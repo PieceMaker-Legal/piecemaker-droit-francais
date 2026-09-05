@@ -1,5 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell } from 'electron';
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,14 +9,19 @@ import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
 import { LocalServerController } from './localServer.js';
 import { TabsController } from './tabs.js';
+import { loadProductConfig } from '../shared/product-config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_NAME = 'CloudCLI';
-const APP_USER_MODEL_ID = 'ai.cloudcli.desktop';
-const CALLBACK_PROTOCOL = 'cloudcli';
+const product = loadProductConfig();
+const APP_NAME = product.name;
+const APP_USER_MODEL_ID = product.appId;
+const CALLBACK_PROTOCOL = product.protocol;
 const CALLBACK_URL = `${CALLBACK_PROTOCOL}://auth/callback`;
-const CLOUDCLI_CONTROL_PLANE_URL = process.env.CLOUDCLI_CONTROL_PLANE_URL || 'https://cloudcli.ai';
+const CLOUDCLI_CONTROL_PLANE_URL = process.env.CLOUDCLI_CONTROL_PLANE_URL || product.controlPlaneUrl;
+const CLOUDCLI_CONTROL_PLANE_HOST = new URL(CLOUDCLI_CONTROL_PLANE_URL).hostname;
+const CLOUDCLI_SSH_HOST = process.env.CLOUDCLI_SSH_HOST || product.sshHost;
+const PRODUCT_DATA_ROOT = process.env.CLOUDCLI_HOME || path.join(os.homedir(), product.dataDirectoryName);
 const REMOTE_START_TIMEOUT_MS = 30000;
 const AUTH_CALLBACK_TTL_MS = 10 * 60 * 1000;
 
@@ -196,7 +202,7 @@ async function hasCloudWebSession() {
   const cookies = await session.defaultSession.cookies.get({});
   return cookies.some((cookie) => {
     const cookieDomain = String(cookie.domain || '');
-    return cookieDomain.includes('cloudcli.ai')
+    return cookieDomain.includes(CLOUDCLI_CONTROL_PLANE_HOST)
       && /-auth-token(?:\.\d+)?$/.test(cookie.name)
       && Boolean(cookie.value);
   });
@@ -247,7 +253,7 @@ async function copyDiagnostics() {
   await dialog.showMessageBox(desktopWindow?.getMainWindow() || undefined, {
     type: 'info',
     title: 'Diagnostics copied',
-    message: 'CloudCLI desktop diagnostics were copied to the clipboard.',
+    message: `${APP_NAME} desktop diagnostics were copied to the clipboard.`,
   });
 }
 
@@ -259,15 +265,15 @@ async function refreshCloudEnvironments({ showErrors = false } = {}) {
   } catch (error) {
     const authState = cloud.getAuthState();
     if (authState === 'expired') {
-      const expiredError = new Error('Your CloudCLI session expired. Reconnect your account.');
+      const expiredError = new Error(`Your ${APP_NAME} session expired. Reconnect your account.`);
       if (showErrors) {
-        await showError('CloudCLI login required', expiredError);
+        await showError(`${APP_NAME} login required`, expiredError);
         return [];
       }
       throw expiredError;
     }
     if (showErrors) {
-      await showError('Could not load CloudCLI environments', error);
+      await showError(`Could not load ${APP_NAME} environments`, error);
       return [];
     }
     throw error;
@@ -299,13 +305,13 @@ async function handleDeepLink(url) {
   }
 
   if (!pendingCloudConnectStartedAt || Date.now() - pendingCloudConnectStartedAt > AUTH_CALLBACK_TTL_MS) {
-    await showError('CloudCLI account connection failed', new Error('No recent CloudCLI account connection was started from this app.'));
+    await showError(`${APP_NAME} account connection failed`, new Error(`No recent ${APP_NAME} account connection was started from this app.`));
     return;
   }
 
   const apiKey = parsed.searchParams.get('api_key');
   if (!apiKey) {
-    await showError('CloudCLI account connection failed', new Error('The callback did not include an API key.'));
+    await showError(`${APP_NAME} account connection failed`, new Error('The callback did not include an API key.'));
     return;
   }
 
@@ -318,8 +324,8 @@ async function handleDeepLink(url) {
 
   dialog.showMessageBox(desktopWindow?.getMainWindow() || undefined, {
     type: 'info',
-    title: 'CloudCLI account connected',
-    message: cloud.getAccount()?.email ? `Connected as ${cloud.getAccount().email}.` : 'CloudCLI account connected.',
+    title: `${APP_NAME} account connected`,
+    message: cloud.getAccount()?.email ? `Connected as ${cloud.getAccount().email}.` : `${APP_NAME} account connected.`,
   }).catch(() => {});
 }
 
@@ -329,7 +335,7 @@ async function copyLocalWebUrl() {
   const localUrl = localServer.getLocalServerUrl();
 
   if (!shareableUrl) {
-    throw new Error('Local CloudCLI URL is not available yet.');
+    throw new Error(`Local ${APP_NAME} URL is not available yet.`);
   }
 
   clipboard.writeText(shareableUrl);
@@ -340,7 +346,7 @@ async function copyLocalWebUrl() {
     message: isLanUrl ? 'LAN web URL copied.' : 'Local web URL copied.',
     detail: isLanUrl
       ? `${shareableUrl}\n\nUse this URL from another device on the same network.`
-      : `${shareableUrl}\n\nThis URL works on this computer. Enable LAN access before starting Local CloudCLI to copy a phone-accessible URL.`,
+      : `${shareableUrl}\n\nThis URL works on this computer. Enable LAN access before starting Local ${APP_NAME} to copy a phone-accessible URL.`,
   });
 
   return getDesktopState();
@@ -350,7 +356,7 @@ async function openLocalWebUi() {
   await localServer.ensureLocalServer();
   const url = localServer.getShareableWebUrl() || localServer.getLocalServerUrl();
   if (!url) {
-    throw new Error('Local CloudCLI URL is not available yet.');
+    throw new Error(`Local ${APP_NAME} URL is not available yet.`);
   }
 
   await openExternalUrl(url);
@@ -366,7 +372,7 @@ async function updateDesktopSetting(key, value) {
       type: 'info',
       title: 'Restart local server to apply',
       message: 'LAN access changes apply the next time the local server starts.',
-      detail: 'Quit CloudCLI and stop the local server, then open Local CloudCLI again.',
+      detail: `Quit ${APP_NAME} and stop the local server, then open Local ${APP_NAME} again.`,
     });
   }
 
@@ -386,7 +392,7 @@ async function showEnvironmentPicker() {
     }
   }
 
-  const choices = ['Local CloudCLI', ...environments.map((environment) => {
+  const choices = [`Local ${APP_NAME}`, ...environments.map((environment) => {
     const status = environment.status === 'running' ? '' : ` (${environment.status})`;
     return `${environment.name || environment.subdomain}${status}`;
   })];
@@ -396,7 +402,7 @@ async function showEnvironmentPicker() {
     buttons: [...choices, 'Cancel'],
     defaultId: 0,
     cancelId: choices.length,
-    title: 'Switch CloudCLI Environment',
+    title: `Switch ${APP_NAME} Environment`,
     message: 'Choose where this desktop window should connect.',
     detail: refreshError ? `Cloud environments could not be refreshed. Showing cached environments.\n\n${refreshError.message || refreshError}` : undefined,
   });
@@ -432,13 +438,13 @@ function getSshTarget(credentials) {
     const parts = String(credentials.ssh_command).split(/\s+/);
     if (parts.length >= 2) return parts[1];
   }
-  return `${credentials.username}@ssh.cloudcli.ai`;
+  return `${credentials.username}@${CLOUDCLI_SSH_HOST}`;
 }
 
 function getSshHost(credentials) {
   const target = getSshTarget(credentials);
   const atIndex = target.indexOf('@');
-  return atIndex >= 0 ? target.slice(atIndex + 1) : 'ssh.cloudcli.ai';
+  return atIndex >= 0 ? target.slice(atIndex + 1) : CLOUDCLI_SSH_HOST;
 }
 
 function getSafeSshUsername(credentials) {
@@ -588,7 +594,7 @@ async function openEnvironmentInDesktop(environment) {
       cancelId: 1,
       title: 'Start environment?',
       message: `${pendingTarget.name} is ${environment.status}.`,
-      detail: 'CloudCLI can start it before opening the remote app.',
+      detail: `${APP_NAME} can start it before opening the remote app.`,
     });
 
     if (response.response !== 0) {
@@ -696,7 +702,7 @@ function getRemoteEnvironmentMenuItems() {
   const environments = cloud.getEnvironments();
 
   if (!cloudAccount?.apiKey) {
-    return [{ label: 'Connect CloudCLI Account...', click: () => void connectCloudAccount() }];
+    return [{ label: `Connect ${APP_NAME} Account...`, click: () => void connectCloudAccount() }];
   }
 
   if (!environments.length) {
@@ -895,7 +901,7 @@ async function bootstrap() {
   app.setAboutPanelOptions({
     applicationName: APP_NAME,
     applicationVersion: app.getVersion(),
-    copyright: 'CloudCLI',
+    copyright: APP_NAME,
   });
 
   localServer = new LocalServerController({
@@ -903,6 +909,10 @@ async function bootstrap() {
     settingsPath: getSettingsPath(),
     isPackaged: app.isPackaged,
     appVersion: app.getVersion(),
+    appName: APP_NAME,
+    dataRoot: PRODUCT_DATA_ROOT,
+    serverBundleBaseUrl: product.serverBundleBaseUrl,
+    serverBundleSlug: product.slug,
     onChange: syncDesktopState,
   });
   cloud = new CloudController({
@@ -938,7 +948,7 @@ async function bootstrap() {
 
 if (registerSingleInstance()) {
   bootstrap().catch(async (error) => {
-    await showError('CloudCLI failed to start', error);
+    await showError(`${APP_NAME} failed to start`, error);
     app.quit();
   });
 }

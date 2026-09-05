@@ -57,8 +57,8 @@ jobs:
       - name: Verify branch server runtime artifacts
         shell: bash
         run: |
-          test -n "$(find release/local-server -maxdepth 1 -name 'cloudcli-local-server-*.tar.gz' -print -quit)"
-          test -n "$(find release/local-server -maxdepth 1 -name 'cloudcli-local-server-*.tar.gz.sha256' -print -quit)"
+          test -n "$(find release/local-server -maxdepth 1 -name '*-local-server-*.tar.gz' -print -quit)"
+          test -n "$(find release/local-server -maxdepth 1 -name '*-local-server-*.tar.gz.sha256' -print -quit)"
 
       - name: Publish branch server bundle
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0

@@ -1,0 +1,49 @@
+{
+  "projects": {
+    "title": "사건",
+    "newProject": "새 사건",
+    "deleteProject": "사건 제거",
+    "renameProject": "사건 이름 변경",
+    "noProjects": "사건이 없습니다",
+    "loadingProjects": "사건 로딩 중...",
+    "searchPlaceholder": "사건 검색...",
+    "projectNamePlaceholder": "사건 이름",
+    "fetchingProjects": "Claude 사건과 세션을 가져오는 중",
+    "projects": "사건",
+    "noMatchingProjects": "일치하는 사건 없음",
+    "runClaudeCli": "사건 디렉토리에서 Claude CLI를 실행하여 시작하세요"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "새 사건 생성",
+    "refresh": "사건 및 세션 새로고침 (Ctrl+R)",
+    "renameProject": "사건 이름 변경 (F2)",
+    "deleteProject": "사이드바에서 사건 제거 (Delete)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "사이드바에서 이 사건을 제거하시겠습니까? 사건 파일, 메모리 및 세션 데이터는 삭제되지 않습니다.",
+    "enterProjectPath": "사건 경로를 입력해주세요",
+    "deleteProjectFailed": "사건 제거 실패. 다시 시도해주세요.",
+    "deleteProjectError": "사건 제거 오류. 다시 시도해주세요.",
+    "createProjectFailed": "사건 생성 실패. 다시 시도해주세요.",
+    "createProjectError": "사건 생성 오류. 다시 시도해주세요.",
+    "updateProjectError": "사건 업데이트 오류. 다시 시도해주세요.",
+    "restoreProjectFailed": "사건 복원 실패. 다시 시도해주세요.",
+    "restoreProjectError": "사건 복원 오류. 다시 시도해주세요."
+  },
+  "search": {
+    "modeProjects": "사건",
+    "projectsScanned_one": "사건 {{count}}개 검색됨",
+    "projectsScanned_other": "사건 {{count}}개 검색됨"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "사건 제거",
+    "confirmDelete": "이 사건을 어떻게 하시겠습니까:",
+    "sessionCount_one": "이 사건에는 {{count}}개의 대화가 있습니다.",
+    "sessionCount_other": "이 사건에는 {{count}}개의 대화가 있습니다.",
+    "allConversationsDeleted": "사건이 사이드바에서 제거됩니다. 파일, 메모리 및 세션 데이터는 보존됩니다.",
+    "cannotUndo": "나중에 사건을 다시 추가할 수 있습니다."
+  }
+}

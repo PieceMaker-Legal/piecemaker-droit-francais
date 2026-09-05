@@ -1,0 +1,48 @@
+{
+  "projects": {
+    "title": "Dossiers",
+    "newProject": "Nouveau dossier",
+    "deleteProject": "Supprimer le dossier",
+    "renameProject": "Renommer le dossier",
+    "noProjects": "Aucun dossier trouvé",
+    "loadingProjects": "Chargement des dossiers...",
+    "searchPlaceholder": "Rechercher des dossiers...",
+    "projectNamePlaceholder": "Nom du dossier",
+    "fetchingProjects": "Récupération de vos dossiers et sessions Claude",
+    "projects": "dossiers",
+    "noMatchingProjects": "Aucun dossier correspondant",
+    "runClaudeCli": "Exécutez le CLI Claude dans le répertoire d'un dossier pour commencer"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "Créer un nouveau dossier",
+    "refresh": "Actualiser les dossiers et sessions (Ctrl+R)",
+    "renameProject": "Renommer le dossier (F2)",
+    "deleteProject": "Retirer le dossier de la barre latérale (Suppr)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "Retirer ce dossier de la barre latérale ? Vos fichiers, mémoires et données de session ne seront pas supprimés.",
+    "enterProjectPath": "Veuillez entrer un chemin de dossier",
+    "deleteProjectFailed": "Échec de la suppression du dossier. Veuillez réessayer.",
+    "deleteProjectError": "Erreur lors de la suppression du dossier. Veuillez réessayer.",
+    "createProjectFailed": "Échec de la création du dossier. Veuillez réessayer.",
+    "createProjectError": "Erreur lors de la création du dossier. Veuillez réessayer.",
+    "updateProjectError": "Erreur lors de la mise à jour du dossier. Veuillez réessayer.",
+    "restoreProjectFailed": "Échec de la restauration du dossier. Veuillez réessayer.",
+    "restoreProjectError": "Erreur lors de la restauration du dossier. Veuillez réessayer."
+  },
+  "search": {
+    "modeProjects": "Dossiers",
+    "projectsScanned_one": "{{count}} dossier analysé",
+    "projectsScanned_other": "{{count}} dossiers analysés"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "Supprimer le dossier",
+    "sessionCount_one": "Ce dossier contient {{count}} conversation.",
+    "sessionCount_other": "Ce dossier contient {{count}} conversations.",
+    "allConversationsDeleted": "Le dossier sera retiré de la barre latérale. Vos fichiers, mémoires et données de session seront conservés.",
+    "cannotUndo": "Vous pourrez rajouter le dossier ultérieurement."
+  }
+}

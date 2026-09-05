@@ -1,0 +1,11 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "Select a Case",
+      "description": "Choose a case to open an interactive shell in that directory"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "Select a case to start chatting with {{provider}}"
+  }
+}

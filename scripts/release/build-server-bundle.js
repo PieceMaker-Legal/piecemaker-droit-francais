@@ -5,12 +5,14 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { loadProductConfig } from '../../shared/product-config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..', '..');
 const packageJson = JSON.parse(
   await fs.readFile(path.join(rootDir, 'package.json'), 'utf8'),
 );
+const product = loadProductConfig();
 
 function getElectronVersion() {
   try {
@@ -109,7 +111,7 @@ function sha256(filePath) {
 const platform = mapPlatform(process.env.CLOUDCLI_BUNDLE_PLATFORM || process.platform);
 const arch = mapArch(process.env.CLOUDCLI_BUNDLE_ARCH || process.arch);
 const version = packageJson.version;
-const bundleName = `cloudcli-local-server-${version}-${platform}-${arch}.tar.gz`;
+const bundleName = `${product.slug}-local-server-${version}-${platform}-${arch}.tar.gz`;
 const bundleRoot = path.join(rootDir, 'release', 'local-server');
 const stageDir = path.join(bundleRoot, `.stage-${version}-${platform}-${arch}`);
 const archivePath = path.join(bundleRoot, bundleName);

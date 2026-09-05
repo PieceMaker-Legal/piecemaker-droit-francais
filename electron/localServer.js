@@ -13,7 +13,6 @@ const DISPLAY_HOST = 'localhost';
 const HEALTH_TIMEOUT_MS = 1000;
 const SERVER_START_TIMEOUT_MS = 30000;
 const MAX_STARTUP_LOG_LINES = 300;
-const SERVER_MARKER_PATH = path.join(os.homedir(), '.cloudcli', 'local-server.json');
 const LOCAL_SERVER_URL_ENV_KEYS = [
   'CLOUDCLI_DESKTOP_LOCAL_SERVER_URL',
   'CLOUDCLI_LOCAL_SERVER_URL',
@@ -205,9 +204,9 @@ function getServerCwd(appRoot, serverEntry) {
   return path.resolve(path.dirname(normalizedEntry), '..', '..');
 }
 
-async function readServerMarkerUrl() {
+async function readServerMarkerUrl(serverMarkerPath) {
   try {
-    const raw = await fs.readFile(SERVER_MARKER_PATH, 'utf8');
+    const raw = await fs.readFile(serverMarkerPath, 'utf8');
     const marker = JSON.parse(raw);
     return marker.url || (marker.port ? `http://${marker.host || HOST}:${marker.port}` : null);
   } catch {
@@ -215,14 +214,14 @@ async function readServerMarkerUrl() {
   }
 }
 
-async function getExistingServerCandidateUrls(defaultUrl) {
+async function getExistingServerCandidateUrls(defaultUrl, serverMarkerPath) {
   const urls = [];
 
   for (const key of LOCAL_SERVER_URL_ENV_KEYS) {
     addCandidateUrl(urls, process.env[key]);
   }
 
-  addCandidateUrl(urls, await readServerMarkerUrl());
+  addCandidateUrl(urls, await readServerMarkerUrl(serverMarkerPath));
 
   for (const key of LOCAL_SERVER_PORT_ENV_KEYS) {
     addCandidatePort(urls, process.env[key]);
@@ -246,11 +245,26 @@ async function waitForCloudCliServer(baseUrl, timeoutMs) {
 }
 
 export class LocalServerController {
-  constructor({ appRoot, settingsPath, isPackaged = false, appVersion, onChange }) {
+  constructor({
+    appRoot,
+    settingsPath,
+    isPackaged = false,
+    appVersion,
+    appName = 'CloudCLI',
+    dataRoot = path.join(os.homedir(), '.cloudcli'),
+    serverBundleBaseUrl,
+    serverBundleSlug = 'cloudcli',
+    onChange,
+  }) {
     this.appRoot = appRoot;
     this.settingsPath = settingsPath;
     this.isPackaged = isPackaged;
     this.appVersion = appVersion;
+    this.appName = appName;
+    this.dataRoot = dataRoot;
+    this.serverMarkerPath = path.join(dataRoot, 'local-server.json');
+    this.serverBundleBaseUrl = serverBundleBaseUrl;
+    this.serverBundleSlug = serverBundleSlug;
     this.onChange = onChange;
     this.localServerUrl = null;
     this.localServerPort = null;
@@ -294,7 +308,7 @@ export class LocalServerController {
   getPendingTarget() {
     return {
       kind: 'local',
-      name: 'Local CloudCLI',
+      name: `Local ${this.appName}`,
       url: this.localServerUrl || `http://${DISPLAY_HOST}:${this.localServerPort || DEFAULT_PORT}`,
     };
   }
@@ -388,6 +402,9 @@ export class LocalServerController {
     const bundleConfig = await readServerBundleConfig(this.appRoot);
     const installer = new ServerInstaller({
       version: this.appVersion,
+      installRoot: process.env.CLOUDCLI_SERVER_DIR || path.join(this.dataRoot, 'server'),
+      bundleBaseUrl: process.env.CLOUDCLI_SERVER_BUNDLE_URL || this.serverBundleBaseUrl,
+      bundleSlug: this.serverBundleSlug,
       bundleReleaseTag: bundleConfig.releaseTag,
       onLog: (line) => this.appendStartupLog(line),
     });
@@ -413,6 +430,8 @@ export class LocalServerController {
         ...runtime.env,
         HOST: bindHost,
         SERVER_PORT: String(port),
+        CLOUDCLI_HOME: this.dataRoot,
+        DATABASE_PATH: process.env.DATABASE_PATH || path.join(this.dataRoot, 'auth.db'),
         PATH: getDesktopPath(),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -439,7 +458,7 @@ export class LocalServerController {
     this.ownedServerProcess.once('exit', (code, signal) => {
       this.appendStartupLog(`process exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}`);
       if (this.ownedServerProcess) {
-        console.error(`CloudCLI desktop server exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}`);
+        console.error(`${this.appName} desktop server exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}`);
       }
       this.ownedServerProcess = null;
     });
@@ -461,12 +480,12 @@ export class LocalServerController {
     }
 
     if (!forceOwnServer) {
-      const candidateUrls = await getExistingServerCandidateUrls(defaultUrl);
+      const candidateUrls = await getExistingServerCandidateUrls(defaultUrl, this.serverMarkerPath);
       for (const candidateUrl of candidateUrls) {
         if (await isCloudCliServer(candidateUrl)) {
           const displayUrl = getDisplayUrl(candidateUrl);
           this.localServerPort = getPortFromUrl(candidateUrl);
-          this.appendStartupLog(`Using existing Local CloudCLI at ${displayUrl}`);
+          this.appendStartupLog(`Using existing Local ${this.appName} at ${displayUrl}`);
           return displayUrl;
         }
       }
@@ -491,7 +510,7 @@ export class LocalServerController {
       ].join('\n\n'));
     }
 
-    this.appendStartupLog(`Local CloudCLI ready at ${displayUrl}`);
+    this.appendStartupLog(`Local ${this.appName} ready at ${displayUrl}`);
     this.localServerUrl = displayUrl;
     return displayUrl;
   }
@@ -507,7 +526,7 @@ export class LocalServerController {
     await this.ensureLocalServer();
     return {
       kind: 'local',
-      name: 'Local CloudCLI',
+      name: `Local ${this.appName}`,
       url: this.localServerUrl,
     };
   }

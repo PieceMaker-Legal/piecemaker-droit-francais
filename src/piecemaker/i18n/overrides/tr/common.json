@@ -1,0 +1,28 @@
+{
+  "mainContent": {
+    "loading": "PieceMaker Yükleniyor",
+    "chooseProject": "Davanı Seç",
+    "selectProjectDescription": "Claude ile kodlamaya başlamak için kenar çubuğundan bir dava seç. Her dava kendi sohbet oturumlarını ve dosya geçmişini içerir.",
+    "createProjectMobile": "Davalara erişmek için yukarıdaki menü düğmesine dokun",
+    "createProjectDesktop": "Kenar çubuğundaki klasör simgesine tıklayarak yeni bir dava oluştur",
+    "projectFiles": "Dava Dosyaları"
+  },
+  "fileTree": {
+    "checkProjectPath": "Dava yolunun erişilebilir olduğunu kontrol et"
+  },
+  "projectWizard": {
+    "title": "Yeni Dava Oluştur",
+    "step1": {
+      "existing": {
+        "description": "Sunucumda zaten bir çalışma alanım var, sadece dava listesine eklemek istiyorum"
+      }
+    },
+    "step3": {
+      "existingInfo": "Çalışma alanı dava listene eklenecek ve Claude/Cursor oturumları için kullanılabilir olacak.",
+      "newEmpty": "Çalışma alanı dava listene eklenecek ve Claude/Cursor oturumları için kullanılabilir olacak."
+    },
+    "buttons": {
+      "createProject": "Davayı Oluştur"
+    }
+  }
+}

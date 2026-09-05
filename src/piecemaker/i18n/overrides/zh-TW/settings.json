@@ -1,0 +1,43 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "案件"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "案件排序",
+      "description": "案件在側邊欄中的排列方式"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "案件（本機）",
+      "userDescription": "使用者範圍：在您機器上的所有案件中可用",
+      "projectDescription": "本機範圍：僅在選定案件中可用"
+    },
+    "fields": {
+      "selectProject": "選取案件..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "在案件目錄中使用 task-master init"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never。所有指令在案件目錄內自動執行。"
+      }
+    }
+  },
+  "pluginSettings": {
+    "starterPlugin": {
+      "name": "案件統計",
+      "description": "查看案件的檔案數、程式碼行數、檔案類型分佈以及最近活動。"
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "Dava"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "Dava Sıralama",
+      "description": "Davaların kenar çubuğunda nasıl sıralanacağı"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "Dava (Yerel)",
+      "userDescription": "Kullanıcı kapsamı: Makinendeki tüm davalarda kullanılabilir",
+      "projectDescription": "Yerel kapsam: Yalnızca seçili davada kullanılabilir"
+    },
+    "fields": {
+      "selectProject": "Bir dava seç..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "Dava dizininde task-master init komutunu kullan"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Tüm komutlar dava dizini içinde otomatik çalışır."
+      }
+    }
+  },
+  "pluginSettings": {
+    "starterPlugin": {
+      "name": "Dava İstatistikleri",
+      "description": "Davan için dosya sayıları, kod satırları, dosya türü dağılımı ve son etkinlik."
+    }
+  }
+}

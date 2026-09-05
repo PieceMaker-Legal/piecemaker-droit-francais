@@ -1,0 +1,46 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "Dossier"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "Tri des dossiers",
+      "description": "Ordre d'affichage des dossiers dans la barre latérale"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "Dossier (local)",
+      "userDescription": "Portée utilisateur : Disponible dans tous les dossiers sur votre machine",
+      "projectDescription": "Portée locale : Disponible uniquement dans le dossier sélectionné"
+    },
+    "fields": {
+      "selectProject": "Sélectionner un dossier..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "Utilisez task-master init dans le répertoire de votre dossier"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Toutes les commandes s'exécutent automatiquement dans le répertoire du dossier."
+      }
+    }
+  },
+  "pluginSettings": {
+    "sections": {
+      "officialDescription": "Maintenus par l'équipe PieceMaker et prêts à être installés directement."
+    },
+    "starterPlugin": {
+      "name": "Statistiques du dossier",
+      "description": "Nombre de fichiers, lignes de code, répartition par type de fichier et activité récente pour votre dossier."
+    }
+  }
+}

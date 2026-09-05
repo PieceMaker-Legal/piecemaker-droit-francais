@@ -1,0 +1,52 @@
+{
+  "projects": {
+    "title": "Досье",
+    "newProject": "Новое досье",
+    "deleteProject": "Убрать досье",
+    "renameProject": "Переименовать досье",
+    "noProjects": "Досье не найдено",
+    "loadingProjects": "Загрузка досье...",
+    "searchPlaceholder": "Поиск досье...",
+    "projectNamePlaceholder": "Имя досье",
+    "fetchingProjects": "Получение ваших досье и сеансов Claude",
+    "projects": "досье",
+    "noMatchingProjects": "Нет подходящих досье",
+    "runClaudeCli": "Запустите Claude CLI в каталоге досье для начала работы"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "Создать новое досье",
+    "refresh": "Обновить досье и сеансы (Ctrl+R)",
+    "renameProject": "Переименовать досье (F2)",
+    "deleteProject": "Убрать досье из боковой панели (Delete)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "Убрать это досье из боковой панели? Файлы досье, воспоминания и данные сеансов не будут удалены.",
+    "enterProjectPath": "Пожалуйста, введите путь к досье",
+    "deleteProjectFailed": "Не удалось убрать досье. Попробуйте снова.",
+    "deleteProjectError": "Ошибка при удалении досье из списка. Попробуйте снова.",
+    "createProjectFailed": "Не удалось создать досье. Попробуйте снова.",
+    "createProjectError": "Ошибка при создании досье. Попробуйте снова.",
+    "updateProjectError": "Ошибка при обновлении досье. Попробуйте снова.",
+    "restoreProjectFailed": "Не удалось восстановить досье. Попробуйте снова.",
+    "restoreProjectError": "Ошибка при восстановлении досье. Попробуйте снова."
+  },
+  "search": {
+    "modeProjects": "Досье",
+    "projectsScanned_one": "{{count}} досье просканировано",
+    "projectsScanned_few": "{{count}} досье просканировано",
+    "projectsScanned_many": "{{count}} досье просканировано",
+    "projectsScanned_other": "{{count}} досье просканировано"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "Убрать досье",
+    "sessionCount_one": "Это досье содержит {{count}} разговор.",
+    "sessionCount_few": "Это досье содержит {{count}} разговора.",
+    "sessionCount_many": "Это досье содержит {{count}} разговоров.",
+    "sessionCount_other": "Это досье содержит {{count}} разговоров.",
+    "allConversationsDeleted": "Досье будет убрано из боковой панели. Ваши файлы, воспоминания и данные сеансов сохранятся.",
+    "cannotUndo": "Вы сможете добавить досье позже."
+  }
+}

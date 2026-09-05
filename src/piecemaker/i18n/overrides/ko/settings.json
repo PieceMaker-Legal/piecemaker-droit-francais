@@ -1,0 +1,51 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "사건"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "사건 정렬",
+      "description": "사이드바에서 사건 정렬 방식"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "사건 (로컬)",
+      "userDescription": "사용자 범위: 모든 사건에서 사용 가능",
+      "projectDescription": "로컬 범위: 선택한 사건에서만 사용 가능"
+    },
+    "fields": {
+      "selectProject": "사건 선택..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "사건 디렉토리에서 task-master init을 사용하세요"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. 사건 디렉토리 내에서 모든 명령어 자동 실행."
+      }
+    }
+  },
+  "mcpServers": {
+    "managed": {
+      "hint": "PieceMaker가 관리합니다."
+    }
+  },
+  "pluginSettings": {
+    "sections": {
+      "officialDescription": "PieceMaker 팀이 관리하며 바로 설치할 수 있습니다."
+    },
+    "starterPlugin": {
+      "name": "사건 통계",
+      "description": "사건의 파일 수, 코드 라인 수, 파일 유형별 분석 및 최근 활동을 확인합니다."
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "mainContent": {
+    "loading": "PieceMaker 로딩 중",
+    "chooseProject": "사건 선택",
+    "selectProjectDescription": "사이드바에서 사건을 선택하여 Claude와 코딩을 시작하세요. 각 사건에는 채팅 세션과 파일 히스토리가 포함됩니다.",
+    "createProjectMobile": "위의 메뉴 버튼을 눌러 사건에 접근하세요",
+    "createProjectDesktop": "사이드바의 폴더 아이콘을 클릭하여 새 사건을 생성하세요",
+    "projectFiles": "사건 파일"
+  },
+  "fileTree": {
+    "checkProjectPath": "사건 경로가 접근 가능한지 확인하세요"
+  },
+  "projectWizard": {
+    "title": "새 사건 생성",
+    "step1": {
+      "existing": {
+        "description": "서버에 이미 워크스페이스가 있고 사건 목록에 추가만 하면 됩니다"
+      }
+    },
+    "step3": {
+      "existingInfo": "워크스페이스가 사건 목록에 추가되며 Claude/Cursor 세션에서 사용할 수 있습니다.",
+      "newEmpty": "워크스페이스가 사건 목록에 추가되며 Claude/Cursor 세션에서 사용할 수 있습니다."
+    },
+    "buttons": {
+      "createProject": "사건 생성"
+    }
+  }
+}

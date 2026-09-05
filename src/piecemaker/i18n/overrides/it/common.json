@@ -1,0 +1,28 @@
+{
+  "mainContent": {
+    "loading": "Caricamento PieceMaker",
+    "chooseProject": "Scegli il tuo fascicolo",
+    "selectProjectDescription": "Seleziona un fascicolo dalla barra laterale per iniziare a programmare con Claude. Ogni fascicolo contiene le tue sessioni di chat e la cronologia dei file.",
+    "createProjectMobile": "Tocca il pulsante menu in alto per accedere ai fascicoli",
+    "createProjectDesktop": "Crea un nuovo fascicolo cliccando l'icona cartella nella barra laterale",
+    "projectFiles": "File del fascicolo"
+  },
+  "fileTree": {
+    "checkProjectPath": "Verifica che il percorso del fascicolo sia accessibile"
+  },
+  "projectWizard": {
+    "title": "Crea nuovo fascicolo",
+    "step1": {
+      "existing": {
+        "description": "Ho già un'area di lavoro sul mio server e devo solo aggiungerla alla lista dei fascicoli"
+      }
+    },
+    "step3": {
+      "existingInfo": "L'area di lavoro verrà aggiunta alla lista dei fascicoli e sarà disponibile per le sessioni Claude/Cursor.",
+      "newEmpty": "L'area di lavoro verrà aggiunta alla lista dei fascicoli e sarà disponibile per le sessioni Claude/Cursor."
+    },
+    "buttons": {
+      "createProject": "Crea fascicolo"
+    }
+  }
+}

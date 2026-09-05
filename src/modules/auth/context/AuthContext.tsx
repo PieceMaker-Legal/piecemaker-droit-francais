@@ -45,7 +45,9 @@ type OnboardingStatusPayload = {
 };
 
 type ApiErrorPayload = {
-  error?: string;
+  // The server's global error middleware answers with an `error` object
+  // ({ code, message, details }), while some routes answer with a plain string.
+  error?: string | { code?: string; message?: string };
   message?: string;
 };
 
@@ -79,7 +81,17 @@ function resolveApiErrorMessage(payload: ApiErrorPayload | null, fallback: strin
     return fallback;
   }
 
-  return payload.error ?? payload.message ?? fallback;
+  const { error } = payload;
+  if (typeof error === 'string') {
+    return error;
+  }
+  // Returning the object itself would make React throw on render (error #31)
+  // and unmount the whole tree instead of showing the message.
+  if (error && typeof error.message === 'string') {
+    return error.message;
+  }
+
+  return payload.message ?? fallback;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
