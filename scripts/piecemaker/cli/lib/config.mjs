@@ -29,7 +29,6 @@ export const INSTALLER = {
 };
 
 export const PORTS = {
-  litellm: numberFromEnv('PIECEMAKER_LITELLM_PORT', 4000),
   admin: numberFromEnv('PIECEMAKER_ADMIN_PORT', 43098),
   appServer: numberFromEnv('PIECEMAKER_APP_PORT', 3003),
   appClient: numberFromEnv('PIECEMAKER_VITE_PORT', 5173),

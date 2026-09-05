@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 import { ADMIN_URL, APP, APP_URL, INSTALLER, PORTS } from './lib/config.mjs';
+import { installComponents } from './lib/composants.mjs';
 import { gitAvailable, resolveNodeRuntime } from './lib/node-runtime.mjs';
 import { freePort } from './lib/ports.mjs';
 import { ensureDependencies, ensureRepository, rebuildNativeModules } from './lib/repos.mjs';
-import { APP_LOG, startApplication, startInstallerStack } from './lib/services.mjs';
+import { APP_LOG, appClientReachable, appServerReachable, startApplication, startInstallerStack, stopLegacyLitellm } from './lib/services.mjs';
 import { installApplicationEntry, openApplication, verifyPwaAssets } from './lib/pwa.mjs';
 import { banner, blank, c, detail, fail, ok, step, warn } from './lib/ui.mjs';
 
@@ -30,7 +31,7 @@ async function cleanPorts(launchOnly) {
   step('Libération des ports');
   const targets = launchOnly
     ? [PORTS.appServer, PORTS.appClient]
-    : [PORTS.appClient, PORTS.appServer, PORTS.admin, PORTS.litellm];
+    : [PORTS.appClient, PORTS.appServer, PORTS.admin];
 
   for (const port of targets) {
     const result = await freePort(port);
@@ -62,8 +63,16 @@ async function synchroniseRepositories(runtime) {
 }
 
 async function launchServices(runtime) {
-  const socle = startInstallerStack(runtime, report);
-  if (socle.started) ok(`Socle actif — proxy PII :${PORTS.litellm}, administration ${ADMIN_URL}`);
+  const applicationAlreadyRunning = await appServerReachable() && await appClientReachable();
+
+  if (applicationAlreadyRunning) {
+    ok(`Application déjà active — ${APP_URL}`);
+    detail('socle laissé en l état : le routage des clients IA appartient à l application en cours');
+    return true;
+  }
+
+  const socle = await startInstallerStack(runtime, report);
+  if (socle.started) ok(`Socle actif — administration ${ADMIN_URL}`);
 
   const application = await startApplication(runtime, report);
   if (application.alreadyRunning) {
@@ -83,6 +92,7 @@ async function launchServices(runtime) {
   }
 
   ok(`Application active — serveur :${PORTS.appServer}, client ${APP_URL}`);
+  await stopLegacyLitellm(report);
   return true;
 }
 
@@ -120,6 +130,7 @@ async function main() {
 
   if (!options.launchOnly) {
     await synchroniseRepositories(runtime);
+    await installComponents(runtime, report);
   }
 
   const running = await launchServices(runtime);

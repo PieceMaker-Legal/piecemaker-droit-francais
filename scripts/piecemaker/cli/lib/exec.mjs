@@ -37,6 +37,36 @@ export function runStreaming(command, args, options = {}) {
   });
 }
 
+export function runInherited(command, args, options = {}) {
+  const { timeout, ...spawnOptions } = options;
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: 'inherit',
+      windowsHide: true,
+      ...spawnOptions,
+    });
+
+    let timedOut = false;
+    let killTimer = null;
+    const timeoutTimer = timeout
+      ? setTimeout(() => {
+          timedOut = true;
+          child.kill('SIGTERM');
+          killTimer = setTimeout(() => child.kill('SIGKILL'), 5000);
+        }, timeout)
+      : null;
+
+    const settle = (code, error) => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (killTimer) clearTimeout(killTimer);
+      resolve({ code, timedOut, error: error || null });
+    };
+
+    child.on('error', (error) => settle(null, error));
+    child.on('close', (code) => settle(code));
+  });
+}
+
 export const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function waitUntil(probe, { timeoutMs = 60_000, intervalMs = 500 } = {}) {

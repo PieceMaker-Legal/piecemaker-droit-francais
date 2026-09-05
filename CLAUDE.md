@@ -172,10 +172,12 @@ commande, aucune question posée.
 piecemaker
 ```
 
-Elle enchaîne, dans cet ordre : libération des ports (5173, 3003, 43098, 4000),
+Elle enchaîne, dans cet ordre : libération des ports (5173, 3003, 43098),
 clonage des dépôts absents, mise à jour en avance rapide, installation des
-dépendances quand le verrou a bougé, démarrage du socle (proxy PII et
-administration) puis de l'application, installation de la PWA, ouverture.
+dépendances quand le verrou a bougé, installation des composants du socle,
+démarrage du socle (administration) puis de l'application (qui porte son
+propre proxy PII), installation de la PWA, ouverture. Sautée en entier avec
+`--launch-only`.
 
 `piecemaker` est la seule commande installée par ce dépôt. Le socle technique
 (proxy PII, MCP, GLiNER) est un projet distinct, PieceMaker-Installer, dont la
@@ -184,6 +186,21 @@ plateforme le démarre en appelant directement `installer/bin/piecemaker.mjs
 start` : le nom de sa commande ne la concerne pas. Emplacement par défaut du
 socle : `~/Sites/PieceMaker-Installer`, remplaçable par
 `PIECEMAKER_INSTALLER_DIR`.
+
+Avant ce démarrage, `piecemaker` rejoue lui-même les seules étapes du socle
+dont ce dépôt a besoin — par `installer/bin/piecemaker.mjs --step <id> --yes`,
+en mode non interactif — dans cet ordre : `01-prerequis`, `03-python-gliner`,
+`03b-python-graphify`, `04-conversion-md`, `12-mcp-piecemaker`,
+`07-legifrance`. Explicitement exclues : `16-litellm-proxy`, remplacé par le
+proxy intégré `server/piecemaker/anonymizer/proxy.cjs` — `router.cjs` refuse
+d'ailleurs ce composant, les deux se disputeraient port et configuration —,
+`05-certificats` (pas d'HTTPS servi par ce dépôt),
+les hooks et les skills (`06-hooks`, `09-claude-assets`, `09-codex-plugin`,
+`13-garde-secrets`), ainsi que `00`, `02`, `08`, `10-*`, `11`, `14`, `15`.
+Une étape déjà à `done` dans `~/.piecemaker/state.json` n'est pas rejouée ;
+une étape en échec ou incomplète (dépendances réseau, clés PISTE absentes en
+mode non interactif) redevient un avertissement nommé — jamais un blocage —
+et la suite s'exécute quand même.
 
 Code dans `scripts/piecemaker/cli/` :
 
@@ -194,9 +211,19 @@ Code dans `scripts/piecemaker/cli/` :
 - `install-command.mjs` — pose l'amorce dans `~/.piecemaker/bin` et dans le
   `bin` de Node, complète le PATH.
 - `lib/` — `ports` (détection et libération des écoutants), `repos`
-  (clone/mise à jour/dépendances, empreinte du verrou), `services` (démarrage
-  et sondes HTTP), `pwa` (vérification du manifest et du service worker, entrée
-  applicative), `node-runtime`, `config`, `exec`, `ui`.
+  (clone/mise à jour/dépendances, empreinte du verrou), `composants`
+  (rejoue les étapes du socle listées ci-dessus, une par une, avec un délai
+  propre à chacune), `services` (démarrage et sondes HTTP), `pwa` (vérification
+  du manifest et du service worker, entrée applicative), `node-runtime`,
+  `config`, `exec`, `ui`.
+
+Un reste de LiteLLM d'une installation antérieure est arrêté une fois
+l'application confirmée active, jamais avant : le socle et l'application
+écrivent le même bloc `piecemaker_litellm` dans les configurations Claude Code
+et Codex, et retirer ce bloc avant que l'application n'ait réaffirmé son propre
+routage enverrait les sessions en clair chez le fournisseur. Pour la même
+raison, une application déjà active fait sauter le démarrage du socle : le
+routage lui appartient.
 
 Réinstaller la commande après un `git pull` qui la modifie :
 
@@ -206,7 +233,7 @@ node scripts/piecemaker/cli/install-command.mjs
 
 Réglages par variables d'environnement : `PIECEMAKER_APP_DIR`,
 `PIECEMAKER_INSTALLER_DIR`, `PIECEMAKER_APP_PORT`, `PIECEMAKER_VITE_PORT`,
-`PIECEMAKER_ADMIN_PORT`, `PIECEMAKER_LITELLM_PORT`.
+`PIECEMAKER_ADMIN_PORT`.
 
 Une mise à jour n'est jamais forcée : un dépôt qui porte des modifications
 locales ou une branche divergente est signalé et laissé intact.
