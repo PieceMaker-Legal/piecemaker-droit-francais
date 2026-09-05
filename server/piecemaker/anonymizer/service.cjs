@@ -22,6 +22,7 @@ const path = require('node:path');
 const { createDictionaryLoader } = require('./dictionary.cjs');
 const { DEFAULT_UPSTREAM, createAnonymizerProxy } = require('./proxy.cjs');
 const { bypassProviders, configureProviders } = require('./providers.cjs');
+const { createHarnessJuridique } = require('../harness/index.cjs');
 
 const ENV_VAR = 'ANTHROPIC_BASE_URL';
 const OPENAI_ENV_VAR = 'OPENAI_BASE_URL';
@@ -78,6 +79,10 @@ function summarizeCoverage(report) {
 
 function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = console }) {
   const dictionary = createDictionaryLoader({ homeDir });
+  // Harnais de citations vérifiées (décisions Légifrance + bloc <CITATIONS>) :
+  // son propre interrupteur (`PIECEMAKER_CITATIONS=off`) est géré à
+  // l'intérieur, pas ici.
+  const harness = createHarnessJuridique({ homeDir });
   // Le shim Cursor vit sous le répertoire de données PieceMaker : il n'a rien à
   // faire dans un répertoire appartenant à un fournisseur.
   const binDir = path.join(homeDir, 'bin');
@@ -108,6 +113,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
         { provider: 'codex', prefix: '/chatgpt', upstream: 'https://chatgpt.com/backend-api/codex' },
         { provider: 'opencode', prefix: '/openai', upstream: 'https://api.openai.com' },
       ],
+      harness,
       onError: (error) => logger.warn?.(`[piecemaker] proxy PII : ${error.message}`),
     });
 
