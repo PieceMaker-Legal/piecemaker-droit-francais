@@ -21,6 +21,7 @@ import SkillsFileEditor from './SkillsFileEditor';
 import SkillsCreateDialog from './SkillsCreateDialog';
 import SkillsComponentsDialog from './SkillsComponentsDialog';
 import SkillsMarketplaceDialog from './SkillsMarketplaceDialog';
+import SkillsActivation from './SkillsActivation';
 
 /** One entry of `GET /files` — an instructions file, an agent, a PieceMaker skill, or a read-only marketplace skill. */
 export type ManagedFileKind = 'instructions' | 'agent' | 'skill' | 'official-skill';
@@ -121,7 +122,10 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
 
+type SectionView = 'files' | 'activation';
+
 export default function SkillsSection() {
+  const [view, setView] = useState<SectionView>('files');
   const [files, setFiles] = useState<ManagedFile[]>([]);
   // Distinguishes "never loaded" from "loaded, zero files" so the initial spinner shows once.
   const [isLoading, setIsLoading] = useState(true);
@@ -150,10 +154,11 @@ export default function SkillsSection() {
     void loadFiles();
   }, [loadFiles]);
 
-  const groups = useMemo(() => groupManagedFiles(files), [files]);
+  const visibleFiles = useMemo(() => files.filter((file) => file.name !== 'CLAUDE.md'), [files]);
+  const groups = useMemo(() => groupManagedFiles(visibleFiles), [visibleFiles]);
   const selectedFile = useMemo(
-    () => files.find((file) => file.path === selectedPath) ?? null,
-    [files, selectedPath],
+    () => visibleFiles.find((file) => file.path === selectedPath) ?? null,
+    [visibleFiles, selectedPath],
   );
 
   const requestSelect = useCallback((path: string | null) => {
@@ -211,52 +216,82 @@ export default function SkillsSection() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => setIsComponentsDialogOpen(true)}>
-            Enregistrement Claude Code
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setIsMarketplaceDialogOpen(true)}>
-            Marketplace de plugins
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={handleRefresh} disabled={isLoading}>
-            <RefreshCw className={isLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-            Actualiser
-          </Button>
+          <div className="flex items-center rounded-lg border border-border/60 bg-muted/30 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setView('files')}
+              className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                view === 'files' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Fichiers
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('activation')}
+              className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                view === 'activation' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Activation par dossier
+            </button>
+          </div>
+          {view === 'files' && (
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsComponentsDialogOpen(true)}>
+                Enregistrement Claude Code
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsMarketplaceDialogOpen(true)}>
+                Marketplace de plugins
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={handleRefresh} disabled={isLoading}>
+                <RefreshCw className={isLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+                Actualiser
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      {loadError && (
-        <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{loadError}</span>
-        </div>
-      )}
-
-      {isLoading && files.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Chargement des skills et agents…
-        </div>
+      {view === 'activation' ? (
+        <SkillsActivation />
       ) : (
-        <div className="flex min-h-0 flex-1">
-          <SkillsFileList
-            groups={groups}
-            selectedPath={selectedPath}
-            onSelect={requestSelect}
-            onCreate={handleOpenCreateDialog}
-            onBrowseMarketplace={() => setIsMarketplaceDialogOpen(true)}
-            onAssetDeleted={(_deletedPath, wasSelected) => {
-              if (wasSelected) handleFileMutated(null);
-              else void loadFiles();
-            }}
-          />
-          <SkillsFileEditor
-            key={selectedPath ?? 'empty'}
-            file={selectedFile}
-            onDirtyChange={setIsDirty}
-            onSaved={handleFileMutated}
-            onAssetsUploaded={() => void loadFiles()}
-          />
-        </div>
+        <>
+          {loadError && (
+            <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{loadError}</span>
+            </div>
+          )}
+
+          {isLoading && files.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Chargement des skills et agents…
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1">
+              <SkillsFileList
+                groups={groups}
+                selectedPath={selectedPath}
+                onSelect={requestSelect}
+                onCreate={handleOpenCreateDialog}
+                onBrowseMarketplace={() => setIsMarketplaceDialogOpen(true)}
+                onAssetDeleted={(_deletedPath, wasSelected) => {
+                  if (wasSelected) handleFileMutated(null);
+                  else void loadFiles();
+                }}
+              />
+              <SkillsFileEditor
+                key={selectedPath ?? 'empty'}
+                file={selectedFile}
+                onDirtyChange={setIsDirty}
+                onSaved={handleFileMutated}
+                onAssetsUploaded={() => void loadFiles()}
+              />
+            </div>
+          )}
+        </>
       )}
 
       <SkillsCreateDialog
