@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -70,4 +71,46 @@ test('réactiver sans levée en cours ne touche à rien', () => {
   const before = fs.readFileSync(protection.protectionFile(root), 'utf8');
   assert.equal(deactivateBypass(root, protection).active, false);
   assert.equal(fs.readFileSync(protection.protectionFile(root), 'utf8'), before);
+});
+
+test('les routes valident leur entrée et rendent l’état du dossier', async () => {
+  const express = require('express');
+  const { createProtectionBypassRouter } = require('./routes.cjs');
+
+  const root = caseWithPieces();
+  const app = express();
+  app.use(express.json());
+  app.use(createProtectionBypassRouter({
+    resolveCase: (reference) => {
+      if (reference !== 'dossier-test') throw new Error('Ce dossier juridique n’est pas enregistré.');
+      return { id: 'dossier-test', root };
+    },
+    protection,
+  }));
+
+  const server = app.listen(0);
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}/protection/bypass`;
+  const put = (body) => fetch(base, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  try {
+    assert.equal((await put({ case: 'dossier-test' })).status, 400);
+    assert.equal((await put({ case: 'inconnu', active: true })).status, 400);
+
+    assert.equal((await (await put({ case: 'dossier-test', active: true })).json()).active, true);
+    assert.equal(protection.isProtectedFile(path.join(root, 'assignation.pdf'), root), false);
+
+    const state = await (await fetch(`${base}?case=dossier-test`)).json();
+    assert.equal(state.active, true);
+    assert.equal(state.case, 'dossier-test');
+
+    assert.equal((await (await put({ case: 'dossier-test', active: false })).json()).active, false);
+    assert.equal(protection.isProtectedFile(path.join(root, 'assignation.pdf'), root), true);
+  } finally {
+    server.close();
+  }
 });
