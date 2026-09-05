@@ -37,7 +37,7 @@ export default function DossierPanel({ selectedProject }: { selectedProject: Pro
   const [section, setSection] = useState<SectionId>('dossiers');
 
   return (
-    <DossierCasesProvider projectPath={selectedProject?.path ?? null}>
+    <DossierCasesProvider projectPath={selectedProject?.fullPath || selectedProject?.path || null}>
       <div className="flex h-full flex-col">
         <div className="shrink-0 overflow-x-auto border-b border-border/50 px-3 py-2">
           <PillBar
