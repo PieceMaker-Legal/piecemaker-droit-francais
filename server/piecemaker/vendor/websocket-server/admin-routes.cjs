@@ -41,6 +41,7 @@ const {
   startOriginalsJob,
   writeCaseMapping,
 } = require('./originals-pipeline.cjs');
+const { invalidateOriginals, listOriginalsCached } = require('../../originals-cache.cjs');
 const {
   documentKey,
   readProtection,
@@ -2592,7 +2593,7 @@ function createAdminRouter({
       folder.registered = legalCase.registered;
       // Les Markdown convertis vivent déjà dans l'historique ; ce cadre ne
       // présente que les pièces originales et un résumé non sensible du mapping.
-      folder.originals = await listOriginals(legalCase.root);
+      folder.originals = await listOriginalsCached(legalCase.root);
       const mapping = readCaseMapping(legalCase.root);
       folder.mapping = {
         exists: mapping.exists,
@@ -2889,7 +2890,7 @@ function createAdminRouter({
     const startedAt = performance.now();
     try {
       const legalCase = selectedCase(req.query.case);
-      const files = await listOriginals(legalCase.root);
+      const files = await listOriginalsCached(legalCase.root);
       finishAdminTiming(res, 'protection', startedAt, { files: files.length });
       res.json({
         case: legalCase.id,
@@ -2916,6 +2917,7 @@ function createAdminRouter({
         unprotected: req.body.unprotected,
         resources: req.body.resources,
       });
+      invalidateOriginals(legalCase.root);
       res.json({
         ok: true,
         case: legalCase.id,
