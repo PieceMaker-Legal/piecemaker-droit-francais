@@ -17,17 +17,16 @@ import { FolderTree, Stamp, SlidersHorizontal, Sparkles, type LucideIcon } from 
 
 import { PillBar, Pill, Tooltip } from '@/shared/ui';
 import type { Project } from '@/shared/types';
-
-import { DossierCasesProvider } from './DossierContext';
-import CaseFilesSection from './sections/CaseFilesSection';
-import StampingSection from './sections/StampingSection';
-import ConfigurationSection from './sections/ConfigurationSection';
-import SkillsSection from './sections/SkillsSection';
+import { DossierCasesProvider } from '@/piecemaker/dossier/DossierContext';
+import CaseFilesSection from '@/piecemaker/dossier/sections/CaseFilesSection';
+import StampingSection from '@/piecemaker/dossier/sections/StampingSection';
+import ConfigurationSection from '@/piecemaker/dossier/sections/ConfigurationSection';
+import SkillsSection from '@/piecemaker/dossier/sections/SkillsSection';
 
 type SectionId = 'dossiers' | 'tampon' | 'configuration' | 'skills';
 
 const SECTIONS: { id: SectionId; label: string; hint: string; icon: LucideIcon }[] = [
-  { id: 'dossiers',      label: 'Dossiers',        hint: 'Pièces, conversion, anonymisation et chronologie', icon: FolderTree },
+  { id: 'dossiers',      label: 'Général',         hint: 'Pièces, mapping, parties et chronologie',           icon: FolderTree },
   { id: 'tampon',        label: 'Tampon et pièces', hint: 'Tampon du cabinet et numérotation des pièces',    icon: Stamp },
   { id: 'configuration', label: 'Configuration',    hint: 'Carte des composants installés',                  icon: SlidersHorizontal },
   { id: 'skills',        label: 'Skills et agents', hint: 'Skills, agents et plugins Claude Code',            icon: Sparkles },
