@@ -1,0 +1,11 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "選擇案件",
+      "description": "選擇一個案件以在該目錄中開啟互動式 Shell"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "選擇一個案件以開始與 {{provider}} 聊天"
+  }
+}

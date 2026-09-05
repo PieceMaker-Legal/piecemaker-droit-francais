@@ -1,0 +1,48 @@
+{
+  "projects": {
+    "title": "Cases",
+    "newProject": "New Case",
+    "deleteProject": "Remove Case",
+    "renameProject": "Rename Case",
+    "noProjects": "No cases found",
+    "loadingProjects": "Loading cases...",
+    "searchPlaceholder": "Search cases...",
+    "projectNamePlaceholder": "Case name",
+    "fetchingProjects": "Fetching your Claude cases and sessions",
+    "projects": "cases",
+    "noMatchingProjects": "No matching cases",
+    "runClaudeCli": "Run Claude CLI in a case directory to get started"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "Create new case",
+    "refresh": "Refresh cases and sessions (Ctrl+R)",
+    "renameProject": "Rename case (F2)",
+    "deleteProject": "Remove case from sidebar (Delete)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "Remove this case from the sidebar? Your case files, memories, and session data will not be deleted.",
+    "enterProjectPath": "Please enter a case path",
+    "deleteProjectFailed": "Failed to remove case. Please try again.",
+    "deleteProjectError": "Error removing case. Please try again.",
+    "createProjectFailed": "Failed to create case. Please try again.",
+    "createProjectError": "Error creating case. Please try again.",
+    "updateProjectError": "Error updating case. Please try again.",
+    "restoreProjectFailed": "Failed to restore case. Please try again.",
+    "restoreProjectError": "Error restoring case. Please try again."
+  },
+  "search": {
+    "modeProjects": "Cases",
+    "projectsScanned_one": "{{count}} case scanned",
+    "projectsScanned_other": "{{count}} cases scanned"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "Remove Case",
+    "sessionCount_one": "This case contains {{count}} conversation.",
+    "sessionCount_other": "This case contains {{count}} conversations.",
+    "allConversationsDeleted": "The case will be removed from the sidebar. Your files, memories, and session data will be preserved.",
+    "cannotUndo": "You can re-add the case later."
+  }
+}

@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "ignorePatterns": ["dist/**", "dist-server/**", "node_modules/**", "public/**"],
+  "ignorePatterns": ["dist/**", "dist-server/**", "node_modules/**", "public/**", "server/piecemaker/vendor/**"],
 
   // Rust-native plugins. oxlint's "import" plugin is the port of eslint-plugin-import-x,
   // and "react" also carries the react-hooks rules.

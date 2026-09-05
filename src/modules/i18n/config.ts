@@ -110,6 +110,11 @@ import zhTWTasks from '@/modules/i18n/locales/zh-TW/tasks.json';
 
 // Import supported languages configuration
 import { languages } from '@/modules/i18n/languages';
+// PieceMaker: fork wording layer, merged over the upstream bundles below.
+import {
+  applyPieceMakerI18nOverrides,
+  PIECEMAKER_DEFAULT_LANGUAGE,
+} from '@/piecemaker/i18n/overrides';
 import {
   readUserPreference,
   subscribeToUserPreferences,
@@ -125,7 +130,7 @@ const getSavedLanguage = (): string => {
   if (saved && languages.some(lang => lang.value === saved)) {
     return saved;
   }
-  return 'en';
+  return PIECEMAKER_DEFAULT_LANGUAGE;
 };
 
 // Initialize i18next
@@ -269,6 +274,9 @@ i18n
       bindI18nStore: false, // Don't re-render on resource changes
     },
   });
+
+// PieceMaker: apply the fork's wording over every language once the base resources exist.
+applyPieceMakerI18nOverrides(i18n);
 
 // Save language preference when it changes
 i18n.on('languageChanged', (lng: string) => {

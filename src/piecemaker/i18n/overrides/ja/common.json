@@ -1,0 +1,28 @@
+{
+  "mainContent": {
+    "loading": "PieceMaker を読み込んでいます",
+    "chooseProject": "案件を選択",
+    "selectProjectDescription": "サイドバーから案件を選択して、Claudeとコーディングを始めましょう。各案件にはチャットセッションとファイル履歴が含まれています。",
+    "createProjectMobile": "上部のメニューボタンから案件にアクセスできます",
+    "createProjectDesktop": "サイドバーのフォルダアイコンをクリックして新しい案件を作成できます",
+    "projectFiles": "案件ファイル"
+  },
+  "fileTree": {
+    "checkProjectPath": "案件のパスがアクセス可能か確認してください"
+  },
+  "projectWizard": {
+    "title": "新規案件を作成",
+    "step1": {
+      "existing": {
+        "description": "サーバー上に既存のワークスペースがあり、案件一覧に追加したい"
+      }
+    },
+    "step3": {
+      "existingInfo": "ワークスペースが案件一覧に追加され、Claude/Cursorセッションで使用できるようになります。",
+      "newEmpty": "ワークスペースが案件一覧に追加され、Claude/Cursorセッションで使用できるようになります。"
+    },
+    "buttons": {
+      "createProject": "案件を作成"
+    }
+  }
+}

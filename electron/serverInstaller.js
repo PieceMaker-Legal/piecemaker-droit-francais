@@ -36,6 +36,7 @@ export class ServerInstaller {
     installRoot = process.env.CLOUDCLI_SERVER_DIR || DEFAULT_INSTALL_ROOT,
     bundleBaseUrl = process.env.CLOUDCLI_SERVER_BUNDLE_URL || DEFAULT_BUNDLE_BASE_URL,
     bundleReleaseTag = process.env.CLOUDCLI_SERVER_BUNDLE_RELEASE_TAG || '',
+    bundleSlug = 'cloudcli',
     onLog,
   } = {}) {
     if (!version) throw new Error('ServerInstaller requires the app version');
@@ -45,6 +46,7 @@ export class ServerInstaller {
     this.installRoot = installRoot;
     this.bundleBaseUrl = bundleBaseUrl.replace(/\/+$/, '');
     this.bundleReleaseTag = bundleReleaseTag || `v${this.version}`;
+    this.bundleSlug = bundleSlug;
     this.onLog = typeof onLog === 'function' ? onLog : () => {};
   }
 
@@ -59,7 +61,7 @@ export class ServerInstaller {
   }
 
   getBundleName() {
-    return `cloudcli-local-server-${this.version}-${this.platform}-${this.arch}.tar.gz`;
+    return `${this.bundleSlug}-local-server-${this.version}-${this.platform}-${this.arch}.tar.gz`;
   }
 
   getBundleUrl() {

@@ -1,0 +1,51 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "Case"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "Case Sorting",
+      "description": "How cases are ordered in the sidebar"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "Case (Local)",
+      "userDescription": "User scope: Available across all cases on your machine",
+      "projectDescription": "Local scope: Only available in the selected case"
+    },
+    "fields": {
+      "selectProject": "Select a case..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "Use task-master init in your case directory"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. All commands auto-execute within case directory."
+      }
+    }
+  },
+  "mcpServers": {
+    "managed": {
+      "hint": "Managed by PieceMaker."
+    }
+  },
+  "pluginSettings": {
+    "sections": {
+      "officialDescription": "Maintained by the PieceMaker team and ready for direct install."
+    },
+    "starterPlugin": {
+      "name": "Case Stats",
+      "description": "File counts, lines of code, file-type breakdown, and recent activity for your case."
+    }
+  }
+}

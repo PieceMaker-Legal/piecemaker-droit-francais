@@ -19,6 +19,20 @@ type GitStatusFileGroup = 'modified' | 'added' | 'deleted' | 'untracked';
 
 //----------------- BRANDING ------------
 
+/** User-facing product name injected from the fork's product.config.json. */
+export const PRODUCT_NAME = typeof __PRODUCT_NAME__ === 'string' ? __PRODUCT_NAME__ : 'CloudCLI';
+
+/** Default browser title injected from the fork's product.config.json. */
+export const PRODUCT_PAGE_TITLE = typeof __PRODUCT_PAGE_TITLE__ === 'string' ? __PRODUCT_PAGE_TITLE__ : 'CloudCLI UI';
+
+/** GitHub owner/repository pair used by repository-aware UI. */
+export const PRODUCT_REPOSITORY = typeof __PRODUCT_REPOSITORY__ === 'string' ? __PRODUCT_REPOSITORY__ : 'siteboon/claudecodeui';
+
+/** Public repository URL used by source and issue links. */
+export const PRODUCT_REPOSITORY_URL = typeof __PRODUCT_REPOSITORY_URL__ === 'string'
+  ? __PRODUCT_REPOSITORY_URL__
+  : 'https://github.com/siteboon/claudecodeui';
+
 /**
  * Font stack used to render the CloudCLI wordmark consistently wherever the brand name
  * appears as text. Apply it inline so the wordmark does not inherit a themed font.

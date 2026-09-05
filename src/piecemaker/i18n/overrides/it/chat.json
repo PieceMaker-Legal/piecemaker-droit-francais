@@ -1,0 +1,11 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "Seleziona un fascicolo",
+      "description": "Scegli un fascicolo per aprire una shell interattiva in quella directory"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "Seleziona un fascicolo per iniziare a chattare con {{provider}}"
+  }
+}

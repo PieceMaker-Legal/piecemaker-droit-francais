@@ -108,8 +108,8 @@ jobs:
           shasum -a 256 release/desktop/*.dmg > desktop-release-assets/SHASUMS256-macos.txt
           cp release/desktop/*.dmg desktop-release-assets/
 
-          test -n "$(find release/local-server -maxdepth 1 -name 'cloudcli-local-server-*.tar.gz' -print -quit)"
-          test -n "$(find release/local-server -maxdepth 1 -name 'cloudcli-local-server-*.tar.gz.sha256' -print -quit)"
+          test -n "$(find release/local-server -maxdepth 1 -name '*-local-server-*.tar.gz' -print -quit)"
+          test -n "$(find release/local-server -maxdepth 1 -name '*-local-server-*.tar.gz.sha256' -print -quit)"
           cp release/local-server/* server-release-assets/
 
       - name: Upload macOS desktop assets
@@ -198,8 +198,8 @@ jobs:
           sha256sum release/desktop/*.exe > desktop-release-assets/SHASUMS256-windows.txt
           cp release/desktop/*.exe desktop-release-assets/
 
-          test -n "$(find release/local-server -maxdepth 1 -name 'cloudcli-local-server-*.tar.gz' -print -quit)"
-          test -n "$(find release/local-server -maxdepth 1 -name 'cloudcli-local-server-*.tar.gz.sha256' -print -quit)"
+          test -n "$(find release/local-server -maxdepth 1 -name '*-local-server-*.tar.gz' -print -quit)"
+          test -n "$(find release/local-server -maxdepth 1 -name '*-local-server-*.tar.gz.sha256' -print -quit)"
           cp release/local-server/* server-release-assets/
 
       - name: Upload Windows desktop assets
@@ -246,8 +246,8 @@ jobs:
           test -n "$(find release/desktop -maxdepth 1 -name '*.exe' -print -quit)"
           test -f release/desktop/SHASUMS256-macos.txt
           test -f release/desktop/SHASUMS256-windows.txt
-          test -n "$(find release/local-server -maxdepth 1 -name 'cloudcli-local-server-*.tar.gz' -print -quit)"
-          test -n "$(find release/local-server -maxdepth 1 -name 'cloudcli-local-server-*.tar.gz.sha256' -print -quit)"
+          test -n "$(find release/local-server -maxdepth 1 -name '*-local-server-*.tar.gz' -print -quit)"
+          test -n "$(find release/local-server -maxdepth 1 -name '*-local-server-*.tar.gz.sha256' -print -quit)"
           find release -maxdepth 2 -type f -print | sort
 
       - name: Verify target GitHub release exists
