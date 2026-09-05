@@ -55,7 +55,7 @@ function emptyVerification() {
  *   production) — les décisions vont dans `<homeDir>/decisions/`, le journal
  *   de vérification dans `<homeDir>/citations-verifiees.jsonl`.
  */
-function createHarnessJuridique({ homeDir } = {}) {
+function createHarnessJuridique({ homeDir, verifyResponses = true } = {}) {
   const decisionsDir = typeof homeDir === 'string' && homeDir ? path.join(homeDir, 'decisions') : null;
   const stats = { decisions: 0, tours: 0, nonVerifiees: 0 };
 
@@ -86,7 +86,7 @@ function createHarnessJuridique({ homeDir } = {}) {
      */
     async observerReponse(texteAssistant, { session } = {}) {
       try {
-        if (isOff()) return emptyVerification();
+        if (isOff() || !verifyResponses) return emptyVerification();
         const result = await verifierReponse(texteAssistant, { homeDir, session });
         if (result?.analysee) {
           stats.tours += 1;

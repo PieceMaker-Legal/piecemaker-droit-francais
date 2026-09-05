@@ -5,5 +5,8 @@
  */
 
 import { startIdentityHighlighting } from '@/piecemaker/anonymizer';
+import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 
 startIdentityHighlighting();
+const stopCitationPanel = startCitationPanel();
+if (import.meta.hot) import.meta.hot.dispose(stopCitationPanel);
