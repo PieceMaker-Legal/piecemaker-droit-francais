@@ -5,12 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BIN_DIR, INSTALLER } from './lib/config.mjs';
+import { BIN_DIR } from './lib/config.mjs';
 import { ok, banner, detail, warn, blank } from './lib/ui.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const COMMAND_NAME = 'piecemaker';
-const INSTALLER_COMMAND_NAME = 'piecemaker-installer';
 
 function shimTargets() {
   const targets = [path.join(BIN_DIR, COMMAND_NAME)];
@@ -54,33 +53,6 @@ function ensurePathEntry() {
   return changed;
 }
 
-function renameInstallerCommand() {
-  const manifestPath = path.join(INSTALLER.directory, 'package.json');
-  if (!fs.existsSync(manifestPath)) {
-    return { renamed: false, reason: 'socle absent' };
-  }
-
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  const entry = manifest.bin?.[COMMAND_NAME] || manifest.bin?.[INSTALLER_COMMAND_NAME] || 'installer/bin/piecemaker.mjs';
-
-  manifest.bin = { [INSTALLER_COMMAND_NAME]: entry };
-  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-
-  const nodeBinDir = path.dirname(process.execPath);
-  const linkPath = path.join(nodeBinDir, INSTALLER_COMMAND_NAME);
-  const targetPath = path.join(INSTALLER.directory, entry);
-
-  try {
-    fs.rmSync(linkPath, { force: true });
-    fs.symlinkSync(targetPath, linkPath);
-    fs.chmodSync(targetPath, 0o755);
-  } catch (error) {
-    return { renamed: true, linked: false, reason: error.message };
-  }
-
-  return { renamed: true, linked: true, linkPath };
-}
-
 function main() {
   banner('Installation de la commande piecemaker');
 
@@ -90,18 +62,8 @@ function main() {
   const pathFiles = ensurePathEntry();
   for (const file of pathFiles) detail(`PATH complété dans ${file}`);
 
-  const installerCommand = renameInstallerCommand();
-  if (installerCommand.renamed && installerCommand.linked) {
-    ok(`socle renommé : ${INSTALLER_COMMAND_NAME} → ${installerCommand.linkPath}`);
-  } else if (installerCommand.renamed) {
-    warn(`socle renommé dans package.json mais lien non créé : ${installerCommand.reason}`);
-  } else {
-    warn(`socle non renommé : ${installerCommand.reason}`);
-  }
-
   blank();
-  detail(`${COMMAND_NAME}             installe, met à jour et lance toute la plateforme`);
-  detail(`${INSTALLER_COMMAND_NAME}   menu du socle technique (proxy PII, MCP, GLiNER)`);
+  detail(`${COMMAND_NAME} installe, met à jour et lance toute la plateforme`);
   blank();
 }
 
