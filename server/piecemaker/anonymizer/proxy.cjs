@@ -25,6 +25,7 @@ const https = require('node:https');
 
 const { anonymize, deanonymize } = require('./dictionary.cjs');
 const { createSseRewriter, rewriteJsonBody } = require('./rewrite.cjs');
+const { createCollecteurTexte } = require('../harness/flux-sse.cjs');
 
 const DEFAULT_UPSTREAM = 'https://api.anthropic.com';
 
@@ -89,11 +90,43 @@ function isEventStream(contentType) {
 }
 
 /**
+ * Texte assistant d'un corps JSON complet (non streamé), pour le harnais de
+ * citations : formes Anthropic Messages (`content[]`, blocs `{type:'text'}`)
+ * et Responses d'OpenAI (`output[].content[]`, blocs `{type:'output_text'}`).
+ * Ne jette jamais : un corps illisible ou d'une autre forme renvoie `''`.
+ */
+function extractAssistantTextFromJson(raw) {
+  try {
+    const parsed = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf8'));
+    if (!parsed || typeof parsed !== 'object') return '';
+    if (Array.isArray(parsed.content)) {
+      return parsed.content
+        .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+        .map((block) => block.text)
+        .join('');
+    }
+    if (Array.isArray(parsed.output)) {
+      return parsed.output
+        .flatMap((item) => (Array.isArray(item?.content) ? item.content : []))
+        .filter((block) => block?.type === 'output_text' && typeof block.text === 'string')
+        .map((block) => block.text)
+        .join('');
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+/**
  * @param {object} options
  * @param {{ get: () => object }} options.dictionary Chargeur de mapping à chaud.
  * @param {Array<{provider: string, prefix: string, upstream: string}>} [options.routes]
  *   Table de routage ; le préfixe le plus long l'emporte.
  * @param {number} [options.port] Port préféré ; 0 = port éphémère.
+ * @param {object|null} [options.harness] Harnais de citations vérifiées
+ *   (`../harness/index.cjs`), absent par défaut : sans lui, le proxy se
+ *   comporte exactement comme s'il n'existait pas.
  */
 function createAnonymizerProxy({
   dictionary,
@@ -102,6 +135,7 @@ function createAnonymizerProxy({
   host = '127.0.0.1',
   maxBodyBytes = 64 * 1024 * 1024,
   onError = () => {},
+  harness = null,
 } = {}) {
   // Préfixe le plus long d'abord : `/anthropic/v1` doit gagner sur `/anthropic`
   // si les deux sont déclarés un jour.
@@ -109,6 +143,30 @@ function createAnonymizerProxy({
     .map((route) => ({ ...route, target: new URL(route.upstream) }))
     .sort((left, right) => right.prefix.length - left.prefix.length);
   const stats = { requests: 0, anonymized: 0, deanonymized: 0, failures: 0, lastError: null };
+
+  // Observation du harnais de citations, en espace clair des deux côtés
+  // (corps brut du client à l'aller, texte livré au client au retour) — voir
+  // `../harness/index.cjs`. Ne doit jamais retarder ni faire échouer une
+  // requête ou une réponse déjà en cours, même si le harnais fourni est
+  // défaillant (double garde : `index.cjs` ne jette déjà jamais, mais le
+  // proxy ne doit dépendre de cette garantie).
+  function observerRequete(rawBody, contentType, session) {
+    if (!harness) return;
+    try {
+      harness.observerRequete(rawBody, contentType, { session });
+    } catch {
+      // jamais bloquant pour la requête en cours
+    }
+  }
+
+  function observerReponse(texteAssistant, session) {
+    if (!harness) return;
+    try {
+      Promise.resolve(harness.observerReponse(texteAssistant, { session })).catch(() => {});
+    } catch {
+      // jamais bloquant pour une réponse déjà envoyée au client
+    }
+  }
 
   function matchRoute(url) {
     return table.find((route) => url === route.prefix || url.startsWith(`${route.prefix}/`) || url.startsWith(`${route.prefix}?`));
@@ -147,6 +205,10 @@ function createAnonymizerProxy({
         return;
       }
 
+      // Corps brut, AVANT anonymisation : le harnais doit voir le même texte
+      // que le client a envoyé, pas les codes qui partent vers le fournisseur.
+      observerRequete(body, clientRequest.headers['content-type'], route.provider);
+
       let outgoing = body;
       if (body.length && !current.empty && isJsonLike(clientRequest.headers['content-type'])) {
         const rewritten = rewriteJsonBody(body, (text) => anonymize(text, current));
@@ -173,6 +235,33 @@ function createAnonymizerProxy({
           clientResponse.writeHead(upstreamResponse.statusCode || 502, responseHeaders);
 
           if (current.empty) {
+            // Rien à dé-anonymiser, mais le harnais observe quand même ce qui
+            // est livré au client — inchangé, aucune réécriture ici.
+            if (isEventStream(upstreamResponse.headers['content-type'])) {
+              const collecteur = createCollecteurTexte();
+              upstreamResponse.setEncoding('utf8');
+              upstreamResponse.on('data', (chunk) => {
+                collecteur.push(chunk);
+                clientResponse.write(chunk);
+              });
+              upstreamResponse.on('end', () => {
+                clientResponse.end();
+                observerReponse(collecteur.texte(), route.provider);
+              });
+              upstreamResponse.on('error', () => clientResponse.end());
+              return;
+            }
+            if (isJsonLike(upstreamResponse.headers['content-type'])) {
+              const chunks = [];
+              upstreamResponse.on('data', (chunk) => chunks.push(chunk));
+              upstreamResponse.on('end', () => {
+                const raw = Buffer.concat(chunks);
+                clientResponse.end(raw);
+                observerReponse(extractAssistantTextFromJson(raw), route.provider);
+              });
+              upstreamResponse.on('error', () => clientResponse.end());
+              return;
+            }
             upstreamResponse.pipe(clientResponse);
             return;
           }
@@ -181,16 +270,24 @@ function createAnonymizerProxy({
 
           if (isEventStream(upstreamResponse.headers['content-type'])) {
             const rewriter = createSseRewriter(revert);
+            const collecteur = createCollecteurTexte();
             upstreamResponse.setEncoding('utf8');
             upstreamResponse.on('data', (chunk) => {
               const out = rewriter.push(chunk);
-              if (out) clientResponse.write(out);
+              if (out) {
+                clientResponse.write(out);
+                collecteur.push(out);
+              }
             });
             upstreamResponse.on('end', () => {
               const tail = rewriter.end();
-              if (tail) clientResponse.write(tail);
+              if (tail) {
+                clientResponse.write(tail);
+                collecteur.push(tail);
+              }
               stats.deanonymized += 1;
               clientResponse.end();
+              observerReponse(collecteur.texte(), route.provider);
             });
             upstreamResponse.on('error', () => clientResponse.end());
             return;
@@ -204,6 +301,7 @@ function createAnonymizerProxy({
               const rewritten = rewriteJsonBody(raw, revert);
               stats.deanonymized += 1;
               clientResponse.end(rewritten);
+              observerReponse(extractAssistantTextFromJson(rewritten), route.provider);
             });
             upstreamResponse.on('error', () => clientResponse.end());
             return;
