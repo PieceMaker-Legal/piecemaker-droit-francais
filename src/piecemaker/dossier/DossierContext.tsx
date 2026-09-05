@@ -1,15 +1,6 @@
-/**
- * Selected legal case file, shared by every section of the Dossier tab.
- *
- * The PieceMaker backend addresses a case by its registry id (`folder.path` in
- * `GET /repository`), not by the CloudCLI project path: a case is registered once
- * from the panel and then referenced by id. When the open CloudCLI project happens
- * to sit inside a registered case, that case is preselected.
- */
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-
-import { pmGet, PieceMakerApiError } from './api';
+import { PieceMakerApiError, pmGet, pmPost } from '@/piecemaker/dossier/api';
 
 /** One registered case file, as listed by `GET /repository`. */
 export type DossierCase = {
@@ -22,6 +13,8 @@ export type DossierCase = {
 };
 
 type RepositoryOverview = { folders?: DossierCase[] };
+
+type RegisterSelectedCaseResult = { folder: DossierCase };
 
 type DossierContextValue = {
   cases: DossierCase[];
@@ -46,31 +39,40 @@ export function DossierCasesProvider({
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const refreshSequence = useRef(0);
 
   const refreshCases = useCallback(async () => {
+    const sequence = ++refreshSequence.current;
     setLoading(true);
     try {
       const overview = await pmGet<RepositoryOverview>('/repository');
-      setCases(overview.folders ?? []);
+      let refreshedCases = overview.folders ?? [];
+      let selectedCase = projectPath
+        ? refreshedCases.find((entry) => projectPath === entry.location)
+        : undefined;
+      if (projectPath && !selectedCase) {
+        const registered = await pmPost<RegisterSelectedCaseResult>('/repository/cases/selected', { folder: projectPath });
+        const registeredCase = registered.folder;
+        selectedCase = registeredCase;
+        refreshedCases = [...refreshedCases.filter((entry) => entry.path !== registeredCase.path), registeredCase];
+      }
+      if (sequence !== refreshSequence.current) return;
+      setCases(refreshedCases);
+      setSelectedCaseId(selectedCase?.path ?? null);
       setError(null);
     } catch (cause) {
+      if (sequence !== refreshSequence.current) return;
       setCases([]);
+      setSelectedCaseId(null);
       setError(cause instanceof PieceMakerApiError ? cause.message : String(cause));
     } finally {
-      setLoading(false);
+      if (sequence === refreshSequence.current) setLoading(false);
     }
-  }, []);
+  }, [projectPath]);
 
   useEffect(() => {
     void refreshCases();
   }, [refreshCases]);
-
-  useEffect(() => {
-    const containing = projectPath
-      ? cases.find((entry) => projectPath === entry.location || projectPath.startsWith(`${entry.location}/`))
-      : undefined;
-    setSelectedCaseId(containing?.path ?? null);
-  }, [cases, projectPath]);
 
   const value = useMemo<DossierContextValue>(() => ({
     cases,
