@@ -17,6 +17,7 @@ const { createAdminRouter, registerLegalCase } = require('./vendor/websocket-ser
 const { readRegistryConfig, resolveCaseReference } = require('./vendor/websocket-server/case-registry.cjs');
 const protectionLibrary = require('./vendor/piecemaker-plugin/scripts/lib/protection.cjs');
 const { createProtectionBypassRouter } = require('./protection/routes.cjs');
+const { createActivationRouter } = require('./activation/index.cjs');
 const { createStampingRouter } = require('./vendor/websocket-server/stamping-routes.cjs');
 const { findSoffice } = require('./vendor/websocket-server/lib/office-to-pdf.cjs');
 
@@ -50,7 +51,7 @@ function piecemakerHome() {
  * @param {() => object} [options.getRuntimeStatus] Ce que la carte des composants
  *   affiche du serveur hôte (port, hôte, dépendances système).
  */
-function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus } = {}) {
+function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anonymizer: applicationAnonymizer } = {}) {
   const express = require('express');
   const router = express.Router();
 
@@ -94,6 +95,12 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus } = {}
     protection: protectionLibrary,
   }));
 
+  router.use(createActivationRouter({
+    repoRoot: VENDOR_ROOT,
+    piecemakerHome: homeDir,
+    userHome: os.homedir(),
+  }));
+
   router.use(createAdminRouter({
     repoRoot: VENDOR_ROOT,
     homeDir,
@@ -104,13 +111,8 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus } = {}
 
   router.use(createStampingRouter({ homeDir }));
 
-  // Le proxy PII remplace LiteLLM : il pose `ANTHROPIC_BASE_URL` dans
-  // l'environnement du serveur, dont héritent le chat et le terminal lancés par
-  // CloudCLI. Démarré ici, il vit et meurt avec le serveur hôte. L'écoute est
-  // asynchrone mais gagne largement la course : aucun client IA n'est lancé
-  // avant le premier message de l'utilisateur.
-  const anonymizer = createAnonymizerService({ homeDir });
-  void anonymizer.start();
+  const anonymizer = applicationAnonymizer || createAnonymizerService({ homeDir });
+  if (!applicationAnonymizer) void anonymizer.start();
   router.use(createAnonymizerRouter({ service: anonymizer }));
 
   return router;
