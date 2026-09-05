@@ -1,20 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { PieceMakerApiError, pmGet, pmPost } from '@/piecemaker/dossier/api';
+import { PieceMakerApiError } from '@/piecemaker/dossier/api';
+import { ensureDossierRegistration, type DossierCase } from '@/piecemaker/dossier/dossierRegistration';
 
-/** One registered case file, as listed by `GET /repository`. */
-export type DossierCase = {
-  /** Registry id, passed back as the `case` query parameter. */
-  path: string;
-  name: string;
-  /** Absolute folder on disk. */
-  location: string;
-  registered: boolean;
-};
-
-type RepositoryOverview = { folders?: DossierCase[] };
-
-type RegisterSelectedCaseResult = { folder: DossierCase };
+export type { DossierCase } from '@/piecemaker/dossier/dossierRegistration';
 
 type DossierContextValue = {
   cases: DossierCase[];
@@ -45,17 +34,7 @@ export function DossierCasesProvider({
     const sequence = ++refreshSequence.current;
     setLoading(true);
     try {
-      const overview = await pmGet<RepositoryOverview>('/repository');
-      let refreshedCases = overview.folders ?? [];
-      let selectedCase = projectPath
-        ? refreshedCases.find((entry) => projectPath === entry.location)
-        : undefined;
-      if (projectPath && !selectedCase) {
-        const registered = await pmPost<RegisterSelectedCaseResult>('/repository/cases/selected', { folder: projectPath });
-        const registeredCase = registered.folder;
-        selectedCase = registeredCase;
-        refreshedCases = [...refreshedCases.filter((entry) => entry.path !== registeredCase.path), registeredCase];
-      }
+      const { cases: refreshedCases, selectedCase } = await ensureDossierRegistration(projectPath);
       if (sequence !== refreshSequence.current) return;
       setCases(refreshedCases);
       setSelectedCaseId(selectedCase?.path ?? null);

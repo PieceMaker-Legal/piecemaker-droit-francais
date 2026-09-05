@@ -5,7 +5,7 @@ import { FileTree } from '@/modules/file-tree';
 import { StandaloneShell } from '@/modules/standalone-shell';
 import { GitPanel } from '@/modules/git-panel';
 import { PluginTabContent } from '@/modules/plugins';
-import { DossierPanel } from '@/piecemaker/dossier';
+import { DossierPanel, useSelectedDossierRegistration } from '@/piecemaker/dossier';
 import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { usePaletteOpsRegister } from '@/modules/command-palette';
 import { TaskMasterPanel, useTaskMasterProjectSync, useTasksSettings } from '@/modules/task-master';
@@ -64,6 +64,7 @@ function WorkspaceMain({
   const browserUseEnabled = useBrowserUseEnabled();
 
   useTaskMasterProjectSync(selectedProject);
+  useSelectedDossierRegistration(selectedProject);
 
   const shouldShowTasksTab = Boolean(tasksEnabled && isTaskMasterInstalled);
   const shouldShowBrowserTab = browserUseEnabled;
