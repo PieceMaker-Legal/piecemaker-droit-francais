@@ -1,3 +1,15 @@
+<!-- piecemaker-instructions-start -->
+## PieceMaker — instructions gérées
+
+Pour une chronologie factuelle, appeler d'abord l'outil `chronologie` du
+serveur MCP `piecemaker`. Pour une question sur les personnes ou leurs liens de
+droit, appeler `graphe_question` ; si l'outil signale que le graphe doit être
+actualisé, lancer `graphe_construire` puis reposer la question. Consulter aussi
+la règle complète suivante :
+
+@/Users/tsardet/Documents/GitHub/piecemaker-droit-francais/.claude/rules/piecemaker.md
+<!-- piecemaker-instructions-end -->
+
 # Repository guidance
 
 Forking CloudCLI. Never modify original code, only plug your additions on it so upstream is possible.
@@ -158,9 +170,22 @@ Piège d'isolation connu : `plugin-registry.service.ts:8-9` code en dur `~/.clau
 - Node système de cette machine en v16, trop ancien pour Vite 7. Utiliser la v24 de nvm, par exemple en préfixant `export PATH="$HOME/.nvm/versions/node/v24.11.1/bin:$PATH"`.
 
 Command to reboot:
-pkill -TERM -f "$PWD/node_modules/.bin/concurrently.*server:dev.*client"
-  2>/dev/null || true; sleep 1; source "$HOME/.nvm/nvm.sh"; nvm install; npm
-  rebuild better-sqlite3; (for i in {1..120}; do if curl -fsS
-  http://127.0.0.1:3002/api/auth/status >/dev/null 2>&1 && curl -fsS
-  http://127.0.0.1:5173/ >/dev/null 2>&1; then open http://localhost:5173; exit
-  0; fi; sleep 0.25; done) & SERVER_PORT=3002 VITE_PORT=5173 npm run dev
+pkill -TERM -f "$PWD/node_modules/.bin/concurrently.*server:dev.*client" 2>/
+  dev/null || true
+  sleep 1
+  source "$HOME/.nvm/nvm.sh"
+  nvm install
+  npm rebuild better-sqlite3
+
+  (
+    for i in {1..120}; do
+      if curl -fsS http://127.0.0.1:3003/api/auth/status >/dev/null 2>&1 &&
+         curl -fsS http://127.0.0.1:5173/ >/dev/null 2>&1; then
+        open http://localhost:5173
+        exit 0
+      fi
+      sleep 0.25
+    done
+  ) &
+
+  SERVER_PORT=3003 VITE_PORT=5173 npm run dev
