@@ -23,7 +23,7 @@ export const APP = {
 export const INSTALLER = {
   key: 'installer',
   label: 'Socle PieceMaker Installer (proxy PII, MCP, GLiNER)',
-  directory: process.env.PIECEMAKER_INSTALLER_DIR || path.join(home, 'PieceMaker'),
+  directory: process.env.PIECEMAKER_INSTALLER_DIR || path.join(home, 'Sites', 'PieceMaker-Installer'),
   remote: 'https://github.com/PieceMaker-Legal/PieceMaker-Installer.git',
   branch: 'main',
 };
