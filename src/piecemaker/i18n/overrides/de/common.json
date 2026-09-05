@@ -1,0 +1,28 @@
+{
+  "mainContent": {
+    "loading": "PieceMaker wird geladen",
+    "chooseProject": "Dossier auswählen",
+    "selectProjectDescription": "Wähl ein Dossier aus der Seitenleiste, um mit Claude zu programmieren. Jedes Dossier enthält deine Chat-Sitzungen und den Dateiverlauf.",
+    "createProjectMobile": "Tipp oben auf die Menüschaltfläche, um auf Dossiers zuzugreifen",
+    "createProjectDesktop": "Erstell ein neues Dossier, indem du auf das Ordnersymbol in der Seitenleiste klickst",
+    "projectFiles": "Dossierdateien"
+  },
+  "fileTree": {
+    "checkProjectPath": "Überprüf, ob der Dossierpfad zugänglich ist"
+  },
+  "projectWizard": {
+    "title": "Neues Dossier erstellen",
+    "step1": {
+      "existing": {
+        "description": "Ich habe bereits einen Arbeitsbereich auf meinem Server und möchte ihn nur zur Dossierliste hinzufügen"
+      }
+    },
+    "step3": {
+      "existingInfo": "Der Arbeitsbereich wird zur Dossierliste hinzugefügt und steht für Claude/Cursor-Sitzungen zur Verfügung.",
+      "newEmpty": "Der Arbeitsbereich wird zur Dossierliste hinzugefügt und steht für Claude/Cursor-Sitzungen zur Verfügung."
+    },
+    "buttons": {
+      "createProject": "Dossier erstellen"
+    }
+  }
+}

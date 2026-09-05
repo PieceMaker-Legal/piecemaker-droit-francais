@@ -3,13 +3,12 @@
 import './load-env.js';
 import fs, { promises as fsPromises } from 'fs';
 import path from 'path';
-import os from 'os';
 import http from 'http';
 
 import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
 
-import { AppError, findApplicationRoot, getModuleDirectory, IS_PLATFORM, terminalTextStyles } from '@/shared/utils.js';
+import { AppError, findApplicationRoot, getApplicationDataRoot, getModuleDirectory, IS_PLATFORM, terminalTextStyles } from '@/shared/utils.js';
 import {
     closeSessionsWatcher,
     initializeSessionsWatcher,
@@ -31,6 +30,7 @@ import { commandsRoutes } from './modules/commands/index.js';
 import { settingsRoutes } from './modules/settings/index.js';
 import { createSystemModule } from './modules/system/index.js';
 import { createAgentModule } from './modules/agent/index.js';
+import { createPieceMakerRouter } from './piecemaker/index.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import { userRoutes } from './modules/user/index.js';
@@ -184,6 +184,9 @@ app.use('/api/user', authenticateToken, userRoutes);
 // Plugins API Routes (protected)
 app.use('/api/plugins', authenticateToken, pluginsRoutes);
 
+// PieceMaker API Routes (protected)
+app.use('/api/piecemaker', authenticateToken, createPieceMakerRouter());
+
 // Browser MCP bridge API (local token protected)
 app.use('/api/browser-use-mcp', browserUseMcpRoutes);
 
@@ -278,7 +281,7 @@ const SERVER_PORT = Number.parseInt(process.env.SERVER_PORT || '3001', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const DISPLAY_HOST = getConnectableHost(HOST);
 const VITE_PORT = process.env.VITE_PORT || 5173;
-const LOCAL_SERVER_MARKER_PATH = path.join(os.homedir(), '.cloudcli', 'local-server.json');
+const LOCAL_SERVER_MARKER_PATH = path.join(getApplicationDataRoot(), 'local-server.json');
 
 function getErrorCode(error: unknown): string | undefined {
     if (typeof error !== 'object' || error === null || !('code' in error)) {

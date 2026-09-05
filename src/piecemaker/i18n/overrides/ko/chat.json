@@ -1,0 +1,11 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "사건 선택",
+      "description": "해당 디렉토리에서 대화형 Shell을 열 사건을 선택하세요"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "{{provider}}와 채팅을 시작하려면 사건을 선택하세요"
+  }
+}

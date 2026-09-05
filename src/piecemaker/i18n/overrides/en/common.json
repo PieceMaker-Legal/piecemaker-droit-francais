@@ -1,0 +1,28 @@
+{
+  "mainContent": {
+    "loading": "Loading PieceMaker",
+    "chooseProject": "Choose Your Case",
+    "selectProjectDescription": "Select a case from the sidebar to start coding with Claude. Each case contains your chat sessions and file history.",
+    "createProjectMobile": "Tap the menu button above to access cases",
+    "createProjectDesktop": "Create a new case by clicking the folder icon in the sidebar",
+    "projectFiles": "Case Files"
+  },
+  "fileTree": {
+    "checkProjectPath": "Check if the case path is accessible"
+  },
+  "projectWizard": {
+    "title": "Create New Case",
+    "step1": {
+      "existing": {
+        "description": "I already have a workspace on my server and just need to add it to the case list"
+      }
+    },
+    "step3": {
+      "existingInfo": "The workspace will be added to your case list and will be available for Claude/Cursor sessions.",
+      "newEmpty": "The workspace will be added to your case list and will be available for Claude/Cursor sessions."
+    },
+    "buttons": {
+      "createProject": "Create Case"
+    }
+  }
+}

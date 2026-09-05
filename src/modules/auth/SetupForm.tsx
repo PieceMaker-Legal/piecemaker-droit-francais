@@ -6,6 +6,7 @@ import { useAuth } from '@/modules/auth/context/AuthContext';
 import AuthErrorAlert from '@/modules/auth/AuthErrorAlert';
 import AuthInputField from '@/modules/auth/AuthInputField';
 import AuthScreenLayout from '@/modules/auth/AuthScreenLayout';
+import { PRODUCT_NAME } from '@/shared/constants';
 
 type SetupFormState = {
   username: string;
@@ -85,7 +86,7 @@ export default function SetupForm() {
 
   return (
     <AuthScreenLayout
-      title="Welcome to CloudCLI"
+      title={`Welcome to ${PRODUCT_NAME}`}
       description="Set up your account to get started"
       footerText="This is a single-user system. Only one account can be created."
     >

@@ -1,0 +1,43 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "Досье"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "Сортировка досье",
+      "description": "Как досье упорядочены на боковой панели"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "Досье (локально)",
+      "userDescription": "Область пользователя: доступно во всех досье на вашей машине",
+      "projectDescription": "Локальная область: доступно только в выбранном досье"
+    },
+    "fields": {
+      "selectProject": "Выберите досье..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "Используйте task-master init в каталоге вашего досье"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Все команды автоматически выполняются в каталоге досье."
+      }
+    }
+  },
+  "pluginSettings": {
+    "starterPlugin": {
+      "name": "Статистика досье",
+      "description": "Количество файлов, строк кода, разбивка по типам файлов и недавняя активность в вашем досье."
+    }
+  }
+}

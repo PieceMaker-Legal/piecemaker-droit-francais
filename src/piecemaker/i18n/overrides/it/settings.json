@@ -1,0 +1,43 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "Fascicolo"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "Ordinamento fascicoli",
+      "description": "Come vengono ordinati i fascicoli nella barra laterale"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "Fascicolo (locale)",
+      "userDescription": "Ambito utente: disponibile in tutti i fascicoli sulla tua macchina",
+      "projectDescription": "Ambito locale: disponibile solo nel fascicolo selezionato"
+    },
+    "fields": {
+      "selectProject": "Seleziona un fascicolo..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "Usa task-master init nella directory del tuo fascicolo"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Tutti i comandi vengono auto-eseguiti nella directory del fascicolo."
+      }
+    }
+  },
+  "pluginSettings": {
+    "starterPlugin": {
+      "name": "Statistiche fascicolo",
+      "description": "Conteggio file, righe di codice, ripartizione per tipo di file e attività recente per il tuo fascicolo."
+    }
+  }
+}

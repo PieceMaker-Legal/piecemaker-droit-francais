@@ -40,6 +40,17 @@ import type {
  */
 export const IS_PLATFORM = process.env.VITE_IS_PLATFORM === 'true';
 
+/**
+ * Returns the root for backend-owned persistent data. Server bootstrap, CLI,
+ * attachments, browser automation, and the desktop shell use `CLOUDCLI_HOME`
+ * to isolate a branded fork; ordinary installs retain the historical
+ * `~/.cloudcli` default. Provider-owned folders such as `~/.codex` are outside
+ * this root and must not be redirected through this helper.
+ */
+export function getApplicationDataRoot(): string {
+  return process.env.CLOUDCLI_HOME || path.join(os.homedir(), '.cloudcli');
+}
+
 // ---------------------------
 //----------------- NORMALIZED MESSAGE HELPER INPUT TYPES ------------
 /**
