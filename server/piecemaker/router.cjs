@@ -14,6 +14,9 @@ const VENDOR_ROOT = path.join(__dirname, 'vendor');
 const { createAnonymizerRouter } = require('./anonymizer/routes.cjs');
 const { createAnonymizerService } = require('./anonymizer/service.cjs');
 const { createAdminRouter, registerLegalCase } = require('./vendor/websocket-server/admin-routes.cjs');
+const { readRegistryConfig, resolveCaseReference } = require('./vendor/websocket-server/case-registry.cjs');
+const protectionLibrary = require('./vendor/piecemaker-plugin/scripts/lib/protection.cjs');
+const { createProtectionBypassRouter } = require('./protection/routes.cjs');
 const { createStampingRouter } = require('./vendor/websocket-server/stamping-routes.cjs');
 const { findSoffice } = require('./vendor/websocket-server/lib/office-to-pdf.cjs');
 
@@ -83,6 +86,13 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus } = {}
       response.status(400).json({ error: error.message });
     }
   });
+
+  // Levée de protection à l'échelle du dossier : ajout PieceMaker monté avant
+  // le vendor, qui n'expose que le classement pièce par pièce.
+  router.use(createProtectionBypassRouter({
+    resolveCase: (reference) => resolveCaseReference(readRegistryConfig(path.join(homeDir, 'config.json')), reference),
+    protection: protectionLibrary,
+  }));
 
   router.use(createAdminRouter({
     repoRoot: VENDOR_ROOT,

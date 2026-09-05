@@ -75,6 +75,15 @@ export type ProtectionSaveResult = {
   resources: string[];
 };
 
+/** GET/PUT /protection/bypass: case-wide protection lift and the snapshot kept to undo it. */
+export type ProtectionBypassState = {
+  case: string;
+  active: boolean;
+  savedAt: string | null;
+  savedCount: number;
+  unprotectedCount: number;
+};
+
 export type OriginalsPipelineAction = 'convert' | 'anonymize';
 
 /** GET/DELETE /originals/job, and the `job` embedded in POST /originals/pipeline. */
