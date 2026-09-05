@@ -1,0 +1,48 @@
+{
+  "projects": {
+    "title": "Davalar",
+    "newProject": "Yeni Dava",
+    "deleteProject": "Davayı Kaldır",
+    "renameProject": "Davayı Yeniden Adlandır",
+    "noProjects": "Dava bulunamadı",
+    "loadingProjects": "Davalar yükleniyor...",
+    "searchPlaceholder": "Davalarda ara...",
+    "projectNamePlaceholder": "Dava adı",
+    "fetchingProjects": "Claude davaların ve oturumların getiriliyor",
+    "projects": "dava",
+    "noMatchingProjects": "Eşleşen dava yok",
+    "runClaudeCli": "Başlamak için bir dava dizininde Claude CLI çalıştır"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "Yeni dava oluştur",
+    "refresh": "Davaları ve oturumları yenile (Ctrl+R)",
+    "renameProject": "Davayı yeniden adlandır (F2)",
+    "deleteProject": "Davayı kenar çubuğundan kaldır (Delete)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "Bu dava kenar çubuğundan kaldırılsın mı? Dava dosyaların, bellek verilerin ve oturum verilerin silinmeyecek.",
+    "enterProjectPath": "Lütfen bir dava yolu gir",
+    "deleteProjectFailed": "Dava kaldırılamadı. Lütfen tekrar dene.",
+    "deleteProjectError": "Dava kaldırılırken hata oluştu. Lütfen tekrar dene.",
+    "createProjectFailed": "Dava oluşturulamadı. Lütfen tekrar dene.",
+    "createProjectError": "Dava oluşturulurken hata oluştu. Lütfen tekrar dene.",
+    "updateProjectError": "Dava güncellenirken hata oluştu. Lütfen tekrar dene.",
+    "restoreProjectFailed": "Dava geri yüklenemedi. Lütfen tekrar dene.",
+    "restoreProjectError": "Dava geri yüklenirken hata oluştu. Lütfen tekrar dene."
+  },
+  "search": {
+    "modeProjects": "Davalar",
+    "projectsScanned_one": "{{count}} dava tarandı",
+    "projectsScanned_other": "{{count}} dava tarandı"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "Davayı Kaldır",
+    "sessionCount_one": "Bu dava {{count}} konuşma içeriyor.",
+    "sessionCount_other": "Bu dava {{count}} konuşma içeriyor.",
+    "allConversationsDeleted": "Dava kenar çubuğundan kaldırılacak. Dosyaların, bellek verilerin ve oturum verilerin korunacak.",
+    "cannotUndo": "Davayı sonra tekrar ekleyebilirsin."
+  }
+}

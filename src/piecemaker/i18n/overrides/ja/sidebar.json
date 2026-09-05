@@ -1,0 +1,43 @@
+{
+  "projects": {
+    "title": "案件",
+    "newProject": "新規案件",
+    "deleteProject": "案件を除去",
+    "renameProject": "案件名を変更",
+    "noProjects": "案件が見つかりません",
+    "loadingProjects": "案件を読み込んでいます...",
+    "searchPlaceholder": "案件を検索...",
+    "projectNamePlaceholder": "案件名",
+    "fetchingProjects": "Claudeの案件とセッションを取得しています",
+    "projects": "案件",
+    "noMatchingProjects": "一致する案件がありません",
+    "runClaudeCli": "案件ディレクトリでClaude CLIを実行して始めましょう"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "新しい案件を作成",
+    "refresh": "案件とセッションを更新 (Ctrl+R)",
+    "renameProject": "案件名を変更 (F2)",
+    "deleteProject": "サイドバーから案件を除去 (Delete)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "サイドバーからこの案件を除去しますか？案件ファイル、メモリ、セッションデータは削除されません。",
+    "enterProjectPath": "案件のパスを入力してください",
+    "deleteProjectFailed": "案件の除去に失敗しました。もう一度お試しください。",
+    "deleteProjectError": "案件の除去でエラーが発生しました。もう一度お試しください。",
+    "createProjectFailed": "案件の作成に失敗しました。もう一度お試しください。",
+    "createProjectError": "案件の作成でエラーが発生しました。もう一度お試しください。",
+    "updateProjectError": "案件の更新でエラーが発生しました。もう一度お試しください。",
+    "restoreProjectFailed": "案件の復元に失敗しました。もう一度お試しください。",
+    "restoreProjectError": "案件の復元でエラーが発生しました。もう一度お試しください。"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "案件を除去",
+    "confirmDelete": "この案件をどうしますか：",
+    "sessionCount": "この案件には{{count}}件の会話があります。",
+    "allConversationsDeleted": "案件はサイドバーから除去されます。ファイル、メモリ、セッションデータは保持されます。",
+    "cannotUndo": "後から案件を再追加できます。"
+  }
+}

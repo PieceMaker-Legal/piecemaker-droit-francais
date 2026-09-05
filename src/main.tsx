@@ -8,6 +8,7 @@ import 'katex/dist/katex.min.css'
 
 // Initialize i18n
 import '@/modules/i18n'
+import '@/piecemaker/anonymizer/bootstrap'
 
 // React Scan is a render-diagnostics overlay, and an expensive one: measured on
 // this app it roughly halves the dev frame rate, adds ~14 MB of heap and injects

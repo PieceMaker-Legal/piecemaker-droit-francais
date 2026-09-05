@@ -1,0 +1,51 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "案件"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "案件排序",
+      "description": "案件在侧边栏中的排列方式"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "案件（本地）",
+      "userDescription": "用户范围：在您机器上的所有案件中可用",
+      "projectDescription": "本地范围：仅在选定案件中可用"
+    },
+    "fields": {
+      "selectProject": "选择案件..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "在案件目录中使用 task-master init"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never。所有命令在案件目录内自动执行。"
+      }
+    }
+  },
+  "mcpServers": {
+    "managed": {
+      "hint": "由 PieceMaker 管理。"
+    }
+  },
+  "pluginSettings": {
+    "sections": {
+      "officialDescription": "由 PieceMaker 团队维护，可直接安装。"
+    },
+    "starterPlugin": {
+      "name": "案件统计",
+      "description": "查看案件的文件数、代码行数、文件类型分布以及最近活动。"
+    }
+  }
+}

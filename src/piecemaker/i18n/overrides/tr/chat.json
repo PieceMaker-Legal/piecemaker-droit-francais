@@ -1,0 +1,11 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "Dava Seç",
+      "description": "O dizinde etkileşimli shell açmak için bir dava seç"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "{{provider}} ile sohbet etmeye başlamak için bir dava seç"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "projects": {
+    "title": "案件",
+    "newProject": "新建案件",
+    "deleteProject": "移除案件",
+    "renameProject": "重命名案件",
+    "noProjects": "未找到案件",
+    "loadingProjects": "加载案件中...",
+    "searchPlaceholder": "搜索案件...",
+    "projectNamePlaceholder": "案件名称",
+    "fetchingProjects": "正在获取您的 Claude 案件和会话",
+    "projects": "案件",
+    "noMatchingProjects": "未找到匹配的案件",
+    "runClaudeCli": "在案件目录中运行 Claude CLI 以开始使用"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "创建新案件",
+    "refresh": "刷新案件和会话 (Ctrl+R)",
+    "renameProject": "重命名案件 (F2)",
+    "deleteProject": "从侧边栏移除案件 (Delete)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "从侧边栏移除此案件？您的案件文件、记忆和会话数据不会被删除。",
+    "enterProjectPath": "请输入案件路径",
+    "deleteProjectFailed": "移除案件失败，请重试。",
+    "deleteProjectError": "移除案件时出错，请重试。",
+    "createProjectFailed": "创建案件失败，请重试。",
+    "createProjectError": "创建案件时出错，请重试。",
+    "updateProjectError": "更新案件时出错，请重试。",
+    "restoreProjectFailed": "恢复案件失败，请重试。",
+    "restoreProjectError": "恢复案件时出错，请重试。"
+  },
+  "search": {
+    "modeProjects": "案件",
+    "projectsScanned_one": "{{count}} 个案件已扫描",
+    "projectsScanned_other": "{{count}} 个案件已扫描"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "移除案件",
+    "sessionCount_one": "此案件包含 {{count}} 个对话。",
+    "sessionCount_other": "此案件包含 {{count}} 个对话。",
+    "allConversationsDeleted": "案件将从侧边栏中移除。您的文件、记忆和会话数据将会保留。",
+    "cannotUndo": "您可以稍后重新添加此案件。"
+  }
+}

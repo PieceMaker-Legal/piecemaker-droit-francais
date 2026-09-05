@@ -1,7 +1,6 @@
 import { createRequire } from 'node:module';
 import { randomBytes, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 // cross-spawn: drop-in spawn with Windows .cmd/PATHEXT resolution.
@@ -9,7 +8,7 @@ import spawn from 'cross-spawn';
 
 import { appConfigDb } from '@/modules/database/index.js';
 import { providerMcpService } from '@/modules/providers/index.js';
-import { getModuleDirectory } from '@/shared/utils.js';
+import { getApplicationDataRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { getBrowserUseRuntime } from './browser-use-runtime.js';
 
@@ -81,7 +80,7 @@ const DEFAULT_SETTINGS: BrowserUseSettings = {
   enabled: false,
 };
 const AGENT_OWNER_ID = 'agent';
-const PROFILE_ROOT = path.join(os.homedir(), '.cloudcli', 'browser-use', 'profiles');
+const PROFILE_ROOT = path.join(getApplicationDataRoot(), 'browser-use', 'profiles');
 const MCP_SERVER_NAME = 'cloudcli-browser';
 const LEGACY_MCP_SERVER_NAMES = ['cloudcli-browser-use'];
 const RUNTIME_READINESS_CACHE_TTL_MS = 30_000;

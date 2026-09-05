@@ -1,0 +1,28 @@
+{
+  "mainContent": {
+    "loading": "Cargando PieceMaker",
+    "chooseProject": "Elige tu expediente",
+    "selectProjectDescription": "Selecciona un expediente en la barra lateral para empezar a programar con Claude. Cada expediente contiene tus sesiones de chat e historial de archivos.",
+    "createProjectMobile": "Toca el botón de menú de arriba para acceder a los expedientes",
+    "createProjectDesktop": "Crea un expediente nuevo haciendo clic en el icono de carpeta de la barra lateral",
+    "projectFiles": "Archivos del expediente"
+  },
+  "fileTree": {
+    "checkProjectPath": "Comprueba si la ruta del expediente es accesible"
+  },
+  "projectWizard": {
+    "title": "Crear expediente nuevo",
+    "step1": {
+      "existing": {
+        "description": "Ya tengo un espacio de trabajo en mi servidor y solo necesito añadirlo a la lista de expedientes"
+      }
+    },
+    "step3": {
+      "existingInfo": "El espacio de trabajo se añadirá a tu lista de expedientes y estará disponible para sesiones de Claude/Cursor.",
+      "newEmpty": "El espacio de trabajo se añadirá a tu lista de expedientes y estará disponible para sesiones de Claude/Cursor."
+    },
+    "buttons": {
+      "createProject": "Crear expediente"
+    }
+  }
+}

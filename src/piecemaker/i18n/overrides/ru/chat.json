@@ -1,0 +1,11 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "Выберите досье",
+      "description": "Выберите досье для открытия интерактивной оболочки в этом каталоге"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "Выберите досье для начала чата с {{provider}}"
+  }
+}

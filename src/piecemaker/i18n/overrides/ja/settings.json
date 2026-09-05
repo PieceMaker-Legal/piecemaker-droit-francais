@@ -1,0 +1,43 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "案件"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "案件の並び順",
+      "description": "サイドバーでの案件の並び順を設定します"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "案件（ローカル）",
+      "userDescription": "ユーザースコープ: すべての案件で利用可能",
+      "projectDescription": "ローカルスコープ: 選択した案件でのみ利用可能"
+    },
+    "fields": {
+      "selectProject": "案件を選択..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "案件ディレクトリで task-master init を実行してください"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never。すべてのコマンドが案件ディレクトリ内で自動実行。"
+      }
+    }
+  },
+  "pluginSettings": {
+    "starterPlugin": {
+      "name": "案件統計",
+      "description": "案件のファイル数、コード行数、ファイルタイプの内訳、最近のアクティビティを表示します。"
+    }
+  }
+}
