@@ -13,6 +13,7 @@ import { Button, Badge, Tooltip } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 
 import { pmGet, pmPost, pmDelete, pmPut, PieceMakerApiError } from '../api';
+import CaseFilesProtectionBypass from './CaseFilesProtectionBypass';
 import type {
   CaseFileEntry,
   CaseMappingSummary,
@@ -219,7 +220,16 @@ export default function CaseFilesOriginals({ caseId, mapping, onRepositoryChange
           <span>·</span>
           <span>Mapping : {mapping.entries} entrée(s){mapping.exists ? '' : ' (non créé)'}</span>
         </div>
-        {overview?.truncated && <Badge variant="outline">Liste tronquée</Badge>}
+        <div className="flex items-center gap-2">
+          {overview?.truncated && <Badge variant="outline">Liste tronquée</Badge>}
+          <CaseFilesProtectionBypass
+            caseId={caseId}
+            onProtectionChange={() => {
+              void loadProtection();
+              onRepositoryChange();
+            }}
+          />
+        </div>
       </div>
 
       {jobRunning && job && (
