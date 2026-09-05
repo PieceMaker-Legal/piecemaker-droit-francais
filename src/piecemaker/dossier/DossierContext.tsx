@@ -13,6 +13,7 @@ type DossierContextValue = {
   refreshCases: () => Promise<void>;
   loading: boolean;
   error: string | null;
+  projectPath: string | null;
 };
 
 const DossierCasesContext = createContext<DossierContextValue | null>(null);
@@ -61,7 +62,8 @@ export function DossierCasesProvider({
     refreshCases,
     loading,
     error,
-  }), [cases, selectedCaseId, refreshCases, loading, error]);
+    projectPath: projectPath ?? null,
+  }), [cases, selectedCaseId, refreshCases, loading, error, projectPath]);
 
   return <DossierCasesContext.Provider value={value}>{children}</DossierCasesContext.Provider>;
 }
