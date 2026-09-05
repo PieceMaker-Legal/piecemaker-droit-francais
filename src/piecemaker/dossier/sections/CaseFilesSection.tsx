@@ -7,17 +7,17 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { FolderPlus, FolderSearch, Loader2, FileStack, CalendarClock } from 'lucide-react';
+import { FolderPlus, FolderSearch, Loader2, FileStack, CalendarClock, Braces } from 'lucide-react';
 
 import { Button, Pill, PillBar } from '@/shared/ui';
+import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
+import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import type { CaseOverview, RegisterCaseResult } from '@/piecemaker/dossier/sections/CaseFilesTypes';
+import CaseFilesOriginals from '@/piecemaker/dossier/sections/CaseFilesOriginals';
+import CaseFilesChronology from '@/piecemaker/dossier/sections/CaseFilesChronology';
+import CaseMappingSection from '@/piecemaker/dossier/sections/CaseMappingSection';
 
-import { useDossierCases } from '../DossierContext';
-import { pmGet, pmPost, PieceMakerApiError } from '../api';
-import type { CaseOverview, RegisterCaseResult } from './CaseFilesTypes';
-import CaseFilesOriginals from './CaseFilesOriginals';
-import CaseFilesChronology from './CaseFilesChronology';
-
-type ViewId = 'pieces' | 'chronologie';
+type ViewId = 'pieces' | 'mapping' | 'chronologie';
 
 export default function CaseFilesSection() {
   const { cases, selectedCaseId, selectCase, refreshCases, loading, error } = useDossierCases();
@@ -131,6 +131,10 @@ export default function CaseFilesSection() {
                 <FileStack className="h-3.5 w-3.5" />
                 Pièces ({overview.originals.length})
               </Pill>
+              <Pill isActive={view === 'mapping'} onClick={() => setView('mapping')}>
+                <Braces className="h-3.5 w-3.5" />
+                Mapping ({overview.mapping.entries})
+              </Pill>
               <Pill isActive={view === 'chronologie'} onClick={() => setView('chronologie')}>
                 <CalendarClock className="h-3.5 w-3.5" />
                 Chronologie
@@ -142,6 +146,7 @@ export default function CaseFilesSection() {
               <CaseFilesOriginals caseId={selectedCaseId} mapping={overview.mapping} onRepositoryChange={() => void loadOverview()} />
             )}
             {view === 'chronologie' && <CaseFilesChronology caseId={selectedCaseId} caseName={overview.name} />}
+            {view === 'mapping' && <CaseMappingSection caseId={selectedCaseId} onRepositoryChange={loadOverview} />}
           </div>
         </div>
       ) : null}
