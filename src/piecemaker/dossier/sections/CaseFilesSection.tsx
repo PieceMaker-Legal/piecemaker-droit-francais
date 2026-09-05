@@ -16,6 +16,7 @@ import type { CaseOverview, RegisterCaseResult } from '@/piecemaker/dossier/sect
 import CaseFilesOriginals from '@/piecemaker/dossier/sections/CaseFilesOriginals';
 import CaseFilesChronology from '@/piecemaker/dossier/sections/CaseFilesChronology';
 import CaseMappingSection from '@/piecemaker/dossier/sections/CaseMappingSection';
+import CaseMappingSetup from '@/piecemaker/dossier/sections/CaseMappingSetup';
 
 type ViewId = 'pieces' | 'mapping' | 'chronologie';
 
@@ -125,6 +126,7 @@ export default function CaseFilesSection() {
         </div>
       ) : overview ? (
         <div className="flex min-h-0 flex-1 flex-col">
+          {(!overview.mapping.exists || overview.mapping.entries === 0) && <CaseMappingSetup caseId={selectedCaseId} onMappingCreated={loadOverview} />}
           <div className="shrink-0 px-4 pt-3">
             <PillBar className="border border-border/40 bg-muted/50">
               <Pill isActive={view === 'pieces'} onClick={() => setView('pieces')}>
