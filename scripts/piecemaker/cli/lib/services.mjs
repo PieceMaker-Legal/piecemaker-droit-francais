@@ -10,6 +10,37 @@ import { npmPath, runtimeEnv } from './node-runtime.mjs';
 export const APP_LOG = path.join(LOG_DIR, 'application.log');
 export const APP_PID_FILE = path.join(PIECEMAKER_HOME, 'application.pid');
 
+const LITELLM_VENDOR_URL = new URL(
+  '../../../../server/piecemaker/vendor/installer/lib/litellm-proxy.mjs',
+  import.meta.url,
+);
+
+export async function stopLegacyLitellm(report) {
+  let vendor;
+  try {
+    vendor = await import(LITELLM_VENDOR_URL);
+  } catch (error) {
+    report.warn(`LiteLLM — bibliothèque vendorisée introuvable : ${error.message}`);
+    return;
+  }
+
+  let status;
+  try {
+    status = await vendor.getLitellmStatus();
+  } catch (error) {
+    report.warn(`LiteLLM — état illisible : ${error.message}`);
+    return;
+  }
+  if (!status.installed || (!status.running && !status.managed)) return;
+
+  try {
+    await vendor.stopLitellmProxy();
+    report.detail('LiteLLM arrêté — résidu d une installation antérieure, remplacé par le proxy intégré');
+  } catch (error) {
+    report.warn(`LiteLLM — arrêt impossible : ${error.message}`);
+  }
+}
+
 function httpReachable(url, timeoutMs = 1500) {
   return new Promise((resolve) => {
     const request = http.get(url, { timeout: timeoutMs }, (response) => {
@@ -35,11 +66,11 @@ export function appClientReachable() {
 export function startInstallerStack(runtime, report) {
   const entry = path.join(INSTALLER.directory, 'installer', 'bin', 'piecemaker.mjs');
   if (!fs.existsSync(entry)) {
-    report.warn('Socle PieceMaker Installer introuvable — proxy PII et administration non démarrés');
+    report.warn('Socle PieceMaker Installer introuvable — administration non démarrée');
     return { started: false };
   }
 
-  report.step('Socle — démarrage du proxy PII et de l administration');
+  report.step('Socle — démarrage de l administration');
   const result = runCapture(runtime.nodePath, [entry, 'start'], {
     cwd: INSTALLER.directory,
     env: runtimeEnv(runtime, { PIECEMAKER_NON_INTERACTIVE: '1' }),
