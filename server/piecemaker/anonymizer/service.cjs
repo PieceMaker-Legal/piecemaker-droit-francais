@@ -77,12 +77,12 @@ function summarizeCoverage(report) {
   return coverage;
 }
 
-function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = console }) {
+function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = console, required = false }) {
   const dictionary = createDictionaryLoader({ homeDir });
   // Harnais de citations vérifiées (décisions Légifrance + bloc <CITATIONS>) :
   // son propre interrupteur (`PIECEMAKER_CITATIONS=off`) est géré à
   // l'intérieur, pas ici.
-  const harness = createHarnessJuridique({ homeDir });
+  const harness = createHarnessJuridique({ homeDir, verifyResponses: false });
   // Le shim Cursor vit sous le répertoire de données PieceMaker : il n'a rien à
   // faire dans un répertoire appartenant à un fournisseur.
   const binDir = path.join(homeDir, 'bin');
@@ -100,7 +100,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
 
   async function start() {
     if (proxy) return state;
-    if (isDisabled(homeDir)) {
+    if (!required && isDisabled(homeDir)) {
       state.reason = 'disabled';
       return state;
     }
@@ -177,6 +177,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
     const current = dictionary.get();
     return {
       ...state,
+      listening: Boolean(proxy?.listening),
       dictionary: {
         file: dictionary.file,
         exists: dictionary.exists(),
