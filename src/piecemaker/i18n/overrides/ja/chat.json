@@ -1,0 +1,8 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "案件を選択",
+      "description": "案件を選択してそのディレクトリでシェルを開きます"
+    }
+  }
+}

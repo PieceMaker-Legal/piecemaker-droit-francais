@@ -1,9 +1,10 @@
 import { Star, X } from 'lucide-react';
 
 import { useGitHubStars } from '@/modules/sidebar/hooks/useGitHubStars';
+import { PRODUCT_REPOSITORY, PRODUCT_REPOSITORY_URL } from '@/shared/constants';
 import { IS_PLATFORM } from '@/shared/utils';
 
-const GITHUB_REPO_URL = 'https://github.com/siteboon/claudecodeui';
+const [repositoryOwner, repositoryName] = PRODUCT_REPOSITORY.split('/');
 
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -15,14 +16,14 @@ function GitHubIcon({ className }: { className?: string }) {
 
 /** Rendered by SidebarHeader on self-hosted (non-platform) builds to link to the GitHub repo with its star count. */
 export default function GitHubStarBadge() {
-  const { formattedCount, isDismissed, dismiss } = useGitHubStars('siteboon', 'claudecodeui');
+  const { formattedCount, isDismissed, dismiss } = useGitHubStars(repositoryOwner, repositoryName);
 
   if (IS_PLATFORM || isDismissed) return null;
 
   return (
     <div className="group/star relative hidden md:block">
       <a
-        href={GITHUB_REPO_URL}
+        href={PRODUCT_REPOSITORY_URL}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"

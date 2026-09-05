@@ -1,0 +1,28 @@
+{
+  "mainContent": {
+    "loading": "正在加载 PieceMaker",
+    "chooseProject": "选择您的案件",
+    "selectProjectDescription": "从侧边栏选择一个案件以开始使用 Claude 进行编程。每个案件包含您的聊天会话和文件历史。",
+    "createProjectMobile": "点击上方的菜单按钮以访问案件",
+    "createProjectDesktop": "点击侧边栏中的文件夹图标以创建新案件",
+    "projectFiles": "案件文件"
+  },
+  "fileTree": {
+    "checkProjectPath": "检查案件路径是否可访问"
+  },
+  "projectWizard": {
+    "title": "创建新案件",
+    "step1": {
+      "existing": {
+        "description": "我的服务器上已经有工作区，只需要将其添加到案件列表中"
+      }
+    },
+    "step3": {
+      "existingInfo": "工作区将被添加到您的案件列表中，并可用于 Claude/Cursor 会话。",
+      "newEmpty": "工作区将被添加到您的案件列表中，并可用于 Claude/Cursor 会话。"
+    },
+    "buttons": {
+      "createProject": "创建案件"
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "projects": {
+    "title": "Expedientes",
+    "newProject": "Nuevo expediente",
+    "deleteProject": "Quitar expediente",
+    "renameProject": "Renombrar expediente",
+    "noProjects": "No se encontraron expedientes",
+    "loadingProjects": "Cargando expedientes...",
+    "searchPlaceholder": "Buscar expedientes...",
+    "projectNamePlaceholder": "Nombre del expediente",
+    "fetchingProjects": "Obteniendo tus expedientes y sesiones de Claude",
+    "projects": "expedientes",
+    "noMatchingProjects": "No hay expedientes que coincidan",
+    "runClaudeCli": "Ejecuta Claude CLI en el directorio de un expediente para empezar"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "Crear expediente nuevo",
+    "refresh": "Actualizar expedientes y sesiones (Ctrl+R)",
+    "renameProject": "Renombrar expediente (F2)",
+    "deleteProject": "Quitar expediente de la barra lateral (Supr)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "¿Quitar este expediente de la barra lateral? Tus archivos, memorias y datos de sesión no se eliminarán.",
+    "enterProjectPath": "Introduce la ruta del expediente",
+    "deleteProjectFailed": "No se pudo quitar el expediente. Inténtalo de nuevo.",
+    "deleteProjectError": "Error al quitar el expediente. Inténtalo de nuevo.",
+    "createProjectFailed": "No se pudo crear el expediente. Inténtalo de nuevo.",
+    "createProjectError": "Error al crear el expediente. Inténtalo de nuevo.",
+    "updateProjectError": "Error al actualizar el expediente. Inténtalo de nuevo.",
+    "restoreProjectFailed": "No se pudo restaurar el expediente. Inténtalo de nuevo.",
+    "restoreProjectError": "Error al restaurar el expediente. Inténtalo de nuevo."
+  },
+  "search": {
+    "modeProjects": "Expedientes",
+    "projectsScanned_one": "{{count}} expediente examinado",
+    "projectsScanned_other": "{{count}} expedientes examinados"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "Quitar expediente",
+    "sessionCount_one": "Este expediente contiene {{count}} conversación.",
+    "sessionCount_other": "Este expediente contiene {{count}} conversaciones.",
+    "allConversationsDeleted": "El expediente se quitará de la barra lateral. Tus archivos, memorias y datos de sesión se conservarán.",
+    "cannotUndo": "Puedes volver a añadir el expediente más tarde."
+  }
+}

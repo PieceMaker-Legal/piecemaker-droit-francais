@@ -1,0 +1,43 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "Dossier"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "Dossiersortierung",
+      "description": "Wie Dossiers in der Seitenleiste angeordnet werden"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "Dossier (Lokal)",
+      "userDescription": "Benutzerbereich: In allen Dossiers deines Computers verfügbar",
+      "projectDescription": "Lokaler Bereich: Nur im ausgewählten Dossier verfügbar"
+    },
+    "fields": {
+      "selectProject": "Dossier auswählen..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "task-master init in deinem Dossierverzeichnis verwenden"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Alle Befehle werden automatisch innerhalb des Dossierverzeichnisses ausgeführt."
+      }
+    }
+  },
+  "pluginSettings": {
+    "starterPlugin": {
+      "name": "Dossierstatistiken",
+      "description": "Dateianzahl, Codezeilen, Dateityp-Aufschlüsselung und aktuelle Aktivitäten für dein Dossier."
+    }
+  }
+}

@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadProductConfig } from '../../shared/product-config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..', '..');
 const stageDir = path.join(rootDir, '.desktop-build', 'desktop-app');
+const product = loadProductConfig();
 
 const packageJson = JSON.parse(
   await fs.readFile(path.join(rootDir, 'package.json'), 'utf8'),
@@ -68,8 +70,8 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
   return {
     name: `${packageJson.name}-desktop`,
     version: packageJson.version,
-    productName: packageJson.productName,
-    description: `${packageJson.productName} desktop shell`,
+    productName: product.name,
+    description: `${product.name} desktop shell`,
     author: packageJson.author,
     license: packageJson.license,
     type: 'module',
@@ -79,10 +81,10 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
     },
     optionalDependencies: copiedOptionalDependencies,
     build: {
-      appId: packageJson.build.appId,
-      productName: packageJson.build.productName,
+      appId: product.appId,
+      productName: product.name,
       asar: packageJson.build.asar,
-      artifactName: packageJson.build.artifactName,
+      artifactName: `${product.slug}-desktop-\${version}-\${os}-\${arch}.\${ext}`,
       electronVersion: getElectronVersion(),
       directories: {
         output: '../../release/desktop',
@@ -95,11 +97,21 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
         'public/**',
         'dist/**',
         'dist-server/**',
+        'shared/**',
+        'product.config.json',
         'node_modules/**',
         'package.json',
       ],
-      protocols: packageJson.build.protocols,
-      mac: packageJson.build.mac,
+      protocols: [{ name: product.name, schemes: [product.protocol] }],
+      mac: {
+        ...packageJson.build.mac,
+        extendInfo: {
+          ...packageJson.build.mac.extendInfo,
+          CFBundleName: product.name,
+          CFBundleDisplayName: product.name,
+          CFBundleURLTypes: [{ CFBundleURLName: product.name, CFBundleURLSchemes: [product.protocol] }],
+        },
+      },
       win: packageJson.build.win,
       nsis: packageJson.build.nsis,
     },
@@ -112,6 +124,8 @@ await fs.mkdir(stageDir, { recursive: true });
 await copyRequired('electron');
 await copyRequired('dist');
 await copyRequired('public');
+await copyRequired('product.config.json');
+await copyRequired('shared/product-config.mjs');
 
 const copiedRuntimeDependencies = [];
 if (await copyNodeModule('ws')) {
