@@ -344,6 +344,7 @@ function createAnonymizerProxy({
 
   return {
     stats,
+    get listening() { return server.listening; },
     routes: table.map(({ provider, prefix, target }) => ({ provider, prefix, upstream: target.origin })),
     /**
      * Écoute le port préféré, sinon les suivants, sinon un port éphémère. Les

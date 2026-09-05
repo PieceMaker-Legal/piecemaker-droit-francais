@@ -3,7 +3,13 @@ import path from 'path';
 
 import type { Router } from 'express';
 
+import { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
+
+import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
+import { createCitationStore } from './harness/citation-store.js';
+import { installChatCitationHarness } from './harness/chat-harness.js';
+import { createCitationsRouter } from './harness/citations.routes.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules repris de PieceMaker-Installer sont du
@@ -24,11 +30,24 @@ type PieceMakerRuntimeStatus = {
 };
 
 type PieceMakerVendorModule = {
-  createPieceMakerRouter(options?: { getRuntimeStatus?: () => PieceMakerRuntimeStatus }): Router;
+  createPieceMakerRouter(options?: { getRuntimeStatus?: () => PieceMakerRuntimeStatus; anonymizer?: unknown }): Router;
   piecemakerHome(): string;
 };
 
 const vendor = createRequire(import.meta.url)(routerPath) as PieceMakerVendorModule;
 
-export const { createPieceMakerRouter, piecemakerHome } = vendor;
+export const { piecemakerHome } = vendor;
+const { createAnonymizerService } = createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/anonymizer/service.cjs'));
+const anonymizer = createAnonymizerService({ homeDir: piecemakerHome(), required: true });
+const ensureProxy = await startRequiredAnonymizer(anonymizer);
+const citations = createCitationStore(piecemakerHome());
+installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy });
+
+export function createPieceMakerRouter(options: { getRuntimeStatus?: () => PieceMakerRuntimeStatus } = {}) {
+  const router = vendor.createPieceMakerRouter({ ...options, anonymizer });
+  router.use(createCitationsRouter(citations, (id) => {
+    try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
+  }));
+  return router;
+}
 export type { PieceMakerRuntimeStatus };
