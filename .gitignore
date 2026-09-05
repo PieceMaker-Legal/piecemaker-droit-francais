@@ -147,3 +147,11 @@ tasks/
 cloudcli-sidebar-app-source.tar.gz
 cloudcli-sidebar.html
 electron/*.tar.gz
+.piecemaker/protection.json.bak
+.piecemaker/protection.json
+server/piecemaker/originals-cache.test.js
+server/piecemaker/protection/bypass.test.js
+.piecemaker/protection.json
+.piecemaker/protection.json
+server/piecemaker/protection/bypass.test.js
+server/piecemaker/vendor/websocket-server/admin-routes.cjs
