@@ -163,6 +163,57 @@ Ce que le système de plugins permet exactement, avant de s'engager :
 
 Piège d'isolation connu : `plugin-registry.service.ts:8-9` code en dur `~/.claude-code-ui/plugins` et `~/.claude-code-ui/plugins.json` au lieu de passer par `getApplicationDataRoot()` (`server/shared/utils.ts:50`). Les plugins échappent donc au `CLOUDCLI_HOME` de PieceMaker. Si on adopte les plugins, c'est une substitution d'une ligne chacune (avec repli upstream), conforme à la règle « toucher un fichier upstream seulement pour la marque ou l'isolation des données ».
 
+## Commande `piecemaker`
+
+Point d'entrée unique de la plateforme, pour l'utilisateur final : une seule
+commande, aucune question posée.
+
+```
+piecemaker
+```
+
+Elle enchaîne, dans cet ordre : libération des ports (5173, 3003, 43098, 4000),
+clonage des dépôts absents, mise à jour en avance rapide, installation des
+dépendances quand le verrou a bougé, démarrage du socle (proxy PII et
+administration) puis de l'application, installation de la PWA, ouverture.
+
+Deux commandes distinctes, deux périmètres — ne pas les confondre :
+
+| Commande | Périmètre |
+| --- | --- |
+| `piecemaker` | toute la plateforme : les deux dépôts, les quatre serveurs, la PWA |
+| `piecemaker-installer` | menu du socle seul (proxy PII, MCP, GLiNER, certificats) |
+
+`piecemaker-installer` est l'ancienne commande `piecemaker` du dépôt
+PieceMaker-Installer, renommée pour libérer le nom. Son `bin` npm a changé de
+clé ; le menu interactif est inchangé.
+
+Code dans `scripts/piecemaker/cli/` :
+
+- `piecemaker.sh` — amorce POSIX installée dans le PATH. Autonome : elle résout
+  un Node ≥ 20 (courant, sinon la version nvm la plus récente) et clone le dépôt
+  s'il est absent, ce qui rend la commande utilisable sur une machine nue.
+- `piecemaker.mjs` — orchestrateur, seul point où l'ordre des étapes est décidé.
+- `install-command.mjs` — pose l'amorce dans `~/.piecemaker/bin` et dans le
+  `bin` de Node, complète le PATH, renomme la commande du socle.
+- `lib/` — `ports` (détection et libération des écoutants), `repos`
+  (clone/mise à jour/dépendances, empreinte du verrou), `services` (démarrage
+  et sondes HTTP), `pwa` (vérification du manifest et du service worker, entrée
+  applicative), `node-runtime`, `config`, `exec`, `ui`.
+
+Réinstaller la commande après un `git pull` qui la modifie :
+
+```
+node scripts/piecemaker/cli/install-command.mjs
+```
+
+Réglages par variables d'environnement : `PIECEMAKER_APP_DIR`,
+`PIECEMAKER_INSTALLER_DIR`, `PIECEMAKER_APP_PORT`, `PIECEMAKER_VITE_PORT`,
+`PIECEMAKER_ADMIN_PORT`, `PIECEMAKER_LITELLM_PORT`.
+
+Une mise à jour n'est jamais forcée : un dépôt qui porte des modifications
+locales ou une branche divergente est signalé et laissé intact.
+
 ## Développement local
 
 - Serveur de dev PieceMaker toujours sur le port 3003 : `SERVER_PORT=3003 PORT=3003 npm run dev`. Le port 3002 est occupé par l'application CloudCLI de bureau installée ; un port fixe évite de chercher où l'app tourne à chaque session.
