@@ -145,7 +145,7 @@ export default function CaseFilesSection() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {view === 'pieces' && (
-              <CaseFilesOriginals caseId={selectedCaseId} mapping={overview.mapping} onRepositoryChange={() => void loadOverview()} />
+              <CaseFilesOriginals caseId={selectedCaseId} mapping={overview.mapping} onRepositoryChange={loadOverview} />
             )}
             {view === 'chronologie' && <CaseFilesChronology caseId={selectedCaseId} caseName={overview.name} />}
             {view === 'mapping' && <CaseMappingSection caseId={selectedCaseId} onRepositoryChange={loadOverview} />}

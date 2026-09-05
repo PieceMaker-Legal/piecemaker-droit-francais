@@ -7,13 +7,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderOpen, Loader2, ShieldCheck, Unlock, BookOpen, X, RefreshCw } from 'lucide-react';
+import { FolderOpen, Loader2, X, RefreshCw } from 'lucide-react';
 
-import { Button, Badge, Tooltip } from '@/shared/ui';
+import { Button, Badge } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 
-import { pmGet, pmPost, pmDelete, pmPut, PieceMakerApiError } from '../api';
-import CaseFilesProtectionBypass from './CaseFilesProtectionBypass';
+import { pmGet, pmPost, pmDelete, pmPut, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import CaseFileRow from '@/piecemaker/dossier/sections/CaseFileRow';
+import CaseFilesProtectionBypass from '@/piecemaker/dossier/sections/CaseFilesProtectionBypass';
 import type {
   CaseFileEntry,
   CaseMappingSummary,
@@ -21,24 +22,11 @@ import type {
   OriginalsPipelineAction,
   PieceProtectionState,
   ProtectionOverview,
-} from './CaseFilesTypes';
-import {
-  describeJob,
-  formatBytes,
-  formatDateTime,
-  originalsStatusLabel,
-  pieceProtectionState,
-  PIECE_STATE_HINTS,
-  PIECE_STATE_LABELS,
-} from './CaseFilesUtils';
+} from '@/piecemaker/dossier/sections/CaseFilesTypes';
+import { describeJob } from '@/piecemaker/dossier/sections/CaseFilesUtils';
 
 const JOB_POLL_INTERVAL_MS = 1500;
-
-const PIECE_STATES: { id: PieceProtectionState; icon: typeof ShieldCheck; label: string }[] = [
-  { id: 'vault', icon: ShieldCheck, label: 'Protégée' },
-  { id: 'workspace', icon: Unlock, label: 'Accessible' },
-  { id: 'resource', icon: BookOpen, label: 'Ressource' },
-];
+const PAGE_SIZE = 100;
 
 type CaseFilesOriginalsProps = {
   caseId: string;
@@ -57,7 +45,14 @@ export default function CaseFilesOriginals({ caseId, mapping, onRepositoryChange
   const [job, setJob] = useState<OriginalsJob | null>(null);
   const [launching, setLaunching] = useState<OriginalsPipelineAction | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [nameFilter, setNameFilter] = useState('');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const pollRef = useRef<number | null>(null);
+  const overviewRef = useRef<ProtectionOverview | null>(null);
+
+  useEffect(() => {
+    overviewRef.current = overview;
+  }, [overview]);
 
   const loadProtection = useCallback(async () => {
     setLoading(true);
@@ -106,48 +101,67 @@ export default function CaseFilesOriginals({ caseId, mapping, onRepositoryChange
 
   const files = overview?.files ?? [];
   const visibleFiles = useMemo(
-    () => (scope === 'pending' ? files.filter((file) => file.status !== 'ready') : files),
-    [files, scope],
+    () => {
+      const normalizedNameFilter = nameFilter.trim().toLocaleLowerCase();
+      return files.filter(
+        (file) =>
+          (scope !== 'pending' || file.status !== 'ready') &&
+          (!normalizedNameFilter || file.name.toLocaleLowerCase().includes(normalizedNameFilter)),
+      );
+    },
+    [files, nameFilter, scope],
   );
 
-  const toggleSelected = (path: string) => {
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [caseId, nameFilter, scope]);
+
+  const toggleSelected = useCallback((path: string) => {
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(path)) next.delete(path);
       else next.add(path);
       return next;
     });
-  };
+  }, []);
 
-  const toggleSelectAll = () => {
+  const toggleSelectAll = useCallback(() => {
     setSelected((current) => {
       if (current.size === visibleFiles.length) return new Set();
       return new Set(visibleFiles.filter((file) => !file.resource).map((file) => file.path));
     });
-  };
+  }, [visibleFiles]);
 
-  const savePieceState = async (file: CaseFileEntry, next: PieceProtectionState) => {
-    if (!overview) return;
-    const previousFiles = overview.files;
+  const savePieceState = useCallback(async (file: CaseFileEntry, next: PieceProtectionState) => {
+    const currentOverview = overviewRef.current;
+    if (!currentOverview) return;
+    const previousFiles = currentOverview.files;
     const nextFiles = previousFiles.map((entry) =>
       entry.path === file.path
         ? { ...entry, protected: next === 'vault', resource: next === 'resource' }
         : entry,
     );
-    setOverview({ ...overview, files: nextFiles });
+    const nextOverview = {
+      ...currentOverview,
+      files: nextFiles,
+      protectedCount: nextFiles.filter((entry) => entry.protected).length,
+      resourceCount: nextFiles.filter((entry) => entry.resource).length,
+    };
+    overviewRef.current = nextOverview;
+    setOverview(nextOverview);
     setSavingPath(file.path);
     try {
       const unprotected = nextFiles.filter((entry) => !entry.protected && !entry.resource).map((entry) => entry.path);
       const resources = nextFiles.filter((entry) => entry.resource).map((entry) => entry.path);
       await pmPut('/protection', { case: caseId, unprotected, resources });
-      onRepositoryChange();
     } catch (cause) {
-      setOverview({ ...overview, files: previousFiles });
+      overviewRef.current = currentOverview;
+      setOverview(currentOverview);
       setMessage(cause instanceof PieceMakerApiError ? cause.message : String(cause));
     } finally {
       setSavingPath(null);
     }
-  };
+  }, [caseId]);
 
   const launchPipeline = async (action: OriginalsPipelineAction) => {
     setLaunching(action);
@@ -178,13 +192,13 @@ export default function CaseFilesOriginals({ caseId, mapping, onRepositoryChange
     }
   };
 
-  const revealPiece = async (file: CaseFileEntry) => {
+  const revealPiece = useCallback(async (file: CaseFileEntry) => {
     try {
       await pmPost('/reveal', { target: 'files', case: caseId, path: file.path });
     } catch (cause) {
       setMessage(cause instanceof PieceMakerApiError ? cause.message : String(cause));
     }
-  };
+  }, [caseId]);
 
   const jobRunning = job ? job.state === 'queued' || job.state === 'running' : false;
 
@@ -269,6 +283,13 @@ export default function CaseFilesOriginals({ caseId, mapping, onRepositoryChange
             <input type="checkbox" checked={selected.size > 0 && selected.size === visibleFiles.filter((f) => !f.resource).length} onChange={toggleSelectAll} />
             Tout sélectionner
           </label>
+          <input
+            type="search"
+            value={nameFilter}
+            onChange={(event) => setNameFilter(event.target.value)}
+            placeholder="Filtrer par nom"
+            className="h-8 w-48 rounded-md border border-border/50 bg-background px-2 text-xs"
+          />
           <div className="ml-2 inline-flex overflow-hidden rounded-md border border-border/50 text-xs">
             <button
               type="button"
@@ -323,79 +344,27 @@ export default function CaseFilesOriginals({ caseId, mapping, onRepositoryChange
         </div>
       ) : (
         <div className="flex-1 space-y-1.5 overflow-y-auto">
-          {visibleFiles.map((file) => {
-            const state = pieceProtectionState(file);
-            return (
-              <div
-                key={file.path}
-                className="flex items-center gap-3 rounded-lg border border-border/50 px-3 py-2 hover:bg-accent/30"
-              >
-                {!file.resource && (
-                  <input
-                    type="checkbox"
-                    checked={selected.has(file.path)}
-                    onChange={() => toggleSelected(file.path)}
-                    disabled={jobRunning}
-                  />
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium">{file.name}</span>
-                    <span className="inline-flex h-5 items-center rounded border border-border/50 px-1 text-[10px] font-bold uppercase text-muted-foreground">
-                      {file.extension.replace('.', '') || '—'}
-                    </span>
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                    <span>{formatBytes(file.size)}</span>
-                    <span>·</span>
-                    <span>{formatDateTime(file.modifiedAt)}</span>
-                    <span>·</span>
-                    <span>{originalsStatusLabel(file)}</span>
-                    {file.pipelineEligible === false && (
-                      <>
-                        <span>·</span>
-                        <span>Hors pipeline</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="inline-flex shrink-0 overflow-hidden rounded-md border border-border/50">
-                  {PIECE_STATES.map((entry) => {
-                    const Icon = entry.icon;
-                    const isActive = entry.id === state;
-                    return (
-                      <Tooltip key={entry.id} content={PIECE_STATE_HINTS[entry.id]} position="top">
-                        <button
-                          type="button"
-                          disabled={savingPath === file.path}
-                          onClick={() => void savePieceState(file, entry.id)}
-                          className={cn(
-                            'flex h-7 w-7 items-center justify-center transition-colors',
-                            isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50',
-                          )}
-                          aria-pressed={isActive}
-                          aria-label={PIECE_STATE_LABELS[entry.id]}
-                        >
-                          {savingPath === file.path && isActive ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Icon className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-                      </Tooltip>
-                    );
-                  })}
-                </div>
-
-                <Tooltip content="Afficher dans le gestionnaire de fichiers" position="top">
-                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => void revealPiece(file)}>
-                    <FolderOpen className="h-3.5 w-3.5" />
-                  </Button>
-                </Tooltip>
-              </div>
-            );
-          })}
+          {visibleFiles.slice(0, visibleCount).map((file) => (
+            <CaseFileRow
+              key={file.path}
+              file={file}
+              state={file.resource ? 'resource' : file.protected ? 'vault' : 'workspace'}
+              isSelected={selected.has(file.path)}
+              isSaving={savingPath === file.path}
+              jobRunning={jobRunning}
+              onToggleSelected={toggleSelected}
+              onSavePieceState={savePieceState}
+              onRevealPiece={revealPiece}
+            />
+          ))}
+          <div className="flex items-center justify-between gap-3 pt-2 text-xs text-muted-foreground">
+            <span>{Math.min(visibleCount, visibleFiles.length)} / {visibleFiles.length} pièces affichées</span>
+            {visibleCount < visibleFiles.length && (
+              <Button variant="outline" size="sm" onClick={() => setVisibleCount((current) => current + PAGE_SIZE)}>
+                Afficher plus ({PAGE_SIZE})
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
