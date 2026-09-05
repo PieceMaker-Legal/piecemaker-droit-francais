@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { FolderPlus, FolderSearch, Loader2, FileStack, CalendarClock, FolderOpen } from 'lucide-react';
+import { FolderPlus, FolderSearch, Loader2, FileStack, CalendarClock } from 'lucide-react';
 
 import { Button, Pill, PillBar } from '@/shared/ui';
 
@@ -20,7 +20,7 @@ import CaseFilesChronology from './CaseFilesChronology';
 type ViewId = 'pieces' | 'chronologie';
 
 export default function CaseFilesSection() {
-  const { cases, selectedCaseId, selectedCase, selectCase, refreshCases, loading, error } = useDossierCases();
+  const { cases, selectedCaseId, selectCase, refreshCases, loading, error } = useDossierCases();
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
 
@@ -66,15 +66,6 @@ export default function CaseFilesSection() {
     }
   };
 
-  const revealCaseFolder = async () => {
-    if (!selectedCaseId) return;
-    try {
-      await pmPost('/reveal', { target: 'files', case: selectedCaseId });
-    } catch {
-      // Best-effort convenience action: a failure here doesn't block the rest of the section.
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
@@ -116,33 +107,10 @@ export default function CaseFilesSection() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-3">
-        <select
-          value={selectedCaseId ?? ''}
-          onChange={(event) => selectCase(event.target.value || null)}
-          className="h-9 min-w-40 rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          {cases.map((entry) => (
-            <option key={entry.path} value={entry.path}>
-              {entry.name}
-            </option>
-          ))}
-        </select>
-        <Button variant="ghost" size="sm" onClick={() => void registerCase()} disabled={registering}>
-          {registering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
-          Enregistrer un dossier
-        </Button>
-        {selectedCase && (
-          <Button variant="ghost" size="sm" onClick={() => void revealCaseFolder()}>
-            <FolderOpen className="h-3.5 w-3.5" /> Afficher dans le gestionnaire de fichiers
-          </Button>
-        )}
-        {selectedCase && <span className="truncate text-xs text-muted-foreground">{selectedCase.location}</span>}
-        {registerError && <span className="text-xs text-destructive">{registerError}</span>}
-      </div>
-
       {!selectedCaseId ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Sélectionnez un dossier.</div>
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+          Le dossier sélectionné dans la barre latérale n'est pas enregistré comme dossier juridique.
+        </div>
       ) : overviewLoading && !overview ? (
         <div className="flex flex-1 items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
