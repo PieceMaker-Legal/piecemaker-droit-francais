@@ -1,0 +1,16 @@
+{
+  "name": "PieceMaker - Droit français",
+  "shortName": "PieceMaker",
+  "pageTitle": "PieceMaker - Droit français",
+  "description": "Plateforme IA pour juristes français",
+  "slug": "piecemaker-droit-francais",
+  "appId": "legal.piecemaker.droitfrancais",
+  "protocol": "piecemaker",
+  "dataDirectoryName": ".piecemaker-droit-francais",
+  "homepage": "https://github.com/PieceMaker-Legal/piecemaker-droit-francais",
+  "repository": "PieceMaker-Legal/piecemaker-droit-francais",
+  "controlPlaneUrl": "https://cloudcli.ai",
+  "sshHost": "ssh.cloudcli.ai",
+  "themeColor": "#ffffff",
+  "backgroundColor": "#ffffff"
+}

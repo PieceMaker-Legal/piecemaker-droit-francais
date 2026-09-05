@@ -1,0 +1,51 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "Expediente"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "Orden de expedientes",
+      "description": "Cómo se ordenan los expedientes en la barra lateral"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "Expediente (local)",
+      "userDescription": "Ámbito de usuario: disponible en todos los expedientes de tu máquina",
+      "projectDescription": "Ámbito local: solo disponible en el expediente seleccionado"
+    },
+    "fields": {
+      "selectProject": "Selecciona un expediente..."
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "Usa task-master init en el directorio de tu expediente"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Todos los comandos se autoejecutan dentro del directorio del expediente."
+      }
+    }
+  },
+  "mcpServers": {
+    "managed": {
+      "hint": "Gestionado por PieceMaker."
+    }
+  },
+  "pluginSettings": {
+    "sections": {
+      "officialDescription": "Mantenidos por el equipo de PieceMaker y listos para instalar directamente."
+    },
+    "starterPlugin": {
+      "name": "Estadísticas del expediente",
+      "description": "Recuento de archivos, líneas de código, desglose por tipo de archivo y actividad reciente de tu expediente."
+    }
+  }
+}

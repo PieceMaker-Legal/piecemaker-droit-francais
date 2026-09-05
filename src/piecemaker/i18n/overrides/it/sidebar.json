@@ -1,0 +1,47 @@
+{
+  "projects": {
+    "title": "Fascicoli",
+    "newProject": "Nuovo fascicolo",
+    "deleteProject": "Rimuovi fascicolo",
+    "renameProject": "Rinomina fascicolo",
+    "noProjects": "Nessun fascicolo trovato",
+    "loadingProjects": "Caricamento fascicoli...",
+    "searchPlaceholder": "Cerca fascicoli...",
+    "projectNamePlaceholder": "Nome fascicolo",
+    "fetchingProjects": "Recupero dei tuoi fascicoli e sessioni Claude",
+    "projects": "fascicoli",
+    "noMatchingProjects": "Nessun fascicolo corrispondente",
+    "runClaudeCli": "Esegui Claude CLI in una directory di fascicolo per iniziare"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "Crea nuovo fascicolo",
+    "refresh": "Aggiorna fascicoli e sessioni (Ctrl+R)",
+    "renameProject": "Rinomina fascicolo (F2)",
+    "deleteProject": "Rimuovi fascicolo dalla barra laterale (Canc)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "Rimuovere questo fascicolo dalla barra laterale? I file del fascicolo, le memorie e i dati delle sessioni non verranno eliminati.",
+    "enterProjectPath": "Inserisci un percorso di fascicolo",
+    "deleteProjectFailed": "Impossibile rimuovere il fascicolo. Riprova.",
+    "deleteProjectError": "Errore durante la rimozione del fascicolo. Riprova.",
+    "createProjectFailed": "Impossibile creare il fascicolo. Riprova.",
+    "createProjectError": "Errore durante la creazione del fascicolo. Riprova.",
+    "updateProjectError": "Errore durante l'aggiornamento del fascicolo. Riprova.",
+    "restoreProjectFailed": "Impossibile ripristinare il fascicolo. Riprova.",
+    "restoreProjectError": "Errore durante il ripristino del fascicolo. Riprova."
+  },
+  "search": {
+    "modeProjects": "Fascicoli",
+    "projectsScanned_one": "{{count}} fascicolo analizzato",
+    "projectsScanned_other": "{{count}} fascicoli analizzati"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "Rimuovi fascicolo",
+    "sessionCount_one": "Questo fascicolo contiene {{count}} conversazione.",
+    "sessionCount_other": "Questo fascicolo contiene {{count}} conversazioni.",
+    "allConversationsDeleted": "Il fascicolo verrà rimosso dalla barra laterale. I tuoi file, memorie e dati delle sessioni verranno preservati."
+  }
+}

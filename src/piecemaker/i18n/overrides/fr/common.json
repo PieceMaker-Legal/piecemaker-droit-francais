@@ -1,0 +1,28 @@
+{
+  "mainContent": {
+    "loading": "Chargement de PieceMaker",
+    "chooseProject": "Choisissez votre dossier",
+    "selectProjectDescription": "Sélectionnez un dossier dans la barre latérale pour commencer à coder avec Claude. Chaque dossier contient vos sessions de chat et l'historique des fichiers.",
+    "createProjectMobile": "Appuyez sur le bouton menu ci-dessus pour accéder aux dossiers",
+    "createProjectDesktop": "Créez un nouveau dossier en cliquant sur l'icône de dossier dans la barre latérale",
+    "projectFiles": "Fichiers du dossier"
+  },
+  "fileTree": {
+    "checkProjectPath": "Vérifiez si le chemin du dossier est accessible"
+  },
+  "projectWizard": {
+    "title": "Créer un nouveau dossier",
+    "step1": {
+      "existing": {
+        "description": "J'ai déjà un espace de travail sur mon serveur et je veux juste l'ajouter à la liste des dossiers"
+      }
+    },
+    "step3": {
+      "existingInfo": "L'espace de travail sera ajouté à votre liste de dossiers et disponible pour les sessions Claude/Cursor.",
+      "newEmpty": "L'espace de travail sera ajouté à votre liste de dossiers et disponible pour les sessions Claude/Cursor."
+    },
+    "buttons": {
+      "createProject": "Créer le dossier"
+    }
+  }
+}

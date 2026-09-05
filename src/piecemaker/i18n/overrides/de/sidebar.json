@@ -1,0 +1,48 @@
+{
+  "projects": {
+    "title": "Dossiers",
+    "newProject": "Neues Dossier",
+    "deleteProject": "Dossier entfernen",
+    "renameProject": "Dossier umbenennen",
+    "noProjects": "Keine Dossiers gefunden",
+    "loadingProjects": "Dossiers werden geladen...",
+    "searchPlaceholder": "Dossiers durchsuchen...",
+    "projectNamePlaceholder": "Dossiername",
+    "fetchingProjects": "Deine Claude-Dossiers und -Sitzungen werden abgerufen",
+    "projects": "Dossiers",
+    "noMatchingProjects": "Keine passenden Dossiers",
+    "runClaudeCli": "Führ Claude CLI in einem Dossierverzeichnis aus, um zu beginnen"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "Neues Dossier erstellen",
+    "refresh": "Dossiers und Sitzungen aktualisieren (Strg+R)",
+    "renameProject": "Dossier umbenennen (F2)",
+    "deleteProject": "Dossier aus Seitenleiste entfernen (Entf)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "Dossier aus der Seitenleiste entfernen? Deine Dossierdateien, Erinnerungen und Sitzungsdaten werden nicht gelöscht.",
+    "enterProjectPath": "Bitte gib einen Dossierpfad ein",
+    "deleteProjectFailed": "Dossier konnte nicht entfernt werden. Bitte erneut versuchen.",
+    "deleteProjectError": "Fehler beim Entfernen des Dossiers. Bitte erneut versuchen.",
+    "createProjectFailed": "Dossier konnte nicht erstellt werden. Bitte erneut versuchen.",
+    "createProjectError": "Fehler beim Erstellen des Dossiers. Bitte erneut versuchen.",
+    "updateProjectError": "Fehler beim Aktualisieren des Dossiers. Bitte erneut versuchen.",
+    "restoreProjectFailed": "Dossier konnte nicht wiederhergestellt werden. Bitte erneut versuchen.",
+    "restoreProjectError": "Fehler beim Wiederherstellen des Dossiers. Bitte erneut versuchen."
+  },
+  "search": {
+    "modeProjects": "Dossiers",
+    "projectsScanned_one": "{{count}} Dossier durchsucht",
+    "projectsScanned_other": "{{count}} Dossiers durchsucht"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "Dossier entfernen",
+    "sessionCount_one": "Dieses Dossier enthält {{count}} Unterhaltung.",
+    "sessionCount_other": "Dieses Dossier enthält {{count}} Unterhaltungen.",
+    "allConversationsDeleted": "Das Dossier wird aus der Seitenleiste entfernt. Deine Dateien, Erinnerungen und Sitzungsdaten bleiben erhalten.",
+    "cannotUndo": "Du kannst das Dossier später erneut hinzufügen."
+  }
+}

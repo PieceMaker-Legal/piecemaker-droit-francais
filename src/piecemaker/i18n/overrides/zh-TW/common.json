@@ -1,0 +1,28 @@
+{
+  "mainContent": {
+    "loading": "正在載入 PieceMaker",
+    "chooseProject": "選擇您的案件",
+    "selectProjectDescription": "從側邊欄選擇一個案件以開始使用 Claude 進行程式開發。每個案件包含您的聊天紀錄和檔案歷史。",
+    "createProjectMobile": "點擊上方的選單按鈕以存取案件",
+    "createProjectDesktop": "點擊側邊欄中的資料夾圖示以建立新案件",
+    "projectFiles": "案件檔案"
+  },
+  "fileTree": {
+    "checkProjectPath": "請檢查案件路徑是否可存取"
+  },
+  "projectWizard": {
+    "title": "建立新案件",
+    "step1": {
+      "existing": {
+        "description": "我的伺服器上已經有工作區，只需要將其加入案件列表"
+      }
+    },
+    "step3": {
+      "existingInfo": "工作區將加入您的案件列表，並可用於 Claude/Cursor 工作階段。",
+      "newEmpty": "工作區將加入您的案件列表，並可用於 Claude/Cursor 工作階段。"
+    },
+    "buttons": {
+      "createProject": "建立案件"
+    }
+  }
+}

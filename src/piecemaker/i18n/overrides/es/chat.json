@@ -1,0 +1,11 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "Selecciona un expediente",
+      "description": "Elige un expediente para abrir una shell interactiva en ese directorio"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "Selecciona un expediente para empezar a chatear con {{provider}}"
+  }
+}

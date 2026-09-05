@@ -1,0 +1,11 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "Dossier auswählen",
+      "description": "Wähl ein Dossier, um ein interaktives Terminal in diesem Verzeichnis zu öffnen"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "Wähl ein Dossier, um mit {{provider}} zu chatten"
+  }
+}

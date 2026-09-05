@@ -1,6 +1,8 @@
 import { ExternalLink, Lock } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import { PRODUCT_SHORT_NAME } from '@/piecemaker/branding';
+
 const CLOUDCLI_URL = 'https://cloudcli.ai';
 
 type PremiumFeatureCardProps = {
@@ -15,7 +17,7 @@ export default function PremiumFeatureCard({
   icon,
   title,
   description,
-  ctaText = 'Available with CloudCLI Pro',
+  ctaText = `Available with ${PRODUCT_SHORT_NAME} Pro`,
 }: PremiumFeatureCardProps) {
   return (
     <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-5">

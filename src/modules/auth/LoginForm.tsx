@@ -7,6 +7,7 @@ import { useAuth } from '@/modules/auth/context/AuthContext';
 import AuthErrorAlert from '@/modules/auth/AuthErrorAlert';
 import AuthInputField from '@/modules/auth/AuthInputField';
 import AuthScreenLayout from '@/modules/auth/AuthScreenLayout';
+import { PRODUCT_NAME } from '@/shared/constants';
 
 type LoginFormState = {
   username: string;
@@ -61,7 +62,7 @@ export default function LoginForm() {
     <AuthScreenLayout
       title={t('login.title')}
       description={t('login.description')}
-      footerText="Enter your credentials to access CloudCLI"
+      footerText={`Enter your credentials to access ${PRODUCT_NAME}`}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <AuthInputField

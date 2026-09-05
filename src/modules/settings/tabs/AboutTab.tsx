@@ -2,6 +2,7 @@ import { Cloud, ExternalLink, MessageSquare, Star, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { CLOUDCLI_WORDMARK_FONT_FAMILY } from '@/shared/constants';
+import { PRODUCT_SHORT_NAME } from '@/piecemaker/branding';
 import { IS_PLATFORM } from '@/shared/utils';
 import { useVersionCheck } from '@/shared/hooks/useVersionCheck';
 import PremiumFeatureCard from '@/modules/settings/PremiumFeatureCard';
@@ -46,7 +47,7 @@ export default function AboutTab() {
               className="text-base font-semibold text-foreground"
               style={{ fontFamily: CLOUDCLI_WORDMARK_FONT_FAMILY }}
             >
-              CloudCLI
+              {PRODUCT_SHORT_NAME}
             </span>
             <a
               href={releasesUrl}
@@ -129,7 +130,7 @@ export default function AboutTab() {
       {/* Hosted CTA (OSS mode only) */}
       {!IS_PLATFORM && (
         <div className="rounded-xl border border-primary/10 bg-primary/5 p-4">
-          <h4 className="text-sm font-medium text-foreground">Try CloudCLI Hosted</h4>
+          <h4 className="text-sm font-medium text-foreground">Try {PRODUCT_SHORT_NAME} Hosted</h4>
           <p className="mt-1 text-xs text-muted-foreground">
             Team collaboration, shared MCP configs, settings sync across environments, and managed infrastructure.
           </p>
@@ -148,7 +149,7 @@ export default function AboutTab() {
       {/* Premium feature placeholders (OSS mode only) */}
       {!IS_PLATFORM && (
         <div className="space-y-4 border-t border-border/50 pt-6">
-          <h3 className="text-sm font-medium text-foreground">CloudCLI Pro Features</h3>
+          <h3 className="text-sm font-medium text-foreground">{PRODUCT_SHORT_NAME} Pro Features</h3>
           <PremiumFeatureCard
             icon={<Cloud className="h-5 w-5" />}
             title="Sync Settings"
@@ -157,7 +158,7 @@ export default function AboutTab() {
           <PremiumFeatureCard
             icon={<Users className="h-5 w-5" />}
             title="Team Management"
-            description="Multiple users, role-based access, and shared projects for your team."
+            description="Multiple users, role-based access, and shared cases for your team."
           />
         </div>
       )}
