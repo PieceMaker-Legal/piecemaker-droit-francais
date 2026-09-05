@@ -13,7 +13,7 @@ const VENDOR_ROOT = path.join(__dirname, 'vendor');
 
 const { createAnonymizerRouter } = require('./anonymizer/routes.cjs');
 const { createAnonymizerService } = require('./anonymizer/service.cjs');
-const { createAdminRouter } = require('./vendor/websocket-server/admin-routes.cjs');
+const { createAdminRouter, registerLegalCase } = require('./vendor/websocket-server/admin-routes.cjs');
 const { createStampingRouter } = require('./vendor/websocket-server/stamping-routes.cjs');
 const { findSoffice } = require('./vendor/websocket-server/lib/office-to-pdf.cjs');
 
@@ -67,6 +67,21 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus } = {}
       error: 'LiteLLM est remplacé par le proxy d’anonymisation intégré, déjà actif. '
         + 'L’installer réécrirait la configuration des clients vers un autre port.',
     });
+  });
+
+  router.post('/repository/cases/selected', async (request, response) => {
+    try {
+      const result = await registerLegalCase({
+        folder: request.body?.folder,
+        configFile: path.join(homeDir, 'config.json'),
+        repoRoot: VENDOR_ROOT,
+        homeDir,
+        userHome: os.homedir(),
+      });
+      response.status(201).json({ ok: true, ...result });
+    } catch (error) {
+      response.status(400).json({ error: error.message });
+    }
   });
 
   router.use(createAdminRouter({
