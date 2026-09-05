@@ -16,8 +16,6 @@ const HELP = `${c.bold('piecemaker')} — installe, met à jour et lance toute l
   piecemaker --launch-only   ne relance que les serveurs manquants
   piecemaker --no-open       ne pas ouvrir l application à la fin
   piecemaker --help          cette aide
-
-${c.dim('Le socle technique (proxy PII, MCP, GLiNER) garde sa propre commande : piecemaker-installer.')}
 `;
 
 function parseArguments(argv) {
