@@ -1,0 +1,19 @@
+#piecemaker-citation-panel {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(44vw, 720px);
+  z-index: 45;
+}
+
+@media (min-width: 1024px) {
+  .piecemaker-citation-open #root {
+    width: calc(100% - min(44vw, 720px));
+  }
+}
+
+@media (max-width: 1023px) {
+  #piecemaker-citation-panel {
+    width: min(100vw, 600px);
+    z-index: 70;
+  }
+}
