@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
 import os from 'node:os';
+import { once } from 'node:events';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -275,4 +276,37 @@ test('la couverture distingue filtré, bloqué et non configuré', () => {
   assert.equal(coverage.claude.state, 'filtered');
   assert.equal(coverage.codex.state, 'unconfigured');
   assert.equal(coverage.cursor.state, 'blocked');
+});
+
+test("l'installation de LiteLLM est refusée : elle réécrirait la configuration des clients", async () => {
+  const express = require('express');
+  const { createPieceMakerRouter } = require('../router.cjs');
+
+  const app = express();
+  app.use(express.json());
+  app.use('/api/piecemaker', createPieceMakerRouter());
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}/api/piecemaker/configuration/install`;
+
+  try {
+    const refused = await fetch(base, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ component: 'litellm' }),
+    });
+    assert.equal(refused.status, 409);
+
+    // Un autre composant n'est pas intercepté : il atteint la route vendorisée,
+    // qui le refuse pour sa propre raison. On sonde avec un nom inconnu plutôt
+    // qu'avec `gliner`, dont la route lancerait une installation réelle.
+    const passed = await fetch(base, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ component: 'composant-inexistant' }),
+    });
+    assert.notEqual(passed.status, 409);
+  } finally {
+    server.close();
+  }
 });
