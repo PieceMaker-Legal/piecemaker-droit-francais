@@ -65,16 +65,11 @@ export function DossierCasesProvider({
     void refreshCases();
   }, [refreshCases]);
 
-  // Preselect the case containing the open project, else the first one. Runs
-  // whenever the list changes so a freshly registered case becomes selectable.
   useEffect(() => {
-    setSelectedCaseId((current) => {
-      if (current && cases.some((entry) => entry.path === current)) return current;
-      const containing = projectPath
-        ? cases.find((entry) => projectPath === entry.location || projectPath.startsWith(`${entry.location}/`))
-        : undefined;
-      return containing?.path ?? cases[0]?.path ?? null;
-    });
+    const containing = projectPath
+      ? cases.find((entry) => projectPath === entry.location || projectPath.startsWith(`${entry.location}/`))
+      : undefined;
+    setSelectedCaseId(containing?.path ?? null);
   }, [cases, projectPath]);
 
   const value = useMemo<DossierContextValue>(() => ({
