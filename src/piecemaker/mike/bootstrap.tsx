@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 
 import { AUTH_SESSION_EXPIRED_EVENT, AUTH_TOKEN_REFRESHED_EVENT, getStoredAuthToken } from '@/shared/authToken';
+import { ThemeProvider } from '@/shared/context/ThemeContext';
 import { Button } from '@/shared/ui';
 import { closeMikeSession, openMikePage } from '@/piecemaker/mike/api';
 import { appendMikeWorkflowDraft, MikeComposerActions } from '@/piecemaker/mike/ComposerActions';
@@ -137,7 +138,7 @@ export function startMikeWorkspace() {
     if (rendered && renderedWorkspace === workspace) return;
     renderedWorkspace = workspace;
     rendered = true;
-    root.render(<MikeWorkspace navigation={navigation} workspace={workspace} />);
+    root.render(<ThemeProvider><MikeWorkspace navigation={navigation} workspace={workspace} /></ThemeProvider>);
   };
   const schedule = () => { if (!scheduled) { scheduled = true; queueMicrotask(refresh); } };
   const observer = new MutationObserver(schedule);
