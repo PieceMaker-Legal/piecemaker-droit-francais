@@ -191,12 +191,11 @@ commande, aucune question posée.
 piecemaker
 ```
 
-Elle enchaîne, dans cet ordre : libération des ports (5173, 3003, 43098),
-clonage des dépôts absents, mise à jour en avance rapide, installation des
+Elle enchaîne, dans cet ordre : libération des ports (5173, 3003), clonage du
+dépôt s'il est absent, mise à jour en avance rapide, installation des
 dépendances quand le verrou a bougé, installation des composants du socle,
-démarrage du socle (administration) puis de l'application (qui porte son
-propre proxy PII), installation de la PWA, ouverture. Sautée en entier avec
-`--launch-only`.
+démarrage de l'application (qui porte son propre proxy PII), installation de
+la PWA, ouverture. Sautée en entier avec `--launch-only`.
 
 Sur une machine nue, sans dépôt ni commande, chaque amorce clone le dépôt puis
 lance ce premier passage :
@@ -215,16 +214,16 @@ one-liner, exécuter une fois `node scripts/piecemaker/cli/install-command.mjs`
 depuis le dépôt cloné (voir plus bas).
 
 `piecemaker` est la seule commande installée par ce dépôt. Le socle technique
-(proxy PII, MCP, GLiNER) est un projet distinct, PieceMaker-Installer, dont la
-commande a été renommée `piecemaker-installer` dans son propre dépôt. La
-plateforme le démarre en appelant directement `installer/bin/piecemaker.mjs
-start` : le nom de sa commande ne la concerne pas. Emplacement par défaut du
-socle : `~/Sites/PieceMaker-Installer`, remplaçable par
-`PIECEMAKER_INSTALLER_DIR`.
+(installation des composants Python GLiNER/Graphify, conversion, MCP) vit
+directement dans ce dépôt, vendorisé sous
+`server/piecemaker/vendor/installer/` (copie mécanique du dépôt historique
+PieceMaker-Installer, voir `PROVENANCE.md` dans ce dossier) — aucun clone
+séparé, aucun processus d'administration distinct : la configuration passe
+par l'onglet Dossier › Configuration de l'application elle-même.
 
-Avant ce démarrage, `piecemaker` rejoue lui-même les seules étapes du socle
-dont ce dépôt a besoin — par `installer/bin/piecemaker.mjs --step <id> --yes`,
-en mode non interactif — dans cet ordre : `01-prerequis`, `03-python-gliner`,
+`piecemaker` rejoue lui-même les seules étapes du socle dont ce dépôt a
+besoin — par `server/piecemaker/vendor/installer/bin/piecemaker.mjs --step
+<id> --yes`, en mode non interactif — dans cet ordre : `01-prerequis`, `03-python-gliner`,
 `03b-python-graphify`, `04-conversion-md`, `12-mcp-piecemaker`,
 `07-legifrance`. Explicitement exclues : `16-litellm-proxy` — ce dépôt n'a
 qu'un proxy PII, `server/piecemaker/anonymizer/proxy.cjs`, et `router.cjs`
@@ -264,8 +263,7 @@ node scripts/piecemaker/cli/install-command.mjs
 ```
 
 Réglages par variables d'environnement : `PIECEMAKER_APP_DIR`,
-`PIECEMAKER_INSTALLER_DIR`, `PIECEMAKER_APP_PORT`, `PIECEMAKER_VITE_PORT`,
-`PIECEMAKER_ADMIN_PORT`.
+`PIECEMAKER_APP_PORT`, `PIECEMAKER_VITE_PORT`.
 
 Une mise à jour n'est jamais forcée : un dépôt qui porte des modifications
 locales ou une branche divergente est signalé et laissé intact.
