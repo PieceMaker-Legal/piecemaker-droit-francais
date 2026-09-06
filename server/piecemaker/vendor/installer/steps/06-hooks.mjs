@@ -7,7 +7,7 @@
  * piecemaker-plugin/scripts/lib/hook-io.mjs).
  *
  * Le mapping PII n'est plus appliqué par des hooks Claude Code : le proxy
- * LiteLLM couvre Claude Code et Codex au même point de passage. Le scan reste
+ * PII couvre Claude Code et Codex au même point de passage. Le scan reste
  * dans le pipeline de l'administration, seul endroit où les modèles NER sont
  * chargés.
  */
