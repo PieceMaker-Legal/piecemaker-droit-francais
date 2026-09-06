@@ -39,8 +39,6 @@ const DEFAULT_ROUTES = [
 
 /** Port fixe : une base écrite dans un fichier de configuration doit survivre à un redémarrage. */
 const DEFAULT_PORT = 4111;
-/** Ports de repli si le précédent est déjà pris (instance restée en vie, autre outil). */
-const PORT_SCAN = 12;
 
 /**
  * En-têtes que le proxy possède et ne relaie donc jamais tels quels. Le corps
@@ -344,23 +342,19 @@ function createAnonymizerProxy({
     get listening() { return server.listening; },
     routes: table.map(({ provider, prefix, target }) => ({ provider, prefix, upstream: target.origin })),
     /**
-     * Écoute le port préféré, sinon les suivants, sinon un port éphémère. Les
-     * configurations des fournisseurs sont réécrites à chaque démarrage : un
-     * port qui change reste cohérent, il ne survit simplement pas à un serveur
-     * arrêté — ce qui est le comportement voulu.
+     * Écoute le port demandé, et lui seul. La base écrite dans les
+     * configurations des clients leur survit sur disque : un port qui dérive
+     * la rend définitivement fausse pour la session suivante. Un port déjà
+     * pris signale une instance encore vivante, pas une invitation à bouger.
      */
     async listen() {
-      const candidates = port === 0 ? [0] : [...Array(PORT_SCAN).keys()].map((offset) => port + offset).concat(0);
-      let lastError = null;
-      for (const candidate of candidates) {
-        try {
-          return await listenOn(candidate);
-        } catch (error) {
-          if (error.code !== 'EADDRINUSE') throw error;
-          lastError = error;
-        }
+      try {
+        return await listenOn(port);
+      } catch (error) {
+        if (error.code !== 'EADDRINUSE') throw error;
+        throw new Error(`Port ${port} déjà occupé : une instance du proxy PII écoute encore. `
+          + `Arrêtez-la (lsof -nP -iTCP:${port} -sTCP:LISTEN) avant de redémarrer.`);
       }
-      throw lastError;
     },
     close() {
       return new Promise((resolve) => server.close(() => resolve()));
