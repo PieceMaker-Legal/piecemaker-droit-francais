@@ -5,7 +5,7 @@ import { installComponents } from './lib/composants.mjs';
 import { gitAvailable, resolveNodeRuntime } from './lib/node-runtime.mjs';
 import { freePort } from './lib/ports.mjs';
 import { ensureDependencies, ensureRepository, rebuildNativeModules } from './lib/repos.mjs';
-import { APP_LOG, appClientReachable, appServerReachable, startApplication, startInstallerStack, stopLegacyLitellm } from './lib/services.mjs';
+import { APP_LOG, appClientReachable, appServerReachable, startApplication, startInstallerStack } from './lib/services.mjs';
 import { installApplicationEntry, openApplication, verifyPwaAssets } from './lib/pwa.mjs';
 import { banner, blank, c, detail, fail, ok, step, warn } from './lib/ui.mjs';
 
@@ -92,7 +92,6 @@ async function launchServices(runtime) {
   }
 
   ok(`Application active — serveur :${PORTS.appServer}, client ${APP_URL}`);
-  await stopLegacyLitellm(report);
   return true;
 }
 
