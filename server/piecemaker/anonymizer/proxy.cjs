@@ -2,9 +2,8 @@
  * Proxy PII local — le seul point de passage entre les clients IA lancés par
  * CloudCLI (chat comme terminal) et les API des fournisseurs.
  *
- * Il remplace la passerelle LiteLLM : même garantie, sans Python, sans venv,
- * sans service de session à installer, et dans le cycle de vie du serveur
- * CloudCLI plutôt qu'à côté.
+ * Sans Python, sans venv, sans service de session à installer : il vit dans
+ * le cycle de vie du serveur CloudCLI plutôt qu'à côté.
  *
  * Sens sortant  : nom réel → code. Aucun nom de partie ne quitte la machine.
  * Sens entrant  : code → nom réel. Claude Code retrouve un texte lisible, ses
@@ -14,11 +13,9 @@
  * Sans mapping, le proxy est un relais transparent : le brancher ne peut pas
  * casser une installation qui n'a encore anonymisé aucun dossier.
  *
- * Une route par fournisseur, distinguée par le préfixe d'URL — la disposition
- * qu'avait LiteLLM, conservée pour que les configurations déjà écrites par
- * l'installateur restent lisibles. Un chemin qui ne correspond à aucune route
- * est refusé : router par défaut reviendrait à laisser passer non filtré ce que
- * l'on n'a pas su reconnaître.
+ * Une route par fournisseur, distinguée par le préfixe d'URL. Un chemin qui ne
+ * correspond à aucune route est refusé : router par défaut reviendrait à
+ * laisser passer non filtré ce que l'on n'a pas su reconnaître.
  */
 const http = require('node:http');
 const https = require('node:https');
@@ -32,7 +29,7 @@ const DEFAULT_UPSTREAM = 'https://api.anthropic.com';
 /**
  * Routes servies par défaut. `/chatgpt` vise le point d'entrée Codex de
  * ChatGPT, où le CLI parle le protocole Responses avec l'authentification
- * ChatGPT — c'est la cible qu'employait déjà la passerelle LiteLLM.
+ * ChatGPT.
  */
 const DEFAULT_ROUTES = [
   { provider: 'claude', prefix: '/anthropic', upstream: 'https://api.anthropic.com' },
