@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import { ADMIN_URL, APP, APP_URL, INSTALLER, PORTS } from './lib/config.mjs';
+import { APP, APP_URL, PORTS } from './lib/config.mjs';
 import { installComponents } from './lib/composants.mjs';
 import { gitAvailable, resolveNodeRuntime } from './lib/node-runtime.mjs';
 import { freePort } from './lib/ports.mjs';
 import { ensureDependencies, ensureRepository, rebuildNativeModules } from './lib/repos.mjs';
-import { APP_LOG, appClientReachable, appServerReachable, startApplication, startInstallerStack } from './lib/services.mjs';
+import { APP_LOG, appClientReachable, appServerReachable, startApplication } from './lib/services.mjs';
 import { installApplicationEntry, openApplication, verifyPwaAssets } from './lib/pwa.mjs';
 import { banner, blank, c, detail, fail, ok, step, warn } from './lib/ui.mjs';
 
@@ -31,7 +31,7 @@ async function cleanPorts(launchOnly) {
   step('Libération des ports');
   const targets = launchOnly
     ? [PORTS.appServer, PORTS.appClient]
-    : [PORTS.appClient, PORTS.appServer, PORTS.admin];
+    : [PORTS.appClient, PORTS.appServer];
 
   for (const port of targets) {
     const result = await freePort(port);
@@ -49,7 +49,7 @@ async function synchroniseRepositories(runtime) {
     throw new Error('git est requis et introuvable.');
   }
 
-  for (const repo of [INSTALLER, APP]) {
+  for (const repo of [APP]) {
     const state = await ensureRepository(repo, runtime, report);
     if (state.cloned) ok(`${repo.label} — installé`);
     else if (state.updated) ok(`${repo.label} — mis à jour`);
@@ -70,9 +70,6 @@ async function launchServices(runtime) {
     detail('socle laissé en l état : le routage des clients IA appartient à l application en cours');
     return true;
   }
-
-  const socle = await startInstallerStack(runtime, report);
-  if (socle.started) ok(`Socle actif — administration ${ADMIN_URL}`);
 
   const application = await startApplication(runtime, report);
   if (application.alreadyRunning) {
@@ -145,7 +142,7 @@ async function main() {
 
   blank();
   ok(`Application  ${c.bold(APP_URL)}`);
-  ok(`Administration  ${ADMIN_URL}`);
+  detail('Configuration du socle : onglet Dossier › Configuration.');
   blank();
 
   if (options.open) openApplication();
