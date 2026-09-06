@@ -1,7 +1,7 @@
 import { Star, X } from 'lucide-react';
 
 import { useGitHubStars } from '@/modules/sidebar/hooks/useGitHubStars';
-import { PRODUCT_REPOSITORY, PRODUCT_REPOSITORY_URL } from '@/shared/constants';
+import { PRODUCT_REPOSITORY, PRODUCT_REPOSITORY_URL, PRODUCT_SHOW_GITHUB_STAR_BADGE } from '@/shared/constants';
 import { IS_PLATFORM } from '@/shared/utils';
 
 const [repositoryOwner, repositoryName] = PRODUCT_REPOSITORY.split('/');
@@ -18,7 +18,7 @@ function GitHubIcon({ className }: { className?: string }) {
 export default function GitHubStarBadge() {
   const { formattedCount, isDismissed, dismiss } = useGitHubStars(repositoryOwner, repositoryName);
 
-  if (IS_PLATFORM || isDismissed) return null;
+  if (IS_PLATFORM || isDismissed || !PRODUCT_SHOW_GITHUB_STAR_BADGE) return null;
 
   return (
     <div className="group/star relative hidden md:block">
