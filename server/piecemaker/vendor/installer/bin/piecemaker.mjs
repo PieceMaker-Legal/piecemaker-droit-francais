@@ -15,7 +15,6 @@
  *   piecemaker conversion      convertit et pseudonymise les pièces manquantes
  *   piecemaker graph build     construit le graphe juridique riche du dossier
  *   piecemaker graph query     interroge le graphe juridique riche du dossier
- *   piecemaker proxy bypass    rétablit l'accès direct à Claude et Codex
  *   piecemaker install         ouvre le menu des composants
  *   piecemaker doctor          diagnostic seul
  *   piecemaker update          met à jour le dépôt et les dépendances
@@ -35,18 +34,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { banner, title, log, write, blank, summary, spinner, badge, c } from '../lib/ui.mjs';
 import { select, confirm, multiSelect, pause, nonInteractive } from '../lib/prompt.mjs';
 import { HOME_DIR, REPO_ROOT, commandExists, findPython, venvPaths } from '../lib/platform.mjs';
-import { COMMANDS, GRAPH_ACTIONS, PROXY_ACTIONS } from '../lib/commandes.mjs';
+import { COMMANDS, GRAPH_ACTIONS } from '../lib/commandes.mjs';
 import { loadConfig, readEnv, markStep, loadState, CONFIG_FILE } from '../lib/state.mjs';
 import { scheduleStepResume, selectStepsToResume } from '../lib/resume-steps.mjs';
-import {
-  bypassLlmClients,
-  bypassLlmClientsIfProxyGone,
-  configureLlmClients,
-  getLitellmStatus,
-  readLitellmLogs,
-  startLitellmProxy,
-  stopLitellmProxy,
-} from '../lib/litellm-proxy.mjs';
 import {
   getServerStatus,
   openAdmin,
@@ -224,7 +214,6 @@ function parseArgs(argv) {
     graphQuestion: [],
     json: false,
     model: null,
-    proxyAction: null,
     resumeSteps: null,
     step: null,
     yes: false,
@@ -237,7 +226,6 @@ function parseArgs(argv) {
     else if (!arg.startsWith('-') && flags.command === 'conversion') flags.conversionDocuments.push(arg);
     else if (!arg.startsWith('-') && flags.command === 'graph' && !flags.graphAction && GRAPH_ACTIONS.has(arg)) flags.graphAction = arg;
     else if (!arg.startsWith('-') && flags.command === 'graph' && flags.graphAction === 'query') flags.graphQuestion.push(arg);
-    else if (!arg.startsWith('-') && flags.command === 'proxy' && !flags.proxyAction && PROXY_ACTIONS.has(arg)) flags.proxyAction = arg;
     else if (arg === '--all') flags.all = true;
     else if (arg === '--backend') flags.backend = argv[++i];
     else if (arg === '--budget') flags.budget = Number(argv[++i]);
@@ -417,7 +405,6 @@ function printHelp() {
   write('  graph build     construit ou actualise le graphe juridique riche');
   write('  graph query     interroge les liens de droit du dossier');
   write('  graph status    indique si le graphe juridique est à jour');
-  write('  proxy bypass    coupe le routage LiteLLM et rétablit l’accès direct');
   write('  install         ouvre le menu d’installation/réparation');
   write('  doctor, check   diagnostic seul, n’installe rien');
   write('  update          met à jour PieceMaker');
@@ -477,49 +464,15 @@ async function installerMenu(steps, ctx, { allowBack = false } = {}) {
   }
 }
 
-function printServerStatus(status, proxy = null) {
+function printServerStatus(status) {
   title('État local');
   const rows = [
     ['Serveur HTTPS', status.running ? badge.done : badge.todo, status.running ? `PID ${status.pid || 'externe'}` : 'arrêté'],
     ['Interface web', status.running ? badge.done : badge.todo, status.url],
     ['Journal', badge.todo, status.logFile],
   ];
-  if (proxy) {
-    const routed = Number(Boolean(proxy.routing?.claude)) + Number(Boolean(proxy.routing?.codex));
-    rows.splice(1, 0,
-      ['Proxy PII LiteLLM', proxy.running ? badge.done : proxy.installed ? badge.todo : badge.failed,
-        proxy.running ? `PID ${proxy.pid || 'externe'} · ${proxy.origin}` : proxy.installed ? 'arrêté' : 'non installé'],
-      ['Routage IA', routed === 2 ? badge.done : badge.todo, `${routed}/2 · Claude Code + Codex`]);
-  }
   summary(rows);
   blank();
-}
-
-async function startProxyCompanion() {
-  const status = await getLitellmStatus();
-  if (!status.installed) return status;
-  let service;
-  try {
-    service = await startLitellmProxy();
-  } catch (error) {
-    // Fail-safe : aucun client ne doit rester pointé vers un port local mort.
-    // Mais un proxy encore vivant — démarrage à froid, sonde dépassée sous
-    // charge — n'est pas un port mort : le dérouter enverrait les sessions
-    // suivantes en clair chez le fournisseur pour une simple lenteur.
-    bypassLlmClientsIfProxyGone({ userHome: os.homedir() });
-    throw error;
-  }
-  const clients = configureLlmClients({ config: loadConfig(), userHome: os.homedir() });
-  for (const [name, result] of Object.entries(clients)) {
-    if (!result.configured) log.warn(`${name === 'claude' ? 'Claude Code' : 'Codex'} non routé : ${result.reason}.`);
-  }
-  return service;
-}
-
-async function stopProxyCompanion() {
-  const status = await getLitellmStatus();
-  if (!status.installed || (!status.running && !status.managed)) return status;
-  return stopLitellmProxy();
 }
 
 async function runChronologyCommand(flags) {
@@ -712,68 +665,37 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
   if (command === 'chronology') return runChronologyCommand(flags);
   if (command === 'conversion') return runConversionCommand(flags);
   if (command === 'graph') return runGraphCommand(flags);
-  if (command === 'proxy') {
-    if (flags.proxyAction !== 'bypass') {
-      throw new Error('Action manquante : utilisez « piecemaker proxy bypass ».');
-    }
-    const clients = bypassLlmClients({ userHome: os.homedir() });
-    const failures = Object.entries(clients).filter(([, result]) => !result.bypassed);
-    if (failures.length) {
-      throw new Error(`Routage non retiré pour : ${failures.map(([name, result]) => `${name === 'claude' ? 'Claude Code' : 'Codex'} (${result.reason})`).join(', ')}.`);
-    }
-    const changed = Object.values(clients).filter((result) => result.changed).length;
-    if (changed) log.ok('Accès direct rétabli pour Claude Code et Codex. Rouvrez les sessions actives.');
-    else log.info('Claude Code et Codex utilisent déjà leur accès direct.');
-    return 0;
-  }
   if (command === 'open') {
-    const proxy = await startProxyCompanion();
-    if (proxy.installed) log.ok(proxy.started ? `Proxy PII démarré : ${proxy.origin}` : `Proxy PII actif : ${proxy.origin}`);
     const status = await openAdmin();
     log.ok(`Interface ouverte : ${status.url}`);
     return 0;
   }
   if (command === 'start') {
-    const proxy = await startProxyCompanion();
     const status = await startServer();
-    if (proxy.installed) log.ok(proxy.started ? `Proxy PII démarré : ${proxy.origin}` : `Proxy PII déjà actif : ${proxy.origin}`);
-    else log.warn('Proxy PII LiteLLM non installé — relancez le composant 16.');
     log.ok(status.started ? `Serveur démarré : ${status.url}` : `Serveur déjà actif : ${status.url}`);
     return 0;
   }
   if (command === 'stop') {
     const status = await stopServer();
-    const clients = bypassLlmClients({ userHome: os.homedir() });
-    const proxy = await stopProxyCompanion();
     if (status.alreadyStopped) log.info('Le serveur est déjà arrêté.');
     else log.ok('Serveur arrêté.');
-    if (proxy.stopped) log.ok('Proxy PII LiteLLM arrêté.');
-    if (Object.values(clients).some((result) => result.changed)) {
-      log.ok('Accès direct rétabli pour Claude Code et Codex.');
-    }
     return 0;
   }
   if (command === 'restart') {
     await stopServer();
-    await stopProxyCompanion();
-    const proxy = await startProxyCompanion();
     const status = await startServer();
     log.ok(`Serveur redémarré : ${status.url}`);
-    if (proxy.installed) log.ok(`Proxy PII redémarré : ${proxy.origin}`);
     return 0;
   }
   if (command === 'status') {
-    const [status, proxy] = await Promise.all([getServerStatus(), getLitellmStatus()]);
-    printServerStatus(status, proxy);
+    const status = await getServerStatus();
+    printServerStatus(status);
     return 0;
   }
   if (command === 'logs') {
     title('Journal du serveur HTTPS');
     const content = readLogs();
     write(content || '  Aucun journal disponible.');
-    blank();
-    title('Journal du proxy PII LiteLLM');
-    write(readLitellmLogs() || '  Aucun journal disponible.');
     blank();
     return 0;
   }
@@ -784,8 +706,6 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
     if (!pending.available) {
       log.ok(`PieceMaker est déjà à jour (${pending.ref}, ${pending.current.slice(0, 7)}).`);
       reconcileCaseInstructions();
-      const proxy = await getLitellmStatus();
-      if (proxy.running) configureLlmClients({ config: loadConfig(), userHome: os.homedir() });
       await refreshDesktopApplicationAfterUpdate();
       if (reconcileCentralMapping()) {
         log.info('Rouvrez les sessions Claude Code actives pour oublier les anciens hooks de mapping.');
@@ -806,9 +726,8 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
     // from the dev clone, so with no PID file it comes back unmanaged. We adopt
     // it: stop whatever holds the port and bring a managed server back below,
     // rather than leaving the user to restart it themselves.
-    const [previous, previousProxy] = await Promise.all([getServerStatus(), getLitellmStatus()]);
+    const previous = await getServerStatus();
     if (previous.running) await stopServer();
-    if (previousProxy.running || previousProxy.managed) await stopLitellmProxy();
     try {
       const result = updateRepository(pending);
       log.ok(`PieceMaker mis à jour (${result.ref}, ${result.target.slice(0, 7)}).`);
@@ -823,7 +742,7 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
       reconcileCaseInstructions();
 
       if (result.pythonChanged) {
-        log.warn('Une dépendance Python a changé : relancez « piecemaker install » (étapes 03 et 16 si elles sont installées).');
+        log.warn('Une dépendance Python a changé : relancez « piecemaker install » (étape 03 si elle est installée).');
       }
 
       // Les composants PieceMaker sont découverts directement dans
@@ -850,18 +769,6 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
       if (previous.running) {
         const restarted = await startServer();
         log.ok(`Serveur redémarré : ${restarted.url}`);
-      }
-      if (previousProxy.running || previousProxy.managed) {
-        try {
-          const restarted = await startLitellmProxy();
-          configureLlmClients({ config: loadConfig(), userHome: os.homedir() });
-          log.ok(`Proxy PII redémarré : ${restarted.origin}`);
-        } catch (error) {
-          const repli = bypassLlmClientsIfProxyGone({ userHome: os.homedir() });
-          log.warn(`Proxy PII non redémarré : ${error.message}`);
-          if (repli.bypassed) log.warn('Accès direct rétabli pour Claude Code et Codex.');
-          else log.warn('Routage conservé : le processus LiteLLM tourne toujours (démarrage en cours ?).');
-        }
       }
       const daemon = restartTelegramDaemon();
       if (daemon.restarted) log.ok('Moniteur Telegram redémarré.');
@@ -910,11 +817,6 @@ function checkForUpdateOnOpen() {
  * entry is how the admin pane gets opened.
  */
 async function ensureServerRunning() {
-  try {
-    await startProxyCompanion();
-  } catch (error) {
-    log.warn(`Proxy PII non démarré : ${error.message}`);
-  }
   let status;
   try {
     status = await getServerStatus();
@@ -938,8 +840,8 @@ async function ensureServerRunning() {
 
 async function mainMenu(steps, ctx, knownUpdate = null) {
   for (;;) {
-    const [status, proxy] = await Promise.all([getServerStatus(), getLitellmStatus()]);
-    printServerStatus(status, proxy);
+    const status = await getServerStatus();
+    printServerStatus(status);
     const choice = await select('Que voulez-vous faire ?', [
       { value: 'open', label: 'Ouvrir l’interface graphique', hint: 'paramètres, skills et agents' },
       { value: status.running ? 'stop' : 'start', label: status.running ? 'Arrêter le serveur local' : 'Démarrer le serveur local' },
