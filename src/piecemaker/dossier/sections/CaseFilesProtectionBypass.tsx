@@ -1,7 +1,8 @@
 /**
  * Case-wide protection switch for the "Pièces" view: one toggle that lifts the
- * vault on every piece of the case, and puts back the exact per-piece
- * classification when switched off (the backend keeps the snapshot).
+ * vault on the case folder itself — every piece inside benefits, including the
+ * ones filed later — and puts the per-piece classification back in charge when
+ * switched off.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -54,8 +55,8 @@ export default function CaseFilesProtectionBypass({ caseId, onProtectionChange }
   };
 
   const hint = active
-    ? `Protection levée sur tout le dossier. La rétablir restaure le classement enregistré (${state?.savedCount ?? 0} pièce(s) accessibles avant la levée).`
-    : 'Rend toutes les pièces du dossier accessibles à l’IA. Le classement actuel est photographié et rétabli en repassant le bouton.';
+    ? `Protection levée sur le dossier : toutes ses pièces sont accessibles à l’IA, y compris celles déposées depuis. La rétablir rend la main au classement pièce par pièce (${state?.savedCount ?? 0} pièce(s) accessibles).`
+    : 'Lève la protection sur le dossier lui-même : toutes ses pièces deviennent accessibles à l’IA, y compris celles déposées ensuite. Le classement pièce par pièce n’est pas modifié et reprend dès que le bouton est repassé.';
 
   return (
     <div className="flex items-center gap-2">
