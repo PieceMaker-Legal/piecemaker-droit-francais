@@ -1,0 +1,92 @@
+$schema: "../../workflow-schema/table-columns.schema.yaml"
+columns:
+  - index: 0
+    name: "Parties"
+    format: "bulleted_list"
+    prompt: >-
+      Identifiez toutes les parties à cet accord. Pour chaque partie, indiquez sa dénomination sociale complète, sa juridiction de constitution (si elle est indiquée) et son rôle dans l'accord (par exemple fournisseur, client ou donneur de licence).
+  - index: 1
+    name: "Périmètre des prestations"
+    format: "text"
+    prompt: >-
+      Résumez le périmètre des travaux ou des services à fournir au titre de cet accord. Quels sont les principaux livrables, obligations ou services ? Identifiez toute limitation ou exclusion du périmètre.
+  - index: 2
+    name: "Modifie un accord antérieur"
+    format: "text"
+    prompt: >-
+      Cet accord modifie-t-il, refond-il, complète-t-il ou remplace-t-il un accord antérieur ? Si oui, identifiez l'accord antérieur par son nom et sa date.
+  - index: 3
+    name: "Date d'entrée en vigueur"
+    format: "date"
+    prompt: >-
+      Quelle est la date d'entrée en vigueur ou de commencement de cet accord ? Si aucune date explicite n'est indiquée, précisez à quel moment il est réputé prendre effet.
+  - index: 4
+    name: "Durée"
+    format: "text"
+    prompt: >-
+      Quelle est la durée de cet accord ? Indiquez la durée initiale et toute condition qui en affecte la durée.
+  - index: 5
+    name: "Renouvellement"
+    format: "text"
+    prompt: >-
+      Quelles dispositions de renouvellement s'appliquent ? Précisez si le renouvellement est automatique ou nécessite une notification, sa durée, ainsi que les conditions ou délais de préavis requis pour empêcher un renouvellement automatique.
+  - index: 6
+    name: "Prix"
+    format: "text"
+    prompt: >-
+      Quelle est la structure tarifaire prévue par cet accord ? Identifiez tous les frais, taux, coûts et modalités de paiement, y compris la devise, l'échéancier de paiement et les exigences de facturation.
+  - index: 7
+    name: "Révision des prix"
+    format: "text"
+    prompt: >-
+      L'accord prévoit-il des mécanismes de révision des prix ? Identifiez toute indexation, référence à l'IPC, indice des prix de détail, comparaison de marché, modification liée au volume ou autre mécanisme permettant de modifier les prix pendant la durée.
+  - index: 8
+    name: "Pénalités de retard de paiement"
+    format: "text"
+    prompt: >-
+      Quelles pénalités ou conséquences s'appliquent en cas de retard de paiement ? Incluez tout taux d'intérêt sur les sommes échues, droit de suspension ou autre recours dont dispose le bénéficiaire du paiement.
+  - index: 9
+    name: "Valeur contractuelle estimée"
+    format: "text"
+    prompt: >-
+      Quelle est la valeur contractuelle totale estimée ou indiquée ? Si aucun montant unique n'est donné, calculez ou estimez-le à partir des taux et de la durée indiqués. Indiquez la devise et toutes les hypothèses retenues.
+  - index: 10
+    name: "Limitation de responsabilité"
+    format: "text"
+    prompt: >-
+      Quelles limitations de responsabilité s'appliquent ? Identifiez tout plafond de responsabilité (y compris son mode de calcul), toute exclusion des pertes consécutives ou indirectes et toute exception au plafond (par exemple fraude, décès ou atteinte à la propriété intellectuelle).
+  - index: 11
+    name: "Propriété intellectuelle et licences"
+    format: "text"
+    prompt: >-
+      Comment la propriété intellectuelle et les licences sont-elles traitées ? Identifiez le titulaire des droits préexistants, le titulaire des droits nouvellement créés et les licences accordées à chaque partie. Relevez toute restriction d'utilisation.
+  - index: 12
+    name: "Changement de contrôle"
+    format: "text"
+    prompt: >-
+      L'accord contient-il une clause de changement de contrôle ? Si oui, décrivez ce qui constitue un changement de contrôle, si un consentement est requis et quels droits (par exemple résiliation ou cession) sont déclenchés.
+  - index: 13
+    name: "Force majeure"
+    format: "text"
+    prompt: >-
+      Résumez la clause de force majeure. Quels événements sont admissibles, quelles obligations sont suspendues, combien de temps l'événement doit-il durer avant qu'une résiliation soit permise et quelle notification est requise ?
+  - index: 14
+    name: "Droits de résiliation"
+    format: "text"
+    prompt: >-
+      Quels sont les droits de résiliation de chaque partie ? Identifiez la résiliation pour convenance (y compris le délai de préavis), la résiliation pour cause (y compris les délais de remède) et les conséquences de la résiliation (par exemple obligations de paiement et maintien de certaines stipulations).
+  - index: 15
+    name: "Dommages-intérêts forfaitaires"
+    format: "text"
+    prompt: >-
+      L'accord prévoit-il des dommages-intérêts forfaitaires ? Si oui, identifiez les faits déclencheurs, le taux ou la formule applicables, tout plafond global et indiquez s'ils constituent le recours exclusif.
+  - index: 16
+    name: "Droit applicable"
+    format: "text"
+    prompt: >-
+      Quel droit régit cet accord ? Indiquez la juridiction et tout système juridique particulier mentionné.
+  - index: 17
+    name: "Règlement des différends"
+    format: "text"
+    prompt: >-
+      Comment les différends sont-ils réglés au titre de cet accord ? Indiquez s'ils relèvent d'un tribunal ou de l'arbitrage, le forum ou siège choisi, les étapes d'escalade ou de médiation à accomplir avant toute procédure formelle et la langue de la procédure.

@@ -1,6 +1,6 @@
 /**
- * Carte « Anonymisation » de la section Configuration : l'état du proxy PII qui
- * remplace LiteLLM.
+ * Carte « Anonymisation » de la section Configuration : l'état du proxy PII
+ * intégré à ce dépôt.
  *
  * Elle répond aux trois seules questions que l'utilisateur se pose avant de
  * confier un dossier à l'IA : est-ce que les noms sont bien remplacés avant de

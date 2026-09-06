@@ -1,0 +1,3 @@
+[data-pm-mike-replaced="true"] { display: none !important; }
+.piecemaker-mike-open > :not([data-pm-mike-workspace]) { display: none !important; }
+[data-pm-mike-workspace] { min-width: 0; flex: 1 1 auto; }
