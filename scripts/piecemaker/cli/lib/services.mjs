@@ -3,8 +3,8 @@ import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
-import { APP, INSTALLER, LOG_DIR, PIECEMAKER_HOME, PORTS } from './config.mjs';
-import { runCapture, waitUntil } from './exec.mjs';
+import { APP, LOG_DIR, PIECEMAKER_HOME, PORTS } from './config.mjs';
+import { waitUntil } from './exec.mjs';
 import { npmPath, runtimeEnv } from './node-runtime.mjs';
 
 export const APP_LOG = path.join(LOG_DIR, 'application.log');
@@ -30,27 +30,6 @@ export function appServerReachable() {
 
 export function appClientReachable() {
   return httpReachable(`http://127.0.0.1:${PORTS.appClient}/`);
-}
-
-export function startInstallerStack(runtime, report) {
-  const entry = path.join(INSTALLER.directory, 'installer', 'bin', 'piecemaker.mjs');
-  if (!fs.existsSync(entry)) {
-    report.warn('Socle PieceMaker Installer introuvable — administration non démarrée');
-    return { started: false };
-  }
-
-  report.step('Socle — démarrage de l administration');
-  const result = runCapture(runtime.nodePath, [entry, 'start'], {
-    cwd: INSTALLER.directory,
-    env: runtimeEnv(runtime, { PIECEMAKER_NON_INTERACTIVE: '1' }),
-    timeout: 120_000,
-  });
-
-  if (result.code !== 0) {
-    report.warn(`Socle — démarrage incomplet${result.stderr ? ` : ${result.stderr.trim().split('\n').pop()}` : ''}`);
-    return { started: false, output: result.stdout };
-  }
-  return { started: true, output: result.stdout };
 }
 
 export async function startApplication(runtime, report) {
