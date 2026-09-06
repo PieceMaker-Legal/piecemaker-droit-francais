@@ -233,7 +233,8 @@ Code dans `scripts/piecemaker/cli/` :
   (clone/mise à jour/dépendances, empreinte du verrou), `composants`
   (rejoue les étapes du socle listées ci-dessus, une par une, avec un délai
   propre à chacune), `services` (démarrage et sondes HTTP), `pwa` (vérification
-  du manifest et du service worker, entrée applicative), `node-runtime`,
+  du manifest et du service worker, entrée applicative avec icône Bureau sur
+  macOS/Windows/Linux et vérification de sa présence réelle), `node-runtime`,
   `config`, `exec`, `ui`.
 
 Un reste de LiteLLM d'une installation antérieure est arrêté une fois
