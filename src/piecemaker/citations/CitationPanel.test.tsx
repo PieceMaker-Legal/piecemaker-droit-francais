@@ -9,6 +9,7 @@ import { legifranceQuoteUrl } from '@/piecemaker/citations/legifrance';
 vi.mock('@/piecemaker/citations/api', () => ({ fetchCitationSource: vi.fn() }));
 
 const token = 'a'.repeat(64);
+const pushState = window.history.pushState;
 const snapshot = {
   title: 'Décision JURITEXT1',
   source: 'Premier extrait. Texte intermédiaire. Deuxième extrait.',
@@ -61,6 +62,24 @@ describe('visionneuse de citations', () => {
       expect(document.getElementById('piecemaker-citation-panel')).toBeNull();
       expect(document.activeElement).toBe(link);
     } finally { act(stop); link.remove(); }
+  });
+
+  it('changer de dossier ou de session referme le panneau resté au-dessus du chat', async () => {
+    window.history.pushState({}, '', '/session/abc');
+    const stop = startCitationPanel();
+    const link = document.createElement('a');
+    link.href = `#piecemaker-citation=${token}`;
+    document.body.appendChild(link);
+    try {
+      fireEvent.click(link);
+      await screen.findByRole('complementary', { name: 'Source de la citation' });
+      act(() => window.history.pushState({}, '', '/session/abc'));
+      expect(document.getElementById('piecemaker-citation-panel')).not.toBeNull();
+      act(() => window.history.pushState({}, '', '/'));
+      expect(document.getElementById('piecemaker-citation-panel')).toBeNull();
+      expect(document.documentElement.classList.contains('piecemaker-citation-open')).toBe(false);
+    } finally { act(stop); link.remove(); }
+    expect(window.history.pushState).toBe(pushState);
   });
 
   it('une source indisponible affiche un message sans détails internes', async () => {
