@@ -27,6 +27,7 @@ const { structuredMarkdownCounterpart } = require('./case-folder-structure.cjs')
 
 const PROTECTION_DIR = '.piecemaker';
 const PROTECTION_FILE = 'protection.json';
+const PROTECTION_BYPASS_FILE = 'protection-bypass.json';
 
 /**
  * Sous-dossier technique historique et emplacement du `mapping_default.json`.
@@ -84,6 +85,23 @@ function documentKey(filePath) {
 
 function protectionFile(caseRoot) {
   return path.join(caseRoot, PROTECTION_DIR, PROTECTION_FILE);
+}
+
+function protectionBypassFile(caseRoot) {
+  return path.join(caseRoot, PROTECTION_DIR, PROTECTION_BYPASS_FILE);
+}
+
+/**
+ * Levée de protection à l'échelle du dossier : un fichier présent suffit, et
+ * couvre les pièces déposées après coup. `protection.json` n'est pas touché,
+ * le classement pièce par pièce revient dès que le fichier disparaît.
+ */
+function isProtectionBypassed(caseRoot) {
+  try {
+    return fs.statSync(protectionBypassFile(caseRoot)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -180,6 +198,7 @@ function readProtection(caseRoot) {
   return {
     file,
     exists: raw !== null,
+    bypass: isProtectionBypassed(caseRoot),
     unprotected: normalizeKeySet(raw?.unprotected),
     resources: normalizeKeySet(raw?.resources),
   };
@@ -253,7 +272,9 @@ function isProtectedFile(absolutePath, caseRoot, state = null) {
   if (!key) return false;
   // Copie extraite d'un .docx : espace de travail implicite, jamais coffre-fort.
   if (isOoxmlWorkspacePath(absolutePath, caseRoot)) return false;
-  const { unprotected, resources } = state || readProtection(caseRoot);
+  const current = state || readProtection(caseRoot);
+  if (current.bypass) return false;
+  const { unprotected, resources } = current;
   return !unprotected.has(key) && !(resources && resources.has(key));
 }
 
@@ -339,16 +360,19 @@ module.exports = {
   isMappingFile,
   locateCase,
   isProtectedFile,
+  isProtectionBypassed,
   isOoxmlWorkspacePath,
   isResourceFile,
   markdownCounterpart,
   normalizeOriginalName,
   protectionFile,
+  protectionBypassFile,
   readProtection,
   relativeKey,
   writeProtection,
   PROTECTION_DIR,
   PROTECTION_FILE,
+  PROTECTION_BYPASS_FILE,
   READABLE_EXTENSIONS,
   FORBIDDEN_JSON_PATTERNS,
   WORKSPACE_SUBDIR,
