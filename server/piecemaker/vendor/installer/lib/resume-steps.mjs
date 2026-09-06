@@ -5,7 +5,7 @@
  * services, puis délègue ici : les étapes dont le diagnostic n'est pas
  * concluant sont rejouées dans un processus détaché, sans interaction et sans
  * retarder le retour de la commande. La sortie part dans
- * `~/.piecemaker/install-resume.log`, à côté de `server.log` et `litellm.log`.
+ * `~/.piecemaker/install-resume.log`, à côté de `server.log`.
  *
  * Deux garde-fous structurent la sélection :
  *
