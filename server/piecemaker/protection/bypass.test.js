@@ -1,6 +1,7 @@
 /**
- * La levée de protection d'un dossier doit couvrir toutes ses pièces, et sa
- * réactivation rendre au cabinet le classement exact qu'il avait choisi.
+ * La levée de protection vise le dossier : elle couvre ses pièces, y compris
+ * celles déposées après coup, et sa réactivation rend au cabinet le classement
+ * exact qu'il avait choisi.
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -12,7 +13,7 @@ import test from 'node:test';
 
 const require = createRequire(import.meta.url);
 const protection = require('../vendor/piecemaker-plugin/scripts/lib/protection.cjs');
-const { activateBypass, bypassState, deactivateBypass, protectableKeys } = require('./bypass.cjs');
+const { activateBypass, bypassState, deactivateBypass } = require('./bypass.cjs');
 
 function caseWithPieces() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-bypass-'));
@@ -25,15 +26,27 @@ function caseWithPieces() {
   return root;
 }
 
-test('la levée inscrit chaque pièce protégeable et laisse le bruit dehors', () => {
+test('la levée couvre le dossier sans réécrire le classement des pièces', () => {
   const root = caseWithPieces();
-  const keys = protectableKeys(root, protection);
-  assert.deepEqual([...keys].sort(), ['Correspondance/lettre.docx', 'assignation.pdf']);
+  protection.writeProtection(root, { unprotected: [], resources: [] });
+  const before = fs.readFileSync(protection.protectionFile(root), 'utf8');
 
   activateBypass(root, protection);
   assert.equal(protection.isProtectedFile(path.join(root, 'assignation.pdf'), root), false);
   assert.equal(protection.isProtectedFile(path.join(root, 'Correspondance', 'lettre.docx'), root), false);
+  assert.equal(fs.readFileSync(protection.protectionFile(root), 'utf8'), before);
   assert.equal(bypassState(root, protection).active, true);
+});
+
+test('une pièce déposée pendant la levée en bénéficie sans nouvelle action', () => {
+  const root = caseWithPieces();
+  activateBypass(root, protection);
+
+  fs.writeFileSync(path.join(root, 'conclusions.pdf'), 'pdf');
+  assert.equal(protection.isProtectedFile(path.join(root, 'conclusions.pdf'), root), false);
+
+  deactivateBypass(root, protection);
+  assert.equal(protection.isProtectedFile(path.join(root, 'conclusions.pdf'), root), true);
 });
 
 test('la réactivation restitue exactement le classement d’avant', () => {
@@ -50,19 +63,30 @@ test('la réactivation restitue exactement le classement d’avant', () => {
   assert.equal(fs.readFileSync(protection.protectionFile(root), 'utf8'), before);
   assert.equal(state.active, false);
   assert.equal(fs.existsSync(path.join(root, '.piecemaker', 'protection-bypass.json')), false);
+  assert.equal(protection.isProtectedFile(path.join(root, 'conclusions.pdf'), root), true);
 });
 
-test('une seconde levée étend la couverture sans écraser la photographie', () => {
+test('une seconde levée ne déplace pas la date de la première', () => {
+  const root = caseWithPieces();
+  const savedAt = activateBypass(root, protection).savedAt;
+  assert.equal(activateBypass(root, protection).savedAt, savedAt);
+});
+
+test('un dossier levé par la version précédente retrouve sa photographie', () => {
   const root = caseWithPieces();
   protection.writeProtection(root, { unprotected: ['assignation.pdf'], resources: [] });
-  const savedAt = activateBypass(root, protection).savedAt;
+  const before = fs.readFileSync(protection.protectionFile(root), 'utf8');
 
-  fs.writeFileSync(path.join(root, 'conclusions.pdf'), 'pdf');
-  assert.equal(activateBypass(root, protection).savedAt, savedAt);
-  assert.equal(protection.isProtectedFile(path.join(root, 'conclusions.pdf'), root), false);
+  fs.mkdirSync(path.join(root, '.piecemaker'), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, '.piecemaker', 'protection-bypass.json'),
+    JSON.stringify({ version: 1, savedAt: '2026-01-01T00:00:00.000Z', unprotected: ['assignation.pdf'], resources: [] }),
+    'utf8',
+  );
+  protection.writeProtection(root, { unprotected: ['assignation.pdf', 'Correspondance/lettre.docx'] });
 
   deactivateBypass(root, protection);
-  assert.deepEqual([...protection.readProtection(root).unprotected], ['assignation.pdf']);
+  assert.equal(fs.readFileSync(protection.protectionFile(root), 'utf8'), before);
 });
 
 test('réactiver sans levée en cours ne touche à rien', () => {
