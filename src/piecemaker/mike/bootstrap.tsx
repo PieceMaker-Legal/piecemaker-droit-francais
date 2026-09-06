@@ -17,7 +17,22 @@ const entries = [
   { path: '/organisation', title: 'Organisation', icon: 'organization' },
 ];
 
-function MikeWorkspace({ navigation, workspace }: { navigation: HTMLElement; workspace: HTMLElement }) {
+const FOOTER_LINK_SELECTOR = 'a[href="https://discord.gg/buxwujPNRE"], a[href="https://github.com/PieceMaker-Legal/piecemaker-droit-francais/issues/new"]';
+
+function findSidebarFooterSlot() {
+  for (const link of document.querySelectorAll<HTMLAnchorElement>(FOOTER_LINK_SELECTOR)) {
+    const wrapper = link.parentElement;
+    if (wrapper instanceof HTMLElement && wrapper.classList.contains('md:block') && !wrapper.closest('[data-pm-mike-workspace]')) return wrapper;
+  }
+  return null;
+}
+
+function findWorkspace() {
+  const tablist = [...document.querySelectorAll<HTMLElement>('[role="tablist"]')].find((element) => !element.closest('[data-pm-mike-workspace]'));
+  return tablist?.closest<HTMLElement>('div.flex.h-full.flex-col') ?? document.querySelector<HTMLElement>('div.flex.min-w-0.flex-1.flex-col > div.flex.h-full.flex-col');
+}
+
+function MikeWorkspace({ navigation, workspace }: { navigation: HTMLElement; workspace: HTMLElement | null }) {
   const bridge = useSyncExternalStore(subscribeWorkflowSessionBridge, workflowSessionBridge);
   const [page, setPage] = useState<string | null>(null);
   const [frameUrl, setFrameUrl] = useState('');
@@ -32,6 +47,7 @@ function MikeWorkspace({ navigation, workspace }: { navigation: HTMLElement; wor
   }, [bridge.pathname, page]);
 
   useEffect(() => {
+    if (!workspace) return;
     workspace.classList.toggle('piecemaker-mike-open', !!page);
     return () => workspace.classList.remove('piecemaker-mike-open');
   }, [page, workspace]);
@@ -48,6 +64,7 @@ function MikeWorkspace({ navigation, workspace }: { navigation: HTMLElement; wor
   }, [page]);
 
   useEffect(() => {
+    if (!workspace) return;
     const message = (event: MessageEvent) => {
       if (!frameUrl || event.source !== frame.current?.contentWindow || event.origin !== new URL(frameUrl).origin) return;
       if (event.data?.type === 'piecemaker-mike-navigation' && typeof event.data.path === 'string') workspace.dataset.mikePage = event.data.path;
@@ -68,7 +85,7 @@ function MikeWorkspace({ navigation, workspace }: { navigation: HTMLElement; wor
         <span className="text-sm">{entry.title}</span>
       </button>)}
     </nav>, navigation)}
-    {page && createPortal(<section data-pm-mike-workspace="true" className="flex h-full min-h-0 flex-col bg-background">
+    {page && workspace && createPortal(<section data-pm-mike-workspace="true" className="flex h-full min-h-0 flex-col bg-background">
       <div className="flex shrink-0 justify-end border-b border-border/40 px-2 py-1">
         <Button size="sm" variant="ghost" onClick={() => setPage(null)}>Revenir à la session</Button>
       </div>
@@ -81,40 +98,45 @@ function MikeWorkspace({ navigation, workspace }: { navigation: HTMLElement; wor
 }
 
 export function startMikeWorkspace() {
+  const navigation = document.createElement('div');
+  navigation.className = 'px-2 pt-1.5';
+  const hiddenLinks = new Set<HTMLElement>();
   let root: ReturnType<typeof createRoot> | null = null;
   let host: HTMLDivElement | null = null;
-  let navigation: HTMLDivElement | null = null;
-  let currentWorkspace: HTMLElement | null = null;
-  const hiddenLinks = new Set<HTMLElement>();
+  let renderedWorkspace: HTMLElement | null = null;
+  let rendered = false;
   let scheduled = false;
   const clear = () => {
     void closeMikeSession().catch(() => {});
     root?.unmount();
     host?.remove();
-    navigation?.remove();
+    navigation.remove();
     hiddenLinks.forEach((link) => link.removeAttribute('data-pm-mike-replaced'));
     hiddenLinks.clear();
     root = null;
     host = null;
-    navigation = null;
-    currentWorkspace = null;
+    renderedWorkspace = null;
+    rendered = false;
   };
   const refresh = () => {
     scheduled = false;
     if (!getStoredAuthToken()) { if (root) clear(); return; }
-    const links = [...document.querySelectorAll<HTMLAnchorElement>('a[href="https://discord.gg/buxwujPNRE"], a[href="https://github.com/PieceMaker-Legal/piecemaker-droit-francais/issues/new"]')];
-    const tablist = [...document.querySelectorAll<HTMLElement>('[role="tablist"]')].find((element) => !element.closest('[data-pm-mike-workspace]'));
-    const workspace = tablist?.closest<HTMLElement>('div.flex.h-full.flex-col') ?? document.querySelector<HTMLElement>('div.flex.min-w-0.flex-1.flex-col > div.flex.h-full.flex-col');
-    if (!links.length || !workspace) { if (root && !currentWorkspace?.isConnected) clear(); return; }
-    if (root && currentWorkspace === workspace && navigation?.isConnected) return;
-    if (root) clear();
-    navigation = document.createElement('div');
-    links[0].before(navigation);
-    links.forEach((link) => { link.setAttribute('data-pm-mike-replaced', 'true'); hiddenLinks.add(link); });
-    host = document.createElement('div');
-    document.body.appendChild(host);
-    currentWorkspace = workspace;
-    root = createRoot(host);
+    const slot = findSidebarFooterSlot();
+    if (!slot) return;
+    if (navigation.nextSibling !== slot) slot.before(navigation);
+    slot.parentElement?.querySelectorAll<HTMLElement>(FOOTER_LINK_SELECTOR).forEach((link) => {
+      link.setAttribute('data-pm-mike-replaced', 'true');
+      hiddenLinks.add(link);
+    });
+    if (!root) {
+      host = document.createElement('div');
+      document.body.appendChild(host);
+      root = createRoot(host);
+    }
+    const workspace = findWorkspace();
+    if (rendered && renderedWorkspace === workspace) return;
+    renderedWorkspace = workspace;
+    rendered = true;
     root.render(<MikeWorkspace navigation={navigation} workspace={workspace} />);
   };
   const schedule = () => { if (!scheduled) { scheduled = true; queueMicrotask(refresh); } };
