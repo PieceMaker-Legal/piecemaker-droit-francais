@@ -22,22 +22,20 @@
  * sinon. C'est le seul fournisseur pour lequel la garantie se paie d'un refus,
  * et cela reste préférable à une fuite silencieuse.
  *
- * La configuration Claude et Codex réutilise le code de l'installateur
- * (`vendor/installer/lib/litellm-proxy.mjs`) : écriture atomique, détection de
- * conflit et réversibilité déjà éprouvées. On conserve volontairement son
- * identifiant de bloc `piecemaker_litellm` — un poste où l'installateur est
- * passé voit ainsi son bloc *remplacé*, non doublé.
+ * La configuration Claude et Codex est écrite par `./client-config.cjs`,
+ * propre à ce dépôt : écriture atomique, détection de conflit et
+ * réversibilité, sous l'identifiant de bloc `piecemaker_proxy`.
  */
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-/** Chargement paresseux : le module de l'installateur est en ESM. */
-let vendorPromise = null;
-function vendor() {
-  if (!vendorPromise) vendorPromise = import('../vendor/installer/lib/litellm-proxy.mjs');
-  return vendorPromise;
-}
+const {
+  configureClaudeCodeProxy,
+  bypassClaudeCodeProxy,
+  configureCodexProxy,
+  bypassCodexProxy,
+} = require('./client-config.cjs');
 
 /** Une base que PieceMaker a écrite — donc que PieceMaker peut réécrire ou retirer. */
 function isOwnLoopbackUrl(value, suffix) {
@@ -180,7 +178,6 @@ exec cursor-agent "$@"
  * serveur de démarrer.
  */
 async function configureProviders({ origin, userHome = os.homedir(), binDir, mappingFile }) {
-  const { configureClaudeCodeProxy, configureCodexProxy } = await vendor();
   const report = {};
 
   const attempt = (name, run) => {
@@ -192,7 +189,10 @@ async function configureProviders({ origin, userHome = os.homedir(), binDir, map
   };
 
   attempt('claude', () => configureClaudeCodeProxy({ baseUrl: `${origin}/anthropic`, userHome }));
-  attempt('codex', () => configureCodexHttpProxy({ configureCodexProxy, origin, userHome }));
+  attempt('codex', () => configureCodexProxy({
+    baseUrl: `${origin}/chatgpt`,
+    codexHome: process.env.CODEX_HOME || path.join(userHome, '.codex'),
+  }));
   attempt('opencode', () => configureOpencode({ origin, userHome }));
   attempt('cursor', () => ({
     configured: false,
@@ -206,30 +206,8 @@ async function configureProviders({ origin, userHome = os.homedir(), binDir, map
   return report;
 }
 
-function configureCodexHttpProxy({ configureCodexProxy, origin, userHome }) {
-  const result = configureCodexProxy({
-    baseUrl: `${origin}/chatgpt`,
-    codexHome: process.env.CODEX_HOME || path.join(userHome, '.codex'),
-  });
-  if (!result.configured) return result;
-  const content = fs.readFileSync(result.file, 'utf8');
-  const start = content.indexOf('# >>> PieceMaker LiteLLM (géré automatiquement)');
-  const end = content.indexOf('# <<< PieceMaker LiteLLM', start);
-  if (start < 0 || end < start) return { ...result, configured: false, reason: 'managed-block-missing' };
-  const block = content.slice(start, end);
-  if ((block.match(/^supports_websockets = true$/gm) || []).length !== 1) {
-    return { ...result, configured: false, reason: 'managed-transport-conflict' };
-  }
-  const rewritten = content.slice(0, start) + block.replace(/^supports_websockets = true$/m, 'supports_websockets = false') + content.slice(end);
-  const temporary = `${result.file}.piecemaker-http-${process.pid}`;
-  fs.writeFileSync(temporary, rewritten, { encoding: 'utf8', mode: 0o600 });
-  fs.renameSync(temporary, result.file);
-  return { ...result, changed: true };
-}
-
 /** Défait tout ce que `configureProviders` a posé : l'arrêt du serveur ne doit pas laisser de base morte. */
 async function bypassProviders({ userHome = os.homedir(), binDir }) {
-  const { bypassClaudeCodeProxy, bypassCodexProxy } = await vendor();
   const report = {};
   const attempt = (name, run) => {
     try {
@@ -256,7 +234,6 @@ module.exports = {
   bypassOpencode,
   bypassProviders,
   configureOpencode,
-  configureCodexHttpProxy,
   configureProviders,
   installCursorGuard,
   isOwnLoopbackUrl,
