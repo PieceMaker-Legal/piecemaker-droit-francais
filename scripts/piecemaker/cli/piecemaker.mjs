@@ -111,7 +111,11 @@ async function installPwa() {
   }
 
   ok(`PWA installée — ${entry.location}`);
+  for (const location of entry.locations || []) {
+    if (location !== entry.location) detail(`également posé : ${location}`);
+  }
   if (!entry.standalone) detail('navigateur Chromium absent : ouverture en onglet classique');
+  if (!entry.verified) warn('installation incomplète : un emplacement attendu est introuvable après coup');
 }
 
 async function main() {

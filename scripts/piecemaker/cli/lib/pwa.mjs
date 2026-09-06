@@ -41,7 +41,7 @@ export async function verifyPwaAssets() {
   };
 }
 
-function chromiumBrowser() {
+function macChromiumBrowser() {
   const candidates = [
     '/Applications/Google Chrome.app',
     '/Applications/Microsoft Edge.app',
@@ -71,6 +71,23 @@ function writeMacIcon(bundleResourcesDir) {
   return converted.code === 0 ? `${APPLICATION_NAME}.icns` : null;
 }
 
+function registerMacBundle(bundleDir) {
+  const lsregister = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister';
+  if (!fs.existsSync(lsregister)) return;
+  runCapture(lsregister, ['-f', bundleDir]);
+}
+
+function writeMacDesktopAlias(bundleDir) {
+  const desktopAlias = path.join(os.homedir(), 'Desktop', `${APPLICATION_NAME}.app`);
+  try {
+    fs.rmSync(desktopAlias, { recursive: true, force: true });
+    fs.symlinkSync(bundleDir, desktopAlias);
+    return desktopAlias;
+  } catch {
+    return null;
+  }
+}
+
 function installMacApplication() {
   const applicationsDir = path.join(os.homedir(), 'Applications');
   const bundleDir = path.join(applicationsDir, `${APPLICATION_NAME}.app`);
@@ -80,7 +97,7 @@ function installMacApplication() {
   fs.mkdirSync(macosDir, { recursive: true });
   fs.mkdirSync(resourcesDir, { recursive: true });
 
-  const browser = chromiumBrowser();
+  const browser = macChromiumBrowser();
   const launchCommand = browser
     ? `open -na "${browser}" --args --app="${APP_URL}" --user-data-dir="$HOME/.piecemaker/pwa-profile"`
     : `open "${APP_URL}"`;
@@ -99,26 +116,189 @@ function installMacApplication() {
   );
 
   runCapture('touch', [bundleDir]);
-  return { installed: true, location: bundleDir, standalone: Boolean(browser) };
+  registerMacBundle(bundleDir);
+
+  const desktopAlias = writeMacDesktopAlias(bundleDir);
+
+  const locations = [bundleDir];
+  if (desktopAlias) locations.push(desktopAlias);
+
+  const bundleReady = fs.existsSync(launcherPath) && fs.existsSync(path.join(bundleDir, 'Contents', 'Info.plist'));
+  const desktopReady = Boolean(desktopAlias) && fs.existsSync(desktopAlias);
+
+  return {
+    installed: true,
+    location: bundleDir,
+    locations,
+    standalone: Boolean(browser),
+    verified: bundleReady && desktopReady,
+  };
+}
+
+function linuxDesktopEntryContent() {
+  return `[Desktop Entry]\nType=Application\nName=${APPLICATION_NAME}\nComment=Plateforme IA pour juristes français\nExec=sh -c "piecemaker --launch-only >/dev/null 2>&1 & sleep 1; xdg-open ${APP_URL}"\nIcon=${path.join(APP.directory, 'public', 'logo-512.png')}\nCategories=Office;Legal;\nTerminal=false\n`;
 }
 
 function installLinuxApplication() {
   const applicationsDir = path.join(os.homedir(), '.local', 'share', 'applications');
   fs.mkdirSync(applicationsDir, { recursive: true });
   const desktopFile = path.join(applicationsDir, 'piecemaker.desktop');
+  const content = linuxDesktopEntryContent();
 
-  fs.writeFileSync(
-    desktopFile,
-    `[Desktop Entry]\nType=Application\nName=${APPLICATION_NAME}\nComment=Plateforme IA pour juristes français\nExec=sh -c "piecemaker --launch-only >/dev/null 2>&1 & sleep 1; xdg-open ${APP_URL}"\nIcon=${path.join(APP.directory, 'public', 'logo-512.png')}\nCategories=Office;Legal;\nTerminal=false\n`,
-    'utf8'
-  );
-  return { installed: true, location: desktopFile, standalone: false };
+  fs.writeFileSync(desktopFile, content, 'utf8');
+  const locations = [desktopFile];
+
+  const desktopDir = path.join(os.homedir(), 'Desktop');
+  let desktopShortcut = null;
+  if (fs.existsSync(desktopDir)) {
+    desktopShortcut = path.join(desktopDir, 'piecemaker.desktop');
+    fs.writeFileSync(desktopShortcut, content, 'utf8');
+    fs.chmodSync(desktopShortcut, 0o755);
+    locations.push(desktopShortcut);
+  }
+
+  return {
+    installed: true,
+    location: desktopFile,
+    locations,
+    standalone: false,
+    verified: locations.every((entry) => fs.existsSync(entry)),
+  };
+}
+
+function encodePngAsIco(pngBuffer) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(1, 4);
+
+  const entry = Buffer.alloc(16);
+  entry.writeUInt8(0, 0);
+  entry.writeUInt8(0, 1);
+  entry.writeUInt8(0, 2);
+  entry.writeUInt8(0, 3);
+  entry.writeUInt16LE(1, 4);
+  entry.writeUInt16LE(32, 6);
+  entry.writeUInt32LE(pngBuffer.length, 8);
+  entry.writeUInt32LE(header.length + entry.length, 12);
+
+  return Buffer.concat([header, entry, pngBuffer]);
+}
+
+function writeWindowsIcon() {
+  const sourceIcon = path.join(APP.directory, 'public', 'logo-512.png');
+  if (!fs.existsSync(sourceIcon)) return null;
+
+  const cacheDir = path.join(PIECEMAKER_HOME, 'cache');
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const icoPath = path.join(cacheDir, `${APPLICATION_NAME}.ico`);
+
+  try {
+    const pngBuffer = fs.readFileSync(sourceIcon);
+    fs.writeFileSync(icoPath, encodePngAsIco(pngBuffer));
+    return icoPath;
+  } catch {
+    return null;
+  }
+}
+
+function windowsChromiumBrowser() {
+  const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  const localAppData = process.env.LOCALAPPDATA || '';
+
+  const candidates = [
+    path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    localAppData && path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(programFilesX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(programFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(programFiles, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+    path.join(programFilesX86, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+    localAppData && path.join(localAppData, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function windowsDesktopDir() {
+  const standard = path.join(os.homedir(), 'Desktop');
+  if (fs.existsSync(standard)) return standard;
+
+  const oneDrive = process.env.OneDrive;
+  if (oneDrive) {
+    const oneDriveDesktop = path.join(oneDrive, 'Desktop');
+    if (fs.existsSync(oneDriveDesktop)) return oneDriveDesktop;
+  }
+
+  return standard;
+}
+
+function windowsStartMenuDir() {
+  const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+  return path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+}
+
+function createWindowsShortcut(shortcutPath, targetPath, shortcutArgs, iconPath) {
+  const escape = (value) => String(value).replace(/'/g, "''");
+  const lines = [
+    '$shell = New-Object -ComObject WScript.Shell',
+    `$shortcut = $shell.CreateShortcut('${escape(shortcutPath)}')`,
+    `$shortcut.TargetPath = '${escape(targetPath)}'`,
+    shortcutArgs ? `$shortcut.Arguments = '${escape(shortcutArgs)}'` : null,
+    `$shortcut.WorkingDirectory = '${escape(path.dirname(targetPath))}'`,
+    iconPath ? `$shortcut.IconLocation = '${escape(iconPath)}'` : null,
+    '$shortcut.Save()',
+  ].filter(Boolean);
+
+  const scriptPath = path.join(os.tmpdir(), `piecemaker-shortcut-${Date.now()}-${Math.random().toString(36).slice(2)}.ps1`);
+  fs.writeFileSync(scriptPath, lines.join('\r\n'), 'utf8');
+
+  const result = runCapture('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', `& '${escape(scriptPath)}'`]);
+  fs.rmSync(scriptPath, { force: true });
+
+  return result.code === 0;
+}
+
+function installWindowsApplication() {
+  const browser = windowsChromiumBrowser();
+  const iconPath = writeWindowsIcon();
+  const userDataDir = path.join(os.homedir(), '.piecemaker', 'pwa-profile');
+
+  const targetPath = browser || path.join(process.env.WINDIR || 'C:\\Windows', 'explorer.exe');
+  const shortcutArgs = browser ? `--app=${APP_URL} --user-data-dir=${userDataDir}` : APP_URL;
+
+  const desktopDir = windowsDesktopDir();
+  const startMenuDir = windowsStartMenuDir();
+  fs.mkdirSync(desktopDir, { recursive: true });
+  fs.mkdirSync(startMenuDir, { recursive: true });
+
+  const desktopShortcut = path.join(desktopDir, `${APPLICATION_NAME}.lnk`);
+  const startMenuShortcut = path.join(startMenuDir, `${APPLICATION_NAME}.lnk`);
+
+  createWindowsShortcut(desktopShortcut, targetPath, shortcutArgs, iconPath);
+  createWindowsShortcut(startMenuShortcut, targetPath, shortcutArgs, iconPath);
+
+  const locations = [desktopShortcut, startMenuShortcut].filter((candidate) => fs.existsSync(candidate));
+
+  if (locations.length === 0) {
+    return { installed: false, reason: "création du raccourci Windows impossible (PowerShell absent ou refusé)" };
+  }
+
+  return {
+    installed: true,
+    location: locations[0],
+    locations,
+    standalone: Boolean(browser),
+    verified: locations.length === 2,
+  };
 }
 
 export function installApplicationEntry() {
   try {
     if (process.platform === 'darwin') return installMacApplication();
     if (process.platform === 'linux') return installLinuxApplication();
+    if (process.platform === 'win32') return installWindowsApplication();
     return { installed: false, reason: 'plateforme non prise en charge' };
   } catch (error) {
     return { installed: false, reason: error.message };
@@ -127,7 +307,7 @@ export function installApplicationEntry() {
 
 export function openApplication() {
   if (process.platform === 'darwin') {
-    const browser = chromiumBrowser();
+    const browser = macChromiumBrowser();
     if (browser) {
       runCapture('open', ['-na', browser, '--args', `--app=${APP_URL}`, `--user-data-dir=${path.join(os.homedir(), '.piecemaker', 'pwa-profile')}`]);
       return;
