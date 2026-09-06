@@ -210,10 +210,10 @@ Avant ce démarrage, `piecemaker` rejoue lui-même les seules étapes du socle
 dont ce dépôt a besoin — par `installer/bin/piecemaker.mjs --step <id> --yes`,
 en mode non interactif — dans cet ordre : `01-prerequis`, `03-python-gliner`,
 `03b-python-graphify`, `04-conversion-md`, `12-mcp-piecemaker`,
-`07-legifrance`. Explicitement exclues : `16-litellm-proxy`, remplacé par le
-proxy intégré `server/piecemaker/anonymizer/proxy.cjs` — `router.cjs` refuse
-d'ailleurs ce composant, les deux se disputeraient port et configuration —,
-`05-certificats` (pas d'HTTPS servi par ce dépôt),
+`07-legifrance`. Explicitement exclues : `16-litellm-proxy` — ce dépôt n'a
+qu'un proxy PII, `server/piecemaker/anonymizer/proxy.cjs`, et `router.cjs`
+refuse toute installation de ce composant amont —, `05-certificats` (pas
+d'HTTPS servi par ce dépôt),
 les hooks et les skills (`06-hooks`, `09-claude-assets`, `09-codex-plugin`,
 `13-garde-secrets`), ainsi que `00`, `02`, `08`, `10-*`, `11`, `14`, `15`.
 Une étape déjà à `done` dans `~/.piecemaker/state.json` n'est pas rejouée ;

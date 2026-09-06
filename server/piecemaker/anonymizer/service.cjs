@@ -42,9 +42,8 @@ function isDisabled(homeDir) {
 /**
  * Cible du relais Anthropic. Une base distante déjà configurée (passerelle
  * d'entreprise, point de terminaison alternatif) est respectée : on se chaîne
- * derrière elle. Une base en boucle locale ne peut être qu'une passerelle de la
- * machine — en pratique le LiteLLM que ce proxy remplace, ou une instance
- * précédente de ce proxy — et serait un relais mort : on l'ignore au profit de
+ * derrière elle. Une base en boucle locale ne peut être qu'une instance
+ * précédente de ce proxy, et serait un relais mort : on l'ignore au profit de
  * l'API officielle.
  */
 function resolveUpstream(configured) {
