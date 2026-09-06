@@ -1,3 +1,4 @@
-[data-pm-mike-replaced="true"] { display: none !important; }
+[data-pm-mike-nav] ~ div:has(> a[href^="https://discord.gg/"]),
+[data-pm-mike-nav] ~ div:has(> a[href$="/issues/new"]) { display: none !important; }
 [data-pm-mike-viewer] { min-width: 0; flex: 1 1 auto; }
 [data-pm-mike-viewer] ~ * { display: none !important; }
