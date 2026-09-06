@@ -198,6 +198,22 @@ démarrage du socle (administration) puis de l'application (qui porte son
 propre proxy PII), installation de la PWA, ouverture. Sautée en entier avec
 `--launch-only`.
 
+Sur une machine nue, sans dépôt ni commande, chaque amorce clone le dépôt puis
+lance ce premier passage :
+
+```
+curl -fsSL https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/scripts/piecemaker/cli/piecemaker.sh | sh
+```
+
+```
+irm https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/scripts/piecemaker/cli/piecemaker.ps1 | iex
+```
+
+Aucune des deux n'installe Ollama ni aucun autre gestionnaire de modèles
+locaux. Pour que `piecemaker` reste ensuite disponible sans repasser par le
+one-liner, exécuter une fois `node scripts/piecemaker/cli/install-command.mjs`
+depuis le dépôt cloné (voir plus bas).
+
 `piecemaker` est la seule commande installée par ce dépôt. Le socle technique
 (proxy PII, MCP, GLiNER) est un projet distinct, PieceMaker-Installer, dont la
 commande a été renommée `piecemaker-installer` dans son propre dépôt. La
@@ -226,9 +242,13 @@ Code dans `scripts/piecemaker/cli/` :
 - `piecemaker.sh` — amorce POSIX installée dans le PATH. Autonome : elle résout
   un Node ≥ 20 (courant, sinon la version nvm la plus récente) et clone le dépôt
   s'il est absent, ce qui rend la commande utilisable sur une machine nue.
+- `piecemaker.ps1` — équivalent PowerShell de `piecemaker.sh` pour Windows,
+  même résolution de Node (PATH puis nvm-windows) et même clonage à la volée.
 - `piecemaker.mjs` — orchestrateur, seul point où l'ordre des étapes est décidé.
 - `install-command.mjs` — pose l'amorce dans `~/.piecemaker/bin` et dans le
-  `bin` de Node, complète le PATH.
+  `bin` de Node (shim `.sh` sur POSIX, `.ps1` + lanceur `.cmd` sur Windows),
+  complète le PATH (fichiers de profil shell sur POSIX, `HKCU\Environment` via
+  `setx` sur Windows).
 - `lib/` — `ports` (détection et libération des écoutants), `repos`
   (clone/mise à jour/dépendances, empreinte du verrou), `composants`
   (rejoue les étapes du socle listées ci-dessus, une par une, avec un délai

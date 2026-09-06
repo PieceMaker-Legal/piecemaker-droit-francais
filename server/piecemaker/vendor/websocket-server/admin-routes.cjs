@@ -84,7 +84,6 @@ const {
   saveDossierBot,
   saveTelegramConfig,
 } = require('./telegram-admin.cjs');
-const { ensureCaseRule } = require('./case-instructions.cjs');
 const {
   DEFAULT_CASE_FOLDER_STRUCTURE,
   configuredCaseFolderStructure,
@@ -236,7 +235,6 @@ async function registerLegalCase({
   const previous = readRegistryConfig(configFile);
   const structure = ensureCaseFolderStructure(root, previous);
   const claudeAssets = await claudeAssetsInstaller(repoRoot, userHome);
-  const rule = ensureCaseRule(repoRoot, root);
   const protection = readProtection(root);
   if (!protection.exists) writeProtection(root, { unprotected: [] });
   const currentMapping = readCaseMapping(root);
@@ -266,7 +264,6 @@ async function registerLegalCase({
     folder: folderOverview,
     installed: {
       claudeAssets: Boolean(claudeAssets?.installed),
-      rule: path.relative(root, rule).split(path.sep).join('/'),
       mapping: path.relative(root, mapping.file).split(path.sep).join('/'),
       protection: path.relative(root, protection.file).split(path.sep).join('/'),
       structure: structure.directories,
