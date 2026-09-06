@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { INSTALLER, PIECEMAKER_HOME } from './config.mjs';
+import { APP, INSTALLER_ENTRY, PIECEMAKER_HOME } from './config.mjs';
 import { runInherited } from './exec.mjs';
 import { runtimeEnv } from './node-runtime.mjs';
 
@@ -29,9 +29,8 @@ function stepStatus(id) {
 }
 
 export async function installComponents(runtime, report) {
-  const entry = path.join(INSTALLER.directory, 'installer', 'bin', 'piecemaker.mjs');
-  if (!fs.existsSync(entry)) {
-    report.warn('Socle PieceMaker Installer introuvable — composants non installés');
+  if (!fs.existsSync(INSTALLER_ENTRY)) {
+    report.warn('Socle PieceMaker introuvable — composants non installés');
     return;
   }
 
@@ -43,8 +42,8 @@ export async function installComponents(runtime, report) {
     }
 
     report.step(`${component.label} — installation`);
-    const result = await runInherited(runtime.nodePath, [entry, '--step', component.id, '--yes'], {
-      cwd: INSTALLER.directory,
+    const result = await runInherited(runtime.nodePath, [INSTALLER_ENTRY, '--step', component.id, '--yes'], {
+      cwd: APP.directory,
       env: runtimeEnv(runtime, { PIECEMAKER_NON_INTERACTIVE: '1', PIECEMAKER_YES: '1' }),
       timeout: component.timeout,
     });
