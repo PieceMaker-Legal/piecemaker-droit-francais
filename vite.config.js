@@ -78,7 +78,8 @@ export default defineConfig(({ mode }) => {
       __PRODUCT_SHORT_NAME__: JSON.stringify(product.shortName),
       __PRODUCT_PAGE_TITLE__: JSON.stringify(product.pageTitle),
       __PRODUCT_REPOSITORY__: JSON.stringify(product.repository),
-      __PRODUCT_REPOSITORY_URL__: JSON.stringify(product.repositoryUrl)
+      __PRODUCT_REPOSITORY_URL__: JSON.stringify(product.repositoryUrl),
+      __PRODUCT_SHOW_GITHUB_STAR_BADGE__: JSON.stringify(product.showGithubStarBadge !== false)
     },
     resolve: {
       alias: {
