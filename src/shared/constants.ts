@@ -33,6 +33,10 @@ export const PRODUCT_REPOSITORY_URL = typeof __PRODUCT_REPOSITORY_URL__ === 'str
   ? __PRODUCT_REPOSITORY_URL__
   : 'https://github.com/siteboon/claudecodeui';
 
+/** Whether the sidebar shows the GitHub star badge; a fork can hide it via product.config.json. */
+export const PRODUCT_SHOW_GITHUB_STAR_BADGE =
+  typeof __PRODUCT_SHOW_GITHUB_STAR_BADGE__ === 'boolean' ? __PRODUCT_SHOW_GITHUB_STAR_BADGE__ : true;
+
 /**
  * Font stack used to render the CloudCLI wordmark consistently wherever the brand name
  * appears as text. Apply it inline so the wordmark does not inherit a themed font.
