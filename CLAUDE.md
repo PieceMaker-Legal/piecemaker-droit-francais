@@ -237,14 +237,6 @@ Code dans `scripts/piecemaker/cli/` :
   macOS/Windows/Linux et vérification de sa présence réelle), `node-runtime`,
   `config`, `exec`, `ui`.
 
-Un reste de LiteLLM d'une installation antérieure est arrêté une fois
-l'application confirmée active, jamais avant : le socle et l'application
-écrivent le même bloc `piecemaker_litellm` dans les configurations Claude Code
-et Codex, et retirer ce bloc avant que l'application n'ait réaffirmé son propre
-routage enverrait les sessions en clair chez le fournisseur. Pour la même
-raison, une application déjà active fait sauter le démarrage du socle : le
-routage lui appartient.
-
 Réinstaller la commande après un `git pull` qui la modifie :
 
 ```
