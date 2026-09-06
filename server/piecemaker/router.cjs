@@ -18,6 +18,7 @@ const { readRegistryConfig, resolveCaseReference } = require('./vendor/websocket
 const protectionLibrary = require('./vendor/piecemaker-plugin/scripts/lib/protection.cjs');
 const { createProtectionBypassRouter } = require('./protection/routes.cjs');
 const { createActivationRouter } = require('./activation/index.cjs');
+const { createMikeRouter } = require('./mike/routes.cjs');
 const { createStampingRouter } = require('./vendor/websocket-server/stamping-routes.cjs');
 const { findSoffice } = require('./vendor/websocket-server/lib/office-to-pdf.cjs');
 
@@ -87,6 +88,8 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anony
     piecemakerHome: homeDir,
     userHome: os.homedir(),
   }));
+
+  router.use(createMikeRouter({ applicationRoot: path.resolve(__dirname, '../..'), homeDir }));
 
   router.use(createAdminRouter({
     repoRoot: VENDOR_ROOT,

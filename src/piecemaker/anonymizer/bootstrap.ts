@@ -6,7 +6,9 @@
 
 import { startIdentityHighlighting } from '@/piecemaker/anonymizer';
 import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
+import { startMikeWorkspace } from '@/piecemaker/mike/bootstrap';
 
 startIdentityHighlighting();
 const stopCitationPanel = startCitationPanel();
-if (import.meta.hot) import.meta.hot.dispose(stopCitationPanel);
+const stopMikeWorkspace = startMikeWorkspace();
+if (import.meta.hot) import.meta.hot.dispose(() => { stopCitationPanel(); stopMikeWorkspace(); });
