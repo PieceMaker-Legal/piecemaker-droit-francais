@@ -1,0 +1,22 @@
+{
+  "source": {
+    "repository": "https://github.com/open-legal-products/mike-workflows",
+    "commit": "ce62e6a2d3f47e1d3567a4f2edc61898cfe9e78a",
+    "addon_reference": "https://github.com/PieceMaker-Legal/claude-for-legal-fr",
+    "addon_commit": "4a6c651889c97cc9140580363c73e0eb17379c2b"
+  },
+  "language": "fr",
+  "defaults": [
+    { "key": "proofread", "type": "assistant", "title": "Relire", "quick_action": true, "word_quick_action": true },
+    { "key": "compare-documents", "type": "assistant", "title": "Comparer les documents", "quick_action": true, "word_quick_action": false },
+    { "key": "extract-key-terms", "type": "assistant", "title": "Extraire les clauses clés", "quick_action": true, "word_quick_action": true },
+    { "key": "draft-from-template", "type": "assistant", "title": "Rédiger à partir d'un modèle", "quick_action": true, "word_quick_action": true },
+    { "key": "commercial-agreement-tabular-review", "type": "tabular", "title": "Revue tabulaire d'un contrat commercial", "quick_action": false, "word_quick_action": false }
+  ],
+  "quick_actions": [
+    { "key": "proofread", "prompt": "Exécutez ce workflow sur les documents sélectionnés.", "word_prompt": "Exécutez ce workflow sur ce document Word." },
+    { "key": "compare-documents", "prompt": "Exécutez ce workflow sur les documents sélectionnés." },
+    { "key": "extract-key-terms", "prompt": "Exécutez ce workflow sur les documents sélectionnés.", "word_prompt": "Exécutez ce workflow sur ce document Word." },
+    { "key": "draft-from-template", "prompt": "Exécutez ce workflow sur les documents sélectionnés.", "word_prompt": "Exécutez ce workflow sur ce document Word." }
+  ]
+}
