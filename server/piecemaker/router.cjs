@@ -60,19 +60,6 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anony
   // Le montage se fait derrière `authenticateToken` : la restriction d'origine
   // du panneau d'administration autonome ferait double emploi et casserait
   // l'app de bureau (origine `file://`) comme l'accès depuis le réseau local.
-  // LiteLLM est remplacé par le proxy PII local : les deux se disputeraient
-  // ANTHROPIC_BASE_URL et le fournisseur Codex, sur deux ports différents.
-  // L'interface n'offre pas cette installation, mais la route vendorisée
-  // l'accepte encore : on la ferme ici plutôt que d'éditer le vendor, qui doit
-  // rester une copie mécanique.
-  router.post('/configuration/install', (request, response, next) => {
-    if (request.body?.component !== 'litellm') return next();
-    response.status(409).json({
-      error: 'LiteLLM est remplacé par le proxy d’anonymisation intégré, déjà actif. '
-        + 'L’installer réécrirait la configuration des clients vers un autre port.',
-    });
-  });
-
   router.post('/repository/cases/selected', async (request, response) => {
     try {
       const result = await registerLegalCase({

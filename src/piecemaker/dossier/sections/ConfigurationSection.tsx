@@ -4,10 +4,10 @@
  * configuration screen, now backed by the same `GET /api/piecemaker/configuration`
  * handler) plus the settings and institutional-terms editors.
  *
- * `GET /configuration` also returns Ollama models, Telegram bots, LiteLLM and hooks
+ * `GET /configuration` also returns Ollama models, Telegram bots and hooks
  * status, and per-case folders — all deliberately left out of this screen (and out
  * of its types below) because they belong to other surfaces (models: local Ollama
- * management; telegram/litellm/hooks: infra not exposed to end users; folders:
+ * management; telegram/hooks: infra not exposed to end users; folders:
  * case↔bot links, owned by CaseFilesSection) or to git history, which this tab does
  * not surface at all.
  */
@@ -85,7 +85,7 @@ export type ConfigurationOverviewResponse = {
     mcp: ConfigurationMcp;
     gliner: ConfigurationGliner;
     mineru: ConfigurationMineru;
-    // hooks / litellm / telegram also present on the wire — out of scope, not typed.
+    // hooks / telegram also present on the wire — out of scope, not typed.
   };
   // models (Ollama) / folders also present on the wire — out of scope, not typed.
 };

@@ -33,8 +33,6 @@ function writeJson(file, data) {
 export function loadConfig() {
   const defaults = {
     port: 43098,
-    litellmPort: 4000,
-    litellmVenvPath: path.join(HOME_DIR, 'litellm-venv'),
     pythonPath: null,
     venvPath: path.join(HOME_DIR, 'venv'),
     graphifyVenvPath: path.join(HOME_DIR, 'graphify-venv'),
