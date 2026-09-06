@@ -12,5 +12,6 @@
   "controlPlaneUrl": "https://cloudcli.ai",
   "sshHost": "ssh.cloudcli.ai",
   "themeColor": "#ffffff",
-  "backgroundColor": "#ffffff"
+  "backgroundColor": "#ffffff",
+  "showGithubStarBadge": false
 }
