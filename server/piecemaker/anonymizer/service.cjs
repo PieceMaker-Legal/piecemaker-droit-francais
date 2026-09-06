@@ -117,13 +117,29 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
     });
 
     let origin;
+    let listenedPort;
     try {
-      ({ origin } = await proxy.listen());
+      ({ origin, port: listenedPort } = await proxy.listen());
     } catch (error) {
       proxy = null;
       state.reason = `listen_failed: ${error.message}`;
       logger.warn?.(`[piecemaker] proxy PII non démarré : ${error.message}`);
       return state;
+    }
+
+    // Publie le port réellement obtenu (le scan de proxy.cjs peut dévier du
+    // port préféré si une instance précédente n'a pas encore libéré le sien)
+    // dans la config partagée, pour que d'autres consommateurs indépendants
+    // du process serveur (ex. le sous-service Docker "mike") puissent le
+    // retrouver sans le redéduire eux-mêmes ni le coder en dur.
+    try {
+      const configFile = path.join(homeDir, 'config.json');
+      const current = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      if (current.mikePiiPort !== listenedPort) {
+        fs.writeFileSync(configFile, `${JSON.stringify({ ...current, mikePiiPort: listenedPort }, null, 2)}\n`, 'utf8');
+      }
+    } catch (error) {
+      logger.warn?.(`[piecemaker] impossible de publier mikePiiPort dans config.json : ${error.message}`);
     }
 
     previousEnv = {
