@@ -1,5 +1,4 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { getMikeData, openMikePage, closeMikeSession } = vi.hoisted(() => ({
@@ -39,7 +38,7 @@ describe('visionneuse Mike montée dans l’arbre React', () => {
     ['/tabular-reviews', 'Aucune revue tabulaire disponible.'],
     ['/organisation', 'Organisation native'],
   ])('rend la page native %s sans ouvrir de passerelle', async (path, expectedText) => {
-    render(<MemoryRouter><MikeViewer projectPath="/dossiers/premier" /></MemoryRouter>);
+    render(<MikeViewer projectPath="/dossiers/premier" />);
     act(() => setMikePage(path));
     await screen.findByLabelText('Espace PieceMaker');
     if (path === '/organisation') {
@@ -50,30 +49,27 @@ describe('visionneuse Mike montée dans l’arbre React', () => {
     expect(openMikePage).not.toHaveBeenCalled();
   });
 
-  it('se referme quand le dossier change', async () => {
-    const { rerender } = render(<MemoryRouter><MikeViewer projectPath="/dossiers/premier" /></MemoryRouter>);
+  it('reste ouverte quand le dossier change et sans dossier du tout', async () => {
+    const { rerender } = render(<MikeViewer projectPath="/dossiers/premier" />);
     expect(screen.queryByLabelText('Espace PieceMaker')).toBeNull();
 
     act(() => setMikePage('/workflows'));
     await screen.findByLabelText('Espace PieceMaker');
     await screen.findByText('Aucun workflow disponible.');
 
-    rerender(<MemoryRouter><MikeViewer projectPath="/dossiers/second" /></MemoryRouter>);
-    expect(screen.queryByLabelText('Espace PieceMaker')).toBeNull();
-    expect(readMikePage()).toBeNull();
-  });
+    rerender(<MikeViewer projectPath="/dossiers/second" />);
+    expect(screen.getByLabelText('Espace PieceMaker')).not.toBeNull();
+    expect(readMikePage()).toBe('/workflows');
 
-  it('libère la session Mike au démontage', () => {
-    const { unmount } = render(<MemoryRouter><MikeViewer projectPath="/dossiers/premier" /></MemoryRouter>);
-    act(() => setMikePage('/workflows'));
-    unmount();
-    expect(readMikePage()).toBeNull();
+    rerender(<MikeViewer projectPath={null} />);
+    expect(screen.getByLabelText('Espace PieceMaker')).not.toBeNull();
+    await screen.findByText('Aucun workflow disponible.');
   });
 
   it('n’affiche que la page choisie quand la navigation change pendant son chargement', async () => {
     const requests: Array<{ endpoint: string; resolve: (value: unknown) => void }> = [];
     getMikeData.mockImplementation((endpoint: string) => new Promise((resolve) => { requests.push({ endpoint, resolve }); }));
-    render(<MemoryRouter><MikeViewer /></MemoryRouter>);
+    render(<MikeViewer />);
 
     act(() => setMikePage('/workflows'));
     await waitFor(() => expect(requests).toHaveLength(1));
@@ -90,7 +86,7 @@ describe('visionneuse Mike montée dans l’arbre React', () => {
 
   it('retire l’état de chargement après un échec et peut relancer la requête', async () => {
     getMikeData.mockRejectedValueOnce(new Error('Mike indisponible')).mockResolvedValueOnce([]);
-    render(<MemoryRouter><MikeViewer /></MemoryRouter>);
+    render(<MikeViewer />);
 
     act(() => setMikePage('/workflows'));
     expect((await screen.findByRole('alert')).textContent).toContain('Mike indisponible');
