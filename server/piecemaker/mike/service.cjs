@@ -7,6 +7,18 @@ const { promisify } = require('node:util');
 
 const execute = promisify(execFile);
 const allowedPages = /^\/(?:workflows|tabular-reviews|library|assistant|projects)(?:\/|$)/;
+const allowedDataEndpoints = [
+  /^\/workflows(\?[^#]*)?$/,
+  /^\/workflows\/[A-Za-z0-9_-]+$/,
+  /^\/library\/(file|template)(\?[^#]*)?$/,
+  /^\/tabular-review(\?[^#]*)?$/,
+  /^\/tabular-review\/[A-Za-z0-9_-]+$/,
+  /^\/quick-actions(\?[^#]*)?$/,
+];
+
+function isAllowedDataEndpoint(endpoint) {
+  return typeof endpoint === 'string' && allowedDataEndpoints.some((pattern) => pattern.test(endpoint));
+}
 
 function createMikeService({ applicationRoot, homeDir }) {
   const runtimeDirectory = path.join(homeDir, 'mike');
@@ -202,6 +214,14 @@ function createMikeService({ applicationRoot, homeDir }) {
       if (!response.ok) throw new Error('Les actions rapides Mike n’ont pas pu être chargées.');
       return response.json();
     },
+    data: async (id, endpoint) => {
+      if (!isAllowedDataEndpoint(endpoint)) throw new Error('Cette ressource Mike n’est pas disponible.');
+      await ensureStarted();
+      const session = await provision(String(id));
+      const response = await backend(session, endpoint);
+      if (!response.ok) throw new Error('La ressource Mike est indisponible.');
+      return response.json();
+    },
     open: async (id, requestedPath, origin) => {
       if (typeof requestedPath !== 'string' || !allowedPages.test(requestedPath) || requestedPath.startsWith('//') || requestedPath.includes('\\')) throw new Error('Cette page Mike n’est pas disponible.');
       await ensureStarted();
@@ -215,4 +235,4 @@ function createMikeService({ applicationRoot, homeDir }) {
   };
 }
 
-module.exports = { createMikeService };
+module.exports = { createMikeService, isAllowedDataEndpoint };
