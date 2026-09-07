@@ -14,6 +14,8 @@ const allowedDataEndpoints = [
   /^\/tabular-review(\?[^#]*)?$/,
   /^\/tabular-review\/[A-Za-z0-9_-]+$/,
   /^\/quick-actions(\?[^#]*)?$/,
+  /^\/workflow-addons(\?[^#]*)?$/,
+  /^\/workflow-addons\/[A-Za-z0-9_-]+$/,
 ];
 
 function isAllowedDataEndpoint(endpoint) {

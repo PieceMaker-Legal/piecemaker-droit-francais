@@ -56,3 +56,13 @@ test('opened gateway rejects requests without its signed session cookie', async 
   const revokedCookie = await originalFetch(opened.url, { headers: { cookie: opened.cookie } });
   assert.equal(revokedCookie.status, 401);
 });
+
+test('the read allowlist admits the add-on catalogue and rejects unknown paths', () => {
+  const { isAllowedDataEndpoint } = require('./service.cjs');
+  assert.equal(isAllowedDataEndpoint('/workflow-addons'), true);
+  assert.equal(isAllowedDataEndpoint('/workflow-addons?type=assistant'), true);
+  assert.equal(isAllowedDataEndpoint('/workflow-addons/8f3c1d20-0a11-4d7e-9b62-5c4e0a1b2c3d'), true);
+  assert.equal(isAllowedDataEndpoint('/workflow-addons/abc/import'), false);
+  assert.equal(isAllowedDataEndpoint('/workflow-addons/../users'), false);
+  assert.equal(isAllowedDataEndpoint('/admin'), false);
+});
