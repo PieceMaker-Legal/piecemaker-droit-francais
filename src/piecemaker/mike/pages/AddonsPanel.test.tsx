@@ -7,7 +7,7 @@ vi.mock('@/piecemaker/mike/api', () => ({ getMikeData }));
 const { appendMikeWorkflowDraft } = vi.hoisted(() => ({ appendMikeWorkflowDraft: vi.fn() }));
 vi.mock('@/piecemaker/mike/ComposerActions', () => ({ appendMikeWorkflowDraft }));
 
-import { AddonsPage } from '@/piecemaker/mike/pages/AddonsPage';
+import { AddonsPanel } from '@/piecemaker/mike/pages/AddonsPanel';
 import { readMikePage, setMikePage } from '@/piecemaker/mike/page';
 
 const ADDONS = [
@@ -64,59 +64,68 @@ beforeEach(() => {
     return Promise.reject(new Error(`endpoint inattendu: ${endpoint}`));
   });
   appendMikeWorkflowDraft.mockReset();
-  setMikePage('/workflow-addons');
+  setMikePage('/workflows');
 });
 
-describe('page Add-ons', () => {
-  it('regroupe les add-ons par pack et affiche les deux sources', async () => {
-    render(<AddonsPage projectPath="/dossiers/premier" />);
-    await screen.findByText('Analyse de contrat');
+describe('panneau Add-ons', () => {
+  it('affiche les packs puis les add-ons du pack sélectionné', async () => {
+    render(<AddonsPanel projectPath="/dossiers/premier" search="" />);
+    await screen.findByText('Mike Core');
 
-    expect(screen.getByText('Mike Core')).toBeTruthy();
     expect(screen.getByText('Claude for Legal France — Litige')).toBeTruthy();
-    expect(screen.getByText('Extraction de pièces')).toBeTruthy();
+    expect(screen.queryByText('Analyse de contrat')).toBeNull();
+
+    fireEvent.click(screen.getByText('Mike Core'));
+    await waitFor(() => expect(screen.getAllByText('Analyse de contrat').length).toBeGreaterThan(0));
+    expect(screen.getByRole('button', { name: /Retour aux packs/ })).toBeTruthy();
+  });
+
+  it('revient à la liste des packs', async () => {
+    render(<AddonsPanel projectPath="/dossiers/premier" search="" />);
+    await screen.findByText('Mike Core');
+
+    fireEvent.click(screen.getByText('Mike Core'));
+    await waitFor(() => expect(screen.getAllByText('Analyse de contrat').length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole('button', { name: /Retour aux packs/ }));
+    await screen.findByText('Mike Core');
+    expect(screen.queryByText('Analyse de contrat')).toBeNull();
   });
 
   it('filtre par source vers les packs français', async () => {
-    render(<AddonsPage projectPath="/dossiers/premier" />);
-    await screen.findByText('Analyse de contrat');
+    render(<AddonsPanel projectPath="/dossiers/premier" search="" />);
+    await screen.findByText('Mike Core');
 
     fireEvent.click(screen.getByRole('button', { name: 'Claude for Legal France' }));
-    await waitFor(() => expect(screen.queryByText('Analyse de contrat')).toBeNull());
-    expect(screen.getAllByText('Extraction de pièces').length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.queryByText('Mike Core')).toBeNull());
+    expect(screen.getByText('Claude for Legal France — Litige')).toBeTruthy();
   });
 
-  it('filtre par type tabulaire', async () => {
-    render(<AddonsPage projectPath="/dossiers/premier" />);
-    await screen.findByText('Analyse de contrat');
+  it('filtre par recherche sur le titre et masque les packs vides', async () => {
+    const { rerender } = render(<AddonsPanel projectPath="/dossiers/premier" search="" />);
+    await screen.findByText('Mike Core');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Tabulaire' }));
-    await waitFor(() => expect(screen.queryByText('Analyse de contrat')).toBeNull());
-    expect(screen.getAllByText('Extraction de pièces').length).toBeGreaterThan(0);
-  });
-
-  it('filtre par recherche sur le titre', async () => {
-    render(<AddonsPage projectPath="/dossiers/premier" />);
-    await screen.findByText('Analyse de contrat');
-
-    fireEvent.change(screen.getByPlaceholderText('Rechercher un add-on…'), { target: { value: 'extraction' } });
-    await waitFor(() => expect(screen.queryByText('Analyse de contrat')).toBeNull());
-    expect(screen.getAllByText('Extraction de pièces').length).toBeGreaterThan(0);
+    rerender(<AddonsPanel projectPath="/dossiers/premier" search="extraction" />);
+    await waitFor(() => expect(screen.queryByText('Mike Core')).toBeNull());
+    const packButton = await screen.findByText('Claude for Legal France — Litige');
+    fireEvent.click(packButton);
+    await waitFor(() => expect(screen.getAllByText('Extraction de pièces').length).toBeGreaterThan(0));
   });
 
   it('charge et affiche le détail d’un add-on sélectionné', async () => {
-    render(<AddonsPage projectPath="/dossiers/premier" />);
-    await screen.findByText('Analyse de contrat');
+    render(<AddonsPanel projectPath="/dossiers/premier" search="" />);
+    await screen.findByText('Claude for Legal France — Litige');
 
-    fireEvent.click(screen.getAllByText('Extraction de pièces')[0]);
+    fireEvent.click(screen.getByText('Claude for Legal France — Litige'));
     await screen.findByText('Extrais les pièces du dossier.');
     expect(screen.getByText(/modele\.docx/)).toBeTruthy();
   });
 
   it('utilise l’add-on assistant sélectionné dans la session en cours', async () => {
-    render(<AddonsPage projectPath="/dossiers/premier" />);
-    await screen.findByText('Analyse de contrat');
+    render(<AddonsPanel projectPath="/dossiers/premier" search="" />);
+    await screen.findByText('Mike Core');
 
+    fireEvent.click(screen.getByText('Mike Core'));
     fireEvent.click(await screen.findByRole('button', { name: 'Utiliser dans la session' }));
     expect(appendMikeWorkflowDraft).toHaveBeenCalledWith(expect.objectContaining({ id: 'addon-mike' }));
     expect(readMikePage()).toBeNull();
@@ -127,7 +136,7 @@ describe('page Add-ons', () => {
       if (endpoint === '/workflow-addons') return Promise.resolve([]);
       return Promise.reject(new Error(`endpoint inattendu: ${endpoint}`));
     });
-    render(<AddonsPage projectPath="/dossiers/premier" />);
+    render(<AddonsPanel projectPath="/dossiers/premier" search="" />);
     await screen.findByText('Aucun add-on disponible.');
   });
 });
