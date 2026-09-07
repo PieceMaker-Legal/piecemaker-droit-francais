@@ -18,6 +18,7 @@ Il ne modifie pas le projet Docker `mike` éventuellement déjà installé.
 node scripts/piecemaker/mike/runtime.mjs build
 node scripts/piecemaker/mike/runtime.mjs start
 node scripts/piecemaker/mike/runtime.mjs status
+node scripts/piecemaker/mike/runtime.mjs sync
 node scripts/piecemaker/mike/runtime.mjs stop
 ```
 
@@ -33,6 +34,9 @@ machine que PieceMaker. Ces ports ne constituent pas une publication distante.
 
 `integration/catalogue.cjs` appelle le synchroniseur original Mike et ajoute
 les skills de `PieceMaker-Legal/claude-for-legal-fr` à son catalogue d’add-ons.
+La commande `sync` rejoue cette synchronisation sans redémarrer la pile, ce
+qui suffit à publier une évolution du dépôt français. Le catalogue obtenu est
+servi par `/workflow-addons` et présenté par la page Add-ons native.
 Les cinq workflows par défaut traduits en français sont conservés dans
 `server/piecemaker/vendor/mike-defaults-fr/`, avec leur provenance.
 Les skills, agents et MCP PieceMaker existants restent dans Organisation.
