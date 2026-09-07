@@ -92,7 +92,7 @@ async function configuration() {
 
 const action = process.argv[2] || 'start';
 await configuration();
-const command = action === 'build' ? ['build', 'backend', 'frontend'] : action === 'stop' ? ['stop'] : action === 'status' ? ['ps', '--format', 'json'] : ['up', '-d', '--no-build'];
+const command = action === 'build' ? ['build', 'backend', 'frontend'] : action === 'stop' ? ['stop'] : action === 'status' ? ['ps', '--format', 'json'] : action === 'sync' ? ['run', '--rm', '--no-deps', 'workflow-sync'] : ['up', '-d', '--no-build'];
 const { spawn } = await import('node:child_process');
 if (action === 'start') {
   const images = await Promise.allSettled(['piecemaker-mike-backend:local', 'piecemaker-mike-frontend:local'].map((image) => execute('docker', ['image', 'inspect', image], { env: environment })));

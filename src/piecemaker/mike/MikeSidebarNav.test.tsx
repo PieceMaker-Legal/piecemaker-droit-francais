@@ -10,7 +10,7 @@ describe('entrées Mike du pied de la barre latérale', () => {
   it('ouvre l’espace demandé et marque l’entrée courante', () => {
     render(<MikeSidebarNav />);
     expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
-      'Workflows', 'Tabular review', 'Library', 'Organisation',
+      'Workflows', 'Add-ons', 'Tabular review', 'Library', 'Organisation',
     ]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Tabular review' }));
