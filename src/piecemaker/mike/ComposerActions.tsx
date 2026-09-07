@@ -3,13 +3,10 @@ import { createPortal } from 'react-dom';
 import { Bot, Layers3, Sparkles } from 'lucide-react';
 
 import { Button } from '@/shared/ui';
-import { downloadMikeDocument, getMikeQuickActions, getMikeWorkflow, getOrganisationAgent, getOrganisationAgents, openMikePage } from '@/piecemaker/mike/api';
-
-type MikeWorkflow = {
-  id: string;
-  metadata: { title: string; type: 'assistant' | 'tabular' };
-  skill_md?: string | null;
-};
+import { downloadMikeDocument, getMikeQuickActions, getMikeWorkflow, getOrganisationAgent, getOrganisationAgents } from '@/piecemaker/mike/api';
+import { DocumentPickerDialog } from '@/piecemaker/mike/pickers/DocumentPickerDialog';
+import { WorkflowPickerDialog } from '@/piecemaker/mike/pickers/WorkflowPickerDialog';
+import type { MikeWorkflow } from '@/piecemaker/mike/types';
 
 type MikeQuickAction = {
   id: string;
@@ -47,61 +44,11 @@ export function appendMikeWorkflowDraft(workflow: MikeWorkflow, prompt?: string 
   textarea.focus();
 }
 
-function MikePicker({ url, onClose, onWorkflow }: { url: string; onClose: () => void; onWorkflow: (workflow: MikeWorkflow, prompt?: string | null) => void }) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== new URL(url).origin || event.data?.type !== 'piecemaker-mike-workflow-selected') return;
-      onWorkflow(event.data.workflow as MikeWorkflow, event.data.prompt);
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [onWorkflow, url]);
-
-  return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Choisir un workflow">
-      <div className="relative h-[min(760px,calc(100vh-2rem))] w-[min(1080px,100%)] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
-        <Button type="button" variant="ghost" size="sm" className="absolute right-2 top-2 z-10" onClick={onClose}>Fermer</Button>
-        <iframe src={url} title="Workflows Mike" className="h-full w-full border-0" allow="clipboard-read; clipboard-write" />
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-function MikeDocumentPicker({ url, onClose, onDocuments }: { url: string; onClose: () => void; onDocuments: (documentIds: string[]) => void }) {
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== new URL(url).origin || event.data?.type !== 'piecemaker-mike-documents-selected') return;
-      onDocuments(event.data.documentIds as string[]);
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [onDocuments, url]);
-
-  return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Choisir des documents">
-      <div className="relative h-[min(760px,calc(100vh-2rem))] w-[min(1080px,100%)] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
-        <Button type="button" variant="ghost" size="sm" className="absolute right-2 top-2 z-10" onClick={onClose}>Fermer</Button>
-        <iframe src={url} title="Bibliothèque Mike" className="h-full w-full border-0" allow="clipboard-read; clipboard-write" />
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
 export function MikeComposerActions({ enabled }: ComposerActionsProps) {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [quickActions, setQuickActions] = useState<MikeQuickAction[]>([]);
-  const [pickerUrl, setPickerUrl] = useState('');
-  const [documentPickerUrl, setDocumentPickerUrl] = useState('');
+  const [workflowPickerOpen, setWorkflowPickerOpen] = useState(false);
+  const [documentPickerOpen, setDocumentPickerOpen] = useState(false);
   const [agents, setAgents] = useState<OrganisationAgent[]>([]);
   const [agentsOpen, setAgentsOpen] = useState(false);
   const [error, setError] = useState('');
@@ -127,22 +74,23 @@ export function MikeComposerActions({ enabled }: ComposerActionsProps) {
 
   const openPicker = () => {
     setError('');
-    void openMikePage('/assistant?pieceMakerMode=workflow-picker').then(setPickerUrl).catch((cause) => setError(cause instanceof Error ? cause.message : 'Le sélecteur de workflows est indisponible.'));
+    setWorkflowPickerOpen(true);
   };
 
   const selectWorkflow = (workflow: MikeWorkflow, prompt?: string | null) => {
-    setPickerUrl('');
+    setWorkflowPickerOpen(false);
     appendMikeWorkflowDraft(workflow, prompt, agents);
   };
 
   const selectQuickAction = (action: MikeQuickAction) => {
     selectWorkflow(action.workflow, action.prompt);
     if (!action.document_upload) return;
-    void openMikePage(`/assistant?pieceMakerMode=quick-action&pieceMakerQuickAction=${encodeURIComponent(action.id)}`).then(setDocumentPickerUrl).catch((cause) => setError(cause instanceof Error ? cause.message : 'La bibliothèque Mike est indisponible.'));
+    setError('');
+    setDocumentPickerOpen(true);
   };
 
   const attachDocuments = (documentIds: string[]) => {
-    setDocumentPickerUrl('');
+    setDocumentPickerOpen(false);
     setError('');
     void Promise.all(documentIds.map(downloadMikeDocument)).then((files) => {
       const form = document.querySelector<HTMLFormElement>('[data-slot="prompt-input"]');
@@ -197,7 +145,7 @@ export function MikeComposerActions({ enabled }: ComposerActionsProps) {
       {quickActions.length > 0 && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Sparkles className="h-3 w-3" />Actions rapides</span>}
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     </div>, target.parentElement ?? target)}
-    {pickerUrl && <MikePicker url={pickerUrl} onClose={() => setPickerUrl('')} onWorkflow={selectWorkflow} />}
-    {documentPickerUrl && <MikeDocumentPicker url={documentPickerUrl} onClose={() => setDocumentPickerUrl('')} onDocuments={attachDocuments} />}
+    <WorkflowPickerDialog open={workflowPickerOpen} onClose={() => setWorkflowPickerOpen(false)} onSelect={selectWorkflow} />
+    <DocumentPickerDialog open={documentPickerOpen} onClose={() => setDocumentPickerOpen(false)} onConfirm={attachDocuments} />
   </>;
 }
