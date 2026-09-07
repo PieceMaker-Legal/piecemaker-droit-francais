@@ -1,6 +1,4 @@
 import { ChevronLeft } from 'lucide-react';
-import { useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
 
 import { Button } from '@/shared/ui';
 import { Organisation } from '@/piecemaker/mike/Organisation';
@@ -16,18 +14,6 @@ function getPageTitle(page: string) {
 
 export function MikeViewer({ projectPath }: { projectPath?: string | null }) {
   const page = useMikePage();
-  const { pathname } = useLocation();
-
-  useEffect(() => () => { setMikePage(null); }, []);
-
-  const previousContext = useRef({ projectPath, pathname });
-
-  useEffect(() => {
-    if (previousContext.current.projectPath !== projectPath || previousContext.current.pathname !== pathname) {
-      setMikePage(null);
-    }
-    previousContext.current = { projectPath, pathname };
-  }, [projectPath, pathname]);
 
   if (!page) return null;
   return (

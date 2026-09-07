@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { AUTH_SESSION_EXPIRED_EVENT } from '@/shared/authToken';
 import { ThemeProvider } from '@/shared/context/ThemeContext';
 import { MikeComposerActions } from '@/piecemaker/mike/ComposerActions';
+import { MikeWorkspaceOverlay } from '@/piecemaker/mike/MikeWorkspaceOverlay';
 import { setMikePage } from '@/piecemaker/mike/page';
 import { subscribeWorkflowSessionBridge, workflowSessionBridge } from '@/piecemaker/mike/sessionBridge';
 
@@ -16,7 +17,7 @@ export function startMikeWorkspace() {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
-  root.render(<ThemeProvider><MikeComposerBridge /></ThemeProvider>);
+  root.render(<ThemeProvider><MikeComposerBridge /><MikeWorkspaceOverlay /></ThemeProvider>);
   const clear = () => setMikePage(null);
   window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, clear);
   return () => {
