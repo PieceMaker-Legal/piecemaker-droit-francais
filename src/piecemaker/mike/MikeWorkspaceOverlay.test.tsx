@@ -58,4 +58,33 @@ describe('recouvrement Mike hors de l’arbre CloudCLI', () => {
     act(() => setMikePage(null));
     expect(screen.queryByLabelText('Espace PieceMaker')).toBeNull();
   });
+
+  it('se monte dans la région de l’espace de travail CloudCLI quand elle existe', async () => {
+    const shell = document.createElement('div');
+    shell.className = 'fixed inset-0 flex bg-background';
+    const region = document.createElement('div');
+    region.className = 'flex min-w-0 flex-1 flex-col';
+    const existingChild = document.createElement('div');
+    existingChild.textContent = 'Contenu CloudCLI existant';
+    region.appendChild(existingChild);
+    shell.appendChild(region);
+    document.body.appendChild(shell);
+
+    try {
+      render(<MikeWorkspaceOverlay />);
+      act(() => setMikePage('/workflows'));
+      const viewer = await screen.findByLabelText('Espace PieceMaker');
+
+      expect(region.contains(viewer)).toBe(true);
+      expect(existingChild.style.display).toBe('none');
+
+      act(() => setMikePage(null));
+      expect(screen.queryByLabelText('Espace PieceMaker')).toBeNull();
+      expect(region.contains(existingChild)).toBe(true);
+      expect(existingChild.style.display).toBe('');
+      expect(region.querySelector('[data-pm-mike-overlay]')).toBeNull();
+    } finally {
+      document.body.removeChild(shell);
+    }
+  });
 });
