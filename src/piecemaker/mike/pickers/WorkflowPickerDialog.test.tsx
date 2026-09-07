@@ -44,17 +44,17 @@ beforeEach(() => {
 describe('WorkflowPickerDialog', () => {
   it('n’affiche que les workflows assistant, filtrés par recherche', async () => {
     render(<WorkflowPickerDialog open onClose={vi.fn()} onSelect={vi.fn()} />);
-    await screen.findByText('Analyse de contrat');
+    await screen.findAllByText('Analyse de contrat');
     expect(screen.queryByText('Extraction de pièces')).toBeNull();
 
     fireEvent.change(screen.getByPlaceholderText('Rechercher un workflow…'), { target: { value: 'zzz' } });
-    await waitFor(() => expect(screen.queryByText('Analyse de contrat')).toBeNull());
+    await waitFor(() => expect(screen.queryAllByText('Analyse de contrat')).toHaveLength(0));
   });
 
   it('sélectionne un workflow puis confirme avec la demande saisie', async () => {
     const onSelect = vi.fn();
     render(<WorkflowPickerDialog open onClose={vi.fn()} onSelect={onSelect} />);
-    await screen.findByText('Analyse de contrat');
+    await screen.findAllByText('Analyse de contrat');
 
     fireEvent.change(screen.getByLabelText('Précisez votre demande (facultatif)'), { target: { value: '  Vérifie la clause de résiliation  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Utiliser ce workflow' }));
@@ -65,7 +65,7 @@ describe('WorkflowPickerDialog', () => {
   it('confirme avec une demande nulle quand le champ est vide', async () => {
     const onSelect = vi.fn();
     render(<WorkflowPickerDialog open onClose={vi.fn()} onSelect={onSelect} />);
-    await screen.findByText('Analyse de contrat');
+    await screen.findAllByText('Analyse de contrat');
 
     fireEvent.click(screen.getByRole('button', { name: 'Utiliser ce workflow' }));
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'wf-assistant' }), null);
@@ -77,7 +77,7 @@ describe('WorkflowPickerDialog', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Workflows Mike indisponibles');
 
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
-    await screen.findByText('Analyse de contrat');
+    await screen.findAllByText('Analyse de contrat');
   });
 
   it('ne charge rien tant que la boîte de dialogue est fermée', () => {
