@@ -3,7 +3,6 @@ import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/shared/ui';
 import { Organisation } from '@/piecemaker/mike/Organisation';
 import { MIKE_PAGES, setMikePage, useMikePage } from '@/piecemaker/mike/page';
-import { AddonsPage } from '@/piecemaker/mike/pages/AddonsPage';
 import { LibraryPage } from '@/piecemaker/mike/pages/LibraryPage';
 import { TabularReviewsPage } from '@/piecemaker/mike/pages/TabularReviewsPage';
 import { WorkflowsPage } from '@/piecemaker/mike/pages/WorkflowsPage';
@@ -29,7 +28,6 @@ export function MikeViewer({ projectPath }: { projectPath?: string | null }) {
       </div>
       <div className="relative min-h-0 flex-1">
         {page === '/workflows' && <WorkflowsPage projectPath={projectPath ?? null} />}
-        {page === '/workflow-addons' && <AddonsPage projectPath={projectPath ?? null} />}
         {page === '/library' && <LibraryPage />}
         {page === '/tabular-reviews' && <TabularReviewsPage />}
         {page === '/organisation' && <Organisation projectPath={projectPath ?? null} />}
