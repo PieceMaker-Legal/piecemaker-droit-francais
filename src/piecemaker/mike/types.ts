@@ -91,3 +91,43 @@ export type MikeTabularReviewDetail = {
   rows: MikeTabularRow[];
   documents: unknown[];
 };
+
+export type MikeAddonAsset = {
+  id: string;
+  filename: string;
+  file_type: string | null;
+  size_bytes: number | null;
+  created_at: string | null;
+};
+
+export type MikeAddonContributor = {
+  name: string;
+  organisation: string | null;
+  role: string | null;
+  linkedin: string | null;
+};
+
+export type MikeWorkflowAddon = {
+  id: string;
+  addon_key: string;
+  pack_key: string;
+  pack_title: string;
+  pack_description: string | null;
+  pack_version: string | null;
+  version: string | null;
+  title: string;
+  description: string | null;
+  type: MikeWorkflowType;
+  contributors: MikeAddonContributor[] | null;
+  language: string | null;
+  practice: string | null;
+  jurisdictions: string[] | null;
+  active: boolean;
+  updated_at: string | null;
+  assets: MikeAddonAsset[];
+};
+
+export type MikeWorkflowAddonDetail = MikeWorkflowAddon & {
+  prompt_md: string | null;
+  columns_config: MikeColumnConfig[] | null;
+};
