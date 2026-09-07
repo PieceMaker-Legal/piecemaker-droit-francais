@@ -1,7 +1,7 @@
 const express = require('express');
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
-const { createMikeService } = require('./service.cjs');
+const { createMikeService, isAllowedDataEndpoint } = require('./service.cjs');
 
 function createMikeRouter(options) {
   const router = express.Router();
@@ -29,6 +29,15 @@ function createMikeRouter(options) {
   router.get('/mike/quick-actions', async (request, response) => {
     try { response.json(await service.quickActions(request.user.id)); }
     catch { response.status(503).json({ error: 'Les actions rapides Mike sont indisponibles.' }); }
+  });
+  router.get('/mike/data', async (request, response) => {
+    const endpoint = typeof request.query.endpoint === 'string' ? request.query.endpoint : '';
+    if (!isAllowedDataEndpoint(endpoint)) {
+      response.status(400).json({ error: 'Cette ressource Mike n’est pas disponible.' });
+      return;
+    }
+    try { response.json(await service.data(request.user.id, endpoint)); }
+    catch { response.status(503).json({ error: 'La ressource Mike est indisponible.' }); }
   });
   router.post('/mike/open', async (request, response) => {
     try {
