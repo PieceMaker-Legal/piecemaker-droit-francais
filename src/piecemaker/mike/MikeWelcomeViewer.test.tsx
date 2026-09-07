@@ -2,19 +2,41 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { openMikePage } = vi.hoisted(() => ({ openMikePage: vi.fn() }));
-vi.mock('@/piecemaker/mike/api', () => ({ openMikePage, closeMikeSession: vi.fn().mockResolvedValue(undefined) }));
+const { getMikeData, openMikePage } = vi.hoisted(() => ({
+  getMikeData: vi.fn(),
+  openMikePage: vi.fn(),
+}));
+vi.mock('@/piecemaker/mike/api', () => ({
+  getMikeData,
+  openMikePage,
+  closeMikeSession: vi.fn().mockResolvedValue(undefined),
+  downloadMikeDocument: vi.fn(),
+}));
 vi.mock('@/piecemaker/mike/Organisation', () => ({ Organisation: () => <div>Configuration autonome</div> }));
 
 import { MikeSidebarNav } from '@/piecemaker/mike/MikeSidebarNav';
 import { setMikePage } from '@/piecemaker/mike/page';
 import { publishWorkflowSessionBridge } from '@/piecemaker/mike/sessionBridge';
 
+function endpointResponse(endpoint: string) {
+  if (endpoint.startsWith('/workflows')) return [];
+  if (endpoint.startsWith('/tabular-review')) return [];
+  if (endpoint.startsWith('/library/')) return { documents: [], folders: [] };
+  return [];
+}
+
 beforeEach(() => {
   setMikePage(null);
   publishWorkflowSessionBridge({ projectPath: null, pathname: '/', navigate: vi.fn() });
-  openMikePage.mockReset().mockImplementation(async (path: string) => `http://mike.test${path}`);
+  openMikePage.mockReset();
+  getMikeData.mockReset().mockImplementation(async (endpoint: string) => endpointResponse(endpoint));
 });
+
+const EMPTY_LABEL: Record<string, string> = {
+  '/workflows': 'Aucun workflow disponible.',
+  '/tabular-reviews': 'Aucune revue tabulaire disponible.',
+  '/library': 'Aucun document dans ce dossier.',
+};
 
 describe('onglets Mike sans dossier sélectionné', () => {
   it.each([
@@ -31,11 +53,10 @@ describe('onglets Mike sans dossier sélectionné', () => {
     fireEvent.click(screen.getByRole('button', { name: title }));
     if (path === '/organisation') {
       expect(await screen.findByText('Configuration autonome')).toBeTruthy();
-      expect(openMikePage).not.toHaveBeenCalled();
     } else {
-      await waitFor(() => expect(screen.getByTitle('Espace Mike').getAttribute('src')).toBe(`http://mike.test${path}`));
-      expect(openMikePage).toHaveBeenCalledWith(path);
+      await screen.findByText(EMPTY_LABEL[path]);
     }
+    expect(openMikePage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Revenir à l’accueil' }));
     expect(screen.queryByLabelText('Espace PieceMaker')).toBeNull();
     expect(screen.getByText('Accueil')).toBeTruthy();
@@ -44,7 +65,7 @@ describe('onglets Mike sans dossier sélectionné', () => {
   it('s’ouvre quand la zone de travail CloudCLI est montée après l’entrée Mike', async () => {
     render(<MemoryRouter><MikeSidebarNav /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Workflows' }));
-    expect(screen.queryByTitle('Espace Mike')).toBeNull();
+    expect(screen.queryByLabelText('Espace PieceMaker')).toBeNull();
 
     const shell = document.createElement('div');
     shell.className = 'fixed inset-0 flex bg-background';
@@ -53,12 +74,12 @@ describe('onglets Mike sans dossier sélectionné', () => {
     shell.appendChild(workspace);
     document.body.appendChild(shell);
 
-    await waitFor(() => expect(screen.getByTitle('Espace Mike').getAttribute('src')).toBe('http://mike.test/workflows'));
+    await waitFor(() => expect(screen.getByText('Aucun workflow disponible.')).toBeTruthy());
     shell.remove();
   });
 
   it('relance une page autonome après une erreur', async () => {
-    openMikePage.mockRejectedValueOnce(new Error('Mike indisponible')).mockResolvedValueOnce('http://mike.test/workflows');
+    getMikeData.mockRejectedValueOnce(new Error('Mike indisponible')).mockResolvedValueOnce([]);
     render(<MemoryRouter><div className="fixed inset-0 flex bg-background">
       <MikeSidebarNav />
       <div className="flex min-w-0 flex-1 flex-col"><div>Accueil</div></div>
@@ -67,7 +88,7 @@ describe('onglets Mike sans dossier sélectionné', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Workflows' }));
     expect((await screen.findByRole('alert')).textContent).toContain('Mike indisponible');
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
-    await waitFor(() => expect(openMikePage).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.getByTitle('Espace Mike').getAttribute('src')).toBe('http://mike.test/workflows'));
+    await waitFor(() => expect(getMikeData).toHaveBeenCalledTimes(2));
+    await screen.findByText('Aucun workflow disponible.');
   });
 });

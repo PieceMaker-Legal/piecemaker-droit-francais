@@ -1,12 +1,13 @@
-import { ChevronLeft, Loader2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ChevronLeft } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { Button } from '@/shared/ui';
-import { closeMikeSession, openMikePage } from '@/piecemaker/mike/api';
 import { Organisation } from '@/piecemaker/mike/Organisation';
 import { MIKE_PAGES, setMikePage, useMikePage } from '@/piecemaker/mike/page';
-import { appendMikeWorkflowDraft } from '@/piecemaker/mike/ComposerActions';
+import { LibraryPage } from '@/piecemaker/mike/pages/LibraryPage';
+import { TabularReviewsPage } from '@/piecemaker/mike/pages/TabularReviewsPage';
+import { WorkflowsPage } from '@/piecemaker/mike/pages/WorkflowsPage';
 import '@/piecemaker/mike/workspace.css';
 
 function getPageTitle(page: string) {
@@ -16,11 +17,6 @@ function getPageTitle(page: string) {
 export function MikeViewer({ projectPath }: { projectPath?: string | null }) {
   const page = useMikePage();
   const { pathname } = useLocation();
-  const [frameUrl, setFrameUrl] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [reloadVersion, setReloadVersion] = useState(0);
-  const frame = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => () => { setMikePage(null); }, []);
 
@@ -33,38 +29,6 @@ export function MikeViewer({ projectPath }: { projectPath?: string | null }) {
     previousContext.current = { projectPath, pathname };
   }, [projectPath, pathname]);
 
-  useEffect(() => {
-    if (!page || page === '/organisation') return;
-    let cancelled = false;
-    setFrameUrl('');
-    setLoading(true);
-    setError('');
-    void openMikePage(page)
-      .then((url) => { if (!cancelled) setFrameUrl(url); })
-      .catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Ouverture impossible.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [page, reloadVersion]);
-
-  useEffect(() => {
-    if (page) return;
-    setFrameUrl('');
-    void closeMikeSession().catch(() => {});
-  }, [page]);
-
-  useEffect(() => {
-    if (!frameUrl) return;
-    const message = (event: MessageEvent) => {
-      if (event.source !== frame.current?.contentWindow || event.origin !== new URL(frameUrl).origin) return;
-      if (event.data?.type === 'piecemaker-mike-workflow-selected' && event.data.workflow?.metadata?.type === 'assistant') {
-        appendMikeWorkflowDraft(event.data.workflow);
-        setMikePage(null);
-      }
-    };
-    window.addEventListener('message', message);
-    return () => window.removeEventListener('message', message);
-  }, [frameUrl]);
-
   if (!page) return null;
   return (
     <section data-pm-mike-viewer="true" aria-label="Espace PieceMaker" className="flex h-full min-h-0 flex-col bg-background">
@@ -76,17 +40,12 @@ export function MikeViewer({ projectPath }: { projectPath?: string | null }) {
         </nav>
         <h1 className="ml-auto text-sm font-medium">{getPageTitle(page)}</h1>
       </div>
-      {page === '/organisation' ? <Organisation projectPath={projectPath ?? null} /> : (
-        <div className="relative min-h-0 flex-1">
-          {loading && <div role="status" className="absolute inset-0 z-10 flex items-center justify-center gap-2 bg-background text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Ouverture de l’espace…</div>}
-          {error ? (
-            <div role="alert" className="p-6">
-              <p>{error}</p>
-              <Button className="mt-4" onClick={() => setReloadVersion((version) => version + 1)}>Réessayer</Button>
-            </div>
-          ) : frameUrl && <iframe ref={frame} key={frameUrl} src={frameUrl} title="Espace Mike" className="h-full w-full border-0" allow="clipboard-read; clipboard-write" />}
-        </div>
-      )}
+      <div className="relative min-h-0 flex-1">
+        {page === '/workflows' && <WorkflowsPage projectPath={projectPath ?? null} />}
+        {page === '/library' && <LibraryPage />}
+        {page === '/tabular-reviews' && <TabularReviewsPage />}
+        {page === '/organisation' && <Organisation projectPath={projectPath ?? null} />}
+      </div>
     </section>
   );
 }
