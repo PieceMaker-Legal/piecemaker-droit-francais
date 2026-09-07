@@ -2,3 +2,5 @@
 [data-pm-mike-nav] ~ div:has(> a[href$="/issues/new"]) { display: none !important; }
 [data-pm-mike-viewer] { min-width: 0; flex: 1 1 auto; }
 [data-pm-mike-viewer] ~ * { display: none !important; }
+[data-pm-mike-welcome] { position: absolute; inset: 0; z-index: 10; }
+div:has(> [data-pm-mike-welcome]) { position: relative; }
