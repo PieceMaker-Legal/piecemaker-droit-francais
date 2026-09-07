@@ -1,8 +1,11 @@
-/**
- * Page Mike ouverte, partagée entre les entrées de navigation injectées dans la
- * barre latérale et la visionneuse montée dans l'arbre React de CloudCLI.
- */
 import { useSyncExternalStore } from 'react';
+
+export const MIKE_PAGES = [
+  { path: '/workflows', title: 'Workflows', icon: 'workflow' },
+  { path: '/tabular-reviews', title: 'Tabular review', icon: 'tabular-review' },
+  { path: '/library', title: 'Library', icon: 'library' },
+  { path: '/organisation', title: 'Organisation', icon: 'organization' },
+] as const;
 
 let page: string | null = null;
 const listeners = new Set<() => void>();
