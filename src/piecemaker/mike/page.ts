@@ -1,10 +1,9 @@
 import { useSyncExternalStore } from 'react';
 
 export const MIKE_PAGES = [
-  { path: '/workflows', title: 'Workflows', icon: 'workflow' },
-  { path: '/workflow-addons', title: 'Add-ons', icon: 'workflow' },
-  { path: '/tabular-reviews', title: 'Tabular review', icon: 'tabular-review' },
   { path: '/library', title: 'Library', icon: 'library' },
+  { path: '/tabular-reviews', title: 'Tabular review', icon: 'tabular-review' },
+  { path: '/workflows', title: 'Workflows', icon: 'workflow' },
   { path: '/organisation', title: 'Organisation', icon: 'organization' },
 ] as const;
 
