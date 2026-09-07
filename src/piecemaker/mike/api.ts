@@ -54,6 +54,13 @@ export async function getOrganisationAgent(path: string): Promise<{ path: string
   return { path: String(body.path || path), content: body.content };
 }
 
+export async function getMikeData<T>(endpoint: string): Promise<T> {
+  const response = await authenticatedFetch(`/api/piecemaker/mike/data?${new URLSearchParams({ endpoint })}`);
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || 'La ressource Mike est indisponible.');
+  return body as T;
+}
+
 export async function downloadMikeDocument(documentId: string): Promise<File> {
   const response = await authenticatedFetch(`/api/piecemaker/mike/documents/${encodeURIComponent(documentId)}/download`);
   if (!response.ok) throw new Error('Le document Mike est indisponible.');
