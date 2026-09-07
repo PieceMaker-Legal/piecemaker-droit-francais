@@ -28,6 +28,35 @@ import {
 
 export const workflowAddonsRouter = Router();
 
+const WORKFLOW_ASSET_ID_BATCH_SIZE = 40;
+
+type WorkflowAddonAsset = {
+  id: string;
+  mike_workflow_id: string;
+  filename: string;
+  file_type: string | null;
+  size_bytes: number | null;
+  created_at: string;
+};
+
+async function loadAssetsForWorkflowIds(
+  db: ReturnType<typeof createServerSupabase>,
+  workflowIds: string[],
+): Promise<{ data: WorkflowAddonAsset[]; error: unknown | null }> {
+  const collected: WorkflowAddonAsset[] = [];
+  for (let start = 0; start < workflowIds.length; start += WORKFLOW_ASSET_ID_BATCH_SIZE) {
+    const batch = workflowIds.slice(start, start + WORKFLOW_ASSET_ID_BATCH_SIZE);
+    const { data, error } = await db
+      .from("mike_workflow_assets")
+      .select("id, mike_workflow_id, filename, file_type, size_bytes, created_at")
+      .in("mike_workflow_id", batch)
+      .order("created_at", { ascending: true });
+    if (error) return { data: [], error };
+    collected.push(...((data ?? []) as unknown as WorkflowAddonAsset[]));
+  }
+  return { data: collected, error: null };
+}
+
 function asyncRoute(
   handler: (req: Request, res: Response) => Promise<unknown>,
 ) {
@@ -58,15 +87,7 @@ workflowAddonsRouter.get(
       .filter((addon) => addon.type === "assistant")
       .map((addon) => addon.id);
     const { data: assets, error: assetsError } =
-      assistantIds.length > 0
-        ? await db
-            .from("mike_workflow_assets")
-            .select(
-              "id, mike_workflow_id, filename, file_type, size_bytes, created_at",
-            )
-            .in("mike_workflow_id", assistantIds)
-            .order("created_at", { ascending: true })
-        : { data: [], error: null };
+      await loadAssetsForWorkflowIds(db, assistantIds);
     if (assetsError) return void sendInternalError(res, assetsError);
     const assetsByAddon = new Map<string, typeof assets>();
     for (const asset of assets ?? []) {
