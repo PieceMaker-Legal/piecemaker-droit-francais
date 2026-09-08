@@ -41,13 +41,14 @@ function escapeForRegex(value: string): string {
 
 /**
  * Bornes Unicode plutôt que `\b` : `\b` est ASCII, il couperait « Motté » ou
- * « Nguyễn » au mauvais endroit.
+ * « Nguyễn » au mauvais endroit. Le drapeau `i` fait que la casse du texte
+ * affiché n'a pas à correspondre à celle du dictionnaire.
  */
 export function buildNameRegex(names: string[]): RegExp | null {
   if (names.length === 0) return null;
   const alternatives = names.map(escapeForRegex).join('|');
   try {
-    return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives})(?![\\p{L}\\p{N}])`, 'gu');
+    return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives})(?![\\p{L}\\p{N}])`, 'giu');
   } catch {
     return null;
   }
