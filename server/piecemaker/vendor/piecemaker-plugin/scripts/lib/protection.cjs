@@ -7,19 +7,19 @@
  * qu'on en a tiré. La protection est désormais une propriété du fichier,
  * décidée dans l'administration.
  *
- * **Protégé par défaut.** Le fichier `.piecemaker/protection.json` d'un dossier
- * n'enregistre que les *exceptions* — ce que l'utilisateur a explicitement
- * libéré. Une pièce déposée entre deux passages dans l'administration est donc
- * protégée sans action de sa part ; l'inverse (une liste de ce qu'il faut
- * protéger) laisserait fuiter tout nouveau document.
+ * **Protégés par défaut : les PDF et les images** (`PROTECTED_EXTENSIONS`), qui
+ * sont les formats dont on tire un Markdown converti. Tout le reste est
+ * accessible à l'IA, anonymisé à la lecture par le proxy PII. Le fichier
+ * `.piecemaker/protection.json` d'un dossier n'enregistre que les *exceptions* —
+ * ce que l'utilisateur a explicitement libéré : une pièce PDF déposée entre deux
+ * passages dans l'administration est donc protégée sans action de sa part.
  *
- * `.md` et `.json` ne sont jamais protégés : ce sont les surfaces que le proxy
- * anonymise avant chaque appel LLM.
- *
- * Une exception, portée par `isMappingFile` : le mapping du dossier et les scans
- * PII sont interdits à l'IA en toute circonstance. Ils ne passent pas par
- * `isProtectedFile` — l'historique du cabinet doit continuer à versionner le
- * mapping (`commits.cjs`) — mais par un refus dédié dans `protect-originals.mjs`.
+ * Deux familles échappent à ce classement et sont interdites à l'IA en toute
+ * circonstance, quelle que soit leur extension : le mapping du dossier et les
+ * scans PII (`isMappingFile`), les secrets d'environnement (`isSecretFile`).
+ * Elles ne passent pas par `isProtectedFile` — l'historique du cabinet doit
+ * continuer à versionner le mapping (`commits.cjs`) — mais par des refus dédiés
+ * dans `protect-originals.mjs`.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -50,6 +50,26 @@ const OOXML_WORKDIR_SUFFIX = '-ooxml';
 const READABLE_EXTENSIONS = new Set(['.md', '.json']);
 
 /**
+ * Seules extensions protégées : les PDF et les images. Ce sont les pièces dont
+ * la lecture directe livrerait l'original non pseudonymisé et pour lesquelles un
+ * Markdown converti existe. Toute autre extension est accessible à l'IA.
+ */
+const PROTECTED_EXTENSIONS = new Set([
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.webp',
+  '.tif',
+  '.tiff',
+  '.heic',
+  '.heif',
+  '.avif',
+]);
+
+/**
  * JSON qui trahiraient la frontière s'ils étaient lus :
  *  - `mapping*.json` fait correspondre chaque code au nom réel — le lire, c'est
  *    dé-anonymiser le dossier entier d'un seul appel d'outil ;
@@ -67,6 +87,20 @@ const FORBIDDEN_JSON_PATTERNS = [/^mapping.*\.json$/i, /_sensitive_map\.json$/i,
 function isMappingFile(filePath) {
   const base = path.basename(String(filePath || ''));
   return FORBIDDEN_JSON_PATTERNS.some((pattern) => pattern.test(base));
+}
+
+/**
+ * Fichiers d'environnement : clés d'API, identifiants de base, jetons. Ils ne
+ * sont pas des pièces, aucune anonymisation ne les rend inoffensifs, et une
+ * seule lecture suffit à les exfiltrer. Refus sans exception possible, comme le
+ * mapping. `.env.example` est écarté : il ne porte que des noms de variables.
+ */
+const SECRET_FILE_PATTERNS = [/^\.env$/i, /^\.env\.(?!example$|sample$|template$)/i, /\.env$/i];
+
+/** Vrai pour un fichier de secrets d'environnement, où qu'il soit rangé. */
+function isSecretFile(filePath) {
+  const base = path.basename(String(filePath || ''));
+  return SECRET_FILE_PATTERNS.some((pattern) => pattern.test(base));
 }
 
 function normalizeOriginalName(value) {
@@ -261,15 +295,17 @@ function isOoxmlWorkspacePath(absolutePath, caseRoot) {
 }
 
 /**
- * Un fichier est protégé s'il est dans le dossier, qu'il n'est ni Markdown ni
- * JSON, et qu'il ne figure dans *aucune* des deux listes d'exceptions (espace
- * de travail ou ressource, toutes deux accessibles à l'IA). `state` évite de
- * relire le fichier d'exceptions à chaque appel dans une boucle.
+ * Un fichier est protégé s'il est dans le dossier, que son extension est celle
+ * d'un PDF ou d'une image (`PROTECTED_EXTENSIONS`), et qu'il ne figure dans
+ * *aucune* des deux listes d'exceptions (espace de travail ou ressource, toutes
+ * deux accessibles à l'IA). `state` évite de relire le fichier d'exceptions à
+ * chaque appel dans une boucle.
  */
 function isProtectedFile(absolutePath, caseRoot, state = null) {
   if (!absolutePath || !caseRoot) return false;
   const key = exceptionKey(absolutePath, caseRoot);
   if (!key) return false;
+  if (!PROTECTED_EXTENSIONS.has(path.extname(key).toLowerCase())) return false;
   // Copie extraite d'un .docx : espace de travail implicite, jamais coffre-fort.
   if (isOoxmlWorkspacePath(absolutePath, caseRoot)) return false;
   const current = state || readProtection(caseRoot);
@@ -358,6 +394,7 @@ module.exports = {
   documentKey,
   exceptionKey,
   isMappingFile,
+  isSecretFile,
   locateCase,
   isProtectedFile,
   isProtectionBypassed,
@@ -374,7 +411,9 @@ module.exports = {
   PROTECTION_FILE,
   PROTECTION_BYPASS_FILE,
   READABLE_EXTENSIONS,
+  PROTECTED_EXTENSIONS,
   FORBIDDEN_JSON_PATTERNS,
+  SECRET_FILE_PATTERNS,
   WORKSPACE_SUBDIR,
   OOXML_WORKDIR_SUFFIX,
 };
