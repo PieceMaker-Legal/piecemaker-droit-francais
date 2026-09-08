@@ -15,7 +15,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
-const { createDictionaryLoader } = require('./dictionary.cjs');
+const { anonymize, createDictionaryLoader, deanonymize } = require('./dictionary.cjs');
 const { createAnonymizerProxy } = require('./proxy.cjs');
 const { bypassOpencode, configureOpencode, installCursorGuard } = require('./providers.cjs');
 const { createSseRewriter, heldLength, rewriteJsonBody } = require('./rewrite.cjs');
@@ -277,16 +277,44 @@ test('la couverture distingue filtré, bloqué et non configuré', () => {
   assert.equal(coverage.cursor.state, 'blocked');
 });
 
-test('le dictionnaire expose toutes les orthographes connues, dédoublonnées', () => {
+function variantsHome() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-anon-variants-'));
   fs.writeFileSync(path.join(dir, 'central-mapping.json'), JSON.stringify({
     version: 1,
-    mapping: { 'Jean Dupont': CODE, 'M. Dupont': CODE, Dupont: CODE },
-    reverse_mapping: { [CODE]: ['Jean Dupont', 'M. Dupont', 'Dupont', 'DUPONT', ''] },
+    mapping: { 'Jean Dupont': CODE, 'M. Dupont': CODE, Dupont: CODE, US: 'ADRESSE_01' },
+    reverse_mapping: { [CODE]: ['Jean Dupont', 'M. Dupont'], ADRESSE_01: ['US'] },
   }));
+  return dir;
+}
 
-  const dictionary = createDictionaryLoader({ homeDir: dir }).get();
+test('le dictionnaire expose les orthographes que le moteur code vraiment', () => {
+  const dictionary = createDictionaryLoader({ homeDir: variantsHome() }).get();
 
   assert.equal(dictionary.canonical[CODE], 'Jean Dupont');
   assert.deepEqual(dictionary.displayNames, ['Jean Dupont', 'M. Dupont', 'Dupont']);
+  assert.deepEqual(dictionary.displayAcronyms, ['US']);
+});
+
+test('tout ce qui est surligné est codé par le moteur, quelle que soit la casse', () => {
+  const dictionary = createDictionaryLoader({ homeDir: variantsHome() }).get();
+
+  for (const name of dictionary.displayNames) {
+    for (const written of [name, name.toLocaleLowerCase(), name.toLocaleUpperCase()]) {
+      const coded = anonymize(`avant ${written} après`, dictionary);
+      assert.equal(coded.includes(written), false, `laissé en clair : ${written}`);
+      assert.equal(coded.includes(CODE), true, `non codé : ${written}`);
+    }
+  }
+
+  for (const acronym of dictionary.displayAcronyms) {
+    assert.equal(anonymize(`avant ${acronym} après`, dictionary).includes('ADRESSE_01'), true);
+  }
+});
+
+test('le retour à l\'humain ignore la casse du code et rend la forme principale', () => {
+  const dictionary = createDictionaryLoader({ homeDir: variantsHome() }).get();
+
+  assert.equal(deanonymize(`voir ${CODE}`, dictionary), 'voir Jean Dupont');
+  assert.equal(deanonymize(`voir ${CODE.toLowerCase()}`, dictionary), 'voir Jean Dupont');
+  assert.equal(deanonymize('voir Personne_Physique_01', dictionary), 'voir Jean Dupont');
 });

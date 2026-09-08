@@ -199,6 +199,10 @@ function applyMapping(text, mapping) {
  * pas : `2` est un caractère de mot, donc `PERSONNE_PHYSIQUE_1` ne matche pas
  * `PERSONNE_PHYSIQUE_12` — mais le tri reste la garantie qui ne dépend pas de
  * la forme des codes.
+ *
+ * La casse du code est ignorée, comme celle de l'entité à l'aller : un modèle
+ * qui écrit « personne_physique_01 » désigne la même personne, et le texte livré
+ * à l'humain doit porter son nom, pas un code resté en clair.
  */
 function revertMapping(text, reverseMapping) {
   if (typeof text !== 'string' || !text) return text;
@@ -212,7 +216,7 @@ function revertMapping(text, reverseMapping) {
     // Un code est un identifiant ASCII : pas de variantes Unicode à gérer, mais
     // les mêmes frontières de mots, pour ne pas réécrire un code cité dans un
     // mot plus long.
-    const regex = new RegExp(`${WORD_BOUNDARY_BEFORE}${escapeRegex(String(code))}${WORD_BOUNDARY_AFTER}`, 'gu');
+    const regex = new RegExp(`${WORD_BOUNDARY_BEFORE}${escapeRegex(String(code))}${WORD_BOUNDARY_AFTER}`, 'giu');
     output = output.replace(regex, String(canonical));
   }
   return output;
