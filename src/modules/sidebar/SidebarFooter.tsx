@@ -4,7 +4,6 @@ import type { TFunction } from 'i18next';
 import { PRODUCT_NAME, PRODUCT_REPOSITORY_URL } from '@/shared/constants';
 import { IS_PLATFORM } from '@/shared/utils';
 import type { ReleaseInfo } from '@/shared/types';
-import { AddonsSidebarNav } from '@/piecemaker/addons/AddonsSidebarNav';
 
 const GITHUB_ISSUES_URL = `${PRODUCT_REPOSITORY_URL}/issues/new`;
 
@@ -108,8 +107,6 @@ export default function SidebarFooter({
 
       {/* Community + Settings */}
       <div className="nav-divider" />
-
-      <AddonsSidebarNav />
 
       {/* Desktop Report Issue */}
       <div className="hidden px-2 pt-1.5 md:block">
