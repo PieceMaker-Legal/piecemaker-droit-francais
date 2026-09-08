@@ -10,6 +10,7 @@ import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
+import { startLibraryBackend, installLibraryRuntime } from './library/index.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -42,6 +43,8 @@ const anonymizer = createAnonymizerService({ homeDir: piecemakerHome(), required
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy });
+const library = await startLibraryBackend(piecemakerHome(), applicationRoot);
+installLibraryRuntime(providerRuntimeService, sessionsService, library);
 
 export function createPieceMakerRouter(options: { getRuntimeStatus?: () => PieceMakerRuntimeStatus } = {}) {
   const router = vendor.createPieceMakerRouter({ ...options, anonymizer });
