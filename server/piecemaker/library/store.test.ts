@@ -131,3 +131,81 @@ test('editing updates YAML and active instructions without changing assets or ac
   assert.equal(reopened.document(id).content, content);
   reopened.close();
 });
+
+test('toggle installs and removes discoverable Claude and Codex skills with their assets', (t) => {
+  const { store, skill, workspace, other } = fixture(t);
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  store.setEnabled(workspace, id, true);
+  store.setEnabled(workspace, id, true);
+  for (const provider of ['.claude', '.agents']) {
+    const installed = path.join(workspace, provider, 'skills', `piecemaker-${id}`);
+    assert.equal(fs.readFileSync(path.join(installed, 'SKILL.md'), 'utf8'), store.document(id).content);
+    assert.equal(fs.readFileSync(path.join(installed, 'table-columns.yaml'), 'utf8'), 'columns:\n  - name: Date\n');
+    assert.equal(fs.existsSync(path.join(other, provider)), false);
+  }
+  const previous = store.document(id).content;
+  store.updateDocument(id, previous.replace('Instructions privées.', 'Instructions actualisées.'), previous);
+  assert.match(fs.readFileSync(path.join(workspace, '.claude/skills', `piecemaker-${id}`, 'SKILL.md'), 'utf8'), /actualisées/);
+  store.setEnabled(workspace, id, false);
+  store.setEnabled(workspace, id, false);
+  for (const provider of ['.claude', '.agents']) assert.deepEqual(fs.readdirSync(path.join(workspace, provider, 'skills')), []);
+  assert.ok(store.document(id));
+});
+
+test('toggle installs native subagents for both providers and refreshes their definitions', (t) => {
+  const { store, skill, workspace } = fixture(t);
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'agent');
+  const claude = path.join(workspace, '.claude/agents', `piecemaker-${id}.md`);
+  const codex = path.join(workspace, '.codex/agents', `piecemaker-${id}.toml`);
+  store.setEnabled(workspace, id, true);
+  assert.equal(fs.readFileSync(claude, 'utf8'), store.document(id).content);
+  const fields = Object.fromEntries(fs.readFileSync(codex, 'utf8').trim().split('\n').map((line) => {
+    const separator = line.indexOf(' = ');
+    return [line.slice(0, separator), JSON.parse(line.slice(separator + 3))];
+  }));
+  assert.equal(fields.name, 'review');
+  assert.match(fields.description, /Lire et comparer/);
+  assert.match(fields.developer_instructions, /Instructions privées/);
+  assert.doesNotMatch(fields.developer_instructions, /name:/);
+  const previous = store.document(id).content;
+  store.updateDocument(id, previous.replace('Instructions privées.', 'Texte "actualisé".\nSuite.'), previous);
+  assert.match(fs.readFileSync(claude, 'utf8'), /actualisé/);
+  assert.match(fs.readFileSync(codex, 'utf8'), /actualisé/);
+  store.setEnabled(workspace, id, false);
+  assert.equal(fs.existsSync(claude), false);
+  assert.equal(fs.existsSync(codex), false);
+  assert.ok(store.document(id));
+});
+
+test('installation refuses personal collisions before installing either provider', (t) => {
+  const { store, skill, workspace } = fixture(t);
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const personal = path.join(workspace, '.agents/skills', `piecemaker-${id}`);
+  fs.mkdirSync(personal, { recursive: true });
+  fs.writeFileSync(path.join(personal, 'SKILL.md'), 'Personnel');
+  assert.throws(() => store.setEnabled(workspace, id, true), /personnel préservé/);
+  assert.equal(store.list(workspace)[0].enabled, false);
+  assert.equal(fs.existsSync(path.join(workspace, '.claude/skills', `piecemaker-${id}`)), false);
+  assert.equal(fs.readFileSync(path.join(personal, 'SKILL.md'), 'utf8'), 'Personnel');
+});
+
+test('installation refuses provider directories redirected outside the dossier', (t) => {
+  const { store, skill, workspace, other } = fixture(t);
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  fs.symlinkSync(other, path.join(workspace, '.claude'));
+  assert.throws(() => store.setEnabled(workspace, id, true), /hors du dossier/);
+  assert.deepEqual(fs.readdirSync(other), []);
+  assert.equal(store.list(workspace)[0].enabled, false);
+});
+
+test('uninstallation preserves a locally edited subagent and its activation', (t) => {
+  const { store, skill, workspace } = fixture(t);
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'agent');
+  store.setEnabled(workspace, id, true);
+  const target = path.join(workspace, '.codex/agents', `piecemaker-${id}.toml`);
+  fs.writeFileSync(target, 'Personal edits');
+  assert.throws(() => store.setEnabled(workspace, id, false), /personnel préservé/);
+  assert.equal(fs.readFileSync(target, 'utf8'), 'Personal edits');
+  assert.equal(store.list(workspace)[0].enabled, true);
+  assert.ok(fs.existsSync(path.join(workspace, '.claude/agents', `piecemaker-${id}.md`)));
+});
