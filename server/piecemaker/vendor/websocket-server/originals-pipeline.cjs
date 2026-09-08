@@ -59,7 +59,6 @@ const PIPELINE_SCRIPT = () => process.env.PIECEMAKER_PIPELINE_PATH || path.join(
 const PYTHON = () => process.env.PYTHON_PATH || 'python3';
 const MAX_LOG_LINES = 200;
 const MAX_ERROR_LINES = 12;
-const MAX_FILES_PER_JOB = 200;
 
 const GIB = 1024 ** 3;
 /**
@@ -815,7 +814,6 @@ async function startOriginalsJob({ casesRoot, caseName, action, files = [], opti
     ? selected
     : selected.filter((file) => (action === 'convert' ? !file.converted : !(file.converted && file.scanned)));
   const skipped = selected.length - pending.length;
-  if (pending.length > MAX_FILES_PER_JOB) throw new Error(`Traitement limité à ${MAX_FILES_PER_JOB} pièces à la fois.`);
 
   pruneJobs();
   if (!pending.length) {
