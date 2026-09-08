@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { ensureDossierRegistration } from '@/piecemaker/dossier/dossierRegistration';
 import type { Project } from '@/shared/types';
-import { publishWorkflowSessionBridge } from '@/piecemaker/mike/sessionBridge';
+import { publishWorkflowSessionBridge } from '@/piecemaker/addons/sessionBridge';
 
 export function useSelectedDossierRegistration(selectedProject: Project | null): void {
   const projectPath = selectedProject?.fullPath || selectedProject?.path;
