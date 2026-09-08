@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildNameRegex } from '@/piecemaker/anonymizer/highlighter';
+import { buildAcronymRegex, buildNameRegex } from '@/piecemaker/anonymizer/highlighter';
 
 function matches(names: string[], text: string): string[] {
   const pattern = buildNameRegex(names);
+  if (!pattern) return [];
+  return Array.from(text.matchAll(pattern), (match) => match[0]);
+}
+
+function acronymMatches(acronyms: string[], text: string): string[] {
+  const pattern = buildAcronymRegex(acronyms);
   if (!pattern) return [];
   return Array.from(text.matchAll(pattern), (match) => match[0]);
 }
@@ -25,5 +31,15 @@ describe('buildNameRegex', () => {
 
   it('renvoie null sans nom', () => {
     expect(buildNameRegex([])).toBeNull();
+  });
+});
+
+describe('buildAcronymRegex', () => {
+  it('respecte la casse, comme le moteur de substitution', () => {
+    expect(acronymMatches(['US'], 'US et us')).toEqual(['US']);
+  });
+
+  it('ne teinte pas l\'intérieur d\'un mot', () => {
+    expect(acronymMatches(['US'], 'BUS USA US')).toEqual(['US']);
   });
 });
