@@ -10,7 +10,7 @@ const product = fs.existsSync(configFile) ? JSON.parse(fs.readFileSync(configFil
 const dataRoot = process.env.CLOUDCLI_HOME || path.join(os.homedir(), product.dataDirectoryName || '.claude-code-ui');
 const target = path.join(dataRoot, 'plugins', 'piecemaker-library');
 fs.mkdirSync(target, { recursive: true });
-for (const filename of ['manifest.json', 'index.js', 'server.mjs', 'package.json']) fs.copyFileSync(path.join(source, filename), path.join(target, filename));
+for (const filename of ['manifest.json', 'icon.svg', 'index.js', 'server.mjs', 'package.json']) fs.copyFileSync(path.join(source, filename), path.join(target, filename));
 fs.writeFileSync(path.join(target, 'local.json'), JSON.stringify({ home: process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker') }), { mode: 0o600 });
 const configPath = path.join(dataRoot, 'plugins.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
