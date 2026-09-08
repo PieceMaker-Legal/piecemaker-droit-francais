@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Loader2, ScanSearch, ShieldCheck } from 'lucide-react';
 
 import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
-import type { OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
+import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
+import type { CaseOverview, OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 import { describeJob } from '@/piecemaker/dossier/sections/CaseFilesUtils';
 import { Button } from '@/shared/ui';
 
@@ -21,23 +22,52 @@ type InstallJob = {
   error: string;
 };
 
-type CaseMappingSetupProps = {
-  caseId: string;
-  onMappingCreated: () => Promise<void>;
-};
+/**
+ * Always-visible mapping-status badge, mounted next to the section tab bar
+ * (`DossierPanel`) rather than inline in a section: it needs to stay on screen
+ * regardless of which of the three tabs is active. It owns its case-overview
+ * fetch (mapping.exists / mapping.entries) rather than receiving it as a prop,
+ * since its mount point has no `overview` to read from. `mappingVersion` from
+ * the dossier context is the refresh signal: this component bumps it after a
+ * successful anonymization run, and re-fetches whenever another part of the
+ * app (e.g. `CaseMappingSection`'s manual edits) bumps it too.
+ */
+export default function CaseMappingSetup() {
+  const { selectedCaseId: caseId, mappingVersion, bumpMappingVersion } = useDossierCases();
 
-export default function CaseMappingSetup({ caseId, onMappingCreated }: CaseMappingSetupProps) {
+  const [overview, setOverview] = useState<CaseOverview | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
   const [glinerInstalled, setGlinerInstalled] = useState<boolean | null>(null);
   const [installJob, setInstallJob] = useState<InstallJob | null>(null);
   const [anonymizationJob, setAnonymizationJob] = useState<OriginalsJob | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const loadOverview = useCallback(async () => {
+    if (!caseId) {
+      setOverview(null);
+      return;
+    }
+    setOverviewLoading(true);
+    try {
+      const { folder } = await pmGet<{ folder: CaseOverview }>('/repository/case', { case: caseId });
+      setOverview(folder);
+    } catch {
+      setOverview(null);
+    } finally {
+      setOverviewLoading(false);
+    }
+  }, [caseId]);
+
+  useEffect(() => {
+    void loadOverview();
+  }, [loadOverview, mappingVersion]);
+
   const loadGlinerStatus = async () => {
     setError(null);
     try {
-      const overview = await pmGet<GlinerOverview>('/configuration');
-      setGlinerInstalled(overview.components.gliner.installed);
+      const status = await pmGet<GlinerOverview>('/configuration');
+      setGlinerInstalled(status.components.gliner.installed);
     } catch (cause) {
       setError(cause instanceof PieceMakerApiError ? cause.message : String(cause));
     }
@@ -46,9 +76,9 @@ export default function CaseMappingSetup({ caseId, onMappingCreated }: CaseMappi
   useEffect(() => {
     let active = true;
     pmGet<GlinerOverview>('/configuration')
-      .then((overview) => {
+      .then((status) => {
         if (!active) return;
-        setGlinerInstalled(overview.components.gliner.installed);
+        setGlinerInstalled(status.components.gliner.installed);
       })
       .catch((cause: unknown) => {
         if (!active) return;
@@ -86,7 +116,7 @@ export default function CaseMappingSetup({ caseId, onMappingCreated }: CaseMappi
         setAnonymizationJob(job);
         if (job.state === 'done') {
           setError(null);
-          await onMappingCreated();
+          bumpMappingVersion();
         } else if (job.state === 'error') {
           setError(job.error || 'L’anonymisation a échoué.');
         }
@@ -95,7 +125,7 @@ export default function CaseMappingSetup({ caseId, onMappingCreated }: CaseMappi
       }
     }, 1500);
     return () => window.clearTimeout(timeout);
-  }, [anonymizationJob, onMappingCreated]);
+  }, [anonymizationJob, bumpMappingVersion]);
 
   const installGliner = async () => {
     setStarting(true);
@@ -111,6 +141,7 @@ export default function CaseMappingSetup({ caseId, onMappingCreated }: CaseMappi
   };
 
   const anonymize = async () => {
+    if (!caseId) return;
     setStarting(true);
     setError(null);
     try {
@@ -128,6 +159,9 @@ export default function CaseMappingSetup({ caseId, onMappingCreated }: CaseMappi
     }
   };
 
+  if (!caseId) return null;
+
+  const mappingReady = Boolean(overview?.mapping.exists && overview.mapping.entries > 0);
   const installing = installJob?.state === 'running';
   const anonymizing = anonymizationJob ? ['queued', 'running'].includes(anonymizationJob.state) : false;
   const busy = starting || installing || anonymizing;
@@ -137,35 +171,44 @@ export default function CaseMappingSetup({ caseId, onMappingCreated }: CaseMappi
       ? describeJob(anonymizationJob)
       : null;
 
+  const tone = mappingReady
+    ? 'border-emerald-500/30 bg-emerald-500/10'
+    : 'border-amber-500/30 bg-amber-500/10';
+  const iconColor = mappingReady
+    ? 'text-emerald-700 dark:text-emerald-300'
+    : 'text-amber-700 dark:text-amber-300';
+  const status = progress || (overviewLoading
+    ? 'Vérification…'
+    : mappingReady
+      ? `${overview?.mapping.entries} anonymisé(s)`
+      : glinerInstalled === null
+        ? 'Vérification…'
+        : glinerInstalled
+          ? 'Aucun mapping'
+          : 'GLiNER requis');
+
   return (
-    <div className="mx-4 mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300">
-        {glinerInstalled ? <ScanSearch className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold">Aucun mapping d’anonymisation</p>
-        <p className="text-xs text-muted-foreground">
-          {progress || (glinerInstalled === null
-            ? 'Vérification de GLiNER…'
-            : glinerInstalled
-              ? 'Analysez les pièces en attente pour créer le mapping du dossier.'
-              : 'GLiNER doit être installé avant d’analyser les pièces.')}
-        </p>
-        {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
-      </div>
+    <div className={`ml-auto flex h-8 shrink-0 items-center gap-2 rounded-md border px-2.5 text-xs ${tone}`}>
+      {mappingReady ? (
+        <ShieldCheck className={`h-3.5 w-3.5 shrink-0 ${iconColor}`} />
+      ) : (
+        <ScanSearch className={`h-3.5 w-3.5 shrink-0 ${iconColor}`} />
+      )}
+      <span className="whitespace-nowrap font-medium">{status}</span>
+      {error && <span className="truncate text-destructive">{error}</span>}
       {glinerInstalled === null && error ? (
-        <Button variant="outline" size="sm" onClick={() => void loadGlinerStatus()}>Réessayer</Button>
+        <Button variant="outline" size="sm" className="h-6 px-2 text-xs" onClick={() => void loadGlinerStatus()}>Réessayer</Button>
       ) : glinerInstalled === null ? (
-        <Button variant="outline" size="sm" disabled><Loader2 className="h-3.5 w-3.5 animate-spin" />Vérification…</Button>
+        <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled><Loader2 className="h-3 w-3 animate-spin" /></Button>
       ) : glinerInstalled ? (
-        <Button size="sm" onClick={() => void anonymize()} disabled={busy}>
-          {anonymizing || starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
-          {anonymizing ? 'Anonymisation…' : 'Anonymiser'}
+        <Button size="sm" className="h-6 px-2 text-xs" onClick={() => void anonymize()} disabled={busy}>
+          {anonymizing || starting ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanSearch className="h-3 w-3" />}
+          {anonymizing ? 'En cours…' : mappingReady ? 'Relancer' : 'Anonymiser'}
         </Button>
       ) : (
-        <Button size="sm" onClick={() => void installGliner()} disabled={busy}>
-          {installing || starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-          {installing ? 'Installation…' : 'Installer GLiNER'}
+        <Button size="sm" className="h-6 px-2 text-xs" onClick={() => void installGliner()} disabled={busy}>
+          {installing || starting ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+          {installing ? 'Installation…' : 'Installer'}
         </Button>
       )}
     </div>

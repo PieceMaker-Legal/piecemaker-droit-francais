@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Braces, Loader2, Plus, RefreshCw, Save, Trash2, Users } from 'lucide-react';
+import { Loader2, Plus, Save, Trash2, Users } from 'lucide-react';
 
-import { pmGet, pmPost, pmPut, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import { pmGet, pmPut, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import {
   applyProcedureParties,
   buildMappingDocument,
@@ -20,11 +20,6 @@ type MappingResponse = Partial<MappingDocument> & {
   name: string;
   exists: boolean;
   commit?: { created?: boolean };
-};
-
-type MappingRebuildResponse = MappingResponse & {
-  added: number;
-  total: number;
 };
 
 type InvalidField = {
@@ -51,10 +46,8 @@ function normalizedDocument(data: Partial<MappingDocument>): MappingDocument {
 export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseMappingSectionProps) {
   const [document, setDocument] = useState<MappingDocument | null>(null);
   const [groups, setGroups] = useState<MappingGroup[]>([]);
-  const [fileName, setFileName] = useState('mapping_default.json');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [rebuilding, setRebuilding] = useState(false);
   const [partiesOpen, setPartiesOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +61,6 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
       const nextDocument = normalizedDocument(data);
       setDocument(nextDocument);
       setGroups(groupMappingByCode(nextDocument.mapping, nextDocument.reverse_mapping));
-      setFileName(data.name || 'mapping_default.json');
       setMessage(data.exists ? null : 'Ce dossier n’a pas encore de fichier de mapping.');
     } catch (cause) {
       setError(cause instanceof PieceMakerApiError ? cause.message : String(cause));
@@ -85,7 +77,6 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
         const nextDocument = normalizedDocument(data);
         setDocument(nextDocument);
         setGroups(groupMappingByCode(nextDocument.mapping, nextDocument.reverse_mapping));
-        setFileName(data.name || 'mapping_default.json');
         setMessage(data.exists ? null : 'Ce dossier n’a pas encore de fichier de mapping.');
       })
       .catch((cause: unknown) => {
@@ -153,26 +144,6 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
     }
   };
 
-  const rebuildMapping = async () => {
-    setRebuilding(true);
-    setError(null);
-    setMessage('Régénération depuis les scans PII…');
-    try {
-      const data = await pmPost<MappingRebuildResponse>('/mapping/rebuild', { case: caseId });
-      const rebuilt = normalizedDocument(data);
-      setDocument(rebuilt);
-      setGroups(groupMappingByCode(rebuilt.mapping, rebuilt.reverse_mapping));
-      setFileName(data.name || fileName);
-      setMessage(`${data.added} entrée(s) ajoutée(s), ${data.total} au total${data.commit?.created ? ' · commit enregistré' : ''}.`);
-      await onRepositoryChange();
-    } catch (cause) {
-      setMessage(null);
-      setError(cause instanceof PieceMakerApiError ? cause.message : String(cause));
-    } finally {
-      setRebuilding(false);
-    }
-  };
-
   const openParties = () => {
     try {
       currentMapping();
@@ -204,11 +175,6 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
 
   return (
     <div className="space-y-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3"><div className="rounded-lg bg-primary/10 p-2 text-primary"><Braces className="h-4 w-4" /></div><div className="min-w-0"><p className="truncate text-sm font-semibold">{fileName}</p><p className="text-xs text-muted-foreground">{groups.length} nom(s) anonymisé(s)</p></div></div>
-        <Button variant="outline" size="sm" onClick={() => void rebuildMapping()} disabled={rebuilding || saving}>{rebuilding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}Régénérer depuis les scans PII</Button>
-      </div>
-
       <button type="button" className="grid w-full grid-cols-[1fr_auto_1fr_auto] items-center gap-3 rounded-xl border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/40" onClick={openParties}>
         <span className="min-w-0"><small className="block text-[10px] font-semibold uppercase text-emerald-600">Partie cliente</small><strong className={`block truncate text-sm ${summary.client.length ? '' : 'text-muted-foreground'}`}>{summary.client.length ? summary.client.join(' · ') : 'À renseigner'}</strong></span>
         <span className="font-semibold text-muted-foreground">c/</span>
@@ -243,7 +209,7 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setGroups((previous) => [...previous, { code: '', principal: '', variants: [] }])}><Plus className="h-3.5 w-3.5" />Entrée</Button>
         <span className={`text-xs ${error ? 'text-destructive' : 'text-muted-foreground'}`}>{error || message}</span>
-        <Button size="sm" className="ml-auto" onClick={() => void saveMapping()} disabled={saving || rebuilding}>{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Enregistrer le mapping</Button>
+        <Button size="sm" className="ml-auto" onClick={() => void saveMapping()} disabled={saving}>{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Enregistrer le mapping</Button>
       </div>
 
       {partiesOpen && <ProcedurePartiesDialog open mapping={currentMappingSafe(groups)} initialInfo={document.informations_dossier} saving={saving} onOpenChange={setPartiesOpen} onSave={saveParties} />}
