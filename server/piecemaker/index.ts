@@ -12,9 +12,9 @@ import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
 
 /**
- * Point d'entrée PieceMaker. Les modules repris de PieceMaker-Installer sont du
- * CommonJS vendorisé sous `server/piecemaker/vendor/` : `createRequire` les
- * charge tels quels, sans les convertir ni les faire passer par `tsc`.
+ * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
+ * CommonJS : `createRequire` les charge tels quels, sans les convertir ni les
+ * faire passer par `tsc`.
  *
  * Le chemin est résolu depuis la racine applicative, pas depuis `__dirname` :
  * compilé, ce fichier vit sous `dist-server/server/piecemaker/`, alors que le
