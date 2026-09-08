@@ -13,19 +13,29 @@ export type IdentityDictionary = {
   version: number;
   updatedAt: string | null;
   names: string[];
+  acronyms: string[];
 };
 
-const EMPTY: IdentityDictionary = { version: 0, updatedAt: null, names: [] };
+const EMPTY: IdentityDictionary = { version: 0, updatedAt: null, names: [], acronyms: [] };
+
+/** Le plus long d'abord : « Jean Dupont » doit gagner sur « Dupont ». */
+function usableSpellings(values: unknown): string[] {
+  if (!Array.isArray(values)) return [];
+  return values
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 1)
+    .sort((a, b) => b.length - a.length);
+}
 
 export async function fetchIdentityDictionary(signal?: AbortSignal): Promise<IdentityDictionary> {
   try {
     const payload = await pmGet<IdentityDictionary>('/anonymizer/dictionary', undefined, signal);
     if (!payload || !Array.isArray(payload.names)) return EMPTY;
-    // Le plus long d'abord : « Jean Dupont » doit gagner sur « Dupont ».
-    const names = payload.names
-      .filter((name): name is string => typeof name === 'string' && name.trim().length > 1)
-      .sort((a, b) => b.length - a.length);
-    return { version: payload.version ?? 0, updatedAt: payload.updatedAt ?? null, names };
+    return {
+      version: payload.version ?? 0,
+      updatedAt: payload.updatedAt ?? null,
+      names: usableSpellings(payload.names),
+      acronyms: usableSpellings(payload.acronyms),
+    };
   } catch {
     // Session non authentifiée, backend absent, dossier sans mapping : le
     // surlignage est un confort, jamais une condition de fonctionnement.
