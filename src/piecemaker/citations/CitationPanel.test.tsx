@@ -109,6 +109,7 @@ describe('visionneuse de citations', () => {
 
 it('les liens Légifrance utilisent uniquement le domaine officiel et ciblent chaque segment sans syntaxe parasite', () => {
   expect(legifranceQuoteUrl('CETATEXT000007048138', 'début-fin ... suite, exacte')).toBe('https://www.legifrance.gouv.fr/ceta/id/CETATEXT000007048138/#:~:text=d%C3%A9but%2Dfin&text=suite%2C%20exacte');
+  expect(legifranceQuoteUrl('LEGIARTI000032040777', 'tiennent lieu de loi')).toBe('https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032040777/#:~:text=tiennent%20lieu%20de%20loi');
   expect(legifranceQuoteUrl('https://evil.example', 'texte')).toBeNull();
   expect(legifranceQuoteUrl(undefined, 'texte')).toBeNull();
 });
