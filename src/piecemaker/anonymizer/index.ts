@@ -32,9 +32,10 @@ export function startIdentityHighlighting(): () => void {
     if (stopped) return;
     if (dictionary.version !== version) {
       version = dictionary.version;
-      highlighter.setNames(dictionary.names);
+      highlighter.setNames(dictionary.names, dictionary.acronyms);
     }
-    timer = setTimeout(() => void tick(), dictionary.names.length ? POLL_INTERVAL_MS : RETRY_INTERVAL_MS);
+    const known = dictionary.names.length + dictionary.acronyms.length;
+    timer = setTimeout(() => void tick(), known ? POLL_INTERVAL_MS : RETRY_INTERVAL_MS);
   };
 
   void tick();
