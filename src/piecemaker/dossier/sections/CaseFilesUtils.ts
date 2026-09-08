@@ -132,14 +132,7 @@ export function chronologyStateModel(graph: ChronologyGraph): ChronologyStateMod
   };
 }
 
-const JOB_PHASE_LABELS: Record<string, string> = {
-  convert: 'Conversion en Markdown',
-  anonymize: 'Anonymisation et mapping',
-  ocr: 'Reconnaissance optique (OCR)',
-  scan: 'Scan des données personnelles',
-};
-
-export function describeJob(job: { action: string; state: string; phase?: string; processed?: number; total?: number; skipped?: number }): string {
+export function describeJob(job: { action: string; state: string; percent?: number; processed?: number; total?: number; skipped?: number }): string {
   const actionLabel = job.action === 'anonymize' ? 'Anonymisation' : 'Conversion';
   if (job.state === 'queued') return `${actionLabel} en attente…`;
   if (job.state === 'error') return `${actionLabel} en échec`;
@@ -147,7 +140,5 @@ export function describeJob(job: { action: string; state: string; phase?: string
     const skipped = job.skipped ? ` · ${job.skipped} ignorée(s)` : '';
     return `${actionLabel} terminée · ${job.processed ?? 0}/${job.total ?? 0} pièce(s)${skipped}`;
   }
-  const phase = job.phase ? JOB_PHASE_LABELS[job.phase] || job.phase : actionLabel;
-  const progress = job.total ? ` · ${job.processed ?? 0}/${job.total}` : '';
-  return `${phase}${progress}…`;
+  return `${Math.round(job.percent ?? 0)} %`;
 }
