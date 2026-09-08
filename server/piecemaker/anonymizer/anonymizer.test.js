@@ -276,3 +276,17 @@ test('la couverture distingue filtré, bloqué et non configuré', () => {
   assert.equal(coverage.codex.state, 'unconfigured');
   assert.equal(coverage.cursor.state, 'blocked');
 });
+
+test('le dictionnaire expose toutes les orthographes connues, dédoublonnées', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-anon-variants-'));
+  fs.writeFileSync(path.join(dir, 'central-mapping.json'), JSON.stringify({
+    version: 1,
+    mapping: { 'Jean Dupont': CODE, 'M. Dupont': CODE, Dupont: CODE },
+    reverse_mapping: { [CODE]: ['Jean Dupont', 'M. Dupont', 'Dupont', 'DUPONT', ''] },
+  }));
+
+  const dictionary = createDictionaryLoader({ homeDir: dir }).get();
+
+  assert.equal(dictionary.canonical[CODE], 'Jean Dupont');
+  assert.deepEqual(dictionary.displayNames, ['Jean Dupont', 'M. Dupont', 'Dupont']);
+});
