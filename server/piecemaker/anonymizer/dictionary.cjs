@@ -32,6 +32,7 @@ const EMPTY = Object.freeze({
   mapping: Object.freeze({}),
   reverse: Object.freeze({}),
   canonical: Object.freeze({}),
+  displayNames: Object.freeze([]),
   entityCount: 0,
   codeCount: 0,
   empty: true,
@@ -51,17 +52,26 @@ function plainObject(value) {
 
 /**
  * Construit le dictionnaire exploitable à partir du document central.
- * `canonical` est la projection code → orthographe humaine, la seule partie
- * que l'interface reçoit.
+ * `canonical` est la projection code → orthographe principale ; `displayNames`
+ * réunit toutes les orthographes connues d'une même personne, car le
+ * surlignage doit teinter « Gilly » comme « Bernard Gilly ». Ce sont les
+ * seules parties que l'interface reçoit.
  */
 function buildDictionary(document, stamp) {
   const mapping = plainObject(document?.mapping);
   const reverse = plainObject(document?.reverse_mapping);
   const canonical = {};
+  const seen = new Map();
   for (const [code, variants] of Object.entries(reverse)) {
-    const name = Array.isArray(variants) ? variants[0] : variants;
-    if (typeof name === 'string' && name.trim()) canonical[code] = name;
+    const spellings = Array.isArray(variants) ? variants : [variants];
+    for (const spelling of spellings) {
+      if (typeof spelling !== 'string' || !spelling.trim()) continue;
+      if (!canonical[code]) canonical[code] = spelling;
+      const folded = spelling.toLocaleLowerCase();
+      if (!seen.has(folded)) seen.set(folded, spelling);
+    }
   }
+  const displayNames = Array.from(seen.values());
   const entityCount = Object.keys(mapping).length;
   const codeCount = Object.keys(canonical).length;
   return {
@@ -70,6 +80,7 @@ function buildDictionary(document, stamp) {
     mapping,
     reverse,
     canonical,
+    displayNames,
     entityCount,
     codeCount,
     empty: entityCount === 0 && codeCount === 0,

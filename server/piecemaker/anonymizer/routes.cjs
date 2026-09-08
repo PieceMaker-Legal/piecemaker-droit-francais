@@ -2,10 +2,12 @@
  * Routes de l'anonymisation, montées sous `/api/piecemaker` derrière
  * `authenticateToken`.
  *
- * `/dictionary` ne renvoie que la projection code → nom canonique dont
- * l'interface a besoin pour surligner : jamais les variantes, jamais le sens
- * nom → code, jamais le fichier de mapping. Les noms qui en sortent sont ceux
- * que le chat affiche déjà, la route n'expose donc rien de plus que l'écran.
+ * `/dictionary` ne renvoie que les orthographes dont l'interface a besoin pour
+ * surligner : jamais le sens nom → code, jamais les codes eux-mêmes, jamais le
+ * fichier de mapping. Les noms qui en sortent sont ceux que le chat affiche
+ * déjà, la route n'expose donc rien de plus que l'écran. Les variantes en font
+ * partie : une même personne s'y écrit de plusieurs façons, et une orthographe
+ * absente de cette liste resterait sans teinte à l'écran.
  */
 function createAnonymizerRouter({ service }) {
   const express = require('express');
@@ -20,7 +22,7 @@ function createAnonymizerRouter({ service }) {
     res.json({
       version: dictionary.version,
       updatedAt: dictionary.updatedAt,
-      names: Object.values(dictionary.canonical),
+      names: dictionary.displayNames,
     });
   });
 
