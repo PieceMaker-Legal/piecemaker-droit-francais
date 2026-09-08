@@ -1,5 +1,0 @@
-body { margin: 0; }
-.bg-app-background > .flex-1 > :not(.w-full) { display: none !important; }
-[data-slot="mobile-header"] { display: none !important; }
-html[data-piecemaker-view="quick-actions"] .bg-app-background { height: auto; }
-html[data-piecemaker-view="quick-actions"] main { min-height: 0; }
