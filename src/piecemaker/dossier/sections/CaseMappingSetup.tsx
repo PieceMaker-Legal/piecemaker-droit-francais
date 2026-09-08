@@ -3,6 +3,7 @@ import { Loader2, ScanSearch, ShieldCheck } from 'lucide-react';
 
 import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
+import { setMappingReady } from '@/piecemaker/dossier/mappingStatusCache';
 import type { CaseOverview, OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 import { describeJob } from '@/piecemaker/dossier/sections/CaseFilesUtils';
 import { Button } from '@/shared/ui';
@@ -62,6 +63,11 @@ export default function CaseMappingSetup() {
   useEffect(() => {
     void loadOverview();
   }, [loadOverview, mappingVersion]);
+
+  useEffect(() => {
+    if (!overview) return;
+    setMappingReady(overview.location, Boolean(overview.mapping.exists && overview.mapping.entries > 0));
+  }, [overview]);
 
   const loadGlinerStatus = async () => {
     setError(null);
