@@ -241,16 +241,6 @@ function classifyCaseFolderPath(caseRoot, relativePath, config = {}) {
   return classifyRelativeCaseFolderPath(relativePath, snapshot.structure, { managed: snapshot.exists });
 }
 
-/**
- * Les dossiers structurés limitent le pipeline aux deux zones métier. Un ancien
- * dossier sans manifeste conserve son comportement historique jusqu'à son
- * prochain enregistrement/migration, afin de ne pas rendre ses pièces muettes.
- */
-function isCasePipelineSource(caseRoot, relativePath, config = {}) {
-  const info = classifyCaseFolderPath(caseRoot, relativePath, config);
-  return info.managed ? info.businessSource : true;
-}
-
 function isCaseGeneratedPath(caseRoot, relativePath, config = {}) {
   return classifyCaseFolderPath(caseRoot, relativePath, config).generated;
 }
@@ -305,7 +295,6 @@ module.exports = {
   configuredCaseFolderStructure,
   ensureCaseFolderStructure,
   isCaseGeneratedPath,
-  isCasePipelineSource,
   isGraphPriorityPath,
   normalizeCaseFolderStructure,
   readCaseFolderStructure,
