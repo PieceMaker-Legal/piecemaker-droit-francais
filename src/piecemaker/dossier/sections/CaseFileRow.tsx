@@ -63,12 +63,6 @@ function CaseFileRow({
           <span>{formatDateTime(file.modifiedAt)}</span>
           <span>·</span>
           <span>{originalsStatusLabel(file)}</span>
-          {file.pipelineEligible === false && (
-            <>
-              <span>·</span>
-              <span>Hors pipeline</span>
-            </>
-          )}
         </div>
       </div>
 

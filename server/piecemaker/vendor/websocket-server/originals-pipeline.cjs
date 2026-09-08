@@ -2,13 +2,16 @@
  * Conversion Markdown et pipeline d'anonymisation des pièces originales d'un
  * dossier juridique, pilotés depuis l'administration.
  *
- * Les originaux ne sortent jamais du dossier. Le Markdown est rangé dans le
- * sous-dossier de conversion de `01_CORRESPONDANCE` ou `02_DATA_ROOM` ; le
- * mapping canonique reste dans `Fichiers convertis PieceMaker/` et l'état
- * technique dans `.piecemaker/anonymization-state.json`. Seules les lignes
- * `PROGRESS:` et un extrait d'erreur sont conservés dans le
- * journal d'un travail : la sortie brute des scripts peut contenir du texte de
- * pièce, qui ne doit jamais remonter dans l'interface.
+ * Les originaux ne sortent jamais du dossier, et le pipeline porte sur toutes
+ * les pièces du dossier, sans restriction de zone. Le Markdown d'une pièce de
+ * `01_CORRESPONDANCE` ou `02_DATA_ROOM` est rangé dans le sous-dossier de
+ * conversion métier correspondant ; celui d'une pièce hors de ces deux zones
+ * rejoint le sous-dossier de travail générique. Le mapping canonique reste
+ * dans `Fichiers convertis PieceMaker/` et l'état technique dans
+ * `.piecemaker/anonymization-state.json`. Seules les lignes `PROGRESS:` et un
+ * extrait d'erreur sont conservés dans le journal d'un travail : la sortie
+ * brute des scripts peut contenir du texte de pièce, qui ne doit jamais
+ * remonter dans l'interface.
  */
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -97,7 +100,6 @@ async function listOriginals(caseRoot) {
     .filter(({ file, info }) => file.extension !== '.md' && !info.generated)
     .map(({ file, info }) => ({
       ...file,
-      pipelineEligible: snapshot.exists ? info.businessSource : true,
       businessArea: info.area,
     }));
 }
@@ -508,8 +510,15 @@ function pumpQueue() {
  * `PROGRESS:PHASE:pct:courant:total` alimentent le journal ; le reste de la
  * sortie est ignoré (texte de pièce potentiel), à l'exception d'un extrait de
  * stderr conservé pour diagnostiquer un échec.
+ *
+ * `progressScale` reporte le pourcentage 0-100 de cet appel dans la part
+ * `[offset, offset + weight]` du travail global : un `runJob` qui enchaîne
+ * plusieurs appels (un par groupe de sortie) garde ainsi une progression
+ * monotone plutôt qu'un pourcentage qui repart de zéro à chaque groupe.
  */
-function spawnTracked(job, script, args) {
+function spawnTracked(job, script, args, progressScale = {}) {
+  const offset = progressScale.offset || 0;
+  const weight = progressScale.weight ?? 100;
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(script)) {
       reject(new Error(`Script introuvable : ${path.basename(script)}`));
@@ -551,7 +560,7 @@ function spawnTracked(job, script, args) {
         // depuis le worker) — c'est elle qui fait vivre la barre pendant les longues
         // minutes d'un gros document, là où SCAN restait figé sur « 1/1 ».
         job.phase = marker === 'CONVERT' ? 'convert' : 'scan';
-        job.percent = Math.min(100, Number(pct) || 0);
+        job.percent = Math.min(100, offset + (Math.min(100, Number(pct) || 0) * weight) / 100);
         job.processed = Number(current) || 0;
         job.total = Number(total) || job.total;
         const unit = marker === 'CHUNKS' ? ' segments' : '';
@@ -677,8 +686,9 @@ async function runJob(job, legalCase, absoluteFiles, options) {
   // `--state-file` découple le statut « analysé » du contenu sensible ; les
   // cartes brutes restent temporaires et ne sont jamais déposées ici.
   // Le script n'accepte qu'un répertoire de sortie. On regroupe donc les
-  // pièces par zone métier (au plus Correspondance et Data Room) tout en
-  // réutilisant le même mapping temporaire entre les groupes.
+  // pièces par répertoire de sortie (zones métier et sous-dossier de travail
+  // générique confondus) tout en réutilisant le même mapping temporaire entre
+  // les groupes.
   const groups = new Map();
   for (const absolute of absoluteFiles) {
     const outputDirectory = outputDirectoryForOriginal(legalCase.root, absolute);
@@ -686,6 +696,10 @@ async function runJob(job, legalCase, absoluteFiles, options) {
     groups.get(outputDirectory).push(absolute);
   }
   try {
+    // Chaque groupe ne rapporte qu'une part de `job.percent`, proportionnelle
+    // à sa part du nombre total de fichiers du lot : sans quoi la barre
+    // repartirait de zéro à chaque nouveau groupe.
+    let filesDone = 0;
     for (const [outputDirectory, groupFiles] of groups) {
       fs.mkdirSync(outputDirectory, { recursive: true });
       const args = [...groupFiles, '-o', outputDirectory, '--mapping-file', workingMapping];
@@ -697,7 +711,10 @@ async function runJob(job, legalCase, absoluteFiles, options) {
       if (options.engine) args.push('--engine', options.engine);
       if (options.mode) args.push('--mode', options.mode);
       if (options.lang) args.push('--lang', options.lang);
-      await spawnTracked(job, PIPELINE_SCRIPT(), args);
+      const offset = absoluteFiles.length ? (filesDone / absoluteFiles.length) * 100 : 0;
+      const weight = absoluteFiles.length ? (groupFiles.length / absoluteFiles.length) * 100 : 100;
+      await spawnTracked(job, PIPELINE_SCRIPT(), args, { offset, weight });
+      filesDone += groupFiles.length;
     }
     const produced = readJsonFile(workingMapping, null);
     if (!produced) throw new Error('Le pipeline n’a produit aucun mapping exploitable.');
@@ -785,9 +802,9 @@ async function startOriginalsJob({ casesRoot, caseName, action, files = [], opti
   // quelles, elles ne sont ni converties ni scannées. On les écarte même si elles
   // sont explicitement cochées, pour que le drapeau reste la seule vérité.
   const selected = (wanted.size ? originals.filter((file) => wanted.has(file.path)) : originals)
-    .filter((file) => !file.resource && file.pipelineEligible !== false);
+    .filter((file) => !file.resource);
   if (!selected.length) {
-    throw new Error('Aucune pièce à traiter : seules Correspondance et Data Room alimentent ce pipeline.');
+    throw new Error('Aucune pièce à traiter dans ce dossier.');
   }
 
   // Sans sélection, le travail porte sur tout le dossier et ne refait que ce
