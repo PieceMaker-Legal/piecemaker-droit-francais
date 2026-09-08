@@ -19,8 +19,6 @@ export type CaseFileEntry = {
   protected: boolean;
   resource: boolean;
   status: 'ready' | 'awaiting-scan' | 'not-converted';
-  /** Only present from GET /protection (via listOriginals): excludes correspondence/data-room outside the pipeline. */
-  pipelineEligible?: boolean;
 };
 
 /** Three-state protection model computed from `protected` + `resource` (see admin app.js PIECE_STATES). */
