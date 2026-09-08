@@ -514,10 +514,20 @@ function pumpQueue() {
  * `[offset, offset + weight]` du travail global : un `runJob` qui enchaîne
  * plusieurs appels (un par groupe de sortie) garde ainsi une progression
  * monotone plutôt qu'un pourcentage qui repart de zéro à chaque groupe.
+ *
+ * `convert_and_scan_pipeline.py` enchaîne lui-même CONVERT (markitdown) puis
+ * SCAN/CHUNKS (GLiNER) au sein d'un même appel, chacun avec son propre 0-100 :
+ * sans repère de sous-phase, le pourcentage retomberait à zéro au passage de
+ * l'un à l'autre. Le poids du groupe est donc partagé entre les deux, GLiNER
+ * (chargement du modèle puis analyse) dominant largement markitdown en durée.
  */
+const CONVERT_SUBPHASE_SHARE = 0.25;
+
 function spawnTracked(job, script, args, progressScale = {}) {
   const offset = progressScale.offset || 0;
   const weight = progressScale.weight ?? 100;
+  const convertWeight = weight * CONVERT_SUBPHASE_SHARE;
+  const scanWeight = weight - convertWeight;
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(script)) {
       reject(new Error(`Script introuvable : ${path.basename(script)}`));
@@ -559,7 +569,10 @@ function spawnTracked(job, script, args, progressScale = {}) {
         // depuis le worker) — c'est elle qui fait vivre la barre pendant les longues
         // minutes d'un gros document, là où SCAN restait figé sur « 1/1 ».
         job.phase = marker === 'CONVERT' ? 'convert' : 'scan';
-        job.percent = Math.min(100, offset + (Math.min(100, Number(pct) || 0) * weight) / 100);
+        const subPct = Math.min(100, Number(pct) || 0);
+        job.percent = job.phase === 'convert'
+          ? Math.min(100, offset + (subPct * convertWeight) / 100)
+          : Math.min(100, offset + convertWeight + (subPct * scanWeight) / 100);
         job.processed = Number(current) || 0;
         job.total = Number(total) || job.total;
         const unit = marker === 'CHUNKS' ? ' segments' : '';
