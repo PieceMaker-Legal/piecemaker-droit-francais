@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url);
 const vendor = path.join(root, 'server/piecemaker/vendor/piecemaker-plugin/scripts/lib');
 const { parseCitationsWithDiagnostics, parsePartialCitationObjects } = require(path.join(vendor, 'citations.cjs'));
 const { verifyCitations } = require(path.join(vendor, 'verify-citations.cjs'));
-const { extractFullText } = require(path.join(root, 'server/piecemaker/harness/decisions.cjs'));
+const { extractFullText, extractDecisionTitle } = require(path.join(root, 'server/piecemaker/harness/decisions.cjs'));
 const { structuredMarkdownCounterpart } = require(path.join(vendor, 'case-folder-structure.cjs'));
 const OPEN = '<CITATIONS>';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
@@ -58,6 +58,7 @@ export function createCitationTurn(options: {
 }) {
   const calls = new Map<string, string>();
   const decisions = new Map<string, string>();
+  const decisionTitles = new Map<string, string>();
   const documents = new Map<string, Promise<string>>();
   let sourceCharacters = 0;
   let fullText = '';
@@ -114,10 +115,15 @@ export function createCitationTurn(options: {
       if (message.kind === 'tool_result' && message.toolId && !message.isError && !message.toolResult?.isError) {
         const id = calls.get(message.toolId);
         if (!id) return;
-        const text = extractFullText(toolText(message.content ?? message.toolResult?.content)) as string;
+        const raw = toolText(message.content ?? message.toolResult?.content);
+        const text = extractFullText(raw) as string;
         if (text.length > MAX_SOURCE_BYTES || text.length <= (decisions.get(id)?.length ?? 0)) return;
         sourceCharacters += text.length;
-        if (sourceCharacters <= MAX_TURN_CHARACTERS) decisions.set(id, text);
+        if (sourceCharacters <= MAX_TURN_CHARACTERS) {
+          decisions.set(id, text);
+          const title = extractDecisionTitle(raw) as string;
+          if (title) decisionTitles.set(id, title);
+        }
       }
     },
     delta(delta: string) {
@@ -161,6 +167,7 @@ export function createCitationTurn(options: {
         const parsed = overflow ? [] : parseCitationsWithDiagnostics(fullText).citations as Citation[];
         const citations = await verifyCitations(parsed, documentText, async (id: string) => decisions.get(id) ?? '') as Citation[];
         if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
+        const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];
         const labels: string[] = [];
         for (const citation of citations) {
@@ -170,7 +177,8 @@ export function createCitationTurn(options: {
           try {
             const token = await options.store.save({
               sessionId: options.sessionId,
-              title: citation.decision_id ?? citation.doc_id ?? 'Source', source, citation, ranges,
+              title: decisionTitle(citation.decision_id) ?? citation.decision_id ?? citation.doc_id ?? 'Source',
+              source, citation, ranges,
             });
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
             labels.push(`[${citation.ref}]${citation.verified === false ? ' — extrait non retrouvé dans la source' : ''}`);

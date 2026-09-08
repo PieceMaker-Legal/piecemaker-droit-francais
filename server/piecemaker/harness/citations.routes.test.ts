@@ -56,9 +56,10 @@ test('une décision absente du tour reste consultable depuis le cache sans deven
     ranges: [],
   });
   await mkdir(path.join(directory, 'decisions'));
-  await writeFile(path.join(directory, 'decisions', `${id}.json`), JSON.stringify({ id, texte: 'Avant. Passage réel. Après.' }));
+  await writeFile(path.join(directory, 'decisions', `${id}.json`), JSON.stringify({ id, titre: 'Conseil d’État, 5 mars 1948', texte: 'Avant. Passage réel. Après.' }));
   const view = await store.read(token, { forViewing: true });
   assert.equal(view?.sourceOrigin, 'decision-cache');
+  assert.equal(view?.title, 'Conseil d’État, 5 mars 1948');
   assert.equal(view?.source, 'Avant. Passage réel. Après.');
   assert.equal(view?.citation.verified, false);
   assert.equal(view?.citation.quotes[0].verification?.verified, false);
