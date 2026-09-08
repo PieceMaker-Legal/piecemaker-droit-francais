@@ -1,11 +1,12 @@
-// Façade PieceMaker : assemble en un seul routeur Express les modules repris de
-// PieceMaker-Installer (`server/piecemaker/vendor/`), pour être monté sur le
-// serveur CloudCLI sous `/api/piecemaker`.
+// Façade PieceMaker : assemble en un seul routeur Express les modules de
+// `server/piecemaker/vendor/`, pour être monté sur le serveur CloudCLI sous
+// `/api/piecemaker`.
 //
-// `vendor/` est une copie mécanique du dépôt PieceMaker-Installer : l'arbre
-// `websocket-server/` + `piecemaker-plugin/` est préservé, si bien qu'aucun
-// `require` interne n'a eu à être réécrit. Ce fichier est le seul point
-// d'entrée ; rien d'autre ne doit require `vendor/` directement.
+// `vendor/` appartient à ce dépôt et s'y modifie comme le reste du code. Le nom
+// et l'arborescence `websocket-server/` + `piecemaker-plugin/` sont conservés
+// parce que les `require` internes en dépendent, pas parce qu'une source
+// extérieure ferait autorité. Ce fichier est le seul point d'entrée ; rien
+// d'autre ne doit require `vendor/` directement.
 const os = require('os');
 const path = require('path');
 

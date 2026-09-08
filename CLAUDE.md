@@ -27,6 +27,19 @@ Before committing, read `git diff` file by file and justify each hunk out loud. 
 
 PieceMaker is french-law oriented feature.
 
+### `server/piecemaker/vendor/` — code du dépôt, pas une copie
+
+Ce dossier a commencé comme une reprise du dépôt historique PieceMaker-Installer.
+Ce régime est terminé : **le code de `vendor/` appartient à ce dépôt**, se
+modifie comme le reste, et ne doit rien à une resynchronisation amont. Aucun
+correctif n'a à être « remonté » ailleurs, aucune modification n'est à justifier
+par la fidélité à une source.
+
+La règle « Add, don't edit » ne concerne donc que les fichiers CloudCLI. Le nom
+`vendor/` et l'arborescence (`websocket-server/`, `piecemaker-plugin/`,
+`installer/`, `mcp/`) sont conservés parce que les `require` internes en
+dépendent, et pour ne pas déplacer inutilement des centaines de fichiers.
+
 ### Harness Legal
 
 Couche de vérification des citations juridiques, portée depuis
@@ -323,10 +336,8 @@ depuis le dépôt cloné (voir plus bas).
 
 `piecemaker` est la seule commande installée par ce dépôt. Le socle technique
 (installation des composants Python GLiNER/Graphify, conversion, MCP) vit
-directement dans ce dépôt, vendorisé sous
-`server/piecemaker/vendor/installer/` (copie mécanique du dépôt historique
-PieceMaker-Installer, voir `PROVENANCE.md` dans ce dossier) — aucun clone
-séparé, aucun processus d'administration distinct : la configuration passe
+directement dans ce dépôt, sous `server/piecemaker/vendor/installer/` — aucun
+clone séparé, aucun processus d'administration distinct : la configuration passe
 par l'onglet Dossier › Configuration de l'application elle-même.
 
 `piecemaker` rejoue lui-même les seules étapes du socle dont ce dépôt a
