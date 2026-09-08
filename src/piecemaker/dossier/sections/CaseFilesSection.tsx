@@ -7,18 +7,17 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { FolderPlus, FolderSearch, Loader2, FileStack, CalendarClock, Braces } from 'lucide-react';
+import { FolderPlus, FolderSearch, Loader2, CalendarClock, Braces } from 'lucide-react';
 
 import { Button, Pill, PillBar } from '@/shared/ui';
 import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
 import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import type { CaseOverview, RegisterCaseResult } from '@/piecemaker/dossier/sections/CaseFilesTypes';
-import CaseFilesOriginals from '@/piecemaker/dossier/sections/CaseFilesOriginals';
 import CaseFilesChronology from '@/piecemaker/dossier/sections/CaseFilesChronology';
 import CaseMappingSection from '@/piecemaker/dossier/sections/CaseMappingSection';
 import CaseMappingSetup from '@/piecemaker/dossier/sections/CaseMappingSetup';
 
-type ViewId = 'pieces' | 'mapping' | 'chronologie';
+type ViewId = 'mapping' | 'chronologie';
 
 export default function CaseFilesSection() {
   const { cases, selectedCaseId, selectCase, refreshCases, loading, error } = useDossierCases();
@@ -28,7 +27,7 @@ export default function CaseFilesSection() {
   const [overview, setOverview] = useState<CaseOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
-  const [view, setView] = useState<ViewId>('pieces');
+  const [view, setView] = useState<ViewId>('mapping');
 
   const loadOverview = useCallback(async () => {
     if (!selectedCaseId) {
@@ -129,10 +128,6 @@ export default function CaseFilesSection() {
           {(!overview.mapping.exists || overview.mapping.entries === 0) && <CaseMappingSetup caseId={selectedCaseId} onMappingCreated={loadOverview} />}
           <div className="shrink-0 px-4 pt-3">
             <PillBar className="border border-border/40 bg-muted/50">
-              <Pill isActive={view === 'pieces'} onClick={() => setView('pieces')}>
-                <FileStack className="h-3.5 w-3.5" />
-                Pièces ({overview.originals.length})
-              </Pill>
               <Pill isActive={view === 'mapping'} onClick={() => setView('mapping')}>
                 <Braces className="h-3.5 w-3.5" />
                 Mapping ({overview.mapping.entries})
@@ -144,9 +139,6 @@ export default function CaseFilesSection() {
             </PillBar>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {view === 'pieces' && (
-              <CaseFilesOriginals caseId={selectedCaseId} mapping={overview.mapping} onRepositoryChange={loadOverview} />
-            )}
             {view === 'chronologie' && <CaseFilesChronology caseId={selectedCaseId} caseName={overview.name} />}
             {view === 'mapping' && <CaseMappingSection caseId={selectedCaseId} onRepositoryChange={loadOverview} />}
           </div>
