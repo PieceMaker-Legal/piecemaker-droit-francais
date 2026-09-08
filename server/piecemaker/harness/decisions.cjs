@@ -47,6 +47,8 @@ const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const ANCHOR_RE = /TEXTE INTÉGRAL\s*:/;
 const SEPARATOR_LINE_RE = /^=+[ \t]*$/m;
 const LIEN_LINE_RE = /^Lien\s*:.*$/m;
+const TITRE_LINE_RE = /^D\u00c9CISION\s*:[ \t]*(.+)$/m;
+const MAX_TITRE_LENGTH = 300;
 
 /** `true` seulement pour le suffixe `consulter_decision` d'un outil MCP. */
 function isConsulterDecisionTool(toolName) {
@@ -100,6 +102,21 @@ function extractFullText(raw) {
   return body.trim();
 }
 
+/**
+ * Renvoie le titre lisible de la décision (« Cour de cassation, civile,
+ * Chambre commerciale, 23 janvier 2016, … ») porté par la ligne `DÉCISION:`
+ * en tête du résultat d'outil, avant la bannière `TEXTE INTÉGRAL:`.
+ * Chaîne vide si l'entête est absent : l'appelant retombe sur l'identifiant.
+ */
+function extractDecisionTitle(raw) {
+  if (typeof raw !== 'string' || !raw) return '';
+  const anchorMatch = ANCHOR_RE.exec(raw);
+  const header = anchorMatch ? raw.slice(0, anchorMatch.index) : raw;
+  const match = TITRE_LINE_RE.exec(header);
+  if (!match) return '';
+  return match[1].trim().slice(0, MAX_TITRE_LENGTH);
+}
+
 function cacheFile(decisionsDir, id) {
   return path.join(decisionsDir, `${id}.json`);
 }
@@ -135,6 +152,7 @@ function writeDecisionCache(rawId, rawContent, { decisionsDir, session }) {
   const raw = flattenContent(rawContent);
   const texte = extractFullText(raw).trim();
   if (!texte) return false;
+  const titre = extractDecisionTitle(raw);
 
   const file = cacheFile(decisionsDir, id);
   // Ne réécrit que si le texte capturé est strictement plus long que celui
@@ -149,6 +167,7 @@ function writeDecisionCache(rawId, rawContent, { decisionsDir, session }) {
       {
         kind: 'legifrance-decision',
         id,
+        titre: titre || undefined,
         texte,
         caracteres: texte.length,
         source: 'proxy-piecemaker',
@@ -248,5 +267,6 @@ module.exports = {
   ID_RE,
   isConsulterDecisionTool,
   extractFullText,
+  extractDecisionTitle,
   captureDecisions,
 };
