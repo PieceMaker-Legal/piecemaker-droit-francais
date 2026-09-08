@@ -65,9 +65,10 @@ export function createCitationStore(homeDir: string) {
             const file = path.join(homeDir, 'decisions', `${id}.json`);
             const info = await lstat(file);
             if (!info.isFile() || info.size > 8 * 1024 * 1024) return snapshot;
-            const cached = JSON.parse(await readFile(file, 'utf8')) as { id?: string; texte?: string };
+            const cached = JSON.parse(await readFile(file, 'utf8')) as { id?: string; titre?: string; texte?: string };
             if (cached.id !== id || typeof cached.texte !== 'string' || !cached.texte) return snapshot;
-            return { ...snapshot, source: cached.texte, sourceOrigin: 'decision-cache', ranges: locateSourcePassages(cached.texte, snapshot.citation.quotes) };
+            const title = snapshot.title === id && typeof cached.titre === 'string' && cached.titre ? cached.titre : snapshot.title;
+            return { ...snapshot, title, source: cached.texte, sourceOrigin: 'decision-cache', ranges: locateSourcePassages(cached.texte, snapshot.citation.quotes) };
           } catch { return snapshot; }
         }
         return snapshot;
