@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const SHARED_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
@@ -20,6 +21,13 @@ const REQUIRED_STRING_KEYS = [
   'themeColor',
   'backgroundColor',
 ];
+
+export function productDataRoot(upstreamRoot) {
+  if (process.env.CLOUDCLI_HOME) return process.env.CLOUDCLI_HOME;
+  const configPath = process.env.CLOUDCLI_PRODUCT_CONFIG || DEFAULT_CONFIG_PATH;
+  if (!fs.existsSync(configPath)) return upstreamRoot;
+  return path.join(os.homedir(), loadProductConfig(configPath).dataDirectoryName);
+}
 
 function requireSafePathSegment(value, key) {
   if (value === '.' || value === '..' || value.includes('/') || value.includes('\\')) {
