@@ -13,24 +13,38 @@
  */
 
 import { useState } from 'react';
-import { FolderTree, Stamp, SlidersHorizontal, Sparkles, type LucideIcon } from 'lucide-react';
+import { FolderTree, Stamp, CalendarClock, type LucideIcon } from 'lucide-react';
 
 import { PillBar, Pill, Tooltip } from '@/shared/ui';
 import type { Project } from '@/shared/types';
-import { DossierCasesProvider } from '@/piecemaker/dossier/DossierContext';
+import { DossierCasesProvider, useDossierCases } from '@/piecemaker/dossier/DossierContext';
 import CaseFilesSection from '@/piecemaker/dossier/sections/CaseFilesSection';
 import StampingSection from '@/piecemaker/dossier/sections/StampingSection';
-import ConfigurationSection from '@/piecemaker/dossier/sections/ConfigurationSection';
-import SkillsSection from '@/piecemaker/dossier/sections/SkillsSection';
+import CaseFilesChronology from '@/piecemaker/dossier/sections/CaseFilesChronology';
+import CaseMappingSetup from '@/piecemaker/dossier/sections/CaseMappingSetup';
 
-type SectionId = 'dossiers' | 'tampon' | 'configuration' | 'skills';
+type SectionId = 'dossiers' | 'tampon' | 'chronologie';
 
 const SECTIONS: { id: SectionId; label: string; hint: string; icon: LucideIcon }[] = [
-  { id: 'dossiers',      label: 'Général',         hint: 'Pièces, mapping, parties et chronologie',           icon: FolderTree },
+  { id: 'dossiers',      label: 'Général',         hint: 'Pièces, mapping et parties',                      icon: FolderTree },
   { id: 'tampon',        label: 'Tampon et pièces', hint: 'Tampon du cabinet et numérotation des pièces',    icon: Stamp },
-  { id: 'configuration', label: 'Configuration',    hint: 'Carte des composants installés',                  icon: SlidersHorizontal },
-  { id: 'skills',        label: 'Skills et agents', hint: 'Skills, agents et plugins Claude Code',            icon: Sparkles },
+  { id: 'chronologie',   label: 'Chronologie',      hint: 'Frise des pièces du dossier',                     icon: CalendarClock },
 ];
+
+function DossierSections({ section }: { section: SectionId }) {
+  const { selectedCaseId, selectedCase } = useDossierCases();
+
+  if (section === 'dossiers') return <CaseFilesSection />;
+  if (section === 'tampon') return <StampingSection />;
+  if (!selectedCaseId || !selectedCase) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Le dossier sélectionné dans la barre latérale n'est pas enregistré comme dossier juridique.
+      </div>
+    );
+  }
+  return <CaseFilesChronology caseId={selectedCaseId} caseName={selectedCase.name} />;
+}
 
 export default function DossierPanel({ selectedProject }: { selectedProject: Project | null }) {
   const [section, setSection] = useState<SectionId>('dossiers');
@@ -38,11 +52,11 @@ export default function DossierPanel({ selectedProject }: { selectedProject: Pro
   return (
     <DossierCasesProvider projectPath={selectedProject?.fullPath || selectedProject?.path || null}>
       <div className="flex h-full flex-col">
-        <div className="shrink-0 overflow-x-auto border-b border-border/50 px-3 py-2">
+        <div className="flex shrink-0 flex-nowrap items-center gap-3 overflow-x-auto border-b border-border/50 px-3 py-2">
           <PillBar
             role="tablist"
             aria-label="Sections du dossier"
-            className="min-w-max border border-border/40 bg-muted/50"
+            className="min-w-max shrink-0 border border-border/40 bg-muted/50"
           >
             {SECTIONS.map((entry) => {
               const isActive = entry.id === section;
@@ -63,13 +77,11 @@ export default function DossierPanel({ selectedProject }: { selectedProject: Pro
               );
             })}
           </PillBar>
+          <CaseMappingSetup />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {section === 'dossiers' && <CaseFilesSection />}
-          {section === 'tampon' && <StampingSection />}
-          {section === 'configuration' && <ConfigurationSection />}
-          {section === 'skills' && <SkillsSection />}
+          <DossierSections section={section} />
         </div>
       </div>
     </DossierCasesProvider>
