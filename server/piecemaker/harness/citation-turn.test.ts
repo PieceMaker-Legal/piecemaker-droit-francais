@@ -123,3 +123,14 @@ test('extraits multiples, ellipses et sauts de page conservent leurs plages sour
   assert.equal(snapshot?.citation.verified, true);
   assert.deepEqual(snapshot?.ranges.map((range) => range.quoteIndex), [0, 0, 1, 1]);
 });
+
+test('la visionneuse porte le titre lisible de la décision, pas son identifiant', async (t) => {
+  const { turn, store } = await fixture(t);
+  const titre = 'Cour de cassation, civile, Chambre commerciale, 23 janvier 2016, 14-11.111';
+  turn.observe(createNormalizedMessage({ provider: 'claude', sessionId: 'session', kind: 'tool_use', toolId: 'call-1', toolName: 'mcp__legifrance__consulter_decision', toolInput: { text_id: 'JURITEXT1' } }));
+  turn.observe(createNormalizedMessage({ provider: 'claude', sessionId: 'session', kind: 'tool_result', toolId: 'call-1', content: `DÉCISION: ${titre}\n\nNature: ARRET\n\n=====\nTEXTE INTÉGRAL:\n=====\nExtrait lu dans ce tour.\nLien: https://example.org` }));
+  const suffix = await (async () => { turn.text(block([{ ref: 1, decision_id: 'JURITEXT1', quote: 'Extrait lu dans ce tour.' }])); return turn.finish(); })();
+  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.ok(token);
+  assert.equal((await store.read(token))?.title, titre);
+});
