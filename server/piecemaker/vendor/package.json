@@ -3,5 +3,5 @@
   "version": "0.0.0",
   "private": true,
   "type": "commonjs",
-  "description": "Copie mécanique des modules PieceMaker-Installer consommés par server/piecemaker/router.cjs. Ne pas modifier hors resynchronisation amont."
+  "description": "Modules PieceMaker consommés par server/piecemaker/router.cjs. Maintenus dans ce dépôt."
 }
