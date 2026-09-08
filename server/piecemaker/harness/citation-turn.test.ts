@@ -124,6 +124,25 @@ test('extraits multiples, ellipses et sauts de page conservent leurs plages sour
   assert.deepEqual(snapshot?.ranges.map((range) => range.quoteIndex), [0, 0, 1, 1]);
 });
 
+test('un article lu avec consulter_article est vérifiable et titré par son code', async (t) => {
+  const { turn, store, events } = await fixture(t);
+  const resultat = [
+    '**1103**', '', 'Code: Code civil', 'Section: Chapitre Ier : Dispositions liminaires',
+    'Validité: 2016-10-01 → 2999-01-01', 'Identifiant: LEGIARTI000032040777',
+    'Lien: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032040777', '',
+    'Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits.',
+  ].join('\n');
+  const message = (fields: Omit<Parameters<typeof createNormalizedMessage>[0], 'provider'>) => createNormalizedMessage({ ...fields, provider: 'claude', sessionId: 'session' });
+  turn.observe(message({ kind: 'tool_use', toolId: 'call-1', toolName: 'mcp__legifrance__consulter_article', toolInput: { article_id: 'LEGIARTI000032040777' } }));
+  turn.observe(message({ kind: 'tool_result', toolId: 'call-1', content: resultat }));
+  turn.text(block([{ ref: 1, decision_id: 'LEGIARTI000032040777', quote: 'tiennent lieu de loi à ceux qui les ont faits' }]));
+  const suffix = await turn.finish();
+  assert.equal(events.at(-1)?.citations[0].verified, true);
+  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.ok(token);
+  assert.equal((await store.read(token))?.title, 'Code civil, article 1103');
+});
+
 test('la visionneuse porte le titre lisible de la décision, pas son identifiant', async (t) => {
   const { turn, store } = await fixture(t);
   const titre = 'Cour de cassation, civile, Chambre commerciale, 23 janvier 2016, 14-11.111';
