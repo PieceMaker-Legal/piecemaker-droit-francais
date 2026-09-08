@@ -6,6 +6,8 @@ import Database from 'better-sqlite3';
 
 import { parseFrontMatter } from '@/shared/frontmatter.js';
 
+import { prepareWorkspaceInstallation } from './workspace-installation.js';
+
 type LibraryEntry = {
   id: string;
   kind: 'skill' | 'agent';
@@ -102,6 +104,8 @@ export function createLibraryStore(home: string) {
       const name = String(data.metadata?.title || data.name || entry.name);
       const description = typeof data.description === 'string' ? data.description : '';
       db.prepare('UPDATE entries SET name = ?, description = ?, content = ? WHERE id = ?').run(name, description, content, id);
+      const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
+      for (const { workspace: selected } of active) setEnabled(selected, id, true);
       return document(id);
     })();
   }
@@ -111,10 +115,12 @@ export function createLibraryStore(home: string) {
     const selected = workspace(workspacePath);
     const entry = document(id);
     const packageRoot = path.join(directory, 'active', createHash('sha256').update(selected).digest('hex'), id);
+    const install = prepareWorkspaceInstallation(selected, id, packageRoot, entry.kind, enabled);
     if (enabled) {
       fs.mkdirSync(path.dirname(packageRoot), { recursive: true, mode: 0o700 });
       if (!fs.realpathSync(path.dirname(packageRoot)).startsWith(fs.realpathSync(directory) + path.sep)) throw new Error('Répertoire d’activation non autorisé.');
       const staging = fs.mkdtempSync(path.join(directory, '.activation-'));
+      const backup = `${staging}.previous`;
       try {
         for (const [relative, bytes] of Object.entries(entry.assets)) {
           const target = path.resolve(staging, relative);
@@ -122,12 +128,34 @@ export function createLibraryStore(home: string) {
           fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
           fs.writeFileSync(target, Buffer.from(bytes, 'base64'), { mode: 0o600 });
         }
-        fs.rmSync(packageRoot, { recursive: true, force: true });
-        fs.renameSync(staging, packageRoot);
-      } finally { fs.rmSync(staging, { recursive: true, force: true }); }
+        if (entry.kind === 'skill') fs.writeFileSync(path.join(staging, 'SKILL.md'), entry.content, { mode: 0o600 });
+        else {
+          fs.writeFileSync(path.join(staging, 'agent.md'), entry.content, { mode: 0o600 });
+          const { data, content } = parseFrontMatter(entry.content);
+          const toml = Object.entries({ name: String(data.name || `piecemaker-${id}`), description: entry.description || entry.name, developer_instructions: content })
+            .map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n');
+          fs.writeFileSync(path.join(staging, 'agent.toml'), `${toml}\n`, { mode: 0o600 });
+        }
+        if (fs.existsSync(packageRoot)) fs.renameSync(packageRoot, backup);
+        try {
+          fs.renameSync(staging, packageRoot);
+          install();
+        }
+        catch (error) {
+          fs.rmSync(packageRoot, { recursive: true, force: true });
+          if (fs.existsSync(backup)) fs.renameSync(backup, packageRoot);
+          throw error;
+        }
+      } finally {
+        fs.rmSync(staging, { recursive: true, force: true });
+        fs.rmSync(backup, { recursive: true, force: true });
+      }
     } else if (fs.existsSync(path.dirname(packageRoot))) {
       if (!fs.realpathSync(path.dirname(packageRoot)).startsWith(fs.realpathSync(directory) + path.sep)) throw new Error('Répertoire d’activation non autorisé.');
+      install();
       fs.rmSync(packageRoot, { recursive: true, force: true });
+    } else {
+      install();
     }
     if (enabled) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, id);
     else db.prepare('DELETE FROM activation WHERE workspace = ? AND entry_id = ?').run(selected, id);
