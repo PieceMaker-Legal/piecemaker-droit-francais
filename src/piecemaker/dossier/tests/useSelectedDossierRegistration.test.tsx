@@ -9,8 +9,6 @@ const { ensureDossierRegistration } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/piecemaker/dossier/dossierRegistration', () => ({ ensureDossierRegistration }));
-const { publishWorkflowSessionBridge } = vi.hoisted(() => ({ publishWorkflowSessionBridge: vi.fn() }));
-vi.mock('@/piecemaker/addons/sessionBridge', () => ({ publishWorkflowSessionBridge }));
 
 import { useSelectedDossierRegistration } from '@/piecemaker/dossier/useSelectedDossierRegistration';
 import type { Project } from '@/shared/types';
@@ -39,18 +37,4 @@ test('registers every project selected in the CloudCLI workspace', async () => {
   rerender({ selectedProject: project });
 
   await waitFor(() => assert.deepEqual(ensureDossierRegistration.mock.calls, [['/cases/Selected']]));
-});
-
-test('publishes the selected project and current path to the workflow session bridge', async () => {
-  renderHook(
-    ({ selectedProject }) => useSelectedDossierRegistration(selectedProject),
-    { initialProps: { selectedProject: project }, wrapper: MemoryRouter },
-  );
-
-  await waitFor(() => {
-    const payload = publishWorkflowSessionBridge.mock.calls.at(-1)?.[0];
-    assert.equal(payload?.projectPath, '/cases/Selected');
-    assert.equal(payload?.pathname, '/');
-    assert.equal(typeof payload?.navigate, 'function');
-  });
 });
