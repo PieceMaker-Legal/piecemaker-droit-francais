@@ -67,6 +67,10 @@ const PERF_SLOW_MS = 250;
 const PERF_LOG_ALL = process.env.PIECEMAKER_PERF_LOG === '1';
 const COMMIT_USER_NAME_KEY = 'PIECEMAKER_USER_NAME';
 const TECHNICAL_COMMIT_EMAIL = 'commits@piecemaker.local';
+// Repli d'auteur Git quand aucune identité n'a été renseignée : un commit
+// automatique (ex. enregistrement du mapping) ne doit jamais être bloqué par
+// une identité manquante.
+const DEFAULT_COMMIT_USER_NAME = 'PieceMaker';
 const GLOBAL_ENV_FILE = path.resolve(__dirname, '..', '..', '..', '.env');
 // Identité de commit partagée par tous les clones. `GLOBAL_ENV_FILE` est résolu
 // relativement à ce module : lancé depuis le cache du plugin (hook d'édition),
@@ -131,9 +135,11 @@ function resolveCommitIdentity({ identity = null, envFile = GLOBAL_ENV_FILE, con
   const requestedName = typeof identity === 'string' ? identity : identity?.name;
   // Sans identité explicite (hook d'édition), on tente le `.env` du clone
   // courant puis, à défaut, config.json — le hook tourne depuis le cache du
-  // plugin où `envFile` par défaut n'existe pas.
+  // plugin où `envFile` par défaut n'existe pas. À défaut de tout ça, un nom
+  // technique par défaut : l'absence d'identité ne doit jamais empêcher un
+  // commit automatique.
   const name = validateCommitUserName(
-    identity ? requestedName : readCommitIdentityEnv(envFile) || readCommitIdentityConfig(configFile)
+    (identity ? requestedName : readCommitIdentityEnv(envFile) || readCommitIdentityConfig(configFile)) || DEFAULT_COMMIT_USER_NAME
   );
   return {
     name,
