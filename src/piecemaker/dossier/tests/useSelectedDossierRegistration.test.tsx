@@ -10,7 +10,7 @@ const { ensureDossierRegistration } = vi.hoisted(() => ({
 
 vi.mock('@/piecemaker/dossier/dossierRegistration', () => ({ ensureDossierRegistration }));
 const { publishWorkflowSessionBridge } = vi.hoisted(() => ({ publishWorkflowSessionBridge: vi.fn() }));
-vi.mock('@/piecemaker/mike/sessionBridge', () => ({ publishWorkflowSessionBridge }));
+vi.mock('@/piecemaker/addons/sessionBridge', () => ({ publishWorkflowSessionBridge }));
 
 import { useSelectedDossierRegistration } from '@/piecemaker/dossier/useSelectedDossierRegistration';
 import type { Project } from '@/shared/types';

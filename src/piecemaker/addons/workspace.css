@@ -1,0 +1,6 @@
+[data-pm-addons-nav] ~ div:has(> a[href^="https://discord.gg/"]),
+[data-pm-addons-nav] ~ div:has(> a[href$="/issues/new"]) { display: none !important; }
+[data-pm-addons-viewer] { min-width: 0; flex: 1 1 auto; }
+[data-pm-addons-viewer] ~ * { display: none !important; }
+[data-pm-addons-welcome] { position: absolute; inset: 0; z-index: 10; }
+div:has(> [data-pm-addons-welcome]) { position: relative; }
