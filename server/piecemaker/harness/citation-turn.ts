@@ -13,7 +13,8 @@ const require = createRequire(import.meta.url);
 const vendor = path.join(root, 'server/piecemaker/vendor/piecemaker-plugin/scripts/lib');
 const { parseCitationsWithDiagnostics, parsePartialCitationObjects } = require(path.join(vendor, 'citations.cjs'));
 const { verifyCitations } = require(path.join(vendor, 'verify-citations.cjs'));
-const { extractFullText, extractDecisionTitle } = require(path.join(root, 'server/piecemaker/harness/decisions.cjs'));
+const { extractFullText, extractSourceTitle } = require(path.join(root, 'server/piecemaker/harness/decisions.cjs'));
+const SOURCE_TOOLS = ['__consulter_decision', '__consulter_article'];
 const { structuredMarkdownCounterpart } = require(path.join(vendor, 'case-folder-structure.cjs'));
 const OPEN = '<CITATIONS>';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
@@ -104,12 +105,12 @@ export function createCitationTurn(options: {
     get hasCitations() { return hidden; },
     observe(message: NormalizedMessage) {
       if (message.parentToolUseId) return;
-      if (message.kind === 'tool_use' && message.toolId && message.toolName?.endsWith('__consulter_decision')) {
+      if (message.kind === 'tool_use' && message.toolId && SOURCE_TOOLS.some((tool) => message.toolName?.endsWith(tool))) {
         let input = record(message.toolInput);
         if (typeof message.toolInput === 'string') {
           try { input = record(JSON.parse(message.toolInput)); } catch { return; }
         }
-        const id = input.text_id ?? input.id;
+        const id = input.text_id ?? input.article_id ?? input.id;
         if (typeof id === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(id)) calls.set(message.toolId, id);
       }
       if (message.kind === 'tool_result' && message.toolId && !message.isError && !message.toolResult?.isError) {
@@ -121,7 +122,7 @@ export function createCitationTurn(options: {
         sourceCharacters += text.length;
         if (sourceCharacters <= MAX_TURN_CHARACTERS) {
           decisions.set(id, text);
-          const title = extractDecisionTitle(raw) as string;
+          const title = extractSourceTitle(raw) as string;
           if (title) decisionTitles.set(id, title);
         }
       }
