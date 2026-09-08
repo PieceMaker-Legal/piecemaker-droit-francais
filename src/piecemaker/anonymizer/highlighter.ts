@@ -41,14 +41,30 @@ function escapeForRegex(value: string): string {
 
 /**
  * Bornes Unicode plutôt que `\b` : `\b` est ASCII, il couperait « Motté » ou
- * « Nguyễn » au mauvais endroit. Le drapeau `i` fait que la casse du texte
- * affiché n'a pas à correspondre à celle du dictionnaire.
+ * « Nguyễn » au mauvais endroit.
+ *
+ * Le drapeau `i` reproduit le moteur de substitution du proxy, qui code une
+ * entité quelle que soit sa casse : ce qui est teinté à l'écran est exactement
+ * ce qui part sous un code.
  */
 export function buildNameRegex(names: string[]): RegExp | null {
-  if (names.length === 0) return null;
-  const alternatives = names.map(escapeForRegex).join('|');
+  return buildBoundedRegex(names, 'giu');
+}
+
+/**
+ * Les acronymes de deux caractères sont la seule exception du moteur : « US »
+ * est codé, le pronom « us » ne l'est pas. Le surlignage respecte la casse ici,
+ * sans quoi il désignerait des mots que le proxy laisse passer en clair.
+ */
+export function buildAcronymRegex(acronyms: string[]): RegExp | null {
+  return buildBoundedRegex(acronyms, 'gu');
+}
+
+function buildBoundedRegex(tokens: string[], flags: string): RegExp | null {
+  if (tokens.length === 0) return null;
+  const alternatives = tokens.map(escapeForRegex).join('|');
   try {
-    return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives})(?![\\p{L}\\p{N}])`, 'giu');
+    return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives})(?![\\p{L}\\p{N}])`, flags);
   } catch {
     return null;
   }
@@ -66,7 +82,7 @@ function ensureStyleElement(): void {
   document.head.appendChild(style);
 }
 
-function collectRanges(root: Node, pattern: RegExp): Range[] {
+function collectRanges(root: Node, patterns: RegExp[]): Range[] {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
@@ -80,14 +96,16 @@ function collectRanges(root: Node, pattern: RegExp): Range[] {
   let node = walker.nextNode();
   while (node && ranges.length < MAX_RANGES) {
     const text = node.nodeValue ?? '';
-    pattern.lastIndex = 0;
-    let match = pattern.exec(text);
-    while (match && ranges.length < MAX_RANGES) {
-      const range = document.createRange();
-      range.setStart(node, match.index);
-      range.setEnd(node, match.index + match[0].length);
-      ranges.push(range);
-      match = pattern.exec(text);
+    for (const pattern of patterns) {
+      pattern.lastIndex = 0;
+      let match = pattern.exec(text);
+      while (match && ranges.length < MAX_RANGES) {
+        const range = document.createRange();
+        range.setStart(node, match.index);
+        range.setEnd(node, match.index + match[0].length);
+        ranges.push(range);
+        match = pattern.exec(text);
+      }
     }
     node = walker.nextNode();
   }
@@ -95,7 +113,7 @@ function collectRanges(root: Node, pattern: RegExp): Range[] {
 }
 
 export type IdentityHighlighter = {
-  setNames(names: string[]): void;
+  setNames(names: string[], acronyms?: string[]): void;
   refresh(): void;
   stop(): void;
 };
@@ -109,17 +127,17 @@ export function createIdentityHighlighter(): IdentityHighlighter {
 
   ensureStyleElement();
 
-  let pattern: RegExp | null = null;
+  let patterns: RegExp[] = [];
   let frame = 0;
   let observer: MutationObserver | null = null;
 
   const apply = () => {
     frame = 0;
-    if (!pattern) {
+    if (patterns.length === 0) {
       registry.delete(HIGHLIGHT_NAME);
       return;
     }
-    const ranges = collectRanges(document.body, pattern);
+    const ranges = collectRanges(document.body, patterns);
     if (ranges.length === 0) {
       registry.delete(HIGHLIGHT_NAME);
       return;
@@ -140,9 +158,10 @@ export function createIdentityHighlighter(): IdentityHighlighter {
   };
 
   return {
-    setNames(names) {
-      pattern = buildNameRegex(names);
-      if (pattern) startObserver();
+    setNames(names, acronyms = []) {
+      patterns = [buildNameRegex(names), buildAcronymRegex(acronyms)]
+        .filter((pattern): pattern is RegExp => pattern !== null);
+      if (patterns.length) startObserver();
       schedule();
     },
     refresh: schedule,

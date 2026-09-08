@@ -20,7 +20,9 @@ const path = require('node:path');
 
 const {
   applyMapping,
+  buildEntityRegex,
   revertMapping,
+  MIN_ENTITY_LENGTH,
 } = require('../vendor/piecemaker-plugin/scripts/lib/substitution.cjs');
 
 const CENTRAL_FILENAME = 'central-mapping.json';
@@ -33,6 +35,7 @@ const EMPTY = Object.freeze({
   reverse: Object.freeze({}),
   canonical: Object.freeze({}),
   displayNames: Object.freeze([]),
+  displayAcronyms: Object.freeze([]),
   entityCount: 0,
   codeCount: 0,
   empty: true,
@@ -52,26 +55,45 @@ function plainObject(value) {
 
 /**
  * Construit le dictionnaire exploitable à partir du document central.
- * `canonical` est la projection code → orthographe principale ; `displayNames`
- * réunit toutes les orthographes connues d'une même personne, car le
- * surlignage doit teinter « Gilly » comme « Bernard Gilly ». Ce sont les
- * seules parties que l'interface reçoit.
+ *
+ * `canonical` est la projection code → orthographe principale, celle que
+ * `revertMapping` rend à l'humain.
+ *
+ * `displayNames` et `displayAcronyms` sont ce que l'interface surligne. Ils
+ * sortent des clés de `mapping`, c'est-à-dire des orthographes que
+ * `applyMapping` code réellement — variantes secondaires comprises — et non de
+ * `reverse_mapping`, qui ne porte que la forme principale. Une entité que le
+ * moteur refuse de substituer (`buildEntityRegex` nul : ponctuation pure, deux
+ * caractères non acronymiques) est écartée des deux listes : surligner ce qui
+ * ne part pas codé serait un mensonge à l'écran.
+ *
+ * La séparation des deux listes reproduit la seule asymétrie du moteur : au-delà
+ * de `MIN_ENTITY_LENGTH`, la casse est ignorée ; à deux caractères, l'acronyme
+ * reste sensible à la casse, faute de quoi « US » emporterait le pronom « us ».
  */
 function buildDictionary(document, stamp) {
   const mapping = plainObject(document?.mapping);
   const reverse = plainObject(document?.reverse_mapping);
   const canonical = {};
-  const seen = new Map();
   for (const [code, variants] of Object.entries(reverse)) {
-    const spellings = Array.isArray(variants) ? variants : [variants];
-    for (const spelling of spellings) {
-      if (typeof spelling !== 'string' || !spelling.trim()) continue;
-      if (!canonical[code]) canonical[code] = spelling;
-      const folded = spelling.toLocaleLowerCase();
-      if (!seen.has(folded)) seen.set(folded, spelling);
-    }
+    const name = Array.isArray(variants) ? variants[0] : variants;
+    if (typeof name === 'string' && name.trim()) canonical[code] = name;
   }
-  const displayNames = Array.from(seen.values());
+
+  const foldedNames = new Map();
+  const acronyms = new Set();
+  for (const entity of Object.keys(mapping)) {
+    if (!buildEntityRegex(entity)) continue;
+    const trimmed = entity.trim();
+    if (trimmed.length < MIN_ENTITY_LENGTH) {
+      acronyms.add(trimmed);
+      continue;
+    }
+    const folded = trimmed.toLocaleLowerCase();
+    if (!foldedNames.has(folded)) foldedNames.set(folded, trimmed);
+  }
+  const displayNames = Array.from(foldedNames.values());
+  const displayAcronyms = Array.from(acronyms);
   const entityCount = Object.keys(mapping).length;
   const codeCount = Object.keys(canonical).length;
   return {
@@ -81,6 +103,7 @@ function buildDictionary(document, stamp) {
     reverse,
     canonical,
     displayNames,
+    displayAcronyms,
     entityCount,
     codeCount,
     empty: entityCount === 0 && codeCount === 0,
