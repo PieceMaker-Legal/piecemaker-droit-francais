@@ -14,6 +14,8 @@ type DossierContextValue = {
   loading: boolean;
   error: string | null;
   projectPath: string | null;
+  mappingVersion: number;
+  bumpMappingVersion: () => void;
 };
 
 const DossierCasesContext = createContext<DossierContextValue | null>(null);
@@ -29,7 +31,9 @@ export function DossierCasesProvider({
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mappingVersion, setMappingVersion] = useState(0);
   const refreshSequence = useRef(0);
+  const bumpMappingVersion = useCallback(() => setMappingVersion((previous) => previous + 1), []);
 
   const refreshCases = useCallback(async () => {
     const sequence = ++refreshSequence.current;
@@ -63,7 +67,9 @@ export function DossierCasesProvider({
     loading,
     error,
     projectPath: projectPath ?? null,
-  }), [cases, selectedCaseId, refreshCases, loading, error, projectPath]);
+    mappingVersion,
+    bumpMappingVersion,
+  }), [cases, selectedCaseId, refreshCases, loading, error, projectPath, mappingVersion, bumpMappingVersion]);
 
   return <DossierCasesContext.Provider value={value}>{children}</DossierCasesContext.Provider>;
 }
