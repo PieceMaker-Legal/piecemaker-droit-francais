@@ -1,0 +1,133 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+import { createLibraryStore } from './store.js';
+import { migratePersonalLibrary } from './migrate.js';
+import { installLibraryRuntime, stripLibraryInstructions } from './runtime.js';
+
+function fixture(t: { after: (fn: () => void) => void }) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-library-'));
+  const home = path.join(root, 'home');
+  const workspace = path.join(root, 'case');
+  const other = path.join(root, 'other');
+  const skill = path.join(home, '.claude/skills/review');
+  for (const directory of [workspace, other, skill]) fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(skill, 'SKILL.md'), '---\nname: review\ndescription: |\n  Lire et comparer.\n  Vérifier les dates.\n---\nInstructions privées.');
+  fs.writeFileSync(path.join(skill, 'table-columns.yaml'), 'columns:\n  - name: Date\n');
+  const store = createLibraryStore(path.join(home, '.piecemaker'));
+  t.after(() => { store.close(); fs.rmSync(root, { recursive: true, force: true }); });
+  return { root, home, workspace, other, skill, store };
+}
+
+test('imports preserve YAML metadata and assets without publishing instructions', (t) => {
+  const { store, skill, workspace } = fixture(t);
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const list = store.list(workspace);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].enabled, false);
+  assert.equal(list[0].description, 'Lire et comparer.\nVérifier les dates.\n');
+  assert.equal('content' in list[0], false);
+  assert.equal(store.instructions(workspace), '');
+  assert.equal(Buffer.from(store.document(id).assets['table-columns.yaml'], 'base64').toString(), 'columns:\n  - name: Date\n');
+  assert.equal(fs.existsSync(path.join(store.directory, 'active')), false);
+});
+
+test('activation is persistent, canonical and confined to the selected dossier', (t) => {
+  const { store, skill, workspace, other, root, home } = fixture(t);
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const alias = path.join(root, 'alias');
+  fs.symlinkSync(workspace, alias);
+  store.setEnabled(alias, id, true);
+  assert.match(store.instructions(workspace), /Instructions privées/);
+  assert.match(store.instructions(workspace), /columns:/);
+  assert.equal(store.instructions(other), '');
+  assert.equal(store.importFile(path.join(skill, 'SKILL.md'), 'skill'), id);
+  assert.equal(store.list(workspace)[0].enabled, true);
+  const reopened = createLibraryStore(path.join(home, '.piecemaker'));
+  assert.equal(reopened.list(workspace)[0].enabled, true);
+  reopened.close();
+  store.setEnabled(workspace, id, false);
+  assert.equal(store.instructions(workspace), '');
+  assert.equal(store.list(workspace)[0].enabled, false);
+  assert.throws(() => store.setEnabled(workspace, id, 'true'));
+  assert.throws(() => store.setEnabled('../case', id, true));
+  assert.throws(() => store.setEnabled(workspace, '../missing', true));
+});
+
+test('migration withdraws verified global installations and retains a recovery manifest', (t) => {
+  const { root, home, skill, store, workspace } = fixture(t);
+  const imported = migratePersonalLibrary(store, home, root, true);
+  assert.equal(imported.length, 1);
+  assert.equal(fs.existsSync(skill), false);
+  assert.equal(store.list(workspace)[0].enabled, false);
+  assert.equal(store.instructions(workspace), '');
+  const archive = fs.readdirSync(store.directory).find((name) => name.startsWith('migration-'));
+  assert.ok(archive);
+  assert.ok(fs.existsSync(path.join(store.directory, archive, 'manifest.json')));
+  assert.ok(fs.existsSync(path.join(store.directory, archive, '.claude/skills/review/SKILL.md')));
+});
+
+test('associated symlinks fail before source withdrawal', (t) => {
+  const { root, home, skill, store } = fixture(t);
+  fs.symlinkSync(path.join(skill, 'SKILL.md'), path.join(skill, 'linked.md'));
+  assert.throws(() => migratePersonalLibrary(store, home, root, true), /lié non importé/);
+  assert.ok(fs.existsSync(path.join(skill, 'SKILL.md')));
+});
+
+test('library instructions are removed from echoes without rewriting user prose', () => {
+  const prose = '/review relire';
+  assert.equal(stripLibraryInstructions(`${prose}\n\n<PIECEMAKER_LIBRARY_INSTRUCTIONS>\nsecret\n</PIECEMAKER_LIBRARY_INSTRUCTIONS>`), prose);
+  assert.equal(stripLibraryInstructions(prose), prose);
+  assert.equal(stripLibraryInstructions('Mention <PIECEMAKER_LIBRARY_INSTRUCTIONS> dans le texte'), 'Mention <PIECEMAKER_LIBRARY_INSTRUCTIONS> dans le texte');
+});
+
+test('runtime injects only active dossier instructions and preserves the visible user message', async (t) => {
+  const { store, workspace, other, skill } = fixture(t);
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const commands: string[] = [];
+  const received: unknown[] = [];
+  const runtime: Parameters<typeof installLibraryRuntime>[0] = {
+    run: async (_provider, command, _options, writer) => {
+      commands.push(command);
+      writer.send({ kind: 'text', role: 'user', content: command });
+    },
+  };
+  const sessions = { fetchHistory: async () => ({ messages: [] }) } as unknown as Parameters<typeof installLibraryRuntime>[1];
+  installLibraryRuntime(runtime, sessions, store);
+  const writer = { send: (value: unknown) => { received.push(value); } };
+  await runtime.run('claude', 'Relire', { cwd: workspace }, writer);
+  assert.equal(commands[0], 'Relire');
+  store.setEnabled(workspace, id, true);
+  await runtime.run('claude', 'Relire', { cwd: workspace }, writer);
+  assert.match(commands[1], /Instructions privées/);
+  assert.deepEqual(received[1], { kind: 'text', role: 'user', content: 'Relire' });
+  await runtime.run('codex', 'Relire', { cwd: other }, writer);
+  assert.equal(commands[2], 'Relire');
+  store.setEnabled(workspace, id, false);
+  await runtime.run('codex', 'Relire', { cwd: workspace }, writer);
+  assert.equal(commands[3], 'Relire');
+});
+
+test('editing updates YAML and active instructions without changing assets or activation', (t) => {
+  const { store, skill, workspace, other, home } = fixture(t);
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  store.setEnabled(workspace, id, true);
+  const before = store.document(id);
+  const content = '---\nname: Relire\ndescription: Nouvelle description\n---\nNouvelles instructions';
+  store.updateDocument(id, content, before.content);
+  assert.equal(store.list(workspace)[0].name, 'Relire');
+  assert.equal(store.list(workspace)[0].description, 'Nouvelle description');
+  assert.equal(store.list(workspace)[0].enabled, true);
+  assert.equal(store.list(other)[0].enabled, false);
+  assert.deepEqual(store.document(id).assets, before.assets);
+  assert.match(store.instructions(workspace), /Nouvelles instructions/);
+  assert.equal(store.instructions(other), '');
+  assert.throws(() => store.updateDocument(id, 'stale', before.content), /modifié ailleurs/);
+  assert.throws(() => store.updateDocument(id, '---\nname: [invalid\n---', content));
+  const reopened = createLibraryStore(path.join(home, '.piecemaker'));
+  assert.equal(reopened.document(id).content, content);
+  reopened.close();
+});
