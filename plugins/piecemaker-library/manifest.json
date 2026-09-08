@@ -7,5 +7,5 @@
   "slot": "tab",
   "entry": "index.js",
   "server": "server.mjs",
-  "icon": "Library"
+  "icon": "icon.svg"
 }
