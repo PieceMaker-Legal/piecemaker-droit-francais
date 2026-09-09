@@ -33,6 +33,26 @@ export default function AgentSelectorSection({
             agent === 'mistral' ? 'bg-violet-500' :
             agent === 'opencode' ? 'bg-zinc-500' : 'bg-foreground/60';
 
+          if (agent === 'mistral') {
+            return (
+              <Pill
+                key={agent}
+                isActive={selectedAgent === agent}
+                onClick={() => onSelectAgent(agent)}
+                className="min-w-0 flex-1 justify-center md:flex-initial"
+              >
+                <img
+                  src="/Mistral-Icon-Gradient-RGB.svg"
+                  alt="Mistral"
+                  className="h-4 w-4 flex-shrink-0"
+                />
+                {agentContextById[agent].authStatus.authenticated && (
+                  <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${dotColor}`} />
+                )}
+              </Pill>
+            );
+          }
+
           return (
             <Pill
               key={agent}
