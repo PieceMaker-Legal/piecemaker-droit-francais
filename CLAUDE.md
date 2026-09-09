@@ -140,13 +140,18 @@ réels. La promesse du produit est que l'IA ne les lit jamais : elle travaille
 sur les Markdown convertis et pseudonymisés. La « protection » est ce qui tient
 cette promesse.
 
-Le modèle est **protégé par défaut** : `.piecemaker/protection.json` ne stocke
-que des *exceptions*, jamais la liste des fichiers protégés. Un fichier déposé
-plus tard est donc protégé sans que rien n'ait à être mis à jour. Les `.md` et
-les `.json` ne sont jamais protégés — ce sont les surfaces déjà anonymisées.
-Les mappings (`mapping*.json`, `*_sensitive_map.json`, `central-mapping.json`)
-ne sont accessibles à l'IA en aucune circonstance, et aucune exception ne les
-atteint.
+**Seuls les PDF et les images sont protégés** (`PROTECTED_EXTENSIONS` dans
+`scripts/lib/protection.cjs`) : ce sont les pièces dont on tire un Markdown
+converti, et un refus renvoie vers ce Markdown. Tout le reste — `.docx`, `.txt`,
+`.eml`, tableurs, `.md`, `.json` — est accessible à l'IA, anonymisé à la lecture
+par le proxy PII. `.piecemaker/protection.json` ne stocke que des *exceptions*,
+jamais la liste des fichiers protégés : un PDF déposé plus tard est donc protégé
+sans que rien n'ait à être mis à jour.
+
+Deux familles sont interdites à l'IA en toute circonstance, quelle que soit leur
+extension, et aucune exception ne les atteint : les mappings (`mapping*.json`,
+`*_sensitive_map.json`, `central-mapping.json`) et les secrets d'environnement
+(`.env`, `.env.*` hors `example`/`sample`/`template`, `*.env`).
 
 La **levée de protection** (`server/piecemaker/protection/bypass.cjs`, bouton
 `src/piecemaker/dossier/sections/CaseFilesProtectionBypass.tsx`) suit la même
@@ -168,10 +173,14 @@ renvoyer vers le Markdown converti, ce qui permet au modèle de se corriger seul
 
 Limites structurelles, à connaître avant de s'y fier :
 
-- **Claude Code uniquement.** Codex ne reçoit qu'un hook `SessionStart` (la
-  sentinelle `proxy-guard.mjs`) : aucun refus par outil, donc aucun blocage
-  mécanique de lecture. Seuls le proxy et les consignes d'`AGENTS.md` s'y
-  appliquent.
+- **Codex reçoit désormais le même refus par outil.** Codex CLI ≥ 0.153.4
+  supporte le contrat `PreToolUse` (`hookSpecificOutput.permissionDecision:
+  "deny"`) et normalise son exécution shell sous le nom d'outil `Bash` —
+  exactement la branche déjà traitée par `protect-originals.mjs`, sans
+  changement de logique. `installer/lib/codex-skills.mjs` installe ce même
+  script dans `~/.codex/hooks.json` (matcher `"*"`, Codex n'exposant pas de
+  tools Read/Grep/Glob distincts), en plus de la sentinelle `SessionStart`
+  (`proxy-guard.mjs`).
 - **Un hook analyse du texte de commande, pas des syscalls.** `python -c
   "open(...)"`, `find -exec cat`, une variable de shell ou un chemin relatif
   après un `cd` échappent à toute analyse textuelle. C'est la raison d'être de
@@ -225,19 +234,23 @@ jamais les hooks, il se place dessous.**
 #### État réel, à ne pas confondre avec l'intention
 
 - Couche 2 : **en production**, bloquante, testée.
-- Couche 1 : les scripts de hook **ne sont pas vendorisés dans ce dépôt** (seul
-  `scripts/lib/` l'est, `hook-io.mjs` manque), l'étape `06-hooks` n'est pas
-  rejouée par la commande `piecemaker`, et les hooks actifs sur un poste de
-  développement proviennent du dépôt historique PieceMaker-Installer. La copie
-  externe de `protection.cjs` ignore le drapeau de levée, que la copie
-  vendorisée sait lire : le bouton n'a donc aucun effet sur les refus.
+- Couche 1 : les scripts de hook sont désormais **vendorisés dans ce dépôt**
+  (`server/piecemaker/vendor/piecemaker-plugin/scripts/` et `hooks/hooks.json`),
+  sans dépendance runtime au dépôt historique PieceMaker-Installer. Les
+  étapes `06-hooks` (Claude Code) et `09-codex-plugin` (Codex) sont rejouées
+  automatiquement par la commande `piecemaker`. La sentinelle `SessionStart`
+  reste unique, hors vendorisation, sous `scripts/piecemaker/hooks/proxy-guard.mjs`
+  à la racine du dépôt, partagée par les deux clients via
+  `PIECEMAKER_HOOK_CLIENT`.
 - Couche 3 : l'étape `14-mxc-sandbox` est vendorisée mais `mxc-sandbox.cjs` ne
   l'est pas, et l'étape est explicitement exclue de la commande `piecemaker`.
   **Elle n'existe pas à l'exécution.**
 
-Corollaire à garder en tête : sur une machine où l'Installer historique n'a
-jamais tourné, **il n'y a aujourd'hui aucune protection de lecture**. C'est ce
-dépôt qui doit livrer la protection — les dépôts sont autonomes.
+Corollaire : une machine neuve, sans dépendance à l'Installer historique,
+dispose désormais d'une protection de lecture réelle dès la première
+exécution de `piecemaker` (étapes `06-hooks` et `09-codex-plugin`), pour
+Claude Code comme pour Codex — ce dépôt livre la protection lui-même, les
+dépôts restent autonomes.
 
 Le sandbox natif de Claude Code (permissions, `sandbox`) n'est configuré nulle
 part et reste la piste la moins coûteuse à évaluer avant tout chantier mxc.
