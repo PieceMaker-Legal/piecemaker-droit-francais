@@ -104,6 +104,19 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
     supportsMessageEditing: false,
     supportsSessionForking: false,
   },
+  mistral: {
+    provider: 'mistral',
+    permissionModes: ['default', 'acceptEdits', 'bypassPermissions'],
+    defaultPermissionMode: 'default',
+    supportsImages: true,
+    supportsFiles: true,
+    supportsAbort: true,
+    supportsPermissionRequests: false,
+    supportsTokenUsage: false,
+    supportsEffort: true,
+    supportsMessageEditing: false,
+    supportsSessionForking: false,
+  },
 };
 
 /**
