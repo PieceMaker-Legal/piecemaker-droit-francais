@@ -24,6 +24,7 @@ export type UserPreferences = {
   claudePermissions: unknown;
   cursorPermissions: unknown;
   codexPermissions: unknown;
+  mistralPermissions: unknown;
   opencodePermissions: unknown;
   codeEditorSettings: unknown;
   uiPreferences: unknown;
@@ -61,6 +62,7 @@ const LEGACY_STORAGE_KEYS: Record<UserPreferenceKey, string> = {
   claudePermissions: 'claude-settings',
   cursorPermissions: 'cursor-tools-settings',
   codexPermissions: 'codex-settings',
+  mistralPermissions: 'mistral-settings',
   opencodePermissions: 'opencode-settings',
   // Unused: the four code-editor settings never shared one key, so they are
   // read by readLegacyCodeEditorSettings instead.

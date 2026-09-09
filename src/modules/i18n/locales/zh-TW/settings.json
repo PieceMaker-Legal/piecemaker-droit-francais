@@ -323,6 +323,12 @@
       },
       "codex": {
         "description": "OpenAI Codex AI 助手"
+      },
+      "opencode": {
+        "description": "OpenCode CLI assistant"
+      },
+      "mistral": {
+        "description": "Mistral AI assistant"
       }
     },
     "connectionStatus": "連線狀態",
@@ -417,7 +423,9 @@
     "description": {
       "claude": "Model Context Protocol 伺服器為 Claude 提供額外的工具和資料來源",
       "cursor": "Model Context Protocol 伺服器為 Cursor 提供額外的工具和資料來源",
-      "codex": "Model Context Protocol 伺服器為 Codex 提供額外的工具和資料來源"
+      "codex": "Model Context Protocol 伺服器為 Codex 提供額外的工具和資料來源",
+      "opencode": "Model Context Protocol 伺服器為 Claude 提供額外的工具和資料來源",
+      "mistral": "Model Context Protocol servers provide additional tools and data sources to Mistral"
     },
     "addButton": "新增 MCP 伺服器",
     "empty": "未設定 MCP 伺服器",

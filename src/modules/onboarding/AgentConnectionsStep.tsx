@@ -29,6 +29,13 @@ const providerCards = [
     loginButtonClassName: 'bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600',
   },
   {
+    provider: 'mistral' as const,
+    title: 'Mistral',
+    connectedClassName: 'bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800',
+    iconContainerClassName: 'bg-violet-100 dark:bg-violet-900/30',
+    loginButtonClassName: 'bg-violet-600 hover:bg-violet-700',
+  },
+  {
     provider: 'opencode' as const,
     title: 'OpenCode',
     connectedClassName: 'bg-zinc-100 dark:bg-zinc-800/50 border-zinc-300 dark:border-zinc-600',

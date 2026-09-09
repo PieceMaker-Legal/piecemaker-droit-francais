@@ -322,6 +322,12 @@
       },
       "codex": {
         "description": "OpenAI Codex KI-Assistent"
+      },
+      "opencode": {
+        "description": "OpenCode CLI assistant"
+      },
+      "mistral": {
+        "description": "Mistral AI assistant"
       }
     },
     "connectionStatus": "Verbindungsstatus",
@@ -416,7 +422,9 @@
     "description": {
       "claude": "Model Context Protocol-Server stellen Claude zusätzliche Werkzeuge und Datenquellen zur Verfügung",
       "cursor": "Model Context Protocol-Server stellen Cursor zusätzliche Werkzeuge und Datenquellen zur Verfügung",
-      "codex": "Model Context Protocol-Server stellen Codex zusätzliche Werkzeuge und Datenquellen zur Verfügung"
+      "codex": "Model Context Protocol-Server stellen Codex zusätzliche Werkzeuge und Datenquellen zur Verfügung",
+      "opencode": "Model Context Protocol-Server stellen Claude zusätzliche Werkzeuge und Datenquellen zur Verfügung",
+      "mistral": "Model Context Protocol servers provide additional tools and data sources to Mistral"
     },
     "addButton": "MCP-Server hinzufügen",
     "empty": "Keine MCP-Server konfiguriert",
