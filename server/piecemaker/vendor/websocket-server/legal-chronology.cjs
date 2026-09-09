@@ -29,7 +29,7 @@ function hasOwn(value, key) {
 // puisse à terme appeler cette projection sans dépendance circulaire.
 function categoryForCode(code) {
   const normalized = String(code).replace(/\s+/g, '_').toUpperCase();
-  if (normalized.includes('PERSONNE_PHYSIQUE') || normalized.includes('DIRIGEANT')) return 'personne';
+  if (normalized.includes('PERSONNE_PHYSIQUE') || normalized.includes('DIRIGEANT') || normalized.includes('AVOCAT')) return 'personne';
   if (normalized.includes('ADRESSE')) return 'adresse';
   if (normalized.includes('SIREN')) return 'siren';
   if (isSocieteCode(normalized)) return 'societe';

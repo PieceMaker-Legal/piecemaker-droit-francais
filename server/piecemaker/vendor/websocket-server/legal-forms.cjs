@@ -60,12 +60,14 @@ function societeCounterKey(code) {
  */
 function isSocieteCode(code) {
   const normalized = String(code || '').replace(/\s+/g, '_').toUpperCase();
+  if (/(^|_)(AVOCAT|PHYSIQUE|DIRIGEANT)(_|$)/.test(normalized)) return false;
   if (normalized.includes('MORALE') || normalized.includes('SOCIETE')) return true;
-  return normalized
+  const tokens = normalized
     .replace(/_\d+$/, '')
     .split('_')
-    .filter(Boolean)
-    .some((token) => LEGAL_FORM_TOKENS.has(token));
+    .filter(Boolean);
+  if (tokens.some((token) => LEGAL_FORM_TOKENS.has(token))) return true;
+  return /^(CLIENT|ADVERSAIRE)_/.test(normalized) && !tokens.includes('PHYSIQUE');
 }
 
 /**
