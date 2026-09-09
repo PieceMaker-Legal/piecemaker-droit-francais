@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, Loader2, Plus, Save, ShieldCheck, Trash2, UserRound, UsersRound } from 'lucide-react';
 
-import { pmGet, pmPut, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import { invalidatePmGet, pmGetCached, pmPut, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import {
   applyProcedureParties,
   buildMappingDocument,
@@ -28,6 +28,7 @@ type RelationshipRole = 'Avocat' | 'Dirigeant' | 'Actionnaire';
 
 type CaseMappingSectionProps = {
   caseId: string;
+  refreshVersion: number;
   onRepositoryChange: () => Promise<void>;
 };
 
@@ -103,7 +104,7 @@ function relationshipRoleChoice(role: string): RelationshipRole | typeof CUSTOM_
   return RELATIONSHIP_ROLES.find((option) => option.toLocaleLowerCase('fr') === normalizedRole) || (role.trim() ? CUSTOM_RELATIONSHIP_ROLE : '');
 }
 
-export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseMappingSectionProps) {
+export default function CaseMappingSection({ caseId, refreshVersion, onRepositoryChange }: CaseMappingSectionProps) {
   const [document, setDocument] = useState<MappingDocument | null>(null);
   const [groups, setGroups] = useState<MappingGroup[]>([]);
   const [profileInfo, setProfileInfo] = useState<ProcedureInfo>(normalizeProcedureInfo());
@@ -118,7 +119,7 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
     setLoading(true);
     setError(null);
     try {
-      const data = await pmGet<MappingResponse>('/mapping', { case: caseId });
+      const data = await pmGetCached<MappingResponse>('/mapping', { case: caseId });
       const nextDocument = normalizedDocument(data);
       setDocument(nextDocument);
       setGroups(groupMappingByCode(nextDocument.mapping, nextDocument.reverse_mapping));
@@ -133,7 +134,7 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
 
   useEffect(() => {
     let active = true;
-    pmGet<MappingResponse>('/mapping', { case: caseId })
+    pmGetCached<MappingResponse>('/mapping', { case: caseId })
       .then((data) => {
         if (!active) return;
         const nextDocument = normalizedDocument(data);
@@ -151,7 +152,7 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
     return () => {
       active = false;
     };
-  }, [caseId]);
+  }, [caseId, refreshVersion]);
 
   const partyCounts = useMemo(() => ({
     client: profileInfo.parties_clientes.length,
@@ -178,6 +179,7 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
 
   const saveDocument = async (nextDocument: MappingDocument, successMessage: string) => {
     const data = await pmPut<MappingResponse>('/mapping', { case: caseId, ...nextDocument });
+    invalidatePmGet('/mapping', { case: caseId });
     const saved = normalizedDocument(data);
     setDocument(saved);
     setGroups(groupMappingByCode(saved.mapping, saved.reverse_mapping));
@@ -261,7 +263,7 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Chargement des profils…</div>;
+  if (loading && !document) return <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Chargement des profils…</div>;
   if (!document) return <div className="mx-auto max-w-md py-16 text-center text-sm"><p className="text-destructive">{error || 'Profils indisponibles.'}</p><Button variant="outline" size="sm" className="mt-3" onClick={() => void loadMapping()}>Réessayer</Button></div>;
 
   return (

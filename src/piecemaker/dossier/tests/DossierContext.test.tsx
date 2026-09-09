@@ -51,20 +51,20 @@ test('registers the selected sidebar folder as a legal case', async () => {
 test('uses an exact registered folder without registering it again', async () => {
   pmGet.mockResolvedValue({
     folders: [{
-      path: 'folder-selected',
-      name: 'Selected',
-      location: '/cases/Selected',
+      path: 'folder-existing',
+      name: 'Existing',
+      location: '/cases/Existing',
       registered: true,
     }],
   });
 
   const screen = render(
-    <DossierCasesProvider projectPath="/cases/Selected">
+    <DossierCasesProvider projectPath="/cases/Existing">
       <SelectionProbe />
     </DossierCasesProvider>,
   );
 
-  await waitFor(() => assert.equal(screen.getByText('/cases/Selected').textContent, '/cases/Selected'));
+  await waitFor(() => assert.equal(screen.getByText('/cases/Existing').textContent, '/cases/Existing'));
   assert.equal(pmPost.mock.calls.length, 0);
 });
 
