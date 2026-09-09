@@ -54,6 +54,10 @@ const getProviderCommand = ({
     return IS_PLATFORM ? 'codex login --device-auth' : 'codex login';
   }
 
+  if (provider === 'mistral') {
+    return IS_PLATFORM ? 'vibe login --device-auth' : 'vibe login';
+  }
+
   if (provider === 'opencode') {
     return 'opencode auth login';
   }
@@ -65,6 +69,7 @@ const getProviderTitle = (provider: LLMProvider) => {
   if (provider === 'claude') return 'Claude CLI Login';
   if (provider === 'cursor') return 'Cursor CLI Login';
   if (provider === 'codex') return 'Codex CLI Login';
+  if (provider === 'mistral') return 'Mistral CLI Login';
   if (provider === 'opencode') return 'OpenCode CLI Login';
   return 'Claude CLI Login';
 };

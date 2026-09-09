@@ -137,6 +137,7 @@ export const MCP_PROVIDER_NAMES: Record<McpProvider, string> = {
   claude: 'Claude',
   cursor: 'Cursor',
   codex: 'Codex',
+  mistral: 'Mistral',
   opencode: 'OpenCode',
 };
 
@@ -145,6 +146,7 @@ export const MCP_SUPPORTED_SCOPES: Record<McpProvider, McpScope[]> = {
   claude: ['user', 'project', 'local'],
   cursor: ['user', 'project'],
   codex: ['user', 'project'],
+  mistral: ['user', 'project'],
   opencode: ['user', 'project'],
 };
 
@@ -153,6 +155,7 @@ export const MCP_SUPPORTED_TRANSPORTS: Record<McpProvider, McpTransport[]> = {
   claude: ['stdio', 'http', 'sse'],
   cursor: ['stdio', 'http'],
   codex: ['stdio', 'http'],
+  mistral: ['stdio', 'http'],
   opencode: ['stdio', 'http'],
 };
 
@@ -164,6 +167,7 @@ export const MCP_SUPPORTS_WORKING_DIRECTORY: Record<McpProvider, boolean> = {
   claude: false,
   cursor: false,
   codex: true,
+  mistral: false,
   opencode: false,
 };
 
@@ -234,5 +238,6 @@ export const PROVIDER_PERMISSION_PREFERENCE_KEYS: Record<LLMProvider, UserPrefer
   claude: 'claudePermissions',
   cursor: 'cursorPermissions',
   codex: 'codexPermissions',
+  mistral: 'mistralPermissions',
   opencode: 'opencodePermissions',
 };

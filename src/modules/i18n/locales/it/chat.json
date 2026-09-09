@@ -17,7 +17,9 @@
     "tool": "Strumento",
     "claude": "Claude",
     "cursor": "Cursor",
-    "codex": "Codex"
+    "codex": "Codex",
+    "opencode": "OpenCode",
+    "mistral": "Mistral"
   },
   "tools": {
     "settings": "Impostazioni strumento",
@@ -126,7 +128,9 @@
       "claude": "Pronto a usare Claude con {{model}}. Inizia a digitare il tuo messaggio qui sotto.",
       "cursor": "Pronto a usare Cursor con {{model}}. Inizia a digitare il tuo messaggio qui sotto.",
       "codex": "Pronto a usare Codex con {{model}}. Inizia a digitare il tuo messaggio qui sotto.",
-      "default": "Seleziona un provider sopra per iniziare"
+      "default": "Seleziona un provider sopra per iniziare",
+      "opencode": "Pronto a usare Claude con {{model}}. Inizia a digitare il tuo messaggio qui sotto.",
+      "mistral": "Ready to use Mistral with {{model}}. Start typing your message below."
     },
     "pressToSearch": "Premi <kbd>{{shortcut}}</kbd> per cercare sessioni, file e commit"
   },

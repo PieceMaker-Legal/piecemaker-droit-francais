@@ -14,6 +14,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   claude: 'Claude',
   codex: 'Codex',
   cursor: 'Cursor',
+  mistral: 'Mistral',
   opencode: 'OpenCode',
 };
 
