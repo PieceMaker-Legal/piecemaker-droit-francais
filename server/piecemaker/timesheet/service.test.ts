@@ -65,6 +65,8 @@ test('extrait le temps actif plafonné et la dernière conclusion visible', asyn
   assert.equal(result.entries[0].activeSeconds, 1200);
   assert.equal(result.entries[0].conclusion, 'Conclusion finale');
   assert.equal(result.entries[0].conclusionAt, '2026-09-01T10:00:00.000Z');
+  assert.equal('transcriptFingerprint' in result.entries[0], false);
+  assert.equal('extractedAt' in result.entries[0], false);
 });
 
 test('coalesce les actualisations identiques', async () => {
