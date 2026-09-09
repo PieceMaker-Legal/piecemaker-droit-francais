@@ -128,6 +128,7 @@ function normalizeProcedureParty(raw, side) {
     adresse: type === 'personne_physique' ? cleanMappingString(party.adresse) : '',
     societe_nom: type === 'societe' ? cleanMappingString(party.societe_nom) : '',
     forme_sociale: type === 'societe' ? cleanMappingString(party.forme_sociale) : '',
+    pays: type === 'societe' ? cleanMappingString(party.pays) || 'France' : '',
     siren: type === 'societe' ? cleanMappingString(party.siren) : '',
     siege_social: type === 'societe' ? cleanMappingString(party.siege_social) : '',
     representant: type === 'societe' ? cleanMappingString(party.representant) : '',
@@ -146,6 +147,7 @@ function normalizeProfileRelationships(value) {
   return value.flatMap((raw) => {
     const relationship = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     const source = cleanMappingString(relationship.source);
+    const original_source = cleanMappingString(relationship.original_source);
     const target = cleanMappingString(relationship.target);
     const role = cleanMappingString(relationship.role);
     const id = cleanMappingString(relationship.id) || relationshipId(source, target, role);
@@ -153,7 +155,7 @@ function normalizeProfileRelationships(value) {
     if (!source || !target || !role || source === target || ids.has(id) || relationships.has(key)) return [];
     ids.add(id);
     relationships.add(key);
-    return [{ id, source, target, role }];
+    return [{ id, source, original_source, target, role }];
   });
 }
 
