@@ -7,24 +7,24 @@
  * no equivalent here — see the final report for why.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CalendarClock, Download, Loader2, Pencil, RefreshCw, Sparkles } from 'lucide-react';
 
 import { Badge, Button } from '@/shared/ui';
 import { authenticatedFetch } from '@/shared/api';
 import { cn } from '@/shared/utils';
-
-import { pmGet, pmPost, PieceMakerApiError, PIECEMAKER_API_BASE } from '../api';
-import type { ChronologyDocument, ChronologyExportFormat, ChronologyOverview } from './CaseFilesTypes';
-import { chronologyStateModel, formatDateIso } from './CaseFilesUtils';
-import CaseFilesDocumentMetaDialog from './CaseFilesDocumentMetaDialog';
+import { invalidatePmGet, pmGetCached, pmPost, PieceMakerApiError, PIECEMAKER_API_BASE } from '@/piecemaker/dossier/api';
+import CaseFilesDocumentMetaDialog from '@/piecemaker/dossier/sections/CaseFilesDocumentMetaDialog';
+import type { ChronologyDocument, ChronologyExportFormat, ChronologyOverview } from '@/piecemaker/dossier/sections/CaseFilesTypes';
+import { chronologyStateModel, formatDateIso } from '@/piecemaker/dossier/sections/CaseFilesUtils';
 
 type CaseFilesChronologyProps = {
   caseId: string;
   caseName: string;
+  refreshVersion: number;
 };
 
-export default function CaseFilesChronology({ caseId, caseName }: CaseFilesChronologyProps) {
+export default function CaseFilesChronology({ caseId, caseName, refreshVersion }: CaseFilesChronologyProps) {
   const [chronology, setChronology] = useState<ChronologyOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,31 +32,37 @@ export default function CaseFilesChronology({ caseId, caseName }: CaseFilesChron
   const [exporting, setExporting] = useState<ChronologyExportFormat | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<ChronologyDocument | null>(null);
+  const loadSequence = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refresh = false) => {
+    const requestSequence = ++loadSequence.current;
     setLoading(true);
     try {
-      const data = await pmGet<ChronologyOverview>('/repository/chronology', { case: caseId });
+      const caseQuery = { case: caseId };
+      if (refresh) invalidatePmGet('/repository/chronology', caseQuery);
+      const data = await pmGetCached<ChronologyOverview>('/repository/chronology', caseQuery);
+      if (requestSequence !== loadSequence.current) return;
       setChronology(data);
       setError(null);
     } catch (cause) {
+      if (requestSequence !== loadSequence.current) return;
       setChronology(null);
       setError(cause instanceof PieceMakerApiError ? cause.message : String(cause));
     } finally {
-      setLoading(false);
+      if (requestSequence === loadSequence.current) setLoading(false);
     }
   }, [caseId]);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshVersion]);
 
   const refreshGraph = async () => {
     setRefreshing(true);
     setMessage(null);
     try {
       await pmPost('/repository/legal-graph/refresh', { case: caseId });
-      await load();
+      await load(true);
     } catch (cause) {
       setMessage(cause instanceof PieceMakerApiError ? cause.message : String(cause));
     } finally {
@@ -150,7 +156,7 @@ export default function CaseFilesChronology({ caseId, caseName }: CaseFilesChron
             {exporting === 'docx' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             DOCX
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void load()}>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void load(true)}>
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -221,7 +227,7 @@ export default function CaseFilesChronology({ caseId, caseName }: CaseFilesChron
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            void load();
+            void load(true);
           }}
         />
       )}
