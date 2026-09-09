@@ -323,6 +323,12 @@
       },
       "codex": {
         "description": "OpenAI Codex AI asistanı"
+      },
+      "opencode": {
+        "description": "OpenCode CLI assistant"
+      },
+      "mistral": {
+        "description": "Mistral AI assistant"
       }
     },
     "connectionStatus": "Bağlantı Durumu",
@@ -417,7 +423,9 @@
     "description": {
       "claude": "Model Context Protocol sunucuları Claude'a ek araçlar ve veri kaynakları sağlar",
       "cursor": "Model Context Protocol sunucuları Cursor'a ek araçlar ve veri kaynakları sağlar",
-      "codex": "Model Context Protocol sunucuları Codex'e ek araçlar ve veri kaynakları sağlar"
+      "codex": "Model Context Protocol sunucuları Codex'e ek araçlar ve veri kaynakları sağlar",
+      "opencode": "Model Context Protocol sunucuları Claude'a ek araçlar ve veri kaynakları sağlar",
+      "mistral": "Model Context Protocol servers provide additional tools and data sources to Mistral"
     },
     "addButton": "MCP Sunucusu Ekle",
     "empty": "Yapılandırılmış MCP sunucusu yok",
