@@ -34,6 +34,7 @@ export type ProcedureParty = {
   adresse: string;
   societe_nom: string;
   forme_sociale: string;
+  pays: string;
   siren: string;
   siege_social: string;
   representant: string;
@@ -43,6 +44,7 @@ export type ProcedureParty = {
 export type ProfileRelationship = {
   id: string;
   source: string;
+  original_source: string;
   target: string;
   role: string;
 };
@@ -101,17 +103,27 @@ function codeToken(value: unknown, fallback = 'AUTRE'): string {
     .replace(/^_+|_+$/g, '') || fallback;
 }
 
+function companyFormToken(value: unknown): string {
+  const collapsed = clean(value)
+    .replace(/\./g, '')
+    .replace(/\b(?:[A-Za-z]\s+){2,}[A-Za-z]\b/g, (match) => match.replace(/\s+/g, ''));
+  return codeToken(collapsed, 'PERSONNE_MORALE');
+}
+
 function isSocieteCode(code: unknown): boolean {
   const normalizedCode = String(code || '').replace(/\s+/g, '_').toUpperCase();
+  if (/(^|_)(AVOCAT|PHYSIQUE|DIRIGEANT)(_|$)/.test(normalizedCode)) return false;
   if (normalizedCode.includes('MORALE') || normalizedCode.includes('SOCIETE')) return true;
-  return normalizedCode.replace(/_\d+$/, '').split('_').filter(Boolean).some((token) => LEGAL_FORM_TOKENS.has(token));
+  const tokens = normalizedCode.replace(/_\d+$/, '').split('_').filter(Boolean);
+  if (tokens.some((token) => LEGAL_FORM_TOKENS.has(token))) return true;
+  return /^(CLIENT|ADVERSAIRE)_/.test(normalizedCode) && !tokens.includes('PHYSIQUE');
 }
 
 function partyCategoryForCode(code: unknown): string {
   const value = codeToken(code);
   if (value.startsWith('SIREN_')) return 'siren';
   if (value.startsWith('ADRESSE_') || value.startsWith('LIEU_NAISSANCE_')) return 'adresses';
-  if (value.includes('PERSONNE_PHYSIQUE') || value.startsWith('DIRIGEANT_')) return 'personnes_physiques';
+  if (value.includes('PERSONNE_PHYSIQUE') || value.startsWith('DIRIGEANT_') || value.startsWith('AVOCAT_')) return 'personnes_physiques';
   if (isSocieteCode(value)) return 'societes';
   return 'autres';
 }
@@ -142,6 +154,7 @@ function normalizeRelationships(value: unknown): ProfileRelationship[] {
   return value.flatMap((candidate) => {
     const relation = candidate && typeof candidate === 'object' ? candidate as Record<string, unknown> : {};
     const source = clean(relation.source);
+    const originalSource = clean(relation.original_source);
     const target = clean(relation.target);
     const role = clean(relation.role);
     const relationshipKey = `${source}\u0000${target}\u0000${role}`;
@@ -149,7 +162,7 @@ function normalizeRelationships(value: unknown): ProfileRelationship[] {
     if (!source || !target || !role || source === target || seenIds.has(id) || seenRelationships.has(relationshipKey)) return [];
     seenIds.add(id);
     seenRelationships.add(relationshipKey);
-    return [{ id, source, target, role }];
+    return [{ id, source, original_source: originalSource, target, role }];
   });
 }
 
@@ -169,6 +182,7 @@ function normalizeParty(raw: unknown, side: 'client' | 'adversaire'): ProcedureP
     adresse: type === 'personne_physique' ? clean(party.adresse) : '',
     societe_nom: type === 'societe' ? clean(party.societe_nom) : '',
     forme_sociale: type === 'societe' ? clean(party.forme_sociale) : '',
+    pays: type === 'societe' ? clean(party.pays) || 'France' : '',
     siren: type === 'societe' ? clean(party.siren) : '',
     siege_social: type === 'societe' ? clean(party.siege_social) : '',
     representant: type === 'societe' ? clean(party.representant) : '',
@@ -311,6 +325,44 @@ function restorePreviousAssignments(
   return buildMappingDocument(groupMappingByCode(mapping, reverseMapping));
 }
 
+function restorePreviousRelationshipSources(
+  document: Pick<MappingDocument, 'mapping' | 'reverse_mapping'>,
+  previousInfo: unknown,
+): { document: Pick<MappingDocument, 'mapping' | 'reverse_mapping'>; originalSources: Map<string, string> } {
+  const mapping = { ...document.mapping };
+  const reverseMapping = { ...document.reverse_mapping };
+  const originalSources = new Map<string, string>();
+  const restoredSources = new Map<string, string>();
+  for (const relationship of normalizeProcedureInfo(previousInfo).relations) {
+    if (!relationship.original_source) continue;
+    const restoredSource = restoredSources.get(relationship.source);
+    if (restoredSource) {
+      originalSources.set(relationship.id, restoredSource);
+      continue;
+    }
+    const source = groupMappingByCode(mapping, reverseMapping).find((group) => group.code === relationship.source);
+    if (!source || !source.code.startsWith('AVOCAT_')) continue;
+    const variants = [source.principal, ...source.variants];
+    const occupiedOutsideSource = Object.entries(mapping)
+      .some(([variant, code]) => code === relationship.original_source && !variants.includes(variant));
+    const restoredCode = occupiedOutsideSource
+      ? nextGenericCode(partyCategoryForCode(source.code), new Set(Object.values(mapping)))
+      : relationship.original_source;
+    for (const variant of variants) mapping[variant] = restoredCode;
+    reverseMapping[restoredCode] = unique(variants);
+    originalSources.set(relationship.id, restoredCode);
+    restoredSources.set(relationship.source, restoredCode);
+  }
+  return { document: buildMappingDocument(groupMappingByCode(mapping, reverseMapping)), originalSources };
+}
+
+function rebaseRelationshipOriginalSources(relationships: ProfileRelationship[], originalSources: Map<string, string>): ProfileRelationship[] {
+  return relationships.map((relationship) => ({
+    ...relationship,
+    original_source: originalSources.get(relationship.id) || relationship.original_source,
+  }));
+}
+
 function findGroup(document: Pick<MappingDocument, 'mapping' | 'reverse_mapping'>, value: unknown): MappingGroup | null {
   const needle = normalized(value);
   if (!needle) return null;
@@ -362,7 +414,7 @@ function applySideAssignments(
       if (assignment) assignments.push(assignment);
     };
     if (party.type === 'societe') {
-      add(party.societe_nom, `${prefix}_PERSONNE_MORALE_${number}`, 'identite', 'societes');
+      add(party.societe_nom, `${prefix}_${companyFormToken(party.forme_sociale)}_${number}`, 'identite', 'societes');
       add(party.siren, `SIREN_${prefix}_${number}`, 'siren', 'siren');
       add(party.siege_social, `ADRESSE_${prefix}_${number}`, 'siege_social', 'adresses');
       add(party.representant, `DIRIGEANT_${prefix}_${number}`, 'representant', 'personnes_physiques');
@@ -393,18 +445,121 @@ function remapProfileRelationships(
   }));
 }
 
+function identityAssignmentCode(party: ProcedureParty): string {
+  return clean(party.mapping_assignments.find((assignment) => assignment.field === 'identite')?.code);
+}
+
+function lawyerCode(prefix: string, sourceCode: string, codes: Set<string>): string {
+  const suffix = sourceCode.startsWith(`${prefix}_`) ? sourceCode.slice(prefix.length + 1) : '';
+  if (/^\d+$/.test(suffix)) return sourceCode;
+  let highest = 0;
+  for (const code of codes) {
+    if (!code.startsWith(`${prefix}_`)) continue;
+    const number = Number(code.slice(prefix.length + 1));
+    if (Number.isInteger(number) && number > highest) highest = number;
+  }
+  return `${prefix}_${String(highest + 1).padStart(2, '0')}`;
+}
+
+export function lawyerRelationshipPseudonym(
+  relationship: Pick<ProfileRelationship, 'source' | 'target' | 'role'>,
+  mappingDocument: Pick<MappingDocument, 'mapping' | 'reverse_mapping'>,
+  parties: ProcedureParty[],
+): string | null {
+  if (normalized(relationship.role) !== 'avocat') return null;
+  const source = groupMappingByCode(mappingDocument.mapping, mappingDocument.reverse_mapping)
+    .find((group) => group.code === relationship.source);
+  if (!source || partyCategoryForCode(source.code) !== 'personnes_physiques') return null;
+  const target = parties.find((party) => party.type === 'societe'
+    && (identityAssignmentCode(party) === relationship.target || clean(mappingDocument.mapping[party.societe_nom]) === relationship.target));
+  if (!target) return null;
+  const prefix = `AVOCAT_${partyRoleToken(target)}_${companyFormToken(target.forme_sociale)}`;
+  return lawyerCode(prefix, source.code, new Set(Object.values(mappingDocument.mapping)));
+}
+
+function applyLawyerRelationshipAssignments(
+  document: Pick<MappingDocument, 'mapping' | 'reverse_mapping'>,
+  relationships: ProfileRelationship[],
+  parties: ProcedureParty[],
+): { document: Pick<MappingDocument, 'mapping' | 'reverse_mapping'>; relationships: ProfileRelationship[]; replacements: Map<string, string> } {
+  const companyByCode = new Map<string, ProcedureParty>();
+  for (const party of parties) {
+    if (party.type !== 'societe') continue;
+    const code = identityAssignmentCode(party);
+    if (code) companyByCode.set(code, party);
+  }
+  const mapping = { ...document.mapping };
+  const reverseMapping = { ...document.reverse_mapping };
+  const groupsByCode = new Map(groupMappingByCode(mapping, reverseMapping).map((group) => [group.code, group]));
+  const replacements = new Map<string, string>();
+  const originalSources = new Map<string, string>();
+  const sourceOrigins = new Map<string, string>();
+  const assignedSources = new Set<string>();
+  const candidates = relationships
+    .filter((relationship) => normalized(relationship.role) === 'avocat' && companyByCode.has(relationship.target))
+    .sort((left, right) => left.id === right.id ? 0 : left.id < right.id ? -1 : 1);
+  for (const relationship of candidates) {
+    if (assignedSources.has(relationship.source)) {
+      originalSources.set(relationship.id, sourceOrigins.get(relationship.source) || relationship.original_source);
+      continue;
+    }
+    const source = groupsByCode.get(relationship.source);
+    const target = companyByCode.get(relationship.target);
+    if (!source || !target || partyCategoryForCode(source.code) !== 'personnes_physiques') continue;
+    const code = lawyerRelationshipPseudonym(relationship, { mapping, reverse_mapping: reverseMapping }, parties);
+    if (!code) continue;
+    for (const variant of [source.principal, ...source.variants]) mapping[variant] = code;
+    reverseMapping[code] = unique([source.principal, ...source.variants]);
+    if (code !== source.code) replacements.set(source.code, code);
+    const originalSource = relationship.original_source || source.code;
+    originalSources.set(relationship.id, originalSource);
+    sourceOrigins.set(relationship.source, originalSource);
+    assignedSources.add(source.code);
+  }
+  const rebuilt = buildMappingDocument(groupMappingByCode(mapping, reverseMapping));
+  return {
+    document: rebuilt,
+    relationships: relationships.map((relationship) => {
+      const isLawyer = normalized(relationship.role) === 'avocat';
+      return {
+        ...relationship,
+        source: replacements.get(relationship.source) || relationship.source,
+        target: replacements.get(relationship.target) || relationship.target,
+        original_source: isLawyer ? originalSources.get(relationship.id) || relationship.original_source : '',
+      };
+    }),
+    replacements,
+  };
+}
+
+function remapPartyAssignments(parties: ProcedureParty[], replacements: Map<string, string>): ProcedureParty[] {
+  return parties.map((party) => ({
+    ...party,
+    mapping_assignments: party.mapping_assignments.map((assignment) => ({
+      ...assignment,
+      code: replacements.get(assignment.code) || assignment.code,
+    })),
+  }));
+}
+
 export function applyProcedureParties(
   mappingDocument: Partial<MappingDocument> = {},
   previousInfo: unknown = {},
   nextInfo: unknown = {},
 ): MappingDocument {
   const base = buildMappingDocument(groupMappingByCode(mappingDocument.mapping || {}, mappingDocument.reverse_mapping || {}));
-  const document = restorePreviousAssignments(base, previousInfo);
-  const info = normalizeProcedureInfo(nextInfo);
+  const restoredAssignments = restorePreviousAssignments(base, previousInfo);
+  const restoredRelationships = restorePreviousRelationshipSources(restoredAssignments, previousInfo);
+  const document = restoredRelationships.document;
+  const nextProcedureInfo = normalizeProcedureInfo(nextInfo);
+  const info = { ...nextProcedureInfo, relations: rebaseRelationshipOriginalSources(nextProcedureInfo.relations, restoredRelationships.originalSources) };
   const claimedVariants = new Map<string, string>();
-  const parties_clientes = applySideAssignments(document, info.parties_clientes, 'client', claimedVariants);
-  const parties_adverses = applySideAssignments(document, info.parties_adverses, 'adversaire', claimedVariants);
+  let parties_clientes = applySideAssignments(document, info.parties_clientes, 'client', claimedVariants);
+  let parties_adverses = applySideAssignments(document, info.parties_adverses, 'adversaire', claimedVariants);
   const rebuilt = buildMappingDocument(groupMappingByCode(document.mapping, document.reverse_mapping));
-  const relations = remapProfileRelationships(info.relations, base, rebuilt);
-  return { ...rebuilt, informations_dossier: { parties_clientes, parties_adverses, relations } };
+  const remappedRelations = remapProfileRelationships(info.relations, base, rebuilt);
+  const lawyerAssignments = applyLawyerRelationshipAssignments(rebuilt, remappedRelations, [...parties_clientes, ...parties_adverses]);
+  parties_clientes = remapPartyAssignments(parties_clientes, lawyerAssignments.replacements);
+  parties_adverses = remapPartyAssignments(parties_adverses, lawyerAssignments.replacements);
+  return { ...lawyerAssignments.document, informations_dossier: { parties_clientes, parties_adverses, relations: lawyerAssignments.relationships } };
 }
