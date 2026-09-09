@@ -349,6 +349,9 @@
       "codex": {
         "description": "OpenAI Codex AI assistant"
       },
+      "mistral": {
+        "description": "Mistral AI assistant"
+      },
       "opencode": {
         "description": "OpenCode CLI assistant"
       }
@@ -446,6 +449,7 @@
       "claude": "Model Context Protocol servers provide additional tools and data sources to Claude",
       "cursor": "Model Context Protocol servers provide additional tools and data sources to Cursor",
       "codex": "Model Context Protocol servers provide additional tools and data sources to Codex",
+      "mistral": "Model Context Protocol servers provide additional tools and data sources to Mistral",
       "opencode": "Model Context Protocol servers provide additional tools and data sources to OpenCode"
     },
     "addButton": "Add MCP Server",

@@ -322,6 +322,12 @@
       },
       "codex": {
         "description": "AI-ассистент OpenAI Codex"
+      },
+      "opencode": {
+        "description": "OpenCode CLI assistant"
+      },
+      "mistral": {
+        "description": "Mistral AI assistant"
       }
     },
     "connectionStatus": "Статус подключения",
@@ -416,7 +422,9 @@
     "description": {
       "claude": "Серверы Model Context Protocol предоставляют дополнительные инструменты и источники данных для Claude",
       "cursor": "Серверы Model Context Protocol предоставляют дополнительные инструменты и источники данных для Cursor",
-      "codex": "Серверы Model Context Protocol предоставляют дополнительные инструменты и источники данных для Codex"
+      "codex": "Серверы Model Context Protocol предоставляют дополнительные инструменты и источники данных для Codex",
+      "opencode": "Серверы Model Context Protocol предоставляют дополнительные инструменты и источники данных для Claude",
+      "mistral": "Model Context Protocol servers provide additional tools and data sources to Mistral"
     },
     "addButton": "Добавить MCP сервер",
     "empty": "MCP серверы не настроены",
