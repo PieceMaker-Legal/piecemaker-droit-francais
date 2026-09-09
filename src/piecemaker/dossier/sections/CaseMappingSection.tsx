@@ -24,10 +24,16 @@ type MappingResponse = Partial<MappingDocument> & {
 
 type ProfileSide = 'client' | 'adversaire';
 
+type RelationshipRole = 'Avocat' | 'Dirigeant' | 'Actionnaire';
+
 type CaseMappingSectionProps = {
   caseId: string;
   onRepositoryChange: () => Promise<void>;
 };
+
+const RELATIONSHIP_ROLES: RelationshipRole[] = ['Avocat', 'Dirigeant', 'Actionnaire'];
+const CUSTOM_RELATIONSHIP_ROLE = 'custom';
+const RELATIONSHIP_SELECT_CLASS = 'h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 function normalizedDocument(data: Partial<MappingDocument>): MappingDocument {
   return {
@@ -46,7 +52,8 @@ function sameIdentity(left: string, right: string): boolean {
 }
 
 function profileType(group: MappingGroup): ProcedureParty['type'] {
-  return /MORALE|SOCIETE|\b(SAS|SARL|SA|SCI|SELARL|EURL)_/i.test(group.code) ? 'societe' : 'personne_physique';
+  const code = group.code.toUpperCase();
+  return /MORALE|SOCIETE|\b(SAS|SARL|SA|SCI|SELARL|EURL)_/.test(code) || (/^(CLIENT|ADVERSAIRE)_/.test(code) && !code.includes('PHYSIQUE')) ? 'societe' : 'personne_physique';
 }
 
 function partyForProfile(info: ProcedureInfo, group: MappingGroup): { side: ProfileSide; party: ProcedureParty } | null {
@@ -72,6 +79,7 @@ function newParty(group: MappingGroup, side: ProfileSide): ProcedureParty {
     forme_sociale: '',
     siren: '',
     siege_social: '',
+    pays: 'France',
     representant: '',
     mapping_assignments: [],
   };
@@ -84,6 +92,15 @@ function positionLabel(party: ProcedureParty): string {
 
 function profileLabel(groups: MappingGroup[], code: string): string {
   return groups.find((group) => group.code === code)?.principal || code;
+}
+
+function isLawyerRelationship(role: string): boolean {
+  return role.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('fr') === 'avocat';
+}
+
+function relationshipRoleChoice(role: string): RelationshipRole | typeof CUSTOM_RELATIONSHIP_ROLE | '' {
+  const normalizedRole = role.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('fr');
+  return RELATIONSHIP_ROLES.find((option) => option.toLocaleLowerCase('fr') === normalizedRole) || (role.trim() ? CUSTOM_RELATIONSHIP_ROLE : '');
 }
 
 export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseMappingSectionProps) {
@@ -140,6 +157,20 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
     client: profileInfo.parties_clientes.length,
     adversaire: profileInfo.parties_adverses.length,
   }), [profileInfo]);
+
+  const lawyerPreviews = useMemo(() => {
+    const previews = new Map<string, string>();
+    if (!document) return previews;
+    try {
+      const preview = applyProcedureParties(buildMappingDocument(groups), document.informations_dossier, profileInfo);
+      for (const relationship of preview.informations_dossier.relations) {
+        if (isLawyerRelationship(relationship.role) && relationship.source.startsWith('AVOCAT_')) previews.set(relationship.id, relationship.source);
+      }
+    } catch {
+      return previews;
+    }
+    return previews;
+  }, [document, groups, profileInfo]);
 
   const currentMapping = () => {
     return buildMappingDocument(groups);
@@ -200,7 +231,7 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
     if (source === target) return;
     setProfileInfo((previous) => previous.relations.some((relation) => relation.source === source && relation.target === target)
       ? previous
-      : { ...previous, relations: [...previous.relations, { id: profileRelationshipId(source, target, ''), source, target, role: '' }] });
+      : { ...previous, relations: [...previous.relations, { id: profileRelationshipId(source, target, ''), source, original_source: '', target, role: '' }] });
     setDraggedProfile(null);
     setError(null);
   };
@@ -256,13 +287,47 @@ export default function CaseMappingSection({ caseId, onRepositoryChange }: CaseM
           {groups.map((group) => {
             const selected = partyForProfile(profileInfo, group);
             const related = profileInfo.relations.filter((relation) => relation.target === group.code);
-            const company = profileType(group) === 'societe';
+            const company = selected ? selected.party.type === 'societe' : profileType(group) === 'societe';
             return <article key={group.code} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = 'link'; event.dataTransfer.setData('text/plain', group.code); setDraggedProfile(group.code); }} onDragEnd={() => setDraggedProfile(null)} className={`group relative flex min-h-[17rem] flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md ${selected?.side === 'client' ? 'border-emerald-500/50' : selected?.side === 'adversaire' ? 'border-red-500/50' : ''}`}>
               <div className={`h-1.5 ${selected?.side === 'client' ? 'bg-emerald-500' : selected?.side === 'adversaire' ? 'bg-red-500' : 'bg-primary/40'}`} />
               <div className="flex items-start gap-3 p-4 pb-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${company ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'bg-primary/10 text-primary'}`}>{company ? <Building2 className="h-5 w-5" /> : <UserRound className="h-5 w-5" />}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{group.principal}</p><p className="mt-1 text-[11px] text-muted-foreground">{company ? 'Personne morale' : 'Personne physique'} · {group.variants.length + 1} écriture{group.variants.length ? 's' : ''} détectée{group.variants.length ? 's' : ''}</p></div></div>
               <div className="px-4 pb-3">{selected ? <div className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${selected.side === 'client' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-red-500/10 text-red-700 dark:text-red-400'}`}>{selected.side === 'client' ? 'Partie cliente' : 'Partie adverse'} · {positionLabel(selected.party)}</div> : <p className="text-[11px] text-muted-foreground">Aucune position procédurale</p>}</div>
               <div className="mx-4 rounded-xl border border-dashed bg-muted/20 p-2.5" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'link'; }} onDrop={(event) => { event.preventDefault(); const source = draggedProfile || event.dataTransfer.getData('text/plain'); if (source) addRelationship(source, group.code); }}>
-                {related.length ? <div className="space-y-2">{related.map((relation) => <div key={relation.id} className="flex items-center gap-1.5"><span className="max-w-[5.5rem] truncate text-[11px] text-muted-foreground">{profileLabel(groups, relation.source)}</span><Input value={relation.role} onChange={(event) => updateRelationship(relation.source, relation.target, event.target.value)} className="h-7 min-w-0 text-[11px]" placeholder="Dirigeant, avocat…" aria-label={`Lien de ${profileLabel(groups, relation.source)}`} /><Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeRelationship(relation.source, relation.target)} aria-label="Supprimer ce lien"><Trash2 className="h-3 w-3" /></Button></div>)}</div> : <p className="text-center text-[11px] leading-4 text-muted-foreground">Glissez un profil ici<br />pour établir un lien</p>}
+                {related.length ? (
+                  <div className="space-y-2">
+                    {related.map((relation) => {
+                      const sourceLabel = profileLabel(groups, relation.source);
+                      const roleChoice = relationshipRoleChoice(relation.role);
+                      return (
+                        <div key={relation.id} className="space-y-2 rounded-lg border bg-background/70 p-2">
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Profil lié</p>
+                              <p className="break-words text-xs font-medium" title={sourceLabel}>{sourceLabel}</p>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeRelationship(relation.source, relation.target)} aria-label={`Supprimer le lien avec ${sourceLabel}`}><Trash2 className="h-3 w-3" /></Button>
+                          </div>
+                          <label className="block space-y-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                            <span>Lien</span>
+                            <select
+                              className={RELATIONSHIP_SELECT_CLASS}
+                              value={roleChoice}
+                              onChange={(event) => updateRelationship(relation.source, relation.target, event.target.value === CUSTOM_RELATIONSHIP_ROLE ? 'Autre' : event.target.value)}
+                              aria-label={`Lien avec ${sourceLabel}`}
+                            >
+                              <option value="">Choisir un lien</option>
+                              {RELATIONSHIP_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+                              <option value={CUSTOM_RELATIONSHIP_ROLE}>Personnalisé</option>
+                            </select>
+                          </label>
+                          {roleChoice === CUSTOM_RELATIONSHIP_ROLE && <Input value={relation.role} onChange={(event) => updateRelationship(relation.source, relation.target, event.target.value)} className="h-8 text-xs" placeholder="Précisez le lien" aria-label={`Lien personnalisé avec ${sourceLabel}`} />}
+                          {lawyerPreviews.get(relation.id) && <p className="text-[10px] text-primary">Pseudonyme proposé <span className="font-semibold">{lawyerPreviews.get(relation.id)}</span></p>}
+                        </div>
+                      );
+                    })}
+                    <p className="text-center text-[10px] leading-4 text-muted-foreground">Glissez un autre profil ici pour ajouter un lien</p>
+                  </div>
+                ) : <p className="text-center text-[11px] leading-4 text-muted-foreground">Glissez un profil ici<br />pour établir un lien</p>}
               </div>
               <div className="mt-auto flex gap-2 p-4 pt-3">{selected ? <Button variant="outline" size="sm" className="flex-1" onClick={() => removeParty(group)}>Retirer</Button> : <><Button variant="outline" size="sm" className="flex-1 border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400" onClick={() => selectParty(group, 'client')}>Client</Button><Button variant="outline" size="sm" className="flex-1 border-red-500/30 text-red-700 hover:bg-red-500/10 dark:text-red-400" onClick={() => selectParty(group, 'adversaire')}>Adverse</Button></>}<Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setPartiesOpen(true)} aria-label={`Modifier ${group.principal}`}><UsersRound className="h-3.5 w-3.5" /></Button></div>
             </article>;
