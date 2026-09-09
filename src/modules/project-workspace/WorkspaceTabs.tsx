@@ -1,4 +1,4 @@
-import { MessageSquare, Terminal, Folder, GitBranch, ClipboardCheck, MonitorPlay, Scale, type LucideIcon } from 'lucide-react';
+import { MessageSquare, Terminal, Folder, ClipboardCheck, MonitorPlay, Scale, type LucideIcon } from 'lucide-react';
 import { Fragment } from 'react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,11 +33,16 @@ type TabDefinition = BuiltInTab | PluginTab;
 
 const BASE_TABS: BuiltInTab[] = [
   { kind: 'builtin', id: 'chat',  labelKey: 'tabs.chat',  icon: MessageSquare },
-  { kind: 'builtin', id: 'shell', labelKey: 'tabs.shell', icon: Terminal },
-  { kind: 'builtin', id: 'files', labelKey: 'tabs.files', icon: Folder },
-  { kind: 'builtin', id: 'git',   labelKey: 'tabs.git',   icon: GitBranch },
   { kind: 'builtin', id: 'dossier', labelKey: 'tabs.dossier', icon: Scale },
+  { kind: 'builtin', id: 'files', labelKey: 'tabs.files', icon: Folder },
 ];
+
+const SHELL_TAB: BuiltInTab = {
+  kind: 'builtin',
+  id: 'shell',
+  labelKey: 'tabs.shell',
+  icon: Terminal,
+};
 
 const BROWSER_TAB: BuiltInTab = {
   kind: 'builtin',
@@ -49,7 +54,7 @@ const BROWSER_TAB: BuiltInTab = {
 const TASKS_TAB: BuiltInTab = {
   kind: 'builtin',
   id: 'tasks',
-  labelKey: 'tabs.tasks',
+  labelKey: 'tabs.library',
   icon: ClipboardCheck,
 };
 
@@ -65,8 +70,9 @@ export default function WorkspaceTabs({
 
   const builtInTabs: BuiltInTab[] = [
     ...BASE_TABS,
-    ...(shouldShowBrowserTab ? [BROWSER_TAB] : []),
     ...(shouldShowTasksTab ? [TASKS_TAB] : []),
+    ...(shouldShowBrowserTab ? [BROWSER_TAB] : []),
+    SHELL_TAB,
   ];
 
   const pluginTabs: PluginTab[] = plugins
