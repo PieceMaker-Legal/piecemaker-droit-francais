@@ -11,6 +11,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { GIT_REPO_ROOT } from './platform.mjs';
+
 const PLUGIN_DIRECTORY = 'piecemaker-plugin';
 const PLUGIN_SKILL_PATH = /(^|[\\/])piecemaker-plugin[\\/]skills[\\/][^\\/]+$/;
 
@@ -30,21 +32,20 @@ export function codexHooksFile(userHome = os.homedir()) {
   return path.join(userHome, '.codex', 'hooks.json');
 }
 
-function codexProxyGuardScript(repoRoot) {
-  return path.join(pluginRoot(repoRoot), 'scripts', 'proxy-guard.mjs');
+/** Script unifié Claude/Codex, à la racine du dépôt — pas une copie vendorisée. */
+function codexProxyGuardScript() {
+  return path.join(GIT_REPO_ROOT, 'scripts', 'piecemaker', 'hooks', 'proxy-guard.mjs');
 }
 
 function isPieceMakerProxyGuard(handler) {
   const command = typeof handler?.command === 'string' ? handler.command : '';
   const commandWindows = typeof handler?.commandWindows === 'string' ? handler.commandWindows : '';
   return (command.includes('proxy-guard.mjs') || commandWindows.includes('proxy-guard.mjs'))
-    && (command.includes('PIECEMAKER_HOOK_CLIENT=codex')
-      || commandWindows.includes('PIECEMAKER_HOOK_CLIENT=codex')
-      || /piecemaker-plugin[\\/]scripts[\\/]proxy-guard\.mjs/.test(command + commandWindows));
+    && (command.includes('PIECEMAKER_HOOK_CLIENT=codex') || commandWindows.includes('PIECEMAKER_HOOK_CLIENT=codex'));
 }
 
-function codexProxyGuardGroup(repoRoot) {
-  const script = codexProxyGuardScript(repoRoot);
+function codexProxyGuardGroup() {
+  const script = codexProxyGuardScript();
   return {
     matcher: 'startup|resume|clear',
     hooks: [{
@@ -115,6 +116,86 @@ export function installCodexSessionHook(repoRoot, userHome = os.homedir()) {
   }
   document.description ||= 'Hooks locaux Codex, dont la sentinelle d’anonymisation PieceMaker.';
   document.hooks.SessionStart = [...preserved, codexProxyGuardGroup(repoRoot)];
+  const output = `${JSON.stringify(document, null, 2)}\n`;
+  let current = null;
+  try { current = fs.readFileSync(loaded.file, 'utf8'); } catch { /* fichier absent */ }
+  if (current === output) return { ok: true, changed: false, file: loaded.file, registered: 1 };
+  try {
+    fs.mkdirSync(path.dirname(loaded.file), { recursive: true });
+    const temporary = `${loaded.file}.tmp-${process.pid}`;
+    fs.writeFileSync(temporary, output, 'utf8');
+    fs.renameSync(temporary, loaded.file);
+    return { ok: true, changed: true, file: loaded.file, registered: 1 };
+  } catch (error) {
+    return { ok: false, changed: false, file: loaded.file, reason: error?.message || 'ecriture-impossible' };
+  }
+}
+
+/** Même script que la protection Claude Code : contrat PreToolUse deny identique. */
+function codexProtectionScript(repoRoot) {
+  return path.join(pluginRoot(repoRoot), 'scripts', 'protect-originals.mjs');
+}
+
+function isPieceMakerProtection(handler) {
+  const command = typeof handler?.command === 'string' ? handler.command : '';
+  const commandWindows = typeof handler?.commandWindows === 'string' ? handler.commandWindows : '';
+  return (command.includes('protect-originals.mjs') || commandWindows.includes('protect-originals.mjs'))
+    && (command.includes('PIECEMAKER_HOOK_CLIENT=codex') || commandWindows.includes('PIECEMAKER_HOOK_CLIENT=codex'));
+}
+
+function codexProtectionGroup(repoRoot) {
+  const script = codexProtectionScript(repoRoot);
+  return {
+    matcher: '*',
+    hooks: [{
+      type: 'command',
+      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
+      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
+      timeout: 5,
+      statusMessage: 'Protection des pièces originales PieceMaker',
+    }],
+  };
+}
+
+export function codexProtectionHookStatus(repoRoot, userHome = os.homedir()) {
+  const loaded = readCodexHooks(userHome);
+  if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
+  const expected = codexProtectionGroup(repoRoot);
+  const groups = Array.isArray(loaded.document.hooks.PreToolUse)
+    ? loaded.document.hooks.PreToolUse
+    : [];
+  const managed = groups.flatMap((group) => Array.isArray(group?.hooks) ? group.hooks : [])
+    .filter(isPieceMakerProtection);
+  const exact = groups.some((group) => group?.matcher === expected.matcher
+    && Array.isArray(group.hooks)
+    && group.hooks.some((handler) => JSON.stringify(handler) === JSON.stringify(expected.hooks[0])));
+  return {
+    ok: exact && managed.length === 1,
+    changed: false,
+    file: loaded.file,
+    reason: exact && managed.length === 1 ? null : 'hook-absent-ou-perime',
+  };
+}
+
+/** Fusionne uniquement le refus PreToolUse de lecture des pièces ; tous les hooks personnels sont conservés. */
+export function installCodexProtectionHook(repoRoot, userHome = os.homedir()) {
+  const loaded = readCodexHooks(userHome);
+  if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
+  const document = loaded.document;
+  const groups = Array.isArray(document.hooks.PreToolUse)
+    ? document.hooks.PreToolUse
+    : [];
+  const preserved = [];
+  for (const group of groups) {
+    if (!group || typeof group !== 'object' || Array.isArray(group)) {
+      preserved.push(group);
+      continue;
+    }
+    const hooks = Array.isArray(group.hooks) ? group.hooks.filter((handler) => !isPieceMakerProtection(handler)) : [];
+    if (hooks.length || !Array.isArray(group.hooks)) preserved.push({ ...group, hooks });
+  }
+  document.description ||= 'Hooks locaux Codex, dont la sentinelle d’anonymisation PieceMaker.';
+  document.hooks.PreToolUse = [...preserved, codexProtectionGroup(repoRoot)];
   const output = `${JSON.stringify(document, null, 2)}\n`;
   let current = null;
   try { current = fs.readFileSync(loaded.file, 'utf8'); } catch { /* fichier absent */ }
@@ -218,6 +299,7 @@ export function codexSkillStatus(repoRoot, userHome, relativePath) {
 export function registerCodexSkill(repoRoot, userHome, relativePath) {
   const skill = codexSkillOf(repoRoot, userHome, relativePath);
   if (!skill) return null;
+  if (fs.existsSync(path.join(process.env.PIECEMAKER_HOME || path.join(userHome, '.piecemaker'), 'library-backend', 'centralized.json'))) return { slug: skill.slug, target: skill.target, state: 'library', note: 'Activation gérée par la bibliothèque.' };
   const current = codexSkillStatus(repoRoot, userHome, relativePath);
   if (current.state === 'linked') return current;
   if (current.state === 'conflict') {

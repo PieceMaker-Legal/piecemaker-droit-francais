@@ -14,8 +14,10 @@ import { createRequire } from 'node:module';
 import { log } from '../lib/ui.mjs';
 import { REPO_ROOT, commandExists } from '../lib/platform.mjs';
 import {
+  codexProtectionHookStatus,
   codexSessionHookStatus,
   codexSkillStatus,
+  installCodexProtectionHook,
   installCodexSessionHook,
   repositoryCodexSkills,
   syncCodexSkills,
@@ -42,7 +44,9 @@ function dependencies(overrides = {}) {
     log,
     codexSkillStatus,
     codexSessionHookStatus,
+    codexProtectionHookStatus,
     installCodexSessionHook,
+    installCodexProtectionHook,
     repositoryCodexSkills,
     syncCodexSkills,
     loadConfig,
@@ -82,16 +86,24 @@ export async function install(ctx, overrides = {}) {
   } else {
     ops.log.detail(`Badge d’anonymisation Codex ${sessionHook.changed ? 'enregistré' : 'déjà à jour'} dans ~/.codex/hooks.json.`);
   }
+  const protectionHook = ops.installCodexProtectionHook(REPO_ROOT, ops.userHome);
+  if (!protectionHook.ok) {
+    ops.log.warn(`Protection des pièces Codex non enregistrée : ${protectionHook.reason}.`);
+  } else {
+    ops.log.detail(`Protection des pièces Codex ${protectionHook.changed ? 'enregistrée' : 'déjà à jour'} dans ~/.codex/hooks.json.`);
+  }
   const instructions = ops.refreshRegisteredCaseRules(REPO_ROOT, ops.loadConfig());
   ops.log.detail(`${instructions.refreshed} dossier(s) juridique(s) muni(s) des instructions Codex/Claude.`);
   for (const failure of instructions.failed) {
     ops.log.warn(`Instructions non actualisées pour ${failure.folder} : ${failure.error}`);
   }
-  if (result.conflicts.length || !sessionHook.ok) {
+  if (result.conflicts.length || !sessionHook.ok || !protectionHook.ok) {
     return {
       status: 'partial',
       note: !sessionHook.ok
         ? `Badge d’anonymisation Codex non enregistré (${sessionHook.reason}).`
+        : !protectionHook.ok
+        ? `Protection des pièces Codex non enregistrée (${protectionHook.reason}).`
         : `${result.conflicts.length} skill(s) Codex personnel(s) homonyme(s) conservé(s).`,
     };
   }
@@ -121,6 +133,10 @@ export async function check(_ctx, overrides = {}) {
   const sessionHook = ops.codexSessionHookStatus(REPO_ROOT, ops.userHome);
   if (!sessionHook.ok) {
     return { status: 'partial', note: `Badge d’anonymisation Codex absent ou périmé (${sessionHook.reason}).` };
+  }
+  const protectionHook = ops.codexProtectionHookStatus(REPO_ROOT, ops.userHome);
+  if (!protectionHook.ok) {
+    return { status: 'partial', note: `Protection des pièces Codex absente ou périmée (${protectionHook.reason}).` };
   }
   return { status: 'done', note: '' };
 }

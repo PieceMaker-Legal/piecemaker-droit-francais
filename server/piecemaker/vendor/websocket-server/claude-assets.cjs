@@ -176,6 +176,7 @@ function claudeAssetStatus(repoRoot, userHome, relativePath) {
 function registerClaudeAsset(repoRoot, userHome, relativePath) {
   const asset = claudeAssetOf(repoRoot, userHome, relativePath);
   if (!asset) return null;
+  if (require('../../library/policy.cjs').libraryIsCentralized(userHome)) return { kind: asset.kind, slug: asset.slug, target: asset.target, state: 'library', note: 'Activation gérée par la bibliothèque.' };
   if (!fs.existsSync(asset.source)) {
     return { kind: asset.kind, slug: asset.slug, target: asset.target, state: 'missing' };
   }

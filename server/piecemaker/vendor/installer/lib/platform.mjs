@@ -22,6 +22,9 @@ export const REPO_ROOT = path.resolve(
   '..'
 );
 
+/** Root of the git repository this installer is vendored into (server/piecemaker/vendor/../../..). */
+export const GIT_REPO_ROOT = path.resolve(REPO_ROOT, '..', '..', '..');
+
 /** Per-user PieceMaker directory, replacing Electron's userData path. */
 export const HOME_DIR = process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
 
