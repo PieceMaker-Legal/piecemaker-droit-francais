@@ -127,4 +127,51 @@ describe('CaseMappingSection', () => {
     expect(screen.getAllByText('Alice').length).toBe(2);
     expect(screen.getByText('Profil lié')).toBeTruthy();
   });
+
+  it('ré-ancre les liens historiques sur les codes courants au rechargement', async () => {
+    pmGetCached.mockResolvedValue({
+      name: 'mapping_default.json',
+      exists: true,
+      mapping: {
+        Alice: 'CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_01',
+        Bob: 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01',
+      },
+      reverse_mapping: {
+        CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_01: ['Alice'],
+        ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01: ['Bob'],
+      },
+      informations_dossier: normalizeProcedureInfo({
+        parties_clientes: [{
+          type: 'personne_physique',
+          nom: 'Alice',
+          mapping_assignments: [{
+            field: 'identite',
+            code: 'CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_01',
+            original_code: 'PERSONNE_PHYSIQUE_01',
+            category: 'personnes_physiques',
+            principal: 'Alice',
+            variants: ['Alice'],
+          }],
+        }],
+        parties_adverses: [{
+          type: 'personne_physique',
+          nom: 'Bob',
+          mapping_assignments: [{
+            field: 'identite',
+            code: 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01',
+            original_code: 'PERSONNE_PHYSIQUE_02',
+            category: 'personnes_physiques',
+            principal: 'Bob',
+            variants: ['Bob'],
+          }],
+        }],
+        relations: [{ source: 'PERSONNE_PHYSIQUE_01', target: 'PERSONNE_PHYSIQUE_02', role: 'Dirigeant' }],
+      }),
+    });
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getAllByText('Alice').length).toBeGreaterThan(0));
+    expect(screen.getByText('Profil lié')).toBeTruthy();
+    expect((screen.getByLabelText('Lien avec Alice') as HTMLSelectElement).value).toBe('Dirigeant');
+  });
 });
