@@ -209,7 +209,7 @@ export function createTimesheetService(
     }
 
     return {
-      entries: store.list(query.scope === 'project' ? query.projectId : undefined),
+      entries: store.list(query.scope === 'project' ? query.projectId : undefined).map(toPublicEntry),
       refreshedAt: new Date().toISOString(),
       refreshedCount,
       skippedCount,
