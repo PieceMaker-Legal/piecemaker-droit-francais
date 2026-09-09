@@ -5,7 +5,9 @@ import {
   applyProcedureParties,
   buildMappingDocument,
   groupMappingByCode,
+  normalizeProcedureInfo,
   principalPartyOptions,
+  profileRelationshipId,
   procedureSummary,
 } from '@/piecemaker/dossier/sections/MappingModel';
 
@@ -88,5 +90,41 @@ describe('MappingModel', () => {
       parties_clientes: [{ type: 'personne_physique', civilite: 'Mme', nom: 'Claire Reynaud', adresse: 'Secret' }],
       parties_adverses: [{ type: 'societe', forme_sociale: 'SARL', societe_nom: 'Alpha', siren: '123456789' }],
     })).toEqual({ client: ['Mme Claire Reynaud'], adverse: ['SARL Alpha'] });
+  });
+
+  it('normalise les liens de profils avec un identifiant stable', () => {
+    const stableId = profileRelationshipId('PERSONNE_MORALE_01', 'PERSONNE_PHYSIQUE_01', 'Dirigeant');
+    expect(normalizeProcedureInfo({
+      relations: [
+        { source: ' PERSONNE_MORALE_01 ', target: ' PERSONNE_PHYSIQUE_01 ', role: ' Dirigeant ' },
+        { id: 'relation-actionnaire', source: 'PERSONNE_MORALE_01', target: 'PERSONNE_PHYSIQUE_02', role: 'Actionnaire' },
+        { id: 'relation-actionnaire', source: 'PERSONNE_MORALE_02', target: 'PERSONNE_PHYSIQUE_02', role: 'Avocat' },
+        { source: 'PERSONNE_MORALE_01', target: 'PERSONNE_PHYSIQUE_01', role: 'Dirigeant' },
+        { source: 'PERSONNE_MORALE_01', target: 'PERSONNE_MORALE_01', role: 'Dirigeant' },
+        { source: 'PERSONNE_MORALE_01', target: 'PERSONNE_PHYSIQUE_03', role: ' ' },
+      ],
+    }).relations).toEqual([
+      { id: stableId, source: 'PERSONNE_MORALE_01', target: 'PERSONNE_PHYSIQUE_01', role: 'Dirigeant' },
+      { id: 'relation-actionnaire', source: 'PERSONNE_MORALE_01', target: 'PERSONNE_PHYSIQUE_02', role: 'Actionnaire' },
+    ]);
+  });
+
+  it('conserve les relations nommées lors de l’attribution des parties', () => {
+    const assigned = applyProcedureParties({ mapping: { Alice: 'PERSONNE_PHYSIQUE_01' }, reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice'] } }, {}, {
+      parties_clientes: [{ type: 'personne_physique', position: 'demandeur', nom: 'Alice' }],
+      parties_adverses: [],
+      relations: [{ id: 'relation-conseil', source: 'PERSONNE_PHYSIQUE_01', target: 'PERSONNE_PHYSIQUE_02', role: 'Avocat' }],
+    });
+    expect(assigned.informations_dossier.relations).toEqual([
+      { id: 'relation-conseil', source: 'CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_01', target: 'PERSONNE_PHYSIQUE_02', role: 'Avocat' },
+    ]);
+    const reassigned = applyProcedureParties(assigned, assigned.informations_dossier, {
+      parties_clientes: [{ type: 'personne_physique', position: 'appelant', nom: 'Alice' }],
+      parties_adverses: [],
+      relations: assigned.informations_dossier.relations,
+    });
+    expect(reassigned.informations_dossier.relations).toEqual([
+      { id: 'relation-conseil', source: 'CLIENT_APPELANT_PERSONNE_PHYSIQUE_01', target: 'PERSONNE_PHYSIQUE_02', role: 'Avocat' },
+    ]);
   });
 });
