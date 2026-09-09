@@ -9,6 +9,8 @@ const STATE_FILE = path.join(PIECEMAKER_HOME, 'state.json');
 
 export const COMPONENTS = [
   { id: '01-prerequis', label: 'Prérequis système', timeout: 2 * 60_000 },
+  { id: '06-hooks', label: 'Protection des pièces (hooks Claude Code)', timeout: 2 * 60_000 },
+  { id: '09-codex-plugin', label: 'Protection des pièces (hooks Codex)', timeout: 2 * 60_000 },
   { id: '03-python-gliner', label: 'Python, GLiNER & anonymisation', timeout: 45 * 60_000 },
   { id: '03b-python-graphify', label: 'Graphify (graphe juridique)', timeout: 15 * 60_000 },
   { id: '04-conversion-md', label: 'Conversion de documents en Markdown', timeout: 10 * 60_000 },
