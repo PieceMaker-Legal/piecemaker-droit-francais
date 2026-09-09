@@ -40,9 +40,17 @@ export type ProcedureParty = {
   mapping_assignments: MappingAssignment[];
 };
 
+export type ProfileRelationship = {
+  id: string;
+  source: string;
+  target: string;
+  role: string;
+};
+
 export type ProcedureInfo = {
   parties_clientes: ProcedureParty[];
   parties_adverses: ProcedureParty[];
+  relations: ProfileRelationship[];
 };
 
 export type MappingDocument = {
@@ -121,6 +129,28 @@ function normalizeAssignments(value: unknown): MappingAssignment[] {
       variants: unique(Array.isArray(assignment.variants) ? assignment.variants : []),
     };
   }).filter((assignment) => assignment.code && assignment.variants.length);
+}
+
+export function profileRelationshipId(source: unknown, target: unknown, role: unknown): string {
+  return `relation:${clean(source)}\u0000${clean(target)}\u0000${clean(role)}`;
+}
+
+function normalizeRelationships(value: unknown): ProfileRelationship[] {
+  if (!Array.isArray(value)) return [];
+  const seenIds = new Set<string>();
+  const seenRelationships = new Set<string>();
+  return value.flatMap((candidate) => {
+    const relation = candidate && typeof candidate === 'object' ? candidate as Record<string, unknown> : {};
+    const source = clean(relation.source);
+    const target = clean(relation.target);
+    const role = clean(relation.role);
+    const relationshipKey = `${source}\u0000${target}\u0000${role}`;
+    const id = clean(relation.id) || profileRelationshipId(source, target, role);
+    if (!source || !target || !role || source === target || seenIds.has(id) || seenRelationships.has(relationshipKey)) return [];
+    seenIds.add(id);
+    seenRelationships.add(relationshipKey);
+    return [{ id, source, target, role }];
+  });
 }
 
 function normalizeParty(raw: unknown, side: 'client' | 'adversaire'): ProcedureParty {
@@ -220,6 +250,7 @@ export function normalizeProcedureInfo(info: unknown = {}): ProcedureInfo {
   return {
     parties_clientes: (Array.isArray(source.parties_clientes) ? source.parties_clientes : []).map((party) => normalizeParty(party, 'client')),
     parties_adverses: (Array.isArray(source.parties_adverses) ? source.parties_adverses : []).map((party) => normalizeParty(party, 'adversaire')),
+    relations: normalizeRelationships(source.relations),
   };
 }
 
@@ -345,6 +376,23 @@ function applySideAssignments(
   });
 }
 
+function remapProfileRelationships(
+  relationships: ProfileRelationship[],
+  previousDocument: Pick<MappingDocument, 'mapping' | 'reverse_mapping'>,
+  nextDocument: Pick<MappingDocument, 'mapping' | 'reverse_mapping'>,
+): ProfileRelationship[] {
+  const replacements = new Map<string, string>();
+  for (const group of groupMappingByCode(previousDocument.mapping, previousDocument.reverse_mapping)) {
+    const replacement = clean(nextDocument.mapping[group.principal]);
+    if (replacement && replacement !== group.code) replacements.set(group.code, replacement);
+  }
+  return relationships.map((relationship) => ({
+    ...relationship,
+    source: replacements.get(relationship.source) || relationship.source,
+    target: replacements.get(relationship.target) || relationship.target,
+  }));
+}
+
 export function applyProcedureParties(
   mappingDocument: Partial<MappingDocument> = {},
   previousInfo: unknown = {},
@@ -357,5 +405,6 @@ export function applyProcedureParties(
   const parties_clientes = applySideAssignments(document, info.parties_clientes, 'client', claimedVariants);
   const parties_adverses = applySideAssignments(document, info.parties_adverses, 'adversaire', claimedVariants);
   const rebuilt = buildMappingDocument(groupMappingByCode(document.mapping, document.reverse_mapping));
-  return { ...rebuilt, informations_dossier: { parties_clientes, parties_adverses } };
+  const relations = remapProfileRelationships(info.relations, base, rebuilt);
+  return { ...rebuilt, informations_dossier: { parties_clientes, parties_adverses, relations } };
 }
