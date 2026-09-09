@@ -135,6 +135,28 @@ function normalizeProcedureParty(raw, side) {
   };
 }
 
+function relationshipId(source, target, role) {
+  return `relation:${source}\u0000${target}\u0000${role}`;
+}
+
+function normalizeProfileRelationships(value) {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set();
+  const relationships = new Set();
+  return value.flatMap((raw) => {
+    const relationship = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    const source = cleanMappingString(relationship.source);
+    const target = cleanMappingString(relationship.target);
+    const role = cleanMappingString(relationship.role);
+    const id = cleanMappingString(relationship.id) || relationshipId(source, target, role);
+    const key = `${source}\u0000${target}\u0000${role}`;
+    if (!source || !target || !role || source === target || ids.has(id) || relationships.has(key)) return [];
+    ids.add(id);
+    relationships.add(key);
+    return [{ id, source, target, role }];
+  });
+}
+
 function normalizeProcedureInfo(raw) {
   const info = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   return {
@@ -142,6 +164,7 @@ function normalizeProcedureInfo(raw) {
       .map((party) => normalizeProcedureParty(party, 'client')),
     parties_adverses: (Array.isArray(info.parties_adverses) ? info.parties_adverses : [])
       .map((party) => normalizeProcedureParty(party, 'adversaire')),
+    relations: normalizeProfileRelationships(info.relations),
   };
 }
 
