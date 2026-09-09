@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { pmGetCached, pmPut, invalidatePmGet } = vi.hoisted(() => ({
@@ -84,5 +84,47 @@ describe('CaseMappingSection', () => {
     await waitFor(() => expect(screen.getByText('Nom complet — variant principal')).toBeTruthy());
     expect(screen.queryByText('Dénomination — variant principal')).toBeNull();
     expect(screen.getByDisplayValue(lawyerPrincipal)).toBeTruthy();
+  });
+
+  it('conserve un lien glissé après son enregistrement', async () => {
+    const relationResponse = {
+      name: 'mapping_default.json',
+      exists: true,
+      mapping: { Alice: 'PERSONNE_PHYSIQUE_01', Bob: 'PERSONNE_PHYSIQUE_02' },
+      reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice'], PERSONNE_PHYSIQUE_02: ['Bob'] },
+      informations_dossier: normalizeProcedureInfo(),
+    };
+    pmGetCached.mockResolvedValue(relationResponse);
+    pmPut.mockImplementation(async (_path: string, body: Record<string, unknown>) => ({ ...relationResponse, ...body, commit: { created: false } }));
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
+
+    const aliceCard = screen.getByText('Alice').closest('article');
+    const bobCard = screen.getByText('Bob').closest('article');
+    expect(aliceCard).toBeTruthy();
+    expect(bobCard).toBeTruthy();
+    fireEvent.click(within(aliceCard!).getByRole('button', { name: 'Client' }));
+    fireEvent.click(within(bobCard!).getByRole('button', { name: 'Adverse' }));
+    const updatedAliceCard = screen.getByText('Alice').closest('article');
+    const updatedBobCard = screen.getByText('Bob').closest('article');
+    expect(updatedAliceCard).toBeTruthy();
+    expect(updatedBobCard).toBeTruthy();
+    fireEvent.dragStart(updatedAliceCard!, { dataTransfer: { effectAllowed: '', setData: vi.fn(), getData: vi.fn(() => 'PERSONNE_PHYSIQUE_01') } });
+    const bobDropZone = updatedBobCard!.querySelector('[class*="border-dashed"]');
+    expect(bobDropZone).toBeTruthy();
+    fireEvent.drop(bobDropZone!, { dataTransfer: { getData: vi.fn(() => 'PERSONNE_PHYSIQUE_01') } });
+    fireEvent.change(screen.getByLabelText('Lien avec Alice'), { target: { value: 'Dirigeant' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les profils' }));
+    });
+
+    await waitFor(() => expect(pmPut).toHaveBeenCalled());
+    expect((pmPut.mock.calls[0][1] as { informations_dossier: { relations: Array<{ source: string; target: string; role: string }> } }).informations_dossier.relations).toEqual([
+      { id: 'relation:PERSONNE_PHYSIQUE_01\u0000PERSONNE_PHYSIQUE_02\u0000', source: 'CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_01', original_source: '', target: 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01', role: 'Dirigeant' },
+    ]);
+    expect(screen.getAllByText('Alice').length).toBe(2);
+    expect(screen.getByText('Profil lié')).toBeTruthy();
   });
 });
