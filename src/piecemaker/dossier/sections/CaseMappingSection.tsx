@@ -187,12 +187,12 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
   const saveDocument = async (nextDocument: MappingDocument, successMessage: string) => {
     const data = await pmPut<MappingResponse>('/mapping', { case: caseId, ...nextDocument });
     invalidatePmGet('/mapping', { case: caseId });
-    await onRepositoryChange();
     const saved = normalizedDocument(data);
     setDocument(saved);
     setGroups(groupMappingByCode(saved.mapping, saved.reverse_mapping));
     setProfileInfo(saved.informations_dossier);
     setMessage(`${successMessage}${data.commit?.created ? ' et commité' : ''}.`);
+    await onRepositoryChange();
   };
 
   const saveProfiles = async () => {
