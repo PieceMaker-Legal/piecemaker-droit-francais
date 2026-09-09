@@ -12,15 +12,15 @@ type AdditionBundles = Record<string, Record<string, Record<string, unknown>>>;
 
 /** Case-file tab label, using each locale's term for a legal case file. */
 export const PIECEMAKER_I18N_ADDITIONS: AdditionBundles = {
-  fr:      { common: { tabs: { dossier: 'Dossier' } } },
-  en:      { common: { tabs: { dossier: 'Case file' } } },
-  es:      { common: { tabs: { dossier: 'Expediente' } } },
-  it:      { common: { tabs: { dossier: 'Fascicolo' } } },
-  de:      { common: { tabs: { dossier: 'Dossier' } } },
-  tr:      { common: { tabs: { dossier: 'Dava dosyası' } } },
-  ru:      { common: { tabs: { dossier: 'Досье' } } },
-  ja:      { common: { tabs: { dossier: '案件' } } },
-  ko:      { common: { tabs: { dossier: '사건' } } },
-  'zh-CN': { common: { tabs: { dossier: '案件' } } },
-  'zh-TW': { common: { tabs: { dossier: '案件' } } },
+  fr:      { common: { tabs: { dossier: 'Dossier', library: 'Bibliothèque' } } },
+  en:      { common: { tabs: { dossier: 'Case file', library: 'Library' } } },
+  es:      { common: { tabs: { dossier: 'Expediente', library: 'Biblioteca' } } },
+  it:      { common: { tabs: { dossier: 'Fascicolo', library: 'Biblioteca' } } },
+  de:      { common: { tabs: { dossier: 'Dossier', library: 'Bibliothek' } } },
+  tr:      { common: { tabs: { dossier: 'Dava dosyası', library: 'Kütüphane' } } },
+  ru:      { common: { tabs: { dossier: 'Досье', library: 'Библиотека' } } },
+  ja:      { common: { tabs: { dossier: '案件', library: 'ライブラリ' } } },
+  ko:      { common: { tabs: { dossier: '사건', library: '라이브러리' } } },
+  'zh-CN': { common: { tabs: { dossier: '案件', library: '资料库' } } },
+  'zh-TW': { common: { tabs: { dossier: '案件', library: '資料庫' } } },
 };
