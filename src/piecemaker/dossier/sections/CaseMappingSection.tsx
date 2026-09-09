@@ -40,41 +40,10 @@ const CUSTOM_RELATIONSHIP_ROLE = 'custom';
 const RELATIONSHIP_SELECT_CLASS = 'h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 function normalizedDocument(data: Partial<MappingDocument>): MappingDocument {
-  const mapping = data.mapping || {};
-  const reverseMapping = data.reverse_mapping || {};
-  const information = normalizeProcedureInfo(data.informations_dossier);
-  const codeAliases = new Map<string, string>();
-  for (const party of [...information.parties_clientes, ...information.parties_adverses]) {
-    for (const assignment of party.mapping_assignments) {
-      if (assignment.original_code && assignment.code) codeAliases.set(assignment.original_code, assignment.code);
-      for (const variant of assignment.variants) {
-        const currentCode = mapping[variant];
-        if (currentCode && assignment.code) codeAliases.set(currentCode, assignment.code);
-      }
-    }
-  }
-  const resolveCurrentCode = (code: string): string => {
-    const seen = new Set<string>();
-    let current = code;
-    while (!seen.has(current)) {
-      seen.add(current);
-      const next = codeAliases.get(current);
-      if (!next || next === current) break;
-      current = next;
-    }
-    return current;
-  };
   return {
-    mapping,
-    reverse_mapping: reverseMapping,
-    informations_dossier: {
-      ...information,
-      relations: information.relations.map((relation) => ({
-        ...relation,
-        source: resolveCurrentCode(relation.source),
-        target: resolveCurrentCode(relation.target),
-      })),
-    },
+    mapping: data.mapping || {},
+    reverse_mapping: data.reverse_mapping || {},
+    informations_dossier: normalizeProcedureInfo(data.informations_dossier),
   };
 }
 
