@@ -202,7 +202,7 @@ function entityCategory(entityType) {
 function codeCategory(code) {
   if (code.startsWith('SIREN_')) return 'siren';
   if (code.startsWith('ADRESSE_') || code.startsWith('LIEU_NAISSANCE_')) return 'adresses';
-  if (code.includes('PERSONNE_PHYSIQUE_') || code.startsWith('DIRIGEANT_')) return 'personnes_physiques';
+  if (code.includes('PERSONNE_PHYSIQUE_') || code.startsWith('DIRIGEANT_') || code.startsWith('AVOCAT_')) return 'personnes_physiques';
   // Sociétés : repli/legacy (…MORALE…, SOCIETE_…) et codes à sigle (SA_1, GMBH_2).
   // Testé après les familles distinctives, qui ne portent aucun sigle.
   if (isSocieteCode(code)) return 'societes';
