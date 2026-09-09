@@ -132,7 +132,7 @@ test('un article lu avec consulter_article est vérifiable et titré par son cod
     'Lien: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032040777', '',
     'Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits.',
   ].join('\n');
-  const message = (fields: Omit<Parameters<typeof createNormalizedMessage>[0], 'provider'>) => createNormalizedMessage({ ...fields, provider: 'claude', sessionId: 'session' });
+  const message = (fields: Omit<Parameters<typeof createNormalizedMessage>[0], 'provider'> & { kind: 'tool_use' | 'tool_result' }) => createNormalizedMessage({ ...fields, provider: 'claude', sessionId: 'session' });
   turn.observe(message({ kind: 'tool_use', toolId: 'call-1', toolName: 'mcp__legifrance__consulter_article', toolInput: { article_id: 'LEGIARTI000032040777' } }));
   turn.observe(message({ kind: 'tool_result', toolId: 'call-1', content: resultat }));
   turn.text(block([{ ref: 1, decision_id: 'LEGIARTI000032040777', quote: 'tiennent lieu de loi à ceux qui les ont faits' }]));
