@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { sessionsService } from '@/modules/providers/index.js';
-import type { NormalizedMessage } from '@/shared/types.js';
+import type { FetchHistoryResult, NormalizedMessage } from '@/shared/types.js';
 import { AppError } from '@/shared/utils.js';
 
 import type { TimesheetEntry } from './store.js';
@@ -22,12 +22,14 @@ export type TimesheetRefreshError = {
 };
 
 export type TimesheetRefreshResult = {
-  entries: TimesheetEntry[];
+  entries: TimesheetPublicEntry[];
   refreshedAt: string;
   refreshedCount: number;
   skippedCount: number;
   errors: TimesheetRefreshError[];
 };
+
+export type TimesheetPublicEntry = Omit<TimesheetEntry, 'transcriptFingerprint' | 'extractedAt'>;
 
 type SessionRecord = ReturnType<typeof sessionsDb.getAllSessions>[number];
 
@@ -38,7 +40,8 @@ type TimesheetStore = {
 };
 
 type TimesheetDependencies = {
-  sessions: Pick<typeof sessionsDb, 'getAllSessions' | 'getSessionsByProjectPath'>;
+  sessions: Pick<typeof sessionsDb, 'getAllSessions' | 'getSessionsByProjectPath'> &
+    Partial<Pick<typeof sessionsDb, 'getArchivedSessions'>>;
   projects: Pick<typeof projectsDb, 'getProjectById' | 'getProjectPath'>;
   history: Pick<typeof sessionsService, 'fetchHistory'>;
 };
@@ -58,7 +61,7 @@ function projectDisplayName(projectPath: string, customName: string | null | und
 
 function messageText(message: NormalizedMessage): string {
   if (message.kind !== 'text' || message.role !== 'assistant') return '';
-  const text = message.content ?? message.displayText ?? message.text ?? '';
+  const text = message.content ?? message.displayText ?? '';
   return typeof text === 'string' ? text.trim() : '';
 }
 
@@ -68,16 +71,38 @@ function validTimestamp(value: string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function fingerprint(session: SessionRecord, dependencies: TimesheetDependencies): string {
-  let fileState = null;
-  if (session.jsonl_path) {
-    try {
-      const stats = fs.statSync(session.jsonl_path);
-      fileState = { size: stats.size, modified: stats.mtimeMs };
-    } catch {
-      fileState = { missing: true };
+function hashFile(filePath: string): string {
+  const hash = createHash('sha256');
+  let descriptor: number | undefined;
+  try {
+    descriptor = fs.openSync(filePath, 'r');
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    let bytesRead = 0;
+    do {
+      bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, null);
+      if (bytesRead > 0) hash.update(buffer.subarray(0, bytesRead));
+    } while (bytesRead > 0);
+    return hash.digest('hex');
+  } catch {
+    return 'missing';
+  } finally {
+    if (descriptor !== undefined) {
+      try { fs.closeSync(descriptor); } catch { }
     }
   }
+}
+
+function hashHistory(messages: NormalizedMessage[]): string {
+  const hash = createHash('sha256');
+  for (const message of messages) hash.update(JSON.stringify(message));
+  return hash.digest('hex');
+}
+
+function fingerprint(
+  session: SessionRecord,
+  dependencies: TimesheetDependencies,
+  messages?: NormalizedMessage[],
+): string {
   const project = session.project_path ? dependencies.projects.getProjectPath(session.project_path) : null;
   return createHash('sha256').update(JSON.stringify({
     sessionId: session.session_id,
@@ -89,7 +114,9 @@ function fingerprint(session: SessionRecord, dependencies: TimesheetDependencies
     projectName: project?.custom_project_name ?? null,
     createdAt: session.created_at,
     updatedAt: session.updated_at,
-    fileState,
+    transcript: session.jsonl_path
+      ? { path: session.jsonl_path, content: hashFile(session.jsonl_path) }
+      : { history: messages ? hashHistory(messages) : 'pending' },
   })).digest('hex');
 }
 
@@ -140,9 +167,17 @@ export function createTimesheetService(
   }
 
   function sessionsFor(query: TimesheetQuery): SessionRecord[] {
-    if (query.scope === 'all') return dependencies.sessions.getAllSessions();
-    const project = resolveProject(query.projectId as string);
-    return dependencies.sessions.getSessionsByProjectPath(project.project_path);
+    const projectPath = query.scope === 'project'
+      ? resolveProject(query.projectId as string).project_path
+      : null;
+    const activeSessions = projectPath
+      ? dependencies.sessions.getSessionsByProjectPath(projectPath)
+      : dependencies.sessions.getAllSessions();
+    const archivedSessions = dependencies.sessions.getArchivedSessions?.() ?? [];
+    const sessions = projectPath
+      ? [...activeSessions, ...archivedSessions.filter((session) => session.project_path === projectPath)]
+      : [...activeSessions, ...archivedSessions];
+    return [...new Map(sessions.map((session) => [session.session_id, session])).values()];
   }
 
   async function refreshNow(query: TimesheetQuery): Promise<TimesheetRefreshResult> {
@@ -152,15 +187,20 @@ export function createTimesheetService(
     const errors: TimesheetRefreshError[] = [];
 
     for (const session of sessions) {
-      const entryFingerprint = fingerprint(session, dependencies);
-      const existing = store.findBySessionId(session.session_id);
-      if (existing?.transcriptFingerprint === entryFingerprint) {
-        skippedCount += 1;
-        continue;
-      }
       try {
-        const history = await dependencies.history.fetchHistory(session.session_id, { limit: null, offset: 0 });
-        const summary = summarizeHistoryWithDependencies(session, history.messages, entryFingerprint, dependencies);
+        const existing = store.findBySessionId(session.session_id);
+        const hasJsonlTranscript = Boolean(session.jsonl_path);
+        let history: FetchHistoryResult | undefined;
+        let entryFingerprint = hasJsonlTranscript ? fingerprint(session, dependencies) : '';
+        if (!hasJsonlTranscript || !existing || existing.transcriptFingerprint !== entryFingerprint) {
+          history = await dependencies.history.fetchHistory(session.session_id, { limit: null, offset: 0 });
+          if (!hasJsonlTranscript) entryFingerprint = fingerprint(session, dependencies, history.messages);
+        }
+        if (existing?.transcriptFingerprint === entryFingerprint) {
+          skippedCount += 1;
+          continue;
+        }
+        const summary = summarizeHistoryWithDependencies(session, history?.messages ?? [], entryFingerprint, dependencies);
         store.upsert({ ...summary, extractedAt: new Date().toISOString() });
         refreshedCount += 1;
       } catch {
@@ -192,11 +232,28 @@ export function createTimesheetService(
   }
 
   return {
-    list(query: TimesheetQuery): TimesheetEntry[] {
+    list(query: TimesheetQuery): TimesheetPublicEntry[] {
       if (query.scope === 'project') resolveProject(query.projectId as string);
-      return store.list(query.scope === 'project' ? query.projectId : undefined);
+      return store.list(query.scope === 'project' ? query.projectId : undefined).map(toPublicEntry);
     },
     refresh,
+  };
+}
+
+function toPublicEntry(entry: TimesheetEntry): TimesheetPublicEntry {
+  return {
+    sessionId: entry.sessionId,
+    provider: entry.provider,
+    projectId: entry.projectId,
+    projectPath: entry.projectPath,
+    projectName: entry.projectName,
+    sessionName: entry.sessionName,
+    startedAt: entry.startedAt,
+    endedAt: entry.endedAt,
+    elapsedSeconds: entry.elapsedSeconds,
+    activeSeconds: entry.activeSeconds,
+    conclusion: entry.conclusion,
+    conclusionAt: entry.conclusionAt,
   };
 }
 

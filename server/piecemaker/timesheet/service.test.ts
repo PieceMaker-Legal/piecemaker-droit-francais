@@ -90,3 +90,51 @@ test('coalesce les actualisations identiques', async () => {
   resolveHistory?.({ messages: [], total: 0, hasMore: false, offset: 0, limit: null });
   await first;
 });
+
+test('réindexe un fournisseur sans JSONL quand son historique change', async () => {
+  const store = makeStore();
+  const session = makeSession('session-store');
+  let messages: FetchHistoryResult['messages'] = [
+    { id: '1', sessionId: 'session-store', timestamp: '2026-09-01T09:00:00.000Z', provider: 'cursor', kind: 'text', role: 'assistant', content: 'Ancienne conclusion' },
+  ];
+  const service = createTimesheetService(store, {
+    sessions: { getAllSessions: () => [session], getSessionsByProjectPath: () => [session] },
+    projects: {
+      getProjectById: () => ({ project_id: 'project-1', project_path: '/dossier', custom_project_name: null, isStarred: 0, isArchived: 0 }),
+      getProjectPath: () => ({ project_id: 'project-1', project_path: '/dossier', custom_project_name: null, isStarred: 0, isArchived: 0 }),
+    },
+    history: { fetchHistory: async () => ({ messages, total: messages.length, hasMore: false, offset: 0, limit: null }) },
+  });
+
+  const first = await service.refresh({ scope: 'all' });
+  messages = [{ ...messages[0], content: 'Nouvelle conclusion' }];
+  const second = await service.refresh({ scope: 'all' });
+
+  assert.equal(first.refreshedCount, 1);
+  assert.equal(second.refreshedCount, 1);
+  assert.equal(second.entries[0].conclusion, 'Nouvelle conclusion');
+});
+
+test('inclut les sessions archivées dans les deux périmètres', async () => {
+  const store = makeStore();
+  const session = makeSession('session-archived');
+  const dependencies = {
+    sessions: {
+      getAllSessions: () => [],
+      getSessionsByProjectPath: () => [],
+      getArchivedSessions: () => [session],
+    },
+    projects: {
+      getProjectById: () => ({ project_id: 'project-1', project_path: '/dossier', custom_project_name: null, isStarred: 0, isArchived: 1 }),
+      getProjectPath: () => ({ project_id: 'project-1', project_path: '/dossier', custom_project_name: null, isStarred: 0, isArchived: 1 }),
+    },
+    history: { fetchHistory: async () => ({ messages: [], total: 0, hasMore: false, offset: 0, limit: null }) },
+  };
+  const service = createTimesheetService(store, dependencies);
+
+  const all = await service.refresh({ scope: 'all' });
+  const project = await service.refresh({ scope: 'project', projectId: 'project-1' });
+
+  assert.equal(all.entries.length, 1);
+  assert.equal(project.entries.length, 1);
+});

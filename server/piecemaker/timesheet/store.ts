@@ -37,6 +37,55 @@ type TimesheetEntryRow = {
   extracted_at: string;
 };
 
+const CURRENT_SCHEMA_VERSION = 1;
+type TimesheetDatabase = InstanceType<typeof Database>;
+
+function createSchema(database: TimesheetDatabase): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS timesheet_sessions (
+      session_id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      project_id TEXT,
+      project_path TEXT NOT NULL,
+      project_name TEXT NOT NULL,
+      session_name TEXT NOT NULL,
+      started_at TEXT,
+      ended_at TEXT,
+      elapsed_seconds INTEGER NOT NULL,
+      active_seconds INTEGER NOT NULL,
+      conclusion TEXT,
+      conclusion_at TEXT,
+      transcript_fingerprint TEXT NOT NULL,
+      extracted_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS timesheet_project_date
+      ON timesheet_sessions(project_id, started_at);
+    CREATE INDEX IF NOT EXISTS timesheet_date
+      ON timesheet_sessions(started_at);
+  `);
+}
+
+function migrate(database: TimesheetDatabase): void {
+  const currentVersion = Number(database.pragma('user_version', { simple: true }));
+  if (currentVersion > CURRENT_SCHEMA_VERSION) {
+    throw new Error('Timesheet database schema is newer than this server.');
+  }
+  createSchema(database);
+  if (currentVersion < 1) {
+    database.pragma(`user_version = ${CURRENT_SCHEMA_VERSION}`);
+  }
+}
+
+function secureDatabaseFiles(databasePath: string): void {
+  for (const filePath of [databasePath, `${databasePath}-wal`, `${databasePath}-shm`]) {
+    try {
+      fs.chmodSync(filePath, 0o600);
+    } catch {
+      continue;
+    }
+  }
+}
+
 function toEntry(row: TimesheetEntryRow): TimesheetEntry {
   return {
     sessionId: row.session_id,
@@ -61,31 +110,12 @@ export function createTimesheetStore(homeDir: string) {
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   fs.chmodSync(directory, 0o700);
   const databasePath = path.join(directory, 'timesheet.sqlite');
-  const database = new Database(databasePath);
+  fs.closeSync(fs.openSync(databasePath, 'a', 0o600));
   fs.chmodSync(databasePath, 0o600);
+  const database = new Database(databasePath);
   database.pragma('journal_mode = WAL');
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS timesheet_sessions (
-      session_id TEXT PRIMARY KEY,
-      provider TEXT NOT NULL,
-      project_id TEXT,
-      project_path TEXT NOT NULL,
-      project_name TEXT NOT NULL,
-      session_name TEXT NOT NULL,
-      started_at TEXT,
-      ended_at TEXT,
-      elapsed_seconds INTEGER NOT NULL,
-      active_seconds INTEGER NOT NULL,
-      conclusion TEXT,
-      conclusion_at TEXT,
-      transcript_fingerprint TEXT NOT NULL,
-      extracted_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS timesheet_project_date
-      ON timesheet_sessions(project_id, started_at);
-    CREATE INDEX IF NOT EXISTS timesheet_date
-      ON timesheet_sessions(started_at);
-  `);
+  migrate(database);
+  secureDatabaseFiles(databasePath);
 
   const upsert = database.prepare(`
     INSERT INTO timesheet_sessions (
@@ -120,6 +150,7 @@ export function createTimesheetStore(homeDir: string) {
     databasePath,
     upsert(entry: TimesheetEntry): void {
       upsert.run(entry);
+      secureDatabaseFiles(databasePath);
     },
     findBySessionId(sessionId: string): TimesheetEntry | null {
       const row = findBySessionId.get(sessionId) as TimesheetEntryRow | undefined;
@@ -130,7 +161,7 @@ export function createTimesheetStore(homeDir: string) {
       return rows.map(toEntry);
     },
     close(): void {
-      database.close();
+      if (database.open) database.close();
     },
   };
 }
