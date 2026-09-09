@@ -22,6 +22,7 @@ const PROVIDERS: Array<{ id: LLMProvider; label: string }> = [
   { id: 'claude', label: 'Claude' },
   { id: 'codex', label: 'Codex' },
   { id: 'cursor', label: 'Cursor' },
+  { id: 'mistral', label: 'Mistral' },
   { id: 'opencode', label: 'OpenCode' },
 ];
 

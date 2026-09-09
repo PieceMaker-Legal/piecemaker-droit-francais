@@ -33,6 +33,7 @@ const PROVIDER_META: { id: LLMProvider; name: string }[] = [
   { id: "claude", name: "Anthropic" },
   { id: "codex", name: "OpenAI" },
   { id: "cursor", name: "Cursor" },
+  { id: "mistral", name: "Mistral AI" },
   { id: "opencode", name: "OpenCode" },
 ];
 
@@ -332,6 +333,10 @@ export default function ProviderSelectionEmptyState({
                 }),
                 codex: t("providerSelection.readyPrompt.codex", {
                   model: providerModels.codex,
+                }),
+                mistral: t("providerSelection.readyPrompt.mistral", {
+                  model: providerModels.mistral,
+                  defaultValue: "Ready with Mistral {{model}}",
                 }),
                 opencode: t("providerSelection.readyPrompt.opencode", {
                   model: providerModels.opencode,
