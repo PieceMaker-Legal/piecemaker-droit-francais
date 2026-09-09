@@ -1,0 +1,9 @@
+[mcp_servers.cloudcli-browser]
+command = "cloudcli"
+args = [ "browser-use-mcp" ]
+env_vars = [ ]
+enabled = true
+
+  [mcp_servers.cloudcli-browser.env]
+  CLOUDCLI_BROWSER_USE_MCP_TOKEN = "42991a787a66e20992ee74cbb84445a4ab7a26bb2c7d189396530e8a91bc168b"
+  CLOUDCLI_BROWSER_USE_API_URL = "http://127.0.0.1:3001/api/browser-use-mcp"

@@ -10,6 +10,9 @@
 const fs = require('fs');
 const path = require('path');
 
+/** Racine du dépôt git, quatre niveaux au-dessus de ce fichier vendorisé. */
+const GIT_REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+
 const DEPRECATED_MAPPING_HOOKS = new Set([
   'anonymize-read.mjs',
   'deanonymize-write.mjs',
@@ -227,6 +230,74 @@ function installClaudeHooks(repoRoot, userHome) {
 }
 
 /**
+ * Sentinelle SessionStart (proxy PII) — script unique, partagé avec Codex,
+ * hors de piecemaker-plugin/ (voir scripts/piecemaker/hooks/proxy-guard.mjs).
+ * Non sourcée depuis hooks.json : son placeholder ${CLAUDE_PLUGIN_ROOT} ne
+ * peut pas désigner un script qui n'est délibérément pas vendorisé.
+ */
+function sessionHookScriptPath() {
+  return path.join(GIT_REPO_ROOT, 'scripts', 'piecemaker', 'hooks', 'proxy-guard.mjs');
+}
+
+function sessionHookCommand() {
+  return `node "${sessionHookScriptPath().replaceAll('"', '\\"')}"`;
+}
+
+function isOwnSessionHook(hook) {
+  const command = typeof hook?.command === 'string' ? hook.command : '';
+  return command.includes('proxy-guard.mjs');
+}
+
+function claudeSessionHookStatus(userHome) {
+  const target = settingsPath(userHome);
+  const command = sessionHookCommand();
+  if (!fs.existsSync(target)) return { ok: false, reason: 'settings-absent', command };
+  const settings = readJson(target);
+  if (!settings) return { ok: false, reason: 'settings-invalide', command };
+  const groups = Array.isArray(settings.hooks?.SessionStart) ? settings.hooks.SessionStart : [];
+  const managed = groups.flatMap((group) => Array.isArray(group?.hooks) ? group.hooks : []).filter(isOwnSessionHook);
+  const exact = groups.some((group) => group?.matcher === 'startup|resume|clear'
+    && Array.isArray(group.hooks)
+    && group.hooks.some((hook) => hook?.type === 'command' && hook.command === command));
+  return { ok: exact && managed.length === 1, reason: exact && managed.length === 1 ? '' : 'hook-absent-ou-perime', command };
+}
+
+/** Fusionne uniquement la sentinelle SessionStart ; tous les hooks personnels sont conservés. */
+function installClaudeSessionHook(userHome) {
+  const target = settingsPath(userHome);
+  const command = sessionHookCommand();
+
+  let settings = {};
+  if (fs.existsSync(target)) {
+    settings = readJson(target);
+    if (!settings) return { ok: false, changed: false, reason: 'settings-invalide', command, settings: target };
+  }
+  if (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks)) settings.hooks = {};
+
+  const groups = Array.isArray(settings.hooks.SessionStart) ? settings.hooks.SessionStart : [];
+  const preserved = [];
+  for (const group of groups) {
+    if (!group || typeof group !== 'object' || Array.isArray(group)) {
+      preserved.push(group);
+      continue;
+    }
+    const hooks = Array.isArray(group.hooks) ? group.hooks.filter((hook) => !isOwnSessionHook(hook)) : [];
+    if (hooks.length || !Array.isArray(group.hooks)) preserved.push({ ...group, hooks });
+  }
+
+  const status = claudeSessionHookStatus(userHome);
+  if (status.ok) return { ok: true, changed: false, command, settings: target };
+
+  settings.hooks.SessionStart = [...preserved, {
+    matcher: 'startup|resume|clear',
+    hooks: [{ type: 'command', command, timeout: 45 }],
+  }];
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+  return { ok: true, changed: true, command, settings: target };
+}
+
+/**
  * statusLine Claude Code — même logique de matérialisation que les hooks,
  * mais pour une clé unique de settings.json (`statusLine`) plutôt qu'un
  * tableau. Une statusLine personnelle (non-PieceMaker) n'est jamais touchée.
@@ -298,9 +369,11 @@ function installClaudeStatusLine(repoRoot, userHome) {
 
 module.exports = {
   claudeHooksStatus,
+  claudeSessionHookStatus,
   claudeStatusLineStatus,
   directHookGroups,
   installClaudeHooks,
+  installClaudeSessionHook,
   installClaudeStatusLine,
   removeDeprecatedMappingHooks,
   settingsPath,

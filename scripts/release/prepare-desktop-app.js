@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { loadProductConfig } from '../../shared/product-config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -76,9 +77,7 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
     license: packageJson.license,
     type: 'module',
     main: 'electron/main.js',
-    dependencies: {
-      ws: packageJson.dependencies.ws,
-    },
+    dependencies: packageJson.dependencies,
     optionalDependencies: copiedOptionalDependencies,
     build: {
       appId: product.appId,
@@ -127,13 +126,6 @@ await copyRequired('public');
 await copyRequired('product.config.json');
 await copyRequired('shared/product-config.mjs');
 
-const copiedRuntimeDependencies = [];
-if (await copyNodeModule('ws')) {
-  copiedRuntimeDependencies.push('ws');
-} else {
-  throw new Error('Required desktop dependency is missing from node_modules: ws');
-}
-
 const copiedOptionalDependencies = {};
 for (const [name, version] of Object.entries(packageJson.optionalDependencies || {})) {
   if (await copyNodeModule(name)) {
@@ -159,8 +151,17 @@ await fs.writeFile(
   'utf8',
 );
 
+// Install the full dependency tree (including transitive deps and native
+// bindings like better-sqlite3, bcrypt, node-pty) into the staged app.
+// electron-builder packages whatever is on disk here, so this must be a
+// complete, resolvable node_modules rather than a hand-picked subset.
+console.log('Installing desktop app dependencies (npm install --omit=dev)…');
+execFileSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund'], {
+  cwd: stageDir,
+  stdio: 'inherit',
+});
+
 console.log(`Prepared thin desktop app at ${path.relative(rootDir, stageDir)}`);
-console.log(`Runtime dependencies: ${copiedRuntimeDependencies.join(', ')}`);
 if (Object.keys(copiedOptionalDependencies).length) {
-  console.log(`Optional dependencies: ${Object.keys(copiedOptionalDependencies).join(', ')}`);
+  console.log(`Pre-copied optional dependencies: ${Object.keys(copiedOptionalDependencies).join(', ')}`);
 }

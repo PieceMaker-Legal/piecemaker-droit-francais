@@ -17,14 +17,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { log, spinner } from '../lib/ui.mjs';
-import { REPO_ROOT, HOME_DIR, runCapture, ensureDir } from '../lib/platform.mjs';
+import { REPO_ROOT, GIT_REPO_ROOT, HOME_DIR, runCapture, ensureDir } from '../lib/platform.mjs';
 import { updateConfig } from '../lib/state.mjs';
 
 const require = createRequire(import.meta.url);
 const {
   claudeHooksStatus,
+  claudeSessionHookStatus,
   claudeStatusLineStatus,
   installClaudeHooks,
+  installClaudeSessionHook,
   installClaudeStatusLine,
 } = require('../../websocket-server/claude-hooks.cjs');
 
@@ -45,7 +47,7 @@ const HOOK_SCRIPTS = {
   commit: path.join(SCRIPTS_DIR, 'commit-track.mjs'),
   classify: path.join(SCRIPTS_DIR, 'classify-ai-documents.mjs'),
   billing: path.join(SCRIPTS_DIR, 'billing-track.mjs'),
-  proxyGuard: path.join(SCRIPTS_DIR, 'proxy-guard.mjs'),
+  proxyGuard: path.join(GIT_REPO_ROOT, 'scripts', 'piecemaker', 'hooks', 'proxy-guard.mjs'),
   statusline: path.join(SCRIPTS_DIR, 'statusline.mjs'),
 };
 
@@ -221,6 +223,13 @@ export async function install(ctx) {
   }
   log.ok(`${registration.registered} hook(s) PieceMaker ${registration.changed ? 'enregistré(s)' : 'déjà enregistré(s)'} directement dans ~/.claude/settings.json.`);
 
+  const sessionHook = installClaudeSessionHook(os.homedir());
+  if (!sessionHook.ok) {
+    log.warn(`Sentinelle proxy PII (SessionStart) non enregistrée : ${sessionHook.reason}.`);
+  } else {
+    log.ok(`Sentinelle proxy PII (SessionStart) ${sessionHook.changed ? 'enregistrée' : 'déjà à jour'} dans ~/.claude/settings.json.`);
+  }
+
   const statusLine = installClaudeStatusLine(REPO_ROOT, os.homedir());
   if (statusLine.conflict) {
     log.warn(`statusLine Claude Code personnelle détectée — laissée telle quelle (${statusLine.reason}). Bandeau d'état PieceMaker non installé.`);
@@ -240,13 +249,14 @@ export async function check(ctx) {
   const cfg = ctx.config || {};
   const configOk = Boolean(cfg.commits && cfg.billing);
   const hooksRegistered = claudeHooksStatus(REPO_ROOT, os.homedir()).ok;
+  const sessionHookRegistered = claudeSessionHookStatus(os.homedir()).ok;
   const statusLine = claudeStatusLineStatus(REPO_ROOT, os.homedir());
   const statusLineOk = statusLine.ok || statusLine.conflict; // une statusLine personnelle n'est pas une anomalie
 
   if (!scriptsExist || !hooksJsonExists) {
     return { status: 'failed', note: 'Fichiers du plugin manquants (scripts ou hooks.json) — réinstallez piecemaker-plugin/.' };
   }
-  if (!dirsExist || !configOk || !hooksRegistered) {
+  if (!dirsExist || !configOk || !hooksRegistered || !sessionHookRegistered) {
     return { status: 'partial', note: 'Scripts présents mais configuration, enregistrement Claude ou répertoires de facturation incomplets — relancez cette étape.' };
   }
   if (!statusLineOk) {

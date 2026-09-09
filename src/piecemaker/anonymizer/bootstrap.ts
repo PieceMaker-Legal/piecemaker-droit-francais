@@ -7,6 +7,7 @@
 import { startIdentityHighlighting } from '@/piecemaker/anonymizer';
 import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 import { startLibraryDocumentViewer } from '@/piecemaker/library/bootstrap';
+import '@/piecemaker/sidebar/sidebar.css';
 
 startIdentityHighlighting();
 const stopCitationPanel = startCitationPanel();
