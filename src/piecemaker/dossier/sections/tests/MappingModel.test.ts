@@ -4,12 +4,15 @@ import {
   MappingValidationError,
   applyProcedureParties,
   buildMappingDocument,
+  findProcedurePartyForProfile,
   groupMappingByCode,
   lawyerRelationshipPseudonym,
   normalizeProcedureInfo,
   principalPartyOptions,
   profileRelationshipId,
   procedureSummary,
+  sortMappingGroupsByProcedureParty,
+  updateProcedurePartyForProfile,
 } from '@/piecemaker/dossier/sections/MappingModel';
 
 describe('MappingModel', () => {
@@ -179,6 +182,34 @@ describe('MappingModel', () => {
       parties_clientes: [{ type: 'personne_physique', civilite: 'Mme', nom: 'Claire Reynaud', adresse: 'Secret' }],
       parties_adverses: [{ type: 'societe', forme_sociale: 'SARL', societe_nom: 'Alpha', siren: '123456789' }],
     })).toEqual({ client: ['Mme Claire Reynaud'], adverse: ['SARL Alpha'] });
+  });
+
+  it('place les profils assignés avant les profils non assignés puis les trie en français', () => {
+    const groups = [
+      { code: 'A', principal: 'zèbre', variants: [] },
+      { code: 'B', principal: 'Émile', variants: [] },
+      { code: 'C', principal: 'alice', variants: [] },
+      { code: 'D', principal: 'Ànna', variants: [] },
+    ];
+    const info = normalizeProcedureInfo({ parties_clientes: [{ type: 'personne_physique', nom: 'Émile' }] });
+    expect(sortMappingGroupsByProcedureParty(groups, info).map((group) => group.principal)).toEqual(['Émile', 'alice', 'Ànna', 'zèbre']);
+  });
+
+  it('transforme uniquement le profil ciblé lors d’un changement de camp et de position', () => {
+    const info = normalizeProcedureInfo({
+      parties_clientes: [{ type: 'personne_physique', nom: 'Alice', position: 'demandeur' }],
+      parties_adverses: [{ type: 'societe', societe_nom: 'Alpha', position: 'defendeur', forme_sociale: 'SAS' }],
+      relations: [{ id: 'relation-alpha', source: 'A', target: 'B', role: 'Dirigeant' }],
+    });
+    const next = updateProcedurePartyForProfile(info, { code: 'A', principal: 'Alice', variants: [] }, 'adversaire', {
+      ...info.parties_clientes[0],
+      position: 'autre',
+      position_libelle: 'Créancier poursuivant',
+    });
+    expect(findProcedurePartyForProfile(next, { code: 'A', principal: 'Alice', variants: [] })).toMatchObject({ side: 'adversaire', party: { position: 'autre', position_libelle: 'Créancier poursuivant' } });
+    expect(next.parties_clientes).toEqual([]);
+    expect(next.parties_adverses.map((party) => party.societe_nom || party.nom)).toEqual(['Alpha', 'Alice']);
+    expect(next.relations).toEqual(info.relations);
   });
 
   it('normalise les liens de profils avec un identifiant stable', () => {

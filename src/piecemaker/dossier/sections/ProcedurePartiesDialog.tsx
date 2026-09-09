@@ -10,6 +10,8 @@ import {
   type ProcedureInfo,
   type ProcedureParty,
 } from '@/piecemaker/dossier/sections/MappingModel';
+import { validateProcedureParty } from '@/piecemaker/dossier/sections/procedurePartyValidation';
+import { procedurePositionFieldValue, procedurePositionPatch } from '@/piecemaker/dossier/sections/procedurePartyPosition';
 
 type PartySide = 'client' | 'adversaire';
 
@@ -22,22 +24,24 @@ type ProcedurePartiesDialogProps = {
   onSave: (info: ProcedureInfo) => Promise<void>;
 };
 
-const INPUT_CLASS = 'h-8 text-xs';
+const INPUT_CLASS = 'h-8 text-xs text-foreground';
 const SELECT_CLASS = 'h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring';
 const LEGAL_FORMS = ['SAS', 'SASU', 'SARL', 'EURL', 'SA', 'SCI', 'SELARL', 'Association', 'GmbH', 'AG', 'Ltd', 'LLC', 'Inc.', 'PLC', 'Sàrl'];
 const COUNTRIES = ['France', 'Allemagne', 'Belgique', 'Espagne', 'Italie', 'Luxembourg', 'Pays-Bas', 'Royaume-Uni', 'Suisse', 'États-Unis', 'Canada'];
+const POSITION_LIST_ID = 'procedure-positions';
 
 function isFrenchCountry(country: string): boolean {
   return ['france', 'français', 'francaise', 'française'].includes(country.trim().toLocaleLowerCase('fr'));
 }
 
-function PartyFields({
+export function PartyFields({
   party,
   side,
   index,
   mapping,
   updateParty,
   removeParty,
+  showRemove = true,
 }: {
   party: ProcedureParty;
   side: PartySide;
@@ -45,6 +49,7 @@ function PartyFields({
   mapping: Pick<MappingDocument, 'mapping' | 'reverse_mapping'>;
   updateParty: (side: PartySide, index: number, patch: Partial<ProcedureParty>) => void;
   removeParty: (side: PartySide, index: number) => void;
+  showRemove?: boolean;
 }) {
   const options = useMemo(
     () => principalPartyOptions(mapping.mapping, mapping.reverse_mapping, party.type),
@@ -56,7 +61,7 @@ function PartyFields({
 
   return (
     <article className="space-y-3 rounded-lg border bg-background p-3 shadow-sm">
-      <div className="grid grid-cols-[minmax(0,.85fr)_minmax(0,1fr)_2rem] items-end gap-2">
+      <div className={`grid items-end gap-2 ${showRemove ? 'grid-cols-[minmax(0,.85fr)_minmax(0,1fr)_2rem]' : 'grid-cols-2'}`}>
         <label className="space-y-1 text-[11px] font-medium text-muted-foreground">
           <span>Nature</span>
           <select
@@ -73,25 +78,21 @@ function PartyFields({
         </label>
         <label className="space-y-1 text-[11px] font-medium text-muted-foreground">
           <span>Position</span>
-          <select
+          <Input
             className={SELECT_CLASS}
-            value={party.position}
-            onChange={(event) => updateParty(side, index, { position: event.target.value })}
-          >
-            {PROCEDURE_POSITIONS.map((position) => <option key={position.value} value={position.value}>{position.label}</option>)}
-          </select>
+            list={`${POSITION_LIST_ID}-${side}-${index}`}
+            value={procedurePositionFieldValue(party)}
+            onChange={(event) => updateParty(side, index, procedurePositionPatch(event.target.value))}
+            placeholder="demandeur, défendeur…"
+          />
+          <datalist id={`${POSITION_LIST_ID}-${side}-${index}`}>
+            {PROCEDURE_POSITIONS.filter((position) => position.value !== 'autre').map((position) => <option key={position.value} value={position.value}>{position.label}</option>)}
+          </datalist>
         </label>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeParty(side, index)} aria-label="Supprimer cette partie">
+        {showRemove && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeParty(side, index)} aria-label="Supprimer cette partie">
           <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+        </Button>}
       </div>
-
-      {party.position === 'autre' && (
-        <label className="block space-y-1 text-[11px] font-medium text-muted-foreground">
-          <span>Position personnalisée</span>
-          <Input className={INPUT_CLASS} value={party.position_libelle} onChange={(event) => updateParty(side, index, { position_libelle: event.target.value })} placeholder="Ex. créancier poursuivant" />
-        </label>
-      )}
 
       {party.type === 'personne_physique' ? (
         <div className="grid grid-cols-2 gap-2">
@@ -186,10 +187,8 @@ export default function ProcedurePartiesDialog({ open, mapping, initialInfo, sav
   const submit = async () => {
     try {
       for (const party of [...info.parties_clientes, ...info.parties_adverses]) {
-        const identity = party.type === 'societe' ? party.societe_nom.trim() : party.nom.trim();
-        if (!identity) throw new Error('Chaque partie ajoutée doit avoir un nom ou une dénomination.');
-        if (party.position === 'autre' && !party.position_libelle.trim()) throw new Error('Précisez la position procédurale personnalisée.');
-        if (party.type === 'societe' && isFrenchCountry(party.pays) && party.siren && party.siren.replace(/\D/g, '').length !== 9) throw new Error('Le SIREN doit contenir exactement 9 chiffres.');
+        const validationError = validateProcedureParty(party);
+        if (validationError) throw new Error(validationError);
       }
       setError(null);
       await onSave(info);

@@ -8,12 +8,15 @@ import {
   groupMappingByCode,
   normalizeProcedureInfo,
   profileRelationshipId,
+  sortMappingGroupsByProcedureParty,
+  updateProcedurePartyForProfile,
   type MappingDocument,
   type MappingGroup,
   type ProcedureInfo,
   type ProcedureParty,
 } from '@/piecemaker/dossier/sections/MappingModel';
 import ProcedurePartiesDialog from '@/piecemaker/dossier/sections/ProcedurePartiesDialog';
+import ProcedurePartyProfileDialog from '@/piecemaker/dossier/sections/ProcedurePartyProfileDialog';
 import { Button, Input } from '@/shared/ui';
 
 type MappingResponse = Partial<MappingDocument> & {
@@ -54,6 +57,7 @@ function sameIdentity(left: string, right: string): boolean {
 
 function profileType(group: MappingGroup): ProcedureParty['type'] {
   const code = group.code.toUpperCase();
+  if (/(^|_)(AVOCAT|PHYSIQUE|DIRIGEANT)(_|$)/.test(code)) return 'personne_physique';
   return /MORALE|SOCIETE|\b(SAS|SARL|SA|SCI|SELARL|EURL)_/.test(code) || (/^(CLIENT|ADVERSAIRE)_/.test(code) && !code.includes('PHYSIQUE')) ? 'societe' : 'personne_physique';
 }
 
@@ -111,6 +115,7 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [partiesOpen, setPartiesOpen] = useState(false);
+  const [profileToEdit, setProfileToEdit] = useState<MappingGroup | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draggedProfile, setDraggedProfile] = useState<string | null>(null);
@@ -159,6 +164,8 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
     adversaire: profileInfo.parties_adverses.length,
   }), [profileInfo]);
 
+  const sortedGroups = useMemo(() => sortMappingGroupsByProcedureParty(groups, profileInfo), [groups, profileInfo]);
+
   const lawyerPreviews = useMemo(() => {
     const previews = new Map<string, string>();
     if (!document) return previews;
@@ -180,12 +187,12 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
   const saveDocument = async (nextDocument: MappingDocument, successMessage: string) => {
     const data = await pmPut<MappingResponse>('/mapping', { case: caseId, ...nextDocument });
     invalidatePmGet('/mapping', { case: caseId });
+    await onRepositoryChange();
     const saved = normalizedDocument(data);
     setDocument(saved);
     setGroups(groupMappingByCode(saved.mapping, saved.reverse_mapping));
     setProfileInfo(saved.informations_dossier);
     setMessage(`${successMessage}${data.commit?.created ? ' et commité' : ''}.`);
-    await onRepositoryChange();
   };
 
   const saveProfiles = async () => {
@@ -263,6 +270,22 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
     }
   };
 
+  const saveProfile = async (side: ProfileSide, party: ProcedureParty) => {
+    if (!document || !profileToEdit) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const nextInfo = updateProcedurePartyForProfile(profileInfo, profileToEdit, side, party);
+      if (nextInfo.relations.some((relation) => !relation.role.trim())) throw new Error('Nommez chaque lien entre profils avant d’enregistrer.');
+      const mapping = currentMapping();
+      await saveDocument(applyProcedureParties(mapping, document.informations_dossier, nextInfo), 'Profils enregistrés');
+      setProfileToEdit(null);
+      setError(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading && !document) return <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Chargement des profils…</div>;
   if (!document) return <div className="mx-auto max-w-md py-16 text-center text-sm"><p className="text-destructive">{error || 'Profils indisponibles.'}</p><Button variant="outline" size="sm" className="mt-3" onClick={() => void loadMapping()}>Réessayer</Button></div>;
 
@@ -286,7 +309,7 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
         <section className="rounded-2xl border border-dashed p-10 text-center"><ShieldCheck className="mx-auto h-6 w-6 text-muted-foreground" /><h3 className="mt-3 text-sm font-semibold">Aucun profil détecté</h3><p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-muted-foreground">Lancez un scan PII ou ajoutez une partie à la procédure pour créer le premier profil.</p><Button variant="outline" size="sm" className="mt-4" onClick={() => setPartiesOpen(true)}><Plus className="h-3.5 w-3.5" />Ajouter un profil</Button></section>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {groups.map((group) => {
+          {sortedGroups.map((group) => {
             const selected = partyForProfile(profileInfo, group);
             const related = profileInfo.relations.filter((relation) => relation.target === group.code);
             const company = selected ? selected.party.type === 'societe' : profileType(group) === 'societe';
@@ -331,7 +354,7 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
                   </div>
                 ) : <p className="text-center text-[11px] leading-4 text-muted-foreground">Glissez un profil ici<br />pour établir un lien</p>}
               </div>
-              <div className="mt-auto flex gap-2 p-4 pt-3">{selected ? <Button variant="outline" size="sm" className="flex-1" onClick={() => removeParty(group)}>Retirer</Button> : <><Button variant="outline" size="sm" className="flex-1 border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400" onClick={() => selectParty(group, 'client')}>Client</Button><Button variant="outline" size="sm" className="flex-1 border-red-500/30 text-red-700 hover:bg-red-500/10 dark:text-red-400" onClick={() => selectParty(group, 'adversaire')}>Adverse</Button></>}<Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setPartiesOpen(true)} aria-label={`Modifier ${group.principal}`}><UsersRound className="h-3.5 w-3.5" /></Button></div>
+              <div className="mt-auto flex gap-2 p-4 pt-3">{selected ? <Button variant="outline" size="sm" className="flex-1" onClick={() => removeParty(group)}>Retirer</Button> : <><Button variant="outline" size="sm" className="flex-1 border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400" onClick={() => selectParty(group, 'client')}>Client</Button><Button variant="outline" size="sm" className="flex-1 border-red-500/30 text-red-700 hover:bg-red-500/10 dark:text-red-400" onClick={() => selectParty(group, 'adversaire')}>Adverse</Button></>}<Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setProfileToEdit(group)} aria-label={`Modifier ${group.principal}`}><UsersRound className="h-3.5 w-3.5" /></Button></div>
             </article>;
           })}
         </div>
@@ -343,6 +366,16 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
       </div>
 
       {partiesOpen && <ProcedurePartiesDialog open mapping={currentMappingSafe(groups)} initialInfo={profileInfo} saving={saving} onOpenChange={setPartiesOpen} onSave={saveParties} />}
+      {profileToEdit && <ProcedurePartyProfileDialog
+        open
+        mapping={currentMappingSafe(groups)}
+        group={profileToEdit}
+        initialParty={partyForProfile(profileInfo, profileToEdit)?.party || newParty(profileToEdit, 'client')}
+        initialSide={partyForProfile(profileInfo, profileToEdit)?.side || 'client'}
+        saving={saving}
+        onOpenChange={(open) => { if (!open) setProfileToEdit(null); }}
+        onSave={saveProfile}
+      />}
     </div>
   );
 }

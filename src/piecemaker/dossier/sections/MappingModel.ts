@@ -55,6 +55,14 @@ export type ProcedureInfo = {
   relations: ProfileRelationship[];
 };
 
+export type ProcedurePartySide = 'client' | 'adversaire';
+
+export type ProcedurePartyProfileMatch = {
+  side: ProcedurePartySide;
+  index: number;
+  party: ProcedureParty;
+};
+
 export type MappingDocument = {
   mapping: Record<string, string>;
   reverse_mapping: Record<string, string[]>;
@@ -279,6 +287,58 @@ export function procedureSummary(info: unknown = {}): { client: string[]; advers
   const normalizedInfo = normalizeProcedureInfo(info);
   const names = (parties: ProcedureParty[]) => parties.map(partyDisplayName).filter(Boolean);
   return { client: names(normalizedInfo.parties_clientes), adverse: names(normalizedInfo.parties_adverses) };
+}
+
+function procedurePartyIdentity(party: ProcedureParty): string {
+  return party.type === 'societe' ? clean(party.societe_nom) : clean(party.nom);
+}
+
+function procedurePartyMatchesProfile(party: ProcedureParty, group: MappingGroup): boolean {
+  return party.mapping_assignments.some((assignment) => normalized(assignment.principal) === normalized(group.principal))
+    || normalized(procedurePartyIdentity(party)) === normalized(group.principal);
+}
+
+export function findProcedurePartyForProfile(info: ProcedureInfo, group: MappingGroup): ProcedurePartyProfileMatch | null {
+  for (const [side, parties] of [['client', info.parties_clientes], ['adversaire', info.parties_adverses]] as const) {
+    const index = parties.findIndex((party) => procedurePartyMatchesProfile(party, group));
+    if (index >= 0) return { side, index, party: parties[index] };
+  }
+  return null;
+}
+
+export function sortMappingGroupsByProcedureParty(groups: MappingGroup[], info: ProcedureInfo): MappingGroup[] {
+  return groups
+    .map((group, index) => ({ group, index, assigned: findProcedurePartyForProfile(info, group) !== null }))
+    .sort((left, right) => {
+      if (left.assigned !== right.assigned) return left.assigned ? -1 : 1;
+      const compared = left.group.principal.localeCompare(right.group.principal, 'fr', { sensitivity: 'base' });
+      return compared || left.index - right.index;
+    })
+    .map(({ group }) => group);
+}
+
+export function updateProcedurePartyForProfile(
+  info: ProcedureInfo,
+  group: MappingGroup,
+  side: ProcedurePartySide,
+  party: ProcedureParty,
+): ProcedureInfo {
+  const previous = normalizeProcedureInfo(info);
+  const match = findProcedurePartyForProfile(previous, group);
+  const partiesClientes = previous.parties_clientes.filter((candidate) => !procedurePartyMatchesProfile(candidate, group));
+  const partiesAdverses = previous.parties_adverses.filter((candidate) => !procedurePartyMatchesProfile(candidate, group));
+  const target = normalizeProcedureInfo({
+    parties_clientes: side === 'client' ? [party] : [],
+    parties_adverses: side === 'adversaire' ? [party] : [],
+  })[side === 'client' ? 'parties_clientes' : 'parties_adverses'][0];
+  const targetParties = side === 'client' ? partiesClientes : partiesAdverses;
+  const insertionIndex = match?.side === side ? Math.min(match.index, targetParties.length) : targetParties.length;
+  targetParties.splice(insertionIndex, 0, target);
+  return {
+    ...previous,
+    parties_clientes: partiesClientes,
+    parties_adverses: partiesAdverses,
+  };
 }
 
 export function principalPartyOptions(
