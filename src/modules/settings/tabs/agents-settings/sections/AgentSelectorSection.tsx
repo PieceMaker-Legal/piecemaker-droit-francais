@@ -46,6 +46,7 @@ export default function AgentSelectorSection({
                   alt="Mistral"
                   className="h-4 w-4 flex-shrink-0"
                 />
+                <span className="truncate">{AGENT_NAMES[agent]}</span>
                 {agentContextById[agent].authStatus.authenticated && (
                   <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${dotColor}`} />
                 )}
