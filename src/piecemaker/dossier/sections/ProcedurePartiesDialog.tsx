@@ -24,7 +24,12 @@ type ProcedurePartiesDialogProps = {
 
 const INPUT_CLASS = 'h-8 text-xs';
 const SELECT_CLASS = 'h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring';
-const LEGAL_FORMS = ['SAS', 'SASU', 'SARL', 'EURL', 'SA', 'SCI', 'SELARL', 'Association'];
+const LEGAL_FORMS = ['SAS', 'SASU', 'SARL', 'EURL', 'SA', 'SCI', 'SELARL', 'Association', 'GmbH', 'AG', 'Ltd', 'LLC', 'Inc.', 'PLC', 'Sàrl'];
+const COUNTRIES = ['France', 'Allemagne', 'Belgique', 'Espagne', 'Italie', 'Luxembourg', 'Pays-Bas', 'Royaume-Uni', 'Suisse', 'États-Unis', 'Canada'];
+
+function isFrenchCountry(country: string): boolean {
+  return ['france', 'français', 'francaise', 'française'].includes(country.trim().toLocaleLowerCase('fr'));
+}
 
 function PartyFields({
   party,
@@ -47,6 +52,7 @@ function PartyFields({
   );
   const listId = `parties-${side}-${index}-${party.type}`;
   const legalFormsListId = `legal-forms-${side}-${index}`;
+  const countriesListId = `countries-${side}-${index}`;
 
   return (
     <article className="space-y-3 rounded-lg border bg-background p-3 shadow-sm">
@@ -56,7 +62,10 @@ function PartyFields({
           <select
             className={SELECT_CLASS}
             value={party.type}
-            onChange={(event) => updateParty(side, index, { type: event.target.value as ProcedureParty['type'] })}
+            onChange={(event) => {
+              const type = event.target.value as ProcedureParty['type'];
+              updateParty(side, index, { type, pays: type === 'societe' ? party.pays || 'France' : '' });
+            }}
           >
             <option value="personne_physique">Personne physique</option>
             <option value="societe">Personne morale</option>
@@ -119,13 +128,18 @@ function PartyFields({
             <datalist id={listId}>{options.map((option) => <option key={option.code} value={option.principal}>{option.code}</option>)}</datalist>
           </label>
           <label className="space-y-1 text-[11px] font-medium text-muted-foreground">
-            <span>Forme sociale</span>
-            <Input className={INPUT_CLASS} list={legalFormsListId} value={party.forme_sociale} onChange={(event) => updateParty(side, index, { forme_sociale: event.target.value })} placeholder="SAS" />
+            <span>Forme juridique — saisie libre</span>
+            <Input className={INPUT_CLASS} list={legalFormsListId} value={party.forme_sociale} onChange={(event) => updateParty(side, index, { forme_sociale: event.target.value })} placeholder="SAS, GmbH, Ltd…" />
             <datalist id={legalFormsListId}>{LEGAL_FORMS.map((value) => <option key={value} value={value} />)}</datalist>
           </label>
           <label className="space-y-1 text-[11px] font-medium text-muted-foreground">
-            <span>SIREN</span>
-            <Input className={INPUT_CLASS} inputMode="numeric" value={party.siren} onChange={(event) => updateParty(side, index, { siren: event.target.value })} placeholder="123 456 789" />
+            <span>Pays d’immatriculation</span>
+            <Input className={INPUT_CLASS} list={countriesListId} value={party.pays} onChange={(event) => updateParty(side, index, { pays: event.target.value })} placeholder="France" autoComplete="country-name" />
+            <datalist id={countriesListId}>{COUNTRIES.map((value) => <option key={value} value={value} />)}</datalist>
+          </label>
+          <label className="col-span-2 space-y-1 text-[11px] font-medium text-muted-foreground">
+            <span>{isFrenchCountry(party.pays) ? 'SIREN' : 'Numéro d’immatriculation'}</span>
+            <Input className={INPUT_CLASS} inputMode={isFrenchCountry(party.pays) ? 'numeric' : 'text'} value={party.siren} onChange={(event) => updateParty(side, index, { siren: event.target.value })} placeholder={isFrenchCountry(party.pays) ? '123 456 789' : 'Numéro de registre'} />
           </label>
           <label className="col-span-2 space-y-1 text-[11px] font-medium text-muted-foreground">
             <span>Siège social</span>
@@ -175,7 +189,7 @@ export default function ProcedurePartiesDialog({ open, mapping, initialInfo, sav
         const identity = party.type === 'societe' ? party.societe_nom.trim() : party.nom.trim();
         if (!identity) throw new Error('Chaque partie ajoutée doit avoir un nom ou une dénomination.');
         if (party.position === 'autre' && !party.position_libelle.trim()) throw new Error('Précisez la position procédurale personnalisée.');
-        if (party.type === 'societe' && party.siren && party.siren.replace(/\D/g, '').length !== 9) throw new Error('Le SIREN doit contenir exactement 9 chiffres.');
+        if (party.type === 'societe' && isFrenchCountry(party.pays) && party.siren && party.siren.replace(/\D/g, '').length !== 9) throw new Error('Le SIREN doit contenir exactement 9 chiffres.');
       }
       setError(null);
       await onSave(info);

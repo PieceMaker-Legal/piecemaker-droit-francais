@@ -418,7 +418,7 @@ function categoryForCode(code) {
   // "ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01"), et un mapping ancien peut mal
   // former le séparateur ("SOCIETE SA_02"). Blancs normalisés, casse ignorée.
   const c = String(code).replace(/\s+/g, '_').toUpperCase();
-  if (c.includes('PERSONNE_PHYSIQUE') || c.includes('DIRIGEANT')) return 'personne';
+  if (c.includes('PERSONNE_PHYSIQUE') || c.includes('DIRIGEANT') || c.includes('AVOCAT')) return 'personne';
   if (c.includes('ADRESSE')) return 'adresse';
   if (c.includes('SIREN')) return 'siren';
   // Sociétés : repli/legacy (…MORALE…, SOCIETE_…) et codes à sigle (SA_1, GMBH_2).
