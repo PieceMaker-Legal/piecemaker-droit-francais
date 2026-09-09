@@ -1,0 +1,6 @@
+div:has(> .nav-divider) > a[href$="/issues/new"],
+div:has(> .nav-divider) > a[href="https://discord.gg/buxwujPNRE"],
+div:has(> .nav-divider) > div:has(> a[href$="/issues/new"]),
+div:has(> .nav-divider) > div:has(> a[href="https://discord.gg/buxwujPNRE"]) {
+  display: none;
+}
