@@ -4,5 +4,6 @@ import { createTimesheetStore } from './store.js';
 
 export function createTimesheetBackend(homeDir: string) {
   const store = createTimesheetStore(homeDir);
+  process.once('exit', () => store.close());
   return createTimesheetRouter(createTimesheetService(store));
 }
