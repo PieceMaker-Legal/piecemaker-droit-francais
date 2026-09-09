@@ -32,7 +32,7 @@ const SECTIONS: { id: SectionId; label: string; hint: string; icon: LucideIcon }
 ];
 
 function DossierSections({ section }: { section: SectionId }) {
-  const { selectedCaseId, selectedCase } = useDossierCases();
+  const { selectedCaseId, selectedCase, mappingVersion } = useDossierCases();
 
   if (section === 'dossiers') return <CaseFilesSection />;
   if (section === 'tampon') return <StampingSection />;
@@ -43,7 +43,7 @@ function DossierSections({ section }: { section: SectionId }) {
       </div>
     );
   }
-  return <CaseFilesChronology caseId={selectedCaseId} caseName={selectedCase.name} />;
+  return <CaseFilesChronology caseId={selectedCaseId} caseName={selectedCase.name} refreshVersion={mappingVersion} />;
 }
 
 export default function DossierPanel({ selectedProject }: { selectedProject: Project | null }) {
