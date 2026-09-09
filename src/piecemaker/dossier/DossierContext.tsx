@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { PieceMakerApiError } from '@/piecemaker/dossier/api';
-import { ensureDossierRegistration, type DossierCase } from '@/piecemaker/dossier/dossierRegistration';
+import { invalidatePmGet, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import { ensureDossierRegistration, refreshDossierRegistration, type DossierCase } from '@/piecemaker/dossier/dossierRegistration';
 
 export type { DossierCase } from '@/piecemaker/dossier/dossierRegistration';
 
@@ -33,16 +33,27 @@ export function DossierCasesProvider({
   const [error, setError] = useState<string | null>(null);
   const [mappingVersion, setMappingVersion] = useState(0);
   const refreshSequence = useRef(0);
-  const bumpMappingVersion = useCallback(() => setMappingVersion((previous) => previous + 1), []);
+  const bumpMappingVersion = useCallback(() => {
+    if (selectedCaseId) {
+      const caseQuery = { case: selectedCaseId };
+      invalidatePmGet('/repository/case', caseQuery);
+      invalidatePmGet('/mapping', caseQuery);
+      invalidatePmGet('/repository/chronology', caseQuery);
+    }
+    setMappingVersion((previous) => previous + 1);
+  }, [selectedCaseId]);
 
-  const refreshCases = useCallback(async () => {
+  const loadCases = useCallback(async (refresh: boolean) => {
     const sequence = ++refreshSequence.current;
     setLoading(true);
     try {
-      const { cases: refreshedCases, selectedCase } = await ensureDossierRegistration(projectPath);
+      const { cases: refreshedCases, selectedCase } = refresh
+        ? await refreshDossierRegistration(projectPath)
+        : await ensureDossierRegistration(projectPath);
       if (sequence !== refreshSequence.current) return;
       setCases(refreshedCases);
       setSelectedCaseId(selectedCase?.path ?? null);
+      if (refresh) setMappingVersion((previous) => previous + 1);
       setError(null);
     } catch (cause) {
       if (sequence !== refreshSequence.current) return;
@@ -54,9 +65,11 @@ export function DossierCasesProvider({
     }
   }, [projectPath]);
 
+  const refreshCases = useCallback(() => loadCases(true), [loadCases]);
+
   useEffect(() => {
-    void refreshCases();
-  }, [refreshCases]);
+    void loadCases(false);
+  }, [loadCases]);
 
   const value = useMemo<DossierContextValue>(() => ({
     cases,

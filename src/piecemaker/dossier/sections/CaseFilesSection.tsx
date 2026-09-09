@@ -6,12 +6,12 @@
  * mounted on the CloudCLI server under /api/piecemaker.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FolderPlus, FolderSearch, Loader2 } from 'lucide-react';
 
 import { Button } from '@/shared/ui';
 import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
-import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import { pmGetCached, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import type { CaseOverview, RegisterCaseResult } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 import CaseMappingSection from '@/piecemaker/dossier/sections/CaseMappingSection';
 
@@ -23,22 +23,28 @@ export default function CaseFilesSection() {
   const [overview, setOverview] = useState<CaseOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
+  const overviewRequestSequence = useRef(0);
 
   const loadOverview = useCallback(async () => {
+    const requestSequence = ++overviewRequestSequence.current;
     if (!selectedCaseId) {
       setOverview(null);
+      setOverviewLoading(false);
+      setOverviewError(null);
       return;
     }
     setOverviewLoading(true);
     try {
-      const { folder } = await pmGet<{ folder: CaseOverview }>('/repository/case', { case: selectedCaseId });
+      const { folder } = await pmGetCached<{ folder: CaseOverview }>('/repository/case', { case: selectedCaseId });
+      if (requestSequence !== overviewRequestSequence.current) return;
       setOverview(folder);
       setOverviewError(null);
     } catch (cause) {
+      if (requestSequence !== overviewRequestSequence.current) return;
       setOverview(null);
       setOverviewError(cause instanceof PieceMakerApiError ? cause.message : String(cause));
     } finally {
-      setOverviewLoading(false);
+      if (requestSequence === overviewRequestSequence.current) setOverviewLoading(false);
     }
   }, [selectedCaseId]);
 
@@ -124,7 +130,7 @@ export default function CaseFilesSection() {
         </div>
       ) : overview ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <CaseMappingSection caseId={selectedCaseId} onRepositoryChange={handleRepositoryChange} />
+          <CaseMappingSection caseId={selectedCaseId} refreshVersion={mappingVersion} onRepositoryChange={handleRepositoryChange} />
         </div>
       ) : null}
     </div>

@@ -8,7 +8,12 @@ const { ensureDossierRegistration } = vi.hoisted(() => ({
   ensureDossierRegistration: vi.fn().mockResolvedValue({ cases: [], selectedCase: null }),
 }));
 
+const { pmGetCached } = vi.hoisted(() => ({
+  pmGetCached: vi.fn().mockResolvedValue({}),
+}));
+
 vi.mock('@/piecemaker/dossier/dossierRegistration', () => ({ ensureDossierRegistration }));
+vi.mock('@/piecemaker/dossier/api', () => ({ pmGetCached }));
 
 import { useSelectedDossierRegistration } from '@/piecemaker/dossier/useSelectedDossierRegistration';
 import type { Project } from '@/shared/types';
@@ -25,6 +30,7 @@ const project = {
 beforeEach(() => {
   ensureDossierRegistration.mockReset();
   ensureDossierRegistration.mockResolvedValue({ cases: [], selectedCase: null });
+  pmGetCached.mockClear();
 });
 
 test('registers every project selected in the CloudCLI workspace', async () => {
@@ -37,4 +43,24 @@ test('registers every project selected in the CloudCLI workspace', async () => {
   rerender({ selectedProject: project });
 
   await waitFor(() => assert.deepEqual(ensureDossierRegistration.mock.calls, [['/cases/Selected']]));
+});
+
+test('preloads the dossier views for the selected legal case', async () => {
+  ensureDossierRegistration.mockResolvedValue({
+    cases: [],
+    selectedCase: { path: 'selected-case', name: 'Selected', location: '/cases/Selected', registered: true },
+  });
+
+  renderHook(
+    () => useSelectedDossierRegistration(project),
+    { wrapper: MemoryRouter },
+  );
+
+  await waitFor(() => assert.equal(pmGetCached.mock.calls.length, 4));
+  assert.deepEqual(pmGetCached.mock.calls, [
+    ['/repository/case', { case: 'selected-case' }],
+    ['/mapping', { case: 'selected-case' }],
+    ['/repository/chronology', { case: 'selected-case' }],
+    ['/configuration'],
+  ]);
 });

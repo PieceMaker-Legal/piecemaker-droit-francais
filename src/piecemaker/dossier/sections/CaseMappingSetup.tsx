@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, ScanSearch, ShieldCheck } from 'lucide-react';
 
-import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import { invalidatePmGet, pmGet, pmGetCached, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
 import { setMappingReady } from '@/piecemaker/dossier/mappingStatusCache';
 import type { CaseOverview, OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
@@ -43,20 +43,25 @@ export default function CaseMappingSetup() {
   const [anonymizationJob, setAnonymizationJob] = useState<OriginalsJob | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const overviewRequestSequence = useRef(0);
 
   const loadOverview = useCallback(async () => {
+    const requestSequence = ++overviewRequestSequence.current;
     if (!caseId) {
       setOverview(null);
+      setOverviewLoading(false);
       return;
     }
     setOverviewLoading(true);
     try {
-      const { folder } = await pmGet<{ folder: CaseOverview }>('/repository/case', { case: caseId });
+      const { folder } = await pmGetCached<{ folder: CaseOverview }>('/repository/case', { case: caseId });
+      if (requestSequence !== overviewRequestSequence.current) return;
       setOverview(folder);
     } catch {
+      if (requestSequence !== overviewRequestSequence.current) return;
       setOverview(null);
     } finally {
-      setOverviewLoading(false);
+      if (requestSequence === overviewRequestSequence.current) setOverviewLoading(false);
     }
   }, [caseId]);
 
@@ -81,7 +86,7 @@ export default function CaseMappingSetup() {
 
   useEffect(() => {
     let active = true;
-    pmGet<GlinerOverview>('/configuration')
+    pmGetCached<GlinerOverview>('/configuration')
       .then((status) => {
         if (!active) return;
         setGlinerInstalled(status.components.gliner.installed);
@@ -102,6 +107,7 @@ export default function CaseMappingSetup() {
         const { job } = await pmGet<{ job: InstallJob }>('/configuration/install', { id: installJob.id });
         setInstallJob(job);
         if (job.state === 'done') {
+          invalidatePmGet('/configuration');
           setGlinerInstalled(true);
           setError(null);
         } else if (job.state === 'failed') {
