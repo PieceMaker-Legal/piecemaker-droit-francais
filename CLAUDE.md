@@ -316,6 +316,8 @@ Ce que le système de plugins permet exactement, avant de s'engager :
 
 Piège d'isolation connu : `plugin-registry.service.ts:8-9` code en dur `~/.claude-code-ui/plugins` et `~/.claude-code-ui/plugins.json` au lieu de passer par `getApplicationDataRoot()` (`server/shared/utils.ts:50`). Les plugins échappent donc au `CLOUDCLI_HOME` de PieceMaker. Si on adopte les plugins, c'est une substitution d'une ligne chacune (avec repli upstream), conforme à la règle « toucher un fichier upstream seulement pour la marque ou l'isolation des données ».
 
+Exception upstream assumée pour la Bibliothèque : le chat reste monté lorsqu'un autre onglet est affiché. `ChatInterface.tsx` transmet donc son état `isActive` à `useChatComposerState.ts`, puis à `useSlashCommands.ts`, afin que le retour sur l'onglet Chat relance le scan des commandes et des skills du fournisseur actif. Cette empreinte de trois fichiers CloudCLI est volontaire, générique et limitée à la visibilité de l'onglet ; elle évite tout couplage du chat au plugin PieceMaker et tout rechargement global de l'application.
+
 ## Commande `piecemaker`
 
 Point d'entrée unique de la plateforme, pour l'utilisateur final : une seule
