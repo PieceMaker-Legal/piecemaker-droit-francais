@@ -122,7 +122,7 @@ export type ChronologyDocument = {
   nature: string | null;
   date: string | null;
   dateIso: string | null;
-  juridiction: string | null;
+  localisation: string | null;
   fields: ChronologyField[];
   reviewRequired: boolean;
   reviewReasons: string[];
@@ -178,7 +178,7 @@ export type DocumentMetaCorrection = {
   path: string;
   nature: string | null;
   dateIso: string | null;
-  juridiction: string | null;
+  localisation: string | null;
   fields: ChronologyField[];
 };
 
