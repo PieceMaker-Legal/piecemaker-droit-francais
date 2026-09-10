@@ -86,7 +86,7 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, onClose,
               <Input type="date" value={dateIso} onChange={(event) => setDateIso(event.target.value)} />
             </label>
             <label className="space-y-1 text-xs font-medium text-muted-foreground">
-              Juridiction / lieu
+              Lieu
               <Input value={juridiction} onChange={(event) => setJuridiction(event.target.value)} placeholder="Ex. TJ de Paris" />
             </label>
           </div>

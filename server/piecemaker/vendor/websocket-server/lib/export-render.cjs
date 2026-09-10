@@ -328,7 +328,7 @@ function renderChronologyHtml(chronology, { caseName } = {}) {
 <h2>Frise chronologique</h2>
 <table width="100%" border="1" cellspacing="0" cellpadding="4">
   <thead>
-    <tr><th>Date</th><th>Nature</th><th>Pièce</th><th>Juridiction</th><th>Informations</th><th>Entités</th></tr>
+    <tr><th>Date</th><th>Nature</th><th>Pièce</th><th>Lieu</th><th>Informations</th><th>Personnes visées</th></tr>
   </thead>
   <tbody>
     ${docRows || '<tr><td colspan="6" class="export-empty">Aucune pièce indexée.</td></tr>'}
