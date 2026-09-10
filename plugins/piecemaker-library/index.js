@@ -1,4 +1,24 @@
 const mounts = new WeakMap();
+const skillScopes = new Set(['user', 'plugin', 'repo', 'project', 'admin', 'system']);
+
+export function normalizeSkill(provider, skill = {}, project) {
+  const scope = skillScopes.has(skill.scope) ? skill.scope : 'user';
+  const normalized = {
+    provider,
+    name: String(skill.name ?? ''),
+    description: String(skill.description ?? ''),
+    command: String(skill.command ?? ''),
+    scope,
+    sourcePath: String(skill.sourcePath ?? ''),
+  };
+  if (typeof skill.pluginName === 'string') normalized.pluginName = skill.pluginName;
+  if (typeof skill.pluginId === 'string') normalized.pluginId = skill.pluginId;
+  if (scope === 'project' || scope === 'repo') {
+    normalized.projectDisplayName = project?.displayName ?? skill.projectDisplayName;
+    normalized.projectPath = project?.path ?? skill.projectPath;
+  }
+  return normalized;
+}
 
 export function mount(container, api) {
   const root = document.createElement('div');
@@ -6,7 +26,7 @@ export function mount(container, api) {
   const style = document.createElement('style');
   style.textContent = `
     .pm-library{height:100%;overflow:auto;padding:24px;box-sizing:border-box;color:hsl(var(--foreground, 0 0% 12%));background:hsl(var(--background, 0 0% 100%));font:14px system-ui,sans-serif}
-    .pm-library *{box-sizing:border-box}.pm-library h1{font-size:20px;margin:0 0 6px}.pm-library p{margin:4px 0;color:hsl(var(--muted-foreground, 0 0% 45%));line-height:1.5}
+    .pm-library *{box-sizing:border-box}.pm-library h1{font-size:20px;margin:0 0 6px}.pm-library h2{font-size:15px;margin:24px 0 4px}.pm-library p{margin:4px 0;color:hsl(var(--muted-foreground, 0 0% 45%));line-height:1.5}
     .pm-library nav,.pm-library .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:20px 0}
     .pm-library button{font:inherit;cursor:pointer;color:inherit;background:transparent;border:1px solid hsl(var(--border, 0 0% 87%));border-radius:6px;padding:7px 12px}
     .pm-library button:disabled{opacity:.45;cursor:default}.pm-library button[aria-selected=true]{background:hsl(var(--muted, 0 0% 93%));font-weight:600}
@@ -28,6 +48,8 @@ export function mount(container, api) {
   let scope = 'legal';
   let search = '';
   let entries = [];
+  let providerSkills = [];
+  let providerErrors = [];
   let snapshot = null;
   let marketplace = null;
   let loading = false;
@@ -72,8 +94,19 @@ export function mount(container, api) {
         const data = workspace ? await request('GET', `/activation${query}`) : null;
         if (version === revision) snapshot = data;
       } else {
-        const data = await request('GET', `/catalog${query}`);
-        if (version === revision) entries = data.entries;
+        const catalog = request('GET', `/catalog${query}`);
+        const discovered = tab === 'skill'
+          ? request('GET', `/provider-skills${query}`).catch(() => ({ providers: [], unavailable: true }))
+          : null;
+        const [catalogData, discoveredData] = await Promise.all([catalog, discovered]);
+        if (version === revision) {
+          entries = catalogData.entries;
+          providerSkills = (discoveredData?.providers || []).flatMap((result) => (
+            (result.skills || []).map((skill) => normalizeSkill(result.provider, skill, workspace ? { path: workspace } : undefined))
+          ));
+          providerErrors = (discoveredData?.providers || []).filter((result) => result.error);
+          if (discoveredData?.unavailable) providerErrors.push({ provider: 'tous' });
+        }
       }
     } catch (cause) { if (version === revision) error = cause.message; }
     finally { if (version === revision && !disposed) { loading = false; render(); } }
@@ -129,7 +162,7 @@ export function mount(container, api) {
   }
 
   function matches(item) {
-    return `${item.name} ${item.description || ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase());
+    return `${item.name} ${item.description || ''} ${item.provider || ''} ${item.scope || ''} ${item.command || ''} ${item.sourcePath || ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase());
   }
 
   function render() {
@@ -163,11 +196,25 @@ export function mount(container, api) {
       if (tab === 'skill' || tab === 'agent') {
         body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}` : 'Sélectionnez un dossier pour activer un élément.', 'meta'));
         const visible = entries.filter((item) => item.kind === tab && matches(item));
+        if (tab === 'skill') body.append(element('h2', 'Catalogue central'));
         if (!visible.length) body.append(element('p', 'Aucun élément.'));
         for (const entry of visible) {
           const item = row(entry, () => void open(entry));
           item.append(toggle('Dans ce dossier', entry.enabled, !context.project, () => void mutate('PUT', `/catalog/${entry.id}/activation`, { workspacePath: context.project.path, enabled: !entry.enabled })));
           body.append(item);
+        }
+        if (tab === 'skill') {
+          body.append(element('h2', 'Skills détectées'));
+          const detected = providerSkills.filter(matches);
+          if (!detected.length) body.append(element('p', 'Aucune skill détectée.'));
+          for (const skill of detected) {
+            const item = row(skill);
+            const details = item.querySelector('.details');
+            details.append(element('p', `${skill.provider} · ${skill.scope}${skill.command ? ` · ${skill.command}` : ''}`, 'meta'));
+            if (skill.sourcePath) details.append(element('p', skill.sourcePath, 'meta'));
+            body.append(item);
+          }
+          if (providerErrors.length) body.append(element('p', `Providers indisponibles : ${providerErrors.map((item) => item.provider).join(', ')}.`, 'meta'));
         }
         body.append(element('p', 'Les changements s’appliquent aux prochains messages. Une désactivation ne retire pas les instructions déjà reçues dans une conversation.', 'meta'));
       } else if (tab === 'connectors') {
@@ -204,7 +251,7 @@ export function mount(container, api) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = context.project?.path !== next.project?.path;
     context = next;
-    if (changed) { entries = []; snapshot = null; void load(); }
+    if (changed) { entries = []; providerSkills = []; providerErrors = []; snapshot = null; void load(); }
     else render();
   });
   mounts.set(container, () => { disposed = true; revision++; unsubscribe(); layout.remove(); style.remove(); });

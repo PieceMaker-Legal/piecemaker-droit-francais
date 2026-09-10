@@ -16,7 +16,7 @@ export class MistralProviderAuth implements IProviderAuth {
    */
   private checkInstalled(): boolean {
     try {
-      const result = spawn.sync('mistral', ['--version'], { stdio: 'ignore', timeout: 5000 });
+      const result = spawn.sync('vibe', ['--version'], { stdio: 'ignore', timeout: 5000 });
       return !result.error && result.status === 0;
     } catch {
       return false;
@@ -74,7 +74,7 @@ export class MistralProviderAuth implements IProviderAuth {
       }, 5000);
 
       try {
-        childProcess = spawn('mistral', ['auth', 'status']);
+        childProcess = spawn('vibe', ['auth', 'status']);
       } catch {
         clearTimeout(timeout);
         processCompleted = true;
