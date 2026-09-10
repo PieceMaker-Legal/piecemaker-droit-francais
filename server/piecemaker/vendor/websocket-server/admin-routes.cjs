@@ -562,7 +562,7 @@ function listMarketplaceConnectors(runCommand = captureCommand, options = {}) {
     seen.add(entry.pluginId);
     plugins.push({
       id: entry.pluginId,
-      name: entry.name || entry.pluginId,
+      name: entry.displayName || entry.name || entry.pluginId,
       description: entry.description || '',
       marketplace: entry.marketplaceName || '',
       installCount: Number.isFinite(entry.installCount) ? entry.installCount : null,
