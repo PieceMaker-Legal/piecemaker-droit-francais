@@ -25,7 +25,7 @@ type CaseFilesDocumentMetaDialogProps = {
 export default function CaseFilesDocumentMetaDialog({ caseId, document, onClose, onSaved }: CaseFilesDocumentMetaDialogProps) {
   const [nature, setNature] = useState(document.nature ?? '');
   const [dateIso, setDateIso] = useState(document.dateIso ?? '');
-  const [juridiction, setJuridiction] = useState(document.juridiction ?? '');
+  const [localisation, setLocalisation] = useState(document.localisation ?? '');
   const [fields, setFields] = useState<ChronologyField[]>(document.fields.length ? document.fields : []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +55,7 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, onClose,
         path: document.path,
         nature: nature.trim() || null,
         dateIso: dateIso.trim() || null,
-        juridiction: juridiction.trim() || null,
+        localisation: localisation.trim() || null,
         fields: fields.filter((field) => field.label.trim() || field.value.trim()),
       });
       onSaved();
@@ -87,7 +87,7 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, onClose,
             </label>
             <label className="space-y-1 text-xs font-medium text-muted-foreground">
               Lieu
-              <Input value={juridiction} onChange={(event) => setJuridiction(event.target.value)} placeholder="Ex. TJ de Paris" />
+              <Input value={localisation} onChange={(event) => setLocalisation(event.target.value)} placeholder="Ex. TJ de Paris" />
             </label>
           </div>
 
