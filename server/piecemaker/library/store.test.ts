@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { createLibraryStore } from './store.js';
-import { migratePersonalLibrary } from './migrate.js';
+import { importLibraryDirectory, migratePersonalLibrary } from './migrate.js';
 import { installLibraryRuntime, stripLibraryInstructions } from './runtime.js';
 
 function fixture(t: { after: (fn: () => void) => void }) {
@@ -33,6 +33,12 @@ test('imports preserve YAML metadata and assets without publishing instructions'
   assert.equal(store.instructions(workspace), '');
   assert.equal(Buffer.from(store.document(id).assets['table-columns.yaml'], 'base64').toString(), 'columns:\n  - name: Date\n');
   assert.equal(fs.existsSync(path.join(store.directory, 'active')), false);
+});
+
+test('imports reject binary main documents before storing replacement characters', (t) => {
+  const { store, skill } = fixture(t);
+  fs.writeFileSync(path.join(skill, 'SKILL.md'), Buffer.from([0x2d, 0x2d, 0x2d, 0x0a, 0xc3, 0x28]));
+  assert.throws(() => store.importFile(path.join(skill, 'SKILL.md'), 'skill'), /ne peut pas être modifié/);
 });
 
 test('activation is persistent, canonical and confined to the selected dossier', (t) => {
@@ -75,6 +81,18 @@ test('associated symlinks fail before source withdrawal', (t) => {
   fs.symlinkSync(path.join(skill, 'SKILL.md'), path.join(skill, 'linked.md'));
   assert.throws(() => migratePersonalLibrary(store, home, root, true), /lié non importé/);
   assert.ok(fs.existsSync(path.join(skill, 'SKILL.md')));
+});
+
+test('confined plugin imports ignore symlinked component roots and documents', (t) => {
+  const { root, skill, store } = fixture(t);
+  const linkedRoot = path.join(root, 'linked-skills');
+  fs.symlinkSync(path.dirname(skill), linkedRoot);
+  assert.deepEqual(importLibraryDirectory(store, linkedRoot, 'skill', false), []);
+  const pluginSkills = path.join(root, 'plugin-skills');
+  const linkedSkill = path.join(pluginSkills, 'linked');
+  fs.mkdirSync(linkedSkill, { recursive: true });
+  fs.symlinkSync(path.join(skill, 'SKILL.md'), path.join(linkedSkill, 'SKILL.md'));
+  assert.deepEqual(importLibraryDirectory(store, pluginSkills, 'skill', false), []);
 });
 
 test('library instructions are removed from echoes without rewriting user prose', () => {
@@ -132,6 +150,55 @@ test('editing updates YAML and active instructions without changing assets or ac
   const reopened = createLibraryStore(path.join(home, '.piecemaker'));
   assert.equal(reopened.document(id).content, content);
   reopened.close();
+});
+
+test('plugin collections expose an editable tree and activate every imported component', async (t) => {
+  const { store, skill, workspace } = fixture(t);
+  const skillId = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  store.upsertCollection({
+    id: 'legal-tools@marketplace',
+    name: 'Legal tools',
+    description: 'Outils juridiques',
+    source: '/plugins/legal-tools',
+    entries: [{ entryId: skillId, rootPath: 'skills/review' }],
+    files: [{ path: 'manifest.json', content: Buffer.from('{"name":"legal-tools"}\n') }],
+  });
+  assert.deepEqual(store.collectionFiles('legal-tools@marketplace').map((file) => file.path), [
+    'manifest.json',
+    'skills/review/SKILL.md',
+    'skills/review/table-columns.yaml',
+  ]);
+  const file = store.collectionFile('legal-tools@marketplace', 'skills/review/table-columns.yaml');
+  assert.equal(file.content, 'columns:\n  - name: Date\n');
+  store.updateCollectionFile('legal-tools@marketplace', file.path, 'columns:\n  - name: Échéance\n', file.content);
+  assert.equal(store.collectionFile('legal-tools@marketplace', file.path).content, 'columns:\n  - name: Échéance\n');
+  const manifest = store.collectionFile('legal-tools@marketplace', 'manifest.json');
+  store.updateCollectionFile('legal-tools@marketplace', manifest.path, '{"name":"outils-juridiques"}\n', manifest.content);
+  assert.match(store.collectionFile('legal-tools@marketplace', manifest.path).content, /outils-juridiques/);
+  assert.throws(() => store.collectionFile('legal-tools@marketplace', '../catalog.sqlite'), /invalide/);
+  const skillDocument = store.collectionFile('legal-tools@marketplace', 'skills/review/SKILL.md');
+  assert.throws(() => store.updateCollectionFile('legal-tools@marketplace', skillDocument.path, `${skillDocument.content}\0`, skillDocument.content), /ne peut pas être modifié/);
+  assert.throws(() => store.updateCollectionFile('legal-tools@marketplace', file.path, 'stale', file.content), /modifié ailleurs/);
+  store.setCollectionEnabled(workspace, 'legal-tools@marketplace', true);
+  assert.equal(store.listCollections(workspace)[0].enabled, true);
+  assert.match(store.instructions(workspace), /Échéance/);
+  store.setCollectionEnabled(workspace, 'legal-tools@marketplace', false);
+  assert.equal(store.listCollections(workspace)[0].enabled, false);
+});
+
+test('plugins without portable components remain browsable and cannot be activated', (t) => {
+  const { store, workspace } = fixture(t);
+  store.upsertCollection({
+    id: 'hooks-only@marketplace',
+    name: 'Hooks only',
+    description: '',
+    source: '/plugins/hooks-only',
+    entries: [],
+    files: [{ path: 'hooks/pre-tool.sh', content: Buffer.from('exit 0\n') }],
+  });
+  assert.equal(store.listCollections(workspace)[0].componentCount, 0);
+  assert.equal(store.collectionFile('hooks-only@marketplace', 'hooks/pre-tool.sh').content, 'exit 0\n');
+  assert.throws(() => store.setCollectionEnabled(workspace, 'hooks-only@marketplace', true), /introuvable/);
 });
 
 test('toggle installs and removes discoverable Claude and Codex skills with their assets', (t) => {

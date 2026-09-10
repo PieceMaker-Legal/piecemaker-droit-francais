@@ -36,6 +36,7 @@ export function mount(container, api) {
     .pm-library .switch{display:flex;align-items:center;gap:8px;font-size:12px;white-space:nowrap}.pm-library input[role=switch]{appearance:none;width:32px;height:18px;border-radius:12px;background:#aaa;position:relative;cursor:pointer;margin:0}
     .pm-library input[role=switch]:before{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:white;top:2px;left:2px}.pm-library input[role=switch]:checked{background:#5252cc}.pm-library input[role=switch]:checked:before{left:16px}
     .pm-library input:focus-visible,.pm-library button:focus-visible{outline:2px solid #6366f1;outline-offset:3px}.pm-library [role=alert]{color:#b91c1c;margin:12px 0}.pm-library .meta{font-size:12px}
+    .pm-library .tree{margin:0 0 12px 18px;padding:6px 0 6px 14px;border-left:1px solid hsl(var(--border, 0 0% 87%))}.pm-library .tree-row{display:flex;align-items:center;gap:8px;min-height:28px;font-size:12px}.pm-library .tree-row button{border:0;padding:3px 5px;text-align:left}.pm-library .tree-row .meta{margin-left:auto;padding-right:8px}
     @media(max-width:600px){.pm-library{padding:16px}.pm-library .row{gap:12px;flex-wrap:wrap}}
   `;
   const layout = document.createElement('div');
@@ -50,6 +51,9 @@ export function mount(container, api) {
   let entries = [];
   let providerSkills = [];
   let providerErrors = [];
+  let plugins = [];
+  const pluginTrees = new Map();
+  let pluginTreeBusy = '';
   let snapshot = null;
   let marketplace = null;
   let loading = false;
@@ -98,9 +102,11 @@ export function mount(container, api) {
         const discovered = tab === 'skill'
           ? request('GET', `/provider-skills${query}`).catch(() => ({ providers: [], unavailable: true }))
           : null;
-        const [catalogData, discoveredData] = await Promise.all([catalog, discovered]);
+        const collections = tab === 'skill' ? request('GET', `/plugins${query}`) : null;
+        const [catalogData, discoveredData, collectionData] = await Promise.all([catalog, discovered, collections]);
         if (version === revision) {
           entries = catalogData.entries;
+          plugins = collectionData?.plugins || [];
           providerSkills = (discoveredData?.providers || []).flatMap((result) => (
             (result.skills || []).map((skill) => normalizeSkill(result.provider, skill, workspace ? { path: workspace } : undefined))
           ));
@@ -138,6 +144,39 @@ export function mount(container, api) {
     } catch (cause) { error = cause.message; render(); }
   }
 
+  async function openPluginFile(plugin, file) {
+    const version = revision;
+    try {
+      const prefix = `/plugins/${encodeURIComponent(plugin.id)}/file`;
+      const document = await request('GET', `${prefix}?path=${encodeURIComponent(file.path)}`);
+      if (disposed || version !== revision) return;
+      let previousContent = document.content;
+      const save = async (content) => {
+        if (disposed) throw new Error('La Bibliothèque est fermée.');
+        await request('PUT', prefix, { path: file.path, content, previousContent });
+        previousContent = content;
+        await load();
+      };
+      window.dispatchEvent(new CustomEvent('piecemaker:library-document', { detail: { name: `${plugin.name}/${file.path}`, editorPath: file.path, content: document.content, container: layout, save } }));
+    } catch (cause) { error = cause.message; render(); }
+  }
+
+  async function togglePluginTree(plugin) {
+    if (pluginTrees.has(plugin.id)) {
+      pluginTrees.delete(plugin.id);
+      render();
+      return;
+    }
+    pluginTreeBusy = plugin.id;
+    error = '';
+    render();
+    try {
+      const response = await request('GET', `/plugins/${encodeURIComponent(plugin.id)}/files`);
+      pluginTrees.set(plugin.id, response.files || []);
+    } catch (cause) { error = cause.message; }
+    finally { pluginTreeBusy = ''; if (!disposed) render(); }
+  }
+
   function toggle(label, checked, disabled, action) {
     const node = element('label', undefined, 'switch');
     const input = document.createElement('input');
@@ -171,7 +210,7 @@ export function mount(container, api) {
     const nav = element('nav');
     nav.setAttribute('role', 'tablist');
     nav.setAttribute('aria-label', 'Bibliothèque');
-    for (const [key, label] of [['skill', 'Skills'], ['connectors', 'MCP & connecteurs'], ['agent', 'Agents'], ['marketplace', 'Marketplace']]) {
+    for (const [key, label] of [['skill', 'Skills & plugins'], ['connectors', 'MCP & connecteurs'], ['agent', 'Agents'], ['marketplace', 'Marketplace']]) {
       const item = button(label, () => { tab = key; search = ''; void load(); });
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', String(tab === key));
@@ -204,6 +243,41 @@ export function mount(container, api) {
           body.append(item);
         }
         if (tab === 'skill') {
+          body.append(element('h2', 'Plugins'));
+          if (!plugins.length) body.append(element('p', 'Aucun plugin dans la bibliothèque. Ajoutez-en depuis la Marketplace.'));
+          for (const plugin of plugins.filter(matches)) {
+            const item = row(plugin);
+            const actions = element('div', undefined, 'toolbar');
+            actions.append(button(pluginTrees.has(plugin.id) ? 'Masquer l’arborescence' : pluginTreeBusy === plugin.id ? 'Chargement…' : 'Voir l’arborescence', () => void togglePluginTree(plugin)));
+            item.append(actions, toggle(plugin.componentCount ? (plugin.partial ? 'Partiellement installé' : 'Dans ce dossier') : 'Aucun composant portable', plugin.enabled, !context.project || !plugin.componentCount, () => void mutate('PUT', `/plugins/${encodeURIComponent(plugin.id)}/activation`, { workspacePath: context.project.path, enabled: !plugin.enabled })));
+            body.append(item);
+            if (pluginTrees.has(plugin.id)) {
+              const tree = element('div', undefined, 'tree');
+              const files = pluginTrees.get(plugin.id);
+              if (!files.length) tree.append(element('p', 'Aucun fichier éditable importé.', 'meta'));
+              const directories = new Set();
+              for (const file of files) {
+                const parts = file.path.split('/');
+                for (let index = 1; index < parts.length; index += 1) directories.add(parts.slice(0, index).join('/'));
+              }
+              const nodes = [
+                ...[...directories].map((path) => ({ path, directory: true })),
+                ...files.map((file) => ({ ...file, directory: false })),
+              ].sort((left, right) => left.path.localeCompare(right.path));
+              for (const node of nodes) {
+                const treeRow = element('div', undefined, 'tree-row');
+                treeRow.style.paddingLeft = `${Math.max(0, node.path.split('/').length - 1) * 14}px`;
+                if (node.directory) treeRow.append(element('span', `▾ ${node.path.split('/').at(-1)}/`));
+                else {
+                  const fileButton = button(`└ ${node.path.split('/').at(-1)}`, () => void openPluginFile(plugin, node));
+                  fileButton.disabled = busy || !node.editable;
+                  treeRow.append(fileButton, element('span', node.editable ? `${node.size} octets` : 'lecture seule', 'meta'));
+                }
+                tree.append(treeRow);
+              }
+              body.append(tree);
+            }
+          }
           body.append(element('h2', 'Skills détectées'));
           const detected = providerSkills.filter(matches);
           if (!detected.length) body.append(element('p', 'Aucune skill détectée.'));
@@ -219,10 +293,10 @@ export function mount(container, api) {
         body.append(element('p', 'Les changements s’appliquent aux prochains messages. Une désactivation ne retire pas les instructions déjà reçues dans une conversation.', 'meta'));
       } else if (tab === 'connectors') {
         if (!snapshot) { body.append(element('p', 'Sélectionnez un dossier pour gérer les MCP et connecteurs.')); return; }
-        for (const [assistant, family, items] of [['claude', 'mcp', snapshot.claude.mcp], ['codex', 'mcp', snapshot.codex.mcp], ['claude', 'plugin', snapshot.claude.plugins]]) {
+        for (const [assistant, family, items] of [['claude', 'mcp', snapshot.claude.mcp], ['codex', 'mcp', snapshot.codex.mcp]]) {
           for (const entry of items.filter(matches)) {
             const item = row(entry);
-            item.append(toggle(`${assistant === 'claude' ? 'Claude' : 'Codex'} · ${family === 'mcp' ? 'MCP' : 'Connecteur'}`, entry.enabled, !entry.toggleable, () => void mutate('POST', '/activation/toggle', { workspacePath: context.project.path, assistant, family, id: entry.id, enabled: !entry.enabled })));
+            item.append(toggle(`${assistant === 'claude' ? 'Claude' : 'Codex'} · MCP`, entry.enabled, !entry.toggleable, () => void mutate('POST', '/activation/toggle', { workspacePath: context.project.path, assistant, family, id: entry.id, enabled: !entry.enabled })));
             body.append(item);
           }
         }
@@ -251,7 +325,7 @@ export function mount(container, api) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = context.project?.path !== next.project?.path;
     context = next;
-    if (changed) { entries = []; providerSkills = []; providerErrors = []; snapshot = null; void load(); }
+    if (changed) { entries = []; providerSkills = []; providerErrors = []; plugins = []; pluginTrees.clear(); snapshot = null; void load(); }
     else render();
   });
   mounts.set(container, () => { disposed = true; revision++; unsubscribe(); layout.remove(); style.remove(); });
