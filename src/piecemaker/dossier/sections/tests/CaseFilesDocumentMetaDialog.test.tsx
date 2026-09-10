@@ -75,6 +75,30 @@ describe('CaseFilesDocumentMetaDialog', () => {
     expect(screen.queryByText('À vérifier')).toBeNull();
   });
 
+  it('affiche le nom du mapping quand la chronologie ne fournit que le code', async () => {
+    pmGetCached.mockImplementation(async (path: string) => path === '/mapping'
+      ? {
+          mapping: { 'Alice Martin': 'PERSONNE_PHYSIQUE_01' },
+          reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice Martin'] },
+        }
+      : {
+          generatedAt: '2026-09-10T08:00:00.000Z',
+          graphRevision: 1,
+          mapping: { exists: true, entries: 1 },
+          stats: { documents: 1, indexed: 1, dated: 1, entities: 1, span: null },
+          documents: [{ ...document, codes: [{ ...document.codes[0], label: null }] }],
+          datedDocuments: [{ ...document, codes: [{ ...document.codes[0], label: null }] }],
+          undatedDocuments: [],
+          graph: { status: 'ready', state: {}, revision: 1 },
+          case: { path: 'case-1', name: 'Dossier', location: '/tmp/dossier' },
+        });
+
+    render(<CaseFilesChronology caseId="case-1" caseName="Dossier" refreshVersion={0} />);
+
+    await waitFor(() => expect(screen.getByText('Alice Martin')).toBeTruthy());
+    expect(screen.queryByText('PERSONNE_PHYSIQUE_01')).toBeNull();
+  });
+
   it('ajoute et retire des personnes du mapping pour une pièce', async () => {
     render(
       <CaseFilesDocumentMetaDialog
