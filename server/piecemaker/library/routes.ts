@@ -1,12 +1,17 @@
 import express from 'express';
 
 import type { createLibraryStore } from './store.js';
+import { listLibraryProviderSkills } from './provider-skills.js';
 
 export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>) {
   const router = express.Router();
   router.get('/catalog', (req, res) => {
     try { res.json({ entries: store.list(typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined) }); }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
+  });
+  router.get('/provider-skills', async (req, res) => {
+    const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
+    res.json(await listLibraryProviderSkills(workspacePath));
   });
   router.get('/catalog/:id', (req, res) => {
     try { res.json(store.document(String(req.params.id))); }
