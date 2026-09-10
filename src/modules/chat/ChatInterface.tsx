@@ -231,6 +231,7 @@ function ChatInterface({
     beginEditMessage,
     cancelEditMessage,
   } = useChatComposerState({
+    isActive,
     selectedProject,
     selectedSession,
     currentSessionId,
