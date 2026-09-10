@@ -25,7 +25,7 @@ export const meta = {
 
 const MARKETPLACE_NAME = 'mcp-legifrance';
 const MARKETPLACE_REPO = 'PieceMaker-Legal/mcp-legifrance';
-const PLUGIN_NAME = 'piecemaker';
+const PLUGIN_NAME = 'legifrance';
 const PLUGIN_SPEC = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 const MINIMUM_PLUGIN_VERSION = '1.0.0';
 const REGISTRATION_URL = 'https://piste.gouv.fr/registration';
