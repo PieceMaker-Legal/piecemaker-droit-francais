@@ -6,7 +6,7 @@ import { api } from '@/shared/api';
 import { AUTH_SESSION_EXPIRED_EVENT } from '@/shared/authToken';
 
 export function LibraryDocumentViewer() {
-  const [document, setDocument] = useState<{ name: string; content: string; container: HTMLElement; save: (content: string) => Promise<void> } | null>(null);
+  const [document, setDocument] = useState<{ name: string; editorPath?: string; content: string; container: HTMLElement; save: (content: string) => Promise<void> } | null>(null);
   const editor = useEditorSidebar({ selectedProject: null, isMobile: false });
   const { handleCloseEditor, handleFileOpen } = editor;
   const [projectId] = useState(() => `piecemaker-library:${crypto.randomUUID()}`);
@@ -16,7 +16,7 @@ export function LibraryDocumentViewer() {
       const data = (event as CustomEvent).detail;
       if (typeof data?.name !== 'string' || typeof data?.content !== 'string' || !(data.container instanceof HTMLElement) || typeof data.save !== 'function') return;
       setDocument(data);
-      handleFileOpen(`${data.name}.md`);
+      handleFileOpen(typeof data.editorPath === 'string' ? data.editorPath : `${data.name}.md`);
     };
     const close = () => { setDocument(null); handleCloseEditor(); };
     window.addEventListener('piecemaker:library-document', open);

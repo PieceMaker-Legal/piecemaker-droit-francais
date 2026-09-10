@@ -10,7 +10,7 @@ vi.mock('@/modules/code-editor', async (importOriginal) => ({
   EditorSidebar: ({ editingFile, onCloseEditor }: { editingFile: { projectId: string; path: string }; onCloseEditor: () => void }) => {
     const [content, setContent] = useState('');
     useEffect(() => { void api.readFile(editingFile.projectId, editingFile.path).then((response) => response.json()).then((data) => setContent(data.content)); }, [editingFile.projectId, editingFile.path]);
-    return <aside><article>{content}</article><button onClick={onCloseEditor}>Fermer</button><button onClick={() => { void api.saveFile(editingFile.projectId, editingFile.path, 'Version modifiée'); }}>Enregistrer</button></aside>;
+    return <aside data-path={editingFile.path}><article>{content}</article><button onClick={onCloseEditor}>Fermer</button><button onClick={() => { void api.saveFile(editingFile.projectId, editingFile.path, 'Version modifiée'); }}>Enregistrer</button></aside>;
   },
 }));
 
@@ -34,6 +34,14 @@ it('docks the native editor beside the library and restores file access when clo
   expect(container.querySelector('aside')).toBeNull();
   expect(api.readFile).toBe(readFile);
   expect(api.saveFile).toBe(saveFile);
+});
+
+it('keeps a plugin file extension when opening the native editor', async () => {
+  container = document.createElement('div');
+  document.body.append(container);
+  await act(async () => { stop = startLibraryDocumentViewer(); });
+  await act(async () => { window.dispatchEvent(new CustomEvent('piecemaker:library-document', { detail: { name: 'Plugin/configuration', editorPath: 'config/settings.json', content: '{}', container, save: async () => {} } })); });
+  expect(container.querySelector('aside')?.dataset.path).toBe('config/settings.json');
 });
 
 it('clears the document on expiry and plugin unmount', async () => {

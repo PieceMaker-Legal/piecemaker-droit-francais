@@ -36,7 +36,7 @@ test('metadata list stays private until a document is explicitly opened', async 
   assert.match(container.textContent, /codex · project · \$analyser/);
   assert.match(container.textContent, /\.agents\/skills\/analyser\/SKILL\.md/);
   assert.equal(container.querySelector('[role=switch]').checked, false);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   let opened;
   window.addEventListener('piecemaker:library-document', (event) => { opened = event.detail; });
   [...container.querySelectorAll('button')].find((button) => button.textContent === 'Relire').click();
@@ -44,6 +44,37 @@ test('metadata list stays private until a document is explicitly opened', async 
   assert.equal(opened.name, 'Relire');
   assert.equal(opened.content, '# Instructions');
   assert.equal(opened.container, container.querySelector('.pm-library').parentElement);
+});
+
+test('plugins live with skills, expose their tree and are absent from MCP connectors', async (t) => {
+  const writes = [];
+  const { container } = fixture(t, async (method, path, body) => {
+    if (path.startsWith('/catalog?')) return { entries: [] };
+    if (path.startsWith('/provider-skills?')) return { providers: [] };
+    if (path.startsWith('/plugins?')) return { plugins: [{ id: 'legal@market', name: 'Plugin légal', description: 'Recherche', enabled: false, partial: false }] };
+    if (path.endsWith('/files')) return { files: [{ path: 'skills/recherche/SKILL.md', size: 120, editable: true }] };
+    if (path.includes('/file?')) return { path: 'skills/recherche/SKILL.md', content: 'Instructions plugin' };
+    if (method === 'PUT' && path.endsWith('/file')) { writes.push({ path, body }); return { ok: true }; }
+    if (path.startsWith('/activation?')) return { claude: { mcp: [], plugins: [{ id: 'legacy', name: 'Ne pas afficher', enabled: true, toggleable: true }] }, codex: { mcp: [] } };
+    return { ok: true };
+  });
+  await settle();
+  assert.match(container.textContent, /Plugin légal/);
+  assert.match(container.textContent, /Skills & plugins/);
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Voir l’arborescence').click();
+  await settle();
+  [...container.querySelectorAll('button')].find((button) => button.textContent.includes('SKILL.md')).click();
+  await settle();
+  let opened;
+  window.addEventListener('piecemaker:library-document', (event) => { opened = event.detail; }, { once: true });
+  [...container.querySelectorAll('button')].find((button) => button.textContent.includes('SKILL.md')).click();
+  await settle();
+  assert.equal(opened.editorPath, 'skills/recherche/SKILL.md');
+  await opened.save('Instructions adaptées');
+  assert.deepEqual(writes, [{ path: '/plugins/legal%40market/file', body: { path: 'skills/recherche/SKILL.md', content: 'Instructions adaptées', previousContent: 'Instructions plugin' } }]);
+  [...container.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'MCP & connecteurs').click();
+  await settle();
+  assert.doesNotMatch(container.textContent, /Ne pas afficher/);
 });
 
 test('a toggle sends the current dossier and no global activation', async (t) => {

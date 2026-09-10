@@ -6,7 +6,7 @@ import path from 'node:path';
 const settings = new URL('./local.json', import.meta.url);
 const home = fs.existsSync(settings) ? JSON.parse(fs.readFileSync(settings, 'utf8')).home : path.join(os.homedir(), '.piecemaker');
 const connectionPath = path.join(home, 'library-backend', 'connection.json');
-const allowed = /^\/(?:catalog(?:\/[a-f0-9]{64}(?:\/activation)?)?|provider-skills|activation(?:\/toggle)?|plugin\/marketplace(?:\/(?:register|acquire))?)(?:\?|$)/;
+const allowed = /^\/(?:catalog(?:\/[a-f0-9]{64}(?:\/activation)?)?|provider-skills|plugins(?:\/[^/?]+(?:\/(?:files|file|activation))?)?|activation(?:\/toggle)?|plugin\/marketplace(?:\/(?:register|acquire))?)(?:\?|$)/;
 const server = http.createServer(async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');

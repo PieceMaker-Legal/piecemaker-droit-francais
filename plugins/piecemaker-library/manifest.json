@@ -1,7 +1,7 @@
 {
   "name": "piecemaker-library",
   "displayName": "Bibliothèque",
-  "description": "Skills, agents, MCP et connecteurs. Activation par dossier.",
+  "description": "Skills, plugins, agents et MCP. Activation multi-provider par dossier.",
   "version": "1.0.0",
   "type": "module",
   "slot": "tab",
