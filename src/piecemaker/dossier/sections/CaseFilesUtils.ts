@@ -86,6 +86,7 @@ const LEGACY_STATUS_TONE: Record<ChronologyLegacyStatus, string> = {
 };
 
 const REASON_LABELS: Record<string, string> = {
+  aucune_personne_indexee: 'aucune personne visée',
   date_changed: 'date corrigée',
   nature_changed: 'type de pièce corrigé',
   document_entities_changed: 'entités de la pièce modifiées',
