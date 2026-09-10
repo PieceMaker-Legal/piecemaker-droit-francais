@@ -19,7 +19,7 @@ import { removeLegacyLegifranceService } from '../lib/legacy-legifrance.mjs';
 
 export const meta = {
   id: '07-legifrance',
-  label: 'Serveur MCP Légifrance (clés PISTE)',
+  label: 'Serveur MCP PieceMaker (Légifrance, clés PISTE)',
   description: "Installe le plugin MCP autonome et configure l'accès à l'API Légifrance via PISTE",
 };
 
@@ -205,13 +205,13 @@ export async function install(ctx, overrides = {}) {
     return { status: 'skipped', note: 'Mode simulation — aucune modification effectuée.' };
   }
   removeLegacyLegifranceService({ userHome: ops.userHome, capture: ops.runCapture, logger: ops.log });
-  const pluginSpin = spinner('Installation du plugin MCP Légifrance autonome...');
+  const pluginSpin = spinner('Installation du serveur MCP PieceMaker autonome...');
   const plugin = await ensurePlugin(ops);
   if (!plugin.ok) {
-    pluginSpin.fail('Plugin MCP Légifrance non installé.');
+    pluginSpin.fail('Serveur MCP PieceMaker non installé.');
     return { status: 'failed', note: plugin.reason };
   }
-  pluginSpin.succeed('Plugin MCP Légifrance installé et prêt.');
+  pluginSpin.succeed('Serveur MCP PieceMaker installé et prêt.');
 
   const standalone = readSimpleEnv(legifranceEnvFile(ops.userHome));
   const existingEnv = { ...standalone, ...(ctx.env || {}) };
