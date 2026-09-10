@@ -257,7 +257,8 @@ function legalTopology(caseRoot, chronology, mappingDocument) {
     documents.push({
       key,
       file: `${key}.md`,
-      label: safeLabel({ key, nature: doc.nature, dateIso: doc.dateIso }),
+      sourcePath: doc.path,
+      label: doc.path,
       nature: doc.nature || null,
       dateIso: doc.dateIso || null,
       juridiction: doc.juridiction || null,
@@ -426,9 +427,9 @@ function corpusDocument(document, parties) {
   const body = document.analyzable
     ? document.content
     : '[Contenu non transmis : la pièce doit être convertie et anonymisée avant analyse sémantique.]';
-  return `# ${document.label}
+  return `# ${document.sourcePath}
 
-- document_id: PIECE_${document.key.slice(0, 12).toUpperCase()}
+- chemin_piece: ${document.sourcePath}
 - date_indexee: ${document.dateIso || 'inconnue'}
 - nature_indexee: ${document.nature || 'inconnue'}
 - juridiction_indexee: ${document.juridiction || 'inconnue'}
