@@ -2,6 +2,8 @@
 
 Plugin CloudCLI autonome : une liste de skills, une liste d’agents, les MCP et connecteurs du dossier, et les marketplaces Legal / Anthropic existantes. Les titres et descriptions viennent du frontmatter YAML. Le contenu complet est demandé uniquement à l’ouverture du document.
 
+L’onglet Skills distingue le catalogue central des skills détectées pour Claude, Codex, Cursor, Mistral et OpenCode. Ces installations sont affichées avec une forme commune et restent gérées par leur provider d’origine.
+
 ## Installation locale
 
 Avec Node 22 ou plus récent, depuis `plugins/piecemaker-library/` :
@@ -17,7 +19,7 @@ La source du plugin est versionnée dans `plugins/piecemaker-library/` du dépô
 ## Données et activation
 
 - Le catalogue appartient au backend PieceMaker hébergé dans CloudCLI : `~/.piecemaker/library-backend/catalog.sqlite` (ou `PIECEMAKER_HOME`).
-- Les skills et agents importés sont désactivés au départ. Un toggle persiste l’activation pour le chemin canonique du dossier ; le backend ajoute alors les instructions aux prochains messages de chat. Les instructions d’agents sont des rôles transmis au modèle, sans création automatique de sous-processus agent.
+- Les skills et agents importés sont désactivés au départ. Un toggle persiste une activation unique pour le chemin canonique du dossier ; le backend ajoute alors les instructions aux prochains messages de Claude, Codex, Cursor, Mistral et OpenCode. Les instructions d’agents sont des rôles transmis au modèle, sans création automatique de sous-processus agent.
 - Les fichiers associés sont conservés dans la base, puis matérialisés uniquement pour les éléments activés. Les instructions indiquent leurs chemins. La désactivation retire cette copie active.
 - La visionneuse réutilise le volet natif `EditorSidebar` de CloudCLI, avec édition et enregistrement direct dans le catalogue. Les métadonnées YAML sont actualisées à chaque sauvegarde et les modifications concurrentes sont détectées. Elle ne crée aucun fichier dans le dossier et ne transmet rien au chat.
 - MCP et connecteurs réutilisent les réglages d’activation par dossier existants. Une acquisition depuis la marketplace installe le connecteur désactivé globalement ; ses skills et agents entrent également dans le catalogue.

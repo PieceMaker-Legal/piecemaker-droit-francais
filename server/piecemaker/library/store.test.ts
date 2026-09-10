@@ -87,28 +87,30 @@ test('library instructions are removed from echoes without rewriting user prose'
 test('runtime injects only active dossier instructions and preserves the visible user message', async (t) => {
   const { store, workspace, other, skill } = fixture(t);
   const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
-  const commands: string[] = [];
+  const commands: Array<{ provider: string; command: string }> = [];
   const received: unknown[] = [];
-  const runtime: Parameters<typeof installLibraryRuntime>[0] = {
-    run: async (_provider, command, _options, writer) => {
-      commands.push(command);
-      writer.send({ kind: 'text', role: 'user', content: command });
-    },
+  const run: Parameters<typeof installLibraryRuntime>[0]['run'] = async (provider, command, _options, writer) => {
+    commands.push({ provider, command });
+    writer.send({ kind: 'text', role: 'user', content: command });
   };
+  const runtime: Parameters<typeof installLibraryRuntime>[0] = { run, getRunner: (provider) => (command, options, writer) => run(provider, command, options, writer) };
   const sessions = { fetchHistory: async () => ({ messages: [] }) } as unknown as Parameters<typeof installLibraryRuntime>[1];
   installLibraryRuntime(runtime, sessions, store);
   const writer = { send: (value: unknown) => { received.push(value); } };
   await runtime.run('claude', 'Relire', { cwd: workspace }, writer);
-  assert.equal(commands[0], 'Relire');
+  assert.equal(commands[0].command, 'Relire');
   store.setEnabled(workspace, id, true);
-  await runtime.run('claude', 'Relire', { cwd: workspace }, writer);
-  assert.match(commands[1], /Instructions privées/);
-  assert.deepEqual(received[1], { kind: 'text', role: 'user', content: 'Relire' });
+  for (const provider of ['claude', 'codex', 'cursor', 'mistral', 'opencode'] as const) {
+    await runtime.getRunner(provider)('Relire', { cwd: workspace }, writer);
+  }
+  assert.deepEqual(commands.slice(1).map(({ provider }) => provider), ['claude', 'codex', 'cursor', 'mistral', 'opencode']);
+  assert.ok(commands.slice(1).every(({ command }) => command.includes('Instructions privées')));
+  assert.ok(received.slice(1).every((message) => JSON.stringify(message) === JSON.stringify({ kind: 'text', role: 'user', content: 'Relire' })));
   await runtime.run('codex', 'Relire', { cwd: other }, writer);
-  assert.equal(commands[2], 'Relire');
+  assert.equal(commands[6].command, 'Relire');
   store.setEnabled(workspace, id, false);
   await runtime.run('codex', 'Relire', { cwd: workspace }, writer);
-  assert.equal(commands[3], 'Relire');
+  assert.equal(commands[7].command, 'Relire');
 });
 
 test('editing updates YAML and active instructions without changing assets or activation', (t) => {
