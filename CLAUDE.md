@@ -279,6 +279,158 @@ Pièges du script à connaître avant de le modifier :
 - terminologie par langue : fr dossier, en case, es expediente, it fascicolo, de Dossier (neutre comme « das Projekt », articles inchangés), tr dava, ru досье (indéclinable, accords corrigés explicitement), ja/zh-CN/zh-TW 案件, ko 사건 (particules 를→을 et 가→이 ajustées).
 
 ## About CloudCLI
+
+### Releases PieceMaker et provenance CloudCLI
+
+Le dépôt contient déjà une génération automatisée de release, mais son
+déclenchement reste volontairement manuel. Le workflow
+`.github/workflows/release.yml` est lancé depuis GitHub Actions avec
+`workflow_dispatch` et l'entrée `increment` (`patch`, `minor`, `major` ou une
+version explicite). Il exécute `npx release-it --ci`, qui construit le projet,
+met à jour `package.json`, `package-lock.json` et `CHANGELOG.md`, crée le commit
+de release et le tag `vX.Y.Z`, publie la release GitHub et publie le paquet npm
+`@cloudcli-ai/cloudcli`. Il exige les secrets `RELEASE_PAT` et `NPM_TOKEN`.
+À la date de cette documentation, `package.json` conserve également le nom
+npm `@cloudcli-ai/cloudcli` : ce workflow ne publie donc pas un paquet npm
+PieceMaker séparé. Il faut vérifier cette cible avant de lancer une release
+destinée uniquement au Desktop PieceMaker.
+
+Le nom par défaut de `.release-it.json` est `CloudCLI UI vX.Y.Z`. Pour une
+release PieceMaker, il faut toujours renseigner l'entrée `release_name` du
+workflow afin que CloudCLI reste identifiable et que sa provenance soit
+auditable. Format recommandé :
+
+```
+PieceMaker vX.Y.Z — CloudCLI vA.B.C (upstream abcdef123456)
+```
+
+`A.B.C` et `abcdef123456` doivent correspondre au commit CloudCLI upstream
+intégré dans la release, pas à une version ou un SHA choisi après coup. Le
+corps de la release doit également mentionner les plugins mis à jour, leur
+version ou commit, et les éventuels écarts PieceMaker.
+
+Procédure de publication finale après intégration de CloudCLI et mise à jour
+des plugins :
+
+1. Depuis une copie propre de `main`, relever le commit source CloudCLI avant
+   l'intégration :
+
+   ```sh
+   git fetch upstream main --tags
+   CLOUDCLI_COMMIT="$(git rev-parse upstream/main)"
+   CLOUDCLI_VERSION="$(git show "$CLOUDCLI_COMMIT:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")"
+   CLOUDCLI_SHORT="${CLOUDCLI_COMMIT:0:12}"
+   ```
+
+2. Intégrer `upstream/main` mécaniquement, résoudre uniquement les conflits
+   autorisés par les règles de fork, puis régénérer les artefacts PieceMaker
+   nécessaires. Vérifier le typecheck, les tests et le build.
+
+3. Pour chaque plugin livré avec cette version, mettre à jour son dépôt sur sa
+   branche stable, vérifier son `manifest.json`, sa version et son commit,
+   puis installer ses dépendances et lancer son build. L'hôte sait mettre à
+   jour un plugin installé via `POST /api/plugins/<nom>/update` (équivalent à
+   `git pull --ff-only`, `npm install --ignore-scripts` et `npm run build`),
+   mais il n'existe pas de mise à jour groupée, de rollback, de verrouillage de
+   version, de signature ni de détection automatique des plugins.
+
+4. Ouvrir GitHub Actions, sélectionner `Release`, choisir l'incrément et
+   fournir le nom suivant :
+
+   ```sh
+   RELEASE_NAME="PieceMaker v${VERSION} — CloudCLI v${CLOUDCLI_VERSION} (upstream ${CLOUDCLI_SHORT})"
+   ```
+
+   Remplacer `VERSION` par la version PieceMaker effectivement publiée. Ne
+   pas utiliser le nom par défaut `CloudCLI UI vX.Y.Z` pour une release finale.
+
+5. Vérifier la release GitHub créée, le commit, le tag, le changelog, le
+   paquet npm publié et le corps de release. Le workflow
+   `.github/workflows/desktop-release.yml` ne crée pas la release principale :
+   il doit être relancé ensuite avec le tag existant (`vX.Y.Z`). Il compile et
+   ajoute les artefacts Desktop macOS (`.dmg`) et Windows (`.exe`), leurs
+   sommes SHA-256, ainsi que les bundles du serveur local dans une prerelease
+   dédiée. Il exige les secrets de signature macOS ; la signature Windows est
+   facultative.
+
+### Construire le Desktop sans certificat
+
+Les scripts locaux déclarés dans `package.json` sont les suivants :
+
+```sh
+npm ci
+npm run desktop:pack
+npm run desktop:dist:mac -- --publish never
+npm run desktop:dist:win -- --publish never
+```
+
+`desktop:pack` produit une application macOS/Windows décompressée et ne
+cherche pas de certificat avec `CSC_IDENTITY_AUTO_DISCOVERY=false`. Les
+commandes `desktop:dist:mac` et `desktop:dist:win` produisent respectivement
+un `.dmg` et un installateur NSIS `.exe` dans `release/desktop`.
+
+Le `package.json` upstream porte encore `productName: CloudCLI`,
+`appId: ai.cloudcli.desktop` et un nom d'artefact `cloudcli-desktop-*`. Le
+script `scripts/release/prepare-desktop-app.js` remplace ces trois valeurs
+dans l'application staged par celles de `product.config.json` ; le build
+PieceMaker produit donc normalement des artefacts nommés
+`piecemaker-droit-francais-desktop-*`, tout en embarquant le runtime CloudCLI.
+
+Pour un test local sans identité de signature, utiliser les variables
+suivantes :
+
+```sh
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run desktop:dist:mac -- --publish never
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run desktop:dist:win -- --publish never
+```
+
+Sur macOS, `build.mac.notarize` est à `true` dans `package.json`, mais
+electron-builder ne lance la notarisation que si des identifiants Apple sont
+présents ; sans eux, il avertit et saute cette étape. Cela peut donc produire
+un DMG de test non signé ou non notarisé localement. Le workflow
+`desktop-release.yml` est plus strict : son étape de vérification échoue avant
+le build si `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`,
+`APPLE_APP_SPECIFIC_PASSWORD` ou `APPLE_TEAM_ID` manque. Il n'existe donc pas
+de release macOS publique via ce workflow sans certificat Developer ID
+Application et accès à la notarisation Apple. Les triplets de credentials
+Apple API key sont acceptés par electron-builder, mais ne satisfont pas les
+tests actuels de ce workflow, qui imposent la variante Apple ID.
+
+Sur Windows, le workflow choisit le build signé si
+`WINDOWS_CSC_LINK` et `WINDOWS_CSC_KEY_PASSWORD` sont présents ; sinon il
+force `CSC_IDENTITY_AUTO_DISCOVERY=false` et publie un `.exe` non signé. Un
+certificat autosigné n'est pertinent que pour un parc interne dont le
+certificat a été installé comme autorité de confiance. Pour une distribution
+publique, il reste non approuvé et ne supprime pas l'avertissement Microsoft
+Defender SmartScreen ; il faut un certificat de signature reconnu par
+Microsoft et une réputation de publication suffisante.
+
+Un binaire macOS non signé ou seulement autosigné n'est pas une distribution
+publique équivalente : Gatekeeper peut bloquer son ouverture ou afficher un
+développeur non identifié. Un utilisateur peut l'autoriser manuellement dans
+les réglages de sécurité, mais cette procédure ne doit pas être la promesse
+de la release. La signature Developer ID et la notarisation Apple sont les
+prérequis pour une installation distribuée normalement. De même, un `.exe`
+Windows non signé peut être téléchargé mais déclenche généralement un
+avertissement SmartScreen et affiche un éditeur inconnu.
+
+La commande locale `npm run release` est aussi disponible via `release.sh`,
+mais elle exige une branche `main` propre et un `GITHUB_TOKEN` dans `.env`.
+Elle reprend les valeurs par défaut de `.release-it.json`, notamment le nom
+`CloudCLI UI vX.Y.Z` et la publication npm ; elle ne doit donc être utilisée
+pour une release PieceMaker qu'après avoir fourni explicitement le nom et
+vérifié la cible de publication. Ni le workflow principal ni le workflow
+Desktop ne mettent automatiquement à jour une installation Electron déjà
+installée : ils publient les artefacts, et l'installation du nouveau `.dmg` ou
+`.exe` reste à déclencher par le distributeur.
+
+Le commit `72d347e` (`fix(piecemaker): suivre les releases du produit`) a
+redirigé la détection de version de la Sidebar et de l'onglet À propos vers le
+dépôt défini par `product.config.json`, avec repli CloudCLI upstream si la
+configuration est absente. La release PieceMaker doit donc être publiée dans
+ce dépôt et porter le nom explicite ci-dessus ; publier seulement une release
+CloudCLI upstream ne déclenche pas la détection PieceMaker.
+
 ### Backend code
 
 For every task that creates, modifies, refactors, or reviews backend code under `server/`, load and follow `$backend-module-standards` from `.agents/skills/backend-module-standards/SKILL.md`. Apply it only to backend code; do not impose those architecture rules on the frontend.
