@@ -187,7 +187,7 @@ export default function ConfigurationSection() {
 
               <ConfigurationComponentCard
                 componentKey="mcp"
-                title="Serveur MCP Légifrance"
+                title="Serveur MCP PieceMaker"
                 installed={overview.components.mcp.installed}
                 summary={overview.components.mcp.summary}
                 onInstalled={load}
