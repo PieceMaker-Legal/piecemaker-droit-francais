@@ -15,7 +15,12 @@ const { readJsonSafe, writeJsonPretty, claudeSettingsLocalPath } = require('./cl
 function readPluginManifest(installPath) {
   try {
     const manifest = readJsonSafe(path.join(installPath, '.claude-plugin', 'plugin.json'));
-    return { name: typeof manifest.name === 'string' ? manifest.name : undefined, description: typeof manifest.description === 'string' ? manifest.description : undefined };
+    return {
+      name: typeof manifest.displayName === 'string' && manifest.displayName.trim()
+        ? manifest.displayName
+        : typeof manifest.name === 'string' ? manifest.name : undefined,
+      description: typeof manifest.description === 'string' ? manifest.description : undefined,
+    };
   } catch {
     return { name: undefined, description: undefined };
   }
