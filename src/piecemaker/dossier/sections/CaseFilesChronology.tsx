@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CalendarClock, Download, Loader2, Pencil, RefreshCw, Sparkles } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Download, Loader2, Pencil, Plus, RefreshCw, Sparkles, UserRound } from 'lucide-react';
 
 import { Badge, Button } from '@/shared/ui';
 import { authenticatedFetch } from '@/shared/api';
@@ -16,7 +16,17 @@ import { cn } from '@/shared/utils';
 import { invalidatePmGet, pmGetCached, pmPost, PieceMakerApiError, PIECEMAKER_API_BASE } from '@/piecemaker/dossier/api';
 import CaseFilesDocumentMetaDialog from '@/piecemaker/dossier/sections/CaseFilesDocumentMetaDialog';
 import type { ChronologyDocument, ChronologyExportFormat, ChronologyOverview } from '@/piecemaker/dossier/sections/CaseFilesTypes';
-import { chronologyStateModel, formatDateIso } from '@/piecemaker/dossier/sections/CaseFilesUtils';
+import { chronologyReviewReasons, chronologyStateModel, formatDateIso } from '@/piecemaker/dossier/sections/CaseFilesUtils';
+import { principalPartyOptions } from '@/piecemaker/dossier/sections/MappingModel';
+
+type ChronologyLoadedOverview = ChronologyOverview & {
+  entityOptions: Array<{ code: string; label: string }>;
+};
+
+type ChronologyMappingResponse = {
+  mapping?: Record<string, string>;
+  reverse_mapping?: Record<string, string[]>;
+};
 
 type CaseFilesChronologyProps = {
   caseId: string;
@@ -25,7 +35,7 @@ type CaseFilesChronologyProps = {
 };
 
 export default function CaseFilesChronology({ caseId, caseName, refreshVersion }: CaseFilesChronologyProps) {
-  const [chronology, setChronology] = useState<ChronologyOverview | null>(null);
+  const [chronology, setChronology] = useState<ChronologyLoadedOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,9 +50,20 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
     try {
       const caseQuery = { case: caseId };
       if (refresh) invalidatePmGet('/repository/chronology', caseQuery);
-      const data = await pmGetCached<ChronologyOverview>('/repository/chronology', caseQuery);
+      const [data, mappingDocument] = await Promise.all([
+        pmGetCached<ChronologyOverview>('/repository/chronology', caseQuery),
+        pmGetCached<ChronologyMappingResponse>('/mapping', caseQuery),
+      ]);
       if (requestSequence !== loadSequence.current) return;
-      setChronology(data);
+      const mapping = mappingDocument.mapping || {};
+      const reverseMapping = mappingDocument.reverse_mapping || {};
+      const entityOptions = [
+        ...principalPartyOptions(mapping, reverseMapping, 'personne_physique'),
+        ...principalPartyOptions(mapping, reverseMapping, 'societe'),
+      ]
+        .map(({ code, principal }) => ({ code, label: principal }))
+        .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
+      setChronology({ ...data, entityOptions });
       setError(null);
     } catch (cause) {
       if (requestSequence !== loadSequence.current) return;
@@ -178,45 +199,61 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
         </div>
       ) : (
         <div className="flex-1 space-y-1.5 overflow-y-auto">
-          {rows.map((document) => (
-            <div key={document.documentKey} className="flex gap-3 rounded-lg border border-border/50 px-3 py-2 hover:bg-accent/30">
-              <div className="w-24 shrink-0 pt-0.5 text-xs text-muted-foreground">{formatDateIso(document.dateIso)}</div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate text-sm font-medium">{document.name}</span>
-                  {document.nature && <Badge variant="secondary">{document.nature}</Badge>}
-                  {document.reviewRequired && (
-                    <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                      À vérifier
-                    </Badge>
+          {rows.map((document) => {
+            const reviewReasons = chronologyReviewReasons(document.reviewReasons);
+            return (
+              <div key={document.documentKey} className="flex gap-3 rounded-lg border border-border/50 px-3 py-2 hover:bg-accent/30">
+                <div className="w-24 shrink-0 pt-0.5 text-xs text-muted-foreground">{formatDateIso(document.dateIso)}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium">{document.name}</span>
+                    {document.nature && <Badge variant="secondary">{document.nature}</Badge>}
+                    {reviewReasons.length > 0 && (
+                      <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                        À vérifier
+                      </Badge>
+                    )}
+                  </div>
+                  {document.localisation && <p className="mt-0.5 text-xs text-muted-foreground">Localisation : {document.localisation}</p>}
+                  {document.fields.length > 0 && (
+                    <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                      {document.fields.map((field, index) => (
+                        <div key={index} className="flex gap-1">
+                          <dt className="font-medium">{field.label}</dt>
+                          <dd>{field.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  <button
+                    type="button"
+                    className="mt-1 flex min-h-7 w-full items-center gap-1.5 rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                    disabled={!document.path}
+                    aria-label={`Modifier les personnes visées pour ${document.name}`}
+                    onClick={() => setEditing(document)}
+                  >
+                    <UserRound className="h-3.5 w-3.5 shrink-0" />
+                    {document.codes.map((entity) => (
+                      <Badge key={entity.code} variant="outline">{entity.label || entity.code}</Badge>
+                    ))}
+                    <Plus className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  </button>
+                  {reviewReasons.length > 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">{reviewReasons.join(' · ')}</p>
                   )}
                 </div>
-                {document.localisation && <p className="mt-0.5 text-xs text-muted-foreground">Localisation : {document.localisation}</p>}
-                {document.fields.length > 0 && (
-                  <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                    {document.fields.map((field, index) => (
-                      <div key={index} className="flex gap-1">
-                        <dt className="font-medium">{field.label}</dt>
-                        <dd>{field.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-                {document.reviewReasons.length > 0 && (
-                  <p className="mt-1 text-xs text-muted-foreground">{document.reviewReasons.join(' · ')}</p>
-                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  disabled={!document.path}
+                  onClick={() => setEditing(document)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0"
-                disabled={!document.path}
-                onClick={() => setEditing(document)}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -224,6 +261,7 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
         <CaseFilesDocumentMetaDialog
           caseId={caseId}
           document={editing}
+          entityOptions={chronology.entityOptions}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
