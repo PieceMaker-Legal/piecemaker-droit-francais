@@ -90,9 +90,8 @@ de confirmer la confiance accordée à ce hook local.
 
 L'étape `07-legifrance` installe le plugin autonome depuis
 `PieceMaker-Legal/mcp-legifrance`. Son runtime, ses tests, son venv et sa
-configuration MCP ne vivent plus dans ce dépôt. Le plugin conserve
-volontairement l'identifiant Claude `piecemaker`, donc le namespace historique
-`mcp__plugin_piecemaker_legifrance` utilisé par les agents reste inchangé.
+configuration MCP ne vivent plus dans ce dépôt. Le plugin est identifié dans
+Claude par `legifrance`, avec le namespace `mcp__plugin_legifrance_legifrance`.
 
 Les identifiants PISTE sont copiés avec des permissions 0600 dans
 `~/.config/mcp-legifrance/.env`. Le `.env` PieceMaker reste alimenté pour
