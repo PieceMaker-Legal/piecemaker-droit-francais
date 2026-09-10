@@ -8,27 +8,40 @@
  */
 
 import { useState } from 'react';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Check, Loader2, Plus, Trash2 } from 'lucide-react';
 
 import { Button, Dialog, DialogContent, DialogTitle, Input } from '@/shared/ui';
+import { pmPut, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import type { ChronologyDocument, ChronologyField } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 
-import { pmPut, PieceMakerApiError } from '../api';
-import type { ChronologyDocument, ChronologyField } from './CaseFilesTypes';
+type ChronologyEntityOption = {
+  code: string;
+  label: string;
+};
 
 type CaseFilesDocumentMetaDialogProps = {
   caseId: string;
   document: ChronologyDocument;
+  entityOptions: ChronologyEntityOption[];
   onClose: () => void;
   onSaved: () => void;
 };
 
-export default function CaseFilesDocumentMetaDialog({ caseId, document, onClose, onSaved }: CaseFilesDocumentMetaDialogProps) {
+export default function CaseFilesDocumentMetaDialog({ caseId, document, entityOptions, onClose, onSaved }: CaseFilesDocumentMetaDialogProps) {
   const [nature, setNature] = useState(document.nature ?? '');
   const [dateIso, setDateIso] = useState(document.dateIso ?? '');
   const [localisation, setLocalisation] = useState(document.localisation ?? '');
   const [fields, setFields] = useState<ChronologyField[]>(document.fields.length ? document.fields : []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Retains the effective mapping codes while the user edits this piece. */
+  const [selectedEntityCodes, setSelectedEntityCodes] = useState(() => document.codes.map(({ code }) => code));
+
+  const toggleEntity = (code: string) => {
+    setSelectedEntityCodes((current) => current.includes(code)
+      ? current.filter((selectedCode) => selectedCode !== code)
+      : [...current, code]);
+  };
 
   const updateField = (index: number, patch: Partial<ChronologyField>) => {
     setFields((current) => current.map((field, i) => (i === index ? { ...field, ...patch } : field)));
@@ -50,6 +63,7 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, onClose,
     setSaving(true);
     setError(null);
     try {
+      const detectedCodes = document.detectedCodes.map(({ code }) => code);
       await pmPut('/repository/document-meta', {
         case: caseId,
         path: document.path,
@@ -57,6 +71,10 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, onClose,
         dateIso: dateIso.trim() || null,
         localisation: localisation.trim() || null,
         fields: fields.filter((field) => field.label.trim() || field.value.trim()),
+        entityDecisions: {
+          additions: selectedEntityCodes.filter((code) => !detectedCodes.includes(code)),
+          exclusions: detectedCodes.filter((code) => !selectedEntityCodes.includes(code)),
+        },
       });
       onSaved();
     } catch (cause) {
@@ -89,6 +107,29 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, onClose,
               Lieu
               <Input value={localisation} onChange={(event) => setLocalisation(event.target.value)} placeholder="Ex. TJ de Paris" />
             </label>
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-xs font-medium text-muted-foreground">Personnes visées</span>
+            <div className="flex flex-wrap gap-2 rounded-md border border-border/60 p-2">
+              {entityOptions.map((entity) => {
+                const selected = selectedEntityCodes.includes(entity.code);
+                return (
+                  <Button
+                    key={entity.code}
+                    type="button"
+                    variant={selected ? 'secondary' : 'outline'}
+                    size="sm"
+                    className="h-8"
+                    aria-pressed={selected}
+                    onClick={() => toggleEntity(entity.code)}
+                  >
+                    {selected && <Check className="h-3.5 w-3.5" />}
+                    {entity.label}
+                  </Button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="space-y-2">

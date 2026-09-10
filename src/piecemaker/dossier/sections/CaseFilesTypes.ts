@@ -108,6 +108,17 @@ export type OriginalsJob = {
 
 export type ChronologyField = { label: string; value: string };
 
+export type ChronologyEntity = {
+  code: string;
+  category: string;
+  label: string | null;
+};
+
+export type ChronologyEntityDecisions = {
+  additions: string[];
+  exclusions: string[];
+};
+
 /** One projected document inside the chronology (chronologyFromLegalGraph()). */
 export type ChronologyDocument = {
   documentKey: string;
@@ -124,6 +135,9 @@ export type ChronologyDocument = {
   dateIso: string | null;
   localisation: string | null;
   fields: ChronologyField[];
+  codes: ChronologyEntity[];
+  detectedCodes: ChronologyEntity[];
+  entityDecisions: ChronologyEntityDecisions;
   reviewRequired: boolean;
   reviewReasons: string[];
 };

@@ -86,7 +86,6 @@ const LEGACY_STATUS_TONE: Record<ChronologyLegacyStatus, string> = {
 };
 
 const REASON_LABELS: Record<string, string> = {
-  aucune_personne_indexee: 'aucune personne visée',
   date_changed: 'date corrigée',
   nature_changed: 'type de pièce corrigé',
   document_entities_changed: 'entités de la pièce modifiées',
@@ -102,8 +101,15 @@ const REASON_LABELS: Record<string, string> = {
   no_party_documents: 'aucune pièce reliée aux parties',
 };
 
+const HIDDEN_REVIEW_REASONS = new Set(['aucune_personne_indexee', 'aucune_partie_selectionnee']);
+
 function readableReason(reason: string): string {
+  if (HIDDEN_REVIEW_REASONS.has(reason)) return '';
   return REASON_LABELS[reason] || reason.split('_').join(' ');
+}
+
+export function chronologyReviewReasons(reasons: string[]): string[] {
+  return [...new Set(reasons.map(readableReason).filter(Boolean))];
 }
 
 export type ChronologyStateModel = {
