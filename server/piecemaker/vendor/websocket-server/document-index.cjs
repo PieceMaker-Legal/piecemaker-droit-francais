@@ -40,7 +40,7 @@ const LEGACY_DOCUMENT_INDEX_OVERRIDES_RELATIVE_PATH = '.piecemaker/document-inde
 const OVERRIDE_MAX_FIELDS = 24;
 const DOCUMENT_INDEX_VERSION = 2;
 const MANUAL_OVERRIDE_FLAG = 'MANUAL_OVERRIDE_DIFFERS_FROM_DETECTION';
-const METADATA_FIELDS = ['nature', 'dateIso', 'juridiction', 'fields'];
+const METADATA_FIELDS = ['nature', 'dateIso', 'localisation', 'fields'];
 
 function documentIndexFile(caseRoot) {
   return path.join(caseRoot, ...DOCUMENT_INDEX_RELATIVE_PATH.split('/'));
@@ -74,7 +74,7 @@ function normalizeOverrideEntry(entry) {
   return {
     nature: cleanOverrideString(source.nature, 120),
     dateIso: /^\d{4}-\d{2}-\d{2}$/.test(source.dateIso) ? source.dateIso : null,
-    juridiction: cleanOverrideString(source.juridiction, 200),
+    localisation: cleanOverrideString(source.localisation, 200),
     fields,
     updatedAt: typeof source.updatedAt === 'string' ? source.updatedAt : null,
   };
@@ -82,7 +82,7 @@ function normalizeOverrideEntry(entry) {
 
 /** Une correction vide (tous champs effacés) : signal de retour à la détection. */
 function isEmptyOverride(entry) {
-  return entry.nature == null && entry.dateIso == null && entry.juridiction == null && entry.fields.length === 0;
+  return entry.nature == null && entry.dateIso == null && entry.localisation == null && entry.fields.length === 0;
 }
 
 function normalizeOverrides(documents) {
@@ -148,7 +148,7 @@ function normalizeRevisionEntries(revisions) {
     const field = String(entry.field || '');
     const revision = Number(entry.revision);
     if (!/^[a-f0-9]{64}$/.test(documentKey) || !Number.isSafeInteger(revision)
-        || revision <= previousRevision || ![...METADATA_FIELDS, 'codes'].includes(field)) continue;
+        || revision <= previousRevision || ![...METADATA_FIELDS, 'personnes_visees'].includes(field)) continue;
     clean.push({
       revision,
       documentKey,
@@ -183,7 +183,7 @@ function detectedMetadata(entry) {
   return {
     nature: entry?.nature ?? null,
     dateIso: entry?.doc_date_iso ?? null,
-    juridiction: entry?.juridiction ?? null,
+    localisation: entry?.localisation ?? null,
     fields: [],
   };
 }
@@ -194,14 +194,14 @@ function effectiveMetadata(entry, override) {
   return {
     nature: override.nature,
     dateIso: override.dateIso,
-    juridiction: override.juridiction,
+    localisation: override.localisation,
     fields: override.fields,
     source: 'admin_manual',
   };
 }
 
 function effectiveEntityCodes(entry, decision, knownCodes = null) {
-  const detected = [...new Set((entry?.codes || []).filter((code) =>
+  const detected = [...new Set((entry?.personnes_visees || []).filter((code) =>
     typeof code === 'string' && (!knownCodes || knownCodes.has(code))))];
   if (!decision) return detected.sort();
   const exclusions = new Set(decision.exclusions);
@@ -213,13 +213,13 @@ function effectiveEntityCodes(entry, decision, knownCodes = null) {
 
 function semanticImpactForField(field) {
   if (['nature', 'dateIso'].includes(field)) return 'refresh_required';
-  if (field === 'codes') return 'refresh_if_scope_changed';
+  if (field === 'personnes_visees') return 'refresh_if_scope_changed';
   return 'display_only';
 }
 
 function semanticStaleReasonForField(field) {
   if (field === 'dateIso') return 'date_changed';
-  if (field === 'codes') return 'document_entities_changed';
+  if (field === 'personnes_visees') return 'document_entities_changed';
   return `${field}_changed`;
 }
 
@@ -330,7 +330,7 @@ function applyDocumentIndexCorrection(caseRoot, relativePath, correction, {
   if (!sameValue(previousCodes, nextCodes) || Boolean(previousDecision) !== Boolean(nextDecision)) {
     revisions.push(appendRevision(current, {
       documentKey: key,
-      field: 'codes',
+      field: 'personnes_visees',
       detectedValue: effectiveEntityCodes(entry, null, knownCodes),
       previousEffectiveValue: previousCodes,
       newValue: nextCodes,
@@ -390,8 +390,10 @@ function readDocumentIndex(caseRoot) {
       nature_confidence: Number.isFinite(entry.nature_confidence) ? entry.nature_confidence : null,
       doc_date: typeof entry.doc_date === 'string' ? entry.doc_date : null,
       doc_date_iso: /^\d{4}-\d{2}-\d{2}$/.test(entry.doc_date_iso) ? entry.doc_date_iso : null,
-      juridiction: typeof entry.juridiction === 'string' ? entry.juridiction : null,
-      codes: Array.isArray(entry.codes) ? entry.codes.filter((code) => typeof code === 'string') : [],
+      localisation: typeof entry.localisation === 'string' ? entry.localisation : null,
+      personnes_visees: Array.isArray(entry.personnes_visees)
+        ? entry.personnes_visees.filter((code) => typeof code === 'string')
+        : [],
       updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : null,
     };
   }
@@ -512,8 +514,8 @@ async function buildChronology(caseRoot, options = {}) {
     const entityDecision = entityDecisions[key] || null;
     const docId = file.path;
     const detected = detectedMetadata(entry);
-    detected.juridiction = entry ? scrubFreeText(entry.juridiction, scrubTokens) : null;
-    const effective = effectiveMetadata({ ...entry, juridiction: detected.juridiction }, override);
+    detected.localisation = entry ? scrubFreeText(entry.localisation, scrubTokens) : null;
+    const effective = effectiveMetadata({ ...entry, localisation: detected.localisation }, override);
     const detectedCodes = effectiveEntityCodes(entry, null, knownCodes);
     const effectiveCodes = effectiveEntityCodes(entry, entityDecision, knownCodes);
     const editRevision = editRevisionByKey.get(key) || 0;
@@ -533,7 +535,7 @@ async function buildChronology(caseRoot, options = {}) {
     if (entityDecision && !sameValue(detectedCodes, effectiveCodes)) {
       qualityFlags.push({
         type: MANUAL_OVERRIDE_FLAG,
-        field: 'codes',
+        field: 'personnes_visees',
         detectedValue: detectedCodes,
         effectiveValue: effectiveCodes,
         source: 'admin_manual',
@@ -562,7 +564,7 @@ async function buildChronology(caseRoot, options = {}) {
       natureConfidence: entry ? entry.nature_confidence : null,
       date: entry ? entry.doc_date : null,
       dateIso: effective.dateIso,
-      juridiction: visibleMetadataValue(effective.juridiction),
+      localisation: visibleMetadataValue(effective.localisation),
       fields: visibleMetadataValue(effective.fields),
       metadata: Object.fromEntries(METADATA_FIELDS.map((field) => [field, {
         detected: visibleMetadataValue(detected[field]),

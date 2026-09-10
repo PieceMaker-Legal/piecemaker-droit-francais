@@ -1615,8 +1615,8 @@ def write_document_index(
             "nature_confidence": meta.get("nature_confidence"),
             "doc_date": meta.get("doc_date"),
             "doc_date_iso": meta.get("doc_date_iso"),
-            "juridiction": _scrub_free_text(meta.get("juridiction"), sensitive_tokens),
-            "codes": _codes_for_entities(entities, code_lookup),
+            "localisation": _scrub_free_text(meta.get("juridiction"), sensitive_tokens),
+            "personnes_visees": _codes_for_entities(entities, code_lookup),
             "updatedAt": updated_at,
         }
         written += 1
