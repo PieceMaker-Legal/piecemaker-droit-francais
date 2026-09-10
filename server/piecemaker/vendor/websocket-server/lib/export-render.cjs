@@ -318,7 +318,7 @@ function renderChronologyHtml(chronology, { caseName } = {}) {
       <td>${escapeHtml(dateLabel)}</td>
       <td>${escapeHtml(doc.nature || '')}</td>
       <td>${escapeHtml(doc.name)}</td>
-      <td>${escapeHtml(doc.juridiction || '')}</td>
+      <td>${escapeHtml(doc.localisation || '')}</td>
       <td>${infosHtml}</td>
       <td>${entitesHtml}</td>
     </tr>`;

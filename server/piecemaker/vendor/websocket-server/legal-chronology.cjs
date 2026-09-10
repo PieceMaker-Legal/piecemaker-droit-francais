@@ -399,7 +399,7 @@ function chronologyFromLegalGraph(
         ?? local.natureConfidence ?? null,
       date: firstOwned(node, ['date']) ?? local.date ?? null,
       dateIso: effectiveMetadataValue(node, local, 'dateIso', ['date_iso']),
-      juridiction: effectiveMetadataValue(node, local, 'juridiction', ['jurisdiction']),
+      localisation: effectiveMetadataValue(node, local, 'localisation'),
       fields: effectiveMetadataValue(node, local, 'fields', ['custom_fields']) || [],
       codes,
       graphNodeId: node?.id || null,
@@ -428,7 +428,7 @@ function chronologyFromLegalGraph(
     if (deanonymize) {
       projected.nature = humanValue(projected.nature, reverseMapping);
       projected.date = humanValue(projected.date, reverseMapping);
-      projected.juridiction = humanValue(projected.juridiction, reverseMapping);
+      projected.localisation = humanValue(projected.localisation, reverseMapping);
       projected.fields = humanValue(projected.fields, reverseMapping);
       projected.qualityFlags = humanValue(projected.qualityFlags, reverseMapping);
     }
