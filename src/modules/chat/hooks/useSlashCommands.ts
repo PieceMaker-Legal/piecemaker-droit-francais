@@ -9,6 +9,7 @@ const COMMAND_QUERY_DEBOUNCE_MS = 150;
 
 
 type UseSlashCommandsOptions = {
+  isActive?: boolean;
   selectedProject: Project | null;
   provider: LLMProvider;
   input: string;
@@ -127,6 +128,7 @@ const filterSlashCommands = (
 };
 
 export function useSlashCommands({
+  isActive = true,
   selectedProject,
   provider,
   input,
@@ -165,6 +167,9 @@ export function useSlashCommands({
       if (!selectedProject) {
         setSlashCommands([]);
         setFilteredCommands([]);
+        return;
+      }
+      if (!isActive) {
         return;
       }
 
@@ -217,7 +222,7 @@ export function useSlashCommands({
     return () => {
       cancelled = true;
     };
-  }, [selectedProject, provider]);
+  }, [isActive, selectedProject, provider]);
 
   useEffect(() => {
     if (!showCommandMenu) {

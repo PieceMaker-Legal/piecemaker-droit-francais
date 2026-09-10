@@ -30,6 +30,7 @@ import { useFileMentions } from '@/modules/chat/hooks/useFileMentions';
 import { useSlashCommands } from '@/modules/chat/hooks/useSlashCommands';
 
 type UseChatComposerStateArgs = {
+  isActive?: boolean;
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
   currentSessionId: string | null;
@@ -153,6 +154,7 @@ const getNotificationSessionSummary = (
 };
 
 export function useChatComposerState({
+  isActive = true,
   selectedProject,
   selectedSession,
   currentSessionId,
@@ -454,6 +456,7 @@ export function useChatComposerState({
     handleCommandInputChange,
     handleCommandMenuKeyDown,
   } = useSlashCommands({
+    isActive,
     selectedProject,
     provider,
     input,
