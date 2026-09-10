@@ -2654,7 +2654,7 @@ function createAdminRouter({
         correction: {
           nature: body.nature,
           dateIso: body.dateIso,
-          juridiction: body.juridiction,
+          localisation: body.localisation,
           fields: body.fields,
           reason: body.reason,
           ...(Object.hasOwn(body, 'entityDecisions')

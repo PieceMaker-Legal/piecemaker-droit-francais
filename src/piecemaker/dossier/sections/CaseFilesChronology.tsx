@@ -191,7 +191,7 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
                     </Badge>
                   )}
                 </div>
-                {document.juridiction && <p className="mt-0.5 text-xs text-muted-foreground">Lieu : {document.juridiction}</p>}
+                {document.localisation && <p className="mt-0.5 text-xs text-muted-foreground">Localisation : {document.localisation}</p>}
                 {document.fields.length > 0 && (
                   <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
                     {document.fields.map((field, index) => (
