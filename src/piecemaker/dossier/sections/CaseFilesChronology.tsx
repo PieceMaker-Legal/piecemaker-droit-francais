@@ -201,6 +201,10 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
         <div className="flex-1 space-y-1.5 overflow-y-auto">
           {rows.map((document) => {
             const reviewReasons = chronologyReviewReasons(document.reviewReasons);
+            const indexedEntities = document.codes.map((entity) => ({
+              ...entity,
+              label: entity.label || chronology.entityOptions.find((option) => option.code === entity.code)?.label || entity.code,
+            }));
             return (
               <div key={document.documentKey} className="flex gap-3 rounded-lg border border-border/50 px-3 py-2 hover:bg-accent/30">
                 <div className="w-24 shrink-0 pt-0.5 text-xs text-muted-foreground">{formatDateIso(document.dateIso)}</div>
@@ -233,7 +237,7 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
                     onClick={() => setEditing(document)}
                   >
                     <UserRound className="h-3.5 w-3.5 shrink-0" />
-                    {document.codes.map((entity) => (
+                    {indexedEntities.map((entity) => (
                       <Badge key={entity.code} variant="outline">{entity.label || entity.code}</Badge>
                     ))}
                     <Plus className="h-3.5 w-3.5 shrink-0 opacity-60" />
