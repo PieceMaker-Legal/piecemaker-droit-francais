@@ -11,7 +11,7 @@ export function stripLibraryInstructions(text: string) {
   return start >= 0 && text.endsWith(CLOSE) ? text.slice(0, start) : text;
 }
 
-export function installLibraryRuntime(runtime: Pick<typeof providerRuntimeService, 'run'>, sessions: Pick<typeof sessionsService, 'fetchHistory'>, store: ReturnType<typeof createLibraryStore>) {
+export function installLibraryRuntime(runtime: Pick<typeof providerRuntimeService, 'run' | 'getRunner'>, sessions: Pick<typeof sessionsService, 'fetchHistory'>, store: ReturnType<typeof createLibraryStore>) {
   const run = runtime.run.bind(runtime);
   const history = sessions.fetchHistory.bind(sessions);
   runtime.run = async (provider, command, options, writer) => {
@@ -30,6 +30,7 @@ export function installLibraryRuntime(runtime: Pick<typeof providerRuntimeServic
     });
     return run(provider, instructions ? `${command}\n\n${OPEN}\nInstructions activées pour ce dossier, à appliquer lorsqu’elles concernent la demande.\n${instructions}\n${CLOSE}` : command, options, wrapped);
   };
+  runtime.getRunner = (provider) => (command, options, writer) => runtime.run(provider, command, options, writer);
   sessions.fetchHistory = async (...args) => {
     const result = await history(...args);
     return { ...result, messages: result.messages.map((message) => message.kind === 'text' && message.role === 'user'

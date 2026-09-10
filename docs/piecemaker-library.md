@@ -10,6 +10,8 @@ Un serveur interne sur une adresse de boucle locale et un port aléatoire expose
 
 Le harnais de bibliothèque décore le service public des providers après le harnais de citations. Il ajoute les seules instructions activées pour le chemin canonique du dossier et masque ce complément dans l’écho utilisateur et l’historique affiché. Les noms de commandes restent au début du message. Les agents activés fournissent leurs instructions de rôle ; cette activation ne crée pas de sous-agent.
 
+Une activation vaut simultanément pour Claude, Codex, Cursor, Mistral et OpenCode. Le harnais commun décore `run` et `getRunner`, de sorte que le choix du provider ne crée aucune activation séparée. Les copies de découverte natives restent un mécanisme de compatibilité supplémentaire pour les providers qui savent lire ces répertoires ; Mistral n’en expose actuellement aucun.
+
 ## Import et retrait des installations globales
 
 Depuis la racine, avec la version de Node compatible avec `better-sqlite3` :
@@ -34,3 +36,5 @@ Une désactivation concerne les prochains messages ; elle ne retire pas les cont
 ## Frontend
 
 Le plugin possède sa liste et ses onglets. `src/piecemaker/library/` monte le composant natif `EditorSidebar` de CloudCLI dans un volet redimensionnable à droite de la liste, sans écrire de document dans le dossier ni utiliser le chat. Le contenu est fermé au démontage du plugin et à l’expiration de l’authentification. Un adaptateur en mémoire fournit le document à l’éditeur ; les lectures des fichiers ordinaires conservent leur transport habituel. Le téléchargement et l’aperçu Markdown natifs sont disponibles. Enregistrer (ou Ctrl/Cmd+S) sauvegarde le document dans le catalogue et actualise ses métadonnées YAML, sans changer ses activations. Une vérification de la version précédente empêche d’écraser une modification concurrente. Les fichiers associés restent conservés séparément du document principal.
+
+L’onglet Skills affiche aussi les installations détectées par Claude, Codex, Cursor, Mistral et OpenCode. Le plugin normalise leur provider, leur scope, leur commande, leur nom, leur description et leur chemin source. Les métadonnées de dossier ne sont conservées que pour les scopes `project` et `repo`. Cette liste reste distincte du catalogue central et ne reçoit donc aucun bouton d’activation.
