@@ -260,6 +260,10 @@ function prioritizeUserNpmGlobalBin(env: NodeJS.ProcessEnv): { key: string; valu
     path.join(os.homedir(), 'AppData', 'Roaming', 'npm'),
     path.join(os.homedir(), '.npm-global', 'bin'),
   ].filter(Boolean);
+  const mistralBin = path.join(os.homedir(), '.mistral', 'bin');
+  const extraCliEntries = fs.existsSync(path.join(mistralBin, os.platform() === 'win32' ? 'mistral.exe' : 'mistral'))
+    ? [mistralBin]
+    : [];
 
   const normalizedPathEntries = pathEntries.map((entry) => os.platform() === 'win32' ? entry.toLowerCase() : entry);
   const preferredEntries = candidates.filter((candidate, index) => {
@@ -279,10 +283,11 @@ function prioritizeUserNpmGlobalBin(env: NodeJS.ProcessEnv): { key: string; valu
   );
 
   const value = [
+    ...extraCliEntries,
     ...preferredEntries,
     ...pathEntries.filter((entry) => {
       const normalizedEntry = os.platform() === 'win32' ? entry.toLowerCase() : entry;
-      return !normalizedPreferredEntries.includes(normalizedEntry);
+      return !normalizedPreferredEntries.includes(normalizedEntry) && !extraCliEntries.includes(entry);
     }),
   ].join(delimiter);
 
@@ -330,7 +335,8 @@ export function handleShellConnection(
           !!initialCommand &&
           (initialCommand.includes('setup-token') ||
             initialCommand.includes('cursor-agent login') ||
-            initialCommand.includes('auth login'));
+            initialCommand.includes('auth login') ||
+            initialCommand.includes('mistral login'));
 
         const commandSuffix =
           isPlainShell && initialCommand
