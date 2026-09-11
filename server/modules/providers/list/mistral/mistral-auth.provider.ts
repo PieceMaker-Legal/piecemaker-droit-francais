@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import spawn from 'cross-spawn';
 
 import type { IProviderAuth } from '@/shared/interfaces.js';
@@ -11,12 +15,28 @@ type MistralLoginStatus = {
 };
 
 export class MistralProviderAuth implements IProviderAuth {
+  private getExecutable(): string {
+    const configuredPath = process.env.MISTRAL_CLI_PATH?.trim();
+    if (configuredPath) {
+      return configuredPath;
+    }
+
+    const bundledPath = path.join(
+      os.homedir(),
+      '.mistral',
+      'bin',
+      process.platform === 'win32' ? 'mistral.exe' : 'mistral',
+    );
+
+    return fs.existsSync(bundledPath) ? bundledPath : 'mistral';
+  }
+
   /**
    * Checks whether the mistral CLI is available on this host.
    */
   private checkInstalled(): boolean {
     try {
-      const result = spawn.sync('vibe', ['--version'], { stdio: 'ignore', timeout: 5000 });
+      const result = spawn.sync(this.getExecutable(), ['--version'], { stdio: 'ignore', timeout: 5000 });
       return !result.error && result.status === 0;
     } catch {
       return false;
@@ -53,7 +73,7 @@ export class MistralProviderAuth implements IProviderAuth {
   }
 
   /**
-   * Runs mistral auth status and parses the login marker from stdout.
+   * Runs `mistral whoami --json` and parses the OAuth identity from stdout.
    */
   private checkMistralLogin(): Promise<MistralLoginStatus> {
     return new Promise((resolve) => {
@@ -74,7 +94,7 @@ export class MistralProviderAuth implements IProviderAuth {
       }, 5000);
 
       try {
-        childProcess = spawn('vibe', ['auth', 'status']);
+        childProcess = spawn(this.getExecutable(), ['whoami', '--json']);
       } catch {
         clearTimeout(timeout);
         processCompleted = true;
@@ -106,16 +126,32 @@ export class MistralProviderAuth implements IProviderAuth {
         clearTimeout(timeout);
 
         if (code === 0) {
-          // Parse Mistral auth status output
-          const emailMatch = stdout.match(/Email:\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
-          if (emailMatch?.[1]) {
-            resolve({ authenticated: true, email: emailMatch[1], method: 'cli' });
+          let identity: { email?: unknown; user?: { email?: unknown } } | null = null;
+          try {
+            const parsed = JSON.parse(stdout.trim()) as unknown;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              identity = parsed as { email?: unknown; user?: { email?: unknown } };
+            }
+          } catch {
+            // Older CLI versions may return a human-readable identity.
+          }
+
+          const jsonEmail = typeof identity?.email === 'string'
+            ? identity.email
+            : typeof identity?.user?.email === 'string'
+              ? identity.user.email
+              : null;
+          const emailMatch = stdout.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+          const email = jsonEmail || emailMatch?.[1] || null;
+          if (email) {
+            resolve({ authenticated: true, email, method: 'oauth2' });
             return;
           }
 
-          // Check for "Logged in" or "Authenticated" indicators
-          if (stdout.includes('Logged in') || stdout.includes('Authenticated') || stdout.includes('Active')) {
-            resolve({ authenticated: true, email: 'Mistral account', method: 'cli' });
+          // Fallback: any non-empty stdout without an explicit "not logged in" style error
+          // means whoami succeeded (exit code 0) and the user is authenticated.
+          if (stdout.trim().length > 0) {
+            resolve({ authenticated: true, email: 'Mistral account', method: 'oauth2' });
             return;
           }
 

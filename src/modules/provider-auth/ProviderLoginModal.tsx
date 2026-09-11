@@ -55,7 +55,7 @@ const getProviderCommand = ({
   }
 
   if (provider === 'mistral') {
-    return IS_PLATFORM ? 'vibe login --device-auth' : 'vibe login';
+    return 'mistral login';
   }
 
   if (provider === 'opencode') {
