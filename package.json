@@ -1,6 +1,6 @@
 {
   "name": "@piecemaker-legal/piecemaker",
-  "version": "1.37.2",
+  "version": "1.0.0",
   "productName": "PieceMaker",
   "description": "Plateforme IA pour juristes français",
   "type": "module",
