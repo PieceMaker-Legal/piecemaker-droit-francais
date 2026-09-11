@@ -280,78 +280,37 @@ Pièges du script à connaître avant de le modifier :
 
 ## About CloudCLI
 
-### Releases PieceMaker et provenance CloudCLI
+### Package npm public PieceMaker
 
-Le dépôt contient déjà une génération automatisée de release, mais son
-déclenchement reste volontairement manuel. Le workflow
-`.github/workflows/release.yml` est lancé depuis GitHub Actions avec
-`workflow_dispatch` et l'entrée `increment` (`patch`, `minor`, `major` ou une
-version explicite). Il exécute `npx release-it --ci`, qui construit le projet,
-met à jour `package.json`, `package-lock.json` et `CHANGELOG.md`, crée le commit
-de release et le tag `vX.Y.Z`, publie la release GitHub et publie le paquet npm
-`@cloudcli-ai/cloudcli`. Il exige les secrets `RELEASE_PAT` et `NPM_TOKEN`.
-À la date de cette documentation, `package.json` conserve également le nom
-npm `@cloudcli-ai/cloudcli` : ce workflow ne publie donc pas un paquet npm
-PieceMaker séparé. Il faut vérifier cette cible avant de lancer une release
-destinée uniquement au Desktop PieceMaker.
+Depuis une copie propre, régénérer le paquet avec les derniers commits
+récupérables :
 
-Le nom par défaut de `.release-it.json` est `CloudCLI UI vX.Y.Z`. Pour une
-release PieceMaker, il faut toujours renseigner l'entrée `release_name` du
-workflow afin que CloudCLI reste identifiable et que sa provenance soit
-auditable. Format recommandé :
-
-```
-PieceMaker vX.Y.Z — CloudCLI vA.B.C (upstream abcdef123456)
+```sh
+npm run package:release
 ```
 
-`A.B.C` et `abcdef123456` doivent correspondre au commit CloudCLI upstream
-intégré dans la release, pas à une version ou un SHA choisi après coup. Le
-corps de la release doit également mentionner les plugins mis à jour, leur
-version ou commit, et les éventuels écarts PieceMaker.
+Cette commande incrémente la version patch, construit le client et le serveur,
+puis crée l'archive `.tgz` dans `release/npm/`. Pour publier sur npm et pousser
+le commit de version :
 
-Procédure de publication finale après intégration de CloudCLI et mise à jour
-des plugins :
+```sh
+npm login
+PUBLISH=1 PUSH=1 npm run package:release
+```
 
-1. Depuis une copie propre de `main`, relever le commit source CloudCLI avant
-   l'intégration :
+Une fois publié, l'installation utilisateur ne nécessite aucun token :
 
-   ```sh
-   git fetch upstream main --tags
-   CLOUDCLI_COMMIT="$(git rev-parse upstream/main)"
-   CLOUDCLI_VERSION="$(git show "$CLOUDCLI_COMMIT:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")"
-   CLOUDCLI_SHORT="${CLOUDCLI_COMMIT:0:12}"
-   ```
+```sh
+npm install -g @piecemaker-legal/piecemaker
+piecemaker
+```
 
-2. Intégrer `upstream/main` mécaniquement, résoudre uniquement les conflits
-   autorisés par les règles de fork, puis régénérer les artefacts PieceMaker
-   nécessaires. Vérifier le typecheck, les tests et le build.
+`piecemaker` starts the Node.js server, waits for its health endpoint, and
+opens the application in an isolated Chrome/Edge/Brave/Chromium app window
+(`--app=...`), not in a normal browser tab. `PWA_URL` and `PWA_PROFILE_DIR`
+can override the URL and local browser profile when needed.
 
-3. Pour chaque plugin livré avec cette version, mettre à jour son dépôt sur sa
-   branche stable, vérifier son `manifest.json`, sa version et son commit,
-   puis installer ses dépendances et lancer son build. L'hôte sait mettre à
-   jour un plugin installé via `POST /api/plugins/<nom>/update` (équivalent à
-   `git pull --ff-only`, `npm install --ignore-scripts` et `npm run build`),
-   mais il n'existe pas de mise à jour groupée, de rollback, de verrouillage de
-   version, de signature ni de détection automatique des plugins.
-
-4. Ouvrir GitHub Actions, sélectionner `Release`, choisir l'incrément et
-   fournir le nom suivant :
-
-   ```sh
-   RELEASE_NAME="PieceMaker v${VERSION} — CloudCLI v${CLOUDCLI_VERSION} (upstream ${CLOUDCLI_SHORT})"
-   ```
-
-   Remplacer `VERSION` par la version PieceMaker effectivement publiée. Ne
-   pas utiliser le nom par défaut `CloudCLI UI vX.Y.Z` pour une release finale.
-
-5. Vérifier la release GitHub créée, le commit, le tag, le changelog, le
-   paquet npm publié et le corps de release. Le workflow
-   `.github/workflows/desktop-release.yml` ne crée pas la release principale :
-   il doit être relancé ensuite avec le tag existant (`vX.Y.Z`). Il compile et
-   ajoute les artefacts Desktop macOS (`.dmg`) et Windows (`.exe`), leurs
-   sommes SHA-256, ainsi que les bundles du serveur local dans une prerelease
-   dédiée. Il exige les secrets de signature macOS ; la signature Windows est
-   facultative.
+Le paquet publié contient l'attribution CloudCLI et reste sous AGPL-3.0-or-later.
 
 ### Construire le Desktop sans certificat
 
@@ -414,15 +373,9 @@ prérequis pour une installation distribuée normalement. De même, un `.exe`
 Windows non signé peut être téléchargé mais déclenche généralement un
 avertissement SmartScreen et affiche un éditeur inconnu.
 
-La commande locale `npm run release` est aussi disponible via `release.sh`,
-mais elle exige une branche `main` propre et un `GITHUB_TOKEN` dans `.env`.
-Elle reprend les valeurs par défaut de `.release-it.json`, notamment le nom
-`CloudCLI UI vX.Y.Z` et la publication npm ; elle ne doit donc être utilisée
-pour une release PieceMaker qu'après avoir fourni explicitement le nom et
-vérifié la cible de publication. Ni le workflow principal ni le workflow
-Desktop ne mettent automatiquement à jour une installation Electron déjà
-installée : ils publient les artefacts, et l'installation du nouveau `.dmg` ou
-`.exe` reste à déclencher par le distributeur.
+Ni le paquet npm ni le workflow Desktop ne mettent automatiquement à jour une
+installation déjà installée : la mise à jour npm ou la réinstallation du
+nouvel artefact Desktop reste à déclencher par le distributeur.
 
 Le commit `72d347e` (`fix(piecemaker): suivre les releases du produit`) a
 redirigé la détection de version de la Sidebar et de l'onglet À propos vers le

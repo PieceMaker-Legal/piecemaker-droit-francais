@@ -14,6 +14,8 @@ function createHarness() {
     error: (message = '') => errorMessages.push(message),
   };
   let serverStarts = 0;
+  let pwaOpens = 0;
+  const startupEvents: string[] = [];
   let sandboxArguments: string[] = [];
   const service = createCliService({
     applicationRoot: '/application',
@@ -40,6 +42,11 @@ function createHarness() {
     updateGlobalPackage: () => undefined,
     startServer: async () => {
       serverStarts += 1;
+      startupEvents.push('server');
+    },
+    openPwa: async () => {
+      pwaOpens += 1;
+      startupEvents.push('pwa');
     },
     startBrowserUseMcp: async () => undefined,
   });
@@ -50,6 +57,8 @@ function createHarness() {
     logMessages,
     errorMessages,
     getServerStarts: () => serverStarts,
+    getPwaOpens: () => pwaOpens,
+    getStartupEvents: () => startupEvents,
     getSandboxArguments: () => sandboxArguments,
   };
 }
@@ -67,6 +76,16 @@ test('applies CLI options to the injected environment before starting the server
   assert.equal(harness.environment.SERVER_PORT, '8080');
   assert.equal(harness.environment.DATABASE_PATH, '/data/app.db');
   assert.equal(harness.getServerStarts(), 1);
+});
+
+test('opens the PWA after the server starts', async () => {
+  const harness = createHarness();
+
+  const exitCode = await harness.service.run([]);
+
+  assert.equal(exitCode, 0);
+  assert.equal(harness.getPwaOpens(), 1);
+  assert.deepEqual(harness.getStartupEvents(), ['server', 'pwa']);
 });
 
 test('passes only sandbox arguments to the injected sandbox service', async () => {
