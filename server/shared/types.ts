@@ -1324,6 +1324,9 @@ export type CliEnvironment = Record<string, string | undefined>;
  */
 export type CliPackageMetadata = {
   version: string;
+  name?: string;
+  productName?: string;
+  commandName?: string;
   homepage?: string;
   bugsUrl?: string;
 };
