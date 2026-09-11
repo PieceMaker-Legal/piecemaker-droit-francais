@@ -555,3 +555,18 @@ pkill -TERM -f "$PWD/node_modules/.bin/concurrently.*server:dev.*client" 2>/
   ) &
 
   SERVER_PORT=3003 VITE_PORT=5173 npm run dev
+
+## Publier le package npm (@piecemaker-legal/piecemaker)
+
+Le workflow `.github/workflows/publish-npm-package.yml` publie sur le registre npm public sous le scope `@piecemaker-legal`. Auth par secret `NPM_TOKEN` (granular access token, org `piecemaker-legal` en read/write, **Bypass 2FA coché à la création** — impossible à ajouter après coup sur un token existant).
+
+**Commande** :
+1. Demander à l'utilisateur le numéro de version à publier (npm refuse de republier une version déjà existante — `403 You cannot publish over the previously published versions`).
+2. Mettre à jour `package.json` : `npm version <X.Y.Z> --no-git-tag-version --allow-same-version`.
+3. Commit + push de `package.json` et `package-lock.json` uniquement (jamais le reste d'un `git status` en cours) : la version publiée est celle du repo distant, pas celle du poste local.
+4. Déclencher : `gh workflow run publish-npm-package.yml --repo PieceMaker-Legal/piecemaker-droit-francais`.
+5. Suivre : `gh run list --workflow publish-npm-package.yml --limit 1` puis `gh run view <id> --json status,conclusion` (poll, `gh run watch` a tendance à dépasser le temps d'exécution disponible). En cas d'échec : `gh run view <id> --log-failed`.
+
+**Effets** : nouvelle version visible sur `https://registry.npmjs.org/@piecemaker-legal%2fpiecemaker`, tag `latest` mis à jour si c'est la plus haute version publiée.
+
+**Numéro de version à demander** : toujours demander avant de lancer — jamais déduire ou incrémenter automatiquement.
