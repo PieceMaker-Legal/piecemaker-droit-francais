@@ -2,22 +2,21 @@
 
 PieceMaker is a browser/PWA interface backed by a local Node.js server.
 
-## Install from npm
+## Install
 
-Requires Node.js 22 or newer:
-
-```bash
-npm install -g @piecemaker-legal/piecemaker
-```
-
-Start PieceMaker with:
+macOS / Linux:
 
 ```bash
-piecemaker
+curl -fsSL https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/scripts/piecemaker/cli/piecemaker.sh | sh && piecemaker
 ```
 
-The package starts the Node backend and opens the PWA in a standalone
-Chrome/Edge/Brave/Chromium app window. Electron is not required.
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/scripts/piecemaker/cli/piecemaker.ps1 | iex; piecemaker
+```
+
+This installs Node.js (via nvm) if it is not already present, clones or updates the repository, installs the `piecemaker` command, and launches the PWA in a standalone Chrome/Edge/Brave/Chromium app window. No prerequisites required.
 
 ## Install from GitHub Packages
 

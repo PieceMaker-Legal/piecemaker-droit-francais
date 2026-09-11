@@ -570,3 +570,13 @@ Le workflow `.github/workflows/publish-npm-package.yml` publie sur le registre n
 **Effets** : nouvelle version visible sur `https://registry.npmjs.org/@piecemaker-legal%2fpiecemaker`, tag `latest` mis à jour si c'est la plus haute version publiée.
 
 **Numéro de version à demander** : toujours demander avant de lancer — jamais déduire ou incrémenter automatiquement.
+
+## Installation utilisateur (README)
+
+Voie principale, sans prérequis (bootstrap Node via nvm si absent) :
+- macOS/Linux : `curl -fsSL https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/scripts/piecemaker/cli/piecemaker.sh | sh && piecemaker`
+- Windows : `irm https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/scripts/piecemaker/cli/piecemaker.ps1 | iex; piecemaker`
+
+Le `&& piecemaker` final est volontaire : la commande doit se terminer par le lancement effectif de l'app PWA, pas seulement par l'installation.
+
+L'ancienne commande `npm install -g @piecemaker-legal/piecemaker` (voie npm classique, suppose Node déjà présent) a été retirée du README au profit de cette voie universelle. La section GitHub Packages (registre distinct) reste inchangée.
