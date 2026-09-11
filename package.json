@@ -1,15 +1,14 @@
 {
-  "name": "@cloudcli-ai/cloudcli",
+  "name": "@piecemaker-legal/piecemaker",
   "version": "1.37.2",
-  "productName": "CloudCLI",
-  "description": "A web-based UI for Claude Code CLI",
+  "productName": "PieceMaker",
+  "description": "Plateforme IA pour juristes français",
   "type": "module",
   "main": "dist-server/server/index.js",
   "bin": {
-    "cloudcli": "dist-server/server/modules/cli/cli.js"
+    "piecemaker": "dist-server/server/modules/cli/cli.js"
   },
   "files": [
-    "electron/",
     "server/",
     "shared/",
     "product.config.json",
@@ -19,13 +18,20 @@
     "scripts/",
     "README.md"
   ],
-  "homepage": "https://cloudcli.ai",
+  "homepage": "https://github.com/PieceMaker-Legal/piecemaker-droit-francais",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/siteboon/claudecodeui.git"
+    "url": "git+https://github.com/PieceMaker-Legal/piecemaker-droit-francais.git"
   },
   "bugs": {
-    "url": "https://github.com/siteboon/claudecodeui/issues"
+    "url": "https://github.com/PieceMaker-Legal/piecemaker-droit-francais/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "dev": "concurrently --kill-others \"npm run server:dev\" \"npm run client\"",
@@ -41,6 +47,8 @@
     "desktop:dist:mac": "npm run build && npm run desktop:stage && electron-builder --projectDir .desktop-build/desktop-app --mac dmg",
     "desktop:dist:win": "npm run build && npm run desktop:stage && electron-builder --projectDir .desktop-build/desktop-app --win nsis",
     "server:bundle": "npm run build && node scripts/release/build-server-bundle.js",
+    "package:release": "sh scripts/release/package-piecemaker.sh",
+    "package:github:release": "cross-env REGISTRY=https://npm.pkg.github.com npm run package:release",
     "desktop:icon:mac": "node electron/scripts/generate-macos-icon.js",
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
@@ -94,7 +102,7 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "electron/assets/logo-macos.icns",
-      "notarize": true,
+      "notarize": false,
       "target": [
         "dmg"
       ],
@@ -208,6 +216,7 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
+    "@electron/rebuild": "^4.2.0",
     "@release-it/conventional-changelog": "^10.0.5",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
@@ -227,7 +236,7 @@
     "autoprefixer": "^10.4.16",
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
-    "electron": "^38.0.0",
+    "electron": "^44.3.0",
     "electron-builder": "^26.15.3",
     "eslint": "^9.39.3",
     "eslint-import-resolver-typescript": "^4.4.4",
@@ -237,6 +246,7 @@
     "husky": "^9.1.7",
     "jsdom": "^26.1.0",
     "lint-staged": "^16.3.2",
+    "node-abi": "^4.35.0",
     "node-gyp": "^10.0.0",
     "oxlint": "^1.79.0",
     "oxlint-tsgolint": "^7.0.2001",

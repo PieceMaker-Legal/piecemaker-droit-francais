@@ -312,6 +312,30 @@ can override the URL and local browser profile when needed.
 
 Le paquet publié contient l'attribution CloudCLI et reste sous AGPL-3.0-or-later.
 
+### Package GitHub Packages public
+
+Le chemin npmjs reste disponible. Pour publier aussi le paquet sur GitHub
+Packages, le script utilise le registre npm GitHub sans supprimer la
+configuration npmjs :
+
+```sh
+npm run package:github:release
+```
+
+Pour réellement publier et pousser la version :
+
+```sh
+npm login --scope=@piecemaker-legal --auth-type=legacy --registry=https://npm.pkg.github.com
+PUBLISH=1 PUSH=1 npm run package:github:release
+```
+
+La publication exige une authentification du mainteneur auprès de GitHub ;
+aucun token n'est créé ni enregistré par le dépôt. Après publication, régler
+la visibilité du package sur **Public** dans GitHub Packages. La possibilité
+d'une installation anonyme dépend ensuite des règles d'accès du registre
+GitHub ; si elle est indispensable, npmjs public reste le registre garanti
+pour une installation sans token.
+
 ### Construire le Desktop sans certificat
 
 Les scripts locaux déclarés dans `package.json` sont les suivants :
