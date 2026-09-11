@@ -9,6 +9,7 @@ import type { CliApplication, CliPackageMetadata } from '@/shared/types.js';
 import { findApplicationRoot, getApplicationDataRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { createCliService } from './cli.service.js';
+import { launchPwa } from './pwa-launcher.js';
 import { createSandboxCommandService } from './sandbox.service.js';
 
 /**
@@ -21,9 +22,22 @@ export function createCliApplication(): CliApplication {
   const applicationRoot = findApplicationRoot(getModuleDirectory(import.meta.url));
   const packageMetadataJson = JSON.parse(
     fs.readFileSync(path.join(applicationRoot, 'package.json'), 'utf8'),
-  ) as { version: string; homepage?: string; bugs?: { url?: string } };
+  ) as {
+    name?: string;
+    version: string;
+    productName?: string;
+    bin?: string | Record<string, string>;
+    homepage?: string;
+    bugs?: { url?: string };
+  };
+  const commandName = typeof packageMetadataJson.bin === 'string'
+    ? path.basename(packageMetadataJson.bin)
+    : Object.keys(packageMetadataJson.bin || {})[0];
   const packageMetadata: CliPackageMetadata = {
+    name: packageMetadataJson.name,
     version: packageMetadataJson.version,
+    productName: packageMetadataJson.productName,
+    commandName,
     homepage: packageMetadataJson.homepage,
     bugsUrl: packageMetadataJson.bugs?.url,
   };
@@ -74,13 +88,14 @@ export function createCliApplication(): CliApplication {
       // before this best-effort npm registry check runs.
       await new Promise<void>((resolve) => setImmediate(resolve));
       return execSync(
-        'npm show @cloudcli-ai/cloudcli version',
+        `npm show ${packageMetadata.name || '@cloudcli-ai/cloudcli'} version`,
         { encoding: 'utf8' },
       ).trim();
     },
     updateGlobalPackage: () => {
-      execSync('npm update -g @cloudcli-ai/cloudcli', { stdio: 'inherit' });
+      execSync(`npm update -g ${packageMetadata.name || '@cloudcli-ai/cloudcli'}`, { stdio: 'inherit' });
     },
+    openPwa: launchPwa,
     startServer: async () => {
       // The server executable is an entrypoint rather than a feature module,
       // so it has no barrel contract to import through.
