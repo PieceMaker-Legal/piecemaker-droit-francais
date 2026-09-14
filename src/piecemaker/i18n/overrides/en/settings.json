@@ -18,6 +18,15 @@
     },
     "fields": {
       "selectProject": "Select a case..."
+    },
+    "scopes": {
+      "project": "Case",
+      "projectAllProviders": "Case (All Providers)",
+      "userGlobalDesc": "Available across all cases on your machine",
+      "userAllProvidersDesc": "Writes to each provider user config and is available across cases on this machine",
+      "localDesc": "Stored in Claude user settings for the selected case",
+      "projectDesc": "Stored in the selected case workspace",
+      "projectAllProvidersDesc": "Writes to the selected case workspace for every provider"
     }
   },
   "tasks": {
@@ -47,5 +56,31 @@
       "name": "Case Stats",
       "description": "File counts, lines of code, file-type breakdown, and recent activity for your case."
     }
+  },
+  "skillsPage": {
+    "description": "Manage {{provider}} skills from local files, complete folders, and case-aware locations.",
+    "scanningProjectSkills": "Scanning case skills...",
+    "emptyDescription": "Add a global skill above or create case-specific skill folders in your workspace.",
+    "noMatchDescription": "Try a different command, name, scope, case, or source path.",
+    "projectBadge": "Case: {{name}}",
+    "scopes": {
+      "project": "Case"
+    }
+  },
+  "mcpServersAdd": {
+    "refreshingScopes": "Refreshing case scopes..."
+  },
+  "mcpTeamCard": {
+    "proLink": "Available with PieceMaker Pro"
+  },
+  "mcpServersAddErrors": {
+    "selectProjectRequired": "Select a case for case-scoped MCP servers",
+    "globalScopeUnsupported": "Add MCP Server supports only user or case scope across all providers."
+  },
+  "about": {
+    "hostedTitle": "Try PieceMaker Hosted",
+    "proFeaturesTitle": "PieceMaker Pro Features",
+    "teamManagementDescription": "Multiple users, role-based access, and shared cases for your team.",
+    "proCta": "Available with PieceMaker Pro"
   }
 }

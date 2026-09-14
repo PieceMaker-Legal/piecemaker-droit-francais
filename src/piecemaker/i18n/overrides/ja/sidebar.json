@@ -37,6 +37,7 @@
     "deleteProject": "案件を除去",
     "confirmDelete": "この案件をどうしますか：",
     "sessionCount": "この案件には{{count}}件の会話があります。",
+    "archiveProject": "案件をアーカイブ",
     "allConversationsDeleted": "案件はサイドバーから除去されます。ファイル、メモリ、セッションデータは保持されます。",
     "cannotUndo": "後から案件を再追加できます。"
   }
