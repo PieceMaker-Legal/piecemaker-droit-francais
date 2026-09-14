@@ -73,7 +73,7 @@ export function createLibraryStore(home: string) {
       description TEXT NOT NULL, content TEXT NOT NULL, assets TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS origins (
-      source TEXT PRIMARY KEY, entry_id TEXT NOT NULL REFERENCES entries(id)
+      source TEXT PRIMARY KEY, entry_id TEXT NOT NULL REFERENCES entries(id), source_hash TEXT
     );
     CREATE TABLE IF NOT EXISTS activation (
       workspace TEXT NOT NULL, entry_id TEXT NOT NULL REFERENCES entries(id),
@@ -93,6 +93,8 @@ export function createLibraryStore(home: string) {
       PRIMARY KEY(collection_id, path)
     );
   `);
+  const originColumns = db.prepare('PRAGMA table_info(origins)').all() as Array<{ name: string }>;
+  if (!originColumns.some((column) => column.name === 'source_hash')) db.exec('ALTER TABLE origins ADD COLUMN source_hash TEXT');
 
   function workspace(value: unknown) {
     if (typeof value !== 'string' || !path.isAbsolute(value)) throw new Error('Dossier absolu requis.');
@@ -147,9 +149,23 @@ export function createLibraryStore(home: string) {
     if (kind === 'skill' && includeAssets) collect(path.dirname(resolved));
     const serialized = JSON.stringify(Object.fromEntries(Object.entries(assets).sort(([a], [b]) => a.localeCompare(b))));
     const id = createHash('sha256').update(`${kind}\0${content}\0${serialized}`).digest('hex');
+    const sourceHash = id;
+    const existingOrigin = db.prepare('SELECT entry_id AS entryId, source_hash AS sourceHash FROM origins WHERE source = ?').get(path.resolve(source)) as { entryId: string; sourceHash: string | null } | undefined;
+    if (existingOrigin) {
+      if (existingOrigin.sourceHash === null || existingOrigin.sourceHash === sourceHash) return existingOrigin.entryId;
+      const existingEntry = document(existingOrigin.entryId);
+      const existingAssets = JSON.stringify(Object.fromEntries(Object.entries(existingEntry.assets).sort(([a], [b]) => a.localeCompare(b))));
+      const existingHash = createHash('sha256').update(`${existingEntry.kind}\0${existingEntry.content}\0${existingAssets}`).digest('hex');
+      if (existingHash !== existingOrigin.sourceHash) return existingOrigin.entryId;
+      db.transaction(() => {
+        db.prepare('UPDATE entries SET name = ?, description = ?, content = ?, assets = ? WHERE id = ?').run(name, description, content, serialized, existingOrigin.entryId);
+        db.prepare('UPDATE origins SET source_hash = ? WHERE source = ?').run(sourceHash, path.resolve(source));
+      })();
+      return existingOrigin.entryId;
+    }
     db.transaction(() => {
       db.prepare('INSERT OR IGNORE INTO entries VALUES (?, ?, ?, ?, ?, ?)').run(id, kind, name, description, content, serialized);
-      db.prepare('INSERT INTO origins VALUES (?, ?) ON CONFLICT(source) DO UPDATE SET entry_id = excluded.entry_id').run(path.resolve(source), id);
+      db.prepare('INSERT INTO origins (source, entry_id, source_hash) VALUES (?, ?, ?)').run(path.resolve(source), id, sourceHash);
     })();
     return id;
   }
