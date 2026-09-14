@@ -43,7 +43,11 @@ function DossierSections({ section }: { section: SectionId }) {
       </div>
     );
   }
-  return <CaseFilesChronology caseId={selectedCaseId} caseName={selectedCase.name} refreshVersion={mappingVersion} />;
+  return (
+    <div className="h-full" data-piecemaker-identity-highlight="off">
+      <CaseFilesChronology caseId={selectedCaseId} caseName={selectedCase.name} refreshVersion={mappingVersion} />
+    </div>
+  );
 }
 
 export default function DossierPanel({ selectedProject }: { selectedProject: Project | null }) {
