@@ -195,64 +195,42 @@ type ViewState = {
 };
 
 const STYLE_TEXT = `
-  .pm-timesheet { min-height: 100%; box-sizing: border-box; padding: 24px; background: var(--pm-bg); color: var(--pm-text); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  .pm-timesheet { height: 100%; overflow: auto; padding: 24px; box-sizing: border-box; color: hsl(var(--foreground, 0 0% 12%)); background: hsl(var(--background, 0 0% 100%)); font: 14px system-ui, sans-serif; }
   .pm-timesheet * { box-sizing: border-box; }
-  .pm-timesheet__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
-  .pm-timesheet__title { margin: 0; font-size: 1.5rem; letter-spacing: -.02em; }
-  .pm-timesheet__subtitle { margin: 6px 0 0; color: var(--pm-muted); font-size: .82rem; }
-  .pm-timesheet__actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
-  .pm-timesheet__select, .pm-timesheet__button { min-height: 36px; border: 1px solid var(--pm-border); border-radius: 7px; background: var(--pm-surface); color: var(--pm-text); padding: 7px 10px; font: inherit; font-size: .82rem; }
-  .pm-timesheet__button { cursor: pointer; }
-  .pm-timesheet__button:hover, .pm-timesheet__button:focus-visible { border-color: var(--pm-accent); outline: none; }
-  .pm-timesheet__status { min-height: 24px; margin-bottom: 12px; color: var(--pm-muted); font-size: .78rem; }
-  .pm-timesheet__status--error { color: var(--pm-error); }
+  .pm-timesheet__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin: 0 0 20px; }
+  .pm-timesheet__title { margin: 0 0 6px; font-size: 20px; }
+  .pm-timesheet__subtitle { margin: 4px 0; color: hsl(var(--muted-foreground, 0 0% 45%)); line-height: 1.5; }
+  .pm-timesheet__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
+  .pm-timesheet__select, .pm-timesheet__button { font: inherit; cursor: pointer; color: inherit; background: transparent; border: 1px solid hsl(var(--border, 0 0% 87%)); border-radius: 6px; padding: 7px 12px; }
+  .pm-timesheet__button:disabled { opacity: .45; cursor: default; }
+  .pm-timesheet__button:hover, .pm-timesheet__button:focus-visible, .pm-timesheet__select:focus-visible { outline: 2px solid #6366f1; outline-offset: 3px; }
+  .pm-timesheet__status { min-height: 24px; margin: 12px 0; color: hsl(var(--muted-foreground, 0 0% 45%)); }
+  .pm-timesheet__status--error { color: #b91c1c; }
   .pm-timesheet__sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  .pm-timesheet__empty { padding: 48px 20px; border: 1px solid var(--pm-border); border-radius: 10px; background: var(--pm-surface); color: var(--pm-muted); text-align: center; }
-  .pm-timesheet__table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--pm-border); border-radius: 10px; background: var(--pm-surface); }
+  .pm-timesheet__empty { padding: 16px 0; color: hsl(var(--muted-foreground, 0 0% 45%)); line-height: 1.5; }
+  .pm-timesheet__table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .pm-timesheet__table { width: 100%; min-width: 760px; border-collapse: collapse; }
-  .pm-timesheet__table th, .pm-timesheet__table td { padding: 11px 13px; border-bottom: 1px solid var(--pm-border); text-align: left; vertical-align: top; }
-  .pm-timesheet__table th { color: var(--pm-muted); font-size: .72rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
-  .pm-timesheet__table td { font-size: .84rem; }
+  .pm-timesheet__table th, .pm-timesheet__table td { padding: 16px 0; border-bottom: 1px solid hsl(var(--border, 0 0% 87%)); text-align: left; vertical-align: top; }
+  .pm-timesheet__table th { color: hsl(var(--muted-foreground, 0 0% 45%)); font-size: 12px; font-weight: 600; }
+  .pm-timesheet__table td { line-height: 1.5; }
   .pm-timesheet__table tr:last-child td { border-bottom: 0; }
-  .pm-timesheet__month td { padding: 10px 13px; border-top: 1px solid var(--pm-border); background: var(--pm-month); color: var(--pm-accent); font-size: .76rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .pm-timesheet__month td { padding: 10px 0; background: hsl(var(--muted, 0 0% 93%)); font-weight: 600; }
   .pm-timesheet__month:first-child td { border-top: 0; }
-  .pm-timesheet__month-total { float: right; color: var(--pm-muted); font-weight: 500; letter-spacing: 0; text-transform: none; }
+  .pm-timesheet__month-total { float: right; color: hsl(var(--muted-foreground, 0 0% 45%)); font-weight: 400; }
   .pm-timesheet__date { white-space: nowrap; }
   .pm-timesheet__folder { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pm-timesheet__session { max-width: 260px; overflow-wrap: anywhere; }
-  .pm-timesheet__conclusion { max-width: 420px; line-height: 1.45; white-space: pre-wrap; }
-  .pm-timesheet__conclusion summary { cursor: pointer; color: var(--pm-accent); }
-  .pm-timesheet__conclusion summary:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 2px; }
-  .pm-timesheet__conclusion p { margin: 7px 0 0; color: var(--pm-muted); }
-  .pm-timesheet__muted { color: var(--pm-muted); }
-  @media (max-width: 700px) {
+  .pm-timesheet__conclusion { max-width: 420px; white-space: pre-wrap; }
+  .pm-timesheet__conclusion summary { cursor: pointer; color: inherit; }
+  .pm-timesheet__conclusion summary:focus-visible { outline: 2px solid #6366f1; outline-offset: 3px; }
+  .pm-timesheet__conclusion p { margin: 4px 0; color: hsl(var(--muted-foreground, 0 0% 45%)); line-height: 1.5; }
+  .pm-timesheet__muted { color: hsl(var(--muted-foreground, 0 0% 45%)); }
+  @media (max-width: 600px) {
     .pm-timesheet { padding: 16px; }
     .pm-timesheet__header { display: block; }
-    .pm-timesheet__actions { justify-content: flex-start; margin-top: 14px; }
+    .pm-timesheet__actions { margin-top: 14px; }
   }
 `;
-
-const themeVariables = (dark: boolean): Record<string, string> => dark
-  ? {
-      '--pm-bg': '#111318',
-      '--pm-surface': '#191c23',
-      '--pm-border': '#2b303a',
-      '--pm-text': '#edf0f5',
-      '--pm-muted': '#aab1bf',
-      '--pm-accent': '#7db2ff',
-      '--pm-month': '#1d2635',
-      '--pm-error': '#ff9d9d',
-    }
-  : {
-      '--pm-bg': '#f7f8fa',
-      '--pm-surface': '#ffffff',
-      '--pm-border': '#dfe3e9',
-      '--pm-text': '#17202d',
-      '--pm-muted': '#637083',
-      '--pm-accent': '#1d5fc4',
-      '--pm-month': '#eef4ff',
-      '--pm-error': '#b42318',
-    };
 
 const makeElement = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] => {
   const element = document.createElement(tag);
@@ -383,7 +361,6 @@ const render = (state: ViewState): void => {
   const { root, context } = state;
   const visibleEntries = state.scope === 'all' && state.folder ? state.entries.filter((entry) => entryFolderKey(entry) === state.folder) : state.entries;
   clearElement(root);
-  for (const [name, value] of Object.entries(themeVariables(context.theme === 'dark'))) root.style.setProperty(name, value);
   const header = makeElement('header', 'pm-timesheet__header');
   const heading = makeElement('div');
   appendText(heading, 'h1', 'Timesheet', 'pm-timesheet__title');
