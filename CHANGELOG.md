@@ -3,6 +3,153 @@
 All notable changes to CloudCLI UI will be documented in this file.
 
 
+## [1.0.3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v1.37.2...v1.0.3) (2026-09-14)
+
+### New Features
+
+* add Mistral AI provider backend support ([a84db9d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a84db9d11fa4f76b67903fbd312f807ba1080809))
+* add Mistral AI provider support ([9b2e13e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9b2e13e0d1ff06778e16c627e6fcbc3a187b96b2))
+* **chat:** unify provider workflows and improve transcript performance ([#1206](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/issues/1206)) ([99ea052](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/99ea05259554c166fccab9e20dcf902f435fa54d))
+* **citations:** titrer et vérifier aussi les articles de code ([3f26efe](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3f26efefead75c445ab7159bb0c0a303da41ae99))
+* **citations:** titrer la visionneuse avec le titre de la décision ([733a2af](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/733a2afb0279ba9f0dd9c44f0950fcf28c0b002a))
+* display MCP Legifrance name ([122ad40](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/122ad40edc0cb1d5fee8c8fd187a8501690fb9e0))
+* **dossier:** enrichit les profils de sociétés ([b558a92](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b558a92fcca423cafe41c8e2ae07bacd0fd0bd4d))
+* **dossier:** présente le mapping sous forme de profils ([2570a1f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2570a1f3dae0e56b7a3ca8004c019d8ae4a136b9))
+* **dossier:** promote Chronologie to a top-level tab, minimal mapping badge ([fb86f81](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fb86f81498de474c6bfbbd74ada2579a901981aa))
+* **graphify:** expose le chemin des pièces ([ee39226](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ee39226332ce77b613006b9f2e3cc86456a026e0))
+* **library:** add centralized catalog with editable native sidebar ([05967bd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/05967bdc8c679cfb3a2274de65220c53772504f4))
+* **library:** manage plugins with skills ([784af29](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/784af297d39a9db00b669f94cc308c8bdf37b1af))
+* **mike:** brancher le catalogue d'add-ons et le dépôt claude-for-legal-fr ([5211bc4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5211bc4b50456b9c34c9cf837c834c22391b5069))
+* name Legifrance MCP plugin ([ebfe599](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ebfe5997070b1d9dcc72784251445c09f795dc68))
+* **piecemaker:** absorber le socle PieceMaker-Installer dans ce dépôt ([1f2f7e1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1f2f7e18d2acfa4d7fdd294aae1eced3b6e6a5f5))
+* **piecemaker:** activation par dossier des MCP, plugins, skills et agents ([87746df](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/87746df75d96e51a0b7542864b5c7e744480572a))
+* **piecemaker:** add multi-provider library skills ([106debe](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/106debea31a647a83cdf79e853042108d47c008b))
+* **piecemaker:** add timesheet backend ([c3ea244](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c3ea244d25f9a3acbe8519785334c8925007485a))
+* **piecemaker:** affiche les personnes comme boutons ([e325b98](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e325b98ffee92431fdceaa9b74f336d3dccf9d3a))
+* **piecemaker:** ajoute le mapping et les parties dans Général ([710e275](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/710e27530f0c105a9921622bb175f1500779d7a2))
+* **piecemaker:** brancher le harnais de citations sur le proxy PII ([9aca9d6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9aca9d66f1174e08cac2f193976fae43fdbd6505))
+* **piecemaker:** commande unique piecemaker qui installe, met à jour et lance ([a10137c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a10137c6d32caeb5b4286e4be4470b3a234bbc64))
+* **piecemaker:** enregistrer le dossier sélectionné dans la barre latérale ([295a766](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/295a766d9eeb5b0d3a351f5751cf78f64fc8f580))
+* **piecemaker:** fork CloudCLI et anonymisation PII par proxy local ([8e4dd13](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8e4dd1399caddc648d95287150c960fb91d30dcb))
+* **piecemaker:** guide la création du mapping ([b37213d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b37213d3bb81896ec1571ee564386f99bcdb63fd))
+* **piecemaker:** installer les composants du socle nécessaires au dépôt ([a58ee3b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a58ee3bfe8b90d4829069dd5868bbea0e2dc29cb))
+* **piecemaker:** intégrer les citations vérifiées et leur visionneuse ([66110b7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/66110b7571aa3426113b3dcdccb47da9f9997530))
+* **piecemaker:** intégrer MikeSidebarNav, MikeViewer et MikeWelcomeViewer ([442ed98](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/442ed98174a67ceeaeec02bd30f4d4851c0b930d))
+* **piecemaker:** launch cli in pwa window ([7f39ded](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7f39ded6cc7b0d1ec7202dee02fc0baf84b22a21))
+* **piecemaker:** lever la protection au niveau du dossier, pas pièce par pièce ([abcfc97](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/abcfc97662e34f3a527044ce5c152b39174fa69e))
+* **piecemaker:** lever la protection d'un dossier depuis l'onglet Dossier ([e251949](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e2519498d3f94879ea34263cbf7270b5dd684a94))
+* **piecemaker:** mike integration ([a5f440b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a5f440b1f5d3d2261492937a36032a6e8429ef03))
+* **piecemaker:** monter la visionneuse Mike dans l'arbre React de CloudCLI ([fff3179](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fff3179c0bf8b9660b6f6d6489333f98a828b39e))
+* **piecemaker:** monter les entrées Mike dans le pied de la barre latérale ([7e32e3a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7e32e3a7e962991bf8f72695faaafca22a7d67b7))
+* **piecemaker:** poser une icône PWA vérifiée sur le Bureau macOS et Windows ([9d82a80](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9d82a806bb7e431b7296bfcc13974b3f22410f8f))
+* **piecemaker:** remplacer les iframes Mike par des pages natives CloudCLI ([9b53b26](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9b53b263c0e0c2f4c3ed299dc2c9b8a42797ae2f))
+* **piecemaker:** reorder workspace tabs ([c4a9d14](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c4a9d14a9b3eaef07f7b39f2c5f6e8ddf8b14a21))
+* **pieces:** pipeline d'anonymisation étendu à tout le dossier, progression en pourcentage ([81fdceb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/81fdcebede298dec24a6ddd9fbddd795cb648751))
+* **protection:** ne protéger que les PDF et les images, refuser les secrets d'environnement ([79879ce](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/79879ce839d2d6de39f3ae0c975f773314a1d549))
+* rename Légifrance MCP display name ([db255f8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/db255f8600e728454129aa86b172830c49939124))
+* replace Mistral logo with gradient SVG icon ([651d4f9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/651d4f99e01aca90b1f83d61083af4015ad4167e))
+* **sidebar:** cache anonymization status instead of polling ([a393ca0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a393ca0a9531fe0ff54bca17723696cdc512e54a))
+
+### Bug Fixes
+
+* **anonymizer:** aligner le surlignage sur ce que le proxy code réellement ([3cdcb28](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3cdcb2863738adc8bedf6bdedfcc610d408276a1))
+* **anonymizer:** surligner les identités sans tenir compte de la casse ([904e220](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/904e220b1ce5b1f37ff550196c908b6e7a203339))
+* **anonymizer:** surligner toutes les orthographes d'une même identité ([f531d60](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f531d609956af70ea58481e5cb9abf39ba89ff83))
+* **chat:** refresh skills when reopening tab ([45096bb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/45096bbf77d1430eb3cebb6b8e644f9199050a3e))
+* **commits:** ne plus bloquer un commit faute d'identité utilisateur ([cb56502](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/cb565025b7e48b2e01129920f7f28d8e9c931983))
+* **dossier:** keep dragged profile links after save ([928a819](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/928a8197a7bb1724885e8c425034e9b8f217aab0))
+* **dossier:** persist profile edits ([5851b6a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5851b6a00190a9c752a08eaacfa26ab196d13205))
+* **dossier:** retirer l'onglet Pièces de la vue dossier ([3b3a38c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3b3a38c60f5b148b880bd22e011c715b9ec5e5c7))
+* fully regenerate package-lock.json from scratch (missing nested deps) ([e9c5a8c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e9c5a8c247ed573337074b185a0994de57c9d649))
+* honor connector display names ([2ad2e0f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2ad2e0fc4e8511aeaf16f79f21465fcc76d056ba))
+* keep Mistral text label in agent selector button ([4eb290b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4eb290b95358d854ada41bcef54e1e91929f6aa0))
+* **mike:** rendre les espaces Mike indépendants du dossier sélectionné ([78f4828](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/78f4828183660dc1b9f9076c5ac3700e1f7e4926))
+* mistral-sessions ([5c5d525](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5c5d525940a80c0127eafa9ae664b5a98f2c4e6f))
+* **mistral:** use OAuth CLI login ([cb33777](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/cb337774e98d45931d661604b47f390be0ef6ded))
+* **piecemaker:** ancrer durablement la navigation Mike en bas de la barre latérale ([67bba7f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/67bba7fe6b69f2277dba0a005f17d5c414ff7835))
+* **piecemaker:** clarify chronology labels ([4ef44c8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4ef44c82ffe2abf022dcbcb2eff848921ed551cc))
+* **piecemaker:** edit chronology people ([406139f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/406139fb18548a26c87b3a6b42389f9a3675ab5d))
+* **piecemaker:** harden timesheet extraction ([41e4ef5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/41e4ef5ce310f2a331b4d13ffb527cd0e9de129f))
+* **piecemaker:** hide timesheet internals on refresh ([f07183f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f07183f55e445d4defa40af695abc14c149b870f))
+* **piecemaker:** install workspace skills and subagents on activation ([590b1d8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/590b1d8f4043c7e0ab1a6f47f593cebd57e4d807))
+* **piecemaker:** intégrer la sélection des dossiers ([47bd05d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/47bd05d628088862e6ab6e4a49b729c730010613))
+* **piecemaker:** monter la racine Mike sous ThemeProvider ([791ac6c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/791ac6cb31c2a4f31feb9cfda9d531eb0cdec599))
+* **piecemaker:** open chat when selecting a session ([b31ef14](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b31ef14730de3187cddaf0823df5a1471e8ae3af))
+* **piecemaker:** ouvrir le dossier depuis la barre latérale ([c5d28b9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c5d28b9f2a9ba52db9fa22339ccf56ab6b000281))
+* **piecemaker:** place library before browser ([4c9bea2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4c9bea25c8be53ef7699d39bd7febcfb9f288b9c))
+* **piecemaker:** refermer la visionneuse de citations quand on change de dossier ([fdb3c08](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fdb3c08dbafc2ed76a8efa12a8a4ce6175a4aa8b))
+* **piecemaker:** refuser l'installation de LiteLLM, qui doublerait le proxy PII ([7c71bec](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7c71becf99646240d5498a431dd0c982e94d92c2))
+* **piecemaker:** rename document index fields ([5838855](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/58388559fa5f839aa4dd2228012910ea83e0f522))
+* **piecemaker:** restaure le timeout GLiNER à 500s avec une relance avant fallback ([027ebf9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/027ebf91fa51d1ba70470af1813bda146cb35b86))
+* **piecemaker:** restaure les personnes indexées ([e39541e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e39541e5d7bb13a1988288a07ecb7dc899e6f6f8))
+* **piecemaker:** retirer l'injection de paragraphe CLAUDE.md et ajouter l'amorce Windows ([d090218](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d090218d9cd8d984a2b888e9e3a09bfa08c715f1))
+* **piecemaker:** ship the library plugin SVG icon ([eaa04dc](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/eaa04dcc81862855eb5957b522cbcceb887ca5e8))
+* **piecemaker:** show indexed people in chronology ([650a24a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/650a24a317341518b82ccba4aa022b56654654d9))
+* **piecemaker:** suivre les releases du produit ([72d347e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/72d347e42a6095081a5ca5b2a67080346c3bf94d))
+* **piecemaker:** supprime le timeout de 300s sur le chargement de GLiNER ([fee2fbd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fee2fbd09cfc8fa698080029cce3e69b3d66219f))
+* **piecemaker:** un seul proxy PII, sur un port qui ne dérive plus ([2172416](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2172416637f96d239971436d972856998b457880))
+* **piecemaker:** use sidebar selection for dossier ([1af2eb7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1af2eb7bb9ecff514cc8098334f50b4bc1c11294))
+* **pieces:** pourcentage continu markitdown→GLiNER au sein d'un groupe ([7157ed7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7157ed7ed4dca13c54c99d2c13ca7cf1bb61d97d))
+* **pieces:** retirer le plafond de 200 pièces par traitement ([5c6cd41](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5c6cd411d670a99777154c5c6632a53c3253ce8a))
+* **pwa:** retirer crossorigin=use-credentials du lien manifest ([4080085](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4080085d80cdd52412856698a3a8b32bf73698dd))
+* regenerate package-lock.json to match package.json dependencies ([0d450f2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0d450f291f73aeb700761eee73c9d643da1f0036))
+* regenerate package-lock.json with npm 10 (Linux) for CI compatibility ([e8a8888](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e8a8888e0fcc6e82572f90256ffd6c7ec9f23934))
+* regenerate package-lock.json with npm 10.9.8 (matches CI Node 22) ([7bfcc1a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7bfcc1a9da474f148abec3da37f8b4e99d123f27))
+* restore Legifrance MCP display name ([0a0458d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0a0458d8273f09b1e78ffc6a935faf484714950e))
+* **scheduled-messages:** interrupt a busy run instead of failing to send ([#1239](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/issues/1239)) ([c1be241](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c1be241bc41586478f3d15f4dc6a5a6399d40aa1))
+
+### Performance
+
+* **dossier:** précharge les vues juridiques ([0e3518c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0e3518c46fbc4f424862c703b40623c98da3fe44))
+* **piecemaker:** mettre en cache et paginer les pièces ([d279b6d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d279b6d0dd20ce2a08ad0e6258cddc4ed2113f26))
+
+### Refactoring
+
+* **addons:** de-brand mike/ to addons/ and externalize its strings to i18n ([9213cff](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9213cff858feff263d77541c00353c8e91787367))
+* **mike:** aligner la structure native sur celle de Mike ([5261982](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5261982cd53e474132074a407fcfb27456a39d83))
+* **piecemaker:** remove retired Mike tabs and iframe integration ([f2edeee](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f2edeeeb6b6b43ec0cb14f66390e03386306960c))
+* **piecemaker:** retirer l'ancien proxy PII Python externe ([2cdc416](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2cdc41697bca11d8513b52437ef76976f5f83704))
+* **piecemaker:** retirer la dernière mention de l'ancien proxy Python ([63ccb13](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/63ccb13acda30f6da4036d19bbfb32f715c2adcf))
+* **piecemaker:** retirer LiteLLM, tout passe par le proxy PII local ([f7d77ac](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f7d77ac7194b6da32e709d6d3a4e80ebe6dab692))
+
+### Documentation
+
+* adopt release.yml as the single release pipeline (npm + GitHub Release) ([631ffcb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/631ffcbae0dffa12d7129084d636dbc355ed53f9))
+* documenter les releases PieceMaker et CloudCLI ([988f606](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/988f606414a4ab08f26205702bc396d64435ee9e))
+* **piecemaker:** ajouter un README dédié avec les commandes d'installation ([1029a81](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1029a8154695945c545c6fe7c0fc7a91eb16aa5a))
+* **piecemaker:** décrire les trois couches de protection des pièces ([316f320](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/316f320b691cce4e1d59e293e812a183d5c94e6c))
+* **piecemaker:** lier agents.md à claude.md et n'installer qu'une commande ([9d46770](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9d46770eca079304b4b9f3732ed65b97b6eeaa32))
+* replace npm install with universal bootstrap one-liners ([939ed5e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/939ed5ed766dfa06bbc7e7b728f606bf01993828))
+
+### Maintenance
+
+* bump version to 1.0.1, document npm publish process ([543cfaa](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/543cfaa39404d6aabede77bab5ab10375a518f63))
+* **piecemaker:** masquer le badge GitHub star via product.config.json ([e3c7c8f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e3c7c8f6ee622889a35cd511c7a3320ea735d701))
+* **piecemaker:** retirer la logique d'arrêt du LiteLLM résiduel ([f2b5b2b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f2b5b2bb9cab58c7e5f3d12c2b28bcab8d6adc4f))
+* **piecemaker:** retirer le bloc d'instructions de dossier juridique du dépôt de code ([870af2b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/870af2b57c807abe3861f5e38a8b7953afe633cd))
+* **piecemaker:** retirer le script de réinitialisation du mot de passe ([63a1800](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/63a1800db1a5e0ea964056a8bb35d229937f2334))
+* separate user mapping changes ([bff9e48](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/bff9e48861981ac4a30ed3a3c112795c5e30e44e))
+* set initial npm publish version to 1.0.0 ([e0af968](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e0af9682eb0b24b9c4ba54bba8c01762f99664d0))
+* sync package-lock.json with package.json ([d3bb715](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d3bb715804810a016ff0687dd886a44bc9274e38))
+* sync package.json to already-published npm version 1.0.2 ([ddfbb8c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ddfbb8cbd409df94d665926ed3978a2f2006fe2b))
+* sync pending changes ([09664cb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/09664cb9517751158fdd3583e407bf9762ef41de))
+* untrack CLAUDE.md, keep it local-only via .gitignore ([6f94a4d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6f94a4d31733aeec5a93505820e1e77e8294ddab))
+* update PieceMaker case metadata ([e2ec5b1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e2ec5b109e52b884c12a1900d2dee2b31992c50c))
+
+### CI/CD
+
+* **piecemaker:** add public github package release ([776a72e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/776a72e18fc671c4f23ac2871237be938b6a6c36))
+* publish package to npmjs.org instead of GitHub Packages ([f8b8247](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f8b8247669ecab771519f38c476ce3ca5ac0718f))
+
+### Tests
+
+* **piecemaker:** couvrir les routes de levée de protection ([71fc0f2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/71fc0f26831536d70a658f3daf02ea539bee2e08))
+* **piecemaker:** rendre le test du sélecteur de workflows indépendant du minutage ([166a927](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/166a927d093708b525d4e6749cb9aac49e3e11b1))
+
+### Build
+
+* library plugin ([6ed7533](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6ed7533b40b351a8d19b830532dd9ea36199929d))
+
 ## [1.37.2](https://github.com/siteboon/claudecodeui/compare/v1.37.1...v1.37.2) (2026-08-18)
 
 ### Bug Fixes
