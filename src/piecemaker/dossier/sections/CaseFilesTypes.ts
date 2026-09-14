@@ -47,12 +47,10 @@ export type RegisterCaseResult = {
   cancelled?: boolean;
   folder?: CaseOverview;
   installed?: {
-    claudeAssets: boolean;
     rule: string;
     mapping: string;
     protection: string;
     structure: string[];
-    commit: string | null;
   };
 };
 
