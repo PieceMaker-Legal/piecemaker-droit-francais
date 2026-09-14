@@ -7,6 +7,8 @@
     --mike-font-ui: var(--font-inter);
     --mike-font-editorial: var(--font-eb-garamond);
     --mike-blue: rgb(0 136 255);
+    --mike-ink-rgb: 17 24 39;
+    --mike-ink: rgb(var(--mike-ink-rgb));
     --mike-text: #374151;
     --mike-muted: #6b7280;
     --mike-border: #e5e7eb;
@@ -32,9 +34,13 @@
     --ring: 208 100% 50%;
     --radius: 0.75rem;
     --app-surface: white;
+    --nav-tab-glow: 0 0% 0% / 0.18;
+    --nav-tab-ring: 0 0% 0% / 0.1;
+    --nav-input-focus-ring: 0 0% 0% / 0.22;
   }
 
   .dark {
+    --mike-ink-rgb: 243 244 246;
     --mike-text: #f3f4f6;
     --mike-muted: #9ca3af;
     --mike-border: #374151;
@@ -306,7 +312,7 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid rgb(0 136 255 / 55%);
+  outline: 2px solid rgb(var(--mike-ink-rgb) / 55%);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--app-surface);
 }
@@ -365,15 +371,22 @@ textarea:not(.chat-input-placeholder) {
 }
 
 [role="tab"][aria-selected="true"] {
-  color: var(--mike-blue);
-  background: rgb(0 136 255 / 11%);
-  box-shadow: inset 0 0 0 1px rgb(0 136 255 / 26%), 0 2px 8px rgb(0 136 255 / 12%);
+  color: var(--mike-ink);
+  background: rgb(var(--mike-ink-rgb) / 8%);
+  box-shadow: inset 0 0 0 1px rgb(var(--mike-ink-rgb) / 26%), 0 2px 8px rgb(var(--mike-ink-rgb) / 12%);
+  font-weight: 600;
 }
 
 [aria-pressed="true"] {
-  color: var(--mike-blue);
-  background: rgb(0 136 255 / 10%);
-  box-shadow: inset 0 0 0 1px rgb(0 136 255 / 22%);
+  color: var(--mike-ink);
+  background: rgb(var(--mike-ink-rgb) / 8%);
+  box-shadow: inset 0 0 0 1px rgb(var(--mike-ink-rgb) / 22%);
+  font-weight: 600;
+}
+
+[class~="font-semibold"][class~="text-primary"],
+[class~="font-bold"][class~="text-primary"] {
+  color: var(--mike-ink);
 }
 
 button[role="switch"] {
@@ -415,7 +428,7 @@ input[type="radio"] {
 
 input[type="checkbox"]:focus-visible,
 input[type="radio"]:focus-visible {
-  outline: 2px solid rgb(0 136 255 / 55%);
+  outline: 2px solid rgb(var(--mike-ink-rgb) / 55%);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -443,8 +456,8 @@ input[type="radio"]:focus-visible {
 }
 
 [data-slot="prompt-input"]:focus-within {
-  border-color: rgb(0 136 255 / 45%);
-  box-shadow: var(--liquid-glass-shadow-subtle), 0 0 0 3px rgb(0 136 255 / 13%);
+  border-color: rgb(var(--mike-ink-rgb) / 45%);
+  box-shadow: var(--liquid-glass-shadow-subtle), 0 0 0 3px rgb(var(--mike-ink-rgb) / 13%);
 }
 
 .chat-message.user > div > div {
@@ -480,6 +493,163 @@ input[type="radio"]:focus-visible {
 #piecemaker-citation-panel [role="alert"] {
   border-radius: 0.75rem;
   background: rgb(220 38 38 / 9%);
+}
+
+#root .pm-library,
+#root .pm-timesheet {
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  font-family: var(--mike-font-ui);
+}
+
+#root .pm-library h1,
+#root .pm-library h2,
+#root .pm-timesheet__title {
+  color: hsl(var(--foreground));
+  font-family: var(--mike-font-editorial);
+  font-weight: 600;
+}
+
+#root .pm-library p,
+#root .pm-timesheet__subtitle,
+#root .pm-timesheet__status {
+  color: hsl(var(--muted-foreground));
+}
+
+#root .pm-library .pills {
+  border: 1px solid var(--liquid-glass-border-subtle);
+  background: var(--liquid-glass-background-subtle);
+  box-shadow: var(--liquid-glass-shadow-subtle);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+#root .pm-library .pills button,
+#root .pm-library button:not(.title):not(.more) {
+  min-height: 2rem;
+  border-radius: 9999px;
+  border-color: var(--liquid-glass-border-subtle);
+  background: var(--liquid-glass-background-subtle);
+  font-family: var(--mike-font-ui);
+}
+
+#root .pm-library .pills button[aria-selected="true"],
+#root .pm-library button[aria-selected="true"] {
+  color: var(--mike-ink);
+  background: rgb(var(--mike-ink-rgb) / 8%);
+  border-color: rgb(var(--mike-ink-rgb) / 26%);
+  box-shadow: inset 0 0 0 1px rgb(var(--mike-ink-rgb) / 12%), 0 2px 8px rgb(var(--mike-ink-rgb) / 12%);
+  font-weight: 600;
+}
+
+#root .pm-library .title,
+#root .pm-library .more,
+#root .pm-library .tree-row button,
+#root .pm-library .entry-menu button {
+  border: 0;
+  background: transparent;
+}
+
+#root .pm-library input[type="search"] {
+  min-height: 2.25rem;
+  border-radius: 0.75rem;
+  border-color: var(--liquid-glass-border-subtle);
+  background: var(--liquid-glass-background-subtle);
+  font-family: var(--mike-font-ui);
+}
+
+#root .pm-library input[role="switch"] {
+  width: 2.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: #d1d5db;
+  box-shadow: inset 0 0 0 1px rgb(17 24 39 / 8%);
+}
+
+#root .pm-library input[role="switch"]::before {
+  width: 0.75rem;
+  height: 0.75rem;
+  top: 0.25rem;
+  left: 0.25rem;
+}
+
+#root .pm-library input[role="switch"]:checked {
+  background: var(--mike-blue);
+}
+
+#root .pm-library input[role="switch"]:checked::before {
+  left: 1.25rem;
+}
+
+#root .pm-library input:focus-visible,
+#root .pm-library button:focus-visible,
+#root .pm-timesheet__button:focus-visible,
+#root .pm-timesheet__conclusion summary:focus-visible {
+  outline: 2px solid rgb(var(--mike-ink-rgb) / 55%);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--app-surface);
+}
+
+#root .pm-library .entry-menu,
+#root .pm-library .modal,
+#root .pm-timesheet__empty,
+#root .pm-timesheet__table-wrap {
+  border-color: var(--liquid-glass-border-subtle);
+  border-radius: 1rem;
+  background: var(--liquid-glass-background-subtle);
+  box-shadow: var(--liquid-glass-shadow-subtle);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+#root .pm-library .row {
+  border-bottom-color: hsl(var(--border));
+}
+
+#root .pm-timesheet__select,
+#root .pm-timesheet__button {
+  min-height: 2.25rem;
+  border-radius: 9999px;
+  border-color: var(--liquid-glass-border-subtle);
+  background: var(--liquid-glass-background-subtle);
+  color: hsl(var(--foreground));
+  font-family: var(--mike-font-ui);
+}
+
+#root .pm-timesheet__button:hover,
+#root .pm-timesheet__button:focus-visible {
+  border-color: rgb(var(--mike-ink-rgb) / 45%);
+}
+
+#root .pm-timesheet__table th,
+#root .pm-timesheet__table td {
+  border-bottom-color: hsl(var(--border));
+}
+
+#root .pm-timesheet__table th {
+  color: hsl(var(--muted-foreground));
+  font-family: var(--mike-font-ui);
+}
+
+#root .pm-timesheet__table td {
+  color: hsl(var(--foreground));
+}
+
+#root .pm-timesheet__month td {
+  border-top-color: hsl(var(--border));
+  background: rgb(var(--mike-ink-rgb) / 6%);
+  color: var(--mike-ink);
+  font-weight: 700;
+}
+
+#root .pm-timesheet__conclusion summary {
+  color: var(--mike-ink);
+}
+
+#root [data-piecemaker-identity-highlight="off"] pre {
+  font-family: var(--mike-font-editorial);
+  font-size: 1rem;
+  line-height: 1.6;
 }
 
 @media (max-width: 768px) {
