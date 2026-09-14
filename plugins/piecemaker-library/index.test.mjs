@@ -58,11 +58,12 @@ test('connectors, skills, plugins and agents have separate tabs', async (t) => {
     return { ok: true };
   });
   await settle();
-  assert.deepEqual([...container.querySelectorAll('[role=tab]')].map((button) => button.textContent), ['Connecteurs', 'Skills', 'Plugins', 'Agents']);
-  [...container.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Connecteurs').click();
+  const libraryTabs = container.querySelector('[role=tablist][aria-label="Bibliothèque"]');
+  assert.deepEqual([...libraryTabs.querySelectorAll('[role=tab]')].map((button) => button.textContent), ['Connecteurs', 'Skills', 'Plugins', 'Agents']);
+  [...libraryTabs.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Connecteurs').click();
   await settle();
   assert.match(container.textContent, /MCP Légifrance/);
-  [...container.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Plugins').click();
+  [...libraryTabs.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Plugins').click();
   await settle();
   assert.match(container.textContent, /Plugin légal/);
   [...container.querySelectorAll('button')].find((button) => button.textContent === 'Voir l’arborescence').click();
@@ -76,7 +77,7 @@ test('connectors, skills, plugins and agents have separate tabs', async (t) => {
   assert.equal(opened.editorPath, 'skills/recherche/SKILL.md');
   await opened.save('Instructions adaptées');
   assert.deepEqual(writes, [{ path: '/plugins/legal%40market/file', body: { path: 'skills/recherche/SKILL.md', content: 'Instructions adaptées', previousContent: 'Instructions plugin' } }]);
-  [...container.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Connecteurs').click();
+  [...libraryTabs.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Connecteurs').click();
   await settle();
   assert.match(container.textContent, /MCP Légifrance/);
 });
@@ -88,9 +89,60 @@ test('a toggle sends the current dossier and no global activation', async (t) =>
     return { entries: [{ id: 'abc', name: 'Relire', description: '', kind: 'skill', enabled: false }] };
   });
   await settle();
+  assert.equal(container.querySelector('[role=switch]').title, 'Installer dans ce dossier');
+  assert.doesNotMatch(container.textContent, /Dans ce dossier/);
   container.querySelector('[role=switch]').click();
   await settle();
   assert.deepEqual(writes, [{ path: '/catalog/abc/activation', body: { workspacePath: '/case-a', enabled: true } }]);
+  assert.equal(container.querySelector('[role=switch]').title, 'Retirer de ce dossier');
+});
+
+test('each section switches between personal items and its filtered marketplace', async (t) => {
+  const calls = [];
+  const { container } = fixture(t, async (method, path) => {
+    calls.push([method, path]);
+    if (path.startsWith('/catalog?')) return { entries: [] };
+    if (path.includes('scope=piecemaker&kind=connector')) return { registered: true, plugins: [{ id: 'piecemaker@mcp-legifrance', name: 'MCP Légifrance', description: 'Droit français' }] };
+    if (path.startsWith('/plugin/marketplace?')) return { registered: true, plugins: [] };
+    if (path.startsWith('/activation?')) return { claude: { mcp: [], plugins: [] }, codex: { mcp: [] } };
+    return { plugins: [] };
+  });
+  await settle();
+  let views = container.querySelector('[role=tablist][aria-label="Vue des skills"]');
+  assert.deepEqual([...views.querySelectorAll('[role=tab]')].map((button) => button.textContent), ['Mes skills', 'Découvrir']);
+  views.querySelector('[role=tab]:last-child').click();
+  await settle();
+  assert.equal(calls.some(([, path]) => path.includes('kind=skill')), true);
+  const libraryTabs = container.querySelector('[role=tablist][aria-label="Bibliothèque"]');
+  [...libraryTabs.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Connecteurs').click();
+  await settle();
+  views = container.querySelector('[role=tablist][aria-label="Vue des connecteurs"]');
+  assert.deepEqual([...views.querySelectorAll('[role=tab]')].map((button) => button.textContent), ['Mes connecteurs', 'Découvrir']);
+  views.querySelector('[role=tab]:last-child').click();
+  await settle();
+  assert.match(container.textContent, /MCP Légifrance/);
+  assert.equal(calls.some(([, path]) => path.includes('scope=piecemaker&kind=connector')), true);
+});
+
+test('a skill action menu permanently deletes it from the library', async (t) => {
+  const calls = [];
+  let deleted = false;
+  const id = 'a'.repeat(64);
+  const { container } = fixture(t, async (method, path) => {
+    calls.push([method, path]);
+    if (method === 'DELETE' && path === `/catalog/${id}`) { deleted = true; return { ok: true }; }
+    if (path.startsWith('/catalog?')) return { entries: deleted ? [] : [{ id, name: 'Relire', description: '', kind: 'skill', enabled: false }] };
+    return { ok: true };
+  });
+  await settle();
+  assert.equal([...container.querySelectorAll('button')].some((item) => item.textContent === 'Supprimer'), false);
+  container.querySelector('[aria-label="Actions pour Relire"]').click();
+  assert.equal([...container.querySelectorAll('button')].some((item) => item.textContent === 'Supprimer'), true);
+  [...container.querySelectorAll('button')].find((item) => item.textContent === 'Supprimer').click();
+  await settle();
+  await settle();
+  assert.equal(calls.some(([method, path]) => method === 'DELETE' && path === `/catalog/${id}`), true);
+  assert.doesNotMatch(container.textContent, /Relire/);
 });
 
 test('a stale dossier response cannot replace the current dossier', async (t) => {

@@ -8,6 +8,42 @@ import express from 'express';
 import type { createLibraryStore } from './store.js';
 import { importLibraryDirectory } from './migrate.js';
 
+type MarketplaceKind = 'connector' | 'skill' | 'plugin' | 'agent';
+
+function marketplaceManifest(userHome: string, marketplaceName: string) {
+  const root = path.join(userHome, '.claude', 'plugins', 'marketplaces', marketplaceName);
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, '.claude-plugin', 'marketplace.json'), 'utf8'));
+    return { root, plugins: Array.isArray(manifest.plugins) ? manifest.plugins : [] };
+  } catch {
+    return { root, plugins: [] };
+  }
+}
+
+function marketplacePackageKinds(userHome: string, marketplaceName: string, plugin: { id: string; name: string; description?: string }, registry: Record<string, unknown>) {
+  const kinds = new Set<MarketplaceKind>(['plugin']);
+  const pluginName = plugin.id.split('@')[0];
+  const marketplace = marketplaceManifest(userHome, marketplaceName);
+  const entry = marketplace.plugins.find((candidate: { name?: string }) => candidate?.name === pluginName);
+  const installs = Array.isArray(registry[plugin.id]) ? registry[plugin.id] as Array<{ installPath?: string }> : [];
+  const installedRoot = installs.find((install) => typeof install?.installPath === 'string')?.installPath;
+  const sourceRoot = typeof entry?.source === 'string' && entry.source.startsWith('.')
+    ? path.resolve(marketplace.root, entry.source)
+    : undefined;
+  const root = installedRoot || sourceRoot;
+  if (root && fs.existsSync(root)) {
+    if (fs.existsSync(path.join(root, '.mcp.json'))) kinds.add('connector');
+    if (fs.existsSync(path.join(root, 'skills')) || fs.existsSync(path.join(root, 'commands'))) kinds.add('skill');
+    if (fs.existsSync(path.join(root, 'agents'))) kinds.add('agent');
+  }
+  if (Array.isArray(entry?.skills) && entry.skills.length) kinds.add('skill');
+  const searchable = `${plugin.name} ${plugin.description || ''}`.toLowerCase();
+  if (/\bmcp\b|\bconnect(?:or|eur|s|ed|ion)?\b|\bintegration\b/.test(searchable)) kinds.add('connector');
+  if (/\bskills?\b|\btoolkit\b|\bworkflow\b/.test(searchable)) kinds.add('skill');
+  if (/\bagents?\b/.test(searchable)) kinds.add('agent');
+  return [...kinds];
+}
+
 export function scanInstalledLibraryCollections(store: ReturnType<typeof createLibraryStore>, userHome: string) {
   const filename = path.join(userHome, '.claude/plugins/installed_plugins.json');
   const registry = fs.existsSync(filename) ? JSON.parse(fs.readFileSync(filename, 'utf8')).plugins || {} : {};
@@ -53,9 +89,10 @@ export function scanInstalledLibraryCollections(store: ReturnType<typeof createL
       }
     };
     collect(installRoot);
+    const fallbackEntryName = imported.length ? store.document(imported[0].id).name : null;
     store.upsertCollection({
       id,
-      name: manifest.displayName || manifest.name || id,
+      name: manifest.displayName || manifest.name || fallbackEntryName || 'Plugin sans nom',
       description: manifest.description || '',
       source: installRoot,
       entries: imported.map((entry) => ({
@@ -76,6 +113,7 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
     return { ok: result.status === 0, output: `${result.stdout || ''}${result.stderr || ''}`, status: result.status };
   };
   const scope = (value: unknown) => {
+    if (value === 'piecemaker') return { name: 'mcp-legifrance', slug: 'PieceMaker-Legal/mcp-legifrance' };
     if (value === 'legal') return { name: 'claude-for-legal', slug: 'anthropics/claude-for-legal' };
     if (value === 'official') return { name: 'claude-plugins-official', slug: 'anthropics/claude-plugins-official' };
     throw new Error('Marketplace inconnue.');
@@ -97,9 +135,18 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
   router.get('/plugin/marketplace', (req, res) => {
     try {
       const marketplace = scope(req.query.scope);
+      const kind = req.query.kind;
+      if (!['connector', 'skill', 'plugin', 'agent'].includes(String(kind))) throw new Error('Type de catalogue inconnu.');
       const catalog = listMarketplaceConnectors(run, { marketplaceName: marketplace.name });
       const registry = installed();
-      res.json({ ...catalog, plugins: catalog.plugins.map((plugin: { id: string }) => ({ ...plugin, installed: Boolean(registry[plugin.id]) })) });
+      const plugins = catalog.plugins
+        .map((plugin: { id: string; name: string; description?: string }) => ({
+          ...plugin,
+          installed: Boolean(registry[plugin.id]),
+          kinds: marketplacePackageKinds(userHome, marketplace.name, plugin, registry),
+        }))
+        .filter((plugin: { kinds: MarketplaceKind[] }) => plugin.kinds.includes(kind as MarketplaceKind));
+      res.json({ ...catalog, kind, plugins });
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.get('/plugins', (req, res) => {

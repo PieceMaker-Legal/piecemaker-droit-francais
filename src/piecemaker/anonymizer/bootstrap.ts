@@ -5,11 +5,13 @@
  */
 
 import { startIdentityHighlighting } from '@/piecemaker/anonymizer';
+import { startDocumentVerificationHighlighting } from '@/piecemaker/anonymizer/documentVerifier';
 import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 import { startLibraryDocumentViewer } from '@/piecemaker/library/bootstrap';
 import '@/piecemaker/sidebar/sidebar.css';
 
 startIdentityHighlighting();
+const stopDocumentVerificationHighlighting = startDocumentVerificationHighlighting();
 const stopCitationPanel = startCitationPanel();
 const stopLibraryDocumentViewer = startLibraryDocumentViewer();
-if (import.meta.hot) import.meta.hot.dispose(() => { stopCitationPanel(); stopLibraryDocumentViewer(); });
+if (import.meta.hot) import.meta.hot.dispose(() => { stopDocumentVerificationHighlighting(); stopCitationPanel(); stopLibraryDocumentViewer(); });
