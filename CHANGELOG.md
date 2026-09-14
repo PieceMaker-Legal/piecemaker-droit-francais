@@ -1,5 +1,16 @@
 # Changelog
 
+All notable changes to PieceMaker will be documented in this file.
+
+
+## [1.0.4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v1.0.3...v1.0.4) (2026-09-14)
+
+### Bug Fixes
+
+* rebrand release name and changelog header from CloudCLI UI to PieceMaker ([4027dbb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4027dbb5baeb978c1a31560bb2b7238808a4f0a1))
+
+# Changelog
+
 All notable changes to CloudCLI UI will be documented in this file.
 
 
