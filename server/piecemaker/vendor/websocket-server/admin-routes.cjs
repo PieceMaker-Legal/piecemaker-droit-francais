@@ -2098,6 +2098,14 @@ function normalizeChronologyScope(caseRoot, value) {
   return parts.join('/');
 }
 
+function chronologyScopeFromFolder(caseRoot, selectedFolder) {
+  const root = fs.realpathSync(caseRoot);
+  const selected = fs.realpathSync(selectedFolder);
+  if (selected !== root && !selected.startsWith(`${root}${path.sep}`)) throw new Error('Sous-dossier hors du dossier juridique.');
+  const relative = path.relative(root, selected).split(path.sep).join('/');
+  return relative ? normalizeChronologyScope(root, relative) : null;
+}
+
 function chronologyFolders(documents) {
   const folders = new Set();
   for (const document of documents || []) {
@@ -2653,6 +2661,17 @@ function createAdminRouter({
         graphEdges: scopedChronology.graph.edges.length,
       });
       res.json(scopedChronology);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  router.post('/repository/chronology/scope', async (req, res) => {
+    try {
+      const legalCase = selectedCase(req.body?.case);
+      const selectedFolder = await pickFolder(process.platform, legalCase.root);
+      if (!selectedFolder) return res.json({ ok: true, cancelled: true, scope: null });
+      res.json({ ok: true, scope: chronologyScopeFromFolder(legalCase.root, selectedFolder) });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
@@ -3232,6 +3251,7 @@ function createAdminRouter({
 module.exports = {
   loadAdminLegalChronology,
   normalizeChronologyScope,
+  chronologyScopeFromFolder,
   scopeChronology,
   applyDocumentMetaMutation,
   applyMarketplaceSelection,

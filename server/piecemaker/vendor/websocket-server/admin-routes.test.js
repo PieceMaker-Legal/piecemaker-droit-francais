@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { normalizeChronologyScope, scopeChronology } = require('./admin-routes.cjs');
+const { chronologyScopeFromFolder, normalizeChronologyScope, scopeChronology } = require('./admin-routes.cjs');
 
 test('scopes a chronology to one subfolder and keeps the dossier folder choices', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-chronology-scope-'));
@@ -30,6 +30,7 @@ test('scopes a chronology to one subfolder and keeps the dossier folder choices'
     };
 
     assert.equal(normalizeChronologyScope(root, 'Pieces/Alpha'), 'Pieces/Alpha');
+    assert.equal(chronologyScopeFromFolder(root, path.join(root, 'Pieces', 'Alpha')), 'Pieces/Alpha');
     const scoped = scopeChronology(chronology, 'Pieces/Alpha');
     assert.deepEqual(scoped.documents, [alpha]);
     assert.deepEqual(scoped.folders, ['Pieces', 'Pieces/Alpha', 'Pieces/Beta']);

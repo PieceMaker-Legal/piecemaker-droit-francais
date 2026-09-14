@@ -26,27 +26,59 @@ const initialResponse = {
   informations_dossier: info,
 };
 
+function openProfileEditor(name: string) {
+  const card = screen.getByText(name).closest('article');
+  expect(card).toBeTruthy();
+  fireEvent.click(within(card!).getByRole('button', { name: `Options pour ${name}` }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Modifier' }));
+}
+
 describe('CaseMappingSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('persiste le submit du dialogue global et réaffiche la réponse sauvegardée', async () => {
+  it('ajoute un nouvel article et le persiste dans le mapping', async () => {
     pmGetCached.mockResolvedValue(initialResponse);
     pmPut.mockImplementation(async (_path: string, body: Record<string, unknown>) => ({ ...initialResponse, ...body, commit: { created: false } }));
 
     render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
     await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter ou modifier des informations' }));
-    fireEvent.change(screen.getByPlaceholderText('demandeur, défendeur…'), { target: { value: 'appelant' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une personne' }));
+    expect(screen.getByText('PERSONNE_PHYSIQUE_02')).toBeTruthy();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les parties' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les profils' }));
     });
 
     await waitFor(() => expect(pmPut).toHaveBeenCalled());
-    expect((pmPut.mock.calls[0][1] as { informations_dossier: { parties_clientes: Array<{ position: string }> } }).informations_dossier.parties_clientes[0].position).toBe('appelant');
-    expect(screen.getByText('Partie cliente · Appelant')).toBeTruthy();
+    expect((pmPut.mock.calls[0][1] as { mapping: Record<string, string> }).mapping.PERSONNE_PHYSIQUE_02).toBe('PERSONNE_PHYSIQUE_02');
+  });
+
+  it('supprime un article depuis son menu et le retire du mapping sauvegardé', async () => {
+    const response = {
+      ...initialResponse,
+      mapping: { Alice: 'PERSONNE_PHYSIQUE_01', Bob: 'PERSONNE_PHYSIQUE_02' },
+      reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice'], PERSONNE_PHYSIQUE_02: ['Bob'] },
+    };
+    pmGetCached.mockResolvedValue(response);
+    pmPut.mockImplementation(async (_path: string, body: Record<string, unknown>) => ({ ...response, ...body, commit: { created: false } }));
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
+    const aliceCard = screen.getByText('Alice').closest('article');
+    expect(aliceCard).toBeTruthy();
+    fireEvent.click(within(aliceCard!).getByRole('button', { name: 'Options pour Alice' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Supprimer' }));
+
+    expect(screen.queryByText('Alice')).toBeNull();
+    expect(screen.getByText('Bob')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les profils' }));
+    });
+
+    await waitFor(() => expect(pmPut).toHaveBeenCalled());
+    expect((pmPut.mock.calls[0][1] as { mapping: Record<string, string> }).mapping).toEqual({ Bob: 'PERSONNE_PHYSIQUE_02' });
   });
 
   it('persiste le submit du dialogue ciblé et conserve le profil ciblé dans la carte', async () => {
@@ -55,8 +87,11 @@ describe('CaseMappingSection', () => {
 
     render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
     await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Modifier Alice' }));
-    fireEvent.change(screen.getByLabelText('Camp'), { target: { value: 'adversaire' } });
+    const aliceCard = screen.getByText('Alice').closest('article');
+    expect(aliceCard).toBeTruthy();
+    fireEvent.click(within(aliceCard!).getByRole('button', { name: 'Options pour Alice' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Modifier' }));
+    fireEvent.change(screen.getByLabelText('Position'), { target: { value: 'adversaire' } });
     fireEvent.change(screen.getByPlaceholderText('demandeur, défendeur…'), { target: { value: 'appelant' } });
 
     await act(async () => {
@@ -66,6 +101,53 @@ describe('CaseMappingSection', () => {
     await waitFor(() => expect(pmPut).toHaveBeenCalled());
     expect((pmPut.mock.calls[0][1] as { informations_dossier: { parties_adverses: Array<{ position: string }> } }).informations_dossier.parties_adverses[0].position).toBe('appelant');
     expect(screen.getByText('Partie adverse · Appelant')).toBeTruthy();
+  });
+
+  it('retire l’affectation Client ou Adverse quand la position devient Tiers', async () => {
+    pmGetCached.mockResolvedValue(initialResponse);
+    pmPut.mockImplementation(async (_path: string, body: Record<string, unknown>) => ({ ...initialResponse, ...body, commit: { created: false } }));
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
+    openProfileEditor('Alice');
+    fireEvent.change(screen.getByLabelText('Position'), { target: { value: 'tiers' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    });
+
+    await waitFor(() => expect(pmPut).toHaveBeenCalled());
+    const savedBody = pmPut.mock.calls[0][1] as {
+      mapping: Record<string, string>;
+      informations_dossier: { parties_clientes: unknown[]; parties_adverses: unknown[] };
+    };
+    const savedInfo = savedBody.informations_dossier;
+    expect(savedInfo.parties_clientes).toHaveLength(0);
+    expect(savedInfo.parties_adverses).toHaveLength(0);
+    expect(savedBody.mapping).toEqual({ Alice: 'PERSONNE_PHYSIQUE_01' });
+    expect(screen.getByText('Aucune position procédurale')).toBeTruthy();
+  });
+
+  it('ne modifie pas le mapping si un profil est enregistré comme Tiers', async () => {
+    pmGetCached.mockResolvedValue(initialResponse);
+    pmPut.mockImplementation(async (_path: string, body: Record<string, unknown>) => ({ ...initialResponse, ...body, commit: { created: false } }));
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
+    openProfileEditor('Alice');
+    fireEvent.change(screen.getByLabelText('Position'), { target: { value: 'tiers' } });
+    fireEvent.change(screen.getByDisplayValue('Alice'), { target: { value: 'Alice modifiée' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    });
+
+    await waitFor(() => expect(pmPut).toHaveBeenCalled());
+    const body = pmPut.mock.calls[0][1] as { mapping: Record<string, string> };
+    expect(body.mapping).toEqual({ Alice: 'PERSONNE_PHYSIQUE_01' });
+    expect(body.mapping['Alice modifiée']).toBeUndefined();
+    expect(screen.getByText('Alice')).toBeTruthy();
+    expect(screen.queryByText('Alice modifiée')).toBeNull();
   });
 
   it('traite AVOCAT_DEFENDEUR_PERSONNE_MORALE_01 comme une personne physique dans la popup ciblée', async () => {
@@ -79,11 +161,89 @@ describe('CaseMappingSection', () => {
 
     render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
     await waitFor(() => expect(screen.getByText(lawyerPrincipal)).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: `Modifier ${lawyerPrincipal}` }));
+    openProfileEditor(lawyerPrincipal);
 
     await waitFor(() => expect(screen.getByText('Nom complet — variant principal')).toBeTruthy());
     expect(screen.queryByText('Dénomination — variant principal')).toBeNull();
     expect(screen.getByDisplayValue(lawyerPrincipal)).toBeTruthy();
+  });
+
+  it('affiche tous les variants détectés dans la popup ciblée', async () => {
+    pmGetCached.mockResolvedValue({
+      ...initialResponse,
+      mapping: { Alice: 'PERSONNE_PHYSIQUE_01', 'Alice Dupont': 'PERSONNE_PHYSIQUE_01' },
+      reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice', 'Alice Dupont'] },
+      informations_dossier: normalizeProcedureInfo(),
+    });
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
+    openProfileEditor('Alice');
+
+    expect(screen.getByText('Variants détectés')).toBeTruthy();
+    expect(screen.getByText('Alice Dupont')).toBeTruthy();
+  });
+
+  it('permet de choisir, ajouter et supprimer un variant dans la popup', async () => {
+    pmGetCached.mockResolvedValue({
+      ...initialResponse,
+      mapping: { Alice: 'CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_02', 'Alice Dupont': 'CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_02' },
+      reverse_mapping: { CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_02: ['Alice', 'Alice Dupont'] },
+      informations_dossier: normalizeProcedureInfo(),
+    });
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
+    openProfileEditor('Alice');
+    fireEvent.click(screen.getByRole('button', { name: 'Définir Alice Dupont comme variant principal' }));
+    expect(screen.getByDisplayValue('Alice Dupont')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Nouveau variant'), { target: { value: 'Alice Martin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    expect(screen.getByText('Alice Martin')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer le variant Alice' }));
+    expect(screen.queryByRole('button', { name: 'Supprimer le variant Alice' })).toBeNull();
+  });
+
+  it('change le principal vers un variant existant sans créer une seconde carte', async () => {
+    const response = {
+      ...initialResponse,
+      mapping: { Alice: 'PERSONNE_PHYSIQUE_01', 'Alice Dupont': 'PERSONNE_PHYSIQUE_01' },
+      reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice', 'Alice Dupont'] },
+      informations_dossier: normalizeProcedureInfo({
+        parties_clientes: [{
+          type: 'personne_physique',
+          nom: 'Alice',
+          position: 'demandeur',
+          mapping_assignments: [{
+            field: 'identite',
+            code: 'PERSONNE_PHYSIQUE_01',
+            original_code: 'PERSONNE_PHYSIQUE_01',
+            category: 'personnes_physiques',
+            principal: 'Alice',
+            variants: ['Alice', 'Alice Dupont'],
+          }],
+        }],
+      }),
+    };
+    pmGetCached.mockResolvedValue(response);
+    pmPut.mockImplementation(async (_path: string, body: Record<string, unknown>) => ({ ...response, ...body, commit: { created: false } }));
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
+    openProfileEditor('Alice');
+    fireEvent.change(screen.getByDisplayValue('Alice'), { target: { value: 'Alice Dupont' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    });
+
+    await waitFor(() => expect(pmPut).toHaveBeenCalled());
+    const body = pmPut.mock.calls[0][1] as { mapping: Record<string, string> };
+    expect(Object.keys(body.mapping).sort()).toEqual(['Alice', 'Alice Dupont']);
+    expect(new Set(Object.values(body.mapping)).size).toBe(1);
+    expect(screen.getByText('Alice Dupont')).toBeTruthy();
+    expect(screen.getAllByRole('article')).toHaveLength(1);
   });
 
   it('conserve un lien glissé après son enregistrement', async () => {
