@@ -260,7 +260,6 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
               <ScanSearch className="h-5 w-5 text-primary" />
               <h2 className="text-base font-semibold">Anonymisation</h2>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">Pipeline MarkItDown + GLiNER, avec mise en file des dossiers.</p>
           </div>
           <div className="space-y-4 px-5 py-4">
             <div className="space-y-2">
