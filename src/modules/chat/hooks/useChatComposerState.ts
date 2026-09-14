@@ -1199,6 +1199,7 @@ export function useChatComposerState({
     textareaRef,
     inputHighlightRef,
     isTextareaExpanded,
+    slashCommands,
     slashCommandsCount,
     filteredCommands,
     frequentCommands,

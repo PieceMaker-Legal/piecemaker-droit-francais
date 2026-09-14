@@ -39,6 +39,10 @@ export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>
     try { res.json(store.updateDocument(String(req.params.id), req.body.content, req.body.previousContent)); }
     catch (error) { res.status(409).json({ error: (error as Error).message }); }
   });
+  router.delete('/catalog/:id', (req, res) => {
+    try { res.json(store.deleteEntry(String(req.params.id))); }
+    catch (error) { res.status(400).json({ error: (error as Error).message }); }
+  });
   router.put('/catalog/:id/activation', (req, res) => {
     try { res.json(store.setEnabled(req.body?.workspacePath, String(req.params.id), req.body?.enabled)); }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
