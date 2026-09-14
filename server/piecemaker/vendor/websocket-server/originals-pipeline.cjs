@@ -56,7 +56,16 @@ const { syncCentralMapping } = require('../piecemaker-plugin/scripts/lib/central
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
 const CONVERTER_SCRIPT = () => process.env.SMART_CONVERTER_PATH || path.join(SCRIPTS_DIR, 'smart_converter.py');
 const PIPELINE_SCRIPT = () => process.env.PIECEMAKER_PIPELINE_PATH || path.join(SCRIPTS_DIR, 'convert_and_scan_pipeline.py');
-const PYTHON = () => process.env.PYTHON_PATH || 'python3';
+const PIECEMAKER_HOME = path.join(os.homedir(), '.piecemaker');
+const configuredPythonPath = () => {
+  try {
+    const { pythonPath } = JSON.parse(fs.readFileSync(path.join(PIECEMAKER_HOME, 'config.json'), 'utf8'));
+    return pythonPath && fs.existsSync(pythonPath) ? pythonPath : null;
+  } catch {
+    return null;
+  }
+};
+const PYTHON = () => process.env.PYTHON_PATH || configuredPythonPath() || 'python3';
 const MAX_LOG_LINES = 200;
 const MAX_ERROR_LINES = 12;
 
