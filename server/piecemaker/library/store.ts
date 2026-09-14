@@ -195,6 +195,20 @@ export function createLibraryStore(home: string) {
     })();
   }
 
+  function deleteEntry(id: string) {
+    const entry = document(id);
+    if (entry.kind !== 'skill') throw new Error('Seuls les skills peuvent être supprimés.');
+    const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
+    for (const { workspace: selected } of active) setEnabled(selected, id, false);
+    db.transaction(() => {
+      db.prepare('DELETE FROM collection_entries WHERE entry_id = ?').run(id);
+      db.prepare('DELETE FROM origins WHERE entry_id = ?').run(id);
+      db.prepare('DELETE FROM activation WHERE entry_id = ?').run(id);
+      db.prepare('DELETE FROM entries WHERE id = ?').run(id);
+    })();
+    return { ok: true };
+  }
+
   function updateAsset(id: string, assetPath: string, content: string, previousContent: string) {
     return db.transaction(() => {
       const entry = document(id);
@@ -377,7 +391,7 @@ export function createLibraryStore(home: string) {
         else {
           fs.writeFileSync(path.join(staging, 'agent.md'), entry.content, { mode: 0o600 });
           const { data, content } = parseFrontMatter(entry.content);
-          const toml = Object.entries({ name: String(data.name || `piecemaker-${id}`), description: entry.description || entry.name, developer_instructions: content })
+          const toml = Object.entries({ name: String(data.name || entry.name), description: entry.description || entry.name, developer_instructions: content })
             .map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n');
           fs.writeFileSync(path.join(staging, 'agent.toml'), `${toml}\n`, { mode: 0o600 });
         }
@@ -425,6 +439,7 @@ export function createLibraryStore(home: string) {
     list,
     document,
     createEntry,
+    deleteEntry,
     updateDocument,
     importFile,
     setEnabled,

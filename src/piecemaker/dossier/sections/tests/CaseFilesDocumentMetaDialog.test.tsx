@@ -1,8 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { invalidatePmGet, pmGetCached, pmPost, pmPut } = vi.hoisted(() => ({
+const { invalidatePmGet, pmGet, pmGetCached, pmPost, pmPut } = vi.hoisted(() => ({
   invalidatePmGet: vi.fn(),
+  pmGet: vi.fn(),
   pmGetCached: vi.fn(),
   pmPost: vi.fn(),
   pmPut: vi.fn(),
@@ -12,6 +13,7 @@ vi.mock('@/piecemaker/dossier/api', () => ({
   PieceMakerApiError: class extends Error {},
   PIECEMAKER_API_BASE: '/api/piecemaker',
   invalidatePmGet,
+  pmGet,
   pmGetCached,
   pmPost,
   pmPut,
@@ -49,6 +51,7 @@ describe('CaseFilesDocumentMetaDialog', () => {
     vi.clearAllMocks();
     window.localStorage.clear();
     pmPut.mockResolvedValue({ ok: true });
+    pmGet.mockResolvedValue({ path: 'Pièces convertis/Assignation.md', content: 'Aperçu de la pièce.' });
   });
 
   it('propose les types fixes dans un menu et conserve la valeur existante', () => {
@@ -230,5 +233,34 @@ describe('CaseFilesDocumentMetaDialog', () => {
       'aucune_partie_selectionnee',
       'markdown_indisponible',
     ])).toEqual(['markdown indisponible']);
+  });
+
+  it('surligne les personnes en orange, les dates en bleu et le reste en jaune dans l’aperçu', async () => {
+    pmGet.mockResolvedValue({
+      path: 'Pièces convertis/Assignation.md',
+      content: 'Le 10/09/2026, Alice Martin a saisi le TJ de Paris pour une assignation.',
+    });
+
+    render(
+      <CaseFilesDocumentMetaDialog
+        caseId="case-1"
+        document={{ ...document, localisation: 'TJ de Paris' }}
+        entityOptions={[]}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    const person = await screen.findByText('Alice Martin', { selector: 'mark' });
+    expect(person.className).toContain('bg-orange-400/40');
+
+    const date = screen.getByText('10/09/2026', { selector: 'mark' });
+    expect(date.className).toContain('bg-blue-400/40');
+
+    const locationMark = screen.getByText('TJ de Paris', { selector: 'mark' });
+    expect(locationMark.className).toContain('bg-yellow-300/50');
+
+    const natureMark = screen.getByText('assignation', { selector: 'mark' });
+    expect(natureMark.className).toContain('bg-yellow-300/50');
   });
 });
