@@ -4,7 +4,25 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { chronologyScopeFromFolder, normalizeChronologyScope, scopeChronology } = require('./admin-routes.cjs');
+const { chronologyScopeFromFolder, loadAdminChronology, normalizeChronologyScope, scopeChronology } = require('./admin-routes.cjs');
+
+test('loads only the opened case chronology from its document index', async () => {
+  const localChronology = { documents: [], deanonymized: false };
+  let builds = 0;
+  let loadedRoot = null;
+  const result = await loadAdminChronology({
+    caseRoot: '/opened-case',
+    buildLocalChronology: async (caseRoot) => {
+      builds += 1;
+      loadedRoot = caseRoot;
+      return localChronology;
+    },
+  });
+
+  assert.equal(builds, 1);
+  assert.equal(loadedRoot, '/opened-case');
+  assert.equal(result, localChronology);
+});
 
 test('scopes a chronology to one subfolder and keeps the dossier folder choices', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-chronology-scope-'));
@@ -18,15 +36,6 @@ test('scopes a chronology to one subfolder and keeps the dossier folder choices'
       undatedDocuments: [],
       entities: [{ code: 'party', documents: [alpha.id, beta.id] }],
       stats: { documents: 2, indexed: 2, dated: 2, entities: 1, span: { from: alpha.dateIso, to: beta.dateIso } },
-      graph: {
-        nodes: [
-          { id: 'doc-a', file_type: 'document', document_key: alpha.documentKey },
-          { id: 'doc-b', file_type: 'document', document_key: beta.documentKey },
-          { id: 'index', source_file: '' },
-        ],
-        edges: [{ source: 'index', target: 'doc-a' }, { source: 'index', target: 'doc-b' }],
-        hyperedges: [],
-      },
     };
 
     assert.equal(normalizeChronologyScope(root, 'Pieces/Alpha'), 'Pieces/Alpha');
@@ -35,7 +44,6 @@ test('scopes a chronology to one subfolder and keeps the dossier folder choices'
     assert.deepEqual(scoped.documents, [alpha]);
     assert.deepEqual(scoped.folders, ['Pieces', 'Pieces/Alpha', 'Pieces/Beta']);
     assert.deepEqual(scoped.stats, { documents: 1, indexed: 1, dated: 1, entities: 1, span: { from: '2024-01-01', to: '2024-01-01' } });
-    assert.deepEqual(scoped.graph.edges, [{ source: 'index', target: 'doc-a' }]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

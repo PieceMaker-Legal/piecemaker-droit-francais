@@ -47,10 +47,7 @@ function managedImportBlock(rule) {
 ## PieceMaker — instructions gérées
 
 Pour une chronologie factuelle, appeler d'abord l'outil \`chronologie\` du
-serveur MCP \`piecemaker\`. Pour une question sur les personnes ou leurs liens de
-droit, appeler \`graphe_question\` ; si l'outil signale que le graphe doit être
-actualisé, lancer \`graphe_construire\` puis reposer la question. Consulter aussi
-la règle complète suivante :
+serveur MCP \`piecemaker\`. Consulter aussi la règle complète suivante :
 
 @${rule}
 ${IMPORT_END}`;

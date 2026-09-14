@@ -5,10 +5,8 @@
 
 import type {
   CaseFileEntry,
-  ChronologyGraph,
-  ChronologyLegacyStatus,
   PieceProtectionState,
-} from './CaseFilesTypes';
+} from '@/piecemaker/dossier/sections/CaseFilesTypes';
 
 export function formatBytes(size: number): string {
   if (!Number.isFinite(size) || size < 0) return '—';
@@ -64,79 +62,6 @@ const ORIGINALS_STATUS_LABELS: Record<CaseFileEntry['status'], string> = {
 
 export function originalsStatusLabel(file: CaseFileEntry): string {
   return ORIGINALS_STATUS_LABELS[file.status] || file.status;
-}
-
-const LEGACY_STATUS_LABELS: Record<ChronologyLegacyStatus, string> = {
-  ready: 'Analyse juridique à jour',
-  stale: 'Analyse juridique à actualiser',
-  building: 'Analyse juridique en cours…',
-  failed: 'Échec de l’analyse juridique',
-  blocked: 'Analyse juridique bloquée',
-  empty: 'Analyse juridique non construite',
-};
-
-/** Badge tone, expressed as Tailwind classes rather than the admin panel's own CSS tokens. */
-const LEGACY_STATUS_TONE: Record<ChronologyLegacyStatus, string> = {
-  ready: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  stale: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  building: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  failed: 'border-destructive/30 bg-destructive/10 text-destructive',
-  blocked: 'border-destructive/30 bg-destructive/10 text-destructive',
-  empty: 'border-border/50 bg-muted/50 text-muted-foreground',
-};
-
-const REASON_LABELS: Record<string, string> = {
-  date_changed: 'date corrigée',
-  nature_changed: 'type de pièce corrigé',
-  document_entities_changed: 'entités de la pièce modifiées',
-  semantic_corpus_changed: 'corpus juridique modifié',
-  party_or_corpus_boundary_changed: 'parties ou périmètre modifiés',
-  legal_prompt_version_changed: 'instructions d’analyse mises à jour',
-  legal_integration_version_changed: 'intégration juridique mise à jour',
-  legal_finalizer_version_changed: 'contrôles juridiques mis à jour',
-  semantic_build_failed: 'dernière construction en échec',
-  mapping_missing: 'mapping manquant',
-  parties_required: 'parties à identifier',
-  party_selection_invalid: 'sélection des parties invalide',
-  no_party_documents: 'aucune pièce reliée aux parties',
-};
-
-const HIDDEN_REVIEW_REASONS = new Set(['aucune_personne_indexee', 'aucune_partie_selectionnee']);
-
-function readableReason(reason: string): string {
-  if (HIDDEN_REVIEW_REASONS.has(reason)) return '';
-  return REASON_LABELS[reason] || reason.split('_').join(' ');
-}
-
-export function chronologyReviewReasons(reasons: string[]): string[] {
-  return [...new Set(reasons.map(readableReason).filter(Boolean))];
-}
-
-export type ChronologyStateModel = {
-  label: string;
-  tone: string;
-  canRefresh: boolean;
-  detail: string;
-};
-
-/**
- * Ported from PieceMaker-Installer's admin/chronology-model.mjs
- * (chronologyStateModel), trimmed to what this section displays: no revision
- * comparison, no quality-flag rendering (those track document-entities
- * corrections, out of scope here).
- */
-export function chronologyStateModel(graph: ChronologyGraph): ChronologyStateModel {
-  const status: ChronologyLegacyStatus = LEGACY_STATUS_LABELS[graph.status] ? graph.status : 'empty';
-  const reasons = [...new Set((graph.state?.semanticStaleReasons || []).map(readableReason).filter(Boolean))];
-  const quarantined = Boolean(graph.state?.semanticQuarantined);
-  return {
-    label: LEGACY_STATUS_LABELS[status],
-    tone: LEGACY_STATUS_TONE[status],
-    canRefresh: status !== 'building' && status !== 'blocked',
-    detail: quarantined
-      ? 'L’ancienne analyse est masquée jusqu’à sa reconstruction.'
-      : reasons.join(' · '),
-  };
 }
 
 export function describeJob(job: { action: string; state: string; percent?: number; processed?: number; total?: number; skipped?: number }): string {

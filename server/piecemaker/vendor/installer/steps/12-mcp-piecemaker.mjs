@@ -1,7 +1,7 @@
 /**
- * Étape 12 — serveur MCP « piecemaker » (graphe, conversion, chronologie).
+ * Étape 12 — serveur MCP « piecemaker » (conversion, chronologie).
  *
- * Les commandes de graphe et de conversion sont aujourd'hui présentées au
+ * Les commandes de conversion sont aujourd'hui présentées au
  * modèle par du texte injecté dans les templates, sans rien qui relie ce
  * texte au binaire : une commande renommée laisserait plusieurs fichiers en
  * dérive silencieuse. `mcp/piecemaker/server.mjs` les expose comme outils
@@ -21,8 +21,8 @@ import { REPO_ROOT, commandExists, run, runCapture } from '../lib/platform.mjs';
 
 export const meta = {
   id: '12-mcp-piecemaker',
-  label: 'Serveur MCP piecemaker (graphe, conversion, chronologie)',
-  description: 'Enregistre dans Claude Code le serveur MCP qui expose le graphe juridique, la conversion et la chronologie',
+  label: 'Serveur MCP piecemaker (conversion, chronologie)',
+  description: 'Enregistre dans Claude Code le serveur MCP qui expose la conversion et la chronologie',
 };
 
 const SERVER_NAME = 'piecemaker';

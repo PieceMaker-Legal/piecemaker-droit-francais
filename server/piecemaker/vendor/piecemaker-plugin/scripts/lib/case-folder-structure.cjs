@@ -1,4 +1,4 @@
-/** Arborescence métier partagée par le serveur, les hooks et Graphify. */
+/** Arborescence métier partagée par le serveur et les hooks. */
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -108,8 +108,8 @@ function readStructureManifest(caseRoot) {
 
 /**
  * La structure est figée par dossier lors de son premier enregistrement. Ainsi,
- * personnaliser les prochains dossiers ne change ni le routage du Markdown ni
- * le périmètre Graphify des dossiers déjà existants.
+ * personnaliser les prochains dossiers ne change pas le routage du Markdown
+ * des dossiers déjà existants.
  */
 function readCaseFolderStructure(caseRoot, config = {}) {
   const manifest = readStructureManifest(caseRoot);
@@ -231,7 +231,6 @@ function classifyRelativeCaseFolderPath(relativePath, structure, { managed = tru
     managed,
     generated,
     businessSource: ['correspondence', 'dataRoom'].includes(area) && !generated,
-    graphPriority: ['correspondence', 'dataRoom'].includes(area) && !generated,
     outputRelative: outputRelative ? outputRelative.split(path.sep).join('/') : null,
   };
 }
@@ -243,10 +242,6 @@ function classifyCaseFolderPath(caseRoot, relativePath, config = {}) {
 
 function isCaseGeneratedPath(caseRoot, relativePath, config = {}) {
   return classifyCaseFolderPath(caseRoot, relativePath, config).generated;
-}
-
-function isGraphPriorityPath(caseRoot, relativePath, config = {}) {
-  return classifyCaseFolderPath(caseRoot, relativePath, config).graphPriority;
 }
 
 /** Répertoire métier où la conversion d'une pièce structurée doit écrire. */
@@ -295,7 +290,6 @@ module.exports = {
   configuredCaseFolderStructure,
   ensureCaseFolderStructure,
   isCaseGeneratedPath,
-  isGraphPriorityPath,
   normalizeCaseFolderStructure,
   readCaseFolderStructure,
   structuredMarkdownCounterpart,

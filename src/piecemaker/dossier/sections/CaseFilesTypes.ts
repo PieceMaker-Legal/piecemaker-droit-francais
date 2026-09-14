@@ -119,7 +119,6 @@ export type ChronologyEntityDecisions = {
   exclusions: string[];
 };
 
-/** One projected document inside the chronology (chronologyFromLegalGraph()). */
 export type ChronologyDocument = {
   documentKey: string;
   id: string;
@@ -127,7 +126,6 @@ export type ChronologyDocument = {
   name: string;
   resource: boolean;
   scanned: boolean;
-  analyzable: boolean;
   indexed: boolean;
   edited: boolean;
   nature: string | null;
@@ -138,33 +136,11 @@ export type ChronologyDocument = {
   codes: ChronologyEntity[];
   detectedCodes: ChronologyEntity[];
   entityDecisions: ChronologyEntityDecisions;
-  reviewRequired: boolean;
-  reviewReasons: string[];
-};
-
-/** The raw semantic-layer status, exposed as `graph.state` (see legal-graph.cjs legalGraphStatus()). */
-export type ChronologyGraphState = {
-  staticState?: string;
-  semanticState?: string;
-  semanticStaleReasons?: string[];
-  semanticQuarantined?: boolean;
-  staticRevision?: number | null;
-  semanticBaseRevision?: number | null;
-};
-
-/** Legacy, simpler status string computed by legacyGraphStatus() — what the frise badge shows. */
-export type ChronologyLegacyStatus = 'ready' | 'stale' | 'building' | 'failed' | 'blocked' | 'empty';
-
-export type ChronologyGraph = {
-  status: ChronologyLegacyStatus;
-  state: ChronologyGraphState;
-  revision: number | null;
 };
 
 /** GET /repository/chronology */
 export type ChronologyOverview = {
   generatedAt: string;
-  graphRevision: number | null;
   mapping: { exists: boolean; entries: number };
   stats: {
     documents: number;
@@ -176,16 +152,9 @@ export type ChronologyOverview = {
   documents: ChronologyDocument[];
   datedDocuments: ChronologyDocument[];
   undatedDocuments: ChronologyDocument[];
-  graph: ChronologyGraph;
   scope?: string | null;
   folders?: string[];
   case: { path: string; name: string; location: string };
-};
-
-/** POST /repository/legal-graph/refresh */
-export type LegalGraphRefreshResult = {
-  ok: true;
-  graph: ChronologyGraphState & { exists: boolean; generatedAt?: string };
 };
 
 /** Body of PUT /repository/document-meta — always the full effective values, never a partial diff. */
