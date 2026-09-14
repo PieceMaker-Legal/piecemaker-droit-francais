@@ -23,8 +23,8 @@ const projects = [
 
 beforeEach(() => {
   localStorage.clear();
-  projectsRequest.mockReset().mockResolvedValue(new Response(JSON.stringify(projects), { status: 200 }));
-  pmGet.mockReset();
+  projectsRequest.mockReset().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(projects), { status: 200 })));
+  pmGet.mockReset().mockResolvedValue({ exists: false, mapping: {} });
   pmPost.mockReset().mockImplementation((path: string, body: { folder?: string }) => {
     if (path === '/repository/cases/selected') return Promise.resolve({ folder: { path: body.folder } });
     const suffix = pmPost.mock.calls.filter(([calledPath]) => calledPath === '/originals/pipeline').length;
@@ -59,7 +59,8 @@ it('queues every project and renders each server job inside its project row', as
   );
 
   fireEvent.click(await screen.findByRole('button', { name: 'Anonymiser les dossiers' }));
-  await screen.findByRole('option', { name: 'Tous les dossiers (2)' });
+  await screen.findByRole('checkbox', { name: 'Sélectionner Dossier A' });
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Mettre en file' }) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByRole('button', { name: 'Mettre en file' }));
 
   await waitFor(() => expect(pmPost).toHaveBeenCalledTimes(4));
@@ -71,4 +72,29 @@ it('queues every project and renders each server job inside its project row', as
   expect(secondProgressSlot.querySelector('[role="progressbar"]')).not.toBeNull();
   expect(firstProgressSlot.textContent).toContain('En attente');
   expect(secondProgressSlot.textContent).toContain('En attente');
+});
+
+it('marks analyzed projects and selects only the remaining projects', async () => {
+  pmGet.mockImplementation((_path: string, params: { case: string }) => Promise.resolve(
+    params.case === '/cabinet/a'
+      ? { exists: true, mapping: { 'Mme Exemple': 'PERSONNE_1' } }
+      : { exists: false, mapping: {} },
+  ));
+  const buttonSlot = document.createElement('span');
+  document.body.append(buttonSlot);
+
+  render(
+    <AnonymizationLauncher
+      buttonSlots={[buttonSlot]}
+      progressSlots={new Map()}
+      onProjectsChange={() => undefined}
+    />,
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Anonymiser les dossiers' }));
+  await screen.findByLabelText('Anonymisation effectuée');
+  fireEvent.click(screen.getByRole('button', { name: 'Non analysés' }));
+
+  expect((screen.getByRole('checkbox', { name: 'Sélectionner Dossier A' }) as HTMLInputElement).checked).toBe(false);
+  expect((screen.getByRole('checkbox', { name: 'Sélectionner Dossier B' }) as HTMLInputElement).checked).toBe(true);
 });
