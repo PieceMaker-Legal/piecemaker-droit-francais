@@ -1,8 +1,11 @@
+@import url("https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&display=swap");
+
 @layer components {
   :root {
     --font-inter: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-sans: var(--font-eb-garamond);
     --font-eb-garamond: "EB Garamond", Garamond, Georgia, serif;
+    --font-size-base: calc(1rem + 2px);
     --font-serif: var(--font-eb-garamond);
     --mike-font-ui: var(--font-eb-garamond);
     --mike-font-editorial: var(--font-eb-garamond);
@@ -253,6 +256,10 @@
 :root,
 body {
   font-family: var(--font-eb-garamond);
+}
+
+body {
+  font-size: var(--font-size-base);
 }
 
 body,
