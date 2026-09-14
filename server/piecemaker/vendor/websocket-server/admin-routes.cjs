@@ -2879,11 +2879,6 @@ function createAdminRouter({
           ? { informations_dossier: req.body.informations_dossier }
           : {}),
       });
-      // Un renommage garde les codes stables ; une suppression peut en revanche
-      // modifier les parties ou le corpus. Le synchroniseur compare les
-      // signatures et met en quarantaine l'ancien fragment si nécessaire,
-      // toujours sans lancer le LLM.
-      const graph = await rematerializeDeterministicLegalGraph(legalCase.root);
       const commit = await createCommit({
         casesRoot: legalCase.casesRoot,
         caseName: legalCase.caseName,
@@ -2902,13 +2897,6 @@ function createAdminRouter({
         mapping: saved.mapping,
         reverse_mapping: saved.reverse_mapping,
         informations_dossier: saved.informations_dossier,
-        graph: {
-          staticState: graph.staticState,
-          staticRevision: graph.staticRevision,
-          semanticState: graph.semanticState,
-          semanticStaleReasons: graph.semanticStaleReasons,
-          semanticQuarantined: graph.semanticQuarantined,
-        },
         commit: { created: commit.created, hash: commit.commit || null },
       });
     } catch (error) {
