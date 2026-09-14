@@ -1,4 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Timesheet">
-  <rect x="8" y="8" width="48" height="48" rx="10" fill="#2563eb"/>
+  <rect x="8" y="8" width="48" height="48" rx="10" fill="#333333"/>
   <path d="M20 18v8M44 18v8M16 25h32M20 33h8M36 33h8M20 42h8M36 42h8" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
 </svg>
