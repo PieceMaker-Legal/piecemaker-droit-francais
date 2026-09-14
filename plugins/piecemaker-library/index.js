@@ -49,8 +49,6 @@ export function mount(container, api) {
   let scope = 'legal';
   let search = '';
   let entries = [];
-  let providerSkills = [];
-  let providerErrors = [];
   let plugins = [];
   const pluginTrees = new Map();
   let pluginTreeBusy = '';
@@ -98,20 +96,14 @@ export function mount(container, api) {
         const data = workspace ? await request('GET', `/activation${query}`) : null;
         if (version === revision) snapshot = data;
       } else {
-        const catalog = request('GET', `/catalog${query}`);
-        const discovered = tab === 'skill'
-          ? request('GET', `/provider-skills${query}`).catch(() => ({ providers: [], unavailable: true }))
-          : null;
-        const collections = tab === 'skill' ? request('GET', `/plugins${query}`) : null;
-        const [catalogData, discoveredData, collectionData] = await Promise.all([catalog, discovered, collections]);
+        let collectionData = null;
+        if (tab === 'skill') {
+          collectionData = await request('GET', `/plugins${query}`);
+        }
+        const catalogData = await request('GET', `/catalog${query}`);
         if (version === revision) {
           entries = catalogData.entries;
           plugins = collectionData?.plugins || [];
-          providerSkills = (discoveredData?.providers || []).flatMap((result) => (
-            (result.skills || []).map((skill) => normalizeSkill(result.provider, skill, workspace ? { path: workspace } : undefined))
-          ));
-          providerErrors = (discoveredData?.providers || []).filter((result) => result.error);
-          if (discoveredData?.unavailable) providerErrors.push({ provider: 'tous' });
         }
       }
     } catch (cause) { if (version === revision) error = cause.message; }
@@ -278,17 +270,6 @@ export function mount(container, api) {
               body.append(tree);
             }
           }
-          body.append(element('h2', 'Skills détectées'));
-          const detected = providerSkills.filter(matches);
-          if (!detected.length) body.append(element('p', 'Aucune skill détectée.'));
-          for (const skill of detected) {
-            const item = row(skill);
-            const details = item.querySelector('.details');
-            details.append(element('p', `${skill.provider} · ${skill.scope}${skill.command ? ` · ${skill.command}` : ''}`, 'meta'));
-            if (skill.sourcePath) details.append(element('p', skill.sourcePath, 'meta'));
-            body.append(item);
-          }
-          if (providerErrors.length) body.append(element('p', `Providers indisponibles : ${providerErrors.map((item) => item.provider).join(', ')}.`, 'meta'));
         }
         body.append(element('p', 'Les changements s’appliquent aux prochains messages. Une désactivation ne retire pas les instructions déjà reçues dans une conversation.', 'meta'));
       } else if (tab === 'connectors') {
@@ -325,7 +306,7 @@ export function mount(container, api) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = context.project?.path !== next.project?.path;
     context = next;
-    if (changed) { entries = []; providerSkills = []; providerErrors = []; plugins = []; pluginTrees.clear(); snapshot = null; void load(); }
+    if (changed) { entries = []; plugins = []; pluginTrees.clear(); snapshot = null; void load(); }
     else render();
   });
   mounts.set(container, () => { disposed = true; revision++; unsubscribe(); layout.remove(); style.remove(); });
