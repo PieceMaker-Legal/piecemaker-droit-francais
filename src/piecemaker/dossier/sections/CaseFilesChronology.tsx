@@ -1,22 +1,20 @@
 /**
  * "Chronologie" view of a case file: the timeline of pieces built from the
- * legal graph, its build status, PDF/DOCX export and manual metadata
+ * document index, PDF/DOCX export and manual metadata
  * correction. Mirrors PieceMaker-Installer's admin/app.js chronology pane
  * (loadChronology, renderTimeline, exportChronology) against the routes
- * mounted under /api/piecemaker. The interactive "graphe des liens" view has
- * no equivalent here — see the final report for why.
+ * mounted under /api/piecemaker.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CalendarClock, Download, FolderTree, Loader2, Pencil, Plus, RefreshCw, Sparkles, UserRound } from 'lucide-react';
+import { CalendarClock, Download, FolderTree, Loader2, Pencil, Plus, RefreshCw, UserRound } from 'lucide-react';
 
 import { Badge, Button, buttonVariants } from '@/shared/ui';
 import { authenticatedFetch } from '@/shared/api';
-import { cn } from '@/shared/utils';
-import { invalidatePmGet, pmGetCached, pmPost, PieceMakerApiError, PIECEMAKER_API_BASE } from '@/piecemaker/dossier/api';
+import { invalidatePmGet, pmGet, pmGetCached, pmPost, PieceMakerApiError, PIECEMAKER_API_BASE } from '@/piecemaker/dossier/api';
 import CaseFilesDocumentMetaDialog from '@/piecemaker/dossier/sections/CaseFilesDocumentMetaDialog';
-import type { ChronologyDocument, ChronologyExportFormat, ChronologyOverview } from '@/piecemaker/dossier/sections/CaseFilesTypes';
-import { chronologyReviewReasons, chronologyStateModel, formatDateIso } from '@/piecemaker/dossier/sections/CaseFilesUtils';
+import type { ChronologyDocument, ChronologyExportFormat, ChronologyOverview, OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
+import { formatDateIso } from '@/piecemaker/dossier/sections/CaseFilesUtils';
 import { principalPartyOptions } from '@/piecemaker/dossier/sections/MappingModel';
 
 type ChronologyLoadedOverview = ChronologyOverview & {
@@ -81,11 +79,23 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
     void load();
   }, [load, refreshVersion]);
 
-  const refreshGraph = async () => {
+  const rebuildDocumentIndex = async () => {
     setRefreshing(true);
     setMessage(null);
     try {
-      await pmPost('/repository/legal-graph/refresh', { case: caseId });
+      const response = await pmPost<{ job: OriginalsJob }>('/originals/pipeline', {
+        case: caseId,
+        action: 'anonymize',
+        files: [],
+        force: false,
+      });
+      let job = response.job;
+      while (job.state === 'queued' || job.state === 'running') {
+        await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+        const response = await pmGet<{ job: OriginalsJob }>('/originals/job', { id: job.id });
+        job = response.job;
+      }
+      if (job.state === 'error') throw new PieceMakerApiError(job.error || 'La reconstruction de l’index a échoué.', 500);
       await load(true);
     } catch (cause) {
       setMessage(cause instanceof PieceMakerApiError ? cause.message : String(cause));
@@ -161,7 +171,6 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
 
   if (!chronology) return null;
 
-  const state = chronologyStateModel(chronology.graph);
   const rows = [...chronology.datedDocuments, ...chronology.undatedDocuments];
 
   return (
@@ -181,18 +190,11 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
               </span>
             </>
           )}
-          <Badge variant="outline" className={cn('ml-1', state.tone)}>
-            {state.label}
-          </Badge>
         </div>
         <div className="flex items-center gap-1.5">
           <Button variant="secondary" size="sm" disabled={selectingScope} onClick={() => void chooseScope()}>
             {selectingScope ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderTree className="h-3.5 w-3.5" />}
             {scope ? `Sous-dossier : ${scope}` : 'Tout le dossier'}
-          </Button>
-          <Button variant="secondary" size="sm" disabled={!state.canRefresh || refreshing} onClick={() => void refreshGraph()}>
-            {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            Actualiser l’analyse juridique
           </Button>
           <Button variant="ghost" size="sm" disabled={exporting !== null} onClick={() => void exportChronology('pdf')}>
             {exporting === 'pdf' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
@@ -202,17 +204,20 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
             {exporting === 'docx' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             DOCX
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void load(true)}>
-            <RefreshCw className="h-3.5 w-3.5" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            disabled={refreshing}
+            aria-label="Reconstruire l’index et actualiser la chronologie"
+            title="Reconstruire document-index.json"
+            onClick={() => void rebuildDocumentIndex()}
+          >
+            {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           </Button>
         </div>
       </div>
 
-      {state.detail && (
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {state.detail}
-        </p>
-      )}
       {message && <p className="text-xs text-destructive">{message}</p>}
 
       {rows.length === 0 ? (
@@ -225,7 +230,6 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
       ) : (
         <div className="flex-1 space-y-1.5 overflow-y-auto">
           {rows.map((document) => {
-            const reviewReasons = chronologyReviewReasons(document.reviewReasons);
             const indexedEntities = document.codes.map((entity) => ({
               ...entity,
               label: entity.label || chronology.entityOptions.find((option) => option.code === entity.code)?.label || entity.code,
@@ -237,11 +241,6 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-medium">{document.name}</span>
                     {document.nature && <Badge variant="secondary">{document.nature}</Badge>}
-                    {reviewReasons.length > 0 && (
-                      <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                        À vérifier
-                      </Badge>
-                    )}
                   </div>
                   {document.localisation && <p className="mt-0.5 text-xs text-muted-foreground">Localisation : {document.localisation}</p>}
                   {document.fields.length > 0 && (
@@ -269,9 +268,6 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
                     ))}
                     <Plus className="h-3.5 w-3.5 shrink-0 opacity-60" />
                   </button>
-                  {reviewReasons.length > 0 && (
-                    <p className="mt-1 text-xs text-muted-foreground">{reviewReasons.join(' · ')}</p>
-                  )}
                 </div>
                 <Button
                   variant="ghost"

@@ -22,7 +22,6 @@ vi.mock('@/piecemaker/dossier/api', () => ({
 import CaseFilesChronology from '@/piecemaker/dossier/sections/CaseFilesChronology';
 import CaseFilesDocumentMetaDialog from '@/piecemaker/dossier/sections/CaseFilesDocumentMetaDialog';
 import type { ChronologyDocument } from '@/piecemaker/dossier/sections/CaseFilesTypes';
-import { chronologyReviewReasons } from '@/piecemaker/dossier/sections/CaseFilesUtils';
 
 const document: ChronologyDocument = {
   documentKey: 'a'.repeat(64),
@@ -31,7 +30,6 @@ const document: ChronologyDocument = {
   name: 'Assignation.pdf',
   resource: false,
   scanned: true,
-  analyzable: true,
   indexed: true,
   edited: false,
   nature: 'Assignation',
@@ -42,8 +40,6 @@ const document: ChronologyDocument = {
   codes: [{ code: 'PERSONNE_PHYSIQUE_01', category: 'personne', label: 'Alice Martin' }],
   detectedCodes: [{ code: 'PERSONNE_PHYSIQUE_01', category: 'personne', label: 'Alice Martin' }],
   entityDecisions: { additions: [], exclusions: [] },
-  reviewRequired: false,
-  reviewReasons: [],
 };
 
 describe('CaseFilesDocumentMetaDialog', () => {
@@ -119,13 +115,11 @@ describe('CaseFilesDocumentMetaDialog', () => {
         }
       : {
           generatedAt: '2026-09-10T08:00:00.000Z',
-          graphRevision: 1,
           mapping: { exists: true, entries: 1 },
           stats: { documents: 1, indexed: 1, dated: 1, entities: 1, span: null },
           documents: [document],
-          datedDocuments: [{ ...document, reviewRequired: true, reviewReasons: ['aucune_personne_indexee', 'aucune_partie_selectionnee'] }],
+          datedDocuments: [document],
           undatedDocuments: [],
-          graph: { status: 'ready', state: {}, revision: 1 },
           case: { path: 'case-1', name: 'Dossier', location: '/tmp/dossier' },
         });
 
@@ -144,13 +138,11 @@ describe('CaseFilesDocumentMetaDialog', () => {
         }
       : {
           generatedAt: '2026-09-10T08:00:00.000Z',
-          graphRevision: 1,
           mapping: { exists: true, entries: 1 },
           stats: { documents: 1, indexed: 1, dated: 1, entities: 1, span: null },
           documents: [{ ...document, codes: [{ ...document.codes[0], label: null }] }],
           datedDocuments: [{ ...document, codes: [{ ...document.codes[0], label: null }] }],
           undatedDocuments: [],
-          graph: { status: 'ready', state: {}, revision: 1 },
           case: { path: 'case-1', name: 'Dossier', location: '/tmp/dossier' },
         });
 
@@ -158,6 +150,35 @@ describe('CaseFilesDocumentMetaDialog', () => {
 
     await waitFor(() => expect(screen.getByText('Alice Martin')).toBeTruthy());
     expect(screen.queryByText('PERSONNE_PHYSIQUE_01')).toBeNull();
+  });
+
+  it('reconstruit l’index documentaire avant d’actualiser la chronologie', async () => {
+    pmGetCached.mockImplementation(async (path: string) => path === '/mapping'
+      ? { mapping: {}, reverse_mapping: {} }
+      : {
+          generatedAt: '2026-09-10T08:00:00.000Z',
+          mapping: { exists: true, entries: 0 },
+          stats: { documents: 1, indexed: 1, dated: 1, entities: 0, span: null },
+          documents: [document],
+          datedDocuments: [document],
+          undatedDocuments: [],
+          case: { path: 'case-1', name: 'Dossier', location: '/tmp/dossier' },
+        });
+    pmPost.mockResolvedValue({
+      job: { id: 'job-1', case: 'case-1', action: 'anonymize', state: 'done' },
+    });
+
+    render(<CaseFilesChronology caseId="case-1" caseName="Dossier" refreshVersion={0} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reconstruire l’index et actualiser la chronologie' }));
+
+    await waitFor(() => expect(pmPost).toHaveBeenCalledWith('/originals/pipeline', {
+      case: 'case-1',
+      action: 'anonymize',
+      files: [],
+      force: false,
+    }));
+    await waitFor(() => expect(invalidatePmGet).toHaveBeenCalledWith('/repository/chronology', { case: 'case-1', scope: undefined }));
   });
 
   it('ajoute et retire des personnes du mapping pour une pièce', async () => {
@@ -227,14 +248,6 @@ describe('CaseFilesDocumentMetaDialog', () => {
     ]);
   });
 
-  it('masque les motifs internes correspondant à une sélection vide', () => {
-    expect(chronologyReviewReasons([
-      'aucune_personne_indexee',
-      'aucune_partie_selectionnee',
-      'markdown_indisponible',
-    ])).toEqual(['markdown indisponible']);
-  });
-
   it('surligne les personnes en orange, les dates en bleu et le reste en jaune dans l’aperçu', async () => {
     pmGet.mockResolvedValue({
       path: 'Pièces convertis/Assignation.md',
@@ -245,7 +258,7 @@ describe('CaseFilesDocumentMetaDialog', () => {
       <CaseFilesDocumentMetaDialog
         caseId="case-1"
         document={{ ...document, localisation: 'TJ de Paris' }}
-        entityOptions={[]}
+        entityOptions={[{ code: 'PERSONNE_PHYSIQUE_01', label: 'Alice Martin' }]}
         onClose={() => {}}
         onSaved={() => {}}
       />,

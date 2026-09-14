@@ -1,8 +1,8 @@
 # MCP PieceMaker
 
 Point d'entrée du serveur MCP `piecemaker` (`piecemaker/server.mjs`), qui expose
-les outils `chronologie`, `graphe_question`, `graphe_construire`, `graphe_etat`
-et `conversion` en pilotant `installer/bin/piecemaker.mjs`.
+les outils `chronologie` et `conversion` en pilotant
+`installer/bin/piecemaker.mjs`.
 
 - `REPO_ROOT`, calculé deux niveaux au-dessus de ce fichier, résout vers
   `server/piecemaker/vendor/`, où vit `installer/bin/piecemaker.mjs`.

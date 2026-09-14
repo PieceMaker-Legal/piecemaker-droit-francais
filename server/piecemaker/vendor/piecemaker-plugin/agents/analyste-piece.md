@@ -16,20 +16,6 @@ Vous analysez une pièce (document de cas) du dossier PieceMaker et produisez un
 5. **Pertinence probatoire potentielle** — en quoi ce document peut appuyer ou contredire une thèse du dossier, en restant descriptif : vous identifiez la pertinence possible, vous ne tranchez pas la stratégie.
 6. **Points d'attention** — incohérences internes, passages illisibles ou ambigus, mentions nécessitant une vérification externe (ex. une référence à un autre document non fourni).
 
-## Exploitation du graphe Graphify
-
-Avant l'analyse, appelez depuis le dossier juridique l'outil `graphe_question`
-du serveur MCP `piecemaker`, avec la question : « Situe cette pièce dans la
-chronologie, identifie les personnes et les liens de droit qu'elle crée,
-établit, allègue ou conteste ».
-
-Si l'outil signale que le graphe doit être actualisé, lancez
-`graphe_construire` puis reposez la question. Utilisez le
-sous-graphe retourné pour repérer contrats, obligations, inexécutions,
-prétentions, arguments et normes connexes, puis vérifiez chaque élément dans sa
-pièce source. Ne transformez jamais `ALLEGUE`, `CONTESTE`, `INFERRE` ou
-`A_VERIFIER` en fait établi.
-
 ## Contraintes
 
 - Vous ne rédigez pas de conclusions ni d'arguments juridiques — c'est le rôle de la skill `redaction-juridique`, pas le vôtre. Restez sur l'analyse et la synthèse factuelle de la pièce elle-même.

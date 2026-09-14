@@ -6,8 +6,8 @@
  * frontières de mots, des variantes Unicode et du tri longest-entity-first,
  * sinon deux moteurs de substitution divergent silencieusement.
  *
- * Ce moteur CommonJS est partagé par le serveur Word, le graphe juridique,
- * l'historique et les autres surfaces locales. Le proxy PII possède son
+ * Ce moteur CommonJS est partagé par le serveur Word, l'historique et les
+ * autres surfaces locales. Le proxy PII possède son
  * implémentation Python équivalente.
  *
  * Deux sens, jamais symétriques dans leur usage :

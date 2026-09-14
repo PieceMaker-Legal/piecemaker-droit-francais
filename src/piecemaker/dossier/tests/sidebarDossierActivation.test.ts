@@ -89,7 +89,7 @@ const mountSessionTabs = (compact = false) => {
   session.addEventListener('click', (event) => event.preventDefault());
   const title = document.createElement('div');
   title.className = 'truncate text-sm font-normal';
-  title.title = "d'où vient ce texte dans graphify ?";
+  title.title = "d'où vient ce texte dans la chronologie ?";
   session.append(title);
   const openChat = vi.fn();
   const openDossier = vi.fn();
