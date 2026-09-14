@@ -16,7 +16,6 @@ export function useSelectedDossierRegistration(selectedProject: Project | null):
         void Promise.allSettled([
           pmGetCached('/repository/case', caseQuery),
           pmGetCached('/mapping', caseQuery),
-          pmGetCached('/repository/chronology', caseQuery),
           pmGetCached('/configuration'),
         ]);
       })
