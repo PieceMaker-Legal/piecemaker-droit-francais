@@ -1,7 +1,7 @@
 {
-  "name": "PieceMaker - Droit français",
+  "name": "PieceMaker",
   "shortName": "PieceMaker",
-  "pageTitle": "PieceMaker - Droit français",
+  "pageTitle": "PieceMaker",
   "description": "Plateforme IA pour juristes français",
   "slug": "piecemaker-droit-francais",
   "appId": "legal.piecemaker.droitfrancais",
