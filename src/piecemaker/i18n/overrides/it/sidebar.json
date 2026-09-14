@@ -42,6 +42,7 @@
     "deleteProject": "Rimuovi fascicolo",
     "sessionCount_one": "Questo fascicolo contiene {{count}} conversazione.",
     "sessionCount_other": "Questo fascicolo contiene {{count}} conversazioni.",
+    "archiveProject": "Archivia fascicolo",
     "allConversationsDeleted": "Il fascicolo verrà rimosso dalla barra laterale. I tuoi file, memorie e dati delle sessioni verranno preservati."
   }
 }
