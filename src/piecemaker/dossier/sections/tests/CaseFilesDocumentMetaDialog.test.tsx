@@ -127,6 +127,45 @@ describe('CaseFilesDocumentMetaDialog', () => {
     })));
   });
 
+  it('affiche les personnes citées dans l’ordre de sélection puis alphabétique', () => {
+    render(
+      <CaseFilesDocumentMetaDialog
+        caseId="case-1"
+        document={document}
+        entityOptions={[
+          { code: 'PERSONNE_PHYSIQUE_03', label: 'Bob Durand' },
+          { code: 'PERSONNE_PHYSIQUE_01', label: 'Alice Martin' },
+          { code: 'PERSONNE_PHYSIQUE_02', label: 'Aaron Bernard' },
+        ]}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Personnes citées')).toBeTruthy();
+    expect(screen.getAllByRole('button').map((button) => button.textContent?.trim())).toEqual([
+      'Alice Martin',
+      'Aaron Bernard',
+      'Bob Durand',
+      'Ajouter',
+      'Annuler',
+      'Enregistrer',
+    ]);
+    expect(screen.getByRole('button', { name: 'Alice Martin' }).classList.contains('opacity-80')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Aaron Bernard' }).classList.contains('opacity-80')).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Alice Martin' }));
+
+    expect(screen.getAllByRole('button').map((button) => button.textContent?.trim())).toEqual([
+      'Aaron Bernard',
+      'Alice Martin',
+      'Bob Durand',
+      'Ajouter',
+      'Annuler',
+      'Enregistrer',
+    ]);
+  });
+
   it('masque les motifs internes correspondant à une sélection vide', () => {
     expect(chronologyReviewReasons([
       'aucune_personne_indexee',
