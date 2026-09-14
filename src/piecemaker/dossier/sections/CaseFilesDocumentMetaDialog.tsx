@@ -27,8 +27,50 @@ type CaseFilesDocumentMetaDialogProps = {
   onSaved: () => void;
 };
 
+const CUSTOM_NATURE_VALUE = '__piecemaker_custom_nature__';
+const CUSTOM_NATURES_STORAGE_KEY = 'piecemaker-custom-document-natures';
+const NATURE_OPTIONS = [
+  'assignation', 'conclusions', 'requête', 'courrier', 'courriel',
+  'mise en demeure', 'contrat', 'facture', 'devis', 'attestation',
+  'jugement', 'arrêt', 'ordonnance', 'procès-verbal', 'constat',
+  'expertise', 'statuts de société', 'extrait Kbis', 'relevé bancaire',
+  'acte notarié', 'bordereau de pièces',
+];
+
+const normalizedNature = (nature: string) => nature.trim().toLocaleLowerCase('fr');
+
+function readCustomNatures(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(CUSTOM_NATURES_STORAGE_KEY) ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+    const known = new Set(NATURE_OPTIONS.map(normalizedNature));
+    return parsed.filter((nature): nature is string => {
+      if (typeof nature !== 'string' || !nature.trim()) return false;
+      const normalized = normalizedNature(nature);
+      if (known.has(normalized)) return false;
+      known.add(normalized);
+      return true;
+    }).map((nature) => nature.trim());
+  } catch {
+    return [];
+  }
+}
+
+function writeCustomNatures(natures: string[]) {
+  try {
+    window.localStorage.setItem(CUSTOM_NATURES_STORAGE_KEY, JSON.stringify(natures));
+  } catch {}
+}
+
 export default function CaseFilesDocumentMetaDialog({ caseId, document, entityOptions, onClose, onSaved }: CaseFilesDocumentMetaDialogProps) {
-  const [nature, setNature] = useState(document.nature ?? '');
+  const initialNature = document.nature?.trim() ?? '';
+  const [rememberedNatures, setRememberedNatures] = useState(readCustomNatures);
+  const initialKnownNature = [...NATURE_OPTIONS, ...rememberedNatures]
+    .find((nature) => normalizedNature(nature) === normalizedNature(initialNature));
+  const [natureSelection, setNatureSelection] = useState(
+    initialKnownNature ? initialNature : initialNature ? CUSTOM_NATURE_VALUE : '',
+  );
+  const [customNature, setCustomNature] = useState(initialKnownNature ? '' : initialNature);
   const [dateIso, setDateIso] = useState(document.dateIso ?? '');
   const [localisation, setLocalisation] = useState(document.localisation ?? '');
   const [fields, setFields] = useState<ChronologyField[]>(document.fields.length ? document.fields : []);
@@ -42,6 +84,14 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, entityOp
     if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
     return left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' });
   }), [entityOptions, selectedEntityCodes]);
+  const natureOptions = useMemo(() => {
+    const options = [...NATURE_OPTIONS, ...rememberedNatures];
+    if (initialKnownNature && initialKnownNature !== initialNature) {
+      const index = options.indexOf(initialKnownNature);
+      options[index] = initialNature;
+    }
+    return options;
+  }, [initialKnownNature, initialNature, rememberedNatures]);
 
   const toggleEntity = (code: string) => {
     setSelectedEntityCodes((current) => current.includes(code)
@@ -66,6 +116,16 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, entityOp
       setError('Cette pièce n’a pas de fichier d’origine : correction indisponible.');
       return;
     }
+    const nature = (natureSelection === CUSTOM_NATURE_VALUE ? customNature : natureSelection).trim();
+    const isNewCustomNature = natureSelection === CUSTOM_NATURE_VALUE
+      && nature
+      && ![...NATURE_OPTIONS, ...rememberedNatures].some((option) => normalizedNature(option) === normalizedNature(nature));
+    if (isNewCustomNature && window.confirm(`Mémoriser « ${nature} » dans le menu des types de pièce ?`)) {
+      const nextRememberedNatures = [...rememberedNatures, nature];
+      setRememberedNatures(nextRememberedNatures);
+      writeCustomNatures(nextRememberedNatures);
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -73,7 +133,7 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, entityOp
       await pmPut('/repository/document-meta', {
         case: caseId,
         path: document.path,
-        nature: nature.trim() || null,
+        nature: nature || null,
         dateIso: dateIso.trim() || null,
         localisation: localisation.trim() || null,
         fields: fields.filter((field) => field.label.trim() || field.value.trim()),
@@ -106,8 +166,28 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, entityOp
           <div className="grid grid-cols-2 gap-3">
             <label className="col-span-2 space-y-1 text-xs font-medium text-muted-foreground">
               Type de pièce
-              <Input value={nature} onChange={(event) => setNature(event.target.value)} placeholder="Ex. Assignation" />
+              <select
+                aria-label="Type de pièce"
+                value={natureSelection}
+                onChange={(event) => setNatureSelection(event.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">— Sélectionner —</option>
+                {natureOptions.map((nature) => <option key={nature} value={nature}>{nature}</option>)}
+                <option value={CUSTOM_NATURE_VALUE}>Autre type…</option>
+              </select>
             </label>
+            {natureSelection === CUSTOM_NATURE_VALUE && (
+              <label className="col-span-2 space-y-1 text-xs font-medium text-muted-foreground">
+                Type personnalisé
+                <Input
+                  value={customNature}
+                  onChange={(event) => setCustomNature(event.target.value)}
+                  placeholder="Ex. sommation de payer"
+                  autoFocus
+                />
+              </label>
+            )}
             <label className="space-y-1 text-xs font-medium text-muted-foreground">
               Date
               <Input type="date" value={dateIso} onChange={(event) => setDateIso(event.target.value)} />
