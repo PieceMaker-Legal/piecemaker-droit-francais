@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CalendarClock, Download, Loader2, Pencil, Plus, RefreshCw, Sparkles, UserRound } from 'lucide-react';
 
-import { Badge, Button } from '@/shared/ui';
+import { Badge, Button, buttonVariants } from '@/shared/ui';
 import { authenticatedFetch } from '@/shared/api';
 import { cn } from '@/shared/utils';
 import { invalidatePmGet, pmGetCached, pmPost, PieceMakerApiError, PIECEMAKER_API_BASE } from '@/piecemaker/dossier/api';
@@ -238,7 +238,9 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
                   >
                     <UserRound className="h-3.5 w-3.5 shrink-0" />
                     {indexedEntities.map((entity) => (
-                      <Badge key={entity.code} variant="outline">{entity.label || entity.code}</Badge>
+                      <span key={entity.code} className={buttonVariants({ variant: 'outline', size: 'sm', className: 'h-8' })}>
+                        {entity.label || entity.code}
+                      </span>
                     ))}
                     <Plus className="h-3.5 w-3.5 shrink-0 opacity-60" />
                   </button>
