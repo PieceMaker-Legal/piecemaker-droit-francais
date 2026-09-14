@@ -112,6 +112,7 @@ Ces points ont déjà été perdus ou ont failli l'être. Les contrôler un par 
 | `src/modules/i18n/config.ts` | l'import, `PIECEMAKER_DEFAULT_LANGUAGE`, `applyPieceMakerI18nOverrides(i18n)` |
 | `src/modules/settings/tabs/AboutTab.tsx` | `useProductVersionCheck`, `PRODUCT_REPOSITORY_URL`, `PRODUCT_SHORT_NAME` |
 | `.release-it.json` | `"releaseName": "PieceMaker v${version}"` et l'en-tête de changelog |
+| `.github/workflows/release.yml` | `NPM_TOKEN` et `NODE_AUTH_TOKEN` dans l'`env` du step Release |
 | `package.json` | nom `@piecemaker-legal/piecemaker`, version PieceMaker (**ne jamais prendre la version upstream**), `homepage`/`repository` PieceMaker |
 | `src/modules/chat/ChatInterface.tsx`, `hooks/useChatComposerState.ts`, `hooks/useSlashCommands.ts` | la transmission de `isActive` |
 | `src/shared/types.ts` | `'mistral'` dans l'union `LLMProvider` |
@@ -133,6 +134,23 @@ Quand upstream ajoute une dépendance légitime à ce `useCallback` (par exemple
 ```ts
 }, [checkOnboardingStatus, clearSession, t]);   // jamais `token`
 ```
+
+### `release.yml` — l'authentification npm n'est pas celle d'upstream
+
+Upstream publie son propre paquet par trusted publishing (OIDC) et n'a donc
+aucun token dans l'`env` du step Release. PieceMaker publie
+`@piecemaker-legal/piecemaker` avec le secret `NPM_TOKEN` du dépôt : les deux
+lignes `NPM_TOKEN` et `NODE_AUTH_TOKEN` doivent survivre à tout merge.
+
+Prendre ce fichier « upstream verbatim » les supprime, et l'échec qui suit ne
+ressemble pas à une perte de merge : `npm publish` renvoie un
+`E404 Not Found - PUT https://registry.npmjs.org/@piecemaker-legal%2fpiecemaker`,
+qui se lit comme un problème de droits chez npmjs alors que le token est
+valide et que seul son passage a disparu. Perdu ainsi lors du merge de
+CloudCLI v1.37.3, diagnostiqué après deux releases échouées.
+
+Tout le reste du step vient d'upstream et se prend tel quel : npm `^11.5.1`,
+le double `--verbose`, le step « Show npm failure details ».
 
 ### `package.json` — les champs `build` restent CloudCLI
 
