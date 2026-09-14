@@ -41,6 +41,25 @@ beforeEach(() => {
   });
 });
 
+it('never registers a legal case just to display the project list', async () => {
+  const buttonSlot = document.createElement('span');
+  document.body.append(buttonSlot);
+
+  render(
+    <AnonymizationLauncher
+      buttonSlots={[buttonSlot]}
+      progressSlots={new Map()}
+      onProjectsChange={() => undefined}
+    />,
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Anonymiser les dossiers' }));
+  await screen.findByRole('checkbox', { name: 'Sélectionner Dossier A' });
+  await waitFor(() => expect(pmGet).toHaveBeenCalledWith('/repository'));
+
+  expect(pmPost.mock.calls.filter(([path]) => path === '/repository/cases/selected')).toEqual([]);
+});
+
 it('queues every project and renders each server job inside its project row', async () => {
   const buttonSlot = document.createElement('span');
   const firstProgressSlot = document.createElement('div');
@@ -75,11 +94,14 @@ it('queues every project and renders each server job inside its project row', as
 });
 
 it('marks analyzed projects and selects only the remaining projects', async () => {
-  pmGet.mockImplementation((_path: string, params: { case: string }) => Promise.resolve(
-    params.case === '/cabinet/a'
+  pmGet.mockImplementation((path: string, params?: { case: string }) => {
+    if (path === '/repository') {
+      return Promise.resolve({ folders: [{ path: 'dossier-a', name: 'Dossier A', location: '/cabinet/a', registered: true }] });
+    }
+    return Promise.resolve(params?.case === 'dossier-a'
       ? { exists: true, mapping: { 'Mme Exemple': 'PERSONNE_1' } }
-      : { exists: false, mapping: {} },
-  ));
+      : { exists: false, mapping: {} });
+  });
   const buttonSlot = document.createElement('span');
   document.body.append(buttonSlot);
 
