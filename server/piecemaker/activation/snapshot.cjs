@@ -8,7 +8,7 @@
  * explicite de l'utilisateur, jamais une conséquence d'une lecture.
  */
 const { listClaudeMcp } = require('./claude-mcp.cjs');
-const { listClaudePlugins } = require('./claude-plugins.cjs');
+const { listClaudePlugins, listClaudePluginConnectors } = require('./claude-plugins.cjs');
 const { listCodexMcp } = require('./codex-mcp.cjs');
 const { buildLibrary, listGlobalLeftovers } = require('./library.cjs');
 
@@ -16,7 +16,7 @@ function buildActivationSnapshot(workspacePath, { repoRoot, piecemakerHome, user
   return {
     workspacePath,
     claude: {
-      mcp: listClaudeMcp(workspacePath, userHome),
+      mcp: [...listClaudeMcp(workspacePath, userHome), ...listClaudePluginConnectors(workspacePath, userHome)],
       plugins: listClaudePlugins(workspacePath, userHome),
     },
     codex: {

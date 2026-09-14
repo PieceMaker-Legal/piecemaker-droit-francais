@@ -102,22 +102,21 @@ export function mount(container, api) {
     try {
       const workspace = context.project?.path;
       const query = workspace ? `?workspacePath=${encodeURIComponent(workspace)}` : '';
-      if (tab === 'marketplace') {
-        const data = await request('GET', `/plugin/marketplace?scope=${scope}`);
-        if (version === revision) marketplace = data;
-      } else if (tab === 'connectors') {
+      if (tab === 'connectors') {
         const data = workspace ? await request('GET', `/activation${query}`) : null;
         if (version === revision) snapshot = data;
-      } else {
-        let collectionData = null;
-        if (tab === 'skill') {
-          collectionData = await request('GET', `/plugins${query}`);
-        }
-        const catalogData = await request('GET', `/catalog${query}`);
+      } else if (tab === 'plugin') {
+        const [collectionData, marketplaceData] = await Promise.all([
+          request('GET', `/plugins${query}`),
+          request('GET', `/plugin/marketplace?scope=${scope}`),
+        ]);
         if (version === revision) {
-          entries = catalogData.entries;
-          plugins = collectionData?.plugins || [];
+          plugins = collectionData.plugins || [];
+          marketplace = marketplaceData;
         }
+      } else {
+        const catalogData = await request('GET', `/catalog${query}`);
+        if (version === revision) entries = catalogData.entries;
       }
     } catch (cause) { if (version === revision) error = cause.message; }
     finally { if (version === revision && !disposed) { loading = false; render(); } }
@@ -238,11 +237,11 @@ export function mount(container, api) {
   function render() {
     const scrollTop = root.scrollTop;
     content.replaceChildren();
-    content.append(element('h1', 'Bibliothèque'), element('p', 'Skills et agents privés, activés uniquement pour les dossiers choisis.'));
+    content.append(element('h1', 'Bibliothèque'), element('p', 'Connecteurs, skills, plugins et agents activés pour les dossiers choisis.'));
     const nav = element('nav');
     nav.setAttribute('role', 'tablist');
     nav.setAttribute('aria-label', 'Bibliothèque');
-    for (const [key, label] of [['skill', 'Skills & plugins'], ['connectors', 'MCP & connecteurs'], ['agent', 'Agents'], ['marketplace', 'Marketplace']]) {
+    for (const [key, label] of [['connectors', 'Connecteurs'], ['skill', 'Skills'], ['plugin', 'Plugins'], ['agent', 'Agents']]) {
       const item = button(label, () => { tab = key; search = ''; void load(); });
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', String(tab === key));
@@ -269,17 +268,18 @@ export function mount(container, api) {
       if (tab === 'skill' || tab === 'agent') {
         body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}` : 'Sélectionnez un dossier pour activer un élément.', 'meta'));
         const visible = entries.filter((item) => item.kind === tab && matches(item));
-        if (tab === 'skill') body.append(element('h2', 'Catalogue central'));
         if (!visible.length) body.append(element('p', 'Aucun élément.'));
         for (const entry of visible) {
           const item = row(entry, () => void open(entry));
           item.append(toggle('Dans ce dossier', entry.enabled, !context.project, () => void mutate('PUT', `/catalog/${entry.id}/activation`, { workspacePath: context.project.path, enabled: !entry.enabled })));
           body.append(item);
         }
-        if (tab === 'skill') {
-          body.append(element('h2', 'Plugins'));
-          if (!plugins.length) body.append(element('p', 'Aucun plugin dans la bibliothèque. Ajoutez-en depuis la Marketplace.'));
-          for (const plugin of plugins.filter(matches)) {
+        body.append(element('p', 'Les changements s’appliquent aux prochains messages. Une désactivation ne retire pas les instructions déjà reçues dans une conversation.', 'meta'));
+      } else if (tab === 'plugin') {
+        body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}` : 'Sélectionnez un dossier pour activer un plugin.', 'meta'));
+        body.append(element('h2', 'Plugins installés'));
+        if (!plugins.length) body.append(element('p', 'Aucun plugin dans la bibliothèque.'));
+        for (const plugin of plugins.filter(matches)) {
             const item = row(plugin);
             const actions = element('div', undefined, 'toolbar');
             actions.append(button(pluginTrees.has(plugin.id) ? 'Masquer l’arborescence' : pluginTreeBusy === plugin.id ? 'Chargement…' : 'Voir l’arborescence', () => void togglePluginTree(plugin)));
@@ -311,19 +311,8 @@ export function mount(container, api) {
               }
               body.append(tree);
             }
-          }
         }
-        body.append(element('p', 'Les changements s’appliquent aux prochains messages. Une désactivation ne retire pas les instructions déjà reçues dans une conversation.', 'meta'));
-      } else if (tab === 'connectors') {
-        if (!snapshot) { body.append(element('p', 'Sélectionnez un dossier pour gérer les MCP et connecteurs.')); return; }
-        for (const [assistant, family, items] of [['claude', 'mcp', snapshot.claude.mcp], ['codex', 'mcp', snapshot.codex.mcp]]) {
-          for (const entry of items.filter(matches)) {
-            const item = row(entry);
-            item.append(toggle(`${assistant === 'claude' ? 'Claude' : 'Codex'} · MCP`, entry.enabled, !entry.toggleable, () => void mutate('POST', '/activation/toggle', { workspacePath: context.project.path, assistant, family, id: entry.id, enabled: !entry.enabled })));
-            body.append(item);
-          }
-        }
-      } else {
+        body.append(element('h2', 'Catalogue de plugins'));
         const scopes = element('div', undefined, 'toolbar');
         for (const [id, title] of [['legal', 'Legal'], ['official', 'Officiel Anthropic']]) {
           const item = button(title, () => { scope = id; void load(); });
@@ -339,6 +328,15 @@ export function mount(container, api) {
           item.append(button(entry.installed ? 'Installé' : 'Ajouter à la bibliothèque', () => void mutate('POST', '/plugin/marketplace/acquire', { id: entry.id, scope })));
           item.lastChild.disabled = busy || entry.installed;
           body.append(item);
+        }
+      } else if (tab === 'connectors') {
+        if (!snapshot) { body.append(element('p', 'Sélectionnez un dossier pour gérer les connecteurs.')); return; }
+        for (const [assistant, items] of [['claude', snapshot.claude.mcp], ['codex', snapshot.codex.mcp]]) {
+          for (const entry of items.filter(matches)) {
+            const item = row(entry);
+            item.append(toggle(`${assistant === 'claude' ? 'Claude' : 'Codex'} · ${entry.protocol || 'MCP'}`, entry.enabled, !entry.toggleable, () => void mutate('POST', '/activation/toggle', { workspacePath: context.project.path, assistant, family: entry.family || 'mcp', id: entry.id, enabled: !entry.enabled })));
+            body.append(item);
+          }
         }
       }
     }
