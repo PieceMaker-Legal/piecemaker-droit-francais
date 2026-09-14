@@ -211,7 +211,7 @@ const STYLE_TEXT = `
   .pm-timesheet__table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .pm-timesheet__table { width: 100%; min-width: 760px; border-collapse: collapse; }
   .pm-timesheet__table th, .pm-timesheet__table td { padding: 16px 10px; border-bottom: 1px solid hsl(var(--border, 0 0% 87%)); text-align: left; vertical-align: top; }
-  .pm-timesheet__table th:first-child, .pm-timesheet__table td:first-child { padding-left: 0; }
+  .pm-timesheet__table th:first-child, .pm-timesheet__table td:first-child { padding-left: 10px; }
   .pm-timesheet__table th:last-child, .pm-timesheet__table td:last-child { padding-right: 0; }
   .pm-timesheet__table th { color: hsl(var(--muted-foreground, 0 0% 45%)); font-size: 12px; font-weight: 600; }
   .pm-timesheet__table td { line-height: 1.5; }
