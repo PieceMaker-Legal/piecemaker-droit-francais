@@ -297,6 +297,52 @@ test('agent codex column shows dash (agents have no codex)', async () => {
   assert(dashes.length > 0);
 });
 
+test('creating a skill from the "Nouveau skill" button refreshes the library', async () => {
+  const emptySnapshot = {
+    workspacePath: '/test/workspace',
+    claude: { mcp: [], plugins: [] },
+    codex: { mcp: [] },
+    library: { skills: [], agents: [] },
+    globalLeftovers: { skills: [], agents: [] },
+  };
+  pmGet.mockResolvedValue(emptySnapshot);
+  pmPost.mockResolvedValue({ ok: true, file: { path: 'piecemaker-plugin/skills/nouveau/SKILL.md' } });
+
+  render(<SkillsActivation />);
+
+  await waitFor(() => {
+    assert(screen.getByText('Bibliothèque — compétences (skills)'));
+  });
+
+  assert.equal(screen.queryAllByText('Créer un skill').length, 0);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Nouveau skill' }));
+
+  await waitFor(() => {
+    assert(screen.getAllByText('Créer un skill').length > 0);
+  });
+
+  fireEvent.change(screen.getByLabelText('Identifiant (minuscules, chiffres, tirets)'), {
+    target: { value: 'nouveau' },
+  });
+  fireEvent.change(screen.getByLabelText('Description (indique à l’agent quand l’utiliser)'), {
+    target: { value: 'Un nouveau skill.' },
+  });
+
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+  });
+
+  await waitFor(() => {
+    assert.equal(
+      pmPost.mock.calls.some((call) => call[0] === '/files' && call[1].slug === 'nouveau'),
+      true,
+    );
+    assert.equal(pmGet.mock.calls.length, 2);
+    assert.equal(screen.queryAllByText('Créer un skill').length, 0);
+  });
+});
+
 test('displays error when loading fails', async () => {
   const apiError = new Error('Network error');
   (apiError as any).message = 'Network error';
