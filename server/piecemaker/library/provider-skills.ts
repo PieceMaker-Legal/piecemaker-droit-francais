@@ -1,6 +1,8 @@
 import { providerSkillsService } from '@/modules/providers/index.js';
 import type { LLMProvider, ProviderSkillListOptions } from '@/shared/types.js';
 
+import type { createLibraryStore } from './store.js';
+
 const LIBRARY_SKILL_PROVIDERS: LLMProvider[] = ['claude', 'codex', 'cursor', 'mistral', 'opencode'];
 
 type ProviderSkillsReader = {
@@ -27,4 +29,20 @@ export async function listLibraryProviderSkills(
   }));
 
   return { providers: results };
+}
+
+export async function scanAndPersistLibraryProviderSkills(
+  store: ReturnType<typeof createLibraryStore>,
+  workspacePath: string | undefined,
+  reader: ProviderSkillsReader = providerSkillsService,
+) {
+  const result = await listLibraryProviderSkills(workspacePath, reader);
+  for (const provider of result.providers) {
+    for (const skill of provider.skills) {
+      if (!skill.sourcePath) continue;
+      try { store.importFile(skill.sourcePath, 'skill'); }
+      catch { try { store.importFile(skill.sourcePath, 'skill', false); } catch {} }
+    }
+  }
+  return result;
 }

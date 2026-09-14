@@ -76,7 +76,7 @@ export default function AboutTab() {
 
       {/* Star on GitHub button */}
       <a
-        href={GITHUB_REPO_URL}
+        href={PRODUCT_REPOSITORY_URL}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
@@ -89,7 +89,7 @@ export default function AboutTab() {
       {/* Links */}
       <div className="flex flex-wrap gap-4 text-sm">
         <a
-          href={GITHUB_REPO_URL}
+          href={PRODUCT_REPOSITORY_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
