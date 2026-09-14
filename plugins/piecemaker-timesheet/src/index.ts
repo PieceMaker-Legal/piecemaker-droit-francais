@@ -435,6 +435,7 @@ const createPdf = (entries: TimesheetEntry[], label: string): Uint8Array => {
     const tableHeight = tableHeightsForPage.reduce((total, height) => total + height, 0);
     const tableBottomForPage = tableTop - tableHeight;
     commands.push(`0.94 0.94 0.94 rg 32 ${tableTop - headerHeight} ${tableWidth} ${headerHeight} re f`);
+    commands.push('0 g');
     commands.push('0.82 0.82 0.82 RG 0.6 w');
     commands.push(`32 ${tableBottomForPage} ${tableWidth} ${tableHeight} re S`);
     let verticalX = 32;
