@@ -41,6 +41,11 @@ export function PartyFields({
   mapping,
   updateParty,
   removeParty,
+  detectedVariants = [],
+  principalVariant,
+  onAddVariant,
+  onRemoveVariant,
+  onSelectPrincipal,
   showRemove = true,
 }: {
   party: ProcedureParty;
@@ -49,6 +54,11 @@ export function PartyFields({
   mapping: Pick<MappingDocument, 'mapping' | 'reverse_mapping'>;
   updateParty: (side: PartySide, index: number, patch: Partial<ProcedureParty>) => void;
   removeParty: (side: PartySide, index: number) => void;
+  detectedVariants?: string[];
+  principalVariant?: string;
+  onAddVariant?: (variant: string) => void;
+  onRemoveVariant?: (variant: string) => void;
+  onSelectPrincipal?: (variant: string) => void;
   showRemove?: boolean;
 }) {
   const options = useMemo(
@@ -152,8 +162,69 @@ export function PartyFields({
           </label>
         </div>
       )}
+      {detectedVariants.length > 0 && <DetectedVariants
+        variants={detectedVariants}
+        principalVariant={principalVariant}
+        onAddVariant={onAddVariant}
+        onRemoveVariant={onRemoveVariant}
+        onSelectPrincipal={onSelectPrincipal}
+      />}
     </article>
   );
+}
+
+function DetectedVariants({
+  variants,
+  principalVariant,
+  onAddVariant,
+  onRemoveVariant,
+  onSelectPrincipal,
+}: {
+  variants: string[];
+  principalVariant?: string;
+  onAddVariant?: (variant: string) => void;
+  onRemoveVariant?: (variant: string) => void;
+  onSelectPrincipal?: (variant: string) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const editable = Boolean(onAddVariant && onRemoveVariant && onSelectPrincipal);
+  const add = () => {
+    const variant = draft.trim();
+    if (!variant || !onAddVariant) return;
+    onAddVariant(variant);
+    setDraft('');
+  };
+
+  return <div className="space-y-1">
+    <span className="block text-[11px] font-medium text-muted-foreground">Variants détectés</span>
+    <div className="space-y-1.5 rounded-md border bg-muted/20 p-2">
+      {variants.map((variant) => {
+        const isPrincipal = variant === principalVariant;
+        return <div key={variant} className="flex items-center gap-2 rounded bg-background px-2 py-1 shadow-sm">
+          <button
+            type="button"
+            className={`min-w-0 flex-1 truncate text-left text-[11px] ${isPrincipal ? 'font-semibold text-primary' : 'text-foreground'} ${editable ? 'cursor-pointer' : 'cursor-default'}`}
+            onClick={() => onSelectPrincipal?.(variant)}
+            aria-label={isPrincipal ? `${variant}, variant principal` : `Définir ${variant} comme variant principal`}
+          >
+            {variant}
+          </button>
+          {editable && <>
+            <Button type="button" variant={isPrincipal ? 'secondary' : 'ghost'} size="sm" className="h-7 shrink-0 px-2 text-[10px]" onClick={() => onSelectPrincipal?.(variant)}>
+              {isPrincipal ? 'Principal' : 'Définir principal'}
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => onRemoveVariant?.(variant)} disabled={variants.length <= 1} aria-label={`Supprimer le variant ${variant}`}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </>}
+        </div>;
+      })}
+      {editable && <div className="flex items-center gap-2 pt-1">
+        <Input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); add(); } }} className="h-8 text-xs" placeholder="Ajouter un variant" aria-label="Nouveau variant" />
+        <Button type="button" variant="outline" size="sm" className="h-8 shrink-0" onClick={add} disabled={!draft.trim()}><Plus className="h-3.5 w-3.5" />Ajouter</Button>
+      </div>}
+    </div>
+  </div>;
 }
 
 export default function ProcedurePartiesDialog({ open, mapping, initialInfo, saving, onOpenChange, onSave }: ProcedurePartiesDialogProps) {
