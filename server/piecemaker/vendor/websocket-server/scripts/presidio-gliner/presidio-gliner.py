@@ -435,20 +435,28 @@ def main():
             entities=["PERSON", "ORGANIZATION", "LOCATION"],
             return_decision_process=False,
         )
-        # Re-include ORGANIZATION_* results that classify_text may have re-typed;
-        # Presidio's engine only checks supported_entities at dispatch time, not on
-        # results, so ORGANIZATION_SA / ORGANIZATION_GMBH etc. pass through as-is.
-        print(f"✓ Presidio-GLiNER2 NER complete ({len(ner_results)} unique entities)")
-        # DEBUG: Log raw GLiNER entities before any filtering
-        for r in ner_results:
-            if DEBUG_ENTITIES:
-                print(f"  [RAW] {r.entity_type}: \"{text[r.start:r.end]}\" score={r.score:.3f} ({r.start}-{r.end})")
-            else:
-                print(f"  [RAW] {r.entity_type}: score={r.score:.3f} ({r.start}-{r.end})")
-        extra_summary["ner_engine"] = "presidio-gliner2"
-        all_results.extend(ner_results)
     except Exception as exc:  # noqa: BLE001
-        warnings.warn(f"[presidio-gliner2] NER analysis failed: {exc}", stacklevel=1)
+        print(
+            f"❌ NER GLiNER2 indisponible, scan abandonné : {exc}",
+            file=sys.stderr,
+        )
+        print(
+            f"   Interpréteur : {sys.executable}",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Re-include ORGANIZATION_* results that classify_text may have re-typed;
+    # Presidio's engine only checks supported_entities at dispatch time, not on
+    # results, so ORGANIZATION_SA / ORGANIZATION_GMBH etc. pass through as-is.
+    print(f"✓ Presidio-GLiNER2 NER complete ({len(ner_results)} unique entities)")
+    for r in ner_results:
+        if DEBUG_ENTITIES:
+            print(f"  [RAW] {r.entity_type}: \"{text[r.start:r.end]}\" score={r.score:.3f} ({r.start}-{r.end})")
+        else:
+            print(f"  [RAW] {r.entity_type}: score={r.score:.3f} ({r.start}-{r.end})")
+    extra_summary["ner_engine"] = "presidio-gliner2"
+    all_results.extend(ner_results)
 
     # Trust GLiNER scores as-is; arbitrate overlapping spans across types (presidio's
     # remove_duplicates only handles same-type containment).
