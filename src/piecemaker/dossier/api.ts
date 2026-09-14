@@ -22,7 +22,7 @@ export class PieceMakerApiError extends Error {
 }
 
 type QueryValue = string | number | boolean | null | undefined;
-type CachedGetRequest = { request: Promise<unknown>; resolvedAt: number | null };
+type CachedGetRequest = { request: Promise<unknown>; resolvedAt: number | null; value: unknown; hasValue: boolean };
 
 const GET_CACHE_MAX_AGE_MS = 30_000;
 const GET_CACHE_MAX_ENTRIES = 32;
@@ -69,25 +69,38 @@ export function pmGetCached<T>(path: string, params?: Record<string, QueryValue>
     cachedGetRequests.set(key, cached);
     return cached.request as Promise<T>;
   }
+  const retainedValue = cached?.hasValue ? cached.value : undefined;
+  const hadRetainedValue = cached?.hasValue ?? false;
   cachedGetRequests.delete(key);
 
   const request = pmGet<T>(path, params)
     .then((value) => {
       const entry = cachedGetRequests.get(key);
-      if (entry?.request === request) entry.resolvedAt = Date.now();
+      if (entry?.request === request) {
+        entry.resolvedAt = Date.now();
+        entry.value = value;
+        entry.hasValue = true;
+      }
       return value;
     })
     .catch((error) => {
-      if (cachedGetRequests.get(key)?.request === request) cachedGetRequests.delete(key);
+      const entry = cachedGetRequests.get(key);
+      if (entry?.request === request) entry.resolvedAt = 0;
       throw error;
     });
-  cachedGetRequests.set(key, { request, resolvedAt: null });
+  cachedGetRequests.set(key, { request, resolvedAt: null, value: retainedValue, hasValue: hadRetainedValue });
   while (cachedGetRequests.size > GET_CACHE_MAX_ENTRIES) {
     const oldestKey = cachedGetRequests.keys().next().value;
     if (oldestKey === undefined) break;
     cachedGetRequests.delete(oldestKey);
   }
   return request;
+}
+
+export function pmPeekCached<T>(path: string, params?: Record<string, QueryValue>): T | null {
+  const cached = cachedGetRequests.get(withQuery(path, params));
+  if (!cached || !cached.hasValue) return null;
+  return cached.value as T;
 }
 
 export function invalidatePmGet(path: string, params?: Record<string, QueryValue>): void {
