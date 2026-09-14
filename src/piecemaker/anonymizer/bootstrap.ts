@@ -8,6 +8,7 @@ import { startIdentityHighlighting } from '@/piecemaker/anonymizer';
 import { startDocumentVerificationHighlighting } from '@/piecemaker/anonymizer/documentVerifier';
 import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 import { startLibraryDocumentViewer } from '@/piecemaker/library/bootstrap';
+import '@/piecemaker/sidebar-anonymization/bootstrap';
 import '@/piecemaker/sidebar/sidebar.css';
 
 startIdentityHighlighting();

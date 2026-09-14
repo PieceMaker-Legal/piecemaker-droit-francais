@@ -41,13 +41,13 @@ describe('ProcedurePartiesDialog', () => {
       onSave={onSave}
     />);
     fireEvent.change(screen.getByLabelText('Nom complet — variant principal'), { target: { value: 'Alice Martin' } });
-    fireEvent.change(screen.getByLabelText('Camp'), { target: { value: 'adversaire' } });
+    fireEvent.change(screen.getByLabelText('Position'), { target: { value: 'adversaire' } });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     });
 
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith('adversaire', expect.objectContaining({ nom: 'Alice Martin' })));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith('adversaire', expect.objectContaining({ nom: 'Alice Martin' }), ['Alice']));
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
@@ -97,6 +97,6 @@ describe('ProcedurePartiesDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     });
 
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith('client', expect.objectContaining({ position: 'autre', position_libelle: 'Créancier poursuivant' })));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith('client', expect.objectContaining({ position: 'autre', position_libelle: 'Créancier poursuivant' }), ['Alice']));
   });
 });

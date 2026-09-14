@@ -142,6 +142,7 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
       const plugins = catalog.plugins
         .map((plugin: { id: string; name: string; description?: string }) => ({
           ...plugin,
+          name: plugin.id === 'piecemaker@mcp-legifrance' ? 'MCP Légifrance' : plugin.name,
           installed: Boolean(registry[plugin.id]),
           kinds: marketplacePackageKinds(userHome, marketplace.name, plugin, registry),
         }))
