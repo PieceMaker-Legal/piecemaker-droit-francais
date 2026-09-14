@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CalendarClock, Download, FolderTree, Loader2, Pencil, Plus, RefreshCw, Sparkles, UserRound } from 'lucide-react';
 
-import { Badge, Button, buttonVariants, Dialog, DialogContent, DialogTitle } from '@/shared/ui';
+import { Badge, Button, buttonVariants } from '@/shared/ui';
 import { authenticatedFetch } from '@/shared/api';
 import { cn } from '@/shared/utils';
 import { invalidatePmGet, pmGetCached, pmPost, PieceMakerApiError, PIECEMAKER_API_BASE } from '@/piecemaker/dossier/api';
@@ -43,7 +43,7 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
   const [message, setMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<ChronologyDocument | null>(null);
   const [scope, setScope] = useState<string | null>(null);
-  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+  const [selectingScope, setSelectingScope] = useState(false);
   const loadSequence = useRef(0);
 
   const load = useCallback(async (refresh = false) => {
@@ -91,6 +91,19 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
       setMessage(cause instanceof PieceMakerApiError ? cause.message : String(cause));
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const chooseScope = async () => {
+    setSelectingScope(true);
+    setMessage(null);
+    try {
+      const result = await pmPost<{ cancelled?: boolean; scope?: string | null }>('/repository/chronology/scope', { case: caseId });
+      if (!result.cancelled) setScope(result.scope || null);
+    } catch (cause) {
+      setMessage(cause instanceof PieceMakerApiError ? cause.message : String(cause));
+    } finally {
+      setSelectingScope(false);
     }
   };
 
@@ -173,8 +186,8 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
           </Badge>
         </div>
         <div className="flex items-center gap-1.5">
-          <Button variant="secondary" size="sm" onClick={() => setScopeDialogOpen(true)}>
-            <FolderTree className="h-3.5 w-3.5" />
+          <Button variant="secondary" size="sm" disabled={selectingScope} onClick={() => void chooseScope()}>
+            {selectingScope ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderTree className="h-3.5 w-3.5" />}
             {scope ? `Sous-dossier : ${scope}` : 'Tout le dossier'}
           </Button>
           <Button variant="secondary" size="sm" disabled={!state.canRefresh || refreshing} onClick={() => void refreshGraph()}>
@@ -289,39 +302,6 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
         />
       )}
 
-      <Dialog open={scopeDialogOpen} onOpenChange={setScopeDialogOpen}>
-        <DialogContent className="max-w-md p-5">
-          <DialogTitle>Choisir le périmètre de la chronologie</DialogTitle>
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">Par défaut, la chronologie couvre tout le dossier.</p>
-            <div className="max-h-72 space-y-1 overflow-y-auto">
-              <Button
-                variant={scope === null ? 'secondary' : 'ghost'}
-                className="w-full justify-start"
-                onClick={() => {
-                  setScope(null);
-                  setScopeDialogOpen(false);
-                }}
-              >
-                Tout le dossier
-              </Button>
-              {(chronology.folders || []).map((folder) => (
-                <Button
-                  key={folder}
-                  variant={scope === folder ? 'secondary' : 'ghost'}
-                  className="w-full justify-start"
-                  onClick={() => {
-                    setScope(folder);
-                    setScopeDialogOpen(false);
-                  }}
-                >
-                  {folder}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
