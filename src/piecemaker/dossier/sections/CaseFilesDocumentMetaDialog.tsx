@@ -7,7 +7,7 @@
  * chronologyMetaFormValues()).
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, Loader2, Plus, Trash2 } from 'lucide-react';
 
 import { Button, Dialog, DialogContent, DialogTitle, Input } from '@/shared/ui';
@@ -36,6 +36,12 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, entityOp
   const [error, setError] = useState<string | null>(null);
   /** Retains the effective mapping codes while the user edits this piece. */
   const [selectedEntityCodes, setSelectedEntityCodes] = useState(() => document.codes.map(({ code }) => code));
+  const sortedEntityOptions = useMemo(() => [...entityOptions].sort((left, right) => {
+    const leftSelected = selectedEntityCodes.includes(left.code);
+    const rightSelected = selectedEntityCodes.includes(right.code);
+    if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
+    return left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' });
+  }), [entityOptions, selectedEntityCodes]);
 
   const toggleEntity = (code: string) => {
     setSelectedEntityCodes((current) => current.includes(code)
@@ -113,9 +119,9 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, entityOp
           </div>
 
           <div className="space-y-2">
-            <span className="text-xs font-medium text-muted-foreground">Personnes visées</span>
+            <span className="text-xs font-medium text-muted-foreground">Personnes citées</span>
             <div className="flex flex-wrap gap-2 rounded-md border border-border/60 p-2">
-              {entityOptions.map((entity) => {
+              {sortedEntityOptions.map((entity) => {
                 const selected = selectedEntityCodes.includes(entity.code);
                 return (
                   <Button
@@ -123,7 +129,7 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, entityOp
                     type="button"
                     variant={selected ? 'secondary' : 'outline'}
                     size="sm"
-                    className="h-8"
+                    className={selected ? 'h-8' : 'h-8 opacity-80'}
                     aria-pressed={selected}
                     onClick={() => toggleEntity(entity.code)}
                   >
