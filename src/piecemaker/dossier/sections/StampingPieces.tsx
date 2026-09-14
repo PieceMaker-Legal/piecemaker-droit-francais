@@ -23,7 +23,7 @@ import {
 import { Badge, Button, Card, CardContent, CardFooter, CardHeader, CardTitle, ScrollArea } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 
-import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import { pmGetCached, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
 
 /** One original piece of the selected case, as returned by GET /repository/case. */
@@ -95,7 +95,7 @@ export default function StampingPieces() {
     setOriginalsLoading(true);
     setOriginalsError(null);
     try {
-      const response = await pmGet<CaseDetailResponse>('/repository/case', { case: caseId });
+      const response = await pmGetCached<CaseDetailResponse>('/repository/case', { case: caseId });
       setOriginals(response.folder.originals ?? []);
     } catch (cause) {
       setOriginals(null);
