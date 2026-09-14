@@ -11,3 +11,4 @@
 
 export const COMMANDS = new Set(['open', 'start', 'stop', 'restart', 'status', 'logs', 'chronology', 'conversion', 'graph', 'install', 'doctor', 'check', 'update']);
 export const GRAPH_ACTIONS = new Set(['build', 'query', 'status']);
+export const CHRONOLOGY_ACTIONS = new Set(['read', 'write', 'edit']);

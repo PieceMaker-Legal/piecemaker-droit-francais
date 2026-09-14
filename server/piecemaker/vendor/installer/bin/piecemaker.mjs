@@ -12,6 +12,10 @@
  *   piecemaker start|stop|restart gère le serveur local
  *   piecemaker status|logs     affiche l'état ou les journaux
  *   piecemaker chronology      affiche la chronologie du dossier courant
+ *   piecemaker chronology write --path <pièce> --correction-json <json>
+ *                              crée une correction de chronologie pour une pièce
+ *   piecemaker chronology edit --path <pièce> --correction-json <json>
+ *                              modifie une correction de chronologie existante
  *   piecemaker conversion      convertit et pseudonymise les pièces manquantes
  *   piecemaker graph build     construit le graphe juridique riche du dossier
  *   piecemaker graph query     interroge le graphe juridique riche du dossier
@@ -34,7 +38,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { banner, title, log, write, blank, summary, spinner, badge, c } from '../lib/ui.mjs';
 import { select, confirm, multiSelect, pause, nonInteractive } from '../lib/prompt.mjs';
 import { HOME_DIR, REPO_ROOT, commandExists, findPython, venvPaths } from '../lib/platform.mjs';
-import { COMMANDS, GRAPH_ACTIONS } from '../lib/commandes.mjs';
+import { COMMANDS, GRAPH_ACTIONS, CHRONOLOGY_ACTIONS } from '../lib/commandes.mjs';
 import { loadConfig, readEnv, markStep, loadState, CONFIG_FILE } from '../lib/state.mjs';
 import { scheduleStepResume, selectStepsToResume } from '../lib/resume-steps.mjs';
 import {
@@ -53,7 +57,7 @@ const require = createRequire(import.meta.url);
 const CLAUDE_ASSETS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/claude-assets.cjs');
 const CLAUDE_HOOKS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/claude-hooks.cjs');
 const CENTRAL_MAPPING_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../piecemaker-plugin/scripts/lib/central-mapping.cjs');
-const ASSISTANT_CHRONOLOGY_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/assistant-chronology.cjs');
+const DOCUMENT_INDEX_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/document-index.cjs');
 const CASE_INSTRUCTIONS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/case-instructions.cjs');
 const LEGAL_GRAPH_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/legal-graph.cjs');
 const ORIGINALS_PIPELINE_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/originals-pipeline.cjs');
@@ -209,11 +213,14 @@ function parseArgs(argv) {
     check: false,
     dryRun: false,
     conversionDocuments: [],
+    correctionJson: null,
     force: false,
     graphAction: null,
     graphQuestion: [],
+    chronologyAction: 'read',
     json: false,
     model: null,
+    piecePath: null,
     resumeSteps: null,
     step: null,
     yes: false,
@@ -222,19 +229,23 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (!arg.startsWith('-') && !flags.command && COMMANDS.has(arg)) flags.command = arg;
+    else if (!arg.startsWith('-') && flags.command === 'chronology' && flags.chronologyAction === 'read' && CHRONOLOGY_ACTIONS.has(arg)) flags.chronologyAction = arg;
     else if (!arg.startsWith('-') && flags.command === 'chronology' && !flags.caseTarget) flags.caseTarget = arg;
     else if (!arg.startsWith('-') && flags.command === 'conversion') flags.conversionDocuments.push(arg);
     else if (!arg.startsWith('-') && flags.command === 'graph' && !flags.graphAction && GRAPH_ACTIONS.has(arg)) flags.graphAction = arg;
     else if (!arg.startsWith('-') && flags.command === 'graph' && flags.graphAction === 'query') flags.graphQuestion.push(arg);
     else if (arg === '--all') flags.all = true;
+    else if (arg === '--action') flags.chronologyAction = argv[++i];
     else if (arg === '--backend') flags.backend = argv[++i];
     else if (arg === '--budget') flags.budget = Number(argv[++i]);
     else if (arg === '--case') flags.caseTarget = argv[++i];
     else if (arg === '--check') flags.check = true;
+    else if (arg === '--correction-json') flags.correctionJson = argv[++i];
     else if (arg === '--dry-run') flags.dryRun = true;
     else if (arg === '--force') flags.force = true;
     else if (arg === '--json') flags.json = true;
     else if (arg === '--model') flags.model = argv[++i];
+    else if (arg === '--path') flags.piecePath = argv[++i];
     else if (arg === '--yes' || arg === '-y') flags.yes = true;
     else if (arg === '--step') flags.step = argv[++i];
     else if (arg === '--resume-steps') {
@@ -400,7 +411,9 @@ function printHelp() {
   write('  restart         redémarre le serveur local');
   write('  status          affiche l’état du serveur');
   write('  logs            affiche les dernières lignes du journal');
-  write('  chronology      affiche la chronologie pseudonymisée du dossier courant');
+  write('  chronology [read]        affiche la chronologie pseudonymisée du dossier courant');
+  write('  chronology write --path <pièce> --correction-json <json>  crée une correction de chronologie');
+  write('  chronology edit --path <pièce> --correction-json <json>   modifie une correction existante');
   write('  conversion [pièce…] convertit et pseudonymise les pièces manquantes ou indiquées');
   write('  graph build     construit ou actualise le graphe juridique riche');
   write('  graph query     interroge les liens de droit du dossier');
@@ -411,6 +424,8 @@ function printHelp() {
   blank();
   write('  --all           installe tout sans menu');
   write('  --case <chemin> cible un dossier enregistré (chronology/conversion/graph)');
+  write('  --path <pièce>  chemin relatif de la pièce (chronology write/edit)');
+  write('  --correction-json <json> correction à appliquer (chronology write/edit)');
   write('  --backend <nom> choisit le backend Graphify (graph build/query)');
   write('  --model <nom>   choisit le modèle d’extraction (graph build/query)');
   write('  --force         retraite les pièces ou reconstruit le graphe');
@@ -475,17 +490,138 @@ function printServerStatus(status) {
   blank();
 }
 
-async function runChronologyCommand(flags) {
-  if (!fs.existsSync(ASSISTANT_CHRONOLOGY_MODULE)) {
+function formatChronologyText(chronology) {
+  const lines = [];
+  lines.push(`Chronologie : ${chronology.stats.documents} pièce(s), ${chronology.stats.dated} datée(s), ${chronology.stats.entities} entité(s).`);
+  lines.push('');
+  for (const doc of chronology.documents) {
+    lines.push(`${doc.dateIso || '(date manquante)'}  ${doc.nature || '(nature inconnue)'}  ${doc.name}`);
+  }
+  const missing = chronology.documents.filter((doc) => !doc.dateIso);
+  if (missing.length) {
+    lines.push('');
+    lines.push('Dates manquantes :');
+    for (const doc of missing) lines.push(`  - ${doc.name}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+function locateChronologyCase(flags) {
+  const { locateConfiguredCase } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
+  const located = locateConfiguredCase(loadConfig(), flags.caseTarget || process.cwd());
+  if (!located) {
+    throw new Error('Lancez la commande depuis un dossier juridique enregistré ou passez --case <chemin>.');
+  }
+  return located;
+}
+
+async function runChronologyReadCommand(flags) {
+  if (!fs.existsSync(DOCUMENT_INDEX_MODULE)) {
     throw new Error('Le module de chronologie PieceMaker est introuvable.');
   }
-  const { chronologyForTarget, formatAssistantChronology } = require(ASSISTANT_CHRONOLOGY_MODULE);
-  const chronology = await chronologyForTarget(loadConfig(), flags.caseTarget || process.cwd());
+  const located = locateChronologyCase(flags);
+  const { buildChronology } = require(DOCUMENT_INDEX_MODULE);
+  const chronology = await buildChronology(located.caseRoot, { deanonymizeLabels: false, includeManualDecisions: true });
   const output = flags.json
     ? `${JSON.stringify(chronology, null, 2)}\n`
-    : formatAssistantChronology(chronology);
+    : formatChronologyText(chronology);
   process.stdout.write(output);
   return 0;
+}
+
+function resolveChronologyPiecePath(caseRoot, relativePath) {
+  const relative = String(relativePath || '').replaceAll('\\', '/').replace(/^\.\//, '');
+  if (!relative) throw new Error('Chemin de pièce manquant.');
+  const absolute = path.resolve(caseRoot, ...relative.split('/'));
+  if (absolute !== caseRoot && !absolute.startsWith(`${caseRoot}${path.sep}`)) {
+    throw new Error('Pièce hors du dossier juridique.');
+  }
+  if (!fs.existsSync(absolute)) throw new Error('Pièce introuvable.');
+  return relative;
+}
+
+async function runChronologyCorrectionCommand(flags) {
+  if (!fs.existsSync(DOCUMENT_INDEX_MODULE)) {
+    throw new Error('Le module de chronologie PieceMaker est introuvable.');
+  }
+  const located = locateChronologyCase(flags);
+  const relative = resolveChronologyPiecePath(located.caseRoot, flags.piecePath);
+
+  let correction;
+  try {
+    correction = JSON.parse(flags.correctionJson || '{}');
+  } catch (error) {
+    throw new Error(`Correction JSON invalide : ${error.message}`);
+  }
+
+  const { stateKey } = require('../../piecemaker-plugin/scripts/lib/anonymization-state.cjs');
+  const { applyDocumentIndexCorrection, readDocumentIndex, documentIndexFile } = require(DOCUMENT_INDEX_MODULE);
+  const key = stateKey(relative);
+  const existing = readDocumentIndex(located.caseRoot).overrides[key] || null;
+
+  if (flags.chronologyAction === 'write' && existing) {
+    throw new Error('Une correction existe déjà pour cette pièce ; utilisez edit_chronology pour la modifier.');
+  }
+  if (flags.chronologyAction === 'edit' && !existing) {
+    throw new Error('Aucune correction existante pour cette pièce ; utilisez write_chronology pour en créer une.');
+  }
+
+  const mutation = applyDocumentIndexCorrection(located.caseRoot, relative, correction);
+
+  const { rematerializeDeterministicLegalGraph } = require(LEGAL_GRAPH_MODULE);
+  await rematerializeDeterministicLegalGraph(located.caseRoot, {
+    semanticStaleReasons: mutation.semanticStaleReasons,
+  });
+
+  let history;
+  try {
+    const { createCommit } = require('../../piecemaker-plugin/scripts/lib/commits.cjs');
+    history = await createCommit({
+      casesRoot: located.casesRoot,
+      caseName: located.caseName,
+      homeDir: HOME_DIR,
+      envFile: path.join(REPO_ROOT, '.env'),
+      label: flags.chronologyAction === 'write'
+        ? 'Création d’une correction de chronologie'
+        : 'Modification d’une correction de chronologie',
+      description: `Mise à jour déterministe de la pièce ${mutation.documentKey.slice(0, 12).toUpperCase()}.`,
+      event: 'assistant-chronology-correction',
+      paths: [path.relative(located.caseRoot, documentIndexFile(located.caseRoot)).split(path.sep).join('/')],
+      waitForLockMs: 10_000,
+    });
+  } catch (error) {
+    history = { created: false, error: error.message };
+  }
+
+  const result = {
+    ok: true,
+    action: flags.chronologyAction,
+    path: relative,
+    documentKey: mutation.documentKey,
+    override: mutation.override,
+    entityDecisions: mutation.entityDecisions,
+    editRevision: mutation.editRevision,
+    history: {
+      created: Boolean(history?.created),
+      hash: history?.commit || null,
+      error: history?.error || null,
+    },
+  };
+
+  if (flags.json) {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  } else {
+    const verb = flags.chronologyAction === 'write' ? 'Correction créée' : 'Correction modifiée';
+    log.ok(`${verb} pour ${relative}.`);
+  }
+  return 0;
+}
+
+async function runChronologyCommand(flags) {
+  if (flags.chronologyAction === 'write' || flags.chronologyAction === 'edit') {
+    return runChronologyCorrectionCommand(flags);
+  }
+  return runChronologyReadCommand(flags);
 }
 
 function normalizedConversionRequest(value, caseRoot) {
@@ -898,6 +1034,11 @@ async function main() {
 
   if (flags.command === 'graph' && (!Number.isFinite(flags.budget) || flags.budget <= 0)) {
     log.error('L’option --budget doit être un nombre strictement positif.');
+    return 1;
+  }
+
+  if (flags.command === 'chronology' && !CHRONOLOGY_ACTIONS.has(flags.chronologyAction)) {
+    log.error('Action inconnue : utilisez « piecemaker chronology read|write|edit ».');
     return 1;
   }
 
