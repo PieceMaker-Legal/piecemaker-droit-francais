@@ -25,6 +25,7 @@ if str(PRESIDIO_GLINER_DIR) not in sys.path:
 from model_config import (  # noqa: E402
     LEGACY_GLINER_MODELS,
     PREFERRED_GLINER_MODEL,
+    gliner2_runtime,
     is_model_cached,
 )
 
@@ -342,7 +343,10 @@ def run_warmup(
 
     # Summary
     migration = gliner_migration_status()
-    critical_ok = results["models"].get("gliner2", migration["preferred_cached"])
+    critical_ok = (
+        gliner2_runtime()["boundary_capable"]
+        and results["models"].get("gliner2", migration["preferred_cached"])
+    )
     total_models = len(results["models"])
     success_models = sum(1 for v in results["models"].values() if v)
 
@@ -376,7 +380,10 @@ def get_status() -> Dict:
         }
 
     # Check dependencies
-    for pkg in ["gliner2", "huggingface_hub", "spacy", "markitdown", "pypdf"]:
+    runtime = gliner2_runtime()
+    status["gliner2_runtime"] = runtime
+    status["dependencies"]["gliner2"] = runtime["boundary_capable"]
+    for pkg in ["huggingface_hub", "spacy", "markitdown", "pypdf"]:
         try:
             __import__(pkg)
             status["dependencies"][pkg] = True
@@ -393,7 +400,7 @@ def get_status() -> Dict:
     # Overall ready status: migration obligatoire, le cache historique ne rend
     # jamais l'anonymisation opérationnelle à lui seul.
     status["migration"] = gliner_migration_status()
-    status["ready"] = all(
+    status["ready"] = status["gliner2_runtime"]["boundary_capable"] and all(
         info["cached"] or info["config"].get("optional", False)
         for info in status["models"].values()
     )
@@ -446,7 +453,10 @@ def main():
 
     # Exit code based on critical component
     migration = gliner_migration_status()
-    critical_ok = results["models"].get("gliner2", migration["preferred_cached"])
+    critical_ok = (
+        gliner2_runtime()["boundary_capable"]
+        and results["models"].get("gliner2", migration["preferred_cached"])
+    )
     sys.exit(0 if critical_ok else 1)
 
 

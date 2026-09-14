@@ -236,6 +236,17 @@ export async function check(ctx) {
     };
   }
 
+  const runtime = statusJson.gliner2_runtime || {};
+  if (runtime.boundary_capable === false) {
+    const installed = runtime.installed
+      ? `gliner2 ${runtime.version || 'inconnu'} installé`
+      : 'gliner2 absent';
+    return {
+      status: 'failed',
+      note: `${installed} : l'architecture boundary de GLiNER2.5 exige gliner2 >= ${runtime.required_release || '2.0'}. Relancez cette étape pour réinstaller les dépendances.`,
+    };
+  }
+
   const models = statusJson.models || {};
   const missing = Object.entries(models)
     .filter(([, info]) => !info.cached)
