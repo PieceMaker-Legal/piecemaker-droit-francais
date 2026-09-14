@@ -8,12 +8,15 @@ import express from 'express';
 
 import { createLibraryStore } from './store.js';
 import { createLibraryRouter } from './routes.js';
-import { createLibraryMarketplaceRouter } from './marketplace.js';
+import { createLibraryMarketplaceRouter, scanInstalledLibraryCollections } from './marketplace.js';
+import { scanAndPersistLibraryProviderSkills } from './provider-skills.js';
 
 export { installLibraryRuntime } from './runtime.js';
 
 export async function startLibraryBackend(home: string, applicationRoot: string) {
   const store = createLibraryStore(home);
+  try { await scanAndPersistLibraryProviderSkills(store, undefined); } catch {}
+  try { scanInstalledLibraryCollections(store, os.homedir()); } catch {}
   const require = createRequire(import.meta.url);
   const { createActivationRouter } = require(path.join(applicationRoot, 'server/piecemaker/activation/index.cjs'));
   const options = { repoRoot: path.join(applicationRoot, 'server/piecemaker/vendor'), piecemakerHome: home, homeDir: home, userHome: os.homedir(), isOriginAllowed: () => true };
