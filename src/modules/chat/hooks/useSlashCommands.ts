@@ -143,6 +143,13 @@ export function useSlashCommands({
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(-1);
   const [slashPosition, setSlashPosition] = useState(-1);
 
+  // Guards fetchCommands against out-of-order responses: isActive/provider
+  // can retrigger the effect before an earlier in-flight request resolves,
+  // and a slower earlier response landing after a faster later one would
+  // overwrite fresh data with stale data (a just-toggled skill appearing
+  // then disappearing).
+  const commandsFetchIdRef = useRef(0);
+
   const commandQueryTimerRef = useRef<number | null>(null);
 
   const clearCommandQueryTimer = useCallback(() => {
@@ -161,12 +168,14 @@ export function useSlashCommands({
   }, [clearCommandQueryTimer]);
 
   useEffect(() => {
-    let cancelled = false;
+    const fetchId = ++commandsFetchIdRef.current;
 
     const fetchCommands = async () => {
       if (!selectedProject) {
-        setSlashCommands([]);
-        setFilteredCommands([]);
+        if (fetchId === commandsFetchIdRef.current) {
+          setSlashCommands([]);
+          setFilteredCommands([]);
+        }
         return;
       }
       if (!isActive) {
@@ -207,21 +216,18 @@ export function useSlashCommands({
           return commandBUsage - commandAUsage;
         });
 
-        if (!cancelled) {
+        if (fetchId === commandsFetchIdRef.current) {
           setSlashCommands(sortedCommands);
         }
       } catch (error) {
         console.error('Error fetching slash commands:', error);
-        if (!cancelled) {
+        if (fetchId === commandsFetchIdRef.current) {
           setSlashCommands([]);
         }
       }
     };
 
     fetchCommands();
-    return () => {
-      cancelled = true;
-    };
   }, [isActive, selectedProject, provider]);
 
   useEffect(() => {

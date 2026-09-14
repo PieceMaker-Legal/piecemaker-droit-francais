@@ -82,6 +82,7 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
     build: {
       appId: product.appId,
       productName: product.name,
+      executableName: product.shortName,
       asar: packageJson.build.asar,
       artifactName: `${product.slug}-desktop-\${version}-\${os}-\${arch}.\${ext}`,
       electronVersion: getElectronVersion(),
