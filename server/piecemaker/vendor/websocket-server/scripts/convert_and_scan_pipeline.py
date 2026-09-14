@@ -93,17 +93,17 @@ def start_scanner_worker() -> Optional[subprocess.Popen]:
         return None
 
 
-def wait_for_worker_ready(proc: Optional[subprocess.Popen], timeout: int = 300) -> bool:
+def wait_for_worker_ready(proc: Optional[subprocess.Popen]) -> bool:
     """Wait for the scanner worker to print READY on stdout.
 
     While waiting, streams stderr output (model loading progress) in real-time.
+    Waits indefinitely — bounded only by the worker exiting on its own.
 
     Args:
         proc: Worker subprocess
-        timeout: Max seconds to wait
 
     Returns:
-        True if worker is ready, False on failure/timeout.
+        True if worker is ready, False if the worker exits before READY.
     """
     if proc is None:
         return False
@@ -135,8 +135,7 @@ def wait_for_worker_ready(proc: Optional[subprocess.Popen], timeout: int = 300) 
     stderr_thread = threading.Thread(target=_stream_stderr, daemon=True)
     stderr_thread.start()
 
-    start = time.time()
-    while time.time() - start < timeout:
+    while True:
         if proc.poll() is not None:
             print(f"⚠️  Scanner worker exited prematurely (exit {proc.returncode})", file=sys.stderr)
             return False
@@ -155,11 +154,6 @@ def wait_for_worker_ready(proc: Optional[subprocess.Popen], timeout: int = 300) 
 
         if not line:
             time.sleep(0.1)
-
-    # Timeout
-    print("⚠️  Scanner worker timed out waiting for READY", file=sys.stderr)
-    proc.kill()
-    return False
 
 
 def scan_file_via_worker(proc: subprocess.Popen, md_file: str, output_dir: str) -> bool:
