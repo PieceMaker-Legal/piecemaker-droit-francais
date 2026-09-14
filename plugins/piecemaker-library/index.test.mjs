@@ -28,15 +28,14 @@ test('metadata list stays private until a document is explicitly opened', async 
   const { container } = fixture(t, async (method, path) => {
     calls.push([method, path]);
     if (path.startsWith('/catalog?')) return { entries: [{ id: 'abc', name: 'Relire', description: 'Vérifier les dates.', kind: 'skill', enabled: false }] };
-    if (path.startsWith('/provider-skills?')) return { providers: [{ provider: 'codex', skills: [{ name: 'Analyser', scope: 'project', command: '$analyser', sourcePath: '/case-a/.agents/skills/analyser/SKILL.md' }] }] };
     return { name: 'Relire', content: '# Instructions', assets: {} };
   });
   await settle();
   assert.match(container.textContent, /Vérifier les dates/);
-  assert.match(container.textContent, /codex · project · \$analyser/);
-  assert.match(container.textContent, /\.agents\/skills\/analyser\/SKILL\.md/);
+  assert.doesNotMatch(container.textContent, /Skills détectées/);
+  assert.doesNotMatch(container.textContent, /Aucune skill détectée/);
   assert.equal(container.querySelector('[role=switch]').checked, false);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 2);
   let opened;
   window.addEventListener('piecemaker:library-document', (event) => { opened = event.detail; });
   [...container.querySelectorAll('button')].find((button) => button.textContent === 'Relire').click();
@@ -50,7 +49,6 @@ test('plugins live with skills, expose their tree and are absent from MCP connec
   const writes = [];
   const { container } = fixture(t, async (method, path, body) => {
     if (path.startsWith('/catalog?')) return { entries: [] };
-    if (path.startsWith('/provider-skills?')) return { providers: [] };
     if (path.startsWith('/plugins?')) return { plugins: [{ id: 'legal@market', name: 'Plugin légal', description: 'Recherche', enabled: false, partial: false }] };
     if (path.endsWith('/files')) return { files: [{ path: 'skills/recherche/SKILL.md', size: 120, editable: true }] };
     if (path.includes('/file?')) return { path: 'skills/recherche/SKILL.md', content: 'Instructions plugin' };
@@ -92,7 +90,6 @@ test('a toggle sends the current dossier and no global activation', async (t) =>
 test('a stale dossier response cannot replace the current dossier', async (t) => {
   let resolveFirst;
   const { container, change } = fixture(t, (method, path) => {
-    if (path.startsWith('/provider-skills')) return Promise.resolve({ providers: [] });
     if (path.includes('case-a')) return new Promise((resolve) => { resolveFirst = resolve; });
     return Promise.resolve({ entries: [{ id: 'new', name: 'Dossier B', description: '', kind: 'skill', enabled: false }] });
   });
