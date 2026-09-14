@@ -47,7 +47,65 @@ const document: ChronologyDocument = {
 describe('CaseFilesDocumentMetaDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     pmPut.mockResolvedValue({ ok: true });
+  });
+
+  it('propose les types fixes dans un menu et conserve la valeur existante', () => {
+    render(
+      <CaseFilesDocumentMetaDialog
+        caseId="case-1"
+        document={document}
+        entityOptions={[]}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    const select = screen.getByRole('combobox', { name: 'Type de pièce' }) as HTMLSelectElement;
+    expect(select.value).toBe('Assignation');
+    expect([...select.options].map((option) => option.textContent)).toContain('extrait Kbis');
+    expect(screen.queryByText('Type personnalisé')).toBeNull();
+  });
+
+  it('enregistre un type personnalisé et propose de le mémoriser', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { unmount } = render(
+      <CaseFilesDocumentMetaDialog
+        caseId="case-1"
+        document={{ ...document, nature: null }}
+        entityOptions={[]}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Type de pièce' }), {
+      target: { value: '__piecemaker_custom_nature__' },
+    });
+    fireEvent.change(screen.getByLabelText('Type personnalisé'), { target: { value: 'Sommation de payer' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    });
+
+    expect(confirm).toHaveBeenCalledWith('Mémoriser « Sommation de payer » dans le menu des types de pièce ?');
+    expect(JSON.parse(window.localStorage.getItem('piecemaker-custom-document-natures') ?? '[]')).toEqual(['Sommation de payer']);
+    await waitFor(() => expect(pmPut).toHaveBeenCalledWith('/repository/document-meta', expect.objectContaining({
+      nature: 'Sommation de payer',
+    })));
+    unmount();
+    render(
+      <CaseFilesDocumentMetaDialog
+        caseId="case-1"
+        document={{ ...document, nature: null }}
+        entityOptions={[]}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    const reopenedSelect = screen.getByRole('combobox', { name: 'Type de pièce' }) as HTMLSelectElement;
+    expect([...reopenedSelect.options].map((option) => option.textContent)).toContain('Sommation de payer');
+    confirm.mockRestore();
   });
 
   it('affiche les personnes indexées sans les motifs techniques', async () => {
