@@ -684,55 +684,39 @@ async function runJob(job, legalCase, absoluteFiles, options) {
     return { converted: absoluteFiles.length };
   }
 
-  // Tous les anciens mappings sont réunis dans un fichier de travail privé. Le
-  // dossier juridique n'est modifié qu'après le succès complet du pipeline : un
-  // échec de GLiNER ne doit pas laisser une migration à moitié enregistrée.
   const before = readCaseMapping(legalCase.root);
-  const mappingWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-mapping-'));
-  const workingMapping = path.join(mappingWorkspace, 'mapping_default.json');
-  if (before.exists) {
-    fs.writeFileSync(workingMapping, `${JSON.stringify(caseMappingPayload(before), null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
-  }
+  const mappingFile = caseMappingFile(legalCase.root);
 
-  // `--mapping-file` vise la copie de travail de l'unique mapping du dossier.
   // `--state-file` découple le statut « analysé » du contenu sensible ; les
   // cartes brutes restent temporaires et ne sont jamais déposées ici.
   // Le script n'accepte qu'un répertoire de sortie. On regroupe donc les
   // pièces par répertoire de sortie (zones métier et sous-dossier de travail
-  // générique confondus) tout en réutilisant le même mapping temporaire entre
-  // les groupes.
+  // générique confondus).
   const groups = new Map();
   for (const absolute of absoluteFiles) {
     const outputDirectory = outputDirectoryForOriginal(legalCase.root, absolute);
     if (!groups.has(outputDirectory)) groups.set(outputDirectory, []);
     groups.get(outputDirectory).push(absolute);
   }
-  try {
-    // Chaque groupe ne rapporte qu'une part de `job.percent`, proportionnelle
-    // à sa part du nombre total de fichiers du lot : sans quoi la barre
-    // repartirait de zéro à chaque nouveau groupe.
-    let filesDone = 0;
-    for (const [outputDirectory, groupFiles] of groups) {
-      fs.mkdirSync(outputDirectory, { recursive: true });
-      const args = [...groupFiles, '-o', outputDirectory, '--mapping-file', workingMapping];
-      // `--case-root` découple la clé du manifeste de `--output` : les pièces
-      // vivent sous le dossier juridique, pas sous le sous-dossier de sortie.
-      args.push('--case-root', legalCase.root);
-      args.push('--state-file', path.join(legalCase.root, '.piecemaker', 'anonymization-state.json'));
-      if (options.skipExisting) args.push('--skip-existing');
-      if (options.engine) args.push('--engine', options.engine);
-      if (options.mode) args.push('--mode', options.mode);
-      if (options.lang) args.push('--lang', options.lang);
-      const offset = absoluteFiles.length ? (filesDone / absoluteFiles.length) * 100 : 0;
-      const weight = absoluteFiles.length ? (groupFiles.length / absoluteFiles.length) * 100 : 100;
-      await spawnTracked(job, PIPELINE_SCRIPT(), args, { offset, weight });
-      filesDone += groupFiles.length;
-    }
-    const produced = readJsonFile(workingMapping, null);
-    if (!produced) throw new Error('Le pipeline n’a produit aucun mapping exploitable.');
-    writeCaseMapping(legalCase.root, produced);
-  } finally {
-    fs.rmSync(mappingWorkspace, { recursive: true, force: true });
+  // Chaque groupe ne rapporte qu'une part de `job.percent`, proportionnelle
+  // à sa part du nombre total de fichiers du lot : sans quoi la barre
+  // repartirait de zéro à chaque nouveau groupe.
+  let filesDone = 0;
+  for (const [outputDirectory, groupFiles] of groups) {
+    fs.mkdirSync(outputDirectory, { recursive: true });
+    const args = [...groupFiles, '-o', outputDirectory, '--mapping-file', mappingFile];
+    // `--case-root` découple la clé du manifeste de `--output` : les pièces
+    // vivent sous le dossier juridique, pas sous le sous-dossier de sortie.
+    args.push('--case-root', legalCase.root);
+    args.push('--state-file', path.join(legalCase.root, '.piecemaker', 'anonymization-state.json'));
+    if (options.skipExisting) args.push('--skip-existing');
+    if (options.engine) args.push('--engine', options.engine);
+    if (options.mode) args.push('--mode', options.mode);
+    if (options.lang) args.push('--lang', options.lang);
+    const offset = absoluteFiles.length ? (filesDone / absoluteFiles.length) * 100 : 0;
+    const weight = absoluteFiles.length ? (groupFiles.length / absoluteFiles.length) * 100 : 100;
+    await spawnTracked(job, PIPELINE_SCRIPT(), args, { offset, weight });
+    filesDone += groupFiles.length;
   }
   job.phase = 'mapping';
   job.percent = 100;
