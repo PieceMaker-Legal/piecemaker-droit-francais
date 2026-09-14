@@ -1,7 +1,7 @@
 import express from 'express';
 
 import type { createLibraryStore } from './store.js';
-import { listLibraryProviderSkills } from './provider-skills.js';
+import { listLibraryProviderSkills, scanAndPersistLibraryProviderSkills } from './provider-skills.js';
 
 export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>) {
   const router = express.Router();
@@ -12,6 +12,11 @@ export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>
   router.get('/provider-skills', async (req, res) => {
     const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
     res.json(await listLibraryProviderSkills(workspacePath));
+  });
+  router.post('/provider-skills/scan', async (req, res) => {
+    const workspacePath = typeof req.body?.workspacePath === 'string' ? req.body.workspacePath : undefined;
+    try { res.json(await scanAndPersistLibraryProviderSkills(store, workspacePath)); }
+    catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.get('/catalog/:id', (req, res) => {
     try { res.json(store.document(String(req.params.id))); }
