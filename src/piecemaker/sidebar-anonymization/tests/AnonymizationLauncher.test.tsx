@@ -98,3 +98,39 @@ it('marks analyzed projects and selects only the remaining projects', async () =
   expect((screen.getByRole('checkbox', { name: 'Sélectionner Dossier A' }) as HTMLInputElement).checked).toBe(false);
   expect((screen.getByRole('checkbox', { name: 'Sélectionner Dossier B' }) as HTMLInputElement).checked).toBe(true);
 });
+
+it('removes the progress bar once the job is finished and shows it again on relaunch', async () => {
+  const buttonSlot = document.createElement('span');
+  const progressSlot = document.createElement('div');
+  document.body.append(buttonSlot, progressSlot);
+
+  render(
+    <AnonymizationLauncher
+      buttonSlots={[buttonSlot]}
+      progressSlots={new Map([['/cabinet/a', progressSlot]])}
+      onProjectsChange={() => undefined}
+    />,
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Anonymiser les dossiers' }));
+  await screen.findByRole('checkbox', { name: 'Sélectionner Dossier A' });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Sélectionner Dossier B' }));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Mettre en file' }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Mettre en file' }));
+
+  await waitFor(() => expect(progressSlot.querySelector('[role="progressbar"]')).not.toBeNull());
+
+  pmGet.mockImplementation((path: string) => (path === '/originals/job'
+    ? Promise.resolve({ job: { id: 'job-0', state: 'done', percent: 100 } })
+    : Promise.resolve({ exists: false, mapping: {} })));
+
+  await waitFor(() => expect(progressSlot.querySelector('[role="progressbar"]')).toBeNull(), { timeout: 4000 });
+  expect(JSON.parse(localStorage.getItem('piecemaker.sidebarAnonymizationJobs') ?? '[]')).toEqual([]);
+
+  pmGet.mockImplementation((path: string) => (path === '/originals/job'
+    ? Promise.resolve({ job: { id: 'job-1', state: 'running', percent: 20, phase: 'scan' } })
+    : Promise.resolve({ exists: false, mapping: {} })));
+  fireEvent.click(screen.getByRole('button', { name: 'Mettre en file' }));
+
+  await waitFor(() => expect(progressSlot.querySelector('[role="progressbar"]')).not.toBeNull());
+});
