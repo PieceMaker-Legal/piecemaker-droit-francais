@@ -13,15 +13,21 @@
  */
 
 import { useState } from 'react';
-import { FolderTree, Stamp, CalendarClock, type LucideIcon } from 'lucide-react';
+import { FolderTree, Stamp, CalendarClock, FileText, type LucideIcon } from 'lucide-react';
 
-import { PillBar, Pill, Tooltip } from '@/shared/ui';
+import { Button, PillBar, Pill, Tooltip } from '@/shared/ui';
 import type { Project } from '@/shared/types';
+import { usePaletteOps } from '@/modules/command-palette';
 import { DossierCasesProvider, useDossierCases } from '@/piecemaker/dossier/DossierContext';
 import CaseFilesSection from '@/piecemaker/dossier/sections/CaseFilesSection';
 import StampingSection from '@/piecemaker/dossier/sections/StampingSection';
 import CaseFilesChronology from '@/piecemaker/dossier/sections/CaseFilesChronology';
 import CaseMappingSetup from '@/piecemaker/dossier/sections/CaseMappingSetup';
+
+// AGENTS.md is a symlink to CLAUDE.md at the repo root, so the two always mirror
+// each other — opening either shows the same repo instructions Claude Code and
+// other agents read on startup.
+const AGENTS_MD_OBJECTIVE = "Instructions du dépôt lues par les agents IA (Claude Code, etc.). Reflète toujours CLAUDE.md.";
 
 type SectionId = 'dossiers' | 'tampon' | 'chronologie';
 
@@ -52,6 +58,7 @@ function DossierSections({ section }: { section: SectionId }) {
 
 export default function DossierPanel({ selectedProject }: { selectedProject: Project | null }) {
   const [section, setSection] = useState<SectionId>('dossiers');
+  const { openFileInEditor } = usePaletteOps();
 
   return (
     <DossierCasesProvider projectPath={selectedProject?.fullPath || selectedProject?.path || null}>
@@ -81,6 +88,17 @@ export default function DossierPanel({ selectedProject }: { selectedProject: Pro
               );
             })}
           </PillBar>
+          <Tooltip content={AGENTS_MD_OBJECTIVE} position="bottom">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 gap-1.5 px-2.5"
+              onClick={() => openFileInEditor('AGENTS.md')}
+            >
+              <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+              <span className="truncate">Agents.md</span>
+            </Button>
+          </Tooltip>
           <CaseMappingSetup />
         </div>
 
