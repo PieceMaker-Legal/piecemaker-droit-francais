@@ -2547,14 +2547,18 @@ function createAdminRouter({
       folder.registered = legalCase.registered;
       // Les Markdown convertis vivent déjà dans l'historique ; ce cadre ne
       // présente que les pièces originales et un résumé non sensible du mapping.
-      folder.originals = await listOriginalsCached(legalCase.root);
       const mapping = readCaseMapping(legalCase.root);
+      const [originals, branches] = await Promise.all([
+        listOriginalsCached(legalCase.root),
+        historyBranches(legalCase.casesRoot, homeDir, legalCase.caseName),
+      ]);
+      folder.originals = originals;
       folder.mapping = {
         exists: mapping.exists,
         name: path.basename(mapping.file),
         entries: Object.keys(mapping.mapping).length,
       };
-      folder.branches = await historyBranches(legalCase.casesRoot, homeDir, legalCase.caseName);
+      folder.branches = branches;
       finishAdminTiming(res, 'case', startedAt, {
         changes: folder.changes,
         originals: folder.originals.length,
