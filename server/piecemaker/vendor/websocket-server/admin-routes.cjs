@@ -205,29 +205,14 @@ async function selectLocalFolder(platform = process.platform, initialFolder = os
   throw new Error(`Aucun sélecteur de dossier n’est disponible sur ce poste (${lastError?.message || 'commande introuvable'}).`);
 }
 
-function installClaudeAssets(repoRoot, userHome, runCommand = captureCommand) {
-  if (!runCommand('claude', ['--version']).ok) {
-    return { installed: false, skipped: true, reason: 'Claude Code est introuvable.' };
-  }
-  const result = syncClaudeAssets(repoRoot, userHome);
-  return {
-    installed: result.conflicts.length === 0,
-    ...result,
-  };
-}
-
 async function registerLegalCase({
   folder,
   configFile,
-  repoRoot,
   homeDir,
-  userHome = os.homedir(),
-  claudeAssetsInstaller = installClaudeAssets,
 } = {}) {
   const root = validateSelectedCaseFolder(folder);
   const previous = readRegistryConfig(configFile);
   const structure = ensureCaseFolderStructure(root, previous);
-  const claudeAssets = await claudeAssetsInstaller(repoRoot, userHome);
   const protection = readProtection(root);
   if (!protection.exists) writeProtection(root, { unprotected: [] });
   const currentMapping = readCaseMapping(root);
@@ -238,16 +223,6 @@ async function registerLegalCase({
   const registered = registerCaseFolder(previous, root);
   atomicWrite(configFile, `${JSON.stringify(registered.config, null, 2)}\n`);
 
-  const commit = await createCommit({
-    casesRoot: path.dirname(root),
-    caseName: path.basename(root),
-    homeDir,
-    label: 'Enregistrement du dossier juridique',
-    event: 'admin-case-register',
-    paths: [path.relative(root, mapping.file).split(path.sep).join('/')],
-    waitForLockMs: 10_000,
-    envFile: path.join(repoRoot, '.env'),
-  });
   const folderOverview = await caseOverview(path.dirname(root), homeDir, path.basename(root));
   folderOverview.path = registered.entry.id;
   folderOverview.location = root;
@@ -256,11 +231,9 @@ async function registerLegalCase({
   return {
     folder: folderOverview,
     installed: {
-      claudeAssets: Boolean(claudeAssets?.installed),
       mapping: path.relative(root, mapping.file).split(path.sep).join('/'),
       protection: path.relative(root, protection.file).split(path.sep).join('/'),
       structure: structure.directories,
-      commit: commit.commit || null,
     },
   };
 }
@@ -2069,7 +2042,6 @@ function createAdminRouter({
   getRuntimeStatus = () => ({}),
   fetchImpl = global.fetch,
   pickFolder = selectLocalFolder,
-  claudeAssetsInstaller = installClaudeAssets,
   // Adaptation PieceMaker/CloudCLI : monté sur le serveur CloudCLI, le routeur
   // est déjà protégé par `authenticateToken`, et l'origine peut être une app
   // Electron (`file://`) ou un hôte LAN. L'appelant peut donc fournir sa propre
@@ -2493,10 +2465,7 @@ function createAdminRouter({
       const result = await registerLegalCase({
         folder: selected,
         configFile,
-        repoRoot,
         homeDir,
-        userHome,
-        claudeAssetsInstaller,
       });
       res.status(201).json({ ok: true, ...result });
     } catch (error) {
@@ -3124,7 +3093,6 @@ module.exports = {
   folderPickerCommands,
   installedPluginSkills,
   reapplyDeletedOfficialSkills,
-  installClaudeAssets,
   isLocalOrigin,
   listDossiers,
   listManagedFiles,
