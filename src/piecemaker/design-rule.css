@@ -664,6 +664,53 @@ input[type="radio"]:focus-visible {
   background: transparent;
 }
 
+#root [class*="hover:bg-blue-"]:hover,
+#root [class*="hover:bg-yellow-"]:hover,
+#root [class*="hover:bg-amber-"]:hover,
+#root [class*="hover:bg-primary"]:hover {
+  background-color: rgb(var(--mike-ink-rgb) / 8%) !important;
+  color: var(--mike-ink) !important;
+}
+
+#root [class~="text-white"][class*="hover:bg-blue-"]:hover,
+#root [class~="text-white"][class*="hover:bg-yellow-"]:hover,
+#root [class~="text-white"][class*="hover:bg-amber-"]:hover,
+#root [class~="text-white"][class*="hover:bg-primary"]:hover {
+  background-color: rgb(17 24 39 / 94%) !important;
+  color: white !important;
+}
+
+#root [class*="hover:text-blue-"]:hover,
+#root [class*="hover:text-yellow-"]:hover,
+#root [class*="hover:text-amber-"]:hover,
+#root [class*="hover:text-primary"]:hover {
+  color: var(--mike-ink) !important;
+}
+
+#root [class*="hover:border-blue-"]:hover,
+#root [class*="hover:border-yellow-"]:hover,
+#root [class*="hover:border-amber-"]:hover,
+#root [class*="hover:border-primary"]:hover {
+  border-color: var(--mike-ink) !important;
+}
+
+#root [class~="text-white"][class*="bg-blue-"],
+#root [class~="text-white"][class*="from-blue-"],
+#root [class~="text-primary-foreground"][class~="bg-primary"] {
+  background-color: rgb(0 136 255 / 90%) !important;
+  border-color: rgb(0 136 255 / 90%) !important;
+  color: white !important;
+}
+
+#root [class~="text-white"][class*="bg-blue-"]:hover,
+#root [class~="text-white"][class*="from-blue-"]:hover,
+#root [class~="text-primary-foreground"][class~="bg-primary"]:hover {
+  background-color: rgb(0 136 255 / 90%) !important;
+  border-color: rgb(0 136 255 / 90%) !important;
+  color: white !important;
+  filter: brightness(0.97);
+}
+
 @media (max-width: 768px) {
   [role="tab"] {
     min-height: 2rem;
