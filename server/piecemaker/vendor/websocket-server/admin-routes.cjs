@@ -2085,6 +2085,73 @@ async function loadAdminLegalChronology({
   return chronology;
 }
 
+function normalizeChronologyScope(caseRoot, value) {
+  const scope = String(value || '').trim().replaceAll('\\', '/').replace(/^\/|\/$/g, '');
+  if (!scope) return null;
+  const parts = scope.split('/');
+  if (parts.some((part) => !part || part === '.' || part === '..')) throw new Error('Sous-dossier invalide.');
+  const root = fs.realpathSync(caseRoot);
+  const absolute = path.resolve(caseRoot, ...parts);
+  const resolved = fs.realpathSync(absolute);
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error('Sous-dossier hors du dossier juridique.');
+  if (!fs.statSync(resolved).isDirectory()) throw new Error('La cible choisie n’est pas un sous-dossier.');
+  return parts.join('/');
+}
+
+function chronologyFolders(documents) {
+  const folders = new Set();
+  for (const document of documents || []) {
+    const parts = String(document.path || '').replaceAll('\\', '/').split('/');
+    parts.pop();
+    for (let index = 1; index <= parts.length; index += 1) folders.add(parts.slice(0, index).join('/'));
+  }
+  return [...folders].sort((left, right) => left.localeCompare(right, 'fr'));
+}
+
+function scopeChronology(chronology, scope) {
+  const folders = chronology.folders || chronologyFolders(chronology.documents);
+  const documents = scope
+    ? chronology.documents.filter((document) => {
+      const documentPath = String(document.path || '');
+      return documentPath === scope || documentPath.startsWith(`${scope}/`);
+    })
+    : chronology.documents;
+  const datedDocuments = documents.filter((document) => document.dateIso);
+  const undatedDocuments = documents.filter((document) => !document.dateIso);
+  const documentIds = new Set(documents.map((document) => document.id));
+  const entities = (chronology.entities || [])
+    .map((entity) => ({ ...entity, documents: (entity.documents || []).filter((id) => documentIds.has(id)) }))
+    .filter((entity) => entity.documents.length > 0);
+  const dated = datedDocuments.map((document) => document.dateIso).sort();
+  const graphDocumentKeys = new Set(documents.map((document) => document.documentKey));
+  const graphFiles = new Set([...graphDocumentKeys].map((key) => `${key}.md`));
+  const nodes = (chronology.graph?.nodes || []).filter((node) => {
+    if (node.file_type === 'document') return graphDocumentKeys.has(node.document_key);
+    return !node.source_file || graphFiles.has(String(node.source_file).replaceAll('\\', '/').split('/').pop());
+  });
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = (chronology.graph?.edges || []).filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+  const hyperedges = (chronology.graph?.hyperedges || []).filter((entry) => entry.nodes.every((id) => nodeIds.has(id)));
+  return {
+    ...chronology,
+    scope: scope || null,
+    folders,
+    documents,
+    datedDocuments,
+    undatedDocuments,
+    entities,
+    stats: {
+      ...chronology.stats,
+      documents: documents.length,
+      indexed: documents.filter((document) => document.indexed).length,
+      dated: datedDocuments.length,
+      entities: entities.length,
+      span: dated.length ? { from: dated[0], to: dated[dated.length - 1] } : null,
+    },
+    graph: chronology.graph ? { ...chronology.graph, nodes, edges, hyperedges } : chronology.graph,
+  };
+}
+
 /** Construction sémantique réservée à l'action admin explicite. */
 async function refreshAdminLegalGraph({
   caseRoot,
@@ -2573,17 +2640,19 @@ function createAdminRouter({
     const startedAt = performance.now();
     try {
       const legalCase = selectedCase(req.query.case);
+      const scope = normalizeChronologyScope(legalCase.root, req.query.scope);
       // Cette route est une vue cabinet et n'expose plus de branche publique
       // pseudonymisée. `deanonymize=0` est volontairement ignoré : les données
       // destinées au modèle empruntent les chemins internes dédiés.
       const chronology = await loadAdminLegalChronology({ caseRoot: legalCase.root, renderViewer: null });
-      chronology.case = { path: legalCase.id, name: legalCase.caseName, location: legalCase.root };
+      const scopedChronology = scopeChronology(chronology, scope);
+      scopedChronology.case = { path: legalCase.id, name: legalCase.caseName, location: legalCase.root };
       finishAdminTiming(res, 'chronology', startedAt, {
-        documents: chronology.stats.documents,
-        entities: chronology.stats.entities,
-        graphEdges: chronology.graph.edges.length,
+        documents: scopedChronology.stats.documents,
+        entities: scopedChronology.stats.entities,
+        graphEdges: scopedChronology.graph.edges.length,
       });
-      res.json(chronology);
+      res.json(scopedChronology);
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
@@ -2611,13 +2680,15 @@ function createAdminRouter({
     try {
       const format = validateExportFormat(String(req.query.format || ''));
       const legalCase = selectedCase(req.query.case);
+      const scope = normalizeChronologyScope(legalCase.root, req.query.scope);
       const chronology = await loadAdminLegalChronology({
         caseRoot: legalCase.root,
         renderViewer: null,
       });
-      const html = renderChronologyHtml(chronology, { caseName: legalCase.caseName });
+      const scopedChronology = scopeChronology(chronology, scope);
+      const html = renderChronologyHtml(scopedChronology, { caseName: legalCase.caseName });
       finishAdminTiming(res, 'chronology-export', startedAt, {
-        documents: chronology.stats.documents,
+        documents: scopedChronology.stats.documents,
         format,
       });
       await sendGeneratedDocument(res, {
@@ -3160,6 +3231,8 @@ function createAdminRouter({
 
 module.exports = {
   loadAdminLegalChronology,
+  normalizeChronologyScope,
+  scopeChronology,
   applyDocumentMetaMutation,
   applyMarketplaceSelection,
   applyPluginComponentSelection,
