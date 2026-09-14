@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertCircle, CheckCircle2, Loader2, ScanSearch, ShieldCheck } from 'lucide-react';
+import { Loader2, ScanSearch, ShieldCheck } from 'lucide-react';
 
 import { api } from '@/shared/api';
 import type { Project } from '@/shared/types';
@@ -27,17 +27,17 @@ type AnonymizationLauncherProps = {
 const STORAGE_KEY = 'piecemaker.sidebarAnonymizationJobs';
 const POLL_INTERVAL_MS = 1_000;
 
+function jobIsPending(job: OriginalsJob): boolean {
+  return job.state === 'queued' || job.state === 'running';
+}
+
 function readStoredJobs(): ProjectJob[] {
   try {
     const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
-    return Array.isArray(value) ? value : [];
+    return Array.isArray(value) ? value.filter((entry) => entry?.job && jobIsPending(entry.job)) : [];
   } catch {
     return [];
   }
-}
-
-function jobIsPending(job: OriginalsJob): boolean {
-  return job.state === 'queued' || job.state === 'running';
 }
 
 function jobLabel(job: OriginalsJob): string {
@@ -48,18 +48,15 @@ function jobLabel(job: OriginalsJob): string {
     const phase = job.phase === 'scan' ? 'Analyse GLiNER' : job.phase === 'commit' ? 'Enregistrement' : 'Conversion MarkItDown';
     return `${phase} · ${Math.round(job.percent ?? 0)} %`;
   }
-  if (job.state === 'done') return 'Anonymisation terminée';
-  return job.error || 'Échec de l’anonymisation';
+  return 'Anonymisation en cours';
 }
 
 function ProjectProgress({ projectJob }: { projectJob: ProjectJob }) {
-  const percent = projectJob.job.state === 'done' ? 100 : Math.max(0, Math.min(100, projectJob.job.percent ?? 0));
+  const percent = Math.max(0, Math.min(100, projectJob.job.percent ?? 0));
   return (
     <div className="mt-1 min-w-0" data-piecemaker-anonymization-progress>
       <div className="mb-0.5 flex min-w-0 items-center gap-1 text-[10px] leading-3 text-muted-foreground">
-        {jobIsPending(projectJob.job) && <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin text-primary" />}
-        {projectJob.job.state === 'done' && <CheckCircle2 className="h-2.5 w-2.5 shrink-0 text-emerald-500" />}
-        {projectJob.job.state === 'error' && <AlertCircle className="h-2.5 w-2.5 shrink-0 text-destructive" />}
+        <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin text-primary" />
         <span className="truncate" title={jobLabel(projectJob.job)}>{jobLabel(projectJob.job)}</span>
       </div>
       <div
@@ -71,10 +68,7 @@ function ProjectProgress({ projectJob }: { projectJob: ProjectJob }) {
         aria-valuenow={percent}
       >
         <div
-          className={cn(
-            'h-full rounded-full transition-[width] duration-500',
-            projectJob.job.state === 'error' ? 'bg-destructive' : projectJob.job.state === 'done' ? 'bg-emerald-500' : 'bg-primary',
-          )}
+          className="h-full rounded-full bg-primary transition-[width] duration-500"
           style={{ width: `${percent}%` }}
         />
       </div>
@@ -146,22 +140,28 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projectJobs));
   }, [projectJobs]);
 
+  const trackedJobIds = useMemo(() => projectJobs.map((entry) => entry.job.id).join(' '), [projectJobs]);
+
   useEffect(() => {
-    if (!projectJobs.some((entry) => jobIsPending(entry.job))) return;
+    if (!trackedJobIds) return;
     const poll = window.setInterval(() => {
-      void Promise.all(projectJobs.filter((entry) => jobIsPending(entry.job)).map(async (entry) => {
+      void Promise.all(trackedJobIds.split(' ').map(async (jobId) => {
         try {
-          const { job } = await pmGet<{ job: OriginalsJob }>('/originals/job', { id: entry.job.id });
-          return { ...entry, job };
+          const { job } = await pmGet<{ job: OriginalsJob }>('/originals/job', { id: jobId });
+          return jobIsPending(job) ? { jobId, job } : { jobId, job: null };
         } catch {
-          return { ...entry, job: { ...entry.job, state: 'error' as const, error: 'Suivi du traitement indisponible.' } };
+          return { jobId, job: null };
         }
       })).then((updates) => {
-        setProjectJobs((current) => current.map((entry) => updates.find((update) => update.job.id === entry.job.id) ?? entry));
+        setProjectJobs((current) => current.flatMap((entry) => {
+          const update = updates.find((candidate) => candidate.jobId === entry.job.id);
+          if (!update) return [entry];
+          return update.job ? [{ ...entry, job: update.job }] : [];
+        }));
       });
     }, POLL_INTERVAL_MS);
     return () => window.clearInterval(poll);
-  }, [projectJobs]);
+  }, [trackedJobIds]);
 
   const selectedProjects = useMemo(
     () => projects.filter((project) => selectedProjectIds.has(project.projectId)),
@@ -217,7 +217,7 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
     setMessage(`${launchedCount} dossier(s) mis en file d’attente.`);
   };
 
-  const pendingCount = projectJobs.filter((entry) => jobIsPending(entry.job)).length;
+  const pendingCount = projectJobs.length;
 
   return (
     <>
