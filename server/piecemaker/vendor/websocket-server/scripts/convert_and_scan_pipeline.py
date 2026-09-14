@@ -93,17 +93,17 @@ def start_scanner_worker() -> Optional[subprocess.Popen]:
         return None
 
 
-def wait_for_worker_ready(proc: Optional[subprocess.Popen]) -> bool:
+def wait_for_worker_ready(proc: Optional[subprocess.Popen], timeout: int = 500) -> bool:
     """Wait for the scanner worker to print READY on stdout.
 
     While waiting, streams stderr output (model loading progress) in real-time.
-    Waits indefinitely — bounded only by the worker exiting on its own.
 
     Args:
         proc: Worker subprocess
+        timeout: Max seconds to wait
 
     Returns:
-        True if worker is ready, False if the worker exits before READY.
+        True if worker is ready, False on failure/timeout.
     """
     if proc is None:
         return False
@@ -135,7 +135,8 @@ def wait_for_worker_ready(proc: Optional[subprocess.Popen]) -> bool:
     stderr_thread = threading.Thread(target=_stream_stderr, daemon=True)
     stderr_thread.start()
 
-    while True:
+    start = time.time()
+    while time.time() - start < timeout:
         if proc.poll() is not None:
             print(f"⚠️  Scanner worker exited prematurely (exit {proc.returncode})", file=sys.stderr)
             return False
@@ -154,6 +155,11 @@ def wait_for_worker_ready(proc: Optional[subprocess.Popen]) -> bool:
 
         if not line:
             time.sleep(0.1)
+
+    # Timeout
+    print("⚠️  Scanner worker timed out waiting for READY", file=sys.stderr)
+    proc.kill()
+    return False
 
 
 def scan_file_via_worker(proc: subprocess.Popen, md_file: str, output_dir: str) -> bool:
@@ -1821,11 +1827,19 @@ def main():
     if skipped_scans:
         print(f"⏭️  {skipped_scans} file(s) already scanned, left untouched")
 
-    # Wait for the scanner worker to finish loading models.
+    # Wait for the scanner worker to finish loading models. One retry (clean
+    # up the stalled/dead worker, relaunch, wait again) before falling back
+    # to a subprocess-per-file scan.
     worker_ready = wait_for_worker_ready(scanner_worker) if pending_scans else False
 
     if pending_scans and not worker_ready:
-        print("⚠️  Scanner worker not available, falling back to subprocess-per-file", file=sys.stderr)
+        print("⚠️  Scanner worker not ready — cleaning up and retrying once", file=sys.stderr)
+        stop_scanner_worker(scanner_worker)
+        scanner_worker = start_scanner_worker()
+        worker_ready = wait_for_worker_ready(scanner_worker)
+
+    if pending_scans and not worker_ready:
+        print("⚠️  Scanner worker not available after retry, falling back to subprocess-per-file", file=sys.stderr)
     print()
 
     scan_success_count = 0
