@@ -24,6 +24,7 @@ const {
   applyMapping,
   readCaseMapping,
 } = require('../piecemaker-plugin/scripts/lib/mapping.cjs');
+const { markdownCounterpart } = require('../piecemaker-plugin/scripts/lib/protection.cjs');
 const { isSocieteCode } = require('./legal-forms.cjs');
 
 const DOCUMENT_INDEX_RELATIVE_PATH = '.piecemaker/document-index.json';
@@ -200,8 +201,8 @@ function effectiveMetadata(entry, override) {
   };
 }
 
-function effectiveEntityCodes(entry, decision, knownCodes = null) {
-  const detected = [...new Set((entry?.personnes_visees || []).filter((code) =>
+function effectiveEntityCodes(entry, decision, knownCodes = null, implicitCodes = []) {
+  const detected = [...new Set([...(entry?.personnes_visees || []), ...implicitCodes].filter((code) =>
     typeof code === 'string' && (!knownCodes || knownCodes.has(code))))];
   if (!decision) return detected.sort();
   const exclusions = new Set(decision.exclusions);
@@ -209,6 +210,23 @@ function effectiveEntityCodes(entry, decision, knownCodes = null) {
     ...detected.filter((code) => !exclusions.has(code)),
     ...decision.additions.filter((code) => !knownCodes || knownCodes.has(code)),
   ])].sort();
+}
+
+function entityCodesInDocumentPath(documentPath, knownCodes) {
+  const normalizedPath = String(documentPath || '').normalize('NFC');
+  return [...knownCodes].filter((code) => normalizedPath.includes(String(code).normalize('NFC')));
+}
+
+function inferredEntityCodes(caseRoot, file, knownCodes, mapping) {
+  const pathCodes = entityCodesInDocumentPath(file.path, knownCodes);
+  if (pathCodes.length || !file.scanned) return pathCodes;
+  const counterpart = markdownCounterpart(path.join(caseRoot, file.path), caseRoot);
+  if (!counterpart.exists) return pathCodes;
+  try {
+    return entityCodesInDocumentPath(applyMapping(fs.readFileSync(counterpart.path, 'utf8'), mapping), knownCodes);
+  } catch {
+    return pathCodes;
+  }
 }
 
 function semanticImpactForField(field) {
@@ -390,10 +408,12 @@ function readDocumentIndex(caseRoot) {
       nature_confidence: Number.isFinite(entry.nature_confidence) ? entry.nature_confidence : null,
       doc_date: typeof entry.doc_date === 'string' ? entry.doc_date : null,
       doc_date_iso: /^\d{4}-\d{2}-\d{2}$/.test(entry.doc_date_iso) ? entry.doc_date_iso : null,
-      localisation: typeof entry.localisation === 'string' ? entry.localisation : null,
-      personnes_visees: Array.isArray(entry.personnes_visees)
-        ? entry.personnes_visees.filter((code) => typeof code === 'string')
-        : [],
+      localisation: typeof entry.localisation === 'string'
+        ? entry.localisation
+        : (typeof entry.juridiction === 'string' ? entry.juridiction : null),
+      personnes_visees: (Array.isArray(entry.personnes_visees)
+        ? entry.personnes_visees
+        : (Array.isArray(entry.codes) ? entry.codes : [])).filter((code) => typeof code === 'string'),
       updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : null,
     };
   }
@@ -516,8 +536,10 @@ async function buildChronology(caseRoot, options = {}) {
     const detected = detectedMetadata(entry);
     detected.localisation = entry ? scrubFreeText(entry.localisation, scrubTokens) : null;
     const effective = effectiveMetadata({ ...entry, localisation: detected.localisation }, override);
-    const detectedCodes = effectiveEntityCodes(entry, null, knownCodes);
-    const effectiveCodes = effectiveEntityCodes(entry, entityDecision, knownCodes);
+    const storedCodes = effectiveEntityCodes(entry, null, knownCodes);
+    const inferredCodes = storedCodes.length ? [] : inferredEntityCodes(caseRoot, file, knownCodes, mapping.mapping || {});
+    const detectedCodes = effectiveEntityCodes(entry, null, knownCodes, inferredCodes);
+    const effectiveCodes = effectiveEntityCodes(entry, entityDecision, knownCodes, inferredCodes);
     const editRevision = editRevisionByKey.get(key) || 0;
     const qualityFlags = [];
     if (override) {
