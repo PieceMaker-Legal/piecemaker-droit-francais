@@ -1761,7 +1761,6 @@ def main():
 
     md_files = []
     md_sources = {}
-    converted_sources = []
     convert_success_count = 0
 
     for i, input_file in enumerate(input_files, start=1):
@@ -1777,7 +1776,7 @@ def main():
             print(f"📄 [{i}/{len(input_files)}] Already converted, reusing: {existing_md.name}")
             md_files.append(str(existing_md))
             md_sources[str(existing_md)] = input_file
-            converted_sources.append(input_file)
+            update_processing_state(state_target, state_case_root, [input_file], "converted")
             convert_success_count += 1
             print()
             continue
@@ -1792,7 +1791,7 @@ def main():
             print(f"   ✅ Markdown generated: {Path(md_path).name}")
             md_files.append(md_path)
             md_sources[md_path] = input_file
-            converted_sources.append(input_file)
+            update_processing_state(state_target, state_case_root, [input_file], "converted")
             convert_success_count += 1
         else:
             print(f"   ❌ Conversion failed, skipping...")
@@ -1806,7 +1805,6 @@ def main():
     print(
         f"✅ Phase 1 complete: {convert_success_count}/{len(input_files)} files converted"
     )
-    update_processing_state(state_target, state_case_root, converted_sources, "converted")
     print()
 
     # Phase 2: Scan all Markdown files for PII
@@ -1843,14 +1841,11 @@ def main():
     print()
 
     scan_success_count = 0
-    successful_scan_sources = []
-    json_files = []
-    # Keeps each scanned document's payload tied to its source so the per-document
-    # index can attribute entity codes and metadata after the merge (the payloads
-    # are deleted with the workspace below).
-    scan_records: List[Dict] = []
+    final_mapping_data = None
+    mapping_path = None
+    index_path = state_target.parent / "document-index.json"
     # Raw detections contain PII. They live only in a private OS temporary
-    # directory and disappear after consolidation, including on exceptions.
+    # directory and are deleted individually as each file is merged.
     scan_workspace = tempfile.TemporaryDirectory(prefix="piecemaker-scans-")
     scan_output_dir = scan_workspace.name
 
@@ -1864,92 +1859,73 @@ def main():
             # Fallback: subprocess per file (old behavior)
             success = scan_file(md_file, scan_output_dir)
 
-        if success:
-            json_path = Path(scan_output_dir) / f"{Path(md_file).stem}_sensitive_map.json"
-            if not json_path.exists():
-                print(f"   ⚠️  Scanner reported success without a payload", file=sys.stderr)
-                continue
-            print(f"   ✅ Sensitive entities collected")
-            scan_success_count += 1
-            successful_scan_sources.append(md_sources[md_file])
-            json_files.append(str(json_path))
-            scan_records.append({"source": md_sources[md_file], "json_path": str(json_path)})
-        else:
+        if not success:
             print(f"   ⚠️  Scan failed, markdown preserved")
+            print()
+            continue
 
+        json_path = Path(scan_output_dir) / f"{Path(md_file).stem}_sensitive_map.json"
+        if not json_path.exists():
+            print(f"   ⚠️  Scanner reported success without a payload", file=sys.stderr)
+            print()
+            continue
+
+        print(f"   ✅ Sensitive entities collected")
+
+        try:
+            with open(json_path, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+            entities = payload.get("entities") or {}
+            document_meta = payload.get("document_meta") or {}
+        except (FileNotFoundError, json.JSONDecodeError, OSError, KeyError):
+            entities = {}
+            document_meta = {}
+
+        source = md_sources[md_file]
+        consolidated = read_individual_mappings([str(json_path)])
+        new_mapping_data = convert_to_anonymization_format(consolidated)
+        existing_mapping = load_existing_mapping(mapping_target)
+        final_mapping_data = merge_with_existing_mapping(new_mapping_data, existing_mapping)
+        mapping_path = save_mapping(mapping_target, final_mapping_data)
+        update_anonymization_state(state_target, state_case_root, [source])
+
+        record = {
+            "source": source,
+            "json_path": str(json_path),
+            "entities": entities,
+            "document_meta": document_meta,
+        }
+        try:
+            indexed = write_document_index(index_path, state_case_root, [record], final_mapping_data)
+            if indexed:
+                print(f"   🗂️  Document index updated")
+        except Exception as exc:  # noqa: BLE001
+            print(f"   ⚠️  Document index update skipped: {exc}", file=sys.stderr)
+
+        json_path.unlink(missing_ok=True)
+        scan_success_count += 1
         print()
 
     # Shut down worker
     stop_scanner_worker(scanner_worker)
+    scan_workspace.cleanup()
 
     print(f"✅ Phase 2 complete: {scan_success_count}/{len(pending_scans)} files scanned")
     print()
 
-    # Phase 3: Merge the transient detections into the one persistent mapping.
-    print("=" * 70)
-    print("PHASE 3: UPDATING THE CASE MAPPING")
-    print("=" * 70)
-    print()
+    if not pending_scans:
+        print("✅ No new scan to merge; mapping and processing state are already up to date")
+        return 0
 
-    if not json_files:
-        scan_workspace.cleanup()
-        if not pending_scans:
-            print("✅ No new scan to merge; mapping and processing state are already up to date")
-            return 0
+    if scan_success_count == 0:
         print("⚠️  No successful PII scan to merge", file=sys.stderr)
         print(f"✅ Pipeline complete: {convert_success_count}/{len(input_files)} files converted")
         print()
         return 1
 
-    print(f"📊 Step 1: Reading {len(json_files)} individual mapping(s)...")
-
-    # Read individual mappings
-    consolidated = read_individual_mappings(json_files)
-    # Capture each document's entities + metadata in memory before the transient
-    # scan workspace is deleted, so the per-document index can be built once the
-    # final mapping (and therefore the codes) is known further down.
-    for record in scan_records:
-        try:
-            with open(record["json_path"], "r", encoding="utf-8") as handle:
-                payload = json.load(handle)
-            record["entities"] = payload.get("entities") or {}
-            record["document_meta"] = payload.get("document_meta") or {}
-        except (FileNotFoundError, json.JSONDecodeError, OSError, KeyError):
-            record["entities"] = {}
-            record["document_meta"] = {}
-    scan_workspace.cleanup()
-
-    # Convert to anonymization format
-    print("🔄 Step 2: Converting to anonymization format...")
-    new_mapping_data = convert_to_anonymization_format(consolidated)
-
-    # Load existing mapping (if exists)
-    print("📂 Step 3: Loading existing mapping...")
-    existing_mapping = load_existing_mapping(mapping_target)
-
-    # Merge with existing mapping
-    print("🔗 Step 4: Merging with existing mapping...")
-    final_mapping_data = merge_with_existing_mapping(new_mapping_data, existing_mapping)
-
-    # Save mapping (same file server uses)
-    print("💾 Step 5: Saving mapping...")
-    mapping_path = save_mapping(mapping_target, final_mapping_data)
-    update_anonymization_state(state_target, state_case_root, successful_scan_sources)
-
-    # Per-document index (chronology / nature / entity codes) lives next to the
-    # scan-state manifest, keyed by the same hash so a filename is never stored.
-    index_path = state_target.parent / "document-index.json"
-    try:
-        indexed = write_document_index(index_path, state_case_root, scan_records, final_mapping_data)
-        if indexed:
-            print(f"🗂️  Document index updated: {indexed} document(s)")
-    except Exception as exc:  # noqa: BLE001
-        print(f"⚠️  Document index update skipped: {exc}", file=sys.stderr)
-
     print(f"✅ Mapping saved to: {mapping_path}")
     print(f"   • Total entities: {len(final_mapping_data['mapping'])} variants")
     print(f"   • Unique codes: {len(final_mapping_data['reverse_mapping'])}")
-    print(f"🧹 Step 6: Removed {len(json_files)} transient sensitive payload(s)")
     print()
 
     # Summary
