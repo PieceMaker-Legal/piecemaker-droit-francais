@@ -11,7 +11,7 @@ import { FolderPlus, FolderSearch, Loader2 } from 'lucide-react';
 
 import { Button } from '@/shared/ui';
 import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
-import { pmGetCached, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import { pmGetCached, pmPeekCached, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import type { CaseOverview, RegisterCaseResult } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 import CaseMappingSection from '@/piecemaker/dossier/sections/CaseMappingSection';
 
@@ -20,7 +20,10 @@ export default function CaseFilesSection() {
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
 
-  const [overview, setOverview] = useState<CaseOverview | null>(null);
+  const initialOverview = selectedCaseId
+    ? pmPeekCached<{ folder: CaseOverview }>('/repository/case', { case: selectedCaseId })?.folder ?? null
+    : null;
+  const [overview, setOverview] = useState<CaseOverview | null>(initialOverview);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const overviewRequestSequence = useRef(0);

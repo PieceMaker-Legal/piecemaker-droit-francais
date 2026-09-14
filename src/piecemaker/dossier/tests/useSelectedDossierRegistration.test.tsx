@@ -56,11 +56,10 @@ test('preloads the dossier views for the selected legal case', async () => {
     { wrapper: MemoryRouter },
   );
 
-  await waitFor(() => assert.equal(pmGetCached.mock.calls.length, 4));
+  await waitFor(() => assert.equal(pmGetCached.mock.calls.length, 3));
   assert.deepEqual(pmGetCached.mock.calls, [
     ['/repository/case', { case: 'selected-case' }],
     ['/mapping', { case: 'selected-case' }],
-    ['/repository/chronology', { case: 'selected-case' }],
     ['/configuration'],
   ]);
 });
