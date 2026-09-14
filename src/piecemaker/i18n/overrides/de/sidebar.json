@@ -42,6 +42,7 @@
     "deleteProject": "Dossier entfernen",
     "sessionCount_one": "Dieses Dossier enthält {{count}} Unterhaltung.",
     "sessionCount_other": "Dieses Dossier enthält {{count}} Unterhaltungen.",
+    "archiveProject": "Dossier archivieren",
     "allConversationsDeleted": "Das Dossier wird aus der Seitenleiste entfernt. Deine Dateien, Erinnerungen und Sitzungsdaten bleiben erhalten.",
     "cannotUndo": "Du kannst das Dossier später erneut hinzufügen."
   }

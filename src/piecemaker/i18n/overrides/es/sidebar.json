@@ -42,6 +42,7 @@
     "deleteProject": "Quitar expediente",
     "sessionCount_one": "Este expediente contiene {{count}} conversación.",
     "sessionCount_other": "Este expediente contiene {{count}} conversaciones.",
+    "archiveProject": "Archivar expediente",
     "allConversationsDeleted": "El expediente se quitará de la barra lateral. Tus archivos, memorias y datos de sesión se conservarán.",
     "cannotUndo": "Puedes volver a añadir el expediente más tarde."
   }

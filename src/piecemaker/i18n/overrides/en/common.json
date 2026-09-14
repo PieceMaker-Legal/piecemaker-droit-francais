@@ -24,5 +24,13 @@
     "buttons": {
       "createProject": "Create Case"
     }
+  },
+  "commandPalette": {
+    "selectProjectFirst": "Select a case first"
+  },
+  "misc": {
+    "projectFallback": "Case",
+    "noProjectSelected": "No Case Selected",
+    "projectRequiredForShell": "A case is required to open a shell"
   }
 }

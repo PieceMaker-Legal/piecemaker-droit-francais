@@ -42,6 +42,7 @@
     "deleteProject": "移除案件",
     "sessionCount_one": "此案件包含 {{count}} 个对话。",
     "sessionCount_other": "此案件包含 {{count}} 个对话。",
+    "archiveProject": "归档案件",
     "allConversationsDeleted": "案件将从侧边栏中移除。您的文件、记忆和会话数据将会保留。",
     "cannotUndo": "您可以稍后重新添加此案件。"
   }
