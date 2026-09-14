@@ -28,6 +28,8 @@ export function mount(container, api) {
     .pm-library{height:100%;overflow:auto;padding:24px;box-sizing:border-box;color:hsl(var(--foreground, 0 0% 12%));background:hsl(var(--background, 0 0% 100%));font:14px system-ui,sans-serif}
     .pm-library *{box-sizing:border-box}.pm-library h1{font-size:20px;margin:0 0 6px}.pm-library h2{font-size:15px;margin:24px 0 4px}.pm-library p{margin:4px 0;color:hsl(var(--muted-foreground, 0 0% 45%));line-height:1.5}
     .pm-library nav,.pm-library .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:20px 0}
+    .pm-library .pills{display:inline-flex;gap:3px;padding:3px;border-radius:999px;background:hsl(var(--muted, 0 0% 93%));margin:12px 0 4px}
+    .pm-library .pills button{border:0;border-radius:999px;padding:6px 12px}.pm-library .pills button[aria-selected=true]{background:hsl(var(--background, 0 0% 100%));box-shadow:0 1px 3px rgba(0,0,0,.12)}
     .pm-library button{font:inherit;cursor:pointer;color:inherit;background:transparent;border:1px solid hsl(var(--border, 0 0% 87%));border-radius:6px;padding:7px 12px}
     .pm-library button:disabled{opacity:.45;cursor:default}.pm-library button[aria-selected=true]{background:hsl(var(--muted, 0 0% 93%));font-weight:600}
     .pm-library input[type=search]{font:inherit;color:inherit;background:transparent;border:1px solid hsl(var(--border, 0 0% 87%));border-radius:6px;padding:9px 12px;flex:1;min-width:160px}
@@ -37,6 +39,7 @@ export function mount(container, api) {
     .pm-library input[role=switch]:before{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:white;top:2px;left:2px}.pm-library input[role=switch]:checked{background:#5252cc}.pm-library input[role=switch]:checked:before{left:16px}
     .pm-library input:focus-visible,.pm-library button:focus-visible{outline:2px solid #6366f1;outline-offset:3px}.pm-library [role=alert]{color:#b91c1c;margin:12px 0}.pm-library .meta{font-size:12px}
     .pm-library .tree{margin:0 0 12px 18px;padding:6px 0 6px 14px;border-left:1px solid hsl(var(--border, 0 0% 87%))}.pm-library .tree-row{display:flex;align-items:center;gap:8px;min-height:28px;font-size:12px}.pm-library .tree-row button{border:0;padding:3px 5px;text-align:left}.pm-library .tree-row .meta{margin-left:auto;padding-right:8px}
+    .pm-library .entry-actions{position:relative}.pm-library .more{border:0;font-size:20px;line-height:1;padding:5px 8px}.pm-library .entry-menu{position:absolute;right:0;top:100%;z-index:10;min-width:120px;padding:4px;background:hsl(var(--background, 0 0% 100%));border:1px solid hsl(var(--border, 0 0% 87%));border-radius:7px;box-shadow:0 6px 18px rgba(0,0,0,.14)}.pm-library .entry-menu button{width:100%;border:0;text-align:left;color:#b91c1c}
     .pm-library .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:50}
     .pm-library .modal{background:hsl(var(--background, 0 0% 100%));border:1px solid hsl(var(--border, 0 0% 87%));border-radius:8px;padding:20px;width:min(420px,90vw);display:flex;flex-direction:column;gap:10px}
     .pm-library .modal h2{margin:0 0 4px;font-size:16px}
@@ -56,6 +59,7 @@ export function mount(container, api) {
   container.append(style, layout);
   let context = api.context;
   let tab = 'skill';
+  let view = 'mine';
   let scope = 'legal';
   let search = '';
   let entries = [];
@@ -72,6 +76,8 @@ export function mount(container, api) {
   let creating = null;
   let createBusy = false;
   let createError = '';
+  let pinnedScrollTop = null;
+  let openMenuId = '';
 
   function element(tag, text, className) {
     const node = document.createElement(tag);
@@ -102,18 +108,16 @@ export function mount(container, api) {
     try {
       const workspace = context.project?.path;
       const query = workspace ? `?workspacePath=${encodeURIComponent(workspace)}` : '';
-      if (tab === 'connectors') {
+      if (view === 'discover') {
+        const kind = tab === 'connectors' ? 'connector' : tab;
+        const data = await request('GET', `/plugin/marketplace?scope=${scope}&kind=${kind}`);
+        if (version === revision) marketplace = data;
+      } else if (tab === 'connectors') {
         const data = workspace ? await request('GET', `/activation${query}`) : null;
         if (version === revision) snapshot = data;
       } else if (tab === 'plugin') {
-        const [collectionData, marketplaceData] = await Promise.all([
-          request('GET', `/plugins${query}`),
-          request('GET', `/plugin/marketplace?scope=${scope}`),
-        ]);
-        if (version === revision) {
-          plugins = collectionData.plugins || [];
-          marketplace = marketplaceData;
-        }
+        const collectionData = await request('GET', `/plugins${query}`);
+        if (version === revision) plugins = collectionData.plugins || [];
       } else {
         const catalogData = await request('GET', `/catalog${query}`);
         if (version === revision) entries = catalogData.entries;
@@ -126,10 +130,28 @@ export function mount(container, api) {
     if (busy) return;
     busy = true;
     error = '';
+    pinnedScrollTop = root.scrollTop;
     render();
     try { await request(method, path, body); await load(); }
     catch (cause) { error = cause.message; }
-    finally { busy = false; if (!disposed) render(); }
+    finally { busy = false; pinnedScrollTop = null; if (!disposed) render(); }
+  }
+
+  /**
+   * "Dans ce dossier" switches: flip locally, re-render once, save in the
+   * background. No loading/busy round trip and no catalog reload, so the
+   * switch just stays where the user left it instead of flashing on every
+   * click. Revert only if the save itself fails.
+   */
+  function toggleActivation(item, path, body) {
+    const previous = item.enabled;
+    item.enabled = !previous;
+    render();
+    request('PUT', path, body).catch((cause) => {
+      item.enabled = previous;
+      error = cause.message;
+      if (!disposed) render();
+    });
   }
 
   async function open(entry) {
@@ -173,12 +195,13 @@ export function mount(container, api) {
     }
     pluginTreeBusy = plugin.id;
     error = '';
+    pinnedScrollTop = root.scrollTop;
     render();
     try {
       const response = await request('GET', `/plugins/${encodeURIComponent(plugin.id)}/files`);
       pluginTrees.set(plugin.id, response.files || []);
     } catch (cause) { error = cause.message; }
-    finally { pluginTreeBusy = ''; if (!disposed) render(); }
+    finally { pluginTreeBusy = ''; pinnedScrollTop = null; if (!disposed) render(); }
   }
 
   function openCreate(kind) {
@@ -207,16 +230,18 @@ export function mount(container, api) {
     finally { createBusy = false; if (!disposed) render(); }
   }
 
-  function toggle(label, checked, disabled, action) {
+  function toggle(label, checked, disabled, action, visibleLabel = true) {
     const node = element('label', undefined, 'switch');
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.setAttribute('role', 'switch');
     input.setAttribute('aria-label', label);
+    input.title = label;
     input.checked = checked;
     input.disabled = disabled || busy;
     input.onchange = action;
-    node.append(input, element('span', label));
+    node.append(input);
+    if (visibleLabel) node.append(element('span', label));
     return node;
   }
 
@@ -234,20 +259,34 @@ export function mount(container, api) {
     return `${item.name} ${item.description || ''} ${item.provider || ''} ${item.scope || ''} ${item.command || ''} ${item.sourcePath || ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase());
   }
 
+  function pluralName() {
+    return { connectors: 'connecteurs', skill: 'skills', plugin: 'plugins', agent: 'agents' }[tab];
+  }
+
   function render() {
-    const scrollTop = root.scrollTop;
+    const scrollTop = pinnedScrollTop !== null ? pinnedScrollTop : root.scrollTop;
     content.replaceChildren();
     content.append(element('h1', 'Bibliothèque'), element('p', 'Connecteurs, skills, plugins et agents activés pour les dossiers choisis.'));
     const nav = element('nav');
     nav.setAttribute('role', 'tablist');
     nav.setAttribute('aria-label', 'Bibliothèque');
     for (const [key, label] of [['connectors', 'Connecteurs'], ['skill', 'Skills'], ['plugin', 'Plugins'], ['agent', 'Agents']]) {
-      const item = button(label, () => { tab = key; search = ''; void load(); });
+      const item = button(label, () => { tab = key; view = 'mine'; scope = key === 'connectors' ? 'piecemaker' : 'legal'; search = ''; void load(); });
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', String(tab === key));
       nav.append(item);
     }
     content.append(nav);
+    const views = element('div', undefined, 'pills');
+    views.setAttribute('role', 'tablist');
+    views.setAttribute('aria-label', `Vue des ${pluralName()}`);
+    for (const [key, label] of [['mine', `Mes ${pluralName()}`], ['discover', 'Découvrir']]) {
+      const item = button(label, () => { view = key; search = ''; void load(); });
+      item.setAttribute('role', 'tab');
+      item.setAttribute('aria-selected', String(view === key));
+      views.append(item);
+    }
+    content.append(views);
     const toolbar = element('div', undefined, 'toolbar');
     const input = document.createElement('input');
     input.type = 'search';
@@ -256,8 +295,8 @@ export function mount(container, api) {
     input.value = search;
     input.oninput = () => { search = input.value; renderRows(); };
     toolbar.append(input, button('Actualiser', () => void load()));
-    if (tab === 'skill') toolbar.append(button('Nouveau skill', () => openCreate('skill')));
-    if (tab === 'agent') toolbar.append(button('Nouvel agent', () => openCreate('agent')));
+    if (view === 'mine' && tab === 'skill') toolbar.append(button('Nouveau skill', () => openCreate('skill')));
+    if (view === 'mine' && tab === 'agent') toolbar.append(button('Nouvel agent', () => openCreate('agent')));
     content.append(toolbar);
     if (error) { const notice = element('p', error); notice.setAttribute('role', 'alert'); content.append(notice); }
     const body = element('div');
@@ -265,13 +304,58 @@ export function mount(container, api) {
     function renderRows() {
       body.replaceChildren();
       if (loading) { body.append(element('p', 'Chargement…')); return; }
-      if (tab === 'skill' || tab === 'agent') {
+      if (view === 'discover') {
+        const scopes = element('div', undefined, 'pills');
+        const availableScopes = tab === 'connectors'
+          ? [['piecemaker', 'PieceMaker'], ['legal', 'Legal'], ['official', 'Officiel Anthropic']]
+          : [['legal', 'Legal'], ['official', 'Officiel Anthropic']];
+        if (!availableScopes.some(([id]) => id === scope)) scope = availableScopes[0][0];
+        for (const [id, title] of availableScopes) {
+          const item = button(title, () => { scope = id; void load(); });
+          item.setAttribute('aria-selected', String(scope === id));
+          scopes.append(item);
+        }
+        scopes.append(button(marketplace?.registered ? 'Rafraîchir le catalogue' : 'Enregistrer le catalogue', () => void mutate('POST', '/plugin/marketplace/register', { scope })));
+        body.append(scopes);
+        if (marketplace?.reason) body.append(element('p', marketplace.reason));
+        if (!marketplace?.registered) body.append(element('p', 'Ce catalogue doit être enregistré avant de pouvoir installer ses éléments.'));
+        const visible = (marketplace?.plugins || []).filter(matches);
+        if (!visible.length) body.append(element('p', `Aucun ${pluralName()} dans ce catalogue.`));
+        for (const entry of visible) {
+          const item = row(entry);
+          item.append(button(entry.installed ? 'Installé' : 'Ajouter', () => void mutate('POST', '/plugin/marketplace/acquire', { id: entry.id, scope })));
+          item.lastChild.disabled = busy || entry.installed;
+          body.append(item);
+        }
+      } else if (tab === 'skill' || tab === 'agent') {
         body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}` : 'Sélectionnez un dossier pour activer un élément.', 'meta'));
         const visible = entries.filter((item) => item.kind === tab && matches(item));
         if (!visible.length) body.append(element('p', 'Aucun élément.'));
         for (const entry of visible) {
           const item = row(entry, () => void open(entry));
-          item.append(toggle('Dans ce dossier', entry.enabled, !context.project, () => void mutate('PUT', `/catalog/${entry.id}/activation`, { workspacePath: context.project.path, enabled: !entry.enabled })));
+          const switchLabel = entry.enabled ? 'Retirer de ce dossier' : 'Installer dans ce dossier';
+          item.append(toggle(switchLabel, entry.enabled, !context.project, () => toggleActivation(entry, `/catalog/${entry.id}/activation`, { workspacePath: context.project.path, enabled: !entry.enabled }), false));
+          if (entry.kind === 'skill') {
+            const actions = element('div', undefined, 'entry-actions');
+            const more = button('⋮', (event) => {
+              event.stopPropagation();
+              openMenuId = openMenuId === entry.id ? '' : entry.id;
+              render();
+            });
+            more.className = 'more';
+            more.setAttribute('aria-label', `Actions pour ${entry.name}`);
+            more.setAttribute('aria-expanded', String(openMenuId === entry.id));
+            actions.append(more);
+            if (openMenuId === entry.id) {
+              const menu = element('div', undefined, 'entry-menu');
+              menu.setAttribute('role', 'menu');
+              const remove = button('Supprimer', () => { openMenuId = ''; void mutate('DELETE', `/catalog/${entry.id}`); });
+              remove.setAttribute('role', 'menuitem');
+              menu.append(remove);
+              actions.append(menu);
+            }
+            item.append(actions);
+          }
           body.append(item);
         }
         body.append(element('p', 'Les changements s’appliquent aux prochains messages. Une désactivation ne retire pas les instructions déjà reçues dans une conversation.', 'meta'));
@@ -283,7 +367,7 @@ export function mount(container, api) {
             const item = row(plugin);
             const actions = element('div', undefined, 'toolbar');
             actions.append(button(pluginTrees.has(plugin.id) ? 'Masquer l’arborescence' : pluginTreeBusy === plugin.id ? 'Chargement…' : 'Voir l’arborescence', () => void togglePluginTree(plugin)));
-            item.append(actions, toggle(plugin.componentCount ? (plugin.partial ? 'Partiellement installé' : 'Dans ce dossier') : 'Aucun composant portable', plugin.enabled, !context.project || !plugin.componentCount, () => void mutate('PUT', `/plugins/${encodeURIComponent(plugin.id)}/activation`, { workspacePath: context.project.path, enabled: !plugin.enabled })));
+            item.append(actions, toggle(plugin.componentCount ? (plugin.partial ? 'Partiellement installé' : 'Dans ce dossier') : 'Aucun composant portable', plugin.enabled, !context.project || !plugin.componentCount, () => toggleActivation(plugin, `/plugins/${encodeURIComponent(plugin.id)}/activation`, { workspacePath: context.project.path, enabled: !plugin.enabled })));
             body.append(item);
             if (pluginTrees.has(plugin.id)) {
               const tree = element('div', undefined, 'tree');
@@ -311,23 +395,6 @@ export function mount(container, api) {
               }
               body.append(tree);
             }
-        }
-        body.append(element('h2', 'Catalogue de plugins'));
-        const scopes = element('div', undefined, 'toolbar');
-        for (const [id, title] of [['legal', 'Legal'], ['official', 'Officiel Anthropic']]) {
-          const item = button(title, () => { scope = id; void load(); });
-          item.setAttribute('aria-selected', String(scope === id));
-          scopes.append(item);
-        }
-        scopes.append(button('Découvrir / rafraîchir', () => void mutate('POST', '/plugin/marketplace/register', { scope })));
-        body.append(scopes);
-        if (marketplace?.reason) body.append(element('p', marketplace.reason));
-        if (!marketplace?.registered) body.append(element('p', 'Ce catalogue doit être enregistré avec « Découvrir / rafraîchir ».'));
-        for (const entry of (marketplace?.plugins || []).filter(matches)) {
-          const item = row(entry);
-          item.append(button(entry.installed ? 'Installé' : 'Ajouter à la bibliothèque', () => void mutate('POST', '/plugin/marketplace/acquire', { id: entry.id, scope })));
-          item.lastChild.disabled = busy || entry.installed;
-          body.append(item);
         }
       } else if (tab === 'connectors') {
         if (!snapshot) { body.append(element('p', 'Sélectionnez un dossier pour gérer les connecteurs.')); return; }

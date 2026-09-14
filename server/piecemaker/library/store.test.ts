@@ -82,6 +82,24 @@ test('activation is persistent, canonical and confined to the selected dossier',
   assert.throws(() => store.setEnabled(workspace, '../missing', true));
 });
 
+test('deleting a skill removes every active copy and its catalogue entry', (t) => {
+  const { store, skill, workspace, other } = fixture(t);
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  store.setEnabled(workspace, id, true);
+  store.setEnabled(other, id, true);
+  store.deleteEntry(id);
+  assert.equal(store.list(workspace).length, 0);
+  assert.equal(store.instructions(workspace), '');
+  for (const selected of [workspace, other]) {
+    for (const provider of ['.claude', '.agents']) {
+      assert.equal(fs.existsSync(path.join(selected, provider, 'skills', `piecemaker-${id}`)), false);
+    }
+  }
+  assert.throws(() => store.document(id), /introuvable/);
+  const agent = store.createEntry('agent', 'Agent conservé', '');
+  assert.throws(() => store.deleteEntry(agent.id), /Seuls les skills/);
+});
+
 test('migration withdraws verified global installations and retains a recovery manifest', (t) => {
   const { root, home, skill, store, workspace } = fixture(t);
   const imported = migratePersonalLibrary(store, home, root, true);

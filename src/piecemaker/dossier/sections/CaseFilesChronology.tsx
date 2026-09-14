@@ -118,6 +118,11 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
     }
   };
 
+  const openDocument = (document: ChronologyDocument) => {
+    if (!document.path) return;
+    setEditing(document);
+  };
+
   if (loading && !chronology) {
     return (
       <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
@@ -253,7 +258,8 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
                   size="icon"
                   className="h-7 w-7 shrink-0"
                   disabled={!document.path}
-                  onClick={() => setEditing(document)}
+                  aria-label={`Corriger ${document.name}`}
+                  onClick={() => openDocument(document)}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>

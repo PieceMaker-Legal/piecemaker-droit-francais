@@ -26,6 +26,8 @@ import {
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
+import { useSlashCommandPills } from '@/piecemaker/chat/useSlashCommandPills';
+import { prepareCommandMenuCommands } from '@/piecemaker/chat/prepareCommandMenuCommands';
 
 type ChatInterfaceProps = {
   isActive: boolean;
@@ -186,6 +188,7 @@ function ChatInterface({
     textareaRef,
     inputHighlightRef,
     isTextareaExpanded,
+    slashCommands,
     slashCommandsCount,
     filteredCommands,
     frequentCommands,
@@ -256,6 +259,23 @@ function ChatInterface({
     setPendingPermissionRequests,
     resolvePermissionModeForProvider,
   });
+
+  const { renderInputWithCommandPills } = useSlashCommandPills({
+    slashCommands,
+    input,
+    setInput,
+    textareaRef,
+    renderBase: renderInputWithMentions,
+  });
+
+  const displayFilteredCommands = useMemo(
+    () => prepareCommandMenuCommands(filteredCommands),
+    [filteredCommands],
+  );
+  const displayFrequentCommands = useMemo(
+    () => prepareCommandMenuCommands(frequentCommands),
+    [frequentCommands],
+  );
 
   // On WebSocket reconnect, request a bounded persisted-tail sync (deferred
   // while Chat is hidden), then re-subscribe — the
@@ -533,17 +553,17 @@ function ChatInterface({
           filteredFiles={filteredFiles}
           selectedFileIndex={selectedFileIndex}
           onSelectFile={selectFile}
-          filteredCommands={filteredCommands}
+          filteredCommands={displayFilteredCommands}
           selectedCommandIndex={selectedCommandIndex}
           onCommandSelect={handleCommandSelect}
           onCloseCommandMenu={resetCommandMenuState}
           isCommandMenuOpen={showCommandMenu}
-          frequentCommands={commandQuery ? [] : frequentCommands}
+          frequentCommands={commandQuery ? [] : displayFrequentCommands}
           getRootProps={getRootProps as (...args: unknown[]) => Record<string, unknown>}
           getInputProps={getInputProps as (...args: unknown[]) => Record<string, unknown>}
           openAttachmentPicker={openAttachmentPicker}
           inputHighlightRef={inputHighlightRef}
-          renderInputWithMentions={renderInputWithMentions}
+          renderInputWithMentions={renderInputWithCommandPills}
           textareaRef={textareaRef}
           input={input}
           onVoiceTranscript={handleVoiceTranscript}

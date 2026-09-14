@@ -296,7 +296,7 @@ export default function CommandMenu({
                       className="min-w-0 truncate font-mono text-[13px] font-semibold text-foreground"
                       title={command.name}
                     >
-                      {command.name}
+                      {typeof command.metadata?.displayLabel === 'string' ? command.metadata.displayLabel : command.name}
                     </span>
                     {command.metadata?.type && (
                       <span className="command-metadata-badge shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
