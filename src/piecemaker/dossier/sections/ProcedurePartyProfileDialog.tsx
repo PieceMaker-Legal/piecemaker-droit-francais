@@ -6,7 +6,7 @@ import type { MappingDocument, MappingGroup, ProcedureParty } from '@/piecemaker
 import { PartyFields } from '@/piecemaker/dossier/sections/ProcedurePartiesDialog';
 import { validateProcedureParty } from '@/piecemaker/dossier/sections/procedurePartyValidation';
 
-type ProfileSide = 'client' | 'adversaire';
+type ProfileSide = 'client' | 'adversaire' | 'tiers';
 
 type ProcedurePartyProfileDialogProps = {
   open: boolean;
@@ -16,7 +16,7 @@ type ProcedurePartyProfileDialogProps = {
   initialSide: ProfileSide;
   saving: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (side: ProfileSide, party: ProcedureParty) => Promise<void>;
+  onSave: (side: ProfileSide, party: ProcedureParty, variants: string[]) => Promise<void>;
 };
 
 const SELECT_CLASS = 'h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -24,6 +24,8 @@ const SELECT_CLASS = 'h-8 w-full rounded-md border border-input bg-background px
 export default function ProcedurePartyProfileDialog({ open, mapping, group, initialParty, initialSide, saving, onOpenChange, onSave }: ProcedurePartyProfileDialogProps) {
   const [party, setParty] = useState<ProcedureParty>(initialParty);
   const [side, setSide] = useState<ProfileSide>(initialSide);
+  const [detectedVariants, setDetectedVariants] = useState(() => [...new Set([group.principal, ...group.variants])]);
+  const [principalVariant, setPrincipalVariant] = useState(group.principal);
   const [error, setError] = useState<string | null>(null);
 
   const updateParty = (_side: ProfileSide, _index: number, patch: Partial<ProcedureParty>) => {
@@ -39,10 +41,29 @@ export default function ProcedurePartyProfileDialog({ open, mapping, group, init
     }
     try {
       setError(null);
-      await onSave(side, party);
+      await onSave(side, party, detectedVariants);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
+  };
+
+  const updatePrincipal = (variant: string) => {
+    setPrincipalVariant(variant);
+    setParty((previous) => previous.type === 'societe' ? { ...previous, societe_nom: variant } : { ...previous, nom: variant });
+    setError(null);
+  };
+
+  const addVariant = (variant: string) => {
+    setDetectedVariants((previous) => previous.some((candidate) => candidate.normalize('NFKD').toLocaleLowerCase('fr') === variant.normalize('NFKD').toLocaleLowerCase('fr')) ? previous : [...previous, variant]);
+    setError(null);
+  };
+
+  const removeVariant = (variant: string) => {
+    if (detectedVariants.length <= 1) return;
+    const remaining = detectedVariants.filter((candidate) => candidate !== variant);
+    setDetectedVariants(remaining);
+    if (variant === principalVariant) updatePrincipal(remaining[0]);
+    setError(null);
   };
 
   return (
@@ -55,17 +76,23 @@ export default function ProcedurePartyProfileDialog({ open, mapping, group, init
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           <label className="block space-y-1 text-[11px] font-medium text-muted-foreground">
-            <span>Camp</span>
+            <span>Position</span>
             <select className={SELECT_CLASS} value={side} onChange={(event) => setSide(event.target.value as ProfileSide)}>
               <option value="client">Client</option>
               <option value="adversaire">Adverse</option>
+              <option value="tiers">Tiers</option>
             </select>
           </label>
           <PartyFields
             party={party}
-            side={side}
+            side={side === 'tiers' ? 'client' : side}
             index={0}
             mapping={mapping}
+            detectedVariants={detectedVariants}
+            principalVariant={principalVariant}
+            onAddVariant={addVariant}
+            onRemoveVariant={removeVariant}
+            onSelectPrincipal={updatePrincipal}
             updateParty={updateParty}
             removeParty={() => undefined}
             showRemove={false}
