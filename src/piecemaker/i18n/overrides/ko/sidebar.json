@@ -43,6 +43,7 @@
     "confirmDelete": "이 사건을 어떻게 하시겠습니까:",
     "sessionCount_one": "이 사건에는 {{count}}개의 대화가 있습니다.",
     "sessionCount_other": "이 사건에는 {{count}}개의 대화가 있습니다.",
+    "archiveProject": "사건 보관",
     "allConversationsDeleted": "사건이 사이드바에서 제거됩니다. 파일, 메모리 및 세션 데이터는 보존됩니다.",
     "cannotUndo": "나중에 사건을 다시 추가할 수 있습니다."
   }

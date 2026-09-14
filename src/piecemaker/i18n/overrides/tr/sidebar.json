@@ -42,6 +42,7 @@
     "deleteProject": "Davayı Kaldır",
     "sessionCount_one": "Bu dava {{count}} konuşma içeriyor.",
     "sessionCount_other": "Bu dava {{count}} konuşma içeriyor.",
+    "archiveProject": "Davayı arşivle",
     "allConversationsDeleted": "Dava kenar çubuğundan kaldırılacak. Dosyaların, bellek verilerin ve oturum verilerin korunacak.",
     "cannotUndo": "Davayı sonra tekrar ekleyebilirsin."
   }

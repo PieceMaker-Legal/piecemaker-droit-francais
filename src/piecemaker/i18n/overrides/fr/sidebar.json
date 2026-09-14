@@ -42,6 +42,7 @@
     "deleteProject": "Supprimer le dossier",
     "sessionCount_one": "Ce dossier contient {{count}} conversation.",
     "sessionCount_other": "Ce dossier contient {{count}} conversations.",
+    "archiveProject": "Archiver le dossier",
     "allConversationsDeleted": "Le dossier sera retiré de la barre latérale. Vos fichiers, mémoires et données de session seront conservés.",
     "cannotUndo": "Vous pourrez rajouter le dossier ultérieurement."
   }
