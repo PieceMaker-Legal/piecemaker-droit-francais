@@ -116,23 +116,25 @@ export default function CaseFilesSection() {
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           Le dossier sélectionné dans la barre latérale n'est pas enregistré comme dossier juridique.
         </div>
-      ) : overviewLoading && !overview ? (
-        <div className="flex flex-1 items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Chargement du dossier…
-        </div>
-      ) : overviewError ? (
-        <div className="mx-auto max-w-md py-16 text-center text-sm">
-          <p className="text-destructive">{overviewError}</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => void loadOverview()}>
-            Réessayer
-          </Button>
-        </div>
-      ) : overview ? (
+      ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {overviewLoading && !overview && (
+            <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Chargement du dossier…
+            </div>
+          )}
+          {overviewError && (
+            <div className="mx-auto max-w-md py-16 text-center text-sm">
+              <p className="text-destructive">{overviewError}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => void loadOverview()}>
+                Réessayer
+              </Button>
+            </div>
+          )}
           <CaseMappingSection caseId={selectedCaseId} refreshVersion={mappingVersion} onRepositoryChange={handleRepositoryChange} />
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
