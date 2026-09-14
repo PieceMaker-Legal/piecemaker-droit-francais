@@ -218,7 +218,12 @@ const STYLE_TEXT = `
   .pm-timesheet__table tr:last-child td { border-bottom: 0; }
   .pm-timesheet__month td { padding: 10px 0; background: hsl(var(--muted, 0 0% 93%)); font-weight: 600; }
   .pm-timesheet__month:first-child td { border-top: 0; }
-  .pm-timesheet__month-total { float: right; color: hsl(var(--muted-foreground, 0 0% 45%)); font-weight: 400; }
+  .pm-timesheet__month-content { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .pm-timesheet__month-label { flex: 1; min-width: 0; }
+  .pm-timesheet__month-total { margin-left: auto; color: hsl(var(--muted-foreground, 0 0% 45%)); font-weight: 400; white-space: nowrap; }
+  .pm-timesheet__month-actions { display: inline-flex; gap: 6px; flex-shrink: 0; }
+  .pm-timesheet__month-actions button { font: inherit; font-size: 12px; font-weight: 400; cursor: pointer; color: inherit; background: transparent; border: 1px solid hsl(var(--border, 0 0% 87%)); border-radius: 6px; padding: 4px 8px; }
+  .pm-timesheet__month-actions button:hover, .pm-timesheet__month-actions button:focus-visible { outline: 2px solid #6366f1; outline-offset: 3px; }
   .pm-timesheet__date { white-space: nowrap; }
   .pm-timesheet__folder { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pm-timesheet__session { max-width: 260px; overflow-wrap: anywhere; }
@@ -280,6 +285,53 @@ const sortEntries = (entries: TimesheetEntry[]): TimesheetEntry[] => [...entries
 
 const totalSeconds = (entries: TimesheetEntry[]): number => entries.reduce((total, entry) => total + entry.activeSeconds, 0);
 
+const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (character) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}[character] ?? character));
+
+const csvValue = (value: string): string => `"${value.replace(/"/g, '""')}"`;
+
+const downloadFile = (filename: string, content: string, type: string): void => {
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+};
+
+const exportMonthToExcel = (entries: TimesheetEntry[], key: string): void => {
+  const rows = [
+    ['Date', 'Dossier', 'Session', 'Temps actif', 'Temps écoulé', 'Conclusion'],
+    ...entries.map((entry) => [
+      formatDate(entry.startedAt),
+      entry.projectName,
+      entry.sessionName,
+      formatDuration(entry.activeSeconds),
+      formatDuration(entry.elapsedSeconds),
+      entry.conclusion || 'Aucune conclusion',
+    ]),
+  ];
+  const content = `\uFEFF${rows.map((row) => row.map(csvValue).join(';')).join('\r\n')}`;
+  downloadFile(`timesheet-${key}.csv`, content, 'text/csv;charset=utf-8');
+};
+
+const exportMonthToPdf = (entries: TimesheetEntry[], label: string): void => {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return;
+  const rows = entries.map((entry) => `<tr><td>${escapeHtml(formatDate(entry.startedAt))}</td><td>${escapeHtml(entry.projectName)}</td><td>${escapeHtml(entry.sessionName)}</td><td>${escapeHtml(formatDuration(entry.activeSeconds))}</td><td>${escapeHtml(entry.conclusion || 'Aucune conclusion')}</td></tr>`).join('');
+  printWindow.document.write(`<!doctype html><html><head><title>${escapeHtml(`Timesheet - ${label}`)}</title><style>body{font:14px system-ui,sans-serif;color:#171717;margin:32px}h1{font-size:20px;margin:0 0 6px}p{color:#737373;margin:4px 0 20px}table{width:100%;border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:12px 10px;border-bottom:1px solid #d4d4d4}th{font-size:12px;color:#737373}td{line-height:1.5}@media print{body{margin:16mm}}</style></head><body><h1>Timesheet</h1><p>${escapeHtml(label)} · ${entries.length} session(s) · ${escapeHtml(formatDuration(totalSeconds(entries)))}</p><table><thead><tr><th>Date</th><th>Dossier</th><th>Session</th><th>Temps</th><th>Conclusion</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+};
+
 type FolderOption = { key: string; label: string };
 
 const folderOptions = (entries: TimesheetEntry[]): FolderOption[] => {
@@ -316,15 +368,36 @@ const buildTable = (entries: TimesheetEntry[]): HTMLDivElement => {
   head.appendChild(headerRow);
   table.appendChild(head);
   const body = makeElement('tbody');
+  const sortedEntries = sortEntries(entries);
+  const entriesByMonth = new Map<string, TimesheetEntry[]>();
+  for (const entry of sortedEntries) {
+    const key = monthKey(entry.startedAt);
+    const monthEntries = entriesByMonth.get(key) ?? [];
+    monthEntries.push(entry);
+    entriesByMonth.set(key, monthEntries);
+  }
   let currentMonth = '';
-  for (const entry of sortEntries(entries)) {
+  for (const entry of sortedEntries) {
     const key = monthKey(entry.startedAt);
     if (key !== currentMonth) {
       currentMonth = key;
       const monthRow = makeElement('tr', 'pm-timesheet__month');
       const monthCell = makeElement('td');
       monthCell.colSpan = 5;
-      appendText(monthCell, 'span', monthLabel(entry.startedAt));
+      const monthContent = makeElement('div', 'pm-timesheet__month-content');
+      appendText(monthContent, 'span', monthLabel(entry.startedAt), 'pm-timesheet__month-label');
+      appendText(monthContent, 'span', formatDuration(totalSeconds(entriesByMonth.get(key) ?? [])), 'pm-timesheet__month-total');
+      const monthActions = makeElement('span', 'pm-timesheet__month-actions');
+      const pdfButton = appendText(monthActions, 'button', 'PDF');
+      pdfButton.type = 'button';
+      pdfButton.setAttribute('aria-label', `Exporter ${monthLabel(entry.startedAt)} en PDF`);
+      pdfButton.addEventListener('click', () => exportMonthToPdf(entriesByMonth.get(key) ?? [], monthLabel(entry.startedAt)));
+      const excelButton = appendText(monthActions, 'button', 'Excel');
+      excelButton.type = 'button';
+      excelButton.setAttribute('aria-label', `Exporter ${monthLabel(entry.startedAt)} vers Excel`);
+      excelButton.addEventListener('click', () => exportMonthToExcel(entriesByMonth.get(key) ?? [], key));
+      monthContent.appendChild(monthActions);
+      monthCell.appendChild(monthContent);
       monthRow.appendChild(monthCell);
       body.appendChild(monthRow);
     }
@@ -436,22 +509,7 @@ const render = (state: ViewState): void => {
     appendText(root, 'p', 'Aucune session enregistrée pour ce périmètre.', 'pm-timesheet__empty');
     return;
   }
-  const grouped = new Map<string, TimesheetEntry[]>();
-  for (const entry of sortEntries(visibleEntries)) {
-    const key = monthKey(entry.startedAt);
-    const group = grouped.get(key) ?? [];
-    group.push(entry);
-    grouped.set(key, group);
-  }
   const table = buildTable(visibleEntries);
-  for (const group of grouped.values()) {
-    const monthRow = Array.from(table.querySelectorAll('.pm-timesheet__month')).find((row) => row.textContent?.startsWith(monthLabel(group[0]?.startedAt ?? null)));
-    if (monthRow) {
-      const total = makeElement('span', 'pm-timesheet__month-total');
-      total.textContent = formatDuration(totalSeconds(group));
-      monthRow.querySelector('td')?.appendChild(total);
-    }
-  }
   root.appendChild(table);
 };
 
