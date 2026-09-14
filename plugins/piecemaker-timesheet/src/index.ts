@@ -285,19 +285,14 @@ const sortEntries = (entries: TimesheetEntry[]): TimesheetEntry[] => [...entries
 
 const totalSeconds = (entries: TimesheetEntry[]): number => entries.reduce((total, entry) => total + entry.activeSeconds, 0);
 
-const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (character) => ({
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-}[character] ?? character));
-
 const csvValue = (value: string): string => `"${value.replace(/"/g, '""')}"`;
 
-const downloadFile = (filename: string, content: string, type: string): void => {
+const downloadFile = (filename: string, content: string | Uint8Array, type: string): void => {
   const link = document.createElement('a');
-  const url = URL.createObjectURL(new Blob([content], { type }));
+  const blobContent: BlobPart = typeof content === 'string'
+    ? content
+    : content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength) as ArrayBuffer;
+  const url = URL.createObjectURL(new Blob([blobContent], { type }));
   link.href = url;
   link.download = filename;
   document.body.appendChild(link);
@@ -322,14 +317,135 @@ const exportMonthToExcel = (entries: TimesheetEntry[], key: string): void => {
   downloadFile(`timesheet-${key}.csv`, content, 'text/csv;charset=utf-8');
 };
 
-const exportMonthToPdf = (entries: TimesheetEntry[], label: string): void => {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return;
-  const rows = entries.map((entry) => `<tr><td>${escapeHtml(formatDate(entry.startedAt))}</td><td>${escapeHtml(entry.projectName)}</td><td>${escapeHtml(entry.sessionName)}</td><td>${escapeHtml(formatDuration(entry.activeSeconds))}</td><td>${escapeHtml(entry.conclusion || 'Aucune conclusion')}</td></tr>`).join('');
-  printWindow.document.write(`<!doctype html><html><head><title>${escapeHtml(`Timesheet - ${label}`)}</title><style>body{font:14px system-ui,sans-serif;color:#171717;margin:32px}h1{font-size:20px;margin:0 0 6px}p{color:#737373;margin:4px 0 20px}table{width:100%;border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:12px 10px;border-bottom:1px solid #d4d4d4}th{font-size:12px;color:#737373}td{line-height:1.5}@media print{body{margin:16mm}}</style></head><body><h1>Timesheet</h1><p>${escapeHtml(label)} · ${entries.length} session(s) · ${escapeHtml(formatDuration(totalSeconds(entries)))}</p><table><thead><tr><th>Date</th><th>Dossier</th><th>Session</th><th>Temps</th><th>Conclusion</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
+const WIN_ANSI_SPECIALS: Record<string, number> = {
+  '€': 0x80,
+  '‚': 0x82,
+  'ƒ': 0x83,
+  '„': 0x84,
+  '…': 0x85,
+  '†': 0x86,
+  '‡': 0x87,
+  'ˆ': 0x88,
+  '‰': 0x89,
+  'Š': 0x8a,
+  '‹': 0x8b,
+  'Œ': 0x8c,
+  'Ž': 0x8e,
+  '‘': 0x91,
+  '’': 0x92,
+  '“': 0x93,
+  '”': 0x94,
+  '•': 0x95,
+  '–': 0x96,
+  '—': 0x97,
+  '˜': 0x98,
+  '™': 0x99,
+  'š': 0x9a,
+  '›': 0x9b,
+  'œ': 0x9c,
+  'ž': 0x9e,
+  'Ÿ': 0x9f,
+};
+
+const winAnsiByte = (character: string): number => {
+  const code = character.charCodeAt(0);
+  if (code >= 32 && code <= 126) return code;
+  if (code >= 160 && code <= 255) return code;
+  return WIN_ANSI_SPECIALS[character] ?? 0x3f;
+};
+
+const pdfText = (value: string): string => {
+  const encoded = [...value].map((character) => String.fromCharCode(winAnsiByte(character))).join('');
+  return `(${encoded.replace(/[\\()]/g, (character) => `\\${character}`)})`;
+};
+
+const pdfBytes = (value: string): Uint8Array => Uint8Array.from([...value].map((character) => character.charCodeAt(0) & 0xff));
+
+const joinBytes = (parts: Uint8Array[]): Uint8Array => {
+  const result = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    result.set(part, offset);
+    offset += part.length;
+  }
+  return result;
+};
+
+const wrapPdfText = (value: string, width: number): string[] => {
+  const words = value.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (words.length === 0) return [''];
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    if (!line) {
+      line = word;
+    } else if (`${line} ${word}`.length <= width) {
+      line += ` ${word}`;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+};
+
+const createPdf = (entries: TimesheetEntry[], label: string): Uint8Array => {
+  const lines = [
+    'Timesheet',
+    label,
+    `${entries.length} session(s) · Total actif : ${formatDuration(totalSeconds(entries))}`,
+    '',
+    ...entries.flatMap((entry) => [
+      `${formatDate(entry.startedAt)} | ${entry.projectName} | ${entry.sessionName}`,
+      `Temps actif : ${formatDuration(entry.activeSeconds)} | Temps écoulé : ${formatDuration(entry.elapsedSeconds)}`,
+      ...wrapPdfText(`Conclusion : ${entry.conclusion || 'Aucune conclusion'}`, 105),
+      '',
+    ]),
+  ];
+  const linesPerPage = 54;
+  const pageLines = Array.from({ length: Math.max(1, Math.ceil(lines.length / linesPerPage)) }, (_, index) => lines.slice(index * linesPerPage, (index + 1) * linesPerPage));
+  const pageObjects = pageLines.map((page, pageIndex) => {
+    const contentObject = 5 + pageIndex * 2;
+    const commands = page.map((line, lineIndex) => {
+      const fontSize = pageIndex === 0 && lineIndex === 0 ? 18 : lineIndex < 3 && pageIndex === 0 ? 11 : 9;
+      const y = 800 - lineIndex * 14;
+      return `BT /F1 ${fontSize} Tf 40 ${y} Td ${pdfText(line)} Tj ET`;
+    }).join('\n');
+    return {
+      page: pdfBytes(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObject} 0 R >>`),
+      content: pdfBytes(`<< /Length ${pdfBytes(commands).length} >>\nstream\n${commands}\nendstream`),
+    };
+  });
+  const objects: Uint8Array[] = [
+    pdfBytes('<< /Type /Catalog /Pages 2 0 R >>'),
+    pdfBytes(`<< /Type /Pages /Kids [${pageLines.map((_, index) => `${4 + index * 2} 0 R`).join(' ')}] /Count ${pageLines.length} >>`),
+    pdfBytes('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'),
+  ];
+  for (const pageObject of pageObjects) objects.push(pageObject.page, pageObject.content);
+  const header = pdfBytes('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n');
+  const chunks: Uint8Array[] = [header];
+  const offsets = [0];
+  let offset = header.length;
+  objects.forEach((object, index) => {
+    const objectBytes = joinBytes([pdfBytes(`${index + 1} 0 obj\n`), object, pdfBytes('\nendobj\n')]);
+    offsets.push(offset);
+    chunks.push(objectBytes);
+    offset += objectBytes.length;
+  });
+  const xrefOffset = offset;
+  const xref = [
+    `xref\n0 ${objects.length + 1}`,
+    '0000000000 65535 f ',
+    ...offsets.slice(1).map((position) => `${String(position).padStart(10, '0')} 00000 n `),
+    `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
+  ].join('\n');
+  chunks.push(pdfBytes(xref));
+  return joinBytes(chunks);
+};
+
+const exportMonthToPdf = (entries: TimesheetEntry[], label: string, key: string): void => {
+  downloadFile(`timesheet-${key}.pdf`, createPdf(entries, label), 'application/pdf');
 };
 
 type FolderOption = { key: string; label: string };
@@ -391,7 +507,7 @@ const buildTable = (entries: TimesheetEntry[]): HTMLDivElement => {
       const pdfButton = appendText(monthActions, 'button', 'PDF');
       pdfButton.type = 'button';
       pdfButton.setAttribute('aria-label', `Exporter ${monthLabel(entry.startedAt)} en PDF`);
-      pdfButton.addEventListener('click', () => exportMonthToPdf(entriesByMonth.get(key) ?? [], monthLabel(entry.startedAt)));
+      pdfButton.addEventListener('click', () => exportMonthToPdf(entriesByMonth.get(key) ?? [], monthLabel(entry.startedAt), key));
       const excelButton = appendText(monthActions, 'button', 'Excel');
       excelButton.type = 'button';
       excelButton.setAttribute('aria-label', `Exporter ${monthLabel(entry.startedAt)} vers Excel`);
