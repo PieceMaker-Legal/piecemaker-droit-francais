@@ -11,13 +11,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, TriangleAlert } from 'lucide-react';
+import { Loader2, Plus, TriangleAlert } from 'lucide-react';
 
 import { cn } from '@/shared/utils';
-import { ScrollArea } from '@/shared/ui';
+import { Button, ScrollArea } from '@/shared/ui';
 
 import { pmGet, pmPost, PieceMakerApiError } from '../api';
 import { useDossierCases } from '../DossierContext';
+import SkillsCreateDialog from './SkillsCreateDialog';
 
 type Item = {
   id: string;
@@ -101,10 +102,19 @@ function Dash() {
   return <span className="text-xs text-muted-foreground">—</span>;
 }
 
-function GroupHeading({ title, columns = true }: { title: string; columns?: boolean }) {
+function GroupHeading({
+  title,
+  columns = true,
+  action,
+}: {
+  title: string;
+  columns?: boolean;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex items-center gap-3 px-4 pb-2 pt-4">
       <h3 className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      {action}
       {columns && (
         <>
           <span className="w-32 shrink-0 text-center text-xs font-medium text-muted-foreground">Claude</span>
@@ -136,6 +146,7 @@ export default function SkillsActivation() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isCreateSkillOpen, setIsCreateSkillOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!projectPath) return;
@@ -356,7 +367,21 @@ export default function SkillsActivation() {
         </Row>
       ))}
 
-      <GroupHeading title="Bibliothèque — compétences (skills)" />
+      <GroupHeading
+        title="Bibliothèque — compétences (skills)"
+        action={
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 gap-1.5 px-2 text-xs"
+            onClick={() => setIsCreateSkillOpen(true)}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Nouveau skill
+          </Button>
+        }
+      />
       {snapshot.library.skills.length === 0 && <p className="px-4 pb-2 text-xs text-muted-foreground">Bibliothèque vide.</p>}
       {snapshot.library.skills.map((item) => (
         <Row key={`skill:${item.id}`}>
@@ -422,6 +447,16 @@ export default function SkillsActivation() {
       )}
 
       <div className="h-4" />
+
+      <SkillsCreateDialog
+        open={isCreateSkillOpen}
+        kind="skill"
+        onOpenChange={setIsCreateSkillOpen}
+        onCreated={() => {
+          setIsCreateSkillOpen(false);
+          void load();
+        }}
+      />
     </ScrollArea>
   );
 }
