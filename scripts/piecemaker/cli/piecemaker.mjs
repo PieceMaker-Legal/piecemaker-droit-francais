@@ -2,6 +2,7 @@
 
 import { APP, APP_URL, PORTS } from './lib/config.mjs';
 import { installComponents } from './lib/composants.mjs';
+import { installPlugins } from './lib/plugins.mjs';
 import { gitAvailable, resolveNodeRuntime } from './lib/node-runtime.mjs';
 import { freePort } from './lib/ports.mjs';
 import { ensureDependencies, ensureRepository, rebuildNativeModules } from './lib/repos.mjs';
@@ -131,6 +132,7 @@ async function main() {
   if (!options.launchOnly) {
     await synchroniseRepositories(runtime);
     await installComponents(runtime, report);
+    await installPlugins(runtime, report);
   }
 
   const running = await launchServices(runtime);
