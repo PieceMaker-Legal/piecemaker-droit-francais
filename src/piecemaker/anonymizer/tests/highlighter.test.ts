@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { buildAcronymRegex, buildNameRegex } from '@/piecemaker/anonymizer/highlighter';
+import { buildAcronymRegex, buildNameRegex, createIdentityHighlighter } from '@/piecemaker/anonymizer/highlighter';
 
 function matches(names: string[], text: string): string[] {
   const pattern = buildNameRegex(names);
@@ -41,5 +41,37 @@ describe('buildAcronymRegex', () => {
 
   it('ne teinte pas l\'intérieur d\'un mot', () => {
     expect(acronymMatches(['US'], 'BUS USA US')).toEqual(['US']);
+  });
+});
+
+describe('createIdentityHighlighter', () => {
+  it('ignore les zones qui désactivent le surlignage', async () => {
+    const registeredRanges: Range[][] = [];
+    const registry = {
+      set: vi.fn((_name: string, highlight: { ranges: Range[] }) => registeredRanges.push(highlight.ranges)),
+      delete: vi.fn(),
+    };
+    vi.stubGlobal('CSS', { highlights: registry });
+    vi.stubGlobal('Highlight', class {
+      ranges: Range[];
+
+      constructor(...ranges: Range[]) {
+        this.ranges = ranges;
+      }
+    });
+    document.body.innerHTML = [
+      '<div>Bernard Gilly</div>',
+      '<div data-piecemaker-identity-highlight="off">Bernard Gilly</div>',
+    ].join('');
+
+    const highlighter = createIdentityHighlighter();
+    highlighter.setNames(['Bernard Gilly']);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+    expect(registeredRanges.at(-1)?.map((range) => range.toString())).toEqual(['Bernard Gilly']);
+
+    highlighter.stop();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
   });
 });
