@@ -86,7 +86,10 @@ export default function CaseFilesDocumentMetaDialog({ caseId, document, entityOp
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85dvh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto p-5">
+      <DialogContent
+        className="max-h-[85dvh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto p-5"
+        data-piecemaker-identity-highlight="off"
+      >
         <DialogTitle>Corriger les métadonnées de la pièce</DialogTitle>
         <div className="space-y-4">
           <div>

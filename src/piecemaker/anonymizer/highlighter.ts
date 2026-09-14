@@ -25,6 +25,7 @@ declare const Highlight: (new (...ranges: Range[]) => unknown) | undefined;
 
 const HIGHLIGHT_NAME = 'piecemaker-identity';
 const STYLE_ELEMENT_ID = 'piecemaker-identity-highlight-style';
+const HIGHLIGHT_EXCLUSION_SELECTOR = '[data-piecemaker-identity-highlight="off"]';
 const MAX_RANGES = 4000;
 
 /** Sous-arbres dont le texte n'a pas de sens à surligner, ou qui ne sont pas du texte. */
@@ -87,6 +88,7 @@ function collectRanges(root: Node, patterns: RegExp[]): Range[] {
     acceptNode(node) {
       const parent = node.parentElement;
       if (!parent || SKIPPED_TAGS.has(parent.tagName)) return NodeFilter.FILTER_REJECT;
+      if (parent.closest(HIGHLIGHT_EXCLUSION_SELECTOR)) return NodeFilter.FILTER_REJECT;
       if (!node.nodeValue || node.nodeValue.length < 2) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
