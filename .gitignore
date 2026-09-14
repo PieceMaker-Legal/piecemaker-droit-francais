@@ -155,3 +155,5 @@ server/piecemaker/protection/bypass.test.js
 .piecemaker/protection.json
 server/piecemaker/protection/bypass.test.js
 server/piecemaker/vendor/websocket-server/admin-routes.cjs
+
+CLAUDE.md
