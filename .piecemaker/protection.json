@@ -2866,6 +2866,7 @@
     "server/piecemaker/harness/source-passages.ts",
     "server/piecemaker/harness/verification.cjs",
     "server/piecemaker/index.ts",
+    "server/piecemaker/library/marketplace.ts",
     "server/piecemaker/library/routes.ts",
     "server/piecemaker/library/store.test.ts",
     "server/piecemaker/library/store.ts",
