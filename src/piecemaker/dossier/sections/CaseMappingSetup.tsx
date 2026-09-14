@@ -152,6 +152,8 @@ export default function CaseMappingSetup() {
     }
   };
 
+  const mappingReady = Boolean(overview?.mapping.exists && overview.mapping.entries > 0);
+
   const anonymize = async () => {
     if (!caseId) return;
     setStarting(true);
@@ -161,9 +163,12 @@ export default function CaseMappingSetup() {
         case: caseId,
         action: 'anonymize',
         files: [],
-        force: false,
+        force: mappingReady,
+        engine: 'markitdown',
       });
       setAnonymizationJob(job);
+      if (job.state === 'done') bumpMappingVersion();
+      if (job.state === 'error') setError(job.error || 'L\u2019anonymisation a \u00e9chou\u00e9.');
     } catch (cause) {
       setError(cause instanceof PieceMakerApiError ? cause.message : String(cause));
     } finally {
@@ -173,7 +178,6 @@ export default function CaseMappingSetup() {
 
   if (!caseId) return null;
 
-  const mappingReady = Boolean(overview?.mapping.exists && overview.mapping.entries > 0);
   const installing = installJob?.state === 'running';
   const anonymizing = anonymizationJob ? ['queued', 'running'].includes(anonymizationJob.state) : false;
   const busy = starting || installing || anonymizing;
