@@ -652,6 +652,18 @@ input[type="radio"]:focus-visible {
   line-height: 1.6;
 }
 
+#root [class~="h-full"][class~="flex-shrink-0"][class~="border-r"][class~="border-border/50"] {
+  border-right-color: var(--liquid-glass-border-subtle);
+  background: var(--liquid-glass-background-subtle);
+  box-shadow: inset -1px 0 0 rgb(var(--mike-ink-rgb) / 4%), 8px 0 24px rgb(15 23 42 / 4%);
+  backdrop-filter: blur(20px) saturate(1.08);
+  -webkit-backdrop-filter: blur(20px) saturate(1.08);
+}
+
+#root [class~="h-full"][class~="flex-shrink-0"][class~="border-r"][class~="border-border/50"] > [class~="bg-background/80"] {
+  background: transparent;
+}
+
 @media (max-width: 768px) {
   [role="tab"] {
     min-height: 2rem;
