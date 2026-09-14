@@ -177,6 +177,8 @@ export type ChronologyOverview = {
   datedDocuments: ChronologyDocument[];
   undatedDocuments: ChronologyDocument[];
   graph: ChronologyGraph;
+  scope?: string | null;
+  folders?: string[];
   case: { path: string; name: string; location: string };
 };
 
