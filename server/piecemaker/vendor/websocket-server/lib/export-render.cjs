@@ -352,8 +352,6 @@ function renderChronologyHtml(chronology, { caseName } = {}) {
   </tbody>
 </table>`;
 
-  // Le graphe (chronology.graph, vis-network interactif) n'a pas d'équivalent
-  // papier et n'est délibérément jamais utilisé ici.
   const bodyHtml = `${summaryHtml}\n${frizeTableHtml}\n${entitiesTableHtml}`;
 
   return documentHtml({ title: 'Chronologie du dossier', subtitle, bodyHtml });

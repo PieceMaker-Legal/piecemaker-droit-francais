@@ -54,13 +54,6 @@ const {
   documentIndexFile,
   readDocumentIndex,
 } = require('./document-index.cjs');
-const { chronologyFromLegalGraph } = require('./legal-chronology.cjs');
-const {
-  buildLegalGraph,
-  legalGraphStatus,
-  rematerializeDeterministicLegalGraph,
-  renderLegalGraphViewer,
-} = require('./legal-graph.cjs');
 const { renderChronologyHtml, renderHistoryHtml } = require('./lib/export-render.cjs');
 const { outputExtension } = require('./lib/office-to-pdf.cjs');
 const { generateDocument } = require('./lib/doc-generate.cjs');
@@ -1941,9 +1934,6 @@ async function sendGeneratedDocument(res, { html, filename, format }) {
   stream.pipe(res);
 }
 
-// Une sauvegarde touche successivement l'index, le graphe matérialisé et
-// l'historique local. Cette file par dossier empêche deux requêtes admin de
-// produire un graphe correspondant à une révision intermédiaire.
 const documentMetaMutationQueues = new Map();
 
 async function serializeDocumentMetaMutation(caseRoot, callback) {
@@ -1958,11 +1948,6 @@ async function serializeDocumentMetaMutation(caseRoot, callback) {
   }
 }
 
-/**
- * Point de mutation testable de la chronologie. Il ne lance jamais Graphify :
- * la couche sémantique existante est relue puis la couche déterministe est
- * rematérialisée avant que la réponse puisse annoncer le succès.
- */
 async function applyDocumentMetaMutation({
   legalCase,
   relativePath,
@@ -1970,14 +1955,10 @@ async function applyDocumentMetaMutation({
   homeDir,
   envFile,
   applyCorrection = applyDocumentIndexCorrection,
-  rematerialize = rematerializeDeterministicLegalGraph,
   createHistoryCommit = createCommit,
 }) {
   return serializeDocumentMetaMutation(legalCase.root, async () => {
     const mutation = applyCorrection(legalCase.root, relativePath, correction);
-    const graph = await rematerialize(legalCase.root, {
-      semanticStaleReasons: mutation.semanticStaleReasons,
-    });
     let history;
     try {
       history = await createHistoryCommit({
@@ -1992,19 +1973,10 @@ async function applyDocumentMetaMutation({
         waitForLockMs: 10_000,
       });
     } catch (error) {
-      // La correction et le graphe sont déjà cohérents : une indisponibilité
-      // de l'historique ne doit ni les annuler ni provoquer une seconde saisie.
       history = { created: false, error: error.message };
     }
     return {
       mutation,
-      graph: {
-        graphFile: graph.graphFile,
-        staticState: 'current',
-        staticRevision: graph.staticRevision,
-        semanticState: graph.semanticState,
-        semanticStaleReasons: graph.semanticStaleReasons,
-      },
       history: {
         created: Boolean(history?.created),
         hash: history?.commit || null,
@@ -2015,74 +1987,14 @@ async function applyDocumentMetaMutation({
   });
 }
 
-function graphStatusFromSynchronization(initialStatus, synchronized) {
-  return {
-    ...initialStatus,
-    exists: true,
-    stale: synchronized.semanticState !== 'current' || synchronized.semanticQuarantined,
-    staticState: synchronized.staticState,
-    semanticState: synchronized.semanticState,
-    staticRevision: synchronized.staticRevision,
-    semanticBaseRevision: synchronized.semanticBaseRevision,
-    semanticStaleReasons: synchronized.semanticStaleReasons || [],
-    semanticQuarantined: Boolean(synchronized.semanticQuarantined),
-    graphFile: synchronized.graphFile,
-    generatedAt: synchronized.generatedAt,
-    stats: synchronized.graph?.piecemaker || null,
-    registry: synchronized.registry || initialStatus.registry,
-    registryStatus: synchronized.registry?.status || initialStatus.registryStatus,
-  };
-}
-
-/**
- * Vue admin unifiée : synchronise exclusivement la couche déterministe,
- * projette la frise depuis ce graphe, puis ré-identifie en mémoire. Toutes les
- * dépendances coûteuses sont injectables pour prouver que ce chemin de lecture
- * ne peut jamais lancer `buildLegalGraph` ni un LLM.
- */
-async function loadAdminLegalChronology({
+async function loadAdminChronology({
   caseRoot,
   buildLocalChronology = buildChronology,
-  readMapping = readCaseMapping,
-  readGraph = (file) => readJson(file, null),
-  readStatus = legalGraphStatus,
-  rematerialize = rematerializeDeterministicLegalGraph,
-  renderViewer = renderLegalGraphViewer,
-  project = chronologyFromLegalGraph,
 }) {
-  let status = await readStatus(caseRoot);
-  // Au premier affichage il n'existe encore aucun manifeste. Créer la couche
-  // documentaire ici reste une opération locale et déterministe ; Graphify
-  // profond n'est accessible que par la route POST d'actualisation explicite.
-  if (!status.exists || !readGraph(status.graphFile)) {
-    const synchronized = await rematerialize(caseRoot);
-    status = graphStatusFromSynchronization(status, synchronized);
-  }
-  const graph = readGraph(status.graphFile);
-  if (!graph) throw new Error('Le graphe documentaire du dossier n’a pas pu être matérialisé.');
-  const [localChronology, mappingDocument] = await Promise.all([
-    buildLocalChronology(caseRoot, {
-      deanonymizeLabels: true,
-      includeManualDecisions: true,
-    }),
-    Promise.resolve(readMapping(caseRoot)),
-  ]);
-  const chronology = project(graph, localChronology, mappingDocument, {
-    deanonymize: true,
-    graphRevision: status.staticRevision,
-    graphStatus: status,
-    generatedAt: status.generatedAt,
+  return buildLocalChronology(caseRoot, {
+    deanonymizeLabels: true,
+    includeManualDecisions: true,
   });
-  if (typeof renderViewer === 'function') {
-    try {
-      chronology.graph.viewerHtml = await renderViewer(chronology.graph);
-    } catch (error) {
-      // Le renderer est un enrichissement local. La frise et les états du
-      // graphe restent disponibles, sans jamais requalifier l'analyse en ready.
-      chronology.graph.viewerError = String(error?.message || error);
-    }
-  }
-  return chronology;
 }
 
 function normalizeChronologyScope(caseRoot, value) {
@@ -2131,15 +2043,6 @@ function scopeChronology(chronology, scope) {
     .map((entity) => ({ ...entity, documents: (entity.documents || []).filter((id) => documentIds.has(id)) }))
     .filter((entity) => entity.documents.length > 0);
   const dated = datedDocuments.map((document) => document.dateIso).sort();
-  const graphDocumentKeys = new Set(documents.map((document) => document.documentKey));
-  const graphFiles = new Set([...graphDocumentKeys].map((key) => `${key}.md`));
-  const nodes = (chronology.graph?.nodes || []).filter((node) => {
-    if (node.file_type === 'document') return graphDocumentKeys.has(node.document_key);
-    return !node.source_file || graphFiles.has(String(node.source_file).replaceAll('\\', '/').split('/').pop());
-  });
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  const edges = (chronology.graph?.edges || []).filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
-  const hyperedges = (chronology.graph?.hyperedges || []).filter((entry) => entry.nodes.every((id) => nodeIds.has(id)));
   return {
     ...chronology,
     scope: scope || null,
@@ -2156,18 +2059,7 @@ function scopeChronology(chronology, scope) {
       entities: entities.length,
       span: dated.length ? { from: dated[0], to: dated[dated.length - 1] } : null,
     },
-    graph: chronology.graph ? { ...chronology.graph, nodes, edges, hyperedges } : chronology.graph,
   };
-}
-
-/** Construction sémantique réservée à l'action admin explicite. */
-async function refreshAdminLegalGraph({
-  caseRoot,
-  build = buildLegalGraph,
-  readStatus = legalGraphStatus,
-}) {
-  await build(caseRoot, { refreshSemantic: true, force: true });
-  return readStatus(caseRoot);
 }
 
 function createAdminRouter({
@@ -2652,13 +2544,12 @@ function createAdminRouter({
       // Cette route est une vue cabinet et n'expose plus de branche publique
       // pseudonymisée. `deanonymize=0` est volontairement ignoré : les données
       // destinées au modèle empruntent les chemins internes dédiés.
-      const chronology = await loadAdminLegalChronology({ caseRoot: legalCase.root, renderViewer: null });
+      const chronology = await loadAdminChronology({ caseRoot: legalCase.root });
       const scopedChronology = scopeChronology(chronology, scope);
       scopedChronology.case = { path: legalCase.id, name: legalCase.caseName, location: legalCase.root };
       finishAdminTiming(res, 'chronology', startedAt, {
         documents: scopedChronology.stats.documents,
         entities: scopedChronology.stats.entities,
-        graphEdges: scopedChronology.graph.edges.length,
       });
       res.json(scopedChronology);
     } catch (error) {
@@ -2677,33 +2568,13 @@ function createAdminRouter({
     }
   });
 
-  // Seule cette action explicite peut appeler Graphify profond/LLM depuis
-  // l'administration. Le manifeste passe à `building` avant l'extraction et à
-  // `failed` en cas d'erreur ; un GET concurrent ne présente donc jamais
-  // l'ancien fragment comme prêt.
-  router.post('/repository/legal-graph/refresh', async (req, res) => {
-    try {
-      const legalCase = selectedCase(req.body?.case);
-      const status = await refreshAdminLegalGraph({ caseRoot: legalCase.root });
-      res.json({ ok: true, graph: status });
-    } catch (error) {
-      res.status(503).json({ error: error.message });
-    }
-  });
-
-  // Export « papier » (PDF/DOCX) de la même projection matérialisée que la
-  // frise admin, ré-identifiée en mémoire pour le cabinet. Le renderer HTML du
-  // graphe n'a pas d'équivalent papier et n'est donc jamais appelé ici.
   router.get('/repository/chronology/export', async (req, res) => {
     const startedAt = performance.now();
     try {
       const format = validateExportFormat(String(req.query.format || ''));
       const legalCase = selectedCase(req.query.case);
       const scope = normalizeChronologyScope(legalCase.root, req.query.scope);
-      const chronology = await loadAdminLegalChronology({
-        caseRoot: legalCase.root,
-        renderViewer: null,
-      });
+      const chronology = await loadAdminChronology({ caseRoot: legalCase.root });
       const scopedChronology = scopeChronology(chronology, scope);
       const html = renderChronologyHtml(scopedChronology, { caseName: legalCase.caseName });
       finishAdminTiming(res, 'chronology-export', startedAt, {
@@ -2762,7 +2633,6 @@ function createAdminRouter({
         entityDecisions: result.mutation.entityDecisions,
         editRevision: result.mutation.editRevision,
         revisions: result.mutation.revisions,
-        graph: result.graph,
         commit: result.history,
       });
     } catch (error) {
@@ -2798,7 +2668,6 @@ function createAdminRouter({
         entityDecisions: result.mutation.entityDecisions,
         editRevision: result.mutation.editRevision,
         revisions: result.mutation.revisions,
-        graph: result.graph,
         commit: result.history,
       });
     } catch (error) {
@@ -3249,7 +3118,7 @@ function createAdminRouter({
 }
 
 module.exports = {
-  loadAdminLegalChronology,
+  loadAdminChronology,
   normalizeChronologyScope,
   chronologyScopeFromFolder,
   scopeChronology,
@@ -3279,7 +3148,6 @@ module.exports = {
   normalizeAgentModel,
   normalizeAgentTools,
   readManagedFile,
-  refreshAdminLegalGraph,
   registerLegalCase,
   registerOfficialMarketplace,
   renameManagedFile,

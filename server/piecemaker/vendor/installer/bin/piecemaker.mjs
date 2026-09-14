@@ -17,8 +17,6 @@
  *   piecemaker chronology edit --path <pièce> --correction-json <json>
  *                              modifie une correction de chronologie existante
  *   piecemaker conversion      convertit et pseudonymise les pièces manquantes
- *   piecemaker graph build     construit le graphe juridique riche du dossier
- *   piecemaker graph query     interroge le graphe juridique riche du dossier
  *   piecemaker install         ouvre le menu des composants
  *   piecemaker doctor          diagnostic seul
  *   piecemaker update          met à jour le dépôt et les dépendances
@@ -38,7 +36,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { banner, title, log, write, blank, summary, spinner, badge, c } from '../lib/ui.mjs';
 import { select, confirm, multiSelect, pause, nonInteractive } from '../lib/prompt.mjs';
 import { HOME_DIR, REPO_ROOT, commandExists, findPython, venvPaths } from '../lib/platform.mjs';
-import { COMMANDS, GRAPH_ACTIONS, CHRONOLOGY_ACTIONS } from '../lib/commandes.mjs';
+import { COMMANDS, CHRONOLOGY_ACTIONS } from '../lib/commandes.mjs';
 import { loadConfig, readEnv, markStep, loadState, CONFIG_FILE } from '../lib/state.mjs';
 import { scheduleStepResume, selectStepsToResume } from '../lib/resume-steps.mjs';
 import {
@@ -59,7 +57,6 @@ const CLAUDE_HOOKS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.
 const CENTRAL_MAPPING_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../piecemaker-plugin/scripts/lib/central-mapping.cjs');
 const DOCUMENT_INDEX_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/document-index.cjs');
 const CASE_INSTRUCTIONS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/case-instructions.cjs');
-const LEGAL_GRAPH_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/legal-graph.cjs');
 const ORIGINALS_PIPELINE_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/originals-pipeline.cjs');
 
 /**
@@ -185,17 +182,6 @@ async function resumePendingStepsAfterUpdate() {
 }
 
 const STEPS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'steps');
-const GRAPHIFY_ENV_KEYS = new Set([
-  'ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL',
-  'AWS_ACCESS_KEY_ID', 'AWS_DEFAULT_REGION', 'AWS_PROFILE', 'AWS_REGION',
-  'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
-  'AZURE_OPENAI_API_KEY', 'AZURE_OPENAI_API_VERSION', 'AZURE_OPENAI_DEPLOYMENT',
-  'AZURE_OPENAI_ENDPOINT', 'DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL',
-  'GEMINI_API_KEY', 'GEMINI_BASE_URL', 'GOOGLE_API_KEY', 'KIMI_BASE_URL',
-  'MOONSHOT_API_KEY', 'OLLAMA_API_KEY', 'OLLAMA_BASE_URL', 'OLLAMA_HOST',
-  'OLLAMA_MODEL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL',
-]);
-
 const STATUS_BADGE = {
   done: badge.done,
   partial: badge.partial,
@@ -207,19 +193,14 @@ function parseArgs(argv) {
   const flags = {
     command: null,
     all: false,
-    backend: null,
-    budget: 4000,
     caseTarget: null,
     check: false,
     dryRun: false,
     conversionDocuments: [],
     correctionJson: null,
     force: false,
-    graphAction: null,
-    graphQuestion: [],
     chronologyAction: 'read',
     json: false,
-    model: null,
     piecePath: null,
     resumeSteps: null,
     step: null,
@@ -232,19 +213,14 @@ function parseArgs(argv) {
     else if (!arg.startsWith('-') && flags.command === 'chronology' && flags.chronologyAction === 'read' && CHRONOLOGY_ACTIONS.has(arg)) flags.chronologyAction = arg;
     else if (!arg.startsWith('-') && flags.command === 'chronology' && !flags.caseTarget) flags.caseTarget = arg;
     else if (!arg.startsWith('-') && flags.command === 'conversion') flags.conversionDocuments.push(arg);
-    else if (!arg.startsWith('-') && flags.command === 'graph' && !flags.graphAction && GRAPH_ACTIONS.has(arg)) flags.graphAction = arg;
-    else if (!arg.startsWith('-') && flags.command === 'graph' && flags.graphAction === 'query') flags.graphQuestion.push(arg);
     else if (arg === '--all') flags.all = true;
     else if (arg === '--action') flags.chronologyAction = argv[++i];
-    else if (arg === '--backend') flags.backend = argv[++i];
-    else if (arg === '--budget') flags.budget = Number(argv[++i]);
     else if (arg === '--case') flags.caseTarget = argv[++i];
     else if (arg === '--check') flags.check = true;
     else if (arg === '--correction-json') flags.correctionJson = argv[++i];
     else if (arg === '--dry-run') flags.dryRun = true;
     else if (arg === '--force') flags.force = true;
     else if (arg === '--json') flags.json = true;
-    else if (arg === '--model') flags.model = argv[++i];
     else if (arg === '--path') flags.piecePath = argv[++i];
     else if (arg === '--yes' || arg === '-y') flags.yes = true;
     else if (arg === '--step') flags.step = argv[++i];
@@ -415,22 +391,16 @@ function printHelp() {
   write('  chronology write --path <pièce> --correction-json <json>  crée une correction de chronologie');
   write('  chronology edit --path <pièce> --correction-json <json>   modifie une correction existante');
   write('  conversion [pièce…] convertit et pseudonymise les pièces manquantes ou indiquées');
-  write('  graph build     construit ou actualise le graphe juridique riche');
-  write('  graph query     interroge les liens de droit du dossier');
-  write('  graph status    indique si le graphe juridique est à jour');
   write('  install         ouvre le menu d’installation/réparation');
   write('  doctor, check   diagnostic seul, n’installe rien');
   write('  update          met à jour PieceMaker');
   blank();
   write('  --all           installe tout sans menu');
-  write('  --case <chemin> cible un dossier enregistré (chronology/conversion/graph)');
+  write('  --case <chemin> cible un dossier enregistré (chronology/conversion)');
   write('  --path <pièce>  chemin relatif de la pièce (chronology write/edit)');
   write('  --correction-json <json> correction à appliquer (chronology write/edit)');
-  write('  --backend <nom> choisit le backend Graphify (graph build/query)');
-  write('  --model <nom>   choisit le modèle d’extraction (graph build/query)');
-  write('  --force         retraite les pièces ou reconstruit le graphe');
-  write('  --budget <n>    limite le contexte retourné par graph query (défaut 4000)');
-  write('  --json          produit une sortie JSON sans décor (chronology/conversion/graph)');
+  write('  --force         retraite les pièces');
+  write('  --json          produit une sortie JSON sans décor (chronology/conversion)');
   write('  --check         diagnostic seul, n\'installe rien');
   write('  --step <id>     rejoue une seule étape');
   write('  --resume-steps <ids> rejoue les étapes indiquées sans interaction (usage interne)');
@@ -567,11 +537,6 @@ async function runChronologyCorrectionCommand(flags) {
   }
 
   const mutation = applyDocumentIndexCorrection(located.caseRoot, relative, correction);
-
-  const { rematerializeDeterministicLegalGraph } = require(LEGAL_GRAPH_MODULE);
-  await rematerializeDeterministicLegalGraph(located.caseRoot, {
-    semanticStaleReasons: mutation.semanticStaleReasons,
-  });
 
   let history;
   try {
@@ -747,60 +712,9 @@ async function runConversionCommand(flags) {
   return 0;
 }
 
-async function runGraphCommand(flags) {
-  if (!fs.existsSync(LEGAL_GRAPH_MODULE)) throw new Error('Le module de graphe juridique PieceMaker est introuvable.');
-  if (!flags.graphAction) throw new Error('Action manquante : utilisez « piecemaker graph build|query|status ».');
-  const { locateConfiguredCase } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
-  const located = locateConfiguredCase(loadConfig(), flags.caseTarget || process.cwd());
-  if (!located) {
-    throw new Error('Lancez la commande depuis un dossier juridique enregistré ou passez --case <chemin>.');
-  }
-  const {
-    buildLegalGraph,
-    legalGraphStatus,
-    queryLegalGraph,
-  } = require(LEGAL_GRAPH_MODULE);
-  const configuredEnv = Object.fromEntries(Object.entries(readEnv())
-    .filter(([key]) => key.startsWith('GRAPHIFY_') || GRAPHIFY_ENV_KEYS.has(key)));
-  const options = {
-    backend: flags.backend,
-    budget: flags.budget,
-    env: { ...process.env, ...configuredEnv },
-    force: flags.force,
-    model: flags.model,
-  };
-
-  if (flags.graphAction === 'query') {
-    const question = flags.graphQuestion.join(' ').trim();
-    const result = await queryLegalGraph(located.caseRoot, question, options);
-    process.stdout.write(result.output.endsWith('\n') ? result.output : `${result.output}\n`);
-    return 0;
-  }
-  if (flags.graphAction === 'build') {
-    const result = await buildLegalGraph(located.caseRoot, options);
-    const status = {
-      graphFile: result.graphFile,
-      generatedAt: result.generatedAt,
-      cacheHit: result.cacheHit,
-      stats: result.graph.piecemaker,
-    };
-    if (flags.json) process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
-    else log.ok(result.cacheHit ? `Graphe juridique déjà à jour : ${result.graphFile}` : `Graphe juridique construit : ${result.graphFile}`);
-    return 0;
-  }
-
-  const status = await legalGraphStatus(located.caseRoot);
-  if (flags.json) process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
-  else if (!status.exists) log.info(`Aucun graphe juridique : ${status.graphFile}`);
-  else if (status.stale) log.warn(`Graphe juridique à actualiser : ${status.graphFile}`);
-  else log.ok(`Graphe juridique à jour : ${status.graphFile}`);
-  return 0;
-}
-
 async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
   if (command === 'chronology') return runChronologyCommand(flags);
   if (command === 'conversion') return runConversionCommand(flags);
-  if (command === 'graph') return runGraphCommand(flags);
   if (command === 'open') {
     const status = await openAdmin();
     log.ok(`Interface ouverte : ${status.url}`);
@@ -1026,14 +940,9 @@ async function main() {
     return 1;
   }
 
-  if (!['chronology', 'conversion', 'graph'].includes(flags.command) && (flags.caseTarget || flags.json)) {
+  if (!['chronology', 'conversion'].includes(flags.command) && (flags.caseTarget || flags.json)) {
     banner();
-    log.error('Les options --case et --json sont réservées aux commandes chronology, conversion et graph.');
-    return 1;
-  }
-
-  if (flags.command === 'graph' && (!Number.isFinite(flags.budget) || flags.budget <= 0)) {
-    log.error('L’option --budget doit être un nombre strictement positif.');
+    log.error('Les options --case et --json sont réservées aux commandes chronology et conversion.');
     return 1;
   }
 
@@ -1042,10 +951,8 @@ async function main() {
     return 1;
   }
 
-  // Les sorties JSON et les sous-graphes sont directement consommés par les
-  // assistants : aucun bandeau PieceMaker ne doit les polluer.
+  // Les sorties JSON sont directement consommées par les assistants.
   if ((flags.command === 'chronology' && flags.json)
-      || (flags.command === 'graph' && (flags.graphAction === 'query' || flags.json))
       || (flags.command === 'conversion' && flags.json)) {
     return runOperationalCommand(flags.command, null, flags);
   }

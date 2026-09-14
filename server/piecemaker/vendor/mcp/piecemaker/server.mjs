@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Serveur MCP « piecemaker » — outils de graphe juridique, de conversion et
- * de chronologie exposés à Claude Code (et à tout client MCP) sans passer
+ * Serveur MCP « piecemaker » — outils de conversion et de chronologie exposés
+ * à Claude Code (et à tout client MCP) sans passer
  * par du texte injecté dans un CLAUDE.md.
  *
  * Chaque outil lance le binaire `piecemaker` en sous-processus plutôt que
@@ -10,8 +10,7 @@
  * d'arguments, même localisation de dossier, une seule implémentation
  * (voir `installer/bin/piecemaker.mjs`).
  *
- * Les commandes lancées ici (`graph query`, `graph … --json`,
- * `conversion --json`, `chronology --json`, `chronology --action write/edit
+ * Les commandes lancées ici (`conversion --json`, `chronology --json`, `chronology --action write/edit
  * --json`) court-circuitent toutes le bandeau, la vérification de mise à jour
  * et le menu interactif (`installer/bin/piecemaker.mjs:1006-1009`) : aucun
  * service PieceMaker n'est démarré, arrêté ni redémarré par ce serveur.
@@ -71,8 +70,7 @@ export function runPiecemakerCommand(args, { cwd = process.cwd(), execFn = spawn
  * Le CLI n'écrit pas toujours ses erreurs sur stderr (`log.error` écrit sur
  * stdout, voir `installer/lib/ui.mjs`) : on retient stderr s'il dit quelque
  * chose, sinon on retombe sur stdout, jamais sur un message vide. Sur succès,
- * stdout est renvoyé tel quel — `graph query` sort du texte, pas du JSON, et
- * les autres outils sortent déjà du JSON mis en forme par le CLI (`--json`).
+ * stdout est renvoyé tel quel.
  */
 export function toToolResult(result) {
   if (result.code !== 0) {
@@ -89,22 +87,6 @@ export function toToolResult(result) {
 // Chaque fonction reproduit exactement une ligne du tableau du plan : même
 // commande, mêmes options, dans le même ordre. `dossier` doit déjà être
 // résolu (jamais undefined) par l'appelant — voir `resolveDossier` ci-dessous.
-
-export function graphQuestionArgs({ question, dossier, budget }) {
-  const args = ['graph', 'query', question, '--case', dossier];
-  if (budget !== undefined && budget !== null) args.push('--budget', String(budget));
-  return args;
-}
-
-export function graphBuildArgs({ dossier, force }) {
-  const args = ['graph', 'build', '--json', '--case', dossier];
-  if (force) args.push('--force');
-  return args;
-}
-
-export function graphStatusArgs({ dossier }) {
-  return ['graph', 'status', '--json', '--case', dossier];
-}
 
 export function conversionArgs({ dossier, pieces, force }) {
   const args = ['conversion', '--json', '--case', dossier];
@@ -166,48 +148,6 @@ const CHRONOLOGY_CORRECTION_SCHEMA = {
 export function createServer({ execFn } = {}) {
   const server = new McpServer({ name: 'piecemaker', version: '1.0.0' });
   const run = (args, dossier) => runPiecemakerCommand(args, { cwd: dossier, execFn });
-
-  server.registerTool('graphe_question', {
-    description: 'Interroge le graphe sémantique juridique du dossier (liens de droit entre les pièces) '
-      + 'et renvoie du texte, pas du JSON. Si le graphe est absent, il est construit automatiquement à la '
-      + 'première question. S\'il existe mais est périmé, l\'outil renvoie une erreur qui le dit explicitement '
-      + '— il ne le reconstruit pas lui-même : relancez alors l\'outil « graphe_construire ».',
-    inputSchema: {
-      question: z.string().min(1).describe('Question posée en langage naturel au graphe juridique du dossier.'),
-      dossier: DOSSIER_SCHEMA,
-      budget: z.number().int().positive().optional()
-        .describe('Budget de tokens du contexte renvoyé (défaut côté CLI : 4000).'),
-    },
-  }, async ({ question, dossier, budget }) => {
-    const resolved = resolveDossier(dossier);
-    const result = await run(graphQuestionArgs({ question, dossier: resolved, budget }), resolved);
-    return toToolResult(result);
-  });
-
-  server.registerTool('graphe_construire', {
-    description: 'Construit ou actualise le graphe sémantique juridique du dossier. N\'a rien à faire si le '
-      + 'graphe est déjà à jour, sauf avec force=true qui force une reconstruction complète.',
-    inputSchema: {
-      dossier: DOSSIER_SCHEMA,
-      force: z.boolean().optional().describe('Reconstruit le graphe même s\'il est déjà à jour.'),
-    },
-  }, async ({ dossier, force }) => {
-    const resolved = resolveDossier(dossier);
-    const result = await run(graphBuildArgs({ dossier: resolved, force }), resolved);
-    return toToolResult(result);
-  });
-
-  server.registerTool('graphe_etat', {
-    description: 'Indique si le graphe sémantique juridique du dossier existe et s\'il est à jour, sans le '
-      + 'construire ni le modifier.',
-    inputSchema: {
-      dossier: DOSSIER_SCHEMA,
-    },
-  }, async ({ dossier }) => {
-    const resolved = resolveDossier(dossier);
-    const result = await run(graphStatusArgs({ dossier: resolved }), resolved);
-    return toToolResult(result);
-  });
 
   server.registerTool('conversion', {
     description: 'Convertit les pièces du dossier en Markdown ET les scanne pour détecter les données '

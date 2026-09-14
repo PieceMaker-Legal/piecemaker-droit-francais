@@ -6,14 +6,13 @@
  * CODES d'entités qu'elle cite (jamais les noms en clair, jamais le nom de
  * fichier — la clé est le même hash que le manifeste de scan). Ce module lit cet
  * index et le recroise avec la liste des pièces et le mapping du dossier pour
- * produire une chronologie et un graphe pièces ↔ entités.
+ * produire une chronologie.
  *
  * La ré-identification (code → nom) n'a lieu que côté serveur, sur la machine du
- * cabinet, exactement comme l'éditeur de mapping de l'administration : le graphe
- * reste indexé par code, et le libellé n'est joint que si
+ * cabinet, exactement comme l'éditeur de mapping de l'administration : le libellé
+ * n'est joint que si
  * `deanonymizeLabels` est vrai. L'application des décisions manuelles est un
- * choix distinct : le graphe pseudonymisé doit lui aussi refléter les
- * corrections du cabinet.
+ * choix distinct.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -33,7 +32,7 @@ const DOCUMENT_INDEX_RELATIVE_PATH = '.piecemaker/document-index.json';
 // la racine `overrides` du MÊME index. Le pipeline Python préserve cette racine
 // lors d'un re-scan. Clé identique aux documents (`stateKey` du chemin relatif).
 // Elles sont appliquées aux vues claires comme pseudonymisées ; dans cette
-// dernière, le texte libre est codé en mémoire avant d'entrer dans le graphe.
+// dernière, le texte libre est codé en mémoire avant de sortir du serveur.
 //
 // Ancien fichier lu uniquement pour migration lors de la prochaine correction.
 const LEGACY_DOCUMENT_INDEX_OVERRIDES_RELATIVE_PATH = '.piecemaker/document-index-overrides.json';
@@ -479,7 +478,7 @@ function scrubFreeText(value, tokens) {
 }
 
 /**
- * Chronologie complète d'un dossier : documents datés + graphe pièces ↔ entités.
+ * Chronologie complète d'un dossier : documents datés et entités détectées.
  *
  * @param {string} caseRoot racine du dossier juridique
  * @param {{ deanonymize?: boolean, deanonymizeLabels?: boolean,
@@ -493,8 +492,8 @@ async function buildChronology(caseRoot, options = {}) {
   const entityDecisions = includeManualDecisions ? index.entityDecisions : {};
   const mapping = readCaseMapping(caseRoot);
   const reverse = mapping.reverse_mapping || {};
-  // Un code renuméroté/supprimé dans l'éditeur ne doit pas rester fantôme dans le
-  // graphe : on ne garde que les codes encore présents dans le mapping courant.
+  // Un code renuméroté/supprimé dans l'éditeur ne doit pas rester fantôme : on
+  // ne garde que les codes encore présents dans le mapping courant.
   const knownCodes = new Set(Object.keys(reverse));
   const scrubTokens = sensitiveTokens(mapping.mapping || {});
 
@@ -568,9 +567,6 @@ async function buildChronology(caseRoot, options = {}) {
     // une re-détection ultérieure ne réécrase donc pas un choix explicite. Le lieu
     // saisi à la main n'est jamais épuré (contrairement au champ détecté).
     documents.push({
-      // Jointure pseudonyme stable avec le graphe juridique. Le chemin et le
-      // nom restent disponibles dans cette vue locale, mais seul ce hash est
-      // matérialisé dans le graphe persistant.
       documentKey: key,
       id: docId,
       path: file.path,
@@ -604,8 +600,7 @@ async function buildChronology(caseRoot, options = {}) {
     });
   }
 
-  // Agrégat par entité après application des décisions documentaires : la
-  // frise, le graphe déterministe et les compteurs partagent le même périmètre.
+  // Agrégat par entité après application des décisions documentaires.
   const entities = new Map();
   for (const document of documents) {
     for (const { code, category, label } of document.codes) {
@@ -637,34 +632,6 @@ async function buildChronology(caseRoot, options = {}) {
     }))
     .sort((a, b) => b.documentCount - a.documentCount || a.code.localeCompare(b.code));
 
-  // Graphe biparti pièces ↔ entités : le client peut en dériver les liens
-  // pièce↔pièce (entités partagées) sans que le serveur ne les matérialise.
-  const nodes = [];
-  const edges = [];
-  for (const doc of documents) {
-    nodes.push({
-      id: `doc:${doc.id}`,
-      kind: 'document',
-      label: doc.name,
-      nature: doc.nature,
-      dateIso: doc.dateIso,
-      protected: doc.protected,
-    });
-    for (const code of doc.codes) {
-      edges.push({ source: `doc:${doc.id}`, target: `ent:${code.code}`, kind: 'cite' });
-    }
-  }
-  for (const entity of entityList) {
-    nodes.push({
-      id: `ent:${entity.code}`,
-      kind: 'entity',
-      category: entity.category,
-      label: entity.label || entity.code,
-      code: entity.code,
-      degree: entity.documentCount,
-    });
-  }
-
   const dated = documents.filter((doc) => doc.dateIso);
   return {
     generatedAt: new Date().toISOString(),
@@ -681,12 +648,6 @@ async function buildChronology(caseRoot, options = {}) {
     },
     documents,
     entities: entityList,
-    // Topologie de secours pour les consommateurs internes. La route admin la
-    // remplace par la sortie Graphify construite à partir de ce même index.
-    graph: {
-      engine: 'index-fallback', source: 'gliner', llm: false,
-      status: edges.length ? 'ready' : 'empty', nodes, edges,
-    },
   };
 }
 
