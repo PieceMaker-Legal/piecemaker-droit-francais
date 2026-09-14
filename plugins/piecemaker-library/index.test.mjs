@@ -101,6 +101,54 @@ test('a stale dossier response cannot replace the current dossier', async (t) =>
   assert.doesNotMatch(container.textContent, /Dossier A/);
 });
 
+test('creating a skill from the toolbar button posts to /catalog and refreshes the list', async (t) => {
+  const calls = [];
+  let created = false;
+  const { container } = fixture(t, async (method, path, body) => {
+    calls.push([method, path, body]);
+    if (path.startsWith('/plugins?')) return { plugins: [] };
+    if (method === 'POST' && path === '/catalog') {
+      created = true;
+      return { id: 'a'.repeat(64), kind: 'skill', name: body.name, description: body.description };
+    }
+    if (path.startsWith('/catalog?')) return { entries: created ? [{ id: 'a'.repeat(64), name: 'Nouveau', description: 'Desc', kind: 'skill', enabled: false }] : [] };
+    return { entries: [] };
+  });
+  await settle();
+  assert.equal(container.querySelector('[aria-label="Nom"]'), null);
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Nouveau skill').click();
+  await settle();
+  assert.match(container.textContent, /Nouveau skill/);
+  container.querySelector('[aria-label="Nom"]').value = 'Nouveau';
+  container.querySelector('[aria-label="Nom"]').dispatchEvent(new window.Event('input'));
+  container.querySelector('[aria-label="Description"]').value = 'Desc';
+  container.querySelector('[aria-label="Description"]').dispatchEvent(new window.Event('input'));
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Créer').click();
+  await settle();
+  await settle();
+  assert.equal(calls.some(([method, path, body]) => method === 'POST' && path === '/catalog' && body.kind === 'skill' && body.name === 'Nouveau' && body.description === 'Desc'), true);
+  assert.match(container.textContent, /Desc/);
+});
+
+test('the create dialog requires a name and can be cancelled', async (t) => {
+  const calls = [];
+  const { container } = fixture(t, async (method, path) => {
+    calls.push([method, path]);
+    if (path.startsWith('/plugins?')) return { plugins: [] };
+    return { entries: [] };
+  });
+  await settle();
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Nouveau skill').click();
+  await settle();
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Créer').click();
+  await settle();
+  assert.match(container.textContent, /Nom requis/);
+  assert.equal(calls.some(([method, path]) => method === 'POST' && path === '/catalog'), false);
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Annuler').click();
+  await settle();
+  assert.equal(container.querySelector('[aria-label="Nom"]'), null);
+});
+
 test('provider skills are normalized for every platform and only project scopes retain dossier metadata', () => {
   for (const provider of ['claude', 'codex', 'cursor', 'mistral', 'opencode']) {
     const normalized = normalizeSkill(provider, {

@@ -35,6 +35,25 @@ test('imports preserve YAML metadata and assets without publishing instructions'
   assert.equal(fs.existsSync(path.join(store.directory, 'active')), false);
 });
 
+test('createEntry adds a listable entry with placeholder content and no assets', (t) => {
+  const { store, workspace } = fixture(t);
+  const created = store.createEntry('skill', ' Nouveau skill ', ' À utiliser pour... ');
+  assert.match(created.id, /^[a-f0-9]{64}$/);
+  assert.equal(created.kind, 'skill');
+  assert.equal(created.name, 'Nouveau skill');
+  assert.equal(created.description, 'À utiliser pour...');
+  assert.match(created.content, /^---\nname: Nouveau skill\ndescription: À utiliser pour\.\.\.\n---\n/);
+  assert.deepEqual(created.assets, {});
+  const list = store.list(workspace);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].name, 'Nouveau skill');
+  assert.equal(list[0].enabled, false);
+  const agent = store.createEntry('agent', 'Mon agent', '');
+  assert.equal(agent.kind, 'agent');
+  assert.match(agent.content, /Rôle et instructions de l’agent/);
+  assert.throws(() => store.createEntry('skill', '   ', 'x'), /Nom requis/);
+});
+
 test('imports reject binary main documents before storing replacement characters', (t) => {
   const { store, skill } = fixture(t);
   fs.writeFileSync(path.join(skill, 'SKILL.md'), Buffer.from([0x2d, 0x2d, 0x2d, 0x0a, 0xc3, 0x28]));
