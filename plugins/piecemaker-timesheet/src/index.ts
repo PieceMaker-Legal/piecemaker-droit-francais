@@ -391,35 +391,80 @@ const wrapPdfText = (value: string, width: number): string[] => {
 };
 
 const createPdf = (entries: TimesheetEntry[], label: string): Uint8Array => {
-  const lines = [
-    'Timesheet',
-    label,
-    `${entries.length} session(s) · Total actif : ${formatDuration(totalSeconds(entries))}`,
-    '',
-    ...entries.flatMap((entry) => [
-      `${formatDate(entry.startedAt)} | ${entry.projectName} | ${entry.sessionName}`,
-      `Temps actif : ${formatDuration(entry.activeSeconds)} | Temps écoulé : ${formatDuration(entry.elapsedSeconds)}`,
-      ...wrapPdfText(`Conclusion : ${entry.conclusion || 'Aucune conclusion'}`, 105),
-      '',
+  const columnWidths = [108, 140, 180, 82, 268];
+  const tableWidth = columnWidths.reduce((total, width) => total + width, 0);
+  const tableRows = [
+    ['Date', 'Dossier', 'Session', 'Temps', 'Conclusion'],
+    ...entries.map((entry) => [
+      formatDate(entry.startedAt),
+      entry.projectName,
+      entry.sessionName,
+      formatDuration(entry.activeSeconds),
+      entry.conclusion || 'Aucune conclusion',
     ]),
   ];
-  const linesPerPage = 54;
-  const pageLines = Array.from({ length: Math.max(1, Math.ceil(lines.length / linesPerPage)) }, (_, index) => lines.slice(index * linesPerPage, (index + 1) * linesPerPage));
-  const pageObjects = pageLines.map((page, pageIndex) => {
+  const wrappedRows = tableRows.map((row) => row.map((cell, index) => wrapPdfText(cell, Math.max(8, Math.floor((columnWidths[index] - 8) / 4.5)))));
+  const rowHeights = wrappedRows.map((row) => 8 + Math.max(...row.map((cell) => cell.length)) * 10);
+  const headerHeight = rowHeights[0] ?? 28;
+  const tableTop = 475;
+  const tableBottom = 38;
+  const tableHeightLimit = tableTop - tableBottom;
+  const pageRows: Array<number[]> = [];
+  let currentRows: number[] = [];
+  let currentHeight = headerHeight;
+  for (let index = 1; index < wrappedRows.length; index += 1) {
+    const nextHeight = rowHeights[index] ?? 18;
+    if (currentRows.length > 0 && currentHeight + nextHeight > tableHeightLimit) {
+      pageRows.push(currentRows);
+      currentRows = [];
+      currentHeight = headerHeight;
+    }
+    currentRows.push(index);
+    currentHeight += nextHeight;
+  }
+  if (currentRows.length > 0 || pageRows.length === 0) pageRows.push(currentRows);
+  const pageObjects = pageRows.map((rows, pageIndex) => {
     const contentObject = 5 + pageIndex * 2;
-    const commands = page.map((line, lineIndex) => {
-      const fontSize = pageIndex === 0 && lineIndex === 0 ? 18 : lineIndex < 3 && pageIndex === 0 ? 11 : 9;
-      const y = 800 - lineIndex * 14;
-      return `BT /F1 ${fontSize} Tf 40 ${y} Td ${pdfText(line)} Tj ET`;
-    }).join('\n');
+    const commands: string[] = [
+      `BT /F1 18 Tf 32 555 Td ${pdfText('Timesheet')} Tj ET`,
+      `BT /F1 11 Tf 32 536 Td ${pdfText(label)} Tj ET`,
+      `BT /F1 9 Tf 32 520 Td ${pdfText(`${entries.length} session(s) - Total actif : ${formatDuration(totalSeconds(entries))}`)} Tj ET`,
+    ];
+    const tableRowsForPage = [0, ...rows];
+    const tableHeightsForPage = tableRowsForPage.map((rowIndex) => rowHeights[rowIndex] ?? 18);
+    const tableHeight = tableHeightsForPage.reduce((total, height) => total + height, 0);
+    const tableBottomForPage = tableTop - tableHeight;
+    commands.push(`0.94 0.94 0.94 rg 32 ${tableTop - headerHeight} ${tableWidth} ${headerHeight} re f`);
+    commands.push('0.82 0.82 0.82 RG 0.6 w');
+    commands.push(`32 ${tableBottomForPage} ${tableWidth} ${tableHeight} re S`);
+    let verticalX = 32;
+    for (const width of columnWidths.slice(0, -1)) {
+      verticalX += width;
+      commands.push(`${verticalX} ${tableBottomForPage} m ${verticalX} ${tableTop} l S`);
+    }
+    let rowTop = tableTop;
+    for (const [pageRowIndex, rowIndex] of tableRowsForPage.entries()) {
+      const rowHeight = tableHeightsForPage[pageRowIndex] ?? 18;
+      if (pageRowIndex > 0) commands.push(`32 ${rowTop} m ${32 + tableWidth} ${rowTop} l S`);
+      let columnX = 32;
+      for (const [columnIndex, cellLines] of wrappedRows[rowIndex].entries()) {
+        cellLines.forEach((line, lineIndex) => {
+          commands.push(`BT /F1 8 Tf ${columnX + 4} ${rowTop - 12 - lineIndex * 10} Td ${pdfText(line)} Tj ET`);
+        });
+        columnX += columnWidths[columnIndex];
+      }
+      rowTop -= rowHeight;
+    }
+    if (pageIndex < pageRows.length - 1) commands.push(`BT /F1 8 Tf 32 24 Td ${pdfText('Suite sur la page suivante')} Tj ET`);
+    const commandText = commands.join('\n');
     return {
-      page: pdfBytes(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObject} 0 R >>`),
-      content: pdfBytes(`<< /Length ${pdfBytes(commands).length} >>\nstream\n${commands}\nendstream`),
+      page: pdfBytes(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObject} 0 R >>`),
+      content: pdfBytes(`<< /Length ${pdfBytes(commandText).length} >>\nstream\n${commandText}\nendstream`),
     };
   });
   const objects: Uint8Array[] = [
     pdfBytes('<< /Type /Catalog /Pages 2 0 R >>'),
-    pdfBytes(`<< /Type /Pages /Kids [${pageLines.map((_, index) => `${4 + index * 2} 0 R`).join(' ')}] /Count ${pageLines.length} >>`),
+    pdfBytes(`<< /Type /Pages /Kids [${pageRows.map((_, index) => `${4 + index * 2} 0 R`).join(' ')}] /Count ${pageRows.length} >>`),
     pdfBytes('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'),
   ];
   for (const pageObject of pageObjects) objects.push(pageObject.page, pageObject.content);
