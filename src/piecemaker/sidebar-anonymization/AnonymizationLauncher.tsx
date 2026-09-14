@@ -7,6 +7,7 @@ import type { Project } from '@/shared/types';
 import { Button, Dialog, DialogContent, DialogTitle } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import type { DossierCase } from '@/piecemaker/dossier/dossierRegistration';
 import { setMappingReady } from '@/piecemaker/dossier/mappingStatusCache';
 import type { OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 
@@ -105,11 +106,17 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
     setLoadingProjectStatus(true);
     const refreshedScannedIds = new Set<string>();
     const refreshedReferences = new Map<string, string>();
+    const overview = await pmGet<{ folders?: DossierCase[] }>('/repository');
+    const registeredReferences = new Map((overview.folders ?? []).map((entry) => [entry.location, entry.path]));
     for (const project of refreshedProjects) {
+      const caseReference = registeredReferences.get(project.fullPath);
+      if (!caseReference) {
+        setMappingReady(project.fullPath, false);
+        continue;
+      }
+      refreshedReferences.set(project.projectId, caseReference);
       try {
-        const registration = await pmPost<{ folder: { path: string } }>('/repository/cases/selected', { folder: project.fullPath });
-        refreshedReferences.set(project.projectId, registration.folder.path);
-        const mapping = await pmGet<{ exists: boolean; mapping: Record<string, string> }>('/mapping', { case: registration.folder.path });
+        const mapping = await pmGet<{ exists: boolean; mapping: Record<string, string> }>('/mapping', { case: caseReference });
         const scanned = mapping.exists && Object.keys(mapping.mapping).length > 0;
         if (scanned) refreshedScannedIds.add(project.projectId);
         setMappingReady(project.fullPath, scanned);
