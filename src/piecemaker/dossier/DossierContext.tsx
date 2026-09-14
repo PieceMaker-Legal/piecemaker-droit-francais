@@ -20,6 +20,30 @@ type DossierContextValue = {
 
 const DossierCasesContext = createContext<DossierContextValue | null>(null);
 
+type DossierCasesSnapshot = { cases: DossierCase[]; selectedCaseId: string | null };
+
+const DOSSIER_CASES_SNAPSHOT_MAX_ENTRIES = 32;
+const dossierCasesSnapshots = new Map<string, DossierCasesSnapshot>();
+
+function dossierCasesSnapshotKey(projectPath: string | null | undefined): string {
+  return projectPath ?? '';
+}
+
+function readDossierCasesSnapshot(projectPath: string | null | undefined): DossierCasesSnapshot | null {
+  return dossierCasesSnapshots.get(dossierCasesSnapshotKey(projectPath)) ?? null;
+}
+
+function writeDossierCasesSnapshot(projectPath: string | null | undefined, snapshot: DossierCasesSnapshot): void {
+  const key = dossierCasesSnapshotKey(projectPath);
+  dossierCasesSnapshots.delete(key);
+  dossierCasesSnapshots.set(key, snapshot);
+  while (dossierCasesSnapshots.size > DOSSIER_CASES_SNAPSHOT_MAX_ENTRIES) {
+    const oldestKey = dossierCasesSnapshots.keys().next().value;
+    if (oldestKey === undefined) break;
+    dossierCasesSnapshots.delete(oldestKey);
+  }
+}
+
 export function DossierCasesProvider({
   projectPath,
   children,
@@ -27,9 +51,10 @@ export function DossierCasesProvider({
   projectPath?: string | null;
   children: ReactNode;
 }) {
-  const [cases, setCases] = useState<DossierCase[]>([]);
-  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialDossierCasesSnapshot = readDossierCasesSnapshot(projectPath);
+  const [cases, setCases] = useState<DossierCase[]>(initialDossierCasesSnapshot?.cases ?? []);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(initialDossierCasesSnapshot?.selectedCaseId ?? null);
+  const [loading, setLoading] = useState(initialDossierCasesSnapshot === null);
   const [error, setError] = useState<string | null>(null);
   const [mappingVersion, setMappingVersion] = useState(0);
   const refreshSequence = useRef(0);
@@ -51,8 +76,10 @@ export function DossierCasesProvider({
         ? await refreshDossierRegistration(projectPath)
         : await ensureDossierRegistration(projectPath);
       if (sequence !== refreshSequence.current) return;
+      const refreshedSelectedCaseId = selectedCase?.path ?? null;
       setCases(refreshedCases);
-      setSelectedCaseId(selectedCase?.path ?? null);
+      setSelectedCaseId(refreshedSelectedCaseId);
+      writeDossierCasesSnapshot(projectPath, { cases: refreshedCases, selectedCaseId: refreshedSelectedCaseId });
       if (refresh) setMappingVersion((previous) => previous + 1);
       setError(null);
     } catch (cause) {
