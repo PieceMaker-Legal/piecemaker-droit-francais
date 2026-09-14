@@ -17,6 +17,7 @@ Usage:
     python3 smart_converter.py image.jpg -o output_dir --mode hybrid --lang latin
 """
 
+import os
 import re
 import sys
 import argparse
@@ -118,6 +119,15 @@ def normalize_markdown_whitespace(text: str) -> str:
     return normalized.strip() + "\n"
 
 
+def _write_text_atomic(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.piecemaker-{os.getpid()}.tmp")
+    with open(temporary, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, path)
+
+
 def normalize_markdown_file(md_path: Path) -> bool:
     """Rewrite *md_path* in place if normalisation changes anything."""
     try:
@@ -130,7 +140,7 @@ def normalize_markdown_file(md_path: Path) -> bool:
     if normalized == original:
         return False
 
-    md_path.write_text(normalized, encoding="utf-8")
+    _write_text_atomic(md_path, normalized)
     print(f"🧹 Normalised whitespace in {md_path.name}", file=sys.stderr)
     return True
 
@@ -248,7 +258,7 @@ def run_markitdown(file_path, output_dir):
             )
 
         content = normalize_markdown_whitespace(result.text_content)
-        output_file.write_text(content, encoding='utf-8')
+        _write_text_atomic(output_file, content)
 
         print(f"✅ Converted to {output_file}", file=sys.stderr)
         print(f"📊 Output length: {len(content)} characters", file=sys.stderr)
