@@ -11,10 +11,10 @@
  * (voir `installer/bin/piecemaker.mjs`).
  *
  * Les commandes lancées ici (`graph query`, `graph … --json`,
- * `conversion --json`, `chronology --json`) court-circuitent toutes le
- * bandeau, la vérification de mise à jour et le menu interactif
- * (`installer/bin/piecemaker.mjs:1006-1009`) : aucun service PieceMaker
- * n'est démarré, arrêté ni redémarré par ce serveur.
+ * `conversion --json`, `chronology --json`, `chronology --action write/edit
+ * --json`) court-circuitent toutes le bandeau, la vérification de mise à jour
+ * et le menu interactif (`installer/bin/piecemaker.mjs:1006-1009`) : aucun
+ * service PieceMaker n'est démarré, arrêté ni redémarré par ce serveur.
  */
 
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -117,6 +117,24 @@ export function chronologyArgs({ dossier }) {
   return ['chronology', '--json', '--case', dossier];
 }
 
+export function chronologyCorrectionArgs(action, { dossier, path: piecePath, nature, dateIso, localisation, fields, entityAdditions, entityExclusions, reason }) {
+  const correction = {};
+  if (nature !== undefined) correction.nature = nature;
+  if (dateIso !== undefined) correction.dateIso = dateIso;
+  if (localisation !== undefined) correction.localisation = localisation;
+  if (fields !== undefined) correction.fields = fields;
+  if (reason !== undefined) correction.reason = reason;
+  if (entityAdditions !== undefined || entityExclusions !== undefined) {
+    correction.entityDecisions = {
+      additions: entityAdditions || [],
+      exclusions: entityExclusions || [],
+    };
+  }
+  const args = ['chronology', '--action', action, '--path', piecePath, '--correction-json', JSON.stringify(correction), '--json'];
+  if (dossier) args.push('--case', dossier);
+  return args;
+}
+
 /** Dossier ciblé par un appel d'outil : celui demandé, sinon la session en cours. */
 export function resolveDossier(dossier) {
   return dossier && String(dossier).trim() ? dossier : process.cwd();
@@ -126,8 +144,23 @@ const DOSSIER_SCHEMA = z.string()
   .optional()
   .describe('Chemin absolu du dossier juridique ciblé. Par défaut, le répertoire de la session Claude Code en cours.');
 
+const CHRONOLOGY_CORRECTION_SCHEMA = {
+  dossier: DOSSIER_SCHEMA,
+  path: z.string().min(1).describe('Chemin relatif de la pièce, tel qu\'indexé par la chronologie.'),
+  nature: z.string().optional().describe('Nature de l\'acte (ex. « Assignation », « Conclusions »).'),
+  dateIso: z.string().optional().describe('Date de la pièce au format ISO 8601 (AAAA-MM-JJ).'),
+  localisation: z.string().optional().describe('Juridiction ou localisation associée à la pièce.'),
+  fields: z.array(z.object({ label: z.string(), value: z.string() })).optional()
+    .describe('Champs personnalisés additionnels de la pièce.'),
+  entityAdditions: z.array(z.string()).optional()
+    .describe('Codes d\'entités (personnes/sociétés pseudonymisées) à rattacher manuellement à la pièce.'),
+  entityExclusions: z.array(z.string()).optional()
+    .describe('Codes d\'entités détectés automatiquement à exclure manuellement de la pièce.'),
+  reason: z.string().optional().describe('Motif de la correction, consigné dans l\'historique du dossier.'),
+};
+
 /**
- * Construit le serveur MCP et y enregistre les cinq outils. Séparé de
+ * Construit le serveur MCP et y enregistre les outils. Séparé de
  * `main()` pour rester testable sans jamais brancher de transport stdio.
  */
 export function createServer({ execFn } = {}) {
@@ -201,6 +234,28 @@ export function createServer({ execFn } = {}) {
   }, async ({ dossier }) => {
     const resolved = resolveDossier(dossier);
     const result = await run(chronologyArgs({ dossier: resolved }), resolved);
+    return toToolResult(result);
+  });
+
+  server.registerTool('write_chronology', {
+    description: 'Crée une correction manuelle de chronologie pour une pièce (date, nature d\'acte, '
+      + 'localisation, personnes citées, champs custom). Échoue si une correction existe déjà pour cette '
+      + 'pièce — utiliser edit_chronology pour la modifier.',
+    inputSchema: CHRONOLOGY_CORRECTION_SCHEMA,
+  }, async ({ dossier, ...params }) => {
+    const resolved = resolveDossier(dossier);
+    const result = await run(chronologyCorrectionArgs('write', { dossier: resolved, ...params }), resolved);
+    return toToolResult(result);
+  });
+
+  server.registerTool('edit_chronology', {
+    description: 'Modifie la correction manuelle de chronologie déjà enregistrée pour une pièce (date, '
+      + 'nature d\'acte, localisation, personnes citées, champs custom). Échoue si aucune correction '
+      + 'n\'existe pour cette pièce — utiliser write_chronology pour en créer une.',
+    inputSchema: CHRONOLOGY_CORRECTION_SCHEMA,
+  }, async ({ dossier, ...params }) => {
+    const resolved = resolveDossier(dossier);
+    const result = await run(chronologyCorrectionArgs('edit', { dossier: resolved, ...params }), resolved);
     return toToolResult(result);
   });
 
