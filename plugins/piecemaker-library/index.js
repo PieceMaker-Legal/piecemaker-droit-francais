@@ -236,6 +236,7 @@ export function mount(container, api) {
   }
 
   function render() {
+    const scrollTop = root.scrollTop;
     content.replaceChildren();
     content.append(element('h1', 'Bibliothèque'), element('p', 'Skills et agents privés, activés uniquement pour les dossiers choisis.'));
     const nav = element('nav');
@@ -343,6 +344,7 @@ export function mount(container, api) {
     }
     renderRows();
     renderModal();
+    root.scrollTop = scrollTop;
   }
 
   function renderModal() {
