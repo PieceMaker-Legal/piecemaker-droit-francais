@@ -2572,7 +2572,7 @@ function createAdminRouter({
       // Cette route est une vue cabinet et n'expose plus de branche publique
       // pseudonymisée. `deanonymize=0` est volontairement ignoré : les données
       // destinées au modèle empruntent les chemins internes dédiés.
-      const chronology = await loadAdminLegalChronology({ caseRoot: legalCase.root });
+      const chronology = await loadAdminLegalChronology({ caseRoot: legalCase.root, renderViewer: null });
       chronology.case = { path: legalCase.id, name: legalCase.caseName, location: legalCase.root };
       finishAdminTiming(res, 'chronology', startedAt, {
         documents: chronology.stats.documents,
