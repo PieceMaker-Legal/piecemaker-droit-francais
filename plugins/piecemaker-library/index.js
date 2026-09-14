@@ -37,11 +37,21 @@ export function mount(container, api) {
     .pm-library input[role=switch]:before{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:white;top:2px;left:2px}.pm-library input[role=switch]:checked{background:#5252cc}.pm-library input[role=switch]:checked:before{left:16px}
     .pm-library input:focus-visible,.pm-library button:focus-visible{outline:2px solid #6366f1;outline-offset:3px}.pm-library [role=alert]{color:#b91c1c;margin:12px 0}.pm-library .meta{font-size:12px}
     .pm-library .tree{margin:0 0 12px 18px;padding:6px 0 6px 14px;border-left:1px solid hsl(var(--border, 0 0% 87%))}.pm-library .tree-row{display:flex;align-items:center;gap:8px;min-height:28px;font-size:12px}.pm-library .tree-row button{border:0;padding:3px 5px;text-align:left}.pm-library .tree-row .meta{margin-left:auto;padding-right:8px}
+    .pm-library .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:50}
+    .pm-library .modal{background:hsl(var(--background, 0 0% 100%));border:1px solid hsl(var(--border, 0 0% 87%));border-radius:8px;padding:20px;width:min(420px,90vw);display:flex;flex-direction:column;gap:10px}
+    .pm-library .modal h2{margin:0 0 4px;font-size:16px}
+    .pm-library .modal label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+    .pm-library .modal input[type=text],.pm-library .modal textarea{font:inherit;color:inherit;background:transparent;border:1px solid hsl(var(--border, 0 0% 87%));border-radius:6px;padding:8px 10px}
+    .pm-library .modal textarea{min-height:80px;resize:vertical}
+    .pm-library .modal .toolbar{justify-content:flex-end;margin:6px 0 0}
     @media(max-width:600px){.pm-library{padding:16px}.pm-library .row{gap:12px;flex-wrap:wrap}}
   `;
   const layout = document.createElement('div');
   layout.style.cssText = 'display:flex;height:100%;min-width:0;overflow:hidden';
   root.style.cssText = 'flex:1;min-width:0';
+  const content = document.createElement('div');
+  const modalHost = document.createElement('div');
+  root.append(content, modalHost);
   layout.append(root);
   container.append(style, layout);
   let context = api.context;
@@ -59,6 +69,9 @@ export function mount(container, api) {
   let error = '';
   let revision = 0;
   let disposed = false;
+  let creating = null;
+  let createBusy = false;
+  let createError = '';
 
   function element(tag, text, className) {
     const node = document.createElement(tag);
@@ -169,6 +182,32 @@ export function mount(container, api) {
     finally { pluginTreeBusy = ''; if (!disposed) render(); }
   }
 
+  function openCreate(kind) {
+    creating = { kind, name: '', description: '' };
+    createError = '';
+    render();
+  }
+
+  function closeCreate() {
+    creating = null;
+    createError = '';
+    render();
+  }
+
+  async function submitCreate() {
+    if (createBusy) return;
+    if (!creating.name.trim()) { createError = 'Nom requis.'; render(); return; }
+    createBusy = true;
+    createError = '';
+    render();
+    try {
+      await request('POST', '/catalog', { kind: creating.kind, name: creating.name, description: creating.description });
+      creating = null;
+      await load();
+    } catch (cause) { createError = cause.message; }
+    finally { createBusy = false; if (!disposed) render(); }
+  }
+
   function toggle(label, checked, disabled, action) {
     const node = element('label', undefined, 'switch');
     const input = document.createElement('input');
@@ -197,8 +236,8 @@ export function mount(container, api) {
   }
 
   function render() {
-    root.replaceChildren();
-    root.append(element('h1', 'Bibliothèque'), element('p', 'Skills et agents privés, activés uniquement pour les dossiers choisis.'));
+    content.replaceChildren();
+    content.append(element('h1', 'Bibliothèque'), element('p', 'Skills et agents privés, activés uniquement pour les dossiers choisis.'));
     const nav = element('nav');
     nav.setAttribute('role', 'tablist');
     nav.setAttribute('aria-label', 'Bibliothèque');
@@ -208,7 +247,7 @@ export function mount(container, api) {
       item.setAttribute('aria-selected', String(tab === key));
       nav.append(item);
     }
-    root.append(nav);
+    content.append(nav);
     const toolbar = element('div', undefined, 'toolbar');
     const input = document.createElement('input');
     input.type = 'search';
@@ -217,10 +256,12 @@ export function mount(container, api) {
     input.value = search;
     input.oninput = () => { search = input.value; renderRows(); };
     toolbar.append(input, button('Actualiser', () => void load()));
-    root.append(toolbar);
-    if (error) { const notice = element('p', error); notice.setAttribute('role', 'alert'); root.append(notice); }
+    if (tab === 'skill') toolbar.append(button('Nouveau skill', () => openCreate('skill')));
+    if (tab === 'agent') toolbar.append(button('Nouvel agent', () => openCreate('agent')));
+    content.append(toolbar);
+    if (error) { const notice = element('p', error); notice.setAttribute('role', 'alert'); content.append(notice); }
     const body = element('div');
-    root.append(body);
+    content.append(body);
     function renderRows() {
       body.replaceChildren();
       if (loading) { body.append(element('p', 'Chargement…')); return; }
@@ -301,6 +342,43 @@ export function mount(container, api) {
       }
     }
     renderRows();
+    renderModal();
+  }
+
+  function renderModal() {
+    modalHost.replaceChildren();
+    if (!creating) return;
+    const backdrop = element('div', undefined, 'modal-backdrop');
+    const modal = element('div', undefined, 'modal');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.append(element('h2', creating.kind === 'agent' ? 'Nouvel agent' : 'Nouveau skill'));
+    const nameLabel = element('label', 'Nom');
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = creating.name;
+    nameInput.setAttribute('aria-label', 'Nom');
+    nameInput.oninput = () => { creating.name = nameInput.value; };
+    nameLabel.append(nameInput);
+    const descLabel = element('label', 'Description');
+    const descInput = document.createElement('textarea');
+    descInput.value = creating.description;
+    descInput.setAttribute('aria-label', 'Description');
+    descInput.oninput = () => { creating.description = descInput.value; };
+    descLabel.append(descInput);
+    modal.append(nameLabel, descLabel);
+    if (createError) { const notice = element('p', createError); notice.setAttribute('role', 'alert'); modal.append(notice); }
+    const actions = element('div', undefined, 'toolbar');
+    const cancelButton = button('Annuler', closeCreate);
+    cancelButton.disabled = createBusy;
+    const submitButton = button(createBusy ? 'Création…' : 'Créer', () => void submitCreate());
+    submitButton.disabled = createBusy;
+    actions.append(cancelButton, submitButton);
+    modal.append(actions);
+    backdrop.append(modal);
+    backdrop.onclick = (event) => { if (event.target === backdrop) closeCreate(); };
+    modalHost.append(backdrop);
+    nameInput.focus();
   }
 
   const unsubscribe = api.onContextChange((next) => {

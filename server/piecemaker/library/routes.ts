@@ -9,6 +9,15 @@ export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>
     try { res.json({ entries: store.list(typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined) }); }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
+  router.post('/catalog', (req, res) => {
+    const kind = req.body?.kind;
+    const name = req.body?.name;
+    if (kind !== 'skill' && kind !== 'agent') { res.status(400).json({ error: 'Type invalide.' }); return; }
+    if (typeof name !== 'string' || !name.trim()) { res.status(400).json({ error: 'Nom requis.' }); return; }
+    const description = typeof req.body?.description === 'string' ? req.body.description : '';
+    try { res.json(store.createEntry(kind, name, description)); }
+    catch (error) { res.status(400).json({ error: (error as Error).message }); }
+  });
   router.get('/provider-skills', async (req, res) => {
     const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
     res.json(await listLibraryProviderSkills(workspacePath));

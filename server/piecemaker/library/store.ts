@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 import Database from 'better-sqlite3';
 
@@ -168,6 +168,17 @@ export function createLibraryStore(home: string) {
       db.prepare('INSERT INTO origins (source, entry_id, source_hash) VALUES (?, ?, ?)').run(path.resolve(source), id, sourceHash);
     })();
     return id;
+  }
+
+  function createEntry(kind: StoredLibraryEntry['kind'], name: string, description: string) {
+    const trimmedName = name.trim();
+    if (!trimmedName) throw new Error('Nom requis.');
+    const trimmedDescription = description.trim();
+    const id = randomBytes(32).toString('hex');
+    const body = kind === 'agent' ? 'Rôle et instructions de l’agent à rédiger ici.' : 'Instructions du skill à rédiger ici.';
+    const content = `---\nname: ${trimmedName}\ndescription: ${trimmedDescription}\n---\n${body}\n`;
+    db.prepare('INSERT INTO entries VALUES (?, ?, ?, ?, ?, ?)').run(id, kind, trimmedName, trimmedDescription, content, '{}');
+    return document(id);
   }
 
   function updateDocument(id: string, content: string, previousContent: string) {
@@ -413,6 +424,7 @@ export function createLibraryStore(home: string) {
     directory,
     list,
     document,
+    createEntry,
     updateDocument,
     importFile,
     setEnabled,
