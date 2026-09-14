@@ -55,6 +55,44 @@ test('GET /activation rend le snapshot avec workspacePath valide', async () => {
   }
 });
 
+test('GET /activation classe le MCP d’un plugin Claude parmi les connecteurs', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-repo-'));
+  const piecemakerHome = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-home-'));
+  const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-ws-'));
+  const userHome = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-user-'));
+  const installPath = path.join(userHome, '.claude', 'plugins', 'cache', 'mcp-legifrance', 'legifrance', '1.0.1');
+  fs.mkdirSync(path.join(installPath, '.claude-plugin'), { recursive: true });
+  fs.writeFileSync(path.join(installPath, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'legifrance', displayName: 'MCP Légifrance', description: 'Sources juridiques officielles.' }));
+  fs.writeFileSync(path.join(installPath, '.mcp.json'), JSON.stringify({ mcpServers: { legifrance: { command: 'python3' } } }));
+  fs.mkdirSync(path.join(userHome, '.claude', 'plugins'), { recursive: true });
+  fs.writeFileSync(path.join(userHome, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ plugins: { 'legifrance@mcp-legifrance': [{ scope: 'user', installPath }] } }));
+
+  const app = express();
+  app.use(express.json());
+  app.use(createActivationRouter({ repoRoot, piecemakerHome, userHome }));
+  const server = app.listen(0);
+  await once(server, 'listening');
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/activation?workspacePath=${encodeURIComponent(workspacePath)}`);
+    assert.equal(response.status, 200);
+    const snapshot = await response.json();
+    assert.deepEqual(snapshot.claude.mcp, [{
+      id: 'legifrance@mcp-legifrance',
+      name: 'MCP Légifrance',
+      description: 'Sources juridiques officielles.',
+      origin: 'plugin',
+      source: '~/.claude/plugins/cache/mcp-legifrance/legifrance/1.0.1',
+      enabled: true,
+      toggleable: true,
+      family: 'plugin',
+      protocol: 'MCP',
+    }]);
+  } finally {
+    server.close();
+  }
+});
+
 test('GET /activation retourne 400 si workspacePath manque', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-repo-'));
   const piecemakerHome = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-home-'));
