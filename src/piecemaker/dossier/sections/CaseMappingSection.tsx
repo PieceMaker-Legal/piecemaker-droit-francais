@@ -5,6 +5,7 @@ import { invalidatePmGet, pmGetCached, pmPut, PieceMakerApiError } from '@/piece
 import {
   applyProcedureParties,
   buildMappingDocument,
+  MappingValidationError,
   groupMappingByCode,
   normalizeProcedureInfo,
   partyCategoryForCode,
@@ -16,6 +17,7 @@ import {
   type ProcedureInfo,
   type ProcedureParty,
 } from '@/piecemaker/dossier/sections/MappingModel';
+import CaseMappingDialog from '@/piecemaker/dossier/sections/CaseMappingDialog';
 import ProcedurePartyProfileDialog from '@/piecemaker/dossier/sections/ProcedurePartyProfileDialog';
 import { ActionMenu, Button, Input } from '@/shared/ui';
 
@@ -186,6 +188,8 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draggedProfile, setDraggedProfile] = useState<string | null>(null);
+  const [mappingOpen, setMappingOpen] = useState(false);
+  const [invalidRow, setInvalidRow] = useState<number | null>(null);
 
   const loadMapping = useCallback(async () => {
     setLoading(true);
@@ -289,13 +293,6 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
     setError(null);
   };
 
-  const addProfile = () => {
-    const group = newProfileGroup(groups);
-    setGroups((previous) => [...previous, group]);
-    setMessage('Nouveau profil ajouté. Enregistrez les profils pour appliquer le mapping.');
-    setError(null);
-  };
-
   const removeProfile = (group: MappingGroup) => {
     setGroups((previous) => previous.filter((candidate) => candidate.code !== group.code));
     setProfileInfo((previous) => {
@@ -360,25 +357,45 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
   if (loading && !document) return <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Chargement des profils…</div>;
   if (!document) return <div className="mx-auto max-w-md py-16 text-center text-sm"><p className="text-destructive">{error || 'Profils indisponibles.'}</p><Button variant="outline" size="sm" className="mt-3" onClick={() => void loadMapping()}>Réessayer</Button></div>;
 
-  return (
-    <div className="space-y-5 p-4">
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={addProfile}><Plus className="h-3.5 w-3.5" />Ajouter une personne</Button>
-      </div>
+  const saveMappingOnly = async () => {
+    if (!document) return;
+    setSaving(true);
+    setError(null);
+    setInvalidRow(null);
+    try {
+      const mapping = buildMappingDocument(groups);
+      await saveDocument({ ...mapping, informations_dossier: document.informations_dossier }, 'Mapping enregistré');
+      setMappingOpen(false);
+    } catch (cause) {
+      if (cause instanceof MappingValidationError) setInvalidRow(cause.rowIndex ?? null);
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSaving(false);
+    }
+  };
 
-      {groups.length === 0 ? (
-        <section className="rounded-2xl border border-dashed p-10 text-center"><ShieldCheck className="mx-auto h-6 w-6 text-muted-foreground" /><h3 className="mt-3 text-sm font-semibold">Aucun profil détecté</h3><p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-muted-foreground">Lancez un scan PII ou ajoutez une partie à la procédure pour créer le premier profil.</p><Button variant="outline" size="sm" className="mt-4" onClick={addProfile}><Plus className="h-3.5 w-3.5" />Ajouter un profil</Button></section>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {sortedGroups.map((group) => {
-            const selected = partyForProfile(profileInfo, group);
-            const related = profileInfo.relations.filter((relation) => relation.target === group.code);
-            const kind = selected
-              ? (selected.party.type === 'societe' ? 'societes' : 'personnes_physiques')
-              : partyCategoryForCode(group.code);
-            const profileKind = PROFILE_KINDS[kind] || PROFILE_KINDS.autres;
-            const KindIcon = profileKind.icon;
-            return <article key={group.code} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = 'link'; event.dataTransfer.setData('text/plain', group.code); setDraggedProfile(group.code); }} onDragEnd={() => setDraggedProfile(null)} className={`group relative flex min-h-[17rem] flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md ${selected?.side === 'client' ? 'border-emerald-500/50' : selected?.side === 'adversaire' ? 'border-red-500/50' : ''}`}>
+  const promoteToParty = (group: MappingGroup) => {
+    setMappingOpen(false);
+    setProfileToEdit(group);
+  };
+
+  const addParty = () => {
+    const group = newProfileGroup(groups);
+    setGroups((previous) => [...previous, group]);
+    setProfileToEdit(group);
+    setMessage('Nouvelle partie ajoutée. Renseignez sa position puis enregistrez.');
+    setError(null);
+  };
+
+  const renderProfileCard = (group: MappingGroup) => {
+    const selected = partyForProfile(profileInfo, group);
+    const related = profileInfo.relations.filter((relation) => relation.target === group.code);
+    const kind = selected
+      ? (selected.party.type === 'societe' ? 'societes' : 'personnes_physiques')
+      : partyCategoryForCode(group.code);
+    const profileKind = PROFILE_KINDS[kind] || PROFILE_KINDS.autres;
+    const KindIcon = profileKind.icon;
+    return <article key={group.code} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = 'link'; event.dataTransfer.setData('text/plain', group.code); setDraggedProfile(group.code); }} onDragEnd={() => setDraggedProfile(null)} className={`group relative flex min-h-[17rem] flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md ${selected?.side === 'client' ? 'border-emerald-500/50' : selected?.side === 'adversaire' ? 'border-red-500/50' : ''}`}>
               <div className={`h-1.5 ${selected?.side === 'client' ? 'bg-emerald-500' : selected?.side === 'adversaire' ? 'bg-red-500' : 'bg-primary/40'}`} />
               <div className="flex items-start gap-3 p-4 pb-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${profileKind.badgeClass}`}><KindIcon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{group.principal}</p><p className="mt-1 text-[11px] text-muted-foreground">{profileKind.label} · {group.variants.length + 1} écriture{group.variants.length ? 's' : ''} détectée{group.variants.length ? 's' : ''}</p></div><ActionMenu label="" icon={EllipsisVertical} iconOnly variant="ghost" size="icon" ariaLabel={`Options pour ${group.principal}`} triggerClassName="h-8 w-8 shrink-0" menuClassName="min-w-[150px]" items={[{ key: 'edit', label: 'Modifier', icon: UsersRound, onSelect: () => setProfileToEdit(group) }, { key: 'delete', label: 'Supprimer', icon: Trash2, isDanger: true, showDividerBefore: true, onSelect: () => removeProfile(group) }]} /></div>
               <div className="px-4 pb-3">{selected ? <div className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${selected.side === 'client' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-red-500/10 text-red-700 dark:text-red-400'}`}>{selected.side === 'client' ? 'Partie cliente' : 'Partie adverse'} · {positionLabel(selected.party)}</div> : <p className="text-[11px] text-muted-foreground">Aucune position procédurale</p>}</div>
@@ -419,9 +436,36 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
                   </div>
                 ) : <p className="text-center text-[11px] leading-4 text-muted-foreground">Glissez un profil ici<br />pour établir un lien</p>}
               </div>
-              {!selected && profileKind.canBeProcedureParty && <div className="mt-auto flex gap-2 p-4 pt-3"><Button variant="outline" size="sm" className="flex-1 border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400" onClick={() => selectParty(group, 'client')}>Client</Button><Button variant="outline" size="sm" className="flex-1 border-red-500/30 text-red-700 hover:bg-red-500/10 dark:text-red-400" onClick={() => selectParty(group, 'adversaire')}>Adverse</Button></div>}
+              
             </article>;
-          })}
+  };
+
+  const clientGroups = sortedGroups.filter((group) => partyForProfile(profileInfo, group)?.side === 'client');
+  const adverseGroups = sortedGroups.filter((group) => partyForProfile(profileInfo, group)?.side === 'adversaire');
+
+  return (
+    <div className="space-y-5 p-4">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={() => setMappingOpen(true)}><Tag className="h-3.5 w-3.5" />Mapping</Button>
+        <Button variant="outline" size="sm" onClick={addParty}><Plus className="h-3.5 w-3.5" />Ajouter une partie</Button>
+      </div>
+
+      {clientGroups.length === 0 && adverseGroups.length === 0 ? (
+        <div className="rounded-2xl border border-dashed p-10 text-center"><ShieldCheck className="mx-auto h-6 w-6 text-muted-foreground" /><h3 className="mt-3 text-sm font-semibold">Aucune partie désignée</h3><p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-muted-foreground">Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><Button variant="outline" size="sm" className="mt-4" onClick={() => setMappingOpen(true)}><Tag className="h-3.5 w-3.5" />Ouvrir le mapping</Button></div>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="space-y-3" role="region" aria-label="Parties clientes">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Parties clientes</h3>
+            {clientGroups.length === 0
+              ? <p className="rounded-xl border border-dashed p-4 text-xs text-muted-foreground">Aucune partie cliente désignée.</p>
+              : <div className="space-y-4">{clientGroups.map((group) => renderProfileCard(group))}</div>}
+          </div>
+          <div className="space-y-3" role="region" aria-label="Parties adverses">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-400">Parties adverses</h3>
+            {adverseGroups.length === 0
+              ? <p className="rounded-xl border border-dashed p-4 text-xs text-muted-foreground">Aucune partie adverse désignée.</p>
+              : <div className="space-y-4">{adverseGroups.map((group) => renderProfileCard(group))}</div>}
+          </div>
         </div>
       )}
 
@@ -429,6 +473,17 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
         <span className={`min-w-0 flex-1 text-xs ${error ? 'text-destructive' : 'text-muted-foreground'}`}>{error || message || 'Glissez un profil sur un autre pour créer un lien.'}</span>
         <Button size="sm" onClick={() => void saveProfiles()} disabled={saving}>{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Enregistrer les profils</Button>
       </div>
+
+      <CaseMappingDialog
+        open={mappingOpen}
+        groups={groups}
+        saving={saving}
+        invalidRowIndex={invalidRow}
+        onOpenChange={setMappingOpen}
+        onChange={setGroups}
+        onSave={() => void saveMappingOnly()}
+        onPromote={promoteToParty}
+      />
 
       {profileToEdit && <ProcedurePartyProfileDialog
         open

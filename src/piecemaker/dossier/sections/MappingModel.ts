@@ -127,13 +127,76 @@ function isSocieteCode(code: unknown): boolean {
   return /^(CLIENT|ADVERSAIRE)_/.test(normalizedCode) && !tokens.includes('PHYSIQUE');
 }
 
-export function partyCategoryForCode(code: unknown): string {
+export type MappingCategory =
+  | 'personnes_physiques'
+  | 'societes'
+  | 'adresses'
+  | 'email'
+  | 'telephone'
+  | 'iban'
+  | 'url'
+  | 'siren'
+  | 'autres';
+
+export const MAPPING_CATEGORIES: Array<{ value: MappingCategory; label: string; prefix: string }> = [
+  { value: 'personnes_physiques', label: 'Personnes physiques', prefix: 'PERSONNE_PHYSIQUE' },
+  { value: 'societes', label: 'Personnes morales', prefix: 'PERSONNE_MORALE' },
+  { value: 'adresses', label: 'Adresses', prefix: 'ADRESSE' },
+  { value: 'email', label: 'Adresses e-mail', prefix: 'EMAIL' },
+  { value: 'telephone', label: 'Téléphones', prefix: 'PHONE' },
+  { value: 'iban', label: 'IBAN', prefix: 'IBAN' },
+  { value: 'url', label: 'URL', prefix: 'URL' },
+  { value: 'siren', label: 'SIREN', prefix: 'SIREN' },
+  { value: 'autres', label: 'Autres données personnelles', prefix: 'AUTRE' },
+];
+
+const CATEGORY_CODE_PREFIXES: Array<[string, MappingCategory]> = [
+  ['SIREN', 'siren'],
+  ['ADRESSE', 'adresses'],
+  ['LOCATION', 'adresses'],
+  ['LIEU_NAISSANCE', 'adresses'],
+  ['EMAIL', 'email'],
+  ['COURRIEL', 'email'],
+  ['MAIL', 'email'],
+  ['PHONE', 'telephone'],
+  ['TELEPHONE', 'telephone'],
+  ['IBAN', 'iban'],
+  ['URL', 'url'],
+];
+
+const SIREN_VALUE = /^\d{9}$/;
+const EMAIL_VALUE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const URL_VALUE = /^(?:https?:\/\/|www\.)\S+$/i;
+const IBAN_VALUE = /^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/i;
+const PHONE_VALUE = /^\+?\d[\d\s.()-]{8,}$/;
+
+export function mappingCategoryForEntry(code: unknown, principal: unknown = ''): MappingCategory {
   const value = codeToken(code);
-  if (value.startsWith('SIREN_')) return 'siren';
-  if (value.startsWith('ADRESSE_') || value.startsWith('LIEU_NAISSANCE_')) return 'adresses';
+  for (const [prefix, category] of CATEGORY_CODE_PREFIXES) {
+    if (value === prefix || value.startsWith(`${prefix}_`)) return category;
+  }
   if (value.includes('PERSONNE_PHYSIQUE') || value.startsWith('DIRIGEANT_') || value.startsWith('AVOCAT_')) return 'personnes_physiques';
   if (isSocieteCode(value)) return 'societes';
+  const text = clean(principal);
+  if (SIREN_VALUE.test(text.replace(/[\s.]/g, ''))) return 'siren';
+  if (EMAIL_VALUE.test(text)) return 'email';
+  if (URL_VALUE.test(text)) return 'url';
+  if (IBAN_VALUE.test(text.replace(/\s/g, ''))) return 'iban';
+  if (PHONE_VALUE.test(text)) return 'telephone';
   return 'autres';
+}
+
+export function nextMappingCode(category: MappingCategory, groups: MappingGroup[] = []): string {
+  const prefix = MAPPING_CATEGORIES.find((entry) => entry.value === category)?.prefix || 'AUTRE';
+  const used = new Set(groups.map((group) => clean(group.code)));
+  let number = 1;
+  while (used.has(`${prefix}_${String(number).padStart(2, '0')}`)) number += 1;
+  return `${prefix}_${String(number).padStart(2, '0')}`;
+}
+
+export function partyCategoryForCode(code: unknown): string {
+  const category = mappingCategoryForEntry(code);
+  return category === 'email' || category === 'telephone' || category === 'iban' || category === 'url' ? 'autres' : category;
 }
 
 function normalizeAssignments(value: unknown): MappingAssignment[] {

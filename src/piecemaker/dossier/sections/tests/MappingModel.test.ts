@@ -7,6 +7,7 @@ import {
   findProcedurePartyForProfile,
   groupMappingByCode,
   lawyerRelationshipPseudonym,
+  mappingCategoryForEntry,
   normalizeProcedureInfo,
   principalPartyOptions,
   profileRelationshipId,
@@ -246,5 +247,28 @@ describe('MappingModel', () => {
     expect(reassigned.informations_dossier.relations).toEqual([
       { id: 'relation-conseil', source: 'CLIENT_APPELANT_PERSONNE_PHYSIQUE_01', original_source: '', target: 'PERSONNE_PHYSIQUE_02', role: 'Avocat' },
     ]);
+  });
+});
+
+describe('mappingCategoryForEntry', () => {
+  it('distingue chaque rubrique a partir de la cle', () => {
+    expect(mappingCategoryForEntry('PERSONNE_PHYSIQUE_01')).toBe('personnes_physiques');
+    expect(mappingCategoryForEntry('PERSONNE_MORALE_01')).toBe('societes');
+    expect(mappingCategoryForEntry('ADRESSE_01')).toBe('adresses');
+    expect(mappingCategoryForEntry('LOCATION_01')).toBe('adresses');
+    expect(mappingCategoryForEntry('EMAIL_01')).toBe('email');
+    expect(mappingCategoryForEntry('PHONE_01')).toBe('telephone');
+    expect(mappingCategoryForEntry('IBAN_01')).toBe('iban');
+    expect(mappingCategoryForEntry('URL_01')).toBe('url');
+    expect(mappingCategoryForEntry('SIREN_01')).toBe('siren');
+  });
+
+  it('retombe sur la valeur quand la cle ne renseigne rien', () => {
+    expect(mappingCategoryForEntry('AUTRE_01', '552100554')).toBe('siren');
+    expect(mappingCategoryForEntry('AUTRE_01', 'contact@acme.fr')).toBe('email');
+    expect(mappingCategoryForEntry('AUTRE_01', 'https://acme.fr')).toBe('url');
+    expect(mappingCategoryForEntry('AUTRE_01', 'FR7630006000011234567890189')).toBe('iban');
+    expect(mappingCategoryForEntry('AUTRE_01', '+33 6 12 34 56 78')).toBe('telephone');
+    expect(mappingCategoryForEntry('AUTRE_01', 'Rien de reconnaissable')).toBe('autres');
   });
 });
