@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 import { AnonymizationLauncher } from '@/piecemaker/sidebar-anonymization/AnonymizationLauncher';
+import { clearTrackedAnonymizationJobs, trackAnonymizationJob } from '@/piecemaker/dossier/anonymizationJobsCache';
 
 const { projectsRequest, pmGet, pmPost } = vi.hoisted(() => ({
   projectsRequest: vi.fn(),
@@ -22,6 +23,7 @@ const projects = [
 ];
 
 beforeEach(() => {
+  clearTrackedAnonymizationJobs();
   localStorage.clear();
   projectsRequest.mockReset().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(projects), { status: 200 })));
   pmGet.mockReset().mockResolvedValue({ exists: false, mapping: {} });
@@ -155,4 +157,27 @@ it('removes the progress bar once the job is finished and shows it again on rela
   fireEvent.click(screen.getByRole('button', { name: 'Mettre en file' }));
 
   await waitFor(() => expect(progressSlot.querySelector('[role="progressbar"]')).not.toBeNull());
+});
+
+it('shows the progress bar for a job started outside the dialog', async () => {
+  const buttonSlot = document.createElement('span');
+  const progressSlot = document.createElement('div');
+  document.body.append(buttonSlot, progressSlot);
+
+  render(
+    <AnonymizationLauncher
+      buttonSlots={[buttonSlot]}
+      progressSlots={new Map([['/cabinet/a', progressSlot]])}
+      onProjectsChange={() => undefined}
+    />,
+  );
+
+  trackAnonymizationJob({
+    projectPath: '/cabinet/a',
+    projectName: 'Dossier A',
+    job: { id: 'job-relaunch', case: 'dossier-a', action: 'anonymize', state: 'running', phase: 'scan', percent: 30 },
+  });
+
+  await waitFor(() => expect(progressSlot.querySelector('[role="progressbar"]')).not.toBeNull());
+  expect(progressSlot.textContent).toContain('Analyse GLiNER');
 });
