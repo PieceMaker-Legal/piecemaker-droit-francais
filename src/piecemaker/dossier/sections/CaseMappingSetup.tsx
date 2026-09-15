@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, ScanSearch, ShieldCheck } from 'lucide-react';
+import { Loader2, RotateCcw, ScanSearch, ShieldCheck } from 'lucide-react';
 
 import { invalidatePmGet, pmGet, pmGetCached, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
 import { setMappingReady } from '@/piecemaker/dossier/mappingStatusCache';
 import type { CaseOverview, OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 import { describeJob } from '@/piecemaker/dossier/sections/CaseFilesUtils';
-import { Button } from '@/shared/ui';
+import { ActionMenu, Button } from '@/shared/ui';
 
 type GlinerOverview = {
   components: {
@@ -153,8 +153,13 @@ export default function CaseMappingSetup() {
   };
 
   const mappingReady = Boolean(overview?.mapping.exists && overview.mapping.entries > 0);
+  // Pi\u00e8ces hors ressources (m\u00eames r\u00e8gles que `startOriginalsJob` c\u00f4t\u00e9 serveur) :
+  // sert \u00e0 afficher, dans le menu de relance, combien seraient retrait\u00e9es par
+  // chaque option, sans appel serveur d\u00e9di\u00e9 \u2014 l'aper\u00e7u les porte d\u00e9j\u00e0.
+  const relevantOriginals = (overview?.originals ?? []).filter((file) => !file.resource);
+  const newOriginalsCount = relevantOriginals.filter((file) => !(file.converted && file.scanned)).length;
 
-  const anonymize = async () => {
+  const anonymize = async (force: boolean) => {
     if (!caseId) return;
     setStarting(true);
     setError(null);
@@ -163,7 +168,7 @@ export default function CaseMappingSetup() {
         case: caseId,
         action: 'anonymize',
         files: [],
-        force: mappingReady,
+        force,
         engine: 'markitdown',
       });
       setAnonymizationJob(job);
@@ -217,10 +222,46 @@ export default function CaseMappingSetup() {
       ) : glinerInstalled === null ? (
         <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled><Loader2 className="h-3 w-3 animate-spin" /></Button>
       ) : glinerInstalled ? (
-        <Button size="sm" className="h-6 px-2 text-xs" onClick={() => void anonymize()} disabled={busy}>
-          {anonymizing || starting ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanSearch className="h-3 w-3" />}
-          {anonymizing ? 'En cours…' : mappingReady ? 'Relancer' : 'Anonymiser'}
-        </Button>
+        anonymizing || starting ? (
+          <Button size="sm" className="h-6 px-2 text-xs" disabled>
+            <Loader2 className="h-3 w-3 animate-spin" />
+            En cours…
+          </Button>
+        ) : mappingReady ? (
+          <ActionMenu
+            label="Relancer"
+            icon={ScanSearch}
+            variant="default"
+            size="sm"
+            triggerClassName="h-6 px-2 text-xs"
+            menuClassName="min-w-[260px]"
+            portal
+            items={[
+              {
+                key: 'new-only',
+                label: 'Scanner les nouvelles pièces',
+                description: newOriginalsCount > 0
+                  ? `${newOriginalsCount} pièce${newOriginalsCount > 1 ? 's' : ''} nouvelle${newOriginalsCount > 1 ? 's' : ''} ou modifiée${newOriginalsCount > 1 ? 's' : ''}`
+                  : 'Aucune pièce nouvelle détectée',
+                icon: ScanSearch,
+                onSelect: () => void anonymize(false),
+              },
+              {
+                key: 'rescan-all',
+                label: 'Rescanner toutes les pièces',
+                description: `${relevantOriginals.length} pièce${relevantOriginals.length > 1 ? 's' : ''} au total`,
+                icon: RotateCcw,
+                showDividerBefore: true,
+                onSelect: () => void anonymize(true),
+              },
+            ]}
+          />
+        ) : (
+          <Button size="sm" className="h-6 px-2 text-xs" onClick={() => void anonymize(false)}>
+            <ScanSearch className="h-3 w-3" />
+            Anonymiser
+          </Button>
+        )
       ) : (
         <Button size="sm" className="h-6 px-2 text-xs" onClick={() => void installGliner()} disabled={busy}>
           {installing || starting ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
