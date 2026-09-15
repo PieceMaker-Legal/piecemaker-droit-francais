@@ -1,8 +1,9 @@
 {
   "name": "piecemaker-dossier",
-  "displayName": "PieceMaker Dossier",
+  "displayName": "Dossier",
   "version": "0.1.0",
   "description": "Knowledge graph storage and queries for a PieceMaker dossier.",
+  "icon": "icon.svg",
   "type": "module",
   "slot": "tab",
   "entry": "dist/client.js",
