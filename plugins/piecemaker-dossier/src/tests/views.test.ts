@@ -19,11 +19,10 @@ const snapshot: KnowledgeSnapshot = {
 };
 
 describe('Mermaid dossier graph', () => {
-  it('centers selected parties and assigns distinct client and adverse colors', () => {
+  it('renders a flat flowchart with selected parties between documents and related entities', () => {
     const source = mermaidSource(snapshot);
-    expect(source).toContain('subgraph center[Parties]');
-    expect(source).toContain('subgraph clients[Parties clientes]');
-    expect(source).toContain('subgraph adversaires[Parties adverses]');
+    expect(source).toContain('flowchart LR');
+    expect(source).not.toContain('subgraph');
     expect(source).toContain('class n_client client');
     expect(source).toContain('class n_adverse adverse');
     expect(source).toContain('n_doc ~~~ n_client');

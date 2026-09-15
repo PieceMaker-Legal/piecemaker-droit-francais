@@ -119,7 +119,7 @@ export class KnowledgeStore {
     if (typeof databaseSource === 'string') fs.mkdirSync(path.dirname(databaseSource), { recursive: true, mode: 0o700 });
     this.database = typeof databaseSource === 'string' ? new Database(databaseSource) : databaseSource;
     initializeKnowledgeSchema(this.database);
-    this.findRoots = this.database.prepare(`SELECT DISTINCT n.* FROM piecemaker_nodes n LEFT JOIN piecemaker_mappings m ON m.project_id=n.project_id AND m.node_id=n.id WHERE n.project_id=@projectId AND (@kind IS NULL OR n.kind=@kind) AND (@pattern='' OR n.search_text LIKE @pattern ESCAPE '\\' OR m.search_text LIKE @pattern ESCAPE '\\') ORDER BY CASE WHEN n.search_text=@exact THEN 0 ELSE 1 END,n.label,n.id LIMIT @limit`);
+    this.findRoots = this.database.prepare(`SELECT DISTINCT n.* FROM piecemaker_nodes n LEFT JOIN piecemaker_mappings m ON m.project_id=n.project_id AND m.node_id=n.id WHERE n.project_id=@projectId AND n.id NOT LIKE 'system:%' AND (@kind IS NULL OR n.kind=@kind) AND (@pattern='' OR n.search_text LIKE @pattern ESCAPE '\\' OR m.search_text LIKE @pattern ESCAPE '\\') ORDER BY CASE WHEN n.search_text=@exact THEN 0 ELSE 1 END,n.label,n.id LIMIT @limit`);
     this.findProject = this.database.prepare('SELECT project_id FROM projects WHERE project_id=@value OR project_path=@value LIMIT 1');
     this.upsertNode = this.database.prepare(`INSERT INTO piecemaker_nodes(project_id,id,kind,label,search_text,aliases_json,data_json,origin,created_at,updated_at) VALUES(@projectId,@id,@kind,@label,@searchText,@aliases,@data,@origin,@at,@at) ON CONFLICT(project_id,id) DO UPDATE SET kind=excluded.kind,label=excluded.label,search_text=excluded.search_text,aliases_json=excluded.aliases_json,data_json=excluded.data_json,origin=excluded.origin,updated_at=excluded.updated_at`);
     this.upsertLink = this.database.prepare(`INSERT INTO piecemaker_links(project_id,from_node_id,to_node_id,relation,data_json,origin,created_at,updated_at) VALUES(@projectId,@fromNodeId,@toNodeId,@relation,@data,@origin,@at,@at) ON CONFLICT(project_id,from_node_id,to_node_id,relation) DO UPDATE SET data_json=excluded.data_json,origin=excluded.origin,updated_at=excluded.updated_at`);
@@ -179,7 +179,10 @@ export class KnowledgeStore {
 
   public snapshot(projectIdInput: string): KnowledgeSnapshot {
     const projectId = this.resolveProject(projectIdInput);
-    const nodes = (this.database.prepare('SELECT * FROM piecemaker_nodes WHERE project_id=? ORDER BY kind,label,id').all(projectId) as NodeRow[]).map(toNode);
+    const storedNodes = (this.database.prepare('SELECT * FROM piecemaker_nodes WHERE project_id=? ORDER BY kind,label,id').all(projectId) as NodeRow[]).map(toNode);
+    const exclusionsNode = storedNodes.find((node) => node.data.systemRole === 'gliner-exclusions');
+    const exclusions = arrayValue(exclusionsNode?.data.values, 'exclusions');
+    const nodes = storedNodes.filter((node) => node.data.systemRole !== 'gliner-exclusions');
     const links = (this.database.prepare('SELECT from_node_id,to_node_id,relation,data_json,origin FROM piecemaker_links WHERE project_id=? ORDER BY relation,from_node_id,to_node_id').all(projectId) as LinkRow[]).map((row): KnowledgeLink => ({
       projectId,
       fromNodeId: row.from_node_id,
@@ -189,7 +192,7 @@ export class KnowledgeStore {
       origin: row.origin,
     }));
     const mappings = (this.database.prepare('SELECT project_id,node_id,real_value,masked_value,data_json,origin FROM piecemaker_mappings WHERE project_id=? ORDER BY real_value').all(projectId) as MappingRow[]).map(toMapping);
-    return { projectId, nodes, links, mappings };
+    return { projectId, nodes, links, mappings, exclusions, exclusionsInitialized: Boolean(exclusionsNode) };
   }
 
   public close(): void { if (this.ownsDatabase) this.database.close(); }

@@ -1,4 +1,5 @@
 export const NODE_KINDS = ['person', 'company', 'document', 'iban', 'address', 'phone', 'email', 'url', 'siren', 'other'] as const;
+export const EXCLUSIONS_NODE_ID = 'system:gliner-exclusions';
 
 export type NodeKind = (typeof NODE_KINDS)[number];
 export type KnowledgeOrigin = 'gliner' | 'manual' | 'llm';
@@ -52,6 +53,8 @@ export type KnowledgeSnapshot = {
   nodes: KnowledgeNode[];
   links: KnowledgeLink[];
   mappings: KnowledgeMapping[];
+  exclusions?: string[];
+  exclusionsInitialized?: boolean;
 };
 
 export type KnowledgeResolvedLink = {
@@ -112,6 +115,7 @@ export type GlinerMappingDocument = {
   mapping?: Record<string, string>;
   reverse_mapping?: Record<string, string[] | string>;
   extracted_data?: Record<string, Record<string, JsonData>>;
+  ignored?: string[];
   informations_dossier?: JsonData;
 };
 
