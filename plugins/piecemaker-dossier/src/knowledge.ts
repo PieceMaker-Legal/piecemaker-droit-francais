@@ -8,6 +8,7 @@ import { NODE_KINDS } from './types.js';
 import type {
   JsonData,
   KnowledgeLinkInput,
+  KnowledgeLink,
   KnowledgeMapping,
   KnowledgeNode,
   KnowledgeNodeInput,
@@ -19,6 +20,7 @@ import type {
   KnowledgeUpdateInput,
   KnowledgeUpdateOperation,
   KnowledgeUpdateResult,
+  KnowledgeSnapshot,
   NodeKind,
 } from './types.js';
 
@@ -102,6 +104,7 @@ export function initializeKnowledgeSchema(database: DatabaseConnection): void {
 
 export class KnowledgeStore {
   private readonly database: DatabaseConnection;
+  private readonly ownsDatabase: boolean;
   private readonly findRoots;
   private readonly findProject;
   private readonly upsertNode;
@@ -111,9 +114,10 @@ export class KnowledgeStore {
   private readonly deleteMapping;
   private readonly deleteNode;
 
-  public constructor(databasePath = resolveKnowledgeDatabasePath()) {
-    fs.mkdirSync(path.dirname(databasePath), { recursive: true, mode: 0o700 });
-    this.database = new Database(databasePath);
+  public constructor(databaseSource: string | DatabaseConnection = resolveKnowledgeDatabasePath()) {
+    this.ownsDatabase = typeof databaseSource === 'string';
+    if (typeof databaseSource === 'string') fs.mkdirSync(path.dirname(databaseSource), { recursive: true, mode: 0o700 });
+    this.database = typeof databaseSource === 'string' ? new Database(databaseSource) : databaseSource;
     initializeKnowledgeSchema(this.database);
     this.findRoots = this.database.prepare(`SELECT DISTINCT n.* FROM piecemaker_nodes n LEFT JOIN piecemaker_mappings m ON m.project_id=n.project_id AND m.node_id=n.id WHERE n.project_id=@projectId AND (@kind IS NULL OR n.kind=@kind) AND (@pattern='' OR n.search_text LIKE @pattern ESCAPE '\\' OR m.search_text LIKE @pattern ESCAPE '\\') ORDER BY CASE WHEN n.search_text=@exact THEN 0 ELSE 1 END,n.label,n.id LIMIT @limit`);
     this.findProject = this.database.prepare('SELECT project_id FROM projects WHERE project_id=@value OR project_path=@value LIMIT 1');
@@ -123,7 +127,9 @@ export class KnowledgeStore {
     this.upsertMapping = this.database.prepare(`INSERT INTO piecemaker_mappings(project_id,node_id,real_value,masked_value,search_text,data_json,origin,created_at,updated_at) VALUES(@projectId,@nodeId,@real,@masked,@searchText,@data,@origin,@at,@at) ON CONFLICT(project_id,node_id,real_value) DO UPDATE SET masked_value=excluded.masked_value,search_text=excluded.search_text,data_json=excluded.data_json,origin=excluded.origin,updated_at=excluded.updated_at`);
     this.deleteMapping = this.database.prepare('DELETE FROM piecemaker_mappings WHERE project_id=@projectId AND node_id=@nodeId AND real_value=@real');
     this.deleteNode = this.database.prepare('DELETE FROM piecemaker_nodes WHERE project_id=@projectId AND id=@nodeId');
-    try { fs.chmodSync(databasePath, 0o600); } catch {}
+    if (typeof databaseSource === 'string') {
+      try { fs.chmodSync(databaseSource, 0o600); } catch {}
+    }
   }
 
   public query(input: KnowledgeQueryInput): KnowledgeQueryResult {
@@ -171,7 +177,22 @@ export class KnowledgeStore {
     })();
   }
 
-  public close(): void { this.database.close(); }
+  public snapshot(projectIdInput: string): KnowledgeSnapshot {
+    const projectId = this.resolveProject(projectIdInput);
+    const nodes = (this.database.prepare('SELECT * FROM piecemaker_nodes WHERE project_id=? ORDER BY kind,label,id').all(projectId) as NodeRow[]).map(toNode);
+    const links = (this.database.prepare('SELECT from_node_id,to_node_id,relation,data_json,origin FROM piecemaker_links WHERE project_id=? ORDER BY relation,from_node_id,to_node_id').all(projectId) as LinkRow[]).map((row): KnowledgeLink => ({
+      projectId,
+      fromNodeId: row.from_node_id,
+      toNodeId: row.to_node_id,
+      relation: row.relation,
+      data: parseJson<JsonData>(row.data_json, {}),
+      origin: row.origin,
+    }));
+    const mappings = (this.database.prepare('SELECT project_id,node_id,real_value,masked_value,data_json,origin FROM piecemaker_mappings WHERE project_id=? ORDER BY real_value').all(projectId) as MappingRow[]).map(toMapping);
+    return { projectId, nodes, links, mappings };
+  }
+
+  public close(): void { if (this.ownsDatabase) this.database.close(); }
   public tableNames(): string[] { return (this.database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'piecemaker_%' ORDER BY name").all() as Array<{ name: string }>).map(({ name }) => name); }
 
   private resolveProject(value: string | undefined): string {

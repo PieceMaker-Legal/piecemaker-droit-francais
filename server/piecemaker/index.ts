@@ -11,6 +11,7 @@ import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
 import { startLibraryBackend, installLibraryRuntime } from './library/index.js';
+import { createKnowledgeBackend } from './knowledge/index.js';
 import { createTimesheetBackend } from './timesheet/index.js';
 
 /**
@@ -47,6 +48,7 @@ installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessions
 const library = await startLibraryBackend(piecemakerHome(), applicationRoot);
 installLibraryRuntime(providerRuntimeService, sessionsService, library);
 const timesheet = createTimesheetBackend(piecemakerHome());
+const knowledge = createKnowledgeBackend(applicationRoot);
 
 export function createPieceMakerRouter(options: { getRuntimeStatus?: () => PieceMakerRuntimeStatus } = {}) {
   const router = vendor.createPieceMakerRouter({ ...options, anonymizer });
@@ -54,6 +56,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));
   router.use(timesheet);
+  router.use(knowledge);
   return router;
 }
 export type { PieceMakerRuntimeStatus };
