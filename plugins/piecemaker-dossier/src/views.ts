@@ -119,8 +119,8 @@ export function generalView(data: ViewData): string {
       <button class="pmd-button pmd-small-button" data-action="add-node">＋ Ajouter une partie</button>
     </div>
     ${clients.length || adversaries.length ? `<div class="pmd-party-columns">
-      <section class="pmd-party-column"><h3 data-side="client">Parties clientes</h3>${clients.length ? clients.map((node) => nodeCard(node, data.graph)).join('') : '<div class="pmd-column-empty">Aucune partie cliente désignée.</div>'}</section>
-      <section class="pmd-party-column"><h3 data-side="adverse">Parties adverses</h3>${adversaries.length ? adversaries.map((node) => nodeCard(node, data.graph)).join('') : '<div class="pmd-column-empty">Aucune partie adverse désignée.</div>'}</section>
+      <section class="pmd-party-column"><h3 data-side="client">Parties clientes</h3>${clients.length ? clients.map((node) => nodeCard(node, data.graph)).join('') : '<button type="button" class="pmd-column-empty" data-party-picker="client"><span>Aucune partie cliente désignée.</span><small>Cliquer pour ajouter une partie</small></button>'}</section>
+      <section class="pmd-party-column"><h3 data-side="adverse">Parties adverses</h3>${adversaries.length ? adversaries.map((node) => nodeCard(node, data.graph)).join('') : '<button type="button" class="pmd-column-empty" data-party-picker="adversaire"><span>Aucune partie adverse désignée.</span><small>Cliquer pour ajouter une partie</small></button>'}</section>
     </div>` : `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button" data-action="mapping">◇ Ouvrir le mapping</button></div>`}
     <div class="pmd-sticky-status">
       <span>Glissez un profil sur un autre pour créer un lien.</span>
@@ -167,7 +167,7 @@ function chronologyEvent(node: KnowledgeNode, dated: boolean, byId: Map<string, 
     .filter((entry): entry is KnowledgeNode => Boolean(entry && entry.kind !== 'document'));
   const nature = textValue(node.data.nature);
   const localisation = textValue(node.data.localisation);
-  return `<article class="pmd-chronology-event" data-dated="${dated}"><div class="pmd-chronology-marker" aria-hidden="true"></div><div class="pmd-chronology-date">${escapeHtml(dated ? chronologyDateLabel(dateFor(node)) : 'Date non renseignée')}</div><div class="pmd-chronology-document pmd-card"><div class="pmd-card-head"><div class="pmd-document-heading"><div class="pmd-card-title">${escapeHtml(node.label)}</div><div class="pmd-document-meta">${escapeHtml(nature || 'Type non renseigné')}${localisation ? ` · ${escapeHtml(localisation)}` : ''}</div></div><button class="pmd-icon-button" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></div>${chronologyFields(node)}<div class="pmd-document-related"><span class="pmd-document-related-label">Personnes liées</span><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('') || '<span class="pmd-badge pmd-badge-muted">Aucune personne liée</span>'}</div></div></div></article>`;
+  return `<article class="pmd-chronology-event" data-dated="${dated}" data-open-document="${escapeHtml(node.id)}"><div class="pmd-chronology-marker" aria-hidden="true"></div><div class="pmd-chronology-date">${escapeHtml(dated ? chronologyDateLabel(dateFor(node)) : 'Date non renseignée')}</div><div class="pmd-chronology-document pmd-card"><div class="pmd-card-head"><div class="pmd-document-heading"><div class="pmd-card-title">${escapeHtml(node.label)}</div><div class="pmd-document-meta">${escapeHtml(nature || 'Type non renseigné')}${localisation ? ` · ${escapeHtml(localisation)}` : ''}</div></div><button class="pmd-icon-button" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></div>${chronologyFields(node)}<div class="pmd-document-related"><span class="pmd-document-related-label">Personnes liées</span><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('') || '<span class="pmd-badge pmd-badge-muted">Aucune personne liée</span>'}</div></div></div></article>`;
 }
 
 function chronologySection(title: string, hint: string, nodes: KnowledgeNode[], dated: boolean, byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
@@ -195,51 +195,31 @@ export function chronologyView(data: ViewData): string {
     ${renderChronologySections(dated, undated, byId, data.graph.links)}`;
 }
 
-const mermaidId = (value: string): string => `n_${value.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-const mermaidLabel = (value: string): string => value.replace(/["\[\]{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+export type NetworkGraphData = {
+  nodes: Array<{ id: string; label: string; group: string; level: number; title: string }>;
+  edges: Array<{ id: string; from: string; to: string; label: string }>;
+};
 
-function mermaidNode(node: KnowledgeNode): string {
-  const label = mermaidLabel(node.label);
-  if (node.kind === 'document') return `${mermaidId(node.id)}[/${JSON.stringify(`Document · ${label}`)}/]`;
-  if (node.data.partySide === 'client') return `${mermaidId(node.id)}([${JSON.stringify(label)}])`;
-  if (node.data.partySide === 'adversaire') return `${mermaidId(node.id)}([${JSON.stringify(label)}])`;
-  return `${mermaidId(node.id)}[${JSON.stringify(label)}]`;
+function networkGroup(node: KnowledgeNode): string {
+  if (node.data.partySide === 'client') return 'client';
+  if (node.data.partySide === 'adversaire') return 'adverse';
+  if (node.kind === 'document') return 'document';
+  if (node.kind === 'person') return 'person';
+  if (node.kind === 'company') return 'company';
+  if (node.kind === 'iban' || node.kind === 'siren') return 'financial';
+  return 'detail';
 }
 
-export function mermaidSource(snapshot: KnowledgeSnapshot): string {
-  const clients = snapshot.nodes.filter((node) => node.data.partySide === 'client');
-  const adversaries = snapshot.nodes.filter((node) => node.data.partySide === 'adversaire');
-  const parties = new Set([...clients, ...adversaries].map((node) => node.id));
-  const documents = snapshot.nodes.filter((node) => node.kind === 'document');
-  const others = snapshot.nodes.filter((node) => node.kind !== 'document' && !parties.has(node.id));
-  const declarations = (nodes: KnowledgeNode[]) => nodes.map((node) => `  ${mermaidNode(node)}`).join('\n');
-  const lines = ['flowchart LR', declarations(documents), declarations(clients), declarations(adversaries), declarations(others)];
-  for (const link of snapshot.links) lines.push(`  ${mermaidId(link.fromNodeId)} -->|${JSON.stringify(mermaidLabel(link.relation))}| ${mermaidId(link.toNodeId)}`);
-  const firstParty = clients[0] || adversaries[0];
-  if (documents[0] && firstParty) lines.push(`  ${mermaidId(documents[0].id)} ~~~ ${mermaidId(firstParty.id)}`);
-  if (firstParty && others[0]) lines.push(`  ${mermaidId(firstParty.id)} ~~~ ${mermaidId(others[0].id)}`);
-  lines.push('  classDef document fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a,stroke-width:1.5px');
-  lines.push('  classDef client fill:#dcfce7,stroke:#22c55e,color:#14532d,stroke-width:3px');
-  lines.push('  classDef adverse fill:#fee2e2,stroke:#ef4444,color:#7f1d1d,stroke-width:3px');
-  lines.push('  classDef person fill:#f5f3ff,stroke:#a78bfa,color:#4c1d95,stroke-width:1.5px');
-  lines.push('  classDef company fill:#fffbeb,stroke:#f59e0b,color:#78350f,stroke-width:1.5px');
-  lines.push('  classDef financial fill:#ecfeff,stroke:#06b6d4,color:#164e63,stroke-width:1.5px');
-  lines.push('  classDef detail fill:#f4f4f5,stroke:#a1a1aa,color:#27272a,stroke-width:1px');
-  if (documents.length) lines.push(`  class ${documents.map((node) => mermaidId(node.id)).join(',')} document`);
-  if (clients.length) lines.push(`  class ${clients.map((node) => mermaidId(node.id)).join(',')} client`);
-  if (adversaries.length) lines.push(`  class ${adversaries.map((node) => mermaidId(node.id)).join(',')} adverse`);
-  const remaining = others.filter((node) => node.kind === 'person');
-  const remainingCompanies = others.filter((node) => node.kind === 'company');
-  const financial = others.filter((node) => node.kind === 'iban' || node.kind === 'siren');
-  const details = others.filter((node) => !remaining.includes(node) && !remainingCompanies.includes(node) && !financial.includes(node));
-  if (remaining.length) lines.push(`  class ${remaining.map((node) => mermaidId(node.id)).join(',')} person`);
-  if (remainingCompanies.length) lines.push(`  class ${remainingCompanies.map((node) => mermaidId(node.id)).join(',')} company`);
-  if (financial.length) lines.push(`  class ${financial.map((node) => mermaidId(node.id)).join(',')} financial`);
-  if (details.length) lines.push(`  class ${details.map((node) => mermaidId(node.id)).join(',')} detail`);
-  lines.push('  linkStyle default stroke:#a1a1aa,stroke-width:1.25px');
-  return lines.filter(Boolean).join('\n');
+export function networkGraphData(snapshot: KnowledgeSnapshot): NetworkGraphData {
+  const nodes = snapshot.nodes.map((node) => {
+    const group = networkGroup(node);
+    const level = node.kind === 'document' ? 0 : group === 'client' || group === 'adverse' ? 1 : 2;
+    return { id: node.id, label: node.label, group, level, title: `${labels[node.kind]} · ${node.label}` };
+  });
+  const edges = snapshot.links.map((link, index) => ({ id: `${index}:${link.fromNodeId}:${link.toNodeId}:${link.relation}`, from: link.fromNodeId, to: link.toNodeId, label: link.relation }));
+  return { nodes, edges };
 }
 
 export function graphView(): string {
-  return `<div class="pmd-toolbar"><div><h2 class="pmd-title">Graphe du dossier</h2><div class="pmd-subtitle">Documents, parties et entités liées</div></div><span class="pmd-spacer"></span><button class="pmd-button" data-action="refresh">Rafraîchir</button></div><div class="pmd-graph-card"><div class="pmd-mermaid" data-mermaid></div></div>`;
+  return `<div class="pmd-toolbar"><div><h2 class="pmd-title">Graphe du dossier</h2><div class="pmd-subtitle">Déplacez, zoomez ou sélectionnez un élément</div></div></div><div class="pmd-network-frame" data-network-frame><div class="pmd-network-actions"><button class="pmd-button" data-action="fit-network">Recentrer</button><button class="pmd-button pmd-button-primary" data-action="fullscreen-network">Plein écran</button></div><div class="pmd-network" data-network></div><div class="pmd-network-help">Molette pour zoomer · Glisser pour déplacer · Double-clic pour modifier</div></div>`;
 }
