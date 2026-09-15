@@ -5,6 +5,9 @@ export type KnowledgeMappingView = Pick<KnowledgeSnapshot, 'projectId' | 'nodes'
 export type KnowledgeChronologyView = { projectId: string; documents: KnowledgeSnapshot['nodes']; links: KnowledgeSnapshot['links'] };
 export type AgentsDocument = { projectId: string; content: string; exists: boolean };
 export type KnowledgeDocumentPreview = { path: string; content: string };
+type RepositoryCase = { path: string; location: string };
+type RepositoryOverview = { folders?: RepositoryCase[] };
+type RegisteredCase = { folder: RepositoryCase };
 
 const BASE = '/api/piecemaker/knowledge';
 const PIECEMAKER_BASE = '/api/piecemaker';
@@ -30,6 +33,25 @@ async function request<T>(base: string, path: string, init: RequestInit = {}): P
 }
 
 const query = (projectId: string): string => `?projectId=${encodeURIComponent(projectId)}`;
+const caseReferences = new Map<string, Promise<string>>();
+
+function caseReference(projectPath: string): Promise<string> {
+  const existing = caseReferences.get(projectPath);
+  if (existing) return existing;
+  const pending = request<RepositoryOverview>(PIECEMAKER_BASE, '/repository')
+    .then(async (overview) => {
+      const registered = overview.folders?.find((entry) => entry.location === projectPath);
+      if (registered) return registered.path;
+      const result = await request<RegisteredCase>(PIECEMAKER_BASE, '/repository/cases/selected', { method: 'POST', body: JSON.stringify({ folder: projectPath }) });
+      return result.folder.path;
+    })
+    .catch((error) => {
+      caseReferences.delete(projectPath);
+      throw error;
+    });
+  caseReferences.set(projectPath, pending);
+  return pending;
+}
 
 export const knowledgeApi = {
   overview: (projectId: string) => request<KnowledgeOverview>(BASE, `/overview${query(projectId)}`),
@@ -37,7 +59,11 @@ export const knowledgeApi = {
   chronology: (projectId: string) => request<KnowledgeChronologyView>(BASE, `/chronology${query(projectId)}`),
   graph: (projectId: string) => request<KnowledgeSnapshot>(BASE, `/graph${query(projectId)}`),
   agents: (projectId: string) => request<AgentsDocument>(BASE, `/agents${query(projectId)}`),
-  document: (projectId: string, path: string) => request<KnowledgeDocumentPreview>(PIECEMAKER_BASE, `/repository/document?case=${encodeURIComponent(projectId)}&path=${encodeURIComponent(path)}`),
+  document: async (projectPath: string, path: string) => {
+    if (!projectPath) throw new Error('Le chemin du dossier CloudCLI est indisponible.');
+    const reference = await caseReference(projectPath);
+    return request<KnowledgeDocumentPreview>(PIECEMAKER_BASE, `/repository/document?case=${encodeURIComponent(reference)}&path=${encodeURIComponent(path)}`);
+  },
   scan: (projectId: string) => request(BASE, '/scan', { method: 'POST', body: JSON.stringify({ projectId }) }),
   update: (projectId: string, operations: KnowledgeUpdateOperation[]) => request(BASE, '/update', { method: 'POST', body: JSON.stringify({ projectId, operations }) }),
 };
