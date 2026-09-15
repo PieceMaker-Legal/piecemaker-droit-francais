@@ -143,12 +143,79 @@ test('sans mapping, le proxy est transparent', async () => {
   });
 });
 
-test('la réécriture JSON couvre les clés et les valeurs imbriquées', () => {
+test('la réécriture JSON préserve les clés et transforme les valeurs imbriquées', () => {
   const rewritten = rewriteJsonBody(
     JSON.stringify({ [NAME]: { note: `vu par ${NAME}`, liste: [NAME] } }),
     (text) => text.split(NAME).join(CODE),
   );
-  assert.equal(rewritten, JSON.stringify({ [CODE]: { note: `vu par ${CODE}`, liste: [CODE] } }));
+  assert.equal(rewritten, JSON.stringify({ [NAME]: { note: `vu par ${CODE}`, liste: [CODE] } }));
+});
+
+test('les entités courtes exigent des frontières et des majuscules', () => {
+  const dictionary = {
+    empty: false,
+    mapping: { Li: 'COURT_1', Max: 'COURT_2', Paul: 'MOYEN_1', Dupont: 'LONG_1' },
+  };
+  const apply = (text) => anonymize(text, dictionary);
+
+  assert.equal(apply(`LI li ALI (LI) /LI/ _LI_ \"LI\" d'LI LI,`), `COURT_1 li ALI (COURT_1) /COURT_1/ _COURT_1_ \"COURT_1\" d'COURT_1 COURT_1,`);
+  assert.equal(apply('Max max MAX xMAXx'), 'Max max COURT_2 xMAXx');
+  assert.equal(apply('Paul paul (PAUL) pauliste _Paul_'), 'MOYEN_1 MOYEN_1 (MOYEN_1) pauliste _MOYEN_1_');
+  assert.equal(apply('Dupont xduponty DUPONT.pdf'), 'LONG_1 xLONG_1y LONG_1.pdf');
+});
+
+test('les identifiants d’appel et de résultat restent appariés', () => {
+  const toolUseId = 'toolu_01JeanDupont_X';
+  const payload = {
+    messages: [
+      { role: 'assistant', content: [{ type: 'tool_use', id: toolUseId, name: 'rechercher', input: {} }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseId, content: 'Résultat' }] },
+    ],
+  };
+  const rewritten = JSON.parse(rewriteJsonBody(
+    JSON.stringify(payload),
+    (text) => text.split('JeanDupont').join(CODE),
+  ));
+
+  assert.equal(rewritten.messages[0].content[0].id, toolUseId);
+  assert.equal(rewritten.messages[1].content[0].tool_use_id, toolUseId);
+});
+
+test('les schémas gardent leur contrat et anonymisent leurs données', () => {
+  const payload = {
+    max_tokens: 1000,
+    tools: [{
+      name: NAME,
+      description: `Recherche ${NAME}`,
+      input_schPERS_MORALE_7: {
+        type: 'object',
+        properties: { client: { type: 'string', enum: [NAME] } },
+        required: ['client'],
+      },
+    }],
+  };
+  const rewritten = JSON.parse(rewriteJsonBody(
+    JSON.stringify(payload),
+    (text) => text.split(NAME).join(CODE),
+  ));
+  const functionCall = JSON.parse(rewriteJsonBody(
+    JSON.stringify({
+      function_call: { name: 'rechercher', arguments: JSON.stringify({ client: CODE }) },
+      content: [{ type: 'tool_use', id: 'toolu_1', name: 'rechercher', input: { id: CODE } }],
+    }),
+    (text) => text.split(CODE).join(NAME),
+  ));
+
+  assert.equal(rewritten.max_tokens, 1000);
+  assert.equal(rewritten.tools[0].name, NAME);
+  assert.equal(rewritten.tools[0].description, `Recherche ${CODE}`);
+  assert.equal(rewritten.tools[0].input_schPERS_MORALE_7.type, 'object');
+  assert.deepEqual(rewritten.tools[0].input_schPERS_MORALE_7.required, ['client']);
+  assert.deepEqual(rewritten.tools[0].input_schPERS_MORALE_7.properties.client.enum, [CODE]);
+  assert.equal(functionCall.function_call.name, 'rechercher');
+  assert.deepEqual(JSON.parse(functionCall.function_call.arguments), { client: NAME });
+  assert.equal(functionCall.content[0].id, 'toolu_1');
+  assert.deepEqual(functionCall.content[0].input, { id: NAME });
 });
 
 test('la retenue de fin de tampon est bornée', () => {
@@ -205,6 +272,69 @@ test('opencode : un code découpé dans un flux Chat Completions est recollé', 
   assert.ok(answer.includes('[DONE]'), 'la sentinelle de fin a disparu');
 });
 
+test('Anthropic réidentifie les arguments fragmentés d’un outil', () => {
+  const rewriter = createSseRewriter((text) => text.split(CODE).join(NAME));
+  const fragments = ['{"client":"PERSONNE_', 'PHYSIQUE_01', '"}'];
+  let answer = '';
+  for (const partial_json of fragments) {
+    answer += rewriter.push(`event: content_block_delta\ndata: ${JSON.stringify({
+      type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json },
+    })}\n\n`);
+  }
+  answer += rewriter.push('event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n');
+  answer += rewriter.end();
+  const argumentsText = answer
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .map((line) => JSON.parse(line.slice(6)).delta?.partial_json || '')
+    .join('');
+  assert.deepEqual(JSON.parse(argumentsText), { client: NAME });
+});
+
+test('Responses réidentifie les arguments fragmentés d’un outil', () => {
+  const rewriter = createSseRewriter((text) => text.split(CODE).join(NAME));
+  const fragments = ['{"client":"PERSONNE_', 'PHYSIQUE_01', '"}'];
+  let answer = '';
+  for (const delta of fragments) {
+    answer += rewriter.push(`event: response.function_call_arguments.delta\ndata: ${JSON.stringify({
+      type: 'response.function_call_arguments.delta', item_id: 'call_1', output_index: 0, delta,
+    })}\n\n`);
+  }
+  answer += rewriter.push('event: response.function_call_arguments.done\ndata: {"type":"response.function_call_arguments.done","item_id":"call_1","output_index":0}\n\n');
+  answer += rewriter.end();
+  const argumentsText = answer
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .map((line) => JSON.parse(line.slice(6)).delta || '')
+    .join('');
+  assert.deepEqual(JSON.parse(argumentsText), { client: NAME });
+});
+
+test('Chat Completions réidentifie les arguments fragmentés d’un outil', () => {
+  const rewriter = createSseRewriter((text) => text.split(CODE).join(NAME));
+  const fragments = ['{"client":"PERSONNE_', 'PHYSIQUE_01', '"}'];
+  let answer = '';
+  fragments.forEach((argumentsText, index) => {
+    answer += rewriter.push(`data: ${JSON.stringify({
+      choices: [{
+        index: 0,
+        delta: { tool_calls: [{ index: 0, function: { ...(index === 0 ? { name: 'rechercher' } : {}), arguments: argumentsText } }] },
+        finish_reason: null,
+      }],
+    })}\n\n`);
+  });
+  answer += rewriter.push('data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}\n\n');
+  answer += rewriter.end();
+  const argumentsText = answer
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .map((line) => JSON.parse(line.slice(6)))
+    .flatMap((event) => event.choices || [])
+    .flatMap((choice) => choice.delta?.tool_calls || [])
+    .map((toolCall) => toolCall.function?.arguments || '')
+    .join('');
+  assert.deepEqual(JSON.parse(argumentsText), { client: NAME });
+});
 test('un chemin sans route est refusé plutôt que relayé', async () => {
   const homeDir = makeHome();
   await withProxy(homeDir, (res) => {

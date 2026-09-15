@@ -36,66 +36,83 @@ function heldLength(buffer) {
   return match[0].length > MAX_HELD_WORD ? 0 : match[0].length;
 }
 
-/**
- * Champs qui ne portent jamais de texte destiné à un humain — protocole,
- * schémas, identifiants, blobs opaques — et que la substitution ne doit
- * donc jamais toucher, ni dans leur valeur ni en descendant dedans.
- *
- * Ce n'est pas une rustine pour un champ précis (ex. `encrypted_content`
- * d'un reasoning item Responses) : n'importe quel champ opaque peut un
- * jour contenir par hasard une sous-chaîne qui matche une entité mappée
- * (232 entités actives, substitution insensible à la casse). Le vrai fix
- * est de ne jamais présenter ces champs à `transform`, quel que soit leur
- * contenu.
- *
- * `messages[].content` textuel et `tool_result` restent traités (texte
- * conversationnel) ; `tools`, les schémas d'outils et les blobs chiffrés
- * de raisonnement ne le sont pas (protocole/opaque).
- */
-const OPAQUE_KEYS = new Set([
+const UNCHANGED_VALUE_KEYS = new Set([
   'encrypted_content',
-  'tools',
   'tool_choice',
-  'function_call',
-  'schema',
-  'parameters',
-  'input_schema',
-  'json_schema',
   'signature',
   'call_id',
+  'tool_use_id',
+  'tool_call_id',
+  'parent_tool_use_id',
+  'id',
+  'item_id',
+  'response_id',
+  'previous_response_id',
+  'type',
+  'role',
+  'model',
+  'status',
+  'object',
+  'finish_reason',
 ]);
 
-/** Clés dynamiques (préfixe plutôt que nom exact), ex. les ids `rs_...`. */
-const OPAQUE_KEY_PATTERNS = [/^id$/, /^rs_/];
+const TOOL_DATA_KEYS = new Set([
+  'description',
+  'server_description',
+  'title',
+  '$comment',
+  'enum',
+  'const',
+  'default',
+  'examples',
+  'example',
+]);
 
-function isOpaqueKey(key) {
-  if (OPAQUE_KEYS.has(key)) return true;
-  return OPAQUE_KEY_PATTERNS.some((pattern) => pattern.test(key));
+function rewriteDataValue(value, transform) {
+  if (typeof value === 'string') return transform(value);
+  if (Array.isArray(value)) return value.map((item) => rewriteDataValue(item, transform));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, item]) => [entryKey, rewriteDataValue(item, transform)]),
+    );
+  }
+  return value;
 }
 
-/**
- * Réécrit récursivement toutes les chaînes d'une valeur JSON, clés comprises :
- * un nom réel peut aussi bien être une valeur de `tool_result` qu'une clé
- * produite par un listing de fichiers.
- *
- * `key` est le nom du champ qui porte `value` dans son objet parent (`null`
- * à la racine ou dans un tableau). Quand ce nom est reconnu comme opaque
- * (voir `OPAQUE_KEYS`), `value` est rendue telle quelle, sans descendre
- * dedans : un tableau `tools` ou un `encrypted_content` traverse le proxy
- * intact, y compris leurs sous-arbres.
- */
+function rewriteToolValue(value, transform, key = null) {
+  if (key !== null && TOOL_DATA_KEYS.has(key)) return rewriteDataValue(value, transform);
+  if (Array.isArray(value)) return value.map((item) => rewriteToolValue(item, transform));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, item]) => [entryKey, rewriteToolValue(item, transform, entryKey)]),
+    );
+  }
+  return value;
+}
+
 function rewriteJsonValue(value, transform, key = null) {
-  if (key !== null && isOpaqueKey(key)) return value;
+  if (key === 'tools') return rewriteToolValue(value, transform);
+  if (key !== null && UNCHANGED_VALUE_KEYS.has(key)) return value;
   if (typeof value === 'string') return transform(value);
   if (Array.isArray(value)) return value.map((item) => rewriteJsonValue(item, transform, null));
   if (value && typeof value === 'object') {
     const output = {};
+    const toolCall = key === 'function'
+      || key === 'function_call'
+      || value.type === 'function_call'
+      || value.type === 'custom_tool_call'
+      || value.type === 'function_call_output'
+      || value.type === 'tool_use';
     for (const [entryKey, item] of Object.entries(value)) {
-      // Le nom de la clé elle-même reste transformé (un listing de
-      // fichiers peut produire une entité en clé), sauf s'il est lui-même
-      // opaque — ex. ne pas substituer dans un id `rs_...` utilisé comme clé.
-      const outputKey = isOpaqueKey(entryKey) ? entryKey : transform(entryKey);
-      output[outputKey] = rewriteJsonValue(item, transform, entryKey);
+      const toolData = toolCall && (
+        entryKey === 'arguments'
+        || entryKey === 'input'
+        || entryKey === 'output'
+        || entryKey === 'content'
+      );
+      output[entryKey] = entryKey === 'name' && toolCall
+        ? item
+        : toolData ? rewriteDataValue(item, transform) : rewriteJsonValue(item, transform, entryKey);
     }
     return output;
   }
@@ -184,56 +201,83 @@ function createSseRewriter(transform) {
 
   function rewriteAnthropic(parsed) {
     const index = Number.isInteger(parsed.index) ? parsed.index : 0;
-    const key = `a:${index}`;
-    const synth = (text) => JSON.stringify({ type: 'content_block_delta', index, delta: { type: 'text_delta', text } });
+    const keyPrefix = 'a:' + index + ':';
 
     if (parsed.type === 'content_block_delta' && parsed.delta) {
       for (const field of DELTA_TEXT_FIELDS) {
         if (typeof parsed.delta[field] !== 'string') continue;
+        const key = keyPrefix + field;
+        const deltaType = parsed.delta.type;
+        const synth = (text) => JSON.stringify({
+          type: 'content_block_delta',
+          index,
+          delta: { type: deltaType, [field]: text },
+        });
         parsed.delta[field] = rewriteDelta(key, parsed.delta[field], synth, 'content_block_delta');
       }
       return lines(JSON.stringify(parsed), undefined);
     }
-    // Le reste retenu doit sortir AVANT la fin du bloc : on le raccroche à un
-    // dernier delta, faute de quoi la fin du dernier mot serait perdue.
-    return withFlush([key], JSON.stringify(parsed), parsed.type);
-  }
-
-  /**
-   * API Responses : le texte arrive dans `delta` (une chaîne nue), identifié par
-   * `item_id` — le même item peut porter plusieurs parts, d'où `content_index`.
-   */
-  function rewriteResponses(parsed) {
-    const owner = parsed.item_id ?? parsed.output_index ?? 0;
-    const part = parsed.content_index ?? 0;
-    const key = `r:${owner}:${part}`;
-    const synth = (delta) => JSON.stringify({ ...parsed, type: 'response.output_text.delta', delta });
-
-    if (typeof parsed.delta === 'string') {
-      parsed.delta = rewriteDelta(key, parsed.delta, synth, 'response.output_text.delta');
-      return lines(JSON.stringify(parsed), undefined);
-    }
-    // `response.completed` clôt tout le flux, les autres `.done` un seul bloc.
-    const keys = parsed.type === 'response.completed' ? [...held.keys()] : [key];
+    const keys = [...held.keys()].filter((key) => key.startsWith(keyPrefix));
     return withFlush(keys, JSON.stringify(parsed), parsed.type);
   }
 
-  /** Chat Completions : un delta par `choices[i]`, terminé par `finish_reason`. */
+  function rewriteResponses(parsed) {
+    const eventType = typeof parsed.type === 'string' ? parsed.type : '';
+    const eventFamily = eventType.replace(/\.(delta|done)$/, '');
+    const owner = parsed.item_id ?? parsed.output_index ?? 0;
+    const part = parsed.content_index ?? 0;
+    const key = 'r:' + eventFamily + ':' + owner + ':' + part;
+    const synth = (delta) => JSON.stringify({ ...parsed, delta });
+
+    if (typeof parsed.delta === 'string') {
+      parsed.delta = rewriteDelta(key, parsed.delta, synth, eventType);
+      return lines(JSON.stringify(parsed), undefined);
+    }
+    const keys = eventType === 'response.completed'
+      ? [...held.keys()]
+      : eventType.endsWith('.done') ? [key] : [];
+    return withFlush(keys, JSON.stringify(parsed), parsed.type);
+  }
+
   function rewriteChatChunk(parsed) {
     const flushed = [];
     for (const choice of parsed.choices) {
       if (!choice || typeof choice !== 'object') continue;
       const index = Number.isInteger(choice.index) ? choice.index : 0;
-      const key = `c:${index}`;
-      const synth = (content) => JSON.stringify({
-        ...parsed,
-        choices: [{ index, delta: { content }, finish_reason: null }],
-      });
-      for (const field of ['content', 'reasoning_content', 'refusal']) {
+      const keyPrefix = 'c:' + index + ':';
+      for (const field of ['content', 'reasoning_content', 'refADRESSE_20l']) {
         if (typeof choice.delta?.[field] !== 'string') continue;
+        const key = keyPrefix + field;
+        const synth = (content) => JSON.stringify({
+          ...parsed,
+          choices: [{ index, delta: { [field]: content }, finish_reason: null }],
+        });
         choice.delta[field] = rewriteDelta(key, choice.delta[field], synth, undefined);
       }
-      if (choice.finish_reason) flushed.push(key);
+      if (Array.isArray(choice.delta?.tool_calls)) {
+        choice.delta.tool_calls.forEach((toolCall, position) => {
+          if (typeof toolCall?.function?.arguments !== 'string') return;
+          const toolIndex = Number.isInteger(toolCall.index) ? toolCall.index : position;
+          const key = keyPrefix + 'tool:' + toolIndex;
+          const synth = (argumentsText) => JSON.stringify({
+            ...parsed,
+            choices: [{
+              index,
+              delta: { tool_calls: [{ index: toolIndex, function: { arguments: argumentsText } }] },
+              finish_reason: null,
+            }],
+          });
+          toolCall.function.arguments = rewriteDelta(
+            key,
+            toolCall.function.arguments,
+            synth,
+            undefined,
+          );
+        });
+      }
+      if (choice.finish_reason) {
+        flushed.push(...[...held.keys()].filter((key) => key.startsWith(keyPrefix)));
+      }
     }
     return withFlush(flushed, JSON.stringify(parsed), undefined);
   }
