@@ -38,21 +38,24 @@ describe('CaseMappingSection', () => {
     vi.clearAllMocks();
   });
 
-  it('ajoute un nouvel article et le persiste dans le mapping', async () => {
+  it('ajoute une entree au mapping depuis sa rubrique et la persiste', async () => {
     pmGetCached.mockResolvedValue(initialResponse);
     pmPut.mockImplementation(async (_path: string, body: Record<string, unknown>) => ({ ...initialResponse, ...body, commit: { created: false } }));
 
     render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
     await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une personne' }));
-    expect(screen.getByText('PERSONNE_PHYSIQUE_02')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Mapping' }));
+    const physiques = screen.getByRole('group', { name: 'Personnes physiques' });
+    fireEvent.click(within(physiques).getByRole('button', { name: 'Ajouter' }));
+    expect(screen.getByDisplayValue('PERSONNE_PHYSIQUE_02')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Variant principal de la ligne 2'), { target: { value: 'Bob' } });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les profils' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le mapping' }));
     });
 
     await waitFor(() => expect(pmPut).toHaveBeenCalled());
-    expect((pmPut.mock.calls[0][1] as { mapping: Record<string, string> }).mapping.PERSONNE_PHYSIQUE_02).toBe('PERSONNE_PHYSIQUE_02');
+    expect((pmPut.mock.calls[0][1] as { mapping: Record<string, string> }).mapping.Bob).toBe('PERSONNE_PHYSIQUE_02');
   });
 
   it('supprime un article depuis son menu et le retire du mapping sauvegardé', async () => {
@@ -72,7 +75,6 @@ describe('CaseMappingSection', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Supprimer' }));
 
     expect(screen.queryByText('Alice')).toBeNull();
-    expect(screen.getByText('Bob')).toBeTruthy();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les profils' }));
     });
@@ -125,7 +127,7 @@ describe('CaseMappingSection', () => {
     expect(savedInfo.parties_clientes).toHaveLength(0);
     expect(savedInfo.parties_adverses).toHaveLength(0);
     expect(savedBody.mapping).toEqual({ Alice: 'PERSONNE_PHYSIQUE_01' });
-    expect(screen.getByText('Aucune position procédurale')).toBeTruthy();
+    expect(screen.getByText('Aucune partie désignée')).toBeTruthy();
   });
 
   it('ne modifie pas le mapping si un profil est enregistré comme Tiers', async () => {
@@ -146,7 +148,7 @@ describe('CaseMappingSection', () => {
     const body = pmPut.mock.calls[0][1] as { mapping: Record<string, string> };
     expect(body.mapping).toEqual({ Alice: 'PERSONNE_PHYSIQUE_01' });
     expect(body.mapping['Alice modifiée']).toBeUndefined();
-    expect(screen.getByText('Alice')).toBeTruthy();
+    expect(screen.queryByText('Alice')).toBeNull();
     expect(screen.queryByText('Alice modifiée')).toBeNull();
   });
 
@@ -156,7 +158,7 @@ describe('CaseMappingSection', () => {
       ...initialResponse,
       mapping: { [lawyerPrincipal]: 'PERSONNE_PHYSIQUE_01' },
       reverse_mapping: { PERSONNE_PHYSIQUE_01: [lawyerPrincipal] },
-      informations_dossier: normalizeProcedureInfo(),
+      informations_dossier: normalizeProcedureInfo({ parties_clientes: [{ type: 'personne_physique', nom: lawyerPrincipal, position: 'demandeur' }] }),
     });
 
     render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
@@ -173,7 +175,7 @@ describe('CaseMappingSection', () => {
       ...initialResponse,
       mapping: { Alice: 'PERSONNE_PHYSIQUE_01', 'Alice Dupont': 'PERSONNE_PHYSIQUE_01' },
       reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice', 'Alice Dupont'] },
-      informations_dossier: normalizeProcedureInfo(),
+      informations_dossier: info,
     });
 
     render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
@@ -189,7 +191,7 @@ describe('CaseMappingSection', () => {
       ...initialResponse,
       mapping: { Alice: 'CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_02', 'Alice Dupont': 'CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_02' },
       reverse_mapping: { CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_02: ['Alice', 'Alice Dupont'] },
-      informations_dossier: normalizeProcedureInfo(),
+      informations_dossier: info,
     });
 
     render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
@@ -252,7 +254,10 @@ describe('CaseMappingSection', () => {
       exists: true,
       mapping: { Alice: 'PERSONNE_PHYSIQUE_01', Bob: 'PERSONNE_PHYSIQUE_02' },
       reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice'], PERSONNE_PHYSIQUE_02: ['Bob'] },
-      informations_dossier: normalizeProcedureInfo(),
+      informations_dossier: normalizeProcedureInfo({
+        parties_clientes: [{ type: 'personne_physique', nom: 'Alice', position: 'demandeur' }],
+        parties_adverses: [{ type: 'personne_physique', nom: 'Bob', position: 'defendeur' }],
+      }),
     };
     pmGetCached.mockResolvedValue(relationResponse);
     pmPut.mockImplementation(async (_path: string, body: Record<string, unknown>) => ({ ...relationResponse, ...body, commit: { created: false } }));
@@ -264,8 +269,6 @@ describe('CaseMappingSection', () => {
     const bobCard = screen.getByText('Bob').closest('article');
     expect(aliceCard).toBeTruthy();
     expect(bobCard).toBeTruthy();
-    fireEvent.click(within(aliceCard!).getByRole('button', { name: 'Client' }));
-    fireEvent.click(within(bobCard!).getByRole('button', { name: 'Adverse' }));
     const updatedAliceCard = screen.getByText('Alice').closest('article');
     const updatedBobCard = screen.getByText('Bob').closest('article');
     expect(updatedAliceCard).toBeTruthy();
@@ -335,25 +338,79 @@ describe('CaseMappingSection', () => {
     expect((screen.getByLabelText('Lien avec Alice') as HTMLSelectElement).value).toBe('Dirigeant');
   });
 
-  it('affiche le type de chaque profil selon son code de pseudonymisation', async () => {
-    const response = {
+  it('classe chaque entree du mapping dans sa rubrique et montre sa cle', async () => {
+    pmGetCached.mockResolvedValue({
       ...initialResponse,
-      mapping: { Alice: 'PERSONNE_PHYSIQUE_01', Acme: 'PERSONNE_MORALE_01', '12 rue des Lilas': 'ADRESSE_01', 'contact@acme.fr': 'TELEPHONE_01' },
-      reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice'], PERSONNE_MORALE_01: ['Acme'], ADRESSE_01: ['12 rue des Lilas'], TELEPHONE_01: ['contact@acme.fr'] },
-    };
-    pmGetCached.mockResolvedValue(response);
+      mapping: {
+        Alice: 'PERSONNE_PHYSIQUE_01',
+        Acme: 'PERSONNE_MORALE_01',
+        '12 rue des Lilas': 'ADRESSE_01',
+        'contact@acme.fr': 'EMAIL_01',
+        '0612345678': 'PHONE_01',
+        'FR7630006000011234567890189': 'IBAN_01',
+        'https://acme.fr': 'URL_01',
+        '552100554': 'SIREN_01',
+      },
+      reverse_mapping: {
+        PERSONNE_PHYSIQUE_01: ['Alice'],
+        PERSONNE_MORALE_01: ['Acme'],
+        ADRESSE_01: ['12 rue des Lilas'],
+        EMAIL_01: ['contact@acme.fr'],
+        PHONE_01: ['0612345678'],
+        IBAN_01: ['FR7630006000011234567890189'],
+        URL_01: ['https://acme.fr'],
+        SIREN_01: ['552100554'],
+      },
+    });
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mapping' })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Mapping' }));
+
+    const rubrique = (label: string) => screen.getByRole('group', { name: label });
+    expect(within(rubrique('Personnes physiques')).getByDisplayValue('PERSONNE_PHYSIQUE_01')).toBeTruthy();
+    expect(within(rubrique('Personnes physiques')).getByDisplayValue('Alice')).toBeTruthy();
+    expect(within(rubrique('Personnes morales')).getByDisplayValue('Acme')).toBeTruthy();
+    expect(within(rubrique('Adresses')).getByDisplayValue('12 rue des Lilas')).toBeTruthy();
+    expect(within(rubrique('Adresses e-mail')).getByDisplayValue('contact@acme.fr')).toBeTruthy();
+    expect(within(rubrique('Téléphones')).getByDisplayValue('0612345678')).toBeTruthy();
+    expect(within(rubrique('IBAN')).getByDisplayValue('FR7630006000011234567890189')).toBeTruthy();
+    expect(within(rubrique('URL')).getByDisplayValue('https://acme.fr')).toBeTruthy();
+    expect(within(rubrique('SIREN')).getByDisplayValue('552100554')).toBeTruthy();
+  });
+
+  it('range les parties clientes a gauche et les parties adverses a droite', async () => {
+    pmGetCached.mockResolvedValue({
+      ...initialResponse,
+      mapping: { Alice: 'PERSONNE_PHYSIQUE_01', Bob: 'PERSONNE_PHYSIQUE_02' },
+      reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice'], PERSONNE_PHYSIQUE_02: ['Bob'] },
+      informations_dossier: normalizeProcedureInfo({
+        parties_clientes: [{ type: 'personne_physique', nom: 'Alice', position: 'demandeur' }],
+        parties_adverses: [{ type: 'personne_physique', nom: 'Bob', position: 'defendeur' }],
+      }),
+    });
 
     render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
     await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
 
-    const cardOf = (name: string) => screen.getByText(name).closest('article')!;
-    expect(cardOf('Alice').textContent).toContain('Personne physique');
-    expect(cardOf('Acme').textContent).toContain('Personne morale');
-    expect(cardOf('12 rue des Lilas').textContent).toContain('Adresse');
-    expect(cardOf('contact@acme.fr').textContent).toContain('Autre donnée personnelle');
+    const clientes = screen.getByRole('region', { name: 'Parties clientes' });
+    const adverses = screen.getByRole('region', { name: 'Parties adverses' });
+    expect(within(clientes).getByText('Alice')).toBeTruthy();
+    expect(within(clientes).queryByText('Bob')).toBeNull();
+    expect(within(adverses).getByText('Bob')).toBeTruthy();
+  });
 
-    expect(within(cardOf('Acme')).getByRole('button', { name: 'Client' })).toBeTruthy();
-    expect(within(cardOf('12 rue des Lilas')).queryByRole('button', { name: 'Client' })).toBeNull();
-    expect(within(cardOf('contact@acme.fr')).queryByRole('button', { name: 'Adverse' })).toBeNull();
+  it('n affiche aucune carte tant qu aucune partie n est designee', async () => {
+    pmGetCached.mockResolvedValue({
+      ...initialResponse,
+      mapping: { Alice: 'PERSONNE_PHYSIQUE_01' },
+      reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice'] },
+      informations_dossier: normalizeProcedureInfo(),
+    });
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByText('Aucune partie désignée')).toBeTruthy());
+    expect(screen.queryAllByRole('article')).toHaveLength(0);
+    expect(screen.queryByText('Alice')).toBeNull();
   });
 });
