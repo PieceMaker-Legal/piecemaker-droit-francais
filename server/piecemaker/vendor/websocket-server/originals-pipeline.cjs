@@ -18,6 +18,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const {
+  ensureProcessTreeStopped,
+  terminateProcessTree,
+} = require('./process-group.cjs');
 
 const {
   createCommit,
@@ -46,7 +50,7 @@ const {
 } = require('../piecemaker-plugin/scripts/lib/mapping.cjs');
 // Vocabulaire des sigles de sociétés (SA_1, SARL_1, PERS_MORALE_1…), miroir de
 // `_LEGAL_FORMS` (scan_utils.py) — sert à classer un code déjà attribué.
-const { isSocieteCode, societeCounterKey } = require('./legal-forms.cjs');
+const { isSocieteCode, societeCounterKey, detectCompanySigle, LEGAL_FORM_TOKENS } = require('./legal-forms.cjs');
 // À chaque enregistrement d'un mapping de dossier, le mapping central global est
 // reconstruit et dé-conflicté : c'est lui que le hook central applique à toute
 // lecture, dossier ou non. `syncCentralMapping` ne jette jamais — un central qui
@@ -93,6 +97,14 @@ const JOB_NICE = () => {
 };
 /** Threads torch du scanner : abaissé de 6 à 4 pour laisser des cœurs libres (le worker lit cette variable). */
 const JOB_TORCH_THREADS = () => process.env.PIECEMAKER_TORCH_THREADS || '4';
+const JOB_TIMEOUT_MS = () => {
+  const value = Number(process.env.PIECEMAKER_ORIGINALS_JOB_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? value : 60 * 60 * 1000;
+};
+const PROCESS_TERMINATION_GRACE_MS = () => {
+  const value = Number(process.env.PIECEMAKER_PROCESS_GROUP_GRACE_MS);
+  return Number.isFinite(value) && value > 0 ? value : 2_000;
+};
 
 /** Les pièces d'un dossier listées dans l'administration : tout sauf le Markdown. */
 async function listOriginals(caseRoot) {
@@ -260,13 +272,38 @@ function areNamesSimilar(first, second) {
   return shorter.size > 0 && [...shorter].every((token) => longer.has(token));
 }
 
-/**
- * Regroupe les occurrences d'un type d'entité. Seules les personnes sont
- * consolidées : deux sociétés dont le nom se ressemble restent deux entités.
- */
-function groupEntityHits(hits, category) {
-  const texts = [...new Set(hits.map((hit) => String(hit?.text || '').trim()).filter(Boolean))];
-  if (category !== 'personnes_physiques') return texts.map((text) => [text]);
+const CIVILITY_PREFIX = /^(?:(?:m|mr|mrs|ms|mme|mlle|dr|pr|prof|ma[iî]tre)\.\s*|(?:mr|mrs|ms|mme|mlle|dr|pr|prof|ma[iî]tre)\s+)/i;
+
+function withoutCivility(text) {
+  return String(text || '').replace(CIVILITY_PREFIX, '').trim();
+}
+
+function expandCivilityVariants(texts) {
+  const expanded = [];
+  for (const text of texts) {
+    expanded.push(text);
+    const bare = withoutCivility(text);
+    if (bare && bare !== text) expanded.push(bare);
+  }
+  return [...new Set(expanded)];
+}
+
+function companyIdentity(text) {
+  const tokens = normalizeEntityName(text)
+    .split(/\s+/)
+    .map((token) => token.replace(/[.,'’&"()]/g, ''))
+    .filter(Boolean);
+  const base = tokens.filter((token) => !LEGAL_FORM_TOKENS.has(token.toUpperCase())).join(' ');
+  return { base, sigle: detectCompanySigle(text) };
+}
+
+function areCompaniesSame(first, second) {
+  if (!first.base || !second.base) return false;
+  if (first.base !== second.base) return false;
+  return !first.sigle || !second.sigle || first.sigle === second.sigle;
+}
+
+function groupSimilarNames(texts) {
   const groups = [];
   for (const text of texts) {
     const normalized = normalizeEntityName(text);
@@ -279,6 +316,28 @@ function groupEntityHits(hits, category) {
     }
   }
   return groups.map((group) => group.texts);
+}
+
+function groupSameCompanies(texts) {
+  const groups = [];
+  for (const text of texts) {
+    const identity = companyIdentity(text);
+    const group = groups.find((candidate) => candidate.identities.some((member) => areCompaniesSame(identity, member)));
+    if (group) {
+      group.texts.push(text);
+      group.identities.push(identity);
+    } else {
+      groups.push({ texts: [text], identities: [identity] });
+    }
+  }
+  return groups.map((group) => group.texts);
+}
+
+function groupEntityHits(hits, category) {
+  const texts = [...new Set(hits.map((hit) => String(hit?.text || '').trim()).filter(Boolean))];
+  if (category === 'personnes_physiques') return groupSimilarNames(expandCivilityVariants(texts));
+  if (category === 'societes') return groupSameCompanies(texts);
+  return texts.map((text) => [text]);
 }
 
 /**
@@ -313,6 +372,7 @@ async function rebuildCaseMapping(caseRoot) {
   // code d'origine plutôt que d'en créer un nouveau.
   const coded = Object.entries(mapping).map(([entity, code]) => ({
     normalized: normalizeEntityName(entity),
+    identity: companyIdentity(entity),
     category: codeCategory(code),
     code,
   }));
@@ -335,6 +395,11 @@ async function rebuildCaseMapping(caseRoot) {
           code = coded.find((entry) => entry.category === category
             && normalized.some((name) => areNamesSimilar(name, entry.normalized)))?.code;
         }
+        if (!code && category === 'societes') {
+          const identities = texts.map(companyIdentity);
+          code = coded.find((entry) => entry.category === category
+            && identities.some((identity) => areCompaniesSame(identity, entry.identity)))?.code;
+        }
         const isNewCode = !code;
         if (!code) {
           const key = category === 'societes' ? `societes:${societeCodeKey(entityType)}` : category;
@@ -348,7 +413,7 @@ async function rebuildCaseMapping(caseRoot) {
         for (const text of texts) {
           if (mapping[text]) continue;
           mapping[text] = code;
-          coded.push({ normalized: normalizeEntityName(text), category, code });
+          coded.push({ normalized: normalizeEntityName(text), identity: companyIdentity(text), category, code });
           added += 1;
         }
         if (isNewCode) reverse[code] = [principal];
@@ -445,7 +510,16 @@ function finishedJob({ case: caseName, caseRoot, action, total, files, result })
  */
 function publicJob(job) {
   if (!job) return null;
-  const { child, caseRoot, reserveBytes, ...rest } = job;
+  const {
+    cancelReason,
+    child,
+    completion,
+    processGroupId,
+    reserveBytes,
+    stopPromise,
+    timeoutId,
+    ...rest
+  } = job;
   if (job.state === 'queued') {
     const position = waiting.findIndex((entry) => entry.job.id === job.id);
     rest.queuePosition = position >= 0 ? position + 1 : 1;
@@ -483,6 +557,7 @@ function getJob(jobId) {
 /** Descripteurs de traitements admis mais pas encore lancés, du plus ancien au plus récent. */
 const waiting = [];
 let reservedBytes = 0;
+let acceptingJobs = true;
 
 function runningAnonymize() {
   for (const job of jobs.values()) {
@@ -504,6 +579,7 @@ function canAdmit(job) {
 
 /** Admet les traitements en file qui rentrent désormais, du plus ancien au plus récent. */
 function pumpQueue() {
+  if (!acceptingJobs) return;
   for (let index = 0; index < waiting.length; index += 1) {
     const descriptor = waiting[index];
     if (!canAdmit(descriptor.job)) continue;
@@ -532,18 +608,55 @@ function pumpQueue() {
  */
 const CONVERT_SUBPHASE_SHARE = 0.25;
 
+function cancellationError(job) {
+  return new Error(
+    job.cancelReason === 'timeout'
+      ? 'Traitement interrompu après dépassement du délai maximal.'
+      : 'Traitement interrompu.'
+  );
+}
+
+function stopRunningJob(job, reason) {
+  if (!job.cancelled) {
+    job.cancelled = true;
+    job.cancelReason = reason;
+  }
+  if (!job.processGroupId) return Promise.resolve();
+  if (!job.stopPromise) {
+    job.stopPromise = terminateProcessTree(job.processGroupId, {
+      graceMs: PROCESS_TERMINATION_GRACE_MS(),
+    });
+  }
+  return job.stopPromise;
+}
+
+async function verifyJobProcessTreeStopped(job, processGroupId = job.processGroupId) {
+  if (!processGroupId) return;
+  if (job.stopPromise) await job.stopPromise;
+  await ensureProcessTreeStopped(processGroupId, {
+    graceMs: PROCESS_TERMINATION_GRACE_MS(),
+  });
+}
+
 function spawnTracked(job, script, args, progressScale = {}) {
   const offset = progressScale.offset || 0;
   const weight = progressScale.weight ?? 100;
   const convertWeight = weight * CONVERT_SUBPHASE_SHARE;
   const scanWeight = weight - convertWeight;
   return new Promise((resolve, reject) => {
+    if (job.cancelled) {
+      reject(cancellationError(job));
+      return;
+    }
     if (!fs.existsSync(script)) {
       reject(new Error(`Script introuvable : ${path.basename(script)}`));
       return;
     }
     const child = spawn(PYTHON(), [script, ...args], {
       cwd: SCRIPTS_DIR,
+      // POSIX descendants inherit this dedicated process group. It lets the
+      // host stop Python, GLiNER, MinerU and office converters as one unit.
+      detached: process.platform !== 'win32',
       env: {
         ...process.env,
         PYTHONUNBUFFERED: '1',
@@ -553,6 +666,8 @@ function spawnTracked(job, script, args, progressScale = {}) {
       windowsHide: true,
     });
     job.child = child;
+    job.processGroupId = child.pid;
+    job.stopPromise = null;
     // Basse priorité CPU : un scan long ne doit pas figer la machine. Les enfants
     // (worker GLiNER, MinerU) héritent du nice sous POSIX. Best-effort — un échec
     // (droits, plateforme) ne doit jamais empêcher le traitement.
@@ -604,20 +719,33 @@ function spawnTracked(job, script, args, progressScale = {}) {
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', consumeStdout);
     child.stderr.on('data', consumeStderr);
-    child.on('error', (error) => reject(error));
-    child.on('close', (code, signal) => {
-      job.child = null;
-      if (job.cancelled) {
-        reject(new Error('Traitement interrompu.'));
-        return;
-      }
-      if (code === 0) {
+    let settled = false;
+    const finish = async (code, signal, spawnError = null) => {
+      if (settled) return;
+      settled = true;
+      const processGroupId = job.processGroupId;
+      try {
+        await verifyJobProcessTreeStopped(job, processGroupId);
+        if (spawnError) throw spawnError;
+        if (job.cancelled) throw cancellationError(job);
+        if (code !== 0) {
+          const detail = errorLines.slice(-3).join(' · ');
+          throw new Error(`${path.basename(script)} a échoué (${signal || `code ${code}`})${detail ? ` : ${detail}` : ''}`);
+        }
         resolve();
-        return;
+      } catch (error) {
+        reject(error);
+      } finally {
+        if (job.child === child) job.child = null;
+        if (job.processGroupId === processGroupId) job.processGroupId = null;
+        job.stopPromise = null;
       }
-      const detail = errorLines.slice(-3).join(' · ');
-      reject(new Error(`${path.basename(script)} a échoué (${signal || `code ${code}`})${detail ? ` : ${detail}` : ''}`));
-    });
+    };
+
+    // `exit` fires when the direct Python process ends. Waiting only for
+    // `close` can hang forever when an orphan still owns an inherited pipe.
+    child.once('error', (error) => void finish(null, null, error));
+    child.once('exit', (code, signal) => void finish(code, signal));
   });
 }
 
@@ -671,11 +799,13 @@ function migrateRootArtifacts(caseRoot, absoluteFiles) {
 
 async function runJob(job, legalCase, absoluteFiles, options) {
   job.migratedFromRoot = migrateRootArtifacts(legalCase.root, absoluteFiles);
+  if (job.cancelled) throw cancellationError(job);
   if (job.action === 'convert') {
     // `smart_converter.py` ne prend qu'un fichier : on avance dossier par
     // dossier pour garder une progression lisible même sans ligne PROGRESS.
     job.phase = 'convert';
     for (const [index, absolute] of absoluteFiles.entries()) {
+      if (job.cancelled) throw cancellationError(job);
       job.processed = index;
       job.percent = Math.round((index / absoluteFiles.length) * 100);
       const outputDirectory = outputDirectoryForOriginal(legalCase.root, absolute);
@@ -712,6 +842,7 @@ async function runJob(job, legalCase, absoluteFiles, options) {
   // repartirait de zéro à chaque nouveau groupe.
   let filesDone = 0;
   for (const [outputDirectory, groupFiles] of groups) {
+    if (job.cancelled) throw cancellationError(job);
     fs.mkdirSync(outputDirectory, { recursive: true });
     const args = [...groupFiles, '-o', outputDirectory, '--mapping-file', mappingFile];
     // `--case-root` découple la clé du manifeste de `--output` : les pièces
@@ -797,6 +928,7 @@ async function commitJobArtifacts(job, legalCase, absoluteFiles, homeDir) {
  */
 async function startOriginalsJob({ casesRoot, caseName, action, files = [], options = {}, homeDir = null } = {}) {
   if (!['convert', 'anonymize'].includes(action)) throw new Error('Action inconnue sur les pièces originales.');
+  if (!acceptingJobs) throw new Error('Le serveur est en cours d’arrêt : aucun nouveau traitement ne peut démarrer.');
   const legalCase = resolveCase(casesRoot, caseName);
   const busy = runningJobForCase(legalCase.root);
   if (busy) throw new Error('Un traitement est déjà en cours sur ce dossier.');
@@ -866,7 +998,12 @@ async function startOriginalsJob({ casesRoot, caseName, action, files = [], opti
     error: null,
     result: null,
     cancelled: false,
+    cancelReason: null,
     child: null,
+    completion: null,
+    processGroupId: null,
+    stopPromise: null,
+    timeoutId: null,
     queuedAt: new Date().toISOString(),
     startedAt: null,
     finishedAt: null,
@@ -892,34 +1029,86 @@ function admitOrQueue(descriptor) {
 
 /**
  * Lance réellement le traitement : réserve sa RAM, exécute le script Python, puis
- * — quoi qu'il arrive — libère la réservation et relance la file. Le `.finally`
- * est le seul endroit qui rend une place : un traitement qui échoue ne doit pas
- * bloquer la file pour autant.
+ * — quoi qu'il arrive — libère la réservation et relance la file. Le bloc
+ * `finally` est le seul endroit qui rend une place : un traitement qui échoue
+ * ne doit pas bloquer la file pour autant.
  */
 function launchJob(descriptor) {
   const { job, legalCase, absoluteFiles, options, homeDir, skipped, forced } = descriptor;
   job.state = 'running';
   job.startedAt = new Date().toISOString();
   reservedBytes += job.reserveBytes;
+  job.timeoutId = setTimeout(() => {
+    void stopRunningJob(job, 'timeout').catch((error) => {
+      appendLog(job, `Nettoyage après délai dépassé : ${error.message}`);
+    });
+  }, JOB_TIMEOUT_MS());
 
-  runJob(job, legalCase, absoluteFiles, { ...options, skipExisting: !forced })
-    .then(async (result) => {
+  job.completion = (async () => {
+    try {
+      const result = await runJob(job, legalCase, absoluteFiles, { ...options, skipExisting: !forced });
+      if (job.cancelled) throw cancellationError(job);
       const commit = await commitJobArtifacts(job, legalCase, absoluteFiles, homeDir);
+      if (job.cancelled) throw cancellationError(job);
       job.state = 'done';
       job.percent = 100;
       job.processed = job.total;
       job.result = { ...result, skipped, commit };
-    })
-    .catch((error) => {
+    } catch (error) {
       job.state = 'error';
       job.error = error.message;
-    })
-    .finally(() => {
+    } finally {
+      clearTimeout(job.timeoutId);
+      job.timeoutId = null;
+      const processGroupId = job.processGroupId;
+      try {
+        await verifyJobProcessTreeStopped(job, processGroupId);
+      } catch (error) {
+        job.state = 'error';
+        job.error = `Nettoyage incomplet du pipeline : ${error.message}`;
+      }
       job.child = null;
+      job.processGroupId = null;
+      job.stopPromise = null;
       job.finishedAt = new Date().toISOString();
       reservedBytes -= job.reserveBytes;
       pumpQueue();
-    });
+    }
+  })();
+}
+
+let stopAllPromise = null;
+
+/**
+ * Arrêt serveur : ferme l'admission, annule toute la file, tue chaque groupe
+ * actif et attend le `finally` de chaque job avant de rendre la main.
+ */
+function stopOriginalsJobs() {
+  if (stopAllPromise) return stopAllPromise;
+  acceptingJobs = false;
+
+  stopAllPromise = (async () => {
+    for (const descriptor of waiting.splice(0)) {
+      const { job } = descriptor;
+      job.cancelled = true;
+      job.cancelReason = 'server-shutdown';
+      job.state = 'error';
+      job.error = 'Traitement interrompu par l’arrêt du serveur.';
+      job.finishedAt = new Date().toISOString();
+    }
+
+    const running = [...jobs.values()].filter((job) => job.state === 'running');
+    const groups = [...new Set(running.map((job) => job.processGroupId).filter(Boolean))];
+    await Promise.allSettled(running.map((job) => stopRunningJob(job, 'server-shutdown')));
+    await Promise.allSettled(running.map((job) => job.completion).filter(Boolean));
+
+    // Contrôle défensif final, y compris si un enfant a fermé ses pipes avant
+    // que son événement `exit` ait été traité par le suivi normal du job.
+    await Promise.all(groups.map((processGroupId) => ensureProcessTreeStopped(processGroupId, {
+      graceMs: PROCESS_TERMINATION_GRACE_MS(),
+    })));
+  })();
+  return stopAllPromise;
 }
 
 function cancelOriginalsJob(jobId) {
@@ -937,13 +1126,16 @@ function cancelOriginalsJob(jobId) {
     return publicJob(job);
   }
   if (job.state !== 'running') return null;
-  job.cancelled = true;
-  if (job.child) job.child.kill('SIGTERM');
+  void stopRunningJob(job, 'user-cancellation').catch((error) => {
+    appendLog(job, `Nettoyage après annulation : ${error.message}`);
+  });
   return publicJob(job);
 }
 
 module.exports = {
   cancelOriginalsJob,
+  groupEntityHits,
+  stopOriginalsJobs,
   // Ré-exportés pour les routes de l'administration : l'implémentation vit
   // désormais dans `piecemaker-plugin/scripts/lib/mapping.cjs`.
   caseMappingFile,
