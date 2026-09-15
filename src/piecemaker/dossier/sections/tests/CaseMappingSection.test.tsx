@@ -413,4 +413,22 @@ describe('CaseMappingSection', () => {
     expect(screen.queryAllByRole('article')).toHaveLength(0);
     expect(screen.queryByText('Alice')).toBeNull();
   });
+
+  it('classe chaque rubrique par ordre alphabetique du variant principal', async () => {
+    pmGetCached.mockResolvedValue({
+      ...initialResponse,
+      mapping: { Zoe: 'PERSONNE_PHYSIQUE_03', Alice: 'PERSONNE_PHYSIQUE_01', Marc: 'PERSONNE_PHYSIQUE_02' },
+      reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice'], PERSONNE_PHYSIQUE_03: ['Zoe'], PERSONNE_PHYSIQUE_02: ['Marc'] },
+    });
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mapping' })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Mapping' }));
+
+    const rubrique = screen.getByRole('group', { name: 'Personnes physiques' });
+    const principaux = within(rubrique)
+      .getAllByLabelText(/^Variant principal de la ligne/)
+      .map((field) => (field as HTMLInputElement).value);
+    expect(principaux).toEqual(['Alice', 'Marc', 'Zoe']);
+  });
 });
