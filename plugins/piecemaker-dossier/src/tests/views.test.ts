@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mermaidSource } from '../views.js';
+import { chronologyView, networkGraphData } from '../views.js';
 import type { KnowledgeSnapshot } from '../types.js';
 
 const snapshot: KnowledgeSnapshot = {
@@ -18,14 +18,27 @@ const snapshot: KnowledgeSnapshot = {
   mappings: [],
 };
 
-describe('Mermaid dossier graph', () => {
-  it('renders a flat flowchart with selected parties between documents and related entities', () => {
-    const source = mermaidSource(snapshot);
-    expect(source).toContain('flowchart LR');
-    expect(source).not.toContain('subgraph');
-    expect(source).toContain('class n_client client');
-    expect(source).toContain('class n_adverse adverse');
-    expect(source).toContain('n_doc ~~~ n_client');
-    expect(source).toContain('n_client ~~~ n_iban');
+describe('vis-network dossier graph', () => {
+  it('places documents, selected parties and related entities on three levels', () => {
+    const graph = networkGraphData(snapshot);
+    expect(graph.nodes.find((node) => node.id === 'doc')).toMatchObject({ group: 'document', level: 0 });
+    expect(graph.nodes.find((node) => node.id === 'client')).toMatchObject({ group: 'client', level: 1 });
+    expect(graph.nodes.find((node) => node.id === 'adverse')).toMatchObject({ group: 'adverse', level: 1 });
+    expect(graph.nodes.find((node) => node.id === 'iban')).toMatchObject({ group: 'financial', level: 2 });
+    expect(graph.edges).toEqual(expect.arrayContaining([expect.objectContaining({ from: 'doc', to: 'client', label: 'mentions' })]));
+  });
+});
+
+describe('chronology document cards', () => {
+  it('marks the whole document event as an editor trigger', () => {
+    const html = chronologyView({
+      overview: { projectId: 'project-1', counts: { document: 1 }, total: 1 },
+      mapping: { projectId: 'project-1', nodes: [], mappings: [], exclusions: [] },
+      chronology: { projectId: 'project-1', documents: [snapshot.nodes[0]], links: [] },
+      graph: snapshot,
+    });
+
+    expect(html).toContain('data-open-document="doc"');
+    expect(html).toContain('aria-label="Modifier Contrat"');
   });
 });
