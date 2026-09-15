@@ -27,6 +27,13 @@ export default function CaseMappingDialog({ open, groups, saving, invalidRowInde
       bucket.push({ group, rowIndex });
       buckets.set(category, bucket);
     });
+    buckets.forEach((bucket) => {
+      bucket.sort((left, right) => {
+        if (!left.group.principal) return right.group.principal ? 1 : 0;
+        if (!right.group.principal) return -1;
+        return left.group.principal.localeCompare(right.group.principal, 'fr', { sensitivity: 'base' });
+      });
+    });
     return buckets;
   }, [groups]);
 
