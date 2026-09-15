@@ -5,6 +5,7 @@ import { documentEditor, modal, nodeEditor } from './editors.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { chronologyView, escapeHtml, generalView, graphView, mappingView, mermaidSource, shell } from './views.js';
 import type { AgentsViewerState, Tab, ViewData } from './views.js';
+import { EXCLUSIONS_NODE_ID } from './types.js';
 import type { KnowledgeUpdateOperation } from './types.js';
 
 type PluginContext = {
@@ -30,6 +31,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let data: ViewData | null = null;
   let loadSequence = 0;
   let scanning = false;
+  let draggedNodeId = '';
   let agentsViewer: AgentsViewerState = { open: false, loading: false, content: '', exists: false, error: '' };
 
   const showError = (error: unknown) => {
@@ -78,8 +80,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       mermaid.initialize({
         startOnLoad: false,
         securityLevel: 'strict',
-        layout: 'elk',
-        look: 'classic',
         theme: 'base',
         themeVariables: {
           background: dark ? '#18181b' : '#ffffff',
@@ -129,6 +129,61 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         layer.remove();
         if (data && node) nodeEditor(root, data, node, save);
       }));
+      layer.querySelector<HTMLElement>('[data-action=add-node]')?.addEventListener('click', () => {
+        layer.remove();
+        if (data) nodeEditor(root, data, null, save);
+      });
+      layer.querySelectorAll<HTMLElement>('[data-remove-exclusion]').forEach((entry) => entry.addEventListener('click', async () => {
+        const removed = entry.dataset.removeExclusion || '';
+        const exclusions = (data?.mapping.exclusions || data?.graph.exclusions || []).filter((value) => value !== removed);
+        layer.remove();
+        try {
+          await save([{ op: 'upsertNode', node: { id: EXCLUSIONS_NODE_ID, kind: 'other', label: 'Exclusions GLiNER', data: { systemRole: 'gliner-exclusions', values: exclusions }, origin: 'manual' } }]);
+        } catch (error) {
+          showError(error);
+        }
+      }));
+    }));
+    root.querySelectorAll<HTMLElement>('[data-node-menu]').forEach((button) => button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const menu = button.parentElement?.querySelector<HTMLElement>('.pmd-profile-menu');
+      root.querySelectorAll<HTMLElement>('.pmd-profile-menu[data-open=true]').forEach((entry) => { if (entry !== menu) entry.dataset.open = 'false'; });
+      if (menu) menu.dataset.open = menu.dataset.open === 'true' ? 'false' : 'true';
+    }));
+    root.querySelectorAll<HTMLElement>('[data-profile-id]').forEach((card) => {
+      card.addEventListener('dragstart', (event) => {
+        draggedNodeId = card.dataset.profileId || '';
+        event.dataTransfer?.setData('text/plain', draggedNodeId);
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'link';
+      });
+      card.addEventListener('dragend', () => { draggedNodeId = ''; });
+    });
+    root.querySelectorAll<HTMLElement>('[data-relation-drop]').forEach((target) => {
+      target.addEventListener('dragover', (event) => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'link'; });
+      target.addEventListener('drop', async (event) => {
+        event.preventDefault();
+        const source = draggedNodeId || event.dataTransfer?.getData('text/plain') || '';
+        const destination = target.dataset.relationDrop || '';
+        if (!source || !destination || source === destination) return;
+        const relation = window.prompt('Nommez le lien entre ces profils :', 'Dirigeant')?.trim();
+        if (!relation) return;
+        try {
+          await save([{ op: 'link', link: { fromNodeId: source, toNodeId: destination, relation, origin: 'manual' } }]);
+        } catch (error) {
+          showError(error);
+        }
+      });
+    });
+    root.querySelectorAll<HTMLElement>('[data-unlink-from]').forEach((button) => button.addEventListener('click', async () => {
+      const fromNodeId = button.dataset.unlinkFrom || '';
+      const toNodeId = button.dataset.unlinkTo || '';
+      const relation = button.dataset.unlinkRelation || '';
+      if (!fromNodeId || !toNodeId || !relation) return;
+      try {
+        await save([{ op: 'unlink', link: { fromNodeId, toNodeId, relation } }]);
+      } catch (error) {
+        showError(error);
+      }
     }));
     root.querySelectorAll<HTMLElement>('[data-edit-node]').forEach((button) => button.addEventListener('click', () => {
       const node = data?.graph.nodes.find((entry) => entry.id === button.dataset.editNode);

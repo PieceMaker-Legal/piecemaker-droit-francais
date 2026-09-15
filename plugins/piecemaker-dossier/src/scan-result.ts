@@ -8,6 +8,7 @@ import type {
   KnowledgeUpdateResult,
   NodeKind,
 } from './types.js';
+import { EXCLUSIONS_NODE_ID } from './types.js';
 import { KnowledgeStore } from './knowledge.js';
 
 type ProcedureAssignment = { field?: unknown; code?: unknown };
@@ -26,6 +27,10 @@ const strings = (value: unknown): string[] => Array.isArray(value) ? [...new Set
 const record = (value: unknown): JsonData => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonData : {};
 const nodeId = (code: string): string => `entity:${code}`;
 const documentId = (id: string): string => `document:${id}`;
+export function exclusionNodeOperation(values: unknown, origin: 'gliner' | 'manual' = 'gliner'): KnowledgeUpdateOperation {
+  const exclusions = strings(values);
+  return { op: 'upsertNode', node: { id: EXCLUSIONS_NODE_ID, kind: 'other', label: 'Exclusions GLiNER', data: { systemRole: 'gliner-exclusions', values: exclusions }, origin } };
+}
 
 function kindFromCode(code: string, principal: string, bucket: string): NodeKind {
   const normalizedCode = code.replace(/\s+/g, '_').toUpperCase();
@@ -145,6 +150,7 @@ export function scanResultOperations(result: GlinerScanResult): KnowledgeUpdateO
   const nodes = entityNodes(result.mapping);
   const relations = procedureOperations(result.mapping, nodes);
   const operations: KnowledgeUpdateOperation[] = [...nodes.values()].map((node) => ({ op: 'upsertNode', node }));
+  operations.push(exclusionNodeOperation(result.mapping.ignored));
   for (const [code, node] of nodes) {
     for (const real of [node.label || '', ...(node.aliases || [])].filter(Boolean)) {
       operations.push({ op: 'upsertMapping', mapping: { nodeId: nodeId(code), real, masked: code, data: {}, origin: 'gliner' } });

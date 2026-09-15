@@ -25,7 +25,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       <label>Libellé<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></label>
       <label>Variantes, une par ligne<textarea class="pmd-textarea" name="aliases">${escapeHtml(node?.aliases.join('\n') || '')}</textarea></label>
       <label>Code anonymisé<input class="pmd-input" name="masked" value="${escapeHtml(mappings[0]?.masked || '')}"></label>
-      <label>Statut procédural<select class="pmd-select" name="partySide"><option value="">Aucun</option><option value="client" ${node?.data.partySide === 'client' ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${node?.data.partySide === 'adversaire' ? 'selected' : ''}>Partie adverse</option></select></label>
+      <label>Statut procédural<select class="pmd-select" name="partySide"><option value="">Aucun</option><option value="client" ${!node || node.data.partySide === 'client' ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${node?.data.partySide === 'adversaire' ? 'selected' : ''}>Partie adverse</option></select></label>
       <label>Forme sociale<input class="pmd-input" name="legalForm" value="${escapeHtml(textValue(node?.data.legalForm))}"></label>
       <label>Nouvelle relation<select class="pmd-select" name="target"><option value="">Aucune</option>${data.graph.nodes.filter((entry) => entry.id !== id && entry.kind !== 'document').map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join('')}</select></label>
       <label>Type de relation<input class="pmd-input" name="relation" placeholder="dirige, iban, adresse…"></label>
