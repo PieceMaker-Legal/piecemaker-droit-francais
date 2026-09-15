@@ -31,6 +31,10 @@ export type KnowledgeLinkInput = {
   origin?: KnowledgeOrigin;
 };
 
+export type KnowledgeLink = Required<KnowledgeLinkInput> & {
+  projectId: string;
+};
+
 export type KnowledgeMappingInput = {
   nodeId: string;
   real: string;
@@ -41,6 +45,13 @@ export type KnowledgeMappingInput = {
 
 export type KnowledgeMapping = Required<KnowledgeMappingInput> & {
   projectId: string;
+};
+
+export type KnowledgeSnapshot = {
+  projectId: string;
+  nodes: KnowledgeNode[];
+  links: KnowledgeLink[];
+  mappings: KnowledgeMapping[];
 };
 
 export type KnowledgeResolvedLink = {
