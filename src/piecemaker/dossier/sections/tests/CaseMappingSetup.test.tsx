@@ -28,6 +28,10 @@ const anonymizedOverview = {
     path: 'case-1',
     location: '/cabinet/a',
     mapping: { exists: true, entries: 12 },
+    originals: [
+      { name: 'a.pdf', path: 'a.pdf', extension: '.pdf', size: 10, modifiedAt: '', converted: true, scanned: true, protected: true, resource: false, status: 'ready' },
+      { name: 'b.pdf', path: 'b.pdf', extension: '.pdf', size: 10, modifiedAt: '', converted: false, scanned: false, protected: true, resource: false, status: 'not-converted' },
+    ],
   },
 };
 
@@ -40,17 +44,34 @@ describe('CaseMappingSetup', () => {
     pmPost.mockResolvedValue({ job: { id: 'job-1', state: 'queued', percent: 0 } });
   });
 
-  it('relance réellement le pipeline MarkItDown puis GLiNER sur un dossier déjà anonymisé', async () => {
+  it('propose de rescanner toutes les pièces sur un dossier déjà anonymisé', async () => {
     render(<CaseMappingSetup />);
 
-    const relaunch = await screen.findByRole('button', { name: /Relancer/ });
-    fireEvent.click(relaunch);
+    fireEvent.click(await screen.findByRole('button', { name: /Relancer/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Rescanner toutes les pièces/ }));
 
     await waitFor(() => expect(pmPost).toHaveBeenCalledWith('/originals/pipeline', {
       case: 'case-1',
       action: 'anonymize',
       files: [],
       force: true,
+      engine: 'markitdown',
+    }));
+  });
+
+  it('propose de ne scanner que les nouvelles pièces sur un dossier déjà anonymisé', async () => {
+    render(<CaseMappingSetup />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Relancer/ }));
+    const scanNewOnly = await screen.findByRole('menuitem', { name: /Scanner les nouvelles pièces/ });
+    expect(scanNewOnly.textContent).toContain('1 pièce nouvelle');
+    fireEvent.click(scanNewOnly);
+
+    await waitFor(() => expect(pmPost).toHaveBeenCalledWith('/originals/pipeline', {
+      case: 'case-1',
+      action: 'anonymize',
+      files: [],
+      force: false,
       engine: 'markitdown',
     }));
   });
