@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import type { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
 import type { KnowledgeQueryInput, KnowledgeUpdateInput } from '../../../plugins/piecemaker-dossier/src/types.js';
 import type { createKnowledgePipeline } from './pipeline.js';
@@ -46,6 +49,17 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
     graph(value: unknown) {
       const id = ensureProject(value);
       return store.snapshot(id);
+    },
+    agents(value: unknown) {
+      const id = ensureProject(value);
+      const project = projects.getProjectById(id);
+      if (!project) throw new Error('Project not found.');
+      const root = fs.realpathSync(project.project_path);
+      const candidate = path.join(root, 'AGENTS.md');
+      if (!fs.existsSync(candidate)) return { projectId: id, content: '', exists: false };
+      const real = fs.realpathSync(candidate);
+      if (real !== root && !real.startsWith(`${root}${path.sep}`)) throw new Error('Invalid AGENTS.md path.');
+      return { projectId: id, content: fs.readFileSync(real, 'utf8').slice(0, 2_000_000), exists: true };
     },
     scan(value: unknown, files?: unknown) {
       return pipeline.scan(ensureProject(value), files);
