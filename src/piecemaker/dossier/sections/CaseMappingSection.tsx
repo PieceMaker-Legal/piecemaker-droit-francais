@@ -276,23 +276,6 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
     }
   };
 
-  const selectParty = (group: MappingGroup, side: ProfileSide) => {
-    setProfileInfo((previous) => {
-      const selected = partyForProfile(previous, group);
-      if (selected?.side === side) return previous;
-      const ownKey = side === 'client' ? 'parties_clientes' : 'parties_adverses';
-      const otherKey = side === 'client' ? 'parties_adverses' : 'parties_clientes';
-      const removeProfile = (party: ProcedureParty) => !sameIdentity(profileIdentity(party), group.principal);
-      return {
-        ...previous,
-        [ownKey]: [...previous[ownKey], selected?.party || newParty(group, side)],
-        [otherKey]: previous[otherKey].filter(removeProfile),
-      };
-    });
-    setMessage('Sélection modifiée. Enregistrez les profils pour appliquer le mapping.');
-    setError(null);
-  };
-
   const removeProfile = (group: MappingGroup) => {
     setGroups((previous) => previous.filter((candidate) => candidate.code !== group.code));
     setProfileInfo((previous) => {
