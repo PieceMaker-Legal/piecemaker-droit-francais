@@ -204,7 +204,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   });
 }
 
-export function documentEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>): void {
+export function documentEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode, projectPath: string, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>): void {
   const mentionLinks = data.graph.links.filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id));
   const linked = new Set(mentionLinks.map((link) => link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId));
   const entities = data.graph.nodes
@@ -289,7 +289,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
       return;
     }
     try {
-      const result = await knowledgeApi.document(data.graph.projectId, pathValue);
+      const result = await knowledgeApi.document(projectPath, pathValue);
       if (preview) preview.innerHTML = `<pre>${highlightPreview(result.content)}</pre>`;
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : String(error));
