@@ -13,6 +13,7 @@ import { KnowledgeStore } from './knowledge.js';
 type ProcedureAssignment = { field?: unknown; code?: unknown };
 type ProcedureParty = {
   type?: unknown;
+  position?: unknown;
   nom?: unknown;
   societe_nom?: unknown;
   forme_sociale?: unknown;
@@ -83,9 +84,12 @@ function entityNodes(mapping: GlinerMappingDocument): Map<string, KnowledgeNodeI
 
 function procedureOperations(mapping: GlinerMappingDocument, nodes: Map<string, KnowledgeNodeInput>): KnowledgeUpdateOperation[] {
   const info = record(mapping.informations_dossier);
-  const parties = [...(Array.isArray(info.parties_clientes) ? info.parties_clientes : []), ...(Array.isArray(info.parties_adverses) ? info.parties_adverses : [])] as ProcedureParty[];
+  const parties = [
+    ...(Array.isArray(info.parties_clientes) ? info.parties_clientes.map((party) => ({ party: party as ProcedureParty, side: 'client' })) : []),
+    ...(Array.isArray(info.parties_adverses) ? info.parties_adverses.map((party) => ({ party: party as ProcedureParty, side: 'adversaire' })) : []),
+  ];
   const operations: KnowledgeUpdateOperation[] = [];
-  for (const party of parties) {
+  for (const { party, side } of parties) {
     const assignments = (Array.isArray(party.mapping_assignments) ? party.mapping_assignments : []) as ProcedureAssignment[];
     const identity = assignments.find((assignment) => text(assignment.field) === 'identite');
     const identityCode = text(identity?.code);
@@ -96,7 +100,12 @@ function procedureOperations(mapping: GlinerMappingDocument, nodes: Map<string, 
       nodes.set(identityCode, {
         ...existing,
         label: existing.label || label,
-        data: { ...existing.data, ...(text(party.forme_sociale) ? { legalForm: text(party.forme_sociale) } : {}) },
+        data: {
+          ...existing.data,
+          partySide: side,
+          position: text(party.position),
+          ...(text(party.forme_sociale) ? { legalForm: text(party.forme_sociale) } : {}),
+        },
       });
     }
     for (const assignment of assignments) {
