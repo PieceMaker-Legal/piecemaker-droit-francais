@@ -143,6 +143,7 @@ describe('GLiNER result persistence', () => {
             IBAN_01: { original: 'FR76 1234', score: 0.99 },
           },
         },
+        ignored: ['Mme Reynaud', 'RCS de Paris'],
         informations_dossier: {
           parties_clientes: [{
             type: 'societe',
@@ -176,6 +177,9 @@ describe('GLiNER result persistence', () => {
     const document = store.query({ projectId: 'project-1', kind: 'document', query: 'contrat', depth: 1 }).matches[0];
     expect(document.data.nature).toBe('Contrat');
     expect(document.links.filter((link) => link.relation === 'mentions')).toHaveLength(2);
+    expect(store.snapshot('project-1').exclusions).toEqual(['Mme Reynaud', 'RCS de Paris']);
+    expect(store.snapshot('project-1').nodes.some((node) => node.id.startsWith('system:'))).toBe(false);
+    expect(store.query({ projectId: 'project-1', query: 'exclusions' }).matches).toHaveLength(0);
   });
 
   it('replaces stale GLiNER rows while retaining manual additions', () => {

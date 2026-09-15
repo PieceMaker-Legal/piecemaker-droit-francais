@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
+import { exclusionNodeOperation } from '../../../plugins/piecemaker-dossier/src/scan-result.js';
 import type { KnowledgeQueryInput, KnowledgeUpdateInput } from '../../../plugins/piecemaker-dossier/src/types.js';
+import { legacyExclusions } from './pipeline.js';
 import type { createKnowledgePipeline } from './pipeline.js';
 
 type ProjectLookup = {
@@ -20,6 +22,16 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
     if (!projects.getProjectById(id)) throw new Error('Project not found.');
     return id;
   };
+  const snapshot = (id: string) => {
+    const current = store.snapshot(id);
+    if (current.exclusionsInitialized) return current;
+    const project = projects.getProjectById(id);
+    const values = project ? legacyExclusions(project.project_path) : [];
+    if (!values.length) return current;
+    const operation = exclusionNodeOperation(values);
+    store.update({ projectId: id, operations: [operation] });
+    return store.snapshot(id);
+  };
   return {
     query(input: KnowledgeQueryInput) {
       return store.query({ ...input, projectId: ensureProject(input.projectId), projectPath: undefined });
@@ -29,7 +41,7 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
     },
     overview(value: unknown) {
       const id = ensureProject(value);
-      const nodes = store.snapshot(id).nodes;
+      const nodes = snapshot(id).nodes;
       const counts = nodes.reduce<Record<string, number>>((result, node) => {
         result[node.kind] = (result[node.kind] || 0) + 1;
         return result;
@@ -38,17 +50,17 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
     },
     mapping(value: unknown) {
       const id = ensureProject(value);
-      const snapshot = store.snapshot(id);
-      return { projectId: id, nodes: snapshot.nodes.filter((node) => node.kind !== 'document'), mappings: snapshot.mappings };
+      const current = snapshot(id);
+      return { projectId: id, nodes: current.nodes.filter((node) => node.kind !== 'document'), mappings: current.mappings, exclusions: current.exclusions || [] };
     },
     chronology(value: unknown) {
       const id = ensureProject(value);
-      const snapshot = store.snapshot(id);
-      return { projectId: id, documents: snapshot.nodes.filter((node) => node.kind === 'document'), links: snapshot.links.filter((link) => link.relation === 'mentions') };
+      const current = snapshot(id);
+      return { projectId: id, documents: current.nodes.filter((node) => node.kind === 'document'), links: current.links.filter((link) => link.relation === 'mentions') };
     },
     graph(value: unknown) {
       const id = ensureProject(value);
-      return store.snapshot(id);
+      return snapshot(id);
     },
     agents(value: unknown) {
       const id = ensureProject(value);
