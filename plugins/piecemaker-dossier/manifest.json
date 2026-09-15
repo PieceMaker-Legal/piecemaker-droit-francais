@@ -5,6 +5,6 @@
   "description": "Knowledge graph storage and queries for a PieceMaker dossier.",
   "type": "module",
   "slot": "tab",
-  "entry": "dist/index.js",
+  "entry": "dist/client.js",
   "permissions": []
 }
