@@ -67,9 +67,6 @@ function plainObject(value) {
  * caractères non acronymiques) est écartée des deux listes : surligner ce qui
  * ne part pas codé serait un mensonge à l'écran.
  *
- * La séparation des deux listes reproduit la seule asymétrie du moteur : au-delà
- * de `MIN_ENTITY_LENGTH`, la casse est ignorée ; à deux caractères, l'acronyme
- * reste sensible à la casse, faute de quoi « US » emporterait le pronom « us ».
  */
 function buildDictionary(document, stamp) {
   const mapping = plainObject(document?.mapping);
@@ -86,7 +83,7 @@ function buildDictionary(document, stamp) {
     if (!buildEntityRegex(entity)) continue;
     const trimmed = entity.trim();
     if (trimmed.length < MIN_ENTITY_LENGTH) {
-      acronyms.add(trimmed);
+      acronyms.add(trimmed.toUpperCase());
       continue;
     }
     const folded = trimmed.toLocaleLowerCase();
