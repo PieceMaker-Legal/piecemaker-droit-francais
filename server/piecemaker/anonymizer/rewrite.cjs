@@ -37,17 +37,65 @@ function heldLength(buffer) {
 }
 
 /**
+ * Champs qui ne portent jamais de texte destiné à un humain — protocole,
+ * schémas, identifiants, blobs opaques — et que la substitution ne doit
+ * donc jamais toucher, ni dans leur valeur ni en descendant dedans.
+ *
+ * Ce n'est pas une rustine pour un champ précis (ex. `encrypted_content`
+ * d'un reasoning item Responses) : n'importe quel champ opaque peut un
+ * jour contenir par hasard une sous-chaîne qui matche une entité mappée
+ * (232 entités actives, substitution insensible à la casse). Le vrai fix
+ * est de ne jamais présenter ces champs à `transform`, quel que soit leur
+ * contenu.
+ *
+ * `messages[].content` textuel et `tool_result` restent traités (texte
+ * conversationnel) ; `tools`, les schémas d'outils et les blobs chiffrés
+ * de raisonnement ne le sont pas (protocole/opaque).
+ */
+const OPAQUE_KEYS = new Set([
+  'encrypted_content',
+  'tools',
+  'tool_choice',
+  'function_call',
+  'schema',
+  'parameters',
+  'input_schema',
+  'json_schema',
+  'signature',
+  'call_id',
+]);
+
+/** Clés dynamiques (préfixe plutôt que nom exact), ex. les ids `rs_...`. */
+const OPAQUE_KEY_PATTERNS = [/^id$/, /^rs_/];
+
+function isOpaqueKey(key) {
+  if (OPAQUE_KEYS.has(key)) return true;
+  return OPAQUE_KEY_PATTERNS.some((pattern) => pattern.test(key));
+}
+
+/**
  * Réécrit récursivement toutes les chaînes d'une valeur JSON, clés comprises :
  * un nom réel peut aussi bien être une valeur de `tool_result` qu'une clé
  * produite par un listing de fichiers.
+ *
+ * `key` est le nom du champ qui porte `value` dans son objet parent (`null`
+ * à la racine ou dans un tableau). Quand ce nom est reconnu comme opaque
+ * (voir `OPAQUE_KEYS`), `value` est rendue telle quelle, sans descendre
+ * dedans : un tableau `tools` ou un `encrypted_content` traverse le proxy
+ * intact, y compris leurs sous-arbres.
  */
-function rewriteJsonValue(value, transform) {
+function rewriteJsonValue(value, transform, key = null) {
+  if (key !== null && isOpaqueKey(key)) return value;
   if (typeof value === 'string') return transform(value);
-  if (Array.isArray(value)) return value.map((item) => rewriteJsonValue(item, transform));
+  if (Array.isArray(value)) return value.map((item) => rewriteJsonValue(item, transform, null));
   if (value && typeof value === 'object') {
     const output = {};
-    for (const [key, item] of Object.entries(value)) {
-      output[transform(key)] = rewriteJsonValue(item, transform);
+    for (const [entryKey, item] of Object.entries(value)) {
+      // Le nom de la clé elle-même reste transformé (un listing de
+      // fichiers peut produire une entité en clé), sauf s'il est lui-même
+      // opaque — ex. ne pas substituer dans un id `rs_...` utilisé comme clé.
+      const outputKey = isOpaqueKey(entryKey) ? entryKey : transform(entryKey);
+      output[outputKey] = rewriteJsonValue(item, transform, entryKey);
     }
     return output;
   }
