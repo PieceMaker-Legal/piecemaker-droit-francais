@@ -19,7 +19,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { createDictionaryLoader } = require('./dictionary.cjs');
+const { createSqliteDictionaryLoader } = require('./sqlite-dictionary.cjs');
 const { DEFAULT_UPSTREAM, createAnonymizerProxy } = require('./proxy.cjs');
 const { bypassProviders, configureProviders } = require('./providers.cjs');
 const { createHarnessJuridique } = require('../harness/index.cjs');
@@ -77,7 +77,8 @@ function summarizeCoverage(report) {
 }
 
 function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = console, required = false }) {
-  const dictionary = createDictionaryLoader({ homeDir });
+  const dictionary = createSqliteDictionaryLoader({ databasePath: process.env.DATABASE_PATH || path.join(homeDir, 'auth.db') });
+  const legacyMappingFile = path.join(homeDir, 'central-mapping.json');
   // Harnais de citations vérifiées (décisions Légifrance + bloc <CITATIONS>) :
   // son propre interrupteur (`PIECEMAKER_CITATIONS=off`) est géré à
   // l'intérieur, pas ici.
@@ -152,7 +153,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
     // En tête de chemin : le shim doit être trouvé avant le vrai `cursor-agent`.
     process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
 
-    const report = await configureProviders({ origin, userHome, binDir, mappingFile: dictionary.file });
+    const report = await configureProviders({ origin, userHome, binDir, mappingFile: legacyMappingFile });
     Object.assign(state, {
       enabled: true,
       reason: 'running',
@@ -174,7 +175,10 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
   }
 
   async function stop() {
-    if (!proxy) return;
+    if (!proxy) {
+      dictionary.close();
+      return;
+    }
     await proxy.close();
     await bypassProviders({ userHome, binDir });
     if (previousEnv) {
@@ -185,6 +189,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
       previousEnv = null;
     }
     proxy = null;
+    dictionary.close();
     Object.assign(state, { enabled: false, reason: 'stopped', origin: null, routes: [], coverage: {} });
   }
 
