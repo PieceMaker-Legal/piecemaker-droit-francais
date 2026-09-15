@@ -127,7 +127,7 @@ function isSocieteCode(code: unknown): boolean {
   return /^(CLIENT|ADVERSAIRE)_/.test(normalizedCode) && !tokens.includes('PHYSIQUE');
 }
 
-function partyCategoryForCode(code: unknown): string {
+export function partyCategoryForCode(code: unknown): string {
   const value = codeToken(code);
   if (value.startsWith('SIREN_')) return 'siren';
   if (value.startsWith('ADRESSE_') || value.startsWith('LIEU_NAISSANCE_')) return 'adresses';

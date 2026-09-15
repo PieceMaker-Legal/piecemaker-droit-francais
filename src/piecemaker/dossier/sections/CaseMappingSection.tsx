@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, EllipsisVertical, Loader2, Plus, Save, ShieldCheck, Trash2, UserRound, UsersRound } from 'lucide-react';
+import { Building2, EllipsisVertical, Fingerprint, Loader2, MapPin, Plus, Save, ShieldCheck, Tag, Trash2, UserRound, UsersRound } from 'lucide-react';
 
 import { invalidatePmGet, pmGetCached, pmPut, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import {
@@ -7,6 +7,7 @@ import {
   buildMappingDocument,
   groupMappingByCode,
   normalizeProcedureInfo,
+  partyCategoryForCode,
   profileRelationshipId,
   sortMappingGroupsByProcedureParty,
   updateProcedurePartyForProfile,
@@ -33,6 +34,14 @@ type CaseMappingSectionProps = {
   caseId: string;
   refreshVersion: number;
   onRepositoryChange: () => Promise<void>;
+};
+
+const PROFILE_KINDS: Record<string, { label: string; icon: typeof UserRound; badgeClass: string; canBeProcedureParty: boolean }> = {
+  personnes_physiques: { label: 'Personne physique', icon: UserRound, badgeClass: 'bg-primary/10 text-primary', canBeProcedureParty: true },
+  societes: { label: 'Personne morale', icon: Building2, badgeClass: 'bg-violet-500/10 text-violet-700 dark:text-violet-300', canBeProcedureParty: true },
+  adresses: { label: 'Adresse', icon: MapPin, badgeClass: 'bg-amber-500/10 text-amber-700 dark:text-amber-300', canBeProcedureParty: false },
+  siren: { label: 'Identifiant d’entreprise', icon: Fingerprint, badgeClass: 'bg-sky-500/10 text-sky-700 dark:text-sky-300', canBeProcedureParty: false },
+  autres: { label: 'Autre donnée personnelle', icon: Tag, badgeClass: 'bg-muted text-muted-foreground', canBeProcedureParty: false },
 };
 
 const RELATIONSHIP_ROLES: RelationshipRole[] = ['Avocat', 'Dirigeant', 'Actionnaire'];
@@ -87,9 +96,7 @@ function sameIdentity(left: string, right: string): boolean {
 }
 
 function profileType(group: MappingGroup): ProcedureParty['type'] {
-  const code = group.code.toUpperCase();
-  if (/(^|_)(AVOCAT|PHYSIQUE|DIRIGEANT)(_|$)/.test(code)) return 'personne_physique';
-  return /MORALE|SOCIETE|\b(SAS|SARL|SA|SCI|SELARL|EURL)_/.test(code) || (/^(CLIENT|ADVERSAIRE)_/.test(code) && !code.includes('PHYSIQUE')) ? 'societe' : 'personne_physique';
+  return partyCategoryForCode(group.code) === 'societes' ? 'societe' : 'personne_physique';
 }
 
 function partyForProfile(info: ProcedureInfo, group: MappingGroup): { side: ProfileSide; party: ProcedureParty } | null {
@@ -366,10 +373,14 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
           {sortedGroups.map((group) => {
             const selected = partyForProfile(profileInfo, group);
             const related = profileInfo.relations.filter((relation) => relation.target === group.code);
-            const company = selected ? selected.party.type === 'societe' : profileType(group) === 'societe';
+            const kind = selected
+              ? (selected.party.type === 'societe' ? 'societes' : 'personnes_physiques')
+              : partyCategoryForCode(group.code);
+            const profileKind = PROFILE_KINDS[kind] || PROFILE_KINDS.autres;
+            const KindIcon = profileKind.icon;
             return <article key={group.code} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = 'link'; event.dataTransfer.setData('text/plain', group.code); setDraggedProfile(group.code); }} onDragEnd={() => setDraggedProfile(null)} className={`group relative flex min-h-[17rem] flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md ${selected?.side === 'client' ? 'border-emerald-500/50' : selected?.side === 'adversaire' ? 'border-red-500/50' : ''}`}>
               <div className={`h-1.5 ${selected?.side === 'client' ? 'bg-emerald-500' : selected?.side === 'adversaire' ? 'bg-red-500' : 'bg-primary/40'}`} />
-              <div className="flex items-start gap-3 p-4 pb-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${company ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'bg-primary/10 text-primary'}`}>{company ? <Building2 className="h-5 w-5" /> : <UserRound className="h-5 w-5" />}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{group.principal}</p><p className="mt-1 text-[11px] text-muted-foreground">{company ? 'Personne morale' : 'Personne physique'} · {group.variants.length + 1} écriture{group.variants.length ? 's' : ''} détectée{group.variants.length ? 's' : ''}</p></div><ActionMenu label="" icon={EllipsisVertical} iconOnly variant="ghost" size="icon" ariaLabel={`Options pour ${group.principal}`} triggerClassName="h-8 w-8 shrink-0" menuClassName="min-w-[150px]" items={[{ key: 'edit', label: 'Modifier', icon: UsersRound, onSelect: () => setProfileToEdit(group) }, { key: 'delete', label: 'Supprimer', icon: Trash2, isDanger: true, showDividerBefore: true, onSelect: () => removeProfile(group) }]} /></div>
+              <div className="flex items-start gap-3 p-4 pb-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${profileKind.badgeClass}`}><KindIcon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{group.principal}</p><p className="mt-1 text-[11px] text-muted-foreground">{profileKind.label} · {group.variants.length + 1} écriture{group.variants.length ? 's' : ''} détectée{group.variants.length ? 's' : ''}</p></div><ActionMenu label="" icon={EllipsisVertical} iconOnly variant="ghost" size="icon" ariaLabel={`Options pour ${group.principal}`} triggerClassName="h-8 w-8 shrink-0" menuClassName="min-w-[150px]" items={[{ key: 'edit', label: 'Modifier', icon: UsersRound, onSelect: () => setProfileToEdit(group) }, { key: 'delete', label: 'Supprimer', icon: Trash2, isDanger: true, showDividerBefore: true, onSelect: () => removeProfile(group) }]} /></div>
               <div className="px-4 pb-3">{selected ? <div className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${selected.side === 'client' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-red-500/10 text-red-700 dark:text-red-400'}`}>{selected.side === 'client' ? 'Partie cliente' : 'Partie adverse'} · {positionLabel(selected.party)}</div> : <p className="text-[11px] text-muted-foreground">Aucune position procédurale</p>}</div>
               <div className="mx-4 rounded-xl border border-dashed bg-muted/20 p-2.5" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'link'; }} onDrop={(event) => { event.preventDefault(); const source = draggedProfile || event.dataTransfer.getData('text/plain'); if (source) addRelationship(source, group.code); }}>
                 {related.length ? (
@@ -408,7 +419,7 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
                   </div>
                 ) : <p className="text-center text-[11px] leading-4 text-muted-foreground">Glissez un profil ici<br />pour établir un lien</p>}
               </div>
-              {!selected && <div className="mt-auto flex gap-2 p-4 pt-3"><Button variant="outline" size="sm" className="flex-1 border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400" onClick={() => selectParty(group, 'client')}>Client</Button><Button variant="outline" size="sm" className="flex-1 border-red-500/30 text-red-700 hover:bg-red-500/10 dark:text-red-400" onClick={() => selectParty(group, 'adversaire')}>Adverse</Button></div>}
+              {!selected && profileKind.canBeProcedureParty && <div className="mt-auto flex gap-2 p-4 pt-3"><Button variant="outline" size="sm" className="flex-1 border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400" onClick={() => selectParty(group, 'client')}>Client</Button><Button variant="outline" size="sm" className="flex-1 border-red-500/30 text-red-700 hover:bg-red-500/10 dark:text-red-400" onClick={() => selectParty(group, 'adversaire')}>Adverse</Button></div>}
             </article>;
           })}
         </div>
