@@ -21,11 +21,13 @@ vi.mock('@/piecemaker/dossier/DossierContext', () => ({
   useDossierCases: () => ({ selectedCaseId: 'case-1', mappingVersion: 0, bumpMappingVersion: () => undefined }),
 }));
 
+import { clearTrackedAnonymizationJobs, getTrackedAnonymizationJobs } from '@/piecemaker/dossier/anonymizationJobsCache';
 import CaseMappingSetup from '@/piecemaker/dossier/sections/CaseMappingSetup';
 
 const anonymizedOverview = {
   folder: {
     path: 'case-1',
+    name: 'Dossier A',
     location: '/cabinet/a',
     mapping: { exists: true, entries: 12 },
     originals: [
@@ -38,6 +40,7 @@ const anonymizedOverview = {
 describe('CaseMappingSetup', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearTrackedAnonymizationJobs();
     pmGetCached.mockImplementation((path: string) => (path === '/repository/case'
       ? Promise.resolve(anonymizedOverview)
       : Promise.resolve({ components: { gliner: { installed: true } } })));
@@ -74,6 +77,17 @@ describe('CaseMappingSetup', () => {
       force: false,
       engine: 'markitdown',
     }));
+  });
+
+  it('publie le travail lancé pour que la barre latérale l’affiche', async () => {
+    render(<CaseMappingSetup />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Relancer/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Rescanner toutes les pièces/ }));
+
+    await waitFor(() => expect(getTrackedAnonymizationJobs()).toEqual([
+      { projectPath: '/cabinet/a', projectName: 'Dossier A', job: { id: 'job-1', state: 'queued', percent: 0 } },
+    ]));
   });
 
   it('ne force pas le retraitement quand aucun mapping n’existe', async () => {

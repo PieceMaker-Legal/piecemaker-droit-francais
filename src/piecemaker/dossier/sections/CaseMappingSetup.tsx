@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, RotateCcw, ScanSearch, ShieldCheck } from 'lucide-react';
 
 import { invalidatePmGet, pmGet, pmGetCached, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import { trackAnonymizationJob } from '@/piecemaker/dossier/anonymizationJobsCache';
 import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
 import { setMappingReady } from '@/piecemaker/dossier/mappingStatusCache';
 import type { CaseOverview, OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
@@ -172,6 +173,9 @@ export default function CaseMappingSetup() {
         engine: 'markitdown',
       });
       setAnonymizationJob(job);
+      if (overview) {
+        trackAnonymizationJob({ projectPath: overview.location, projectName: overview.name, job });
+      }
       if (job.state === 'done') bumpMappingVersion();
       if (job.state === 'error') setError(job.error || 'L\u2019anonymisation a \u00e9chou\u00e9.');
     } catch (cause) {
