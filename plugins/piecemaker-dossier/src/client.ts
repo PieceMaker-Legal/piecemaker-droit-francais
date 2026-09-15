@@ -165,7 +165,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (typeof id !== 'string' || !data) return;
         const node = data.graph.nodes.find((entry) => entry.id === id);
         if (!node) return;
-        if (node.kind === 'document') documentEditor(root, data, node, save);
+        if (node.kind === 'document') documentEditor(root, data, node, context.project?.path || '', save);
         else nodeEditor(root, data, node, save);
       });
     } catch (error) {
@@ -290,14 +290,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     root.querySelectorAll<HTMLElement>('[data-open-document]').forEach((card) => {
       const open = () => {
         const node = data?.graph.nodes.find((entry) => entry.id === card.dataset.openDocument);
-        if (data && node) documentEditor(root, data, node, save);
+        if (data && node) documentEditor(root, data, node, context.project?.path || '', save);
       };
       card.addEventListener('click', open);
     });
     root.querySelectorAll<HTMLElement>('[data-edit-document]').forEach((button) => button.addEventListener('click', (event) => {
       event.stopPropagation();
       const node = data?.graph.nodes.find((entry) => entry.id === button.dataset.editDocument);
-      if (data && node) documentEditor(root, data, node, save);
+      if (data && node) documentEditor(root, data, node, context.project?.path || '', save);
     }));
     root.querySelector<HTMLElement>('[data-action=agents]')?.addEventListener('click', async () => {
       if (!context.project) return;
