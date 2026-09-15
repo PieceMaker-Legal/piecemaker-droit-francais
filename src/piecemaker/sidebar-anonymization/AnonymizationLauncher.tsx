@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, ScanSearch, ShieldCheck } from 'lucide-react';
 
@@ -10,36 +10,18 @@ import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import type { DossierCase } from '@/piecemaker/dossier/dossierRegistration';
 import { setMappingReady } from '@/piecemaker/dossier/mappingStatusCache';
 import type { OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
-
-type ProjectJob = {
-  projectId: string;
-  projectName: string;
-  projectPath: string;
-  caseReference: string;
-  job: OriginalsJob;
-};
+import {
+  getTrackedAnonymizationJobs,
+  subscribeTrackedAnonymizationJobs,
+  trackAnonymizationJob,
+} from '@/piecemaker/dossier/anonymizationJobsCache';
+import type { TrackedAnonymizationJob } from '@/piecemaker/dossier/anonymizationJobsCache';
 
 type AnonymizationLauncherProps = {
   buttonSlots: HTMLElement[];
   progressSlots: Map<string, HTMLElement>;
   onProjectsChange: (projects: Project[]) => void;
 };
-
-const STORAGE_KEY = 'piecemaker.sidebarAnonymizationJobs';
-const POLL_INTERVAL_MS = 1_000;
-
-function jobIsPending(job: OriginalsJob): boolean {
-  return job.state === 'queued' || job.state === 'running';
-}
-
-function readStoredJobs(): ProjectJob[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
-    return Array.isArray(value) ? value.filter((entry) => entry?.job && jobIsPending(entry.job)) : [];
-  } catch {
-    return [];
-  }
-}
 
 function jobLabel(job: OriginalsJob): string {
   if (job.state === 'queued') {
@@ -52,7 +34,7 @@ function jobLabel(job: OriginalsJob): string {
   return 'Anonymisation en cours';
 }
 
-function ProjectProgress({ projectJob }: { projectJob: ProjectJob }) {
+function ProjectProgress({ projectJob }: { projectJob: TrackedAnonymizationJob }) {
   const percent = Math.max(0, Math.min(100, projectJob.job.percent ?? 0));
   return (
     <div className="mt-1 min-w-0" data-piecemaker-anonymization-progress>
@@ -87,7 +69,7 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
   const [force, setForce] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [projectJobs, setProjectJobs] = useState<ProjectJob[]>(readStoredJobs);
+  const projectJobs = useSyncExternalStore(subscribeTrackedAnonymizationJobs, getTrackedAnonymizationJobs);
   const refreshPromiseRef = useRef<Promise<void> | null>(null);
   const projectsLoadedRef = useRef(false);
 
@@ -143,33 +125,6 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
     return () => window.clearTimeout(timer);
   }, [loadProjects]);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projectJobs));
-  }, [projectJobs]);
-
-  const trackedJobIds = useMemo(() => projectJobs.map((entry) => entry.job.id).join(' '), [projectJobs]);
-
-  useEffect(() => {
-    if (!trackedJobIds) return;
-    const poll = window.setInterval(() => {
-      void Promise.all(trackedJobIds.split(' ').map(async (jobId) => {
-        try {
-          const { job } = await pmGet<{ job: OriginalsJob }>('/originals/job', { id: jobId });
-          return jobIsPending(job) ? { jobId, job } : { jobId, job: null };
-        } catch {
-          return { jobId, job: null };
-        }
-      })).then((updates) => {
-        setProjectJobs((current) => current.flatMap((entry) => {
-          const update = updates.find((candidate) => candidate.jobId === entry.job.id);
-          if (!update) return [entry];
-          return update.job ? [{ ...entry, job: update.job }] : [];
-        }));
-      });
-    }, POLL_INTERVAL_MS);
-    return () => window.clearInterval(poll);
-  }, [trackedJobIds]);
-
   const selectedProjects = useMemo(
     () => projects.filter((project) => selectedProjectIds.has(project.projectId)),
     [projects, selectedProjectIds],
@@ -202,16 +157,11 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
           engine: 'markitdown',
         });
         launchedCount += 1;
-        setProjectJobs((current) => [
-          ...current.filter((entry) => entry.projectId !== project.projectId),
-          {
-            projectId: project.projectId,
-            projectName: project.displayName,
-            projectPath: project.fullPath,
-            caseReference,
-            job,
-          },
-        ]);
+        trackAnonymizationJob({
+          projectPath: project.fullPath,
+          projectName: project.displayName,
+          job,
+        });
       } catch (cause) {
         failures.push(`${project.displayName} : ${cause instanceof PieceMakerApiError ? cause.message : String(cause)}`);
       }
@@ -256,7 +206,7 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
 
       {projectJobs.map((entry) => {
         const slot = progressSlots.get(entry.projectPath);
-        return slot ? createPortal(<ProjectProgress key={entry.projectId} projectJob={entry} />, slot) : null;
+        return slot ? createPortal(<ProjectProgress key={entry.projectPath} projectJob={entry} />, slot) : null;
       })}
 
       <Dialog open={open} onOpenChange={setOpen}>
