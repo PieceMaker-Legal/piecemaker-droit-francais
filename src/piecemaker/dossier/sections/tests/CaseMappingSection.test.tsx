@@ -334,4 +334,26 @@ describe('CaseMappingSection', () => {
     expect(screen.getByText('Profil lié')).toBeTruthy();
     expect((screen.getByLabelText('Lien avec Alice') as HTMLSelectElement).value).toBe('Dirigeant');
   });
+
+  it('affiche le type de chaque profil selon son code de pseudonymisation', async () => {
+    const response = {
+      ...initialResponse,
+      mapping: { Alice: 'PERSONNE_PHYSIQUE_01', Acme: 'PERSONNE_MORALE_01', '12 rue des Lilas': 'ADRESSE_01', 'contact@acme.fr': 'TELEPHONE_01' },
+      reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice'], PERSONNE_MORALE_01: ['Acme'], ADRESSE_01: ['12 rue des Lilas'], TELEPHONE_01: ['contact@acme.fr'] },
+    };
+    pmGetCached.mockResolvedValue(response);
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
+
+    const cardOf = (name: string) => screen.getByText(name).closest('article')!;
+    expect(cardOf('Alice').textContent).toContain('Personne physique');
+    expect(cardOf('Acme').textContent).toContain('Personne morale');
+    expect(cardOf('12 rue des Lilas').textContent).toContain('Adresse');
+    expect(cardOf('contact@acme.fr').textContent).toContain('Autre donnée personnelle');
+
+    expect(within(cardOf('Acme')).getByRole('button', { name: 'Client' })).toBeTruthy();
+    expect(within(cardOf('12 rue des Lilas')).queryByRole('button', { name: 'Client' })).toBeNull();
+    expect(within(cardOf('contact@acme.fr')).queryByRole('button', { name: 'Adverse' })).toBeNull();
+  });
 });
