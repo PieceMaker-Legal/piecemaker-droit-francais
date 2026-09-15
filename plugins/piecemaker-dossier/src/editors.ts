@@ -253,9 +253,15 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     </div>`);
   const preview = layer.querySelector<HTMLElement>('[data-document-preview]');
   const selectedEntities = new Set(linked);
+  const datePreviewValues = (): string[] => {
+    const iso = dateFor(node);
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    const numeric = match ? [`${match[3]}/${match[2]}/${match[1]}`, `${match[3]}-${match[2]}-${match[1]}`, `${match[3]}.${match[2]}.${match[1]}`] : [];
+    return [textValue(node.data.doc_date), textValue(node.data.date), iso, ...numeric].filter(Boolean);
+  };
   const previewValues = (category: 'person' | 'date' | 'fact'): string[] => {
     if (category === 'person') return entities.map((entry) => entry.label);
-    if (category === 'date') return [dateFor(node), textValue(node.data.date)].filter(Boolean);
+    if (category === 'date') return datePreviewValues();
     return [nature, textValue(node.data.localisation), ...fields.flatMap((field) => [field.label, field.value])].filter(Boolean);
   };
   const highlightPreview = (content: string): string => {
