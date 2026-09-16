@@ -42,7 +42,7 @@ function profileKind(node: KnowledgeNode): { label: string; icon: string; kind: 
 function positionLabel(node: KnowledgeNode): string {
   const position = textValue(node.data.position);
   const labelsByPosition: Record<string, string> = { demandeur: 'Demandeur', defendeur: 'Défendeur', appelant: 'Appelant', intime: 'Intimé', requerant: 'Requérant', mis_en_cause: 'Mis en cause', intervenant: 'Intervenant' };
-  return labelsByPosition[position] || position || (node.data.partySide === 'client' ? 'Demandeur' : 'Défendeur');
+  return labelsByPosition[position] || position || (node.data.partySide === 'client' ? 'Demandeur' : node.data.partySide === 'adversaire' ? 'Défendeur' : 'Aucune position procédurale');
 }
 
 function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot): string {
@@ -66,7 +66,7 @@ function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot): string {
           <div class="pmd-profile-menu"><button data-edit-node="${escapeHtml(node.id)}">${userIcon}<span>Modifier</span></button><button class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">×<span>Supprimer</span></button></div>
         </div>
       </div>
-      <div class="pmd-party-line"><span class="pmd-party-badge" data-side="${accent}">${side === 'client' ? 'Partie cliente' : 'Partie adverse'} · ${escapeHtml(positionLabel(node))}</span></div>
+      <div class="pmd-party-line"><span class="pmd-party-badge" data-side="${accent}">${side === 'client' ? 'Partie cliente' : side === 'adversaire' ? 'Partie adverse' : 'Tiers'}${side === 'client' || side === 'adversaire' ? ` · ${escapeHtml(positionLabel(node))}` : ''}</span></div>
       <div class="pmd-relations-box" data-relation-drop="${escapeHtml(node.id)}">
         ${relations.length ? relations.map((link) => {
           const otherId = link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId;
@@ -109,16 +109,17 @@ export function generalView(data: ViewData): string {
   const entities = data.graph.nodes.filter((node) => node.kind !== 'document');
   const clients = entities.filter((node) => node.data.partySide === 'client');
   const adversaries = entities.filter((node) => node.data.partySide === 'adversaire');
+  const tiers = entities.filter((node) => (node.kind === 'person' || node.kind === 'company') && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire');
   return `
     <div class="pmd-general">
     <div class="pmd-general-actions">
       <button class="pmd-button pmd-small-button" data-action="mapping">${tagIcon} Mapping</button>
       <button class="pmd-button pmd-small-button" data-action="add-node">＋ Ajouter une partie</button>
     </div>
-    ${clients.length || adversaries.length ? `<div class="pmd-party-columns">
+    ${clients.length || adversaries.length || tiers.length ? `<div class="pmd-party-columns">
       <section class="pmd-party-column"><h3 data-side="client">Parties clientes</h3>${clients.length ? clients.map((node) => nodeCard(node, data.graph)).join('') : '<button type="button" class="pmd-column-empty" data-party-picker="client"><span>Aucune partie cliente désignée.</span><small>Cliquer pour ajouter une partie</small></button>'}</section>
       <section class="pmd-party-column"><h3 data-side="adverse">Parties adverses</h3>${adversaries.length ? adversaries.map((node) => nodeCard(node, data.graph)).join('') : '<button type="button" class="pmd-column-empty" data-party-picker="adversaire"><span>Aucune partie adverse désignée.</span><small>Cliquer pour ajouter une partie</small></button>'}</section>
-    </div>` : `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button" data-action="mapping">◇ Ouvrir le mapping</button></div>`}
+    </div>${tiers.length ? `<details class="pmd-tiers-accordion"><summary class="pmd-tiers-summary"><svg class="pmd-tiers-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg><span>Tiers</span><span class="pmd-tiers-count">${tiers.length}</span></summary><div class="pmd-tiers-content" role="region" aria-label="Tiers">${tiers.map((node) => nodeCard(node, data.graph)).join('')}</div></details>` : ''}` : `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button" data-action="mapping">◇ Ouvrir le mapping</button></div>`}
     <div class="pmd-sticky-status">
       <span>Glissez un profil sur un autre pour créer un lien.</span>
       <button class="pmd-button pmd-button-primary pmd-small-button" data-action="refresh">✓ Enregistrer les profils</button>
