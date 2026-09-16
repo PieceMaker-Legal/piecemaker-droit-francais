@@ -248,7 +248,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         const sourceId = draggedNodeId || event.dataTransfer?.getData('text/plain') || '';
         const side = target.dataset.partyDrop;
         const node = data?.graph.nodes.find((entry) => entry.id === sourceId);
-        if (!node || side !== 'adversaire') return;
+        if (!node || (side !== 'client' && side !== 'adversaire')) return;
         try {
           const change = partyCodeChange(
             node,
