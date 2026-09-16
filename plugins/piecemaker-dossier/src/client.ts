@@ -6,7 +6,6 @@ import { documentEditor, modal, nodeEditor, partyTypePicker } from './editors.js
 import { PLUGIN_STYLES } from './styles.js';
 import { chronologyView, escapeHtml, generalView, graphView, mappingView, networkGraphData, shell } from './views.js';
 import type { Tab, ViewData } from './views.js';
-import { EXCLUSIONS_NODE_ID } from './types.js';
 import type { KnowledgeUpdateOperation } from './types.js';
 
 type NetworkNode = {
@@ -100,6 +99,40 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (!context.project) return;
     await knowledgeApi.update(context.project.name, operations);
     await load();
+  };
+
+  const openMapping = () => {
+    if (!data) return;
+    const mappingData = data;
+    const layer = modal(root, mappingView(mappingData));
+    layer.querySelectorAll<HTMLFormElement>('[data-mapping-row]').forEach((row) => row.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const node = mappingData.graph.nodes.find((candidate) => candidate.id === row.dataset.nodeId);
+      if (!node) return;
+      const form = new FormData(row);
+      const label = String(form.get('label') || '').trim();
+      const masked = String(form.get('masked') || '').trim();
+      const aliases = String(form.get('aliases') || '').split(',').map((alias) => alias.trim()).filter(Boolean);
+      if (!label) return;
+      const mappings = mappingData.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
+      const operations: KnowledgeUpdateOperation[] = [{ op: 'upsertNode', node: { id: node.id, kind: node.kind, label, aliases, data: node.data, origin: 'manual' } }];
+      for (const mapping of mappings) operations.push({ op: 'deleteMapping', mapping: { nodeId: node.id, real: mapping.real } });
+      for (const real of [...new Set([label, ...aliases])]) operations.push({ op: 'upsertMapping', mapping: { nodeId: node.id, real, masked, origin: 'manual' } });
+      try {
+        await save(operations);
+      } catch (error) {
+        showError(error);
+      }
+    }));
+    layer.querySelectorAll<HTMLElement>('[data-edit-node]').forEach((entry) => entry.addEventListener('click', () => {
+      const node = mappingData.graph.nodes.find((candidate) => candidate.id === entry.dataset.editNode);
+      layer.remove();
+      if (node) nodeEditor(root, mappingData, node, save, {}, openMapping);
+    }));
+    layer.querySelector<HTMLElement>('[data-action=add-node]')?.addEventListener('click', () => {
+      layer.remove();
+      nodeEditor(root, mappingData, null, save);
+    });
   };
 
   const renderGraph = () => {
@@ -211,29 +244,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (data) nodeEditor(root, data, null, save, { kind, partySide: side });
       });
     }));
-    root.querySelectorAll<HTMLElement>('[data-action=mapping]').forEach((button) => button.addEventListener('click', () => {
-      if (!data) return;
-      const layer = modal(root, mappingView(data));
-      layer.querySelectorAll<HTMLElement>('[data-edit-node]').forEach((entry) => entry.addEventListener('click', () => {
-        const node = data?.graph.nodes.find((candidate) => candidate.id === entry.dataset.editNode);
-        layer.remove();
-        if (data && node) nodeEditor(root, data, node, save);
-      }));
-      layer.querySelector<HTMLElement>('[data-action=add-node]')?.addEventListener('click', () => {
-        layer.remove();
-        if (data) nodeEditor(root, data, null, save);
-      });
-      layer.querySelectorAll<HTMLElement>('[data-remove-exclusion]').forEach((entry) => entry.addEventListener('click', async () => {
-        const removed = entry.dataset.removeExclusion || '';
-        const exclusions = (data?.mapping.exclusions || data?.graph.exclusions || []).filter((value) => value !== removed);
-        layer.remove();
-        try {
-          await save([{ op: 'upsertNode', node: { id: EXCLUSIONS_NODE_ID, kind: 'other', label: 'Exclusions GLiNER', data: { systemRole: 'gliner-exclusions', values: exclusions }, origin: 'manual' } }]);
-        } catch (error) {
-          showError(error);
-        }
-      }));
-    }));
+    root.querySelectorAll<HTMLElement>('[data-action=mapping]').forEach((button) => button.addEventListener('click', openMapping));
     root.querySelectorAll<HTMLElement>('[data-node-menu]').forEach((button) => button.addEventListener('click', (event) => {
       event.stopPropagation();
       const menu = button.parentElement?.querySelector<HTMLElement>('.pmd-profile-menu');
