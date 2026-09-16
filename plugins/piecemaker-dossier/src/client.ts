@@ -266,6 +266,16 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       });
     });
     root.querySelectorAll<HTMLElement>('[data-action=mapping]').forEach((button) => button.addEventListener('click', openMapping));
+    root.querySelectorAll<HTMLButtonElement>('[data-remove-party]').forEach((button) => button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const nodeId = button.dataset.removeParty;
+      if (!nodeId || !window.confirm('Retirer la désignation de partie de ce profil ?')) return;
+      try {
+        await save([{ op: 'removePartyDesignation', nodeId }]);
+      } catch (error) {
+        showError(error);
+      }
+    }));
     root.querySelectorAll<HTMLElement>('[data-node-menu]').forEach((button) => button.addEventListener('click', (event) => {
       event.stopPropagation();
       const menu = button.parentElement?.querySelector<HTMLElement>('.pmd-profile-menu');
