@@ -3,6 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { installDefaultConnectors } from './default-connectors.mjs';
+
 const source = path.dirname(fileURLToPath(import.meta.url));
 const applicationRoot = path.resolve(process.argv[2] || path.join(source, '../..'));
 const configFile = path.join(applicationRoot, 'product.config.json');
@@ -16,4 +18,5 @@ const configPath = path.join(dataRoot, 'plugins.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
 config['piecemaker-library'] = { ...config['piecemaker-library'], enabled: true };
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
+installDefaultConnectors();
 process.stdout.write(`Bibliothèque installée dans ${target}\n`);
