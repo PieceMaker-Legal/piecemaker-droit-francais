@@ -5,7 +5,7 @@ import { knowledgeApi } from './api.js';
 import { documentEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { chronologyView, escapeHtml, generalView, graphView, mappingView, networkGraphData, shell } from './views.js';
-import type { AgentsViewerState, Tab, ViewData } from './views.js';
+import type { Tab, ViewData } from './views.js';
 import { EXCLUSIONS_NODE_ID } from './types.js';
 import type { KnowledgeUpdateOperation } from './types.js';
 
@@ -47,6 +47,7 @@ type PluginContext = {
 type PluginApi = {
   readonly context: PluginContext;
   onContextChange(callback: (context: PluginContext) => void): () => void;
+  openFileInEditor(filePath: string): void;
 };
 
 export function mount(container: HTMLElement, api: PluginApi): void {
@@ -63,7 +64,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let scanning = false;
   let draggedNodeId = '';
   let network: NetworkInstance | null = null;
-  let agentsViewer: AgentsViewerState = { open: false, loading: false, content: '', exists: false, error: '' };
 
   const showError = (error: unknown) => {
     const target = root.querySelector<HTMLElement>('[data-error]');
@@ -299,30 +299,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       const node = data?.graph.nodes.find((entry) => entry.id === button.dataset.editDocument);
       if (data && node) documentEditor(root, data, node, context.project?.path || '', save);
     }));
-    root.querySelector<HTMLElement>('[data-action=agents]')?.addEventListener('click', async () => {
-      if (!context.project) return;
-      agentsViewer = { open: true, loading: true, content: '', exists: false, error: '' };
-      render();
-      try {
-        const document = await knowledgeApi.agents(context.project.name);
-        agentsViewer = { open: true, loading: false, content: document.content, exists: document.exists, error: '' };
-        render();
-      } catch (error) {
-        agentsViewer = { open: true, loading: false, content: '', exists: false, error: error instanceof Error ? error.message : String(error) };
-        render();
-      }
-    });
-    root.querySelector<HTMLElement>('[data-action=close-agents]')?.addEventListener('click', () => {
-      agentsViewer = { ...agentsViewer, open: false };
-      render();
-    });
+    root.querySelector<HTMLElement>('[data-action=agents]')?.addEventListener('click', () => api.openFileInEditor('AGENTS.md'));
   };
 
   const render = () => {
     network?.destroy();
     network = null;
     root.dataset.theme = context.theme;
-    root.innerHTML = shell(active, data?.graph.mappings.length || 0, scanning, agentsViewer);
+    root.innerHTML = shell(active, data?.graph.mappings.length || 0, scanning);
     const content = root.querySelector<HTMLElement>('[data-content]');
     if (!context.project) {
       if (content) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
@@ -342,7 +326,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     context = next;
     if (changedProject) {
       data = null;
-      agentsViewer = { open: false, loading: false, content: '', exists: false, error: '' };
       void load();
     } else {
       render();
