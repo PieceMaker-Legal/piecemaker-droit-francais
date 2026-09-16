@@ -6,7 +6,6 @@ import type { Router } from 'express';
 import { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
-import type { GlinerMappingDocument } from '../../plugins/piecemaker-dossier/src/types.js';
 
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { createCitationStore } from './harness/citation-store.js';
@@ -37,13 +36,14 @@ type PieceMakerRuntimeStatus = {
 };
 
 type PieceMakerVendorModule = {
-  createPieceMakerRouter(options?: { getRuntimeStatus?: () => PieceMakerRuntimeStatus; anonymizer?: unknown; onMappingReady?: (caseRoot: string, mapping: GlinerMappingDocument) => Promise<void> }): Router;
+  createPieceMakerRouter(options?: { getRuntimeStatus?: () => PieceMakerRuntimeStatus; anonymizer?: unknown }): Router;
   piecemakerHome(): string;
+  stopOriginalsJobs(): Promise<void>;
 };
 
 const vendor = createRequire(import.meta.url)(routerPath) as PieceMakerVendorModule;
 
-export const { piecemakerHome } = vendor;
+export const { piecemakerHome, stopOriginalsJobs } = vendor;
 const { createAnonymizerService } = createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/anonymizer/service.cjs'));
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome(), required: true });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
@@ -55,7 +55,7 @@ const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
 
 export function createPieceMakerRouter(options: { getRuntimeStatus?: () => PieceMakerRuntimeStatus } = {}) {
-  const router = vendor.createPieceMakerRouter({ ...options, anonymizer, onMappingReady: knowledge.onMappingReady });
+  const router = vendor.createPieceMakerRouter({ ...options, anonymizer });
   router.use(createCitationsRouter(citations, (id) => {
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));

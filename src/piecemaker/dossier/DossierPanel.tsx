@@ -38,7 +38,7 @@ const SECTIONS: { id: SectionId; label: string; hint: string; icon: LucideIcon }
 ];
 
 function DossierSections({ section }: { section: SectionId }) {
-  const { selectedCaseId, selectedCase, mappingVersion } = useDossierCases();
+  const { projectId, selectedCaseId, selectedCase, mappingVersion } = useDossierCases();
 
   if (section === 'dossiers') return <CaseFilesSection />;
   if (section === 'tampon') return <StampingSection />;
@@ -51,7 +51,7 @@ function DossierSections({ section }: { section: SectionId }) {
   }
   return (
     <div className="h-full" data-piecemaker-identity-highlight="off">
-      <CaseFilesChronology caseId={selectedCaseId} caseName={selectedCase.name} refreshVersion={mappingVersion} />
+      <CaseFilesChronology caseId={selectedCaseId} projectId={projectId ?? undefined} caseName={selectedCase.name} refreshVersion={mappingVersion} />
     </div>
   );
 }
@@ -61,7 +61,10 @@ export default function DossierPanel({ selectedProject }: { selectedProject: Pro
   const { openFileInEditor } = usePaletteOps();
 
   return (
-    <DossierCasesProvider projectPath={selectedProject?.fullPath || selectedProject?.path || null}>
+    <DossierCasesProvider
+      projectId={selectedProject?.projectId ?? null}
+      projectPath={selectedProject?.fullPath || selectedProject?.path || null}
+    >
       <div className="flex h-full flex-col">
         <div className="flex shrink-0 flex-nowrap items-center gap-3 overflow-x-auto border-b border-border/50 px-3 py-2">
           <PillBar

@@ -29,6 +29,7 @@ export type ProjectListItem = {
   displayName: string;
   fullPath: string;
   isStarred: boolean;
+  anonymizationComplete: boolean;
   sessions: SessionSummary[];
   sessionMeta: {
     hasMore: boolean;
@@ -189,6 +190,7 @@ export async function getProjectsWithSessions(
     project_path: string;
     custom_project_name?: string | null;
     isStarred?: number;
+    anonymization_complete?: number;
   }>;
   const totalProjects = projectRows.length;
   const projects: ProjectListItem[] = [];
@@ -223,6 +225,7 @@ export async function getProjectsWithSessions(
       displayName,
       fullPath: projectPath,
       isStarred: Boolean(row.isStarred),
+      anonymizationComplete: Boolean(row.anonymization_complete),
       sessions: sessionsPage.sessions,
       sessionMeta: {
         hasMore: sessionsPage.hasMore,
@@ -257,6 +260,7 @@ export async function getArchivedProjectsWithSessions(
     project_path: string;
     custom_project_name?: string | null;
     isStarred?: number;
+    anonymization_complete?: number;
   }>;
 
   const archivedProjects: ArchivedProjectListItem[] = [];
@@ -275,6 +279,7 @@ export async function getArchivedProjectsWithSessions(
       displayName,
       fullPath: row.project_path,
       isStarred: Boolean(row.isStarred),
+      anonymizationComplete: Boolean(row.anonymization_complete),
       isArchived: true,
       sessions: sessionsPage.sessions,
       sessionMeta: {

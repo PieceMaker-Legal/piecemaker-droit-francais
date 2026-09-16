@@ -6,10 +6,7 @@ import { api } from '@/shared/api';
 import type { Project } from '@/shared/types';
 import { Button, Dialog, DialogContent, DialogTitle } from '@/shared/ui';
 import { cn } from '@/shared/utils';
-import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
-import type { DossierCase } from '@/piecemaker/dossier/dossierRegistration';
-import { setAnonymizationComplete } from '@/piecemaker/dossier/mappingStatusCache';
-import type { OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
+import { pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import {
   getTrackedAnonymizationJobs,
   subscribeTrackedAnonymizationJobs,
@@ -54,9 +51,6 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
   const [scannedProjectIds, setScannedProjectIds] = useState<Set<string>>(new Set());
-  const [caseReferences, setCaseReferences] = useState<Map<string, string>>(new Map());
-  const [loadingProjectStatus, setLoadingProjectStatus] = useState(false);
-  const [force, setForce] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const projectJobs = useSyncExternalStore(subscribeTrackedAnonymizationJobs, getTrackedAnonymizationJobs);
@@ -75,29 +69,7 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
       return retainedIds.size ? retainedIds : availableIds;
     });
     onProjectsChange(refreshedProjects);
-    setLoadingProjectStatus(true);
-    const refreshedScannedIds = new Set<string>();
-    const refreshedReferences = new Map<string, string>();
-    const overview = await pmGet<{ folders?: DossierCase[] }>('/repository');
-    const registeredReferences = new Map((overview.folders ?? []).map((entry) => [entry.location, entry.path]));
-    const status = await pmGet<{ projects: Array<{ projectPath: string; completedAt: string }> }>('/knowledge/anonymization-status');
-    const completedPaths = new Set((Array.isArray(status.projects) ? status.projects : [])
-      .filter((project) => project.completedAt)
-      .map((project) => project.projectPath));
-    for (const project of refreshedProjects) {
-      const caseReference = registeredReferences.get(project.fullPath);
-      if (!caseReference) {
-        setAnonymizationComplete(project.fullPath, false);
-        continue;
-      }
-      refreshedReferences.set(project.projectId, caseReference);
-      const scanned = completedPaths.has(project.fullPath);
-      if (scanned) refreshedScannedIds.add(project.projectId);
-      setAnonymizationComplete(project.fullPath, scanned);
-    }
-    setScannedProjectIds(refreshedScannedIds);
-    setCaseReferences(refreshedReferences);
-    setLoadingProjectStatus(false);
+    setScannedProjectIds(new Set(refreshedProjects.filter((project) => project.anonymizationComplete).map((project) => project.projectId)));
   }, [onProjectsChange]);
 
   const loadProjects = useCallback(() => {
@@ -136,20 +108,20 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
     const failures: string[] = [];
     for (const project of selectedProjects) {
       try {
-        const caseReference = caseReferences.get(project.projectId)
-          ?? (await pmPost<{ folder: { path: string } }>('/repository/cases/selected', { folder: project.fullPath })).folder.path;
-        const { job } = await pmPost<{ job: OriginalsJob }>('/originals/pipeline', {
-          case: caseReference,
-          action: 'anonymize',
-          files: [],
-          force,
-          engine: 'markitdown',
+        const { job } = await pmPost<{ job: { id: string; state: 'running' | 'done' | 'error'; percent: number; error: string | null } }>('/knowledge/scan', {
+          projectId: project.projectId,
         });
         launchedCount += 1;
         trackAnonymizationJob({
           projectPath: project.fullPath,
           projectName: project.displayName,
-          job,
+          job: {
+            id: job.id,
+            case: project.projectId,
+            state: job.state,
+            percent: job.percent,
+            error: job.error,
+          },
         });
       } catch (cause) {
         failures.push(`${project.displayName} : ${cause instanceof PieceMakerApiError ? cause.message : String(cause)}`);
@@ -216,7 +188,6 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2 text-xs"
-                    disabled={loadingProjectStatus}
                     onClick={() => setSelectedProjectIds(new Set(projects.filter((project) => !scannedProjectIds.has(project.projectId)).map((project) => project.projectId)))}
                   >
                     Non analysés
@@ -239,9 +210,7 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
                       <span className="block truncate text-sm text-foreground">{project.displayName}</span>
                       <span className="block truncate text-xs text-muted-foreground" title={project.fullPath}>{project.fullPath}</span>
                     </span>
-                    {loadingProjectStatus ? (
-                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-                    ) : scannedProjectIds.has(project.projectId) ? (
+                    {scannedProjectIds.has(project.projectId) ? (
                       <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-label="Anonymisation effectuée">
                         <title>Anonymisation effectuée</title>
                       </ShieldCheck>
@@ -251,20 +220,13 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
               </div>
               <p className="text-xs text-muted-foreground">{selectedProjects.length} dossier(s) sélectionné(s)</p>
             </div>
-            <label className="flex items-start gap-2 text-sm">
-              <input type="checkbox" className="mt-0.5" checked={force} onChange={(event) => setForce(event.target.checked)} />
-              <span>
-                <span className="block font-medium">Relancer le traitement complet</span>
-                <span className="block text-xs text-muted-foreground">Reconvertit et réanalyse aussi les pièces déjà anonymisées.</span>
-              </span>
-            </label>
             {message && <p className={cn('text-xs', message.includes('mis en file') && !message.includes(' : ') ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive')} role="status">{message}</p>}
           </div>
           <div className="flex justify-end gap-2 border-t border-border/60 px-5 py-3">
             <Button variant="ghost" onClick={() => setOpen(false)}>Fermer</Button>
-            <Button disabled={launching || loadingProjectStatus || selectedProjects.length === 0} onClick={() => void launch()}>
+            <Button disabled={launching || selectedProjects.length === 0} onClick={() => void launch()}>
               {launching && <Loader2 className="h-4 w-4 animate-spin" />}
-              {force ? 'Relancer' : 'Mettre en file'}
+              Mettre en file
             </Button>
           </div>
         </DialogContent>

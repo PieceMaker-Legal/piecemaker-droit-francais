@@ -18,7 +18,6 @@ export function createKnowledgeRouter(service: KnowledgeService) {
     });
   };
   router.get('/knowledge/overview', (request, response) => respond(() => service.overview(request.query.projectId), response));
-  router.get('/knowledge/anonymization-status', (_request, response) => respond(() => service.anonymizationStatus(), response));
   router.get('/knowledge/mapping', (request, response) => respond(() => service.mapping(request.query.projectId), response));
   router.get('/knowledge/chronology', (request, response) => respond(() => service.chronology(request.query.projectId), response));
   router.get('/knowledge/graph', (request, response) => respond(() => service.graph(request.query.projectId), response));

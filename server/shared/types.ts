@@ -725,6 +725,7 @@ export type ProjectRepositoryRow = {
   custom_project_name: string | null;
   isStarred: number;
   isArchived: number;
+  anonymization_complete?: number;
 };
 
 /**
