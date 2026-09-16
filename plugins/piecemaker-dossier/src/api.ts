@@ -1,8 +1,9 @@
-import type { KnowledgeSnapshot, KnowledgeUpdateOperation } from './types.js';
+import type { KnowledgeNode, KnowledgeSnapshot, KnowledgeUpdateOperation } from './types.js';
 
 export type KnowledgeOverview = { projectId: string; counts: Record<string, number>; total: number };
 export type KnowledgeMappingView = Pick<KnowledgeSnapshot, 'projectId' | 'nodes' | 'mappings' | 'exclusions'>;
-export type KnowledgeChronologyView = { projectId: string; documents: KnowledgeSnapshot['nodes']; links: KnowledgeSnapshot['links'] };
+export type KnowledgeChronologyDocument = Omit<KnowledgeNode, 'id'>;
+export type KnowledgeChronologyView = { projectId: string; documents: KnowledgeChronologyDocument[]; links: KnowledgeSnapshot['links'] };
 export type AgentsDocument = { projectId: string; content: string; exists: boolean };
 export type KnowledgeDocumentPreview = { path: string; content: string };
 export type InstitutionalTerms = { file: string; terms: string[] };

@@ -14,12 +14,11 @@ export type KnowledgeNodeInput = {
   origin?: KnowledgeOrigin;
 };
 
-export type KnowledgeNode = KnowledgeNodeInput & {
+export type KnowledgeNode = Omit<KnowledgeNodeInput, 'origin'> & {
   projectId: string;
   label: string;
   aliases: string[];
   data: JsonData;
-  origin: KnowledgeOrigin;
   createdAt: string;
   updatedAt: string;
 };
@@ -32,7 +31,7 @@ export type KnowledgeLinkInput = {
   origin?: KnowledgeOrigin;
 };
 
-export type KnowledgeLink = Required<KnowledgeLinkInput> & {
+export type KnowledgeLink = Omit<Required<KnowledgeLinkInput>, 'origin'> & {
   projectId: string;
 };
 
@@ -44,7 +43,7 @@ export type KnowledgeMappingInput = {
   origin?: KnowledgeOrigin;
 };
 
-export type KnowledgeMapping = Required<KnowledgeMappingInput> & {
+export type KnowledgeMapping = Omit<Required<KnowledgeMappingInput>, 'origin'> & {
   projectId: string;
 };
 
@@ -61,7 +60,6 @@ export type KnowledgeResolvedLink = {
   relation: string;
   direction: 'outgoing' | 'incoming';
   data: JsonData;
-  origin: KnowledgeOrigin;
   node: KnowledgeResolvedNode | null;
   cycle: boolean;
 };
