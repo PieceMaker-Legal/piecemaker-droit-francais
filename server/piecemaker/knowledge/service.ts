@@ -77,11 +77,15 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
     },
     scan(value: unknown, files?: unknown) {
       const id = ensureProject(value);
-      return { job: scanJobs.start(id, (report) => pipeline.scan(id, files, report)) };
+      return { job: scanJobs.start(id, (report, signal) => pipeline.scan(id, files, report, signal)) };
     },
     scanJob(jobId: unknown, value?: unknown) {
       const job = scanJobs.get(jobId) || (value ? scanJobs.runningForProject(ensureProject(value)) : null);
       return { job };
+    },
+    cancelScan(jobId: unknown, value?: unknown) {
+      const job = scanJobs.get(jobId) || (value ? scanJobs.runningForProject(ensureProject(value)) : null);
+      return { job: scanJobs.cancel(job) };
     },
   };
 }

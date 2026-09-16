@@ -53,5 +53,7 @@ button.pmd-column-empty[data-drop-active=true]{border-color:var(--pmd-accent);ba
 .pmd-scan-progress-label{white-space:nowrap;color:var(--pmd-muted);font-size:11px;font-variant-numeric:tabular-nums;line-height:14px}
 .pmd-scan-progress-track{display:block;flex:1;height:4px;overflow:hidden;border-radius:999px;background:var(--pmd-soft)}
 .pmd-scan-progress-bar{display:block;height:100%;border-radius:999px;background:var(--pmd-accent);transition:width .5s}
+.pmd-scan-cancel{display:flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--pmd-muted);font-size:14px;line-height:1;cursor:pointer}
+.pmd-scan-cancel:hover{background:var(--pmd-soft);color:var(--pmd-text)}
 @media(max-width:760px){.pmd-scan-progress{min-width:80px}}
 `;

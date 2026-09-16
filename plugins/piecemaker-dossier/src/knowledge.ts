@@ -253,7 +253,7 @@ export class KnowledgeStore {
   }
 
   private validateOperation(operation: KnowledgeUpdateOperation): KnowledgeUpdateOperation {
-    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','upsertMapping','deleteMapping','deleteNode'].includes(operation.op)) throw new TypeError('unsupported operation');
+    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','upsertMapping','deleteMapping','deleteNode','renameNode'].includes(operation.op)) throw new TypeError('unsupported operation');
     return operation;
   }
 
@@ -296,8 +296,34 @@ export class KnowledgeStore {
       counts.mappings += 1;
       return;
     }
+    if (operation.op === 'renameNode') {
+      const fromNodeId = requiredText(operation.rename.fromNodeId, 'rename.fromNodeId');
+      const toNodeId = requiredText(operation.rename.toNodeId, 'rename.toNodeId');
+      if (fromNodeId !== toNodeId) this.renameNodeRows(projectId, fromNodeId, toNodeId, timestamp);
+      counts.nodes += 1;
+      return;
+    }
     this.deleteNode.run({ projectId, nodeId: requiredText(operation.nodeId, 'nodeId') });
     counts.nodes += 1;
+  }
+
+  private renameNodeRows(projectId: string, fromNodeId: string, toNodeId: string, timestamp: string): void {
+    const source = this.database.prepare('SELECT * FROM piecemaker_nodes WHERE project_id=? AND id=?').get(projectId, fromNodeId) as NodeRow | undefined;
+    if (!source) return;
+    const masked = toNodeId.startsWith('entity:') ? toNodeId.slice('entity:'.length) : '';
+    const data = parseJson<JsonData>(source.data_json, {});
+    if (masked) data.code = masked;
+    this.database.prepare('INSERT INTO piecemaker_nodes(project_id,id,kind,label,search_text,aliases_json,data_json,origin,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET kind=excluded.kind,label=excluded.label,search_text=excluded.search_text,aliases_json=excluded.aliases_json,data_json=excluded.data_json,updated_at=excluded.updated_at')
+      .run(projectId, toNodeId, source.kind, source.label, searchable([source.label, ...parseJson<string[]>(source.aliases_json, [])]), source.aliases_json, JSON.stringify(data), source.origin, source.created_at, timestamp);
+    const mappings = this.database.prepare('SELECT * FROM piecemaker_mappings WHERE project_id=? AND node_id=?').all(projectId, fromNodeId) as MappingRow[];
+    this.database.prepare('DELETE FROM piecemaker_mappings WHERE project_id=? AND node_id=?').run(projectId, fromNodeId);
+    for (const row of mappings) {
+      const maskedValue = masked || row.masked_value;
+      this.upsertMapping.run({ projectId, nodeId: toNodeId, real: row.real_value, masked: maskedValue, searchText: searchable([row.real_value, maskedValue]), data: row.data_json, origin: row.origin, at: timestamp });
+    }
+    this.database.prepare('UPDATE OR REPLACE piecemaker_links SET from_node_id=?,updated_at=? WHERE project_id=? AND from_node_id=?').run(toNodeId, timestamp, projectId, fromNodeId);
+    this.database.prepare('UPDATE OR REPLACE piecemaker_links SET to_node_id=?,updated_at=? WHERE project_id=? AND to_node_id=?').run(toNodeId, timestamp, projectId, fromNodeId);
+    this.deleteNode.run({ projectId, nodeId: fromNodeId });
   }
 
   private loadGraph(projectId: string, rootIds: string[], depth: number): LoadedGraph {
