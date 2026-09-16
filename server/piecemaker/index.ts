@@ -16,6 +16,7 @@ import { startLibraryBackend, installLibraryRuntime } from './library/index.js';
 import { createKnowledgeBackend } from './knowledge/index.js';
 import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
+import { createBodaccSearchRouter } from './bodacc-search.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -61,6 +62,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(timesheet);
   router.use(knowledge.router);
   router.use(createCompanySearchRouter());
+  router.use(createBodaccSearchRouter());
   return router;
 }
 export type { PieceMakerRuntimeStatus };

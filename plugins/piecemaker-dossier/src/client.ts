@@ -2,8 +2,8 @@ import { knowledgeApi } from './api.js';
 import { documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { partyCodeChange } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { chronologyView, escapeHtml, generalView, mappingView, scanPercentLabel, shell } from './views.js';
-import type { Tab, ViewData } from './views.js';
+import { chronologyView, escapeHtml, generalView, mappingView, scanPercentLabel, scanView, shell } from './views.js';
+import type { BodaccScanState, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
 
@@ -34,6 +34,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let data: ViewData | null = null;
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
+  const bodaccStates = new Map<string, BodaccScanState>();
   let draggedNodeId = '';
   let tiersCollapsed = false;
 
@@ -188,6 +189,42 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const bind = () => {
     root.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => button.addEventListener('click', () => {
       active = button.dataset.tab as Tab;
+      render();
+    }));
+    root.querySelectorAll<HTMLElement>('[data-bodacc-details]').forEach((details) => details.addEventListener('toggle', () => {
+      const companyId = details.dataset.bodaccDetails;
+      if (!companyId) return;
+      const state = bodaccStates.get(companyId) || { status: 'idle' as const };
+      state.open = (details as HTMLDetailsElement).open;
+      bodaccStates.set(companyId, state);
+    }));
+    root.querySelectorAll<HTMLButtonElement>('[data-action=company-search][data-scan-company]').forEach((button) => button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const companyId = button.dataset.scanCompany || '';
+      if (!companyId) return;
+      const siren = button.dataset.siren || '';
+      const siret = button.dataset.siret || '';
+      const state = bodaccStates.get(companyId) || { status: 'idle' as const };
+      state.open = true;
+      if (!siren && !siret) {
+        state.status = 'error';
+        state.error = 'Aucun SIREN ou SIRET n’est renseigné pour cette personne morale.';
+        bodaccStates.set(companyId, state);
+        render();
+        return;
+      }
+      state.status = 'loading';
+      state.error = '';
+      bodaccStates.set(companyId, state);
+      render();
+      try {
+        state.result = await knowledgeApi.searchBodacc(siren, siret);
+        state.status = 'loaded';
+      } catch (error) {
+        state.status = 'error';
+        state.error = error instanceof Error ? error.message : 'Recherche BODACC impossible.';
+      }
+      bodaccStates.set(companyId, state);
       render();
     }));
     root.querySelectorAll<HTMLElement>('[data-action=refresh]').forEach((button) => button.addEventListener('click', () => void load()));
@@ -353,7 +390,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     } else if (!data) {
       if (content) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
     } else if (content) {
-      content.innerHTML = active === 'general' ? generalView(data, tiersCollapsed) : chronologyView(data);
+      content.innerHTML = active === 'general' ? generalView(data, tiersCollapsed) : active === 'chronology' ? chronologyView(data) : scanView(data, bodaccStates);
     }
     bind();
   };

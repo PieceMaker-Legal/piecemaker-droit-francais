@@ -1,8 +1,14 @@
 import { NODE_KINDS } from './types.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
-import type { KnowledgeChronologyView, KnowledgeMappingView, KnowledgeOverview, ScanJob } from './api.js';
+import type { BodaccSearchResult, KnowledgeChronologyView, KnowledgeMappingView, KnowledgeOverview, ScanJob } from './api.js';
 
-export type Tab = 'general' | 'chronology';
+export type Tab = 'general' | 'chronology' | 'scan';
+export type BodaccScanState = {
+  status: 'idle' | 'loading' | 'loaded' | 'error';
+  result?: BodaccSearchResult;
+  error?: string;
+  open?: boolean;
+};
 export type ViewData = {
   overview: KnowledgeOverview;
   mapping: KnowledgeMappingView;
@@ -88,9 +94,12 @@ const tiersProfileIcon = '<svg class="pmd-tiers-chevron" viewBox="0 0 24 24" fil
 
 const folderTreeIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M3 5a2 2 0 0 0 2 2h3"></path><path d="M3 3v13a2 2 0 0 0 2 2h3"></path></svg>';
 const calendarClockIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"></path><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h5"></path><circle cx="16" cy="16" r="6"></circle><path d="M16 14v2l1 1"></path></svg>';
+const bodaccIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg>';
+const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'general', label: 'Parties', icon: folderTreeIcon },
   { id: 'chronology', label: 'Chronologie', icon: calendarClockIcon },
+  { id: 'scan', label: 'Scan Bodacc', icon: bodaccIcon },
 ];
 
 export function scanPercentLabel(job: ScanJob): string {
@@ -148,6 +157,58 @@ export function generalView(data: ViewData, tiersCollapsed = false): string {
     </div>
     </div>
   `;
+}
+
+function companyIdentifiers(node: KnowledgeNode, graph: KnowledgeSnapshot): { siren: string; siret: string } {
+  const identifiers = { siren: '', siret: '' };
+  for (const link of graph.links.filter((entry) => entry.fromNodeId === node.id || entry.toNodeId === node.id)) {
+    const relation = link.relation.toLocaleLowerCase();
+    const related = graph.nodes.find((entry) => entry.id === (link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId));
+    const value = related?.label || '';
+    const digits = value.replace(/\D/g, '');
+    if (relation === 'siren' && digits.length === 9) identifiers.siren = digits;
+    if (relation === 'siret' && digits.length === 14) identifiers.siret = digits;
+  }
+  const dataSiren = textValue(node.data.siren).replace(/\D/g, '');
+  const dataSiret = textValue(node.data.siret).replace(/\D/g, '');
+  if (!identifiers.siren && dataSiren.length === 9) identifiers.siren = dataSiren;
+  if (!identifiers.siret && dataSiret.length === 14) identifiers.siret = dataSiret;
+  if (!identifiers.siren && identifiers.siret) identifiers.siren = identifiers.siret.slice(0, 9);
+  return identifiers;
+}
+
+function bodaccAnnouncement(announcement: BodaccSearchResult['annonces'][number]): string {
+  const details = [
+    ['Date', announcement.datePublication],
+    ['Avis', announcement.typeAvis],
+    ['Famille', announcement.familleAvis],
+    ['Entreprise', announcement.commercant],
+    ['Ville', announcement.ville],
+    ['Tribunal', announcement.tribunal],
+    ['Jugement', announcement.jugement],
+    ['Acte', announcement.acte],
+  ].filter((entry) => entry[1]);
+  return `<article class="pmd-bodacc-announcement"><div class="pmd-bodacc-announcement-head"><strong>${escapeHtml(announcement.typeAvis || announcement.familleAvis || 'Annonce BODACC')}</strong>${announcement.datePublication ? `<time>${escapeHtml(announcement.datePublication)}</time>` : ''}</div><dl>${details.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>${announcement.url ? `<a href="${escapeHtml(announcement.url)}" target="_blank" rel="noopener noreferrer">Ouvrir l’annonce officielle ↗</a>` : ''}</article>`;
+}
+
+function bodaccStateMarkup(state: BodaccScanState, siren: string): string {
+  if (state.status === 'loading') return '<p class="pmd-bodacc-status">Recherche des annonces BODACC…</p>';
+  if (state.status === 'error') return `<p class="pmd-bodacc-status pmd-bodacc-error">${escapeHtml(state.error || 'Recherche impossible.')}</p>`;
+  if (state.status === 'idle') return `<p class="pmd-bodacc-status">Rechercher les annonces liées au SIREN ${escapeHtml(siren)}.</p>`;
+  const result = state.result;
+  if (!result || !result.annonces.length) return `<p class="pmd-bodacc-status">Aucune annonce BODACC trouvée pour le SIREN ${escapeHtml(siren)}.</p>`;
+  return `${result.alertes.length ? `<div class="pmd-bodacc-alerts">${result.alertes.map((alerte) => `<span>${escapeHtml(alerte)}</span>`).join('')}</div>` : ''}<p class="pmd-bodacc-summary">${result.annonces.length} annonce${result.annonces.length > 1 ? 's' : ''} affichée${result.annonces.length > 1 ? 's' : ''} sur ${result.total}.</p><div class="pmd-bodacc-list">${result.annonces.map(bodaccAnnouncement).join('')}</div>`;
+}
+
+export function scanView(data: ViewData, states: Map<string, BodaccScanState> = new Map()): string {
+  const companies = data.graph.nodes.filter((node) => node.kind === 'company').sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
+  if (!companies.length) return '<div class="pmd-empty">Aucune personne morale dans le dossier.</div>';
+  return `<div class="pmd-scan-view"><div class="pmd-toolbar"><div><h2 class="pmd-title">Scan Bodacc</h2><div class="pmd-subtitle">Annonces liées aux personnes morales du dossier</div></div><span class="pmd-spacer"></span><span class="pmd-section-count">${companies.length}</span></div><div class="pmd-scan-company-list">${companies.map((company) => {
+    const identifiers = companyIdentifiers(company, data.graph);
+    const state = states.get(company.id) || { status: 'idle' as const };
+    const identifierLabel = [identifiers.siren ? `SIREN ${identifiers.siren}` : '', identifiers.siret ? `SIRET ${identifiers.siret}` : ''].filter(Boolean).join(' · ') || 'SIREN / SIRET non renseigné';
+    return `<article class="pmd-scan-company" data-scan-company="${escapeHtml(company.id)}"><div class="pmd-scan-company-header"><div class="pmd-scan-company-copy"><h3>${escapeHtml(company.label || 'Personne morale sans nom')}</h3><p>${escapeHtml(identifierLabel)}</p></div><button type="button" class="pmd-icon-button" data-action="company-search" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public">${companySearchIcon}</button></div><details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(company.id)}" ${state.open ? 'open' : ''}><summary>Annonces BODACC${state.status === 'loaded' && state.result ? ` · ${state.result.annonces.length}` : ''}</summary><div class="pmd-bodacc-content">${bodaccStateMarkup(state, identifiers.siren || identifiers.siret)}</div></details></article>`;
+  }).join('')}</div></div>`;
 }
 
 export function mappingView(data: ViewData): string {
