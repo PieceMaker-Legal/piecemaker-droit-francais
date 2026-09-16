@@ -254,13 +254,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       state.open = (details as HTMLDetailsElement).open;
       bodaccStates.set(companyId, state);
     }));
-    root.querySelectorAll<HTMLButtonElement>('[data-action=bodacc-search][data-scan-company]').forEach((button) => button.addEventListener('click', async (event) => {
+    root.querySelectorAll<HTMLButtonElement>('[data-action=company-search][data-scan-company]').forEach((button) => button.addEventListener('click', (event) => {
       event.stopPropagation();
       const companyId = button.dataset.scanCompany || '';
-      if (!companyId) return;
-      const siren = button.dataset.siren || '';
-      const siret = button.dataset.siret || '';
-      await searchBodaccCompany(companyId, siren, siret);
+      const company = data?.graph.nodes.find((node) => node.id === companyId);
+      if (data && company) nodeEditor(root, data, company, save, {}, undefined, true);
     }));
     root.querySelectorAll<HTMLButtonElement>('[data-action=company-family-menu]').forEach((button) => button.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -280,8 +278,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }));
     root.querySelector<HTMLElement>('[data-action=scan-all-companies]')?.addEventListener('click', async (event) => {
       event.stopPropagation();
-      const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-action=bodacc-search][data-scan-company]'));
-      const searches = buttons.map((button) => searchBodaccCompany(button.dataset.scanCompany || '', button.dataset.siren || '', button.dataset.siret || '', false, false));
+      const companies = Array.from(root.querySelectorAll<HTMLElement>('.pmd-scan-company[data-scan-company]'));
+      const searches = companies.map((company) => searchBodaccCompany(company.dataset.scanCompany || '', company.dataset.siren || '', company.dataset.siret || '', false, false));
       render();
       await Promise.all(searches);
       render();
