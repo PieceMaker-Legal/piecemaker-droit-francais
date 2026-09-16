@@ -1,0 +1,11 @@
+{
+  "name": "piecemaker-tamponnage",
+  "displayName": "Tampon et pièces",
+  "version": "0.1.0",
+  "description": "Configurez le tampon du cabinet et numérotez les pièces d'un dossier.",
+  "icon": "icon.svg",
+  "type": "module",
+  "slot": "tab",
+  "entry": "dist/index.js",
+  "permissions": []
+}
