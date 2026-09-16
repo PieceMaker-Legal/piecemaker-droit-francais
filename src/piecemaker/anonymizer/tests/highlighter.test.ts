@@ -16,8 +16,8 @@ function acronymMatches(acronyms: string[], text: string): string[] {
 
 describe('buildNameRegex', () => {
   it('ignore la casse du texte affiché', () => {
-    expect(matches(['Jean Dupont'], 'bernard gilly, BERNARD GILLY et Jean Dupont'))
-      .toEqual(['bernard gilly', 'BERNARD GILLY', 'Jean Dupont']);
+    expect(matches(['Jean Dupont'], 'jean dupont, JEAN DUPONT et Jean Dupont'))
+      .toEqual(['jean dupont', 'JEAN DUPONT', 'Jean Dupont']);
   });
 
   it('ignore la casse des codes pseudonymisés', () => {
