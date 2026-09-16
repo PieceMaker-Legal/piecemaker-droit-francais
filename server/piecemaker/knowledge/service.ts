@@ -50,6 +50,9 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
       }, {});
       return { projectId: id, counts, total: nodes.length };
     },
+    anonymizationStatus() {
+      return { projects: store.listAnonymizationStatuses() };
+    },
     mapping(value: unknown) {
       const id = ensureProject(value);
       const current = snapshot(id);

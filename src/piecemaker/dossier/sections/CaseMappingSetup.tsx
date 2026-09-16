@@ -4,7 +4,7 @@ import { Loader2, RotateCcw, ScanSearch, ShieldCheck } from 'lucide-react';
 import { invalidatePmGet, pmGet, pmGetCached, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import { trackAnonymizationJob } from '@/piecemaker/dossier/anonymizationJobsCache';
 import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
-import { setMappingReady } from '@/piecemaker/dossier/mappingStatusCache';
+import { setAnonymizationComplete } from '@/piecemaker/dossier/mappingStatusCache';
 import type { CaseOverview, OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 import { describeJob } from '@/piecemaker/dossier/sections/CaseFilesUtils';
 import { ActionMenu, Button } from '@/shared/ui';
@@ -24,16 +24,6 @@ type InstallJob = {
   error: string;
 };
 
-/**
- * Always-visible mapping-status badge, mounted next to the section tab bar
- * (`DossierPanel`) rather than inline in a section: it needs to stay on screen
- * regardless of which of the three tabs is active. It owns its case-overview
- * fetch (mapping.exists / mapping.entries) rather than receiving it as a prop,
- * since its mount point has no `overview` to read from. `mappingVersion` from
- * the dossier context is the refresh signal: this component bumps it after a
- * successful anonymization run, and re-fetches whenever another part of the
- * app (e.g. `CaseMappingSection`'s manual edits) bumps it too.
- */
 export default function CaseMappingSetup() {
   const { selectedCaseId: caseId, mappingVersion, bumpMappingVersion } = useDossierCases();
 
@@ -58,6 +48,13 @@ export default function CaseMappingSetup() {
       const { folder } = await pmGetCached<{ folder: CaseOverview }>('/repository/case', { case: caseId });
       if (requestSequence !== overviewRequestSequence.current) return;
       setOverview(folder);
+      try {
+        const status = await pmGet<{ projects: Array<{ projectPath: string; completedAt: string }> }>('/knowledge/anonymization-status');
+        if (requestSequence !== overviewRequestSequence.current) return;
+        setAnonymizationComplete(folder.location, status.projects.some((project) => project.projectPath === folder.location && Boolean(project.completedAt)));
+      } catch {
+        setAnonymizationComplete(folder.location, false);
+      }
     } catch {
       if (requestSequence !== overviewRequestSequence.current) return;
       setOverview(null);
@@ -69,11 +66,6 @@ export default function CaseMappingSetup() {
   useEffect(() => {
     void loadOverview();
   }, [loadOverview, mappingVersion]);
-
-  useEffect(() => {
-    if (!overview) return;
-    setMappingReady(overview.location, Boolean(overview.mapping.exists && overview.mapping.entries > 0));
-  }, [overview]);
 
   const loadGlinerStatus = async () => {
     setError(null);
