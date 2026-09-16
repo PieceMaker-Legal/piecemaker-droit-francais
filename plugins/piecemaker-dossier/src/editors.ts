@@ -51,11 +51,11 @@ const relationSelectOptions = (): string => [
 
 export type PartyEditorDefaults = {
   kind?: 'person' | 'company';
-  partySide?: 'client' | 'adversaire';
+  partySide?: 'client' | 'adversaire' | 'tiers';
 };
 
-export function partyTypePicker(root: HTMLElement, side: 'client' | 'adversaire', onSelect: (kind: 'person' | 'company') => void): HTMLElement {
-  const sideLabel = side === 'client' ? 'cliente' : 'adverse';
+export function partyTypePicker(root: HTMLElement, side: 'client' | 'adversaire' | 'tiers', onSelect: (kind: 'person' | 'company') => void): HTMLElement {
+  const sideLabel = side === 'client' ? 'cliente' : side === 'adversaire' ? 'adverse' : 'tierce';
   const layer = modal(root, `
     <div class="pmd-party-picker">
       <div class="pmd-toolbar"><div><h2 class="pmd-title">Ajouter une partie ${sideLabel}</h2><div class="pmd-subtitle">Choisissez le type de partie à créer</div></div><span class="pmd-spacer"></span><button class="pmd-icon-button" data-close aria-label="Fermer">×</button></div>
@@ -89,7 +89,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       <label>Libellé<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></label>
       <label>Variantes<div class="pmd-alias-editor" data-alias-editor><div class="pmd-alias-pills" data-alias-pills></div><input class="pmd-input pmd-alias-input" data-alias-input placeholder="Saisissez une variante puis appuyez sur Entrée"><input type="hidden" name="aliases"></div></label>
       <label>Code anonymisé<input class="pmd-input" name="masked" value="${escapeHtml(mappings[0]?.masked || '')}"></label>
-      <label>Statut procédural<select class="pmd-select" name="partySide"><option value="">Aucun</option><option value="client" ${(!node && defaults.partySide === 'client') || (node && node.data.partySide === 'client') || (!node && !defaults.partySide) ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${(node && node.data.partySide === 'adversaire') || (!node && defaults.partySide === 'adversaire') ? 'selected' : ''}>Partie adverse</option></select></label>
+      <label>Statut procédural<select class="pmd-select" name="partySide"><option value="">Aucun</option><option value="client" ${(!node && defaults.partySide === 'client') || (node && node.data.partySide === 'client') || (!node && !defaults.partySide) ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${(node && node.data.partySide === 'adversaire') || (!node && defaults.partySide === 'adversaire') ? 'selected' : ''}>Partie adverse</option><option value="tiers" ${(node && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire') || (!node && defaults.partySide === 'tiers') ? 'selected' : ''}>Tiers</option></select></label>
       <div data-company-fields ${companyFieldsHidden ? 'hidden' : ''}>
         <label>Forme sociale<input class="pmd-input" name="legalForm" value="${escapeHtml(textValue(node?.data.legalForm))}"></label>
         <label>Numéro SIREN<input class="pmd-input" name="siren" inputmode="numeric" autocomplete="off" value="${escapeHtml(linkedSirenNode?.label || '')}" placeholder="9 chiffres"><div class="pmd-siren-suggestions" data-siren-suggestions></div></label>

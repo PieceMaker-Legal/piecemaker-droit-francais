@@ -128,7 +128,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     root.querySelectorAll<HTMLElement>('[data-party-picker]').forEach((button) => button.addEventListener('click', () => {
       if (!data) return;
       const side = button.dataset.partyPicker;
-      if (side !== 'client' && side !== 'adversaire') return;
+      if (side !== 'client' && side !== 'adversaire' && side !== 'tiers') return;
       partyTypePicker(root, side, (kind) => {
         if (data) nodeEditor(root, data, null, save, { kind, partySide: side });
       });
