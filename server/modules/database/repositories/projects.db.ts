@@ -15,6 +15,16 @@ function normalizeProjectDisplayName(projectPath: string, customProjectName: str
     return directoryName || projectPath;
 }
 
+function ensureAnonymizationStatusTable(db: ReturnType<typeof getConnection>): void {
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS piecemaker_anonymization_status (
+            project_id TEXT PRIMARY KEY NOT NULL,
+            completed_at TEXT NOT NULL,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+        )
+    `);
+}
+
 export const projectsDb = {
     createProjectPath(projectPath: string, customProjectName: string | null = null): CreateProjectPathResult {
         const db = getConnection();
@@ -88,10 +98,13 @@ export const projectsDb = {
 
     getProjectPaths(): ProjectRepositoryRow[] {
         const db = getConnection();
+        ensureAnonymizationStatusTable(db);
         return db.prepare(`
-            SELECT project_id, project_path, custom_project_name, isStarred, isArchived
-            FROM projects
-            WHERE isArchived = 0
+            SELECT p.project_id, p.project_path, p.custom_project_name, p.isStarred, p.isArchived,
+                   CASE WHEN s.project_id IS NULL THEN 0 ELSE 1 END AS anonymization_complete
+            FROM projects p
+            LEFT JOIN piecemaker_anonymization_status s ON s.project_id = p.project_id
+            WHERE p.isArchived = 0
         `).all() as ProjectRepositoryRow[];
     },
 
@@ -101,10 +114,13 @@ export const projectsDb = {
      */
     getArchivedProjectPaths(): ProjectRepositoryRow[] {
         const db = getConnection();
+        ensureAnonymizationStatusTable(db);
         return db.prepare(`
-            SELECT project_id, project_path, custom_project_name, isStarred, isArchived
-            FROM projects
-            WHERE isArchived = 1
+            SELECT p.project_id, p.project_path, p.custom_project_name, p.isStarred, p.isArchived,
+                   CASE WHEN s.project_id IS NULL THEN 0 ELSE 1 END AS anonymization_complete
+            FROM projects p
+            LEFT JOIN piecemaker_anonymization_status s ON s.project_id = p.project_id
+            WHERE p.isArchived = 1
         `).all() as ProjectRepositoryRow[];
     },
 

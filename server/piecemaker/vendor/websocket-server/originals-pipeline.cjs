@@ -863,7 +863,6 @@ async function runJob(job, legalCase, absoluteFiles, options) {
   // Migration unique des dossiers créés par les anciennes versions : leurs
   // scans sont absorbés dans le mapping et leur état technique avant suppression.
   const mapping = await rebuildCaseMapping(legalCase.root);
-  if (typeof options.onMappingReady === 'function') await options.onMappingReady(legalCase.root, mapping);
   const mappingAdded = Math.max(0, mapping.total - Object.keys(before.mapping).length);
   appendLog(job, `Mapping : ${mappingAdded} nouvelle(s) entrée(s), ${mapping.total} au total`);
   if (mapping.migratedScans) appendLog(job, `${mapping.migratedScans} ancien(s) sensitive map migré(s)`);

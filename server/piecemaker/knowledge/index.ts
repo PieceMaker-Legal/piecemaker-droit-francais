@@ -7,7 +7,6 @@ import { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledg
 import { createKnowledgePipeline } from './pipeline.js';
 import { createKnowledgeRouter } from './routes.js';
 import { createKnowledgeService } from './service.js';
-import { createMappingReadyHandler } from './mapping-sync.js';
 
 export function createKnowledgeBackend(applicationRoot: string) {
   const router = express.Router();
@@ -17,7 +16,6 @@ export function createKnowledgeBackend(applicationRoot: string) {
     if (!store) store = new KnowledgeStore(getConnection());
     return store;
   };
-  const onMappingReady = createMappingReadyHandler(getStore, projectsDb);
   router.use((request, response, next) => {
     if (!knowledgeRouter) {
       const pipeline = createKnowledgePipeline({ applicationRoot, projects: projectsDb, store: getStore() });
@@ -25,5 +23,5 @@ export function createKnowledgeBackend(applicationRoot: string) {
     }
     knowledgeRouter(request, response, next);
   });
-  return { router, onMappingReady };
+  return { router };
 }

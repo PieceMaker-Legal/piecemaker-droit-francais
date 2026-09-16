@@ -1,17 +1,20 @@
 import { pmGet } from '@/piecemaker/dossier/api';
-import { setAnonymizationComplete } from '@/piecemaker/dossier/mappingStatusCache';
-import type { OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 
 const STORAGE_KEY = 'piecemaker.sidebarAnonymizationJobs';
 const POLL_INTERVAL_MS = 1_000;
 
-export type AnonymizationJobSource = 'originals' | 'knowledge';
+type AnonymizationJob = {
+  id: string;
+  case: string;
+  state: 'running' | 'done' | 'error' | 'cancelled';
+  percent?: number;
+  error?: string | null;
+};
 
 export type TrackedAnonymizationJob = {
   projectPath: string;
   projectName: string;
-  job: OriginalsJob;
-  source?: AnonymizationJobSource;
+  job: AnonymizationJob;
 };
 
 type KnowledgeScanJob = {
@@ -22,15 +25,16 @@ type KnowledgeScanJob = {
   error: string | null;
 };
 
-function jobIsPending(job: OriginalsJob): boolean {
-  return job.state === 'queued' || job.state === 'running';
+export const ANONYMIZATION_COMPLETED_EVENT = 'piecemaker:anonymization-completed';
+
+function jobIsPending(job: AnonymizationJob): boolean {
+  return job.state === 'running';
 }
 
-function knowledgeJobAsOriginals(job: KnowledgeScanJob): OriginalsJob {
+function knowledgeJobAsTracked(job: KnowledgeScanJob): AnonymizationJob {
   return {
     id: job.id,
     case: job.projectId,
-    action: 'anonymize',
     state: job.state,
     percent: job.percent,
     error: job.error,
@@ -77,17 +81,13 @@ function publish(jobs: TrackedAnonymizationJob[]): void {
   listeners.forEach((listener) => listener());
 }
 
-async function pollEntry(entry: TrackedAnonymizationJob): Promise<OriginalsJob | null> {
-  if (entry.source === 'knowledge') {
-    const { job } = await pmGet<{ job: KnowledgeScanJob | null }>('/knowledge/scan/job', { id: entry.job.id, projectId: entry.job.case });
-    return job ? knowledgeJobAsOriginals(job) : null;
-  }
-  const { job } = await pmGet<{ job: OriginalsJob }>('/originals/job', { id: entry.job.id });
-  return job;
+async function pollEntry(entry: TrackedAnonymizationJob): Promise<AnonymizationJob | null> {
+  const { job } = await pmGet<{ job: KnowledgeScanJob | null }>('/knowledge/scan/job', { id: entry.job.id, projectId: entry.job.case });
+  return job ? knowledgeJobAsTracked(job) : null;
 }
 
 async function refreshTrackedJobs(): Promise<void> {
-  const polled = new Map<string, OriginalsJob | null>();
+  const polled = new Map<string, AnonymizationJob | null>();
   await Promise.all(trackedJobs.map(async (entry) => {
     try {
       const job = await pollEntry(entry);
@@ -101,7 +101,7 @@ async function refreshTrackedJobs(): Promise<void> {
   publish(trackedJobs.flatMap((entry) => {
     if (!polled.has(entry.job.id)) return [entry];
     const job = polled.get(entry.job.id);
-    if (job?.state === 'done') setAnonymizationComplete(entry.projectPath, true);
+    if (job?.state === 'done') window.dispatchEvent(new CustomEvent(ANONYMIZATION_COMPLETED_EVENT));
     return job ? [{ ...entry, job }] : [];
   }));
 }
@@ -146,12 +146,12 @@ type KnowledgeScanBroadcast = { projectPath: string; projectName: string; job: K
 
 export function receiveKnowledgeScanBroadcast(detail: KnowledgeScanBroadcast | null | undefined): void {
   if (!detail?.projectPath || !detail.job?.id) return;
-  const job = knowledgeJobAsOriginals(detail.job);
+  const job = knowledgeJobAsTracked(detail.job);
   if (!jobIsPending(job)) {
     publish(trackedJobs.filter((tracked) => tracked.job.id !== job.id));
     return;
   }
-  trackAnonymizationJob({ projectPath: detail.projectPath, projectName: detail.projectName || detail.projectPath, job, source: 'knowledge' });
+  trackAnonymizationJob({ projectPath: detail.projectPath, projectName: detail.projectName || detail.projectPath, job });
 }
 
 window.addEventListener(KNOWLEDGE_SCAN_EVENT, (event) => {

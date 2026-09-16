@@ -13,7 +13,7 @@ import { Badge, Button, buttonVariants } from '@/shared/ui';
 import { authenticatedFetch } from '@/shared/api';
 import { invalidatePmGet, pmGet, pmGetCached, pmPost, PieceMakerApiError, PIECEMAKER_API_BASE } from '@/piecemaker/dossier/api';
 import CaseFilesDocumentMetaDialog from '@/piecemaker/dossier/sections/CaseFilesDocumentMetaDialog';
-import type { ChronologyDocument, ChronologyExportFormat, ChronologyOverview, OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
+import type { ChronologyDocument, ChronologyExportFormat, ChronologyOverview } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 import { formatDateIso } from '@/piecemaker/dossier/sections/CaseFilesUtils';
 import { principalPartyOptions } from '@/piecemaker/dossier/sections/MappingModel';
 
@@ -28,11 +28,20 @@ type ChronologyMappingResponse = {
 
 type CaseFilesChronologyProps = {
   caseId: string;
+  projectId?: string;
   caseName: string;
   refreshVersion: number;
 };
 
-export default function CaseFilesChronology({ caseId, caseName, refreshVersion }: CaseFilesChronologyProps) {
+type KnowledgeScanJob = {
+  id: string;
+  projectId: string;
+  state: 'running' | 'done' | 'error' | 'cancelled';
+  percent: number;
+  error: string | null;
+};
+
+export default function CaseFilesChronology({ caseId, projectId, caseName, refreshVersion }: CaseFilesChronologyProps) {
   const [chronology, setChronology] = useState<ChronologyLoadedOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,19 +92,17 @@ export default function CaseFilesChronology({ caseId, caseName, refreshVersion }
     setRefreshing(true);
     setMessage(null);
     try {
-      const response = await pmPost<{ job: OriginalsJob }>('/originals/pipeline', {
-        case: caseId,
-        action: 'anonymize',
-        files: [],
-        force: false,
-      });
+      if (!projectId) throw new PieceMakerApiError('Projet introuvable.', 404);
+      const response = await pmPost<{ job: KnowledgeScanJob }>('/knowledge/scan', { projectId });
       let job = response.job;
-      while (job.state === 'queued' || job.state === 'running') {
+      while (job.state === 'running') {
         await new Promise((resolve) => window.setTimeout(resolve, 1_000));
-        const response = await pmGet<{ job: OriginalsJob }>('/originals/job', { id: job.id });
-        job = response.job;
+        const next = await pmGet<{ job: KnowledgeScanJob | null }>('/knowledge/scan/job', { id: job.id, projectId });
+        if (!next.job) throw new PieceMakerApiError('Le scan a disparu du serveur.', 500);
+        job = next.job;
       }
       if (job.state === 'error') throw new PieceMakerApiError(job.error || 'La reconstruction de l’index a échoué.', 500);
+      if (job.state === 'cancelled') throw new PieceMakerApiError('Le scan a été interrompu.', 409);
       await load(true);
     } catch (cause) {
       setMessage(cause instanceof PieceMakerApiError ? cause.message : String(cause));

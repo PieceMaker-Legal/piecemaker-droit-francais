@@ -12,6 +12,7 @@ import type { LLMProvider, LoadingProgress, MCPServerStatus, Project, ProjectSes
 import SidebarCollapsed from '@/modules/sidebar/SidebarCollapsed';
 import SidebarContent from '@/modules/sidebar/SidebarContent';
 import SidebarModals from '@/modules/sidebar/SidebarModals';
+import { ANONYMIZATION_COMPLETED_EVENT } from '@/piecemaker/dossier/anonymizationJobsCache';
 
 type SidebarProps = {
   projects: Project[];
@@ -167,6 +168,14 @@ function Sidebar({
   const handleProjectCreated = () => {
     void paletteOps.refreshProjects();
   };
+
+  useEffect(() => {
+    const refreshAfterAnonymization = () => {
+      void refreshProjects();
+    };
+    window.addEventListener(ANONYMIZATION_COMPLETED_EVENT, refreshAfterAnonymization);
+    return () => window.removeEventListener(ANONYMIZATION_COMPLETED_EVENT, refreshAfterAnonymization);
+  }, [refreshProjects]);
 
   // Stable so memo() on the row components can bail out; an inline arrow here
   // would give every row a new callback on each sidebar render.

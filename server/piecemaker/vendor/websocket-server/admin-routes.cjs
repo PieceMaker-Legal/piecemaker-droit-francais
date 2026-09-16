@@ -2042,7 +2042,6 @@ function createAdminRouter({
   getRuntimeStatus = () => ({}),
   fetchImpl = global.fetch,
   pickFolder = selectLocalFolder,
-  onMappingReady,
   // Adaptation PieceMaker/CloudCLI : monté sur le serveur CloudCLI, le routeur
   // est déjà protégé par `authenticateToken`, et l'origine peut être une app
   // Electron (`file://`) ou un hôte LAN. L'appelant peut donc fournir sa propre
@@ -2850,7 +2849,6 @@ function createAdminRouter({
           ? { informations_dossier: req.body.informations_dossier }
           : {}),
       });
-      if (onMappingReady) await onMappingReady(legalCase.root, saved);
       const commit = await createCommit({
         casesRoot: legalCase.casesRoot,
         caseName: legalCase.caseName,
@@ -2880,7 +2878,6 @@ function createAdminRouter({
     try {
       const legalCase = selectedCase(req.body?.case);
       const rebuilt = await rebuildCaseMapping(legalCase.root);
-      if (onMappingReady) await onMappingReady(legalCase.root, rebuilt);
       const commit = await createCommit({
         casesRoot: legalCase.casesRoot,
         caseName: legalCase.caseName,

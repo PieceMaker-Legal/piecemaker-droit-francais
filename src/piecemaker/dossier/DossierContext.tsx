@@ -6,6 +6,7 @@ import { ensureDossierRegistration, refreshDossierRegistration, type DossierCase
 export type { DossierCase } from '@/piecemaker/dossier/dossierRegistration';
 
 type DossierContextValue = {
+  projectId: string | null;
   cases: DossierCase[];
   selectedCaseId: string | null;
   selectedCase: DossierCase | null;
@@ -45,9 +46,11 @@ function writeDossierCasesSnapshot(projectPath: string | null | undefined, snaps
 }
 
 export function DossierCasesProvider({
+  projectId,
   projectPath,
   children,
 }: {
+  projectId?: string | null;
   projectPath?: string | null;
   children: ReactNode;
 }) {
@@ -99,6 +102,7 @@ export function DossierCasesProvider({
   }, [loadCases]);
 
   const value = useMemo<DossierContextValue>(() => ({
+    projectId: projectId ?? null,
     cases,
     selectedCaseId,
     selectedCase: cases.find((entry) => entry.path === selectedCaseId) ?? null,
@@ -109,7 +113,7 @@ export function DossierCasesProvider({
     projectPath: projectPath ?? null,
     mappingVersion,
     bumpMappingVersion,
-  }), [cases, selectedCaseId, refreshCases, loading, error, projectPath, mappingVersion, bumpMappingVersion]);
+  }), [projectId, cases, selectedCaseId, refreshCases, loading, error, projectPath, mappingVersion, bumpMappingVersion]);
 
   return <DossierCasesContext.Provider value={value}>{children}</DossierCasesContext.Provider>;
 }
