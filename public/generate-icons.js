@@ -1,49 +1,63 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
 
-// Icon sizes needed
-const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+const logoSizes = [32, 64, 128, 256, 512];
+const iconSizes = [72, 96, 128, 144, 152, 192, 384, 512];
+const outputDirectory = path.dirname(fileURLToPath(import.meta.url));
+const logoSource = path.join(outputDirectory, 'logo-sources', 'logo-black.png');
+const iconDirectory = path.join(outputDirectory, 'icons');
 
-// SVG template function
-function createIconSVG(size) {
-  const cornerRadius = Math.round(size * 0.25); // 25% corner radius
-  const strokeWidth = Math.max(2, Math.round(size * 0.06)); // Scale stroke width
-  
-  // MessageSquare path scaled to size
-  const padding = Math.round(size * 0.25);
-  const iconSize = size - (padding * 2);
-  const startX = padding;
-  const startY = Math.round(padding * 0.7);
-  const endX = startX + iconSize;
-  const endY = startY + Math.round(iconSize * 0.6);
-  const tailX = startX;
-  const tailY = endY + Math.round(iconSize * 0.3);
-  
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background with rounded corners -->
-  <rect width="${size}" height="${size}" rx="${cornerRadius}" fill="hsl(262.1 83.3% 57.8%)"/>
-  
-  <!-- MessageSquare icon -->
-  <path d="M${startX} ${startY}C${startX} ${startY - 10} ${startX + 10} ${startY - 20} ${startX + 20} ${startY - 20}H${endX - 20}C${endX - 10} ${startY - 20} ${endX} ${startY - 10} ${endX} ${startY}V${endY - 20}C${endX} ${endY - 10} ${endX - 10} ${endY} ${endX - 20} ${endY}H${startX + Math.round(iconSize * 0.4)}L${tailX} ${tailY}V${startY}Z" 
-        stroke="white" 
-        stroke-width="${strokeWidth}" 
-        stroke-linecap="round" 
-        stroke-linejoin="round" 
-        fill="none"/>
-</svg>`;
+function logoHref(directory) {
+  return directory === outputDirectory ? 'logo-sources/logo-black.png' : '../logo-sources/logo-black.png';
 }
 
-// Generate SVG files for each size
-sizes.forEach(size => {
-  const svgContent = createIconSVG(size);
-  const filename = `icon-${size}x${size}.svg`;
-  const filepath = path.join(__dirname, 'icons', filename);
-  
-  fs.writeFileSync(filepath, svgContent);
-  console.log(`Created ${filename}`);
-});
+function createLogoSvg(size, directory = outputDirectory) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><image href="${logoHref(directory)}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`;
+}
 
-console.log('\nSVG icons created! To convert to PNG, you can use:');
-console.log('1. Online converter like cloudconvert.com');
-console.log('2. If you have ImageMagick: convert icon.svg icon.png');
-console.log('3. If you have Inkscape: inkscape --export-type=png icon.svg');
+function createIconSvg(size) {
+  const radius = Math.round(size * 0.235);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect width="${size}" height="${size}" rx="${radius}" fill="#ffffff"/><image href="../logo-sources/logo-black.png" x="${size * 0.07}" y="${size * 0.07}" width="${size * 0.86}" height="${size * 0.86}" preserveAspectRatio="xMidYMid meet"/></svg>`;
+}
+
+async function writePng(destination, size, rounded) {
+  const mark = sharp(logoSource)
+    .resize({ width: Math.round(size * (rounded ? 0.86 : 0.98)), height: Math.round(size * (rounded ? 0.86 : 0.98)), fit: 'contain' })
+    .png();
+  const markBuffer = await mark.toBuffer();
+  const canvas = sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: rounded ? '#ffffff' : { r: 255, g: 255, b: 255, alpha: 0 }
+    }
+  });
+  await canvas
+    .composite([{ input: markBuffer, gravity: 'centre' }])
+    .png()
+    .toFile(destination);
+}
+
+async function generate() {
+  fs.mkdirSync(iconDirectory, { recursive: true });
+
+  fs.writeFileSync(path.join(outputDirectory, 'logo.svg'), createLogoSvg(512));
+  fs.writeFileSync(path.join(outputDirectory, 'favicon.svg'), createLogoSvg(64));
+
+  await Promise.all([
+    ...logoSizes.map((size) => writePng(path.join(outputDirectory, `logo-${size}.png`), size, true)),
+    writePng(path.join(outputDirectory, 'favicon.png'), 32, true),
+    ...iconSizes.map(async (size) => {
+      fs.writeFileSync(path.join(iconDirectory, `icon-${size}x${size}.svg`), createIconSvg(size));
+      await writePng(path.join(iconDirectory, `icon-${size}x${size}.png`), size, true);
+    })
+  ]);
+}
+
+generate().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
