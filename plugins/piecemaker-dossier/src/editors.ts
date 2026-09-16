@@ -72,7 +72,7 @@ export function partyTypePicker(root: HTMLElement, side: 'client' | 'adversaire'
   return layer;
 }
 
-export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode | null, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>, defaults: PartyEditorDefaults = {}): void {
+export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode | null, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>, defaults: PartyEditorDefaults = {}, onBackToMapping?: () => void): void {
   const id = node?.id || `manual:${crypto.randomUUID()}`;
   const selectedKind = node?.kind || defaults.kind || 'person';
   const mappings = node ? data.graph.mappings.filter((entry) => entry.nodeId === node.id) : [];
@@ -83,7 +83,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const companyFieldsHidden = selectedKind !== 'company';
   const initialAliases = [...new Set((node?.aliases || []).map((alias) => alias.trim()).filter(Boolean))];
   const layer = modal(root, `
-    <div class="pmd-toolbar"><h2 class="pmd-title">${node ? 'Modifier l’élément' : 'Ajouter un élément'}</h2><span class="pmd-spacer"></span><button class="pmd-icon-button" data-close>×</button></div>
+    <div class="pmd-toolbar">${node && onBackToMapping ? '<button type="button" class="pmd-button pmd-back-button" data-back-mapping>← Retour</button>' : ''}<h2 class="pmd-title">${node ? 'Modifier l’élément' : 'Ajouter un élément'}</h2><span class="pmd-spacer"></span><button class="pmd-icon-button" data-close>×</button></div>
     <form class="pmd-form" data-node-form>
       <label>Type<select class="pmd-select" name="kind">${kindOptions(node?.kind || defaults.kind || 'person')}</select></label>
       <label>Libellé<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></label>
@@ -100,6 +100,10 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       ${relations.length ? `<div><div class="pmd-group">Relations actuelles</div><div class="pmd-badges">${relations.map((relation, index) => `<button type="button" class="pmd-badge pmd-icon-button" data-unlink="${index}">${escapeHtml(relation.relation)} ×</button>`).join('')}</div></div>` : ''}
       <div class="pmd-form-actions"><button type="button" class="pmd-button" data-close>Annuler</button><button class="pmd-button pmd-button-primary">Enregistrer</button></div>
     </form>`);
+  layer.querySelector<HTMLElement>('[data-back-mapping]')?.addEventListener('click', () => {
+    layer.remove();
+    onBackToMapping?.();
+  });
   const removals = new Set<number>();
   const aliasEditor = layer.querySelector<HTMLElement>('[data-alias-editor]');
   const aliasPills = layer.querySelector<HTMLElement>('[data-alias-pills]');
