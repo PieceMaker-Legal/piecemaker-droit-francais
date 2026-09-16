@@ -6,6 +6,18 @@ export type KnowledgeChronologyView = { projectId: string; documents: KnowledgeS
 export type AgentsDocument = { projectId: string; content: string; exists: boolean };
 export type KnowledgeDocumentPreview = { path: string; content: string };
 export type InstitutionalTerms = { file: string; terms: string[] };
+export type ScanJob = {
+  id: string;
+  projectId: string;
+  source: 'knowledge';
+  action: 'anonymize';
+  state: 'running' | 'done' | 'error';
+  phase: 'convert' | 'scan' | 'commit';
+  percent: number;
+  processed: number;
+  total: number;
+  error: string | null;
+};
 type RepositoryCase = { path: string; location: string };
 type RepositoryOverview = { folders?: RepositoryCase[] };
 type RegisteredCase = { folder: RepositoryCase };
@@ -65,7 +77,8 @@ export const knowledgeApi = {
     const reference = await caseReference(projectPath);
     return request<KnowledgeDocumentPreview>(PIECEMAKER_BASE, `/repository/document?case=${encodeURIComponent(reference)}&path=${encodeURIComponent(path)}`);
   },
-  scan: (projectId: string) => request(BASE, '/scan', { method: 'POST', body: JSON.stringify({ projectId }) }),
+  scan: (projectId: string) => request<{ job: ScanJob }>(BASE, '/scan', { method: 'POST', body: JSON.stringify({ projectId }) }),
+  scanJob: (jobId: string, projectId: string) => request<{ job: ScanJob | null }>(BASE, `/scan/job?id=${encodeURIComponent(jobId)}&projectId=${encodeURIComponent(projectId)}`),
   update: (projectId: string, operations: KnowledgeUpdateOperation[]) => request(BASE, '/update', { method: 'POST', body: JSON.stringify({ projectId, operations }) }),
   institutionalTerms: () => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms'),
   saveInstitutionalTerms: (terms: string[]) => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms', { method: 'PUT', body: JSON.stringify({ terms }) }),

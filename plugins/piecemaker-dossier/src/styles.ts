@@ -47,4 +47,11 @@ button.pmd-column-empty{display:flex;width:100%;box-sizing:border-box;flex-direc
 .pmd-mapping-actions{position:relative;min-width:32px;width:32px;overflow:visible!important}.pmd-mapping-actions .pmd-profile-menu-wrap{display:flex;margin-left:0}.pmd-mapping-actions .pmd-profile-menu-trigger{flex-shrink:0}
 .pmd-mapping-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.4fr) 32px}
 button.pmd-column-empty[data-drop-active=true]{border-color:var(--pmd-accent);background:color-mix(in srgb,var(--pmd-soft) 45%,transparent)}
+.pmd-scan-status[data-scanning=true]{border-color:color-mix(in srgb,var(--pmd-accent) 35%,transparent);background:color-mix(in srgb,var(--pmd-accent) 10%,transparent)}
+.pmd-scan-status[data-scanning=true] .pmd-status-icon{color:var(--pmd-accent)}
+.pmd-scan-progress{display:flex;min-width:150px;flex-direction:column;gap:3px}
+.pmd-scan-progress-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--pmd-muted);font-size:10px;line-height:12px}
+.pmd-scan-progress-track{display:block;height:4px;overflow:hidden;border-radius:999px;background:var(--pmd-soft)}
+.pmd-scan-progress-bar{display:block;height:100%;border-radius:999px;background:var(--pmd-accent);transition:width .5s}
+@media(max-width:760px){.pmd-scan-progress{min-width:96px}.pmd-scan-progress-label{display:none}}
 `;
