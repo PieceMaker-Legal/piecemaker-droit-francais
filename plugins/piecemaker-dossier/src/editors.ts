@@ -212,7 +212,15 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   let companySearchBusy = false;
   let companySearchError = '';
   const companySearchName = (): string => realCompanyName(mappings, labelInput?.value?.trim() || '');
-  const companySearchQuery = (): string => [companySearchName(), legalFormInput?.value, sirenInput?.value].map((value) => value?.trim() || '').filter((value) => value !== 'Personne morale').join(' ');
+  const companySearchQuery = (): string => {
+    const name = companySearchName();
+    const terms = name && name !== 'Personne morale' ? [name] : [];
+    for (const value of [legalFormInput?.value, sirenInput?.value]) {
+      const term = value?.trim();
+      if (term && term !== 'Personne morale') terms.push(term);
+    }
+    return terms.join(' ');
+  };
   const renderCompanySearchPanel = () => {
     if (!companySearchPanel) return;
     companySearchPanel.hidden = false;
