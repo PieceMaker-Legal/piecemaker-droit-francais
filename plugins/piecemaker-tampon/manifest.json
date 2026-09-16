@@ -1,7 +1,7 @@
 {
-  "name": "piecemaker-bordereau",
+  "name": "piecemaker-tampon",
   "displayName": "Bordereau",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Configurez le tampon du cabinet et numérotez les pièces d'un dossier.",
   "icon": "icon.svg",
   "type": "module",
