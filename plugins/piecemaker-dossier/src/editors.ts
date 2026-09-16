@@ -251,7 +251,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
             <div class="pmd-document-form-section"><span>Personnes citées</span><div class="pmd-document-entities">${entityButtons || '<p class="pmd-document-muted">Aucune personne connue.</p>'}</div></div>
             <div class="pmd-document-form-section"><div class="pmd-document-section-heading"><span>Champs libres</span><button class="pmd-button" type="button" data-add-field>＋ Ajouter</button></div><div data-fields>${fieldRows}</div><p class="pmd-document-muted" data-empty-fields ${fields.length ? 'hidden' : ''}>Aucun champ libre.</p></div>
           </div>
-          <div class="pmd-document-form-actions"><button class="pmd-button" type="button" data-close>Annuler</button><button class="pmd-button pmd-button-primary">Enregistrer</button></div>
+          <div class="pmd-document-form-actions"><button class="pmd-button" type="button" data-close>Annuler</button><button class="pmd-button pmd-button-primary" type="submit" data-document-submit>Enregistrer</button></div>
         </form>
       </div>
     </div>`);
@@ -350,6 +350,12 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   });
   layer.querySelector<HTMLFormElement>('[data-document-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    const submit = layer.querySelector<HTMLButtonElement>('[data-document-submit]');
+    if (submit?.disabled) return;
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = 'Enregistrement…';
+    }
     const form = new FormData(event.currentTarget as HTMLFormElement);
     const natureSelection = textValue(form.get('nature'));
     const customNature = natureSelection === '__piecemaker_custom_nature__' ? window.prompt('Type de pièce personnalisé :', '')?.trim() || '' : '';
@@ -366,6 +372,10 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
       layer.remove();
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : String(error));
+      if (submit) {
+        submit.disabled = false;
+        submit.textContent = 'Enregistrer';
+      }
     }
   });
   void loadPreview();
