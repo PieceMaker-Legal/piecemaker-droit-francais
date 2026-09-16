@@ -3,6 +3,74 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [1.0.6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v1.0.5...v1.0.6) (2026-09-16)
+
+### New Features
+
+* **cli:** install Bordereau plugin in main interface ([0be3c8e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0be3c8e3bbe8dd3f7bb07d2adbd848c9f1b09a06))
+* **dossier:** open chronology cards in piece editor ([7afefb4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7afefb4aeee277bb053408d71e4e973a7e3858a3))
+* **dossier:** restaurer les exclusions et la vue générale ([570002e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/570002e13c268d664ee402b2a6779c15186ca55d))
+* **dossier:** retirer l'onglet Dossier et son ouverture au clic sur un dossier ([e0d7bb5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e0d7bb5ba48710dce0ab10ea4af54a50e9b14651))
+* **piecemaker:** afficher les tiers du dossier ([a2fb6e0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a2fb6e022f62c6f0c81dc9c307540dccd0fd38f4))
+* **piecemaker:** ajouter l’interface du graphe dossier ([b6e91e8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b6e91e815d097b9770a969fad4573cdca82f73b7))
+* **piecemaker:** consolider les personnes morales et les civilites ([9c3859a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9c3859ab2b73a3fe7ba273df39852860cead800b))
+* **piecemaker:** exposer le graphe sur le serveur ([898d6f8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/898d6f8cf8901a924a27095e5f78ce556dfad9d5))
+* **piecemaker:** lire le mapping du proxy depuis sqlite ([bf4c44f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/bf4c44f7cf591ce4f1da49845f94a6349a907643))
+* **piecemaker:** proposer un choix au clic sur Relancer ([e2e08fa](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e2e08fad74923d4fb3dad5f228716a2621c5cb86))
+* **piecemaker:** reserver les cartes aux parties et rouvrir le mapping ([de18eed](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/de18eed0afdf1e406ad54c84a90c93cc649acc64))
+* **piecemaker:** stocker le graphe dossier dans sqlite ([3ace2d1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3ace2d13aad16dc011221caef45b14d449ad3a0a))
+* **piecemaker:** trier chaque rubrique du mapping par variant principal ([7c531c8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7c531c861ff97a02076d4accb06d2925028fa3c5))
+* **plugin:** add stamping and pieces plugin ([23251a9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/23251a90f4d3b1987220faf3026e7bb13ca26b0f))
+* **plugin:** aligner l'interface dossier ([be6df2f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/be6df2f6e1334701eb1ed2a6a6b849af4ed611e3))
+* **plugin:** reconstruire Bordereau en plugin React bundlé ([56892e7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/56892e789b40ea7384d009ea76bcdaaeb410ed84))
+
+### Bug Fixes
+
+* **anonymizer:** ne pas substituer dans les champs protocolaires ([2d23c4c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2d23c4c103c58d626283d3461143433599f2164f))
+* **anonymizer:** préserver les contrats d’outils ([1e68e3f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1e68e3fe646862e8df517eaba043f3794ba73d37))
+* **anonymizer:** restreindre le surlignage des pseudonymes au chat ([d1fa7cd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d1fa7cd23683df0853cd8275ad060892ac596f7f))
+* **dossier:** charger le Markdown dans la visionneuse ([0291afd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0291afd0aea2a0a9bc66154270c4b9d95a8ead44))
+* **dossier:** ouvrir AGENTS.md dans l'éditeur CloudCLI ([f900251](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f90025100f0abf0200e54674062c51440db66948))
+* **dossier:** surligner les dates repérées en bleu ([d0b37ba](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d0b37baa900ae6ec39ba296dc99906ac7c598655))
+* **dossier:** surligner toutes les valeurs du mapping ([ff339b3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ff339b35f3190e28ae7d2942035a4713992e304a))
+* **piecemaker:** n'afficher la barre d'anonymisation que pendant le traitement ([9a055b3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9a055b39e3f09a35d48fe3e203dee0928f43d29d))
+* **piecemaker:** ne plus enregistrer chaque projet comme dossier juridique ([40378de](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/40378def90e35b5f09c73d3bebfd1db7967b83cf))
+* **piecemaker:** refuser un gliner2 incapable de charger GLiNER2.5 ([6761b67](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6761b670975adca150e74141cf764722ce17093a))
+* **piecemaker:** relancer réellement le pipeline sur un dossier déjà anonymisé ([24b7a21](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/24b7a21f9f5c5ae0b4eb71756f36a2db338c6a60))
+* **piecemaker:** rendre GLiNER obligatoire et lancer le scan dans le venv ([aba8cbd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/aba8cbdae89007b5f8c56e936138a73d5ac16b80))
+* **piecemaker:** réparer la lecture de chronologie et ajouter les corrections manuelles ([b9c98d4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b9c98d4c895c38bb8e52f34adf3433ec6d26e496))
+* **piecemaker:** retire les graphes de la chronologie ([050b05b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/050b05b5f13a535fddb3f6c55f42bd2e3ace1c50))
+* **piecemaker:** retirer l'appel au graphe resté dans PUT /mapping ([8d107bc](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8d107bcfa7b4b81c8b436d937446d38cc19178f6))
+* **piecemaker:** typer les profils selon la catégorie GLiNER ([b3c15d2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b3c15d27f925de277dc41a18cf1cb5f7800fbfb0))
+* **piecPERS_MORALE_7ker:** afficher la progression des relances dans la barre latérale ([40f864c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/40f864c680062a0b603079664a309c25e71b0600))
+* **plugin:** use the original Stamp tab icon ([99eb4a6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/99eb4a6afba52983b9eba3c0942aabfbc24fa9a6))
+
+### Refactoring
+
+* **piecemaker:** alléger l'enregistrement d'un dossier juridique ([3e2aad4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3e2aad4594c7e4ce0f68e56c06d43edb539aed8e))
+* **plugin:** rename stamping tab to Bordereau ([91c2146](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/91c2146e8e5975e28cd55c60cb4c18140ae3230e))
+
+### Documentation
+
+* **piecemaker:** mesurer les onglets fichiers et dossier ([63ba35f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/63ba35ff0e576f6a057bea9755a21a8aeafaa52e))
+
+### Styling
+
+* **dossier:** aligner les onglets sur le design des onglets CloudCLI ([51e36ab](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/51e36ab744601aca829d8c637057456f43ddd922))
+* **dossier:** hover neutre sur les boutons ([d3556ca](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d3556caa24b10fa62b4547f85b53d31352745eb3))
+
+### Maintenance
+
+* **piecemaker:** sortir les tests PieceMaker du suivi git ([b54f264](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b54f26464bf1e305f75ba8df59bd2ba183799e63))
+
+### Tests
+
+* **anonymizer:** remplacer les noms réels par des noms fictifs ([5a9c936](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5a9c93660913790311432c205bf4d06c7fe77315))
+
+### Build
+
+* **dossier:** déclarer les dépendances vis-network ([29b67c6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/29b67c629c5770f022886e6b3888b315d922e065))
+
 ## [1.0.5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v1.37.2...v1.0.5) (2026-09-14)
 
 ### New Features
