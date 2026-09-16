@@ -1,6 +1,4 @@
-const isAbsolutePath = (value: string): boolean => /^(?:\/|[A-Za-z]:[\\/])/.test(value);
-
-const openTabAfterSidebarSelection = (event: MouseEvent) => {
+const openChatAfterSidebarSelection = (event: MouseEvent) => {
   if (!(event.target instanceof Element) || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
   const sessionLink = event.target.closest<HTMLAnchorElement>('a[href^="/session/"]');
@@ -9,22 +7,16 @@ const openTabAfterSidebarSelection = (event: MouseEvent) => {
     compactSession?.querySelector('div[title].truncate.text-sm.font-normal')
     && !event.target.closest('button, input, textarea, a')
   ));
-
-  const projectButton = event.target.closest<HTMLButtonElement>('button');
-  const projectPath = Array.from(projectButton?.querySelectorAll<HTMLElement>('[title]') ?? [])
-    .find((element) => isAbsolutePath(element.title));
-  if (!isSession && !projectPath) return;
+  if (!isSession) return;
 
   window.setTimeout(() => {
-    const icon = document.querySelector<SVGElement>(isSession
-      ? '[role="tab"] svg.lucide-message-square'
-      : '[role="tab"] svg.lucide-scale');
+    const icon = document.querySelector<SVGElement>('[role="tab"] svg.lucide-message-square');
     icon?.closest<HTMLButtonElement>('button[role="tab"]')?.click();
   });
 };
 
-document.addEventListener('click', openTabAfterSidebarSelection);
+document.addEventListener('click', openChatAfterSidebarSelection);
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => document.removeEventListener('click', openTabAfterSidebarSelection));
+  import.meta.hot.dispose(() => document.removeEventListener('click', openChatAfterSidebarSelection));
 }
