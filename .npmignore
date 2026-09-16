@@ -55,3 +55,6 @@ tasks/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Corpus d'évaluation GLiNER : textes réels, jamais distribués
+server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/eval/

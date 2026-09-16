@@ -16,7 +16,8 @@
     "dist/",
     "dist-server/",
     "scripts/",
-    "README.md"
+    "README.md",
+    "!server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/eval/**"
   ],
   "homepage": "https://github.com/PieceMaker-Legal/piecemaker-droit-francais",
   "repository": {
