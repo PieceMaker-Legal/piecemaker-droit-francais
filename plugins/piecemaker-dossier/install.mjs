@@ -11,7 +11,7 @@ const product = fs.existsSync(configFile) ? JSON.parse(fs.readFileSync(configFil
 const dataRoot = process.env.CLOUDCLI_HOME || path.join(os.homedir(), product.dataDirectoryName || '.claude-code-ui');
 const target = path.join(dataRoot, 'plugins', 'piecemaker-dossier');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const dependencies = ['better-sqlite3', 'esbuild', 'vis-data', 'vis-network'];
+const dependencies = ['better-sqlite3', 'esbuild'];
 
 if (!dependencies.every((dependency) => fs.existsSync(path.join(source, 'node_modules', dependency)))) {
   const installation = spawnSync(npmCommand, ['ci', '--no-audit', '--no-fund'], {

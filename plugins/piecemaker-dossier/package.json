@@ -9,9 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "better-sqlite3": "^12.6.2",
-    "vis-data": "^8.0.5",
-    "vis-network": "^10.0.2"
+    "better-sqlite3": "^12.6.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
