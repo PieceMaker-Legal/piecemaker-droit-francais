@@ -45,7 +45,7 @@ describe('buildAcronymRegex', () => {
 });
 
 describe('createIdentityHighlighter', () => {
-  it('ignore les zones qui désactivent le surlignage', async () => {
+  it('ne teinte que le fil de conversation, hors zones désactivées', async () => {
     const registeredRanges: Range[][] = [];
     const registry = {
       set: vi.fn((_name: string, highlight: { ranges: Range[] }) => registeredRanges.push(highlight.ranges)),
@@ -60,8 +60,9 @@ describe('createIdentityHighlighter', () => {
       }
     });
     document.body.innerHTML = [
+      '<div class="chat-messages-pane">Jean Dupont</div>',
+      '<div class="chat-messages-pane"><div data-piecemaker-identity-highlight="off">Jean Dupont</div></div>',
       '<div>Jean Dupont</div>',
-      '<div data-piecemaker-identity-highlight="off">Jean Dupont</div>',
     ].join('');
 
     const highlighter = createIdentityHighlighter();
