@@ -53,6 +53,10 @@ const relationSelectOptions = (): string => [
   '<option value="__custom__">Relation personnalisée…</option>',
 ].join('');
 
+const relationLabel = (relation: string): string => relation === 'mentions'
+  ? 'Mentionné dans'
+  : relation ? `${relation.charAt(0).toLocaleUpperCase('fr-FR')}${relation.slice(1)}` : 'Relation';
+
 export type PartyEditorDefaults = {
   kind?: 'person' | 'company';
   partySide?: 'client' | 'adversaire' | 'tiers';
@@ -81,6 +85,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const selectedKind = node?.kind || defaults.kind || 'person';
   const mappings = node ? data.graph.mappings.filter((entry) => entry.nodeId === node.id) : [];
   const relations = node ? data.graph.links.filter((entry) => entry.fromNodeId === node.id || entry.toNodeId === node.id) : [];
+  const nodesById = new Map(data.graph.nodes.map((entry) => [entry.id, entry]));
   const sirenNodes = data.graph.nodes.filter((entry) => entry.kind === 'siren');
   const linkedSiren = node ? relations.find((entry) => entry.relation.toLocaleLowerCase() === 'siren' && entry.fromNodeId === node.id && sirenNodes.some((candidate) => candidate.id === entry.toNodeId)) : undefined;
   const linkedSirenNode = linkedSiren ? sirenNodes.find((entry) => entry.id === linkedSiren.toNodeId) : undefined;
@@ -102,7 +107,13 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       <label>Nouvelle relation<select class="pmd-select" name="target"><option value="">Aucune</option>${data.graph.nodes.filter((entry) => entry.id !== id && entry.kind !== 'document').map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join('')}</select></label>
       <label>Type de relation<select class="pmd-select" name="relation">${relationSelectOptions()}</select></label>
       <label data-custom-relation hidden>Relation personnalisée<input class="pmd-input" name="customRelation" placeholder="Saisissez une relation"></label>
-      ${relations.length ? `<div><div class="pmd-group">Relations actuelles</div><div class="pmd-badges">${relations.map((relation, index) => `<button type="button" class="pmd-badge pmd-icon-button" data-unlink="${index}">${escapeHtml(relation.relation)} ×</button>`).join('')}</div></div>` : ''}
+      ${relations.length ? `<div class="pmd-current-relations"><div class="pmd-group">Relations actuelles <span class="pmd-group-count">${relations.length}</span></div><div class="pmd-relation-list">${relations.map((relation, index) => {
+        const relatedNodeId = relation.fromNodeId === id ? relation.toNodeId : relation.fromNodeId;
+        const relatedNode = nodesById.get(relatedNodeId);
+        const relatedLabel = relatedNode?.label || relatedNodeId;
+        const relatedKind = relatedNode?.kind === 'document' ? 'Pièce' : relatedNode?.kind === 'person' ? 'Personne physique' : relatedNode?.kind === 'company' ? 'Personne morale' : relatedNode ? labels[relatedNode.kind] : '';
+        return `<button type="button" class="pmd-relation-row" data-unlink="${index}" aria-label="Supprimer le lien ${escapeHtml(relationLabel(relation.relation))} avec ${escapeHtml(relatedLabel)}"><span class="pmd-relation-copy"><span class="pmd-relation-type">${escapeHtml(relationLabel(relation.relation))}</span><strong class="pmd-relation-target">${escapeHtml(relatedLabel)}</strong>${relatedKind ? `<small class="pmd-relation-kind">${escapeHtml(relatedKind)}</small>` : ''}</span><span class="pmd-relation-remove" aria-hidden="true">×</span></button>`;
+      }).join('')}</div></div>` : ''}
       <div class="pmd-form-actions"><button type="button" class="pmd-button" data-close>Annuler</button><button class="pmd-button pmd-button-primary">Enregistrer</button></div>
     </form>`);
   layer.querySelector<HTMLElement>('[data-back-mapping]')?.addEventListener('click', () => {
