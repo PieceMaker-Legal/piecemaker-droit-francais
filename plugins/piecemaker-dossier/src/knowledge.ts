@@ -115,6 +115,7 @@ export class KnowledgeStore {
   private readonly deleteLink;
   private readonly upsertMapping;
   private readonly deleteMapping;
+  private readonly removePartyDesignation;
   private readonly deleteNode;
 
   public constructor(databaseSource: string | DatabaseConnection = resolveKnowledgeDatabasePath()) {
@@ -129,6 +130,7 @@ export class KnowledgeStore {
     this.deleteLink = this.database.prepare('DELETE FROM piecemaker_links WHERE project_id=@projectId AND from_node_id=@fromNodeId AND to_node_id=@toNodeId AND relation=@relation');
     this.upsertMapping = this.database.prepare(`INSERT INTO piecemaker_mappings(project_id,node_id,real_value,masked_value,search_text,data_json,origin,created_at,updated_at) VALUES(@projectId,@nodeId,@real,@masked,@searchText,@data,@origin,@at,@at) ON CONFLICT(project_id,node_id,real_value) DO UPDATE SET masked_value=excluded.masked_value,search_text=excluded.search_text,data_json=excluded.data_json,origin=excluded.origin,updated_at=excluded.updated_at`);
     this.deleteMapping = this.database.prepare('DELETE FROM piecemaker_mappings WHERE project_id=@projectId AND node_id=@nodeId AND real_value=@real');
+    this.removePartyDesignation = this.database.prepare("UPDATE piecemaker_nodes SET data_json=json_remove(data_json, '$.partySide', '$.position'), updated_at=@at WHERE project_id=@projectId AND id=@nodeId");
     this.deleteNode = this.database.prepare('DELETE FROM piecemaker_nodes WHERE project_id=@projectId AND id=@nodeId');
     if (typeof databaseSource === 'string') {
       try { fs.chmodSync(databaseSource, 0o600); } catch {}
@@ -253,7 +255,7 @@ export class KnowledgeStore {
   }
 
   private validateOperation(operation: KnowledgeUpdateOperation): KnowledgeUpdateOperation {
-    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','upsertMapping','deleteMapping','deleteNode','renameNode'].includes(operation.op)) throw new TypeError('unsupported operation');
+    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','upsertMapping','deleteMapping','removePartyDesignation','deleteNode','renameNode'].includes(operation.op)) throw new TypeError('unsupported operation');
     return operation;
   }
 
@@ -294,6 +296,11 @@ export class KnowledgeStore {
       const values = { projectId, nodeId: requiredText(mapping.nodeId, 'mapping.nodeId'), real: requiredText(mapping.real, 'mapping.real') };
       this.upsertMapping.run({ ...values, masked: requiredText(mapping.masked, 'mapping.masked'), searchText: searchable([mapping.real, mapping.masked]), data: JSON.stringify(objectValue(mapping.data, 'mapping.data')), origin: originValue(mapping.origin), at: timestamp });
       counts.mappings += 1;
+      return;
+    }
+    if (operation.op === 'removePartyDesignation') {
+      this.removePartyDesignation.run({ projectId, nodeId: requiredText(operation.nodeId, 'nodeId'), at: timestamp });
+      counts.nodes += 1;
       return;
     }
     if (operation.op === 'renameNode') {

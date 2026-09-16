@@ -57,4 +57,7 @@ button.pmd-column-empty[data-drop-active=true]{border-color:var(--pmd-accent);ba
 .pmd-scan-cancel{display:flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--pmd-muted);font-size:14px;line-height:1;cursor:pointer}
 .pmd-scan-cancel:hover{background:var(--pmd-soft);color:var(--pmd-text)}
 @media(max-width:760px){.pmd-scan-progress{min-width:80px}}
+.pmd-party-badge{align-items:center;gap:6px;padding-right:6px}
+.pmd-party-badge-remove{display:flex;width:16px;height:16px;align-items:center;justify-content:center;border:0;border-radius:50%;background:transparent;color:inherit;cursor:pointer;font:inherit;line-height:1}
+.pmd-party-badge-remove:hover{background:#0002}
 `;
