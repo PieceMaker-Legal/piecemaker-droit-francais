@@ -97,10 +97,10 @@ function lineValue(text: string, label: string): string {
   return line ? line.slice(label.length).trim() : '';
 }
 
-function parseSearchLine(line: string): { name: string; siren: string; summary: string } | null {
-  const match = /^-\s+(.+?)\s+\(([^)]+)\)\s+\|\s+SIREN\s+(\d{9})\s+\|\s+(.+?)\s+\|\s+NAF\s+([^|]+)\s+\|\s+(.+)$/.exec(line.trim());
+export function parseSearchLine(line: string): { name: string; siren: string; summary: string } | null {
+  const match = /^-\s+(.+?)(?:\s+\(([^)]+)\))?\s+\|\s+SIREN\s+(\d{9})\s+\|\s+(.+?)\s+\|\s+NAF\s+([^|]+)\s+\|\s+(.+)$/.exec(line.trim());
   if (!match) return null;
-  return { name: match[1].trim(), siren: match[3], summary: `${match[2]} · ${match[4].trim()} · NAF ${match[5].trim()} · ${match[6].trim()}` };
+  return { name: match[1].trim(), siren: match[3], summary: [match[2]?.trim(), match[4].trim(), `NAF ${match[5].trim()}`, match[6].trim()].filter(Boolean).join(' · ') };
 }
 
 function parseDirectors(text: string): CompanyDirector[] {
