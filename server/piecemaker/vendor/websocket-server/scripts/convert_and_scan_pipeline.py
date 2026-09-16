@@ -633,6 +633,84 @@ def consolidate_duplicate_entities(entities: List[Dict]) -> List[Dict]:
     return consolidated
 
 
+def _person_entry_texts(code: str, entry: Dict, reverse_mapping: Dict,
+                        mapping_texts: Optional[List[str]] = None) -> List[str]:
+    values = [entry.get("original", ""), *(entry.get("variants") or [])]
+    values.extend(reverse_mapping.get(code, []) or [])
+    values.extend(mapping_texts or [])
+    return list(dict.fromkeys(
+        value for value in values
+        if isinstance(value, str) and value.strip()
+    ))
+
+
+def _merge_person_entry(merged_mapping: Dict, merged_reverse: Dict,
+                        merged_extracted: Dict, code: str, texts: List[str],
+                        source_entry: Optional[Dict] = None) -> None:
+    entries = merged_extracted.setdefault("personnes_physiques", {})
+    entry = entries.setdefault(code, {
+        "original": texts[0] if texts else "",
+        "code": code,
+        "variants": [],
+    })
+    current_texts = _person_entry_texts(code, entry, merged_reverse)
+    combined = list(dict.fromkeys([*current_texts, *texts]))
+    if combined:
+        entry["original"] = max(combined, key=len)
+        entry["variants"] = combined
+        merged_reverse[code] = list(dict.fromkeys([
+            *(merged_reverse.get(code, []) or []), *combined
+        ]))
+        for text in combined:
+            merged_mapping[text] = code
+    if source_entry:
+        entry["score"] = max(entry.get("score", 0.0), source_entry.get("score", 0.0))
+        entry.setdefault("recognizer", source_entry.get("recognizer", "unknown"))
+
+
+def _prune_existing_person_duplicates(merged_mapping: Dict, merged_reverse: Dict,
+                                       merged_extracted: Dict) -> None:
+    entries = merged_extracted.setdefault("personnes_physiques", {})
+    mapping_texts_by_code: Dict[str, List[str]] = {}
+    for text, code in merged_mapping.items():
+        mapping_texts_by_code.setdefault(code, []).append(text)
+
+    canonical_by_name: Dict[str, str] = {}
+    for code in list(entries):
+        entry = entries.get(code, {})
+        texts = _person_entry_texts(
+            code,
+            entry,
+            merged_reverse,
+            mapping_texts_by_code.get(code),
+        )
+        names = [normalize_name(text) for text in texts]
+        names = list(dict.fromkeys(name for name in names if name))
+        survivor = next((canonical_by_name[name] for name in names if name in canonical_by_name), None)
+        if survivor is None:
+            for name in names:
+                canonical_by_name[name] = code
+            continue
+        if survivor == code:
+            continue
+
+        _merge_person_entry(
+            merged_mapping,
+            merged_reverse,
+            merged_extracted,
+            survivor,
+            texts,
+            entry,
+        )
+        for name in names:
+            canonical_by_name[name] = survivor
+        for text, mapped_code in list(merged_mapping.items()):
+            if mapped_code == code:
+                merged_mapping[text] = survivor
+        merged_reverse.pop(code, None)
+        entries.pop(code, None)
+
+
 def is_known_city_or_country(text: str) -> bool:
     """Check if text matches known city or country names.
 
@@ -1178,8 +1256,21 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         "autres": {**existing_mapping.get('extracted_data', {}).get('autres', {})}
     }
 
-    # Track seen entities to avoid duplicates
+    _prune_existing_person_duplicates(merged_mapping, merged_reverse, merged_extracted)
+
     seen_entities_lower = {k.lower(): v for k, v in merged_mapping.items()}
+    existing_person_by_name: Dict[str, str] = {}
+    for code, entry in merged_extracted["personnes_physiques"].items():
+        for entity_text in _person_entry_texts(code, entry, merged_reverse):
+            normalized = normalize_name(entity_text)
+            if normalized:
+                existing_person_by_name.setdefault(normalized, code)
+    for entity_text, code in merged_mapping.items():
+        if "PERSONNE_PHYSIQUE_" not in str(code) and not str(code).startswith(("DIRIGEANT_", "AVOCAT_")):
+            continue
+        normalized = normalize_name(entity_text)
+        if normalized:
+            existing_person_by_name.setdefault(normalized, code)
 
     # Find highest existing code numbers per category
     code_counters = {
@@ -1194,7 +1285,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
     # URGOT SA), là où un test par sous-chaîne ne reconnaîtrait pas SA_3.
     societe_counters: Dict[str, int] = {}
 
-    for code in merged_reverse.keys():
+    for code in set(merged_reverse) | set(merged_mapping.values()):
         if "PERSONNE_PHYSIQUE_" in code or code.startswith("DIRIGEANT_"):
             num = int(code.split("_")[-1])
             code_counters["personnes_physiques"] = max(code_counters["personnes_physiques"], num + 1)
@@ -1216,15 +1307,6 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
     for text, code in new_mapping.get('mapping', {}).items():
         text_lower = text.lower()
 
-        # Skip if already exists (use existing code)
-        if text_lower in seen_entities_lower:
-            continue
-
-        # Skip entities the lawyer discarded from the mapping
-        if text_lower in ignored_lower:
-            continue
-
-        # Determine category
         category = None
         for cat_key in merged_extracted.keys():
             if code in new_mapping.get('extracted_data', {}).get(cat_key, {}):
@@ -1233,6 +1315,42 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
 
         if not category:
             category = "autres"
+
+        old_entry = new_mapping.get('extracted_data', {}).get(category, {}).get(code, {})
+        variants = old_entry.get("variants", [text])
+        candidate_texts = list(dict.fromkeys([text, *variants]))
+
+        if category == "personnes_physiques":
+            existing_code = next(
+                (
+                    existing_person_by_name[normalized]
+                    for candidate in candidate_texts
+                    for normalized in [normalize_name(candidate)]
+                    if normalized in existing_person_by_name
+                ),
+                None,
+            )
+            if existing_code:
+                accepted_texts = [candidate for candidate in candidate_texts if candidate.lower() not in ignored_lower]
+                _merge_person_entry(
+                    merged_mapping,
+                    merged_reverse,
+                    merged_extracted,
+                    existing_code,
+                    accepted_texts,
+                    old_entry,
+                )
+                for candidate in accepted_texts:
+                    seen_entities_lower[candidate.lower()] = existing_code
+                continue
+
+        # Skip if already exists (use existing code)
+        if text_lower in seen_entities_lower:
+            continue
+
+        # Skip entities the lawyer discarded from the mapping
+        if text_lower in ignored_lower:
+            continue
 
         # Generate new code with incremented counter
         if category == "personnes_physiques":
@@ -1257,13 +1375,14 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
             new_code = f"{entity_type}_{code_counters[category]:02d}"
             code_counters[category] += 1
 
-        # Get variants from existing entry
-        old_entry = new_mapping.get('extracted_data', {}).get(category, {}).get(code, {})
-        variants = old_entry.get("variants", [text])
-
         # Add all variants to merged structures (no lowercase duplicates)
-        for variant in variants:
+        accepted_variants = [variant for variant in variants if variant.lower() not in ignored_lower]
+        for variant in accepted_variants:
             merged_mapping[variant] = new_code
+            seen_entities_lower[variant.lower()] = new_code
+            normalized = normalize_name(variant) if category == "personnes_physiques" else ""
+            if normalized:
+                existing_person_by_name.setdefault(normalized, new_code)
 
         seen_entities_lower[text_lower] = new_code
 
@@ -1275,7 +1394,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         merged_extracted[category][new_code] = {
             "original": original,
             "code": new_code,
-            "variants": variants,
+            "variants": accepted_variants,
             "score": old_entry.get("score", 1.0),
             "recognizer": old_entry.get("recognizer", "unknown")
         }
