@@ -1,4 +1,5 @@
 import { pmGet } from '@/piecemaker/dossier/api';
+import { setAnonymizationComplete } from '@/piecemaker/dossier/mappingStatusCache';
 import type { OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 
 const STORAGE_KEY = 'piecemaker.sidebarAnonymizationJobs';
@@ -100,6 +101,7 @@ async function refreshTrackedJobs(): Promise<void> {
   publish(trackedJobs.flatMap((entry) => {
     if (!polled.has(entry.job.id)) return [entry];
     const job = polled.get(entry.job.id);
+    if (job?.state === 'done') setAnonymizationComplete(entry.projectPath, true);
     return job ? [{ ...entry, job }] : [];
   }));
 }

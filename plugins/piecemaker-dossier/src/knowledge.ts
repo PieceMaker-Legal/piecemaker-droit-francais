@@ -74,6 +74,11 @@ CREATE TABLE IF NOT EXISTS piecemaker_mappings (
   PRIMARY KEY (project_id, node_id, real_value),
   FOREIGN KEY (project_id, node_id) REFERENCES piecemaker_nodes(project_id, id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS piecemaker_anonymization_status (
+  project_id TEXT PRIMARY KEY NOT NULL,
+  completed_at TEXT NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+);
 CREATE INDEX IF NOT EXISTS piecemaker_nodes_lookup ON piecemaker_nodes(project_id, kind, search_text);
 CREATE INDEX IF NOT EXISTS piecemaker_links_from ON piecemaker_links(project_id, from_node_id);
 CREATE INDEX IF NOT EXISTS piecemaker_links_to ON piecemaker_links(project_id, to_node_id);
@@ -218,6 +223,24 @@ export class KnowledgeStore {
   public glinerMappingKeys(projectIdInput: string): Array<{ nodeId: string; real: string }> {
     const projectId = this.resolveProject(projectIdInput);
     return this.database.prepare("SELECT node_id AS nodeId, real_value AS real FROM piecemaker_mappings WHERE project_id=? AND origin='gliner'").all(projectId) as Array<{ nodeId: string; real: string }>;
+  }
+
+  public markAnonymizationComplete(projectIdInput: string): void {
+    const projectId = this.resolveProject(projectIdInput);
+    this.database.prepare(`
+      INSERT INTO piecemaker_anonymization_status(project_id, completed_at)
+      VALUES (?, ?)
+      ON CONFLICT(project_id) DO UPDATE SET completed_at=excluded.completed_at
+    `).run(projectId, at());
+  }
+
+  public listAnonymizationStatuses(): Array<{ projectId: string; projectPath: string; completedAt: string }> {
+    return this.database.prepare(`
+      SELECT s.project_id AS projectId, p.project_path AS projectPath, s.completed_at AS completedAt
+      FROM piecemaker_anonymization_status s
+      INNER JOIN projects p ON p.project_id = s.project_id
+      ORDER BY s.project_id
+    `).all() as Array<{ projectId: string; projectPath: string; completedAt: string }>;
   }
 
   public close(): void { if (this.ownsDatabase) this.database.close(); }
