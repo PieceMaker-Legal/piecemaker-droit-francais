@@ -2,6 +2,8 @@ import { entityKinds, escapeHtml, labels, textValue, dateFor } from './views.js'
 import { knowledgeApi } from './api.js';
 import type { ViewData } from './views.js';
 import type { KnowledgeNode, KnowledgeUpdateOperation, NodeKind } from './types.js';
+import { PROCEDURE_POSITIONS, partyCodeChange } from './party-codes.js';
+import type { PartySide } from './party-codes.js';
 
 export function modal(root: HTMLElement, body: string): HTMLElement {
   const layer = document.createElement('div');
@@ -12,6 +14,8 @@ export function modal(root: HTMLElement, body: string): HTMLElement {
   layer.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => layer.remove()));
   return layer;
 }
+
+const positionOptions = (selected: string): string => ['<option value="">Non précisée</option>', ...PROCEDURE_POSITIONS.map((entry) => `<option value="${entry.value}" ${entry.value === selected ? 'selected' : ''}>${escapeHtml(entry.label)}</option>`)].join('');
 
 const kindOptions = (selected: NodeKind): string => entityKinds.map((kind) => `<option value="${kind}" ${kind === selected ? 'selected' : ''}>${escapeHtml(labels[kind])}</option>`).join('');
 
@@ -90,6 +94,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       <label>Variantes<div class="pmd-alias-editor" data-alias-editor><div class="pmd-alias-pills" data-alias-pills></div><input class="pmd-input pmd-alias-input" data-alias-input placeholder="Saisissez une variante puis appuyez sur Entrée"><input type="hidden" name="aliases"></div></label>
       <label>Code anonymisé<input class="pmd-input" name="masked" value="${escapeHtml(mappings[0]?.masked || '')}"></label>
       <label>Statut procédural<select class="pmd-select" name="partySide"><option value="">Aucun</option><option value="client" ${(!node && defaults.partySide === 'client') || (node && node.data.partySide === 'client') || (!node && !defaults.partySide) ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${(node && node.data.partySide === 'adversaire') || (!node && defaults.partySide === 'adversaire') ? 'selected' : ''}>Partie adverse</option><option value="tiers" ${(node && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire') || (!node && defaults.partySide === 'tiers') ? 'selected' : ''}>Tiers</option></select></label>
+      <label data-position-field>Position procédurale<select class="pmd-select" name="position">${positionOptions(textValue(node?.data.position))}</select></label>
       <div data-company-fields ${companyFieldsHidden ? 'hidden' : ''}>
         <label>Forme sociale<input class="pmd-input" name="legalForm" value="${escapeHtml(textValue(node?.data.legalForm))}"></label>
         <label>Numéro SIREN<input class="pmd-input" name="siren" inputmode="numeric" autocomplete="off" value="${escapeHtml(linkedSirenNode?.label || '')}" placeholder="9 chiffres"><div class="pmd-siren-suggestions" data-siren-suggestions></div></label>
@@ -173,6 +178,28 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   sirenInput?.addEventListener('input', renderSirenSuggestions);
   sirenInput?.addEventListener('focus', renderSirenSuggestions);
   renderSirenSuggestions();
+  const sideSelect = layer.querySelector<HTMLSelectElement>('select[name="partySide"]');
+  const positionSelect = layer.querySelector<HTMLSelectElement>('select[name="position"]');
+  const maskedInput = layer.querySelector<HTMLInputElement>('input[name="masked"]');
+  const legalFormInput = layer.querySelector<HTMLInputElement>('input[name="legalForm"]');
+  const renameApplies = (side: string): boolean => side === 'client' || side === 'adversaire' || Boolean(textValue(node?.data.originalCode));
+  const codeChangeFor = (side: string) => partyCodeChange(
+    { id, kind: (kindSelect?.value || selectedKind) as NodeKind, data: node?.data || {} },
+    { kind: (kindSelect?.value || selectedKind) as NodeKind, legalForm: legalFormInput?.value || '', side: side as PartySide, position: positionSelect?.value || '' },
+    data.graph.nodes,
+    data.graph.mappings,
+  );
+  const syncMasked = () => {
+    const side = sideSelect?.value || '';
+    if (!maskedInput) return;
+    maskedInput.readOnly = side === 'client' || side === 'adversaire';
+    if (renameApplies(side)) maskedInput.value = codeChangeFor(side).code;
+  };
+  sideSelect?.addEventListener('change', syncMasked);
+  positionSelect?.addEventListener('change', syncMasked);
+  kindSelect?.addEventListener('change', syncMasked);
+  legalFormInput?.addEventListener('input', syncMasked);
+  if (maskedInput) maskedInput.readOnly = sideSelect?.value === 'client' || sideSelect?.value === 'adversaire';
   relationSelect?.addEventListener('change', () => {
     if (!customRelationField) return;
     customRelationField.hidden = relationSelect.value !== '__custom__';
@@ -189,20 +216,30 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     const legalForm = kind === 'company' ? textValue(form.get('legalForm')).trim() : '';
     const sirenValue = kind === 'company' ? normalizeSiren(textValue(form.get('siren'))) : '';
     const sirenNode = sirenValue ? sirenNodes.find((candidate) => [candidate.label, ...candidate.aliases].some((entry) => normalizeSiren(entry) === sirenValue)) : undefined;
-    const operations: KnowledgeUpdateOperation[] = [{ op: 'upsertNode', node: { id, kind, label, aliases: savedAliases, data: { ...(node?.data || {}), partySide: partySide || null, legalForm: legalForm || null }, origin: 'manual' } }];
-    for (const mapping of mappings) operations.push({ op: 'deleteMapping', mapping: { nodeId: id, real: mapping.real } });
-    for (const real of [label, ...savedAliases]) if (masked) operations.push({ op: 'upsertMapping', mapping: { nodeId: id, real, masked, origin: 'manual' } });
+    const position = textValue(form.get('position')).trim();
+    const change = renameApplies(partySide)
+      ? partyCodeChange({ id, kind, data: node?.data || {} }, { kind, legalForm, side: partySide as PartySide, position }, data.graph.nodes, data.graph.mappings)
+      : null;
+    const nodeId = change ? change.nodeId : id;
+    const code = change ? change.code : masked;
+    const nodeData = change ? change.data : { ...(node?.data || {}), partySide: partySide || null, legalForm: legalForm || null, position: position || null };
+    const rename = (value: string): string => value === id ? nodeId : value;
+    const operations: KnowledgeUpdateOperation[] = [];
+    if (change && node && nodeId !== id) operations.push(...change.operations);
+    operations.push({ op: 'upsertNode', node: { id: nodeId, kind, label, aliases: savedAliases, data: nodeData, origin: 'manual' } });
+    for (const mapping of mappings) operations.push({ op: 'deleteMapping', mapping: { nodeId, real: mapping.real } });
+    for (const real of [label, ...savedAliases]) if (code) operations.push({ op: 'upsertMapping', mapping: { nodeId, real, masked: code, origin: 'manual' } });
     for (const index of removals) {
       const relation = relations[index];
-      operations.push({ op: 'unlink', link: { fromNodeId: relation.fromNodeId, toNodeId: relation.toNodeId, relation: relation.relation } });
+      operations.push({ op: 'unlink', link: { fromNodeId: rename(relation.fromNodeId), toNodeId: rename(relation.toNodeId), relation: relation.relation } });
     }
     const target = textValue(form.get('target'));
     const selectedRelation = textValue(form.get('relation')).trim();
     const customRelation = textValue(form.get('customRelation')).trim();
     const relation = selectedRelation === '__custom__' ? customRelation : selectedRelation;
     if (selectedRelation === '__custom__' && customRelation) customRelationOptions.add(customRelation);
-    if (target && relation) operations.push({ op: 'link', link: { fromNodeId: id, toNodeId: target, relation, origin: 'manual' } });
-    if (sirenNode && !data.graph.links.some((link) => link.fromNodeId === id && link.toNodeId === sirenNode.id && link.relation.toLocaleLowerCase() === 'siren')) operations.push({ op: 'link', link: { fromNodeId: id, toNodeId: sirenNode.id, relation: 'SIREN', origin: 'manual' } });
+    if (target && relation) operations.push({ op: 'link', link: { fromNodeId: nodeId, toNodeId: target, relation, origin: 'manual' } });
+    if (sirenNode && !data.graph.links.some((link) => link.fromNodeId === id && link.toNodeId === sirenNode.id && link.relation.toLocaleLowerCase() === 'siren')) operations.push({ op: 'link', link: { fromNodeId: nodeId, toNodeId: sirenNode.id, relation: 'SIREN', origin: 'manual' } });
     await save(operations);
     layer.remove();
   });

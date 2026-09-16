@@ -14,7 +14,7 @@ export type KnowledgeScanJob = {
   projectId: string;
   source: 'knowledge';
   action: 'anonymize';
-  state: 'running' | 'done' | 'error';
+  state: 'running' | 'done' | 'error' | 'cancelled';
   phase: KnowledgeScanPhase;
   percent: number;
   processed: number;
@@ -32,6 +32,7 @@ function isPending(job: KnowledgeScanJob): boolean {
 
 export function createKnowledgeScanJobs() {
   const jobs = new Map<string, KnowledgeScanJob>();
+  const controllers = new Map<string, AbortController>();
 
   const prune = () => {
     const deadline = Date.now() - COMPLETED_RETENTION_MS;
@@ -47,7 +48,7 @@ export function createKnowledgeScanJobs() {
   };
 
   return {
-    start(projectId: string, run: (report: (progress: KnowledgeScanProgress) => void) => Promise<unknown>): KnowledgeScanJob {
+    start(projectId: string, run: (report: (progress: KnowledgeScanProgress) => void, signal: AbortSignal) => Promise<unknown>): KnowledgeScanJob {
       prune();
       const running = runningForProject(projectId);
       if (running) return running;
@@ -73,15 +74,20 @@ export function createKnowledgeScanJobs() {
         job.processed = progress.processed;
         job.total = progress.total || job.total;
       };
-      run(report).then(() => {
+      const controller = new AbortController();
+      controllers.set(job.id, controller);
+      run(report, controller.signal).then(() => {
+        if (job.state !== 'running') return;
         job.state = 'done';
         job.phase = 'commit';
         job.percent = 100;
       }, (error: unknown) => {
+        if (job.state !== 'running') return;
         job.state = 'error';
         job.error = error instanceof Error ? error.message : String(error);
       }).finally(() => {
-        job.finishedAt = new Date().toISOString();
+        controllers.delete(job.id);
+        job.finishedAt = job.finishedAt || new Date().toISOString();
       });
       return job;
     },
@@ -92,6 +98,14 @@ export function createKnowledgeScanJobs() {
     runningForProject(projectId: string): KnowledgeScanJob | null {
       prune();
       return runningForProject(projectId);
+    },
+    cancel(job: KnowledgeScanJob | null): KnowledgeScanJob | null {
+      if (!job || job.state !== 'running') return job;
+      job.state = 'cancelled';
+      job.finishedAt = new Date().toISOString();
+      controllers.get(job.id)?.abort();
+      controllers.delete(job.id);
+      return job;
     },
   };
 }

@@ -104,6 +104,7 @@ export function scanProgress(job: ScanJob): string {
       <span class="pmd-scan-progress-track" role="progressbar" aria-label="Anonymisation du dossier" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(percent)}">
         <span class="pmd-scan-progress-bar" style="width:${percent}%"></span>
       </span>
+      <button type="button" class="pmd-scan-cancel" data-action="cancel-scan" aria-label="Arrêter l’analyse" title="Arrêter l’analyse">×</button>
     </span>`;
 }
 
