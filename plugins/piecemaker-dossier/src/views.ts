@@ -92,17 +92,15 @@ const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'chronology', label: 'Chronologie', icon: calendarClockIcon },
 ];
 
-export function scanJobLabel(job: ScanJob): string {
-  const phase = job.phase === 'scan' ? 'Analyse GLiNER' : job.phase === 'commit' ? 'Enregistrement' : 'Conversion MarkItDown';
-  return `${phase} · ${Math.round(job.percent || 0)} %`;
+export function scanPercentLabel(job: ScanJob): string {
+  return `${Math.round(Math.max(0, Math.min(100, job.percent || 0)))} %`;
 }
 
 export function scanProgress(job: ScanJob): string {
   const percent = Math.max(0, Math.min(100, job.percent || 0));
-  const label = scanJobLabel(job);
   return `
     <span class="pmd-scan-progress" data-scan-progress>
-      <span class="pmd-scan-progress-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+      <span class="pmd-scan-progress-label">${escapeHtml(scanPercentLabel(job))}</span>
       <span class="pmd-scan-progress-track" role="progressbar" aria-label="Anonymisation du dossier" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(percent)}">
         <span class="pmd-scan-progress-bar" style="width:${percent}%"></span>
       </span>
