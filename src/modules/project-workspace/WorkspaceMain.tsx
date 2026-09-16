@@ -215,6 +215,7 @@ function WorkspaceMain({
                 pluginName={activeTab.replace('plugin:', '')}
                 selectedProject={selectedProject}
                 selectedSession={selectedSession}
+                onOpenFileInEditor={openFileInEditor}
               />
             </div>
           )}

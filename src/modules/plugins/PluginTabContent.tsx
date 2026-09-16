@@ -10,6 +10,7 @@ type PluginTabContentProps = {
   pluginName: string;
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
+  onOpenFileInEditor: (filePath: string) => void;
 };
 
 type PluginContext = {
@@ -48,6 +49,7 @@ export default function PluginTabContent({
   pluginName,
   selectedProject,
   selectedSession,
+  onOpenFileInEditor,
 }: PluginTabContentProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -114,6 +116,10 @@ export default function PluginTabContent({
             if (!res.ok) throw new Error(`RPC error ${res.status}`);
             return res.json();
           },
+
+          openFileInEditor(filePath: string): void {
+            onOpenFileInEditor(filePath);
+          },
         };
 
         await mod.mount?.(container, pluginHostApi);
@@ -135,7 +141,7 @@ export default function PluginTabContent({
       contextCallbacks.clear();
       moduleRef.current = null;
     };
-  }, [pluginName, plugin?.entry, plugin?.enabled]); // re-mount when plugin or enabled state changes
+  }, [onOpenFileInEditor, pluginName, plugin?.entry, plugin?.enabled]); // re-mount when plugin or enabled state changes
 
   return (
     <div className="relative h-full w-full overflow-auto">
