@@ -10,14 +10,6 @@ export type ViewData = {
   graph: KnowledgeSnapshot;
 };
 
-export type AgentsViewerState = {
-  open: boolean;
-  loading: boolean;
-  content: string;
-  exists: boolean;
-  error: string;
-};
-
 export const labels: Record<NodeKind, string> = {
   person: 'Personnes physiques',
   company: 'Personnes morales',
@@ -89,7 +81,7 @@ function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot): string {
 const shieldCheckIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>';
 const scanSearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><circle cx="12" cy="12" r="3"></circle><path d="m16 16-1.9-1.9"></path></svg>';
 
-export function shell(active: Tab, mappingCount = 0, scanning = false, agentsViewer?: AgentsViewerState): string {
+export function shell(active: Tab, mappingCount = 0, scanning = false): string {
   return `
     <div class="pmd-header">
       <div class="pmd-tabs" role="tablist">
@@ -105,7 +97,7 @@ export function shell(active: Tab, mappingCount = 0, scanning = false, agentsVie
       <button class="pmd-button pmd-agents-button" data-action="agents"><span>▤</span> Agents.md</button>
     </div>
     <div data-error></div>
-    <div class="pmd-workspace"><main class="pmd-content" data-content></main>${agentsViewer?.open ? agentsView(agentsViewer) : ''}</div>`;
+    <div class="pmd-workspace"><main class="pmd-content" data-content></main></div>`;
 }
 
 export function generalView(data: ViewData): string {
@@ -138,15 +130,6 @@ export function mappingView(data: ViewData): string {
     const mappings = data.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
     return `<button class="pmd-mapping-row" data-edit-node="${escapeHtml(node.id)}"><span>${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}</span><span>${escapeHtml(node.label)}</span><span>${escapeHtml(node.aliases.join(', ') || 'Aucun autre variant')}</span><span>✎</span></button>`;
   }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}<section class="pmd-mapping-category pmd-exclusions"><header><h3>Éléments exclus <span>${exclusions.length}</span></h3></header>${exclusions.length ? `<div class="pmd-exclusion-list">${exclusions.map((value) => `<span>${escapeHtml(value)}<button data-remove-exclusion="${escapeHtml(value)}" aria-label="Réintégrer ${escapeHtml(value)}">×</button></span>`).join('')}</div>` : '<div class="pmd-column-empty">Aucun élément exclu.</div>'}</section></div><div class="pmd-mapping-footer"><button class="pmd-button" data-close>Fermer</button><button class="pmd-button pmd-button-primary" data-close>✓ Enregistrer le mapping</button></div></div>`;
-}
-
-function agentsView(state: AgentsViewerState): string {
-  const body = state.loading
-    ? '<div class="pmd-viewer-empty">Chargement d’AGENTS.md…</div>'
-    : state.error
-      ? `<div class="pmd-viewer-error">${escapeHtml(state.error)}</div>`
-      : `<pre class="pmd-code">${escapeHtml(state.exists ? state.content : 'Aucun fichier AGENTS.md dans ce dossier.')}</pre>`;
-  return `<aside class="pmd-file-viewer" aria-label="Visionneuse AGENTS.md"><header><div><strong>AGENTS.md</strong><span>Fichier du dossier actif</span></div><button class="pmd-icon-button" data-action="close-agents" aria-label="Fermer">×</button></header><div class="pmd-file-body">${body}</div></aside>`;
 }
 
 function chronologyDateLabel(value: string): string {
