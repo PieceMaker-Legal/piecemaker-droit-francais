@@ -59,6 +59,14 @@ const relationLabel = (relation: string): string => relation === 'mentions'
   ? 'Mentionné dans'
   : relation ? `${relation.charAt(0).toLocaleUpperCase('fr-FR')}${relation.slice(1)}` : 'Relation';
 
+const pseudonymPattern = /^(?:CLIENT|ADVERSAIRE|PERSONNE_MORALE|PERSONNE_PHYSIQUE|PERS_MORALE|PERS_PHYSIQUE)(?:_|$)/;
+
+const realCompanyName = (mappings: Array<{ real: string; masked: string }>, currentLabel: string): string => {
+  const mappedName = mappings.map((mapping) => mapping.real.trim()).find((value) => value && !pseudonymPattern.test(value));
+  if (mappedName) return mappedName;
+  return currentLabel && !pseudonymPattern.test(currentLabel) ? currentLabel : 'Personne morale';
+};
+
 export type PartyEditorDefaults = {
   kind?: 'person' | 'company';
   partySide?: 'client' | 'adversaire' | 'tiers';
@@ -203,12 +211,13 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   let companySearchResults: CompanySearchResult[] = [];
   let companySearchBusy = false;
   let companySearchError = '';
-  const companySearchQuery = (): string => [labelInput?.value, legalFormInput?.value, sirenInput?.value].map((value) => value?.trim() || '').filter(Boolean).join(' ');
+  const companySearchName = (): string => realCompanyName(mappings, labelInput?.value?.trim() || '');
+  const companySearchQuery = (): string => [companySearchName(), legalFormInput?.value, sirenInput?.value].map((value) => value?.trim() || '').filter((value) => value !== 'Personne morale').join(' ');
   const renderCompanySearchPanel = () => {
     if (!companySearchPanel) return;
     companySearchPanel.hidden = false;
     const message = companySearchBusy ? '<p class="pmd-company-search-status">Recherche en cours…</p>' : companySearchError ? `<p class="pmd-company-search-status pmd-company-search-error">${escapeHtml(companySearchError)}</p>` : !companySearchResults.length ? '<p class="pmd-company-search-status">Aucun résultat.</p>' : '';
-    companySearchPanel.innerHTML = `<div class="pmd-company-search-header"><div><h3>Registre Public</h3><p>Résultats PERS_MORALE_1</p></div></div><div class="pmd-company-search-results">${message}${companySearchResults.map((result, index) => `<article class="pmd-company-result"><h4>${escapeHtml(result.name)}</h4><p>${escapeHtml(result.summary)}</p><dl><div><dt>SIREN</dt><dd>${escapeHtml(result.fields.siren || result.siren)}</dd></div>${result.fields.address ? `<div><dt>Siège</dt><dd>${escapeHtml(result.fields.address)}</dd></div>` : ''}${result.fields.directors.length ? `<div><dt>Dirigeants</dt><dd>${escapeHtml(result.fields.directors.map((director) => director.name).join(', '))}</dd></div>` : ''}</dl>${result.url ? `<a class="pmd-company-result-link" href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">Vérifier la fiche officielle ↗</a>` : ''}<details><summary>Voir toutes les informations</summary><pre>${escapeHtml(result.details)}</pre></details><button type="button" class="pmd-button pmd-button-primary pmd-company-validate" data-company-result="${index}">Valider cette personne morale</button></article>`).join('')}</div>`;
+    companySearchPanel.innerHTML = `<div class="pmd-company-search-header"><div><h3>Registre Public</h3><p>Résultats pour ${escapeHtml(companySearchName())}</p></div></div><div class="pmd-company-search-results">${message}${companySearchResults.map((result, index) => `<article class="pmd-company-result"><h4>${escapeHtml(result.name)}</h4><p>${escapeHtml(result.summary)}</p><dl><div><dt>SIREN</dt><dd>${escapeHtml(result.fields.siren || result.siren)}</dd></div>${result.fields.address ? `<div><dt>Siège</dt><dd>${escapeHtml(result.fields.address)}</dd></div>` : ''}${result.fields.directors.length ? `<div><dt>Dirigeants</dt><dd>${escapeHtml(result.fields.directors.map((director) => director.name).join(', '))}</dd></div>` : ''}</dl>${result.url ? `<a class="pmd-company-result-link" href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">Vérifier la fiche officielle ↗</a>` : ''}<details><summary>Voir toutes les informations</summary><pre>${escapeHtml(result.details)}</pre></details><button type="button" class="pmd-button pmd-button-primary pmd-company-validate" data-company-result="${index}">Valider cette personne morale</button></article>`).join('')}</div>`;
     companySearchPanel.querySelectorAll<HTMLElement>('[data-company-result]').forEach((button) => button.addEventListener('click', async () => {
       const result = companySearchResults[Number(button.dataset.companyResult)];
       if (!result || !data) return;
