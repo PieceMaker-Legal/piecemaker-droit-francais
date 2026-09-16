@@ -135,8 +135,6 @@ def wait_for_worker_ready(
                 stripped = line.strip()
                 if _chunk_re.match(stripped):
                     _, _, _, current, raw_total = stripped.split(":")
-                    if int(current) >= int(raw_total):
-                        progress_context["event"].set()
                     global_total = progress_context.get("total", 0)
                     if global_total:
                         global_current = min(global_total, progress_context.get("offset", 0) + int(current))
@@ -147,6 +145,8 @@ def wait_for_worker_ready(
                         )
                     else:
                         print(stripped, flush=True)
+                    if int(current) >= int(raw_total):
+                        progress_context["event"].set()
                 else:
                     # Keep diagnostics on stderr. The Node parent deliberately
                     # ignores non-PROGRESS stdout because it may contain document
