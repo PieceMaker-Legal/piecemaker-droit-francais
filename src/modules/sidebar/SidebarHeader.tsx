@@ -34,8 +34,8 @@ type SidebarHeaderProps = {
 function LogoBlock({ t }: { t: TFunction }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary/90 shadow-sm">
-        <img src="/logo-sources/logo-black.png" alt="" className="h-7 w-7 rounded-lg bg-white object-contain p-0.5 shadow-sm" />
+      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center">
+        <img src="/logo-sources/logo-black.png" alt="" className="h-7 w-7 object-contain" />
       </div>
       <h1
         className="truncate text-sm font-bold tracking-tight text-foreground"
