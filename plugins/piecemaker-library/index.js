@@ -107,6 +107,8 @@ export function mount(container, api) {
     try {
       const workspace = context.project?.path;
       const query = workspace ? `?workspacePath=${encodeURIComponent(workspace)}` : '';
+      const synchronized = await request('POST', '/plugins/sync', { workspacePath: workspace });
+      if (version === revision && tab === 'plugin' && view === 'mine') plugins = synchronized.plugins || [];
       if (view === 'discover') {
         const kind = tab === 'connectors' ? 'connector' : tab;
         const data = await request('GET', `/plugin/marketplace?scope=${scope}&kind=${kind}`);
