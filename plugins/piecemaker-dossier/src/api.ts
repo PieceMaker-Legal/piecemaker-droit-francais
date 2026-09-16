@@ -14,6 +14,31 @@ export type ScanJob = {
   percent: number;
   error: string | null;
 };
+export type CompanyDirector = { name: string; role: string };
+export type CompanySearchFields = {
+  legalName: string;
+  legalForm: string;
+  status: string;
+  siren: string;
+  siret: string;
+  vat: string;
+  legalFormCode: string;
+  naf: string;
+  creationDate: string;
+  category: string;
+  address: string;
+  directors: CompanyDirector[];
+  finances: string[];
+  source: string;
+};
+export type CompanySearchResult = {
+  name: string;
+  siren: string;
+  summary: string;
+  url: string;
+  details: string;
+  fields: CompanySearchFields;
+};
 type RepositoryCase = { path: string; location: string };
 type RepositoryOverview = { folders?: RepositoryCase[] };
 type RegisteredCase = { folder: RepositoryCase };
@@ -76,6 +101,7 @@ export const knowledgeApi = {
   scan: (projectId: string) => request<{ job: ScanJob }>(BASE, '/scan', { method: 'POST', body: JSON.stringify({ projectId }) }),
   scanJob: (jobId: string, projectId: string) => request<{ job: ScanJob | null }>(BASE, `/scan/job?id=${encodeURIComponent(jobId)}&projectId=${encodeURIComponent(projectId)}`),
   cancelScan: (jobId: string, projectId: string) => request<{ job: ScanJob | null }>(BASE, '/scan/cancel', { method: 'POST', body: JSON.stringify({ id: jobId, projectId }) }),
+  searchCompanies: (queryText: string) => request<{ query: string; results: CompanySearchResult[] }>(PIECEMAKER_BASE, '/company-search', { method: 'POST', body: JSON.stringify({ query: queryText }) }),
   update: (projectId: string, operations: KnowledgeUpdateOperation[]) => request(BASE, '/update', { method: 'POST', body: JSON.stringify({ projectId, operations }) }),
   institutionalTerms: () => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms'),
   saveInstitutionalTerms: (terms: string[]) => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms', { method: 'PUT', body: JSON.stringify({ terms }) }),
