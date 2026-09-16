@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import Database from 'better-sqlite3';
 
+import { isInstitutionalEntity } from './institutional-terms.js';
+
 import { NODE_KINDS } from './types.js';
 import type {
   JsonData,
@@ -90,6 +92,7 @@ const kindValue = (value: unknown): NodeKind => { if (typeof value !== 'string' 
 const searchable = (values: string[]): string => values.join('\u0000').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
 const searchPattern = (value: string): string => `%${searchable([value]).replace(/[\\%_]/g, '\\$&')}%`;
 const toNode = (row: NodeRow): KnowledgeNode => ({ id: row.id, projectId: row.project_id, kind: row.kind, label: row.label, aliases: parseJson<string[]>(row.aliases_json, []), data: parseJson<JsonData>(row.data_json, {}), origin: row.origin, createdAt: row.created_at, updatedAt: row.updated_at });
+const withoutInstitutionalAliases = (node: KnowledgeNode): KnowledgeNode => ({ ...node, aliases: node.aliases.filter((alias) => !isInstitutionalEntity(alias)) });
 const toMapping = (row: MappingRow): KnowledgeMapping => ({ projectId: row.project_id, nodeId: row.node_id, real: row.real_value, masked: row.masked_value, data: parseJson<JsonData>(row.data_json, {}), origin: row.origin });
 
 export function resolveKnowledgeDatabasePath(): string {
@@ -148,7 +151,11 @@ export class KnowledgeStore {
     const projectId = this.resolveProject(input.projectId);
     if (!Array.isArray(input.operations)) throw new TypeError('operations must be an array');
     const operations = input.operations.map((operation) => this.validateOperation(operation));
-    const counts = this.database.transaction(() => this.applyOperations(projectId, operations))();
+    const counts = this.database.transaction(() => {
+      const applied = this.applyOperations(projectId, operations);
+      this.removeInstitutionalEntities(projectId);
+      return applied;
+    })();
     return { projectId, applied: operations.length, ...counts };
   }
 
@@ -173,8 +180,14 @@ export class KnowledgeStore {
           AND origin<>?
         )`).run(projectId, origin, origin, origin);
       const counts = this.applyOperations(projectId, validated);
+      this.removeInstitutionalEntities(projectId);
       return { projectId, applied: validated.length, ...counts };
     })();
+  }
+
+  public purgeInstitutionalEntities(projectIdInput: string): number {
+    const projectId = this.resolveProject(projectIdInput);
+    return this.database.transaction(() => this.removeInstitutionalEntities(projectId))();
   }
 
   public snapshot(projectIdInput: string): KnowledgeSnapshot {
@@ -182,7 +195,11 @@ export class KnowledgeStore {
     const storedNodes = (this.database.prepare('SELECT * FROM piecemaker_nodes WHERE project_id=? ORDER BY kind,label,id').all(projectId) as NodeRow[]).map(toNode);
     const exclusionsNode = storedNodes.find((node) => node.data.systemRole === 'gliner-exclusions');
     const exclusions = arrayValue(exclusionsNode?.data.values, 'exclusions');
-    const nodes = storedNodes.filter((node) => node.data.systemRole !== 'gliner-exclusions');
+    const nodes = storedNodes
+      .filter((node) => node.data.systemRole !== 'gliner-exclusions')
+      .filter((node) => !isInstitutionalEntity(node.label))
+      .map(withoutInstitutionalAliases);
+    const retained = new Set(nodes.map((node) => node.id));
     const links = (this.database.prepare('SELECT from_node_id,to_node_id,relation,data_json,origin FROM piecemaker_links WHERE project_id=? ORDER BY relation,from_node_id,to_node_id').all(projectId) as LinkRow[]).map((row): KnowledgeLink => ({
       projectId,
       fromNodeId: row.from_node_id,
@@ -190,13 +207,43 @@ export class KnowledgeStore {
       relation: row.relation,
       data: parseJson<JsonData>(row.data_json, {}),
       origin: row.origin,
-    }));
-    const mappings = (this.database.prepare('SELECT project_id,node_id,real_value,masked_value,data_json,origin FROM piecemaker_mappings WHERE project_id=? ORDER BY real_value').all(projectId) as MappingRow[]).map(toMapping);
+    })).filter((link) => retained.has(link.fromNodeId) && retained.has(link.toNodeId));
+    const mappings = (this.database.prepare('SELECT project_id,node_id,real_value,masked_value,data_json,origin FROM piecemaker_mappings WHERE project_id=? ORDER BY real_value').all(projectId) as MappingRow[])
+      .map(toMapping)
+      .filter((mapping) => retained.has(mapping.nodeId) && !isInstitutionalEntity(mapping.real));
     return { projectId, nodes, links, mappings, exclusions, exclusionsInitialized: Boolean(exclusionsNode) };
   }
 
   public close(): void { if (this.ownsDatabase) this.database.close(); }
   public tableNames(): string[] { return (this.database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'piecemaker_%' ORDER BY name").all() as Array<{ name: string }>).map(({ name }) => name); }
+
+  private removeInstitutionalEntities(projectId: string): number {
+    const rows = this.database.prepare("SELECT id,label,aliases_json FROM piecemaker_nodes WHERE project_id=? AND id NOT LIKE 'system:%'").all(projectId) as Array<{ id: string; label: string; aliases_json: string }>;
+    const dropNode = this.database.prepare('DELETE FROM piecemaker_nodes WHERE project_id=? AND id=?');
+    const dropNodeMappings = this.database.prepare('DELETE FROM piecemaker_mappings WHERE project_id=? AND node_id=?');
+    const dropNodeLinks = this.database.prepare('DELETE FROM piecemaker_links WHERE project_id=? AND (from_node_id=? OR to_node_id=?)');
+    const dropMapping = this.database.prepare('DELETE FROM piecemaker_mappings WHERE project_id=? AND node_id=? AND real_value=?');
+    const rewriteAliases = this.database.prepare('UPDATE piecemaker_nodes SET aliases_json=?,search_text=?,updated_at=? WHERE project_id=? AND id=?');
+    const readMappings = this.database.prepare('SELECT real_value FROM piecemaker_mappings WHERE project_id=? AND node_id=?');
+    const timestamp = new Date().toISOString();
+    let removed = 0;
+    for (const row of rows) {
+      if (isInstitutionalEntity(row.label)) {
+        dropNodeMappings.run(projectId, row.id);
+        dropNodeLinks.run(projectId, row.id, row.id);
+        dropNode.run(projectId, row.id);
+        removed += 1;
+        continue;
+      }
+      const aliases = parseJson<string[]>(row.aliases_json, []);
+      const kept = aliases.filter((alias) => !isInstitutionalEntity(alias));
+      if (kept.length !== aliases.length) rewriteAliases.run(JSON.stringify(kept), searchable([row.label, ...kept]), timestamp, projectId, row.id);
+      for (const mapping of readMappings.all(projectId, row.id) as Array<{ real_value: string }>) {
+        if (isInstitutionalEntity(mapping.real_value)) dropMapping.run(projectId, row.id, mapping.real_value);
+      }
+    }
+    return removed;
+  }
 
   private resolveProject(value: string | undefined): string {
     const candidate = requiredText(value, 'projectId or projectPath');
