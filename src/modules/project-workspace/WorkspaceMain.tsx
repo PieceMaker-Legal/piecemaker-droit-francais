@@ -5,7 +5,7 @@ import { FileTree } from '@/modules/file-tree';
 import { StandaloneShell } from '@/modules/standalone-shell';
 import { GitPanel } from '@/modules/git-panel';
 import { PluginTabContent } from '@/modules/plugins';
-import { DossierPanel, useSelectedDossierRegistration } from '@/piecemaker/dossier';
+import { useSelectedDossierRegistration } from '@/piecemaker/dossier';
 import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { usePaletteOpsRegister } from '@/modules/command-palette';
 import { TaskMasterPanel, useTaskMasterProjectSync, useTasksSettings } from '@/modules/task-master';
@@ -200,12 +200,6 @@ function WorkspaceMain({
           {shouldShowBrowserTab && activeTab === 'browser' && (
             <div className="h-full overflow-hidden">
               <BrowserUsePanel isVisible={activeTab === 'browser'} onShowSettings={onShowSettings} />
-            </div>
-          )}
-
-          {activeTab === 'dossier' && (
-            <div className="h-full overflow-hidden">
-              <DossierPanel selectedProject={selectedProject} />
             </div>
           )}
 
