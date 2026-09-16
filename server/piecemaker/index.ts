@@ -6,6 +6,8 @@ import type { Router } from 'express';
 import { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
+import type { GlinerMappingDocument } from '../../plugins/piecemaker-dossier/src/types.js';
+
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
@@ -33,7 +35,7 @@ type PieceMakerRuntimeStatus = {
 };
 
 type PieceMakerVendorModule = {
-  createPieceMakerRouter(options?: { getRuntimeStatus?: () => PieceMakerRuntimeStatus; anonymizer?: unknown }): Router;
+  createPieceMakerRouter(options?: { getRuntimeStatus?: () => PieceMakerRuntimeStatus; anonymizer?: unknown; onMappingReady?: (caseRoot: string, mapping: GlinerMappingDocument) => Promise<void> }): Router;
   piecemakerHome(): string;
 };
 
@@ -51,12 +53,12 @@ const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
 
 export function createPieceMakerRouter(options: { getRuntimeStatus?: () => PieceMakerRuntimeStatus } = {}) {
-  const router = vendor.createPieceMakerRouter({ ...options, anonymizer });
+  const router = vendor.createPieceMakerRouter({ ...options, anonymizer, onMappingReady: knowledge.onMappingReady });
   router.use(createCitationsRouter(citations, (id) => {
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));
   router.use(timesheet);
-  router.use(knowledge);
+  router.use(knowledge.router);
   return router;
 }
 export type { PieceMakerRuntimeStatus };
