@@ -1,5 +1,7 @@
 import { entityKinds, escapeHtml, labels, textValue, dateFor } from './views.js';
 import { knowledgeApi } from './api.js';
+import type { CompanySearchResult } from './api.js';
+import { buildCompanyValidationOperations } from './company-search.js';
 import type { ViewData } from './views.js';
 import type { KnowledgeNode, KnowledgeUpdateOperation, NodeKind } from './types.js';
 import { PROCEDURE_POSITIONS, partyCodeChange } from './party-codes.js';
@@ -91,9 +93,10 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const linkedSirenNode = linkedSiren ? sirenNodes.find((entry) => entry.id === linkedSiren.toNodeId) : undefined;
   const companyFieldsHidden = selectedKind !== 'company';
   const initialAliases = [...new Set((node?.aliases || []).map((alias) => alias.trim()).filter(Boolean))];
+  const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
   const layer = modal(root, `
-    <div class="pmd-toolbar">${node && onBackToMapping ? '<button type="button" class="pmd-button pmd-back-button" data-back-mapping>← Retour</button>' : ''}<h2 class="pmd-title">${node ? 'Modifier l’élément' : 'Ajouter un élément'}</h2><span class="pmd-spacer"></span><button class="pmd-icon-button" data-close>×</button></div>
-    <form class="pmd-form" data-node-form>
+    <div class="pmd-toolbar">${node && onBackToMapping ? '<button type="button" class="pmd-button pmd-back-button" data-back-mapping>← Retour</button>' : ''}<h2 class="pmd-title">${node ? 'Modifier l’élément' : 'Ajouter un élément'}</h2><span class="pmd-spacer"></span><button type="button" class="pmd-icon-button" data-action="company-search" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public" ${selectedKind === 'company' ? '' : 'hidden'}>${companySearchIcon}</button><button class="pmd-icon-button" data-close>×</button></div>
+    <div class="pmd-dialog-columns"><form class="pmd-form" data-node-form>
       <label>Type<select class="pmd-select" name="kind">${kindOptions(node?.kind || defaults.kind || 'person')}</select></label>
       <label>Libellé<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></label>
       <label>Variantes<div class="pmd-alias-editor" data-alias-editor><div class="pmd-alias-pills" data-alias-pills></div><input class="pmd-input pmd-alias-input" data-alias-input placeholder="Saisissez une variante puis appuyez sur Entrée"><input type="hidden" name="aliases"></div></label>
@@ -115,7 +118,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
         return `<button type="button" class="pmd-relation-row" data-unlink="${index}" aria-label="Supprimer le lien ${escapeHtml(relationLabel(relation.relation))} avec ${escapeHtml(relatedLabel)}"><span class="pmd-relation-copy"><span class="pmd-relation-type">${escapeHtml(relationLabel(relation.relation))}</span><strong class="pmd-relation-target">${escapeHtml(relatedLabel)}</strong>${relatedKind ? `<small class="pmd-relation-kind">${escapeHtml(relatedKind)}</small>` : ''}</span><span class="pmd-relation-remove" aria-hidden="true">×</span></button>`;
       }).join('')}</div></div>` : ''}
       <div class="pmd-form-actions"><button type="button" class="pmd-button" data-close>Annuler</button><button class="pmd-button pmd-button-primary">Enregistrer</button></div>
-    </form>`);
+    </form><aside class="pmd-company-search" data-company-search hidden></aside></div>`);
   layer.querySelector<HTMLElement>('[data-back-mapping]')?.addEventListener('click', () => {
     layer.remove();
     onBackToMapping?.();
@@ -181,9 +184,11 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       sirenSuggestions.hidden = true;
     }));
   };
+  const companySearchButton = layer.querySelector<HTMLElement>('[data-action=company-search]');
   kindSelect?.addEventListener('change', () => {
     if (!companyFields || !kindSelect) return;
     companyFields.hidden = kindSelect.value !== 'company';
+    if (companySearchButton) companySearchButton.hidden = kindSelect.value !== 'company';
     if (kindSelect.value === 'company') renderSirenSuggestions();
   });
   sirenInput?.addEventListener('input', renderSirenSuggestions);
@@ -193,6 +198,63 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const positionSelect = layer.querySelector<HTMLSelectElement>('select[name="position"]');
   const maskedInput = layer.querySelector<HTMLInputElement>('input[name="masked"]');
   const legalFormInput = layer.querySelector<HTMLInputElement>('input[name="legalForm"]');
+  const labelInput = layer.querySelector<HTMLInputElement>('input[name="label"]');
+  const companySearchPanel = layer.querySelector<HTMLElement>('[data-company-search]');
+  let companySearchResults: CompanySearchResult[] = [];
+  let companySearchBusy = false;
+  let companySearchError = '';
+  const companySearchQuery = (): string => [labelInput?.value, legalFormInput?.value, sirenInput?.value].map((value) => value?.trim() || '').filter(Boolean).join(' ');
+  const renderCompanySearchPanel = () => {
+    if (!companySearchPanel) return;
+    companySearchPanel.hidden = false;
+    const message = companySearchBusy ? '<p class="pmd-company-search-status">Recherche en cours…</p>' : companySearchError ? `<p class="pmd-company-search-status pmd-company-search-error">${escapeHtml(companySearchError)}</p>` : !companySearchResults.length ? '<p class="pmd-company-search-status">Aucun résultat.</p>' : '';
+    companySearchPanel.innerHTML = `<div class="pmd-company-search-header"><div><h3>Registre Public</h3><p>Résultats PERS_MORALE_1</p></div></div><div class="pmd-company-search-results">${message}${companySearchResults.map((result, index) => `<article class="pmd-company-result"><h4>${escapeHtml(result.name)}</h4><p>${escapeHtml(result.summary)}</p><dl><div><dt>SIREN</dt><dd>${escapeHtml(result.fields.siren || result.siren)}</dd></div>${result.fields.address ? `<div><dt>Siège</dt><dd>${escapeHtml(result.fields.address)}</dd></div>` : ''}${result.fields.directors.length ? `<div><dt>Dirigeants</dt><dd>${escapeHtml(result.fields.directors.map((director) => director.name).join(', '))}</dd></div>` : ''}</dl>${result.url ? `<a class="pmd-company-result-link" href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">Vérifier la fiche officielle ↗</a>` : ''}<details><summary>Voir toutes les informations</summary><pre>${escapeHtml(result.details)}</pre></details><button type="button" class="pmd-button pmd-button-primary pmd-company-validate" data-company-result="${index}">Valider cette personne morale</button></article>`).join('')}</div>`;
+    companySearchPanel.querySelectorAll<HTMLElement>('[data-company-result]').forEach((button) => button.addEventListener('click', async () => {
+      const result = companySearchResults[Number(button.dataset.companyResult)];
+      if (!result || !data) return;
+      companySearchBusy = true;
+      companySearchError = '';
+      renderCompanySearchPanel();
+      try {
+        const operations = buildCompanyValidationOperations(result, {
+          nodeId: id,
+          node,
+          partySide: (sideSelect?.value || '') as PartySide,
+          position: positionSelect?.value || '',
+          legalForm: legalFormInput?.value || '',
+        }, data.graph);
+        await save(operations);
+        layer.remove();
+      } catch (error) {
+        companySearchError = error instanceof Error ? error.message : 'Validation impossible.';
+      } finally {
+        companySearchBusy = false;
+        if (companySearchPanel.isConnected) renderCompanySearchPanel();
+      }
+    }));
+  };
+  layer.querySelector<HTMLElement>('[data-action=company-search]')?.addEventListener('click', async () => {
+    if (companySearchBusy) return;
+    const query = companySearchQuery();
+    if (!query) {
+      companySearchError = 'Saisissez un nom, une forme sociale ou un SIREN.';
+      renderCompanySearchPanel();
+      return;
+    }
+    companySearchBusy = true;
+    companySearchError = '';
+    companySearchResults = [];
+    renderCompanySearchPanel();
+    try {
+      const response = await knowledgeApi.searchCompanies(query);
+      companySearchResults = response.results;
+    } catch (error) {
+      companySearchError = error instanceof Error ? error.message : 'Recherche impossible.';
+    } finally {
+      companySearchBusy = false;
+      renderCompanySearchPanel();
+    }
+  });
   const renameApplies = (side: string): boolean => side === 'client' || side === 'adversaire' || Boolean(textValue(node?.data.originalCode));
   const codeChangeFor = (side: string) => partyCodeChange(
     { id, kind: (kindSelect?.value || selectedKind) as NodeKind, data: node?.data || {} },
