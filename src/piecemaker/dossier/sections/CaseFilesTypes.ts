@@ -80,7 +80,7 @@ export type ProtectionBypassState = {
   unprotectedCount: number;
 };
 
-export type OriginalsPipelineAction = 'convert' | 'anonymize';
+export type OriginalsPipelineAction = 'convert';
 
 /** GET/DELETE /originals/job, and the `job` embedded in POST /originals/pipeline. */
 export type OriginalsJob = {

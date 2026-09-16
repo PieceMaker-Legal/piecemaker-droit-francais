@@ -15,6 +15,7 @@ const VENDOR_ROOT = path.join(__dirname, 'vendor');
 const { createAnonymizerRouter } = require('./anonymizer/routes.cjs');
 const { createAnonymizerService } = require('./anonymizer/service.cjs');
 const { createAdminRouter, registerLegalCase } = require('./vendor/websocket-server/admin-routes.cjs');
+const { stopOriginalsJobs } = require('./vendor/websocket-server/originals-pipeline.cjs');
 const { readRegistryConfig, resolveCaseReference } = require('./vendor/websocket-server/case-registry.cjs');
 const protectionLibrary = require('./vendor/piecemaker-plugin/scripts/lib/protection.cjs');
 const { createProtectionBypassRouter } = require('./protection/routes.cjs');
@@ -52,7 +53,7 @@ function piecemakerHome() {
  * @param {() => object} [options.getRuntimeStatus] Ce que la carte des composants
  *   affiche du serveur hôte (port, hôte, dépendances système).
  */
-function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anonymizer: applicationAnonymizer, onMappingReady } = {}) {
+function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anonymizer: applicationAnonymizer } = {}) {
   const express = require('express');
   const router = express.Router();
 
@@ -93,7 +94,6 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anony
     userHome: os.homedir(),
     getRuntimeStatus,
     isOriginAllowed: () => true,
-    onMappingReady,
   }));
 
   router.use(createStampingRouter({ homeDir }));
@@ -105,4 +105,4 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anony
   return router;
 }
 
-module.exports = { createPieceMakerRouter, piecemakerHome, VENDOR_ROOT };
+module.exports = { createPieceMakerRouter, piecemakerHome, stopOriginalsJobs, VENDOR_ROOT };

@@ -234,15 +234,6 @@ export class KnowledgeStore {
     `).run(projectId, at());
   }
 
-  public listAnonymizationStatuses(): Array<{ projectId: string; projectPath: string; completedAt: string }> {
-    return this.database.prepare(`
-      SELECT s.project_id AS projectId, p.project_path AS projectPath, s.completed_at AS completedAt
-      FROM piecemaker_anonymization_status s
-      INNER JOIN projects p ON p.project_id = s.project_id
-      ORDER BY s.project_id
-    `).all() as Array<{ projectId: string; projectPath: string; completedAt: string }>;
-  }
-
   public close(): void { if (this.ownsDatabase) this.database.close(); }
   public tableNames(): string[] { return (this.database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'piecemaker_%' ORDER BY name").all() as Array<{ name: string }>).map(({ name }) => name); }
 

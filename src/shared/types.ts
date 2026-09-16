@@ -110,6 +110,7 @@ export type Project = {
   projectId: string;
   displayName: string;
   fullPath: string;
+  anonymizationComplete?: boolean;
   path?: string;
   isStarred?: boolean;
   sessions?: ProjectSession[];

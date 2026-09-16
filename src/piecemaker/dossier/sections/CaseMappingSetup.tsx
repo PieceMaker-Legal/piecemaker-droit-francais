@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, RotateCcw, ScanSearch, ShieldCheck } from 'lucide-react';
+import { Loader2, ScanSearch, ShieldCheck } from 'lucide-react';
 
 import { invalidatePmGet, pmGet, pmGetCached, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import { trackAnonymizationJob } from '@/piecemaker/dossier/anonymizationJobsCache';
 import { useDossierCases } from '@/piecemaker/dossier/DossierContext';
-import { setAnonymizationComplete } from '@/piecemaker/dossier/mappingStatusCache';
-import type { CaseOverview, OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
-import { describeJob } from '@/piecemaker/dossier/sections/CaseFilesUtils';
-import { ActionMenu, Button } from '@/shared/ui';
+import type { CaseOverview } from '@/piecemaker/dossier/sections/CaseFilesTypes';
+import { Button } from '@/shared/ui';
 
 type GlinerOverview = {
   components: {
@@ -24,14 +22,22 @@ type InstallJob = {
   error: string;
 };
 
+type KnowledgeScanJob = {
+  id: string;
+  projectId: string;
+  state: 'running' | 'done' | 'error' | 'cancelled';
+  percent: number;
+  error: string | null;
+};
+
 export default function CaseMappingSetup() {
-  const { selectedCaseId: caseId, mappingVersion, bumpMappingVersion } = useDossierCases();
+  const { projectId, selectedCaseId: caseId, mappingVersion, bumpMappingVersion } = useDossierCases();
 
   const [overview, setOverview] = useState<CaseOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [glinerInstalled, setGlinerInstalled] = useState<boolean | null>(null);
   const [installJob, setInstallJob] = useState<InstallJob | null>(null);
-  const [anonymizationJob, setAnonymizationJob] = useState<OriginalsJob | null>(null);
+  const [anonymizationJob, setAnonymizationJob] = useState<KnowledgeScanJob | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const overviewRequestSequence = useRef(0);
@@ -48,13 +54,6 @@ export default function CaseMappingSetup() {
       const { folder } = await pmGetCached<{ folder: CaseOverview }>('/repository/case', { case: caseId });
       if (requestSequence !== overviewRequestSequence.current) return;
       setOverview(folder);
-      try {
-        const status = await pmGet<{ projects: Array<{ projectPath: string; completedAt: string }> }>('/knowledge/anonymization-status');
-        if (requestSequence !== overviewRequestSequence.current) return;
-        setAnonymizationComplete(folder.location, status.projects.some((project) => project.projectPath === folder.location && Boolean(project.completedAt)));
-      } catch {
-        setAnonymizationComplete(folder.location, false);
-      }
     } catch {
       if (requestSequence !== overviewRequestSequence.current) return;
       setOverview(null);
@@ -114,10 +113,11 @@ export default function CaseMappingSetup() {
   }, [installJob]);
 
   useEffect(() => {
-    if (!anonymizationJob || !['queued', 'running'].includes(anonymizationJob.state)) return;
+    if (!anonymizationJob || anonymizationJob.state !== 'running') return;
     const timeout = window.setTimeout(async () => {
       try {
-        const { job } = await pmGet<{ job: OriginalsJob }>('/originals/job', { id: anonymizationJob.id });
+        const { job } = await pmGet<{ job: KnowledgeScanJob | null }>('/knowledge/scan/job', { id: anonymizationJob.id, projectId: anonymizationJob.projectId });
+        if (!job) return;
         setAnonymizationJob(job);
         if (job.state === 'done') {
           setError(null);
@@ -146,27 +146,20 @@ export default function CaseMappingSetup() {
   };
 
   const mappingReady = Boolean(overview?.mapping.exists && overview.mapping.entries > 0);
-  // Pi\u00e8ces hors ressources (m\u00eames r\u00e8gles que `startOriginalsJob` c\u00f4t\u00e9 serveur) :
-  // sert \u00e0 afficher, dans le menu de relance, combien seraient retrait\u00e9es par
-  // chaque option, sans appel serveur d\u00e9di\u00e9 \u2014 l'aper\u00e7u les porte d\u00e9j\u00e0.
-  const relevantOriginals = (overview?.originals ?? []).filter((file) => !file.resource);
-  const newOriginalsCount = relevantOriginals.filter((file) => !(file.converted && file.scanned)).length;
 
-  const anonymize = async (force: boolean) => {
-    if (!caseId) return;
+  const anonymize = async () => {
+    if (!caseId || !projectId) return;
     setStarting(true);
     setError(null);
     try {
-      const { job } = await pmPost<{ job: OriginalsJob }>('/originals/pipeline', {
-        case: caseId,
-        action: 'anonymize',
-        files: [],
-        force,
-        engine: 'markitdown',
-      });
+      const { job } = await pmPost<{ job: KnowledgeScanJob }>('/knowledge/scan', { projectId });
       setAnonymizationJob(job);
       if (overview) {
-        trackAnonymizationJob({ projectPath: overview.location, projectName: overview.name, job });
+        trackAnonymizationJob({
+          projectPath: overview.location,
+          projectName: overview.name,
+          job: { id: job.id, case: projectId, state: job.state, percent: job.percent, error: job.error },
+        });
       }
       if (job.state === 'done') bumpMappingVersion();
       if (job.state === 'error') setError(job.error || 'L\u2019anonymisation a \u00e9chou\u00e9.');
@@ -180,12 +173,12 @@ export default function CaseMappingSetup() {
   if (!caseId) return null;
 
   const installing = installJob?.state === 'running';
-  const anonymizing = anonymizationJob ? ['queued', 'running'].includes(anonymizationJob.state) : false;
+  const anonymizing = anonymizationJob?.state === 'running';
   const busy = starting || installing || anonymizing;
   const progress = installing
     ? installJob.progress || 'Installation de GLiNER en cours…'
     : anonymizing && anonymizationJob
-      ? describeJob(anonymizationJob)
+      ? `${Math.round(anonymizationJob.percent)} %`
       : null;
 
   const tone = mappingReady
@@ -223,39 +216,10 @@ export default function CaseMappingSetup() {
             <Loader2 className="h-3 w-3 animate-spin" />
             En cours…
           </Button>
-        ) : mappingReady ? (
-          <ActionMenu
-            label="Relancer"
-            icon={ScanSearch}
-            variant="default"
-            size="sm"
-            triggerClassName="h-6 px-2 text-xs"
-            menuClassName="min-w-[260px]"
-            portal
-            items={[
-              {
-                key: 'new-only',
-                label: 'Scanner les nouvelles pièces',
-                description: newOriginalsCount > 0
-                  ? `${newOriginalsCount} pièce${newOriginalsCount > 1 ? 's' : ''} nouvelle${newOriginalsCount > 1 ? 's' : ''} ou modifiée${newOriginalsCount > 1 ? 's' : ''}`
-                  : 'Aucune pièce nouvelle détectée',
-                icon: ScanSearch,
-                onSelect: () => void anonymize(false),
-              },
-              {
-                key: 'rescan-all',
-                label: 'Rescanner toutes les pièces',
-                description: `${relevantOriginals.length} pièce${relevantOriginals.length > 1 ? 's' : ''} au total`,
-                icon: RotateCcw,
-                showDividerBefore: true,
-                onSelect: () => void anonymize(true),
-              },
-            ]}
-          />
         ) : (
-          <Button size="sm" className="h-6 px-2 text-xs" onClick={() => void anonymize(false)}>
+          <Button size="sm" className="h-6 px-2 text-xs" onClick={() => void anonymize()}>
             <ScanSearch className="h-3 w-3" />
-            Anonymiser
+            {mappingReady ? 'Rescanner' : 'Anonymiser'}
           </Button>
         )
       ) : (

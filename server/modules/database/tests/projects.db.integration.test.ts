@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { closeConnection } from '@/modules/database/connection.js';
+import { closeConnection, getConnection } from '@/modules/database/connection.js';
 import { initializeDatabase } from '@/modules/database/init-db.js';
 import { projectsDb } from '@/modules/database/repositories/projects.db.js';
 
@@ -68,5 +68,21 @@ test('projectsDb.createProjectPath returns active_conflict for active duplicates
     assert.ok(conflict.project);
     assert.equal(conflict.project?.project_id, initial.project?.project_id);
     assert.equal(conflict.project?.isArchived, 0);
+  });
+});
+
+test('projectsDb.getProjectPaths reads anonymization completion directly from SQLite', async () => {
+  await withIsolatedDatabase(() => {
+    const created = projectsDb.createProjectPath('/workspace/anonymized-project');
+    assert.ok(created.project);
+
+    projectsDb.getProjectPaths();
+    getConnection().prepare(`
+      INSERT INTO piecemaker_anonymization_status (project_id, completed_at)
+      VALUES (?, ?)
+    `).run(created.project.project_id, new Date().toISOString());
+
+    const project = projectsDb.getProjectPaths()[0];
+    assert.equal(project.anonymization_complete, 1);
   });
 });

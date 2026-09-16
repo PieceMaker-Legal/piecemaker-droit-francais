@@ -321,15 +321,6 @@ export default function CaseFilesOriginals({ caseId, mapping, onRepositoryChange
             {launching === 'convert' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Convertir en Markdown
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={selected.size === 0 || jobRunning || launching !== null}
-            onClick={() => void launchPipeline('anonymize')}
-          >
-            {launching === 'anonymize' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Anonymiser et mapper
-          </Button>
         </div>
       </div>
 

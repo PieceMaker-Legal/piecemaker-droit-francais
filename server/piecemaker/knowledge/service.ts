@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
 import { exclusionNodeOperation } from '../../../plugins/piecemaker-dossier/src/scan-result.js';
 import type { KnowledgeQueryInput, KnowledgeUpdateInput } from '../../../plugins/piecemaker-dossier/src/types.js';
+
 import { legacyExclusions } from './pipeline.js';
 import type { createKnowledgePipeline } from './pipeline.js';
 import { createKnowledgeScanJobs } from './scan-jobs.js';
@@ -50,9 +51,6 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
       }, {});
       return { projectId: id, counts, total: nodes.length };
     },
-    anonymizationStatus() {
-      return { projects: store.listAnonymizationStatuses() };
-    },
     mapping(value: unknown) {
       const id = ensureProject(value);
       const current = snapshot(id);
@@ -83,7 +81,13 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
     },
     scan(value: unknown, files?: unknown) {
       const id = ensureProject(value);
-      return { job: scanJobs.start(id, (report, signal) => pipeline.scan(id, files, report, signal)) };
+      return {
+        job: scanJobs.start(id, async (report, signal) => {
+          const result = await pipeline.scan(id, files, report, signal);
+          store.markAnonymizationComplete(id);
+          return result;
+        }),
+      };
     },
     scanJob(jobId: unknown, value?: unknown) {
       const job = scanJobs.get(jobId) || (value ? scanJobs.runningForProject(ensureProject(value)) : null);

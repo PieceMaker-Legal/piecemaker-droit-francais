@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useSyncExternalStore } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Check, ChevronDown, ChevronRight, Edit3, ShieldCheck, Star, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
@@ -9,7 +9,6 @@ import { getTaskIndicatorStatus } from '@/modules/sidebar/utils/sidebarProjectFo
 import TaskIndicator from '@/modules/sidebar/TaskIndicator';
 import SidebarProjectSessions from '@/modules/sidebar/SidebarProjectSessions';
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
-import { getAnonymizationComplete, subscribeAnonymizationStatus } from '@/piecemaker/dossier/mappingStatusCache';
 
 type SidebarProjectItemProps = {
   project: Project;
@@ -97,9 +96,7 @@ function SidebarProjectItem({
   // Project identity is tracked by the DB-assigned `projectId` everywhere
   // after the projectName → projectId migration.
   const isSelected = selectedProject?.projectId === project.projectId;
-  const isAnonymized = useSyncExternalStore(subscribeAnonymizationStatus, () =>
-    getAnonymizationComplete(project.fullPath),
-  );
+  const isAnonymized = Boolean(project.anonymizationComplete);
   const totalSessionCount = Number(project.sessionMeta?.total ?? sessions.length);
   const sessionCountDisplay = getSessionCountDisplay(project, sessions);
   const sessionCountLabel = `${sessionCountDisplay} session${totalSessionCount === 1 ? '' : 's'}`;
