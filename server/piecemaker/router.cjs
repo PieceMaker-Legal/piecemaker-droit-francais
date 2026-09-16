@@ -52,7 +52,7 @@ function piecemakerHome() {
  * @param {() => object} [options.getRuntimeStatus] Ce que la carte des composants
  *   affiche du serveur hôte (port, hôte, dépendances système).
  */
-function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anonymizer: applicationAnonymizer } = {}) {
+function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anonymizer: applicationAnonymizer, onMappingReady } = {}) {
   const express = require('express');
   const router = express.Router();
 
@@ -93,6 +93,7 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anony
     userHome: os.homedir(),
     getRuntimeStatus,
     isOriginAllowed: () => true,
+    onMappingReady,
   }));
 
   router.use(createStampingRouter({ homeDir }));
