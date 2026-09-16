@@ -70,7 +70,7 @@ function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot): string {
           <div class="pmd-profile-menu"><button data-edit-node="${escapeHtml(node.id)}">${userIcon}<span>Modifier</span></button><button class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">×<span>Supprimer</span></button></div>
         </div>
       </div>
-      ${side === 'client' || side === 'adversaire' ? `<div class="pmd-party-line"><span class="pmd-party-badge" data-side="${accent}">${side === 'client' ? 'Partie cliente' : 'Partie adverse'} · ${escapeHtml(positionLabel(node))}</span></div>` : ''}
+      ${side === 'client' || side === 'adversaire' ? `<div class="pmd-party-line"><span class="pmd-party-badge" data-side="${accent}">${side === 'client' ? 'Partie cliente' : 'Partie adverse'} · ${escapeHtml(positionLabel(node))}<button type="button" class="pmd-party-badge-remove" data-remove-party="${escapeHtml(node.id)}" aria-label="Retirer la désignation de partie" title="Retirer la désignation de partie">×</button></span></div>` : ''}
       ${showRelations ? `<div class="pmd-relations-box" data-relation-drop="${escapeHtml(node.id)}">
         ${relations.length ? relations.map((link) => {
           const otherId = link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId;

@@ -96,6 +96,7 @@ export type KnowledgeUpdateOperation =
   | { op: 'unlink'; link: Pick<KnowledgeLinkInput, 'fromNodeId' | 'toNodeId' | 'relation'> }
   | { op: 'upsertMapping'; mapping: KnowledgeMappingInput }
   | { op: 'deleteMapping'; mapping: Pick<KnowledgeMappingInput, 'nodeId' | 'real'> }
+  | { op: 'removePartyDesignation'; nodeId: string }
   | { op: 'deleteNode'; nodeId: string }
   | { op: 'renameNode'; rename: { fromNodeId: string; toNodeId: string } };
 
