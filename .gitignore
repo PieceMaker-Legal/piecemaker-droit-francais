@@ -166,3 +166,6 @@ server/piecemaker/**/*.test.js
 plugins/piecemaker-*/**/*.test.ts
 plugins/piecemaker-*/**/*.test.tsx
 plugins/piecemaker-*/**/*.test.mjs
+
+# Corpus d'évaluation GLiNER (textes réels, jamais versionnés)
+server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/eval/
