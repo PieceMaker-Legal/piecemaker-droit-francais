@@ -96,6 +96,28 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       layer.remove();
       if (node) nodeEditor(root, mappingData, node, save, {}, openMapping);
     }));
+    layer.querySelectorAll<HTMLElement>('[data-row-menu]').forEach((trigger) => trigger.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const menu = trigger.parentElement?.querySelector<HTMLElement>('.pmd-profile-menu');
+      layer.querySelectorAll<HTMLElement>('.pmd-profile-menu[data-open=true]').forEach((entry) => { if (entry !== menu) entry.dataset.open = 'false'; });
+      if (!menu) return;
+      const body = layer.querySelector<HTMLElement>('.pmd-mapping-body');
+      const room = body ? body.getBoundingClientRect().bottom - trigger.getBoundingClientRect().bottom : Number.POSITIVE_INFINITY;
+      menu.dataset.drop = room < 110 ? 'up' : 'down';
+      menu.dataset.open = menu.dataset.open === 'true' ? 'false' : 'true';
+    }));
+    layer.querySelectorAll<HTMLElement>('[data-delete-node]').forEach((entry) => entry.addEventListener('click', async () => {
+      const nodeId = entry.dataset.deleteNode;
+      if (!nodeId || !window.confirm('Supprimer cet élément et ses relations ?')) return;
+      layer.remove();
+      try {
+        await save([{ op: 'deleteNode', nodeId }]);
+        openMapping();
+      } catch (error) {
+        showError(error);
+      }
+    }));
+    layer.addEventListener('click', () => layer.querySelectorAll<HTMLElement>('.pmd-profile-menu[data-open=true]').forEach((menu) => { menu.dataset.open = 'false'; }));
     layer.querySelector<HTMLElement>('[data-action=add-node]')?.addEventListener('click', () => {
       layer.remove();
       nodeEditor(root, mappingData, null, save);
