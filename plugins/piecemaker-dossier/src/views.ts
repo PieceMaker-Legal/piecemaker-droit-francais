@@ -50,12 +50,13 @@ function positionLabel(node: KnowledgeNode): string {
 
 function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot): string {
   const side = textValue(node.data.partySide);
+  const showRelations = side === 'client' || side === 'adversaire';
   const nodesById = new Map(graph.nodes.map((entry) => [entry.id, entry]));
-  const relations = graph.links.filter((link) => {
+  const relations = showRelations ? graph.links.filter((link) => {
     if (link.fromNodeId !== node.id && link.toNodeId !== node.id) return false;
     const other = nodesById.get(link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId);
     return link.relation !== 'mentions' && (other?.kind === 'person' || other?.kind === 'company');
-  });
+  }) : [];
   const kind = profileKind(node);
   const accent = side === 'client' ? 'client' : side === 'adversaire' ? 'adverse' : 'neutral';
   return `
@@ -70,14 +71,14 @@ function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot): string {
         </div>
       </div>
       <div class="pmd-party-line"><span class="pmd-party-badge" data-side="${accent}">${side === 'client' ? 'Partie cliente' : side === 'adversaire' ? 'Partie adverse' : 'Tiers'}${side === 'client' || side === 'adversaire' ? ` · ${escapeHtml(positionLabel(node))}` : ''}</span></div>
-      <div class="pmd-relations-box" data-relation-drop="${escapeHtml(node.id)}">
+      ${showRelations ? `<div class="pmd-relations-box" data-relation-drop="${escapeHtml(node.id)}">
         ${relations.length ? relations.map((link) => {
           const otherId = link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId;
           const other = nodesById.get(otherId);
           return `<div class="pmd-related"><div><span>Profil lié</span><strong>${escapeHtml(other?.label || otherId)}</strong><small>${escapeHtml(link.relation)}</small></div><button data-unlink-from="${escapeHtml(link.fromNodeId)}" data-unlink-to="${escapeHtml(link.toNodeId)}" data-unlink-relation="${escapeHtml(link.relation)}" aria-label="Supprimer le lien">×</button></div>`;
         }).join('<div class="pmd-related-separator"></div>') : '<div class="pmd-relation-empty">Glissez un profil ici<br>pour établir un lien</div>'}
         ${relations.length ? '<div class="pmd-drop-hint">Glissez un autre profil ici pour ajouter un lien</div>' : ''}
-      </div>
+      </div>` : ''}
     </article>`;
 }
 
@@ -108,7 +109,7 @@ export function shell(active: Tab, mappingCount = 0, scanning = false): string {
     <div class="pmd-workspace"><main class="pmd-content" data-content></main></div>`;
 }
 
-export function generalView(data: ViewData): string {
+export function generalView(data: ViewData, tiersCollapsed = false): string {
   const entities = data.graph.nodes.filter((node) => node.kind !== 'document');
   const clients = entities.filter((node) => node.data.partySide === 'client');
   const adversaries = entities.filter((node) => node.data.partySide === 'adversaire');
@@ -119,10 +120,10 @@ export function generalView(data: ViewData): string {
       <button class="pmd-button pmd-small-button" data-action="mapping">${tagIcon} Mapping</button>
       <button class="pmd-button pmd-small-button" data-action="add-node">＋ Ajouter une partie</button>
     </div>
-    ${clients.length || adversaries.length || tiers.length ? `<div class="pmd-party-columns">
+    ${clients.length || adversaries.length || tiers.length ? `<div class="pmd-party-layout" data-tiers-collapsed="${tiersCollapsed}"><div class="pmd-party-columns">
       <section class="pmd-party-column"><h3 data-side="client">Parties clientes</h3>${clients.length ? clients.map((node) => nodeCard(node, data.graph)).join('') : '<button type="button" class="pmd-column-empty" data-party-picker="client"><span>Aucune partie cliente désignée.</span><small>Cliquer pour ajouter une partie</small></button>'}</section>
       <section class="pmd-party-column"><h3 data-side="adverse">Parties adverses</h3>${adversaries.length ? adversaries.map((node) => nodeCard(node, data.graph)).join('') : '<button type="button" class="pmd-column-empty" data-party-picker="adversaire"><span>Aucune partie adverse désignée.</span><small>Cliquer pour ajouter une partie</small></button>'}</section>
-    </div>${tiers.length ? `<details class="pmd-tiers-accordion"><summary class="pmd-tiers-summary"><svg class="pmd-tiers-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg><span>Tiers</span><span class="pmd-tiers-count">${tiers.length}</span></summary><div class="pmd-tiers-content" role="region" aria-label="Tiers">${tiers.map((node) => nodeCard(node, data.graph)).join('')}</div></details>` : ''}` : `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button" data-action="mapping">◇ Ouvrir le mapping</button></div>`}
+    </div>${tiers.length ? `<aside class="pmd-tiers-column" data-tiers-column data-collapsed="${tiersCollapsed}"><button type="button" class="pmd-tiers-toggle" data-action="toggle-tiers" aria-expanded="${!tiersCollapsed}" aria-controls="pmd-tiers-content"><svg class="pmd-tiers-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg><span class="pmd-tiers-label">Tiers</span><span class="pmd-tiers-count">${tiers.length}</span></button><div id="pmd-tiers-content" class="pmd-tiers-content" role="region" aria-label="Tiers">${tiers.map((node) => nodeCard(node, data.graph)).join('')}</div></aside>` : ''}</div>` : `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button" data-action="mapping">◇ Ouvrir le mapping</button></div>`}
     <div class="pmd-sticky-status">
       <span>Glissez un profil sur un autre pour créer un lien.</span>
       <button class="pmd-button pmd-button-primary pmd-small-button" data-action="refresh">✓ Enregistrer les profils</button>
@@ -136,7 +137,7 @@ export function mappingView(data: ViewData): string {
   const categories = entityKinds.map((kind) => ({ kind, label: labels[kind], entries: entries.filter((node) => node.kind === kind) })).filter((category) => category.entries.length);
   return `<div class="pmd-mapping-dialog"><div class="pmd-mapping-header"><h2>Mapping de pseudonymisation</h2><button class="pmd-icon-button" data-action="institutional-terms" aria-label="Termes institutionnels" title="Termes institutionnels jamais pseudonymisés">${gearIcon}</button><button class="pmd-icon-button" data-close>×</button></div><div class="pmd-mapping-body"><p>Chaque ligne associe une clé de pseudonymisation au variant principal rétabli lors du revert et aux autres écritures détectées.</p>${categories.map((category) => `<section class="pmd-mapping-category"><header><h3>${escapeHtml(category.label)} <span>${category.entries.length}</span></h3><button data-action="add-node">＋ Ajouter</button></header><div>${category.entries.map((node) => {
     const mappings = data.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
-    return `<form class="pmd-mapping-row" data-mapping-row data-node-id="${escapeHtml(node.id)}"><input class="pmd-mapping-input" name="masked" aria-label="Code anonymisé" value="${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}"><input class="pmd-mapping-input" name="label" aria-label="Libellé" value="${escapeHtml(node.label)}" required><input class="pmd-mapping-input" name="aliases" aria-label="Variantes" value="${escapeHtml(node.aliases.join(', '))}" placeholder="Variantes"><span class="pmd-mapping-actions"><span class="pmd-profile-menu-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-mapping-menu-trigger" data-row-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button><div class="pmd-profile-menu"><button type="button" data-edit-node="${escapeHtml(node.id)}">${pencilIcon}<span>Modifier</span></button><button type="button" class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">${trashIcon}<span>Supprimer</span></button></div></span></span></form>`;
+    return `<form class="pmd-mapping-row" data-mapping-row data-node-id="${escapeHtml(node.id)}"><input class="pmd-mapping-input" name="masked" aria-label="Code anonymisé" value="${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}"><input class="pmd-mapping-input" name="label" aria-label="Libellé" value="${escapeHtml(node.label)}" required><input class="pmd-mapping-input" name="aliases" aria-label="Variantes" value="${escapeHtml(node.aliases.join(', '))}" placeholder="Variantes"><div class="pmd-mapping-actions"><div class="pmd-profile-menu-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-mapping-menu-trigger" data-row-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button><div class="pmd-profile-menu"><button type="button" data-edit-node="${escapeHtml(node.id)}">${pencilIcon}<span>Modifier</span></button><button type="button" class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">${trashIcon}<span>Supprimer</span></button></div></div></div></form>`;
   }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button" data-close>Fermer</button><button class="pmd-button pmd-button-primary" data-close>✓ Enregistrer le mapping</button></div></div>`;
 }
 

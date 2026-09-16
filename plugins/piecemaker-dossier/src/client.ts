@@ -30,6 +30,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let loadSequence = 0;
   let scanning = false;
   let draggedNodeId = '';
+  let tiersCollapsed = false;
 
   const showError = (error: unknown) => {
     const target = root.querySelector<HTMLElement>('[data-error]');
@@ -137,6 +138,18 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       render();
     }));
     root.querySelectorAll<HTMLElement>('[data-action=refresh]').forEach((button) => button.addEventListener('click', () => void load()));
+    root.querySelector<HTMLElement>('[data-action=toggle-tiers]')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const button = event.currentTarget as HTMLElement;
+      const layout = root.querySelector<HTMLElement>('.pmd-party-layout');
+      const column = root.querySelector<HTMLElement>('[data-tiers-column]');
+      if (!layout || !column) return;
+      const collapsed = column.dataset.collapsed === 'true';
+      tiersCollapsed = !collapsed;
+      column.dataset.collapsed = String(!collapsed);
+      layout.dataset.tiersCollapsed = String(!collapsed);
+      button.setAttribute('aria-expanded', String(collapsed));
+    });
     root.querySelector<HTMLElement>('[data-action=scan]')?.addEventListener('click', async () => {
       if (!context.project || scanning) return;
       scanning = true;
@@ -240,7 +253,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     } else if (!data) {
       if (content) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
     } else if (content) {
-      content.innerHTML = active === 'general' ? generalView(data) : chronologyView(data);
+      content.innerHTML = active === 'general' ? generalView(data, tiersCollapsed) : chronologyView(data);
     }
     bind();
   };
