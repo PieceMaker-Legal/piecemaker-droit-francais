@@ -1,41 +1,9 @@
-import * as VisNetwork from 'vis-network/standalone';
-import { DataSet } from 'vis-data/esnext';
-
 import { knowledgeApi } from './api.js';
 import { documentEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { chronologyView, escapeHtml, generalView, graphView, mappingView, networkGraphData, shell } from './views.js';
+import { chronologyView, escapeHtml, generalView, mappingView, shell } from './views.js';
 import type { Tab, ViewData } from './views.js';
 import type { KnowledgeUpdateOperation } from './types.js';
-
-type NetworkNode = {
-  id: string;
-  label: string;
-  group: string;
-  level: number;
-  title: string;
-  shape?: string;
-  margin?: number;
-  borderWidth?: number;
-};
-
-type NetworkEdge = {
-  id: string;
-  from: string;
-  to: string;
-  label: string;
-  arrows?: { to: { enabled: boolean; scaleFactor: number } };
-};
-
-type NetworkInstance = {
-  once(event: string, callback: () => void): void;
-  on(event: string, callback: (parameters: { nodes: Array<string | number> }) => void): void;
-  fit(options?: unknown): void;
-  redraw(): void;
-  destroy(): void;
-};
-
-const Network = (VisNetwork as unknown as { Network: new (...args: unknown[]) => NetworkInstance }).Network;
 
 type PluginContext = {
   theme: 'dark' | 'light';
@@ -62,7 +30,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let loadSequence = 0;
   let scanning = false;
   let draggedNodeId = '';
-  let network: NetworkInstance | null = null;
 
   const showError = (error: unknown) => {
     const target = root.querySelector<HTMLElement>('[data-error]');
@@ -135,90 +102,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     });
   };
 
-  const renderGraph = () => {
-    if (!data || active !== 'graph') return;
-    const target = root.querySelector<HTMLElement>('[data-network]');
-    if (!target) return;
-    try {
-      const dark = context.theme === 'dark';
-      const graph = networkGraphData(data.graph);
-      const nodes = new DataSet<NetworkNode>(graph.nodes.map((node) => ({ ...node, shape: 'box', margin: 12, borderWidth: node.level === 1 ? 3 : 1.5 })));
-      const edges = new DataSet<NetworkEdge>(graph.edges.map((edge) => ({ ...edge, arrows: { to: { enabled: true, scaleFactor: .55 } } })));
-      const options = {
-        autoResize: true,
-        layout: {
-          hierarchical: {
-            enabled: true,
-            direction: 'LR',
-            sortMethod: 'directed',
-            levelSeparation: 250,
-            nodeSpacing: 135,
-            treeSpacing: 180,
-            blockShifting: true,
-            edgeMinimization: true,
-            parentCentralization: true,
-          },
-        },
-        physics: false,
-        nodes: {
-          font: { face: 'Inter, ui-sans-serif, system-ui, sans-serif', size: 13, color: dark ? '#fafafa' : '#18181b' },
-          widthConstraint: { maximum: 220 },
-          shadow: { enabled: true, color: '#00000024', size: 8, x: 0, y: 3 },
-          chosen: { node: true, label: true },
-        },
-        edges: {
-          color: { color: dark ? '#71717a' : '#a1a1aa', highlight: dark ? '#60a5fa' : '#2563eb', hover: dark ? '#60a5fa' : '#2563eb', inherit: false },
-          font: { face: 'Inter, ui-sans-serif, system-ui, sans-serif', size: 10, color: dark ? '#d4d4d8' : '#52525b', strokeWidth: 4, strokeColor: dark ? '#18181b' : '#ffffff', align: 'middle' },
-          smooth: { enabled: true, type: 'cubicBezier', forceDirection: 'horizontal', roundness: .45 },
-          width: 1.3,
-          selectionWidth: 2,
-        },
-        groups: {
-          document: { color: { background: dark ? '#172554' : '#eff6ff', border: '#60a5fa', highlight: { background: '#dbeafe', border: '#2563eb' } }, font: { color: dark ? '#dbeafe' : '#1e3a8a' } },
-          client: { color: { background: dark ? '#14532d' : '#dcfce7', border: '#22c55e', highlight: { background: '#bbf7d0', border: '#16a34a' } }, font: { color: dark ? '#dcfce7' : '#14532d' } },
-          adverse: { color: { background: dark ? '#7f1d1d' : '#fee2e2', border: '#ef4444', highlight: { background: '#fecaca', border: '#dc2626' } }, font: { color: dark ? '#fee2e2' : '#7f1d1d' } },
-          person: { color: { background: dark ? '#4c1d95' : '#f5f3ff', border: '#a78bfa' }, font: { color: dark ? '#ede9fe' : '#4c1d95' } },
-          company: { color: { background: dark ? '#1e3a8a' : '#eff6ff', border: dark ? '#60a5fa' : '#2563eb', highlight: { background: dark ? '#1d4ed8' : '#dbeafe', border: dark ? '#93c5fd' : '#1d4ed8' } }, font: { color: dark ? '#dbeafe' : '#1e3a8a' } },
-          financial: { color: { background: dark ? '#164e63' : '#ecfeff', border: '#06b6d4' }, font: { color: dark ? '#cffafe' : '#164e63' } },
-          detail: { color: { background: dark ? '#27272a' : '#f4f4f5', border: '#a1a1aa' }, font: { color: dark ? '#e4e4e7' : '#27272a' } },
-        },
-        interaction: { hover: true, hoverConnectedEdges: true, multiselect: true, keyboard: { enabled: true, bindToWindow: false }, tooltipDelay: 250 },
-      };
-      network = new Network(target, { nodes, edges }, options);
-      (container as HTMLElement & { pmdNetwork?: NetworkInstance }).pmdNetwork = network;
-      network.once('afterDrawing', () => network?.fit({ animation: { duration: 350, easingFunction: 'easeInOutQuad' } }));
-      target.closest<HTMLElement>('[data-network-frame]')?.addEventListener('fullscreenchange', () => {
-        window.setTimeout(() => {
-          network?.redraw();
-          network?.fit({ animation: { duration: 250, easingFunction: 'easeInOutQuad' } });
-        });
-      });
-      network.on('doubleClick', (parameters: { nodes: Array<string | number> }) => {
-        const id = parameters.nodes[0];
-        if (typeof id !== 'string' || !data) return;
-        const node = data.graph.nodes.find((entry) => entry.id === id);
-        if (!node) return;
-        if (node.kind === 'document') documentEditor(root, data, node, context.project?.path || '', save);
-        else nodeEditor(root, data, node, save);
-      });
-    } catch (error) {
-      target.innerHTML = `<div class="pmd-error">${escapeHtml(error instanceof Error ? error.message : error)}</div>`;
-    }
-  };
-
   const bind = () => {
     root.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => button.addEventListener('click', () => {
       active = button.dataset.tab as Tab;
       render();
     }));
     root.querySelectorAll<HTMLElement>('[data-action=refresh]').forEach((button) => button.addEventListener('click', () => void load()));
-    root.querySelector<HTMLElement>('[data-action=fit-network]')?.addEventListener('click', () => network?.fit({ animation: { duration: 350, easingFunction: 'easeInOutQuad' } }));
-    root.querySelector<HTMLElement>('[data-action=fullscreen-network]')?.addEventListener('click', async () => {
-      const frame = root.querySelector<HTMLElement>('[data-network-frame]');
-      if (!frame) return;
-      if (document.fullscreenElement === frame) await document.exitFullscreen();
-      else await frame.requestFullscreen();
-    });
     root.querySelector<HTMLElement>('[data-action=scan]')?.addEventListener('click', async () => {
       if (!context.project || scanning) return;
       scanning = true;
@@ -314,8 +203,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   };
 
   const render = () => {
-    network?.destroy();
-    network = null;
     root.dataset.theme = context.theme;
     root.innerHTML = shell(active, data?.graph.mappings.length || 0, scanning);
     const content = root.querySelector<HTMLElement>('[data-content]');
@@ -324,10 +211,9 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     } else if (!data) {
       if (content) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
     } else if (content) {
-      content.innerHTML = active === 'general' ? generalView(data) : active === 'chronology' ? chronologyView(data) : graphView();
+      content.innerHTML = active === 'general' ? generalView(data) : chronologyView(data);
     }
     bind();
-    renderGraph();
   };
 
   render();
@@ -346,10 +232,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
 }
 
 export function unmount(container: HTMLElement): void {
-  const target = container as HTMLElement & { pmdUnsubscribe?: () => void; pmdNetwork?: NetworkInstance };
+  const target = container as HTMLElement & { pmdUnsubscribe?: () => void };
   target.pmdUnsubscribe?.();
-  target.pmdNetwork?.destroy();
   delete target.pmdUnsubscribe;
-  delete target.pmdNetwork;
   container.replaceChildren();
 }
