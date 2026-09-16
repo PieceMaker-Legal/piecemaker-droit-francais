@@ -10,6 +10,7 @@ import type {
 } from './types.js';
 import { EXCLUSIONS_NODE_ID } from './types.js';
 import { KnowledgeStore } from './knowledge.js';
+import { isInstitutionalEntity } from './institutional-terms.js';
 
 type ProcedureAssignment = { field?: unknown; code?: unknown };
 type ProcedureParty = {
@@ -73,7 +74,9 @@ function entityNodes(mapping: GlinerMappingDocument): Map<string, KnowledgeNodeI
   const nodes = new Map<string, KnowledgeNodeInput>();
   for (const code of codes) {
     const details = extracted.get(code);
-    const names = [...new Set([text(details?.data.original), ...(variants.get(code) || []), ...strings(details?.data.variants)].filter(Boolean))];
+    const detected = [...new Set([text(details?.data.original), ...(variants.get(code) || []), ...strings(details?.data.variants)].filter(Boolean))];
+    if (isInstitutionalEntity(detected[0])) continue;
+    const names = detected.filter((name) => !isInstitutionalEntity(name));
     const label = names[0] || code;
     nodes.set(code, {
       id: nodeId(code),

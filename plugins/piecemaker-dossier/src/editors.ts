@@ -370,3 +370,51 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   });
   void loadPreview();
 }
+
+export function institutionalTermsEditor(root: HTMLElement, onClose?: () => void): HTMLElement {
+  const layer = modal(root, `
+    <div class="pmd-terms-editor">
+      <div class="pmd-toolbar"><div><h2 class="pmd-title">Termes institutionnels</h2><div class="pmd-subtitle">Jamais pseudonymisés, un terme par ligne, valable pour tous les dossiers</div></div><span class="pmd-spacer"></span><button class="pmd-icon-button" data-close aria-label="Fermer">×</button></div>
+      <form class="pmd-form" data-terms-form>
+        <label>Liste<textarea class="pmd-textarea pmd-terms-textarea" name="terms" spellcheck="false" disabled>Chargement…</textarea></label>
+        <div class="pmd-terms-status" data-terms-status></div>
+        <div class="pmd-form-actions"><button type="button" class="pmd-button" data-close>Annuler</button><button type="submit" class="pmd-button pmd-button-primary" data-terms-submit disabled>Enregistrer</button></div>
+      </form>
+    </div>`);
+  const field = layer.querySelector<HTMLTextAreaElement>('[name=terms]');
+  const submit = layer.querySelector<HTMLButtonElement>('[data-terms-submit]');
+  const status = layer.querySelector<HTMLElement>('[data-terms-status]');
+  const setStatus = (message: string, failed = false) => {
+    if (!status) return;
+    status.textContent = message;
+    status.dataset.error = String(failed);
+  };
+  layer.addEventListener('click', (event) => { if (event.target === layer) onClose?.(); });
+  layer.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => onClose?.()));
+  void knowledgeApi.institutionalTerms()
+    .then((store) => {
+      if (!field || !submit) return;
+      field.value = store.terms.join('\n');
+      field.disabled = false;
+      submit.disabled = false;
+      setStatus(`${store.terms.length} termes enregistrés.`);
+    })
+    .catch((error) => setStatus(error instanceof Error ? error.message : String(error), true));
+  layer.querySelector<HTMLFormElement>('[data-terms-form]')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!field || !submit) return;
+    const terms = field.value.split('\n').map((term) => term.trim()).filter(Boolean);
+    submit.disabled = true;
+    setStatus('Enregistrement…');
+    try {
+      const store = await knowledgeApi.saveInstitutionalTerms(terms);
+      field.value = store.terms.join('\n');
+      submit.disabled = false;
+      setStatus(`${store.terms.length} termes enregistrés.`);
+    } catch (error) {
+      submit.disabled = false;
+      setStatus(error instanceof Error ? error.message : String(error), true);
+    }
+  });
+  return layer;
+}

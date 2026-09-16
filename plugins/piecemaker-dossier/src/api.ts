@@ -5,6 +5,7 @@ export type KnowledgeMappingView = Pick<KnowledgeSnapshot, 'projectId' | 'nodes'
 export type KnowledgeChronologyView = { projectId: string; documents: KnowledgeSnapshot['nodes']; links: KnowledgeSnapshot['links'] };
 export type AgentsDocument = { projectId: string; content: string; exists: boolean };
 export type KnowledgeDocumentPreview = { path: string; content: string };
+export type InstitutionalTerms = { file: string; terms: string[] };
 type RepositoryCase = { path: string; location: string };
 type RepositoryOverview = { folders?: RepositoryCase[] };
 type RegisteredCase = { folder: RepositoryCase };
@@ -66,4 +67,6 @@ export const knowledgeApi = {
   },
   scan: (projectId: string) => request(BASE, '/scan', { method: 'POST', body: JSON.stringify({ projectId }) }),
   update: (projectId: string, operations: KnowledgeUpdateOperation[]) => request(BASE, '/update', { method: 'POST', body: JSON.stringify({ projectId, operations }) }),
+  institutionalTerms: () => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms'),
+  saveInstitutionalTerms: (terms: string[]) => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms', { method: 'PUT', body: JSON.stringify({ terms }) }),
 };
