@@ -90,7 +90,7 @@ export function partyTypePicker(root: HTMLElement, side: 'client' | 'adversaire'
   return layer;
 }
 
-export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode | null, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>, defaults: PartyEditorDefaults = {}, onBackToMapping?: () => void, startCompanySearch = false): void {
+export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode | null, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>, defaults: PartyEditorDefaults = {}, onBackToMapping?: () => void): void {
   const id = node?.id || `manual:${crypto.randomUUID()}`;
   const selectedKind = node?.kind || defaults.kind || 'person';
   const mappings = node ? data.graph.mappings.filter((entry) => entry.nodeId === node.id) : [];
@@ -272,7 +272,6 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       renderCompanySearchPanel();
     }
   });
-  if (startCompanySearch) companySearchButton?.click();
   const renameApplies = (side: string): boolean => side === 'client' || side === 'adversaire' || Boolean(textValue(node?.data.originalCode));
   const codeChangeFor = (side: string) => partyCodeChange(
     { id, kind: (kindSelect?.value || selectedKind) as NodeKind, data: node?.data || {} },
