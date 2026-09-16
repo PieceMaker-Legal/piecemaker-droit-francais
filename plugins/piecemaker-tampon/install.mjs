@@ -9,15 +9,14 @@ const applicationRoot = path.resolve(process.argv[2] || path.join(source, '../..
 const configFile = path.join(applicationRoot, 'product.config.json');
 const product = fs.existsSync(configFile) ? JSON.parse(fs.readFileSync(configFile, 'utf8')) : {};
 const dataRoot = process.env.CLOUDCLI_HOME || path.join(os.homedir(), product.dataDirectoryName || '.claude-code-ui');
-const target = path.join(dataRoot, 'plugins', 'piecemaker-bordereau');
+const target = path.join(dataRoot, 'plugins', 'piecemaker-tampon');
 
-const compiler = path.join(applicationRoot, 'node_modules', 'typescript', 'bin', 'tsc');
-if (!fs.existsSync(compiler)) {
-  process.stderr.write(`TypeScript introuvable dans ${applicationRoot} — installez les dépendances de l'application avant ce plugin.\n`);
+if (!fs.existsSync(path.join(applicationRoot, 'node_modules', 'esbuild'))) {
+  process.stderr.write(`esbuild introuvable dans ${applicationRoot} — installez les dépendances de l'application avant ce plugin.\n`);
   process.exit(1);
 }
 
-const compilation = spawnSync(process.execPath, [compiler, '--project', path.join(source, 'tsconfig.json')], {
+const compilation = spawnSync(process.execPath, [path.join(source, 'build.mjs'), applicationRoot], {
   cwd: source,
   encoding: 'utf8',
   windowsHide: true,
@@ -35,6 +34,6 @@ for (const filename of ['manifest.json', 'icon.svg', 'package.json']) fs.copyFil
 
 const configPath = path.join(dataRoot, 'plugins.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
-config['piecemaker-bordereau'] = { ...config['piecemaker-bordereau'], enabled: true };
+config['piecemaker-tampon'] = { ...config['piecemaker-tampon'], enabled: true };
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
 process.stdout.write(`Bordereau installé dans ${target}\n`);
