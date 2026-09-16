@@ -384,41 +384,79 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
 export function institutionalTermsEditor(root: HTMLElement, onClose?: () => void): HTMLElement {
   const layer = modal(root, `
     <div class="pmd-terms-editor">
-      <div class="pmd-toolbar"><div><h2 class="pmd-title">Termes institutionnels</h2><div class="pmd-subtitle">Jamais pseudonymisés, un terme par ligne, valable pour tous les dossiers</div></div><span class="pmd-spacer"></span><button class="pmd-icon-button" data-close aria-label="Fermer">×</button></div>
+      <div class="pmd-toolbar"><div><h2 class="pmd-title">Termes institutionnels</h2><div class="pmd-subtitle">Jamais pseudonymisés, valables pour tous les dossiers</div></div><span class="pmd-spacer"></span><button class="pmd-icon-button" data-close aria-label="Fermer">×</button></div>
       <form class="pmd-form" data-terms-form>
-        <label>Liste<textarea class="pmd-textarea pmd-terms-textarea" name="terms" spellcheck="false" disabled>Chargement…</textarea></label>
+        <label>Liste<div class="pmd-alias-editor pmd-terms-list" data-terms-editor><div class="pmd-alias-pills" data-terms-pills></div><input class="pmd-input pmd-alias-input" data-terms-input placeholder="Chargement…" spellcheck="false" disabled></div></label>
         <div class="pmd-terms-status" data-terms-status></div>
         <div class="pmd-form-actions"><button type="button" class="pmd-button" data-close>Annuler</button><button type="submit" class="pmd-button pmd-button-primary" data-terms-submit disabled>Enregistrer</button></div>
       </form>
     </div>`);
-  const field = layer.querySelector<HTMLTextAreaElement>('[name=terms]');
+  const pills = layer.querySelector<HTMLElement>('[data-terms-pills]');
+  const input = layer.querySelector<HTMLInputElement>('[data-terms-input]');
   const submit = layer.querySelector<HTMLButtonElement>('[data-terms-submit]');
   const status = layer.querySelector<HTMLElement>('[data-terms-status]');
+  const terms: string[] = [];
   const setStatus = (message: string, failed = false) => {
     if (!status) return;
     status.textContent = message;
     status.dataset.error = String(failed);
   };
+  const syncTerms = () => {
+    if (!pills) return;
+    pills.innerHTML = terms.map((term, index) => `<span class="pmd-alias-pill">${escapeHtml(term)}<button type="button" data-remove-term="${index}" aria-label="Supprimer ${escapeHtml(term)}">×</button></span>`).join('');
+    pills.querySelectorAll<HTMLButtonElement>('[data-remove-term]').forEach((button) => button.addEventListener('click', () => {
+      const index = Number(button.dataset.removeTerm);
+      const term = terms[index];
+      if (!window.confirm(`Supprimer le terme « ${term} » de la liste institutionnelle ?`)) return;
+      terms.splice(index, 1);
+      syncTerms();
+      input?.focus();
+    }));
+  };
+  const addTerm = () => {
+    if (!input) return;
+    const term = input.value.trim();
+    input.value = '';
+    if (!term) return;
+    if (terms.includes(term)) {
+      setStatus(`« ${term} » figure déjà dans la liste.`);
+      return;
+    }
+    terms.push(term);
+    syncTerms();
+    setStatus(`${terms.length} termes, non enregistrés.`);
+  };
+  input?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    addTerm();
+  });
+  layer.querySelector<HTMLElement>('[data-terms-editor]')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) input?.focus();
+  });
   layer.addEventListener('click', (event) => { if (event.target === layer) onClose?.(); });
   layer.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => onClose?.()));
   void knowledgeApi.institutionalTerms()
     .then((store) => {
-      if (!field || !submit) return;
-      field.value = store.terms.join('\n');
-      field.disabled = false;
+      if (!input || !submit) return;
+      terms.splice(0, terms.length, ...store.terms);
+      syncTerms();
+      input.disabled = false;
+      input.placeholder = 'Saisissez un terme puis appuyez sur Entrée';
       submit.disabled = false;
       setStatus(`${store.terms.length} termes enregistrés.`);
     })
     .catch((error) => setStatus(error instanceof Error ? error.message : String(error), true));
   layer.querySelector<HTMLFormElement>('[data-terms-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!field || !submit) return;
-    const terms = field.value.split('\n').map((term) => term.trim()).filter(Boolean);
+    if (!input || !submit) return;
+    addTerm();
     submit.disabled = true;
     setStatus('Enregistrement…');
     try {
-      const store = await knowledgeApi.saveInstitutionalTerms(terms);
-      field.value = store.terms.join('\n');
+      const store = await knowledgeApi.saveInstitutionalTerms(terms.slice());
+      terms.splice(0, terms.length, ...store.terms);
+      syncTerms();
       submit.disabled = false;
       setStatus(`${store.terms.length} termes enregistrés.`);
     } catch (error) {
