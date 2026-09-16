@@ -127,7 +127,11 @@ describe('CaseMappingSection', () => {
     expect(savedInfo.parties_clientes).toHaveLength(0);
     expect(savedInfo.parties_adverses).toHaveLength(0);
     expect(savedBody.mapping).toEqual({ Alice: 'PERSONNE_PHYSIQUE_01' });
-    expect(screen.getByText('Aucune partie désignée')).toBeTruthy();
+    expect(screen.getByText('Tiers')).toBeTruthy();
+    const tiers = screen.getByText('Tiers').closest('details');
+    expect(tiers).toBeTruthy();
+    fireEvent.click(screen.getByText('Tiers'));
+    expect(within(tiers!).getByText('Alice')).toBeTruthy();
   });
 
   it('ne modifie pas le mapping si un profil est enregistré comme Tiers', async () => {
@@ -148,8 +152,8 @@ describe('CaseMappingSection', () => {
     const body = pmPut.mock.calls[0][1] as { mapping: Record<string, string> };
     expect(body.mapping).toEqual({ Alice: 'PERSONNE_PHYSIQUE_01' });
     expect(body.mapping['Alice modifiée']).toBeUndefined();
-    expect(screen.queryByText('Alice')).toBeNull();
     expect(screen.queryByText('Alice modifiée')).toBeNull();
+    expect(screen.getByText('Tiers').closest('details')?.hasAttribute('open')).toBe(false);
   });
 
   it('traite AVOCAT_DEFENDEUR_PERSONNE_MORALE_01 comme une personne physique dans la popup ciblée', async () => {
@@ -400,18 +404,49 @@ describe('CaseMappingSection', () => {
     expect(within(adverses).getByText('Bob')).toBeTruthy();
   });
 
-  it('n affiche aucune carte tant qu aucune partie n est designee', async () => {
+  it('n affiche aucune carte pour un mapping qui ne contient pas de personne', async () => {
     pmGetCached.mockResolvedValue({
       ...initialResponse,
-      mapping: { Alice: 'PERSONNE_PHYSIQUE_01' },
-      reverse_mapping: { PERSONNE_PHYSIQUE_01: ['Alice'] },
+      mapping: { '12 rue des Lilas': 'ADRESSE_01' },
+      reverse_mapping: { ADRESSE_01: ['12 rue des Lilas'] },
       informations_dossier: normalizeProcedureInfo(),
     });
 
     render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
     await waitFor(() => expect(screen.getByText('Aucune partie désignée')).toBeTruthy());
     expect(screen.queryAllByRole('article')).toHaveLength(0);
-    expect(screen.queryByText('Alice')).toBeNull();
+    expect(screen.queryByText('12 rue des Lilas')).toBeNull();
+  });
+
+  it('regroupe les personnes physiques et morales non affectees dans l accordéon Tiers', async () => {
+    pmGetCached.mockResolvedValue({
+      ...initialResponse,
+      mapping: {
+        Alice: 'PERSONNE_PHYSIQUE_01',
+        Acme: 'PERSONNE_MORALE_01',
+        '12 rue des Lilas': 'ADRESSE_01',
+      },
+      reverse_mapping: {
+        PERSONNE_PHYSIQUE_01: ['Alice'],
+        PERSONNE_MORALE_01: ['Acme'],
+        ADRESSE_01: ['12 rue des Lilas'],
+      },
+      informations_dossier: normalizeProcedureInfo({
+        parties_clientes: [{ type: 'personne_physique', nom: 'Client', position: 'demandeur' }],
+        parties_adverses: [{ type: 'personne_physique', nom: 'Adversaire', position: 'defendeur' }],
+      }),
+    });
+
+    render(<CaseMappingSection caseId="case-1" refreshVersion={0} onRepositoryChange={async () => {}} />);
+    await waitFor(() => expect(screen.getByText('Tiers')).toBeTruthy());
+
+    const tiers = screen.getByText('Tiers').closest('details');
+    expect(tiers).toBeTruthy();
+    expect(tiers?.hasAttribute('open')).toBe(false);
+    fireEvent.click(screen.getByText('Tiers'));
+    expect(within(tiers!).getByText('Alice')).toBeTruthy();
+    expect(within(tiers!).getByText('Acme')).toBeTruthy();
+    expect(within(tiers!).queryByText('12 rue des Lilas')).toBeNull();
   });
 
   it('classe chaque rubrique par ordre alphabetique du variant principal', async () => {

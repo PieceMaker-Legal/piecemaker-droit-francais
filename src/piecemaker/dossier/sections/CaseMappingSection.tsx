@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, EllipsisVertical, Fingerprint, Loader2, MapPin, Plus, Save, ShieldCheck, Tag, Trash2, UserRound, UsersRound } from 'lucide-react';
+import { Building2, ChevronDown, EllipsisVertical, Fingerprint, Loader2, MapPin, Plus, Save, ShieldCheck, Tag, Trash2, UserRound, UsersRound } from 'lucide-react';
 
 import { invalidatePmGet, pmGetCached, pmPut, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import {
@@ -425,6 +425,11 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
 
   const clientGroups = sortedGroups.filter((group) => partyForProfile(profileInfo, group)?.side === 'client');
   const adverseGroups = sortedGroups.filter((group) => partyForProfile(profileInfo, group)?.side === 'adversaire');
+  const tiersGroups = sortedGroups.filter((group) => {
+    if (partyForProfile(profileInfo, group)) return false;
+    const category = partyCategoryForCode(group.code);
+    return category === 'personnes_physiques' || category === 'societes';
+  });
 
   return (
     <div className="space-y-5 p-4">
@@ -433,23 +438,34 @@ export default function CaseMappingSection({ caseId, refreshVersion, onRepositor
         <Button variant="outline" size="sm" onClick={addParty}><Plus className="h-3.5 w-3.5" />Ajouter une partie</Button>
       </div>
 
-      {clientGroups.length === 0 && adverseGroups.length === 0 ? (
+      {clientGroups.length === 0 && adverseGroups.length === 0 && tiersGroups.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-10 text-center"><ShieldCheck className="mx-auto h-6 w-6 text-muted-foreground" /><h3 className="mt-3 text-sm font-semibold">Aucune partie désignée</h3><p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-muted-foreground">Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><Button variant="outline" size="sm" className="mt-4" onClick={() => setMappingOpen(true)}><Tag className="h-3.5 w-3.5" />Ouvrir le mapping</Button></div>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <div className="space-y-3" role="region" aria-label="Parties clientes">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Parties clientes</h3>
-            {clientGroups.length === 0
-              ? <p className="rounded-xl border border-dashed p-4 text-xs text-muted-foreground">Aucune partie cliente désignée.</p>
-              : <div className="space-y-4">{clientGroups.map((group) => renderProfileCard(group))}</div>}
+        <>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className="space-y-3" role="region" aria-label="Parties clientes">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Parties clientes</h3>
+              {clientGroups.length === 0
+                ? <p className="rounded-xl border border-dashed p-4 text-xs text-muted-foreground">Aucune partie cliente désignée.</p>
+                : <div className="space-y-4">{clientGroups.map((group) => renderProfileCard(group))}</div>}
+            </div>
+            <div className="space-y-3" role="region" aria-label="Parties adverses">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-400">Parties adverses</h3>
+              {adverseGroups.length === 0
+                ? <p className="rounded-xl border border-dashed p-4 text-xs text-muted-foreground">Aucune partie adverse désignée.</p>
+                : <div className="space-y-4">{adverseGroups.map((group) => renderProfileCard(group))}</div>}
+            </div>
           </div>
-          <div className="space-y-3" role="region" aria-label="Parties adverses">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-400">Parties adverses</h3>
-            {adverseGroups.length === 0
-              ? <p className="rounded-xl border border-dashed p-4 text-xs text-muted-foreground">Aucune partie adverse désignée.</p>
-              : <div className="space-y-4">{adverseGroups.map((group) => renderProfileCard(group))}</div>}
-          </div>
-        </div>
+          {tiersGroups.length > 0 && <details className="mt-5 space-y-3">
+            <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground [&::-webkit-details-marker]:hidden">
+              <ChevronDown className="details-chevron h-4 w-4 shrink-0" />
+              Tiers
+            </summary>
+            <div className="space-y-4 pt-1" role="region" aria-label="Tiers">
+              {tiersGroups.map((group) => renderProfileCard(group))}
+            </div>
+          </details>}
+        </>
       )}
 
       <div className="sticky bottom-3 flex flex-wrap items-center gap-3 rounded-xl border bg-background/95 px-4 py-3 shadow-lg backdrop-blur">
