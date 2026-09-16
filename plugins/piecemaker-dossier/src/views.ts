@@ -64,13 +64,13 @@ function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot): string {
       <div class="pmd-profile-accent"></div>
       <div class="pmd-card-head">
         <span class="pmd-kind-icon" data-kind="${kind.kind}">${kind.icon}</span>
-        <div class="pmd-profile-heading"><div class="pmd-card-title">${escapeHtml(node.label || 'Sans libellé')}</div><div class="pmd-profile-kind">${escapeHtml(kind.label)} · ${Math.max(1, node.aliases.length + 1)} écriture${node.aliases.length ? 's' : ''} détectée${node.aliases.length ? 's' : ''}</div></div>
+        <div class="pmd-profile-heading"><div class="pmd-card-title">${escapeHtml(node.label || 'Sans libellé')}</div><div class="pmd-profile-kind">${escapeHtml(kind.label)}</div></div>
         <div class="pmd-profile-menu-wrap">
           <button class="pmd-profile-menu-trigger" data-node-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button>
           <div class="pmd-profile-menu"><button data-edit-node="${escapeHtml(node.id)}">${userIcon}<span>Modifier</span></button><button class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">×<span>Supprimer</span></button></div>
         </div>
       </div>
-      <div class="pmd-party-line"><span class="pmd-party-badge" data-side="${accent}">${side === 'client' ? 'Partie cliente' : side === 'adversaire' ? 'Partie adverse' : 'Tiers'}${side === 'client' || side === 'adversaire' ? ` · ${escapeHtml(positionLabel(node))}` : ''}</span></div>
+      ${side === 'client' || side === 'adversaire' ? `<div class="pmd-party-line"><span class="pmd-party-badge" data-side="${accent}">${side === 'client' ? 'Partie cliente' : 'Partie adverse'} · ${escapeHtml(positionLabel(node))}</span></div>` : ''}
       ${showRelations ? `<div class="pmd-relations-box" data-relation-drop="${escapeHtml(node.id)}">
         ${relations.length ? relations.map((link) => {
           const otherId = link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId;
