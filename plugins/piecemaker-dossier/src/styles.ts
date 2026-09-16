@@ -13,7 +13,7 @@ export const PLUGIN_STYLES = `
 .pmd-scan-status{margin-left:auto;display:flex;height:32px;flex-shrink:0;align-items:center;gap:8px;border:1px solid #10b9814d;border-radius:6px;padding:0 10px;background:#10b9811a;font-size:12px}.pmd-scan-status[data-ready=false]{border-color:var(--pmd-border);background:var(--pmd-soft)}
 .pmd-status-icon,.pmd-scan-button{display:inline-flex;align-items:center;justify-content:center}.pmd-status-icon{color:#047857}.pmd-status-icon svg{width:14px;height:14px}.pmd-status-label{white-space:nowrap;font-weight:600}.pmd-scan-button{height:24px;gap:6px;border:0;border-radius:6px;padding:0 8px;background:var(--pmd-accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}.pmd-scan-button:hover{filter:brightness(1.08)}.pmd-scan-button:disabled{cursor:default;opacity:.65}.pmd-scan-button svg{width:16px;height:16px}
 .pmd-button{border:1px solid var(--pmd-border);color:var(--pmd-text)}
-.pmd-button:hover{color:var(--pmd-accent);border-color:var(--pmd-accent)}
+.pmd-button:hover{background:var(--pmd-soft);color:var(--pmd-text)}
 .pmd-tab:hover[aria-selected=false]{background:color-mix(in srgb,var(--pmd-bg) 55%,transparent);color:var(--pmd-text)}
 .pmd-button-primary{background:var(--pmd-accent);border-color:var(--pmd-accent);color:var(--pmd-bg);font-weight:650}
 .pmd-button-danger{color:var(--pmd-danger)}.pmd-spacer{flex:1}

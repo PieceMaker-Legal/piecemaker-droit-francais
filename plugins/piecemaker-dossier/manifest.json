@@ -2,7 +2,7 @@
   "name": "piecemaker-dossier",
   "displayName": "Dossier",
   "version": "0.1.0",
-  "description": "Knowledge graph storage and queries for a PieceMaker dossier.",
+  "description": "Gestion de l'anonymisation & des informations du dossier.",
   "icon": "icon.svg",
   "type": "module",
   "slot": "tab",
