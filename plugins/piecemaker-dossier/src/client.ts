@@ -1,5 +1,5 @@
 import { knowledgeApi } from './api.js';
-import { documentEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
+import { documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { chronologyView, escapeHtml, generalView, mappingView, shell } from './views.js';
 import type { Tab, ViewData } from './views.js';
@@ -99,6 +99,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     layer.querySelector<HTMLElement>('[data-action=add-node]')?.addEventListener('click', () => {
       layer.remove();
       nodeEditor(root, mappingData, null, save);
+    });
+    layer.querySelector<HTMLElement>('[data-action=institutional-terms]')?.addEventListener('click', () => {
+      layer.remove();
+      institutionalTermsEditor(root, async () => {
+        await load();
+        openMapping();
+      });
     });
   };
 
