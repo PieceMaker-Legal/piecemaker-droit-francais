@@ -58,7 +58,10 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
     chronology(value: unknown) {
       const id = ensureProject(value);
       const current = snapshot(id);
-      return { projectId: id, documents: current.nodes.filter((node) => node.kind === 'document'), links: current.links.filter((link) => link.relation === 'mentions') };
+      const documents = current.nodes
+        .filter((node) => node.kind === 'document')
+        .map(({ id: _documentId, ...document }) => document);
+      return { projectId: id, documents, links: current.links.filter((link) => link.relation === 'mentions') };
     },
     graph(value: unknown) {
       const id = ensureProject(value);

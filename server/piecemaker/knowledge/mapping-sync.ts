@@ -18,9 +18,8 @@ function staleMappingDeletions(
   const retained = new Set(operations.flatMap((operation) => operation.op === 'upsertMapping'
     ? [mappingKey(operation.mapping.nodeId, operation.mapping.real)]
     : []));
-  return store.snapshot(projectId).mappings
-    .filter((entry) => entry.origin === 'gliner'
-      && entry.nodeId.startsWith('entity:')
+  return store.glinerMappingKeys(projectId)
+    .filter((entry) => entry.nodeId.startsWith('entity:')
       && !retained.has(mappingKey(entry.nodeId, entry.real)))
     .map((entry) => ({ op: 'deleteMapping', mapping: { nodeId: entry.nodeId, real: entry.real } }));
 }

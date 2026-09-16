@@ -193,10 +193,18 @@ function renderChronologySections(dated: KnowledgeNode[], undated: KnowledgeNode
 }
 
 export function chronologyView(data: ViewData): string {
-  const dated = data.chronology.documents
+  const documents = data.chronology.documents
+    .map((document) => {
+      const documentPath = textValue(document.data.path);
+      return data.graph.nodes.find((candidate) => candidate.kind === 'document'
+        && candidate.label === document.label
+        && (!documentPath || textValue(candidate.data.path) === documentPath));
+    })
+    .filter((node): node is KnowledgeNode => Boolean(node));
+  const dated = documents
     .filter((node) => Boolean(dateFor(node)))
     .sort((left, right) => dateFor(left).localeCompare(dateFor(right)) || left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
-  const undated = data.chronology.documents
+  const undated = documents
     .filter((node) => !dateFor(node))
     .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));

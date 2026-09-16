@@ -91,9 +91,9 @@ const originValue = (value: unknown): KnowledgeOrigin => value === 'gliner' || v
 const kindValue = (value: unknown): NodeKind => { if (typeof value !== 'string' || !NODE_KINDS.includes(value as NodeKind)) throw new TypeError(`kind must be one of ${NODE_KINDS.join(', ')}`); return value as NodeKind; };
 const searchable = (values: string[]): string => values.join('\u0000').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
 const searchPattern = (value: string): string => `%${searchable([value]).replace(/[\\%_]/g, '\\$&')}%`;
-const toNode = (row: NodeRow): KnowledgeNode => ({ id: row.id, projectId: row.project_id, kind: row.kind, label: row.label, aliases: parseJson<string[]>(row.aliases_json, []), data: parseJson<JsonData>(row.data_json, {}), origin: row.origin, createdAt: row.created_at, updatedAt: row.updated_at });
+const toNode = (row: NodeRow): KnowledgeNode => ({ id: row.id, projectId: row.project_id, kind: row.kind, label: row.label, aliases: parseJson<string[]>(row.aliases_json, []), data: parseJson<JsonData>(row.data_json, {}), createdAt: row.created_at, updatedAt: row.updated_at });
 const withoutInstitutionalAliases = (node: KnowledgeNode): KnowledgeNode => ({ ...node, aliases: node.aliases.filter((alias) => !isInstitutionalEntity(alias)) });
-const toMapping = (row: MappingRow): KnowledgeMapping => ({ projectId: row.project_id, nodeId: row.node_id, real: row.real_value, masked: row.masked_value, data: parseJson<JsonData>(row.data_json, {}), origin: row.origin });
+const toMapping = (row: MappingRow): KnowledgeMapping => ({ projectId: row.project_id, nodeId: row.node_id, real: row.real_value, masked: row.masked_value, data: parseJson<JsonData>(row.data_json, {}) });
 
 export function resolveKnowledgeDatabasePath(): string {
   return process.env.DATABASE_PATH || path.join(process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker'), 'auth.db');
@@ -208,12 +208,16 @@ export class KnowledgeStore {
       toNodeId: row.to_node_id,
       relation: row.relation,
       data: parseJson<JsonData>(row.data_json, {}),
-      origin: row.origin,
     })).filter((link) => retained.has(link.fromNodeId) && retained.has(link.toNodeId));
     const mappings = (this.database.prepare('SELECT project_id,node_id,real_value,masked_value,data_json,origin FROM piecemaker_mappings WHERE project_id=? ORDER BY real_value').all(projectId) as MappingRow[])
       .map(toMapping)
       .filter((mapping) => retained.has(mapping.nodeId) && !isInstitutionalEntity(mapping.real));
     return { projectId, nodes, links, mappings, exclusions, exclusionsInitialized: Boolean(exclusionsNode) };
+  }
+
+  public glinerMappingKeys(projectIdInput: string): Array<{ nodeId: string; real: string }> {
+    const projectId = this.resolveProject(projectIdInput);
+    return this.database.prepare("SELECT node_id AS nodeId, real_value AS real FROM piecemaker_mappings WHERE project_id=? AND origin='gliner'").all(projectId) as Array<{ nodeId: string; real: string }>;
   }
 
   public close(): void { if (this.ownsDatabase) this.database.close(); }
@@ -356,7 +360,7 @@ export class KnowledgeStore {
       const outgoing = link.from_node_id === nodeId;
       const relatedId = outgoing ? link.to_node_id : link.from_node_id;
       const cycle = nextVisited.has(relatedId);
-      links.push({ relation: link.relation, direction: outgoing ? 'outgoing' : 'incoming', data: parseJson<JsonData>(link.data_json, {}), origin: link.origin, node: depth > 0 && !cycle ? this.assembleNode(relatedId, graph, depth - 1, nextVisited) : null, cycle });
+      links.push({ relation: link.relation, direction: outgoing ? 'outgoing' : 'incoming', data: parseJson<JsonData>(link.data_json, {}), node: depth > 0 && !cycle ? this.assembleNode(relatedId, graph, depth - 1, nextVisited) : null, cycle });
     }
     return { ...toNode(row), mappings: graph.mappings.get(nodeId) || [], links };
   }
