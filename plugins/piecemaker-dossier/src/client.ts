@@ -175,6 +175,29 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (data) nodeEditor(root, data, null, save, { kind, partySide: side });
       });
     }));
+    root.querySelectorAll<HTMLElement>('[data-party-drop]').forEach((target) => {
+      target.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        target.dataset.dropActive = 'true';
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      });
+      target.addEventListener('dragleave', (event) => {
+        if (!target.contains(event.relatedTarget as Node | null)) delete target.dataset.dropActive;
+      });
+      target.addEventListener('drop', async (event) => {
+        event.preventDefault();
+        delete target.dataset.dropActive;
+        const sourceId = draggedNodeId || event.dataTransfer?.getData('text/plain') || '';
+        const side = target.dataset.partyDrop;
+        const node = data?.graph.nodes.find((entry) => entry.id === sourceId);
+        if (!node || side !== 'adversaire') return;
+        try {
+          await save([{ op: 'upsertNode', node: { id: node.id, kind: node.kind, label: node.label, aliases: node.aliases, data: { ...node.data, partySide: side }, origin: 'manual' } }]);
+        } catch (error) {
+          showError(error);
+        }
+      });
+    });
     root.querySelectorAll<HTMLElement>('[data-action=mapping]').forEach((button) => button.addEventListener('click', openMapping));
     root.querySelectorAll<HTMLElement>('[data-node-menu]').forEach((button) => button.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -186,7 +209,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       card.addEventListener('dragstart', (event) => {
         draggedNodeId = card.dataset.profileId || '';
         event.dataTransfer?.setData('text/plain', draggedNodeId);
-        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'link';
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'linkMove';
       });
       card.addEventListener('dragend', () => { draggedNodeId = ''; });
     });
