@@ -7,7 +7,7 @@ import { gitAvailable, resolveNodeRuntime } from './lib/node-runtime.mjs';
 import { freePort } from './lib/ports.mjs';
 import { ensureDependencies, ensureRepository, rebuildNativeModules } from './lib/repos.mjs';
 import { APP_LOG, appClientReachable, appServerReachable, startApplication } from './lib/services.mjs';
-import { installApplicationEntry, openApplication, verifyPwaAssets } from './lib/pwa.mjs';
+import { applicationWindowIsOpen, installApplicationEntry, openApplication, verifyPwaAssets } from './lib/pwa.mjs';
 import { banner, blank, c, detail, fail, ok, step, warn } from './lib/ui.mjs';
 
 const report = { step, ok, warn, detail };
@@ -16,7 +16,6 @@ const HELP = `${c.bold('piecemaker')} — installe, met à jour et lance toute l
 
   piecemaker                 tout faire : ports, dépôts, dépendances, PWA, serveurs
   piecemaker --launch-only   ne relance que les serveurs manquants
-  piecemaker --no-open       ne pas ouvrir l application à la fin
   piecemaker --help          cette aide
 `;
 
@@ -24,7 +23,6 @@ function parseArguments(argv) {
   return {
     help: argv.includes('--help') || argv.includes('-h'),
     launchOnly: argv.includes('--launch-only'),
-    open: !argv.includes('--no-open'),
   };
 }
 
@@ -147,7 +145,7 @@ async function main() {
   detail('Configuration du socle : onglet Dossier › Configuration.');
   blank();
 
-  if (options.open) openApplication();
+  if (!options.launchOnly && !applicationWindowIsOpen()) openApplication();
   return 0;
 }
 

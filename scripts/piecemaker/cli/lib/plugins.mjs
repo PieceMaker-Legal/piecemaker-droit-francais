@@ -10,6 +10,8 @@ const INSTALL_TIMEOUT = 2 * 60_000;
 export const PLUGINS = [
   { id: 'piecemaker-timesheet', label: 'Plugin Timesheet' },
   { id: 'piecemaker-tampon', label: 'Plugin Bordereau' },
+  { id: 'piecemaker-dossier', label: 'Plugin Dossier' },
+  { id: 'piecemaker-library', label: 'Plugin Bibliothèque' },
 ];
 
 export async function installPlugins(runtime, report) {

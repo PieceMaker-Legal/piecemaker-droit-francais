@@ -221,6 +221,22 @@ function windowsChromiumBrowser() {
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
+export function applicationWindowIsOpen() {
+  const appArgument = `--app=${APP_URL}`;
+  if (process.platform === 'win32') {
+    const result = runCapture('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*${appArgument}*' }).Count`,
+    ]);
+    return result.code === 0 && Number.parseInt(result.stdout.trim(), 10) > 0;
+  }
+
+  const result = runCapture('ps', ['-ax', '-o', 'command=']);
+  return result.code === 0 && result.stdout.split('\n').some((line) => line.includes(appArgument));
+}
+
 function windowsDesktopDir() {
   const standard = path.join(os.homedir(), 'Desktop');
   if (fs.existsSync(standard)) return standard;
