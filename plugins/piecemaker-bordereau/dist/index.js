@@ -1,4 +1,4 @@
-// plugins/piecemaker-tamponnage/src/index.ts
+// plugins/piecemaker-bordereau/src/index.ts
 var ApiError = class extends Error {
   status;
   constructor(message, status) {
