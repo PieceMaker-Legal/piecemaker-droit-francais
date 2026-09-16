@@ -17,10 +17,7 @@ type KnowledgeScanJob = {
   id: string;
   projectId: string;
   state: 'running' | 'done' | 'error';
-  phase: 'convert' | 'scan' | 'commit';
   percent: number;
-  processed: number;
-  total: number;
   error: string | null;
 };
 
@@ -34,10 +31,7 @@ function knowledgeJobAsOriginals(job: KnowledgeScanJob): OriginalsJob {
     case: job.projectId,
     action: 'anonymize',
     state: job.state,
-    phase: job.phase,
     percent: job.percent,
-    processed: job.processed,
-    total: job.total,
     error: job.error,
   };
 }

@@ -49,9 +49,9 @@ button.pmd-column-empty{display:flex;width:100%;box-sizing:border-box;flex-direc
 button.pmd-column-empty[data-drop-active=true]{border-color:var(--pmd-accent);background:color-mix(in srgb,var(--pmd-soft) 45%,transparent)}
 .pmd-scan-status[data-scanning=true]{border-color:color-mix(in srgb,var(--pmd-accent) 35%,transparent);background:color-mix(in srgb,var(--pmd-accent) 10%,transparent)}
 .pmd-scan-status[data-scanning=true] .pmd-status-icon{color:var(--pmd-accent)}
-.pmd-scan-progress{display:flex;min-width:150px;flex-direction:column;gap:3px}
-.pmd-scan-progress-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--pmd-muted);font-size:10px;line-height:12px}
-.pmd-scan-progress-track{display:block;height:4px;overflow:hidden;border-radius:999px;background:var(--pmd-soft)}
+.pmd-scan-progress{display:flex;min-width:120px;align-items:center;gap:8px}
+.pmd-scan-progress-label{white-space:nowrap;color:var(--pmd-muted);font-size:11px;font-variant-numeric:tabular-nums;line-height:14px}
+.pmd-scan-progress-track{display:block;flex:1;height:4px;overflow:hidden;border-radius:999px;background:var(--pmd-soft)}
 .pmd-scan-progress-bar{display:block;height:100%;border-radius:999px;background:var(--pmd-accent);transition:width .5s}
-@media(max-width:760px){.pmd-scan-progress{min-width:96px}.pmd-scan-progress-label{display:none}}
+@media(max-width:760px){.pmd-scan-progress{min-width:80px}}
 `;
