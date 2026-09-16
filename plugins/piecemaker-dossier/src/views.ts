@@ -1,5 +1,6 @@
 import { NODE_KINDS } from './types.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
+import { BODACC_FAMILIES } from './api.js';
 import type { BodaccSearchResult, KnowledgeChronologyView, KnowledgeMappingView, KnowledgeOverview, ScanJob } from './api.js';
 
 export type Tab = 'general' | 'chronology' | 'scan';
@@ -8,6 +9,7 @@ export type BodaccScanState = {
   result?: BodaccSearchResult;
   error?: string;
   open?: boolean;
+  families?: string[];
 };
 export type ViewData = {
   overview: KnowledgeOverview;
@@ -95,7 +97,7 @@ const tiersProfileIcon = '<svg class="pmd-tiers-chevron" viewBox="0 0 24 24" fil
 const folderTreeIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M3 5a2 2 0 0 0 2 2h3"></path><path d="M3 3v13a2 2 0 0 0 2 2h3"></path></svg>';
 const calendarClockIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"></path><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h5"></path><circle cx="16" cy="16" r="6"></circle><path d="M16 14v2l1 1"></path></svg>';
 const bodaccIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg>';
-const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
+const bodaccSearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h10v16H4z"></path><path d="M7 8h4M7 12h4"></path><circle cx="16.5" cy="16.5" r="3.5"></circle><path d="m19.2 19.2 2 2"></path></svg>';
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'general', label: 'Parties', icon: folderTreeIcon },
   { id: 'chronology', label: 'Chronologie', icon: calendarClockIcon },
@@ -200,14 +202,19 @@ function bodaccStateMarkup(state: BodaccScanState, siren: string): string {
   return `${result.alertes.length ? `<div class="pmd-bodacc-alerts">${result.alertes.map((alerte) => `<span>${escapeHtml(alerte)}</span>`).join('')}</div>` : ''}<p class="pmd-bodacc-summary">${result.annonces.length} annonce${result.annonces.length > 1 ? 's' : ''} affichée${result.annonces.length > 1 ? 's' : ''} sur ${result.total}.</p><div class="pmd-bodacc-list">${result.annonces.map(bodaccAnnouncement).join('')}</div>`;
 }
 
+function bodaccFamilyMenu(companyId: string, families: string[]): string {
+  return `<div class="pmd-profile-menu-wrap pmd-bodacc-family-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-bodacc-family-trigger" data-action="company-family-menu" data-scan-company="${escapeHtml(companyId)}" aria-label="Choisir les familles BODACC" aria-expanded="false" title="Choisir les familles BODACC">${moreIcon}</button><div class="pmd-profile-menu pmd-bodacc-family-menu" data-bodacc-family-menu="${escapeHtml(companyId)}"><strong>Familles BODACC</strong>${BODACC_FAMILIES.map((family) => `<label><input type="checkbox" data-bodacc-family="${escapeHtml(family.code)}" data-scan-company="${escapeHtml(companyId)}" ${families.includes(family.code) ? 'checked' : ''}><span>${escapeHtml(family.label)}</span></label>`).join('')}</div></div>`;
+}
+
 export function scanView(data: ViewData, states: Map<string, BodaccScanState> = new Map()): string {
   const companies = data.graph.nodes.filter((node) => node.kind === 'company').sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
   if (!companies.length) return '<div class="pmd-empty">Aucune personne morale dans le dossier.</div>';
-  return `<div class="pmd-scan-view"><div class="pmd-toolbar"><div><h2 class="pmd-title">Scan Bodacc</h2><div class="pmd-subtitle">Annonces liées aux personnes morales du dossier</div></div><span class="pmd-spacer"></span><span class="pmd-section-count">${companies.length}</span></div><div class="pmd-scan-company-list">${companies.map((company) => {
+  return `<div class="pmd-scan-view"><div class="pmd-toolbar"><div><h2 class="pmd-title">Scan Bodacc</h2><div class="pmd-subtitle">Annonces liées aux personnes morales du dossier</div></div><span class="pmd-spacer"></span><button type="button" class="pmd-button pmd-scan-all-button" data-action="scan-all-companies" aria-label="Scanner toutes les personnes morales">${bodaccSearchIcon}<span>Scanner toutes les personnes</span></button></div><div class="pmd-scan-company-list">${companies.map((company) => {
     const identifiers = companyIdentifiers(company, data.graph);
     const state = states.get(company.id) || { status: 'idle' as const };
     const identifierLabel = [identifiers.siren ? `SIREN ${identifiers.siren}` : '', identifiers.siret ? `SIRET ${identifiers.siret}` : ''].filter(Boolean).join(' · ') || 'SIREN / SIRET non renseigné';
-    return `<article class="pmd-scan-company" data-scan-company="${escapeHtml(company.id)}"><div class="pmd-scan-company-header"><div class="pmd-scan-company-copy"><h3>${escapeHtml(company.label || 'Personne morale sans nom')}</h3><p>${escapeHtml(identifierLabel)}</p></div><button type="button" class="pmd-icon-button" data-action="company-search" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public">${companySearchIcon}</button></div><details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(company.id)}" ${state.open ? 'open' : ''}><summary>Annonces BODACC${state.status === 'loaded' && state.result ? ` · ${state.result.annonces.length}` : ''}</summary><div class="pmd-bodacc-content">${bodaccStateMarkup(state, identifiers.siren || identifiers.siret)}</div></details></article>`;
+    const families = state.families || BODACC_FAMILIES.map((family) => family.code);
+    return `<article class="pmd-scan-company" data-scan-company="${escapeHtml(company.id)}"><div class="pmd-scan-company-header"><div class="pmd-scan-company-copy"><h3>${escapeHtml(company.label || 'Personne morale sans nom')}</h3><p>${escapeHtml(identifierLabel)}</p></div><div class="pmd-scan-company-actions"><button type="button" class="pmd-icon-button" data-action="bodacc-search" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" aria-label="Rechercher les annonces BODACC de cette personne morale" title="Rechercher dans BODACC">${bodaccSearchIcon}</button>${bodaccFamilyMenu(company.id, families)}</div></div><details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(company.id)}" ${state.open ? 'open' : ''}><summary>Annonces BODACC${state.status === 'loaded' && state.result ? ` · ${state.result.annonces.length}` : ''}</summary><div class="pmd-bodacc-content">${bodaccStateMarkup(state, identifiers.siren || identifiers.siret)}</div></details></article>`;
   }).join('')}</div></div>`;
 }
 

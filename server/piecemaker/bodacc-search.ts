@@ -37,6 +37,20 @@ export type BodaccSearchResult = {
   annonces: BodaccAnnouncement[];
 };
 
+const BODACC_FAMILY_CODES = new Set([
+  'dpc',
+  'modification',
+  'creation',
+  'radiation',
+  'collective',
+  'vente',
+  'immatriculation',
+  'divers',
+  'conciliation',
+  'retablissement_professionnel',
+  'inconnue',
+]);
+
 const MCP_TIMEOUT_MS = 45_000;
 
 function collectLauncherCandidates(): string[] {
@@ -146,10 +160,33 @@ function readHistory(content: McpContent[], siren: string): BodaccSearchResult {
   return { siren: history.siren || siren, total: Number(history.total_annonces || annonces.length), alertes: history.alertes || [], annonces };
 }
 
-async function searchBodacc(siren: string, siret: string): Promise<BodaccSearchResult> {
+function familyCode(announcement: BodaccAnnouncement): string {
+  const family = announcement.familleAvis.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+  if (family.includes('depot') && family.includes('compte')) return 'dpc';
+  if (family.includes('modification')) return 'modification';
+  if (family.includes('creation')) return 'creation';
+  if (family.includes('radiation')) return 'radiation';
+  if (family.includes('conciliation')) return 'conciliation';
+  if (family.includes('retablissement professionnel')) return 'retablissement_professionnel';
+  if (family.includes('procedure') && family.includes('collective')) return 'collective';
+  if (family.includes('vente') || family.includes('cession')) return 'vente';
+  if (family.includes('immatriculation')) return 'immatriculation';
+  if (family.includes('divers')) return 'divers';
+  return 'inconnue';
+}
+
+function filterFamilies(result: BodaccSearchResult, requestedFamilies: string[] | null): BodaccSearchResult {
+  if (requestedFamilies === null) return result;
+  const families = [...new Set(requestedFamilies.filter((family) => BODACC_FAMILY_CODES.has(family)))];
+  if (families.length === BODACC_FAMILY_CODES.size) return result;
+  const annonces = result.annonces.filter((announcement) => families.includes(familyCode(announcement)));
+  return { ...result, total: annonces.length, annonces, alertes: result.alertes.filter((alert) => (alert.toLocaleLowerCase().includes('procedure') && families.includes('collective')) || (alert.toLocaleLowerCase().includes('radiation') && families.includes('radiation'))) };
+}
+
+async function searchBodacc(siren: string, siret: string, requestedFamilies: string[] | null): Promise<BodaccSearchResult> {
   const normalized = normalizedSiren(siren, siret);
   const response = await mcpCall('Tracking_BODACC', { siren: normalized, type_recherche: 'historique' });
-  return readHistory(resultContent(response), normalized);
+  return filterFamilies(readHistory(resultContent(response), normalized), requestedFamilies);
 }
 
 export function createBodaccSearchRouter() {
@@ -157,8 +194,9 @@ export function createBodaccSearchRouter() {
   router.post('/bodacc-search', async (request: Request, response: Response) => {
     const siren = typeof request.body?.siren === 'string' ? request.body.siren : '';
     const siret = typeof request.body?.siret === 'string' ? request.body.siret : '';
+    const families = Array.isArray(request.body?.families) ? request.body.families.filter((family: unknown): family is string => typeof family === 'string') : null;
     try {
-      response.json(await searchBodacc(siren, siret));
+      response.json(await searchBodacc(siren, siret, families));
     } catch (error) {
       response.status(502).json({ error: error instanceof Error ? error.message : 'Recherche BODACC impossible.' });
     }
