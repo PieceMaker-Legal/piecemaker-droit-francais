@@ -25,5 +25,6 @@ export function createKnowledgeRouter(service: KnowledgeService) {
   router.post('/knowledge/query', (request, response) => respond(() => service.query(request.body), response));
   router.post('/knowledge/update', (request, response) => respond(() => service.update(request.body), response));
   router.post('/knowledge/scan', (request, response) => respond(() => service.scan(request.body?.projectId, request.body?.files), response));
+  router.get('/knowledge/scan/job', (request, response) => respond(() => service.scanJob(request.query.id, request.query.projectId), response));
   return router;
 }

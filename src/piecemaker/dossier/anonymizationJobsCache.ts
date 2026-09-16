@@ -4,14 +4,42 @@ import type { OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes'
 const STORAGE_KEY = 'piecemaker.sidebarAnonymizationJobs';
 const POLL_INTERVAL_MS = 1_000;
 
+export type AnonymizationJobSource = 'originals' | 'knowledge';
+
 export type TrackedAnonymizationJob = {
   projectPath: string;
   projectName: string;
   job: OriginalsJob;
+  source?: AnonymizationJobSource;
+};
+
+type KnowledgeScanJob = {
+  id: string;
+  projectId: string;
+  state: 'running' | 'done' | 'error';
+  phase: 'convert' | 'scan' | 'commit';
+  percent: number;
+  processed: number;
+  total: number;
+  error: string | null;
 };
 
 function jobIsPending(job: OriginalsJob): boolean {
   return job.state === 'queued' || job.state === 'running';
+}
+
+function knowledgeJobAsOriginals(job: KnowledgeScanJob): OriginalsJob {
+  return {
+    id: job.id,
+    case: job.projectId,
+    action: 'anonymize',
+    state: job.state,
+    phase: job.phase,
+    percent: job.percent,
+    processed: job.processed,
+    total: job.total,
+    error: job.error,
+  };
 }
 
 function readFromStorage(): TrackedAnonymizationJob[] {
@@ -54,12 +82,21 @@ function publish(jobs: TrackedAnonymizationJob[]): void {
   listeners.forEach((listener) => listener());
 }
 
+async function pollEntry(entry: TrackedAnonymizationJob): Promise<OriginalsJob | null> {
+  if (entry.source === 'knowledge') {
+    const { job } = await pmGet<{ job: KnowledgeScanJob | null }>('/knowledge/scan/job', { id: entry.job.id, projectId: entry.job.case });
+    return job ? knowledgeJobAsOriginals(job) : null;
+  }
+  const { job } = await pmGet<{ job: OriginalsJob }>('/originals/job', { id: entry.job.id });
+  return job;
+}
+
 async function refreshTrackedJobs(): Promise<void> {
   const polled = new Map<string, OriginalsJob | null>();
   await Promise.all(trackedJobs.map(async (entry) => {
     try {
-      const { job } = await pmGet<{ job: OriginalsJob }>('/originals/job', { id: entry.job.id });
-      polled.set(entry.job.id, jobIsPending(job) ? job : null);
+      const job = await pollEntry(entry);
+      polled.set(entry.job.id, job && jobIsPending(job) ? job : null);
     } catch {
       polled.set(entry.job.id, null);
     }
@@ -100,3 +137,27 @@ export function trackAnonymizationJob(entry: TrackedAnonymizationJob): void {
 export function clearTrackedAnonymizationJobs(): void {
   publish([]);
 }
+
+/**
+ * The dossier plugin runs in an isolated module and cannot import this
+ * registry, so it announces its scans on the window instead. Receiving them
+ * here is what lets a scan launched from the plugin tab draw the same progress
+ * bar in the project row, and keep drawing it once that tab is unmounted.
+ */
+export const KNOWLEDGE_SCAN_EVENT = 'piecemaker:knowledge-scan-job';
+
+type KnowledgeScanBroadcast = { projectPath: string; projectName: string; job: KnowledgeScanJob };
+
+export function receiveKnowledgeScanBroadcast(detail: KnowledgeScanBroadcast | null | undefined): void {
+  if (!detail?.projectPath || !detail.job?.id) return;
+  const job = knowledgeJobAsOriginals(detail.job);
+  if (!jobIsPending(job)) {
+    publish(trackedJobs.filter((tracked) => tracked.job.id !== job.id));
+    return;
+  }
+  trackAnonymizationJob({ projectPath: detail.projectPath, projectName: detail.projectName || detail.projectPath, job, source: 'knowledge' });
+}
+
+window.addEventListener(KNOWLEDGE_SCAN_EVENT, (event) => {
+  receiveKnowledgeScanBroadcast((event as CustomEvent<KnowledgeScanBroadcast>).detail);
+});

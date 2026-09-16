@@ -1,6 +1,6 @@
 import { NODE_KINDS } from './types.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
-import type { KnowledgeChronologyView, KnowledgeMappingView, KnowledgeOverview } from './api.js';
+import type { KnowledgeChronologyView, KnowledgeMappingView, KnowledgeOverview, ScanJob } from './api.js';
 
 export type Tab = 'general' | 'chronology';
 export type ViewData = {
@@ -92,16 +92,34 @@ const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'chronology', label: 'Chronologie', icon: calendarClockIcon },
 ];
 
-export function shell(active: Tab, mappingCount = 0, scanning = false): string {
+export function scanJobLabel(job: ScanJob): string {
+  const phase = job.phase === 'scan' ? 'Analyse GLiNER' : job.phase === 'commit' ? 'Enregistrement' : 'Conversion MarkItDown';
+  return `${phase} · ${Math.round(job.percent || 0)} %`;
+}
+
+export function scanProgress(job: ScanJob): string {
+  const percent = Math.max(0, Math.min(100, job.percent || 0));
+  const label = scanJobLabel(job);
+  return `
+    <span class="pmd-scan-progress" data-scan-progress>
+      <span class="pmd-scan-progress-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+      <span class="pmd-scan-progress-track" role="progressbar" aria-label="Anonymisation du dossier" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(percent)}">
+        <span class="pmd-scan-progress-bar" style="width:${percent}%"></span>
+      </span>
+    </span>`;
+}
+
+export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null): string {
+  const scanning = Boolean(job && job.state === 'running');
   return `
     <div class="pmd-header">
       <div class="pmd-tabs" role="tablist">
         ${TABS.map(({ id, label, icon }) => `<button type="button" class="pmd-tab" role="tab" data-tab="${id}" aria-selected="${active === id}" tabindex="${active === id ? 0 : -1}">${icon}<span>${label}</span></button>`).join('')}
         <button class="pmd-button pmd-agents-button" data-action="agents"><span>▤</span> Agents.md</button>
       </div>
-      <div class="pmd-scan-status" data-ready="${mappingCount > 0}">
+      <div class="pmd-scan-status" data-ready="${mappingCount > 0}" data-scanning="${scanning}">
         <span class="pmd-status-icon">${shieldCheckIcon}</span>
-        <span class="pmd-status-label">${mappingCount} anonymisé(s)</span>
+        ${scanning && job ? scanProgress(job) : `<span class="pmd-status-label">${mappingCount} anonymisé(s)</span>`}
         <button class="pmd-scan-button" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : mappingCount > 0 ? 'Relancer' : 'Lancer'}</span></button>
       </div>
     </div>
