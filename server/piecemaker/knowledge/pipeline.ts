@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import type { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
 import type { GlinerDocument, GlinerMappingDocument, JsonData } from '../../../plugins/piecemaker-dossier/src/types.js';
 import { persistScanResult, scanResultOperations } from '../../../plugins/piecemaker-dossier/src/scan-result.js';
+import type { KnowledgeScanProgress } from './scan-jobs.js';
 
 type ProjectLookup = {
   getProjectById(projectId: string): { project_id: string; project_path: string } | null;
@@ -45,14 +46,48 @@ function safeFiles(projectPath: string, requested: unknown): string[] {
   }))];
 }
 
-function runProcess(executable: string, args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
+/**
+ * `convert_and_scan_pipeline.py` chains CONVERT (markitdown) then SCAN/CHUNKS
+ * (GLiNER) in one call, each with its own 0-100. The two shares below keep the
+ * reported percentage monotonic across that handover, with the same weighting
+ * as `originals-pipeline.cjs` — GLiNER dominates markitdown in duration.
+ */
+const CONVERT_SUBPHASE_SHARE = 0.25;
+
+function progressFromLine(line: string): KnowledgeScanProgress | null {
+  const matched = /^PROGRESS:([A-Z]+):(\d+):(\d+):(\d+)/.exec(line.trim());
+  if (!matched) return null;
+  const [, marker, percentage, current, total] = matched;
+  const phase = marker === 'CONVERT' ? 'convert' : 'scan';
+  const subPercent = Math.min(100, Number(percentage) || 0);
+  return {
+    phase,
+    percent: phase === 'convert'
+      ? subPercent * CONVERT_SUBPHASE_SHARE
+      : CONVERT_SUBPHASE_SHARE * 100 + subPercent * (1 - CONVERT_SUBPHASE_SHARE),
+    processed: Number(current) || 0,
+    total: Number(total) || 0,
+  };
+}
+
+function runProcess(executable: string, args: string[], cwd: string, onProgress?: (progress: KnowledgeScanProgress) => void): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { cwd, env: process.env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(executable, args, { cwd, env: { ...process.env, PYTHONUNBUFFERED: '1' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
+    let pendingLine = '';
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+      if (!onProgress) return;
+      const lines = (pendingLine + chunk).split(/\r?\n/);
+      pendingLine = lines.pop() || '';
+      for (const line of lines) {
+        const progress = progressFromLine(line);
+        if (progress) onProgress(progress);
+      }
+    });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.once('error', reject);
     child.once('close', (code) => {
@@ -131,7 +166,7 @@ function textValue(value: unknown): string {
 export function createKnowledgePipeline(options: PipelineOptions) {
   const script = path.join(options.applicationRoot, 'server', 'piecemaker', 'vendor', 'websocket-server', 'scripts', 'convert_and_scan_pipeline.py');
   return {
-    async scan(projectId: string, requestedFiles?: unknown) {
+    async scan(projectId: string, requestedFiles?: unknown, onProgress?: (progress: KnowledgeScanProgress) => void) {
       const project = options.projects.getProjectById(projectId);
       if (!project) throw new Error('Project not found.');
       const projectPath = fs.realpathSync(project.project_path);
@@ -156,7 +191,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
           '--state-file',
           stateFile,
         ];
-        const processResult = await runProcess(pythonExecutable(options.pythonPath), args, projectPath);
+        const processResult = await runProcess(pythonExecutable(options.pythonPath), args, projectPath, onProgress);
         const mapping = parseObject(mappingFile) as GlinerMappingDocument;
         const documentIndex = parseObject(path.join(temporaryRoot, 'document-index.json'));
         const documents = documentsFromIndex(projectPath, files, documentIndex);

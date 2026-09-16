@@ -6,6 +6,7 @@ import { exclusionNodeOperation } from '../../../plugins/piecemaker-dossier/src/
 import type { KnowledgeQueryInput, KnowledgeUpdateInput } from '../../../plugins/piecemaker-dossier/src/types.js';
 import { legacyExclusions } from './pipeline.js';
 import type { createKnowledgePipeline } from './pipeline.js';
+import { createKnowledgeScanJobs } from './scan-jobs.js';
 
 type ProjectLookup = {
   getProjectById(projectId: string): { project_id: string; project_path: string } | null;
@@ -17,6 +18,7 @@ function projectId(value: unknown): string {
 }
 
 export function createKnowledgeService(store: KnowledgeStore, projects: ProjectLookup, pipeline: ReturnType<typeof createKnowledgePipeline>) {
+  const scanJobs = createKnowledgeScanJobs();
   const ensureProject = (value: unknown): string => {
     const id = projectId(value);
     if (!projects.getProjectById(id)) throw new Error('Project not found.');
@@ -74,7 +76,12 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
       return { projectId: id, content: fs.readFileSync(real, 'utf8').slice(0, 2_000_000), exists: true };
     },
     scan(value: unknown, files?: unknown) {
-      return pipeline.scan(ensureProject(value), files);
+      const id = ensureProject(value);
+      return { job: scanJobs.start(id, (report) => pipeline.scan(id, files, report)) };
+    },
+    scanJob(jobId: unknown, value?: unknown) {
+      const job = scanJobs.get(jobId) || (value ? scanJobs.runningForProject(ensureProject(value)) : null);
+      return { job };
     },
   };
 }

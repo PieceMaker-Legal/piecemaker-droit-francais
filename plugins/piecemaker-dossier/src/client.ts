@@ -1,8 +1,9 @@
 import { knowledgeApi } from './api.js';
 import { documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { chronologyView, escapeHtml, generalView, mappingView, shell } from './views.js';
+import { chronologyView, escapeHtml, generalView, mappingView, scanJobLabel, shell } from './views.js';
 import type { Tab, ViewData } from './views.js';
+import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
 
 type PluginContext = {
@@ -17,6 +18,9 @@ type PluginApi = {
   openFileInEditor(filePath: string): void;
 };
 
+const KNOWLEDGE_SCAN_EVENT = 'piecemaker:knowledge-scan-job';
+const SCAN_POLL_INTERVAL_MS = 1000;
+
 export function mount(container: HTMLElement, api: PluginApi): void {
   const style = document.createElement('style');
   style.textContent = PLUGIN_STYLES;
@@ -28,13 +32,55 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let active: Tab = 'general';
   let data: ViewData | null = null;
   let loadSequence = 0;
-  let scanning = false;
+  let scanJob: ScanJob | null = null;
   let draggedNodeId = '';
   let tiersCollapsed = false;
 
   const showError = (error: unknown) => {
     const target = root.querySelector<HTMLElement>('[data-error]');
     if (target) target.innerHTML = `<div class="pmd-error">${escapeHtml(error instanceof Error ? error.message : error)}</div>`;
+  };
+
+  const publishScanJob = (job: ScanJob) => {
+    if (!context.project) return;
+    window.dispatchEvent(new CustomEvent(KNOWLEDGE_SCAN_EVENT, {
+      detail: { projectPath: context.project.path, projectName: context.project.name, job },
+    }));
+  };
+
+  const paintScanProgress = () => {
+    const track = root.querySelector<HTMLElement>('.pmd-scan-progress-track');
+    const bar = root.querySelector<HTMLElement>('.pmd-scan-progress-bar');
+    const label = root.querySelector<HTMLElement>('.pmd-scan-progress-label');
+    if (!scanJob || !track || !bar || !label) {
+      render();
+      return;
+    }
+    const percent = Math.max(0, Math.min(100, scanJob.percent || 0));
+    bar.style.width = `${percent}%`;
+    track.setAttribute('aria-valuenow', String(Math.round(percent)));
+    label.textContent = scanJobLabel(scanJob);
+    label.title = scanJobLabel(scanJob);
+  };
+
+  const followScan = async (started: ScanJob) => {
+    const projectId = context.project?.name || '';
+    scanJob = started;
+    publishScanJob(started);
+    render();
+    while (scanJob && scanJob.state === 'running') {
+      await new Promise((resolve) => window.setTimeout(resolve, SCAN_POLL_INTERVAL_MS));
+      if (context.project?.name !== projectId) return;
+      const { job } = await knowledgeApi.scanJob(scanJob.id, projectId);
+      if (!job) break;
+      scanJob = job;
+      publishScanJob(job);
+      paintScanProgress();
+    }
+    const failure = scanJob?.state === 'error' ? scanJob.error : '';
+    scanJob = null;
+    await load();
+    if (failure) showError(new Error(failure));
   };
 
   const load = async () => {
@@ -61,6 +107,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       render();
       showError(error);
     }
+  };
+
+  const resumeScan = async () => {
+    if (!context.project || scanJob) return;
+    const projectId = context.project.name;
+    const { job } = await knowledgeApi.scanJob('', projectId).catch(() => ({ job: null }));
+    if (job && job.state === 'running' && context.project?.name === projectId) await followScan(job);
   };
 
   const save = async (operations: KnowledgeUpdateOperation[]) => {
@@ -151,15 +204,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       button.setAttribute('aria-expanded', String(collapsed));
     });
     root.querySelector<HTMLElement>('[data-action=scan]')?.addEventListener('click', async () => {
-      if (!context.project || scanning) return;
-      scanning = true;
-      render();
+      if (!context.project || scanJob) return;
       try {
-        await knowledgeApi.scan(context.project.name);
-        scanning = false;
-        await load();
+        const { job } = await knowledgeApi.scan(context.project.name);
+        await followScan(job);
       } catch (error) {
-        scanning = false;
+        scanJob = null;
         render();
         showError(error);
       }
@@ -269,7 +319,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
 
   const render = () => {
     root.dataset.theme = context.theme;
-    root.innerHTML = shell(active, data?.graph.mappings.length || 0, scanning);
+    root.innerHTML = shell(active, data?.graph.mappings.length || 0, scanJob);
     const content = root.querySelector<HTMLElement>('[data-content]');
     if (!context.project) {
       if (content) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
@@ -283,12 +333,15 @@ export function mount(container: HTMLElement, api: PluginApi): void {
 
   render();
   void load();
+  void resumeScan();
   const unsubscribe = api.onContextChange((next) => {
     const changedProject = next.project?.name !== context.project?.name;
     context = next;
     if (changedProject) {
       data = null;
+      scanJob = null;
       void load();
+      void resumeScan();
     } else {
       render();
     }
