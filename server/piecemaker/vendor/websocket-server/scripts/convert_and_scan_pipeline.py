@@ -48,6 +48,10 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Set
 
 
+GLINER_CHUNK_SIZE = 384
+GLINER_CHUNK_OVERLAP = 64
+
+
 def print_progress(phase: str, current: int, total: int) -> None:
     """Print standardized progress message.
 
@@ -93,7 +97,11 @@ def start_scanner_worker() -> Optional[subprocess.Popen]:
         return None
 
 
-def wait_for_worker_ready(proc: Optional[subprocess.Popen], timeout: int = 500) -> bool:
+def wait_for_worker_ready(
+    proc: Optional[subprocess.Popen],
+    progress_context: Dict,
+    timeout: int = 500,
+) -> bool:
     """Wait for the scanner worker to print READY on stdout.
 
     While waiting, streams stderr output (model loading progress) in real-time.
@@ -108,9 +116,9 @@ def wait_for_worker_ready(proc: Optional[subprocess.Popen], timeout: int = 500) 
     if proc is None:
         return False
 
-    import re
     import select
     import threading
+    progress_context["event"] = threading.Event()
 
     _chunk_re = re.compile(r"^PROGRESS:CHUNKS:\d+:\d+:\d+")
 
@@ -126,9 +134,24 @@ def wait_for_worker_ready(proc: Optional[subprocess.Popen], timeout: int = 500) 
             for line in proc.stderr:
                 stripped = line.strip()
                 if _chunk_re.match(stripped):
-                    print(stripped, flush=True)
+                    _, _, _, current, raw_total = stripped.split(":")
+                    if int(current) >= int(raw_total):
+                        progress_context["event"].set()
+                    global_total = progress_context.get("total", 0)
+                    if global_total:
+                        global_current = min(global_total, progress_context.get("offset", 0) + int(current))
+                        global_percent = int(global_current * 100 / global_total)
+                        print(
+                            f"PROGRESS:CHUNKS:{global_percent}:{global_current}:{global_total}",
+                            flush=True,
+                        )
+                    else:
+                        print(stripped, flush=True)
                 else:
-                    print(f"  [worker] {line}", end="", flush=True)
+                    # Keep diagnostics on stderr. The Node parent deliberately
+                    # ignores non-PROGRESS stdout because it may contain document
+                    # text, while it retains a bounded stderr tail on failure.
+                    print(f"  [worker] {line}", end="", file=sys.stderr, flush=True)
         except (ValueError, OSError):
             pass  # Pipe closed
 
@@ -141,11 +164,12 @@ def wait_for_worker_ready(proc: Optional[subprocess.Popen], timeout: int = 500) 
             print(f"⚠️  Scanner worker exited prematurely (exit {proc.returncode})", file=sys.stderr)
             return False
 
-        # Non-blocking read from stdout
+        # TextIOWrapper does not reliably distinguish EAGAIN from EOF when its
+        # descriptor is toggled to non-blocking mode. select() keeps the stream
+        # blocking and reads only after a complete line is available.
         try:
-            os.set_blocking(proc.stdout.fileno(), False)
-            line = proc.stdout.readline()
-            os.set_blocking(proc.stdout.fileno(), True)
+            readable, _, _ = select.select([proc.stdout], [], [], 0.1)
+            line = proc.stdout.readline() if readable else ""
         except (IOError, OSError):
             line = ""
 
@@ -153,16 +177,23 @@ def wait_for_worker_ready(proc: Optional[subprocess.Popen], timeout: int = 500) 
             print("✅ Scanner worker ready (models loaded)")
             return True
 
-        if not line:
-            time.sleep(0.1)
-
     # Timeout
     print("⚠️  Scanner worker timed out waiting for READY", file=sys.stderr)
     proc.kill()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
     return False
 
 
-def scan_file_via_worker(proc: subprocess.Popen, md_file: str, output_dir: str) -> bool:
+def scan_file_via_worker(
+    proc: subprocess.Popen,
+    md_file: str,
+    output_dir: str,
+    progress_context: Optional[Dict] = None,
+    chunk_offset: int = 0,
+) -> bool:
     """Send a scan command to the worker and wait for the result.
 
     Args:
@@ -173,6 +204,9 @@ def scan_file_via_worker(proc: subprocess.Popen, md_file: str, output_dir: str) 
     Returns:
         True if scan succeeded, False otherwise.
     """
+    if progress_context is not None:
+        progress_context["offset"] = chunk_offset
+        progress_context["event"].clear()
     cmd = json.dumps({"cmd": "scan", "md_file": md_file, "output_dir": output_dir})
     try:
         proc.stdin.write(cmd + "\n")
@@ -198,6 +232,9 @@ def scan_file_via_worker(proc: subprocess.Popen, md_file: str, output_dir: str) 
         print(f"⚠️  Invalid JSON from worker: {response_line.strip()}", file=sys.stderr)
         return False
 
+    if progress_context is not None and progress_context.get("active_chunks", 0):
+        progress_context["event"].wait(timeout=5)
+
     if response.get("status") == "ok":
         return True
     else:
@@ -207,15 +244,43 @@ def scan_file_via_worker(proc: subprocess.Popen, md_file: str, output_dir: str) 
 
 def stop_scanner_worker(proc: Optional[subprocess.Popen]) -> None:
     """Gracefully stop the scanner worker."""
-    if proc is None or proc.poll() is not None:
+    if proc is None:
         return
 
     try:
-        proc.stdin.write(json.dumps({"cmd": "quit"}) + "\n")
-        proc.stdin.flush()
-        proc.wait(timeout=10)
+        if proc.poll() is None:
+            proc.stdin.write(json.dumps({"cmd": "quit"}) + "\n")
+            proc.stdin.flush()
+            proc.wait(timeout=10)
     except Exception:
-        proc.kill()
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except Exception:
+            pass
+    finally:
+        for stream in (proc.stdin, proc.stdout, proc.stderr):
+            try:
+                stream.close()
+            except (AttributeError, OSError):
+                pass
+
+
+class PipelineResources:
+    """Owns every heavyweight or sensitive transient pipeline resource."""
+
+    def __init__(self) -> None:
+        self.scanner_worker: Optional[subprocess.Popen] = None
+        self.scan_workspace: Optional[tempfile.TemporaryDirectory] = None
+
+    def close(self) -> None:
+        # The temporary maps contain raw PII and must be removed even when
+        # worker shutdown itself encounters a broken pipe or a dead process.
+        try:
+            stop_scanner_worker(self.scanner_worker)
+        finally:
+            if self.scan_workspace is not None:
+                self.scan_workspace.cleanup()
 
 
 def convert_file(
@@ -326,100 +391,6 @@ def convert_file(
     except Exception as e:
         print(f"❌ Conversion error: {e}", file=sys.stderr)
         return False, None
-
-
-def scan_file(md_file: str, output_dir: str) -> bool:
-    """Run presidio-gliner.py subprocess to scan Markdown for PII with real-time output streaming.
-
-    Args:
-        md_file: Path to markdown file
-        output_dir: Directory for output JSON
-
-    Returns:
-        success: True if scan succeeded
-    """
-    script_dir = Path(__file__).parent
-    scanner_script = script_dir / "presidio-gliner" / "presidio-gliner.py"
-
-    if not scanner_script.exists():
-        print(f"❌ presidio-gliner.py not found at {scanner_script}", file=sys.stderr)
-        return False
-
-    # Build command
-    cmd = [sys.executable, str(scanner_script), md_file, "-o", output_dir]
-
-    try:
-        # Run scanner with real-time output streaming
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,  # Line buffered
-        )
-
-        # Stream output in real-time
-        os.set_blocking(process.stdout.fileno(), False)
-        os.set_blocking(process.stderr.fileno(), False)
-
-        return_code = None
-        while return_code is None:
-            # Check if process has finished
-            return_code = process.poll()
-
-            # Read available output without blocking
-            try:
-                # Read stdout
-                while True:
-                    line = process.stdout.readline()
-                    if not line:
-                        break
-                    print(line, end="", flush=True)
-
-                # Read stderr
-                while True:
-                    line = process.stderr.readline()
-                    if not line:
-                        break
-                    print(line, end="", file=sys.stderr, flush=True)
-
-            except (IOError, OSError):
-                pass
-
-            # Small delay to prevent CPU spinning
-            if return_code is None:
-                time.sleep(0.01)
-
-        # Ensure we read any remaining output
-        try:
-            remaining_stdout, remaining_stderr = process.communicate(timeout=1)
-            if remaining_stdout:
-                print(remaining_stdout, end="", flush=True)
-            if remaining_stderr:
-                print(remaining_stderr, end="", file=sys.stderr, flush=True)
-        except subprocess.TimeoutExpired:
-            pass
-
-        if return_code != 0:
-            print(f"⚠️  Scan failed with exit code {return_code}", file=sys.stderr)
-            return False
-
-        # Verify JSON output was created
-        md_stem = Path(md_file).stem
-        json_path = Path(output_dir) / f"{md_stem}_sensitive_map.json"
-
-        if not json_path.exists():
-            print(f"⚠️  Expected JSON output not found: {json_path}", file=sys.stderr)
-            return False
-
-        return True
-
-    except subprocess.TimeoutExpired:
-        print(f"❌ Scan timeout (>10 minutes): {md_file}", file=sys.stderr)
-        return False
-    except Exception as e:
-        print(f"❌ Scan error: {e}", file=sys.stderr)
-        return False
 
 
 def load_existing_mapping(mapping_path: Path) -> Optional[Dict]:
@@ -566,6 +537,25 @@ def are_names_similar(name1: str, norm1: str, name2: str, norm2: str) -> bool:
         return True
 
     return False
+
+
+def count_gliner_chunks(md_file: str) -> int:
+    try:
+        word_count = len(re.findall(r"\S+", Path(md_file).read_text(encoding="utf-8")))
+    except (OSError, UnicodeError):
+        return 1
+    if not word_count:
+        return 1
+    step = max(1, GLINER_CHUNK_SIZE - GLINER_CHUNK_OVERLAP)
+    return (max(0, word_count - GLINER_CHUNK_SIZE) + step - 1) // step + 1
+
+
+def emit_chunk_progress(current: int, total: int) -> None:
+    if total <= 0:
+        return
+    bounded_current = min(total, max(0, current))
+    percent = int(bounded_current * 100 / total)
+    print(f"PROGRESS:CHUNKS:{percent}:{bounded_current}:{total}", flush=True)
 
 
 def consolidate_duplicate_entities(entities: List[Dict]) -> List[Dict]:
@@ -1633,7 +1623,7 @@ def write_document_index(
     return written
 
 
-def main():
+def run_pipeline(resources: PipelineResources):
     """Main pipeline orchestration."""
     parser = argparse.ArgumentParser(
         description="Convert documents to Markdown and scan for sensitive data",
@@ -1697,6 +1687,7 @@ def main():
         help="Reuse existing Markdown and scans whose source fingerprint is unchanged",
     )
     args = parser.parse_args()
+    progress_context = {"offset": 0, "total": 0, "active_chunks": 0}
 
     # Validate input files
     input_files = []
@@ -1747,7 +1738,8 @@ def main():
 
     # Start scanner worker immediately so model loading overlaps with Phase 1.
     if scan_needed:
-        scanner_worker = start_scanner_worker()
+        resources.scanner_worker = start_scanner_worker()
+        scanner_worker = resources.scanner_worker
     else:
         scanner_worker = None
         print("✅ Every PII scan is already up to date — GLiNER not started")
@@ -1825,19 +1817,27 @@ def main():
     if skipped_scans:
         print(f"⏭️  {skipped_scans} file(s) already scanned, left untouched")
 
-    # Wait for the scanner worker to finish loading models. One retry (clean
-    # up the stalled/dead worker, relaunch, wait again) before falling back
-    # to a subprocess-per-file scan.
-    worker_ready = wait_for_worker_ready(scanner_worker) if pending_scans else False
+    chunk_counts = {md_file: count_gliner_chunks(md_file) for md_file in pending_scans}
+    total_chunks = sum(chunk_counts.values())
+    progress_context["total"] = total_chunks
+
+    # Wait for the scanner worker to finish loading models. One retry cleans up
+    # and relaunches a stalled/dead worker; a second failure aborts the job so
+    # the heavyweight model is never reloaded once per document.
+    worker_ready = wait_for_worker_ready(scanner_worker, progress_context) if pending_scans else False
 
     if pending_scans and not worker_ready:
         print("⚠️  Scanner worker not ready — cleaning up and retrying once", file=sys.stderr)
         stop_scanner_worker(scanner_worker)
-        scanner_worker = start_scanner_worker()
-        worker_ready = wait_for_worker_ready(scanner_worker)
+        resources.scanner_worker = start_scanner_worker()
+        scanner_worker = resources.scanner_worker
+        worker_ready = wait_for_worker_ready(scanner_worker, progress_context)
 
     if pending_scans and not worker_ready:
-        print("⚠️  Scanner worker not available after retry, falling back to subprocess-per-file", file=sys.stderr)
+        raise RuntimeError(
+            "Scanner GLiNER indisponible après deux tentatives ; "
+            "le traitement est arrêté pour éviter de recharger le modèle pour chaque fichier."
+        )
     print()
 
     scan_success_count = 0
@@ -1846,18 +1846,26 @@ def main():
     index_path = state_target.parent / "document-index.json"
     # Raw detections contain PII. They live only in a private OS temporary
     # directory and are deleted individually as each file is merged.
-    scan_workspace = tempfile.TemporaryDirectory(prefix="piecemaker-scans-")
+    resources.scan_workspace = tempfile.TemporaryDirectory(prefix="piecemaker-scans-")
+    scan_workspace = resources.scan_workspace
     scan_output_dir = scan_workspace.name
 
+    emit_chunk_progress(0, total_chunks)
+    completed_chunks = 0
     for i, md_file in enumerate(pending_scans, start=1):
-        print_progress("SCAN", i, len(pending_scans))
         print(f"🔍 [{i}/{len(pending_scans)}] Scanning: {Path(md_file).name}")
 
-        if worker_ready:
-            success = scan_file_via_worker(scanner_worker, md_file, scan_output_dir)
-        else:
-            # Fallback: subprocess per file (old behavior)
-            success = scan_file(md_file, scan_output_dir)
+        progress_context["active_chunks"] = chunk_counts[md_file]
+        success = scan_file_via_worker(
+            scanner_worker,
+            md_file,
+            scan_output_dir,
+            progress_context,
+            completed_chunks,
+        )
+        if success:
+            completed_chunks += chunk_counts[md_file]
+            emit_chunk_progress(completed_chunks, total_chunks)
 
         if not success:
             print(f"   ⚠️  Scan failed, markdown preserved")
@@ -1906,10 +1914,6 @@ def main():
         scan_success_count += 1
         print()
 
-    # Shut down worker
-    stop_scanner_worker(scanner_worker)
-    scan_workspace.cleanup()
-
     print(f"✅ Phase 2 complete: {scan_success_count}/{len(pending_scans)} files scanned")
     print()
 
@@ -1952,6 +1956,14 @@ def main():
         return 0
     else:
         return 1
+
+
+def main():
+    resources = PipelineResources()
+    try:
+        return run_pipeline(resources)
+    finally:
+        resources.close()
 
 
 if __name__ == "__main__":
