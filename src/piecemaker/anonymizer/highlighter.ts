@@ -10,6 +10,11 @@
  * diverger l'arbre réel de celui que React croit avoir rendu, et le premier
  * re-rendu se solderait par un `NotFoundError: Failed to execute 'removeChild'`.
  * Ici, aucun nœud n'est créé ni déplacé — seules des `Range` sont enregistrées.
+ *
+ * Le surlignage est restreint au fil de conversation : c'est le seul endroit où
+ * le texte a traversé le proxy PII, donc le seul où la teinte signale quelque
+ * chose. Ailleurs — pièces du dossier, panneaux, formulaires — le texte n'a
+ * jamais été codé et la teinte serait un faux signal.
  */
 
 type HighlightRegistry = {
@@ -26,6 +31,7 @@ declare const Highlight: (new (...ranges: Range[]) => unknown) | undefined;
 const HIGHLIGHT_NAME = 'piecemaker-identity';
 const STYLE_ELEMENT_ID = 'piecemaker-identity-highlight-style';
 const HIGHLIGHT_EXCLUSION_SELECTOR = '[data-piecemaker-identity-highlight="off"]';
+const HIGHLIGHT_SCOPE_SELECTOR = '.chat-messages-pane, [data-piecemaker-identity-highlight="on"]';
 const MAX_RANGES = 4000;
 
 /** Sous-arbres dont le texte n'a pas de sens à surligner, ou qui ne sont pas du texte. */
@@ -81,6 +87,10 @@ function ensureStyleElement(): void {
   border-radius: 2px;
 }`;
   document.head.appendChild(style);
+}
+
+function highlightScopes(): Element[] {
+  return Array.from(document.querySelectorAll(HIGHLIGHT_SCOPE_SELECTOR));
 }
 
 function collectRanges(root: Node, patterns: RegExp[]): Range[] {
@@ -139,7 +149,7 @@ export function createIdentityHighlighter(): IdentityHighlighter {
       registry.delete(HIGHLIGHT_NAME);
       return;
     }
-    const ranges = collectRanges(document.body, patterns);
+    const ranges = highlightScopes().flatMap((scope) => collectRanges(scope, patterns));
     if (ranges.length === 0) {
       registry.delete(HIGHLIGHT_NAME);
       return;
