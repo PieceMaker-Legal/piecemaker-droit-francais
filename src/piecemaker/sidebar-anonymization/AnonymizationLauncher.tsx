@@ -8,7 +8,7 @@ import { Button, Dialog, DialogContent, DialogTitle } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import type { DossierCase } from '@/piecemaker/dossier/dossierRegistration';
-import { setMappingReady } from '@/piecemaker/dossier/mappingStatusCache';
+import { setAnonymizationComplete } from '@/piecemaker/dossier/mappingStatusCache';
 import type { OriginalsJob } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 import {
   getTrackedAnonymizationJobs,
@@ -80,21 +80,20 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
     const refreshedReferences = new Map<string, string>();
     const overview = await pmGet<{ folders?: DossierCase[] }>('/repository');
     const registeredReferences = new Map((overview.folders ?? []).map((entry) => [entry.location, entry.path]));
+    const status = await pmGet<{ projects: Array<{ projectPath: string; completedAt: string }> }>('/knowledge/anonymization-status');
+    const completedPaths = new Set((Array.isArray(status.projects) ? status.projects : [])
+      .filter((project) => project.completedAt)
+      .map((project) => project.projectPath));
     for (const project of refreshedProjects) {
       const caseReference = registeredReferences.get(project.fullPath);
       if (!caseReference) {
-        setMappingReady(project.fullPath, false);
+        setAnonymizationComplete(project.fullPath, false);
         continue;
       }
       refreshedReferences.set(project.projectId, caseReference);
-      try {
-        const mapping = await pmGet<{ exists: boolean; mapping: Record<string, string> }>('/mapping', { case: caseReference });
-        const scanned = mapping.exists && Object.keys(mapping.mapping).length > 0;
-        if (scanned) refreshedScannedIds.add(project.projectId);
-        setMappingReady(project.fullPath, scanned);
-      } catch {
-        setMappingReady(project.fullPath, false);
-      }
+      const scanned = completedPaths.has(project.fullPath);
+      if (scanned) refreshedScannedIds.add(project.projectId);
+      setAnonymizationComplete(project.fullPath, scanned);
     }
     setScannedProjectIds(refreshedScannedIds);
     setCaseReferences(refreshedReferences);

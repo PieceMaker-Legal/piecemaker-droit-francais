@@ -9,7 +9,7 @@ import { getTaskIndicatorStatus } from '@/modules/sidebar/utils/sidebarProjectFo
 import TaskIndicator from '@/modules/sidebar/TaskIndicator';
 import SidebarProjectSessions from '@/modules/sidebar/SidebarProjectSessions';
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
-import { getMappingReady, subscribeMappingReady } from '@/piecemaker/dossier/mappingStatusCache';
+import { getAnonymizationComplete, subscribeAnonymizationStatus } from '@/piecemaker/dossier/mappingStatusCache';
 
 type SidebarProjectItemProps = {
   project: Project;
@@ -97,10 +97,8 @@ function SidebarProjectItem({
   // Project identity is tracked by the DB-assigned `projectId` everywhere
   // after the projectName → projectId migration.
   const isSelected = selectedProject?.projectId === project.projectId;
-  // Cached at the point CaseMappingSetup.tsx loads the case overview, keyed by
-  // the same absolute path as `project.fullPath` — no fetch or poll here.
-  const isAnonymized = useSyncExternalStore(subscribeMappingReady, () =>
-    getMappingReady(project.fullPath),
+  const isAnonymized = useSyncExternalStore(subscribeAnonymizationStatus, () =>
+    getAnonymizationComplete(project.fullPath),
   );
   const totalSessionCount = Number(project.sessionMeta?.total ?? sessions.length);
   const sessionCountDisplay = getSessionCountDisplay(project, sessions);

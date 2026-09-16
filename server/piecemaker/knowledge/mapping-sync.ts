@@ -34,5 +34,6 @@ export function createMappingReadyHandler(store: StoreProvider, projects: Projec
       projectId: project.project_id,
       operations: [...staleMappingDeletions(knowledge, project.project_id, operations), ...operations],
     });
+    knowledge.markAnonymizationComplete(project.project_id);
   };
 }
