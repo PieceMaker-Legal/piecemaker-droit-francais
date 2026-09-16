@@ -9,13 +9,8 @@ export type InstitutionalTerms = { file: string; terms: string[] };
 export type ScanJob = {
   id: string;
   projectId: string;
-  source: 'knowledge';
-  action: 'anonymize';
   state: 'running' | 'done' | 'error';
-  phase: 'convert' | 'scan' | 'commit';
   percent: number;
-  processed: number;
-  total: number;
   error: string | null;
 };
 type RepositoryCase = { path: string; location: string };

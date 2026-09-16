@@ -1,7 +1,7 @@
 import { knowledgeApi } from './api.js';
 import { documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { chronologyView, escapeHtml, generalView, mappingView, scanJobLabel, shell } from './views.js';
+import { chronologyView, escapeHtml, generalView, mappingView, scanPercentLabel, shell } from './views.js';
 import type { Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -59,8 +59,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     const percent = Math.max(0, Math.min(100, scanJob.percent || 0));
     bar.style.width = `${percent}%`;
     track.setAttribute('aria-valuenow', String(Math.round(percent)));
-    label.textContent = scanJobLabel(scanJob);
-    label.title = scanJobLabel(scanJob);
+    label.textContent = scanPercentLabel(scanJob);
   };
 
   const followScan = async (started: ScanJob) => {

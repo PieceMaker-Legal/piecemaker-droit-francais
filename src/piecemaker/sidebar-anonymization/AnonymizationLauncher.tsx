@@ -23,24 +23,14 @@ type AnonymizationLauncherProps = {
   onProjectsChange: (projects: Project[]) => void;
 };
 
-function jobLabel(job: OriginalsJob): string {
-  if (job.state === 'queued') {
-    return job.queuePosition ? `En attente · position ${job.queuePosition}` : 'En attente';
-  }
-  if (job.state === 'running') {
-    const phase = job.phase === 'scan' ? 'Analyse GLiNER' : job.phase === 'commit' ? 'Enregistrement' : 'Conversion MarkItDown';
-    return `${phase} · ${Math.round(job.percent ?? 0)} %`;
-  }
-  return 'Anonymisation en cours';
-}
-
 function ProjectProgress({ projectJob }: { projectJob: TrackedAnonymizationJob }) {
   const percent = Math.max(0, Math.min(100, projectJob.job.percent ?? 0));
+  const label = `${Math.round(percent)} %`;
   return (
     <div className="mt-1 min-w-0" data-piecemaker-anonymization-progress>
       <div className="mb-0.5 flex min-w-0 items-center gap-1 text-[10px] leading-3 text-muted-foreground">
         <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin text-primary" />
-        <span className="truncate" title={jobLabel(projectJob.job)}>{jobLabel(projectJob.job)}</span>
+        <span className="truncate">{label}</span>
       </div>
       <div
         className="h-1 overflow-hidden rounded-full bg-muted"
