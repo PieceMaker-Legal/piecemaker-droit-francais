@@ -1,4 +1,4 @@
-import { knowledgeApi } from './api.js';
+import { BODACC_FAMILIES, knowledgeApi } from './api.js';
 import { documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { partyCodeChange } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
@@ -29,6 +29,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   root.className = 'pmd-root';
   root.style.position = 'relative';
   container.replaceChildren(style, root);
+  root.addEventListener('click', () => root.querySelectorAll<HTMLElement>('.pmd-profile-menu[data-open=true], .pmd-bodacc-family-menu[data-open=true]').forEach((menu) => { menu.dataset.open = 'false'; }));
   let context = api.context;
   let active: Tab = 'general';
   let data: ViewData | null = null;
@@ -41,6 +42,61 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const showError = (error: unknown) => {
     const target = root.querySelector<HTMLElement>('[data-error]');
     if (target) target.innerHTML = `<div class="pmd-error">${escapeHtml(error instanceof Error ? error.message : error)}</div>`;
+  };
+
+  const defaultBodaccFamilies = BODACC_FAMILIES.map((family) => family.code);
+  const bodaccPreferenceKey = (companyId: string): string => `piecemaker-dossier:bodacc-families:${encodeURIComponent(context.project?.name || '')}:${encodeURIComponent(companyId)}`;
+  const bodaccFamiliesFor = (companyId: string): string[] => {
+    const existing = bodaccStates.get(companyId);
+    if (Array.isArray(existing?.families)) return existing.families;
+    let families = defaultBodaccFamilies;
+    try {
+      const stored = JSON.parse(localStorage.getItem(bodaccPreferenceKey(companyId)) || 'null') as unknown;
+      if (Array.isArray(stored)) families = stored.filter((family): family is string => typeof family === 'string' && defaultBodaccFamilies.includes(family));
+    } catch {
+      families = defaultBodaccFamilies;
+    }
+    const state = existing || { status: 'idle' as const };
+    state.families = families;
+    bodaccStates.set(companyId, state);
+    return families;
+  };
+  const rememberBodaccFamilies = (companyId: string, families: string[]) => {
+    const state = bodaccStates.get(companyId) || { status: 'idle' as const };
+    state.families = families;
+    bodaccStates.set(companyId, state);
+    try {
+      localStorage.setItem(bodaccPreferenceKey(companyId), JSON.stringify(families));
+    } catch {
+      return;
+    }
+  };
+
+  const searchBodaccCompany = async (companyId: string, siren: string, siret: string, renderAtStart = true, renderAtEnd = true) => {
+    const state = bodaccStates.get(companyId) || { status: 'idle' as const };
+    const families = bodaccFamiliesFor(companyId);
+    state.families = families;
+    state.open = true;
+    if (!siren && !siret) {
+      state.status = 'error';
+      state.error = 'Aucun SIREN ou SIRET n’est renseigné pour cette personne morale.';
+      bodaccStates.set(companyId, state);
+      if (renderAtStart || renderAtEnd) render();
+      return;
+    }
+    state.status = 'loading';
+    state.error = '';
+    bodaccStates.set(companyId, state);
+    if (renderAtStart) render();
+    try {
+      state.result = await knowledgeApi.searchBodacc(siren, siret, families);
+      state.status = 'loaded';
+    } catch (error) {
+      state.status = 'error';
+      state.error = error instanceof Error ? error.message : 'Recherche BODACC impossible.';
+    }
+    bodaccStates.set(companyId, state);
+    if (renderAtEnd && context.project) render();
   };
 
   const publishScanJob = (job: ScanJob) => {
@@ -198,35 +254,38 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       state.open = (details as HTMLDetailsElement).open;
       bodaccStates.set(companyId, state);
     }));
-    root.querySelectorAll<HTMLButtonElement>('[data-action=company-search][data-scan-company]').forEach((button) => button.addEventListener('click', async (event) => {
+    root.querySelectorAll<HTMLButtonElement>('[data-action=bodacc-search][data-scan-company]').forEach((button) => button.addEventListener('click', async (event) => {
       event.stopPropagation();
       const companyId = button.dataset.scanCompany || '';
       if (!companyId) return;
       const siren = button.dataset.siren || '';
       const siret = button.dataset.siret || '';
-      const state = bodaccStates.get(companyId) || { status: 'idle' as const };
-      state.open = true;
-      if (!siren && !siret) {
-        state.status = 'error';
-        state.error = 'Aucun SIREN ou SIRET n’est renseigné pour cette personne morale.';
-        bodaccStates.set(companyId, state);
-        render();
-        return;
-      }
-      state.status = 'loading';
-      state.error = '';
-      bodaccStates.set(companyId, state);
-      render();
-      try {
-        state.result = await knowledgeApi.searchBodacc(siren, siret);
-        state.status = 'loaded';
-      } catch (error) {
-        state.status = 'error';
-        state.error = error instanceof Error ? error.message : 'Recherche BODACC impossible.';
-      }
-      bodaccStates.set(companyId, state);
-      render();
+      await searchBodaccCompany(companyId, siren, siret);
     }));
+    root.querySelectorAll<HTMLButtonElement>('[data-action=company-family-menu]').forEach((button) => button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const menu = button.parentElement?.querySelector<HTMLElement>('[data-bodacc-family-menu]');
+      root.querySelectorAll<HTMLElement>('[data-bodacc-family-menu][data-open=true]').forEach((entry) => { if (entry !== menu) entry.dataset.open = 'false'; });
+      if (!menu) return;
+      const open = menu.dataset.open === 'true';
+      menu.dataset.open = String(!open);
+      button.setAttribute('aria-expanded', String(!open));
+    }));
+    root.querySelectorAll<HTMLElement>('[data-bodacc-family-menu]').forEach((menu) => menu.addEventListener('click', (event) => event.stopPropagation()));
+    root.querySelectorAll<HTMLInputElement>('[data-bodacc-family]').forEach((checkbox) => checkbox.addEventListener('change', () => {
+      const companyId = checkbox.dataset.scanCompany || '';
+      if (!companyId) return;
+      const families = Array.from(root.querySelectorAll<HTMLInputElement>('[data-bodacc-family]')).filter((entry) => entry.dataset.scanCompany === companyId && entry.checked).map((entry) => entry.dataset.bodaccFamily || '').filter(Boolean);
+      rememberBodaccFamilies(companyId, families);
+    }));
+    root.querySelector<HTMLElement>('[data-action=scan-all-companies]')?.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-action=bodacc-search][data-scan-company]'));
+      const searches = buttons.map((button) => searchBodaccCompany(button.dataset.scanCompany || '', button.dataset.siren || '', button.dataset.siret || '', false, false));
+      render();
+      await Promise.all(searches);
+      render();
+    });
     root.querySelectorAll<HTMLElement>('[data-action=refresh]').forEach((button) => button.addEventListener('click', () => void load()));
     root.querySelector<HTMLElement>('[data-action=toggle-tiers]')?.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -404,6 +463,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (changedProject) {
       data = null;
       scanJob = null;
+      bodaccStates.clear();
       void load();
       void resumeScan();
     } else {
