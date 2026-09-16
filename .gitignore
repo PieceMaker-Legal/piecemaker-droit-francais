@@ -157,3 +157,12 @@ server/piecemaker/protection/bypass.test.js
 server/piecemaker/vendor/websocket-server/admin-routes.cjs
 
 CLAUDE.md
+
+# Tests PieceMaker (hors upstream CloudCLI)
+src/piecemaker/**/*.test.ts
+src/piecemaker/**/*.test.tsx
+server/piecemaker/**/*.test.ts
+server/piecemaker/**/*.test.js
+plugins/piecemaker-*/**/*.test.ts
+plugins/piecemaker-*/**/*.test.tsx
+plugins/piecemaker-*/**/*.test.mjs
