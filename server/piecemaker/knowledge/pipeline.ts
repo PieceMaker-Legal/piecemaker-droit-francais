@@ -70,7 +70,7 @@ function progressFromLine(line: string): KnowledgeScanProgress | null {
   };
 }
 
-function runProcess(executable: string, args: string[], cwd: string, onProgress?: (progress: KnowledgeScanProgress) => void): Promise<{ stdout: string; stderr: string }> {
+function runProcess(executable: string, args: string[], cwd: string, onProgress?: (progress: KnowledgeScanProgress) => void, signal?: AbortSignal): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { cwd, env: { ...process.env, PYTHONUNBUFFERED: '1' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
@@ -89,8 +89,13 @@ function runProcess(executable: string, args: string[], cwd: string, onProgress?
       }
     });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
+    const abort = () => { child.kill('SIGTERM'); };
+    if (signal?.aborted) abort();
+    signal?.addEventListener('abort', abort, { once: true });
     child.once('error', reject);
     child.once('close', (code) => {
+      signal?.removeEventListener('abort', abort);
+      if (signal?.aborted) { reject(new Error('Analyse interrompue.')); return; }
       if (code === 0) resolve({ stdout, stderr });
       else reject(new Error(stderr.trim() || stdout.trim() || `Pipeline failed with code ${code ?? 1}.`));
     });
@@ -166,7 +171,7 @@ function textValue(value: unknown): string {
 export function createKnowledgePipeline(options: PipelineOptions) {
   const script = path.join(options.applicationRoot, 'server', 'piecemaker', 'vendor', 'websocket-server', 'scripts', 'convert_and_scan_pipeline.py');
   return {
-    async scan(projectId: string, requestedFiles?: unknown, onProgress?: (progress: KnowledgeScanProgress) => void) {
+    async scan(projectId: string, requestedFiles?: unknown, onProgress?: (progress: KnowledgeScanProgress) => void, signal?: AbortSignal) {
       const project = options.projects.getProjectById(projectId);
       if (!project) throw new Error('Project not found.');
       const projectPath = fs.realpathSync(project.project_path);
@@ -191,7 +196,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
           '--state-file',
           stateFile,
         ];
-        const processResult = await runProcess(pythonExecutable(options.pythonPath), args, projectPath, onProgress);
+        const processResult = await runProcess(pythonExecutable(options.pythonPath), args, projectPath, onProgress, signal);
         const mapping = parseObject(mappingFile) as GlinerMappingDocument;
         const documentIndex = parseObject(path.join(temporaryRoot, 'document-index.json'));
         const documents = documentsFromIndex(projectPath, files, documentIndex);

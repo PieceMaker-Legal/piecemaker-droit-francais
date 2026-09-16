@@ -1,5 +1,6 @@
 import { knowledgeApi } from './api.js';
 import { documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
+import { partyCodeChange } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { chronologyView, escapeHtml, generalView, mappingView, scanPercentLabel, shell } from './views.js';
 import type { Tab, ViewData } from './views.js';
@@ -202,6 +203,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       layout.dataset.tiersCollapsed = String(!collapsed);
       button.setAttribute('aria-expanded', String(collapsed));
     });
+    root.querySelector<HTMLElement>('[data-action=cancel-scan]')?.addEventListener('click', async () => {
+      if (!context.project || !scanJob || !window.confirm('Arrêter l’analyse en cours ?')) return;
+      try {
+        await knowledgeApi.cancelScan(scanJob.id, context.project.name);
+      } catch (error) {
+        showError(error);
+      }
+    });
     root.querySelector<HTMLElement>('[data-action=scan]')?.addEventListener('click', async () => {
       if (!context.project || scanJob) return;
       try {
@@ -241,7 +250,16 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         const node = data?.graph.nodes.find((entry) => entry.id === sourceId);
         if (!node || side !== 'adversaire') return;
         try {
-          await save([{ op: 'upsertNode', node: { id: node.id, kind: node.kind, label: node.label, aliases: node.aliases, data: { ...node.data, partySide: side }, origin: 'manual' } }]);
+          const change = partyCodeChange(
+            node,
+            { kind: node.kind, legalForm: typeof node.data.legalForm === 'string' ? node.data.legalForm : '', side, position: typeof node.data.position === 'string' ? node.data.position : '' },
+            data?.graph.nodes || [],
+            data?.graph.mappings || [],
+          );
+          const operations: KnowledgeUpdateOperation[] = [...change.operations];
+          operations.push({ op: 'upsertNode', node: { id: change.nodeId, kind: node.kind, label: node.label, aliases: node.aliases, data: change.data, origin: 'manual' } });
+          for (const real of [node.label, ...node.aliases]) if (change.code) operations.push({ op: 'upsertMapping', mapping: { nodeId: change.nodeId, real, masked: change.code, origin: 'manual' } });
+          await save(operations);
         } catch (error) {
           showError(error);
         }
