@@ -259,10 +259,20 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     const numeric = match ? [`${match[3]}/${match[2]}/${match[1]}`, `${match[3]}-${match[2]}-${match[1]}`, `${match[3]}.${match[2]}.${match[1]}`] : [];
     return [textValue(node.data.doc_date), textValue(node.data.date), iso, ...numeric].filter(Boolean);
   };
+  const mappedPreviewValues = (personMappings: boolean): string[] => {
+    const kinds = new Map(data.graph.nodes.map((entry) => [entry.id, entry.kind]));
+    return data.graph.mappings
+      .filter((mapping) => {
+        const kind = kinds.get(mapping.nodeId);
+        return personMappings ? kind === 'person' || kind === 'company' : kind !== 'person' && kind !== 'company';
+      })
+      .flatMap((mapping) => [mapping.real, mapping.masked])
+      .filter(Boolean);
+  };
   const previewValues = (category: 'person' | 'date' | 'fact'): string[] => {
-    if (category === 'person') return entities.map((entry) => entry.label);
+    if (category === 'person') return [...entities.flatMap((entry) => [entry.label, ...entry.aliases]), ...mappedPreviewValues(true)];
     if (category === 'date') return datePreviewValues();
-    return [nature, textValue(node.data.localisation), ...fields.flatMap((field) => [field.label, field.value])].filter(Boolean);
+    return [nature, textValue(node.data.localisation), ...fields.flatMap((field) => [field.label, field.value]), ...mappedPreviewValues(false)].filter(Boolean);
   };
   const highlightPreview = (content: string): string => {
     const categories: Array<'person' | 'date' | 'fact'> = ['person', 'date', 'fact'];
