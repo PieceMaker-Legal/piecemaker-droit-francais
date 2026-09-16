@@ -1,4 +1,5 @@
 import { BODACC_FAMILIES, knowledgeApi } from './api.js';
+import { buildCompanyValidationOperations } from './company-search.js';
 import { documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { partyCodeChange } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
@@ -6,6 +7,7 @@ import { chronologyView, escapeHtml, generalView, mappingView, scanPercentLabel,
 import type { BodaccScanState, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
+import type { PartySide } from './party-codes.js';
 
 type PluginContext = {
   theme: 'dark' | 'light';
@@ -97,6 +99,44 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }
     bodaccStates.set(companyId, state);
     if (renderAtEnd && context.project) render();
+  };
+
+  const companySearchQuery = (companyId: string, siren: string, siret: string): string => {
+    const company = data?.graph.nodes.find((node) => node.id === companyId);
+    if (!company) return '';
+    const pseudonymPattern = /^(?:CLIENT|ADVERSAIRE|PERSONNE_MORALE|PERSONNE_PHYSIQUE|PERS_MORALE|PERS_PHYSIQUE)(?:_|$)/;
+    const mappedName = data?.graph.mappings.filter((mapping) => mapping.nodeId === companyId).map((mapping) => mapping.real.trim()).find((value) => value && !pseudonymPattern.test(value));
+    const label = mappedName || (pseudonymPattern.test(company.label.trim()) ? '' : company.label.trim());
+    const legalForm = typeof company.data.legalForm === 'string' && company.data.legalForm !== 'Personne morale' ? company.data.legalForm.trim() : '';
+    return [label, legalForm, siren, siret].filter(Boolean).join(' ');
+  };
+
+  const searchCompanyIdentity = async (companyId: string, siren: string, siret: string) => {
+    const state = bodaccStates.get(companyId) || { status: 'idle' as const };
+    state.open = true;
+    state.companySearchStatus = 'loading';
+    state.companySearchResults = [];
+    state.companySearchError = '';
+    bodaccStates.set(companyId, state);
+    render();
+    const query = companySearchQuery(companyId, siren, siret);
+    if (!query) {
+      state.companySearchStatus = 'error';
+      state.companySearchError = 'Aucun nom exploitable n’est disponible pour rechercher cette personne morale.';
+      bodaccStates.set(companyId, state);
+      render();
+      return;
+    }
+    try {
+      const response = await knowledgeApi.searchCompanies(query);
+      state.companySearchResults = response.results;
+      state.companySearchStatus = 'loaded';
+    } catch (error) {
+      state.companySearchStatus = 'error';
+      state.companySearchError = error instanceof Error ? error.message : 'Recherche Registre Public impossible.';
+    }
+    bodaccStates.set(companyId, state);
+    render();
   };
 
   const publishScanJob = (job: ScanJob) => {
@@ -258,7 +298,39 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       event.stopPropagation();
       const companyId = button.dataset.scanCompany || '';
       const company = data?.graph.nodes.find((node) => node.id === companyId);
-      if (data && company) nodeEditor(root, data, company, save, {}, undefined, true);
+      if (!company) return;
+      const identified = Boolean(company.data.registrePublic && typeof company.data.registrePublic === 'object');
+      if (identified) void searchBodaccCompany(companyId, button.dataset.siren || '', button.dataset.siret || '');
+      else void searchCompanyIdentity(companyId, button.dataset.siren || '', button.dataset.siret || '');
+    }));
+    root.querySelectorAll<HTMLButtonElement>('[data-action=company-validate][data-scan-company]').forEach((button) => button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const companyId = button.dataset.scanCompany || '';
+      const company = data?.graph.nodes.find((node) => node.id === companyId);
+      const state = bodaccStates.get(companyId);
+      const result = state?.companySearchResults?.[Number(button.dataset.companyResult)];
+      if (!data || !company || !result) return;
+      button.disabled = true;
+      try {
+        await save(buildCompanyValidationOperations(result, {
+          nodeId: company.id,
+          node: company,
+          partySide: (typeof company.data.partySide === 'string' ? company.data.partySide : '') as PartySide,
+          position: typeof company.data.position === 'string' ? company.data.position : '',
+          legalForm: typeof company.data.legalForm === 'string' ? company.data.legalForm : '',
+        }, data.graph));
+        const nextState = bodaccStates.get(companyId) || { status: 'idle' as const };
+        nextState.companySearchStatus = 'idle';
+        nextState.companySearchResults = [];
+        bodaccStates.set(companyId, nextState);
+        await searchBodaccCompany(companyId, result.fields.siren || result.siren, result.fields.siret);
+      } catch (error) {
+        const nextState = bodaccStates.get(companyId) || { status: 'idle' as const };
+        nextState.companySearchStatus = 'error';
+        nextState.companySearchError = error instanceof Error ? error.message : 'Validation impossible.';
+        bodaccStates.set(companyId, nextState);
+        render();
+      }
     }));
     root.querySelectorAll<HTMLButtonElement>('[data-action=company-family-menu]').forEach((button) => button.addEventListener('click', (event) => {
       event.stopPropagation();
