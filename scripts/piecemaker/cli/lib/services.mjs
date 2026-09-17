@@ -32,6 +32,15 @@ export function appClientReachable() {
   return httpReachable(`http://127.0.0.1:${PORTS.appClient}/`);
 }
 
+function readLogTail(file, maxLines = 40) {
+  try {
+    const lines = fs.readFileSync(file, 'utf8').trimEnd().split(/\n/);
+    return lines.slice(-maxLines).join('\n');
+  } catch {
+    return '';
+  }
+}
+
 export async function startApplication(runtime, report) {
   const alreadyRunning = await appClientReachable() && await appServerReachable();
   if (alreadyRunning) {
@@ -61,11 +70,24 @@ export async function startApplication(runtime, report) {
     fs.closeSync(logHandle);
   }
 
-  child.unref();
   fs.writeFileSync(APP_PID_FILE, String(child.pid), 'utf8');
 
-  const serverUp = await waitUntil(appServerReachable, { timeoutMs: 120_000 });
-  const clientUp = await waitUntil(appClientReachable, { timeoutMs: 120_000 });
+  const death = new Promise((resolve) => {
+    child.once('error', () => resolve('died'));
+    child.once('exit', () => resolve('died'));
+  });
 
-  return { started: true, pid: child.pid, serverUp, clientUp };
+  await Promise.race([
+    waitUntil(appServerReachable, { timeoutMs: 120_000 }),
+    death,
+  ]);
+  const serverUp = await appServerReachable();
+  if (!serverUp) {
+    child.unref();
+    return { started: true, pid: child.pid, serverUp: false, clientUp: false, logTail: readLogTail(APP_LOG) };
+  }
+
+  const clientUp = await waitUntil(appClientReachable, { timeoutMs: 120_000 });
+  child.unref();
+  return { started: true, pid: child.pid, serverUp: true, clientUp, logTail: clientUp ? '' : readLogTail(APP_LOG) };
 }

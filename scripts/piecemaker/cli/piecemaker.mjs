@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { APP, APP_URL, PORTS } from './lib/config.mjs';
+import { repairClientProxies } from './lib/piecemaker-anonymizer.mjs';
 import { installComponents } from './lib/composants.mjs';
 import { installPlugins } from './lib/plugins.mjs';
 import { gitAvailable, resolveNodeRuntime } from './lib/node-runtime.mjs';
@@ -61,10 +62,23 @@ async function synchroniseRepositories(runtime) {
   rebuildNativeModules(APP, runtime, report, ['better-sqlite3', 'node-pty']);
 }
 
-async function launchServices(runtime) {
-  const applicationAlreadyRunning = await appServerReachable() && await appClientReachable();
+function printLogTail(logTail) {
+  if (!logTail) {
+    detail(`journal : ${APP_LOG}`);
+    return;
+  }
+  detail(`journal : ${APP_LOG}`);
+  for (const line of logTail.split('\n')) {
+    if (line.trim()) detail(line);
+  }
+}
 
-  if (applicationAlreadyRunning) {
+async function applicationIsRunning() {
+  return await appServerReachable() && await appClientReachable();
+}
+
+async function launchServices(runtime) {
+  if (await applicationIsRunning()) {
     ok(`Application déjà active — ${APP_URL}`);
     detail('socle laissé en l état : le routage des clients IA appartient à l application en cours');
     return true;
@@ -78,12 +92,12 @@ async function launchServices(runtime) {
 
   if (!application.serverUp) {
     fail(`Serveur applicatif injoignable sur le port ${PORTS.appServer}`);
-    detail(`journal : ${APP_LOG}`);
+    printLogTail(application.logTail);
     return false;
   }
   if (!application.clientUp) {
     fail(`Client applicatif injoignable sur le port ${PORTS.appClient}`);
-    detail(`journal : ${APP_LOG}`);
+    printLogTail(application.logTail);
     return false;
   }
 
@@ -125,18 +139,21 @@ async function main() {
   const runtime = resolveNodeRuntime();
   detail(`Node ${runtime.version}`);
 
-  await cleanPorts(options.launchOnly);
+  await repairClientProxies({ appDir: APP.directory, report });
+
+  const alreadyRunning = await applicationIsRunning();
+  if (!alreadyRunning) {
+    await cleanPorts(options.launchOnly);
+    const running = await launchServices(runtime);
+    if (!running) return 1;
+  } else {
+    ok(`Application déjà active — ${APP_URL}`);
+  }
 
   if (!options.launchOnly) {
     await synchroniseRepositories(runtime);
     await installComponents(runtime, report);
     await installPlugins(runtime, report);
-  }
-
-  const running = await launchServices(runtime);
-  if (!running) return 1;
-
-  if (!options.launchOnly) {
     await installPwa();
   }
 
