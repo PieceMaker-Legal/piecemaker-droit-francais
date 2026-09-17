@@ -228,7 +228,7 @@ export function createLibraryStore(home: string) {
   }
 
   function upsertCollection(input: LibraryCollectionInput) {
-    if (!input.id || (!input.entries.length && !input.files.length)) return null;
+    if (!input.id || (!input.entries.length && !input.files.length && !input.source)) return null;
     return db.transaction(() => {
       db.prepare(`INSERT INTO collections (id, name, description, source) VALUES (?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description, source = excluded.source`)
@@ -275,7 +275,48 @@ export function createLibraryStore(home: string) {
       });
   }
 
+  function collectionSource(id: string): string | null {
+    const row = db.prepare('SELECT source FROM collections WHERE id = ?').get(id) as { source: string } | undefined;
+    return row?.source || null;
+  }
+
+  function collectSourceFiles(source: string): Array<{ path: string; content: Buffer }> {
+    const root = fs.realpathSync(source);
+    const files: Array<{ path: string; content: Buffer }> = [];
+    let totalSize = 0;
+    const walk = (directory: string, relative = '') => {
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === '__pycache__' || entry.isSymbolicLink()) continue;
+        const relativePath = path.posix.join(relative.split(path.sep).join('/'), entry.name);
+        const absolutePath = path.join(directory, entry.name);
+        if (entry.isDirectory()) walk(absolutePath, relativePath);
+        else if (entry.isFile()) {
+          const content = fs.readFileSync(absolutePath);
+          totalSize += content.length;
+          if (totalSize > 30 * 1024 * 1024 || files.length >= 5000) throw new Error(`Plugin trop volumineux : ${path.basename(root)}`);
+          files.push({ path: relativePath, content });
+        }
+      }
+    };
+    walk(root);
+    return files;
+  }
+
+  function ensureCollectionFiles(id: string) {
+    const stored = db.prepare('SELECT 1 FROM collection_files WHERE collection_id = ? LIMIT 1').get(id);
+    if (stored) return;
+    const source = collectionSource(id);
+    if (!source || !fs.existsSync(source) || fs.lstatSync(source).isSymbolicLink()) return;
+    const files = collectSourceFiles(source);
+    if (!files.length) return;
+    const insertFile = db.prepare('INSERT INTO collection_files (collection_id, path, content) VALUES (?, ?, ?)');
+    db.transaction(() => {
+      for (const file of files) insertFile.run(id, normalizedCollectionPath(file.path), file.content);
+    })();
+  }
+
   function collectionFiles(id: string) {
+    ensureCollectionFiles(id);
     const files = new Map<string, { path: string; size: number; editable: boolean }>();
     const storedFiles = db.prepare('SELECT path, content FROM collection_files WHERE collection_id = ?').all(id) as Array<{ path: string; content: Buffer }>;
     for (const file of storedFiles) {
@@ -304,6 +345,7 @@ export function createLibraryStore(home: string) {
   }
 
   function collectionFile(id: string, filePath: string) {
+    ensureCollectionFiles(id);
     const normalized = normalizedCollectionPath(filePath);
     for (const mapping of collectionEntries(id)) {
       const entry = document(mapping.entryId);
@@ -323,6 +365,7 @@ export function createLibraryStore(home: string) {
 
   function updateCollectionFile(id: string, filePath: string, content: string, previousContent: string) {
     if (typeof content !== 'string' || typeof previousContent !== 'string') throw new Error('Contenu et version précédente requis.');
+    ensureCollectionFiles(id);
     const normalized = normalizedCollectionPath(filePath);
     for (const mapping of collectionEntries(id)) {
       const entry = document(mapping.entryId);

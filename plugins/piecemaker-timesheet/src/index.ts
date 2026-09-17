@@ -594,6 +594,22 @@ const buildTable = (entries: TimesheetEntry[]): HTMLDivElement => {
   return wrapper;
 };
 
+const paintStatus = (state: ViewState): void => {
+  const status = state.root.querySelector<HTMLElement>('.pm-timesheet__status');
+  if (!status) {
+    render(state);
+    return;
+  }
+  status.className = state.error ? 'pm-timesheet__status pm-timesheet__status--error' : 'pm-timesheet__status';
+  if (state.error) status.setAttribute('role', 'alert');
+  else status.removeAttribute('role');
+  if (state.error) status.textContent = state.error;
+  else if (state.refreshing) status.textContent = 'Actualisation des sessions…';
+  else if (state.loading) status.textContent = 'Chargement des sessions…';
+  else if (state.refreshedAt) status.textContent = `Actualisé à ${state.refreshedAt.toLocaleTimeString('fr-FR')}`;
+  else status.textContent = '';
+};
+
 const render = (state: ViewState): void => {
   const { root, context } = state;
   const visibleEntries = state.scope === 'all' && state.folder ? state.entries.filter((entry) => entryFolderKey(entry) === state.folder) : state.entries;
@@ -693,7 +709,8 @@ async function load(state: ViewState, refresh: boolean): Promise<void> {
   }
   state.loading = true;
   state.error = null;
-  render(state);
+  if (state.loaded) paintStatus(state);
+  else render(state);
   try {
     const cached = await fetchEntries(state.scope, projectId, controller.signal);
     if (state.disposed || state.requestId !== requestId) return;
@@ -706,11 +723,12 @@ async function load(state: ViewState, refresh: boolean): Promise<void> {
     if (controller.signal.aborted || state.disposed || state.requestId !== requestId) return;
     state.loading = false;
     state.error = error instanceof Error ? error.message : 'Impossible de charger le timesheet.';
-    render(state);
+    if (state.loaded) paintStatus(state);
+    else render(state);
   }
   if (!refresh || state.disposed || state.requestId !== requestId) return;
   state.refreshing = true;
-  render(state);
+  paintStatus(state);
   try {
     const refreshed = await refreshEntries(state.scope, projectId, controller.signal);
     if (state.disposed || state.requestId !== requestId) return;
@@ -750,7 +768,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
   container.append(style, root);
   const state: ViewState = {
     context: api.context,
-    scope: 'all',
+    scope: 'project',
     folder: '',
     entries: [],
     loaded: false,
@@ -768,12 +786,15 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
   states.set(container, state);
   state.unsubscribe = api.onContextChange((context) => {
     if (state.disposed) return;
+    const previousProject = state.context.project?.name ?? null;
+    const nextProject = context.project?.name ?? null;
     state.context = context;
+    if (previousProject === nextProject) return;
     if (state.scope === 'project') state.folder = '';
-    void load(state, true);
+    void load(state, false);
   });
   render(state);
-  void load(state, true);
+  void load(state, false);
 }
 
 export function unmount(container: HTMLElement): void {

@@ -71,24 +71,12 @@ function validTimestamp(value: string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function hashFile(filePath: string): string {
-  const hash = createHash('sha256');
-  let descriptor: number | undefined;
+function fingerprintFile(filePath: string): string {
   try {
-    descriptor = fs.openSync(filePath, 'r');
-    const buffer = Buffer.allocUnsafe(64 * 1024);
-    let bytesRead = 0;
-    do {
-      bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, null);
-      if (bytesRead > 0) hash.update(buffer.subarray(0, bytesRead));
-    } while (bytesRead > 0);
-    return hash.digest('hex');
+    const stats = fs.statSync(filePath);
+    return `${stats.size}:${stats.mtimeMs}`;
   } catch {
     return 'missing';
-  } finally {
-    if (descriptor !== undefined) {
-      try { fs.closeSync(descriptor); } catch { }
-    }
   }
 }
 
@@ -115,7 +103,7 @@ function fingerprint(
     createdAt: session.created_at,
     updatedAt: session.updated_at,
     transcript: session.jsonl_path
-      ? { path: session.jsonl_path, content: hashFile(session.jsonl_path) }
+      ? { path: session.jsonl_path, content: fingerprintFile(session.jsonl_path) }
       : { history: messages ? hashHistory(messages) : 'pending' },
   })).digest('hex');
 }

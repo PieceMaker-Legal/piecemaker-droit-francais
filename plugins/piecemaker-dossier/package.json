@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/client.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/client.js",
+    "build": "esbuild src/client.ts --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=dist/client.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

@@ -1,7 +1,7 @@
 import { NODE_KINDS } from './types.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
 import { BODACC_FAMILIES } from './api.js';
-import type { BodaccSearchResult, CompanySearchResult, KnowledgeChronologyView, KnowledgeMappingView, KnowledgeOverview, ScanJob } from './api.js';
+import type { BodaccSearchResult, CompanySearchResult, ScanJob } from './api.js';
 
 export type Tab = 'general' | 'chronology' | 'scan';
 export type BodaccScanState = {
@@ -15,9 +15,6 @@ export type BodaccScanState = {
   companySearchError?: string;
 };
 export type ViewData = {
-  overview: KnowledgeOverview;
-  mapping: KnowledgeMappingView;
-  chronology: KnowledgeChronologyView;
   graph: KnowledgeSnapshot;
 };
 
@@ -112,6 +109,13 @@ export function scanPercentLabel(job: ScanJob): string {
   return `${Math.round(Math.max(0, Math.min(100, job.percent || 0)))} %`;
 }
 
+export function scanStatusMarkup(mappingCount = 0, job: ScanJob | null = null): string {
+  const scanning = Boolean(job && job.state === 'running');
+  return `<span class="pmd-status-icon">${shieldCheckIcon}</span>
+        ${scanning && job ? scanProgress(job) : `<span class="pmd-status-label">${mappingCount} anonymisé(s)</span>`}
+        <button class="pmd-scan-button" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : mappingCount > 0 ? 'Relancer' : 'Lancer'}</span></button>`;
+}
+
 export function scanProgress(job: ScanJob): string {
   const percent = Math.max(0, Math.min(100, job.percent || 0));
   return `
@@ -133,9 +137,7 @@ export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null)
         <button class="pmd-button pmd-agents-button" data-action="agents"><span>▤</span> Agents.md</button>
       </div>
       <div class="pmd-scan-status" data-ready="${mappingCount > 0}" data-scanning="${scanning}">
-        <span class="pmd-status-icon">${shieldCheckIcon}</span>
-        ${scanning && job ? scanProgress(job) : `<span class="pmd-status-label">${mappingCount} anonymisé(s)</span>`}
-        <button class="pmd-scan-button" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : mappingCount > 0 ? 'Relancer' : 'Lancer'}</span></button>
+        ${scanStatusMarkup(mappingCount, job)}
       </div>
     </div>
     <div data-error></div>
@@ -229,7 +231,10 @@ export function scanView(data: ViewData, states: Map<string, BodaccScanState> = 
     const state = states.get(company.id) || { status: 'idle' as const };
     const identifierLabel = [identifiers.siren ? `SIREN ${identifiers.siren}` : '', identifiers.siret ? `SIRET ${identifiers.siret}` : ''].filter(Boolean).join(' · ') || 'SIREN / SIRET non renseigné';
     const families = state.families || BODACC_FAMILIES.map((family) => family.code);
-    return `<article class="pmd-scan-company" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}"><div class="pmd-scan-company-header"><div class="pmd-scan-company-copy"><h3>${escapeHtml(company.label || 'Personne morale sans nom')}</h3><p>${escapeHtml(identifierLabel)}</p></div><div class="pmd-scan-company-actions"><button type="button" class="pmd-icon-button" data-action="company-search" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public">${companySearchIcon}</button>${bodaccFamilyMenu(company.id, families)}</div></div><details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(company.id)}" ${state.open ? 'open' : ''}><summary>Annonces BODACC${state.status === 'loaded' && state.result ? ` · ${state.result.annonces.length}` : ''}</summary><div class="pmd-bodacc-content">${bodaccStateMarkup(state, identifiers.siren || identifiers.siret)}</div></details></article>`;
+    const companySearchOpen = state.companySearchStatus && state.companySearchStatus !== 'idle';
+    const accordionTitle = companySearchOpen ? 'Résultats Registre Public' : `Annonces BODACC${state.status === 'loaded' && state.result ? ` · ${state.result.annonces.length}` : ''}`;
+    const accordionContent = companySearchOpen ? companySearchStateMarkup(state, company.id) : bodaccStateMarkup(state, identifiers.siren || identifiers.siret);
+    return `<article class="pmd-scan-company" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}"><div class="pmd-scan-company-header"><div class="pmd-scan-company-copy"><h3>${escapeHtml(company.label || 'Personne morale sans nom')}</h3><p>${escapeHtml(identifierLabel)}</p></div><div class="pmd-scan-company-actions"><button type="button" class="pmd-icon-button" data-action="company-search" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public">${companySearchIcon}</button>${bodaccFamilyMenu(company.id, families)}</div></div><details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(company.id)}" ${state.open ? 'open' : ''}><summary>${accordionTitle}</summary><div class="pmd-bodacc-content">${accordionContent}</div></details></article>`;
   }).join('')}</div></div>`;
 }
 
@@ -260,7 +265,7 @@ function chronologyEvent(node: KnowledgeNode, dated: boolean, byId: Map<string, 
     .filter((entry): entry is KnowledgeNode => Boolean(entry && entry.kind !== 'document'));
   const nature = textValue(node.data.nature);
   const localisation = textValue(node.data.localisation);
-  return `<article class="pmd-chronology-event" data-dated="${dated}" data-open-document="${escapeHtml(node.id)}"><div class="pmd-chronology-marker" aria-hidden="true"></div><div class="pmd-chronology-date">${escapeHtml(dated ? chronologyDateLabel(dateFor(node)) : 'Date non renseignée')}</div><div class="pmd-chronology-document pmd-card"><div class="pmd-card-head"><div class="pmd-document-heading"><div class="pmd-card-title">${escapeHtml(node.label)}</div><div class="pmd-document-meta">${escapeHtml(nature || 'Type non renseigné')}${localisation ? ` · ${escapeHtml(localisation)}` : ''}</div></div><button class="pmd-icon-button" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></div>${chronologyFields(node)}<div class="pmd-document-related"><span class="pmd-document-related-label">Personnes liées</span><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('') || '<span class="pmd-badge pmd-badge-muted">Aucune personne liée</span>'}</div></div></div></article>`;
+  return `<article class="pmd-chronology-event" data-dated="${dated}" data-open-document="${escapeHtml(node.id)}"><div class="pmd-chronology-marker" aria-hidden="true"></div><div class="pmd-chronology-date">${escapeHtml(dated ? chronologyDateLabel(dateFor(node)) : 'Date non renseignée')}</div><div class="pmd-chronology-document pmd-card"><div class="pmd-card-head"><div class="pmd-document-heading"><div class="pmd-card-title">${escapeHtml(node.label)}</div><div class="pmd-document-meta">${escapeHtml(nature || 'Type non renseigné')}${localisation ? ` · ${escapeHtml(localisation)}` : ''}</div></div><button class="pmd-icon-button" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></div>${chronologyFields(node)}<div class="pmd-document-related"><span class="pmd-document-related-label">Mentions</span><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('') || '<span class="pmd-badge pmd-badge-muted">Aucune personne liée</span>'}</div></div></div></article>`;
 }
 
 function chronologySection(title: string, hint: string, nodes: KnowledgeNode[], dated: boolean, byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
@@ -276,14 +281,7 @@ function renderChronologySections(dated: KnowledgeNode[], undated: KnowledgeNode
 }
 
 export function chronologyView(data: ViewData): string {
-  const documents = data.chronology.documents
-    .map((document) => {
-      const documentPath = textValue(document.data.path);
-      return data.graph.nodes.find((candidate) => candidate.kind === 'document'
-        && candidate.label === document.label
-        && (!documentPath || textValue(candidate.data.path) === documentPath));
-    })
-    .filter((node): node is KnowledgeNode => Boolean(node));
+  const documents = data.graph.nodes.filter((node) => node.kind === 'document');
   const dated = documents
     .filter((node) => Boolean(dateFor(node)))
     .sort((left, right) => dateFor(left).localeCompare(dateFor(right)) || left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
