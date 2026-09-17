@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { BIN_DIR } from './lib/config.mjs';
 import { ok, banner, detail, warn, blank } from './lib/ui.mjs';
@@ -28,7 +28,7 @@ function installPosixShim() {
     try {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.rmSync(target, { force: true });
-      fs.writeFileSync(target, source, 'utf8');
+      fs.writeFileSync(target, source, { encoding: 'utf8', mode: 0o755 });
       fs.chmodSync(target, 0o755);
       installed.push(target);
     } catch (error) {
@@ -105,26 +105,52 @@ function ensureWindowsPathEntry() {
   return true;
 }
 
-function main() {
-  banner('Installation de la commande piecemaker');
+export function piecemakerExecutable() {
+  const names = isWindows ? [`${COMMAND_NAME}.cmd`, `${COMMAND_NAME}.ps1`] : [COMMAND_NAME];
+  const directories = [BIN_DIR, path.dirname(process.execPath)];
+  for (const directory of directories) {
+    for (const name of names) {
+      const candidate = path.join(directory, name);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  return COMMAND_NAME;
+}
 
+export function installPiecemakerCommand() {
   const shims = isWindows ? installWindowsShim() : installPosixShim();
-  for (const shim of shims) ok(`commande installée : ${shim}`);
+  let pathUpdated = false;
 
   if (isWindows) {
     try {
-      if (ensureWindowsPathEntry()) detail(`PATH complété (redémarrez le terminal pour le prendre en compte)`);
+      pathUpdated = ensureWindowsPathEntry();
     } catch (error) {
       warn(`PATH non complété automatiquement : ${error.message}`);
     }
   } else {
     const pathFiles = ensurePosixPathEntry();
-    for (const file of pathFiles) detail(`PATH complété dans ${file}`);
+    pathUpdated = pathFiles.length > 0;
   }
 
+  return { shims, pathUpdated, executable: piecemakerExecutable() };
+}
+
+function invokedAsCli() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return import.meta.url === pathToFileURL(fs.realpathSync(entry)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (invokedAsCli()) {
+  banner('Installation de la commande piecemaker');
+  const result = installPiecemakerCommand();
+  for (const shim of result.shims) ok(`commande installée : ${shim}`);
+  if (result.pathUpdated) detail(isWindows ? 'PATH complété (redémarrez le terminal pour le prendre en compte)' : `PATH complété avec ${BIN_DIR}`);
   blank();
   detail(`${COMMAND_NAME} installe, met à jour et lance toute la plateforme`);
   blank();
 }
-
-main();
