@@ -133,7 +133,7 @@ export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null,
   const scanning = Boolean(job && job.state === 'running');
   return `
     <div class="pmd-header">
-      <div class="pmd-tab piecemaker-button piecemaker-button--sms" role="tablist">
+      <div class="pmd-tabs" role="tablist">
         ${TABS.map(({ id, label, icon }) => `<button type="button" class="pmd-tab piecemaker-button piecemaker-button--sm" role="tab" data-tab="${id}" aria-selected="${active === id}" tabindex="${active === id ? 0 : -1}">${icon}<span>${label}</span></button>`).join('')}
         <button class="pmd-button pmd-agents-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="agents"><span>▤</span> Agents.md</button>
       </div>
@@ -236,7 +236,7 @@ function bodaccFamilyMenu(companyId: string, families: string[]): string {
 export function scanView(data: ViewData, states: Map<string, BodaccScanState> = new Map()): string {
   const companies = data.graph.nodes.filter((node) => node.kind === 'company').sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
   if (!companies.length) return '<div class="pmd-empty">Aucune personne morale dans le dossier.</div>';
-  return `<div class="pmd-scan-view"><div class="pmd-toolbar"><div><h2 class="pmd-title piecemaker-display">Scan Bodacc</h2><div class="pmd-subtitle">Annonces liées aux personnes morales du dossier</div></div><span class="pmd-spacer"></span><button type="button" class="pmd-button pmd-scan-all-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="scan-all-companies" aria-label="Scanner toutes les personnes morales">${bodaccSearchIcon}<span>Scanner toutes les personnes</span></button></div><div class="pmd-scan-company-list">${companies.map((company) => {
+  return `<div class="pmd-scan-view"><div class="pmd-toolbar"><span class="pmd-spacer"></span><button type="button" class="pmd-button pmd-scan-all-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="scan-all-companies" aria-label="Scanner toutes les personnes morales">${bodaccSearchIcon}<span>Scanner toutes les personnes</span></button></div><div class="pmd-scan-company-list">${companies.map((company) => {
     const identifiers = companyIdentifiers(company, data.graph);
     const state = states.get(company.id) || { status: 'idle' as const };
     const identifierLabel = [identifiers.siren ? `SIREN ${identifiers.siren}` : '', identifiers.siret ? `SIRET ${identifiers.siret}` : ''].filter(Boolean).join(' · ') || 'SIREN / SIRET non renseigné';
@@ -300,6 +300,6 @@ export function chronologyView(data: ViewData): string {
     .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
   return `
-    <div class="pmd-toolbar"><div><h2 class="pmd-title piecemaker-display">Chronologie</h2><div class="pmd-subtitle">Documents et personnes liées</div></div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Rafraîchir</button></div>
+    <div class="pmd-toolbar"><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Rafraîchir</button></div>
     ${renderChronologySections(dated, undated, byId, data.graph.links)}`;
 }
