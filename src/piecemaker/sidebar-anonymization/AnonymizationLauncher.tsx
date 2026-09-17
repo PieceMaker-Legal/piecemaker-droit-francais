@@ -8,6 +8,7 @@ import { Button, Dialog, DialogContent, DialogTitle } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 import { pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import {
+  ANONYMIZATION_COMPLETED_EVENT,
   getTrackedAnonymizationJobs,
   subscribeTrackedAnonymizationJobs,
   trackAnonymizationJob,
@@ -84,6 +85,14 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
   useEffect(() => {
     const timer = window.setTimeout(() => void loadProjects().catch(() => undefined), 0);
     return () => window.clearTimeout(timer);
+  }, [loadProjects]);
+
+  useEffect(() => {
+    const refreshAfterAnonymization = () => {
+      void loadProjects().catch(() => undefined);
+    };
+    window.addEventListener(ANONYMIZATION_COMPLETED_EVENT, refreshAfterAnonymization);
+    return () => window.removeEventListener(ANONYMIZATION_COMPLETED_EVENT, refreshAfterAnonymization);
   }, [loadProjects]);
 
   const selectedProjects = useMemo(
