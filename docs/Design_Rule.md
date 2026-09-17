@@ -1,6 +1,6 @@
 # Design Rule — CSS, typographie et contrôles
 
-Cette règle formalise les patterns observés dans le dépôt Mike : typographie,
+Cette règle formalise les patterns observés dans le dépôt PieceMaker : typographie,
 icônes, boutons, toggles et cases à cocher. Elle ne définit aucun markup HTML.
 
 ## Sources et principes
@@ -11,7 +11,7 @@ icônes, boutons, toggles et cases à cocher. Elle ne définit aucun markup HTML
 - Icônes : bibliothèque `lucide-react`, avec un trait par défaut de 2 px.
 - Style de surface : liquid glass, avec bordure fine, ombre intérieure et
   transparence légère.
-- Couleur d’accent : bleu Mike `rgb(0 136 255)`.
+- Couleur d’accent : bleu PieceMaker `rgb(0 136 255)`.
 - Rayons : principalement `rounded-full` pour les contrôles, `rounded-md` ou
   `rounded-lg` pour les éléments structurés, et `rounded-xl`/`rounded-2xl`
   pour les surfaces et panneaux.
@@ -41,78 +41,78 @@ icônes, boutons, toggles et cases à cocher. Elle ne définit aucun markup HTML
 ```css
 @layer components {
   :root {
-    --mike-font-ui: var(--font-inter, Inter, sans-serif);
-    --mike-font-editorial: var(--font-eb-garamond, "EB Garamond", serif);
-    --mike-blue: rgb(0 136 255);
-    --mike-text: #374151;
-    --mike-muted: #6b7280;
-    --mike-border: #e5e7eb;
+    --piecemaker-font-ui: var(--font-inter, Inter, sans-serif);
+    --piecemaker-font-editorial: var(--font-eb-garamond, "EB Garamond", serif);
+    --piecemaker-blue: rgb(0 136 255);
+    --piecemaker-text: #374151;
+    --piecemaker-muted: #6b7280;
+    --piecemaker-border: #e5e7eb;
   }
 
-  .mike-ui {
-    font-family: var(--mike-font-ui);
+  .piecemaker-ui {
+    font-family: var(--piecemaker-font-ui);
     font-size: 0.875rem;
     line-height: 1.25rem;
   }
 
-  .mike-display,
-  .mike-editorial {
-    font-family: var(--mike-font-editorial);
+  .piecemaker-display,
+  .piecemaker-editorial {
+    font-family: var(--piecemaker-font-editorial);
   }
 
-  .mike-button {
+  .piecemaker-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.375rem;
     border-radius: 9999px;
-    font-family: var(--mike-font-ui);
+    font-family: var(--piecemaker-font-ui);
     font-weight: 500;
     white-space: nowrap;
     transition: all 150ms ease;
     cursor: pointer;
   }
 
-  .mike-button--xs {
+  .piecemaker-button--xs {
     height: 1.5rem;
     padding-inline: 0.625rem;
     font-size: 0.6875rem;
   }
 
-  .mike-button--sm {
+  .piecemaker-button--sm {
     height: 1.75rem;
     padding-inline: 0.75rem;
     font-size: 0.75rem;
   }
 
-  .mike-button--normal {
+  .piecemaker-button--normal {
     height: 2rem;
     padding-inline: 1rem;
     font-size: 0.875rem;
   }
 
-  .mike-button--icon {
+  .piecemaker-button--icon {
     width: 1.5rem;
     height: 1.5rem;
     padding: 0;
   }
 
-  .mike-button--blue {
+  .piecemaker-button--blue {
     color: white;
     background: rgb(0 136 255 / 90%);
   }
 
-  .mike-button--black {
+  .piecemaker-button--black {
     color: white;
     background: rgb(3 7 18 / 88%);
   }
 
-  .mike-button--danger {
+  .piecemaker-button--danger {
     color: white;
     background: rgb(220 38 38 / 90%);
   }
 
-  .mike-button--glass {
+  .piecemaker-button--glass {
     color: #374151;
     background: var(--liquid-glass-background-subtle);
     border: 1px solid var(--liquid-glass-border-subtle);
@@ -120,39 +120,39 @@ icônes, boutons, toggles et cases à cocher. Elle ne définit aucun markup HTML
     backdrop-filter: blur(20px);
   }
 
-  .mike-button:hover {
+  .piecemaker-button:hover {
     filter: brightness(0.97);
   }
 
-  .mike-button:active {
+  .piecemaker-button:active {
     transform: scale(0.98);
   }
 
-  .mike-button:disabled {
+  .piecemaker-button:disabled {
     cursor: not-allowed;
     opacity: 0.4;
   }
 
-  .mike-button:focus-visible,
-  .mike-toggle:focus-visible,
-  .mike-checkbox:focus-visible {
+  .piecemaker-button:focus-visible,
+  .piecemaker-toggle:focus-visible,
+  .piecemaker-checkbox:focus-visible {
     outline: none;
     box-shadow:
       0 0 0 2px rgb(0 136 255 / 40%),
       0 0 0 4px var(--app-surface, white);
   }
 
-  .mike-toggle {
+  .piecemaker-toggle {
     display: inline-flex;
     align-items: center;
     gap: 0.625rem;
     width: fit-content;
     color: #4b5563;
-    font-family: var(--mike-font-ui);
+    font-family: var(--piecemaker-font-ui);
     font-size: 0.875rem;
   }
 
-  .mike-toggle__track {
+  .piecemaker-toggle__track {
     position: relative;
     display: inline-flex;
     flex: 0 0 auto;
@@ -163,7 +163,7 @@ icônes, boutons, toggles et cases à cocher. Elle ne définit aucun markup HTML
     transition: background-color 200ms ease;
   }
 
-  .mike-toggle__thumb {
+  .piecemaker-toggle__thumb {
     position: absolute;
     top: 0.25rem;
     left: 0.25rem;
@@ -175,26 +175,26 @@ icônes, boutons, toggles et cases à cocher. Elle ne définit aucun markup HTML
     transition: transform 200ms ease;
   }
 
-  .mike-toggle[aria-checked="true"] .mike-toggle__track {
-    background: var(--mike-blue);
+  .piecemaker-toggle[aria-checked="true"] .piecemaker-toggle__track {
+    background: var(--piecemaker-blue);
   }
 
-  .mike-toggle[aria-checked="true"] .mike-toggle__thumb {
+  .piecemaker-toggle[aria-checked="true"] .piecemaker-toggle__thumb {
     transform: translateX(1rem);
   }
 
-  .mike-checkbox {
+  .piecemaker-checkbox {
     width: 0.625rem;
     height: 0.625rem;
     margin-inline-end: 0.75rem;
     flex: 0 0 auto;
-    border: 1px solid var(--mike-border);
+    border: 1px solid var(--piecemaker-border);
     border-radius: 0.25rem;
     accent-color: #000;
     cursor: pointer;
   }
 
-  .mike-check-square {
+  .piecemaker-check-square {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -205,36 +205,36 @@ icônes, boutons, toggles et cases à cocher. Elle ne définit aucun markup HTML
     border-radius: 0.25rem;
   }
 
-  .mike-check-square[data-state="checked"],
-  .mike-check-square[data-state="indeterminate"] {
+  .piecemaker-check-square[data-state="checked"],
+  .piecemaker-check-square[data-state="indeterminate"] {
     border-color: #111827;
     background: #111827;
   }
 
-  .mike-check-square__mark {
+  .piecemaker-check-square__mark {
     width: 0.625rem;
     height: 0.625rem;
     color: white;
   }
 
-  .mike-icon {
+  .piecemaker-icon {
     width: 1rem;
     height: 1rem;
     flex: 0 0 auto;
     stroke-width: 2;
   }
 
-  .mike-icon--small {
+  .piecemaker-icon--small {
     width: 0.75rem;
     height: 0.75rem;
   }
 
-  .mike-icon--compact {
+  .piecemaker-icon--compact {
     width: 0.875rem;
     height: 0.875rem;
   }
 
-  .mike-icon--large {
+  .piecemaker-icon--large {
     width: 1.25rem;
     height: 1.25rem;
   }
