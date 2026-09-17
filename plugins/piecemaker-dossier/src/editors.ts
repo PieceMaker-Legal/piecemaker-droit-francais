@@ -1,4 +1,4 @@
-import { entityKinds, escapeHtml, labels, textValue, dateFor } from './views.js';
+import { aliasEditorMarkup, entityKinds, escapeHtml, kindLabels, nodeVariants, parseAliases, textValue, dateFor } from './views.js';
 import { knowledgeApi } from './api.js';
 import type { CompanySearchResult } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
@@ -19,7 +19,39 @@ export function modal(root: HTMLElement, body: string): HTMLElement {
 
 const positionOptions = (selected: string): string => ['<option value="">Non précisée</option>', ...PROCEDURE_POSITIONS.map((entry) => `<option value="${entry.value}" ${entry.value === selected ? 'selected' : ''}>${escapeHtml(entry.label)}</option>`)].join('');
 
-const kindOptions = (selected: NodeKind): string => entityKinds.map((kind) => `<option value="${kind}" ${kind === selected ? 'selected' : ''}>${escapeHtml(labels[kind])}</option>`).join('');
+const kindOptions = (selected: NodeKind): string => entityKinds.map((kind) => `<option value="${kind}" ${kind === selected ? 'selected' : ''}>${escapeHtml(kindLabels[kind])}</option>`).join('');
+
+export function bindAliasEditors(layer: HTMLElement): void {
+  layer.querySelectorAll<HTMLElement>('[data-alias-editor]').forEach((editor) => {
+    const pills = editor.querySelector<HTMLElement>('[data-alias-pills]');
+    const input = editor.querySelector<HTMLInputElement>('[data-alias-input]');
+    const hidden = editor.querySelector<HTMLInputElement>('input[name="aliases"]');
+    if (!pills || !hidden) return;
+    const aliases = parseAliases(hidden.value);
+    const sync = () => {
+      hidden.value = aliases.join('\n');
+      pills.innerHTML = aliases.map((alias, index) => `<span class="pmd-alias-pill">${escapeHtml(alias)}<button type="button" data-remove-alias="${index}" aria-label="Supprimer ${escapeHtml(alias)}">×</button></span>`).join('');
+      pills.querySelectorAll<HTMLButtonElement>('[data-remove-alias]').forEach((button) => button.addEventListener('click', () => {
+        aliases.splice(Number(button.dataset.removeAlias), 1);
+        sync();
+        input?.focus();
+      }));
+    };
+    input?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const alias = input.value.trim();
+      if (!alias || aliases.includes(alias)) {
+        input.value = '';
+        return;
+      }
+      aliases.push(alias);
+      input.value = '';
+      sync();
+    });
+    sync();
+  });
+}
 
 const defaultRelationOptions = [
   'dirigeant',
@@ -100,31 +132,43 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const linkedSiren = node ? relations.find((entry) => entry.relation.toLocaleLowerCase() === 'siren' && entry.fromNodeId === node.id && sirenNodes.some((candidate) => candidate.id === entry.toNodeId)) : undefined;
   const linkedSirenNode = linkedSiren ? sirenNodes.find((entry) => entry.id === linkedSiren.toNodeId) : undefined;
   const companyFieldsHidden = selectedKind !== 'company';
-  const initialAliases = [...new Set((node?.aliases || []).map((alias) => alias.trim()).filter(Boolean))];
+  const variants = node ? nodeVariants(node, data.graph.mappings) : [];
+  const profileLinks = relations.map((relation, index) => {
+    const relatedNodeId = relation.fromNodeId === id ? relation.toNodeId : relation.fromNodeId;
+    const relatedNode = nodesById.get(relatedNodeId);
+    return { relation, index, relatedNode, relatedNodeId };
+  }).filter((entry) => entry.relation.relation !== 'mentions' && (entry.relatedNode?.kind === 'person' || entry.relatedNode?.kind === 'company'));
+  const mentionCount = relations.filter((relation) => relation.relation === 'mentions').length;
+  const linkTargets = data.graph.nodes.filter((entry) => entry.id !== id && (entry.kind === 'person' || entry.kind === 'company'));
   const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
   const layer = modal(root, `
-    <div class="pmd-toolbar">${node && onBackToMapping ? '<button type="button" class="pmd-button pmd-back-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-back-mapping>← Retour</button>' : ''}<h2 class="pmd-title piecemaker-display">${node ? 'Modifier l’élément' : 'Ajouter un élément'}</h2><span class="pmd-spacer"></span><button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="company-search" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public" ${selectedKind === 'company' ? '' : 'hidden'}>${companySearchIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div>
+    <div class="pmd-toolbar">${node && onBackToMapping ? '<button type="button" class="pmd-button pmd-back-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-back-mapping>← Retour</button>' : ''}<h2 class="pmd-title piecemaker-display">${node ? `Modifier ${escapeHtml(node.label)}` : 'Ajouter un élément'}</h2><span class="pmd-spacer"></span><button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="company-search" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public" ${selectedKind === 'company' ? '' : 'hidden'}>${companySearchIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div>
     <div class="pmd-dialog-columns"><form class="pmd-form" data-node-form>
+      <section class="pmd-form-section"><h3>Identité</h3>
       <label>Type<select class="pmd-select" name="kind">${kindOptions(node?.kind || defaults.kind || 'person')}</select></label>
-      <label>Libellé<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></label>
-      <label>Variantes<div class="pmd-alias-editor" data-alias-editor><div class="pmd-alias-pills" data-alias-pills></div><input class="pmd-input pmd-alias-input" data-alias-input placeholder="Saisissez une variante puis appuyez sur Entrée"><input type="hidden" name="aliases"></div></label>
+      <label>Nom principal<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></label>
+      <label>Autres écritures${aliasEditorMarkup(variants)}</label>
       <label>Code anonymisé<input class="pmd-input" name="masked" value="${escapeHtml(mappings[0]?.masked || '')}"></label>
-      <label>Statut procédural<select class="pmd-select" name="partySide"><option value="">Aucun</option><option value="client" ${(!node && defaults.partySide === 'client') || (node && node.data.partySide === 'client') || (!node && !defaults.partySide) ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${(node && node.data.partySide === 'adversaire') || (!node && defaults.partySide === 'adversaire') ? 'selected' : ''}>Partie adverse</option><option value="tiers" ${(node && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire') || (!node && defaults.partySide === 'tiers') ? 'selected' : ''}>Tiers</option></select></label>
-      <label data-position-field>Position procédurale<select class="pmd-select" name="position">${positionOptions(textValue(node?.data.position))}</select></label>
+      </section>
+      <section class="pmd-form-section"><h3>Rôle dans le dossier</h3>
+      <label>Partie<select class="pmd-select" name="partySide"><option value="">Aucune</option><option value="client" ${(!node && defaults.partySide === 'client') || (node && node.data.partySide === 'client') || (!node && !defaults.partySide) ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${(node && node.data.partySide === 'adversaire') || (!node && defaults.partySide === 'adversaire') ? 'selected' : ''}>Partie adverse</option><option value="tiers" ${(node && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire') || (!node && defaults.partySide === 'tiers') ? 'selected' : ''}>Tiers</option></select></label>
+      <label data-position-field>Position<select class="pmd-select" name="position">${positionOptions(textValue(node?.data.position))}</select></label>
       <div data-company-fields ${companyFieldsHidden ? 'hidden' : ''}>
         <label>Forme sociale<input class="pmd-input" name="legalForm" value="${escapeHtml(textValue(node?.data.legalForm))}"></label>
         <label>Numéro SIREN<input class="pmd-input" name="siren" inputmode="numeric" autocomplete="off" value="${escapeHtml(linkedSirenNode?.label || '')}" placeholder="9 chiffres"><div class="pmd-siren-suggestions" data-siren-suggestions></div></label>
       </div>
-      <label>Nouvelle relation<select class="pmd-select" name="target"><option value="">Aucune</option>${data.graph.nodes.filter((entry) => entry.id !== id && entry.kind !== 'document').map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join('')}</select></label>
-      <label>Type de relation<select class="pmd-select" name="relation">${relationSelectOptions()}</select></label>
-      <label data-custom-relation hidden>Relation personnalisée<input class="pmd-input" name="customRelation" placeholder="Saisissez une relation"></label>
-      ${relations.length ? `<div class="pmd-current-relations"><div class="pmd-group">Relations actuelles <span class="pmd-group-count">${relations.length}</span></div><div class="pmd-relation-list">${relations.map((relation, index) => {
-        const relatedNodeId = relation.fromNodeId === id ? relation.toNodeId : relation.fromNodeId;
-        const relatedNode = nodesById.get(relatedNodeId);
+      </section>
+      <section class="pmd-form-section"><h3>Liens</h3>
+      ${mentionCount ? `<p class="pmd-form-note">Cité dans ${mentionCount} pièce${mentionCount > 1 ? 's' : ''} — à corriger depuis la chronologie.</p>` : ''}
+      <label>Lier à<select class="pmd-select" name="target"><option value="">Personne ou société…</option>${linkTargets.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join('')}</select></label>
+      <label>Nature du lien<select class="pmd-select" name="relation">${relationSelectOptions()}</select></label>
+      <label data-custom-relation hidden>Lien personnalisé<input class="pmd-input" name="customRelation" placeholder="Saisissez le type de lien"></label>
+      ${profileLinks.length ? `<div class="pmd-current-relations"><div class="pmd-relation-list">${profileLinks.map(({ relation, index, relatedNode, relatedNodeId }) => {
         const relatedLabel = relatedNode?.label || relatedNodeId;
-        const relatedKind = relatedNode?.kind === 'document' ? 'Pièce' : relatedNode?.kind === 'person' ? 'Personne physique' : relatedNode?.kind === 'company' ? 'Personne morale' : relatedNode ? labels[relatedNode.kind] : '';
-        return `<button type="button" class="pmd-relation-row" data-unlink="${index}" aria-label="Supprimer le lien ${escapeHtml(relationLabel(relation.relation))} avec ${escapeHtml(relatedLabel)}"><span class="pmd-relation-copy"><span class="pmd-relation-type">${escapeHtml(relationLabel(relation.relation))}</span><strong class="pmd-relation-target">${escapeHtml(relatedLabel)}</strong>${relatedKind ? `<small class="pmd-relation-kind">${escapeHtml(relatedKind)}</small>` : ''}</span><span class="pmd-relation-remove" aria-hidden="true">×</span></button>`;
-      }).join('')}</div></div>` : ''}
+        const relatedKind = relatedNode?.kind === 'person' ? 'Personne physique' : 'Personne morale';
+        return `<button type="button" class="pmd-relation-row" data-unlink="${index}" aria-label="Supprimer le lien ${escapeHtml(relationLabel(relation.relation))} avec ${escapeHtml(relatedLabel)}"><span class="pmd-relation-copy"><span class="pmd-relation-type">${escapeHtml(relationLabel(relation.relation))}</span><strong class="pmd-relation-target">${escapeHtml(relatedLabel)}</strong><small class="pmd-relation-kind">${escapeHtml(relatedKind)}</small></span><span class="pmd-relation-remove" aria-hidden="true">×</span></button>`;
+      }).join('')}</div></div>` : '<p class="pmd-form-note">Aucun lien avec une autre personne.</p>'}
+      </section>
       <div class="pmd-form-actions"><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm">Enregistrer</button></div>
     </form><aside class="pmd-company-search" data-company-search hidden></aside></div>`);
   layer.querySelector<HTMLElement>('[data-back-mapping]')?.addEventListener('click', () => {
@@ -132,38 +176,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     onBackToMapping?.();
   });
   const removals = new Set<number>();
-  const aliasEditor = layer.querySelector<HTMLElement>('[data-alias-editor]');
-  const aliasPills = layer.querySelector<HTMLElement>('[data-alias-pills]');
-  const aliasInput = layer.querySelector<HTMLInputElement>('[data-alias-input]');
-  const aliases = initialAliases.slice();
-  const syncAliases = () => {
-    if (!aliasEditor || !aliasPills) return;
-    aliasPills.innerHTML = aliases.map((alias, index) => `<span class="pmd-alias-pill">${escapeHtml(alias)}<button type="button" data-remove-alias="${index}" aria-label="Supprimer ${escapeHtml(alias)}">×</button></span>`).join('');
-    const hidden = aliasEditor.querySelector<HTMLInputElement>('input[name="aliases"]');
-    if (hidden) hidden.value = aliases.join('\n');
-    aliasPills.querySelectorAll<HTMLButtonElement>('[data-remove-alias]').forEach((button) => button.addEventListener('click', () => {
-      aliases.splice(Number(button.dataset.removeAlias), 1);
-      syncAliases();
-      aliasInput?.focus();
-    }));
-  };
-  const addAlias = () => {
-    if (!aliasInput) return;
-    const alias = aliasInput.value.trim();
-    if (!alias || aliases.includes(alias)) {
-      aliasInput.value = '';
-      return;
-    }
-    aliases.push(alias);
-    aliasInput.value = '';
-    syncAliases();
-  };
-  aliasInput?.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    addAlias();
-  });
-  syncAliases();
+  bindAliasEditors(layer);
   layer.querySelectorAll<HTMLElement>('[data-unlink]').forEach((button) => button.addEventListener('click', () => {
     removals.add(Number(button.dataset.unlink));
     button.style.display = 'none';
@@ -299,7 +312,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     event.preventDefault();
     const form = new FormData(event.currentTarget as HTMLFormElement);
     const label = textValue(form.get('label')).trim();
-    const savedAliases = textValue(form.get('aliases')).split('\n').map((entry) => entry.trim()).filter(Boolean);
+    const savedAliases = parseAliases(form.get('aliases'));
     const masked = textValue(form.get('masked')).trim();
     const partySide = textValue(form.get('partySide'));
     const kind = textValue(form.get('kind')) as NodeKind;
