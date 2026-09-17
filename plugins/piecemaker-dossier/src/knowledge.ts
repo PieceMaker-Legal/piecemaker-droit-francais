@@ -108,6 +108,10 @@ export function initializeKnowledgeSchema(database: DatabaseConnection): void {
   database.pragma('foreign_keys = ON');
   database.pragma('busy_timeout = 5000');
   database.exec(SCHEMA_SQL);
+  database.prepare(`
+    INSERT OR IGNORE INTO piecemaker_anonymization_status(project_id, completed_at)
+    SELECT DISTINCT project_id, ? FROM piecemaker_mappings
+  `).run(at());
 }
 
 export class KnowledgeStore {
@@ -217,7 +221,8 @@ export class KnowledgeStore {
     const mappings = (this.database.prepare('SELECT project_id,node_id,real_value,masked_value,data_json,origin FROM piecemaker_mappings WHERE project_id=? ORDER BY real_value').all(projectId) as MappingRow[])
       .map(toMapping)
       .filter((mapping) => retained.has(mapping.nodeId) && !isInstitutionalEntity(mapping.real));
-    return { projectId, nodes, links, mappings, exclusions, exclusionsInitialized: Boolean(exclusionsNode) };
+    const anonymizationComplete = Boolean(this.database.prepare('SELECT 1 FROM piecemaker_anonymization_status WHERE project_id=?').get(projectId));
+    return { projectId, nodes, links, mappings, exclusions, exclusionsInitialized: Boolean(exclusionsNode), anonymizationComplete };
   }
 
   public glinerMappingKeys(projectIdInput: string): Array<{ nodeId: string; real: string }> {

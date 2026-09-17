@@ -109,11 +109,12 @@ export function scanPercentLabel(job: ScanJob): string {
   return `${Math.round(Math.max(0, Math.min(100, job.percent || 0)))} %`;
 }
 
-export function scanStatusMarkup(mappingCount = 0, job: ScanJob | null = null): string {
+export function scanStatusMarkup(mappingCount = 0, job: ScanJob | null = null, scanned = false): string {
   const scanning = Boolean(job && job.state === 'running');
+  const ready = scanned || mappingCount > 0;
   return `<span class="pmd-status-icon">${shieldCheckIcon}</span>
         ${scanning && job ? scanProgress(job) : `<span class="pmd-status-label">${mappingCount} anonymisé(s)</span>`}
-        <button class="pmd-scan-button" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : mappingCount > 0 ? 'Relancer' : 'Lancer'}</span></button>`;
+        <button class="pmd-scan-button" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : ready ? 'Relancer' : 'Lancer'}</span></button>`;
 }
 
 export function scanProgress(job: ScanJob): string {
@@ -128,7 +129,7 @@ export function scanProgress(job: ScanJob): string {
     </span>`;
 }
 
-export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null): string {
+export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null, scanned = false): string {
   const scanning = Boolean(job && job.state === 'running');
   return `
     <div class="pmd-header">
@@ -136,19 +137,28 @@ export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null)
         ${TABS.map(({ id, label, icon }) => `<button type="button" class="pmd-tab" role="tab" data-tab="${id}" aria-selected="${active === id}" tabindex="${active === id ? 0 : -1}">${icon}<span>${label}</span></button>`).join('')}
         <button class="pmd-button pmd-agents-button" data-action="agents"><span>▤</span> Agents.md</button>
       </div>
-      <div class="pmd-scan-status" data-ready="${mappingCount > 0}" data-scanning="${scanning}">
-        ${scanStatusMarkup(mappingCount, job)}
+      <div class="pmd-scan-status" data-ready="${scanned || mappingCount > 0}" data-scanning="${scanning}">
+        ${scanStatusMarkup(mappingCount, job, scanned)}
       </div>
     </div>
     <div data-error></div>
     <div class="pmd-workspace"><main class="pmd-content" data-content></main></div>`;
 }
 
-export function generalView(data: ViewData, tiersCollapsed = false): string {
+function noPartiesMarkup(scanned: boolean, scanning: boolean): string {
+  if (!scanned) {
+    return `<div class="pmd-no-parties">${scanSearchIcon}<h3>Dossier non analysé</h3><p>Lancez l’analyse pour détecter les entités et désigner les parties.</p><button class="pmd-button" data-action="scan" ${scanning ? 'disabled' : ''}>${scanning ? 'Analyse en cours…' : 'Lancer l’analyse'}</button></div>`;
+  }
+  return `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button" data-action="mapping">◇ Ouvrir le mapping</button></div>`;
+}
+
+export function generalView(data: ViewData, tiersCollapsed = false, job: ScanJob | null = null): string {
   const entities = data.graph.nodes.filter((node) => node.kind !== 'document');
   const clients = entities.filter((node) => node.data.partySide === 'client');
   const adversaries = entities.filter((node) => node.data.partySide === 'adversaire');
   const tiers = entities.filter((node) => (node.kind === 'person' || node.kind === 'company') && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire');
+  const scanned = Boolean(data.graph.anonymizationComplete);
+  const scanning = Boolean(job && job.state === 'running');
   return `
     <div class="pmd-general">
     <div class="pmd-general-actions">
@@ -158,7 +168,7 @@ export function generalView(data: ViewData, tiersCollapsed = false): string {
     ${clients.length || adversaries.length || tiers.length ? `<div class="pmd-party-layout" data-tiers-collapsed="${tiersCollapsed}"><div class="pmd-party-columns">
       <section class="pmd-party-column"><h3 data-side="client">Parties clientes</h3>${clients.map((node) => nodeCard(node, data.graph)).join('')}<button type="button" class="pmd-column-empty" data-party-picker="client" data-party-drop="client"><span>${clients.length ? 'Ajouter une autre partie cliente' : 'Aucune partie cliente désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
       <section class="pmd-party-column"><h3 data-side="adverse">Parties adverses</h3>${adversaries.map((node) => nodeCard(node, data.graph)).join('')}<button type="button" class="pmd-column-empty" data-party-picker="adversaire" data-party-drop="adversaire"><span>${adversaries.length ? 'Ajouter une autre partie adverse' : 'Aucune partie adverse désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
-    </div>${tiers.length ? `<aside class="pmd-tiers-column" data-tiers-column data-collapsed="${tiersCollapsed}"><button type="button" class="pmd-tiers-toggle" data-action="toggle-tiers" aria-expanded="${!tiersCollapsed}" aria-controls="pmd-tiers-content">${tiersProfileIcon}<span class="pmd-tiers-label">Tiers</span><span class="pmd-tiers-count">${tiers.length}</span></button><div id="pmd-tiers-content" class="pmd-tiers-content" role="region" aria-label="Tiers">${tiers.map((node) => nodeCard(node, data.graph)).join('')}</div></aside>` : ''}</div>` : `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button" data-action="mapping">◇ Ouvrir le mapping</button></div>`}
+    </div>${tiers.length ? `<aside class="pmd-tiers-column" data-tiers-column data-collapsed="${tiersCollapsed}"><button type="button" class="pmd-tiers-toggle" data-action="toggle-tiers" aria-expanded="${!tiersCollapsed}" aria-controls="pmd-tiers-content">${tiersProfileIcon}<span class="pmd-tiers-label">Tiers</span><span class="pmd-tiers-count">${tiers.length}</span></button><div id="pmd-tiers-content" class="pmd-tiers-content" role="region" aria-label="Tiers">${tiers.map((node) => nodeCard(node, data.graph)).join('')}</div></aside>` : ''}</div>` : noPartiesMarkup(scanned, scanning)}
     <div class="pmd-sticky-status">
       <span>Glissez un profil sur un autre pour créer un lien.</span>
       <button class="pmd-button pmd-button-primary pmd-small-button" data-action="refresh">✓ Enregistrer les profils</button>

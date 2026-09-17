@@ -31,6 +31,10 @@ function jobIsPending(job: AnonymizationJob): boolean {
   return job.state === 'running';
 }
 
+function announceCompletion(job: AnonymizationJob | null | undefined): void {
+  if (job?.state === 'done') window.dispatchEvent(new CustomEvent(ANONYMIZATION_COMPLETED_EVENT));
+}
+
 function knowledgeJobAsTracked(job: KnowledgeScanJob): AnonymizationJob {
   return {
     id: job.id,
@@ -90,19 +94,16 @@ async function refreshTrackedJobs(): Promise<void> {
   const polled = new Map<string, AnonymizationJob | null>();
   await Promise.all(trackedJobs.map(async (entry) => {
     try {
-      const job = await pollEntry(entry);
-      polled.set(entry.job.id, job && jobIsPending(job) ? job : null);
+      polled.set(entry.job.id, await pollEntry(entry));
     } catch {
       polled.set(entry.job.id, null);
     }
   }));
-  // Recomputed from the current list rather than from the snapshot the poll
-  // started on, so a job tracked while the requests were in flight survives.
   publish(trackedJobs.flatMap((entry) => {
     if (!polled.has(entry.job.id)) return [entry];
     const job = polled.get(entry.job.id);
-    if (job?.state === 'done') window.dispatchEvent(new CustomEvent(ANONYMIZATION_COMPLETED_EVENT));
-    return job ? [{ ...entry, job }] : [];
+    announceCompletion(job);
+    return job && jobIsPending(job) ? [{ ...entry, job }] : [];
   }));
 }
 
@@ -147,6 +148,7 @@ type KnowledgeScanBroadcast = { projectPath: string; projectName: string; job: K
 export function receiveKnowledgeScanBroadcast(detail: KnowledgeScanBroadcast | null | undefined): void {
   if (!detail?.projectPath || !detail.job?.id) return;
   const job = knowledgeJobAsTracked(detail.job);
+  announceCompletion(job);
   if (!jobIsPending(job)) {
     publish(trackedJobs.filter((tracked) => tracked.job.id !== job.id));
     return;

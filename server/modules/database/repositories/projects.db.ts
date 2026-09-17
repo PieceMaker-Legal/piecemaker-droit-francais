@@ -23,6 +23,12 @@ function ensureAnonymizationStatusTable(db: ReturnType<typeof getConnection>): v
             FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
     `);
+    const mappingsExist = db.prepare(`SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='piecemaker_mappings'`).get() as { ok: number } | undefined;
+    if (!mappingsExist) return;
+    db.prepare(`
+        INSERT OR IGNORE INTO piecemaker_anonymization_status(project_id, completed_at)
+        SELECT DISTINCT project_id, ? FROM piecemaker_mappings
+    `).run(new Date().toISOString());
 }
 
 export const projectsDb = {

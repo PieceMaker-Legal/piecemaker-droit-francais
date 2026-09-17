@@ -410,7 +410,7 @@ function SidebarProjectItem({
                 {isAnonymized && (
                   <ShieldCheck
                     className="h-4 w-4 text-emerald-700 dark:text-emerald-300"
-                    aria-hidden="true"
+                    aria-label={t('tooltips.anonymizationComplete')}
                   >
                     <title>{t('tooltips.anonymizationComplete')}</title>
                   </ShieldCheck>

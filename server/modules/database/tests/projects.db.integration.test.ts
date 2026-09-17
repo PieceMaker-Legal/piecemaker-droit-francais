@@ -86,3 +86,49 @@ test('projectsDb.getProjectPaths reads anonymization completion directly from SQ
     assert.equal(project.anonymization_complete, 1);
   });
 });
+
+test('projectsDb.getProjectPaths backfills anonymization completion from existing mappings', async () => {
+  await withIsolatedDatabase(() => {
+    const created = projectsDb.createProjectPath('/workspace/legacy-scanned-project');
+    assert.ok(created.project);
+    const db = getConnection();
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS piecemaker_nodes (
+        project_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        label TEXT NOT NULL,
+        search_text TEXT NOT NULL DEFAULT '',
+        aliases_json TEXT NOT NULL DEFAULT '[]',
+        data_json TEXT NOT NULL DEFAULT '{}',
+        origin TEXT NOT NULL DEFAULT 'gliner',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (project_id, id)
+      );
+      CREATE TABLE IF NOT EXISTS piecemaker_mappings (
+        project_id TEXT NOT NULL,
+        node_id TEXT NOT NULL,
+        real_value TEXT NOT NULL,
+        masked_value TEXT NOT NULL,
+        search_text TEXT NOT NULL DEFAULT '',
+        data_json TEXT NOT NULL DEFAULT '{}',
+        origin TEXT NOT NULL DEFAULT 'gliner',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (project_id, node_id, real_value)
+      );
+    `);
+    db.prepare(`
+      INSERT INTO piecemaker_nodes(project_id,id,kind,label,search_text,aliases_json,data_json,origin,created_at,updated_at)
+      VALUES (?, 'person-1', 'person', 'Alice', 'alice', '[]', '{}', 'gliner', ?, ?)
+    `).run(created.project.project_id, new Date().toISOString(), new Date().toISOString());
+    db.prepare(`
+      INSERT INTO piecemaker_mappings(project_id,node_id,real_value,masked_value,search_text,data_json,origin,created_at,updated_at)
+      VALUES (?, 'person-1', 'Alice', 'PERSONNE_PHYSIQUE_01', 'alice', '{}', 'gliner', ?, ?)
+    `).run(created.project.project_id, new Date().toISOString(), new Date().toISOString());
+
+    const project = projectsDb.getProjectPaths()[0];
+    assert.equal(project.anonymization_complete, 1);
+  });
+});

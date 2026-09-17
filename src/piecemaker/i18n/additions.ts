@@ -12,15 +12,15 @@ type AdditionBundles = Record<string, Record<string, Record<string, unknown>>>;
 
 /** Case-file tab label, using each locale's term for a legal case file. */
 export const PIECEMAKER_I18N_ADDITIONS: AdditionBundles = {
-  fr:      { common: { tabs: { dossier: 'Dossier', library: 'Bibliothèque' } }, chat: { composer: { removeCommandPill: 'Retirer la commande {{name}}' } } },
-  en:      { common: { tabs: { dossier: 'Case file', library: 'Library' } }, chat: { composer: { removeCommandPill: 'Remove the {{name}} command' } } },
-  es:      { common: { tabs: { dossier: 'Expediente', library: 'Biblioteca' } }, chat: { composer: { removeCommandPill: 'Quitar el comando {{name}}' } } },
-  it:      { common: { tabs: { dossier: 'Fascicolo', library: 'Biblioteca' } }, chat: { composer: { removeCommandPill: 'Rimuovi il comando {{name}}' } } },
-  de:      { common: { tabs: { dossier: 'Dossier', library: 'Bibliothek' } }, chat: { composer: { removeCommandPill: 'Befehl {{name}} entfernen' } } },
-  tr:      { common: { tabs: { dossier: 'Dava dosyası', library: 'Kütüphane' } }, chat: { composer: { removeCommandPill: '{{name}} komutunu kaldır' } } },
-  ru:      { common: { tabs: { dossier: 'Досье', library: 'Библиотека' } }, chat: { composer: { removeCommandPill: 'Удалить команду {{name}}' } } },
-  ja:      { common: { tabs: { dossier: '案件', library: 'ライブラリ' } }, chat: { composer: { removeCommandPill: '{{name}} コマンドを削除' } } },
-  ko:      { common: { tabs: { dossier: '사건', library: '라이브러리' } }, chat: { composer: { removeCommandPill: '{{name}} 명령 제거' } } },
-  'zh-CN': { common: { tabs: { dossier: '案件', library: '资料库' } }, chat: { composer: { removeCommandPill: '移除 {{name}} 命令' } } },
-  'zh-TW': { common: { tabs: { dossier: '案件', library: '資料庫' } }, chat: { composer: { removeCommandPill: '移除 {{name}} 命令' } } },
+  fr:      { common: { tabs: { dossier: 'Dossier', library: 'Bibliothèque' } }, chat: { composer: { removeCommandPill: 'Retirer la commande {{name}}' } }, sidebar: { tooltips: { anonymizationComplete: 'Anonymisation effectuée' } } },
+  en:      { common: { tabs: { dossier: 'Case file', library: 'Library' } }, chat: { composer: { removeCommandPill: 'Remove the {{name}} command' } }, sidebar: { tooltips: { anonymizationComplete: 'Anonymization complete' } } },
+  es:      { common: { tabs: { dossier: 'Expediente', library: 'Biblioteca' } }, chat: { composer: { removeCommandPill: 'Quitar el comando {{name}}' } }, sidebar: { tooltips: { anonymizationComplete: 'Anonimización realizada' } } },
+  it:      { common: { tabs: { dossier: 'Fascicolo', library: 'Biblioteca' } }, chat: { composer: { removeCommandPill: 'Rimuovi il comando {{name}}' } }, sidebar: { tooltips: { anonymizationComplete: 'Anonimizzazione completata' } } },
+  de:      { common: { tabs: { dossier: 'Dossier', library: 'Bibliothek' } }, chat: { composer: { removeCommandPill: 'Befehl {{name}} entfernen' } }, sidebar: { tooltips: { anonymizationComplete: 'Anonymisierung abgeschlossen' } } },
+  tr:      { common: { tabs: { dossier: 'Dava dosyası', library: 'Kütüphane' } }, chat: { composer: { removeCommandPill: '{{name}} komutunu kaldır' } }, sidebar: { tooltips: { anonymizationComplete: 'Anonimleştirme tamamlandı' } } },
+  ru:      { common: { tabs: { dossier: 'Досье', library: 'Библиотека' } }, chat: { composer: { removeCommandPill: 'Удалить команду {{name}}' } }, sidebar: { tooltips: { anonymizationComplete: 'Анонимизация выполнена' } } },
+  ja:      { common: { tabs: { dossier: '案件', library: 'ライブラリ' } }, chat: { composer: { removeCommandPill: '{{name}} コマンドを削除' } }, sidebar: { tooltips: { anonymizationComplete: '匿名化が完了しました' } } },
+  ko:      { common: { tabs: { dossier: '사건', library: '라이브러리' } }, chat: { composer: { removeCommandPill: '{{name}} 명령 제거' } }, sidebar: { tooltips: { anonymizationComplete: '익명화 완료' } } },
+  'zh-CN': { common: { tabs: { dossier: '案件', library: '资料库' } }, chat: { composer: { removeCommandPill: '移除 {{name}} 命令' } }, sidebar: { tooltips: { anonymizationComplete: '已完成匿名化' } } },
+  'zh-TW': { common: { tabs: { dossier: '案件', library: '資料庫' } }, chat: { composer: { removeCommandPill: '移除 {{name}} 命令' } }, sidebar: { tooltips: { anonymizationComplete: '已完成匿名化' } } },
 };
