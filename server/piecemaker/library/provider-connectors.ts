@@ -66,6 +66,7 @@ export function listUserProviderConnectors(userHome: string) {
   const opencodeJsonc = path.join(userHome, '.config', 'opencode', 'opencode.jsonc');
   const opencodePath = fs.existsSync(opencodeJson) ? opencodeJson : opencodeJsonc;
   collectServers(opencodePath, objectRecord(readJson(opencodePath).mcp), collected);
+  collectServers(path.join(userHome, '.grok', 'config.toml'), objectRecord(readToml(path.join(userHome, '.grok', 'config.toml')).mcp_servers), collected);
   return collected;
 }
 

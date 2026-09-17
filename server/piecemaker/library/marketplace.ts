@@ -208,7 +208,7 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
   router.post('/plugins/sync', async (req, res) => {
     try {
       const workspacePath = typeof req.body?.workspacePath === 'string' ? req.body.workspacePath : undefined;
-      await scanAndPersistLibraryProviderSkills(store, workspacePath);
+      await scanAndPersistLibraryProviderSkills(store, workspacePath, undefined, userHome);
       scanAndPersistLibraryProviderAgents(store, userHome);
       scanAndPersistLibraryProviderConnectors(store, userHome);
       scanInstalledLibraryCollections(store, userHome);
