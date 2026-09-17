@@ -1,6 +1,6 @@
 import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
-import { bindAliasEditors, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
+import { askConfirm, askPrompt, bindAliasEditors, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { partyCodeChange } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { chronologyView, escapeHtml, generalView, mappingView, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
@@ -260,7 +260,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }));
     layer.querySelectorAll<HTMLElement>('[data-delete-node]').forEach((entry) => entry.addEventListener('click', async () => {
       const nodeId = entry.dataset.deleteNode;
-      if (!nodeId || !window.confirm('Supprimer cet élément et ses relations ?')) return;
+      if (!nodeId || !await askConfirm(root, 'Supprimer cet élément et ses relations ?', 'Supprimer')) return;
       layer.remove();
       try {
         await save([{ op: 'deleteNode', nodeId }]);
@@ -405,8 +405,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         return;
       }
       if (action === 'cancel-scan') {
-        if (!context.project || !scanJob || !window.confirm('Arrêter l’analyse en cours ?')) return;
-        void knowledgeApi.cancelScan(scanJob.id, context.project.name).catch(showError);
+        if (!context.project || !scanJob) return;
+        void askConfirm(root, 'Arrêter l’analyse en cours ?', 'Arrêter').then((confirmed) => {
+          if (!confirmed || !context.project || !scanJob) return;
+          void knowledgeApi.cancelScan(scanJob.id, context.project.name).catch(showError);
+        });
         return;
       }
       if (action === 'scan') {
@@ -442,8 +445,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       const removeParty = target.closest<HTMLElement>('[data-remove-party]');
       if (removeParty) {
         const nodeId = removeParty.dataset.removeParty;
-        if (!nodeId || !window.confirm('Retirer la désignation de partie de ce profil ?')) return;
-        void save([{ op: 'removePartyDesignation', nodeId }]).catch(showError);
+        if (!nodeId) return;
+        void askConfirm(root, 'Retirer la désignation de partie de ce profil ?', 'Retirer').then((confirmed) => {
+          if (!confirmed) return;
+          void save([{ op: 'removePartyDesignation', nodeId }]).catch(showError);
+        });
         return;
       }
       const unlink = target.closest<HTMLElement>('[data-unlink-from]');
@@ -463,8 +469,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       }
       const deleteNode = target.closest<HTMLElement>('[data-delete-node]');
       if (deleteNode) {
-        if (!deleteNode.dataset.deleteNode || !window.confirm('Supprimer cet élément et ses relations ?')) return;
-        void save([{ op: 'deleteNode', nodeId: deleteNode.dataset.deleteNode }]).catch(showError);
+        const nodeId = deleteNode.dataset.deleteNode;
+        if (!nodeId) return;
+        void askConfirm(root, 'Supprimer cet élément et ses relations ?', 'Supprimer').then((confirmed) => {
+          if (!confirmed) return;
+          void save([{ op: 'deleteNode', nodeId }]).catch(showError);
+        });
         return;
       }
       const editDocument = target.closest<HTMLElement>('[data-edit-document]');
@@ -546,9 +556,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       const source = draggedNodeId || event.dataTransfer?.getData('text/plain') || '';
       const destination = relationDrop.dataset.relationDrop || '';
       if (!source || !destination || source === destination) return;
-      const relation = window.prompt('Nommez le lien entre ces profils :', 'Dirigeant')?.trim();
-      if (!relation) return;
-      void save([{ op: 'link', link: { fromNodeId: source, toNodeId: destination, relation, origin: 'manual' } }]).catch(showError);
+      void askPrompt(root, 'Nommez le lien entre ces profils', 'Dirigeant', 'Lier').then((relation) => {
+        if (!relation) return;
+        void save([{ op: 'link', link: { fromNodeId: source, toNodeId: destination, relation, origin: 'manual' } }]).catch(showError);
+      });
     });
   };
 
