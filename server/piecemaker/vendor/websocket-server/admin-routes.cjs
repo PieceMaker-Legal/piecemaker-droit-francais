@@ -775,15 +775,9 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
           .every((name) => fs.existsSync(path.join(glinerModelCache, revision, name))));
     } catch { return false; }
   })();
-  const glinerReady = fs.existsSync(path.join(glinerDir, 'presidio-gliner.py'))
+  const glinerReady = fs.existsSync(path.join(glinerDir, 'scanner_worker.py'))
     && hasPackage('gliner2')
     && glinerModelReady;
-  const coremlDefault = path.join(
-    glinerDir, 'models', 'gliner2.5-multi-v1-encoder_b1_832.mlmodelc',
-  );
-  const coreml = [process.env.PIECEMAKER_COREML_MODEL, coremlDefault]
-    .filter(Boolean)
-    .some((candidate) => fs.existsSync(candidate));
   const mineruReady = hasPackage('mineru') || hasPackage('magic_pdf')
     || fs.existsSync(path.join(venvDir, 'bin', 'mineru'));
   const folders = listConfiguredCases(readRegistryConfig(path.join(homeDir, 'config.json'))).map((entry) => {
@@ -841,11 +835,10 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
         name: 'GLiNER2.5 · PII',
         installed: glinerReady,
         summary: glinerReady
-          ? coreml ? 'Détection locale · GPU CoreML' : 'Détection locale · CPU'
+          ? 'Détection locale · PyTorch'
           : 'Modèle d’anonymisation absent',
-        coreml,
         model: glinerModelId,
-        engine: coreml ? 'CoreML (GPU)' : 'torch (CPU)',
+        engine: 'torch',
       },
       mineru: {
         name: 'MinerU · OCR',
@@ -2745,7 +2738,6 @@ function createAdminRouter({
           engine: String(req.body?.engine || '').trim() || undefined,
           mode: String(req.body?.mode || '').trim() || undefined,
           lang: String(req.body?.lang || '').trim() || undefined,
-          onMappingReady,
         },
       });
       job.reference = legalCase.id;

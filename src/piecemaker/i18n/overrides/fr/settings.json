@@ -36,7 +36,7 @@
   },
   "pluginSettings": {
     "sections": {
-      "officialDescription": "Maintenus par l'équipe PieceMaker et prêts à être installés directement."
+      "officialDescription": "Maintenus par CloudCLI et prêts à être installés directement."
     },
     "starterPlugin": {
       "name": "Statistiques du dossier",

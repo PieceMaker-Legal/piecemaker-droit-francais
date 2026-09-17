@@ -3,7 +3,6 @@
   "displayName": "Timesheet",
   "version": "1.0.0",
   "description": "Suivi du temps et des conclusions des sessions par dossier.",
-  "author": "PieceMaker",
   "icon": "icon.svg",
   "type": "module",
   "slot": "tab",

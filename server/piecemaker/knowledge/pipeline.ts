@@ -1,12 +1,13 @@
+import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 
 import type { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
-import type { GlinerDocument, GlinerMappingDocument, JsonData } from '../../../plugins/piecemaker-dossier/src/types.js';
 import { persistScanResult, scanResultOperations } from '../../../plugins/piecemaker-dossier/src/scan-result.js';
+import type { GlinerDocument, GlinerMappingDocument, JsonData } from '../../../plugins/piecemaker-dossier/src/types.js';
+
 import type { KnowledgeScanProgress } from './scan-jobs.js';
 
 type ProjectLookup = {
@@ -20,6 +21,29 @@ type PipelineOptions = {
   pythonPath?: string;
 };
 
+type OriginalFile = { path: string; resource?: boolean };
+
+type OriginalsPipeline = {
+  caseMappingFile(caseRoot: string): string;
+  listOriginals(caseRoot: string): Promise<OriginalFile[]>;
+  runManagedPythonJob(options: {
+    action: 'convert' | 'anonymize';
+    script: string;
+    args: string[];
+    onProgress?: (progress: KnowledgeScanProgress) => void;
+    signal?: AbortSignal;
+  }): Promise<unknown>;
+  writeCaseMapping(caseRoot: string, document: GlinerMappingDocument): unknown;
+};
+
+const require = createRequire(import.meta.url);
+const {
+  caseMappingFile,
+  listOriginals,
+  runManagedPythonJob,
+  writeCaseMapping,
+} = require('../vendor/websocket-server/originals-pipeline.cjs') as OriginalsPipeline;
+
 const SUPPORTED_EXTENSIONS = new Set(['.pdf', '.docx', '.doc', '.odt', '.rtf', '.txt', '.md', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']);
 
 function relativeKey(projectPath: string, filePath: string): string {
@@ -27,15 +51,18 @@ function relativeKey(projectPath: string, filePath: string): string {
   return crypto.createHash('sha256').update(relative).digest('hex');
 }
 
-function listedFiles(projectPath: string): string[] {
-  return fs.readdirSync(projectPath, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && SUPPORTED_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
-    .map((entry) => path.join(projectPath, entry.name));
+/** Pièces scannées par défaut : même liste que l'administration, récursive, hors Markdown généré. */
+export async function defaultScanFiles(projectPath: string): Promise<string[]> {
+  const root = fs.realpathSync(projectPath);
+  const originals = await listOriginals(root);
+  return originals
+    .filter((file) => !file.resource)
+    .map((file) => path.resolve(root, file.path));
 }
 
-function safeFiles(projectPath: string, requested: unknown): string[] {
+async function safeFiles(projectPath: string, requested: unknown): Promise<string[]> {
   const root = fs.realpathSync(projectPath);
-  const candidates = Array.isArray(requested) && requested.length ? requested : listedFiles(root);
+  const candidates = Array.isArray(requested) && requested.length ? requested : await defaultScanFiles(root);
   return [...new Set(candidates.map((candidate) => {
     const raw = String(candidate || '');
     const resolved = path.resolve(root, raw);
@@ -46,66 +73,16 @@ function safeFiles(projectPath: string, requested: unknown): string[] {
   }))];
 }
 
-/**
- * `convert_and_scan_pipeline.py` chains CONVERT (markitdown) then SCAN/CHUNKS
- * (GLiNER) in one call, each with its own 0-100. The two shares below keep the
- * reported percentage monotonic across that handover, with the same weighting
- * as `originals-pipeline.cjs` — GLiNER dominates markitdown in duration.
- */
-const CONVERT_SUBPHASE_SHARE = 0.25;
-
-function progressFromLine(line: string): KnowledgeScanProgress | null {
-  const matched = /^PROGRESS:([A-Z]+):(\d+):(\d+):(\d+)/.exec(line.trim());
-  if (!matched) return null;
-  const [, marker, percentage, current, total] = matched;
-  const phase = marker === 'CONVERT' ? 'convert' : 'scan';
-  const subPercent = Math.min(100, Number(percentage) || 0);
-  return {
-    phase,
-    percent: phase === 'convert'
-      ? subPercent * CONVERT_SUBPHASE_SHARE
-      : CONVERT_SUBPHASE_SHARE * 100 + subPercent * (1 - CONVERT_SUBPHASE_SHARE),
-    processed: Number(current) || 0,
-    total: Number(total) || 0,
-  };
-}
-
-function runProcess(executable: string, args: string[], cwd: string, onProgress?: (progress: KnowledgeScanProgress) => void, signal?: AbortSignal): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { cwd, env: { ...process.env, PYTHONUNBUFFERED: '1' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    let stdout = '';
-    let stderr = '';
-    let pendingLine = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-      if (!onProgress) return;
-      const lines = (pendingLine + chunk).split(/\r?\n/);
-      pendingLine = lines.pop() || '';
-      for (const line of lines) {
-        const progress = progressFromLine(line);
-        if (progress) onProgress(progress);
-      }
-    });
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
-    const abort = () => { child.kill('SIGTERM'); };
-    if (signal?.aborted) abort();
-    signal?.addEventListener('abort', abort, { once: true });
-    child.once('error', reject);
-    child.once('close', (code) => {
-      signal?.removeEventListener('abort', abort);
-      if (signal?.aborted) { reject(new Error('Analyse interrompue.')); return; }
-      if (code === 0) resolve({ stdout, stderr });
-      else reject(new Error(stderr.trim() || stdout.trim() || `Pipeline failed with code ${code ?? 1}.`));
-    });
-  });
-}
-
 function parseObject(filePath: string): JsonData {
-  const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^﻿/, '')) as unknown;
+  const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '')) as unknown;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid pipeline output.');
   return parsed as JsonData;
+}
+
+function readDocumentIndex(projectPath: string): JsonData {
+  const indexPath = path.join(projectPath, '.piecemaker', 'document-index.json');
+  if (!fs.existsSync(indexPath)) return { documents: {} };
+  return parseObject(indexPath);
 }
 
 function documentsFromIndex(projectPath: string, files: string[], documentIndex: JsonData): GlinerDocument[] {
@@ -168,6 +145,17 @@ function textValue(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+async function withPythonPath<T>(pythonPath: string, run: () => Promise<T>): Promise<T> {
+  const previous = process.env.PYTHON_PATH;
+  process.env.PYTHON_PATH = pythonPath;
+  try {
+    return await run();
+  } finally {
+    if (previous === undefined) delete process.env.PYTHON_PATH;
+    else process.env.PYTHON_PATH = previous;
+  }
+}
+
 export function createKnowledgePipeline(options: PipelineOptions) {
   const script = path.join(options.applicationRoot, 'server', 'piecemaker', 'vendor', 'websocket-server', 'scripts', 'convert_and_scan_pipeline.py');
   return {
@@ -175,39 +163,43 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const project = options.projects.getProjectById(projectId);
       if (!project) throw new Error('Project not found.');
       const projectPath = fs.realpathSync(project.project_path);
-      const files = safeFiles(projectPath, requestedFiles);
+      const explicitFiles = Array.isArray(requestedFiles) && requestedFiles.length > 0;
+      const files = await safeFiles(projectPath, requestedFiles);
       if (!files.length) throw new Error('No supported file to scan.');
-      const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-'));
-      const mappingFile = path.join(temporaryRoot, 'mapping.json');
-      const stateFile = path.join(temporaryRoot, 'state.json');
+      const mappingFile = caseMappingFile(projectPath);
+      const stateFile = path.join(projectPath, '.piecemaker', 'anonymization-state.json');
       const outputDirectory = path.join(projectPath, 'Fichiers convertis PieceMaker');
+      fs.mkdirSync(path.dirname(mappingFile), { recursive: true });
+      fs.mkdirSync(path.dirname(stateFile), { recursive: true });
       fs.mkdirSync(outputDirectory, { recursive: true });
-      try {
-        fs.writeFileSync(mappingFile, JSON.stringify(mappingSeed(projectId, projectPath, options.store)), { mode: 0o600 });
-        const args = [
-          script,
-          ...files,
-          '-o',
-          outputDirectory,
-          '--mapping-file',
-          mappingFile,
-          '--case-root',
-          projectPath,
-          '--state-file',
-          stateFile,
-        ];
-        const processResult = await runProcess(pythonExecutable(options.pythonPath), args, projectPath, onProgress, signal);
-        const mapping = parseObject(mappingFile) as GlinerMappingDocument;
-        const documentIndex = parseObject(path.join(temporaryRoot, 'document-index.json'));
-        const documents = documentsFromIndex(projectPath, files, documentIndex);
-        const scanResult = { projectId, mapping, documents };
-        const result = Array.isArray(requestedFiles) && requestedFiles.length
-          ? options.store.update({ projectId, operations: scanResultOperations(scanResult) })
-          : persistScanResult(scanResult, options.store);
-        return { ...result, documents: documents.length, stdout: processResult.stdout.trim(), stderr: processResult.stderr.trim() };
-      } finally {
-        fs.rmSync(temporaryRoot, { recursive: true, force: true });
-      }
+      fs.writeFileSync(mappingFile, JSON.stringify(mappingSeed(projectId, projectPath, options.store)), { mode: 0o600 });
+      const args = [
+        ...files,
+        '-o',
+        outputDirectory,
+        '--mapping-file',
+        mappingFile,
+        '--case-root',
+        projectPath,
+        '--state-file',
+        stateFile,
+      ];
+      if (!explicitFiles) args.push('--skip-existing');
+      await withPythonPath(pythonExecutable(options.pythonPath), () => runManagedPythonJob({
+        action: 'anonymize',
+        script,
+        args,
+        onProgress,
+        signal,
+      }));
+      const mapping = parseObject(mappingFile) as GlinerMappingDocument;
+      writeCaseMapping(projectPath, mapping);
+      const documents = documentsFromIndex(projectPath, files, readDocumentIndex(projectPath));
+      const scanResult = { projectId, mapping, documents };
+      const result = explicitFiles
+        ? options.store.update({ projectId, operations: scanResultOperations(scanResult) })
+        : persistScanResult(scanResult, options.store);
+      return { ...result, documents: documents.length };
     },
   };
 }

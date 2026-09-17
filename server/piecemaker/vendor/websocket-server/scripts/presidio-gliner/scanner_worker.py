@@ -23,6 +23,7 @@ import os
 import sys
 import warnings
 from collections import defaultdict
+from importlib.metadata import PackageNotFoundError, version as package_version
 from typing import Dict, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -39,13 +40,15 @@ from presidio_analyzer.nlp_engine import NlpArtifacts, NlpEngineProvider
 try:
     from gliner2 import AutoExtractor
     GLINER2_AVAILABLE = True
-except ImportError:
+    GLINER2_IMPORT_ERROR = None
+except ImportError as exc:
     GLINER2_AVAILABLE = False
+    GLINER2_IMPORT_ERROR = exc
 
 from model_config import PREFERRED_GLINER_MODEL
 
 # ---------------------------------------------------------------------------
-# Import scan_utils via the same path trick as presidio-gliner.py
+# Import scan_utils from the parent scripts/ directory.
 # ---------------------------------------------------------------------------
 _PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _PARENT_DIR)
@@ -70,29 +73,31 @@ from scan_utils import (  # noqa: E402
 
 sys.modules.update(_real_presidio_mods)
 
-# Lives next to this file, not in the scripts/ directory added above.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import coreml_runtime  # noqa: E402
-
 # ---------------------------------------------------------------------------
-# Thread count — measured on the target hardware (Apple M1, 8 cores):
-# 4 threads (torch's default) 23.0 min for a 972-chunk document, 6 threads 18.8 min,
-# 8 threads 23.4 min (the efficiency cores drag the batch down). MPS was measured at
-# 29.6 min, i.e. slower than CPU, and is deliberately not used.
+# Device: official GLiNER2 path — PyTorch CUDA if present, otherwise CPU.
+# MPS was measured slower than CPU on this encoder and is not used.
+# Thread count — measured on Apple M1 (8 cores): 4 threads 23.0 min for a
+# 972-chunk document, 6 threads 18.8 min, 8 threads 23.4 min.
 # ---------------------------------------------------------------------------
 try:
     import torch
 
     torch.set_num_threads(int(os.environ.get("PIECEMAKER_TORCH_THREADS", "6")))
 except ImportError:  # pragma: no cover - torch ships with gliner2
-    pass
+    torch = None
+
+
+def _gliner_map_location():
+    if torch is not None and torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
 
 # Logging every detected entity writes the document's PII in clear text to stderr,
 # which the Electron parent captures (~3 200 lines for a single URD). Off by default.
 DEBUG_ENTITIES = os.environ.get("PIECEMAKER_DEBUG_ENTITIES", "").lower() in ("1", "true", "yes")
 
 # ---------------------------------------------------------------------------
-# Constants (must match presidio-gliner.py)
+# Constants — unique scanner entry point.
 # ---------------------------------------------------------------------------
 GLINER_MODEL = PREFERRED_GLINER_MODEL
 
@@ -142,8 +147,7 @@ GLINER_THRESHOLD = 0.5
 # "Osakeyhtio", "EIRELI" or "No Liability" for French and American companies.
 
 # Réglage officiel Fastino pour les documents longs GLiNER2.5 : 384 mots avec
-# 64 mots de recouvrement. Ces valeurs doivent rester identiques dans
-# presidio-gliner.py, qui est l'autre point d'entrée du scanner.
+# 64 mots de recouvrement.
 CHUNK_SIZE = 384
 CHUNK_OVERLAP = 64
 BATCH_SIZE = 8
@@ -224,9 +228,9 @@ def extract_document_meta(text: str) -> Dict:
 
     One classify_text call (single-label nature) and one extract_json call (a
     header record: date + court) on the document header, via the already-loaded
-    GLiNER2 model. Never raises: a model without these heads, a CoreML-swapped
-    encoder that rejects the call, or an empty header all return the neutral
-    shape so the scan payload is always well-formed.
+    GLiNER2 model. Never raises: a model without these heads, a failed
+    classification call, or an empty header all return the neutral shape so
+    the scan payload is always well-formed.
     """
     meta = {
         "nature": None, "nature_confidence": None,
@@ -276,7 +280,7 @@ def extract_document_meta(text: str) -> Dict:
     return meta
 
 # ---------------------------------------------------------------------------
-# Chunking (copied from presidio-gliner.py)
+# Chunking
 # ---------------------------------------------------------------------------
 import re
 
@@ -296,7 +300,7 @@ def chunk_text_by_words(text: str, max_words: int = CHUNK_SIZE, overlap: int = C
     return chunks
 
 # ---------------------------------------------------------------------------
-# GLiNER2 Recognizer (copied from presidio-gliner.py)
+# GLiNER2 Recognizer
 # ---------------------------------------------------------------------------
 
 class GLiNER2Recognizer(LocalRecognizer):
@@ -318,16 +322,21 @@ class GLiNER2Recognizer(LocalRecognizer):
 
     def load(self):
         if not GLINER2_AVAILABLE:
-            raise ImportError("gliner2 is not installed.")
+            try:
+                installed_version = package_version("gliner2")
+            except PackageNotFoundError:
+                installed_version = "non installé"
+            raise ImportError(
+                f"gliner2 {installed_version} est incompatible : AutoExtractor est absent "
+                f"(version requise >= 2.0). Erreur d'import : {GLINER2_IMPORT_ERROR}"
+            )
         if self.model is not None:
             return
         self.model = AutoExtractor.from_pretrained(
             self.model_name,
             local_files_only=True,
+            map_location=_gliner_map_location(),
         )
-        # Reached only when the worker did not pre-load a shared model; accelerate here too
-        # so the fast path does not depend on which entry point loaded the model first.
-        coreml_runtime.maybe_accelerate(self.model, self.model_name)
 
     def analyze(self, text, entities, nlp_artifacts=None):
         if self.model is None:
@@ -494,16 +503,13 @@ def _ensure_gliner_loaded():
     global _gliner_model
     if _gliner_model is None and GLINER2_AVAILABLE:
         _log("Loading GLiNER2 model...")
+        device = _gliner_map_location()
         _gliner_model = AutoExtractor.from_pretrained(
             GLINER_MODEL,
             local_files_only=True,
+            map_location=device,
         )
-
-        # The encoder dominates the wall clock. CoreML uses an artifact compiled from
-        # this exact GLiNER2.5 checkpoint; otherwise it falls back to torch on its own.
-        coreml_runtime.maybe_accelerate(_gliner_model, GLINER_MODEL)
-
-        _log("GLiNER2 model loaded.")
+        _log(f"GLiNER2 model loaded ({device}).")
 
 
 # ---------------------------------------------------------------------------

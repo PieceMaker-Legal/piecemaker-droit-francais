@@ -8,7 +8,7 @@
  * PreToolUse hooks, which parse command text and are bypassable (see
  * docs/mxc-sandbox.md).
  *
- * Deliberately best-effort, like the CoreML encoder in step 03: mxc needs the
+ * Deliberately best-effort: mxc needs the
  * Rust toolchain, self-declares "not a security boundary currently", and its
  * value is defence-in-depth. Any failure falls back cleanly to the hooks and
  * never fails the install — the step is `required: false`. The runtime side

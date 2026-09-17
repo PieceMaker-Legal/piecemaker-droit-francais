@@ -61,7 +61,6 @@ export type ConfigurationGliner = {
   name: string;
   installed: boolean;
   summary: string;
-  coreml: boolean;
   model: string;
   engine: string;
 };
