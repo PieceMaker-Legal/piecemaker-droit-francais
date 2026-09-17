@@ -17,6 +17,82 @@ export function modal(root: HTMLElement, body: string): HTMLElement {
   return layer;
 }
 
+function overlay(root: HTMLElement, body: string): HTMLElement {
+  const layer = document.createElement('div');
+  layer.className = 'pmd-modal';
+  layer.innerHTML = `<div class="pmd-dialog pmd-dialog-compact">${body}</div>`;
+  root.appendChild(layer);
+  return layer;
+}
+
+function closeOverlay(layer: HTMLElement, onKey: (event: KeyboardEvent) => void): void {
+  document.removeEventListener('keydown', onKey);
+  layer.remove();
+}
+
+export function askConfirm(root: HTMLElement, title: string, confirmLabel = 'Confirmer'): Promise<boolean> {
+  return new Promise((resolve) => {
+    const layer = overlay(root, `
+      <div class="pmd-confirm">
+        <h2 class="pmd-title piecemaker-display">${escapeHtml(title)}</h2>
+        <div class="pmd-form-actions">
+          <button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button>
+          <button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-confirm>${escapeHtml(confirmLabel)}</button>
+        </div>
+      </div>`);
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      closeOverlay(layer, onKey);
+      resolve(value);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+      if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+    };
+    document.addEventListener('keydown', onKey);
+    layer.addEventListener('click', (event) => { if (event.target === layer) finish(false); });
+    layer.querySelector('[data-close]')?.addEventListener('click', () => finish(false));
+    layer.querySelector('[data-confirm]')?.addEventListener('click', () => finish(true));
+    layer.querySelector<HTMLButtonElement>('[data-confirm]')?.focus();
+  });
+}
+
+export function askPrompt(root: HTMLElement, title: string, value = '', confirmLabel = 'Enregistrer'): Promise<string | null> {
+  return new Promise((resolve) => {
+    const layer = overlay(root, `
+      <form class="pmd-confirm" data-prompt-form>
+        <h2 class="pmd-title piecemaker-display">${escapeHtml(title)}</h2>
+        <input class="pmd-input" name="value" value="${escapeHtml(value)}" autocomplete="off">
+        <div class="pmd-form-actions">
+          <button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button>
+          <button type="submit" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm">${escapeHtml(confirmLabel)}</button>
+        </div>
+      </form>`);
+    const input = layer.querySelector<HTMLInputElement>('input[name="value"]');
+    let settled = false;
+    const finish = (next: string | null) => {
+      if (settled) return;
+      settled = true;
+      closeOverlay(layer, onKey);
+      resolve(next);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); finish(null); }
+    };
+    document.addEventListener('keydown', onKey);
+    layer.addEventListener('click', (event) => { if (event.target === layer) finish(null); });
+    layer.querySelector('[data-close]')?.addEventListener('click', () => finish(null));
+    layer.querySelector<HTMLFormElement>('[data-prompt-form]')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      finish(input?.value.trim() || null);
+    });
+    input?.focus();
+    input?.select();
+  });
+}
+
 const positionOptions = (selected: string): string => ['<option value="">Non précisée</option>', ...PROCEDURE_POSITIONS.map((entry) => `<option value="${entry.value}" ${entry.value === selected ? 'selected' : ''}>${escapeHtml(entry.label)}</option>`)].join('');
 
 const kindOptions = (selected: NodeKind): string => entityKinds.map((kind) => `<option value="${kind}" ${kind === selected ? 'selected' : ''}>${escapeHtml(kindLabels[kind])}</option>`).join('');
@@ -498,7 +574,14 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     }
     const form = new FormData(event.currentTarget as HTMLFormElement);
     const natureSelection = textValue(form.get('nature'));
-    const customNature = natureSelection === '__piecemaker_custom_nature__' ? window.prompt('Type de pièce personnalisé :', '')?.trim() || '' : '';
+    const customNature = natureSelection === '__piecemaker_custom_nature__' ? (await askPrompt(root, 'Type de pièce personnalisé', '', 'Utiliser')) || '' : '';
+    if (natureSelection === '__piecemaker_custom_nature__' && !customNature) {
+      if (submit) {
+        submit.disabled = false;
+        submit.textContent = 'Enregistrer';
+      }
+      return;
+    }
     const savedNature = natureSelection === '__piecemaker_custom_nature__' ? customNature : natureSelection;
     const documentFields = Array.from(layer.querySelectorAll<HTMLElement>('[data-field-row]')).map((row) => ({ label: row.querySelector<HTMLInputElement>('[data-field-label]')?.value.trim() || '', value: row.querySelector<HTMLInputElement>('[data-field-value]')?.value.trim() || '' })).filter((field) => field.label || field.value);
     const operations: KnowledgeUpdateOperation[] = [{
@@ -544,11 +627,13 @@ export function institutionalTermsEditor(root: HTMLElement, onClose?: () => void
   const syncTerms = () => {
     if (!pills) return;
     pills.innerHTML = terms.map((term, index) => `<span class="pmd-alias-pill">${escapeHtml(term)}<button type="button" data-remove-term="${index}" aria-label="Supprimer ${escapeHtml(term)}">×</button></span>`).join('');
-    pills.querySelectorAll<HTMLButtonElement>('[data-remove-term]').forEach((button) => button.addEventListener('click', () => {
+    pills.querySelectorAll<HTMLButtonElement>('[data-remove-term]').forEach((button) => button.addEventListener('click', async () => {
       const index = Number(button.dataset.removeTerm);
       const term = terms[index];
-      if (!window.confirm(`Supprimer le terme « ${term} » de la liste institutionnelle ?`)) return;
-      terms.splice(index, 1);
+      if (!term || !await askConfirm(root, `Supprimer le terme « ${term} » ?`, 'Supprimer')) return;
+      const current = terms.indexOf(term);
+      if (current < 0) return;
+      terms.splice(current, 1);
       syncTerms();
       input?.focus();
     }));
