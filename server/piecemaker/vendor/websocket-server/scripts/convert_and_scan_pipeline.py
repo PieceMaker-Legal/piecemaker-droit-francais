@@ -3,7 +3,7 @@
 Convert & Scan Pipeline — orchestrates document conversion and PII scanning.
 
 This script chains smart_converter.py (conversion to Markdown) and
-presidio-gliner.py (PII scanning) for batch processing of multiple documents.
+scanner_worker.py (PII scanning) for batch processing of multiple documents.
 
 Usage:
     python3 convert_and_scan_pipeline.py <file1> [file2 ...] -o <output_dir> [options]

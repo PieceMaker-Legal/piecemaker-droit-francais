@@ -559,9 +559,20 @@ const waiting = [];
 let reservedBytes = 0;
 let acceptingJobs = true;
 
+/**
+ * Jobs admis via `runManagedPythonJob` (pas de `legalCase`, donc absents de
+ * `jobs`) : `runningAnonymize` doit les voir pour que l'exclusivité GLiNER
+ * reste vraie dans les deux sens, quel que soit le consommateur qui a lancé
+ * le traitement en cours.
+ */
+const runningManaged = new Set();
+
 function runningAnonymize() {
   for (const job of jobs.values()) {
     if (job.state === 'running' && job.action === 'anonymize') return true;
+  }
+  for (const job of runningManaged) {
+    if (job.action === 'anonymize') return true;
   }
   return false;
 }
@@ -577,7 +588,12 @@ function canAdmit(job) {
   return true;
 }
 
-/** Admet les traitements en file qui rentrent désormais, du plus ancien au plus récent. */
+/**
+ * Admet les traitements en file qui rentrent désormais, du plus ancien au plus
+ * récent. Un descripteur `runManagedPythonJob` (identifié par la présence de
+ * `run`, sans `legalCase`) suit son propre lancement : même file, même
+ * contrôle d'admission, exécution différente.
+ */
 function pumpQueue() {
   if (!acceptingJobs) return;
   for (let index = 0; index < waiting.length; index += 1) {
@@ -585,7 +601,8 @@ function pumpQueue() {
     if (!canAdmit(descriptor.job)) continue;
     waiting.splice(index, 1);
     index -= 1;
-    launchJob(descriptor);
+    if (descriptor.run) launchManagedJob(descriptor);
+    else launchJob(descriptor);
   }
 }
 
@@ -747,6 +764,108 @@ function spawnTracked(job, script, args, progressScale = {}) {
     child.once('error', (error) => void finish(null, null, error));
     child.once('exit', (code, signal) => void finish(code, signal));
   });
+}
+
+/**
+ * Point d'entrée générique pour tout traitement devant passer par le même
+ * contrôle d'admission que les pièces originales (exclusivité GLiNER, budget
+ * RAM, file d'attente, nice, timeout, arrêt propre du groupe de process).
+ *
+ * Contrairement à `startOriginalsJob`, cette fonction ne connaît aucune
+ * notion de dossier juridique enregistré (`legalCase`, mapping, commit) :
+ * elle sert les consommateurs qui ont leur propre gestion du résultat (le
+ * pipeline `knowledge`, dont le `projectId` n'est pas un dossier juridique du
+ * registre) mais qui doivent néanmoins partager le même verrou GLiNER et le
+ * même budget RAM que l'administration — sinon rien n'empêche deux scans
+ * simultanés de charger chacun leur propre modèle et de figer la machine.
+ *
+ * Lance directement `script` avec `args` via `spawnTracked` (même parseur de
+ * lignes `PROGRESS:`, même gestion du groupe de process, même priorité nice).
+ * `onProgress`, si fourni, est appelé à chaque mise à jour de la progression
+ * avec `{ phase, percent, processed, total }`.
+ */
+function runManagedPythonJob({ action, script, args, onProgress, signal } = {}) {
+  if (!['convert', 'anonymize'].includes(action)) throw new Error('Action inconnue.');
+  if (!acceptingJobs) throw new Error('Le serveur est en cours d’arrêt : aucun nouveau traitement ne peut démarrer.');
+  const job = {
+    action,
+    cancelled: false,
+    cancelReason: null,
+    child: null,
+    processGroupId: null,
+    stopPromise: null,
+    phase: 'convert',
+    percent: 0,
+    processed: 0,
+    total: 0,
+    log: [],
+    reserveBytes: JOB_RESERVE_BYTES(action),
+  };
+  if (onProgress) {
+    for (const key of ['phase', 'percent', 'processed', 'total']) {
+      let value = job[key];
+      Object.defineProperty(job, key, {
+        get: () => value,
+        set: (next) => {
+          value = next;
+          onProgress({ phase: job.phase, percent: job.percent, processed: job.processed, total: job.total });
+        },
+      });
+    }
+  }
+  const abort = () => { void stopRunningJob(job, 'user-cancellation'); };
+  if (signal) {
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+  }
+  const run = () => spawnTracked(job, script, args);
+  const descriptor = { job, run };
+  const completion = new Promise((resolve, reject) => {
+    descriptor.resolve = resolve;
+    descriptor.reject = reject;
+  });
+  runningManaged.add(job);
+  if (canAdmit(job)) {
+    launchManagedJob(descriptor);
+  } else {
+    waiting.push(descriptor);
+  }
+  return completion.finally(() => {
+    signal?.removeEventListener('abort', abort);
+  });
+}
+
+/** Variante de `launchJob` pour un descripteur `runManagedPythonJob` (pas de `legalCase`/commit à gérer ici). */
+function launchManagedJob(descriptor) {
+  const { job, run, resolve, reject } = descriptor;
+  reservedBytes += job.reserveBytes;
+  const timeoutId = setTimeout(() => {
+    void stopRunningJob(job, 'timeout');
+  }, JOB_TIMEOUT_MS());
+  (async () => {
+    try {
+      if (job.cancelled) throw cancellationError(job);
+      const result = await run(job);
+      if (job.cancelled) throw cancellationError(job);
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
+      clearTimeout(timeoutId);
+      const processGroupId = job.processGroupId;
+      try {
+        await verifyJobProcessTreeStopped(job, processGroupId);
+      } catch {
+        // Best-effort : une erreur de nettoyage ne doit pas masquer le résultat déjà tranché ci-dessus.
+      }
+      job.child = null;
+      job.processGroupId = null;
+      job.stopPromise = null;
+      runningManaged.delete(job);
+      reservedBytes -= job.reserveBytes;
+      pumpQueue();
+    }
+  })();
 }
 
 /**
@@ -1092,14 +1211,22 @@ function stopOriginalsJobs() {
       const { job } = descriptor;
       job.cancelled = true;
       job.cancelReason = 'server-shutdown';
+      if (descriptor.run) {
+        // Descripteur `runManagedPythonJob` : rejeter sa promesse est le seul
+        // moyen de le débloquer, il n'a pas d'état `job.state`/`jobs` propre.
+        descriptor.reject(cancellationError(job));
+        continue;
+      }
       job.state = 'error';
       job.error = 'Traitement interrompu par l’arrêt du serveur.';
       job.finishedAt = new Date().toISOString();
     }
 
     const running = [...jobs.values()].filter((job) => job.state === 'running');
-    const groups = [...new Set(running.map((job) => job.processGroupId).filter(Boolean))];
-    await Promise.allSettled(running.map((job) => stopRunningJob(job, 'server-shutdown')));
+    const managedRunning = [...runningManaged];
+    const allRunning = [...running, ...managedRunning];
+    const groups = [...new Set(allRunning.map((job) => job.processGroupId).filter(Boolean))];
+    await Promise.allSettled(allRunning.map((job) => stopRunningJob(job, 'server-shutdown')));
     await Promise.allSettled(running.map((job) => job.completion).filter(Boolean));
 
     // Contrôle défensif final, y compris si un enfant a fermé ses pipes avant
@@ -1135,6 +1262,10 @@ function cancelOriginalsJob(jobId) {
 module.exports = {
   cancelOriginalsJob,
   groupEntityHits,
+  // Point d'entrée partagé : tout consommateur d'un pipeline GLiNER/markitdown
+  // (même hors dossier juridique enregistré, ex. `knowledge/pipeline.ts`) doit
+  // passer par ici pour rester sous l'exclusivité GLiNER et le budget RAM.
+  runManagedPythonJob,
   stopOriginalsJobs,
   // Ré-exportés pour les routes de l'administration : l'implémentation vit
   // désormais dans `piecemaker-plugin/scripts/lib/mapping.cjs`.
