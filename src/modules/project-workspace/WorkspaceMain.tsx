@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, type Dispatch, type SetStateAction } from 'react';
+import React, { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 
 import { ChatInterface } from '@/modules/chat';
 import { FileTree } from '@/modules/file-tree';
 import { StandaloneShell } from '@/modules/standalone-shell';
 import { GitPanel } from '@/modules/git-panel';
-import { PluginTabContent } from '@/modules/plugins';
+import { PluginTabContent, usePlugins } from '@/modules/plugins';
 import { useSelectedDossierRegistration } from '@/piecemaker/dossier';
 import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { usePaletteOpsRegister } from '@/modules/command-palette';
@@ -62,6 +62,10 @@ function WorkspaceMain({
 
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
   const browserUseEnabled = useBrowserUseEnabled();
+  const { plugins } = usePlugins();
+  // Plugin tabs stay mounted after the first visit so switching away does not
+  // tear down the instance and re-fetch the bundle.
+  const [visitedPluginNames, setVisitedPluginNames] = useState<string[]>([]);
 
   useTaskMasterProjectSync(selectedProject);
   useSelectedDossierRegistration(selectedProject);
@@ -99,6 +103,11 @@ function WorkspaceMain({
       setActiveTab('chat');
     }
   }, [shouldShowBrowserTab, activeTab, setActiveTab]);
+
+  const activePluginName = activeTab.startsWith('plugin:') ? activeTab.replace('plugin:', '') : null;
+  if (activePluginName && !visitedPluginNames.includes(activePluginName)) {
+    setVisitedPluginNames((current) => current.includes(activePluginName) ? current : [...current, activePluginName]);
+  }
 
   // Stable so React.memo(ChatInterface) can bail out: an inline arrow here made
   // every WorkspaceMain render re-render the whole chat tree, including during
@@ -203,16 +212,19 @@ function WorkspaceMain({
             </div>
           )}
 
-          {activeTab.startsWith('plugin:') && (
-            <div className="h-full overflow-hidden">
+          {plugins.filter((plugin) => plugin.enabled && (visitedPluginNames.includes(plugin.name) || activeTab === `plugin:${plugin.name}`)).map((plugin) => (
+            <div
+              key={plugin.name}
+              className={`h-full overflow-hidden ${activeTab === `plugin:${plugin.name}` ? '' : 'hidden'}`}
+            >
               <PluginTabContent
-                pluginName={activeTab.replace('plugin:', '')}
+                pluginName={plugin.name}
                 selectedProject={selectedProject}
                 selectedSession={selectedSession}
                 onOpenFileInEditor={openFileInEditor}
               />
             </div>
-          )}
+          ))}
         </div>
 
         <EditorSidebar

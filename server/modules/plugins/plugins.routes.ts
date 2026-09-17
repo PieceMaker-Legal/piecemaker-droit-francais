@@ -26,8 +26,15 @@ export function createPluginsRouter(service: ReturnType<typeof createPluginsServ
   router.get('/:name/assets/*', async (req, res, next) => {
     try {
       const asset = service.resolveAsset(routeParameter(req.params.name), wildcardPath(req));
+      const stats = fs.statSync(asset.path);
+      const etag = `"${stats.mtimeMs.toString(16)}-${stats.size.toString(16)}"`;
       res.setHeader('Content-Type', asset.contentType);
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('ETag', etag);
+      res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+      if (req.headers['if-none-match'] === etag) {
+        res.status(304).end();
+        return;
+      }
       const stream = fs.createReadStream(asset.path);
       stream.on('error', next);
       stream.pipe(res);

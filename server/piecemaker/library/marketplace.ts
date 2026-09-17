@@ -89,23 +89,6 @@ export function scanInstalledLibraryCollections(store: ReturnType<typeof createL
         imported.push({ source, id: store.importFile(source, 'skill', false), linked: false });
       }
     }
-    const files: Array<{ path: string; content: Buffer }> = [];
-    let totalSize = 0;
-    const collect = (directory: string, relative = '') => {
-      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-        if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === '__pycache__' || entry.isSymbolicLink()) continue;
-        const relativePath = path.posix.join(relative.split(path.sep).join('/'), entry.name);
-        const absolutePath = path.join(directory, entry.name);
-        if (entry.isDirectory()) collect(absolutePath, relativePath);
-        else if (entry.isFile()) {
-          const content = fs.readFileSync(absolutePath);
-          totalSize += content.length;
-          if (totalSize > 30 * 1024 * 1024 || files.length >= 5000) throw new Error(`Plugin trop volumineux : ${id}`);
-          files.push({ path: relativePath, content });
-        }
-      }
-    };
-    collect(installRoot);
     const fallbackEntryName = imported.length ? store.document(imported[0].id).name : null;
     store.upsertCollection({
       id,
@@ -116,7 +99,7 @@ export function scanInstalledLibraryCollections(store: ReturnType<typeof createL
         entryId: entry.id,
         rootPath: path.relative(installRoot, entry.source).split(path.sep).join('/'),
       })),
-      files,
+      files: [],
     });
   }
 }
@@ -194,7 +177,6 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
   router.get('/plugins', (req, res) => {
     try {
       const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
-      if (workspacePath) scanInstalledLibraryCollections(store, userHome);
       res.json({ plugins: store.listCollections(workspacePath) });
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
