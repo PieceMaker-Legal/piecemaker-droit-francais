@@ -1,6 +1,5 @@
 import type { KnowledgeSnapshot, KnowledgeUpdateOperation } from './types.js';
 
-export type AgentsDocument = { projectId: string; content: string; exists: boolean };
 export type KnowledgeDocumentPreview = { path: string; content: string };
 export type InstitutionalTerms = { file: string; terms: string[] };
 export type ScanJob = {
@@ -47,23 +46,6 @@ export type BodaccAnnouncement = {
   acte: string;
   url: string;
 };
-export type BodaccFamily = {
-  code: string;
-  label: string;
-};
-export const BODACC_FAMILIES: BodaccFamily[] = [
-  { code: 'dpc', label: 'Dépôts des comptes' },
-  { code: 'modification', label: 'Modifications diverses' },
-  { code: 'creation', label: 'Créations' },
-  { code: 'radiation', label: 'Radiations' },
-  { code: 'collective', label: 'Procédures collectives' },
-  { code: 'vente', label: 'Ventes et cessions' },
-  { code: 'immatriculation', label: 'Immatriculations' },
-  { code: 'divers', label: 'Annonces diverses' },
-  { code: 'conciliation', label: 'Procédures de conciliation' },
-  { code: 'retablissement_professionnel', label: 'Rétablissement professionnel' },
-  { code: 'inconnue', label: 'Famille non renseignée' },
-];
 export type BodaccSearchResult = {
   siren: string;
   total: number;
@@ -120,7 +102,6 @@ function caseReference(projectPath: string): Promise<string> {
 
 export const knowledgeApi = {
   graph: (projectId: string) => request<KnowledgeSnapshot>(BASE, `/graph${query(projectId)}`),
-  agents: (projectId: string) => request<AgentsDocument>(BASE, `/agents${query(projectId)}`),
   document: async (projectPath: string, path: string) => {
     if (!projectPath) throw new Error('Le chemin du dossier CloudCLI est indisponible.');
     const reference = await caseReference(projectPath);
@@ -130,7 +111,7 @@ export const knowledgeApi = {
   scanJob: (jobId: string, projectId: string) => request<{ job: ScanJob | null }>(BASE, `/scan/job?id=${encodeURIComponent(jobId)}&projectId=${encodeURIComponent(projectId)}`),
   cancelScan: (jobId: string, projectId: string) => request<{ job: ScanJob | null }>(BASE, '/scan/cancel', { method: 'POST', body: JSON.stringify({ id: jobId, projectId }) }),
   searchCompanies: (queryText: string) => request<{ query: string; results: CompanySearchResult[] }>(PIECEMAKER_BASE, '/company-search', { method: 'POST', body: JSON.stringify({ query: queryText }) }),
-  searchBodacc: (siren: string, siret: string, families: string[]) => request<BodaccSearchResult>(PIECEMAKER_BASE, '/bodacc-search', { method: 'POST', body: JSON.stringify({ siren, siret, families }) }),
+  searchBodacc: (siren: string, siret: string) => request<BodaccSearchResult>(PIECEMAKER_BASE, '/bodacc-search', { method: 'POST', body: JSON.stringify({ siren, siret }) }),
   update: (projectId: string, operations: KnowledgeUpdateOperation[]) => request(BASE, '/update', { method: 'POST', body: JSON.stringify({ projectId, operations }) }),
   institutionalTerms: () => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms'),
   saveInstitutionalTerms: (terms: string[]) => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms', { method: 'PUT', body: JSON.stringify({ terms }) }),

@@ -1,15 +1,13 @@
 import { NODE_KINDS } from './types.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
-import { BODACC_FAMILIES } from './api.js';
 import type { BodaccSearchResult, CompanySearchResult, ScanJob } from './api.js';
 
-export type Tab = 'general' | 'chronology' | 'scan';
+export type Tab = 'general' | 'chronology';
 export type BodaccScanState = {
   status: 'idle' | 'loading' | 'loaded' | 'error';
   result?: BodaccSearchResult;
   error?: string;
   open?: boolean;
-  families?: string[];
   companySearchStatus?: 'idle' | 'loading' | 'loaded' | 'error';
   companySearchResults?: CompanySearchResult[];
   companySearchError?: string;
@@ -56,7 +54,7 @@ function positionLabel(node: KnowledgeNode): string {
   return labelsByPosition[position] || position || (node.data.partySide === 'client' ? 'Demandeur' : node.data.partySide === 'adversaire' ? 'Défendeur' : 'Aucune position procédurale');
 }
 
-function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot): string {
+function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot, state?: BodaccScanState): string {
   const side = textValue(node.data.partySide);
   const showRelations = side === 'client' || side === 'adversaire';
   const nodesById = new Map(graph.nodes.map((entry) => [entry.id, entry]));
@@ -87,6 +85,7 @@ function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot): string {
         }).join('<div class="pmd-related-separator"></div>') : '<div class="pmd-relation-empty">Glissez un profil ici<br>pour établir un lien</div>'}
         ${relations.length ? '<div class="pmd-drop-hint">Glissez un autre profil ici pour ajouter un lien</div>' : ''}
       </div>` : ''}
+      ${companyEnrichment(node, graph, state)}
     </article>`;
 }
 
@@ -96,13 +95,11 @@ const tiersProfileIcon = '<svg class="pmd-tiers-chevron" viewBox="0 0 24 24" fil
 
 const folderTreeIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M3 5a2 2 0 0 0 2 2h3"></path><path d="M3 3v13a2 2 0 0 0 2 2h3"></path></svg>';
 const calendarClockIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"></path><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h5"></path><circle cx="16" cy="16" r="6"></circle><path d="M16 14v2l1 1"></path></svg>';
-const bodaccIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg>';
 const bodaccSearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h10v16H4z"></path><path d="M7 8h4M7 12h4"></path><circle cx="16.5" cy="16.5" r="3.5"></circle><path d="m19.2 19.2 2 2"></path></svg>';
 const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'general', label: 'Parties', icon: folderTreeIcon },
   { id: 'chronology', label: 'Chronologie', icon: calendarClockIcon },
-  { id: 'scan', label: 'Scan Bodacc', icon: bodaccIcon },
 ];
 
 export function scanPercentLabel(job: ScanJob): string {
@@ -152,13 +149,14 @@ function noPartiesMarkup(scanned: boolean, scanning: boolean): string {
   return `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="mapping">◇ Ouvrir le mapping</button></div>`;
 }
 
-export function generalView(data: ViewData, tiersCollapsed = false, job: ScanJob | null = null): string {
+export function generalView(data: ViewData, tiersCollapsed = false, job: ScanJob | null = null, states: Map<string, BodaccScanState> = new Map()): string {
   const entities = data.graph.nodes.filter((node) => node.kind !== 'document');
   const clients = entities.filter((node) => node.data.partySide === 'client');
   const adversaries = entities.filter((node) => node.data.partySide === 'adversaire');
   const tiers = entities.filter((node) => (node.kind === 'person' || node.kind === 'company') && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire');
   const scanned = Boolean(data.graph.anonymizationComplete);
   const scanning = Boolean(job && job.state === 'running');
+  const card = (node: KnowledgeNode) => nodeCard(node, data.graph, states.get(node.id));
   return `
     <div class="pmd-general">
     <div class="pmd-general-actions">
@@ -166,13 +164,10 @@ export function generalView(data: ViewData, tiersCollapsed = false, job: ScanJob
       <button class="pmd-button pmd-small-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="add-node">＋ Ajouter une partie</button>
     </div>
     ${clients.length || adversaries.length || tiers.length ? `<div class="pmd-party-layout" data-tiers-collapsed="${tiersCollapsed}"><div class="pmd-party-columns">
-      <section class="pmd-party-column"><h3 data-side="client">Parties clientes</h3>${clients.map((node) => nodeCard(node, data.graph)).join('')}<button type="button" class="pmd-column-empty" data-party-picker="client" data-party-drop="client"><span>${clients.length ? 'Ajouter une autre partie cliente' : 'Aucune partie cliente désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
-      <section class="pmd-party-column"><h3 data-side="adverse">Parties adverses</h3>${adversaries.map((node) => nodeCard(node, data.graph)).join('')}<button type="button" class="pmd-column-empty" data-party-picker="adversaire" data-party-drop="adversaire"><span>${adversaries.length ? 'Ajouter une autre partie adverse' : 'Aucune partie adverse désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
-    </div>${tiers.length ? `<aside class="pmd-tiers-column" data-tiers-column data-collapsed="${tiersCollapsed}"><button type="button" class="pmd-tiers-toggle" data-action="toggle-tiers" aria-expanded="${!tiersCollapsed}" aria-controls="pmd-tiers-content">${tiersProfileIcon}<span class="pmd-tiers-label">Tiers</span><span class="pmd-tiers-count">${tiers.length}</span></button><div id="pmd-tiers-content" class="pmd-tiers-content" role="region" aria-label="Tiers">${tiers.map((node) => nodeCard(node, data.graph)).join('')}</div></aside>` : ''}</div>` : noPartiesMarkup(scanned, scanning)}
-    <div class="pmd-sticky-status">
-      <span>Glissez un profil sur un autre pour créer un lien.</span>
-      <button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm pmd-small-button" data-action="refresh">✓ Enregistrer les profils</button>
-    </div>
+      <section class="pmd-party-column"><h3 data-side="client">Parties clientes</h3>${clients.map(card).join('')}<button type="button" class="pmd-column-empty" data-party-picker="client" data-party-drop="client"><span>${clients.length ? 'Ajouter une autre partie cliente' : 'Aucune partie cliente désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
+      <section class="pmd-party-column"><h3 data-side="adverse">Parties adverses</h3>${adversaries.map(card).join('')}<button type="button" class="pmd-column-empty" data-party-picker="adversaire" data-party-drop="adversaire"><span>${adversaries.length ? 'Ajouter une autre partie adverse' : 'Aucune partie adverse désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
+    </div>${tiers.length ? `<aside class="pmd-tiers-column" data-tiers-column data-collapsed="${tiersCollapsed}"><button type="button" class="pmd-tiers-toggle" data-action="toggle-tiers" aria-expanded="${!tiersCollapsed}" aria-controls="pmd-tiers-content">${tiersProfileIcon}<span class="pmd-tiers-label">Tiers</span><span class="pmd-tiers-count">${tiers.length}</span></button><div id="pmd-tiers-content" class="pmd-tiers-content" role="region" aria-label="Tiers">${tiers.map(card).join('')}</div></aside>` : ''}</div>
+    <p class="pmd-hint">Glissez un profil sur un autre pour créer un lien, ou sur une colonne pour le désigner comme partie.</p>` : noPartiesMarkup(scanned, scanning)}
     </div>
   `;
 }
@@ -193,6 +188,36 @@ function companyIdentifiers(node: KnowledgeNode, graph: KnowledgeSnapshot): { si
   if (!identifiers.siret && dataSiret.length === 14) identifiers.siret = dataSiret;
   if (!identifiers.siren && identifiers.siret) identifiers.siren = identifiers.siret.slice(0, 9);
   return identifiers;
+}
+
+function designatedCompany(node: KnowledgeNode): boolean {
+  return node.kind === 'company' && (node.data.partySide === 'client' || node.data.partySide === 'adversaire');
+}
+
+function companyEnrichment(node: KnowledgeNode, graph: KnowledgeSnapshot, state?: BodaccScanState): string {
+  if (!designatedCompany(node)) return '';
+  const identifiers = companyIdentifiers(node, graph);
+  const identified = Boolean(node.data.registrePublic && typeof node.data.registrePublic === 'object');
+  const identifierLabel = [identifiers.siren ? `SIREN ${identifiers.siren}` : '', identifiers.siret ? `SIRET ${identifiers.siret}` : ''].filter(Boolean).join(' · ') || 'SIREN / SIRET non renseigné';
+  const searchOpen = Boolean(state?.companySearchStatus && state.companySearchStatus !== 'idle');
+  const showPanel = searchOpen || Boolean(state && state.status !== 'idle');
+  const accordionTitle = searchOpen
+    ? 'Résultats Registre Public'
+    : state?.status === 'loaded' && state.result
+      ? `Annonces BODACC · ${state.result.annonces.length}`
+      : 'Annonces BODACC';
+  const accordionContent = searchOpen
+    ? companySearchStateMarkup(state || { status: 'idle' }, node.id)
+    : bodaccStateMarkup(state || { status: 'idle' }, identifiers.siren || identifiers.siret);
+  const open = Boolean(state?.open || searchOpen || state?.status === 'loading' || state?.status === 'error');
+  return `<div class="pmd-company-enrichment">
+    <div class="pmd-company-enrichment-row">
+      <p>${escapeHtml(identifierLabel)}</p>
+      ${identified ? '' : `<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="company-search" data-scan-company="${escapeHtml(node.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" title="Rechercher dans le Registre Public">${companySearchIcon}<span>Identifier</span></button>`}
+      <button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="bodacc-search" data-scan-company="${escapeHtml(node.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" title="Rechercher les annonces BODACC">${bodaccSearchIcon}<span>Annonces BODACC</span></button>
+    </div>
+    ${showPanel ? `<details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(node.id)}" ${open ? 'open' : ''}><summary>${accordionTitle}</summary><div class="pmd-bodacc-content">${accordionContent}</div></details>` : ''}
+  </div>`;
 }
 
 function bodaccAnnouncement(announcement: BodaccSearchResult['annonces'][number]): string {
@@ -229,32 +254,13 @@ function companySearchStateMarkup(state: BodaccScanState, companyId: string): st
   return `<p class="pmd-bodacc-summary">${state.companySearchResults.length} résultat${state.companySearchResults.length > 1 ? 's' : ''} Registre Public.</p><div class="pmd-company-search-results">${state.companySearchResults.map((result, index) => companySearchResultMarkup(result, companyId, index)).join('')}</div>`;
 }
 
-function bodaccFamilyMenu(companyId: string, families: string[]): string {
-  return `<div class="pmd-profile-menu-wrap pmd-bodacc-family-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-bodacc-family-trigger" data-action="company-family-menu" data-scan-company="${escapeHtml(companyId)}" aria-label="Choisir les familles BODACC" aria-expanded="false" title="Choisir les familles BODACC">${moreIcon}</button><div class="pmd-profile-menu pmd-bodacc-family-menu" data-bodacc-family-menu="${escapeHtml(companyId)}"><strong>Familles BODACC</strong>${BODACC_FAMILIES.map((family) => `<label><input type="checkbox" data-bodacc-family="${escapeHtml(family.code)}" data-scan-company="${escapeHtml(companyId)}" ${families.includes(family.code) ? 'checked' : ''}><span>${escapeHtml(family.label)}</span></label>`).join('')}</div></div>`;
-}
-
-export function scanView(data: ViewData, states: Map<string, BodaccScanState> = new Map()): string {
-  const companies = data.graph.nodes.filter((node) => node.kind === 'company').sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
-  if (!companies.length) return '<div class="pmd-empty">Aucune personne morale dans le dossier.</div>';
-  return `<div class="pmd-scan-view"><div class="pmd-toolbar"><span class="pmd-spacer"></span><button type="button" class="pmd-button pmd-scan-all-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="scan-all-companies" aria-label="Scanner toutes les personnes morales">${bodaccSearchIcon}<span>Scanner toutes les personnes</span></button></div><div class="pmd-scan-company-list">${companies.map((company) => {
-    const identifiers = companyIdentifiers(company, data.graph);
-    const state = states.get(company.id) || { status: 'idle' as const };
-    const identifierLabel = [identifiers.siren ? `SIREN ${identifiers.siren}` : '', identifiers.siret ? `SIRET ${identifiers.siret}` : ''].filter(Boolean).join(' · ') || 'SIREN / SIRET non renseigné';
-    const families = state.families || BODACC_FAMILIES.map((family) => family.code);
-    const companySearchOpen = state.companySearchStatus && state.companySearchStatus !== 'idle';
-    const accordionTitle = companySearchOpen ? 'Résultats Registre Public' : `Annonces BODACC${state.status === 'loaded' && state.result ? ` · ${state.result.annonces.length}` : ''}`;
-    const accordionContent = companySearchOpen ? companySearchStateMarkup(state, company.id) : bodaccStateMarkup(state, identifiers.siren || identifiers.siret);
-    return `<article class="pmd-scan-company" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}"><div class="pmd-scan-company-header"><div class="pmd-scan-company-copy"><h3>${escapeHtml(company.label || 'Personne morale sans nom')}</h3><p>${escapeHtml(identifierLabel)}</p></div><div class="pmd-scan-company-actions"><button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="company-search" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public">${companySearchIcon}</button>${bodaccFamilyMenu(company.id, families)}</div></div><details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(company.id)}" ${state.open ? 'open' : ''}><summary>${accordionTitle}</summary><div class="pmd-bodacc-content">${accordionContent}</div></details></article>`;
-  }).join('')}</div></div>`;
-}
-
 export function mappingView(data: ViewData): string {
   const entries = data.graph.nodes.filter((node) => node.kind !== 'document');
   const categories = entityKinds.map((kind) => ({ kind, label: labels[kind], entries: entries.filter((node) => node.kind === kind) })).filter((category) => category.entries.length);
   return `<div class="pmd-mapping-dialog"><div class="pmd-mapping-header"><h2>Mapping de pseudonymisation</h2><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="institutional-terms" aria-label="Termes institutionnels" title="Termes institutionnels jamais pseudonymisés">${gearIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div><div class="pmd-mapping-body"><p>Chaque ligne associe une clé de pseudonymisation au variant principal rétabli lors du revert et aux autres écritures détectées.</p>${categories.map((category) => `<section class="pmd-mapping-category"><header><h3>${escapeHtml(category.label)} <span>${category.entries.length}</span></h3><button data-action="add-node">＋ Ajouter</button></header><div>${category.entries.map((node) => {
     const mappings = data.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
     return `<form class="pmd-mapping-row" data-mapping-row data-node-id="${escapeHtml(node.id)}"><input class="pmd-mapping-input" name="masked" aria-label="Code anonymisé" value="${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}"><input class="pmd-mapping-input" name="label" aria-label="Libellé" value="${escapeHtml(node.label)}" required><input class="pmd-mapping-input" name="aliases" aria-label="Variantes" value="${escapeHtml(node.aliases.join(', '))}" placeholder="Variantes"><div class="pmd-mapping-actions"><div class="pmd-profile-menu-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-mapping-menu-trigger" data-row-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button><div class="pmd-profile-menu"><button type="button" data-edit-node="${escapeHtml(node.id)}">${pencilIcon}<span>Modifier</span></button><button type="button" class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">${trashIcon}<span>Supprimer</span></button></div></div></div></form>`;
-  }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-close>✓ Enregistrer le mapping</button></div></div>`;
+  }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-save-mapping>✓ Enregistrer le mapping</button></div></div>`;
 }
 
 function chronologyDateLabel(value: string): string {

@@ -17,11 +17,7 @@ export function createKnowledgeRouter(service: KnowledgeService) {
       response.status(statusFor(error)).json({ error: error instanceof Error ? error.message : 'Knowledge operation failed.' });
     });
   };
-  router.get('/knowledge/overview', (request, response) => respond(() => service.overview(request.query.projectId), response));
-  router.get('/knowledge/mapping', (request, response) => respond(() => service.mapping(request.query.projectId), response));
-  router.get('/knowledge/chronology', (request, response) => respond(() => service.chronology(request.query.projectId), response));
   router.get('/knowledge/graph', (request, response) => respond(() => service.graph(request.query.projectId), response));
-  router.get('/knowledge/agents', (request, response) => respond(() => service.agents(request.query.projectId), response));
   router.post('/knowledge/query', (request, response) => respond(() => service.query(request.body), response));
   router.post('/knowledge/update', (request, response) => respond(() => service.update(request.body), response));
   router.post('/knowledge/scan', (request, response) => respond(() => service.scan(request.body?.projectId, request.body?.files), response));
