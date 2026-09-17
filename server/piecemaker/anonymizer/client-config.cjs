@@ -138,9 +138,17 @@ function configureCodexProxy({
 
   const managedTable = lines.findIndex((line) => line.trim() === `[model_providers.${CODEX_PROVIDER_ID}]`);
   const managedStart = lines.findIndex((line) => line.trim() === CODEX_BLOCK_START);
-  const managedEnd = lines.findIndex((line) => line.trim() === CODEX_BLOCK_END);
-  if (managedTable >= 0 && (managedStart < 0 || managedEnd < managedTable)) {
+  let managedEnd = lines.findIndex((line) => line.trim() === CODEX_BLOCK_END);
+  if (managedTable >= 0 && managedStart < 0) {
     return { configured: false, changed: false, conflict: true, file: configFile, reason: 'provider-table-conflict' };
+  }
+  if (managedStart >= 0 && managedEnd < managedStart) {
+    let end = managedTable >= managedStart ? managedTable : managedStart;
+    for (let index = end + 1; index < lines.length; index += 1) {
+      if (/^\s*\[/.test(lines[index])) break;
+      end = index;
+    }
+    managedEnd = end;
   }
 
   if (provider) {
