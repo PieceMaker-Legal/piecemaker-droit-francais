@@ -118,6 +118,10 @@ h1.font-serif {
   -webkit-backdrop-filter: none;
 }
 
+.flex.h-full.flex-col.bg-background\/80 {
+  overflow-x: hidden;
+}
+
 @media (min-width: 768px) {
   .md\:w-72 {
     width: 16.5rem;
@@ -170,18 +174,48 @@ div:has(> .nav-divider) > div:has(> a[href="https://discord.gg/buxwujPNRE"]) {
   background: transparent;
   padding: 0;
   gap: 0.125rem;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.flex.rounded-lg.bg-muted\/50.p-0\.5 > * {
+  min-width: 0;
 }
 
 .flex.rounded-lg.bg-muted\/50.p-0\.5 > button,
-.flex.rounded-lg.bg-muted\/50.p-0\.5 > span > button {
+.flex.rounded-lg.bg-muted\/50.p-0\.5 > .relative > button {
   background: transparent;
   box-shadow: none;
   border-radius: 0.5rem;
   font-weight: 500;
 }
 
+.flex.rounded-lg.bg-muted\/50.p-0\.5 > button.flex-1 {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  padding-inline: 0.35rem;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+}
+
+.flex.rounded-lg.bg-muted\/50.p-0\.5 > button.flex-1 > svg {
+  display: none;
+}
+
+.flex.rounded-lg.bg-muted\/50.p-0\.5 > .relative {
+  flex: 0 0 auto;
+  min-width: auto;
+  display: flex;
+}
+
+.flex.rounded-lg.bg-muted\/50.p-0\.5 > .relative > button {
+  padding-inline: 0.35rem;
+}
+
 .flex.rounded-lg.bg-muted\/50.p-0\.5 > button[aria-pressed="true"],
-.flex.rounded-lg.bg-muted\/50.p-0\.5 > span > button[aria-pressed="true"] {
+.flex.rounded-lg.bg-muted\/50.p-0\.5 > .relative > button[aria-pressed="true"] {
   background: hsl(var(--accent));
   box-shadow: none;
   color: hsl(var(--foreground));
