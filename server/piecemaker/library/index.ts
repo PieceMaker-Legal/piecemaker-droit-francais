@@ -17,7 +17,7 @@ export { installLibraryRuntime } from './runtime.js';
 
 export async function startLibraryBackend(home: string, applicationRoot: string) {
   const store = createLibraryStore(home);
-  try { await scanAndPersistLibraryProviderSkills(store, undefined); } catch {}
+  try { await scanAndPersistLibraryProviderSkills(store, undefined, undefined, os.homedir()); } catch {}
   try { scanAndPersistLibraryProviderAgents(store, os.homedir()); } catch {}
   try { scanAndPersistLibraryProviderConnectors(store, os.homedir()); } catch {}
   try { scanInstalledLibraryCollections(store, os.homedir()); } catch {}

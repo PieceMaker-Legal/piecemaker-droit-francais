@@ -1,12 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const SKILL_PROVIDERS = ['.claude', '.agents', '.cursor', '.opencode'];
+const SKILL_PROVIDERS = ['.claude', '.agents', '.cursor', '.opencode', '.grok'];
 
 const AGENT_TARGETS = [
   { provider: '.claude', folder: 'agents', extension: '.md', sourceFile: 'agent.md' },
   { provider: '.codex', folder: 'agents', extension: '.toml', sourceFile: 'agent.toml' },
   { provider: '.opencode', folder: 'agent', extension: '.md', sourceFile: 'agent.md' },
+  { provider: '.grok', folder: 'agents', extension: '.md', sourceFile: 'agent.md' },
 ] as const;
 
 function assertWorkspaceDirectory(workspace: string, directory: string, enabled: boolean) {

@@ -110,6 +110,22 @@ function codexServer(config: LibraryConnectorConfig, enabled: boolean) {
   };
 }
 
+function grokServer(config: LibraryConnectorConfig, enabled: boolean) {
+  if (config.transport === 'http') {
+    return {
+      url: config.url,
+      enabled,
+      ...(config.headers && Object.keys(config.headers).length ? { headers: config.headers } : {}),
+    };
+  }
+  return {
+    command: config.command,
+    args: config.args ?? [],
+    enabled,
+    ...(config.env && Object.keys(config.env).length ? { env: config.env } : {}),
+  };
+}
+
 function opencodeServer(config: LibraryConnectorConfig, enabled: boolean) {
   if (config.transport === 'http') {
     return {
@@ -174,11 +190,12 @@ export function prepareConnectorInstallation(workspace: string, name: string, co
   const codexPath = path.join(workspace, '.codex', 'config.toml');
   const cursorPath = path.join(workspace, '.cursor', 'mcp.json');
   const opencodePath = opencodeConfigPath(workspace);
-  for (const filePath of [mcpJsonPath, claudeSettingsPath, codexPath, cursorPath, opencodePath]) {
+  const grokPath = path.join(workspace, '.grok', 'config.toml');
+  for (const filePath of [mcpJsonPath, claudeSettingsPath, codexPath, cursorPath, opencodePath, grokPath]) {
     assertWorkspaceFile(workspace, filePath);
   }
 
-  const snapshots = [mcpJsonPath, claudeSettingsPath, codexPath, cursorPath, opencodePath].map(snapshotFile);
+  const snapshots = [mcpJsonPath, claudeSettingsPath, codexPath, cursorPath, opencodePath, grokPath].map(snapshotFile);
 
   return () => {
     try {
@@ -215,6 +232,14 @@ export function prepareConnectorInstallation(workspace: string, name: string, co
       opencodeServers[name] = opencodeServer(config, enabled);
       opencodeConfig.mcp = opencodeServers;
       writeJson(opencodePath, opencodeConfig);
+
+      const grokConfig = readToml(grokPath);
+      const grokServers = objectRecord(grokConfig.mcp_servers);
+      grokServers[name] = enabled
+        ? grokServer(config, true)
+        : { ...objectRecord(grokServers[name]), ...grokServer(config, false), enabled: false };
+      grokConfig.mcp_servers = grokServers;
+      writeToml(grokPath, grokConfig);
     } catch (error) {
       for (const snapshot of snapshots.reverse()) restoreFile(snapshot);
       throw error;
