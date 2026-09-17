@@ -13,6 +13,32 @@ type PluginTabContentProps = {
   onOpenFileInEditor: (filePath: string) => void;
 };
 
+type PluginModule = {
+  mount?: (container: HTMLElement, api: unknown) => void | Promise<void>;
+  unmount?: (container: HTMLElement) => void;
+};
+
+const pluginModules = new Map<string, Promise<PluginModule>>();
+
+function loadPluginModule(pluginName: string, entryFile: string, version: string): Promise<PluginModule> {
+  const cacheKey = `${pluginName}:${entryFile}:${version}`;
+  const cached = pluginModules.get(cacheKey);
+  if (cached) return cached;
+  const pending = (async () => {
+    const res = await api.plugins.asset(pluginName, entryFile);
+    if (!res.ok) throw new Error(`Failed to fetch plugin (HTTP ${res.status})`);
+    const jsText = await res.text();
+    const blob = new Blob([jsText], { type: 'application/javascript' });
+    const blobUrl = URL.createObjectURL(blob);
+    return import(/* @vite-ignore */ blobUrl).finally(() => URL.revokeObjectURL(blobUrl)) as Promise<PluginModule>;
+  })();
+  pluginModules.set(cacheKey, pending);
+  pending.catch(() => {
+    if (pluginModules.get(cacheKey) === pending) pluginModules.delete(cacheKey);
+  });
+  return pending;
+}
+
 type PluginContext = {
   theme: 'dark' | 'light';
   // Plugin contract historically used `name` for the project identifier; we
@@ -88,15 +114,7 @@ export default function PluginTabContent({
 
     (async () => {
       try {
-        // Fetch the plugin JS with auth headers (Cloudflare Worker requires auth on all routes).
-        // Then import it via a Blob URL so the browser never makes an unauthenticated request.
-        const res = await api.plugins.asset(pluginName, entryFile);
-        if (!res.ok) throw new Error(`Failed to fetch plugin (HTTP ${res.status})`);
-        const jsText = await res.text();
-        const blob = new Blob([jsText], { type: 'application/javascript' });
-        const blobUrl = URL.createObjectURL(blob);
-        // @vite-ignore
-        const mod = await import(/* @vite-ignore */ blobUrl).finally(() => URL.revokeObjectURL(blobUrl));
+        const mod = await loadPluginModule(pluginName, entryFile, plugin?.version || '0');
         if (!active || !containerRef.current) return;
 
         moduleRef.current = mod;
@@ -141,7 +159,7 @@ export default function PluginTabContent({
       contextCallbacks.clear();
       moduleRef.current = null;
     };
-  }, [onOpenFileInEditor, pluginName, plugin?.entry, plugin?.enabled]); // re-mount when plugin or enabled state changes
+  }, [onOpenFileInEditor, pluginName, plugin?.entry, plugin?.enabled, plugin?.version]);
 
   return (
     <div className="relative h-full w-full overflow-auto">

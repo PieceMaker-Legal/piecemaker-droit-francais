@@ -56,6 +56,7 @@ export function mount(container, api) {
   root.append(content, modalHost);
   layout.append(root);
   container.append(style, layout);
+  root.addEventListener('click', () => { if (openMenuId) { openMenuId = ''; render(); } });
   let context = api.context;
   let tab = 'skill';
   let view = 'mine';
@@ -99,16 +100,21 @@ export function mount(container, api) {
     return result;
   }
 
-  async function load() {
+  async function load(options = {}) {
     const version = ++revision;
-    loading = true;
+    const hadContent = Boolean(entries.length || plugins.length || snapshot || marketplace);
     error = '';
-    render();
+    if (!hadContent) {
+      loading = true;
+      render();
+    }
     try {
       const workspace = context.project?.path;
       const query = workspace ? `?workspacePath=${encodeURIComponent(workspace)}` : '';
-      const synchronized = await request('POST', '/plugins/sync', { workspacePath: workspace });
-      if (version === revision && tab === 'plugin' && view === 'mine') plugins = synchronized.plugins || [];
+      if (options.sync) {
+        const synchronized = await request('POST', '/plugins/sync', { workspacePath: workspace });
+        if (version === revision && tab === 'plugin' && view === 'mine') plugins = synchronized.plugins || [];
+      }
       if (view === 'discover') {
         const kind = tab === 'connectors' ? 'connector' : tab;
         const data = await request('GET', `/plugin/marketplace?scope=${scope}&kind=${kind}`);
@@ -295,7 +301,7 @@ export function mount(container, api) {
     input.setAttribute('aria-label', 'Rechercher dans la bibliothèque');
     input.value = search;
     input.oninput = () => { search = input.value; renderRows(); };
-    toolbar.append(input, button('Actualiser', () => void load()));
+    toolbar.append(input, button('Actualiser', () => void load({ sync: true })));
     if (view === 'mine' && tab === 'skill') toolbar.append(button('Nouveau skill', () => openCreate('skill')));
     if (view === 'mine' && tab === 'agent') toolbar.append(button('Nouvel agent', () => openCreate('agent')));
     content.append(toolbar);
