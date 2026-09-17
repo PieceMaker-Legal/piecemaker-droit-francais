@@ -54,6 +54,7 @@ export type KnowledgeSnapshot = {
   mappings: KnowledgeMapping[];
   exclusions?: string[];
   exclusionsInitialized?: boolean;
+  anonymizationComplete?: boolean;
 };
 
 export type KnowledgeResolvedLink = {

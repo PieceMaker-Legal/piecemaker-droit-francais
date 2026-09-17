@@ -307,10 +307,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     const status = root.querySelector<HTMLElement>('.pmd-scan-status');
     if (!status) return;
     const mappingCount = data?.graph.mappings.length || 0;
+    const scanned = Boolean(data?.graph.anonymizationComplete);
     const scanning = Boolean(scanJob && scanJob.state === 'running');
-    status.dataset.ready = String(mappingCount > 0);
+    status.dataset.ready = String(scanned || mappingCount > 0);
     status.dataset.scanning = String(scanning);
-    status.innerHTML = scanStatusMarkup(mappingCount, scanJob);
+    status.innerHTML = scanStatusMarkup(mappingCount, scanJob, scanned);
   };
 
   const paintContent = () => {
@@ -318,7 +319,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (!content) return;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
     else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
-    else content.innerHTML = active === 'general' ? generalView(data, tiersCollapsed) : active === 'chronology' ? chronologyView(data) : scanView(data, bodaccStates);
+    else content.innerHTML = active === 'general' ? generalView(data, tiersCollapsed, scanJob) : active === 'chronology' ? chronologyView(data) : scanView(data, bodaccStates);
   };
 
   const bindOnce = () => {
@@ -579,7 +580,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const render = () => {
     root.dataset.theme = context.theme;
     if (!root.querySelector('[data-content]')) {
-      root.innerHTML = shell(active, data?.graph.mappings.length || 0, scanJob);
+      root.innerHTML = shell(active, data?.graph.mappings.length || 0, scanJob, Boolean(data?.graph.anonymizationComplete));
       bindOnce();
     } else {
       paintTabs();
