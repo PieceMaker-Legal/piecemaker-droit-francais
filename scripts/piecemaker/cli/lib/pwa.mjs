@@ -3,10 +3,15 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
+import { piecemakerExecutable } from '../install-command.mjs';
 import { APP, APP_URL, PIECEMAKER_HOME } from './config.mjs';
 import { runCapture } from './exec.mjs';
 
 const APPLICATION_NAME = 'PieceMaker';
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
 
 function fetchStatus(url) {
   return new Promise((resolve) => {
@@ -103,7 +108,8 @@ function installMacApplication() {
     : `open "${APP_URL}"`;
 
   const launcherPath = path.join(macosDir, APPLICATION_NAME);
-  fs.writeFileSync(launcherPath, `#!/bin/sh\n/usr/bin/env piecemaker --launch-only >/dev/null 2>&1 &\nsleep 2\n${launchCommand}\n`, 'utf8');
+  const command = piecemakerExecutable();
+  fs.writeFileSync(launcherPath, `#!/bin/sh\n${shellQuote(command)} --launch-only >/dev/null 2>&1 &\nsleep 2\n${launchCommand}\n`, 'utf8');
   fs.chmodSync(launcherPath, 0o755);
 
   const iconFile = writeMacIcon(resourcesDir);
@@ -136,7 +142,8 @@ function installMacApplication() {
 }
 
 function linuxDesktopEntryContent() {
-  return `[Desktop Entry]\nType=Application\nName=${APPLICATION_NAME}\nComment=Plateforme IA pour juristes français\nExec=sh -c "piecemaker --launch-only >/dev/null 2>&1 & sleep 1; xdg-open ${APP_URL}"\nIcon=${path.join(APP.directory, 'public', 'logo-512.png')}\nCategories=Office;Legal;\nTerminal=false\n`;
+  const command = piecemakerExecutable();
+  return `[Desktop Entry]\nType=Application\nName=${APPLICATION_NAME}\nComment=Plateforme IA pour juristes français\nExec=sh -c ${JSON.stringify(`${command} --launch-only >/dev/null 2>&1 & sleep 1; xdg-open ${APP_URL}`)}\nIcon=${path.join(APP.directory, 'public', 'logo-512.png')}\nCategories=Office;Legal;\nTerminal=false\n`;
 }
 
 function installLinuxApplication() {
@@ -276,13 +283,29 @@ function createWindowsShortcut(shortcutPath, targetPath, shortcutArgs, iconPath)
   return result.code === 0;
 }
 
+function writeWindowsLauncher(browser, userDataDir) {
+  const command = piecemakerExecutable();
+  const lines = [
+    '@echo off',
+    `start "" /B "${command}" --launch-only`,
+    'ping 127.0.0.1 -n 3 >nul',
+  ];
+  if (browser) {
+    lines.push(`start "" "${browser}" --app=${APP_URL} --user-data-dir=${userDataDir}`);
+  } else {
+    lines.push(`start "" "${APP_URL}"`);
+  }
+  const launcher = path.join(PIECEMAKER_HOME, 'bin', 'open-piecemaker.cmd');
+  fs.mkdirSync(path.dirname(launcher), { recursive: true });
+  fs.writeFileSync(launcher, `${lines.join('\r\n')}\r\n`, 'utf8');
+  return launcher;
+}
+
 function installWindowsApplication() {
   const browser = windowsChromiumBrowser();
   const iconPath = writeWindowsIcon();
   const userDataDir = path.join(os.homedir(), '.piecemaker', 'pwa-profile');
-
-  const targetPath = browser || path.join(process.env.WINDIR || 'C:\\Windows', 'explorer.exe');
-  const shortcutArgs = browser ? `--app=${APP_URL} --user-data-dir=${userDataDir}` : APP_URL;
+  const launcher = writeWindowsLauncher(browser, userDataDir);
 
   const desktopDir = windowsDesktopDir();
   const startMenuDir = windowsStartMenuDir();
@@ -292,8 +315,8 @@ function installWindowsApplication() {
   const desktopShortcut = path.join(desktopDir, `${APPLICATION_NAME}.lnk`);
   const startMenuShortcut = path.join(startMenuDir, `${APPLICATION_NAME}.lnk`);
 
-  createWindowsShortcut(desktopShortcut, targetPath, shortcutArgs, iconPath);
-  createWindowsShortcut(startMenuShortcut, targetPath, shortcutArgs, iconPath);
+  createWindowsShortcut(desktopShortcut, launcher, '', iconPath);
+  createWindowsShortcut(startMenuShortcut, launcher, '', iconPath);
 
   const locations = [desktopShortcut, startMenuShortcut].filter((candidate) => fs.existsSync(candidate));
 

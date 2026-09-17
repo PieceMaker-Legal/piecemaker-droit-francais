@@ -59,5 +59,13 @@ if (-not (Test-Path $EntryPath)) {
   exit 1
 }
 
+$Installer = Join-Path $AppDir 'scripts\piecemaker\cli\install-command.mjs'
+if (Test-Path $Installer) {
+  & $NodeBin $Installer
+}
+
+$BinDir = Join-Path $HOME '.piecemaker\bin'
+$env:PATH = "$(Split-Path $NodeBin -Parent);$BinDir;$env:PATH"
+
 & $NodeBin $EntryPath @args
 exit $LASTEXITCODE
