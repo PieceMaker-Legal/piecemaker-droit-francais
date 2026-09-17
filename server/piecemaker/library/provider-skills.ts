@@ -1,9 +1,6 @@
-import path from 'node:path';
-
 import { providerSkillsService } from '@/modules/providers/index.js';
 import type { LLMProvider, ProviderSkillListOptions } from '@/shared/types.js';
 
-import { importLibraryDirectory } from './migrate.js';
 import type { createLibraryStore } from './store.js';
 
 const LIBRARY_SKILL_PROVIDERS: LLMProvider[] = ['claude', 'codex', 'cursor', 'mistral', 'opencode'];
@@ -42,7 +39,7 @@ export async function scanAndPersistLibraryProviderSkills(
   const result = await listLibraryProviderSkills(workspacePath, reader);
   for (const provider of result.providers) {
     for (const skill of provider.skills) {
-      if (!skill.sourcePath) continue;
+      if (!skill.sourcePath || skill.scope !== 'user' || skill.pluginId || skill.pluginName) continue;
       try { store.importFile(skill.sourcePath, 'skill'); }
       catch { try { store.importFile(skill.sourcePath, 'skill', false); } catch {} }
     }
@@ -50,14 +47,4 @@ export async function scanAndPersistLibraryProviderSkills(
   return result;
 }
 
-export function scanAndPersistLibraryClaudeAgents(
-  store: ReturnType<typeof createLibraryStore>,
-  workspacePath: string | undefined,
-  userHome: string,
-) {
-  const directories = [path.join(userHome, '.claude', 'agents')];
-  if (workspacePath) directories.push(path.join(workspacePath, '.claude', 'agents'));
-  for (const directory of directories) {
-    try { importLibraryDirectory(store, directory, 'agent', false); } catch {}
-  }
-}
+export { scanAndPersistLibraryClaudeAgents, scanAndPersistLibraryProviderAgents } from './provider-agents.js';

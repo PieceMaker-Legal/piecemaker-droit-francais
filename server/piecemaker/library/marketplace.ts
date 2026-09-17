@@ -6,8 +6,11 @@ import { spawnSync } from 'node:child_process';
 import express from 'express';
 
 import type { createLibraryStore } from './store.js';
+import { normalizeProviderConnector } from './connector-installation.js';
 import { importLibraryDirectory } from './migrate.js';
-import { scanAndPersistLibraryClaudeAgents, scanAndPersistLibraryProviderSkills } from './provider-skills.js';
+import { scanAndPersistLibraryProviderAgents } from './provider-agents.js';
+import { scanAndPersistLibraryProviderConnectors } from './provider-connectors.js';
+import { scanAndPersistLibraryProviderSkills } from './provider-skills.js';
 
 type MarketplaceKind = 'connector' | 'skill' | 'plugin' | 'agent';
 
@@ -38,10 +41,7 @@ function marketplacePackageKinds(userHome: string, marketplaceName: string, plug
     if (fs.existsSync(path.join(root, 'agents'))) kinds.add('agent');
   }
   if (Array.isArray(entry?.skills) && entry.skills.length) kinds.add('skill');
-  const searchable = `${plugin.name} ${plugin.description || ''}`.toLowerCase();
-  if (/\bmcp\b|\bconnect(?:or|eur|s|ed|ion)?\b|\bintegration\b/.test(searchable)) kinds.add('connector');
-  if (/\bskills?\b|\btoolkit\b|\bworkflow\b/.test(searchable)) kinds.add('skill');
-  if (/\bagents?\b/.test(searchable)) kinds.add('agent');
+  if (marketplaceName === 'mcp-legifrance') kinds.add('connector');
   return [...kinds];
 }
 
@@ -73,11 +73,10 @@ export function scanInstalledLibraryCollections(store: ReturnType<typeof createL
     if (!install || !fs.existsSync(install.installPath)) continue;
     const installRoot = fs.realpathSync(install.installPath);
     if (!installRoot.startsWith(`${pluginsRoot}${path.sep}`)) continue;
-    if (store.hasCollection(id)) continue;
     let manifest: { name?: string; displayName?: string; description?: string } = {};
     const manifestPath = path.join(installRoot, '.claude-plugin', 'plugin.json');
     try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch {}
-    const imported = [
+    const imported: Array<{ source: string; id: string; linked: boolean; rootPath?: string }> = [
       ...importLibraryDirectory(store, path.join(installRoot, 'skills'), 'skill', false),
       ...importLibraryDirectory(store, path.join(installRoot, 'agents'), 'agent', false),
     ];
@@ -89,6 +88,32 @@ export function scanInstalledLibraryCollections(store: ReturnType<typeof createL
         imported.push({ source, id: store.importFile(source, 'skill', false), linked: false });
       }
     }
+    const mcpPath = path.join(installRoot, '.mcp.json');
+    if (fs.existsSync(mcpPath) && !fs.lstatSync(mcpPath).isSymbolicLink()) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+        const servers = parsed?.mcpServers && typeof parsed.mcpServers === 'object' && !Array.isArray(parsed.mcpServers)
+          ? parsed.mcpServers as Record<string, unknown>
+          : {};
+        for (const [name, raw] of Object.entries(servers)) {
+          const config = normalizeProviderConnector(raw);
+          if (!config) continue;
+          const source = `${mcpPath}#${name}`;
+          imported.push({
+            source,
+            id: store.importConnector({
+              name,
+              description: config.url || config.command || name,
+              config,
+              source,
+              namespace: id,
+            }),
+            linked: false,
+            rootPath: `mcp/${name}.json`,
+          });
+        }
+      } catch {}
+    }
     const fallbackEntryName = imported.length ? store.document(imported[0].id).name : null;
     store.upsertCollection({
       id,
@@ -97,7 +122,7 @@ export function scanInstalledLibraryCollections(store: ReturnType<typeof createL
       source: installRoot,
       entries: imported.map((entry) => ({
         entryId: entry.id,
-        rootPath: path.relative(installRoot, entry.source).split(path.sep).join('/'),
+        rootPath: entry.rootPath || path.relative(installRoot, entry.source).split(path.sep).join('/'),
       })),
       files: [],
     });
@@ -184,7 +209,8 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
     try {
       const workspacePath = typeof req.body?.workspacePath === 'string' ? req.body.workspacePath : undefined;
       await scanAndPersistLibraryProviderSkills(store, workspacePath);
-      scanAndPersistLibraryClaudeAgents(store, workspacePath, userHome);
+      scanAndPersistLibraryProviderAgents(store, userHome);
+      scanAndPersistLibraryProviderConnectors(store, userHome);
       scanInstalledLibraryCollections(store, userHome);
       res.json({
         ok: true,
@@ -222,10 +248,10 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
     try {
       const marketplace = scope(req.body?.scope);
       const id = req.body?.id;
-      if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]+@[a-zA-Z0-9_-]+$/.test(id) || !id.endsWith(`@${marketplace.name}`)) throw new Error('Connecteur invalide.');
-      if (installed()[id]) throw new Error('Connecteur déjà installé. Son activation se règle par dossier.');
+      if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]+@[a-zA-Z0-9_-]+$/.test(id) || !id.endsWith(`@${marketplace.name}`)) throw new Error('Élément invalide.');
+      if (installed()[id]) throw new Error('Déjà installé. Son activation se règle par dossier.');
       const catalog = listMarketplaceConnectors(run, { marketplaceName: marketplace.name });
-      if (!catalog.plugins.some((plugin: { id: string }) => plugin.id === id)) throw new Error('Connecteur absent du catalogue.');
+      if (!catalog.plugins.some((plugin: { id: string }) => plugin.id === id)) throw new Error('Élément absent du catalogue.');
       disableNativeClaudePlugin(userHome, id);
       let result;
       try { result = run('claude', ['plugin', 'install', id, '--scope', 'user']); }
