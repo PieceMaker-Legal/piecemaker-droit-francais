@@ -76,7 +76,7 @@ export function partyTypePicker(root: HTMLElement, side: 'client' | 'adversaire'
   const sideLabel = side === 'client' ? 'cliente' : side === 'adversaire' ? 'adverse' : 'tierce';
   const layer = modal(root, `
     <div class="pmd-party-picker">
-      <div class="pmd-toolbar"><div><h2 class="pmd-title">Ajouter une partie ${sideLabel}</h2><div class="pmd-subtitle">Choisissez le type de partie à créer</div></div><span class="pmd-spacer"></span><button class="pmd-icon-button" data-close aria-label="Fermer">×</button></div>
+      <div class="pmd-toolbar"><div><h2 class="pmd-title piecemaker-display">Ajouter une partie ${sideLabel}</h2><div class="pmd-subtitle">Choisissez le type de partie à créer</div></div><span class="pmd-spacer"></span><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close aria-label="Fermer">×</button></div>
       <div class="pmd-party-picker-options">
         <button type="button" class="pmd-party-picker-option" data-party-kind="person"><span class="pmd-party-picker-icon pmd-party-picker-person">♙</span><span><strong>Personne physique</strong><small>Une personne</small></span></button>
         <button type="button" class="pmd-party-picker-option" data-party-kind="company"><span class="pmd-party-picker-icon pmd-party-picker-company">▦</span><span><strong>Personne morale</strong><small>Une société ou organisation</small></span></button>
@@ -103,7 +103,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const initialAliases = [...new Set((node?.aliases || []).map((alias) => alias.trim()).filter(Boolean))];
   const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
   const layer = modal(root, `
-    <div class="pmd-toolbar">${node && onBackToMapping ? '<button type="button" class="pmd-button pmd-back-button" data-back-mapping>← Retour</button>' : ''}<h2 class="pmd-title">${node ? 'Modifier l’élément' : 'Ajouter un élément'}</h2><span class="pmd-spacer"></span><button type="button" class="pmd-icon-button" data-action="company-search" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public" ${selectedKind === 'company' ? '' : 'hidden'}>${companySearchIcon}</button><button class="pmd-icon-button" data-close>×</button></div>
+    <div class="pmd-toolbar">${node && onBackToMapping ? '<button type="button" class="pmd-button pmd-back-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-back-mapping>← Retour</button>' : ''}<h2 class="pmd-title piecemaker-display">${node ? 'Modifier l’élément' : 'Ajouter un élément'}</h2><span class="pmd-spacer"></span><button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="company-search" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public" ${selectedKind === 'company' ? '' : 'hidden'}>${companySearchIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div>
     <div class="pmd-dialog-columns"><form class="pmd-form" data-node-form>
       <label>Type<select class="pmd-select" name="kind">${kindOptions(node?.kind || defaults.kind || 'person')}</select></label>
       <label>Libellé<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></label>
@@ -125,7 +125,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
         const relatedKind = relatedNode?.kind === 'document' ? 'Pièce' : relatedNode?.kind === 'person' ? 'Personne physique' : relatedNode?.kind === 'company' ? 'Personne morale' : relatedNode ? labels[relatedNode.kind] : '';
         return `<button type="button" class="pmd-relation-row" data-unlink="${index}" aria-label="Supprimer le lien ${escapeHtml(relationLabel(relation.relation))} avec ${escapeHtml(relatedLabel)}"><span class="pmd-relation-copy"><span class="pmd-relation-type">${escapeHtml(relationLabel(relation.relation))}</span><strong class="pmd-relation-target">${escapeHtml(relatedLabel)}</strong>${relatedKind ? `<small class="pmd-relation-kind">${escapeHtml(relatedKind)}</small>` : ''}</span><span class="pmd-relation-remove" aria-hidden="true">×</span></button>`;
       }).join('')}</div></div>` : ''}
-      <div class="pmd-form-actions"><button type="button" class="pmd-button" data-close>Annuler</button><button class="pmd-button pmd-button-primary">Enregistrer</button></div>
+      <div class="pmd-form-actions"><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm">Enregistrer</button></div>
     </form><aside class="pmd-company-search" data-company-search hidden></aside></div>`);
   layer.querySelector<HTMLElement>('[data-back-mapping]')?.addEventListener('click', () => {
     layer.remove();
@@ -225,7 +225,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     if (!companySearchPanel) return;
     companySearchPanel.hidden = false;
     const message = companySearchBusy ? '<p class="pmd-company-search-status">Recherche en cours…</p>' : companySearchError ? `<p class="pmd-company-search-status pmd-company-search-error">${escapeHtml(companySearchError)}</p>` : !companySearchResults.length ? '<p class="pmd-company-search-status">Aucun résultat.</p>' : '';
-    companySearchPanel.innerHTML = `<div class="pmd-company-search-header"><div><h3>Registre Public</h3><p>Résultats pour ${escapeHtml(companySearchName())}</p></div></div><div class="pmd-company-search-results">${message}${companySearchResults.map((result, index) => `<article class="pmd-company-result"><h4>${escapeHtml(result.name)}</h4><p>${escapeHtml(result.summary)}</p><dl><div><dt>SIREN</dt><dd>${escapeHtml(result.fields.siren || result.siren)}</dd></div>${result.fields.address ? `<div><dt>Siège</dt><dd>${escapeHtml(result.fields.address)}</dd></div>` : ''}${result.fields.directors.length ? `<div><dt>Dirigeants</dt><dd>${escapeHtml(result.fields.directors.map((director) => director.name).join(', '))}</dd></div>` : ''}</dl>${result.url ? `<a class="pmd-company-result-link" href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">Vérifier la fiche officielle ↗</a>` : ''}<details><summary>Voir toutes les informations</summary><pre>${escapeHtml(result.details)}</pre></details><button type="button" class="pmd-button pmd-button-primary pmd-company-validate" data-company-result="${index}">Valider cette personne morale</button></article>`).join('')}</div>`;
+    companySearchPanel.innerHTML = `<div class="pmd-company-search-header"><div><h3>Registre Public</h3><p>Résultats pour ${escapeHtml(companySearchName())}</p></div></div><div class="pmd-company-search-results">${message}${companySearchResults.map((result, index) => `<article class="pmd-company-result"><h4>${escapeHtml(result.name)}</h4><p>${escapeHtml(result.summary)}</p><dl><div><dt>SIREN</dt><dd>${escapeHtml(result.fields.siren || result.siren)}</dd></div>${result.fields.address ? `<div><dt>Siège</dt><dd>${escapeHtml(result.fields.address)}</dd></div>` : ''}${result.fields.directors.length ? `<div><dt>Dirigeants</dt><dd>${escapeHtml(result.fields.directors.map((director) => director.name).join(', '))}</dd></div>` : ''}</dl>${result.url ? `<a class="pmd-company-result-link" href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">Vérifier la fiche officielle ↗</a>` : ''}<details><summary>Voir toutes les informations</summary><pre>${escapeHtml(result.details)}</pre></details><button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm pmd-company-validate" data-company-result="${index}">Valider cette personne morale</button></article>`).join('')}</div>`;
     companySearchPanel.querySelectorAll<HTMLElement>('[data-company-result]').forEach((button) => button.addEventListener('click', async () => {
       const result = companySearchResults[Number(button.dataset.companyResult)];
       if (!result || !data) return;
@@ -358,7 +358,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     const selected = linked.has(entry.id);
     return `<button class="pmd-document-entity${selected ? ' is-selected' : ''}" type="button" aria-pressed="${selected}" data-document-entity="${escapeHtml(entry.id)}">${selected ? '<span aria-hidden="true">✓</span>' : ''}${escapeHtml(entry.label)}</button>`;
   }).join('');
-  const fieldRows = fields.map((field, index) => `<div class="pmd-document-field-row" data-field-row><input class="pmd-input" data-field-label value="${escapeHtml(field.label)}" placeholder="Libellé"><input class="pmd-input" data-field-value value="${escapeHtml(field.value)}" placeholder="Valeur"><button class="pmd-icon-button" type="button" data-remove-field="${index}" aria-label="Supprimer le champ">×</button></div>`).join('');
+  const fieldRows = fields.map((field, index) => `<div class="pmd-document-field-row" data-field-row><input class="pmd-input" data-field-label value="${escapeHtml(field.label)}" placeholder="Libellé"><input class="pmd-input" data-field-value value="${escapeHtml(field.value)}" placeholder="Valeur"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" type="button" data-remove-field="${index}" aria-label="Supprimer le champ">×</button></div>`).join('');
   const layer = modal(root, `
     <div role="dialog" aria-modal="true" class="pmd-document-dialog" data-piecemaker-identity-highlight="off">
       <h2 class="pmd-sr-only">Corriger les métadonnées de la pièce</h2>
@@ -376,9 +376,9 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
               <label>Lieu<input class="pmd-input" name="localisation" placeholder="Ex. TJ de ADRESSE_02" value="${escapeHtml(textValue(node.data.localisation))}"></label>
             </div>
             <div class="pmd-document-form-section"><span>Personnes citées</span><div class="pmd-document-entities">${entityButtons || '<p class="pmd-document-muted">Aucune personne connue.</p>'}</div></div>
-            <div class="pmd-document-form-section"><div class="pmd-document-section-heading"><span>Champs libres</span><button class="pmd-button" type="button" data-add-field>＋ Ajouter</button></div><div data-fields>${fieldRows}</div><p class="pmd-document-muted" data-empty-fields ${fields.length ? 'hidden' : ''}>Aucun champ libre.</p></div>
+            <div class="pmd-document-form-section"><div class="pmd-document-section-heading"><span>Champs libres</span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" type="button" data-add-field>＋ Ajouter</button></div><div data-fields>${fieldRows}</div><p class="pmd-document-muted" data-empty-fields ${fields.length ? 'hidden' : ''}>Aucun champ libre.</p></div>
           </div>
-          <div class="pmd-document-form-actions"><button class="pmd-button" type="button" data-close>Annuler</button><button class="pmd-button pmd-button-primary" type="submit" data-document-submit>Enregistrer</button></div>
+          <div class="pmd-document-form-actions"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" type="button" data-close>Annuler</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" type="submit" data-document-submit>Enregistrer</button></div>
         </form>
       </div>
     </div>`);
@@ -465,7 +465,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   layer.querySelector<HTMLElement>('[data-add-field]')?.addEventListener('click', () => {
     const fieldsTarget = layer.querySelector<HTMLElement>('[data-fields]');
     if (!fieldsTarget) return;
-    fieldsTarget.insertAdjacentHTML('beforeend', '<div class="pmd-document-field-row" data-field-row><input class="pmd-input" data-field-label placeholder="Libellé"><input class="pmd-input" data-field-value placeholder="Valeur"><button class="pmd-icon-button" type="button" data-remove-field aria-label="Supprimer le champ">×</button></div>');
+    fieldsTarget.insertAdjacentHTML('beforeend', '<div class="pmd-document-field-row" data-field-row><input class="pmd-input" data-field-label placeholder="Libellé"><input class="pmd-input" data-field-value placeholder="Valeur"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" type="button" data-remove-field aria-label="Supprimer le champ">×</button></div>');
     layer.querySelector<HTMLInputElement>('[data-fields] [data-field-row]:last-child [data-field-label]')?.focus();
     renderFields();
   });
@@ -511,11 +511,11 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
 export function institutionalTermsEditor(root: HTMLElement, onClose?: () => void): HTMLElement {
   const layer = modal(root, `
     <div class="pmd-terms-editor">
-      <div class="pmd-toolbar"><div><h2 class="pmd-title">Termes institutionnels</h2><div class="pmd-subtitle">Jamais pseudonymisés, valables pour tous les dossiers</div></div><span class="pmd-spacer"></span><button class="pmd-icon-button" data-close aria-label="Fermer">×</button></div>
+      <div class="pmd-toolbar"><div><h2 class="pmd-title piecemaker-display">Termes institutionnels</h2><div class="pmd-subtitle">Jamais pseudonymisés, valables pour tous les dossiers</div></div><span class="pmd-spacer"></span><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close aria-label="Fermer">×</button></div>
       <form class="pmd-form" data-terms-form>
         <label>Liste<div class="pmd-alias-editor pmd-terms-list" data-terms-editor><div class="pmd-alias-pills" data-terms-pills></div><input class="pmd-input pmd-alias-input" data-terms-input placeholder="Chargement…" spellcheck="false" disabled></div></label>
         <div class="pmd-terms-status" data-terms-status></div>
-        <div class="pmd-form-actions"><button type="button" class="pmd-button" data-close>Annuler</button><button type="submit" class="pmd-button pmd-button-primary" data-terms-submit disabled>Enregistrer</button></div>
+        <div class="pmd-form-actions"><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button><button type="submit" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-terms-submit disabled>Enregistrer</button></div>
       </form>
     </div>`);
   const pills = layer.querySelector<HTMLElement>('[data-terms-pills]');

@@ -133,9 +133,9 @@ export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null,
   const scanning = Boolean(job && job.state === 'running');
   return `
     <div class="pmd-header">
-      <div class="pmd-tabs" role="tablist">
-        ${TABS.map(({ id, label, icon }) => `<button type="button" class="pmd-tab" role="tab" data-tab="${id}" aria-selected="${active === id}" tabindex="${active === id ? 0 : -1}">${icon}<span>${label}</span></button>`).join('')}
-        <button class="pmd-button pmd-agents-button" data-action="agents"><span>▤</span> Agents.md</button>
+      <div class="pmd-tab piecemaker-button piecemaker-button--sms" role="tablist">
+        ${TABS.map(({ id, label, icon }) => `<button type="button" class="pmd-tab piecemaker-button piecemaker-button--sm" role="tab" data-tab="${id}" aria-selected="${active === id}" tabindex="${active === id ? 0 : -1}">${icon}<span>${label}</span></button>`).join('')}
+        <button class="pmd-button pmd-agents-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="agents"><span>▤</span> Agents.md</button>
       </div>
       <div class="pmd-scan-status" data-ready="${scanned || mappingCount > 0}" data-scanning="${scanning}">
         ${scanStatusMarkup(mappingCount, job, scanned)}
@@ -147,9 +147,9 @@ export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null,
 
 function noPartiesMarkup(scanned: boolean, scanning: boolean): string {
   if (!scanned) {
-    return `<div class="pmd-no-parties">${scanSearchIcon}<h3>Dossier non analysé</h3><p>Lancez l’analyse pour détecter les entités et désigner les parties.</p><button class="pmd-button" data-action="scan" ${scanning ? 'disabled' : ''}>${scanning ? 'Analyse en cours…' : 'Lancer l’analyse'}</button></div>`;
+    return `<div class="pmd-no-parties">${scanSearchIcon}<h3>Dossier non analysé</h3><p>Lancez l’analyse pour détecter les entités et désigner les parties.</p><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="scan" ${scanning ? 'disabled' : ''}>${scanning ? 'Analyse en cours…' : 'Lancer l’analyse'}</button></div>`;
   }
-  return `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button" data-action="mapping">◇ Ouvrir le mapping</button></div>`;
+  return `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="mapping">◇ Ouvrir le mapping</button></div>`;
 }
 
 export function generalView(data: ViewData, tiersCollapsed = false, job: ScanJob | null = null): string {
@@ -162,8 +162,8 @@ export function generalView(data: ViewData, tiersCollapsed = false, job: ScanJob
   return `
     <div class="pmd-general">
     <div class="pmd-general-actions">
-      <button class="pmd-button pmd-small-button" data-action="mapping">${tagIcon} Mapping</button>
-      <button class="pmd-button pmd-small-button" data-action="add-node">＋ Ajouter une partie</button>
+      <button class="pmd-button pmd-small-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="mapping">${tagIcon} Mapping</button>
+      <button class="pmd-button pmd-small-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="add-node">＋ Ajouter une partie</button>
     </div>
     ${clients.length || adversaries.length || tiers.length ? `<div class="pmd-party-layout" data-tiers-collapsed="${tiersCollapsed}"><div class="pmd-party-columns">
       <section class="pmd-party-column"><h3 data-side="client">Parties clientes</h3>${clients.map((node) => nodeCard(node, data.graph)).join('')}<button type="button" class="pmd-column-empty" data-party-picker="client" data-party-drop="client"><span>${clients.length ? 'Ajouter une autre partie cliente' : 'Aucune partie cliente désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
@@ -171,7 +171,7 @@ export function generalView(data: ViewData, tiersCollapsed = false, job: ScanJob
     </div>${tiers.length ? `<aside class="pmd-tiers-column" data-tiers-column data-collapsed="${tiersCollapsed}"><button type="button" class="pmd-tiers-toggle" data-action="toggle-tiers" aria-expanded="${!tiersCollapsed}" aria-controls="pmd-tiers-content">${tiersProfileIcon}<span class="pmd-tiers-label">Tiers</span><span class="pmd-tiers-count">${tiers.length}</span></button><div id="pmd-tiers-content" class="pmd-tiers-content" role="region" aria-label="Tiers">${tiers.map((node) => nodeCard(node, data.graph)).join('')}</div></aside>` : ''}</div>` : noPartiesMarkup(scanned, scanning)}
     <div class="pmd-sticky-status">
       <span>Glissez un profil sur un autre pour créer un lien.</span>
-      <button class="pmd-button pmd-button-primary pmd-small-button" data-action="refresh">✓ Enregistrer les profils</button>
+      <button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm pmd-small-button" data-action="refresh">✓ Enregistrer les profils</button>
     </div>
     </div>
   `;
@@ -219,7 +219,7 @@ function bodaccStateMarkup(state: BodaccScanState, siren: string): string {
 }
 
 function companySearchResultMarkup(result: CompanySearchResult, companyId: string, index: number): string {
-  return `<article class="pmd-company-result"><h4>${escapeHtml(result.name)}</h4><p>${escapeHtml(result.summary)}</p><dl><div><dt>SIREN</dt><dd>${escapeHtml(result.fields.siren || result.siren)}</dd></div>${result.fields.directors.length ? `<div><dt>Dirigeants</dt><dd>${escapeHtml(result.fields.directors.map((director) => director.name).join(', '))}</dd></div>` : ''}</dl>${result.url ? `<a class="pmd-company-result-link" href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">Vérifier la fiche officielle ↗</a>` : ''}<details><summary>Voir toutes les informations</summary><pre>${escapeHtml(result.details)}</pre></details><button type="button" class="pmd-button pmd-button-primary pmd-company-validate" data-action="company-validate" data-scan-company="${escapeHtml(companyId)}" data-company-result="${index}">Valider cette personne morale</button></article>`;
+  return `<article class="pmd-company-result"><h4>${escapeHtml(result.name)}</h4><p>${escapeHtml(result.summary)}</p><dl><div><dt>SIREN</dt><dd>${escapeHtml(result.fields.siren || result.siren)}</dd></div>${result.fields.directors.length ? `<div><dt>Dirigeants</dt><dd>${escapeHtml(result.fields.directors.map((director) => director.name).join(', '))}</dd></div>` : ''}</dl>${result.url ? `<a class="pmd-company-result-link" href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">Vérifier la fiche officielle ↗</a>` : ''}<details><summary>Voir toutes les informations</summary><pre>${escapeHtml(result.details)}</pre></details><button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm pmd-company-validate" data-action="company-validate" data-scan-company="${escapeHtml(companyId)}" data-company-result="${index}">Valider cette personne morale</button></article>`;
 }
 
 function companySearchStateMarkup(state: BodaccScanState, companyId: string): string {
@@ -236,7 +236,7 @@ function bodaccFamilyMenu(companyId: string, families: string[]): string {
 export function scanView(data: ViewData, states: Map<string, BodaccScanState> = new Map()): string {
   const companies = data.graph.nodes.filter((node) => node.kind === 'company').sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
   if (!companies.length) return '<div class="pmd-empty">Aucune personne morale dans le dossier.</div>';
-  return `<div class="pmd-scan-view"><div class="pmd-toolbar"><div><h2 class="pmd-title">Scan Bodacc</h2><div class="pmd-subtitle">Annonces liées aux personnes morales du dossier</div></div><span class="pmd-spacer"></span><button type="button" class="pmd-button pmd-scan-all-button" data-action="scan-all-companies" aria-label="Scanner toutes les personnes morales">${bodaccSearchIcon}<span>Scanner toutes les personnes</span></button></div><div class="pmd-scan-company-list">${companies.map((company) => {
+  return `<div class="pmd-scan-view"><div class="pmd-toolbar"><div><h2 class="pmd-title piecemaker-display">Scan Bodacc</h2><div class="pmd-subtitle">Annonces liées aux personnes morales du dossier</div></div><span class="pmd-spacer"></span><button type="button" class="pmd-button pmd-scan-all-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="scan-all-companies" aria-label="Scanner toutes les personnes morales">${bodaccSearchIcon}<span>Scanner toutes les personnes</span></button></div><div class="pmd-scan-company-list">${companies.map((company) => {
     const identifiers = companyIdentifiers(company, data.graph);
     const state = states.get(company.id) || { status: 'idle' as const };
     const identifierLabel = [identifiers.siren ? `SIREN ${identifiers.siren}` : '', identifiers.siret ? `SIRET ${identifiers.siret}` : ''].filter(Boolean).join(' · ') || 'SIREN / SIRET non renseigné';
@@ -244,17 +244,17 @@ export function scanView(data: ViewData, states: Map<string, BodaccScanState> = 
     const companySearchOpen = state.companySearchStatus && state.companySearchStatus !== 'idle';
     const accordionTitle = companySearchOpen ? 'Résultats Registre Public' : `Annonces BODACC${state.status === 'loaded' && state.result ? ` · ${state.result.annonces.length}` : ''}`;
     const accordionContent = companySearchOpen ? companySearchStateMarkup(state, company.id) : bodaccStateMarkup(state, identifiers.siren || identifiers.siret);
-    return `<article class="pmd-scan-company" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}"><div class="pmd-scan-company-header"><div class="pmd-scan-company-copy"><h3>${escapeHtml(company.label || 'Personne morale sans nom')}</h3><p>${escapeHtml(identifierLabel)}</p></div><div class="pmd-scan-company-actions"><button type="button" class="pmd-icon-button" data-action="company-search" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public">${companySearchIcon}</button>${bodaccFamilyMenu(company.id, families)}</div></div><details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(company.id)}" ${state.open ? 'open' : ''}><summary>${accordionTitle}</summary><div class="pmd-bodacc-content">${accordionContent}</div></details></article>`;
+    return `<article class="pmd-scan-company" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}"><div class="pmd-scan-company-header"><div class="pmd-scan-company-copy"><h3>${escapeHtml(company.label || 'Personne morale sans nom')}</h3><p>${escapeHtml(identifierLabel)}</p></div><div class="pmd-scan-company-actions"><button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="company-search" data-scan-company="${escapeHtml(company.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public">${companySearchIcon}</button>${bodaccFamilyMenu(company.id, families)}</div></div><details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(company.id)}" ${state.open ? 'open' : ''}><summary>${accordionTitle}</summary><div class="pmd-bodacc-content">${accordionContent}</div></details></article>`;
   }).join('')}</div></div>`;
 }
 
 export function mappingView(data: ViewData): string {
   const entries = data.graph.nodes.filter((node) => node.kind !== 'document');
   const categories = entityKinds.map((kind) => ({ kind, label: labels[kind], entries: entries.filter((node) => node.kind === kind) })).filter((category) => category.entries.length);
-  return `<div class="pmd-mapping-dialog"><div class="pmd-mapping-header"><h2>Mapping de pseudonymisation</h2><button class="pmd-icon-button" data-action="institutional-terms" aria-label="Termes institutionnels" title="Termes institutionnels jamais pseudonymisés">${gearIcon}</button><button class="pmd-icon-button" data-close>×</button></div><div class="pmd-mapping-body"><p>Chaque ligne associe une clé de pseudonymisation au variant principal rétabli lors du revert et aux autres écritures détectées.</p>${categories.map((category) => `<section class="pmd-mapping-category"><header><h3>${escapeHtml(category.label)} <span>${category.entries.length}</span></h3><button data-action="add-node">＋ Ajouter</button></header><div>${category.entries.map((node) => {
+  return `<div class="pmd-mapping-dialog"><div class="pmd-mapping-header"><h2>Mapping de pseudonymisation</h2><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="institutional-terms" aria-label="Termes institutionnels" title="Termes institutionnels jamais pseudonymisés">${gearIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div><div class="pmd-mapping-body"><p>Chaque ligne associe une clé de pseudonymisation au variant principal rétabli lors du revert et aux autres écritures détectées.</p>${categories.map((category) => `<section class="pmd-mapping-category"><header><h3>${escapeHtml(category.label)} <span>${category.entries.length}</span></h3><button data-action="add-node">＋ Ajouter</button></header><div>${category.entries.map((node) => {
     const mappings = data.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
     return `<form class="pmd-mapping-row" data-mapping-row data-node-id="${escapeHtml(node.id)}"><input class="pmd-mapping-input" name="masked" aria-label="Code anonymisé" value="${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}"><input class="pmd-mapping-input" name="label" aria-label="Libellé" value="${escapeHtml(node.label)}" required><input class="pmd-mapping-input" name="aliases" aria-label="Variantes" value="${escapeHtml(node.aliases.join(', '))}" placeholder="Variantes"><div class="pmd-mapping-actions"><div class="pmd-profile-menu-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-mapping-menu-trigger" data-row-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button><div class="pmd-profile-menu"><button type="button" data-edit-node="${escapeHtml(node.id)}">${pencilIcon}<span>Modifier</span></button><button type="button" class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">${trashIcon}<span>Supprimer</span></button></div></div></div></form>`;
-  }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button" data-close>Fermer</button><button class="pmd-button pmd-button-primary" data-close>✓ Enregistrer le mapping</button></div></div>`;
+  }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-close>✓ Enregistrer le mapping</button></div></div>`;
 }
 
 function chronologyDateLabel(value: string): string {
@@ -275,7 +275,7 @@ function chronologyEvent(node: KnowledgeNode, dated: boolean, byId: Map<string, 
     .filter((entry): entry is KnowledgeNode => Boolean(entry && entry.kind !== 'document'));
   const nature = textValue(node.data.nature);
   const localisation = textValue(node.data.localisation);
-  return `<article class="pmd-chronology-event" data-dated="${dated}" data-open-document="${escapeHtml(node.id)}"><div class="pmd-chronology-marker" aria-hidden="true"></div><div class="pmd-chronology-date">${escapeHtml(dated ? chronologyDateLabel(dateFor(node)) : 'Date non renseignée')}</div><div class="pmd-chronology-document pmd-card"><div class="pmd-card-head"><div class="pmd-document-heading"><div class="pmd-card-title">${escapeHtml(node.label)}</div><div class="pmd-document-meta">${escapeHtml(nature || 'Type non renseigné')}${localisation ? ` · ${escapeHtml(localisation)}` : ''}</div></div><button class="pmd-icon-button" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></div>${chronologyFields(node)}<div class="pmd-document-related"><span class="pmd-document-related-label">Mentions</span><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('') || '<span class="pmd-badge pmd-badge-muted">Aucune personne liée</span>'}</div></div></div></article>`;
+  return `<article class="pmd-chronology-event" data-dated="${dated}" data-open-document="${escapeHtml(node.id)}"><div class="pmd-chronology-marker" aria-hidden="true"></div><div class="pmd-chronology-date">${escapeHtml(dated ? chronologyDateLabel(dateFor(node)) : 'Date non renseignée')}</div><div class="pmd-chronology-document pmd-card"><div class="pmd-card-head"><div class="pmd-document-heading"><div class="pmd-card-title">${escapeHtml(node.label)}</div><div class="pmd-document-meta">${escapeHtml(nature || 'Type non renseigné')}${localisation ? ` · ${escapeHtml(localisation)}` : ''}</div></div><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></div>${chronologyFields(node)}<div class="pmd-document-related"><span class="pmd-document-related-label">Mentions</span><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('') || '<span class="pmd-badge pmd-badge-muted">Aucune personne liée</span>'}</div></div></div></article>`;
 }
 
 function chronologySection(title: string, hint: string, nodes: KnowledgeNode[], dated: boolean, byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
@@ -300,6 +300,6 @@ export function chronologyView(data: ViewData): string {
     .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
   return `
-    <div class="pmd-toolbar"><div><h2 class="pmd-title">Chronologie</h2><div class="pmd-subtitle">Documents et personnes liées</div></div><span class="pmd-spacer"></span><button class="pmd-button" data-action="refresh">Rafraîchir</button></div>
+    <div class="pmd-toolbar"><div><h2 class="pmd-title piecemaker-display">Chronologie</h2><div class="pmd-subtitle">Documents et personnes liées</div></div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Rafraîchir</button></div>
     ${renderChronologySections(dated, undated, byId, data.graph.links)}`;
 }
