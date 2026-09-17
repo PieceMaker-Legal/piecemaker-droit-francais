@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { APP, LOG_DIR, PIECEMAKER_HOME, PORTS } from './config.mjs';
 import { waitUntil } from './exec.mjs';
 import { npmPath, runtimeEnv } from './node-runtime.mjs';
+import { freePort } from './ports.mjs';
 
 export const APP_LOG = path.join(LOG_DIR, 'application.log');
 export const APP_PID_FILE = path.join(PIECEMAKER_HOME, 'application.pid');
@@ -30,6 +31,44 @@ export function appServerReachable() {
 
 export function appClientReachable() {
   return httpReachable(`http://127.0.0.1:${PORTS.appClient}/`);
+}
+
+function anonymizerPort() {
+  try {
+    const port = Number.parseInt(JSON.parse(fs.readFileSync(path.join(PIECEMAKER_HOME, 'config.json'), 'utf8')).mikePiiPort, 10);
+    if (Number.isInteger(port) && port > 0) return port;
+  } catch {
+  }
+  return PORTS.anonymizer;
+}
+
+function stopPid(pid) {
+  if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) return false;
+  if (process.platform === 'win32') {
+    try { process.kill(pid, 'SIGTERM'); return true; } catch { return false; }
+  }
+  try { process.kill(-pid, 'SIGTERM'); return true; } catch {
+    try { process.kill(pid, 'SIGTERM'); return true; } catch { return false; }
+  }
+}
+
+export async function stopApplication() {
+  const killed = [];
+  const occupied = [];
+  try {
+    const pid = Number.parseInt(fs.readFileSync(APP_PID_FILE, 'utf8'), 10);
+    if (stopPid(pid)) killed.push(pid);
+  } catch {
+  }
+
+  for (const port of [PORTS.appClient, PORTS.appServer, anonymizerPort()]) {
+    const result = await freePort(port);
+    killed.push(...result.killed);
+    if (!result.released) occupied.push(port);
+  }
+
+  try { fs.rmSync(APP_PID_FILE, { force: true }); } catch { }
+  return { killed: [...new Set(killed)], occupied };
 }
 
 function readLogTail(file, maxLines = 40) {

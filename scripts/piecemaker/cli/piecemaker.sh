@@ -54,7 +54,12 @@ if [ ! -f "$APP_DIR/$ENTRY" ]; then
   exit 1
 fi
 
-PATH="$(dirname "$NODE_BIN"):$PATH"
+INSTALLER="$APP_DIR/scripts/piecemaker/cli/install-command.mjs"
+if [ -f "$INSTALLER" ]; then
+  "$NODE_BIN" "$INSTALLER" || true
+fi
+
+PATH="$(dirname "$NODE_BIN"):${HOME}/.piecemaker/bin:${PATH:-}"
 export PATH
 
 exec "$NODE_BIN" "$APP_DIR/$ENTRY" "$@"
