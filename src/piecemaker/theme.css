@@ -163,11 +163,26 @@ div:has(> .nav-divider) > div:has(> a[href="https://discord.gg/buxwujPNRE"]) {
   display: none;
 }
 
+.flex.min-w-0.items-center.gap-2\.5:has(> h1) {
+  gap: 0.375rem;
+  min-width: auto;
+}
+
+.flex.min-w-0.items-center.gap-2\.5:has(> h1) > .h-7.w-7,
+.flex.min-w-0.items-center.gap-2\.5:has(> h1) img {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
 .flex.h-full.flex-col.bg-background\/80 h1 {
   font-family: var(--piecemaker-font-ui) !important;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: -0.03em;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  min-width: max-content;
 }
 
 .flex.rounded-lg.bg-muted\/50.p-0\.5 {
