@@ -32,6 +32,7 @@ export function scanAndPersistLibraryProviderAgents(store: ReturnType<typeof cre
     path.join(userHome, '.cursor', 'agents'),
     path.join(userHome, '.config', 'opencode', 'agent'),
     path.join(userHome, '.config', 'opencode', 'agents'),
+    path.join(userHome, '.grok', 'agents'),
   ];
   for (const directory of markdownDirectories) {
     try { importLibraryDirectory(store, directory, 'agent', false); } catch {}

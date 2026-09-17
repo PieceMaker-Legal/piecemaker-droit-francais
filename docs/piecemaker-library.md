@@ -10,7 +10,7 @@ Un serveur interne sur une adresse de boucle locale et un port aléatoire expose
 
 Le harnais de bibliothèque décore le service public des providers après le harnais de citations. Il ajoute les seules instructions activées pour le chemin canonique du dossier et masque ce complément dans l’écho utilisateur et l’historique affiché. Les noms de commandes restent au début du message. Les agents activés fournissent leurs instructions de rôle ; cette activation ne crée pas de sous-agent.
 
-Une activation vaut simultanément pour Claude, Codex, Cursor, Mistral et OpenCode. Le harnais commun décore `run` et `getRunner`, de sorte que le choix du provider ne crée aucune activation séparée. Les copies de découverte natives sont posées dans le dossier pour tous les providers qui exposent un répertoire (skills : `.claude`, `.agents`, `.cursor`, `.opencode` ; agents : `.claude`, `.codex`, `.opencode` ; MCP projet : `.mcp.json`, `.codex/config.toml`, `.cursor/mcp.json`, `opencode.json`). Mistral n’en expose actuellement aucun : seul le harnais s’applique.
+Une activation vaut simultanément pour Claude, Codex, Cursor, Mistral, OpenCode et Grok. Le harnais commun décore `run` et `getRunner`, de sorte que le choix du provider ne crée aucune activation séparée. Les copies de découverte natives sont posées dans le dossier pour tous les providers qui exposent un répertoire (skills : `.claude`, `.agents`, `.cursor`, `.opencode`, `.grok` ; agents : `.claude`, `.codex`, `.opencode`, `.grok` ; MCP projet : `.mcp.json`, `.codex/config.toml`, `.cursor/mcp.json`, `opencode.json`, `.grok/config.toml`). Mistral n’en expose actuellement aucun : seul le harnais s’applique.
 
 ## Import et retrait des installations globales
 
@@ -21,7 +21,7 @@ npx tsx --tsconfig server/tsconfig.json server/piecemaker/library/migrate-cli.ts
 npx tsx --tsconfig server/tsconfig.json server/piecemaker/library/migrate-cli.ts --withdraw
 ```
 
-Le premier appel importe les cinq workflows vendus dans `mike-defaults-fr`, les skills personnelles Claude/Codex/Agents/Cursor/OpenCode, les agents Claude/Codex/Cursor/OpenCode et l’ancienne bibliothèque personnelle PieceMaker. Le second retire les installations globales importées après vérification et conserve une sauvegarde avec manifeste dans `library-backend/migration-*`. Aucun original n’est retiré en cas d’échec d’import préalable. Les skills système et les règles d’architecture locales du dépôt sont exclues. Au démarrage, le backend recopie aussi dans SQLite les MCP utilisateur de chaque provider et le connecteur Registre Public.
+Le premier appel importe les cinq workflows vendus dans `mike-defaults-fr`, les skills personnelles Claude/Codex/Agents/Cursor/OpenCode/Grok, les agents Claude/Codex/Cursor/OpenCode/Grok et l’ancienne bibliothèque personnelle PieceMaker. Le second retire les installations globales importées après vérification et conserve une sauvegarde avec manifeste dans `library-backend/migration-*`. Aucun original n’est retiré en cas d’échec d’import préalable. Les skills système et les règles d’architecture locales du dépôt sont exclues. Au démarrage, le backend recopie aussi dans SQLite les MCP utilisateur de chaque provider et le connecteur Registre Public.
 
 Le marqueur `centralized.json` empêche les installateurs de skills PieceMaker de recréer leurs liens globaux lors d’une mise à jour. Les hooks de protection restent indépendants de cette politique.
 

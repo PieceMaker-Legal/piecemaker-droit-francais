@@ -31,15 +31,17 @@ export function migratePersonalLibrary(store: ReturnType<typeof createLibrarySto
     [path.join(userHome, '.agents', 'skills'), 'skill'],
     [path.join(userHome, '.cursor', 'skills'), 'skill'],
     [path.join(userHome, '.config', 'opencode', 'skills'), 'skill'],
+    [path.join(userHome, '.grok', 'skills'), 'skill'],
     [path.join(userHome, '.claude', 'agents'), 'agent'],
     [path.join(userHome, '.cursor', 'agents'), 'agent'],
+    [path.join(userHome, '.grok', 'agents'), 'agent'],
     [path.join(userHome, '.config', 'opencode', 'agents'), 'agent'],
     [path.join(userHome, '.config', 'opencode', 'agent'), 'agent'],
     [path.join(userHome, '.piecemaker', 'library', 'skills'), 'skill'],
     [path.join(userHome, '.piecemaker', 'library', 'agents'), 'agent'],
   ] as const) imported.push(...importLibraryDirectory(store, directory, kind));
   if (withdraw) {
-    const candidates = imported.filter((entry) => ['.claude', '.codex', '.agents', '.cursor', path.join('.config', 'opencode')].some((provider) => entry.source.startsWith(path.join(userHome, provider) + path.sep)));
+    const candidates = imported.filter((entry) => ['.claude', '.codex', '.agents', '.cursor', '.grok', path.join('.config', 'opencode')].some((provider) => entry.source.startsWith(path.join(userHome, provider) + path.sep)));
     const backup = path.join(store.directory, `migration-${Date.now()}`);
     fs.mkdirSync(backup, { recursive: true, mode: 0o700 });
     fs.writeFileSync(path.join(backup, 'manifest.json'), JSON.stringify(candidates, null, 2), { mode: 0o600 });
