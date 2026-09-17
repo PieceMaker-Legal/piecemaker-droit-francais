@@ -226,6 +226,20 @@ header.pwa-header-safe {
   background: hsl(var(--background));
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  padding: 0.65rem 1.25rem;
+}
+
+header.pwa-header-safe h2 {
+  font-family: var(--piecemaker-font-editorial);
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--piecemaker-ink);
+}
+
+.dark header.pwa-header-safe h2 {
+  color: hsl(var(--foreground));
 }
 
 button.bg-primary,
