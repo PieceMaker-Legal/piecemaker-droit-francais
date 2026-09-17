@@ -1,9 +1,9 @@
-import { BODACC_FAMILIES, knowledgeApi } from './api.js';
+import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { partyCodeChange } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { chronologyView, escapeHtml, generalView, mappingView, scanPercentLabel, scanStatusMarkup, scanView, shell } from './views.js';
+import { chronologyView, escapeHtml, generalView, mappingView, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
 import type { BodaccScanState, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -46,59 +46,35 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (target) target.innerHTML = `<div class="pmd-error">${escapeHtml(error instanceof Error ? error.message : error)}</div>`;
   };
 
-  const defaultBodaccFamilies = BODACC_FAMILIES.map((family) => family.code);
-  const bodaccPreferenceKey = (companyId: string): string => `piecemaker-dossier:bodacc-families:${encodeURIComponent(context.project?.name || '')}:${encodeURIComponent(companyId)}`;
-  const bodaccFamiliesFor = (companyId: string): string[] => {
-    const existing = bodaccStates.get(companyId);
-    if (Array.isArray(existing?.families)) return existing.families;
-    let families = defaultBodaccFamilies;
-    try {
-      const stored = JSON.parse(localStorage.getItem(bodaccPreferenceKey(companyId)) || 'null') as unknown;
-      if (Array.isArray(stored)) families = stored.filter((family): family is string => typeof family === 'string' && defaultBodaccFamilies.includes(family));
-    } catch {
-      families = defaultBodaccFamilies;
-    }
-    const state = existing || { status: 'idle' as const };
-    state.families = families;
-    bodaccStates.set(companyId, state);
-    return families;
-  };
-  const rememberBodaccFamilies = (companyId: string, families: string[]) => {
-    const state = bodaccStates.get(companyId) || { status: 'idle' as const };
-    state.families = families;
-    bodaccStates.set(companyId, state);
-    try {
-      localStorage.setItem(bodaccPreferenceKey(companyId), JSON.stringify(families));
-    } catch {
-      return;
-    }
+  const designatedCompany = (companyId: string) => {
+    const company = data?.graph.nodes.find((node) => node.id === companyId);
+    return Boolean(company && company.kind === 'company' && (company.data.partySide === 'client' || company.data.partySide === 'adversaire'));
   };
 
-  const searchBodaccCompany = async (companyId: string, siren: string, siret: string, renderAtStart = true, renderAtEnd = true) => {
+  const searchBodaccCompany = async (companyId: string, siren: string, siret: string) => {
+    if (!designatedCompany(companyId)) return;
     const state = bodaccStates.get(companyId) || { status: 'idle' as const };
-    const families = bodaccFamiliesFor(companyId);
-    state.families = families;
     state.open = true;
     if (!siren && !siret) {
       state.status = 'error';
       state.error = 'Aucun SIREN ou SIRET n’est renseigné pour cette personne morale.';
       bodaccStates.set(companyId, state);
-      if (renderAtStart || renderAtEnd) render();
+      render();
       return;
     }
     state.status = 'loading';
     state.error = '';
     bodaccStates.set(companyId, state);
-    if (renderAtStart) render();
+    render();
     try {
-      state.result = await knowledgeApi.searchBodacc(siren, siret, families);
+      state.result = await knowledgeApi.searchBodacc(siren, siret);
       state.status = 'loaded';
     } catch (error) {
       state.status = 'error';
       state.error = error instanceof Error ? error.message : 'Recherche BODACC impossible.';
     }
     bodaccStates.set(companyId, state);
-    if (renderAtEnd && context.project) render();
+    if (context.project) render();
   };
 
   const companySearchQuery = (companyId: string, siren: string, siret: string): string => {
@@ -112,6 +88,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   };
 
   const searchCompanyIdentity = async (companyId: string, siren: string, siret: string) => {
+    if (!designatedCompany(companyId)) return;
     const state = bodaccStates.get(companyId) || { status: 'idle' as const };
     state.open = true;
     state.companySearchStatus = 'loading';
@@ -230,25 +207,41 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (!data) return;
     const mappingData = data;
     const layer = modal(root, mappingView(mappingData));
-    layer.querySelectorAll<HTMLFormElement>('[data-mapping-row]').forEach((row) => row.addEventListener('submit', async (event) => {
-      event.preventDefault();
+    const operationsFromRow = (row: HTMLFormElement): KnowledgeUpdateOperation[] => {
       const node = mappingData.graph.nodes.find((candidate) => candidate.id === row.dataset.nodeId);
-      if (!node) return;
+      if (!node) return [];
       const form = new FormData(row);
       const label = String(form.get('label') || '').trim();
       const masked = String(form.get('masked') || '').trim();
       const aliases = String(form.get('aliases') || '').split(',').map((alias) => alias.trim()).filter(Boolean);
-      if (!label) return;
+      if (!label) return [];
       const mappings = mappingData.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
       const operations: KnowledgeUpdateOperation[] = [{ op: 'upsertNode', node: { id: node.id, kind: node.kind, label, aliases, data: node.data, origin: 'manual' } }];
       for (const mapping of mappings) operations.push({ op: 'deleteMapping', mapping: { nodeId: node.id, real: mapping.real } });
       for (const real of [...new Set([label, ...aliases])]) operations.push({ op: 'upsertMapping', mapping: { nodeId: node.id, real, masked, origin: 'manual' } });
+      return operations;
+    };
+    layer.querySelectorAll<HTMLFormElement>('[data-mapping-row]').forEach((row) => row.addEventListener('submit', async (event) => {
+      event.preventDefault();
       try {
-        await save(operations);
+        await save(operationsFromRow(row));
       } catch (error) {
         showError(error);
       }
     }));
+    layer.querySelector<HTMLElement>('[data-save-mapping]')?.addEventListener('click', async () => {
+      const operations = Array.from(layer.querySelectorAll<HTMLFormElement>('[data-mapping-row]')).flatMap(operationsFromRow);
+      if (!operations.length) {
+        layer.remove();
+        return;
+      }
+      try {
+        await save(operations);
+        layer.remove();
+      } catch (error) {
+        showError(error);
+      }
+    });
     layer.querySelectorAll<HTMLElement>('[data-edit-node]').forEach((entry) => entry.addEventListener('click', () => {
       const node = mappingData.graph.nodes.find((candidate) => candidate.id === entry.dataset.editNode);
       layer.remove();
@@ -290,7 +283,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   };
 
   const closeOpenMenus = (except?: HTMLElement | null) => {
-    root.querySelectorAll<HTMLElement>('.pmd-profile-menu[data-open=true], .pmd-bodacc-family-menu[data-open=true]').forEach((menu) => {
+    root.querySelectorAll<HTMLElement>('.pmd-profile-menu[data-open=true]').forEach((menu) => {
       if (menu !== except) menu.dataset.open = 'false';
     });
   };
@@ -319,25 +312,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (!content) return;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
     else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
-    else content.innerHTML = active === 'general' ? generalView(data, tiersCollapsed, scanJob) : active === 'chronology' ? chronologyView(data) : scanView(data, bodaccStates);
+    else content.innerHTML = active === 'chronology' ? chronologyView(data) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
   };
 
   const bindOnce = () => {
     root.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
       if (target.closest('.pmd-modal')) return;
-      const familyMenu = target.closest<HTMLElement>('[data-bodacc-family-menu]');
-      if (familyMenu) return;
-      const familyTrigger = target.closest<HTMLElement>('[data-action="company-family-menu"]');
-      if (familyTrigger) {
-        const menu = familyTrigger.parentElement?.querySelector<HTMLElement>('[data-bodacc-family-menu]');
-        closeOpenMenus(menu);
-        if (!menu) return;
-        const open = menu.dataset.open === 'true';
-        menu.dataset.open = String(!open);
-        familyTrigger.setAttribute('aria-expanded', String(!open));
-        return;
-      }
       const nodeMenu = target.closest<HTMLElement>('[data-node-menu]');
       if (nodeMenu) {
         const menu = nodeMenu.parentElement?.querySelector<HTMLElement>('.pmd-profile-menu');
@@ -357,11 +338,15 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       if (action === 'company-search') {
         const button = target.closest<HTMLElement>('[data-scan-company]');
         const companyId = button?.dataset.scanCompany || '';
-        const company = data?.graph.nodes.find((node) => node.id === companyId);
-        if (!company || !button) return;
-        const identified = Boolean(company.data.registrePublic && typeof company.data.registrePublic === 'object');
-        if (identified) void searchBodaccCompany(companyId, button.dataset.siren || '', button.dataset.siret || '');
-        else void searchCompanyIdentity(companyId, button.dataset.siren || '', button.dataset.siret || '');
+        if (!button || !designatedCompany(companyId)) return;
+        void searchCompanyIdentity(companyId, button.dataset.siren || '', button.dataset.siret || '');
+        return;
+      }
+      if (action === 'bodacc-search') {
+        const button = target.closest<HTMLElement>('[data-scan-company]');
+        const companyId = button?.dataset.scanCompany || '';
+        if (!button || !designatedCompany(companyId)) return;
+        void searchBodaccCompany(companyId, button.dataset.siren || '', button.dataset.siret || '');
         return;
       }
       if (action === 'company-validate') {
@@ -371,22 +356,26 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         const company = data?.graph.nodes.find((node) => node.id === companyId);
         const state = bodaccStates.get(companyId);
         const result = state?.companySearchResults?.[Number(button.dataset.companyResult)];
-        if (!data || !company || !result) return;
+        if (!data || !company || !result || !designatedCompany(companyId)) return;
         button.disabled = true;
         void (async () => {
           try {
-            await save(buildCompanyValidationOperations(result, {
+            const operations = buildCompanyValidationOperations(result, {
               nodeId: company.id,
               node: company,
               partySide: (typeof company.data.partySide === 'string' ? company.data.partySide : '') as PartySide,
               position: typeof company.data.position === 'string' ? company.data.position : '',
               legalForm: typeof company.data.legalForm === 'string' ? company.data.legalForm : '',
-            }, data.graph));
+            }, data.graph);
+            const renamed = operations.find((operation) => operation.op === 'renameNode');
+            const nextId = renamed?.op === 'renameNode' ? renamed.rename.toNodeId : companyId;
+            await save(operations);
             const nextState = bodaccStates.get(companyId) || { status: 'idle' as const };
             nextState.companySearchStatus = 'idle';
             nextState.companySearchResults = [];
-            bodaccStates.set(companyId, nextState);
-            await searchBodaccCompany(companyId, result.fields.siren || result.siren, result.fields.siret);
+            bodaccStates.delete(companyId);
+            bodaccStates.set(nextId, nextState);
+            await searchBodaccCompany(nextId, result.fields.siren || result.siren, result.fields.siret);
           } catch (error) {
             const nextState = bodaccStates.get(companyId) || { status: 'idle' as const };
             nextState.companySearchStatus = 'error';
@@ -395,13 +384,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
             render();
           }
         })();
-        return;
-      }
-      if (action === 'scan-all-companies') {
-        const companies = Array.from(root.querySelectorAll<HTMLElement>('.pmd-scan-company[data-scan-company]'));
-        const searches = companies.map((company) => searchBodaccCompany(company.dataset.scanCompany || '', company.dataset.siren || '', company.dataset.siret || '', false, false));
-        render();
-        void Promise.all(searches).then(() => render());
         return;
       }
       if (action === 'refresh') {
@@ -495,14 +477,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         const node = data?.graph.nodes.find((entry) => entry.id === openDocument.dataset.openDocument);
         if (data && node) documentEditor(root, data, node, context.project?.path || '', save);
       }
-    });
-    root.addEventListener('change', (event) => {
-      const checkbox = (event.target as HTMLElement).closest<HTMLInputElement>('[data-bodacc-family]');
-      if (!checkbox) return;
-      const companyId = checkbox.dataset.scanCompany || '';
-      if (!companyId) return;
-      const families = Array.from(root.querySelectorAll<HTMLInputElement>('[data-bodacc-family]')).filter((entry) => entry.dataset.scanCompany === companyId && entry.checked).map((entry) => entry.dataset.bodaccFamily || '').filter(Boolean);
-      rememberBodaccFamilies(companyId, families);
     });
     root.addEventListener('toggle', (event) => {
       const details = event.target as HTMLElement;
