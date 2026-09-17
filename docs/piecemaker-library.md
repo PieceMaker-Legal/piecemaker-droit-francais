@@ -10,7 +10,7 @@ Un serveur interne sur une adresse de boucle locale et un port aléatoire expose
 
 Le harnais de bibliothèque décore le service public des providers après le harnais de citations. Il ajoute les seules instructions activées pour le chemin canonique du dossier et masque ce complément dans l’écho utilisateur et l’historique affiché. Les noms de commandes restent au début du message. Les agents activés fournissent leurs instructions de rôle ; cette activation ne crée pas de sous-agent.
 
-Une activation vaut simultanément pour Claude, Codex, Cursor, Mistral et OpenCode. Le harnais commun décore `run` et `getRunner`, de sorte que le choix du provider ne crée aucune activation séparée. Les copies de découverte natives restent un mécanisme de compatibilité supplémentaire pour les providers qui savent lire ces répertoires ; Mistral n’en expose actuellement aucun.
+Une activation vaut simultanément pour Claude, Codex, Cursor, Mistral et OpenCode. Le harnais commun décore `run` et `getRunner`, de sorte que le choix du provider ne crée aucune activation séparée. Les copies de découverte natives sont posées dans le dossier pour tous les providers qui exposent un répertoire (skills : `.claude`, `.agents`, `.cursor`, `.opencode` ; agents : `.claude`, `.codex`, `.opencode` ; MCP projet : `.mcp.json`, `.codex/config.toml`, `.cursor/mcp.json`, `opencode.json`). Mistral n’en expose actuellement aucun : seul le harnais s’applique.
 
 ## Import et retrait des installations globales
 
@@ -21,7 +21,7 @@ npx tsx --tsconfig server/tsconfig.json server/piecemaker/library/migrate-cli.ts
 npx tsx --tsconfig server/tsconfig.json server/piecemaker/library/migrate-cli.ts --withdraw
 ```
 
-Le premier appel importe les cinq workflows vendus dans `mike-defaults-fr`, les skills personnelles Claude/Codex/Agents, les agents Claude et l’ancienne bibliothèque personnelle PieceMaker. Le second retire les installations globales importées après vérification et conserve une sauvegarde avec manifeste dans `library-backend/migration-*`. Aucun original n’est retiré en cas d’échec d’import préalable. Les skills système et les règles d’architecture locales du dépôt sont exclues.
+Le premier appel importe les cinq workflows vendus dans `mike-defaults-fr`, les skills personnelles Claude/Codex/Agents/Cursor/OpenCode, les agents Claude/Codex/Cursor/OpenCode et l’ancienne bibliothèque personnelle PieceMaker. Le second retire les installations globales importées après vérification et conserve une sauvegarde avec manifeste dans `library-backend/migration-*`. Aucun original n’est retiré en cas d’échec d’import préalable. Les skills système et les règles d’architecture locales du dépôt sont exclues. Au démarrage, le backend recopie aussi dans SQLite les MCP utilisateur de chaque provider et le connecteur Registre Public.
 
 Le marqueur `centralized.json` empêche les installateurs de skills PieceMaker de recréer leurs liens globaux lors d’une mise à jour. Les hooks de protection restent indépendants de cette politique.
 
@@ -37,6 +37,4 @@ Une désactivation concerne les prochains messages ; elle ne retire pas les cont
 
 Le plugin possède sa liste et ses onglets. `src/piecemaker/library/` monte le composant natif `EditorSidebar` de CloudCLI dans un volet redimensionnable à droite de la liste, sans écrire de document dans le dossier ni utiliser le chat. Le contenu est fermé au démontage du plugin et à l'expiration de l'authentification. Un adaptateur en mémoire fournit le document à l'éditeur ; les lectures des fichiers ordinaires conservent leur transport habituel. Le téléchargement et l'aperçu Markdown natifs sont disponibles. Enregistrer (ou Ctrl/Cmd+S) sauvegarde le document dans le catalogue et actualise ses métadonnées YAML, sans changer ses activations. Une vérification de la version précédente empêche d'écraser une modification concurrente. Les fichiers associés restent conservés séparément du document principal.
 
-La navigation sépare quatre types d'objets : Connecteurs, Skills, Plugins et Agents. Un serveur MCP fourni par un plugin apparaît parmi les Connecteurs et sa bascule pilote l'activation de ce plugin dans le dossier. Le même paquet reste visible dans Plugins pour consulter ses fichiers et les composants portables qu'il contient. Le catalogue de découverte est intégré à cet onglet Plugins.
-
-L'onglet Skills affiche aussi les installations détectées par Claude, Codex, Cursor, Mistral et OpenCode. Le plugin normalise leur provider, leur scope, leur commande, leur nom, leur description et leur chemin source. Les métadonnées de dossier ne sont conservées que pour les scopes `project` et `repo`. Cette liste reste distincte du catalogue central et ne reçoit donc aucun bouton d'activation.
+La navigation sépare quatre types d'objets lus depuis SQLite : Connecteurs, Skills, Plugins et Agents. Un objet n'apparaît que dans un onglet. Les MCP autonomes (Registre Public, serveurs utilisateur) sont des Connecteurs ; une skill ou un agent autonome va dans Skills ou Agents ; un paquet installé, y compris son MCP, ses skills et ses agents, reste un Plugin. Un toggle installe l'élément dans le dossier pour tous les providers.

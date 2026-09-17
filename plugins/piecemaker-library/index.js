@@ -69,7 +69,6 @@ export function mount(container, api) {
   let plugins = [];
   const pluginTrees = new Map();
   let pluginTreeBusy = '';
-  let snapshot = null;
   let marketplace = null;
   let loading = false;
   let busy = false;
@@ -105,7 +104,7 @@ export function mount(container, api) {
 
   async function load(options = {}) {
     const version = ++revision;
-    const hadContent = Boolean(entries.length || plugins.length || snapshot || marketplace);
+    const hadContent = Boolean(entries.length || plugins.length || marketplace);
     error = '';
     if (!hadContent) {
       loading = true;
@@ -122,9 +121,6 @@ export function mount(container, api) {
         const kind = tab === 'connectors' ? 'connector' : tab;
         const data = await request('GET', `/plugin/marketplace?scope=${scope}&kind=${kind}`);
         if (version === revision) marketplace = data;
-      } else if (tab === 'connectors') {
-        const data = workspace ? await request('GET', `/activation${query}`) : null;
-        if (version === revision) snapshot = data;
       } else if (tab === 'plugin') {
         const collectionData = await request('GET', `/plugins${query}`);
         if (version === revision) plugins = collectionData.plugins || [];
@@ -337,9 +333,10 @@ export function mount(container, api) {
           item.lastChild.disabled = busy || entry.installed;
           body.append(item);
         }
-      } else if (tab === 'skill' || tab === 'agent') {
+      } else if (tab === 'skill' || tab === 'agent' || tab === 'connectors') {
         body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}` : 'Sélectionnez un dossier pour activer un élément.', 'meta'));
-        const visible = entries.filter((item) => item.kind === tab && matches(item));
+        const kind = tab === 'connectors' ? 'connector' : tab;
+        const visible = entries.filter((item) => item.kind === kind && !item.collectionId && matches(item));
         if (!visible.length) body.append(element('p', 'Aucun élément.'));
         for (const entry of visible) {
           const item = row(entry, () => void open(entry));
@@ -406,15 +403,6 @@ export function mount(container, api) {
               body.append(tree);
             }
         }
-      } else if (tab === 'connectors') {
-        if (!snapshot) { body.append(element('p', 'Sélectionnez un dossier pour gérer les connecteurs.')); return; }
-        for (const [assistant, items] of [['claude', snapshot.claude.mcp], ['codex', snapshot.codex.mcp]]) {
-          for (const entry of items.filter(matches)) {
-            const item = row(entry);
-            item.append(toggle(`${assistant === 'claude' ? 'Claude' : 'Codex'} · ${entry.protocol || 'MCP'}`, entry.enabled, !entry.toggleable, () => void mutate('POST', '/activation/toggle', { workspacePath: context.project.path, assistant, family: entry.family || 'mcp', id: entry.id, enabled: !entry.enabled })));
-            body.append(item);
-          }
-        }
       }
     }
     renderRows();
@@ -461,7 +449,7 @@ export function mount(container, api) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = context.project?.path !== next.project?.path;
     context = next;
-    if (changed) { entries = []; plugins = []; pluginTrees.clear(); snapshot = null; void load(); }
+    if (changed) { entries = []; plugins = []; pluginTrees.clear(); void load(); }
     else render();
   });
   mounts.set(container, () => { disposed = true; revision++; unsubscribe(); layout.remove(); style.remove(); });

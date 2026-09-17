@@ -6,15 +6,24 @@ import Database from 'better-sqlite3';
 
 import { parseFrontMatter } from '@/shared/frontmatter.js';
 
+import { parseConnectorConfig, prepareConnectorInstallation, type LibraryConnectorConfig } from './connector-installation.js';
 import { prepareWorkspaceInstallation } from './workspace-installation.js';
 
 type StoredLibraryEntry = {
   id: string;
-  kind: 'skill' | 'agent';
+  kind: 'skill' | 'agent' | 'connector';
   name: string;
   description: string;
   content: string;
   assets: string;
+};
+
+type LibraryConnectorInput = {
+  name: string;
+  description: string;
+  config: LibraryConnectorConfig;
+  source: string;
+  namespace?: string;
 };
 
 type LibraryEntry = Omit<StoredLibraryEntry, 'assets'> & { assets: Record<string, string> };
@@ -112,14 +121,39 @@ export function createLibraryStore(home: string) {
   function list(workspacePath?: string) {
     const selected = workspacePath ? workspace(workspacePath) : '';
     return db.prepare(`SELECT e.id, e.kind, e.name, e.description,
-      EXISTS(SELECT 1 FROM activation a WHERE a.entry_id = e.id AND a.workspace = ?) AS enabled
+      EXISTS(SELECT 1 FROM activation a WHERE a.entry_id = e.id AND a.workspace = ?) AS enabled,
+      (SELECT ce.collection_id FROM collection_entries ce WHERE ce.entry_id = e.id LIMIT 1) AS collectionId
       FROM entries e ORDER BY e.name COLLATE NOCASE`).all(selected).map((row) => {
-        const entry = row as Omit<StoredLibraryEntry, 'content' | 'assets'> & { enabled: number };
-        return { ...entry, enabled: Boolean(entry.enabled) };
+        const entry = row as Omit<StoredLibraryEntry, 'content' | 'assets'> & { enabled: number; collectionId: string | null };
+        return { ...entry, enabled: Boolean(entry.enabled), collectionId: entry.collectionId || null };
       });
   }
 
-  function importFile(source: string, kind: StoredLibraryEntry['kind'], includeAssets = true) {
+  function persistImportedEntry(source: string, kind: StoredLibraryEntry['kind'], name: string, description: string, content: string, assets: Record<string, string>, id: string) {
+    const serialized = JSON.stringify(Object.fromEntries(Object.entries(assets).sort(([left], [right]) => left.localeCompare(right))));
+    const sourceHash = createHash('sha256').update(`${kind}\0${content}\0${serialized}`).digest('hex');
+    const originSource = !path.isAbsolute(source) || source.includes('#') ? source : path.resolve(source);
+    const existingOrigin = db.prepare('SELECT entry_id AS entryId, source_hash AS sourceHash FROM origins WHERE source = ?').get(originSource) as { entryId: string; sourceHash: string | null } | undefined;
+    if (existingOrigin) {
+      if (existingOrigin.sourceHash === null || existingOrigin.sourceHash === sourceHash) return existingOrigin.entryId;
+      const existingEntry = document(existingOrigin.entryId);
+      const existingAssets = JSON.stringify(Object.fromEntries(Object.entries(existingEntry.assets).sort(([left], [right]) => left.localeCompare(right))));
+      const existingHash = createHash('sha256').update(`${existingEntry.kind}\0${existingEntry.content}\0${existingAssets}`).digest('hex');
+      if (existingHash !== existingOrigin.sourceHash) return existingOrigin.entryId;
+      db.transaction(() => {
+        db.prepare('UPDATE entries SET name = ?, description = ?, content = ?, assets = ? WHERE id = ?').run(name, description, content, serialized, existingOrigin.entryId);
+        db.prepare('UPDATE origins SET source_hash = ? WHERE source = ?').run(sourceHash, originSource);
+      })();
+      return existingOrigin.entryId;
+    }
+    db.transaction(() => {
+      db.prepare('INSERT OR IGNORE INTO entries VALUES (?, ?, ?, ?, ?, ?)').run(id, kind, name, description, content, serialized);
+      db.prepare('INSERT INTO origins (source, entry_id, source_hash) VALUES (?, ?, ?)').run(originSource, id, sourceHash);
+    })();
+    return id;
+  }
+
+  function importFile(source: string, kind: 'skill' | 'agent', includeAssets = true) {
     const resolved = fs.realpathSync(source);
     const content = decodeUtf8File(fs.readFileSync(resolved));
     const parsed = parseFrontMatter(content);
@@ -147,30 +181,30 @@ export function createLibraryStore(home: string) {
       }
     }
     if (kind === 'skill' && includeAssets) collect(path.dirname(resolved));
-    const serialized = JSON.stringify(Object.fromEntries(Object.entries(assets).sort(([a], [b]) => a.localeCompare(b))));
-    const id = createHash('sha256').update(`${kind}\0${content}\0${serialized}`).digest('hex');
-    const sourceHash = id;
-    const existingOrigin = db.prepare('SELECT entry_id AS entryId, source_hash AS sourceHash FROM origins WHERE source = ?').get(path.resolve(source)) as { entryId: string; sourceHash: string | null } | undefined;
-    if (existingOrigin) {
-      if (existingOrigin.sourceHash === null || existingOrigin.sourceHash === sourceHash) return existingOrigin.entryId;
-      const existingEntry = document(existingOrigin.entryId);
-      const existingAssets = JSON.stringify(Object.fromEntries(Object.entries(existingEntry.assets).sort(([a], [b]) => a.localeCompare(b))));
-      const existingHash = createHash('sha256').update(`${existingEntry.kind}\0${existingEntry.content}\0${existingAssets}`).digest('hex');
-      if (existingHash !== existingOrigin.sourceHash) return existingOrigin.entryId;
-      db.transaction(() => {
-        db.prepare('UPDATE entries SET name = ?, description = ?, content = ?, assets = ? WHERE id = ?').run(name, description, content, serialized, existingOrigin.entryId);
-        db.prepare('UPDATE origins SET source_hash = ? WHERE source = ?').run(sourceHash, path.resolve(source));
-      })();
-      return existingOrigin.entryId;
-    }
-    db.transaction(() => {
-      db.prepare('INSERT OR IGNORE INTO entries VALUES (?, ?, ?, ?, ?, ?)').run(id, kind, name, description, content, serialized);
-      db.prepare('INSERT INTO origins (source, entry_id, source_hash) VALUES (?, ?, ?)').run(path.resolve(source), id, sourceHash);
-    })();
-    return id;
+    const id = createHash('sha256').update(`${kind}\0${content}\0${JSON.stringify(Object.fromEntries(Object.entries(assets).sort(([left], [right]) => left.localeCompare(right))))}`).digest('hex');
+    return persistImportedEntry(resolved, kind, name, description, content, assets, id);
   }
 
-  function createEntry(kind: StoredLibraryEntry['kind'], name: string, description: string) {
+  function importContent(source: string, kind: 'skill' | 'agent', content: string) {
+    const parsed = parseFrontMatter(content);
+    const data = parsed.data;
+    const sourceName = path.basename(source, path.extname(source));
+    const name = String(data.metadata?.title || data.name || sourceName);
+    const description = typeof data.description === 'string' ? data.description : '';
+    const id = createHash('sha256').update(`${kind}\0${content}\0{}`).digest('hex');
+    return persistImportedEntry(source, kind, name, description, content, {}, id);
+  }
+
+  function importConnector(input: LibraryConnectorInput) {
+    const name = input.name.trim();
+    if (!name) throw new Error('Nom requis.');
+    const content = `${JSON.stringify(input.config, null, 2)}\n`;
+    const description = input.description.trim() || (input.config.url || input.config.command || name);
+    const id = createHash('sha256').update(`connector\0${input.namespace || ''}\0${name}`).digest('hex');
+    return persistImportedEntry(input.source, 'connector', name, description, content, {}, id);
+  }
+
+  function createEntry(kind: 'skill' | 'agent', name: string, description: string) {
     const trimmedName = name.trim();
     if (!trimmedName) throw new Error('Nom requis.');
     const trimmedDescription = description.trim();
@@ -185,10 +219,16 @@ export function createLibraryStore(home: string) {
     return db.transaction(() => {
       const entry = document(id);
       if (entry.content !== previousContent) throw new Error('Le document a été modifié ailleurs. Rouvrez-le avant d’enregistrer.');
-      const { data } = parseFrontMatter(content);
-      const name = String(data.metadata?.title || data.name || entry.name);
-      const description = typeof data.description === 'string' ? data.description : '';
-      db.prepare('UPDATE entries SET name = ?, description = ?, content = ? WHERE id = ?').run(name, description, content, id);
+      if (entry.kind === 'connector') {
+        const config = parseConnectorConfig(content);
+        const description = config.url || config.command || entry.name;
+        db.prepare('UPDATE entries SET description = ?, content = ? WHERE id = ?').run(description, `${JSON.stringify(config, null, 2)}\n`, id);
+      } else {
+        const { data } = parseFrontMatter(content);
+        const name = String(data.metadata?.title || data.name || entry.name);
+        const description = typeof data.description === 'string' ? data.description : '';
+        db.prepare('UPDATE entries SET name = ?, description = ?, content = ? WHERE id = ?').run(name, description, content, id);
+      }
       const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
       for (const { workspace: selected } of active) setEnabled(selected, id, true);
       return document(id);
@@ -236,9 +276,11 @@ export function createLibraryStore(home: string) {
       db.prepare('DELETE FROM collection_entries WHERE collection_id = ?').run(input.id);
       const insert = db.prepare('INSERT INTO collection_entries (collection_id, entry_id, root_path) VALUES (?, ?, ?)');
       for (const entry of input.entries) insert.run(input.id, entry.entryId, normalizedCollectionPath(entry.rootPath));
-      db.prepare('DELETE FROM collection_files WHERE collection_id = ?').run(input.id);
-      const insertFile = db.prepare('INSERT INTO collection_files (collection_id, path, content) VALUES (?, ?, ?)');
-      for (const file of input.files) insertFile.run(input.id, normalizedCollectionPath(file.path), file.content);
+      if (input.files.length) {
+        db.prepare('DELETE FROM collection_files WHERE collection_id = ?').run(input.id);
+        const insertFile = db.prepare('INSERT INTO collection_files (collection_id, path, content) VALUES (?, ?, ?)');
+        for (const file of input.files) insertFile.run(input.id, normalizedCollectionPath(file.path), file.content);
+      }
       return input.id;
     })();
   }
@@ -416,6 +458,12 @@ export function createLibraryStore(home: string) {
     if (typeof enabled !== 'boolean') throw new Error('Activation booléenne requise.');
     const selected = workspace(workspacePath);
     const entry = document(id);
+    if (entry.kind === 'connector') {
+      prepareConnectorInstallation(selected, entry.name, parseConnectorConfig(entry.content), enabled)();
+      if (enabled) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, id);
+      else db.prepare('DELETE FROM activation WHERE workspace = ? AND entry_id = ?').run(selected, id);
+      return { ok: true, enabled };
+    }
     const packageRoot = path.join(directory, 'active', createHash('sha256').update(selected).digest('hex'), id);
     const install = prepareWorkspaceInstallation(selected, id, packageRoot, entry.kind, enabled);
     if (enabled) {
@@ -467,7 +515,7 @@ export function createLibraryStore(home: string) {
   function instructions(workspacePath: string) {
     const selected = workspace(workspacePath);
     const entries = db.prepare(`SELECT e.* FROM entries e JOIN activation a ON a.entry_id = e.id
-      WHERE a.workspace = ? ORDER BY e.name`).all(selected) as StoredLibraryEntry[];
+      WHERE a.workspace = ? AND e.kind IN ('skill', 'agent') ORDER BY e.name`).all(selected) as StoredLibraryEntry[];
     return entries.map((entry) => {
       const assets = JSON.parse(entry.assets) as Record<string, string>;
       const references = Object.entries(assets).filter(([name]) => name === 'table-columns.yaml')
@@ -485,6 +533,8 @@ export function createLibraryStore(home: string) {
     deleteEntry,
     updateDocument,
     importFile,
+    importContent,
+    importConnector,
     setEnabled,
     instructions,
     upsertCollection,
