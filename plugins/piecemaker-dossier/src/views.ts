@@ -29,10 +29,41 @@ export const labels: Record<NodeKind, string> = {
   other: 'Autres',
 };
 
+export const kindLabels: Record<NodeKind, string> = {
+  person: 'Personne physique',
+  company: 'Personne morale',
+  document: 'Document',
+  iban: 'IBAN',
+  address: 'Adresse',
+  phone: 'Téléphone',
+  email: 'E-mail',
+  url: 'URL',
+  siren: 'SIREN',
+  other: 'Autre',
+};
+
 export const entityKinds = NODE_KINDS.filter((kind) => kind !== 'document');
 export const escapeHtml = (value: unknown): string => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] || character);
 export const textValue = (value: unknown): string => typeof value === 'string' ? value : '';
 export const dateFor = (node: KnowledgeNode): string => textValue(node.data.doc_date_iso) || textValue(node.data.dateIso) || '';
+export const parseAliases = (value: unknown): string[] => String(value || '').split(/[\n,]/).map((entry) => entry.trim()).filter(Boolean);
+
+export function nodeVariants(node: KnowledgeNode, mappings: Array<{ nodeId: string; real: string }>): string[] {
+  const label = node.label.trim();
+  const seen = new Set<string>(label ? [label] : []);
+  const variants: string[] = [];
+  for (const value of [...node.aliases, ...mappings.filter((mapping) => mapping.nodeId === node.id).map((mapping) => mapping.real)]) {
+    const variant = value.trim();
+    if (!variant || seen.has(variant)) continue;
+    seen.add(variant);
+    variants.push(variant);
+  }
+  return variants;
+}
+
+export function aliasEditorMarkup(variants: string[]): string {
+  return `<div class="pmd-alias-editor" data-alias-editor><div class="pmd-alias-pills" data-alias-pills>${variants.map((variant, index) => `<span class="pmd-alias-pill">${escapeHtml(variant)}<button type="button" data-remove-alias="${index}" aria-label="Supprimer ${escapeHtml(variant)}">×</button></span>`).join('')}</div><input class="pmd-input pmd-alias-input" data-alias-input placeholder="Autre écriture, puis Entrée"><input type="hidden" name="aliases" value="${escapeHtml(variants.join('\n'))}"></div>`;
+}
 
 const userIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"></path><circle cx="10" cy="7" r="4"></circle><path d="M22 21a8 8 0 0 0-5-7.7"></path></svg>';
 const companyIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4c0-.5.4-1 1-1h10c.6 0 1 .5 1 1v18"></path><path d="M6 12H4c-.6 0-1 .4-1 1v9"></path><path d="M18 9h2c.6 0 1 .4 1 1v12"></path><path d="M10 6h4M10 10h4M10 14h4M10 18h4"></path></svg>';
@@ -258,9 +289,10 @@ function companySearchStateMarkup(state: BodaccScanState, companyId: string): st
 export function mappingView(data: ViewData): string {
   const entries = data.graph.nodes.filter((node) => node.kind !== 'document');
   const categories = entityKinds.map((kind) => ({ kind, label: labels[kind], entries: entries.filter((node) => node.kind === kind) })).filter((category) => category.entries.length);
-  return `<div class="pmd-mapping-dialog"><div class="pmd-mapping-header"><h2 class="piecemaker-display">Mapping de pseudonymisation</h2><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="institutional-terms" aria-label="Termes institutionnels" title="Termes institutionnels jamais pseudonymisés">${gearIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div><div class="pmd-mapping-body"><p>Chaque ligne associe une clé de pseudonymisation au variant principal rétabli lors du revert et aux autres écritures détectées.</p>${categories.map((category) => `<section class="pmd-mapping-category"><header><h3>${escapeHtml(category.label)} <span>${category.entries.length}</span></h3><button type="button" class="piecemaker-button piecemaker-button--glass piecemaker-button--xs" data-action="add-node">＋ Ajouter</button></header><div>${category.entries.map((node) => {
+  return `<div class="pmd-mapping-dialog"><div class="pmd-mapping-header"><h2 class="piecemaker-display">Mapping de pseudonymisation</h2><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="institutional-terms" aria-label="Termes institutionnels" title="Termes institutionnels jamais pseudonymisés">${gearIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div><div class="pmd-mapping-body"><p>Le code est ce que voit l’IA. Le nom principal et les autres écritures sont rétablis à l’affichage. Toutes les variantes détectées par GLiNER apparaissent ici.</p>${categories.map((category) => `<section class="pmd-mapping-category"><header><h3>${escapeHtml(category.label)} <span>${category.entries.length}</span></h3><button type="button" class="piecemaker-button piecemaker-button--glass piecemaker-button--xs" data-action="add-node">＋ Ajouter</button></header><div class="pmd-mapping-legend"><span>Code</span><span>Nom principal</span><span>Autres écritures</span></div><div>${category.entries.map((node) => {
     const mappings = data.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
-    return `<form class="pmd-mapping-row" data-mapping-row data-node-id="${escapeHtml(node.id)}"><input class="pmd-mapping-input" name="masked" aria-label="Code anonymisé" value="${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}"><input class="pmd-mapping-input" name="label" aria-label="Libellé" value="${escapeHtml(node.label)}" required><input class="pmd-mapping-input" name="aliases" aria-label="Variantes" value="${escapeHtml(node.aliases.join(', '))}" placeholder="Variantes"><div class="pmd-mapping-actions"><div class="pmd-profile-menu-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-mapping-menu-trigger" data-row-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button><div class="pmd-profile-menu"><button type="button" data-edit-node="${escapeHtml(node.id)}">${pencilIcon}<span>Modifier</span></button><button type="button" class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">${trashIcon}<span>Supprimer</span></button></div></div></div></form>`;
+    const variants = nodeVariants(node, data.graph.mappings);
+    return `<form class="pmd-mapping-row" data-mapping-row data-node-id="${escapeHtml(node.id)}"><input class="pmd-mapping-input" name="masked" aria-label="Code anonymisé" value="${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}"><input class="pmd-mapping-input" name="label" aria-label="Nom principal" value="${escapeHtml(node.label)}" required>${aliasEditorMarkup(variants)}<div class="pmd-mapping-actions"><div class="pmd-profile-menu-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-mapping-menu-trigger" data-row-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button><div class="pmd-profile-menu"><button type="button" data-edit-node="${escapeHtml(node.id)}">${pencilIcon}<span>Modifier</span></button><button type="button" class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">${trashIcon}<span>Supprimer</span></button></div></div></div></form>`;
   }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-save-mapping>✓ Enregistrer le mapping</button></div></div>`;
 }
 

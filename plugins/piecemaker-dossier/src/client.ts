@@ -1,9 +1,9 @@
 import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
-import { documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
+import { bindAliasEditors, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { partyCodeChange } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { chronologyView, escapeHtml, generalView, mappingView, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
+import { chronologyView, escapeHtml, generalView, mappingView, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
 import type { BodaccScanState, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -207,13 +207,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (!data) return;
     const mappingData = data;
     const layer = modal(root, mappingView(mappingData));
+    bindAliasEditors(layer);
     const operationsFromRow = (row: HTMLFormElement): KnowledgeUpdateOperation[] => {
       const node = mappingData.graph.nodes.find((candidate) => candidate.id === row.dataset.nodeId);
       if (!node) return [];
       const form = new FormData(row);
       const label = String(form.get('label') || '').trim();
       const masked = String(form.get('masked') || '').trim();
-      const aliases = String(form.get('aliases') || '').split(',').map((alias) => alias.trim()).filter(Boolean);
+      const aliases = parseAliases(form.get('aliases'));
       if (!label) return [];
       const mappings = mappingData.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
       const operations: KnowledgeUpdateOperation[] = [{ op: 'upsertNode', node: { id: node.id, kind: node.kind, label, aliases, data: node.data, origin: 'manual' } }];
