@@ -219,6 +219,10 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-chronology-event [data-edit-document]{position:relative;z-index:1}
 .pmd-modal{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:20px;background:rgb(17 24 39 / .16)}
 .pmd-dialog{width:min(680px,100%);max-height:85%;overflow:auto;border:1px solid var(--pmd-glass-border);border-radius:1rem;background:var(--pmd-bg);padding:20px;box-shadow:0 18px 50px rgb(15 23 42 / .12)}
+.pmd-dialog-compact{width:min(400px,100%);padding:22px}
+.pmd-confirm{display:grid;gap:14px}
+.pmd-confirm .pmd-title{font-size:1.25rem}
+.pmd-confirm .pmd-form-actions{margin-top:2px}
 .pmd-form{display:grid;gap:12px}
 .pmd-form-section{display:grid;gap:12px;padding-bottom:16px;border-bottom:1px solid var(--pmd-border)}
 .pmd-form-section:last-of-type{border-bottom:0;padding-bottom:0}
