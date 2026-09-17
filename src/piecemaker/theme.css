@@ -31,14 +31,14 @@
   --nav-divider-color: 220 13% 91% / 1;
   --nav-input-bg: 210 20% 96% / 1;
   --nav-input-focus-ring: 208 100% 50% / 0.22;
-  --mike-font-ui: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mike-font-editorial: "EB Garamond", "Iowan Old Style", Georgia, "Times New Roman", serif;
-  --mike-blue: rgb(0 136 255);
-  --mike-text: #374151;
-  --mike-muted: #6b7280;
-  --mike-border: #e5e7eb;
-  --mike-ink: #111827;
-  --mike-ink-rgb: 17 24 39;
+  --piecemaker-font-ui: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --piecemaker-font-editorial: "EB Garamond", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --piecemaker-blue: rgb(0 136 255);
+  --piecemaker-text: #374151;
+  --piecemaker-muted: #6b7280;
+  --piecemaker-border: #e5e7eb;
+  --piecemaker-ink: #111827;
+  --piecemaker-ink-rgb: 17 24 39;
   --liquid-glass-background-subtle: rgb(255 255 255 / 0.78);
   --liquid-glass-border-subtle: rgb(229 231 235 / 0.9);
   --liquid-glass-shadow-subtle: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 1px 2px rgb(15 23 42 / 0.05);
@@ -83,12 +83,12 @@ button,
 input,
 textarea,
 select {
-  font-family: var(--mike-font-ui);
+  font-family: var(--piecemaker-font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
 .font-serif {
-  font-family: var(--mike-font-editorial);
+  font-family: var(--piecemaker-font-editorial);
 }
 
 h1.font-serif {
@@ -160,7 +160,7 @@ div:has(> .nav-divider) > div:has(> a[href="https://discord.gg/buxwujPNRE"]) {
 }
 
 .flex.h-full.flex-col.bg-background\/80 h1 {
-  font-family: var(--mike-font-ui) !important;
+  font-family: var(--piecemaker-font-ui) !important;
   font-size: 0.9375rem;
   font-weight: 600;
   letter-spacing: -0.03em;
@@ -213,12 +213,12 @@ header.pwa-header-safe .ml-auto.w-fit {
 }
 
 header.pwa-header-safe h2 {
-  font-family: var(--mike-font-editorial);
+  font-family: var(--piecemaker-font-editorial);
   font-size: 1.5rem;
   font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1.2;
-  color: var(--mike-ink);
+  color: var(--piecemaker-ink);
 }
 
 .dark header.pwa-header-safe h2 {
@@ -239,7 +239,7 @@ header.pwa-header-safe [role="tab"] {
   box-shadow: none;
   border-radius: 0;
   border-bottom: 2px solid transparent;
-  color: var(--mike-muted);
+  color: var(--piecemaker-muted);
   font-weight: 500;
   height: auto;
   max-width: none;
@@ -248,14 +248,14 @@ header.pwa-header-safe [role="tab"] {
 
 header.pwa-header-safe [role="tab"]:hover {
   background: transparent;
-  color: var(--mike-ink);
+  color: var(--piecemaker-ink);
 }
 
 header.pwa-header-safe [role="tab"][aria-selected="true"] {
   background: transparent;
   box-shadow: none;
-  color: var(--mike-ink);
-  border-bottom-color: var(--mike-ink);
+  color: var(--piecemaker-ink);
+  border-bottom-color: var(--piecemaker-ink);
 }
 
 .dark header.pwa-header-safe [role="tab"]:hover,
@@ -319,7 +319,7 @@ button[role="switch"] {
 }
 
 button[role="switch"][aria-checked="true"] {
-  background: var(--mike-blue);
+  background: var(--piecemaker-blue);
 }
 
 button[role="switch"] > span {
@@ -380,70 +380,70 @@ aside.border-r.bg-muted\/30 button {
   font-size: 0.6875rem;
 }
 
-.mike-ui {
-  font-family: var(--mike-font-ui);
+.piecemaker-ui {
+  font-family: var(--piecemaker-font-ui);
   font-size: 0.875rem;
   line-height: 1.25rem;
 }
 
-.mike-display,
-.mike-editorial {
-  font-family: var(--mike-font-editorial);
+.piecemaker-display,
+.piecemaker-editorial {
+  font-family: var(--piecemaker-font-editorial);
 }
 
-.mike-button {
+.piecemaker-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
   border-radius: 9999px;
-  font-family: var(--mike-font-ui);
+  font-family: var(--piecemaker-font-ui);
   font-weight: 500;
   white-space: nowrap;
   transition: all 150ms ease;
   cursor: pointer;
 }
 
-.mike-button--xs {
+.piecemaker-button--xs {
   height: 1.5rem;
   padding-inline: 0.625rem;
   font-size: 0.6875rem;
 }
 
-.mike-button--sm {
+.piecemaker-button--sm {
   height: 1.75rem;
   padding-inline: 0.75rem;
   font-size: 0.75rem;
 }
 
-.mike-button--normal {
+.piecemaker-button--normal {
   height: 2rem;
   padding-inline: 1rem;
   font-size: 0.875rem;
 }
 
-.mike-button--icon {
+.piecemaker-button--icon {
   width: 1.5rem;
   height: 1.5rem;
   padding: 0;
 }
 
-.mike-button--blue {
+.piecemaker-button--blue {
   color: white;
   background: rgb(0 136 255 / 90%);
 }
 
-.mike-button--black {
+.piecemaker-button--black {
   color: white;
   background: rgb(3 7 18 / 88%);
 }
 
-.mike-button--danger {
+.piecemaker-button--danger {
   color: white;
   background: rgb(220 38 38 / 90%);
 }
 
-.mike-button--glass {
+.piecemaker-button--glass {
   color: #374151;
   background: var(--liquid-glass-background-subtle);
   border: 1px solid var(--liquid-glass-border-subtle);
@@ -451,39 +451,39 @@ aside.border-r.bg-muted\/30 button {
   backdrop-filter: blur(20px);
 }
 
-.mike-button:hover {
+.piecemaker-button:hover {
   filter: brightness(0.97);
 }
 
-.mike-button:active {
+.piecemaker-button:active {
   transform: scale(0.98);
 }
 
-.mike-button:disabled {
+.piecemaker-button:disabled {
   cursor: not-allowed;
   opacity: 0.4;
 }
 
-.mike-button:focus-visible,
-.mike-toggle:focus-visible,
-.mike-checkbox:focus-visible {
+.piecemaker-button:focus-visible,
+.piecemaker-toggle:focus-visible,
+.piecemaker-checkbox:focus-visible {
   outline: none;
   box-shadow:
     0 0 0 2px rgb(0 136 255 / 40%),
     0 0 0 4px var(--app-surface, white);
 }
 
-.mike-toggle {
+.piecemaker-toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.625rem;
   width: fit-content;
   color: #4b5563;
-  font-family: var(--mike-font-ui);
+  font-family: var(--piecemaker-font-ui);
   font-size: 0.875rem;
 }
 
-.mike-toggle__track {
+.piecemaker-toggle__track {
   position: relative;
   display: inline-flex;
   flex: 0 0 auto;
@@ -494,7 +494,7 @@ aside.border-r.bg-muted\/30 button {
   transition: background-color 200ms ease;
 }
 
-.mike-toggle__thumb {
+.piecemaker-toggle__thumb {
   position: absolute;
   top: 0.25rem;
   left: 0.25rem;
@@ -506,26 +506,26 @@ aside.border-r.bg-muted\/30 button {
   transition: transform 200ms ease;
 }
 
-.mike-toggle[aria-checked="true"] .mike-toggle__track {
-  background: var(--mike-blue);
+.piecemaker-toggle[aria-checked="true"] .piecemaker-toggle__track {
+  background: var(--piecemaker-blue);
 }
 
-.mike-toggle[aria-checked="true"] .mike-toggle__thumb {
+.piecemaker-toggle[aria-checked="true"] .piecemaker-toggle__thumb {
   transform: translateX(1rem);
 }
 
-.mike-checkbox {
+.piecemaker-checkbox {
   width: 0.625rem;
   height: 0.625rem;
   margin-inline-end: 0.75rem;
   flex: 0 0 auto;
-  border: 1px solid var(--mike-border);
+  border: 1px solid var(--piecemaker-border);
   border-radius: 0.25rem;
   accent-color: #000;
   cursor: pointer;
 }
 
-.mike-check-square {
+.piecemaker-check-square {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -536,36 +536,36 @@ aside.border-r.bg-muted\/30 button {
   border-radius: 0.25rem;
 }
 
-.mike-check-square[data-state="checked"],
-.mike-check-square[data-state="indeterminate"] {
+.piecemaker-check-square[data-state="checked"],
+.piecemaker-check-square[data-state="indeterminate"] {
   border-color: #111827;
   background: #111827;
 }
 
-.mike-check-square__mark {
+.piecemaker-check-square__mark {
   width: 0.625rem;
   height: 0.625rem;
   color: white;
 }
 
-.mike-icon {
+.piecemaker-icon {
   width: 1rem;
   height: 1rem;
   flex: 0 0 auto;
   stroke-width: 2;
 }
 
-.mike-icon--small {
+.piecemaker-icon--small {
   width: 0.75rem;
   height: 0.75rem;
 }
 
-.mike-icon--compact {
+.piecemaker-icon--compact {
   width: 0.875rem;
   height: 0.875rem;
 }
 
-.mike-icon--large {
+.piecemaker-icon--large {
   width: 1.25rem;
   height: 1.25rem;
 }
