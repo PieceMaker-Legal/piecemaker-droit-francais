@@ -111,7 +111,7 @@ export function scanStatusMarkup(mappingCount = 0, job: ScanJob | null = null, s
   const ready = scanned || mappingCount > 0;
   return `<span class="pmd-status-icon">${shieldCheckIcon}</span>
         ${scanning && job ? scanProgress(job) : `<span class="pmd-status-label">${mappingCount} anonymisé(s)</span>`}
-        <button class="pmd-scan-button" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : ready ? 'Relancer' : 'Lancer'}</span></button>`;
+        <button class="pmd-scan-button piecemaker-button piecemaker-button--black piecemaker-button--xs" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : ready ? 'Relancer' : 'Lancer'}</span></button>`;
 }
 
 export function scanProgress(job: ScanJob): string {
@@ -144,9 +144,9 @@ export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null,
 
 function noPartiesMarkup(scanned: boolean, scanning: boolean): string {
   if (!scanned) {
-    return `<div class="pmd-no-parties">${scanSearchIcon}<h3>Dossier non analysé</h3><p>Lancez l’analyse pour détecter les entités et désigner les parties.</p><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="scan" ${scanning ? 'disabled' : ''}>${scanning ? 'Analyse en cours…' : 'Lancer l’analyse'}</button></div>`;
+    return `<div class="pmd-no-parties">${scanSearchIcon}<h3 class="piecemaker-display">Dossier non analysé</h3><p>Lancez l’analyse pour détecter les entités et désigner les parties.</p><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="scan" ${scanning ? 'disabled' : ''}>${scanning ? 'Analyse en cours…' : 'Lancer l’analyse'}</button></div>`;
   }
-  return `<div class="pmd-no-parties">${shieldCheckIcon}<h3>Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="mapping">◇ Ouvrir le mapping</button></div>`;
+  return `<div class="pmd-no-parties">${shieldCheckIcon}<h3 class="piecemaker-display">Aucune partie désignée</h3><p>Ouvrez le mapping pour désigner une entité détectée comme partie, ou ajoutez une partie.</p><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="mapping">◇ Ouvrir le mapping</button></div>`;
 }
 
 export function generalView(data: ViewData, tiersCollapsed = false, job: ScanJob | null = null, states: Map<string, BodaccScanState> = new Map()): string {
@@ -164,8 +164,8 @@ export function generalView(data: ViewData, tiersCollapsed = false, job: ScanJob
       <button class="pmd-button pmd-small-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="add-node">＋ Ajouter une partie</button>
     </div>
     ${clients.length || adversaries.length || tiers.length ? `<div class="pmd-party-layout" data-tiers-collapsed="${tiersCollapsed}"><div class="pmd-party-columns">
-      <section class="pmd-party-column"><h3 data-side="client">Parties clientes</h3>${clients.map(card).join('')}<button type="button" class="pmd-column-empty" data-party-picker="client" data-party-drop="client"><span>${clients.length ? 'Ajouter une autre partie cliente' : 'Aucune partie cliente désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
-      <section class="pmd-party-column"><h3 data-side="adverse">Parties adverses</h3>${adversaries.map(card).join('')}<button type="button" class="pmd-column-empty" data-party-picker="adversaire" data-party-drop="adversaire"><span>${adversaries.length ? 'Ajouter une autre partie adverse' : 'Aucune partie adverse désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
+      <section class="pmd-party-column"><h3 class="piecemaker-display" data-side="client">Parties clientes</h3>${clients.map(card).join('')}<button type="button" class="pmd-column-empty" data-party-picker="client" data-party-drop="client"><span>${clients.length ? 'Ajouter une autre partie cliente' : 'Aucune partie cliente désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
+      <section class="pmd-party-column"><h3 class="piecemaker-display" data-side="adverse">Parties adverses</h3>${adversaries.map(card).join('')}<button type="button" class="pmd-column-empty" data-party-picker="adversaire" data-party-drop="adversaire"><span>${adversaries.length ? 'Ajouter une autre partie adverse' : 'Aucune partie adverse désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
     </div>${tiers.length ? `<aside class="pmd-tiers-column" data-tiers-column data-collapsed="${tiersCollapsed}"><button type="button" class="pmd-tiers-toggle" data-action="toggle-tiers" aria-expanded="${!tiersCollapsed}" aria-controls="pmd-tiers-content">${tiersProfileIcon}<span class="pmd-tiers-label">Tiers</span><span class="pmd-tiers-count">${tiers.length}</span></button><div id="pmd-tiers-content" class="pmd-tiers-content" role="region" aria-label="Tiers">${tiers.map(card).join('')}</div></aside>` : ''}</div>
     <p class="pmd-hint">Glissez un profil sur un autre pour créer un lien, ou sur une colonne pour le désigner comme partie.</p>` : noPartiesMarkup(scanned, scanning)}
     </div>
@@ -257,7 +257,7 @@ function companySearchStateMarkup(state: BodaccScanState, companyId: string): st
 export function mappingView(data: ViewData): string {
   const entries = data.graph.nodes.filter((node) => node.kind !== 'document');
   const categories = entityKinds.map((kind) => ({ kind, label: labels[kind], entries: entries.filter((node) => node.kind === kind) })).filter((category) => category.entries.length);
-  return `<div class="pmd-mapping-dialog"><div class="pmd-mapping-header"><h2>Mapping de pseudonymisation</h2><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="institutional-terms" aria-label="Termes institutionnels" title="Termes institutionnels jamais pseudonymisés">${gearIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div><div class="pmd-mapping-body"><p>Chaque ligne associe une clé de pseudonymisation au variant principal rétabli lors du revert et aux autres écritures détectées.</p>${categories.map((category) => `<section class="pmd-mapping-category"><header><h3>${escapeHtml(category.label)} <span>${category.entries.length}</span></h3><button data-action="add-node">＋ Ajouter</button></header><div>${category.entries.map((node) => {
+  return `<div class="pmd-mapping-dialog"><div class="pmd-mapping-header"><h2 class="piecemaker-display">Mapping de pseudonymisation</h2><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="institutional-terms" aria-label="Termes institutionnels" title="Termes institutionnels jamais pseudonymisés">${gearIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div><div class="pmd-mapping-body"><p>Chaque ligne associe une clé de pseudonymisation au variant principal rétabli lors du revert et aux autres écritures détectées.</p>${categories.map((category) => `<section class="pmd-mapping-category"><header><h3>${escapeHtml(category.label)} <span>${category.entries.length}</span></h3><button type="button" class="piecemaker-button piecemaker-button--glass piecemaker-button--xs" data-action="add-node">＋ Ajouter</button></header><div>${category.entries.map((node) => {
     const mappings = data.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
     return `<form class="pmd-mapping-row" data-mapping-row data-node-id="${escapeHtml(node.id)}"><input class="pmd-mapping-input" name="masked" aria-label="Code anonymisé" value="${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}"><input class="pmd-mapping-input" name="label" aria-label="Libellé" value="${escapeHtml(node.label)}" required><input class="pmd-mapping-input" name="aliases" aria-label="Variantes" value="${escapeHtml(node.aliases.join(', '))}" placeholder="Variantes"><div class="pmd-mapping-actions"><div class="pmd-profile-menu-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-mapping-menu-trigger" data-row-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button><div class="pmd-profile-menu"><button type="button" data-edit-node="${escapeHtml(node.id)}">${pencilIcon}<span>Modifier</span></button><button type="button" class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">${trashIcon}<span>Supprimer</span></button></div></div></div></form>`;
   }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-save-mapping>✓ Enregistrer le mapping</button></div></div>`;
@@ -286,7 +286,7 @@ function chronologyEvent(node: KnowledgeNode, dated: boolean, byId: Map<string, 
 
 function chronologySection(title: string, hint: string, nodes: KnowledgeNode[], dated: boolean, byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
   if (!nodes.length) return '';
-  return `<section class="pmd-chronology-section"><div class="pmd-chronology-section-heading"><div><h3>${title}</h3><p>${hint}</p></div><span class="pmd-section-count">${nodes.length}</span></div><div class="pmd-timeline">${nodes.map((node) => chronologyEvent(node, dated, byId, links)).join('')}</div></section>`;
+  return `<section class="pmd-chronology-section"><div class="pmd-chronology-section-heading"><div><h3 class="piecemaker-display">${title}</h3><p>${hint}</p></div><span class="pmd-section-count">${nodes.length}</span></div><div class="pmd-timeline">${nodes.map((node) => chronologyEvent(node, dated, byId, links)).join('')}</div></section>`;
 }
 
 function renderChronologySections(dated: KnowledgeNode[], undated: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[] = []): string {
@@ -306,6 +306,6 @@ export function chronologyView(data: ViewData): string {
     .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
   return `
-    <div class="pmd-toolbar"><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Rafraîchir</button></div>
+    <div class="pmd-toolbar"><div><h2 class="pmd-title piecemaker-display">Chronologie</h2><div class="pmd-subtitle">Pièces du dossier, du plus ancien au plus récent</div></div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Rafraîchir</button></div>
     ${renderChronologySections(dated, undated, byId, data.graph.links)}`;
 }
