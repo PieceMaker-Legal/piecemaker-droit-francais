@@ -22,28 +22,31 @@ export function normalizeSkill(provider, skill = {}, project) {
 
 export function mount(container, api) {
   const root = document.createElement('div');
-  root.className = 'pm-library';
+  root.className = 'pm-library piecemaker-ui';
   const style = document.createElement('style');
   style.textContent = `
-    .pm-library{height:100%;overflow:auto;padding:24px;box-sizing:border-box;color:hsl(var(--foreground, 0 0% 12%));background:hsl(var(--background, 0 0% 100%));font:14px system-ui,sans-serif}
-    .pm-library *{box-sizing:border-box}.pm-library h1{font-size:20px;margin:0 0 6px}.pm-library h2{font-size:15px;margin:24px 0 4px}.pm-library p{margin:4px 0;color:hsl(var(--muted-foreground, 0 0% 45%));line-height:1.5}
-    .pm-library nav,.pm-library .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:20px 0}.pm-library nav[role=tablist],.pm-library .pills{display:flex;width:max-content;flex-wrap:nowrap;gap:3px;padding:3px;border:1px solid var(--liquid-glass-border-subtle,hsl(var(--border, 0 0% 87%)));border-radius:999px;background:var(--liquid-glass-background-subtle,hsl(var(--muted, 0 0% 93%)));box-shadow:var(--liquid-glass-shadow-subtle,0 1px 3px rgba(0,0,0,.08));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);margin:12px 0 4px}
-    .pm-library nav[role=tablist] button,.pm-library .pills button{border:0;border-radius:999px;padding:6px 12px;background:transparent}.pm-library nav[role=tablist] button:hover,.pm-library .pills button:hover{background:rgb(255 255 255 / 12%)}.pm-library nav[role=tablist] button[aria-selected=true],.pm-library .pills button[aria-selected=true]{background:transparent;box-shadow:inset 0 0 0 1px rgb(var(--piecemaker-ink-rgb) / 26%);font-weight:600}
-    .pm-library button{font:inherit;cursor:pointer;color:inherit;background:transparent;border:1px solid hsl(var(--border, 0 0% 87%));border-radius:6px;padding:7px 12px}
-    .pm-library button:disabled{opacity:.45;cursor:default}.pm-library button[aria-selected=true]{background:hsl(var(--muted, 0 0% 93%));font-weight:600}
-    .pm-library input[type=search]{font:inherit;color:inherit;background:transparent;border:1px solid hsl(var(--border, 0 0% 87%));border-radius:6px;padding:9px 12px;flex:1;min-width:160px}
-    .pm-library .row{display:flex;align-items:center;gap:20px;border-bottom:1px solid hsl(var(--border, 0 0% 87%));padding:16px 0}
-    .pm-library .title{display:block;border:0;text-align:left;padding:0;font-weight:600}.pm-library .details{flex:1;min-width:0}.pm-library .details p{white-space:pre-wrap;overflow-wrap:anywhere}
-    .pm-library .switch{display:flex;align-items:center;gap:8px;font-size:12px;white-space:nowrap}.pm-library input[role=switch]{appearance:none;width:32px;height:18px;border-radius:12px;background:#aaa;position:relative;cursor:pointer;margin:0}
-    .pm-library input[role=switch]:before{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:white;top:2px;left:2px}.pm-library input[role=switch]:checked{background:#5252cc}.pm-library input[role=switch]:checked:before{left:16px}
-    .pm-library input:focus-visible,.pm-library button:focus-visible{outline:2px solid #6366f1;outline-offset:3px}.pm-library [role=alert]{color:#b91c1c;margin:12px 0}.pm-library .meta{font-size:12px}
-    .pm-library .tree{margin:0 0 12px 18px;padding:6px 0 6px 14px;border-left:1px solid hsl(var(--border, 0 0% 87%))}.pm-library .tree-row{display:flex;align-items:center;gap:8px;min-height:28px;font-size:12px}.pm-library .tree-row button{border:0;padding:3px 5px;text-align:left}.pm-library .tree-row .meta{margin-left:auto;padding-right:8px}
-    .pm-library .entry-actions{position:relative}.pm-library .more{border:0;font-size:20px;line-height:1;padding:5px 8px}.pm-library .entry-menu{position:absolute;right:0;top:100%;z-index:10;min-width:120px;padding:4px;background:hsl(var(--background, 0 0% 100%));border:1px solid hsl(var(--border, 0 0% 87%));border-radius:7px;box-shadow:0 6px 18px rgba(0,0,0,.14)}.pm-library .entry-menu button{width:100%;border:0;text-align:left;color:#b91c1c}
-    .pm-library .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:50}
-    .pm-library .modal{background:hsl(var(--background, 0 0% 100%));border:1px solid hsl(var(--border, 0 0% 87%));border-radius:8px;padding:20px;width:min(420px,90vw);display:flex;flex-direction:column;gap:10px}
-    .pm-library .modal h2{margin:0 0 4px;font-size:16px}
+    .pm-library{height:100%;overflow:auto;padding:24px;box-sizing:border-box;color:var(--piecemaker-text,#374151);background:hsl(var(--background, 0 0% 100%));font:14px var(--piecemaker-font-ui,Inter,ui-sans-serif,system-ui,sans-serif)}
+    .pm-library *{box-sizing:border-box}.pm-library h1{font-family:var(--piecemaker-font-editorial,EB Garamond,Georgia,serif);font-size:1.25rem;font-weight:500;letter-spacing:-.02em;margin:0 0 6px}.pm-library h2{font-family:var(--piecemaker-font-editorial,EB Garamond,Georgia,serif);font-size:1.05rem;font-weight:500;margin:24px 0 4px}.pm-library p{margin:4px 0;color:var(--piecemaker-muted,#6b7280);line-height:1.5}
+    .pm-library nav,.pm-library .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:20px 0}.pm-library nav[role=tablist],.pm-library .pills{display:flex;width:max-content;flex-wrap:nowrap;gap:3px;padding:3px;border:1px solid var(--liquid-glass-border-subtle,var(--piecemaker-border,#e5e7eb));border-radius:999px;background:var(--liquid-glass-background-subtle,hsl(var(--muted, 0 0% 93%)));box-shadow:var(--liquid-glass-shadow-subtle,none);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);margin:12px 0 4px}
+    .pm-library nav[role=tablist] button,.pm-library .pills button{border:0;box-shadow:none;background:transparent}.pm-library nav[role=tablist] button:hover,.pm-library .pills button:hover{background:rgb(255 255 255 / 12%);filter:none}.pm-library nav[role=tablist] button[aria-selected=true],.pm-library .pills button[aria-selected=true]{background:transparent;box-shadow:inset 0 0 0 1px rgb(var(--piecemaker-ink-rgb,17 24 39) / 26%);font-weight:600}
+    .pm-library button:not(.piecemaker-button){font:inherit;cursor:pointer;color:inherit;background:var(--liquid-glass-background-subtle,transparent);border:1px solid var(--liquid-glass-border-subtle,var(--piecemaker-border,#e5e7eb));border-radius:9999px;padding:6px 12px}
+    .pm-library button:disabled{opacity:.4;cursor:not-allowed}
+    .pm-library input[type=search]{font:inherit;color:inherit;background:transparent;border:1px solid var(--piecemaker-border,#e5e7eb);border-radius:.75rem;padding:9px 12px;flex:1;min-width:160px;box-shadow:none}
+    .pm-library .row{display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--piecemaker-border,#e5e7eb);padding:16px 0}
+    .pm-library .title{display:block;border:0;background:transparent;box-shadow:none;text-align:left;padding:0;font-weight:600;border-radius:0;height:auto;filter:none}.pm-library .details{flex:1;min-width:0}.pm-library .details p{white-space:pre-wrap;overflow-wrap:anywhere}
+    .pm-library .switch,.pm-library .piecemaker-toggle{display:inline-flex;align-items:center;gap:.625rem;width:fit-content;color:#4b5563;font-size:.875rem;white-space:nowrap}
+    .pm-library input[role=switch]{appearance:none;width:2.25rem;height:1.25rem;border-radius:9999px;background:#d1d5db;position:relative;cursor:pointer;margin:0;flex:0 0 auto;border:0}
+    .pm-library input[role=switch]:before{content:'';position:absolute;width:.75rem;height:.75rem;border-radius:50%;background:white;top:.25rem;left:.25rem;box-shadow:0 1px 2px rgb(0 0 0 / 12%);transition:transform 200ms ease}
+    .pm-library input[role=switch]:checked{background:var(--piecemaker-blue,rgb(0 136 255))}
+    .pm-library input[role=switch]:checked:before{transform:translateX(1rem);left:.25rem}
+    .pm-library input:focus-visible,.pm-library button:focus-visible{outline:none;box-shadow:0 0 0 2px rgb(0 136 255 / 40%),0 0 0 4px hsl(var(--background, 0 0% 100%))}.pm-library [role=alert]{color:#b91c1c;margin:12px 0}.pm-library .meta{font-size:12px;color:var(--piecemaker-muted,#6b7280)}
+    .pm-library .tree{margin:0 0 12px 18px;padding:6px 0 6px 14px;border-left:1px solid var(--piecemaker-border,#e5e7eb)}.pm-library .tree-row{display:flex;align-items:center;gap:8px;min-height:28px;font-size:12px}.pm-library .tree-row button{border:0;padding:3px 5px;text-align:left;height:auto;border-radius:.5rem}.pm-library .tree-row .meta{margin-left:auto;padding-right:8px}
+    .pm-library .entry-actions{position:relative}.pm-library .more{border:0;font-size:20px;line-height:1;width:1.5rem;height:1.5rem;padding:0}.pm-library .entry-menu{position:absolute;right:0;top:100%;z-index:10;min-width:120px;padding:4px;background:hsl(var(--background, 0 0% 100%));border:1px solid var(--piecemaker-border,#e5e7eb);border-radius:.75rem;box-shadow:0 18px 50px rgb(15 23 42 / .12)}.pm-library .entry-menu button{width:100%;border:0;text-align:left;color:#fff;background:rgb(220 38 38 / 90%);border-radius:.5rem}
+    .pm-library .modal-backdrop{position:fixed;inset:0;background:rgb(17 24 39 / .18);display:flex;align-items:center;justify-content:center;z-index:50}
+    .pm-library .modal{background:hsl(var(--background, 0 0% 100%));border:1px solid var(--piecemaker-border,#e5e7eb);border-radius:1rem;padding:20px;width:min(420px,90vw);display:flex;flex-direction:column;gap:10px;box-shadow:0 18px 50px rgb(15 23 42 / .12)}
+    .pm-library .modal h2{margin:0 0 4px;font-size:1.25rem}
     .pm-library .modal label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
-    .pm-library .modal input[type=text],.pm-library .modal textarea{font:inherit;color:inherit;background:transparent;border:1px solid hsl(var(--border, 0 0% 87%));border-radius:6px;padding:8px 10px}
+    .pm-library .modal input[type=text],.pm-library .modal textarea{font:inherit;color:inherit;background:transparent;border:1px solid var(--piecemaker-border,#e5e7eb);border-radius:.75rem;padding:8px 10px;box-shadow:none}
     .pm-library .modal textarea{min-height:80px;resize:vertical}
     .pm-library .modal .toolbar{justify-content:flex-end;margin:6px 0 0}
     @media(max-width:600px){.pm-library{padding:16px}.pm-library .row{gap:12px;flex-wrap:wrap}}
@@ -86,8 +89,8 @@ export function mount(container, api) {
     return node;
   }
 
-  function button(text, action) {
-    const node = element('button', text);
+  function button(text, action, extraClass) {
+    const node = element('button', text, extraClass || 'piecemaker-button piecemaker-button--sm piecemaker-button--glass');
     node.type = 'button';
     node.disabled = busy;
     node.onclick = action;
@@ -238,7 +241,7 @@ export function mount(container, api) {
   }
 
   function toggle(label, checked, disabled, action, visibleLabel = true) {
-    const node = element('label', undefined, 'switch');
+    const node = element('label', undefined, 'switch piecemaker-toggle');
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.setAttribute('role', 'switch');
@@ -255,7 +258,7 @@ export function mount(container, api) {
   function row(item, action) {
     const node = element('div', undefined, 'row');
     const details = element('div', undefined, 'details');
-    if (action) { const title = button(item.name, action); title.className = 'title'; details.append(title); }
+    if (action) { const title = button(item.name, action, 'title piecemaker-button'); details.append(title); }
     else details.append(element('strong', item.name));
     details.append(element('p', item.description || 'Aucune description.'));
     node.append(details);
@@ -273,7 +276,7 @@ export function mount(container, api) {
   function render() {
     const scrollTop = pinnedScrollTop !== null ? pinnedScrollTop : root.scrollTop;
     content.replaceChildren();
-    content.append(element('h1', 'Bibliothèque'), element('p', 'Connecteurs, skills, plugins et agents activés pour les dossiers choisis.'));
+    content.append(element('h1', 'Bibliothèque', 'piecemaker-display'), element('p', 'Connecteurs, skills, plugins et agents activés pour les dossiers choisis.'));
     const nav = element('nav');
     nav.setAttribute('role', 'tablist');
     nav.setAttribute('aria-label', 'Bibliothèque');
@@ -349,14 +352,14 @@ export function mount(container, api) {
               openMenuId = openMenuId === entry.id ? '' : entry.id;
               render();
             });
-            more.className = 'more';
+            more.className = 'more piecemaker-button piecemaker-button--icon';
             more.setAttribute('aria-label', `Actions pour ${entry.name}`);
             more.setAttribute('aria-expanded', String(openMenuId === entry.id));
             actions.append(more);
             if (openMenuId === entry.id) {
               const menu = element('div', undefined, 'entry-menu');
               menu.setAttribute('role', 'menu');
-              const remove = button('Supprimer', () => { openMenuId = ''; void mutate('DELETE', `/catalog/${entry.id}`); });
+              const remove = button('Supprimer', () => { openMenuId = ''; void mutate('DELETE', `/catalog/${entry.id}`); }, 'piecemaker-button piecemaker-button--sm piecemaker-button--danger');
               remove.setAttribute('role', 'menuitem');
               menu.append(remove);
               actions.append(menu);
@@ -445,7 +448,7 @@ export function mount(container, api) {
     const actions = element('div', undefined, 'toolbar');
     const cancelButton = button('Annuler', closeCreate);
     cancelButton.disabled = createBusy;
-    const submitButton = button(createBusy ? 'Création…' : 'Créer', () => void submitCreate());
+    const submitButton = button(createBusy ? 'Création…' : 'Créer', () => void submitCreate(), 'piecemaker-button piecemaker-button--sm piecemaker-button--black');
     submitButton.disabled = createBusy;
     actions.append(cancelButton, submitButton);
     modal.append(actions);

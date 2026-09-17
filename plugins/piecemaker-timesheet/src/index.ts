@@ -195,43 +195,42 @@ type ViewState = {
 };
 
 const STYLE_TEXT = `
-  .pm-timesheet { height: 100%; overflow: auto; padding: 24px; box-sizing: border-box; color: hsl(var(--foreground, 0 0% 12%)); background: hsl(var(--background, 0 0% 100%)); font: 14px system-ui, sans-serif; }
+  .pm-timesheet { height: 100%; overflow: auto; padding: 24px; box-sizing: border-box; color: var(--piecemaker-text, #374151); background: hsl(var(--background, 0 0% 100%)); font: 14px var(--piecemaker-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
   .pm-timesheet * { box-sizing: border-box; }
   .pm-timesheet__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin: 0 0 20px; }
-  .pm-timesheet__title { margin: 0 0 6px; font-size: 20px; }
-  .pm-timesheet__subtitle { margin: 4px 0; color: hsl(var(--muted-foreground, 0 0% 45%)); line-height: 1.5; }
+  .pm-timesheet__title { margin: 0 0 6px; font-family: var(--piecemaker-font-editorial, EB Garamond, Georgia, serif); font-size: 1.25rem; font-weight: 500; letter-spacing: -.02em; }
+  .pm-timesheet__subtitle { margin: 4px 0; color: var(--piecemaker-muted, #6b7280); line-height: 1.5; }
   .pm-timesheet__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
-  .pm-timesheet__select, .pm-timesheet__button { font: inherit; cursor: pointer; color: inherit; background: transparent; border: 1px solid hsl(var(--border, 0 0% 87%)); border-radius: 6px; padding: 7px 12px; }
-  .pm-timesheet__button:disabled { opacity: .45; cursor: default; }
-  .pm-timesheet__button:hover, .pm-timesheet__button:focus-visible, .pm-timesheet__select:focus-visible { outline: 2px solid #6366f1; outline-offset: 3px; }
-  .pm-timesheet__status { min-height: 24px; margin: 12px 0; color: hsl(var(--muted-foreground, 0 0% 45%)); }
+  .pm-timesheet__select { font: inherit; cursor: pointer; color: inherit; background: transparent; border: 1px solid var(--piecemaker-border, #e5e7eb); border-radius: .75rem; padding: 7px 12px; box-shadow: none; }
+  .pm-timesheet__button:disabled { opacity: .4; cursor: not-allowed; }
+  .pm-timesheet__button:focus-visible, .pm-timesheet__select:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(0 136 255 / 40%), 0 0 0 4px hsl(var(--background, 0 0% 100%)); }
+  .pm-timesheet__status { min-height: 24px; margin: 12px 0; color: var(--piecemaker-muted, #6b7280); }
   .pm-timesheet__status--error { color: #b91c1c; }
   .pm-timesheet__sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  .pm-timesheet__empty { padding: 16px 0; color: hsl(var(--muted-foreground, 0 0% 45%)); line-height: 1.5; }
+  .pm-timesheet__empty { padding: 16px 0; color: var(--piecemaker-muted, #6b7280); line-height: 1.5; }
   .pm-timesheet__table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .pm-timesheet__table { width: 100%; min-width: 760px; border-collapse: collapse; }
-  .pm-timesheet__table th, .pm-timesheet__table td { padding: 16px 10px; border-bottom: 1px solid hsl(var(--border, 0 0% 87%)); text-align: left; vertical-align: top; }
+  .pm-timesheet__table th, .pm-timesheet__table td { padding: 16px 10px; border-bottom: 1px solid var(--piecemaker-border, #e5e7eb); text-align: left; vertical-align: top; }
   .pm-timesheet__table th:first-child, .pm-timesheet__table td:first-child { padding-left: 10px; }
   .pm-timesheet__table th:last-child, .pm-timesheet__table td:last-child { padding-right: 10px; }
-  .pm-timesheet__table th { color: hsl(var(--muted-foreground, 0 0% 45%)); font-size: 12px; font-weight: 600; }
+  .pm-timesheet__table th { color: var(--piecemaker-muted, #6b7280); font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: .04em; }
   .pm-timesheet__table td { line-height: 1.5; }
   .pm-timesheet__table tr:last-child td { border-bottom: 0; }
   .pm-timesheet__month td { padding: 10px 0; background: hsl(var(--muted, 0 0% 93%)); font-weight: 600; }
   .pm-timesheet__month:first-child td { border-top: 0; }
   .pm-timesheet__month-content { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .pm-timesheet__month-label { flex: 1; min-width: 0; }
-  .pm-timesheet__month-total { margin-left: auto; color: hsl(var(--muted-foreground, 0 0% 45%)); font-weight: 400; white-space: nowrap; }
+  .pm-timesheet__month-total { margin-left: auto; color: var(--piecemaker-muted, #6b7280); font-weight: 400; white-space: nowrap; }
   .pm-timesheet__month-actions { display: inline-flex; gap: 6px; flex-shrink: 0; }
-  .pm-timesheet__month-actions button { font: inherit; font-size: 12px; font-weight: 400; cursor: pointer; color: inherit; background: transparent; border: 1px solid hsl(var(--border, 0 0% 87%)); border-radius: 6px; padding: 4px 8px; }
-  .pm-timesheet__month-actions button:hover, .pm-timesheet__month-actions button:focus-visible { outline: 2px solid #6366f1; outline-offset: 3px; }
+  .pm-timesheet__month-actions button:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(0 136 255 / 40%), 0 0 0 4px hsl(var(--background, 0 0% 100%)); }
   .pm-timesheet__date { white-space: nowrap; }
   .pm-timesheet__folder { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pm-timesheet__session { max-width: 260px; overflow-wrap: anywhere; }
   .pm-timesheet__conclusion { max-width: 420px; white-space: pre-wrap; }
   .pm-timesheet__conclusion summary { cursor: pointer; color: inherit; }
-  .pm-timesheet__conclusion summary:focus-visible { outline: 2px solid #6366f1; outline-offset: 3px; }
-  .pm-timesheet__conclusion p { margin: 4px 0; color: hsl(var(--muted-foreground, 0 0% 45%)); line-height: 1.5; }
-  .pm-timesheet__muted { color: hsl(var(--muted-foreground, 0 0% 45%)); }
+  .pm-timesheet__conclusion summary:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(0 136 255 / 40%); }
+  .pm-timesheet__conclusion p { margin: 4px 0; color: var(--piecemaker-muted, #6b7280); line-height: 1.5; }
+  .pm-timesheet__muted { color: var(--piecemaker-muted, #6b7280); }
   @media (max-width: 600px) {
     .pm-timesheet { padding: 16px; }
     .pm-timesheet__header { display: block; }
@@ -550,11 +549,11 @@ const buildTable = (entries: TimesheetEntry[]): HTMLDivElement => {
       appendText(monthContent, 'span', monthLabel(entry.startedAt), 'pm-timesheet__month-label');
       appendText(monthContent, 'span', formatDuration(totalSeconds(entriesByMonth.get(key) ?? [])), 'pm-timesheet__month-total');
       const monthActions = makeElement('span', 'pm-timesheet__month-actions');
-      const pdfButton = appendText(monthActions, 'button', 'PDF');
+      const pdfButton = appendText(monthActions, 'button', 'PDF', 'piecemaker-button piecemaker-button--xs piecemaker-button--glass');
       pdfButton.type = 'button';
       pdfButton.setAttribute('aria-label', `Exporter ${monthLabel(entry.startedAt)} en PDF`);
       pdfButton.addEventListener('click', () => exportMonthToPdf(entriesByMonth.get(key) ?? [], monthLabel(entry.startedAt), key));
-      const excelButton = appendText(monthActions, 'button', 'Excel');
+      const excelButton = appendText(monthActions, 'button', 'Excel', 'piecemaker-button piecemaker-button--xs piecemaker-button--glass');
       excelButton.type = 'button';
       excelButton.setAttribute('aria-label', `Exporter ${monthLabel(entry.startedAt)} vers Excel`);
       excelButton.addEventListener('click', () => exportMonthToExcel(entriesByMonth.get(key) ?? [], key));
@@ -616,7 +615,7 @@ const render = (state: ViewState): void => {
   clearElement(root);
   const header = makeElement('header', 'pm-timesheet__header');
   const heading = makeElement('div');
-  appendText(heading, 'h1', 'Timesheet', 'pm-timesheet__title');
+  appendText(heading, 'h1', 'Timesheet', 'pm-timesheet__title piecemaker-display');
   appendText(heading, 'p', state.scope === 'project' && context.project ? projectLabel(context.project) : 'Tous les dossiers', 'pm-timesheet__subtitle');
   if (state.loaded && visibleEntries.length > 0) {
     appendText(heading, 'p', `Total affiché : ${formatDuration(totalSeconds(visibleEntries))}`, 'pm-timesheet__subtitle');
@@ -658,7 +657,7 @@ const render = (state: ViewState): void => {
     });
     actions.appendChild(folderSelect);
   }
-  const refreshButton = makeElement('button', 'pm-timesheet__button');
+  const refreshButton = makeElement('button', 'pm-timesheet__button piecemaker-button piecemaker-button--sm piecemaker-button--glass');
   refreshButton.type = 'button';
   refreshButton.textContent = state.refreshing ? 'Actualisation…' : 'Actualiser';
   refreshButton.disabled = state.loading || state.refreshing;
@@ -763,7 +762,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
   }
   const style = makeElement('style');
   style.textContent = STYLE_TEXT;
-  const root = makeElement('main', 'pm-timesheet');
+  const root = makeElement('main', 'pm-timesheet piecemaker-ui');
   root.setAttribute('aria-label', 'Timesheet');
   container.append(style, root);
   const state: ViewState = {
