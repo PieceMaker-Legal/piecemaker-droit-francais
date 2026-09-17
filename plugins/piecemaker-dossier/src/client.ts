@@ -29,7 +29,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const style = document.createElement('style');
   style.textContent = PLUGIN_STYLES;
   const root = document.createElement('div');
-  root.className = 'pmd-root';
+  root.className = 'pmd-root piecemaker-ui';
   root.style.position = 'relative';
   container.replaceChildren(style, root);
   let context = api.context;
