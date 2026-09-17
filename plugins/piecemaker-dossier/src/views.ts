@@ -198,9 +198,10 @@ function companyEnrichment(node: KnowledgeNode, graph: KnowledgeSnapshot, state?
   if (!designatedCompany(node)) return '';
   const identifiers = companyIdentifiers(node, graph);
   const identified = Boolean(node.data.registrePublic && typeof node.data.registrePublic === 'object');
+  const hasIdentifier = Boolean(identifiers.siren || identifiers.siret);
   const identifierLabel = [identifiers.siren ? `SIREN ${identifiers.siren}` : '', identifiers.siret ? `SIRET ${identifiers.siret}` : ''].filter(Boolean).join(' · ') || 'SIREN / SIRET non renseigné';
   const searchOpen = Boolean(state?.companySearchStatus && state.companySearchStatus !== 'idle');
-  const showPanel = searchOpen || Boolean(state && state.status !== 'idle');
+  const showPanel = searchOpen || (hasIdentifier && Boolean(state && state.status !== 'idle'));
   const accordionTitle = searchOpen
     ? 'Résultats Registre Public'
     : state?.status === 'loaded' && state.result
@@ -214,7 +215,7 @@ function companyEnrichment(node: KnowledgeNode, graph: KnowledgeSnapshot, state?
     <div class="pmd-company-enrichment-row">
       <p>${escapeHtml(identifierLabel)}</p>
       ${identified ? '' : `<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="company-search" data-scan-company="${escapeHtml(node.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" title="Rechercher dans le Registre Public">${companySearchIcon}<span>Identifier</span></button>`}
-      <button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="bodacc-search" data-scan-company="${escapeHtml(node.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" title="Rechercher les annonces BODACC">${bodaccSearchIcon}<span>Annonces BODACC</span></button>
+      ${hasIdentifier ? `<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="bodacc-search" data-scan-company="${escapeHtml(node.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" title="Rechercher les annonces BODACC">${bodaccSearchIcon}<span>Annonces BODACC</span></button>` : ''}
     </div>
     ${showPanel ? `<details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(node.id)}" ${open ? 'open' : ''}><summary>${accordionTitle}</summary><div class="pmd-bodacc-content">${accordionContent}</div></details>` : ''}
   </div>`;
