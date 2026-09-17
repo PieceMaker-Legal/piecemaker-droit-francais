@@ -276,7 +276,7 @@ export function mount(container, api) {
   function render() {
     const scrollTop = pinnedScrollTop !== null ? pinnedScrollTop : root.scrollTop;
     content.replaceChildren();
-    content.append(element('h1', 'Bibliothèque', 'piecemaker-display'), element('p', 'Connecteurs, skills, plugins et agents activés pour les dossiers choisis.'));
+    content.append(element('p', 'Connecteurs, skills, plugins et agents activés pour les dossiers choisis.'));
     const nav = element('nav');
     nav.setAttribute('role', 'tablist');
     nav.setAttribute('aria-label', 'Bibliothèque');
@@ -371,7 +371,7 @@ export function mount(container, api) {
         body.append(element('p', 'Les changements s’appliquent aux prochains messages. Une désactivation ne retire pas les instructions déjà reçues dans une conversation.', 'meta'));
       } else if (tab === 'plugin') {
         body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}` : 'Sélectionnez un dossier pour activer un plugin.', 'meta'));
-        body.append(element('h2', 'Plugins installés'));
+
         if (!plugins.length) body.append(element('p', 'Aucun plugin dans la bibliothèque.'));
         for (const plugin of plugins.filter(matches)) {
             const item = row(plugin);
