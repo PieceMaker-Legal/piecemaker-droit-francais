@@ -6,9 +6,8 @@
  * frontières de mots, des variantes Unicode et du tri longest-entity-first,
  * sinon deux moteurs de substitution divergent silencieusement.
  *
- * Ce moteur CommonJS est partagé par le serveur Word, l'historique et les
- * autres surfaces locales. Le proxy PII possède son
- * implémentation Python équivalente.
+ * Ce moteur CommonJS est partagé par le proxy PII (`anonymizer/dictionary.cjs`),
+ * l'historique et les autres surfaces locales.
  *
  * Deux sens, jamais symétriques dans leur usage :
  *  - `applyMapping`  entité → code, sur tout ce que l'IA s'apprête à lire ;

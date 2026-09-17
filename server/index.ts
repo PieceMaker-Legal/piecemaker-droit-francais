@@ -30,7 +30,7 @@ import { commandsRoutes } from './modules/commands/index.js';
 import { settingsRoutes } from './modules/settings/index.js';
 import { createSystemModule } from './modules/system/index.js';
 import { createAgentModule } from './modules/agent/index.js';
-import { createPieceMakerRouter } from './piecemaker/index.js';
+import { createPieceMakerRouter, stopOriginalsJobs } from './piecemaker/index.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import { userRoutes } from './modules/user/index.js';
@@ -378,29 +378,58 @@ async function startServer() {
             });
         });
 
-        await closeSessionsWatcher();
-        closeScheduledMessageDispatcher();
-        // Clean up plugin processes on shutdown
-        const shutdownRuntimeServices = async () => {
-            try {
-                await browserUseService.stopAllSessions();
-            } catch (err) {
-                console.error('[Browser] Error stopping sessions during shutdown:', getErrorMessage(err));
-            }
-            try {
-                await stopAllPlugins();
-            } catch (err) {
-                console.error('[Plugins] Error stopping plugins during shutdown:', getErrorMessage(err));
-            }
-            try {
-                await removeLocalServerMarker();
-            } catch (err) {
-                console.error('[Local Server] Error removing server marker during shutdown:', getErrorMessage(err));
-            }
-            process.exit(0);
+        let shutdownPromise: Promise<void> | null = null;
+        const shutdownRuntimeServices = () => {
+            if (shutdownPromise) return shutdownPromise;
+            shutdownPromise = (async () => {
+                // Stop accepting HTTP work first. Existing requests may finish while
+                // the process pipelines and background services are being drained.
+                const serverClosed = new Promise<void>((resolve, reject) => {
+                    server.close((error) => {
+                        if (error && getErrorCode(error) !== 'ERR_SERVER_NOT_RUNNING') reject(error);
+                        else resolve();
+                    });
+                }).catch((err) => {
+                    console.error('[Server] Error closing HTTP server during shutdown:', getErrorMessage(err));
+                });
+
+                try {
+                    await closeSessionsWatcher();
+                } catch (err) {
+                    console.error('[Sessions] Error stopping watchers during shutdown:', getErrorMessage(err));
+                }
+                try {
+                    closeScheduledMessageDispatcher();
+                } catch (err) {
+                    console.error('[Scheduled messages] Error stopping dispatcher during shutdown:', getErrorMessage(err));
+                }
+                try {
+                    await stopOriginalsJobs();
+                } catch (err) {
+                    console.error('[PieceMaker] Error stopping pipeline jobs during shutdown:', getErrorMessage(err));
+                }
+                try {
+                    await browserUseService.stopAllSessions();
+                } catch (err) {
+                    console.error('[Browser] Error stopping sessions during shutdown:', getErrorMessage(err));
+                }
+                try {
+                    await stopAllPlugins();
+                } catch (err) {
+                    console.error('[Plugins] Error stopping plugins during shutdown:', getErrorMessage(err));
+                }
+                await serverClosed;
+                try {
+                    await removeLocalServerMarker();
+                } catch (err) {
+                    console.error('[Local Server] Error removing server marker during shutdown:', getErrorMessage(err));
+                }
+                process.exit(0);
+            })();
+            return shutdownPromise;
         };
-        process.on('SIGTERM', () => void shutdownRuntimeServices());
-        process.on('SIGINT', () => void shutdownRuntimeServices());
+        process.on('SIGTERM', () => { void shutdownRuntimeServices(); });
+        process.on('SIGINT', () => { void shutdownRuntimeServices(); });
     } catch (error) {
         console.error('[ERROR] Failed to start server:', error);
         process.exit(1);
