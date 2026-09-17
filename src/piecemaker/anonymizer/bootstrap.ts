@@ -9,7 +9,7 @@ import { startDocumentVerificationHighlighting } from '@/piecemaker/anonymizer/d
 import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 import { startLibraryDocumentViewer } from '@/piecemaker/library/bootstrap';
 import '@/piecemaker/sidebar-anonymization/bootstrap';
-import '@/piecemaker/sidebar/sidebar.css';
+import '@/piecemaker/theme.css';
 
 startIdentityHighlighting();
 const stopDocumentVerificationHighlighting = startDocumentVerificationHighlighting();
