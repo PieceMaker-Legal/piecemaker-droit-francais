@@ -615,7 +615,6 @@ const render = (state: ViewState): void => {
   clearElement(root);
   const header = makeElement('header', 'pm-timesheet__header');
   const heading = makeElement('div');
-  appendText(heading, 'h1', 'Timesheet', 'pm-timesheet__title piecemaker-display');
   appendText(heading, 'p', state.scope === 'project' && context.project ? projectLabel(context.project) : 'Tous les dossiers', 'pm-timesheet__subtitle');
   if (state.loaded && visibleEntries.length > 0) {
     appendText(heading, 'p', `Total affiché : ${formatDuration(totalSeconds(visibleEntries))}`, 'pm-timesheet__subtitle');
