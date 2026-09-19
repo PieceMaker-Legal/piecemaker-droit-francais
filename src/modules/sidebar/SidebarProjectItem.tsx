@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
-import { Check, ChevronDown, ChevronRight, Edit3, ShieldCheck, Star, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Edit3, ShieldCheck, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Button } from '@/shared/ui';
@@ -50,11 +50,6 @@ type SidebarProjectItemProps = {
   t: TFunction;
 };
 
-const getSessionCountDisplay = (project: Project, sessions: SessionWithProvider[]): string => {
-  const total = Number(project.sessionMeta?.total ?? sessions.length);
-  return String(total);
-};
-
 /** Rendered by SidebarProjectList for one project row, including its expand, rename, star and delete controls. */
 function SidebarProjectItem({
   project,
@@ -97,9 +92,6 @@ function SidebarProjectItem({
   // after the projectName → projectId migration.
   const isSelected = selectedProject?.projectId === project.projectId;
   const isAnonymized = Boolean(project.anonymizationComplete);
-  const totalSessionCount = Number(project.sessionMeta?.total ?? sessions.length);
-  const sessionCountDisplay = getSessionCountDisplay(project, sessions);
-  const sessionCountLabel = `${sessionCountDisplay} session${totalSessionCount === 1 ? '' : 's'}`;
   const taskStatus = getTaskIndicatorStatus(project, mcpServerStatus);
   const mobileRenameInputRef = useRef<HTMLInputElement>(null);
 
@@ -158,10 +150,10 @@ function SidebarProjectItem({
             onClick={toggleProject}
           >
             <div className="flex items-center justify-between">
-              <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 <button
                   className={cn(
-                    'w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 transition-all duration-150 border',
+                    'size-3 rounded-md flex items-center justify-center active:scale-90 transition-all duration-150 border p-0',
                     isStarred
                       ? 'bg-yellow-500/10 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-800'
                       : 'bg-gray-500/10 dark:bg-gray-900/30 border-gray-200 dark:border-gray-800',
@@ -172,12 +164,13 @@ function SidebarProjectItem({
                   }}
                   title={isStarred ? t('tooltips.removeFromFavorites') : t('tooltips.addToFavorites')}
                 >
-                  <Star
+                  <span
+                    aria-hidden="true"
                     className={cn(
-                      'w-4 h-4 transition-colors',
+                      'size-[9px] shrink-0 rounded-full',
                       isStarred
-                        ? 'text-yellow-600 dark:text-yellow-400 fill-current'
-                        : 'text-gray-600 dark:text-gray-400',
+                        ? 'bg-yellow-600 dark:bg-yellow-400'
+                        : 'border border-gray-600 dark:border-gray-400',
                     )}
                   />
                 </button>
@@ -210,19 +203,16 @@ function SidebarProjectItem({
                       }}
                     />
                   ) : (
-                    <>
-                      <div className="flex min-w-0 flex-1 items-center justify-between">
-                        <h3 className="truncate text-sm font-normal text-foreground">{project.displayName}</h3>
-                        {tasksEnabled && (
-                          <TaskIndicator
-                            status={taskStatus}
-                            size="xs"
-                            className="ml-2 hidden flex-shrink-0 md:inline-flex"
-                          />
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{sessionCountLabel}</p>
-                    </>
+                    <div className="flex min-w-0 flex-1 items-center justify-between">
+                      <h3 className="truncate text-sm font-normal text-foreground">{project.displayName}</h3>
+                      {tasksEnabled && (
+                        <TaskIndicator
+                          status={taskStatus}
+                          size="xs"
+                          className="ml-2 hidden flex-shrink-0 md:inline-flex"
+                        />
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -298,10 +288,10 @@ function SidebarProjectItem({
           )}
           onClick={selectAndToggleProject}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
             <div
               className={cn(
-                'w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-all duration-200',
+                'size-2.5 flex items-center justify-center rounded cursor-pointer transition-all duration-200 p-0',
                 isStarred
                   ? 'hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
                   : 'opacity-40 hover:opacity-100 hover:bg-accent',
@@ -312,52 +302,37 @@ function SidebarProjectItem({
               }}
               title={isStarred ? t('tooltips.removeFromFavorites') : t('tooltips.addToFavorites')}
             >
-              <Star
+              <span
+                aria-hidden="true"
                 className={cn(
-                  'w-3 h-3 transition-colors',
+                  'size-2 shrink-0 rounded-full',
                   isStarred
-                    ? 'text-yellow-600 dark:text-yellow-400 fill-current'
-                    : 'text-muted-foreground',
+                    ? 'bg-yellow-600 dark:bg-yellow-400'
+                    : 'border border-muted-foreground',
                 )}
               />
             </div>
-            <div className="min-w-0 flex-1 text-left">
+            <div className="min-w-0 flex-1 text-left" title={project.fullPath}>
               {isEditing ? (
-                <div className="space-y-1">
-                  <input
-                    type="text"
-                    value={renameDraft}
-                    onChange={(event) => onRenameDraftChange(event.target.value)}
-                    className="w-full rounded border border-border bg-background px-2 py-1 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
-                    placeholder={t('projects.projectNamePlaceholder')}
-                    autoFocus
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        saveProjectName();
-                      }
-                      if (event.key === 'Escape') {
-                        onCancelEditingProject();
-                      }
-                    }}
-                  />
-                  <div className="truncate text-xs text-muted-foreground" title={project.fullPath}>
-                    {project.fullPath}
-                  </div>
-                </div>
+                <input
+                  type="text"
+                  value={renameDraft}
+                  onChange={(event) => onRenameDraftChange(event.target.value)}
+                  className="w-full rounded border border-border bg-background px-2 py-1 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
+                  placeholder={t('projects.projectNamePlaceholder')}
+                  autoFocus
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      saveProjectName();
+                    }
+                    if (event.key === 'Escape') {
+                      onCancelEditingProject();
+                    }
+                  }}
+                />
               ) : (
-                <div>
-                  <div className="truncate text-sm font-normal text-foreground" title={project.displayName}>
-                    {project.displayName}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {sessionCountDisplay}
-                    {project.fullPath !== project.displayName && (
-                      <span className="ml-1 opacity-60" title={project.fullPath}>
-                        {' - '}
-                        {project.fullPath.length > 25 ? `...${project.fullPath.slice(-22)}` : project.fullPath}
-                      </span>
-                    )}
-                  </div>
+                <div className="truncate text-sm font-normal text-foreground" title={project.displayName}>
+                  {project.displayName}
                 </div>
               )}
             </div>
