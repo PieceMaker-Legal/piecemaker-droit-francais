@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { ensureDesktopShortcut } from './desktop-shortcut.js';
+
 type PwaOutput = {
   log(message: string): void;
 };
@@ -102,7 +104,22 @@ async function waitForServer(url: string): Promise<boolean> {
   return false;
 }
 
-/** Starts PieceMaker in an isolated Chromium app window after its backend is ready. */
+const SHUTDOWN_GRACE_MS = 10_000;
+const DELEGATED_LAUNCH_MS = 3_000;
+
+function shutdownAfterWindowClosed(output: PwaOutput): void {
+  output.log('[OK] PieceMaker window closed; stopping the local server.');
+  const forced = setTimeout(() => process.exit(0), SHUTDOWN_GRACE_MS);
+  forced.unref();
+  if (process.listenerCount('SIGTERM') > 0) process.emit('SIGTERM', 'SIGTERM');
+  else process.exit(0);
+}
+
+/**
+ * Starts PieceMaker in an isolated Chromium app window after its backend is
+ * ready, and ties the server's lifetime to that window: closing it shuts the
+ * local server down through the same graceful path as SIGTERM.
+ */
 export async function launchPwa(output: PwaOutput = DEFAULT_OUTPUT): Promise<void> {
   const url = pwaUrl();
   if (!(await waitForServer(url))) {
@@ -116,16 +133,24 @@ export async function launchPwa(output: PwaOutput = DEFAULT_OUTPUT): Promise<voi
     return;
   }
 
+  ensureDesktopShortcut(output);
+
   const profileDirectory = pwaProfileDirectory();
   fs.mkdirSync(profileDirectory, { recursive: true });
+  const openedAt = Date.now();
   const child = spawn(browser, [`--app=${url}`, `--user-data-dir=${profileDirectory}`], {
-    detached: true,
     stdio: 'ignore',
     windowsHide: true,
   });
   child.on('error', () => {
     output.log(`[WARN] Could not open the PieceMaker PWA; open ${url} manually.`);
   });
-  child.unref();
-  output.log(`[OK] PieceMaker PWA opened at ${url}`);
+  child.on('exit', () => {
+    if (Date.now() - openedAt < DELEGATED_LAUNCH_MS) {
+      output.log(`[WARN] The PieceMaker window is owned by another browser process; the server keeps running.`);
+      return;
+    }
+    shutdownAfterWindowClosed(output);
+  });
+  output.log(`[OK] PieceMaker PWA opened at ${url} — closing the window stops the server.`);
 }
