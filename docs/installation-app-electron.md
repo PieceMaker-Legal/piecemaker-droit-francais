@@ -51,10 +51,17 @@ la dernière *release* publiée), `PIECEMAKER_REPO`, `PIECEMAKER_BOOTSTRAP_HOME`
 4. **Node.js** — si le poste n'a pas Node ≥ 22, une version dédiée est
    téléchargée depuis nodejs.org dans `~/.piecemaker/bootstrap/toolchain/`.
    Rien n'est installé au niveau système, aucun gestionnaire de paquets requis.
-5. **Construction** — `npm install` puis `npm run desktop:pack`
-   (vite + tsc + electron-builder `--dir`), avec
-   `CSC_IDENTITY_AUTO_DISCOVERY=false` pour qu'electron-builder n'aille pas
-   chercher une identité de signature du poste.
+5. **Construction** — `npm install`, `npm run build`, `npm run desktop:stage`,
+   puis `electron-builder --dir` avec `CSC_IDENTITY_AUTO_DISCOVERY=false` pour
+   qu'electron-builder n'aille pas chercher une identité de signature du poste.
+   Les trois étapes de `desktop:pack` sont appelées séparément afin d'insérer,
+   entre la préparation et l'empaquetage, une **complétion de l'arbre de
+   dépendances** : `prepare-desktop-app.js` recopie certains paquets à la main
+   (`jimp`, `@nut-tree-fork/*`) sans leurs dépendances transitives, ce
+   qu'electron-builder refuse (*Production dependency @jimp/custom not found*).
+   L'installateur relève les dépendances déclarées mais absentes de
+   `.desktop-build/desktop-app/node_modules` et les installe en
+   `--no-save --omit=dev`. Aucun script amont n'est modifié.
 6. **Installation** — `/Applications/PieceMaker.app` (repli sur
    `~/Applications` si le dossier n'est pas accessible en écriture), ou
    `%LOCALAPPDATA%\Programs\PieceMaker` avec raccourcis menu Démarrer et
@@ -128,7 +135,7 @@ desktop-bootstrap/
   install.ps1                    entrée Windows (irm | iex)
   lib/
     install.mjs                  orchestrateur des étapes
-    build.mjs                    npm install + desktop:pack + repérage de l'artefact
+    build.mjs                    build, stage, complétion des dépendances, empaquetage
     certificates.mjs             aiguillage de plateforme
     certificates-darwin.mjs      openssl, trousseau Système, codesign
     certificates-win32.mjs       New-SelfSignedCertificate, magasins, Authenticode
