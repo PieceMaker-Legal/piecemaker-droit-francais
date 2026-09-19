@@ -46,7 +46,7 @@ export async function verifyPwaAssets() {
   };
 }
 
-function macChromiumBrowser() {
+export function macChromiumBrowser() {
   const candidates = [
     '/Applications/Google Chrome.app',
     '/Applications/Microsoft Edge.app',
@@ -103,13 +103,12 @@ function installMacApplication() {
   fs.mkdirSync(resourcesDir, { recursive: true });
 
   const browser = macChromiumBrowser();
-  const launchCommand = browser
-    ? `open -na "${browser}" --args --app="${APP_URL}" --user-data-dir="$HOME/.piecemaker/pwa-profile"`
-    : `open "${APP_URL}"`;
-
   const launcherPath = path.join(macosDir, APPLICATION_NAME);
   const command = piecemakerExecutable();
-  fs.writeFileSync(launcherPath, `#!/bin/sh\n${shellQuote(command)} --launch-only >/dev/null 2>&1 &\nsleep 2\n${launchCommand}\n`, 'utf8');
+  const launchCommand = browser
+    ? `exec ${shellQuote(command)} --window >/dev/null 2>&1`
+    : `open "${APP_URL}"`;
+  fs.writeFileSync(launcherPath, `#!/bin/sh\n${shellQuote(command)} --launch-only >/dev/null 2>&1\n${launchCommand}\n`, 'utf8');
   fs.chmodSync(launcherPath, 0o755);
 
   const iconFile = writeMacIcon(resourcesDir);
@@ -209,7 +208,7 @@ function writeWindowsIcon() {
   }
 }
 
-function windowsChromiumBrowser() {
+export function windowsChromiumBrowser() {
   const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
   const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
   const localAppData = process.env.LOCALAPPDATA || '';
@@ -283,15 +282,14 @@ function createWindowsShortcut(shortcutPath, targetPath, shortcutArgs, iconPath)
   return result.code === 0;
 }
 
-function writeWindowsLauncher(browser, userDataDir) {
+function writeWindowsLauncher(browser) {
   const command = piecemakerExecutable();
   const lines = [
     '@echo off',
-    `start "" /B "${command}" --launch-only`,
-    'ping 127.0.0.1 -n 3 >nul',
+    `call "${command}" --launch-only`,
   ];
   if (browser) {
-    lines.push(`start "" "${browser}" --app=${APP_URL} --user-data-dir=${userDataDir}`);
+    lines.push(`call "${command}" --window`);
   } else {
     lines.push(`start "" "${APP_URL}"`);
   }
@@ -304,8 +302,7 @@ function writeWindowsLauncher(browser, userDataDir) {
 function installWindowsApplication() {
   const browser = windowsChromiumBrowser();
   const iconPath = writeWindowsIcon();
-  const userDataDir = path.join(os.homedir(), '.piecemaker', 'pwa-profile');
-  const launcher = writeWindowsLauncher(browser, userDataDir);
+  const launcher = writeWindowsLauncher(browser);
 
   const desktopDir = windowsDesktopDir();
   const startMenuDir = windowsStartMenuDir();
