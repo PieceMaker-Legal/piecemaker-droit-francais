@@ -9,6 +9,7 @@ import { gitAvailable, resolveNodeRuntime } from './lib/node-runtime.mjs';
 import { ensureDependencies, ensureRepository, rebuildNativeModules } from './lib/repos.mjs';
 import { APP_LOG, appClientReachable, appServerReachable, startApplication, stopApplication } from './lib/services.mjs';
 import { applicationWindowIsOpen, installApplicationEntry, openApplication, verifyPwaAssets } from './lib/pwa.mjs';
+import { runApplicationWindow } from './lib/app-window.mjs';
 import { banner, blank, c, detail, fail, ok, step, warn } from './lib/ui.mjs';
 
 const report = { step, ok, warn, detail };
@@ -17,13 +18,16 @@ const HELP = `${c.bold('piecemaker')} — installe, met à jour, répare et lanc
 
   piecemaker                 reset propre, puis installation et lancement
   piecemaker --launch-only   répare et relance seulement si l'application est arrêtée
+  piecemaker --window        relance si besoin, ouvre la fenêtre et arrête tout à sa fermeture
   piecemaker --help          cette aide
 `;
 
 function parseArguments(argv) {
+  const window = argv.includes('--window');
   return {
     help: argv.includes('--help') || argv.includes('-h'),
-    launchOnly: argv.includes('--launch-only'),
+    launchOnly: argv.includes('--launch-only') || window,
+    window,
   };
 }
 
@@ -147,6 +151,16 @@ async function main() {
   ok(`Application  ${c.bold(APP_URL)}`);
   detail('Configuration du socle : onglet Dossier › Configuration.');
   blank();
+
+  if (options.window) {
+    const session = await runApplicationWindow();
+    if (!session.supervised) {
+      warn(`Fenêtre non supervisée : ${session.reason}`);
+      return 0;
+    }
+    ok('Fenêtre fermée — application arrêtée');
+    return 0;
+  }
 
   if (!options.launchOnly && !applicationWindowIsOpen()) openApplication();
   return 0;

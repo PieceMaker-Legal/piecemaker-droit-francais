@@ -2592,6 +2592,7 @@
     "release/desktop/mac-arm64/CloudCLI.app/Contents/Resources/icon.icns",
     "scripts/fix-node-pty.js",
     "scripts/piecemaker/cli/install-command.mjs",
+    "scripts/piecemaker/cli/lib/app-window.mjs",
     "scripts/piecemaker/cli/lib/composants.mjs",
     "scripts/piecemaker/cli/lib/config.mjs",
     "scripts/piecemaker/cli/lib/exec.mjs",
