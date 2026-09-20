@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { capture, powershell } from './shell.mjs';
+import { askCertificateConsent } from './consent.mjs';
 import { ui } from './ui.mjs';
 import {
   CA_COMMON_NAME,
@@ -76,6 +77,8 @@ export function isCaTrusted() {
 }
 
 export async function trustCertificateAuthority() {
+  if (!askCertificateConsent()) return false;
+
   const { signing } = await readThumbprints();
   powershell([
     '$ErrorActionPreference = "Stop"',
@@ -83,6 +86,7 @@ export async function trustCertificateAuthority() {
     `Import-Certificate -FilePath ${quote(signingCertPath)} -CertStoreLocation Cert:\\CurrentUser\\TrustedPublisher | Out-Null`,
     `if (-not (Test-Path "Cert:\\CurrentUser\\My\\${signing}")) { throw "Certificat de signature introuvable." }`,
   ].join('; '));
+  return true;
 }
 
 export async function signApplication(appDir) {

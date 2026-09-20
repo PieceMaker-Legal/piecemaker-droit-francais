@@ -2,7 +2,9 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { capture, mustCapture, osascript } from './shell.mjs';
+import { capture, mustCapture } from './shell.mjs';
+import { runAuthorizationPanel } from './panel-darwin.mjs';
+import { CONSENT_EXPLANATION, CONSENT_TITLE } from './consent.mjs';
 import { ui } from './ui.mjs';
 import {
   CA_COMMON_NAME,
@@ -125,6 +127,7 @@ export async function generateCertificates() {
       'pkcs12', '-export',
       '-inkey', signingKeyPath, '-in', signingCertPath, '-certfile', caCertPath,
       '-name', SIGNING_COMMON_NAME, '-out', signingBundlePath, '-passout', `pass:${passphrase}`,
+      '-keypbe', 'PBE-SHA1-3DES', '-certpbe', 'PBE-SHA1-3DES', '-macalg', 'sha1',
     ]);
     await fs.writeFile(signingSecretPath, passphrase, { mode: 0o600 });
 
@@ -140,13 +143,22 @@ export function isCaTrusted() {
   return result.code === 0;
 }
 
-export function trustCertificateAuthority() {
-  const command = `security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain '${caCertPath}'`;
-  const prompt = "PieceMaker doit enregistrer son certificat local dans le trousseau Système";
-  const result = osascript(`do shell script "${command.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}" with administrator privileges with prompt "${prompt}"`);
-  if (result.code !== 0) {
-    throw new Error(`Enregistrement du certificat refusé ou impossible : ${result.stderr || result.stdout}`);
-  }
+function userKeychainPath() {
+  const declared = capture('security', ['default-keychain', '-d', 'user']).stdout.replace(/^"|"$/g, '');
+  if (declared) return declared;
+  return path.join(os.homedir(), 'Library', 'Keychains', 'login.keychain-db');
+}
+
+export async function trustCertificateAuthority() {
+  const command = `security add-trusted-cert -r trustRoot -k '${userKeychainPath()}' '${caCertPath}'`;
+  const { authorized } = await runAuthorizationPanel({
+    title: CONSENT_TITLE,
+    message: CONSENT_EXPLANATION,
+    confirmLabel: 'Autoriser',
+    cancelLabel: 'Annuler',
+    command,
+  });
+  return authorized;
 }
 
 async function prepareSigningKeychain() {

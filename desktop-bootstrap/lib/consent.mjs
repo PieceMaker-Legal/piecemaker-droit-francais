@@ -1,9 +1,9 @@
-import { capture, osascript } from './shell.mjs';
-import { IS_MAC, PRODUCT_NAME } from './paths.mjs';
+import { capture } from './shell.mjs';
+import { PRODUCT_NAME } from './paths.mjs';
 
-const TITLE = `${PRODUCT_NAME} — autorisation requise`;
+export const CONSENT_TITLE = `${PRODUCT_NAME} — autorisation requise`;
 
-const EXPLANATION = [
+export const CONSENT_EXPLANATION = [
   `${PRODUCT_NAME} fonctionne entièrement sur votre ordinateur.`,
   '',
   "Pour que le poste reconnaisse l'application et son serveur local comme fiables,",
@@ -12,29 +12,20 @@ const EXPLANATION = [
   'Ce certificat :',
   '• est généré ici, à l\'instant, et ne quitte jamais votre ordinateur ;',
   '• sert uniquement à sécuriser https://localhost et à signer l\'application installée ;',
+  '• est enregistré pour votre seul compte, sans privilège administrateur ;',
   '• peut être retiré à tout moment (procédure indiquée dans la documentation).',
   '',
   'Autoriser son enregistrement ?',
 ].join('\n');
 
-function escapeForAppleScript(value) {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
-}
-
 function escapeForPowerShell(value) {
   return value.replace(/'/g, "''");
 }
 
-function askOnMac() {
-  const script = `display dialog "${escapeForAppleScript(EXPLANATION)}" with title "${escapeForAppleScript(TITLE)}" buttons {"Annuler", "Autoriser"} default button "Autoriser" cancel button "Annuler" with icon note`;
-  const result = osascript(script);
-  return result.code === 0 && result.stdout.includes('Autoriser');
-}
-
-function askOnWindows() {
+export function askCertificateConsent() {
   const script = [
     'Add-Type -AssemblyName PresentationFramework;',
-    `[System.Windows.MessageBox]::Show('${escapeForPowerShell(EXPLANATION)}', '${escapeForPowerShell(TITLE)}', 'OKCancel', 'Information')`,
+    `[System.Windows.MessageBox]::Show('${escapeForPowerShell(CONSENT_EXPLANATION)}', '${escapeForPowerShell(CONSENT_TITLE)}', 'OKCancel', 'Information')`,
   ].join(' ');
   const result = capture('powershell.exe', [
     '-NoProfile',
@@ -42,8 +33,4 @@ function askOnWindows() {
     '-Command', script,
   ]);
   return result.code === 0 && result.stdout.trim() === 'OK';
-}
-
-export function askCertificateConsent() {
-  return IS_MAC ? askOnMac() : askOnWindows();
 }
