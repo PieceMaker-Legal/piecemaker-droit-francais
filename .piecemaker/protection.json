@@ -286,6 +286,7 @@
     "desktop-bootstrap/lib/certificates.mjs",
     "desktop-bootstrap/lib/consent.mjs",
     "desktop-bootstrap/lib/install.mjs",
+    "desktop-bootstrap/lib/panel-darwin.mjs",
     "desktop-bootstrap/lib/paths.mjs",
     "desktop-bootstrap/lib/place.mjs",
     "desktop-bootstrap/lib/shell.mjs",
