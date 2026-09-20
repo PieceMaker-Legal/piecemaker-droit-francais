@@ -36,7 +36,7 @@ type SessionRecord = ReturnType<typeof sessionsDb.getAllSessions>[number];
 type TimesheetStore = {
   upsert(entry: TimesheetEntry): void;
   findBySessionId(sessionId: string): TimesheetEntry | null;
-  list(projectId?: string): TimesheetEntry[];
+  list(projectPath?: string): TimesheetEntry[];
 };
 
 type TimesheetDependencies = {
@@ -154,10 +154,13 @@ export function createTimesheetService(
     return project;
   }
 
+  function projectPathFor(query: TimesheetQuery): string | undefined {
+    if (query.scope !== 'project') return undefined;
+    return resolveProject(query.projectId as string).project_path;
+  }
+
   function sessionsFor(query: TimesheetQuery): SessionRecord[] {
-    const projectPath = query.scope === 'project'
-      ? resolveProject(query.projectId as string).project_path
-      : null;
+    const projectPath = projectPathFor(query) ?? null;
     const activeSessions = projectPath
       ? dependencies.sessions.getSessionsByProjectPath(projectPath)
       : dependencies.sessions.getAllSessions();
@@ -197,7 +200,7 @@ export function createTimesheetService(
     }
 
     return {
-      entries: store.list(query.scope === 'project' ? query.projectId : undefined).map(toPublicEntry),
+      entries: store.list(projectPathFor(query)).map(toPublicEntry),
       refreshedAt: new Date().toISOString(),
       refreshedCount,
       skippedCount,
@@ -221,8 +224,7 @@ export function createTimesheetService(
 
   return {
     list(query: TimesheetQuery): TimesheetPublicEntry[] {
-      if (query.scope === 'project') resolveProject(query.projectId as string);
-      return store.list(query.scope === 'project' ? query.projectId : undefined).map(toPublicEntry);
+      return store.list(projectPathFor(query)).map(toPublicEntry);
     },
     refresh,
   };
