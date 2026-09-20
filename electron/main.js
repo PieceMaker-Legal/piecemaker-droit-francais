@@ -54,7 +54,7 @@ function getPreloadPath() {
 
 function getWindowIconPath() {
   if (process.platform === 'darwin') {
-    return path.join(getAppRoot(), 'electron', 'assets', 'logo-macos.png');
+    return path.join(getAppRoot(), ...(product.windowIcon || 'electron/assets/logo-macos.png').split('/'));
   }
   return path.join(getAppRoot(), 'public', 'logo-512.png');
 }
