@@ -6,8 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { ServerInstaller } from './serverInstaller.js';
+import { loadProductConfig } from '../shared/product-config.mjs';
 
-const DEFAULT_PORT = 3001;
+const DEFAULT_PORT = loadProductConfig().desktopPort || 3001;
 const HOST = '127.0.0.1';
 const DISPLAY_HOST = 'localhost';
 const HEALTH_TIMEOUT_MS = 1000;

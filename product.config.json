@@ -6,6 +6,7 @@
   "slug": "piecemaker-droit-francais",
   "appId": "legal.piecemaker.droitfrancais",
   "protocol": "piecemaker",
+  "desktopPort": 3101,
   "dataDirectoryName": ".piecemaker-droit-francais",
   "homepage": "https://github.com/PieceMaker-Legal/piecemaker-droit-francais",
   "repository": "PieceMaker-Legal/piecemaker-droit-francais",

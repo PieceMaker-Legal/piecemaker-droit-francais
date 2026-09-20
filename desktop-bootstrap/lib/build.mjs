@@ -1,10 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { run } from './shell.mjs';
 import { ui } from './ui.mjs';
 import { IS_MAC, PRODUCT_NAME } from './paths.mjs';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const bootstrapRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 async function exists(target) {
   try {
@@ -98,6 +100,65 @@ async function repairStagedTree(stageDir) {
   ui.warn("Certaines dépendances restent introuvables — electron-builder peut échouer.");
 }
 
+const EXCLUDED_RUNTIME_ASSETS = new Set(['node_modules', '__pycache__', '.env', '.DS_Store', '.git']);
+
+function isRuntimeAsset(target) {
+  const name = path.basename(target);
+  if (EXCLUDED_RUNTIME_ASSETS.has(name)) return false;
+  return !name.endsWith('.ts');
+}
+
+async function embedRuntimeAssets(sourceDir, stageDir) {
+  const from = path.join(sourceDir, 'server', 'piecemaker');
+  const to = path.join(stageDir, 'server', 'piecemaker');
+  await fs.rm(to, { recursive: true, force: true });
+  await fs.cp(from, to, { recursive: true, filter: isRuntimeAsset });
+
+  const probe = path.join(to, 'vendor', 'piecemaker-plugin', 'scripts', 'lib', 'verify-citations.cjs');
+  if (!(await exists(probe))) {
+    throw new Error(`Ressources PieceMaker incomplètes — ${probe} est absent.`);
+  }
+
+  ui.detail('Ressources PieceMaker non compilées embarquées.');
+}
+
+const OVERLAY_DIR = 'electron-piecemaker';
+const OVERLAY_ENTRY = `${OVERLAY_DIR}/main.js`;
+
+async function embedDesktopOverlay(stageDir) {
+  const from = path.join(bootstrapRoot, 'overlay', OVERLAY_DIR);
+  const to = path.join(stageDir, OVERLAY_DIR);
+  await fs.rm(to, { recursive: true, force: true });
+  await fs.cp(from, to, { recursive: true });
+  ui.detail("Surcouche d'ouverture automatique embarquée.");
+}
+
+async function patchStagedManifest(stageDir) {
+  const manifestPath = path.join(stageDir, 'package.json');
+  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+
+  manifest.main = OVERLAY_ENTRY;
+  manifest.build.extraMetadata = { ...manifest.build.extraMetadata, main: OVERLAY_ENTRY };
+  for (const pattern of ['server/**', `${OVERLAY_DIR}/**`]) {
+    if (!manifest.build.files.includes(pattern)) manifest.build.files.push(pattern);
+  }
+
+  await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+}
+
+async function embedLocalServer(sourceDir, stageDir) {
+  const from = path.join(sourceDir, 'dist-server');
+  const entry = path.join(from, 'server', 'index.js');
+  if (!(await exists(entry))) {
+    throw new Error(`Serveur local absent (${entry}) — « npm run build:server » n'a rien produit.`);
+  }
+  const to = path.join(stageDir, 'dist-server');
+  await fs.rm(to, { recursive: true, force: true });
+  await fs.cp(from, to, { recursive: true });
+  ui.detail('Serveur local embarqué dans l\'application.');
+  await embedRuntimeAssets(sourceDir, stageDir);
+}
+
 export async function buildDesktopApp(sourceDir) {
   ui.step('Installation des dépendances du projet (plusieurs minutes)…');
   await run(npmCommand, ['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
@@ -107,7 +168,11 @@ export async function buildDesktopApp(sourceDir) {
 
   ui.step("Préparation de l'application de bureau…");
   await run(npmCommand, ['run', 'desktop:stage'], { cwd: sourceDir });
-  await repairStagedTree(path.join(sourceDir, '.desktop-build', 'desktop-app'));
+  const stageDir = path.join(sourceDir, '.desktop-build', 'desktop-app');
+  await embedLocalServer(sourceDir, stageDir);
+  await embedDesktopOverlay(stageDir);
+  await patchStagedManifest(stageDir);
+  await repairStagedTree(stageDir);
 
   ui.step("Construction de l'application Electron…");
   await run('npx', ['electron-builder', '--projectDir', '.desktop-build/desktop-app', '--dir'], {
