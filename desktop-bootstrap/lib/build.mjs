@@ -124,6 +124,8 @@ async function embedRuntimeAssets(sourceDir, stageDir) {
 
 const OVERLAY_DIR = 'electron-piecemaker';
 const OVERLAY_ENTRY = `${OVERLAY_DIR}/main.js`;
+const ICON_DIR = 'server/piecemaker/vendor/installer/assets';
+const PRODUCT_ICONS = { mac: `${ICON_DIR}/piecemaker.icns`, win: `${ICON_DIR}/piecemaker.ico` };
 
 async function embedDesktopOverlay(stageDir) {
   const from = path.join(bootstrapRoot, 'overlay', OVERLAY_DIR);
@@ -143,7 +145,15 @@ async function patchStagedManifest(stageDir) {
     if (!manifest.build.files.includes(pattern)) manifest.build.files.push(pattern);
   }
 
+  for (const [platform, icon] of Object.entries(PRODUCT_ICONS)) {
+    if (!(await exists(path.join(stageDir, icon)))) {
+      throw new Error(`Icône ${PRODUCT_NAME} absente du stage : ${icon}.`);
+    }
+    manifest.build[platform] = { ...manifest.build[platform], icon };
+  }
+
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  ui.detail(`Icône ${PRODUCT_NAME} appliquée à l'application.`);
 }
 
 async function embedLocalServer(sourceDir, stageDir) {

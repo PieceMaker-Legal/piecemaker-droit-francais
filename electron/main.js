@@ -118,6 +118,7 @@ function getDesktopState() {
   const localState = getLocalState();
   const authState = cloud.getAuthState();
   return {
+    appName: APP_NAME,
     account: {
       connected: authState === 'connected',
       email: cloudAccount?.email || null,
