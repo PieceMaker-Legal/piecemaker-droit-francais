@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import { buildDesktopApp } from './build.mjs';
-import { askCertificateConsent } from './consent.mjs';
 import { generateCertificates, isCaTrusted, signApplication, trustCertificateAuthority } from './certificates.mjs';
 import { createShortcuts, installApplication, launchApplication } from './place.mjs';
 import { ui } from './ui.mjs';
@@ -56,16 +55,19 @@ async function runCertificateStep(installedPath) {
   if (isCaTrusted()) {
     ui.ok('Certificat local déjà reconnu par le système.');
   } else {
-    if (!askCertificateConsent()) {
+    let authorized;
+    try {
+      authorized = await trustCertificateAuthority();
+    } catch (error) {
+      ui.warn(`Enregistrement du certificat impossible (${error.message}) — l'application reste utilisable en HTTP local.`);
+      return;
+    }
+
+    if (!authorized) {
       ui.warn("Enregistrement du certificat refusé — l'application reste utilisable en HTTP local.");
       return;
     }
-    try {
-      await trustCertificateAuthority();
-    } catch (error) {
-      ui.warn(`${error.message} — l'application reste utilisable en HTTP local.`);
-      return;
-    }
+
     await fs.writeFile(
       trustMarkerPath,
       `${JSON.stringify({ trustedAt: new Date().toISOString(), release: releaseTag }, null, 2)}\n`,

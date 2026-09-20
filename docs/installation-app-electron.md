@@ -84,23 +84,21 @@ dans `~/.piecemaker/certs/`, puis deux certificats en sont dérivés :
 | `piecemaker-signing.crt` + `.p12` / `.pfx` | signature de l'application construite sur place |
 
 Avant tout enregistrement dans le magasin de confiance, **une fenêtre
-graphique** s'affiche (`display dialog` AppleScript sur macOS, `MessageBox`
-WPF sur Windows). Elle explique en clair que le certificat est généré sur
-place, qu'il ne quitte pas le poste, à quoi il sert et qu'il est réversible.
-Un seul clic — « Autoriser » / « OK » — déclenche l'enregistrement ; « Annuler »
-poursuit l'installation sans certificat, l'application restant utilisable en
-HTTP local.
+graphique** s'affiche. Elle explique en clair que le certificat est généré sur
+place, qu'il ne quitte pas le poste, qu'il n'engage que le compte courant, à
+quoi il sert et qu'il est réversible. Un seul clic — « Autoriser » / « OK » —
+déclenche l'enregistrement ; « Annuler » poursuit l'installation sans
+certificat, l'application restant utilisable en HTTP local.
 
 Après accord :
 
-- **macOS** — `security add-trusted-cert -d -r trustRoot -k
-  /Library/Keychains/System.keychain`, lancé via `do shell script … with
-  administrator privileges`, c'est-à-dire l'invite d'authentification native du
-  système (une seule saisie). L'application est ensuite signée avec l'identité
-  locale importée dans un trousseau dédié
-  `~/Library/Keychains/piecemaker-signing.keychain-db`, protégé par un secret
-  aléatoire (`~/.piecemaker/certs/signing-keychain.secret`) : le mot de passe du
-  trousseau de session de l'utilisateur n'est jamais demandé ni manipulé.
+- **macOS** — `security add-trusted-cert -r trustRoot -k <trousseau de session>`,
+  sans `-d` et **sans privilège administrateur** : la confiance est déclarée
+  dans le domaine utilisateur, ce qui ne demande aucun mot de passe.
+  L'application est ensuite signée avec l'identité locale importée dans un
+  trousseau dédié `~/Library/Keychains/piecemaker-signing.keychain-db`, protégé
+  par un secret aléatoire (`~/.piecemaker/certs/signing-keychain.secret`) : le
+  mot de passe de session n'est jamais demandé ni manipulé.
 - **Windows** — import dans `Cert:\CurrentUser\Root` (avertissement de sécurité
   Windows natif, pas d'élévation administrateur) et dans
   `Cert:\CurrentUser\TrustedPublisher`, puis `Set-AuthenticodeSignature` sur
@@ -109,12 +107,32 @@ Après accord :
 Un échec de signature n'interrompt pas l'installation : il est signalé et
 l'application reste utilisable.
 
+### Pourquoi le panneau est une application sur macOS
+
+Déclarer une confiance touche au *Security framework*, qui exige une session
+graphique. Un `do shell script … with administrator privileges` la retire au
+processus fils, d'où l'échec `SecTrustSettingsSetTrustSettings: The
+authorization was denied since no user interaction was possible` lorsque
+l'installateur tourne depuis un shell détaché.
+
+`panel-darwin.mjs` contourne cela sans élévation : il compile le panneau en
+`.app` (`osacompile`) et l'ouvre par `open -W`, ce qui le place dans la session
+Aqua. L'installateur peut donc se dérouler **de bout en bout** depuis un shell
+d'arrière-plan, sans terminal interactif et sans mot de passe administrateur.
+
+Le bundle PKCS#12 de signature est exporté avec
+`-keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1` : les réglages par
+défaut d'OpenSSL 3 (Homebrew) produisent un `.p12` que `security import`
+rejette (*MAC verification failed*).
+
 ### Retirer le certificat
 
-macOS :
+macOS, **depuis le Terminal** (`remove-trusted-cert` exige lui aussi une
+session graphique) :
 
 ```sh
-sudo security delete-certificate -c "PieceMaker Local CA" /Library/Keychains/System.keychain
+security remove-trusted-cert "$HOME/.piecemaker/certs/piecemaker-ca.crt"
+security delete-certificate -c "PieceMaker Local CA" "$(security default-keychain -d user | tr -d ' \"')"
 security delete-keychain ~/Library/Keychains/piecemaker-signing.keychain-db
 rm -rf ~/.piecemaker/certs
 ```
@@ -137,9 +155,10 @@ desktop-bootstrap/
     install.mjs                  orchestrateur des étapes
     build.mjs                    build, stage, complétion des dépendances, empaquetage
     certificates.mjs             aiguillage de plateforme
-    certificates-darwin.mjs      openssl, trousseau Système, codesign
+    certificates-darwin.mjs      openssl, confiance utilisateur, codesign
     certificates-win32.mjs       New-SelfSignedCertificate, magasins, Authenticode
-    consent.mjs                  fenêtre d'autorisation à un clic
+    panel-darwin.mjs             panneau d'autorisation macOS en session graphique
+    consent.mjs                  texte d'autorisation et panneau Windows
     place.mjs                    installation, raccourcis, lancement
     paths.mjs                    emplacements et noms de produit
     shell.mjs                    exécution de processus
