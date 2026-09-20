@@ -60,7 +60,12 @@ async function runCertificateStep(installedPath) {
       ui.warn("Enregistrement du certificat refusé — l'application reste utilisable en HTTP local.");
       return;
     }
-    await trustCertificateAuthority();
+    try {
+      await trustCertificateAuthority();
+    } catch (error) {
+      ui.warn(`${error.message} — l'application reste utilisable en HTTP local.`);
+      return;
+    }
     await fs.writeFile(
       trustMarkerPath,
       `${JSON.stringify({ trustedAt: new Date().toISOString(), release: releaseTag }, null, 2)}\n`,
