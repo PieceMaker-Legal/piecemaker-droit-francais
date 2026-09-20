@@ -360,7 +360,7 @@ window.__MOCK_STATE__ = {
     var refreshAction = activeRefreshable ? '<button class="icon-btn tb-action no-drag" data-cc-action="refresh-tab" title="Refresh tab">' + icon('refresh', 16) + '</button>' : '';
     var logoutAction = (conn || authState(state) === 'expired') ? '<button class="icon-btn tb-action no-drag" data-cc-action="logout" title="Logout">' + icon('logOut', 16) + '</button>' : '';
     return '<div class="titlebar">' +
-      '<div class="brand"><img class="mk" src="' + esc(LOGO_URL) + '" alt=""><span>CloudCLI</span></div>' +
+      '<div class="brand"><img class="mk" src="' + esc(LOGO_URL) + '" alt=""><span>' + esc(state.appName || 'CloudCLI') + '</span></div>' +
       '<div class="tb-tabs no-drag">' + renderTabs(state) + '</div>' +
       '<span style="flex:1"></span>' +
       refreshAction +

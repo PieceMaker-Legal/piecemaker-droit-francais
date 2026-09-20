@@ -1,6 +1,10 @@
 import { app } from 'electron';
 
-import '../electron/main.js';
+import { reclaimProxyPort } from './reclaimProxyPort.js';
+
+reclaimProxyPort();
+
+await import('../electron/main.js');
 
 const OPEN_LOCAL_EXPRESSION = 'window.cloudcliDesktop && window.cloudcliDesktop.openLocal()';
 
