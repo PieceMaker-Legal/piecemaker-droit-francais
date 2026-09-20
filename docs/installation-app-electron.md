@@ -62,6 +62,12 @@ la dernière *release* publiée), `PIECEMAKER_REPO`, `PIECEMAKER_BOOTSTRAP_HOME`
    L'installateur relève les dépendances déclarées mais absentes de
    `.desktop-build/desktop-app/node_modules` et les installe en
    `--no-save --omit=dev`. Aucun script amont n'est modifié.
+
+   Toujours entre la préparation et l'empaquetage, trois ajouts sont insérés
+   dans l'arbre de *stage* (voir « Serveur embarqué » ci-dessous) : le serveur
+   local compilé, les ressources PieceMaker non compilées, et la surcouche
+   d'ouverture automatique. Le manifeste généré du *stage* est complété en
+   conséquence (`files`, `main`, `build.extraMetadata.main`).
 6. **Installation** — `/Applications/PieceMaker.app` (repli sur
    `~/Applications` si le dossier n'est pas accessible en écriture), ou
    `%LOCALAPPDATA%\Programs\PieceMaker` avec raccourcis menu Démarrer et
@@ -71,6 +77,52 @@ la dernière *release* publiée), `PIECEMAKER_REPO`, `PIECEMAKER_BOOTSTRAP_HOME`
 
 Les étapes 3 à 5 sont idempotentes : sources et Node déjà présents sont
 réutilisés, et un certificat encore valide n'est pas régénéré.
+
+## Serveur embarqué et ouverture sur l'interface PieceMaker
+
+L'application de bureau CloudCLI est un *thin shell* : `electron/localServer.js`
+cherche `dist-server/server/index.js` dans le bundle et, à défaut, télécharge un
+serveur depuis les *releases* GitHub. Aucune release PieceMaker ne publie cet
+artefact : sans intervention, l'application s'ouvre sur le lanceur CloudCLI et
+aucun serveur ne démarre. L'installateur comble cela en trois temps.
+
+**1. Serveur local compilé.** `dist-server/` est recopié dans le *stage*. Il est
+lancé par Electron avec `ELECTRON_RUN_AS_NODE=1`, donc dans le Node d'Electron :
+electron-builder reconstruit `better-sqlite3`, `bcrypt` et `node-pty` pour l'ABI
+exacte de la version d'Electron empaquetée.
+
+**2. Ressources non compilées.** `tsc` n'émet que les `.js` issus des `.ts`, or
+le serveur résout plusieurs chemins relatifs à la racine applicative
+(`findApplicationRoot`) : `server/piecemaker/router.cjs`,
+`server/piecemaker/anonymizer/service.cjs`,
+`server/piecemaker/harness/decisions.cjs` et tout
+`server/piecemaker/vendor/`. Sans eux, le serveur s'arrête au démarrage sur
+*Cannot find module … verify-citations.cjs*. L'installateur recopie donc
+`server/piecemaker/` en excluant les `.ts` (déjà compilés), `node_modules`,
+`__pycache__`, `.env` et `.DS_Store` — environ 2,4 Mo — et vérifie la présence
+d'un fichier témoin avant de poursuivre.
+
+**3. Ouverture automatique.** `bootstrap()` d'amont n'ouvre jamais la cible
+locale : le serveur ne démarre qu'au clic sur « Open Local CloudCLI ».
+`desktop-bootstrap/overlay/electron-piecemaker/main.js` est recopié dans le
+*stage* et devient le point d'entrée Electron à la place de `electron/main.js`,
+qu'il se contente d'importer. À la première fenêtre chargée, il appelle
+`window.cloudcliDesktop.openLocal()` — exactement le chemin qu'emprunte le clic
+utilisateur, via le pont `contextBridge` déjà exposé par `electron/preload.cjs`.
+L'application s'ouvre donc directement sur l'interface PieceMaker et ses
+plugins.
+
+**4. Port propre au produit.** `electron/localServer.js` sondait le port 3001
+d'amont ; tout autre service déjà à l'écoute sur ce port (un serveur MCP local,
+par exemple) répond à la sonde `/health`, échoue le contrôle
+`isCloudCliServer()`, et l'application abandonne après 30 s sur *Bundled backend
+did not become ready*. Le port par défaut est donc lu dans
+`product.config.json` (`desktopPort`, 3101), avec repli sur la valeur amont 3001.
+
+C'est la seule modification d'un fichier amont — deux lignes, une substitution
+avec repli, au titre de l'isolation des données. Tout le reste est ajouté à
+côté : la surcouche dans son propre dossier, et le manifeste **généré** du
+*stage* complété à la construction.
 
 ## Le certificat auto-signé
 
@@ -151,9 +203,11 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\.piecemaker\certs"
 desktop-bootstrap/
   install.sh                     entrée macOS (curl | sh)
   install.ps1                    entrée Windows (irm | iex)
+  overlay/
+    electron-piecemaker/main.js  point d'entrée Electron, ouvre la cible locale
   lib/
     install.mjs                  orchestrateur des étapes
-    build.mjs                    build, stage, complétion des dépendances, empaquetage
+    build.mjs                    build, stage, serveur embarqué, surcouche, empaquetage
     certificates.mjs             aiguillage de plateforme
     certificates-darwin.mjs      openssl, confiance utilisateur, codesign
     certificates-win32.mjs       New-SelfSignedCertificate, magasins, Authenticode
@@ -167,9 +221,11 @@ desktop-bootstrap/
 
 ## Rapport au reste du dépôt
 
-- **Aucun fichier CloudCLI n'est modifié.** L'installateur est une surcouche
-  qui se contente d'appeler les scripts npm existants ; `git diff` sur
-  `electron/`, `scripts/` ou `package.json` reste vide.
+- **Un seul fichier CloudCLI est modifié**, au titre de l'isolation des
+  données : `electron/localServer.js` lit son port par défaut dans
+  `product.config.json`, avec repli sur la valeur amont. `git diff` sur
+  `scripts/` ou `package.json` reste vide ; l'installateur se contente
+  d'appeler les scripts npm existants.
 - Il est indépendant de la commande `piecemaker` et de
   `server/piecemaker/vendor/installer/` : aucun code n'est partagé avec eux.
 
