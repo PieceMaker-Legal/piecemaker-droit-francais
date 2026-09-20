@@ -3,6 +3,22 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [1.0.8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v1.0.7...v1.0.8) (2026-09-20)
+
+### New Features
+
+* **cli:** arrête l'application à la fermeture de sa fenêtre ([f04304a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f04304a1a0fe55335a4f880cbb480e9fa6935764))
+* **cli:** lie le cycle de vie du serveur à la fenêtre PieceMaker ([45820f4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/45820f4eb6f2705582cb06209e1d7ac0f1f83047))
+* **desktop-bootstrap:** enregistre le certificat sans privilège administrateur ([68a1b9f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/68a1b9fce6e96896d51c8c169880bc34e0325e48)), closes [PKCS#12](https://github.com/PieceMaker-Legal/PKCS/issues/12)
+* **desktop-bootstrap:** ouvre l'app installée sur l'interface PieceMaker ([492058e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/492058ed3c76e73c25e574defb08a6bb841adf44))
+* **desktop:** installe l'app Electron par une commande curl avec certificat local ([e50c12c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e50c12c6d528e8ba34efd6c9287da1b145aa431e))
+* **desktop:** libère le port du proxy PII au lancement et applique la marque PieceMaker ([e9f92d1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e9f92d127ff8992d96a89a6116a3f292d0e20665))
+
+### Bug Fixes
+
+* **desktop-bootstrap:** complète l'arbre de dépendances du stage avant l'empaquetage ([82f6d2e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/82f6d2e45d98d93dbe37481c63cfe0fe4261fad8))
+* **desktop-bootstrap:** poursuit l'installation quand l'enregistrement du certificat échoue ([772b447](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/772b447e9da16f386a5d06b696338d146963ff71))
+
 ## [1.0.7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v1.0.6...v1.0.7) (2026-09-19)
 
 ### New Features
