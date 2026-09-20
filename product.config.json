@@ -12,6 +12,7 @@
   "repository": "PieceMaker-Legal/piecemaker-droit-francais",
   "controlPlaneUrl": "https://cloudcli.ai",
   "sshHost": "ssh.cloudcli.ai",
+  "windowIcon": "public/logo-512.png",
   "themeColor": "#ffffff",
   "backgroundColor": "#ffffff",
   "showGithubStarBadge": false
