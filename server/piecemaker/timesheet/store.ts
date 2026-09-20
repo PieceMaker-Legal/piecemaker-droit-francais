@@ -60,6 +60,8 @@ function createSchema(database: TimesheetDatabase): void {
     );
     CREATE INDEX IF NOT EXISTS timesheet_project_date
       ON timesheet_sessions(project_id, started_at);
+    CREATE INDEX IF NOT EXISTS timesheet_project_path_date
+      ON timesheet_sessions(project_path, started_at);
     CREATE INDEX IF NOT EXISTS timesheet_date
       ON timesheet_sessions(started_at);
   `);
@@ -144,7 +146,7 @@ export function createTimesheetStore(homeDir: string) {
   `);
   const findBySessionId = database.prepare('SELECT * FROM timesheet_sessions WHERE session_id = ?');
   const listAll = database.prepare('SELECT * FROM timesheet_sessions ORDER BY datetime(started_at) DESC, session_id DESC');
-  const listByProject = database.prepare('SELECT * FROM timesheet_sessions WHERE project_id = ? ORDER BY datetime(started_at) DESC, session_id DESC');
+  const listByProjectPath = database.prepare('SELECT * FROM timesheet_sessions WHERE project_path = ? ORDER BY datetime(started_at) DESC, session_id DESC');
 
   return {
     databasePath,
@@ -156,8 +158,8 @@ export function createTimesheetStore(homeDir: string) {
       const row = findBySessionId.get(sessionId) as TimesheetEntryRow | undefined;
       return row ? toEntry(row) : null;
     },
-    list(projectId?: string): TimesheetEntry[] {
-      const rows = (projectId ? listByProject.all(projectId) : listAll.all()) as TimesheetEntryRow[];
+    list(projectPath?: string): TimesheetEntry[] {
+      const rows = (projectPath ? listByProjectPath.all(projectPath) : listAll.all()) as TimesheetEntryRow[];
       return rows.map(toEntry);
     },
     close(): void {
