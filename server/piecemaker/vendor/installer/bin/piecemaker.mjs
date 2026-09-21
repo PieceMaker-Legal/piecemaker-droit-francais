@@ -8,9 +8,6 @@
  *
  * Usage:
  *   piecemaker                 menu interactif
- *   piecemaker open            démarre le serveur et ouvre l'interface web
- *   piecemaker start|stop|restart gère le serveur local
- *   piecemaker status|logs     affiche l'état ou les journaux
  *   piecemaker chronology      affiche la chronologie du dossier courant
  *   piecemaker chronology write --path <pièce> --correction-json <json>
  *                              crée une correction de chronologie pour une pièce
@@ -40,16 +37,7 @@ import { COMMANDS, CHRONOLOGY_ACTIONS } from '../lib/commandes.mjs';
 import { loadConfig, readEnv, markStep, loadState, CONFIG_FILE } from '../lib/state.mjs';
 import { scheduleStepResume, selectStepsToResume } from '../lib/resume-steps.mjs';
 import { appServerPort, readLocalScanJob, startLocalScan } from '../lib/conversion-client.mjs';
-import {
-  getServerStatus,
-  openAdmin,
-  readLogs,
-  restartTelegramDaemon,
-  startServer,
-  stopServer,
-  checkForUpdate,
-  updateRepository,
-} from '../lib/service.mjs';
+import { restartTelegramDaemon, checkForUpdate, updateRepository } from '../lib/service.mjs';
 
 const require = createRequire(import.meta.url);
 const CLAUDE_ASSETS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/claude-assets.cjs');
@@ -98,7 +86,7 @@ function reconcileCentralMapping() {
   const integration = loadCentralMappingIntegration();
   const central = integration?.syncCentralMapping(loadConfig());
   if (central) log.ok(`Mapping central du proxy reconstruit (${central.entities || 0} entité(s)).`);
-  else log.warn('Mapping central du proxy non reconstruit ; relancez « piecemaker start ».');
+  else log.warn('Mapping central du proxy non reconstruit ; relancez « piecemaker ».');
   return hooksRemoved;
 }
 
@@ -360,12 +348,6 @@ async function runCheck(steps, ctx) {
 function printHelp() {
   write(`  ${c.bold('piecemaker')} — PieceMaker local`);
   blank();
-  write('  open            démarre le serveur et ouvre l’interface web');
-  write('  start           démarre le serveur local en arrière-plan');
-  write('  stop            arrête le serveur local');
-  write('  restart         redémarre le serveur local');
-  write('  status          affiche l’état du serveur');
-  write('  logs            affiche les dernières lignes du journal');
   write('  chronology [read]        affiche la chronologie pseudonymisée du dossier courant');
   write('  chronology write --path <pièce> --correction-json <json>  crée une correction de chronologie');
   write('  chronology edit --path <pièce> --correction-json <json>   modifie une correction existante');
@@ -426,17 +408,6 @@ async function installerMenu(steps, ctx, { allowBack = false } = {}) {
     if (!allowBack) return;
     await pause();
   }
-}
-
-function printServerStatus(status) {
-  title('État local');
-  const rows = [
-    ['Serveur HTTPS', status.running ? badge.done : badge.todo, status.running ? `PID ${status.pid || 'externe'}` : 'arrêté'],
-    ['Interface web', status.running ? badge.done : badge.todo, status.url],
-    ['Journal', badge.todo, status.logFile],
-  ];
-  summary(rows);
-  blank();
 }
 
 function formatChronologyText(chronology) {
@@ -691,43 +662,7 @@ async function runConversionCommand(flags) {
 async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
   if (command === 'chronology') return runChronologyCommand(flags);
   if (command === 'conversion') return runConversionCommand(flags);
-  if (command === 'open') {
-    const status = await openAdmin();
-    log.ok(`Interface ouverte : ${status.url}`);
-    return 0;
-  }
-  if (command === 'start') {
-    const status = await startServer();
-    log.ok(status.started ? `Serveur démarré : ${status.url}` : `Serveur déjà actif : ${status.url}`);
-    return 0;
-  }
-  if (command === 'stop') {
-    const status = await stopServer();
-    if (status.alreadyStopped) log.info('Le serveur est déjà arrêté.');
-    else log.ok('Serveur arrêté.');
-    return 0;
-  }
-  if (command === 'restart') {
-    await stopServer();
-    const status = await startServer();
-    log.ok(`Serveur redémarré : ${status.url}`);
-    return 0;
-  }
-  if (command === 'status') {
-    const status = await getServerStatus();
-    printServerStatus(status);
-    return 0;
-  }
-  if (command === 'logs') {
-    title('Journal du serveur HTTPS');
-    const content = readLogs();
-    write(content || '  Aucun journal disponible.');
-    blank();
-    return 0;
-  }
   if (command === 'update') {
-    // Look before stopping anything: an up-to-date install must not lose its
-    // server for the duration of a no-op npm install.
     const pending = knownUpdate ?? checkForUpdate();
     if (!pending.available) {
       log.ok(`PieceMaker est déjà à jour (${pending.ref}, ${pending.current.slice(0, 7)}).`);
@@ -746,13 +681,6 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
       log.info(`Restauration de l’installation depuis le dépôt distant (${pending.localChanges} fichier(s) localement modifié(s)).`);
     }
 
-    // A live server on the port is a PieceMaker server (the health probe
-    // answered 200), whether we started it or not — e.g. one launched by hand
-    // from the dev clone, so with no PID file it comes back unmanaged. We adopt
-    // it: stop whatever holds the port and bring a managed server back below,
-    // rather than leaving the user to restart it themselves.
-    const previous = await getServerStatus();
-    if (previous.running) await stopServer();
     try {
       const result = updateRepository(pending);
       log.ok(`PieceMaker mis à jour (${result.ref}, ${result.target.slice(0, 7)}).`);
@@ -783,10 +711,6 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
       reconcileCentralMapping();
       log.info('Rouvrez les sessions Claude Code/Codex actives pour charger les hooks et le MCP mis à jour.');
     } finally {
-      if (previous.running) {
-        const restarted = await startServer();
-        log.ok(`Serveur redémarré : ${restarted.url}`);
-      }
       const daemon = restartTelegramDaemon();
       if (daemon.restarted) log.ok('Moniteur Telegram redémarré.');
       else if (daemon.reason && daemon.reason !== 'absent' && daemon.reason !== 'unsupported') {
@@ -826,49 +750,14 @@ function checkForUpdateOnOpen() {
   }
 }
 
-/**
- * Bare `piecemaker` should land on a live server. Start it if it is down, but
- * never block the menu on failure: a missing certificate or a boot error is
- * reported and the interactive installer below stays reachable to fix it.
- * The browser is left closed on purpose — the menu's "Ouvrir l'interface"
- * entry is how the admin pane gets opened.
- */
-async function ensureServerRunning() {
-  let status;
-  try {
-    status = await getServerStatus();
-  } catch {
-    return;
-  }
-  if (status.running) return;
-
-  const spin = spinner('Démarrage du serveur local...');
-  try {
-    const started = await startServer();
-    spin.stop();
-    log.ok(`Serveur démarré : ${started.url}`);
-  } catch (error) {
-    spin.stop();
-    log.warn(`Serveur non démarré : ${error.message}`);
-    log.detail('Réparez-le via « Installer ou réparer des composants » ci-dessous.');
-  }
-  blank();
-}
-
 async function mainMenu(steps, ctx, knownUpdate = null) {
   for (;;) {
-    const status = await getServerStatus();
-    printServerStatus(status);
     const choice = await select('Que voulez-vous faire ?', [
-      { value: 'open', label: 'Ouvrir l’interface graphique', hint: 'paramètres, skills et agents' },
-      { value: status.running ? 'stop' : 'start', label: status.running ? 'Arrêter le serveur local' : 'Démarrer le serveur local' },
-      { value: 'status', label: 'Actualiser l’état' },
       { value: 'install', label: 'Installer ou réparer des composants' },
       {
         value: 'update',
         label: knownUpdate?.remoteAvailable ? 'Mettre à jour PieceMaker — MAJ disponible' : 'Mettre à jour PieceMaker',
       },
-      { value: 'logs', label: 'Afficher les journaux' },
       { value: 'quit', label: 'Quitter' },
     ]);
 
@@ -885,7 +774,6 @@ async function mainMenu(steps, ctx, knownUpdate = null) {
     } catch (error) {
       log.error(error.message);
     }
-    if (choice === 'open') return;
     await pause();
   }
 }
@@ -945,9 +833,7 @@ async function main() {
     return runOperationalCommand(flags.command, null, flags);
   }
 
-  // `update` arrête puis relance lui-même le serveur et le proxy : il passe
-  // avant ensureServerRunning() plus bas, pour ne pas démarrer un serveur juste
-  // avant de le couper. Il enchaîne aussi sur la reprise des étapes.
+  // `update` enchaîne sur la reprise des étapes : il passe avant le menu.
   let autoUpdated = false;
   if (opensInteractiveInstaller && knownUpdate?.available) {
     try {
@@ -1017,10 +903,7 @@ async function main() {
   }
 
   if (flags.command === 'install') await installerMenu(steps, ctx);
-  else {
-    await ensureServerRunning();
-    await mainMenu(steps, ctx, knownUpdate);
-  }
+  else await mainMenu(steps, ctx, knownUpdate);
   return 0;
 }
 

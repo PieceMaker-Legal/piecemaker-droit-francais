@@ -32,7 +32,6 @@ function writeJson(file, data) {
 
 export function loadConfig() {
   const defaults = {
-    port: 43098,
     pythonPath: null,
     venvPath: path.join(HOME_DIR, 'venv'),
   };
