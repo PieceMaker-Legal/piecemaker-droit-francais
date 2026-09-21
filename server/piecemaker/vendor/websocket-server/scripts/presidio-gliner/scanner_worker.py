@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Long-lived scanner worker — loads GLiNER2.5 + spaCy once, processes multiple files
+Long-lived scanner worker — loads GLiNER2.5 once, processes multiple files
 via a JSON-line stdin/stdout protocol.
 
 Protocol:
@@ -29,13 +29,14 @@ from typing import Dict, List, Optional
 # ---------------------------------------------------------------------------
 # Heavy imports — these are the expensive ones (~30-60s)
 # ---------------------------------------------------------------------------
+import spacy
 from presidio_analyzer import (
     AnalysisExplanation,
     AnalyzerEngine,
     LocalRecognizer,
     RecognizerResult,
 )
-from presidio_analyzer.nlp_engine import NlpArtifacts, NlpEngineProvider
+from presidio_analyzer.nlp_engine import SpacyNlpEngine
 
 try:
     from gliner2 import AutoExtractor
@@ -430,23 +431,14 @@ _analyzer_cache: Dict[str, AnalyzerEngine] = {}
 _gliner_model = None  # Shared GLiNER2 model instance
 
 
-def _disable_unused_spacy_components(nlp_engine, language: str) -> None:
-    """Turn off every spaCy pipe whose output nothing reads.
+def _build_tokenizer_only_engine(language: str) -> SpacyNlpEngine:
+    """Build a presidio NLP engine that only tokenises, with no trained model."""
+    nlp = spacy.blank(language)
+    nlp.max_length = 5_000_000
 
-    Entities come from GLiNER2; spaCy is kept only because presidio needs a tokenizer
-    and NlpArtifacts. Failing to disable a pipe is not fatal, so this never raises.
-    """
-    nlp = nlp_engine.nlp.get(language)
-    if nlp is None:
-        return
-
-    for pipe_name in list(nlp.pipe_names):
-        try:
-            nlp.disable_pipe(pipe_name)
-        except Exception as exc:  # noqa: BLE001
-            _log(f"Could not disable spaCy pipe '{pipe_name}': {exc}")
-
-    _log(f"spaCy [{language}] active pipes: {nlp.pipe_names or 'tokenizer only'}")
+    engine = SpacyNlpEngine()
+    engine.nlp = {language: nlp}
+    return engine
 
 
 def _get_or_build_analyzer(language: str) -> AnalyzerEngine:
@@ -459,25 +451,9 @@ def _get_or_build_analyzer(language: str) -> AnalyzerEngine:
     if language in _analyzer_cache:
         return _analyzer_cache[language]
 
-    lang_models = {"fr": "fr_core_news_sm", "en": "en_core_web_sm"}
-    model_name = lang_models.get(language, "en_core_web_sm")
+    _log(f"Building analyzer for language: {language}")
 
-    _log(f"Building analyzer for language: {language} (spaCy model: {model_name})")
-
-    nlp_provider = NlpEngineProvider(nlp_configuration={
-        "nlp_engine_name": "spacy",
-        "models": [{"lang_code": language, "model_name": model_name}],
-    })
-    nlp_engine = nlp_provider.create_engine()
-    nlp_engine.nlp[language].max_length = 5_000_000
-
-    # presidio's SpacyNlpEngine calls spacy.load() with no `disable=`, so the whole
-    # pipeline — tagger, morphologizer, parser, attribute_ruler, lemmatizer, ner —
-    # runs over the document. SpacyRecognizer is then removed below, so the NER output
-    # is thrown away and only tokenisation is used. Measured on 300k characters:
-    # 20.6 s with the full pipeline, 0.9 s with tokenisation alone, and ~1 GB less
-    # resident memory (which matters on an 8 GB machine).
-    _disable_unused_spacy_components(nlp_engine, language)
+    nlp_engine = _build_tokenizer_only_engine(language)
 
     analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=[language])
 

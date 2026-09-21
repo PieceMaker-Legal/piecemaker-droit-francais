@@ -15,10 +15,4 @@ huggingface-hub>=0.20.0  # Required for model downloading with progress
 
 # Presidio + GLiNER integration
 presidio-analyzer>=2.2.0
-spacy>=3.7.0
-#
-# After installing spacy, download language models:
-#   python -m spacy download fr_core_news_sm  # French (15MB, 88% NER accuracy)
-#   python -m spacy download en_core_web_sm   # English (13MB, 85% NER accuracy)
-#
-# Or use: python warmup.py  # Downloads all models automatically
+spacy>=3.7.0  # Tokenizer only, via spacy.blank() — no language model needed
