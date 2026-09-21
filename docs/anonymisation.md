@@ -54,7 +54,7 @@ budget RAM, nice, timeout).
 
 - Phase CONVERT : `smart_converter.py` (`auto` → markitdown si couche texte,
   MinerU sinon).
-- Phase SCAN : `scanner_worker.py` charge GLiNER2.5 + spaCy **une fois**,
+- Phase SCAN : `scanner_worker.py` charge GLiNER2.5 **une fois**,
   puis scanne chaque Markdown (protocole JSON-line). Les cartes brutes
   (`*_sensitive_map.json`) restent dans un répertoire temporaire et sont
   détruites après fusion.

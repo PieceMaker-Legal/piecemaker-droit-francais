@@ -67,7 +67,7 @@ def print_progress(phase: str, current: int, total: int) -> None:
 def start_scanner_worker() -> Optional[subprocess.Popen]:
     """Start the long-lived scanner worker subprocess.
 
-    The worker loads GLiNER2 + spaCy models once and stays alive to process
+    The worker loads the GLiNER2 model once and stays alive to process
     multiple files via a JSON-line stdin/stdout protocol.  Launch this at the
     start of the pipeline so model loading overlaps with Phase 1 (conversion).
 
@@ -1845,7 +1845,7 @@ def run_pipeline(resources: PipelineResources):
     print()
 
     # What is left to do, decided before anything runs: the scanner worker loads
-    # ~1.1GB of GLiNER2.5 + spaCy weights, so it must only start when at least one
+    # ~1.1GB of GLiNER2.5 weights, so it must only start when at least one
     # file actually needs a PII scan.
     def markdown_path(input_file: str) -> Path:
         return Path(args.output) / f"{Path(input_file).stem}.md"

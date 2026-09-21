@@ -42,20 +42,6 @@ MODELS_CONFIG = {
         "optional": False,
         "type": "huggingface",
     },
-    "spacy_fr": {
-        "model_id": "fr_core_news_sm",
-        "description": "French NLP model for spaCy",
-        "size_mb": "~45MB",
-        "optional": False,
-        "type": "spacy",
-    },
-    "spacy_en": {
-        "model_id": "en_core_web_sm",
-        "description": "English NLP model for spaCy",
-        "size_mb": "~40MB",
-        "optional": False,
-        "type": "spacy",
-    },
 }
 
 
@@ -103,20 +89,6 @@ def gliner_migration_status() -> Dict:
     }
 
 
-def is_spacy_cached(model_id: str) -> bool:
-    """Check if spaCy model is installed"""
-    try:
-        import spacy
-
-        try:
-            spacy.load(model_id)
-            return True
-        except OSError:
-            return False
-    except ImportError:
-        return False
-
-
 def check_model_cached(model_key: str) -> bool:
     """Check if a specific model is cached"""
     config = MODELS_CONFIG.get(model_key)
@@ -125,8 +97,6 @@ def check_model_cached(model_key: str) -> bool:
 
     if config["type"] == "huggingface":
         return is_gliner2_cached(config["model_id"])
-    elif config["type"] == "spacy":
-        return is_spacy_cached(config["model_id"])
     return False
 
 
@@ -163,52 +133,6 @@ def download_gliner2_model(model_id: str, description: str, force: bool = False)
         return False
 
 
-def download_spacy_model(model_id: str, description: str) -> bool:
-    """Download spaCy model via CLI"""
-    try:
-        # Check if spacy is installed
-        try:
-            import spacy
-        except ImportError:
-            log_json(
-                f"spaCy not installed, skipping {model_id}",
-                level="warning",
-                model=model_id,
-            )
-            log_plain(f"⏭️  spaCy not installed, skipping {model_id}")
-            return False
-
-        log_json(f"Downloading spaCy model: {model_id}", model=model_id, phase="start")
-        log_plain(f"📥 Downloading spaCy model: {model_id}...")
-
-        # Download using subprocess
-        result = subprocess.run(
-            [sys.executable, "-m", "spacy", "download", model_id],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        log_json(
-            f"Downloaded spaCy model: {model_id}", model=model_id, phase="complete"
-        )
-        log_plain(f"✅ Downloaded spaCy model: {model_id}")
-        return True
-
-    except subprocess.CalledProcessError as e:
-        log_json(
-            f"Failed to download spaCy model {model_id}: {e}",
-            level="warning",
-            model=model_id,
-        )
-        log_plain(f"⚠️  spaCy model download failed: {model_id}")
-        return False
-    except Exception as e:
-        log_json(f"Error downloading {model_id}: {e}", level="error", model=model_id)
-        log_plain(f"❌ Error: {model_id} - {e}")
-        return False
-
-
 def download_model(model_key: str, force: bool = False) -> bool:
     """Download a specific model by key"""
     config = MODELS_CONFIG.get(model_key)
@@ -229,8 +153,6 @@ def download_model(model_key: str, force: bool = False) -> bool:
     # Download based on type
     if config["type"] == "huggingface":
         return download_gliner2_model(config["model_id"], config["description"], force=force)
-    elif config["type"] == "spacy":
-        return download_spacy_model(config["model_id"], config["description"])
 
     return False
 
@@ -241,19 +163,22 @@ def download_model(model_key: str, force: bool = False) -> bool:
 
 
 def check_mineru() -> bool:
-    """Verify mineru CLI is available"""
+    """Verify the mineru package is importable and runnable"""
     try:
         result = subprocess.run(
-            ["mineru", "--version"], capture_output=True, text=True, check=True
+            [sys.executable, "-m", "mineru.cli.client", "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
         )
-        log_json("MinerU CLI available", tool="mineru", available=True)
-        log_plain("✅ MinerU CLI available")
+        log_json("MinerU available", tool="mineru", available=True)
+        log_plain("✅ MinerU available")
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         log_json(
-            "MinerU CLI not found", tool="mineru", available=False, level="warning"
+            "MinerU not installed", tool="mineru", available=False, level="warning"
         )
-        log_plain("⚠️  MinerU CLI not found (pip install mineru)")
+        log_plain("⚠️  MinerU not installed (pip install 'mineru[pipeline,vlm]==2.7.6')")
         return False
 
 
@@ -392,7 +317,11 @@ def get_status() -> Dict:
 
     # Check mineru
     try:
-        subprocess.run(["mineru", "--version"], capture_output=True, check=True)
+        subprocess.run(
+            [sys.executable, "-m", "mineru.cli.client", "--version"],
+            capture_output=True,
+            check=True,
+        )
         status["tools"]["mineru"] = True
     except:
         status["tools"]["mineru"] = False

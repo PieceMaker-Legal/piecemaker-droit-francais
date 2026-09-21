@@ -3,7 +3,7 @@
  *
  * This is the anonymisation core: a venv is created at config.venvPath,
  * websocket-server/scripts/requirements.txt is installed into it, then
- * warmup.py downloads GLiNER2.5 multilingual (~1.1GB) and spaCy fr/en. An
+ * warmup.py downloads GLiNER2.5 multilingual (~1.1GB). An
  * existing GLiNER2 checkpoint triggers an explicit, mandatory migration prompt.
  * warmup.py emits JSON status lines on stdout (see log_json in warmup.py) interleaved
  * with plain emoji lines (log_plain) — both are surfaced through the spinner.
@@ -68,7 +68,7 @@ export function glinerInstallState(status) {
 export function glinerDownloadQuestion(state) {
   return state.replacementRequired
     ? `GLiNER2.5 multilingue remplace obligatoirement l’ancien modèle ${state.legacyModels.join(', ')}. Télécharger et activer ${state.preferredModelId} (environ 1,1 Go) ?`
-    : `Télécharger et activer ${state.preferredModelId} ainsi que les modèles spaCy fr/en (environ 1,2 Go au total) ?`;
+    : `Télécharger et activer ${state.preferredModelId} (environ 1,1 Go) ?`;
 }
 
 function readWarmupStatus(python) {
@@ -158,7 +158,7 @@ export async function install(ctx) {
     };
   }
 
-  const spin = spinner('Installation des modèles GLiNER2.5 et spaCy...');
+  const spin = spinner('Installation du modèle GLiNER2.5...');
   const code = await run(vp.python, [WARMUP], { cwd: SCRIPTS_DIR, onLine: onWarmupLine(spin) });
 
   if (code !== 0) {
@@ -181,7 +181,7 @@ export async function install(ctx) {
       note: `Les modèles requis ne sont pas prêts (${missingAfterWarmup.join(', ') || installedState.preferredModelId}). Relancez l’étape « 03-python-gliner » pour réessayer.`,
     };
   }
-  spin.succeed('GLiNER2.5 multilingue et modèles spaCy prêts');
+  spin.succeed('GLiNER2.5 multilingue prêt');
 
   return { status: 'done', note: '' };
 }
