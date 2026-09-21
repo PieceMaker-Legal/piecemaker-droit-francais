@@ -2,7 +2,6 @@ import { Activity, Archive, Folder, FolderPlus, MessageSquare, Plus, RefreshCw, 
 import type { TFunction } from 'i18next';
 
 import { Button, Input, Tooltip } from '@/shared/ui';
-import { CLOUDCLI_WORDMARK_FONT_FAMILY } from '@/shared/constants';
 import { IS_PLATFORM,cn } from '@/shared/utils';
 import type { SidebarSearchMode } from '@/shared/types';
 import GitHubStarBadge from '@/modules/sidebar/GitHubStarBadge';
@@ -30,21 +29,8 @@ type SidebarHeaderProps = {
   t: TFunction;
 };
 
-/** Module-level, not a nested render function, so the wordmark is not remounted on every SidebarHeader render. */
-function LogoBlock({ t }: { t: TFunction }) {
-  return (
-    <div className="flex min-w-0 items-center gap-2.5">
-      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center">
-        <img src="/logo-sources/logo-black.png" alt="" className="h-7 w-7 object-contain" />
-      </div>
-      <h1
-        className="truncate text-sm font-bold tracking-tight text-foreground"
-        style={{ fontFamily: CLOUDCLI_WORDMARK_FONT_FAMILY }}
-      >
-        {t('app.title')}
-      </h1>
-    </div>
-  );
+function LogoBlock() {
+  return null;
 }
 
 /** Rendered by SidebarContent at the top of the panel for the search box, search-mode tabs, refresh and new-project actions. */
@@ -91,10 +77,10 @@ export default function SidebarHeader({
               className="flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-80"
               title={t('tooltips.viewEnvironments')}
             >
-              <LogoBlock t={t} />
+              <LogoBlock />
             </a>
           ) : (
-            <LogoBlock t={t} />
+            <LogoBlock />
           )}
 
           <div className="flex flex-shrink-0 items-center gap-0.5">
@@ -253,10 +239,10 @@ export default function SidebarHeader({
               className="flex min-w-0 items-center gap-2.5 transition-opacity active:opacity-70"
               title={t('tooltips.viewEnvironments')}
             >
-              <LogoBlock t={t} />
+              <LogoBlock />
             </a>
           ) : (
-            <LogoBlock t={t} />
+            <LogoBlock />
           )}
 
           <div className="flex flex-shrink-0 gap-1.5">
