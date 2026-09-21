@@ -71,15 +71,17 @@ Code dans `scripts/piecemaker/cli/` :
 
 `piecemaker conversion [--case <chemin>] [--force] [--json] [pièce…]` convertit
 et pseudonymise les pièces d'un dossier juridique enregistré. C'est un **client
-HTTP** de la porte unique : la requête part sur la boucle locale vers
-`POST /api/piecemaker/local/scan`, monté avant l'authentification et refusé à
-tout appelant qui n'est pas 127.0.0.1. Le CLI ne détient donc aucun secret, et
-la conversion emprunte exactement le même service, la même file d'attente et la
-même exclusivité GLiNER que l'interface.
+HTTP** de la porte unique : la requête part en clair sur la boucle locale vers
+`POST /api/piecemaker/local/scan` du serveur applicatif
+(`PIECEMAKER_APP_PORT`, 3003 par défaut), monté avant l'authentification et
+refusé à tout appelant qui n'est pas 127.0.0.1. Le CLI ne détient donc aucun
+secret, et la conversion emprunte exactement le même service, la même file
+d'attente et la même exclusivité GLiNER que l'interface.
 
 Conséquences :
 
-- serveur arrêté ⇒ il est **démarré automatiquement** avant la conversion ;
+- serveur applicatif arrêté ⇒ il est **démarré automatiquement** avant la
+  conversion, par `startApplication` du CLI principal, donc avec son proxy PII ;
 - sans serveur joignable, la conversion échoue au lieu de lancer un Python isolé ;
 - `--force` renvoie la liste complète des pièces, ce que la porte unique traite
   comme une reconversion (elle n'ajoute `--skip-existing` que si aucune pièce
