@@ -111,7 +111,7 @@ function colore(texte, couleur) {
 
 function badge(routed, actif) {
   if (routed && actif) return colore('🔒 Anonymisation PieceMaker active ✓', VERT);
-  if (routed) return colore('⚠️ Anonymisation PieceMaker inactive — proxy arrêté (piecemaker start)', ROUGE);
+  if (routed) return colore('⚠️ Anonymisation PieceMaker inactive — proxy arrêté (piecemaker)', ROUGE);
   return colore('⚠️ Anonymisation PieceMaker inactive — accès direct', ROUGE);
 }
 
