@@ -54,6 +54,10 @@ installLibraryRuntime(providerRuntimeService, sessionsService, library);
 const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
 
+export function createPieceMakerLocalRouter() {
+  return knowledge.localRouter;
+}
+
 export function createPieceMakerRouter(options: { getRuntimeStatus?: () => PieceMakerRuntimeStatus } = {}) {
   const router = vendor.createPieceMakerRouter({ ...options, anonymizer });
   router.use(createCitationsRouter(citations, (id) => {

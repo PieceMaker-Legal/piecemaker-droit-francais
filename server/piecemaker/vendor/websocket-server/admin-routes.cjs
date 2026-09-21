@@ -32,13 +32,10 @@ const {
   worktreeDetails,
 } = require('../piecemaker-plugin/scripts/lib/commits.cjs');
 const {
-  cancelOriginalsJob,
-  getJob,
   listOriginals,
   readCaseMapping,
   rebuildCaseMapping,
   saveCaseMapping,
-  startOriginalsJob,
   writeCaseMapping,
 } = require('./originals-pipeline.cjs');
 const { invalidateOriginals, listOriginalsCached } = require('../../originals-cache.cjs');
@@ -1619,8 +1616,7 @@ const REVEAL_TARGETS = new Set(['files', 'terminal']);
 /**
  * Résout un chemin reçu du navigateur (relatif à la racine d'un dossier
  * juridique) vers un chemin absolu, sans jamais remonter hors de cette
- * racine. Même garde que `startOriginalsJob` (originals-pipeline.cjs) pour
- * les pièces sélectionnées : `path.resolve` puis vérification du préfixe.
+ * racine : `path.resolve` puis vérification du préfixe.
  */
 function resolveCasePath(caseRoot, relativePath) {
   const relative = String(relativePath || '').replaceAll('\\', '/').replace(/^\.\//, '');
@@ -2713,47 +2709,6 @@ function createAdminRouter({
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
-  });
-
-  // ── Pièces originales : conversion Markdown et pipeline d'anonymisation ──
-  // Les deux traitements sont longs (OCR, modèles NER) : la route rend la main
-  // avec un identifiant de travail que l'administration interroge ensuite.
-
-  router.post('/originals/pipeline', async (req, res) => {
-    try {
-      const legalCase = selectedCase(req.body?.case);
-      const job = await startOriginalsJob({
-        casesRoot: legalCase.casesRoot,
-        caseName: legalCase.caseName,
-        homeDir,
-        action: String(req.body?.action || ''),
-        files: Array.isArray(req.body?.files) ? req.body.files : [],
-        options: {
-          // Sans `force`, un travail sans sélection ne refait que les pièces
-          // dont le Markdown ou le scan PII manque.
-          force: req.body?.force === true,
-          engine: String(req.body?.engine || '').trim() || undefined,
-          mode: String(req.body?.mode || '').trim() || undefined,
-          lang: String(req.body?.lang || '').trim() || undefined,
-        },
-      });
-      job.reference = legalCase.id;
-      res.status(202).json({ ok: true, job });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  router.get('/originals/job', (req, res) => {
-    const job = getJob(req.query.id);
-    if (!job) return res.status(404).json({ error: 'Travail inconnu ou expiré.' });
-    res.json({ job });
-  });
-
-  router.delete('/originals/job', (req, res) => {
-    const job = cancelOriginalsJob(req.query.id);
-    if (!job) return res.status(404).json({ error: 'Aucun traitement en cours pour cet identifiant.' });
-    res.json({ ok: true, job });
   });
 
   // ── Protection des pièces ────────────────────────────────────────────────
