@@ -13,7 +13,6 @@ import { createRequire } from 'node:module';
 
 import { log } from '../lib/ui.mjs';
 import { REPO_ROOT, commandExists } from '../lib/platform.mjs';
-import { depositRootClaudeMd } from '../lib/service.mjs';
 import { loadConfig } from '../lib/state.mjs';
 
 const require = createRequire(import.meta.url);
@@ -28,8 +27,6 @@ export const meta = {
 };
 
 const PLUGIN_DIR = path.join(REPO_ROOT, 'piecemaker-plugin');
-const CLAUDE_MD = path.join(REPO_ROOT, 'CLAUDE.md');
-const CLAUDE_MD_TEMPLATE = path.join(REPO_ROOT, 'installer', 'templates', 'root-CLAUDE.md');
 
 function dependencies(overrides = {}) {
   return {
@@ -42,27 +39,10 @@ function dependencies(overrides = {}) {
     syncClaudeAssets,
     claudeHooksStatus,
     installClaudeHooks,
-    depositRootClaudeMd,
     loadConfig,
     refreshRegisteredCaseRules,
     ...overrides,
   };
-}
-
-/**
- * Dépose la persona utilisateur si le CLAUDE.md racine est absent. Un fichier
- * existant n'est jamais remplacé, afin de préserver les repères d'un clone de
- * développement.
- */
-function reconcileClaudeMd(ops) {
-  const result = ops.depositRootClaudeMd();
-  if (result.status === 'missing-template') {
-    return { status: 'partial', note: `CLAUDE.md absent et gabarit introuvable (${CLAUDE_MD_TEMPLATE}).` };
-  }
-  if (result.status === 'deposited') {
-    return { status: 'done', note: 'CLAUDE.md (persona utilisateur) déposé depuis le gabarit.' };
-  }
-  return { status: 'done', note: '' };
 }
 
 export async function install(ctx, overrides = {}) {
@@ -84,7 +64,6 @@ export async function install(ctx, overrides = {}) {
   if (ctx.dryRun) {
     ops.log.info(`[simulation] enregistrement de ${assets.length} skill(s)/agent(s) PieceMaker dans ~/.claude`);
     ops.log.info('[simulation] fusion des hooks PieceMaker dans ~/.claude/settings.json');
-    ops.log.info('[simulation] dépôt de CLAUDE.md (racine) depuis le gabarit si absent');
     ops.log.info('[simulation] actualisation des instructions des dossiers juridiques enregistrés');
     return { status: 'skipped', note: 'Mode simulation — aucune modification effectuée.' };
   }
@@ -106,8 +85,6 @@ export async function install(ctx, overrides = {}) {
     ops.log.warn(`Instructions non actualisées pour ${failure.folder} : ${failure.error}`);
   }
 
-  const claudeMd = reconcileClaudeMd(ops);
-  if (claudeMd.status !== 'done') return claudeMd;
   if (result.conflicts.length) {
     return {
       status: 'partial',
@@ -130,16 +107,8 @@ export async function check(_ctx, overrides = {}) {
     .filter((asset) => !['linked', 'copied'].includes(
       ops.claudeAssetStatus(REPO_ROOT, ops.userHome, asset)?.state,
     ));
-  const claudeMdOk = ops.existsSync(CLAUDE_MD);
   const hooksOk = ops.claudeHooksStatus(REPO_ROOT, ops.userHome).ok;
 
-  if (!claudeMdOk && unregistered.length) {
-    return {
-      status: 'partial',
-      note: `CLAUDE.md absent et ${unregistered.length} skill(s)/agent(s) non enregistré(s) dans ~/.claude.`,
-    };
-  }
-  if (!claudeMdOk) return { status: 'partial', note: 'CLAUDE.md absent.' };
   if (!hooksOk) return { status: 'partial', note: 'Hooks PieceMaker non enregistrés dans ~/.claude/settings.json.' };
   if (unregistered.length) {
     return {
