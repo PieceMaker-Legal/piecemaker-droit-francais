@@ -2,7 +2,7 @@ import { BrowserWindow, Menu, Tray, clipboard, nativeImage, nativeTheme, session
 
 import { ViewHost } from './viewHost.js';
 
-const TITLEBAR_HEIGHT = 44;
+const TITLEBAR_HEIGHT = 0;
 const AUTH_TOKEN_STORAGE_KEY = 'auth-token';
 function isAllowedPermissionOrigin(sourceUrl, controlPlaneUrl) {
   try {
