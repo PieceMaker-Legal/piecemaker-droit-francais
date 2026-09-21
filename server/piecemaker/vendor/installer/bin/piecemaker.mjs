@@ -35,11 +35,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { banner, title, log, write, blank, summary, spinner, badge, c } from '../lib/ui.mjs';
 import { select, confirm, multiSelect, pause, nonInteractive } from '../lib/prompt.mjs';
-import { HOME_DIR, REPO_ROOT, commandExists, findPython } from '../lib/platform.mjs';
+import { GIT_REPO_ROOT, HOME_DIR, REPO_ROOT, commandExists, findPython } from '../lib/platform.mjs';
 import { COMMANDS, CHRONOLOGY_ACTIONS } from '../lib/commandes.mjs';
 import { loadConfig, readEnv, markStep, loadState, CONFIG_FILE } from '../lib/state.mjs';
 import { scheduleStepResume, selectStepsToResume } from '../lib/resume-steps.mjs';
-import { readLocalScanJob, startLocalScan } from '../lib/conversion-client.mjs';
+import { appServerPort, readLocalScanJob, startLocalScan } from '../lib/conversion-client.mjs';
 import {
   getServerStatus,
   openAdmin,
@@ -58,6 +58,7 @@ const CENTRAL_MAPPING_MODULE = path.resolve(path.dirname(fileURLToPath(import.me
 const DOCUMENT_INDEX_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/document-index.cjs');
 const CASE_INSTRUCTIONS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/case-instructions.cjs');
 const ORIGINALS_PIPELINE_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/originals-pipeline.cjs');
+const APP_CLI_LIB = path.join(GIT_REPO_ROOT, 'scripts', 'piecemaker', 'cli', 'lib');
 
 /**
  * The bootstrap/update command is also distributed as an installer-only
@@ -615,12 +616,12 @@ function publicConversionResult(job) {
   };
 }
 
-async function waitForConversionJob(config, { folder, id }, { json = false } = {}) {
+async function waitForConversionJob({ folder, id }, { json = false } = {}) {
   let job = null;
   let reportedPercent = -10;
   do {
     await new Promise((resolve) => setTimeout(resolve, 500));
-    ({ job } = await readLocalScanJob(config, { folder, id }));
+    ({ job } = await readLocalScanJob({ folder, id }));
     if (!json && job && job.percent >= reportedPercent + 10) {
       log.info(`Conversion et analyse PII : ${job.percent || 0} % (${job.processed || 0}/${job.total || 0})`);
       reportedPercent = job.percent || 0;
@@ -633,11 +634,20 @@ async function waitForConversionJob(config, { folder, id }, { json = false } = {
 }
 
 async function ensureServerForConversion({ json = false } = {}) {
-  const status = await getServerStatus();
-  if (status.running) return loadConfig();
-  if (!json) log.info('Serveur PieceMaker arrêté : démarrage avant conversion.');
-  await startServer();
-  return loadConfig();
+  const servicesModule = path.join(APP_CLI_LIB, 'services.mjs');
+  if (!fs.existsSync(servicesModule)) {
+    throw new Error(`Le serveur applicatif doit être démarré par la commande « piecemaker » avant la conversion (port ${appServerPort()}).`);
+  }
+  const { appServerReachable, startApplication } = await import(pathToFileURL(servicesModule).href);
+  if (await appServerReachable()) return;
+  if (!json) log.info(`Serveur applicatif arrêté : démarrage sur le port ${appServerPort()} avant conversion.`);
+  const { resolveNodeRuntime } = await import(pathToFileURL(path.join(APP_CLI_LIB, 'node-runtime.mjs')).href);
+  const outcome = await startApplication(resolveNodeRuntime(), {
+    step: (text) => { if (!json) log.info(text); },
+  });
+  if (outcome.serverUp === false) {
+    throw new Error(`Le serveur applicatif n'a pas démarré.${outcome.logTail ? `\n${outcome.logTail}` : ''}`);
+  }
 }
 
 async function runConversionCommand(flags) {
@@ -666,10 +676,9 @@ async function runConversionCommand(flags) {
       : 'Conversion et pseudonymisation des pièces qui ne sont pas encore prêtes.');
   }
 
-  const config = await ensureServerForConversion({ json: flags.json });
-  const started = await startLocalScan(config, { folder: located.caseRoot, files: requestedFiles });
+  await ensureServerForConversion({ json: flags.json });
+  const started = await startLocalScan({ folder: located.caseRoot, files: requestedFiles });
   const job = await waitForConversionJob(
-    config,
     { folder: located.caseRoot, id: started.job?.id },
     { json: flags.json },
   );
