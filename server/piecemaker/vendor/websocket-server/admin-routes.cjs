@@ -2095,9 +2095,6 @@ function createAdminRouter({
       ok: true,
       version: pkg.version || 'inconnue',
       repoRoot,
-      certificatesReady:
-        fs.existsSync(path.join(repoRoot, 'websocket-server', 'localhost.crt')) &&
-        fs.existsSync(path.join(repoRoot, 'websocket-server', 'localhost.key')),
       files: {
         skills: files.filter((file) => file.kind === 'skill').length,
         agents: files.filter((file) => file.kind === 'agent').length,

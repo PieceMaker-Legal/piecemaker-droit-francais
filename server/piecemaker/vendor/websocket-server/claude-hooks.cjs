@@ -13,10 +13,12 @@ const path = require('path');
 /** Racine du dépôt git, quatre niveaux au-dessus de ce fichier vendorisé. */
 const GIT_REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 
-const DEPRECATED_MAPPING_HOOKS = new Set([
+const DEPRECATED_HOOKS = new Set([
   'anonymize-read.mjs',
   'deanonymize-write.mjs',
   'piecemaker-central-anonymize.mjs',
+  'verify-citations.mjs',
+  'decision-cache.mjs',
 ]);
 
 function settingsPath(userHome) {
@@ -41,24 +43,24 @@ function commandScriptName(command) {
   return match?.[1] || '';
 }
 
-function deprecatedMappingHookName(command) {
+function deprecatedHookName(command) {
   const text = String(command || '');
-  return [...DEPRECATED_MAPPING_HOOKS].find((name) => text.includes(name)) || '';
+  return [...DEPRECATED_HOOKS].find((name) => text.includes(name)) || '';
 }
 
-function deprecatedMappingHooks(settings) {
+function deprecatedHooks(settings) {
   if (!settings?.hooks || typeof settings.hooks !== 'object') return [];
   return Object.entries(settings.hooks).flatMap(([event, groups]) =>
     (Array.isArray(groups) ? groups : []).flatMap((group) =>
       (Array.isArray(group?.hooks) ? group.hooks : [])
-        .map((hook) => ({ event, command: hook?.command, script: deprecatedMappingHookName(hook?.command) }))
+        .map((hook) => ({ event, command: hook?.command, script: deprecatedHookName(hook?.command) }))
         .filter((entry) => entry.script),
     ),
   );
 }
 
-/** Retire les anciens hooks de substitution, remplacés par le proxy PII. */
-function removeDeprecatedMappingHooks(userHome) {
+/** Retire les hooks hérités dont la fonction est passée dans le proxy PII. */
+function removeDeprecatedHooks(userHome) {
   const target = settingsPath(userHome);
   let changed = false;
   let removed = 0;
@@ -77,7 +79,7 @@ function removeDeprecatedMappingHooks(userHome) {
             continue;
           }
           const hooks = group.hooks;
-          const kept = hooks.filter((hook) => !deprecatedMappingHookName(hook?.command));
+          const kept = hooks.filter((hook) => !deprecatedHookName(hook?.command));
           const removedFromGroup = hooks.length - kept.length;
           removed += removedFromGroup;
           eventChanged ||= removedFromGroup > 0;
@@ -155,7 +157,7 @@ function claudeHooksStatus(repoRoot, userHome) {
   const expected = expectedCommands(repoRoot);
   if (!expected) return { ok: false, reason: 'source-hooks-absent', missing: [] };
   const settings = readJson(settingsPath(userHome), {});
-  const deprecated = deprecatedMappingHooks(settings);
+  const deprecated = deprecatedHooks(settings);
   const missing = expected.filter((entry) => {
     const current = findHook(settings, entry.event, entry.script);
     return current?.hook.command !== entry.command
@@ -167,9 +169,9 @@ function claudeHooksStatus(repoRoot, userHome) {
 }
 
 function installClaudeHooks(repoRoot, userHome) {
-  const cleanup = removeDeprecatedMappingHooks(userHome);
+  const cleanup = removeDeprecatedHooks(userHome);
   if (!cleanup.ok) {
-    return { ok: false, changed: cleanup.changed, reason: `Nettoyage des anciens hooks de mapping impossible : ${cleanup.reason}` };
+    return { ok: false, changed: cleanup.changed, reason: `Nettoyage des hooks hérités impossible : ${cleanup.reason}` };
   }
   const expected = expectedCommands(repoRoot);
   if (!expected) {
@@ -375,6 +377,6 @@ module.exports = {
   installClaudeHooks,
   installClaudeSessionHook,
   installClaudeStatusLine,
-  removeDeprecatedMappingHooks,
+  removeDeprecatedHooks,
   settingsPath,
 };
