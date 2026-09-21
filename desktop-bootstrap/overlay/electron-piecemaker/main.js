@@ -1,6 +1,5 @@
 import { app, BrowserWindow } from 'electron';
 
-import { brandChrome } from './brandChrome.js';
 import { reclaimProxyPort } from './reclaimProxyPort.js';
 
 reclaimProxyPort();
@@ -18,7 +17,6 @@ function openLocalOnce(window) {
 }
 
 function adoptWindow(window) {
-  brandChrome(window);
   if (alreadyOpened) return;
   if (window.webContents.isLoading()) {
     window.webContents.once('did-finish-load', () => openLocalOnce(window));
