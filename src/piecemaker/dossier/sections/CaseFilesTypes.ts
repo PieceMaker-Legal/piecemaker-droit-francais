@@ -80,30 +80,6 @@ export type ProtectionBypassState = {
   unprotectedCount: number;
 };
 
-export type OriginalsPipelineAction = 'convert';
-
-/** GET/DELETE /originals/job, and the `job` embedded in POST /originals/pipeline. */
-export type OriginalsJob = {
-  id: string;
-  case: string;
-  action: OriginalsPipelineAction;
-  state: 'queued' | 'running' | 'done' | 'error';
-  phase?: string;
-  percent?: number;
-  processed?: number;
-  total?: number;
-  skipped?: number;
-  files?: string[];
-  log?: string[];
-  error?: string | null;
-  cancelled?: boolean;
-  queuedAt?: string;
-  startedAt?: string;
-  finishedAt?: string;
-  queuePosition?: number;
-  reference?: string;
-};
-
 export type ChronologyField = { label: string; value: string };
 
 export type ChronologyEntity = {

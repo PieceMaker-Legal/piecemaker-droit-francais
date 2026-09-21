@@ -30,7 +30,7 @@ import { commandsRoutes } from './modules/commands/index.js';
 import { settingsRoutes } from './modules/settings/index.js';
 import { createSystemModule } from './modules/system/index.js';
 import { createAgentModule } from './modules/agent/index.js';
-import { createPieceMakerRouter, stopOriginalsJobs } from './piecemaker/index.js';
+import { createPieceMakerLocalRouter, createPieceMakerRouter, stopOriginalsJobs } from './piecemaker/index.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import { userRoutes } from './modules/user/index.js';
@@ -183,6 +183,9 @@ app.use('/api/user', authenticateToken, userRoutes);
 
 // Plugins API Routes (protected)
 app.use('/api/plugins', authenticateToken, pluginsRoutes);
+
+// PieceMaker local conversion API (loopback protected)
+app.use('/api/piecemaker/local', createPieceMakerLocalRouter());
 
 // PieceMaker API Routes (protected)
 app.use('/api/piecemaker', authenticateToken, createPieceMakerRouter());
