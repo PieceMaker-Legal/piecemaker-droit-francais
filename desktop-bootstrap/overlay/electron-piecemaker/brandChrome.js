@@ -7,6 +7,17 @@ const HIDDEN_CHROME_CSS = `
   [data-cc-nav="cloud"] {
     display: none !important;
   }
+  .titlebar {
+    background: transparent !important;
+    border: none !important;
+    -webkit-app-region: drag;
+  }
+  .titlebar > *:not(.brand) {
+    display: none !important;
+  }
+  .titlebar .brand {
+    margin-left: 72px;
+  }
 `;
 
 const RENAME_SCRIPT = `(() => {
