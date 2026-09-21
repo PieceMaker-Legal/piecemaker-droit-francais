@@ -1,11 +1,9 @@
-import { app } from 'electron';
+import { app, BrowserWindow } from 'electron';
 
 import { brandChrome } from './brandChrome.js';
 import { reclaimProxyPort } from './reclaimProxyPort.js';
 
 reclaimProxyPort();
-
-await import('../electron/main.js');
 
 const OPEN_LOCAL_EXPRESSION = 'window.cloudcliDesktop && window.cloudcliDesktop.openLocal()';
 
@@ -19,8 +17,18 @@ function openLocalOnce(window) {
   });
 }
 
-app.on('browser-window-created', (_event, window) => {
+function adoptWindow(window) {
   brandChrome(window);
   if (alreadyOpened) return;
-  window.webContents.once('did-finish-load', () => openLocalOnce(window));
-});
+  if (window.webContents.isLoading()) {
+    window.webContents.once('did-finish-load', () => openLocalOnce(window));
+    return;
+  }
+  openLocalOnce(window);
+}
+
+app.on('browser-window-created', (_event, window) => adoptWindow(window));
+
+await import('../electron/main.js');
+
+for (const window of BrowserWindow.getAllWindows()) adoptWindow(window);

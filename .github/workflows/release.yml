@@ -64,6 +64,20 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_LOGS_DIR: ${{ runner.temp }}/release-npm-logs
 
+      - name: Verify the published version is served by the registry
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          for ATTEMPT in $(seq 1 30); do
+            if npm view "@piecemaker-legal/piecemaker@$VERSION" version >/dev/null 2>&1; then
+              echo "Registry serves $VERSION."
+              exit 0
+            fi
+            echo "Attempt $ATTEMPT: $VERSION not served yet."
+            sleep 20
+          done
+          echo "::error::release-it reported success but the registry never served $VERSION (staged publish)."
+          exit 1
+
       - name: Show npm failure details
         if: failure() && steps.release.outcome == 'failure'
         env:
