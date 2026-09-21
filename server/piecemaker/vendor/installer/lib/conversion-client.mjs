@@ -2,30 +2,31 @@
  * Client HTTP de la conversion PieceMaker.
  *
  * La conversion et l'analyse PII n'ont qu'un seul point d'entrée : la route
- * `knowledge/scan` du serveur. Le CLI en est un client, sur la boucle locale,
- * via le montage `/api/piecemaker/local` placé avant l'authentification. Le
- * certificat du serveur est auto-signé : `rejectUnauthorized` est désactivé
- * comme dans `probeServer`, et la requête ne sort jamais de 127.0.0.1.
+ * `knowledge/scan` du serveur applicatif. Le CLI en est un client, sur la
+ * boucle locale, via le montage `/api/piecemaker/local` placé avant
+ * l'authentification. Le serveur applicatif écoute en clair sur le port du
+ * CLI (`PIECEMAKER_APP_PORT`, 3003 par défaut) : aucun certificat n'entre en
+ * jeu et la requête ne sort jamais de 127.0.0.1.
  */
 
-import https from 'node:https';
+import http from 'node:http';
 
 const LOCAL_BASE = '/api/piecemaker/local';
 
-function serverPort(config) {
-  return Number(config?.port) || 43098;
+export function appServerPort() {
+  const parsed = Number.parseInt(process.env.PIECEMAKER_APP_PORT || '', 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 3003;
 }
 
-function requestJson(config, { method, path, body }) {
+function requestJson({ method, path, body }) {
   const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
   return new Promise((resolve, reject) => {
-    const request = https.request(
+    const request = http.request(
       {
         hostname: '127.0.0.1',
-        port: serverPort(config),
+        port: appServerPort(),
         path,
         method,
-        rejectUnauthorized: false,
         timeout: 30_000,
         headers: {
           Accept: 'application/json',
@@ -59,15 +60,15 @@ function requestJson(config, { method, path, body }) {
   });
 }
 
-export function startLocalScan(config, { folder, files }) {
-  return requestJson(config, {
+export function startLocalScan({ folder, files }) {
+  return requestJson({
     method: 'POST',
     path: `${LOCAL_BASE}/scan`,
     body: { folder, ...(files?.length ? { files } : {}) },
   });
 }
 
-export function readLocalScanJob(config, { folder, id }) {
+export function readLocalScanJob({ folder, id }) {
   const query = new URLSearchParams({ folder, ...(id ? { id } : {}) });
-  return requestJson(config, { method: 'GET', path: `${LOCAL_BASE}/scan/job?${query}` });
+  return requestJson({ method: 'GET', path: `${LOCAL_BASE}/scan/job?${query}` });
 }
