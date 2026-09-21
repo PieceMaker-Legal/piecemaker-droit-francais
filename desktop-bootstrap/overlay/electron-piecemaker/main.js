@@ -2,10 +2,8 @@ import { app, BrowserWindow } from 'electron';
 
 import { brandChrome } from './brandChrome.js';
 import { reclaimProxyPort } from './reclaimProxyPort.js';
-import { removeTitlebar } from './removeTitlebar.js';
 
 reclaimProxyPort();
-removeTitlebar();
 
 const OPEN_LOCAL_EXPRESSION = 'window.cloudcliDesktop && window.cloudcliDesktop.openLocal()';
 
