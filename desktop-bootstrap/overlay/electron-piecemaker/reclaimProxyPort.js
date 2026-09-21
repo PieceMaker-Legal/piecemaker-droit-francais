@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
 
 const PROXY_PORT = 4111;
-const RECLAIMABLE_PROCESSES = new Set(['node', 'PieceMaker', 'Electron', 'PieceMake']);
+const TERM_GRACE_MS = 2000;
+const KILL_GRACE_MS = 3000;
 
 function listenersOnUnix(port) {
   const output = execFileSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-F', 'pc'], {
@@ -40,29 +41,38 @@ function currentListeners() {
   }
 }
 
-function terminate(pid) {
+function terminate(pid, signal) {
   try {
     if (process.platform === 'win32') execFileSync('taskkill', ['/PID', String(pid), '/F'], { stdio: 'ignore' });
-    else process.kill(pid, 'SIGTERM');
+    else process.kill(pid, signal);
     return true;
   } catch {
     return false;
   }
 }
 
+function waitForRelease(graceMs) {
+  const clock = new Int32Array(new SharedArrayBuffer(4));
+  const deadline = Date.now() + graceMs;
+  while (Date.now() < deadline) {
+    if (!currentListeners().length) return true;
+    Atomics.wait(clock, 0, 0, 100);
+  }
+  return !currentListeners().length;
+}
+
+function reclaimableListeners() {
+  return currentListeners().filter(({ pid }) => pid !== process.pid && pid > 1);
+}
+
 export function reclaimProxyPort() {
   const reclaimed = [];
-  for (const { pid, command } of currentListeners()) {
-    if (pid === process.pid) continue;
-    if (!RECLAIMABLE_PROCESSES.has(command)) continue;
-    if (terminate(pid)) reclaimed.push(`${command}(${pid})`);
+  for (const { pid, command } of reclaimableListeners()) {
+    if (terminate(pid, 'SIGTERM')) reclaimed.push(`${command}(${pid})`);
   }
-  if (reclaimed.length) {
-    const clock = new Int32Array(new SharedArrayBuffer(4));
-    const deadline = Date.now() + 5000;
-    while (currentListeners().length && Date.now() < deadline) {
-      Atomics.wait(clock, 0, 0, 200);
-    }
-  }
+  if (!reclaimed.length) return reclaimed;
+  if (waitForRelease(TERM_GRACE_MS)) return reclaimed;
+  for (const { pid } of reclaimableListeners()) terminate(pid, 'SIGKILL');
+  waitForRelease(KILL_GRACE_MS);
   return reclaimed;
 }
