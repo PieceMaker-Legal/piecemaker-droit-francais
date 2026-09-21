@@ -107,8 +107,8 @@ jamais les hooks, il se place dessous.**
   reste unique, hors vendorisation, sous `scripts/piecemaker/hooks/proxy-guard.mjs`
   à la racine du dépôt, partagée par les deux clients via
   `PIECEMAKER_HOOK_CLIENT`.
-- Couche 3 : l'étape `14-mxc-sandbox` est vendorisée mais `mxc-sandbox.cjs` ne
-  l'est pas, et l'étape est explicitement exclue de la commande `piecemaker`.
+- Couche 3 : l'étape `14-mxc-sandbox` a été supprimée du dépôt — `mxc-sandbox.cjs`
+  n'a jamais été vendorisé et rien ne la consommait à l'exécution.
   **Elle n'existe pas à l'exécution.**
 
 Corollaire : une machine neuve, sans dépendance à l'Installer historique,
