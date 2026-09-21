@@ -87,11 +87,11 @@ function loadCentralMappingIntegration() {
 function reconcileCentralMapping() {
   let hooksRemoved = false;
   const claude = loadClaudeIntegrations();
-  if (typeof claude?.removeDeprecatedMappingHooks === 'function') {
-    const cleanup = claude.removeDeprecatedMappingHooks(os.homedir());
+  if (typeof claude?.removeDeprecatedHooks === 'function') {
+    const cleanup = claude.removeDeprecatedHooks(os.homedir());
     hooksRemoved = Boolean(cleanup.changed);
-    if (!cleanup.ok) log.warn(`Anciens hooks de mapping non nettoyés (${cleanup.reason}).`);
-    else if (cleanup.changed) log.ok('Anciens hooks de mapping Claude Code retirés.');
+    if (!cleanup.ok) log.warn(`Hooks hérités non nettoyés (${cleanup.reason}).`);
+    else if (cleanup.changed) log.ok('Hooks hérités Claude Code retirés.');
   }
 
   const integration = loadCentralMappingIntegration();
@@ -114,28 +114,6 @@ function reconcileCaseInstructions() {
     return result.failed.length === 0;
   } catch (error) {
     log.warn(`Règles de dossier non actualisées (${error.message}).`);
-    return false;
-  }
-}
-
-/** Rejoue la partie non interactive de l'étape 15 après une mise à jour, mais
- * seulement pour une application Bureau déjà installée. Le chargement reste
- * dynamique : il intervient après le reset Git et utilise donc la nouvelle
- * version de l'étape qui vient d'être téléchargée. */
-async function refreshDesktopApplicationAfterUpdate() {
-  const stepPath = path.join(STEPS_DIR, '15-pwa-desktop.mjs');
-  if (!fs.existsSync(stepPath)) return false;
-  try {
-    const step = await import(`${pathToFileURL(stepPath).href}?update=${Date.now()}`);
-    if (typeof step.refreshInstalledDesktopApplication !== 'function') return false;
-    const result = await step.refreshInstalledDesktopApplication();
-    if (result.status !== 'skipped') markStep('15-pwa-desktop', result.status, result.note || '');
-    if (result.status === 'done') log.ok('Application PieceMaker sur le Bureau mise à jour.');
-    else if (result.status === 'partial') log.warn(`Application Bureau partiellement mise à jour : ${result.note}`);
-    else if (result.status === 'failed') log.warn(`Application Bureau non mise à jour : ${result.note}`);
-    return result.status === 'done';
-  } catch (error) {
-    log.warn(`Application Bureau non mise à jour (${error.message}).`);
     return false;
   }
 }
@@ -756,9 +734,8 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
     if (!pending.available) {
       log.ok(`PieceMaker est déjà à jour (${pending.ref}, ${pending.current.slice(0, 7)}).`);
       reconcileCaseInstructions();
-      await refreshDesktopApplicationAfterUpdate();
       if (reconcileCentralMapping()) {
-        log.info('Rouvrez les sessions Claude Code actives pour oublier les anciens hooks de mapping.');
+        log.info('Rouvrez les sessions Claude Code actives pour oublier les hooks hérités.');
       }
       // « update » reste le geste de remise à niveau : même sans nouveau commit,
       // une étape d'installation restée incomplète repart en tâche de fond.
@@ -813,7 +790,6 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
       }
 
       reconcileCentralMapping();
-      await refreshDesktopApplicationAfterUpdate();
       log.info('Rouvrez les sessions Claude Code/Codex actives pour charger les hooks et le MCP mis à jour.');
     } finally {
       if (previous.running) {
