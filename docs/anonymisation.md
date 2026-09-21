@@ -4,8 +4,9 @@ Un seul enchaînement construit le mapping et un seul point de passage code
 les messages. Le modèle ne voit que des codes ; le cabinet ne voit que des
 noms. Les fichiers restent en clair sur le disque.
 
-La conversion Markdown seule (`POST /originals/pipeline` action `convert`)
-n’appartient pas à ce chemin : elle ne scanne pas et n’alimente pas le proxy.
+Depuis la consolidation, `POST /knowledge/scan` est la **seule** porte de la
+conversion : l'UI, le CLI `piecemaker conversion` et l'outil MCP `conversion`
+y aboutissent tous. Il n'existe plus de conversion Markdown sans scan.
 
 ---
 
@@ -14,6 +15,8 @@ n’appartient pas à ce chemin : elle ne scanne pas et n’alimente pas le prox
 ```mermaid
 flowchart TD
   UI["UI Anonymiser"] --> API["POST /knowledge/scan"]
+  CLI["piecemaker conversion · outil MCP"] --> LOCAL["POST /api/piecemaker/local/scan — loopback"]
+  LOCAL --> API
   API --> LIST["listOriginals — pièces récursives"]
   LIST --> LOCK["runManagedPythonJob — un GLiNER à la fois"]
   LOCK --> PY["convert_and_scan_pipeline.py"]

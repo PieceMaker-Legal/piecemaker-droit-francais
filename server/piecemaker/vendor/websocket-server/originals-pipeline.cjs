@@ -24,21 +24,15 @@ const {
 } = require('./process-group.cjs');
 
 const {
-  createCommit,
   originalFilesOverview,
-  resolveCase,
   safeCaseFiles,
 } = require('../piecemaker-plugin/scripts/lib/commits.cjs');
-const { documentKey, WORKSPACE_SUBDIR } = require('../piecemaker-plugin/scripts/lib/protection.cjs');
+const { documentKey } = require('../piecemaker-plugin/scripts/lib/protection.cjs');
 const {
-  caseConversionOutputDirectory,
   classifyRelativeCaseFolderPath,
   readCaseFolderStructure,
 } = require('./case-folder-structure.cjs');
-const {
-  markFilesAnonymized,
-  markFilesConverted,
-} = require('../piecemaker-plugin/scripts/lib/anonymization-state.cjs');
+const { markFilesAnonymized } = require('../piecemaker-plugin/scripts/lib/anonymization-state.cjs');
 // Le mapping vit dans le plugin : c'est le seul des trois consommateurs (hooks,
 // pipeline, routeur du task pane) qui soit distribué seul.
 const {
@@ -58,8 +52,6 @@ const { isSocieteCode, societeCounterKey, detectCompanySigle, LEGAL_FORM_TOKENS 
 const { syncCentralMapping } = require('../piecemaker-plugin/scripts/lib/central-mapping.cjs');
 
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
-const CONVERTER_SCRIPT = () => process.env.SMART_CONVERTER_PATH || path.join(SCRIPTS_DIR, 'smart_converter.py');
-const PIPELINE_SCRIPT = () => process.env.PIECEMAKER_PIPELINE_PATH || path.join(SCRIPTS_DIR, 'convert_and_scan_pipeline.py');
 const PIECEMAKER_HOME = path.join(os.homedir(), '.piecemaker');
 const configuredPythonPath = () => {
   try {
@@ -466,90 +458,11 @@ async function migrateLegacySensitiveMaps(caseRoot) {
 
 // ── Travaux de conversion / anonymisation ──────────────────────────────────
 
-const jobs = new Map();
-const JOB_RETENTION_MS = 30 * 60 * 1000;
-
-function pruneJobs() {
-  const now = Date.now();
-  for (const [id, job] of jobs) {
-    if (job.state !== 'running' && job.finishedAt && now - Date.parse(job.finishedAt) > JOB_RETENTION_MS) jobs.delete(id);
-  }
-}
-
-/** Travail rendu déjà terminé — rien à traiter, aucun processus lancé. */
-function finishedJob({ case: caseName, caseRoot, action, total, files, result }) {
-  const now = new Date().toISOString();
-  return {
-    id: crypto.randomUUID(),
-    case: caseName,
-    caseRoot,
-    action,
-    state: 'done',
-    phase: 'mapping',
-    percent: 100,
-    processed: total,
-    total,
-    skipped: result?.skipped || 0,
-    files,
-    log: [],
-    error: null,
-    result,
-    cancelled: false,
-    child: null,
-    startedAt: now,
-    finishedAt: now,
-  };
-}
-
-/**
- * Forme exposée par l'API. `caseRoot`, `child` et `reserveBytes` en sont retirés :
- * ils ne servent qu'à l'ordonnancement interne, et la réponse de
- * `GET /api/admin/originals/job` n'a pas à véhiculer un chemin absolu du disque du
- * cabinet ni des octets de réservation. `queuePosition` est ajouté pour un job en
- * file, pour que l'admin puisse afficher « N devant ».
- */
-function publicJob(job) {
-  if (!job) return null;
-  const {
-    cancelReason,
-    child,
-    completion,
-    processGroupId,
-    reserveBytes,
-    stopPromise,
-    timeoutId,
-    ...rest
-  } = job;
-  if (job.state === 'queued') {
-    const position = waiting.findIndex((entry) => entry.job.id === job.id);
-    rest.queuePosition = position >= 0 ? position + 1 : 1;
-  }
-  return rest;
-}
-
 function appendLog(job, line) {
   const text = String(line || '').trim();
   if (!text) return;
   job.log.push(text);
   if (job.log.length > MAX_LOG_LINES) job.log.splice(0, job.log.length - MAX_LOG_LINES);
-}
-
-/**
- * Le verrou porte sur la **racine** du dossier, pas sur son nom : deux dossiers
- * juridiques enregistrés distincts peuvent porter le même nom, et un
- * traitement lent sur l'une bloquait alors tout traitement sur l'autre. Un job en
- * file compte aussi : sinon un double-clic empilerait deux traitements du même
- * dossier au lieu d'un seul.
- */
-function runningJobForCase(caseRoot) {
-  for (const job of jobs.values()) {
-    if (['running', 'queued'].includes(job.state) && job.caseRoot === caseRoot) return job;
-  }
-  return null;
-}
-
-function getJob(jobId) {
-  return publicJob(jobs.get(String(jobId || '')));
 }
 
 // ── Contrôle d'admission : sérialise GLiNER, plafonne les conversions par la RAM ─
@@ -560,17 +473,12 @@ let reservedBytes = 0;
 let acceptingJobs = true;
 
 /**
- * Jobs admis via `runManagedPythonJob` (pas de `legalCase`, donc absents de
- * `jobs`) : `runningAnonymize` doit les voir pour que l'exclusivité GLiNER
- * reste vraie dans les deux sens, quel que soit le consommateur qui a lancé
- * le traitement en cours.
+ * Traitements en cours, tous consommateurs confondus : l'exclusivité GLiNER
+ * doit rester vraie quel que soit celui qui a lancé le traitement.
  */
 const runningManaged = new Set();
 
 function runningAnonymize() {
-  for (const job of jobs.values()) {
-    if (job.state === 'running' && job.action === 'anonymize') return true;
-  }
   for (const job of runningManaged) {
     if (job.action === 'anonymize') return true;
   }
@@ -590,9 +498,7 @@ function canAdmit(job) {
 
 /**
  * Admet les traitements en file qui rentrent désormais, du plus ancien au plus
- * récent. Un descripteur `runManagedPythonJob` (identifié par la présence de
- * `run`, sans `legalCase`) suit son propre lancement : même file, même
- * contrôle d'admission, exécution différente.
+ * récent.
  */
 function pumpQueue() {
   if (!acceptingJobs) return;
@@ -601,8 +507,7 @@ function pumpQueue() {
     if (!canAdmit(descriptor.job)) continue;
     waiting.splice(index, 1);
     index -= 1;
-    if (descriptor.run) launchManagedJob(descriptor);
-    else launchJob(descriptor);
+    launchManagedJob(descriptor);
   }
 }
 
@@ -613,9 +518,9 @@ function pumpQueue() {
  * stderr conservé pour diagnostiquer un échec.
  *
  * `progressScale` reporte le pourcentage 0-100 de cet appel dans la part
- * `[offset, offset + weight]` du travail global : un `runJob` qui enchaîne
- * plusieurs appels (un par groupe de sortie) garde ainsi une progression
- * monotone plutôt qu'un pourcentage qui repart de zéro à chaque groupe.
+ * `[offset, offset + weight]` du travail global : un appelant qui enchaîne
+ * plusieurs appels garde ainsi une progression monotone plutôt qu'un
+ * pourcentage qui repart de zéro à chaque appel.
  *
  * `convert_and_scan_pipeline.py` enchaîne lui-même CONVERT (markitdown) puis
  * SCAN/CHUNKS (GLiNER) au sein d'un même appel, chacun avec son propre 0-100 :
@@ -771,9 +676,9 @@ function spawnTracked(job, script, args, progressScale = {}) {
  * contrôle d'admission que les pièces originales (exclusivité GLiNER, budget
  * RAM, file d'attente, nice, timeout, arrêt propre du groupe de process).
  *
- * Contrairement à `startOriginalsJob`, cette fonction ne connaît aucune
- * notion de dossier juridique enregistré (`legalCase`, mapping, commit) :
- * elle sert les consommateurs qui ont leur propre gestion du résultat (le
+ * Cette fonction ne connaît aucune notion de dossier juridique enregistré
+ * (`legalCase`, mapping, commit) : elle sert les consommateurs qui ont leur
+ * propre gestion du résultat (le
  * pipeline `knowledge`, dont le `projectId` n'est pas un dossier juridique du
  * registre) mais qui doivent néanmoins partager le même verrou GLiNER et le
  * même budget RAM que l'administration — sinon rien n'empêche deux scans
@@ -835,7 +740,7 @@ function runManagedPythonJob({ action, script, args, onProgress, signal } = {}) 
   });
 }
 
-/** Variante de `launchJob` pour un descripteur `runManagedPythonJob` (pas de `legalCase`/commit à gérer ici). */
+/** Lancement d'un descripteur `runManagedPythonJob` (pas de `legalCase`/commit à gérer ici). */
 function launchManagedJob(descriptor) {
   const { job, run, resolve, reject } = descriptor;
   reservedBytes += job.reserveBytes;
@@ -868,334 +773,6 @@ function launchManagedJob(descriptor) {
   })();
 }
 
-/**
- * Migration « au prochain traitement », rattachée aux pièces du lot : range dans
- * le dossier de conversion métier le Markdown que d'anciennes versions ont laissé à la racine
- * pour une pièce effectivement (re)traitée. Le rattachement au lot est délibéré —
- * comme `sessionArtifactPaths` — pour ne jamais déplacer un document de travail
- * de l'utilisateur ni un fichier modifié en parallèle. Retourne les chemins
- * racine retirés (POSIX) : le commit du lot les enregistre comme suppressions,
- * sinon la relocalisation resterait un changement en attente.
- *
- * Le mapping n'est **pas** relocalisé ici : sa consolidation reste l'apanage du
- * chemin de succès (`writeCaseMapping`), qui lit les copies racine puis les
- * supprime. Un scan en échec ne doit pas migrer prématurément un ancien mapping.
- */
-function outputDirectoryForOriginal(caseRoot, absoluteFile) {
-  const relative = path.relative(caseRoot, absoluteFile).split(path.sep).join('/');
-  return caseConversionOutputDirectory(caseRoot, relative)
-    || path.join(caseRoot, WORKSPACE_SUBDIR);
-}
-
-function migrateRootArtifacts(caseRoot, absoluteFiles) {
-  const sourceByKey = new Map(absoluteFiles.map((file) => [documentKey(file), file]));
-  if (!sourceByKey.size) return [];
-  let entries;
-  try {
-    entries = fs.readdirSync(caseRoot, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const toMove = entries.filter((entry) =>
-    entry.isFile()
-    && path.extname(entry.name).toLowerCase() === '.md'
-    && sourceByKey.has(documentKey(entry.name)));
-  if (!toMove.length) return [];
-  const removed = [];
-  for (const entry of toMove) {
-    const source = path.join(caseRoot, entry.name);
-    const outputDirectory = outputDirectoryForOriginal(caseRoot, sourceByKey.get(documentKey(entry.name)));
-    fs.mkdirSync(outputDirectory, { recursive: true });
-    const destination = path.join(outputDirectory, entry.name);
-    // Le sous-dossier fait autorité : un doublon plus récent y gagne, on se
-    // contente d'écarter la copie racine périmée.
-    if (fs.existsSync(destination)) fs.rmSync(source, { force: true });
-    else fs.renameSync(source, destination);
-    removed.push(entry.name);
-  }
-  return removed;
-}
-
-async function runJob(job, legalCase, absoluteFiles, options) {
-  job.migratedFromRoot = migrateRootArtifacts(legalCase.root, absoluteFiles);
-  if (job.cancelled) throw cancellationError(job);
-  if (job.action === 'convert') {
-    // `smart_converter.py` ne prend qu'un fichier : on avance dossier par
-    // dossier pour garder une progression lisible même sans ligne PROGRESS.
-    job.phase = 'convert';
-    for (const [index, absolute] of absoluteFiles.entries()) {
-      if (job.cancelled) throw cancellationError(job);
-      job.processed = index;
-      job.percent = Math.round((index / absoluteFiles.length) * 100);
-      const outputDirectory = outputDirectoryForOriginal(legalCase.root, absolute);
-      fs.mkdirSync(outputDirectory, { recursive: true });
-      const args = [absolute, '-o', outputDirectory];
-      if (options.engine) args.push('--engine', options.engine);
-      if (options.mode) args.push('--mode', options.mode);
-      if (options.lang) args.push('--lang', options.lang);
-      await spawnTracked(job, CONVERTER_SCRIPT(), args);
-      markFilesConverted(legalCase.root, [absolute]);
-      job.processed = index + 1;
-      job.percent = Math.round(((index + 1) / absoluteFiles.length) * 100);
-      appendLog(job, `Conversion ${job.processed}/${absoluteFiles.length}`);
-    }
-    return { converted: absoluteFiles.length };
-  }
-
-  const before = readCaseMapping(legalCase.root);
-  const mappingFile = caseMappingFile(legalCase.root);
-
-  // `--state-file` découple le statut « analysé » du contenu sensible ; les
-  // cartes brutes restent temporaires et ne sont jamais déposées ici.
-  // Le script n'accepte qu'un répertoire de sortie. On regroupe donc les
-  // pièces par répertoire de sortie (zones métier et sous-dossier de travail
-  // générique confondus).
-  const groups = new Map();
-  for (const absolute of absoluteFiles) {
-    const outputDirectory = outputDirectoryForOriginal(legalCase.root, absolute);
-    if (!groups.has(outputDirectory)) groups.set(outputDirectory, []);
-    groups.get(outputDirectory).push(absolute);
-  }
-  // Chaque groupe ne rapporte qu'une part de `job.percent`, proportionnelle
-  // à sa part du nombre total de fichiers du lot : sans quoi la barre
-  // repartirait de zéro à chaque nouveau groupe.
-  let filesDone = 0;
-  for (const [outputDirectory, groupFiles] of groups) {
-    if (job.cancelled) throw cancellationError(job);
-    fs.mkdirSync(outputDirectory, { recursive: true });
-    const args = [...groupFiles, '-o', outputDirectory, '--mapping-file', mappingFile];
-    // `--case-root` découple la clé du manifeste de `--output` : les pièces
-    // vivent sous le dossier juridique, pas sous le sous-dossier de sortie.
-    args.push('--case-root', legalCase.root);
-    args.push('--state-file', path.join(legalCase.root, '.piecemaker', 'anonymization-state.json'));
-    if (options.skipExisting) args.push('--skip-existing');
-    if (options.engine) args.push('--engine', options.engine);
-    if (options.mode) args.push('--mode', options.mode);
-    if (options.lang) args.push('--lang', options.lang);
-    const offset = absoluteFiles.length ? (filesDone / absoluteFiles.length) * 100 : 0;
-    const weight = absoluteFiles.length ? (groupFiles.length / absoluteFiles.length) * 100 : 100;
-    await spawnTracked(job, PIPELINE_SCRIPT(), args, { offset, weight });
-    filesDone += groupFiles.length;
-  }
-  job.phase = 'mapping';
-  job.percent = 100;
-  // Migration unique des dossiers créés par les anciennes versions : leurs
-  // scans sont absorbés dans le mapping et leur état technique avant suppression.
-  const mapping = await rebuildCaseMapping(legalCase.root);
-  const mappingAdded = Math.max(0, mapping.total - Object.keys(before.mapping).length);
-  appendLog(job, `Mapping : ${mappingAdded} nouvelle(s) entrée(s), ${mapping.total} au total`);
-  if (mapping.migratedScans) appendLog(job, `${mapping.migratedScans} ancien(s) sensitive map migré(s)`);
-  return { scanned: absoluteFiles.length, mappingAdded, mappingTotal: mapping.total };
-}
-
-/**
- * Chemins produits par le lot courant. Le filtre est volontairement rattaché
- * aux pièces sélectionnées : un autre fichier Markdown/JSON modifié pendant un
- * OCR long ne doit jamais entrer dans le commit de cette session.
- */
-async function sessionArtifactPaths(legalCase, absoluteFiles, action) {
-  const documentKeys = new Set(absoluteFiles.map((file) => documentKey(file)));
-  const mappingPath = path.relative(legalCase.root, caseMappingFile(legalCase.root)).split(path.sep).join('/');
-  const safeFiles = await safeCaseFiles(legalCase.root);
-  return safeFiles.filter((relative) => {
-    if (action === 'anonymize' && relative === mappingPath) return true;
-    const segments = relative.split('/');
-    const basename = segments.at(-1) || '';
-    const extension = path.extname(basename).toLowerCase();
-    const insideDocumentOutput = segments.slice(0, -1).some((segment) => documentKeys.has(documentKey(segment)));
-    if (insideDocumentOutput) return true;
-    if (extension === '.md') return documentKeys.has(documentKey(basename));
-    return false;
-  });
-}
-
-async function commitJobArtifacts(job, legalCase, absoluteFiles, homeDir) {
-  if (!homeDir) return null;
-  const artifactPaths = await sessionArtifactPaths(legalCase, absoluteFiles, job.action);
-  // Les Markdown relocalisés depuis la racine rejoignent le commit du lot pour
-  // que leur suppression à l'ancien emplacement y soit enregistrée proprement.
-  const paths = [...new Set([...artifactPaths, ...(job.migratedFromRoot || [])])];
-  if (!paths.length) throw new Error('Traitement terminé, mais aucun fichier produit ne peut être commité.');
-  job.phase = 'commit';
-  appendLog(job, `Commit automatique de ${paths.length} fichier(s)`);
-  const count = absoluteFiles.length;
-  const commit = await createCommit({
-    casesRoot: legalCase.casesRoot,
-    caseName: legalCase.name,
-    homeDir,
-    label: job.action === 'convert'
-      ? `Conversion de ${count} pièce${count > 1 ? 's' : ''}`
-      : `Conversion et analyse PII de ${count} pièce${count > 1 ? 's' : ''}`,
-    sessionId: job.id,
-    event: job.action === 'convert' ? 'admin-conversion' : 'admin-scan',
-    paths,
-    waitForLockMs: 10_000,
-  });
-  if (commit.skipped === 'busy') throw new Error('Traitement terminé, mais l’historique est occupé : commit automatique non créé.');
-  return {
-    created: commit.created,
-    hash: commit.commit || null,
-    files: commit.files || [],
-  };
-}
-
-/**
- * Démarre un travail sur les pièces d'un dossier.
- * `action` vaut `convert` (Markdown seul) ou `anonymize` (Markdown + scan PII
- * + régénération du mapping). `files` contient des chemins relatifs au dossier
- * juridique, tels que renvoyés par `listOriginals`.
- */
-async function startOriginalsJob({ casesRoot, caseName, action, files = [], options = {}, homeDir = null } = {}) {
-  if (!['convert', 'anonymize'].includes(action)) throw new Error('Action inconnue sur les pièces originales.');
-  if (!acceptingJobs) throw new Error('Le serveur est en cours d’arrêt : aucun nouveau traitement ne peut démarrer.');
-  const legalCase = resolveCase(casesRoot, caseName);
-  const busy = runningJobForCase(legalCase.root);
-  if (busy) throw new Error('Un traitement est déjà en cours sur ce dossier.');
-
-  const originals = await listOriginals(legalCase.root);
-  const wanted = new Set(files.map((file) => String(file || '').replaceAll('\\', '/')));
-  // Les ressources sont volontairement hors périmètre : accessibles à l'IA telles
-  // quelles, elles ne sont ni converties ni scannées. On les écarte même si elles
-  // sont explicitement cochées, pour que le drapeau reste la seule vérité.
-  const selected = (wanted.size ? originals.filter((file) => wanted.has(file.path)) : originals)
-    .filter((file) => !file.resource);
-  if (!selected.length) {
-    throw new Error('Aucune pièce à traiter dans ce dossier.');
-  }
-
-  // Sans sélection, le travail porte sur tout le dossier et ne refait que ce
-  // qui manque : le modèle GLiNER ne se charge pas si tout est déjà scanné.
-  // Cocher des pièces vaut demande explicite de les retraiter.
-  const forced = wanted.size > 0 || options.force === true;
-  const pending = forced
-    ? selected
-    : selected.filter((file) => (action === 'convert' ? !file.converted : !(file.converted && file.scanned)));
-  const skipped = selected.length - pending.length;
-
-  pruneJobs();
-  if (!pending.length) {
-    // Rien à faire : on rend un travail déjà terminé plutôt qu'une erreur, pour
-    // que l'administration affiche « à jour » et non un échec.
-    const job = finishedJob({
-      case: legalCase.name,
-      caseRoot: legalCase.root,
-      action,
-      total: 0,
-      files: [],
-      result: { converted: 0, scanned: 0, skipped, upToDate: true },
-    });
-    jobs.set(job.id, job);
-    return publicJob(job);
-  }
-
-  // Les chemins sont relatifs au dossier juridique lui-même : les pièces ne
-  // vivent plus dans un sous-dossier dédié, elles sont là où le cabinet les a
-  // rangées, racine et sous-dossiers confondus.
-  const absoluteFiles = pending.map((file) => {
-    const absolute = path.resolve(legalCase.root, ...file.path.split('/'));
-    if (!absolute.startsWith(`${legalCase.root}${path.sep}`)) {
-      throw new Error('Pièce hors du dossier juridique.');
-    }
-    if (!fs.existsSync(absolute)) throw new Error(`Pièce introuvable : ${file.name}`);
-    return absolute;
-  });
-
-  const job = {
-    id: crypto.randomUUID(),
-    case: legalCase.name,
-    caseRoot: legalCase.root,
-    action,
-    state: 'queued',
-    phase: 'convert',
-    percent: 0,
-    processed: 0,
-    total: pending.length,
-    skipped,
-    files: pending.map((file) => file.path),
-    reserveBytes: JOB_RESERVE_BYTES(action),
-    log: [],
-    error: null,
-    result: null,
-    cancelled: false,
-    cancelReason: null,
-    child: null,
-    completion: null,
-    processGroupId: null,
-    stopPromise: null,
-    timeoutId: null,
-    queuedAt: new Date().toISOString(),
-    startedAt: null,
-    finishedAt: null,
-  };
-
-  // Le descripteur porte tout ce dont `launchJob` a besoin, qu'il démarre
-  // maintenant ou plus tard depuis la file.
-  return admitOrQueue({ job, legalCase, absoluteFiles, options, homeDir, skipped, forced });
-}
-
-/** Démarre le traitement maintenant s'il rentre, sinon le met en file d'attente. */
-function admitOrQueue(descriptor) {
-  const { job } = descriptor;
-  jobs.set(job.id, job);
-  if (canAdmit(job)) {
-    launchJob(descriptor);
-  } else {
-    job.state = 'queued';
-    waiting.push(descriptor);
-  }
-  return publicJob(job);
-}
-
-/**
- * Lance réellement le traitement : réserve sa RAM, exécute le script Python, puis
- * — quoi qu'il arrive — libère la réservation et relance la file. Le bloc
- * `finally` est le seul endroit qui rend une place : un traitement qui échoue
- * ne doit pas bloquer la file pour autant.
- */
-function launchJob(descriptor) {
-  const { job, legalCase, absoluteFiles, options, homeDir, skipped, forced } = descriptor;
-  job.state = 'running';
-  job.startedAt = new Date().toISOString();
-  reservedBytes += job.reserveBytes;
-  job.timeoutId = setTimeout(() => {
-    void stopRunningJob(job, 'timeout').catch((error) => {
-      appendLog(job, `Nettoyage après délai dépassé : ${error.message}`);
-    });
-  }, JOB_TIMEOUT_MS());
-
-  job.completion = (async () => {
-    try {
-      const result = await runJob(job, legalCase, absoluteFiles, { ...options, skipExisting: !forced });
-      if (job.cancelled) throw cancellationError(job);
-      const commit = await commitJobArtifacts(job, legalCase, absoluteFiles, homeDir);
-      if (job.cancelled) throw cancellationError(job);
-      job.state = 'done';
-      job.percent = 100;
-      job.processed = job.total;
-      job.result = { ...result, skipped, commit };
-    } catch (error) {
-      job.state = 'error';
-      job.error = error.message;
-    } finally {
-      clearTimeout(job.timeoutId);
-      job.timeoutId = null;
-      const processGroupId = job.processGroupId;
-      try {
-        await verifyJobProcessTreeStopped(job, processGroupId);
-      } catch (error) {
-        job.state = 'error';
-        job.error = `Nettoyage incomplet du pipeline : ${error.message}`;
-      }
-      job.child = null;
-      job.processGroupId = null;
-      job.stopPromise = null;
-      job.finishedAt = new Date().toISOString();
-      reservedBytes -= job.reserveBytes;
-      pumpQueue();
-    }
-  })();
-}
-
 let stopAllPromise = null;
 
 /**
@@ -1211,23 +788,12 @@ function stopOriginalsJobs() {
       const { job } = descriptor;
       job.cancelled = true;
       job.cancelReason = 'server-shutdown';
-      if (descriptor.run) {
-        // Descripteur `runManagedPythonJob` : rejeter sa promesse est le seul
-        // moyen de le débloquer, il n'a pas d'état `job.state`/`jobs` propre.
-        descriptor.reject(cancellationError(job));
-        continue;
-      }
-      job.state = 'error';
-      job.error = 'Traitement interrompu par l’arrêt du serveur.';
-      job.finishedAt = new Date().toISOString();
+      descriptor.reject(cancellationError(job));
     }
 
-    const running = [...jobs.values()].filter((job) => job.state === 'running');
-    const managedRunning = [...runningManaged];
-    const allRunning = [...running, ...managedRunning];
-    const groups = [...new Set(allRunning.map((job) => job.processGroupId).filter(Boolean))];
-    await Promise.allSettled(allRunning.map((job) => stopRunningJob(job, 'server-shutdown')));
-    await Promise.allSettled(running.map((job) => job.completion).filter(Boolean));
+    const running = [...runningManaged];
+    const groups = [...new Set(running.map((job) => job.processGroupId).filter(Boolean))];
+    await Promise.allSettled(running.map((job) => stopRunningJob(job, 'server-shutdown')));
 
     // Contrôle défensif final, y compris si un enfant a fermé ses pipes avant
     // que son événement `exit` ait été traité par le suivi normal du job.
@@ -1238,29 +804,7 @@ function stopOriginalsJobs() {
   return stopAllPromise;
 }
 
-function cancelOriginalsJob(jobId) {
-  const job = jobs.get(String(jobId || ''));
-  if (!job) return null;
-  // Un job encore en file n'a pas de process : on le retire de la file et on
-  // laisse la place au suivant.
-  if (job.state === 'queued') {
-    const index = waiting.findIndex((entry) => entry.job.id === job.id);
-    if (index >= 0) waiting.splice(index, 1);
-    job.state = 'error';
-    job.error = 'Traitement interrompu.';
-    job.finishedAt = new Date().toISOString();
-    pumpQueue();
-    return publicJob(job);
-  }
-  if (job.state !== 'running') return null;
-  void stopRunningJob(job, 'user-cancellation').catch((error) => {
-    appendLog(job, `Nettoyage après annulation : ${error.message}`);
-  });
-  return publicJob(job);
-}
-
 module.exports = {
-  cancelOriginalsJob,
   groupEntityHits,
   // Point d'entrée partagé : tout consommateur d'un pipeline GLiNER/markitdown
   // (même hors dossier juridique enregistré, ex. `knowledge/pipeline.ts`) doit
@@ -1270,12 +814,9 @@ module.exports = {
   // Ré-exportés pour les routes de l'administration : l'implémentation vit
   // désormais dans `piecemaker-plugin/scripts/lib/mapping.cjs`.
   caseMappingFile,
-  getJob,
   listOriginals,
   readCaseMapping,
   rebuildCaseMapping,
   saveCaseMapping,
-  sessionArtifactPaths,
-  startOriginalsJob,
   writeCaseMapping,
 };

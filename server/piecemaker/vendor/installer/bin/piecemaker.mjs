@@ -35,10 +35,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { banner, title, log, write, blank, summary, spinner, badge, c } from '../lib/ui.mjs';
 import { select, confirm, multiSelect, pause, nonInteractive } from '../lib/prompt.mjs';
-import { HOME_DIR, REPO_ROOT, commandExists, findPython, venvPaths } from '../lib/platform.mjs';
+import { HOME_DIR, REPO_ROOT, commandExists, findPython } from '../lib/platform.mjs';
 import { COMMANDS, CHRONOLOGY_ACTIONS } from '../lib/commandes.mjs';
 import { loadConfig, readEnv, markStep, loadState, CONFIG_FILE } from '../lib/state.mjs';
 import { scheduleStepResume, selectStepsToResume } from '../lib/resume-steps.mjs';
+import { readLocalScanJob, startLocalScan } from '../lib/conversion-client.mjs';
 import {
   getServerStatus,
   openAdmin,
@@ -603,89 +604,78 @@ function publicConversionResult(job) {
   return {
     id: job?.id || null,
     state: job?.state || 'error',
+    phase: job?.phase || null,
     processed: Number(job?.processed) || 0,
     total: Number(job?.total) || 0,
-    skipped: Number(job?.skipped) || 0,
     result: {
-      converted: Number(result.converted) || 0,
-      scanned: Number(result.scanned) || 0,
-      ...(Number.isFinite(result.mappingAdded) ? { mappingAdded: result.mappingAdded } : {}),
-      ...(Number.isFinite(result.mappingTotal) ? { mappingTotal: result.mappingTotal } : {}),
-      ...(result.upToDate ? { upToDate: true } : {}),
-      ...(result.commit ? {
-        commitCreated: Boolean(result.commit.created),
-        commit: result.commit.hash || null,
-      } : {}),
+      documents: Number(result.documents) || 0,
+      ...(Number.isFinite(result.nodes) ? { nodes: result.nodes } : {}),
+      ...(Number.isFinite(result.edges) ? { edges: result.edges } : {}),
     },
   };
 }
 
-async function waitForConversionJob(initialJob, getJob, { json = false } = {}) {
-  let job = initialJob;
-  let reportedState = '';
+async function waitForConversionJob(config, { folder, id }, { json = false } = {}) {
+  let job = null;
   let reportedPercent = -10;
-  while (job && ['queued', 'running'].includes(job.state)) {
-    if (!json && (job.state !== reportedState || job.percent >= reportedPercent + 10)) {
-      if (job.state === 'queued') log.info('Conversion en attente d’une place dans la file de traitement.');
-      else log.info(`Conversion et analyse PII : ${job.percent || 0} % (${job.processed || 0}/${job.total || 0})`);
-      reportedState = job.state;
+  do {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    ({ job } = await readLocalScanJob(config, { folder, id }));
+    if (!json && job && job.percent >= reportedPercent + 10) {
+      log.info(`Conversion et analyse PII : ${job.percent || 0} % (${job.processed || 0}/${job.total || 0})`);
       reportedPercent = job.percent || 0;
     }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    job = getJob(job.id);
-  }
+  } while (job && job.state === 'running');
   if (!job) throw new Error('Le travail de conversion a expiré avant sa fin.');
   if (job.state === 'error') throw new Error(job.error || 'La conversion a échoué.');
+  if (job.state === 'cancelled') throw new Error('La conversion a été annulée.');
   return job;
+}
+
+async function ensureServerForConversion({ json = false } = {}) {
+  const status = await getServerStatus();
+  if (status.running) return loadConfig();
+  if (!json) log.info('Serveur PieceMaker arrêté : démarrage avant conversion.');
+  await startServer();
+  return loadConfig();
 }
 
 async function runConversionCommand(flags) {
   if (!fs.existsSync(ORIGINALS_PIPELINE_MODULE)) {
     throw new Error('Le module de conversion PieceMaker est introuvable.');
   }
-  const config = loadConfig();
   const { locateConfiguredCase } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
-  const located = locateConfiguredCase(config, flags.caseTarget || process.cwd());
+  const located = locateConfiguredCase(loadConfig(), flags.caseTarget || process.cwd());
   if (!located) {
     throw new Error('Lancez la commande depuis un dossier juridique enregistré ou passez --case <chemin>.');
   }
 
-  // Le serveur choisit habituellement l’interpréteur au démarrage. La commande
-  // autonome reproduit ce choix sans exiger que le serveur PieceMaker tourne.
-  const configuredVenv = venvPaths(config.venvPath);
-  const python = process.env.PYTHON_PATH
-    || readEnv().PYTHON_PATH
-    || config.pythonPath
-    || (configuredVenv.exists ? configuredVenv.python : null)
-    || findPython()?.command;
-  if (!python) throw new Error('Aucun interpréteur Python 3.10+ n’est disponible pour la conversion.');
-  process.env.PYTHON_PATH = python;
-
-  const { getJob, listOriginals, startOriginalsJob } = require(ORIGINALS_PIPELINE_MODULE);
+  const { listOriginals } = require(ORIGINALS_PIPELINE_MODULE);
   const originals = await listOriginals(located.caseRoot);
-  const requestedFiles = resolveConversionFiles(
+  const selected = resolveConversionFiles(
     originals,
     flags.conversionDocuments || [],
     located.caseRoot,
   );
+  const requestedFiles = selected.length || !flags.force
+    ? selected
+    : originals.map((original) => original.path);
   if (!flags.json) {
     log.info(requestedFiles.length
       ? `Conversion et pseudonymisation de ${requestedFiles.length} pièce(s) sélectionnée(s).`
       : 'Conversion et pseudonymisation des pièces qui ne sont pas encore prêtes.');
   }
-  const initialJob = await startOriginalsJob({
-    casesRoot: located.casesRoot,
-    caseName: located.caseName,
-    homeDir: HOME_DIR,
-    action: 'anonymize',
-    files: requestedFiles,
-    options: { force: flags.force },
-  });
-  const job = await waitForConversionJob(initialJob, getJob, { json: flags.json });
+
+  const config = await ensureServerForConversion({ json: flags.json });
+  const started = await startLocalScan(config, { folder: located.caseRoot, files: requestedFiles });
+  const job = await waitForConversionJob(
+    config,
+    { folder: located.caseRoot, id: started.job?.id },
+    { json: flags.json },
+  );
   const result = publicConversionResult(job);
   if (flags.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-  else if (result.result.upToDate) log.ok('Toutes les pièces sont déjà converties et pseudonymisées.');
-  else log.ok(`Conversion et pseudonymisation terminées : ${result.result.scanned} pièce(s).`);
+  else log.ok(`Conversion et pseudonymisation terminées : ${result.result.documents} pièce(s).`);
   return 0;
 }
 

@@ -20,6 +20,7 @@ export type KnowledgeScanJob = {
   processed: number;
   total: number;
   error: string | null;
+  result: unknown;
   startedAt: string;
   finishedAt: string | null;
 };
@@ -63,6 +64,7 @@ export function createKnowledgeScanJobs() {
         processed: 0,
         total: 0,
         error: null,
+        result: null,
         startedAt: new Date().toISOString(),
         finishedAt: null,
       };
@@ -76,11 +78,12 @@ export function createKnowledgeScanJobs() {
       };
       const controller = new AbortController();
       controllers.set(job.id, controller);
-      run(report, controller.signal).then(() => {
+      run(report, controller.signal).then((result: unknown) => {
         if (job.state !== 'running') return;
         job.state = 'done';
         job.phase = 'commit';
         job.percent = 100;
+        job.result = result ?? null;
       }, (error: unknown) => {
         if (job.state !== 'running') return;
         job.state = 'error';
