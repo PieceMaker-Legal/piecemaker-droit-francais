@@ -48,7 +48,6 @@ import {
   stopServer,
   checkForUpdate,
   updateRepository,
-  depositRootClaudeMd,
 } from '../lib/service.mjs';
 
 const require = createRequire(import.meta.url);
@@ -759,13 +758,6 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
       const result = updateRepository(pending);
       log.ok(`PieceMaker mis à jour (${result.ref}, ${result.target.slice(0, 7)}).`);
 
-      // CLAUDE.md racine est gitignoré : « git reset --hard » ci-dessus le
-      // supprime dès qu'un clone récupère le commit qui l'a dé-versionné. On
-      // redépose donc la persona utilisateur depuis le gabarit (absent → écrit,
-      // présent → intact), même source que l'étape d'installation 09.
-      if (depositRootClaudeMd().status === 'deposited') {
-        log.ok('CLAUDE.md (persona utilisateur) redéposé depuis le gabarit.');
-      }
       reconcileCaseInstructions();
 
       if (result.pythonChanged) {
