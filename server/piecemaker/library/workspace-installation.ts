@@ -10,6 +10,12 @@ const AGENT_TARGETS = [
   { provider: '.grok', folder: 'agents', extension: '.md', sourceFile: 'agent.md' },
 ] as const;
 
+export function componentFolderName(name: string) {
+  const slug = String(name).normalize('NFKD').replace(/[^\p{Letter}\p{Number}._-]+/gu, '-').replace(/^[-._]+|[-._]+$/g, '');
+  if (!slug) throw new Error(`Nom de composant inutilisable : ${name}`);
+  return slug;
+}
+
 function assertWorkspaceDirectory(workspace: string, directory: string, enabled: boolean) {
   if (!fs.existsSync(directory)) {
     if (enabled) fs.mkdirSync(directory);
@@ -20,14 +26,16 @@ function assertWorkspaceDirectory(workspace: string, directory: string, enabled:
   }
 }
 
-export function prepareWorkspaceInstallation(workspace: string, id: string, packageRoot: string, kind: 'skill' | 'agent', enabled: boolean) {
+export function prepareWorkspaceInstallation(workspace: string, id: string, name: string, packageRoot: string, kind: 'skill' | 'agent', enabled: boolean) {
+  const slug = componentFolderName(name);
   const targets = kind === 'skill'
     ? SKILL_PROVIDERS.map((provider) => {
       const parent = path.join(workspace, provider, 'skills');
       for (const directory of [path.dirname(parent), parent]) assertWorkspaceDirectory(workspace, directory, enabled);
       return {
         parent,
-        target: path.join(parent, `piecemaker-${id}`),
+        target: path.join(parent, slug),
+        legacy: path.join(parent, `piecemaker-${id}`),
         source: packageRoot,
         kind: 'skill' as const,
       };
@@ -37,7 +45,8 @@ export function prepareWorkspaceInstallation(workspace: string, id: string, pack
       for (const directory of [path.dirname(parent), parent]) assertWorkspaceDirectory(workspace, directory, enabled);
       return {
         parent,
-        target: path.join(parent, `piecemaker-${id}${entry.extension}`),
+        target: path.join(parent, `${slug}${entry.extension}`),
+        legacy: path.join(parent, `piecemaker-${id}${entry.extension}`),
         source: path.join(packageRoot, entry.sourceFile),
         kind: 'agent' as const,
       };
@@ -81,6 +90,14 @@ export function prepareWorkspaceInstallation(workspace: string, id: string, pack
         else fs.symlinkSync(source, target, process.platform === 'win32' ? 'junction' : 'dir');
       }
       throw error;
+    }
+    for (const { legacy, source, kind: targetKind } of prepared) {
+      let existing: fs.Stats;
+      try { existing = fs.lstatSync(legacy); } catch { continue; }
+      const owned = targetKind === 'skill'
+        ? existing.isSymbolicLink() && fs.existsSync(source) && fs.realpathSync(legacy) === fs.realpathSync(source)
+        : existing.isFile() && fs.existsSync(source) && fs.readFileSync(legacy).equals(fs.readFileSync(source));
+      if (owned) fs.unlinkSync(legacy);
     }
   };
 }
