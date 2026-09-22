@@ -7,7 +7,7 @@ import Database from 'better-sqlite3';
 import { parseFrontMatter } from '@/shared/frontmatter.js';
 
 import { parseConnectorConfig, prepareConnectorInstallation, type LibraryConnectorConfig } from './connector-installation.js';
-import { prepareWorkspaceInstallation } from './workspace-installation.js';
+import { componentFolderName, prepareWorkspaceInstallation } from './workspace-installation.js';
 
 type StoredLibraryEntry = {
   id: string;
@@ -62,6 +62,11 @@ function decodeUtf8File(bytes: Buffer) {
 function decodeEditableFile(bytes: Buffer) {
   if (bytes.length > MAX_EDITABLE_FILE_BYTES) throw new Error('Ce fichier ne peut pas être modifié.');
   return decodeUtf8File(bytes);
+}
+
+function installationFolder(content: string, fallback = '') {
+  const { data } = parseFrontMatter(content);
+  return componentFolderName(String(data.name || data.metadata?.title || fallback));
 }
 
 function collectionMainPath(entry: LibraryEntry, rootPath: string) {
@@ -219,6 +224,10 @@ export function createLibraryStore(home: string) {
     return db.transaction(() => {
       const entry = document(id);
       if (entry.content !== previousContent) throw new Error('Le document a été modifié ailleurs. Rouvrez-le avant d’enregistrer.');
+      const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
+      if (entry.kind !== 'connector' && installationFolder(content) !== installationFolder(entry.content)) {
+        for (const { workspace: selected } of active) setEnabled(selected, id, false);
+      }
       if (entry.kind === 'connector') {
         const config = parseConnectorConfig(content);
         const description = config.url || config.command || entry.name;
@@ -229,7 +238,6 @@ export function createLibraryStore(home: string) {
         const description = typeof data.description === 'string' ? data.description : '';
         db.prepare('UPDATE entries SET name = ?, description = ?, content = ? WHERE id = ?').run(name, description, content, id);
       }
-      const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
       for (const { workspace: selected } of active) setEnabled(selected, id, true);
       return document(id);
     })();
@@ -465,7 +473,7 @@ export function createLibraryStore(home: string) {
       return { ok: true, enabled };
     }
     const packageRoot = path.join(directory, 'active', createHash('sha256').update(selected).digest('hex'), id);
-    const install = prepareWorkspaceInstallation(selected, id, packageRoot, entry.kind, enabled);
+    const install = prepareWorkspaceInstallation(selected, id, installationFolder(entry.content, entry.name), packageRoot, entry.kind, enabled);
     if (enabled) {
       fs.mkdirSync(path.dirname(packageRoot), { recursive: true, mode: 0o700 });
       if (!fs.realpathSync(path.dirname(packageRoot)).startsWith(fs.realpathSync(directory) + path.sep)) throw new Error('Répertoire d’activation non autorisé.');
