@@ -53,15 +53,6 @@ function isDisabled(homeDir) {
  * précédente de ce proxy, et serait un relais mort : on l'ignore au profit de
  * l'API officielle.
  */
-function isLoopbackValue(value) {
-  try {
-    const { hostname } = new URL(String(value || ''));
-    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
-  } catch {
-    return false;
-  }
-}
-
 function resolveUpstream(configured) {
   if (!configured) return DEFAULT_UPSTREAM;
   try {
@@ -94,12 +85,14 @@ function summarizeCoverage(report) {
 
 function hudsuckerBinary() {
   if (process.env.PIECEMAKER_HUDSUCKER_BIN) return process.env.PIECEMAKER_HUDSUCKER_BIN;
-  const directory = path.join(__dirname, 'hudsucker-proxy', 'target');
-  const release = path.join(directory, 'release', 'piecemaker-hudsucker');
-  const debug = path.join(directory, 'debug', 'piecemaker-hudsucker');
+  const name = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
+  const packaged = path.join(__dirname, 'bin', name);
+  const release = path.join(__dirname, 'hudsucker-proxy', 'target', 'release', name);
+  const debug = path.join(__dirname, 'hudsucker-proxy', 'target', 'debug', name);
+  if (fs.existsSync(packaged)) return packaged;
   if (fs.existsSync(release)) return release;
   if (fs.existsSync(debug)) return debug;
-  return release;
+  return packaged;
 }
 
 function certificatePaths() {
@@ -258,8 +251,6 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
       PATH: process.env.PATH,
     };
     for (const key of PROXY_ENV_KEYS) previousEnv[key] = process.env[key];
-    if (isLoopbackValue(process.env[ENV_VAR])) delete process.env[ENV_VAR];
-    if (isLoopbackValue(process.env[OPENAI_ENV_VAR])) delete process.env[OPENAI_ENV_VAR];
     Object.assign(process.env, proxyEnvironment(origin, certificates.cert));
     process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
 
