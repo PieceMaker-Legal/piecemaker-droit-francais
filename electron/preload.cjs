@@ -1,11 +1,20 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+let product = { cloudEnabled: true };
+try {
+  product = require('../product.config.json');
+} catch {
+  product = { cloudEnabled: true };
+}
+
 function isCloudCliAppOrigin(location) {
   if (location.protocol === 'file:') return true;
 
   if (location.protocol === 'http:') {
     return location.hostname === '127.0.0.1' || location.hostname === 'localhost';
   }
+
+  if (product.cloudEnabled === false) return false;
 
   return location.protocol === 'https:' && (
     location.hostname === 'cloudcli.ai' || location.hostname.endsWith('.cloudcli.ai')

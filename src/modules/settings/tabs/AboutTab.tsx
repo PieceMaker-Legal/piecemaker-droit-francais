@@ -1,15 +1,11 @@
-import { Cloud, ExternalLink, MessageSquare, Star, Users } from 'lucide-react';
+import { ExternalLink, MessageSquare, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { CLOUDCLI_WORDMARK_FONT_FAMILY, PRODUCT_REPOSITORY_URL } from '@/shared/constants';
 import { PRODUCT_SHORT_NAME } from '@/piecemaker/branding';
 import { useProductVersionCheck } from '@/piecemaker/hooks/useProductVersionCheck';
-import { IS_PLATFORM } from '@/shared/utils';
-import PremiumFeatureCard from '@/modules/settings/PremiumFeatureCard';
 
 const DISCORD_URL = 'https://discord.gg/buxwujPNRE';
-const DOCS_URL = 'https://cloudcli.ai/docs/plugin-overview';
-const CLOUDCLI_URL = 'https://cloudcli.ai';
 
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -106,61 +102,7 @@ export default function AboutTab() {
           <DiscordIcon className="h-4 w-4" />
           Discord
         </a>
-        <a
-          href={DOCS_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          Docs
-        </a>
-        <a
-          href={CLOUDCLI_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          cloudcli.ai
-        </a>
       </div>
-
-      {/* Hosted CTA (OSS mode only) */}
-      {!IS_PLATFORM && (
-        <div className="rounded-xl border border-primary/10 bg-primary/5 p-4">
-          <h4 className="text-sm font-medium text-foreground">{t('about.hostedTitle')}</h4>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {t('about.hostedDescription')}
-          </p>
-          <a
-            href={CLOUDCLI_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:underline"
-          >
-            {t('about.learnMore')}
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
-      )}
-
-      {/* Premium feature placeholders (OSS mode only) */}
-      {!IS_PLATFORM && (
-        <div className="space-y-4 border-t border-border/50 pt-6">
-          <h3 className="text-sm font-medium text-foreground">{t('about.proFeaturesTitle')}</h3>
-          <PremiumFeatureCard
-            icon={<Cloud className="h-5 w-5" />}
-            title={t('about.syncSettingsTitle')}
-            description={t('about.syncSettingsDescription')}
-          />
-          <PremiumFeatureCard
-            icon={<Users className="h-5 w-5" />}
-            title={t('about.teamManagementTitle')}
-            description={t('about.teamManagementDescription')}
-          />
-        </div>
-      )}
 
       {/* License */}
       <div className="border-t border-border/50 pt-4">

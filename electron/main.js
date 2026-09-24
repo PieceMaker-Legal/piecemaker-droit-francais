@@ -18,6 +18,7 @@ const APP_NAME = product.name;
 const APP_USER_MODEL_ID = product.appId;
 const CALLBACK_PROTOCOL = product.protocol;
 const CALLBACK_URL = `${CALLBACK_PROTOCOL}://auth/callback`;
+const CLOUD_ENABLED = product.cloudEnabled !== false;
 const CLOUDCLI_CONTROL_PLANE_URL = process.env.CLOUDCLI_CONTROL_PLANE_URL || product.controlPlaneUrl;
 const CLOUDCLI_CONTROL_PLANE_HOST = new URL(CLOUDCLI_CONTROL_PLANE_URL).hostname;
 const CLOUDCLI_SSH_HOST = process.env.CLOUDCLI_SSH_HOST || product.sshHost;
@@ -136,6 +137,7 @@ function getDesktopState() {
     activeTabId: tabs.activeTabId,
     environments: cloud.getEnvironments().map(serializeEnvironment),
     desktopNotifications: desktopNotifications?.getState() || { enabled: false, supported: false, connectedCount: 0, targetCount: 0 },
+    cloudEnabled: CLOUD_ENABLED,
   };
 }
 
@@ -259,6 +261,7 @@ async function copyDiagnostics() {
 }
 
 async function refreshCloudEnvironments({ showErrors = false } = {}) {
+  if (!CLOUD_ENABLED) return [];
   isRefreshingCloud = true;
   syncDesktopState();
   try {
@@ -286,6 +289,7 @@ async function refreshCloudEnvironments({ showErrors = false } = {}) {
 }
 
 async function connectCloudAccount() {
+  if (!CLOUD_ENABLED) return null;
   const connectUrl = cloud.buildConnectUrl();
   pendingCloudConnectStartedAt = Date.now();
   clipboard.writeText(connectUrl);
@@ -301,7 +305,7 @@ async function handleDeepLink(url) {
     return;
   }
 
-  if (parsed.protocol !== `${CALLBACK_PROTOCOL}:` || parsed.hostname !== 'auth') {
+  if (!CLOUD_ENABLED || parsed.protocol !== `${CALLBACK_PROTOCOL}:` || parsed.hostname !== 'auth') {
     return;
   }
 
@@ -521,6 +525,7 @@ async function copyEnvironmentMobileUrl(environment) {
 }
 
 async function openCloudDashboard() {
+  if (!CLOUD_ENABLED) return getDesktopState();
   await openExternalUrl(CLOUDCLI_CONTROL_PLANE_URL);
   return getDesktopState();
 }
@@ -837,6 +842,7 @@ async function createDesktopWindow() {
     getCloudState,
     getLocalState,
     tabs,
+    cloudEnabled: CLOUD_ENABLED,
     actions: {
       copyDiagnostics,
       copyText: (text) => clipboard.writeText(text),
@@ -920,6 +926,7 @@ async function bootstrap() {
     storePath: getStorePath(),
     controlPlaneUrl: CLOUDCLI_CONTROL_PLANE_URL,
     callbackUrl: CALLBACK_URL,
+    appName: APP_NAME,
     onChange: syncDesktopState,
   });
   desktopNotifications = new DesktopNotificationsController({
@@ -944,7 +951,7 @@ async function bootstrap() {
   registerIpcHandlers();
   registerAppEvents();
   await createDesktopWindow();
-  void refreshCloudEnvironments({ showErrors: false });
+  if (CLOUD_ENABLED) void refreshCloudEnvironments({ showErrors: false });
 }
 
 if (registerSingleInstance()) {

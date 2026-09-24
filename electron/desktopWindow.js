@@ -4,13 +4,13 @@ import { ViewHost } from './viewHost.js';
 
 const TITLEBAR_HEIGHT = 0;
 const AUTH_TOKEN_STORAGE_KEY = 'auth-token';
-function isAllowedPermissionOrigin(sourceUrl, controlPlaneUrl) {
+function isAllowedPermissionOrigin(sourceUrl, controlPlaneUrl, cloudEnabled = true) {
   try {
     const source = new URL(sourceUrl);
     if ((source.hostname === '127.0.0.1' || source.hostname === 'localhost') && source.protocol === 'http:') {
       return true;
     }
-    if (source.protocol !== 'https:') {
+    if (!cloudEnabled || source.protocol !== 'https:') {
       return false;
     }
     const controlPlane = new URL(controlPlaneUrl);
@@ -41,6 +41,7 @@ export class DesktopWindowManager {
     getLocalState,
     actions,
     tabs,
+    cloudEnabled = true,
   }) {
     this.appName = appName;
     this.getWindowIconPath = getWindowIconPath;
@@ -54,6 +55,7 @@ export class DesktopWindowManager {
     this.getLocalState = getLocalState;
     this.actions = actions;
     this.tabs = tabs;
+    this.cloudEnabled = cloudEnabled !== false;
 
     this.mainWindow = null;
     this.settingsWindow = null;
@@ -393,7 +395,7 @@ export class DesktopWindowManager {
         {
           label: cloudState.account?.email ? `Reconnect ${cloudState.account.email}` : 'Login',
           click: () => void this.actions.connectCloudAccount()
-            .catch((error) => this.actions.showError('Could not connect CloudCLI account', error)),
+            .catch((error) => this.actions.showError(`Could not connect ${this.productLabel()} account`, error)),
         },
       ];
     }
@@ -408,14 +410,19 @@ export class DesktopWindowManager {
     }));
   }
 
+  productLabel() {
+    return this.appName || 'CloudCLI';
+  }
+
   buildAppMenu() {
     if (!this.mainWindow) return;
     const cloudState = this.getCloudState();
     const localState = this.getLocalState();
     const remoteItems = this.getRemoteEnvironmentMenuItems();
+    const productLabel = this.productLabel();
     const cloudAccountLabel = cloudState.account?.apiKey
-      ? (cloudState.account?.email ? `Connected: ${cloudState.account.email}` : 'CloudCLI Connected')
-      : (cloudState.account?.email ? `Reconnect: ${cloudState.account.email}` : 'Connect CloudCLI Account...');
+      ? (cloudState.account?.email ? `Connected: ${cloudState.account.email}` : `${productLabel} Connected`)
+      : (cloudState.account?.email ? `Reconnect: ${cloudState.account.email}` : `Connect ${productLabel} Account...`);
 
     const template = [
       {
@@ -431,6 +438,7 @@ export class DesktopWindowManager {
           {
             label: 'Switch Environment',
             accelerator: 'CmdOrCtrl+Shift+E',
+            visible: this.cloudEnabled,
             click: () => void this.actions.showEnvironmentPicker().catch((error) => this.actions.showError('Could not switch environment', error)),
           },
           {
@@ -465,13 +473,14 @@ export class DesktopWindowManager {
           {
             label: 'Switch Environment',
             accelerator: 'CmdOrCtrl+Shift+E',
+            visible: this.cloudEnabled,
             click: () => void this.actions.showEnvironmentPicker().catch((error) => this.actions.showError('Could not switch environment', error)),
           },
           { type: 'separator' },
           {
-            label: 'Open Local CloudCLI',
+            label: `Open Local ${productLabel}`,
             accelerator: 'CmdOrCtrl+L',
-            click: () => void this.actions.openLocalInDesktop().catch((error) => this.actions.showError('Could not open local CloudCLI', error)),
+            click: () => void this.actions.openLocalInDesktop().catch((error) => this.actions.showError(`Could not open local ${productLabel}`, error)),
           },
           {
             label: 'Open Local Web UI in Browser',
@@ -500,21 +509,21 @@ export class DesktopWindowManager {
           },
         ],
       },
-      {
+      ...(this.cloudEnabled ? [{
         label: 'Cloud',
         submenu: [
           {
             label: cloudAccountLabel,
             accelerator: 'CmdOrCtrl+Shift+C',
-            click: () => void this.actions.connectCloudAccount().catch((error) => this.actions.showError('Could not connect CloudCLI account', error)),
+            click: () => void this.actions.connectCloudAccount().catch((error) => this.actions.showError(`Could not connect ${productLabel} account`, error)),
           },
           {
             label: 'Refresh Cloud Environments',
-            click: () => void this.actions.refreshCloudEnvironments().catch((error) => this.actions.showError('Could not load CloudCLI environments', error)),
+            click: () => void this.actions.refreshCloudEnvironments().catch((error) => this.actions.showError(`Could not load ${productLabel} environments`, error)),
             enabled: Boolean(cloudState.account?.apiKey),
           },
           {
-            label: 'Logout CloudCLI Account',
+            label: `Logout ${productLabel} Account`,
             click: () => void this.actions.clearCloudAccount().catch((error) => this.actions.showError('Could not logout', error)),
             enabled: Boolean(cloudState.account?.apiKey),
           },
@@ -524,7 +533,7 @@ export class DesktopWindowManager {
             submenu: remoteItems,
           },
         ],
-      },
+      }] : []),
       {
         label: 'Edit',
         submenu: [
@@ -578,10 +587,10 @@ export class DesktopWindowManager {
       {
         label: 'Help',
         submenu: [
-        {
-          label: 'Open cloudcli.ai',
-          click: () => void this.actions.openCloudDashboard(),
-        },
+          ...(this.cloudEnabled ? [{
+            label: 'Open cloudcli.ai',
+            click: () => void this.actions.openCloudDashboard(),
+          }] : []),
           {
             label: 'Copy Diagnostics',
             click: () => void this.actions.copyDiagnostics(),
@@ -604,8 +613,8 @@ export class DesktopWindowManager {
         label: 'Local',
         submenu: [
           {
-            label: localState.localServerRunning ? 'Open Local in CloudCLI' : 'Start Local in CloudCLI',
-            click: () => void this.actions.openLocalInDesktop().catch((error) => this.actions.showError('Could not open local CloudCLI', error)),
+            label: localState.localServerRunning ? `Open Local in ${this.productLabel()}` : `Start Local in ${this.productLabel()}`,
+            click: () => void this.actions.openLocalInDesktop().catch((error) => this.actions.showError(`Could not open local ${this.productLabel()}`, error)),
           },
           {
             label: 'Open Local in Browser',
@@ -617,20 +626,22 @@ export class DesktopWindowManager {
           },
         ],
       },
-      {
-        label: 'Cloud Environments',
-        submenu: this.buildTrayEnvironmentSection(),
-      },
-      { type: 'separator' },
-      {
-        label: cloudState.account?.email ? `Connected: ${cloudState.account.email}` : 'Login',
-        click: () => void this.actions.connectCloudAccount().catch((error) => this.actions.showError('Could not connect CloudCLI account', error)),
-      },
-      {
-        label: 'Logout CloudCLI Account',
-        click: () => void this.actions.clearCloudAccount().catch((error) => this.actions.showError('Could not logout', error)),
-        enabled: Boolean(cloudState.account?.apiKey),
-      },
+      ...(this.cloudEnabled ? [
+        {
+          label: 'Cloud Environments',
+          submenu: this.buildTrayEnvironmentSection(),
+        },
+        { type: 'separator' },
+        {
+          label: cloudState.account?.email ? `Connected: ${cloudState.account.email}` : 'Login',
+          click: () => void this.actions.connectCloudAccount().catch((error) => this.actions.showError(`Could not connect ${this.productLabel()} account`, error)),
+        },
+        {
+          label: `Logout ${this.productLabel()} Account`,
+          click: () => void this.actions.clearCloudAccount().catch((error) => this.actions.showError('Could not logout', error)),
+          enabled: Boolean(cloudState.account?.apiKey),
+        },
+      ] : []),
       { type: 'separator' },
       {
         label: `Quit ${this.appName}`,
@@ -681,7 +692,7 @@ export class DesktopWindowManager {
     const isAllowedPermission = (webContents, permission) => {
       const sourceUrl = webContents.getURL();
       const allowedPermissions = new Set(['clipboard-read', 'media', 'notifications']);
-      return isAllowedPermissionOrigin(sourceUrl, this.getCloudState().controlPlaneUrl) && allowedPermissions.has(permission);
+      return isAllowedPermissionOrigin(sourceUrl, this.getCloudState().controlPlaneUrl, this.cloudEnabled) && allowedPermissions.has(permission);
     };
 
     session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {

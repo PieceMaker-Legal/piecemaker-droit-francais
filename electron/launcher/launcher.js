@@ -8,6 +8,7 @@ window.__MOCK_STATE__ = {
   shareableWebUrl: 'http://localhost:3001',
   localServerRunning: false,
   localStartupLogs: [],
+  cloudEnabled: false,
   environments: [
     { id: 'env-api', name: 'api-gateway', subdomain: 'api-gateway', access_url: 'https://api-gateway.cloudcli.ai', status: 'running', region: 'fra1', agent: 'Claude Code' },
     { id: 'env-web', name: 'web-frontend', subdomain: 'web-frontend', access_url: 'https://web-frontend.cloudcli.ai', status: 'stopped', region: 'sfo1', agent: 'Codex' },
@@ -31,7 +32,7 @@ window.__MOCK_STATE__ = {
     getState: function () { return Promise.resolve(clone(mockState)); },
     openLocal: function () {
       mockState.localServerRunning = true;
-      mockState.activeTarget = { kind: 'local', name: 'Local CloudCLI', url: mockState.localWebUrl };
+      mockState.activeTarget = { kind: 'local', name: 'Local ' + (mockState.appName || 'CloudCLI'), url: mockState.localWebUrl };
       return Promise.resolve(clone(mockState));
     },
     openLocalWebUi: function () {
@@ -136,6 +137,14 @@ window.__MOCK_STATE__ = {
     return state && state.account ? (state.account.authState || (state.account.connected ? 'connected' : 'logged_out')) : 'logged_out';
   }
 
+  function cloudEnabled(state) {
+    return !state || state.cloudEnabled !== false;
+  }
+
+  function appLabel(state) {
+    return (state && state.appName) || 'CloudCLI';
+  }
+
   function accountLabel(state) {
     if (authState(state) === 'expired') return 'Reconnect';
     if (state && state.account && state.account.email) return state.account.email;
@@ -170,6 +179,8 @@ window.__MOCK_STATE__ = {
     connected: connected,
     authState: authState,
     accountLabel: accountLabel,
+    cloudEnabled: cloudEnabled,
+    appLabel: appLabel,
     localUrl: localUrl,
     envCount: envCount,
     version: VERSION,
@@ -294,8 +305,9 @@ window.__MOCK_STATE__ = {
   CC.act = function (name, node) {
     switch (name) {
       case 'local':
-        return CC.run('Starting Local CloudCLI...', function () { return bridge.openLocal(); });
+        return CC.run('Starting Local ' + appLabel(CC.state) + '...', function () { return bridge.openLocal(); });
       case 'connect':
+        if (!cloudEnabled(CC.state)) return;
         return CC.run('Opening cloudcli.ai to connect your account...', function () { return bridge.connectCloud(); });
       case 'logout':
         return CC.run('Logging out...', function () { return bridge.disconnectCloud(); });
@@ -318,7 +330,8 @@ window.__MOCK_STATE__ = {
       case 'settings-close':
         return CC.closeSheet();
       case 'dashboard':
-        return CC.run('Opening CloudCLI dashboard...', function () { return bridge.openCloudDashboard(); });
+        if (!cloudEnabled(CC.state)) return;
+        return CC.run('Opening ' + appLabel(CC.state) + ' dashboard...', function () { return bridge.openCloudDashboard(); });
       case 'refresh-environments':
         return CC.run('Refreshing cloud environments...', function () { return bridge.refreshEnvironments(); });
       case 'refresh-tab':
@@ -356,16 +369,20 @@ window.__MOCK_STATE__ = {
     }
     var activeRefreshable = (state.activeTarget && (state.activeTarget.kind === 'remote' || state.activeTarget.kind === 'local')) ||
       (activeTab && activeTab.id !== 'home');
-    var envActions = activeEnvironmentId ? '<button class="btn sm tb-action no-drag" data-cc-action="env-row-menu" data-cc-environment-id="' + esc(activeEnvironmentId) + '" title="Open environment actions">Open environment in...</button>' : '';
+    var showCloud = cloudEnabled(state);
+    var envActions = showCloud && activeEnvironmentId ? '<button class="btn sm tb-action no-drag" data-cc-action="env-row-menu" data-cc-environment-id="' + esc(activeEnvironmentId) + '" title="Open environment actions">Open environment in...</button>' : '';
     var refreshAction = activeRefreshable ? '<button class="icon-btn tb-action no-drag" data-cc-action="refresh-tab" title="Refresh tab">' + icon('refresh', 16) + '</button>' : '';
-    var logoutAction = (conn || authState(state) === 'expired') ? '<button class="icon-btn tb-action no-drag" data-cc-action="logout" title="Logout">' + icon('logOut', 16) + '</button>' : '';
+    var logoutAction = showCloud && (conn || authState(state) === 'expired') ? '<button class="icon-btn tb-action no-drag" data-cc-action="logout" title="Logout">' + icon('logOut', 16) + '</button>' : '';
+    var accountAction = showCloud
+      ? '<button class="btn sm tb-action no-drag" data-cc-action="connect" title="' + esc(authState(state) === 'expired' ? 'Reconnect your ' + appLabel(state) + ' account' : accountLabel(state)) + '"><span class="dot" style="background:' + (conn ? 'var(--ok)' : (authState(state) === 'expired' ? 'var(--warn)' : 'var(--tx3)')) + '"></span>' + esc(accountLabel(state)) + '</button>'
+      : '';
     return '<div class="titlebar">' +
-      '<div class="brand"><img class="mk" src="' + esc(LOGO_URL) + '" alt=""><span>' + esc(state.appName || 'CloudCLI') + '</span></div>' +
+      '<div class="brand"><img class="mk" src="' + esc(LOGO_URL) + '" alt=""><span>' + esc(appLabel(state)) + '</span></div>' +
       '<div class="tb-tabs no-drag">' + renderTabs(state) + '</div>' +
       '<span style="flex:1"></span>' +
       refreshAction +
       envActions +
-      '<button class="btn sm tb-action no-drag" data-cc-action="connect" title="' + esc(authState(state) === 'expired' ? 'Reconnect your CloudCLI account' : accountLabel(state)) + '"><span class="dot" style="background:' + (conn ? 'var(--ok)' : (authState(state) === 'expired' ? 'var(--warn)' : 'var(--tx3)')) + '"></span>' + esc(accountLabel(state)) + '</button>' +
+      accountAction +
       logoutAction +
       '<button class="icon-btn tb-action no-drag" data-cc-action="settings-toggle" title="Settings">' + icon('settings', 16) + '</button>' +
       '</div>';
@@ -374,10 +391,13 @@ window.__MOCK_STATE__ = {
   CC.statusbar = function (state) {
     var status = CC._status || {};
     var running = !!state.localServerRunning;
+    var cloudStatus = cloudEnabled(state)
+      ? '<span class="sep">·</span><span>' + esc(envCount(state)) + '</span>' +
+        '<span class="sep">·</span><span>' + (authState(state) === 'expired' ? 'session expired' : (connected(state) ? esc(accountLabel(state)) : 'not connected')) + '</span>'
+      : '';
     return '<div class="statusbar">' +
       '<span><span class="dot" style="width:7px;height:7px;background:' + (running ? 'var(--ok)' : 'var(--tx3)') + '"></span> local ' + (running ? 'running · ' + esc(localUrl(state)) : 'idle') + '</span>' +
-      '<span class="sep">·</span><span>' + esc(envCount(state)) + '</span>' +
-      '<span class="sep">·</span><span>' + (authState(state) === 'expired' ? 'session expired' : (connected(state) ? esc(accountLabel(state)) : 'not connected')) + '</span>' +
+      cloudStatus +
       '<span style="flex:1"></span>' +
       (status.msg ? '<span class="status-msg ' + esc(status.tone) + '">' + esc(status.msg) + '</span><span class="sep">·</span>' : '') +
       '<span>v' + esc(VERSION) + '</span>' +
@@ -446,13 +466,13 @@ window.__MOCK_STATE__ = {
       '<div class="cc-row2"><button class="btn sm" data-cc-action="open-web">' + icon('arrow', 14) + 'Open in browser</button><button class="btn sm" data-cc-action="copy-web">' + icon('copy', 14) + 'Copy URL</button></div>';
     if (options.includePreferences) {
       body +=
-        '<label class="cc-toggle"><input type="checkbox" data-cc-setting="keepLocalServerRunning"' + (settings.keepLocalServerRunning ? ' checked' : '') + '><span><b>Keep server running</b><br>Leave Local CloudCLI available after you quit the app.</span></label>' +
+        '<label class="cc-toggle"><input type="checkbox" data-cc-setting="keepLocalServerRunning"' + (settings.keepLocalServerRunning ? ' checked' : '') + '><span><b>Keep server running</b><br>Leave Local ' + esc(appLabel(state)) + ' available after you quit the app.</span></label>' +
         '<label class="cc-toggle"><input type="checkbox" data-cc-setting="exposeLocalServerOnNetwork"' + (settings.exposeLocalServerOnNetwork ? ' checked' : '') + '><span><b>Allow LAN access</b><br>Use the copied URL from another device on this network.</span></label>';
     }
     body += '</div>';
     return CC.renderSection(
       options.eyebrow || 'LOCAL SERVER',
-      options.title || 'Run Local CloudCLI on this machine',
+      options.title || ('Run Local ' + appLabel(state) + ' on this machine'),
       body
     );
   };
@@ -474,12 +494,12 @@ window.__MOCK_STATE__ = {
       CC.buildLocalServerSection(state, { includePreferences: false }),
       CC.renderSection('PREFERENCES', 'How the local service behaves', '' +
         '<div class="cc-surface">' +
-        '<label class="cc-toggle"><input type="checkbox" data-cc-setting="keepLocalServerRunning"' + ((state.desktopSettings || {}).keepLocalServerRunning ? ' checked' : '') + '><span><b>Keep server running</b><br>Leave Local CloudCLI available after you quit the app.</span></label>' +
+        '<label class="cc-toggle"><input type="checkbox" data-cc-setting="keepLocalServerRunning"' + ((state.desktopSettings || {}).keepLocalServerRunning ? ' checked' : '') + '><span><b>Keep server running</b><br>Leave Local ' + esc(appLabel(state)) + ' available after you quit the app.</span></label>' +
         '<label class="cc-toggle"><input type="checkbox" data-cc-setting="exposeLocalServerOnNetwork"' + ((state.desktopSettings || {}).exposeLocalServerOnNetwork ? ' checked' : '') + '><span><b>Allow LAN access</b><br>Use the copied URL from another device on this network.</span></label>' +
         '</div>'
       ),
     ];
-    CC.renderSheet('Local Settings', 'Manage how Local CloudCLI runs on this computer.', sections);
+    CC.renderSheet('Local Settings', 'Manage how Local ' + appLabel(state) + ' runs on this computer.', sections);
   };
 
   CC.renderDesktopSettings = function () {
@@ -627,9 +647,9 @@ window.__MOCK_STATE__ = {
   }
 
   function localPane(state) {
-    return '<div class="pane-h"><div><h2 class="pane-title">Local servers</h2><p class="pane-sub">Manage Local CloudCLI on this machine. No account required.</p></div></div>' +
+    return '<div class="pane-h"><div><h2 class="pane-title">Local servers</h2><p class="pane-sub">Manage Local ' + CC.esc(CC.appLabel(state)) + ' on this machine. No account required.</p></div></div>' +
       '<div class="card"><div class="card-head"><div><div class="card-t">Local server</div><div class="card-sub mono">' + CC.esc(CC.localUrl(state) || 'Starts on demand') + '</div></div><div class="card-tools"><span class="dot" style="background:' + (state.localServerRunning ? 'var(--ok)' : 'var(--tx3)') + '"></span><button class="icon-btn" data-cc-action="local-settings-toggle" title="Local settings">' + CC.icon('gear', 16) + '</button></div></div>' +
-      '<div class="card-actions"><button class="btn pri" data-cc-action="local">' + CC.icon('play', 15) + 'Open Local CloudCLI</button><button class="btn" data-cc-action="open-web">' + CC.icon('arrow', 14) + 'Open in browser</button><button class="btn" data-cc-action="copy-web">' + CC.icon('copy', 14) + 'Copy URL</button></div></div>';
+      '<div class="card-actions"><button class="btn pri" data-cc-action="local">' + CC.icon('play', 15) + 'Open Local ' + CC.esc(CC.appLabel(state)) + '</button><button class="btn" data-cc-action="open-web">' + CC.icon('arrow', 14) + 'Open in browser</button><button class="btn" data-cc-action="copy-web">' + CC.icon('copy', 14) + 'Copy URL</button></div></div>';
   }
 
   function envRow(environment) {
@@ -646,13 +666,13 @@ window.__MOCK_STATE__ = {
   function cloudPane(state) {
     var header = '<div class="pane-h"><div><h2 class="pane-title">Environments</h2><p class="pane-sub">' + CC.esc(CC.envCount(state)) + '</p></div><button class="btn sm" data-cc-action="dashboard">' + CC.icon('arrow', 14) + 'Dashboard</button></div>';
     if (CC.authState(state) === 'expired') {
-      return header + '<div class="empty">Your CloudCLI session expired.<div style="margin-top:14px"><button class="btn pri" data-cc-action="connect">' + CC.icon('cloudPlus', 15) + 'Reconnect account</button></div></div>';
+      return header + '<div class="empty">Your ' + CC.esc(CC.appLabel(state)) + ' session expired.<div style="margin-top:14px"><button class="btn pri" data-cc-action="connect">' + CC.icon('cloudPlus', 15) + 'Reconnect account</button></div></div>';
     }
     if (!CC.connected(state)) {
-      return header + '<div class="empty">Connect your CloudCLI account to list hosted environments.<div style="margin-top:14px"><button class="btn pri" data-cc-action="connect">' + CC.icon('cloudPlus', 15) + 'Connect account</button></div></div>';
+      return header + '<div class="empty">Connect your ' + CC.esc(CC.appLabel(state)) + ' account to list hosted environments.<div style="margin-top:14px"><button class="btn pri" data-cc-action="connect">' + CC.icon('cloudPlus', 15) + 'Connect account</button></div></div>';
     }
     if (state.cloudLoading && !(state.environments || []).length) {
-      return header + '<div class="empty">Loading your CloudCLI environments...</div>';
+      return header + '<div class="empty">Loading your ' + CC.esc(CC.appLabel(state)) + ' environments...</div>';
     }
 
     var list = (state.environments || []).map(envRow).join('');
@@ -661,6 +681,9 @@ window.__MOCK_STATE__ = {
   }
 
   function renderBody(state) {
+    if (!CC.cloudEnabled(state)) {
+      return '<div class="sb-main">' + localPane(state) + '</div>';
+    }
     var section = CC.ui.section || ((CC.connected(state) || CC.authState(state) === 'expired') ? 'cloud' : 'local');
     CC.ui.section = section;
     var nav = '<div class="sb"><div class="sb-grp"><div class="lbl">Launcher</div>' +
