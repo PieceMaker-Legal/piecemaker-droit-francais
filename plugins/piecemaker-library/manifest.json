@@ -6,6 +6,5 @@
   "type": "module",
   "slot": "tab",
   "entry": "index.js",
-  "server": "server.mjs",
   "icon": "icon.svg"
 }
