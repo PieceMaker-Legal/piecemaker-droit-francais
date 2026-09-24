@@ -30,29 +30,8 @@
 
 .piecemaker-decision p {
   margin: 0 0 0.85em;
-}
-
-.piecemaker-decision-body,
-.piecemaker-decision-branch {
   text-align: justify;
   hyphens: auto;
-}
-
-.piecemaker-decision-heading {
-  margin-bottom: 1.35em;
-  text-align: center;
-  font-variant: small-caps;
-  letter-spacing: 0.03em;
-}
-
-.piecemaker-decision-motifs {
-  margin-top: 1.6em;
-  font-weight: 600;
-}
-
-.piecemaker-decision-branch {
-  padding-left: 1.5rem;
-  text-indent: -1.5rem;
 }
 
 .dark .piecemaker-decision {
