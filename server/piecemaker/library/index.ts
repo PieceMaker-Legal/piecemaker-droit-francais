@@ -1,8 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { randomBytes } from 'node:crypto';
-import { createRequire } from 'node:module';
 
 import express from 'express';
 
@@ -15,44 +13,26 @@ import { scanAndPersistLibraryProviderSkills } from './provider-skills.js';
 
 export { installLibraryRuntime } from './runtime.js';
 
-export async function startLibraryBackend(home: string, applicationRoot: string) {
+const LIBRARY_BODY_LIMIT = 1024 * 1024;
+
+export async function openLibrary(home: string, applicationRoot: string) {
   const store = createLibraryStore(home);
   try { await scanAndPersistLibraryProviderSkills(store, undefined, undefined, os.homedir()); } catch {}
   try { scanAndPersistLibraryProviderAgents(store, os.homedir()); } catch {}
   try { scanAndPersistLibraryProviderConnectors(store, os.homedir()); } catch {}
   try { scanInstalledLibraryCollections(store, os.homedir()); } catch {}
-  const require = createRequire(import.meta.url);
-  const { createActivationRouter } = require(path.join(applicationRoot, 'server/piecemaker/activation/index.cjs'));
-  const options = { repoRoot: path.join(applicationRoot, 'server/piecemaker/vendor'), piecemakerHome: home, homeDir: home, userHome: os.homedir(), isOriginAllowed: () => true };
-  const token = randomBytes(32).toString('hex');
-  const app = express();
-  app.use((req, res, next) => {
-    if (req.headers.authorization !== `Bearer ${token}`) { res.sendStatus(401); return; }
+  try { fs.unlinkSync(path.join(store.directory, 'connection.json')); } catch {}
+  const router = express.Router();
+  router.use((req, res, next) => {
+    const length = Number(req.headers['content-length'] || 0);
+    if (Number.isFinite(length) && length > LIBRARY_BODY_LIMIT) {
+      res.status(413).json({ error: 'Requête trop volumineuse.' });
+      return;
+    }
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  app.use(express.json({ limit: '1mb' }));
-  app.use(createLibraryRouter(store));
-  app.use(createLibraryMarketplaceRouter(store, applicationRoot, os.homedir()));
-  app.use((req, res, next) => {
-    if ((req.method === 'GET' && req.path === '/activation')
-      || (req.method === 'POST' && req.path === '/activation/toggle')) { next(); return; }
-    res.sendStatus(404);
-  });
-  app.use(createActivationRouter(options));
-  const server = app.listen(0, '127.0.0.1');
-  await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
-  const address = server.address();
-  if (!address || typeof address === 'string') throw new Error('Bibliothèque indisponible.');
-  const connection = path.join(store.directory, 'connection.json');
-  const temporary = `${connection}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, JSON.stringify({ port: address.port, token }), { mode: 0o600 });
-  fs.renameSync(temporary, connection);
-  server.unref();
-  process.once('exit', () => {
-    try {
-      if (JSON.parse(fs.readFileSync(connection, 'utf8')).token === token) fs.unlinkSync(connection);
-    } catch {}
-  });
-  return store;
+  router.use(createLibraryRouter(store));
+  router.use(createLibraryMarketplaceRouter(store, applicationRoot, os.homedir()));
+  return { store, router };
 }

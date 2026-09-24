@@ -11,7 +11,7 @@ import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
-import { startLibraryBackend, installLibraryRuntime } from './library/index.js';
+import { openLibrary, installLibraryRuntime } from './library/index.js';
 import { createKnowledgeBackend } from './knowledge/index.js';
 import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
@@ -49,8 +49,8 @@ const anonymizer = createAnonymizerService({ homeDir: piecemakerHome(), required
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy });
-const library = await startLibraryBackend(piecemakerHome(), applicationRoot);
-installLibraryRuntime(providerRuntimeService, sessionsService, library);
+const library = await openLibrary(piecemakerHome(), applicationRoot);
+installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
 const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
 
@@ -64,6 +64,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));
   router.use(timesheet);
+  router.use('/library', library.router);
   router.use(knowledge.router);
   router.use(createCompanySearchRouter());
   router.use(createBodaccSearchRouter());
