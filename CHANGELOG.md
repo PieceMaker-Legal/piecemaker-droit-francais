@@ -3,6 +3,13 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.1...v2.0.2) (2026-09-24)
+
+### New Features
+
+* **citations:** aligne la visionneuse sur les balises Légifrance ([8fcb75f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8fcb75f545678b228de65f6947cffd9e504446b1))
+* **desktop:** retire les composants à la désinstallation ([9d54517](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9d5451791ed8f416be803770c0dc6ecbf8a71dd6))
+
 ## [2.0.1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v1.0.8...v2.0.1) (2026-09-24)
 
 ### New Features
