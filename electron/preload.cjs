@@ -37,6 +37,14 @@ if (isCloudCliAppOrigin(window.location)) {
   });
 }
 
+if (window.location.protocol === 'file:' || (
+  window.location.protocol === 'http:' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost')
+)) {
+  contextBridge.exposeInMainWorld('piecemakerDesktop', {
+    uninstall: () => ipcRenderer.invoke('piecemaker-desktop:uninstall'),
+  });
+}
+
 if (window.location.protocol === 'file:') {
   contextBridge.exposeInMainWorld('cloudcliDesktop', {
     connectCloud: () => ipcRenderer.invoke('cloudcli-desktop:connect-cloud'),
