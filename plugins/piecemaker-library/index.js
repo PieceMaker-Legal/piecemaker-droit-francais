@@ -97,8 +97,27 @@ export function mount(container, api) {
   }
 
   async function request(method, path, body) {
-    const result = await api.rpc(method, path, body);
-    if (result?.error || result?.ok === false) throw new Error(result.error || result.reason || 'Opération impossible.');
+    const headers = { Accept: 'application/json' };
+    const token = localStorage.getItem('auth-token');
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    const response = await fetch(`/api/piecemaker/library${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      credentials: 'same-origin',
+    });
+    const refreshed = response.headers.get('X-Refreshed-Token');
+    if (refreshed) {
+      localStorage.setItem('auth-token', refreshed);
+      window.dispatchEvent(new CustomEvent('auth-token-refreshed', { detail: refreshed }));
+    }
+    if (response.headers.get('X-Auth-Error')) localStorage.removeItem('auth-token');
+    let result = null;
+    try { result = await response.json(); } catch { result = null; }
+    if (!response.ok || result?.error || result?.ok === false) {
+      throw new Error(result?.error || result?.reason || `Erreur ${response.status}`);
+    }
     return result;
   }
 
