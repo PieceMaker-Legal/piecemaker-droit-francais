@@ -6,9 +6,18 @@ Supports both pipeline (direct PDF) and VLM/hybrid (image-based) modes
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+
+def mineru_executable():
+    name = 'mineru.exe' if os.name == 'nt' else 'mineru'
+    sibling = Path(sys.executable).resolve().parent / name
+    if sibling.is_file():
+        return str(sibling)
+    return 'mineru'
 
 def parse_with_pipeline(pdf_path, output_dir, lang=None):
     """
@@ -29,7 +38,7 @@ def parse_with_pipeline(pdf_path, output_dir, lang=None):
     
     # Build mineru command
     cmd = [
-        'mineru',
+        mineru_executable(),
         '-p', str(pdf_path),
         '-o', str(output_dir),
         '-b', 'pipeline'
@@ -72,7 +81,7 @@ def parse_with_vlm(pdf_path, output_dir, backend='hybrid-auto-engine'):
     
     # Build mineru command
     cmd = [
-        'mineru',
+        mineru_executable(),
         '-p', str(pdf_path),
         '-o', str(output_dir),
         '-b', backend
