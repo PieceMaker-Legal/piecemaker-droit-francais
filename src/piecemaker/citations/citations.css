@@ -17,3 +17,44 @@
     z-index: 70;
   }
 }
+
+.piecemaker-decision {
+  margin: 0 auto;
+  max-width: 66ch;
+  padding: 1.75rem 1.5rem 3rem;
+  color: var(--piecemaker-text);
+  font-family: var(--piecemaker-font-editorial);
+  font-size: 1.125rem;
+  line-height: 1.65;
+}
+
+.piecemaker-decision p {
+  margin: 0 0 0.85em;
+}
+
+.piecemaker-decision-body,
+.piecemaker-decision-branch {
+  text-align: justify;
+  hyphens: auto;
+}
+
+.piecemaker-decision-heading {
+  margin-bottom: 1.35em;
+  text-align: center;
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+}
+
+.piecemaker-decision-motifs {
+  margin-top: 1.6em;
+  font-weight: 600;
+}
+
+.piecemaker-decision-branch {
+  padding-left: 1.5rem;
+  text-indent: -1.5rem;
+}
+
+.dark .piecemaker-decision {
+  color: hsl(var(--foreground));
+}
