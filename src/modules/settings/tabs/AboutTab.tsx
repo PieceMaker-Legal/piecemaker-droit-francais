@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 
 import { CLOUDCLI_WORDMARK_FONT_FAMILY, PRODUCT_REPOSITORY_URL } from '@/shared/constants';
 import { PRODUCT_SHORT_NAME } from '@/piecemaker/branding';
-import { DesktopUninstallButton } from '@/piecemaker/desktop/DesktopUninstallButton';
 import { useProductVersionCheck } from '@/piecemaker/hooks/useProductVersionCheck';
 
 const DISCORD_URL = 'https://discord.gg/buxwujPNRE';
@@ -104,8 +103,6 @@ export default function AboutTab() {
           Discord
         </a>
       </div>
-
-      <DesktopUninstallButton />
 
       {/* License */}
       <div className="border-t border-border/50 pt-4">

@@ -1,6 +1,7 @@
-import { Bell, Bot, GitBranch, Key, ListChecks, Mic, MonitorPlay, Palette, Puzzle } from 'lucide-react';
+import { Bell, Bot, GitBranch, Key, ListChecks, Mic, MonitorPlay, Palette, Puzzle, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { hasDesktopUninstall } from '@/piecemaker/desktop/desktopUninstallBridge';
 import { cn } from '@/shared/utils';
 import { PillBar, Pill } from '@/shared/ui';
 import type { SettingsMainTab } from '@/shared/types';
@@ -28,16 +29,22 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'notifications', labelKey: 'mainTabs.notifications', icon: Bell },
 ];
 
+function settingsNavItems(): NavItem[] {
+  if (!hasDesktopUninstall()) return NAV_ITEMS;
+  return [...NAV_ITEMS, { id: 'uninstall', labelKey: 'mainTabs.uninstall', icon: Trash2 }];
+}
+
 /** Rendered by Settings to switch between the settings dialog's main sections. */
 export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebarProps) {
   const { t } = useTranslation('settings');
+  const items = settingsNavItems();
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside className="hidden w-56 flex-shrink-0 border-r border-border bg-muted/30 md:flex md:flex-col">
         <nav className="flex flex-col gap-1 p-3">
-          {NAV_ITEMS.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
 
@@ -63,7 +70,7 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
       {/* Mobile horizontal nav — pill bar */}
       <div className="flex-shrink-0 border-b border-border px-3 py-2 md:hidden">
         <PillBar className="scrollbar-hide w-full overflow-x-auto">
-          {NAV_ITEMS.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
 
             return (

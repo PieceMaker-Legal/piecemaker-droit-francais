@@ -204,10 +204,10 @@ rejette (*MAC verification failed*).
 
 ### Désinstaller
 
-Dans l'application installée, l'onglet À propos propose **Désinstaller PieceMaker**.
-Le bouton retire l'application, les raccourcis Windows, le certificat local et
-les composants Python. Les dossiers déjà créés restent dans le répertoire de
-données.
+Dans l'application installée, les réglages ont un onglet **Désinstaller** sous Notifications.
+Cet onglet retire l'application, les raccourcis Windows, le certificat local,
+le venv Python, les modèles GLiNER et MinerU, et le fichier `mineru.json`.
+Les dossiers déjà créés restent dans le répertoire de données.
 
 ### Retirer le certificat
 
