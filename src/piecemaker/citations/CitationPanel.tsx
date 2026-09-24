@@ -1,9 +1,42 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 import { Button, ScrollArea } from '@/shared/ui';
 import { fetchCitationSource } from '@/piecemaker/citations/api';
+import { decisionParagraphs, type DecisionParagraph } from '@/piecemaker/citations/decisionLayout';
 import { legifranceQuoteUrl } from '@/piecemaker/citations/legifrance';
+
+type PassageRange = { start: number; end: number };
+
+function highlightedPassage(source: string, start: number, end: number, ranges: PassageRange[], passage: RefObject<HTMLElement | null>) {
+  const parts: ReactNode[] = [];
+  let offset = start;
+  for (const [index, range] of ranges.entries()) {
+    const from = Math.max(range.start, start);
+    const to = Math.min(range.end, end);
+    if (range.end > source.length || range.end <= range.start || from < offset || to <= from) continue;
+    if (from > offset) parts.push(source.slice(offset, from));
+    parts.push(<mark key={`${range.start}-${range.end}`} ref={index === 0 && from === range.start ? passage : undefined} className="rounded bg-yellow-200 text-gray-950 dark:bg-yellow-700 dark:text-white">{source.slice(from, to)}</mark>);
+    offset = to;
+  }
+  if (offset < end) parts.push(source.slice(offset, end));
+  return parts;
+}
+
+function CitationText({ source, ranges, passage, paragraphs }: { source: string; ranges: PassageRange[]; passage: RefObject<HTMLElement | null>; paragraphs: DecisionParagraph[] | null }) {
+  if (!paragraphs) {
+    return <div className="whitespace-pre-wrap break-words p-4 font-serif text-sm leading-relaxed" aria-label="Texte source">{highlightedPassage(source, 0, source.length, ranges, passage)}</div>;
+  }
+  return (
+    <div className="piecemaker-decision" lang="fr" aria-label="Texte source">
+      {paragraphs.map((paragraph) => (
+        <p key={paragraph.start} className={`piecemaker-decision-${paragraph.kind}`}>
+          {highlightedPassage(source, paragraph.start, paragraph.end, ranges, passage)}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export function CitationPanel({ token, onClose }: { token: string; onClose: () => void }) {
   return <CitationPanelContent key={token} token={token} onClose={onClose} />;
@@ -40,15 +73,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
   const quote = source?.citation.quotes[quoteIndex];
   const officialUrl = legifranceQuoteUrl(source?.citation.decision_id, quote?.quote);
   const ranges = (source?.ranges ?? []).filter((range) => range.quoteIndex === quoteIndex).sort((a, b) => a.start - b.start);
-  const parts = [];
-  let offset = 0;
-  for (const [index, range] of ranges.entries()) {
-    if (!source || range.start < offset || range.end > source.source.length || range.end <= range.start) continue;
-    parts.push(source.source.slice(offset, range.start));
-    parts.push(<mark key={`${range.start}-${range.end}`} ref={index === 0 ? passage : undefined} className="rounded bg-yellow-200 text-gray-950 dark:bg-yellow-700 dark:text-white">{source.source.slice(range.start, range.end)}</mark>);
-    offset = range.end;
-  }
-  if (source) parts.push(source.source.slice(offset));
+  const paragraphs = source ? decisionParagraphs(source.source) : null;
 
   return (
     <aside aria-label="Source de la citation" className="flex h-full min-w-0 flex-col border-l border-border bg-background text-foreground shadow-xl">
@@ -72,7 +97,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
           {officialUrl && <a href={officialUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className="mt-3 inline-block text-sm text-blue-600 underline dark:text-blue-400">Ouvrir ce passage sur Légifrance ↗</a>}
         </section>
       )}
-      {source && <ScrollArea className="min-h-0 flex-1"><div className="whitespace-pre-wrap break-words p-4 font-serif text-sm leading-relaxed" aria-label="Texte source">{source.source ? parts : 'Le texte de cette source n’a pas été lu dans ce tour ou est indisponible.'}</div></ScrollArea>}
+      {source && <ScrollArea className="min-h-0 flex-1">{source.source ? <CitationText source={source.source} ranges={ranges} passage={passage} paragraphs={paragraphs} /> : <div className="p-4 text-sm" aria-label="Texte source">Le texte de cette source n’a pas été lu dans ce tour ou est indisponible.</div>}</ScrollArea>}
     </aside>
   );
 }
