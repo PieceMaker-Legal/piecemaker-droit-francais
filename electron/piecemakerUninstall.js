@@ -5,6 +5,14 @@ import path from 'node:path';
 
 import { macUninstallScript, packagedApplicationRoot, removalPlan, windowsUninstallScript } from './uninstallPlan.js';
 
+function readJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 export function registerPiecemakerUninstall({ ipcMain, app }) {
   ipcMain.handle('piecemaker-desktop:uninstall', async () => {
     if (!app.isPackaged) {
@@ -14,7 +22,12 @@ export function registerPiecemakerUninstall({ ipcMain, app }) {
     if (!appRoot) {
       throw new Error('Dossier de l’application introuvable.');
     }
-    const plan = removalPlan(appRoot);
+    const home = os.homedir();
+    const dataHome = process.env.PIECEMAKER_HOME || path.join(home, '.piecemaker');
+    const plan = removalPlan(appRoot, home, process.env, process.platform, {
+      config: readJson(path.join(dataHome, 'config.json')),
+      mineru: readJson(path.join(home, 'mineru.json')),
+    });
     const helper = path.join(os.tmpdir(), `piecemaker-uninstall-${process.pid}${process.platform === 'win32' ? '.ps1' : '.sh'}`);
     if (process.platform === 'win32') {
       fs.writeFileSync(helper, windowsUninstallScript(plan), 'utf8');
