@@ -158,6 +158,8 @@ server/piecemaker/vendor/websocket-server/admin-routes.cjs
 
 CLAUDE.md
 
+server/piecemaker/anonymizer/bin/
+
 # Tests PieceMaker (hors upstream CloudCLI)
 src/piecemaker/**/*.test.ts
 src/piecemaker/**/*.test.tsx

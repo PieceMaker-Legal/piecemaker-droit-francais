@@ -1,35 +1,12 @@
-/**
- * Écriture atomique des configurations Claude Code et Codex pour les faire
- * passer par le proxy hudsucker de ce dépôt.
- *
- * Propre à ce fichier, sans dépendance vendor : l'identifiant de bloc
- * `piecemaker_proxy` et les marqueurs qui l'entourent n'appartiennent qu'à
- * ce proxy. Le fournisseur Codex géré n'a jamais parlé que HTTP Responses.
- */
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-
-const CODEX_PROVIDER_ID = 'piecemaker_proxy';
-const CODEX_BLOCK_START = '# >>> PieceMaker Proxy PII (géré automatiquement)';
-const CODEX_BLOCK_END = '# <<< PieceMaker Proxy PII';
 
 function atomicWrite(file, content, mode = 0o600) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temporary = `${file}.piecemaker-${process.pid}-${Date.now()}`;
   fs.writeFileSync(temporary, content, { encoding: 'utf8', mode });
   fs.renameSync(temporary, file);
-}
-
-/** Une base que PieceMaker a écrite — donc que PieceMaker peut réécrire ou retirer. */
-function isOwnLoopbackUrl(value, suffix) {
-  try {
-    const url = new URL(String(value || ''));
-    return ['127.0.0.1', 'localhost'].includes(url.hostname)
-      && url.pathname.replace(/\/$/, '') === suffix;
-  } catch {
-    return false;
-  }
 }
 
 const PROXY_ENV = {
@@ -75,16 +52,8 @@ function configureClaudeCodeProxy({ proxyUrl, caFile, userHome = os.homedir() } 
   if (existingProxy && existingProxy !== proxyUrl && !isLoopbackProxy(existingProxy)) {
     return { configured: false, changed: false, conflict: true, file: settingsFile, reason: 'proxy-conflict' };
   }
-  const existingBase = settings.env.ANTHROPIC_BASE_URL;
-  if (existingBase && !isOwnLoopbackUrl(existingBase, '/anthropic')) {
-    return { configured: false, changed: false, conflict: true, file: settingsFile, reason: 'base-url-conflict' };
-  }
 
   let changed = false;
-  if (existingBase) {
-    delete settings.env.ANTHROPIC_BASE_URL;
-    changed = true;
-  }
   for (const [key, produce] of Object.entries(PROXY_ENV)) {
     const value = produce(proxyUrl, caFile);
     if (!value) continue;
@@ -117,14 +86,9 @@ function bypassClaudeCodeProxy({ userHome = os.homedir() } = {}) {
     if (env === undefined) return { bypassed: true, changed: false, conflict: false, file: settingsFile };
     return { bypassed: false, changed: false, conflict: true, file: settingsFile, reason: 'env-invalid' };
   }
-  const ownsProxy = isLoopbackProxy(env.HTTPS_PROXY) || isOwnLoopbackUrl(env.ANTHROPIC_BASE_URL, '/anthropic');
-  if (!ownsProxy) return { bypassed: true, changed: false, conflict: false, file: settingsFile };
+  if (!isLoopbackProxy(env.HTTPS_PROXY)) return { bypassed: true, changed: false, conflict: false, file: settingsFile };
 
   let changed = false;
-  if (isOwnLoopbackUrl(env.ANTHROPIC_BASE_URL, '/anthropic')) {
-    delete env.ANTHROPIC_BASE_URL;
-    changed = true;
-  }
   if (isLoopbackProxy(env.HTTPS_PROXY)) {
     for (const key of Object.keys(PROXY_ENV)) {
       if (env[key] !== undefined) {
@@ -139,87 +103,15 @@ function bypassClaudeCodeProxy({ userHome = os.homedir() } = {}) {
   return { bypassed: true, changed: true, conflict: false, file: settingsFile };
 }
 
-function topLevelAssignment(lines, key) {
-  const expression = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=\\s*(.*?)\\s*$`);
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (/^\s*\[/.test(line)) break;
-    const match = line.match(expression);
-    if (match) return { index, raw: match[1] };
-  }
-  return null;
+function configureCodexProxy() {
+  return { configured: true, changed: false, conflict: false, file: null };
 }
 
-function parseTomlString(raw) {
-  const value = String(raw || '').trim();
-  if (value.startsWith('"')) {
-    const literal = value.match(/^("(?:\\.|[^"\\])*")/)?.[1];
-    try { return literal ? JSON.parse(literal) : null; } catch { return null; }
-  }
-  const literal = value.match(/^'([^']*)'/)?.[1];
-  if (literal !== undefined) return literal;
-  return null;
-}
-
-function configureCodexProxy(options = {}) {
-  const removed = bypassCodexProxy(options);
-  if (removed.conflict) {
-    return { configured: false, changed: false, conflict: true, file: removed.file, reason: removed.reason };
-  }
-  return { configured: true, changed: removed.changed, conflict: false, file: removed.file };
-}
-
-function bypassCodexProxy({
-  codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex'),
-} = {}) {
-  const configFile = path.join(codexHome, 'config.toml');
-  if (!fs.existsSync(configFile)) {
-    return { bypassed: true, changed: false, conflict: false, file: configFile };
-  }
-
-  let content;
-  try { content = fs.readFileSync(configFile, 'utf8'); } catch {
-    return { bypassed: false, changed: false, conflict: true, file: configFile, reason: 'config-unreadable' };
-  }
-
-  const lines = content.replace(/^﻿/, '').split(/\r?\n/);
-  const provider = topLevelAssignment(lines, 'model_provider');
-  const providerValue = provider ? parseTomlString(provider.raw) : 'openai';
-  const managedStart = lines.findIndex((line) => line.trim() === CODEX_BLOCK_START);
-  let managedEnd = lines.findIndex((line) => line.trim() === CODEX_BLOCK_END);
-  if (managedStart >= 0 && managedEnd < managedStart) {
-    let end = managedStart;
-    for (let index = managedStart + 1; index < lines.length; index += 1) {
-      if (/^\s*\[/.test(lines[index]) && !lines[index].includes('piecemaker_proxy')) break;
-      end = index;
-    }
-    managedEnd = end;
-  }
-  if (managedStart < 0 && managedEnd >= 0) {
-    return { bypassed: false, changed: false, conflict: true, file: configFile, reason: 'provider-block-invalid' };
-  }
-  if (providerValue !== CODEX_PROVIDER_ID && managedStart < 0) {
-    return { bypassed: true, changed: false, conflict: false, file: configFile };
-  }
-  if (managedStart >= 0) lines.splice(managedStart, managedEnd - managedStart + 1);
-
-  if (providerValue === CODEX_PROVIDER_ID) {
-    lines[provider.index] = 'model_provider = "openai"';
-    if (lines[provider.index - 1]?.trim() === '# Fournisseur Responses protégé par PieceMaker.') {
-      lines.splice(provider.index - 1, 1);
-    }
-  }
-
-  const normalized = `${lines.join('\n').replace(/\n+$/, '')}\n`;
-  if (normalized === `${content.replace(/^﻿/, '').replace(/\n*$/, '')}\n`) {
-    return { bypassed: true, changed: false, conflict: false, file: configFile };
-  }
-  atomicWrite(configFile, normalized);
-  return { bypassed: true, changed: true, conflict: false, file: configFile };
+function bypassCodexProxy() {
+  return { bypassed: true, changed: false, conflict: false, file: null };
 }
 
 module.exports = {
-  CODEX_PROVIDER_ID,
   configureClaudeCodeProxy,
   bypassClaudeCodeProxy,
   configureCodexProxy,

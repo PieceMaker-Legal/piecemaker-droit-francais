@@ -11,9 +11,7 @@
  * Ce hook sert deux clients, distingués par la variable d'environnement
  * PIECEMAKER_HOOK_CLIENT :
  *   - claude (valeur par défaut) : HTTPS_PROXY dans ~/.claude/settings.json.
- *     Une ancienne ANTHROPIC_BASE_URL en boucle locale est retirée avec.
- *   - codex : HTTPS_PROXY hérité du processus. Un ancien bloc
- *     [model_providers.piecemaker_proxy] est retiré pour rendre l'URL réelle.
+ *   - codex : HTTPS_PROXY hérité du processus.
  *
  * Il sonde le port concerné, et si le proxy est bien mort retire l'entrée
  * périmée pour laisser la session démarrer en accès direct plutôt qu'en
@@ -39,8 +37,6 @@ const require = createRequire(import.meta.url);
 const DEFAULT_PORT = 4111;
 const PROBE_TIMEOUT_MS = 1500;
 const GUARD_NAME = 'repo';
-const CODEX_BLOCK_START = '# >>> PieceMaker Proxy PII (géré automatiquement)';
-const CODEX_BLOCK_END = '# <<< PieceMaker Proxy PII';
 
 function lireEntierPort(valeur) {
   const nombre = Number.parseInt(valeur, 10);
@@ -81,21 +77,11 @@ function lireStdin(delaiMs = 500) {
   });
 }
 
-function estUrlLoopback(valeur, pathAttendu) {
-  try {
-    const url = new URL(String(valeur || ''));
-    const estLoopback = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
-    return estLoopback && url.pathname.replace(/\/$/, '') === pathAttendu;
-  } catch {
-    return false;
-  }
-}
-
 function extraireBaseUrlClaude(userHome) {
   const settingsFile = path.join(userHome, '.claude', 'settings.json');
   const settings = lireJsonSiPresent(settingsFile);
   const env = settings && typeof settings.env === 'object' && settings.env !== null ? settings.env : {};
-  return env.HTTPS_PROXY || env.ANTHROPIC_BASE_URL;
+  return env.HTTPS_PROXY;
 }
 
 function estLoopback(valeur) {
@@ -104,28 +90,6 @@ function estLoopback(valeur) {
     return url.hostname === '127.0.0.1' || url.hostname === 'localhost';
   } catch {
     return false;
-  }
-}
-
-function extraireBlocCodex(contenu) {
-  const debut = contenu.indexOf(CODEX_BLOCK_START);
-  const fin = contenu.indexOf(CODEX_BLOCK_END);
-  if (debut === -1 || fin === -1 || fin < debut) return null;
-  return contenu.slice(debut, fin + CODEX_BLOCK_END.length);
-}
-
-function extraireBaseUrlCodex(codexHome) {
-  try {
-    const configFile = path.join(codexHome, 'config.toml');
-    if (!fs.existsSync(configFile)) return undefined;
-    const contenu = fs.readFileSync(configFile, 'utf8');
-    const bloc = extraireBlocCodex(contenu);
-    if (!bloc) return undefined;
-    const correspondance = bloc.match(/^\s*base_url\s*=\s*(?:"([^"]*)"|'([^']*)')/m);
-    if (!correspondance) return undefined;
-    return correspondance[1] !== undefined ? correspondance[1] : correspondance[2];
-  } catch {
-    return undefined;
   }
 }
 
@@ -190,14 +154,6 @@ async function main() {
     };
 
     if (client === 'codex') {
-      const codexHome = process.env.CODEX_HOME || path.join(userHome, '.codex');
-      const baseUrl = extraireBaseUrlCodex(codexHome);
-
-      if (baseUrl && estUrlLoopback(baseUrl, '/chatgpt')) {
-        const { bypassCodexProxy } = require('../../../server/piecemaker/anonymizer/client-config.cjs');
-        bypassCodexProxy({ codexHome });
-      }
-
       const envProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
       if (!envProxy) {
         route = 'absente';
@@ -231,10 +187,10 @@ async function main() {
 
       verdict = 'nettoye';
       terminer({
-        systemMessage: `⚠️ PIECEMAKER : proxy PII injoignable sur le port ${port}. La configuration périmée a été retirée de ~/.codex/config.toml — cette session Codex démarre en ACCÈS DIRECT, SANS ANONYMISATION. Démarrer le serveur PieceMaker (commande \`piecemaker\`) pour rétablir la protection.`,
+        systemMessage: `⚠️ PIECEMAKER : proxy PII injoignable sur le port ${port}. Cette session Codex n'est pas anonymisée. Démarrer le serveur PieceMaker (commande \`piecemaker\`) pour rétablir la protection.`,
         hookSpecificOutput: {
           hookEventName: 'SessionStart',
-          additionalContext: `Le proxy PII PieceMaker était configuré sur le port ${port} mais ne répond pas. Le bloc géré a été retiré de ~/.codex/config.toml et model_provider est revenu à "openai". Cette session n'est PAS anonymisée tant que le serveur PieceMaker (commande \`piecemaker\`) n'est pas relancé.`,
+          additionalContext: `Le proxy PII PieceMaker était configuré sur le port ${port} mais ne répond pas. Cette session n'est PAS anonymisée tant que le serveur PieceMaker (commande \`piecemaker\`) n'est pas relancé.`,
         },
       });
       return;
