@@ -38,6 +38,8 @@ async function main() {
 
   createShortcuts(installedPath);
 
+  await import('../composants/install.mjs').then((composants) => composants.installRuntimeComponents({ sourceDir }));
+
   if (!skipLaunch) {
     ui.step(`Démarrage de ${PRODUCT_NAME}…`);
     launchApplication(installedPath);
