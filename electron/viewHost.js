@@ -229,7 +229,6 @@ export class ViewHost {
       return;
     }
     view.setBounds(this.getContentViewBounds());
-    view.setAutoResize({ width: true, height: true });
   }
 
   resizeActiveView() {

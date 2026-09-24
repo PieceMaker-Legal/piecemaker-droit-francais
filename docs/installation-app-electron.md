@@ -202,6 +202,13 @@ Le bundle PKCS#12 de signature est exporté avec
 défaut d'OpenSSL 3 (Homebrew) produisent un `.p12` que `security import`
 rejette (*MAC verification failed*).
 
+### Désinstaller
+
+Dans l'application installée, l'onglet À propos propose **Désinstaller PieceMaker**.
+Le bouton retire l'application, les raccourcis Windows, le certificat local et
+les composants Python. Les dossiers déjà créés restent dans le répertoire de
+données.
+
 ### Retirer le certificat
 
 macOS, **depuis le Terminal** (`remove-trusted-cert` exige lui aussi une
