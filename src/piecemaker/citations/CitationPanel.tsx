@@ -2,11 +2,23 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'rea
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 import { Button, ScrollArea } from '@/shared/ui';
-import { fetchCitationSource } from '@/piecemaker/citations/api';
-import { decisionParagraphs, type DecisionParagraph } from '@/piecemaker/citations/decisionLayout';
+import { fetchCitationSource, fetchLegifranceBlocks } from '@/piecemaker/citations/api';
 import { legifranceQuoteUrl } from '@/piecemaker/citations/legifrance';
 
 type PassageRange = { start: number; end: number };
+
+const detachedPassage = { current: null };
+
+function quoteRanges(block: string, quote: string | undefined) {
+  if (!quote) return [];
+  const ranges: PassageRange[] = [];
+  for (const part of quote.split(/\[\[PAGE_BREAK\]\]|\.{3}|…/).map((item) => item.trim()).filter(Boolean)) {
+    const pattern = part.split(/\s+/).map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+    const match = pattern ? new RegExp(pattern).exec(block) : null;
+    if (match) ranges.push({ start: match.index, end: match.index + match[0].length });
+  }
+  return ranges;
+}
 
 function highlightedPassage(source: string, start: number, end: number, ranges: PassageRange[], passage: RefObject<HTMLElement | null>) {
   const parts: ReactNode[] = [];
@@ -23,15 +35,16 @@ function highlightedPassage(source: string, start: number, end: number, ranges: 
   return parts;
 }
 
-function CitationText({ source, ranges, passage, paragraphs }: { source: string; ranges: PassageRange[]; passage: RefObject<HTMLElement | null>; paragraphs: DecisionParagraph[] | null }) {
-  if (!paragraphs) {
+function CitationText({ source, ranges, passage, blocks, quote }: { source: string; ranges: PassageRange[]; passage: RefObject<HTMLElement | null>; blocks: string[] | null; quote: string | undefined }) {
+  if (!blocks) {
     return <div className="whitespace-pre-wrap break-words p-4 font-serif text-sm leading-relaxed" aria-label="Texte source">{highlightedPassage(source, 0, source.length, ranges, passage)}</div>;
   }
+  const firstMarked = blocks.findIndex((block) => quoteRanges(block, quote).length > 0);
   return (
     <div className="piecemaker-decision" lang="fr" aria-label="Texte source">
-      {paragraphs.map((paragraph) => (
-        <p key={paragraph.start} className={`piecemaker-decision-${paragraph.kind}`}>
-          {highlightedPassage(source, paragraph.start, paragraph.end, ranges, passage)}
+      {blocks.map((block, index) => (
+        <p key={index}>
+          {highlightedPassage(block, 0, block.length, quoteRanges(block, quote), index === firstMarked ? passage : detachedPassage)}
         </p>
       ))}
     </div>
@@ -46,6 +59,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
   const [source, setSource] = useState<Awaited<ReturnType<typeof fetchCitationSource>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [quoteIndex, setQuoteIndex] = useState(0);
+  const [blocks, setBlocks] = useState<string[] | null>(null);
   const passage = useRef<HTMLElement | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
 
@@ -61,8 +75,19 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
   }, [token]);
 
   useEffect(() => {
+    if (!source?.citation.decision_id) return;
+    const controller = new AbortController();
+    void fetchLegifranceBlocks(token, controller.signal).then((value) => {
+      if (!controller.signal.aborted) setBlocks(value);
+    }).catch(() => {
+      if (!controller.signal.aborted) setBlocks(null);
+    });
+    return () => controller.abort();
+  }, [token, source?.citation.decision_id]);
+
+  useEffect(() => {
     passage.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [source, quoteIndex]);
+  }, [source, quoteIndex, blocks]);
 
   useEffect(() => {
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
@@ -73,7 +98,6 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
   const quote = source?.citation.quotes[quoteIndex];
   const officialUrl = legifranceQuoteUrl(source?.citation.decision_id, quote?.quote);
   const ranges = (source?.ranges ?? []).filter((range) => range.quoteIndex === quoteIndex).sort((a, b) => a.start - b.start);
-  const paragraphs = source ? decisionParagraphs(source.source) : null;
 
   return (
     <aside aria-label="Source de la citation" className="flex h-full min-w-0 flex-col border-l border-border bg-background text-foreground shadow-xl">
@@ -97,7 +121,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
           {officialUrl && <a href={officialUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className="mt-3 inline-block text-sm text-blue-600 underline dark:text-blue-400">Ouvrir ce passage sur Légifrance ↗</a>}
         </section>
       )}
-      {source && <ScrollArea className="min-h-0 flex-1">{source.source ? <CitationText source={source.source} ranges={ranges} passage={passage} paragraphs={paragraphs} /> : <div className="p-4 text-sm" aria-label="Texte source">Le texte de cette source n’a pas été lu dans ce tour ou est indisponible.</div>}</ScrollArea>}
+      {source && <ScrollArea className="min-h-0 flex-1">{source.source || blocks ? <CitationText source={source.source} ranges={ranges} passage={passage} blocks={blocks} quote={quote?.quote} /> : <div className="p-4 text-sm" aria-label="Texte source">Le texte de cette source n’a pas été lu dans ce tour ou est indisponible.</div>}</ScrollArea>}
     </aside>
   );
 }
