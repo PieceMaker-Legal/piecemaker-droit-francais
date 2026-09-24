@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { run } from './shell.mjs';
+import { capture, run } from './shell.mjs';
 import { ui } from './ui.mjs';
 import { IS_MAC, PRODUCT_NAME } from './paths.mjs';
 
@@ -100,7 +101,7 @@ async function repairStagedTree(stageDir) {
   ui.warn("Certaines dépendances restent introuvables — electron-builder peut échouer.");
 }
 
-const EXCLUDED_RUNTIME_ASSETS = new Set(['node_modules', '__pycache__', '.env', '.DS_Store', '.git']);
+const EXCLUDED_RUNTIME_ASSETS = new Set(['node_modules', '__pycache__', '.env', '.DS_Store', '.git', 'target', 'hudsucker-proxy']);
 
 function isRuntimeAsset(target) {
   const name = path.basename(target);
@@ -169,9 +170,62 @@ async function embedLocalServer(sourceDir, stageDir) {
   await embedRuntimeAssets(sourceDir, stageDir);
 }
 
+function cargoHome() {
+  const bootstrapHome = process.env.PIECEMAKER_BOOTSTRAP_HOME
+    || path.join(os.homedir(), '.piecemaker', 'bootstrap');
+  return path.join(bootstrapHome, 'toolchain', 'cargo');
+}
+
+async function ensureCargo() {
+  if (capture('cargo', ['--version']).code === 0) return process.env;
+  const home = cargoHome();
+  const rustupHome = path.join(path.dirname(home), 'rustup');
+  const cargoBin = path.join(home, 'bin', process.platform === 'win32' ? 'cargo.exe' : 'cargo');
+  const env = {
+    ...process.env,
+    CARGO_HOME: home,
+    RUSTUP_HOME: rustupHome,
+    PATH: `${path.join(home, 'bin')}${path.delimiter}${process.env.PATH || ''}`,
+  };
+  if (await exists(cargoBin)) return env;
+
+  ui.step("Installation de Rust pour le proxy d'anonymisation…");
+  if (process.platform === 'win32') {
+    const installer = path.join(os.tmpdir(), 'piecemaker-rustup-init.exe');
+    await run('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      `Invoke-WebRequest -UseBasicParsing -Uri https://win.rustup.rs/x86_64 -OutFile '${installer}'`,
+    ]);
+    await run(installer, ['-y', '--default-toolchain', 'stable', '--profile', 'minimal', '--no-modify-path'], { env });
+  } else {
+    await run('sh', ['-c', "curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path"], { env });
+  }
+  if (!(await exists(cargoBin))) throw new Error('Rust installé, mais cargo est introuvable.');
+  return env;
+}
+
+async function buildAnonymizerProxy(sourceDir) {
+  const env = await ensureCargo();
+  const project = path.join(sourceDir, 'server', 'piecemaker', 'anonymizer', 'hudsucker-proxy');
+  ui.step("Compilation du proxy d'anonymisation…");
+  await run('cargo', ['build', '--release', '--manifest-path', path.join(project, 'Cargo.toml')], {
+    cwd: sourceDir,
+    env,
+  });
+  const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
+  const built = path.join(project, 'target', 'release', binaryName);
+  const destinationDir = path.join(sourceDir, 'server', 'piecemaker', 'anonymizer', 'bin');
+  await fs.mkdir(destinationDir, { recursive: true });
+  const destination = path.join(destinationDir, binaryName);
+  await fs.copyFile(built, destination);
+  if (process.platform !== 'win32') await fs.chmod(destination, 0o755);
+  ui.detail('Proxy d\'anonymisation embarqué.');
+}
+
 export async function buildDesktopApp(sourceDir) {
   ui.step('Installation des dépendances du projet (plusieurs minutes)…');
   await run(npmCommand, ['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
+  await buildAnonymizerProxy(sourceDir);
 
   ui.step('Compilation du client et du serveur…');
   await run(npmCommand, ['run', 'build'], { cwd: sourceDir });
