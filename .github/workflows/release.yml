@@ -47,6 +47,11 @@ jobs:
 
       - run: npm ci
 
+      - name: Refuse CloudCLI version numbers
+        run: node scripts/release/assert-piecemaker-version.mjs
+        env:
+          RELEASE_INCREMENT: ${{ inputs.increment }}
+
       - name: Release
         id: release
         run: |

@@ -42,7 +42,6 @@ const CONFIG_FILE = path.join(os.homedir(), '.claude', 'piecemaker-secret-paths.
 /** Never empty: at minimum, the general PieceMaker runtime .env. */
 const DEFAULT_BLOCKLIST = [
   path.join(os.homedir(), 'PieceMaker', '.env'),
-  path.join(os.homedir(), 'Sites', 'PieceMaker-Installer', '.env'),
 ];
 
 const PATH_TOOLS = new Set(['Read', 'Grep', 'Glob', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit']);

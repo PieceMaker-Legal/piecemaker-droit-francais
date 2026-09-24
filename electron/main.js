@@ -10,6 +10,7 @@ import { DesktopNotificationsController } from './desktopNotifications.js';
 import { LocalServerController } from './localServer.js';
 import { TabsController } from './tabs.js';
 import { loadProductConfig } from '../shared/product-config.mjs';
+import { registerPiecemakerUninstall } from './piecemakerUninstall.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -732,6 +733,8 @@ function registerProtocolHandler() {
 }
 
 function registerIpcHandlers() {
+  registerPiecemakerUninstall({ ipcMain, app });
+
   ipcMain.handle('cloudcli-desktop:connect-cloud', async () => ({
     ...getDesktopState(),
     connectUrl: await connectCloudAccount(),

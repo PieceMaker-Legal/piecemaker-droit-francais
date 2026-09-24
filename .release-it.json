@@ -2,6 +2,7 @@
   "git": {
     "commitMessage": "chore(release): v${version}",
     "tagName": "v${version}",
+    "tagMatch": "v[2-9].*",
     "requireBranch": "main",
     "requireCleanWorkingDir": true
   },

@@ -2,7 +2,7 @@ import { Activity, Archive, Folder, FolderPlus, MessageSquare, Plus, RefreshCw, 
 import type { TFunction } from 'i18next';
 
 import { Button, Input, Tooltip } from '@/shared/ui';
-import { IS_PLATFORM,cn } from '@/shared/utils';
+import { cn } from '@/shared/utils';
 import type { SidebarSearchMode } from '@/shared/types';
 import GitHubStarBadge from '@/modules/sidebar/GitHubStarBadge';
 
@@ -28,10 +28,6 @@ type SidebarHeaderProps = {
   onCollapseSidebar: () => void;
   t: TFunction;
 };
-
-function LogoBlock() {
-  return null;
-}
 
 /** Rendered by SidebarContent at the top of the panel for the search box, search-mode tabs, refresh and new-project actions. */
 export default function SidebarHeader({
@@ -70,19 +66,7 @@ export default function SidebarHeader({
         className="hidden px-3 pb-2 pt-3 md:block"
         style={{}}
       >
-        <div className="flex items-center justify-between gap-2">
-          {IS_PLATFORM ? (
-            <a
-              href="https://cloudcli.ai/dashboard"
-              className="flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-80"
-              title={t('tooltips.viewEnvironments')}
-            >
-              <LogoBlock />
-            </a>
-          ) : (
-            <LogoBlock />
-          )}
-
+        <div className="flex items-center justify-end gap-2">
           <div className="flex flex-shrink-0 items-center gap-0.5">
             <Button
               variant="ghost"
@@ -232,19 +216,7 @@ export default function SidebarHeader({
         className="p-3 pb-2 md:hidden"
         style={isPWA && isMobile ? { paddingTop: '16px' } : {}}
       >
-        <div className="flex items-center justify-between">
-          {IS_PLATFORM ? (
-            <a
-              href="https://cloudcli.ai/dashboard"
-              className="flex min-w-0 items-center gap-2.5 transition-opacity active:opacity-70"
-              title={t('tooltips.viewEnvironments')}
-            >
-              <LogoBlock />
-            </a>
-          ) : (
-            <LogoBlock />
-          )}
-
+        <div className="flex items-center justify-end">
           <div className="flex flex-shrink-0 gap-1.5">
             <button
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50 transition-all active:scale-95"
