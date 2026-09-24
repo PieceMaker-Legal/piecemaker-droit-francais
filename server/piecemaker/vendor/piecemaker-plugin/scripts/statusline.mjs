@@ -39,11 +39,10 @@ function validPort(value) {
 function readRouting() {
   try {
     const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-    const value = settings?.env?.ANTHROPIC_BASE_URL;
+    const value = settings?.env?.HTTPS_PROXY || settings?.env?.ANTHROPIC_BASE_URL;
     if (typeof value !== 'string' || !value) return false;
     const url = new URL(value);
-    return ['127.0.0.1', 'localhost'].includes(url.hostname)
-      && url.pathname.replace(/\/$/, '') === '/anthropic';
+    return ['127.0.0.1', 'localhost'].includes(url.hostname);
   } catch {
     return false;
   }
