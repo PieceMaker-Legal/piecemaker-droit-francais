@@ -1,26 +1,18 @@
-import { useTranslation } from 'react-i18next';
-import { ExternalLink, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import type { ReactNode } from 'react';
-
-
-const CLOUDCLI_URL = 'https://cloudcli.ai';
 
 type PremiumFeatureCardProps = {
   icon: ReactNode;
   title: string;
   description: string;
-  ctaText?: string;
 };
 
-/** Rendered by the settings module's about tab to advertise a paid CloudCLI feature. */
+/** Rendered by the settings module's about tab to describe a locked feature. */
 export default function PremiumFeatureCard({
   icon,
   title,
   description,
-  ctaText,
 }: PremiumFeatureCardProps) {
-  const { t } = useTranslation('settings');
-  const resolvedCta = ctaText ?? t('about.proCta');
   return (
     <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-5">
       <div className="flex items-start gap-3">
@@ -35,15 +27,6 @@ export default function PremiumFeatureCard({
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {description}
           </p>
-          <a
-            href={CLOUDCLI_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:underline"
-          >
-            {resolvedCta}
-            <ExternalLink className="h-3 w-3" />
-          </a>
         </div>
       </div>
     </div>

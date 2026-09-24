@@ -3,11 +3,9 @@ import { useTranslation } from 'react-i18next';
 import {
   Activity,
   BarChart3,
-  BookOpen,
   Calculator,
   Clock,
   Download,
-  ExternalLink,
   Github,
   GitBranch,
   Loader2,
@@ -528,11 +526,12 @@ export default function PluginSettingsTab() {
 
   const officialPlugins = plugins.filter(isOfficialPlugin);
   const otherPlugins = plugins.filter((plugin) => !isOfficialPlugin(plugin));
+  const isCloudCliRecommendation = (recommendation: PluginRecommendation) => /cloudcli/i.test(recommendation.repoUrl);
   const officialRecommendations = OFFICIAL_PLUGIN_RECOMMENDATIONS.filter(
-    (recommendation) => !isRecommendationInstalled(recommendation),
+    (recommendation) => !isCloudCliRecommendation(recommendation) && !isRecommendationInstalled(recommendation),
   );
   const unofficialRecommendations = UNOFFICIAL_PLUGIN_RECOMMENDATIONS.filter(
-    (recommendation) => !isRecommendationInstalled(recommendation),
+    (recommendation) => !isCloudCliRecommendation(recommendation) && !isRecommendationInstalled(recommendation),
   );
   const hasOfficialSection = officialPlugins.length > 0 || officialRecommendations.length > 0;
   const hasOtherSection = otherPlugins.length > 0 || unofficialRecommendations.length > 0;
@@ -662,31 +661,6 @@ export default function PluginSettingsTab() {
         </div>
       )}
 
-      {/* Starter plugin */}
-      <div className="flex items-center justify-center gap-3 border-t border-border/50 pt-2">
-        <BookOpen className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/40" />
-        <span className="text-xs text-muted-foreground/60">
-          {t('pluginSettings.starterPluginLabel')}
-        </span>
-        <span className="text-muted-foreground/20">·</span>
-        <a
-          href={STARTER_PLUGIN_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground/60 transition-colors hover:text-foreground"
-        >
-          {t('pluginSettings.starter')} <ExternalLink className="h-2.5 w-2.5" />
-        </a>
-        <span className="text-muted-foreground/20">·</span>
-        <a
-          href="https://cloudcli.ai/docs/plugin-overview"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground/60 transition-colors hover:text-foreground"
-        >
-          {t('pluginSettings.docs')} <ExternalLink className="h-2.5 w-2.5" />
-        </a>
-      </div>
     </div>
   );
 }
