@@ -38,7 +38,8 @@ Options : `--no-certificate` (saute entièrement l'étape certificat),
 Variables d'environnement : `PIECEMAKER_TAG` (version à construire, par défaut
 la dernière *release* publiée), `PIECEMAKER_REPO`, `PIECEMAKER_BOOTSTRAP_HOME`
 (défaut `~/.piecemaker/bootstrap`), `PIECEMAKER_HOME` (défaut `~/.piecemaker`),
-`PIECEMAKER_NODE_CHANNEL`.
+`PIECEMAKER_NODE_CHANNEL`, `PIECEMAKER_COMPONENTS_HOME` (déplace l'interpréteur
+Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`).
 
 ## Déroulé
 
@@ -73,10 +74,34 @@ la dernière *release* publiée), `PIECEMAKER_REPO`, `PIECEMAKER_BOOTSTRAP_HOME`
    `%LOCALAPPDATA%\Programs\PieceMaker` avec raccourcis menu Démarrer et
    Bureau.
 7. **Certificat** — voir ci-dessous.
-8. **Lancement** de l'application.
+8. **Composants Python** — GLiNER, MarkItDown, MinerU et le reste de
+   `requirements.txt`, dans un venv. Sans eux l'application s'ouvre, mais
+   l'anonymisation et la conversion des pièces ne démarrent pas. Le détail
+   est plus bas.
+9. **Lancement** de l'application.
 
-Les étapes 3 à 5 sont idempotentes : sources et Node déjà présents sont
-réutilisés, et un certificat encore valide n'est pas régénéré.
+Les étapes 3 à 5 et 8 sont idempotentes : sources, Node, venv et modèles déjà
+présents sont réutilisés, et un certificat encore valide n'est pas régénéré.
+
+## Composants Python
+
+`desktop-bootstrap/composants/` installe, hors du bundle Electron :
+
+- un Python 3.10 à 3.13 déjà présent sur le poste, sinon un CPython 3.12
+  autonome (python-build-standalone) dans `<destination>/python` ;
+- le venv `<destination>/venv`, avec `requirements.txt` (MarkItDown, pypdf,
+  GLiNER, Presidio, spaCy) puis `mineru[pipeline,vlm]==2.7.6` ;
+- les modèles MinerU du moteur *pipeline* (OCR des pièces scannées) et le
+  modèle GLiNER2.5.
+
+`<destination>` est `PIECEMAKER_COMPONENTS_HOME`, ou `PIECEMAKER_HOME` si cette
+variable est absente. Elle ne contient que l'interpréteur et le venv. Les
+poids GLiNER restent dans le cache Hugging Face, et MinerU écrit `~/mineru.json`.
+Le chemin du venv est enregistré dans `config.json` (`pythonPath`, `venvPath`) :
+c'est ce fichier que l'application lit. Déplacer le dossier de code ne demande
+que la ligne qui l'importe dans `desktop-bootstrap/lib/install.mjs` — il
+n'importe rien du reste du bootstrap. Déplacer les binaires installés se fait
+en relançant avec `PIECEMAKER_COMPONENTS_HOME`.
 
 ## Serveur embarqué et ouverture sur l'interface PieceMaker
 
@@ -203,6 +228,8 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\.piecemaker\certs"
 desktop-bootstrap/
   install.sh                     entrée macOS (curl | sh)
   install.ps1                    entrée Windows (irm | iex)
+  composants/
+    install.mjs                  venv, GLiNER, MarkItDown, MinerU
   overlay/
     electron-piecemaker/main.js  point d'entrée Electron, ouvre la cible locale
   lib/
