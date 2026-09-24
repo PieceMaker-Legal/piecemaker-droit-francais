@@ -1,6 +1,6 @@
 /**
  * Écriture atomique des configurations Claude Code et Codex pour les faire
- * passer par le proxy PII de ce dépôt (`./proxy.cjs`).
+ * passer par le proxy hudsucker de ce dépôt.
  *
  * Propre à ce fichier, sans dépendance vendor : l'identifiant de bloc
  * `piecemaker_proxy` et les marqueurs qui l'entourent n'appartiennent qu'à
@@ -32,7 +32,28 @@ function isOwnLoopbackUrl(value, suffix) {
   }
 }
 
-function configureClaudeCodeProxy({ baseUrl, userHome = os.homedir() } = {}) {
+const PROXY_ENV = {
+  HTTPS_PROXY: (proxyUrl) => proxyUrl,
+  HTTP_PROXY: (proxyUrl) => proxyUrl,
+  ALL_PROXY: (proxyUrl) => proxyUrl,
+  NO_PROXY: () => 'localhost,127.0.0.1,::1',
+  NODE_USE_ENV_PROXY: () => '1',
+  NODE_EXTRA_CA_CERTS: (_proxyUrl, caFile) => caFile,
+  SSL_CERT_FILE: (_proxyUrl, caFile) => caFile,
+  CODEX_CA_CERTIFICATE: (_proxyUrl, caFile) => caFile,
+  REQUESTS_CA_BUNDLE: (_proxyUrl, caFile) => caFile,
+};
+
+function isLoopbackProxy(value) {
+  try {
+    const url = new URL(String(value || ''));
+    return ['127.0.0.1', 'localhost'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function configureClaudeCodeProxy({ proxyUrl, caFile, userHome = os.homedir() } = {}) {
   const settingsFile = path.join(userHome, '.claude', 'settings.json');
   let settings = {};
   try {
@@ -50,13 +71,29 @@ function configureClaudeCodeProxy({ baseUrl, userHome = os.homedir() } = {}) {
     return { configured: false, changed: false, conflict: true, file: settingsFile, reason: 'env-invalid' };
   }
   if (!settings.env) settings.env = {};
-  const existing = settings.env.ANTHROPIC_BASE_URL;
-  if (existing && existing !== baseUrl && !isOwnLoopbackUrl(existing, '/anthropic')) {
+  const existingProxy = settings.env.HTTPS_PROXY;
+  if (existingProxy && existingProxy !== proxyUrl && !isLoopbackProxy(existingProxy)) {
+    return { configured: false, changed: false, conflict: true, file: settingsFile, reason: 'proxy-conflict' };
+  }
+  const existingBase = settings.env.ANTHROPIC_BASE_URL;
+  if (existingBase && !isOwnLoopbackUrl(existingBase, '/anthropic')) {
     return { configured: false, changed: false, conflict: true, file: settingsFile, reason: 'base-url-conflict' };
   }
-  if (existing === baseUrl) return { configured: true, changed: false, conflict: false, file: settingsFile };
 
-  settings.env.ANTHROPIC_BASE_URL = baseUrl;
+  let changed = false;
+  if (existingBase) {
+    delete settings.env.ANTHROPIC_BASE_URL;
+    changed = true;
+  }
+  for (const [key, produce] of Object.entries(PROXY_ENV)) {
+    const value = produce(proxyUrl, caFile);
+    if (!value) continue;
+    if (settings.env[key] !== value) {
+      settings.env[key] = value;
+      changed = true;
+    }
+  }
+  if (!changed) return { configured: true, changed: false, conflict: false, file: settingsFile };
   atomicWrite(settingsFile, `${JSON.stringify(settings, null, 2)}\n`);
   return { configured: true, changed: true, conflict: false, file: settingsFile };
 }
@@ -76,25 +113,30 @@ function bypassClaudeCodeProxy({ userHome = os.homedir() } = {}) {
   }
 
   const env = settings.env;
-  if (env === undefined || (env && typeof env === 'object' && !Array.isArray(env)
-      && !env.ANTHROPIC_BASE_URL)) {
-    return { bypassed: true, changed: false, conflict: false, file: settingsFile };
-  }
   if (!env || typeof env !== 'object' || Array.isArray(env)) {
+    if (env === undefined) return { bypassed: true, changed: false, conflict: false, file: settingsFile };
     return { bypassed: false, changed: false, conflict: true, file: settingsFile, reason: 'env-invalid' };
   }
-  if (!isOwnLoopbackUrl(env.ANTHROPIC_BASE_URL, '/anthropic')) {
-    return { bypassed: true, changed: false, conflict: false, file: settingsFile };
-  }
+  const ownsProxy = isLoopbackProxy(env.HTTPS_PROXY) || isOwnLoopbackUrl(env.ANTHROPIC_BASE_URL, '/anthropic');
+  if (!ownsProxy) return { bypassed: true, changed: false, conflict: false, file: settingsFile };
 
-  delete env.ANTHROPIC_BASE_URL;
+  let changed = false;
+  if (isOwnLoopbackUrl(env.ANTHROPIC_BASE_URL, '/anthropic')) {
+    delete env.ANTHROPIC_BASE_URL;
+    changed = true;
+  }
+  if (isLoopbackProxy(env.HTTPS_PROXY)) {
+    for (const key of Object.keys(PROXY_ENV)) {
+      if (env[key] !== undefined) {
+        delete env[key];
+        changed = true;
+      }
+    }
+  }
+  if (!changed) return { bypassed: true, changed: false, conflict: false, file: settingsFile };
   if (Object.keys(env).length === 0) delete settings.env;
   atomicWrite(settingsFile, `${JSON.stringify(settings, null, 2)}\n`);
   return { bypassed: true, changed: true, conflict: false, file: settingsFile };
-}
-
-function tomlString(value) {
-  return JSON.stringify(String(value));
 }
 
 function topLevelAssignment(lines, key) {
@@ -119,71 +161,12 @@ function parseTomlString(raw) {
   return null;
 }
 
-function configureCodexProxy({
-  baseUrl,
-  codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex'),
-} = {}) {
-  const configFile = path.join(codexHome, 'config.toml');
-  let content = '';
-  try { content = fs.existsSync(configFile) ? fs.readFileSync(configFile, 'utf8') : ''; } catch {
-    return { configured: false, changed: false, conflict: true, file: configFile, reason: 'config-unreadable' };
+function configureCodexProxy(options = {}) {
+  const removed = bypassCodexProxy(options);
+  if (removed.conflict) {
+    return { configured: false, changed: false, conflict: true, file: removed.file, reason: removed.reason };
   }
-
-  const lines = content.replace(/^﻿/, '').split(/\r?\n/);
-  const provider = topLevelAssignment(lines, 'model_provider');
-  const providerValue = provider ? parseTomlString(provider.raw) : 'openai';
-  if (provider && !['openai', CODEX_PROVIDER_ID].includes(providerValue)) {
-    return { configured: false, changed: false, conflict: true, file: configFile, reason: 'provider-conflict' };
-  }
-
-  const managedTable = lines.findIndex((line) => line.trim() === `[model_providers.${CODEX_PROVIDER_ID}]`);
-  const managedStart = lines.findIndex((line) => line.trim() === CODEX_BLOCK_START);
-  let managedEnd = lines.findIndex((line) => line.trim() === CODEX_BLOCK_END);
-  if (managedTable >= 0 && managedStart < 0) {
-    return { configured: false, changed: false, conflict: true, file: configFile, reason: 'provider-table-conflict' };
-  }
-  if (managedStart >= 0 && managedEnd < managedStart) {
-    let end = managedTable >= managedStart ? managedTable : managedStart;
-    for (let index = end + 1; index < lines.length; index += 1) {
-      if (/^\s*\[/.test(lines[index])) break;
-      end = index;
-    }
-    managedEnd = end;
-  }
-
-  if (provider) {
-    lines[provider.index] = `model_provider = ${tomlString(CODEX_PROVIDER_ID)} # géré par PieceMaker`;
-  } else {
-    const firstTable = lines.findIndex((line) => /^\s*\[/.test(line));
-    lines.splice(firstTable < 0 ? 0 : firstTable, 0,
-      '# Fournisseur Responses protégé par PieceMaker.',
-      `model_provider = ${tomlString(CODEX_PROVIDER_ID)} # géré par PieceMaker`,
-      '');
-  }
-
-  // Le proxy de ce dépôt parle HTTP Responses, jamais WebSocket.
-  const block = [
-    CODEX_BLOCK_START,
-    `[model_providers.${CODEX_PROVIDER_ID}]`,
-    'name = "PieceMaker · Proxy PII"',
-    `base_url = ${tomlString(baseUrl)}`,
-    'requires_openai_auth = true',
-    'wire_api = "responses"',
-    'supports_websockets = false',
-    CODEX_BLOCK_END,
-  ];
-  if (managedStart >= 0 && managedEnd >= managedStart) {
-    lines.splice(managedStart, managedEnd - managedStart + 1, ...block);
-  } else {
-    while (lines.at(-1) === '') lines.pop();
-    lines.push('', ...block);
-  }
-  const normalized = `${lines.join('\n').replace(/\n+$/, '')}\n`;
-  if (normalized === `${content.replace(/^﻿/, '').replace(/\n*$/, '')}\n`) {
-    return { configured: true, changed: false, conflict: false, file: configFile };
-  }
-  atomicWrite(configFile, normalized);
-  return { configured: true, changed: true, conflict: false, file: configFile };
+  return { configured: true, changed: removed.changed, conflict: false, file: removed.file };
 }
 
 function bypassCodexProxy({
@@ -203,8 +186,16 @@ function bypassCodexProxy({
   const provider = topLevelAssignment(lines, 'model_provider');
   const providerValue = provider ? parseTomlString(provider.raw) : 'openai';
   const managedStart = lines.findIndex((line) => line.trim() === CODEX_BLOCK_START);
-  const managedEnd = lines.findIndex((line) => line.trim() === CODEX_BLOCK_END);
-  if ((managedStart < 0) !== (managedEnd < 0) || managedEnd < managedStart) {
+  let managedEnd = lines.findIndex((line) => line.trim() === CODEX_BLOCK_END);
+  if (managedStart >= 0 && managedEnd < managedStart) {
+    let end = managedStart;
+    for (let index = managedStart + 1; index < lines.length; index += 1) {
+      if (/^\s*\[/.test(lines[index]) && !lines[index].includes('piecemaker_proxy')) break;
+      end = index;
+    }
+    managedEnd = end;
+  }
+  if (managedStart < 0 && managedEnd >= 0) {
     return { bypassed: false, changed: false, conflict: true, file: configFile, reason: 'provider-block-invalid' };
   }
   if (providerValue !== CODEX_PROVIDER_ID && managedStart < 0) {

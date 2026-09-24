@@ -2,21 +2,18 @@
 /**
  * Hook SessionStart — garde-fou contre le port mort du proxy PII.
  *
- * Le proxy de ce dépôt (server/piecemaker/anonymizer/proxy.cjs, démarré par
- * service.cjs) écoute un port fixe et vit avec le process serveur. Il meurt
+ * Le proxy de ce dépôt (hudsucker, démarré par service.cjs) écoute un port
+ * fixe et vit avec le process serveur. Il meurt
  * avec lui, mais la configuration qu'il a écrite survit sur disque : une
  * session démarrée serveur éteint pointe alors vers un port fermé en boucle,
  * sans pouvoir se corriger elle-même en cours de route.
  *
  * Ce hook sert deux clients, distingués par la variable d'environnement
  * PIECEMAKER_HOOK_CLIENT :
- *   - claude (valeur par défaut) : la base vient de ~/.claude/settings.json
- *     → env.ANTHROPIC_BASE_URL, pathname attendu /anthropic. Nettoyage via
- *     bypassClaudeCodeProxy() (server/piecemaker/anonymizer/client-config.cjs).
- *   - codex : la base vient de ~/.codex/config.toml (ou $CODEX_HOME), dans
- *     le bloc géré délimité par les marqueurs PieceMaker Proxy PII, table
- *     [model_providers.piecemaker_proxy], pathname attendu /chatgpt.
- *     Nettoyage via bypassCodexProxy() du même module.
+ *   - claude (valeur par défaut) : HTTPS_PROXY dans ~/.claude/settings.json.
+ *     Une ancienne ANTHROPIC_BASE_URL en boucle locale est retirée avec.
+ *   - codex : HTTPS_PROXY hérité du processus. Un ancien bloc
+ *     [model_providers.piecemaker_proxy] est retiré pour rendre l'URL réelle.
  *
  * Il sonde le port concerné, et si le proxy est bien mort retire l'entrée
  * périmée pour laisser la session démarrer en accès direct plutôt qu'en
@@ -98,7 +95,16 @@ function extraireBaseUrlClaude(userHome) {
   const settingsFile = path.join(userHome, '.claude', 'settings.json');
   const settings = lireJsonSiPresent(settingsFile);
   const env = settings && typeof settings.env === 'object' && settings.env !== null ? settings.env : {};
-  return env.ANTHROPIC_BASE_URL;
+  return env.HTTPS_PROXY || env.ANTHROPIC_BASE_URL;
+}
+
+function estLoopback(valeur) {
+  try {
+    const url = new URL(String(valeur || ''));
+    return url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+  } catch {
+    return false;
+  }
 }
 
 function extraireBlocCodex(contenu) {
@@ -187,20 +193,26 @@ async function main() {
       const codexHome = process.env.CODEX_HOME || path.join(userHome, '.codex');
       const baseUrl = extraireBaseUrlCodex(codexHome);
 
-      if (!baseUrl) {
+      if (baseUrl && estUrlLoopback(baseUrl, '/chatgpt')) {
+        const { bypassCodexProxy } = require('../../../server/piecemaker/anonymizer/client-config.cjs');
+        bypassCodexProxy({ codexHome });
+      }
+
+      const envProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+      if (!envProxy) {
         route = 'absente';
         verdict = 'direct';
         terminer({
           systemMessage: "PieceMaker : aucun proxy PII configuré pour cette session Codex — elle démarre en accès direct, sans anonymisation.",
           hookSpecificOutput: {
             hookEventName: 'SessionStart',
-            additionalContext: "Aucun fournisseur piecemaker_proxy n'est configuré dans ~/.codex/config.toml : la session n'est pas routée par le proxy PII PieceMaker, aucune anonymisation n'est appliquée.",
+            additionalContext: "HTTPS_PROXY n'est pas défini : la session Codex n'est pas routée par le proxy PII PieceMaker, aucune anonymisation n'est appliquée.",
           },
         });
         return;
       }
 
-      if (!estUrlLoopback(baseUrl, '/chatgpt')) {
+      if (!estLoopback(envProxy)) {
         route = 'externe';
         verdict = 'externe';
         terminer(null);
@@ -208,7 +220,7 @@ async function main() {
       }
 
       route = 'proxy_piecemaker';
-      port = portDeLaBase(baseUrl, DEFAULT_PORT);
+      port = portDeLaBase(envProxy, DEFAULT_PORT);
       probe = await sonderPort(port);
 
       if (probe === 'vivant') {
@@ -216,9 +228,6 @@ async function main() {
         terminer(null);
         return;
       }
-
-      const { bypassCodexProxy } = require('../../../server/piecemaker/anonymizer/client-config.cjs');
-      bypassCodexProxy({ codexHome });
 
       verdict = 'nettoye';
       terminer({
@@ -244,13 +253,13 @@ async function main() {
         systemMessage: "PieceMaker : aucun proxy PII configuré pour cette session — elle démarre en accès direct, sans anonymisation.",
         hookSpecificOutput: {
           hookEventName: 'SessionStart',
-          additionalContext: "Aucune base ANTHROPIC_BASE_URL n'est configurée : la session n'est pas routée par le proxy PII PieceMaker, aucune anonymisation n'est appliquée.",
+          additionalContext: "HTTPS_PROXY n'est pas défini : la session n'est pas routée par le proxy PII PieceMaker, aucune anonymisation n'est appliquée.",
         },
       });
       return;
     }
 
-    if (!estUrlLoopback(baseUrl, '/anthropic')) {
+    if (!estLoopback(baseUrl)) {
       route = 'externe';
       verdict = 'externe';
       terminer(null);
@@ -275,7 +284,7 @@ async function main() {
       systemMessage: `⚠️ PIECEMAKER : proxy PII injoignable sur le port ${port}. La configuration périmée a été retirée — cette session démarre en ACCÈS DIRECT, SANS ANONYMISATION. Démarrer le serveur PieceMaker (commande \`piecemaker\`) pour rétablir la protection.`,
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
-        additionalContext: `Le proxy PII PieceMaker était configuré sur le port ${port} mais ne répond pas. L'entrée ANTHROPIC_BASE_URL périmée a été retirée de ~/.claude/settings.json. Cette session n'est PAS anonymisée tant que le serveur PieceMaker (commande \`piecemaker\`) n'est pas relancé.`,
+        additionalContext: `Le proxy PII PieceMaker était configuré sur le port ${port} mais ne répond pas. HTTPS_PROXY a été retiré de ~/.claude/settings.json. Cette session n'est PAS anonymisée tant que le serveur PieceMaker (commande \`piecemaker\`) n'est pas relancé.`,
       },
     });
   } catch {
