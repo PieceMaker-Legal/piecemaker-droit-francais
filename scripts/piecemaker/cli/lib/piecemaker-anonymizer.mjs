@@ -35,6 +35,7 @@ export async function repairClientProxies({ appDir, report }) {
 
   const userHome = os.homedir();
   const origin = `http://127.0.0.1:${await resolveAnonymizerPort()}`;
+  const caFile = path.join(userHome, '.piecemaker', 'certs', 'piecemaker-ca.crt');
 
   const attempt = (name, run) => {
     try {
@@ -51,9 +52,8 @@ export async function repairClientProxies({ appDir, report }) {
     }
   };
 
-  attempt('claude', () => configureClaudeCodeProxy({ baseUrl: `${origin}/anthropic`, userHome }));
+  attempt('claude', () => configureClaudeCodeProxy({ proxyUrl: origin, caFile, userHome }));
   attempt('codex', () => configureCodexProxy({
-    baseUrl: `${origin}/chatgpt`,
     codexHome: process.env.CODEX_HOME || path.join(userHome, '.codex'),
   }));
 }

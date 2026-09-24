@@ -15,17 +15,24 @@
  * Le proxy vit et meurt avec le serveur : à l'arrêt, les bases écrites sont
  * retirées pour ne pas laisser les clients pointer un port fermé.
  */
+const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
 const { createSqliteDictionaryLoader } = require('./sqlite-dictionary.cjs');
-const { DEFAULT_UPSTREAM, createAnonymizerProxy } = require('./proxy.cjs');
+const { startRewriterBridge } = require('./rewriter-bridge.cjs');
 const { bypassProviders, configureProviders } = require('./providers.cjs');
 const { createHarnessJuridique } = require('../harness/index.cjs');
 
 const ENV_VAR = 'ANTHROPIC_BASE_URL';
 const OPENAI_ENV_VAR = 'OPENAI_BASE_URL';
+const DEFAULT_UPSTREAM = 'https://api.anthropic.com';
+const DEFAULT_PORT = 4111;
+const PROXY_ENV_KEYS = [
+  'HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY',
+  'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'CODEX_CA_CERTIFICATE', 'REQUESTS_CA_BUNDLE',
+];
 
 /** Interrupteur : `PIECEMAKER_ANONYMIZER=off`, ou `anonymizer.enabled: false` dans `config.json`. */
 function isDisabled(homeDir) {
@@ -46,6 +53,15 @@ function isDisabled(homeDir) {
  * précédente de ce proxy, et serait un relais mort : on l'ignore au profit de
  * l'API officielle.
  */
+function isLoopbackValue(value) {
+  try {
+    const { hostname } = new URL(String(value || ''));
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  } catch {
+    return false;
+  }
+}
+
 function resolveUpstream(configured) {
   if (!configured) return DEFAULT_UPSTREAM;
   try {
@@ -76,6 +92,64 @@ function summarizeCoverage(report) {
   return coverage;
 }
 
+function hudsuckerBinary() {
+  if (process.env.PIECEMAKER_HUDSUCKER_BIN) return process.env.PIECEMAKER_HUDSUCKER_BIN;
+  const directory = path.join(__dirname, 'hudsucker-proxy', 'target');
+  const release = path.join(directory, 'release', 'piecemaker-hudsucker');
+  const debug = path.join(directory, 'debug', 'piecemaker-hudsucker');
+  if (fs.existsSync(release)) return release;
+  if (fs.existsSync(debug)) return debug;
+  return release;
+}
+
+function certificatePaths() {
+  const directory = path.join(os.homedir(), '.piecemaker', 'certs');
+  return {
+    cert: path.join(directory, 'piecemaker-ca.crt'),
+    key: path.join(directory, 'piecemaker-ca.key'),
+  };
+}
+
+function waitForOutput(child, needle, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let buffer = '';
+    let settled = false;
+    const finish = (failed, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.stdout?.off('data', take);
+      child.stderr?.off('data', take);
+      child.off('exit', onExit);
+      if (failed) reject(value);
+      else resolve(value);
+    };
+    const timer = setTimeout(() => finish(true, new Error(`hudsucker n'a pas écouté : ${buffer}`)), timeoutMs);
+    const take = (chunk) => {
+      buffer += chunk.toString();
+      if (buffer.includes(needle)) finish(false, buffer);
+    };
+    const onExit = (code) => finish(true, new Error(`hudsucker sorti (${code}) : ${buffer}`));
+    child.stdout?.on('data', take);
+    child.stderr?.on('data', take);
+    child.once('exit', onExit);
+  });
+}
+
+function proxyEnvironment(proxyUrl, caFile) {
+  return {
+    HTTPS_PROXY: proxyUrl,
+    HTTP_PROXY: proxyUrl,
+    ALL_PROXY: proxyUrl,
+    NO_PROXY: 'localhost,127.0.0.1,::1',
+    NODE_USE_ENV_PROXY: '1',
+    NODE_EXTRA_CA_CERTS: caFile,
+    SSL_CERT_FILE: caFile,
+    CODEX_CA_CERTIFICATE: caFile,
+    REQUESTS_CA_BUNDLE: caFile,
+  };
+}
+
 function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = console, required = false }) {
   const dictionary = createSqliteDictionaryLoader({ databasePath: process.env.DATABASE_PATH || path.join(homeDir, 'auth.db') });
   const legacyMappingFile = path.join(homeDir, 'central-mapping.json');
@@ -96,6 +170,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
     coverage: {},
   };
   let proxy = null;
+  let bridge = null;
   let previousEnv = null;
 
   async function start() {
@@ -105,34 +180,68 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
       return state;
     }
 
-    const claudeUpstream = resolveUpstream(process.env[ENV_VAR]);
-    proxy = createAnonymizerProxy({
-      dictionary,
-      routes: [
-        { provider: 'claude', prefix: '/anthropic', upstream: claudeUpstream },
-        { provider: 'codex', prefix: '/chatgpt', upstream: 'https://chatgpt.com/backend-api/codex' },
-        { provider: 'opencode', prefix: '/openai', upstream: 'https://api.openai.com' },
-      ],
-      harness,
-      onError: (error) => logger.warn?.(`[piecemaker] proxy PII : ${error.message}`),
-    });
+    const binary = hudsuckerBinary();
+    const certificates = certificatePaths();
+    if (!fs.existsSync(binary) || !fs.existsSync(certificates.cert) || !fs.existsSync(certificates.key)) {
+      state.reason = 'binary_or_ca_missing';
+      logger.warn?.('[piecemaker] hudsucker ou autorité locale absent');
+      return state;
+    }
 
-    let origin;
-    let listenedPort;
+    const claudeUpstream = resolveUpstream(process.env[ENV_VAR]);
+    const hosts = ['api.anthropic.com', 'api.openai.com', 'chatgpt.com'];
     try {
-      ({ origin, port: listenedPort } = await proxy.listen());
+      const extra = new URL(claudeUpstream).hostname;
+      if (extra && !hosts.includes(extra)) hosts.push(extra);
+    } catch {
+      // l'amont par défaut reste la liste fixe
+    }
+
+    try {
+      bridge = await startRewriterBridge({ dictionary, harness });
     } catch (error) {
+      state.reason = `listen_failed: ${error.message}`;
+      logger.warn?.(`[piecemaker] réécriture PII non démarrée : ${error.message}`);
+      return state;
+    }
+
+    const listenedPort = DEFAULT_PORT;
+    const origin = `http://127.0.0.1:${listenedPort}`;
+    const child = spawn(binary, [
+      '--listen', `127.0.0.1:${listenedPort}`,
+      '--rewriter', `http://127.0.0.1:${bridge.port}`,
+      '--ca-cert', certificates.cert,
+      '--ca-key', certificates.key,
+      '--hosts', hosts.join(','),
+    ], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        HTTPS_PROXY: '',
+        HTTP_PROXY: '',
+        ALL_PROXY: '',
+        https_proxy: '',
+        http_proxy: '',
+        all_proxy: '',
+      },
+    });
+    proxy = child;
+    child.stdout?.on('data', (chunk) => logger.log?.(String(chunk).trim()));
+    child.stderr?.on('data', (chunk) => logger.warn?.(`[piecemaker] hudsucker : ${String(chunk).trim()}`));
+    try {
+      await waitForOutput(child, `listening 127.0.0.1:${listenedPort}`, 15000);
+    } catch (error) {
+      child.kill('SIGKILL');
       proxy = null;
+      await bridge.close();
+      bridge = null;
       state.reason = `listen_failed: ${error.message}`;
       logger.warn?.(`[piecemaker] proxy PII non démarré : ${error.message}`);
       return state;
     }
 
-    // Publie le port réellement obtenu (le scan de proxy.cjs peut dévier du
-    // port préféré si une instance précédente n'a pas encore libéré le sien)
-    // dans la config partagée, pour que d'autres consommateurs indépendants
-    // du process serveur (ex. le sous-service Docker "mike") puissent le
-    // retrouver sans le redéduire eux-mêmes ni le coder en dur.
+    // Publie le port dans la config partagée pour que les consommateurs
+    // indépendants du process serveur puissent le retrouver.
     try {
       const configFile = path.join(homeDir, 'config.json');
       const current = JSON.parse(fs.readFileSync(configFile, 'utf8'));
@@ -148,19 +257,26 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
       [OPENAI_ENV_VAR]: process.env[OPENAI_ENV_VAR],
       PATH: process.env.PATH,
     };
-    process.env[ENV_VAR] = `${origin}/anthropic`;
-    process.env[OPENAI_ENV_VAR] = `${origin}/openai`;
-    // En tête de chemin : le shim doit être trouvé avant le vrai `cursor-agent`.
+    for (const key of PROXY_ENV_KEYS) previousEnv[key] = process.env[key];
+    if (isLoopbackValue(process.env[ENV_VAR])) delete process.env[ENV_VAR];
+    if (isLoopbackValue(process.env[OPENAI_ENV_VAR])) delete process.env[OPENAI_ENV_VAR];
+    Object.assign(process.env, proxyEnvironment(origin, certificates.cert));
     process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
 
-    const report = await configureProviders({ origin, userHome, binDir, mappingFile: legacyMappingFile });
+    const report = await configureProviders({
+      origin,
+      caFile: certificates.cert,
+      userHome,
+      binDir,
+      mappingFile: legacyMappingFile,
+    });
     Object.assign(state, {
       enabled: true,
       reason: 'running',
       origin,
       upstream: claudeUpstream,
       startedAt: new Date().toISOString(),
-      routes: proxy.routes,
+      routes: hosts.map((host) => ({ provider: host, upstream: `https://${host}` })),
       coverage: summarizeCoverage(report),
     });
 
@@ -175,11 +291,20 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
   }
 
   async function stop() {
-    if (!proxy) {
+    if (!proxy && !bridge) {
       dictionary.close();
       return;
     }
-    await proxy.close();
+    if (proxy && proxy.exitCode === null) {
+      proxy.kill('SIGTERM');
+      await Promise.race([
+        new Promise((resolve) => proxy.once('exit', resolve)),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
+      if (proxy.exitCode === null) proxy.kill('SIGKILL');
+    }
+    if (bridge) await bridge.close();
+    bridge = null;
     await bypassProviders({ userHome, binDir });
     if (previousEnv) {
       for (const [key, value] of Object.entries(previousEnv)) {
@@ -197,7 +322,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
     const current = dictionary.get();
     return {
       ...state,
-      listening: Boolean(proxy?.listening),
+      listening: Boolean(proxy && proxy.exitCode === null && !proxy.killed),
       dictionary: {
         file: dictionary.file,
         exists: dictionary.exists(),
@@ -206,7 +331,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
         updatedAt: current.updatedAt,
         empty: current.empty,
       },
-      stats: proxy ? { ...proxy.stats } : null,
+      stats: bridge ? { ...bridge.stats } : null,
     };
   }
 

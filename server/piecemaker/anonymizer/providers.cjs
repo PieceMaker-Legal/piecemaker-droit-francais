@@ -71,7 +71,7 @@ const OPENCODE_ROUTES = [
   { id: 'openai', suffix: '/openai' },
 ];
 
-function configureOpencode({ origin, userHome }) {
+function configureOpencode({ userHome }) {
   const file = opencodeConfigFile(userHome);
   let config = {};
   try {
@@ -92,26 +92,27 @@ function configureOpencode({ origin, userHome }) {
 
   let changed = false;
   for (const { id, suffix } of OPENCODE_ROUTES) {
-    const target = `${origin}${suffix}`;
     const entry = config.provider[id];
-    if (entry !== undefined && (!entry || typeof entry !== 'object' || Array.isArray(entry))) {
+    if (entry === undefined) continue;
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
       return { configured: false, changed: false, conflict: true, file, reason: `provider-${id}-invalid` };
     }
-    const options = entry?.options;
+    const options = entry.options;
     if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options))) {
       return { configured: false, changed: false, conflict: true, file, reason: `options-${id}-invalid` };
     }
     const existing = options?.baseURL;
-    // Une base tierce délibérément posée par l'utilisateur n'est pas écrasée :
-    // on signale le conflit plutôt que de casser sa configuration en silence.
-    if (existing && existing !== target && !isOwnLoopbackUrl(existing, suffix)) {
+    if (existing && !isOwnLoopbackUrl(existing, suffix)) {
       return { configured: false, changed: false, conflict: true, file, reason: `base-url-conflict:${id}` };
     }
-    if (existing === target) continue;
-    config.provider[id] = { ...entry, options: { ...options, baseURL: target } };
+    if (!isOwnLoopbackUrl(existing, suffix)) continue;
+    delete options.baseURL;
+    if (Object.keys(options).length === 0) delete entry.options;
+    if (Object.keys(entry).length === 0) delete config.provider[id];
     changed = true;
   }
 
+  if (changed && config.provider && Object.keys(config.provider).length === 0) delete config.provider;
   if (changed) writeJsonAtomic(file, config);
   return { configured: true, changed, conflict: false, file };
 }
@@ -177,7 +178,7 @@ exec cursor-agent "$@"
  * dans le statut, ce qui est l'information utile, plutôt que d'empêcher le
  * serveur de démarrer.
  */
-async function configureProviders({ origin, userHome = os.homedir(), binDir, mappingFile }) {
+async function configureProviders({ origin, caFile, userHome = os.homedir(), binDir, mappingFile }) {
   const report = {};
 
   const attempt = (name, run) => {
@@ -188,12 +189,11 @@ async function configureProviders({ origin, userHome = os.homedir(), binDir, map
     }
   };
 
-  attempt('claude', () => configureClaudeCodeProxy({ baseUrl: `${origin}/anthropic`, userHome }));
+  attempt('claude', () => configureClaudeCodeProxy({ proxyUrl: origin, caFile, userHome }));
   attempt('codex', () => configureCodexProxy({
-    baseUrl: `${origin}/chatgpt`,
     codexHome: process.env.CODEX_HOME || path.join(userHome, '.codex'),
   }));
-  attempt('opencode', () => configureOpencode({ origin, userHome }));
+  attempt('opencode', () => configureOpencode({ userHome }));
   attempt('cursor', () => ({
     configured: false,
     changed: false,
