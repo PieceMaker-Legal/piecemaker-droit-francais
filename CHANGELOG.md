@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.2...v2.0.3) (2026-09-25)
+
+### Bug Fixes
+
+* **desktop:** restaure le runtime PieceMaker empaqueté ([527d64b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/527d64bf2876fa6d01a025f4499d84312d7ac45f))
+
 ## [2.0.2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.1...v2.0.2) (2026-09-24)
 
 ### New Features
