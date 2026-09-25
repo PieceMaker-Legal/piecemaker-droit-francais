@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { findApplicationRoot, getModuleDirectory } from '../../shared/utils.js';
 import type { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
 import { persistScanResult, scanResultOperations } from '../../../plugins/piecemaker-dossier/src/scan-result.js';
 import type { GlinerDocument, GlinerMappingDocument, JsonData } from '../../../plugins/piecemaker-dossier/src/types.js';
@@ -42,7 +43,14 @@ const {
   listOriginals,
   runManagedPythonJob,
   writeCaseMapping,
-} = require('../vendor/websocket-server/originals-pipeline.cjs') as OriginalsPipeline;
+} = require(path.join(
+  findApplicationRoot(getModuleDirectory(import.meta.url)),
+  'server',
+  'piecemaker',
+  'vendor',
+  'websocket-server',
+  'originals-pipeline.cjs',
+)) as OriginalsPipeline;
 
 const SUPPORTED_EXTENSIONS = new Set(['.pdf', '.docx', '.doc', '.odt', '.rtf', '.txt', '.md', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']);
 

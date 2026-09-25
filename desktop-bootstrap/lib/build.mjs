@@ -37,6 +37,21 @@ async function findBuiltApp(sourceDir) {
   throw new Error(`Aucune application construite trouvée dans ${releaseRoot}.`);
 }
 
+async function verifyBuiltApp(builtApp) {
+  const appRoot = IS_MAC ? path.join(builtApp, 'Contents', 'Resources', 'app') : path.join(builtApp, 'resources', 'app');
+  const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
+  const required = [
+    'dist-server/server/index.js',
+    'server/piecemaker/vendor/websocket-server/originals-pipeline.cjs',
+    `server/piecemaker/anonymizer/bin/${binaryName}`,
+  ];
+  const missing = [];
+  for (const relativePath of required) {
+    if (!(await exists(path.join(appRoot, relativePath)))) missing.push(relativePath);
+  }
+  if (missing.length) throw new Error(`Application construite incomplète — fichiers absents : ${missing.join(', ')}`);
+}
+
 async function readPackageJson(target) {
   try {
     return JSON.parse(await fs.readFile(path.join(target, 'package.json'), 'utf8'));
@@ -245,6 +260,7 @@ export async function buildDesktopApp(sourceDir) {
   });
 
   const built = await findBuiltApp(sourceDir);
+  await verifyBuiltApp(built);
   ui.ok(`Application construite : ${built}`);
   return built;
 }
