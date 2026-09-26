@@ -4,8 +4,8 @@ Les pièces originales d'un dossier portent les noms réels. La promesse du
 produit est que l'IA ne lit jamais une pièce PDF ou image : elle travaille sur
 le Markdown converti et pseudonymisé. La « protection » est ce qui tient cette
 promesse. **Règle :** tout projet est protégé par défaut, sans action ; seul
-l'interrupteur de l'onglet Dossier lève la protection d'un projet entier, après
-confirmation.
+un clic sur le bouclier du projet, dans la barre latérale, lève la protection
+d'un projet entier, après confirmation.
 
 ## Périmètre : quels dossiers
 
@@ -46,7 +46,7 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 | Fichier | Contenu | Écrit par |
 | --- | --- | --- |
 | `protection.json` | `{version, unprotected, resources}` : uniquement des **exceptions**, jamais la liste des fichiers protégés. Un PDF déposé plus tard est protégé sans mise à jour. | création/enregistrement du dossier (listes vides), hook `classify-ai-documents.mjs`, `PUT /protection` |
-| `protection-bypass.json` | drapeau `{scope: "dossier"}` : sa seule présence lève toute protection du dossier, pièces futures comprises. | interrupteur « Protégé / Protection levée » de l'onglet Dossier (`src/piecemaker/dossier/sections/CaseProtectionToggle.tsx`, confirmation dans les deux sens) → `PUT /protection/bypass` (`server/piecemaker/protection/bypass.cjs`) |
+| `protection-bypass.json` | drapeau `{scope: "dossier"}` : sa seule présence lève toute protection du dossier, pièces futures comprises. | bouclier de la ligne du projet dans la barre latérale — vert si anonymisé et protégé, rouge barré si levé (`src/piecemaker/dossier/CaseProtectionShield.tsx`, monté par `SidebarProjectItem.tsx`, confirmation dans les deux sens) → `PUT /protection/bypass` (`server/piecemaker/protection/bypass.cjs`) |
 
 - Les exceptions sont des chemins relatifs : une pièce renommée ou déplacée
   perd la sienne et redevient protégée (défaut sûr).

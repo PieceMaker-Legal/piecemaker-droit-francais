@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
-import { Check, ChevronDown, ChevronRight, Edit3, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Edit3, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Button } from '@/shared/ui';
@@ -9,6 +9,7 @@ import { getTaskIndicatorStatus } from '@/modules/sidebar/utils/sidebarProjectFo
 import TaskIndicator from '@/modules/sidebar/TaskIndicator';
 import SidebarProjectSessions from '@/modules/sidebar/SidebarProjectSessions';
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
+import { CaseProtectionShield } from '@/piecemaker/dossier';
 
 type SidebarProjectItemProps = {
   project: Project;
@@ -382,14 +383,7 @@ function SidebarProjectItem({
                 >
                   <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
                 </div>
-                {isAnonymized && (
-                  <ShieldCheck
-                    className="h-4 w-4 text-emerald-700 dark:text-emerald-300"
-                    aria-label={t('tooltips.anonymizationComplete')}
-                  >
-                    <title>{t('tooltips.anonymizationComplete')}</title>
-                  </ShieldCheck>
-                )}
+                <CaseProtectionShield projectPath={project.fullPath} anonymized={isAnonymized} anonymizedLabel={t('tooltips.anonymizationComplete')} />
                 {isExpanded ? (
                   <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
                 ) : (
