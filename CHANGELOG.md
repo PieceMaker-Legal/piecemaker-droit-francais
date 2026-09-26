@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.3...v2.0.4) (2026-09-26)
+
+### Bug Fixes
+
+* **anonymisation:** débloque le scan resté à 0 % ([eca1e25](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/eca1e254b0c71a301f807f70f9ee851c1e91bfa6))
+
 ## [2.0.3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.2...v2.0.3) (2026-09-25)
 
 ### Bug Fixes
