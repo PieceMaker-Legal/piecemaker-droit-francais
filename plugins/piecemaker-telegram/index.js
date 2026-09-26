@@ -6,28 +6,36 @@ const instances = new WeakMap();
 
 export function mount(container, api) {
   const root = document.createElement('div');
-  root.className = 'pm-telegram';
+  root.className = 'pm-telegram piecemaker-ui';
+  root.dataset.theme = api.context.theme;
   root.innerHTML = `
     <style>
-      .pm-telegram{height:100%;overflow:auto;background:var(--background,#fff);color:var(--foreground,#1c2430);font:14px/1.5 system-ui,sans-serif}
-      .pm-telegram *{box-sizing:border-box}.pm-telegram main{max-width:820px;margin:auto;padding:28px 22px 64px}
-      .pm-telegram h1{font-size:26px;margin:0 0 6px}.pm-telegram h2{font-size:17px;margin:0 0 10px}
-      .pm-telegram p{margin:6px 0 12px}.pm-telegram .muted{color:var(--muted-foreground,#667085)}
-      .pm-telegram .card{border:1px solid var(--border,#d9dee5);border-radius:10px;padding:18px;margin-top:16px;background:var(--card,#fff)}
+      .pm-telegram{--telegram-text:var(--piecemaker-text,#374151);--telegram-muted:var(--piecemaker-muted,#6b7280);--telegram-ink:var(--piecemaker-ink,#111827);--telegram-border:var(--piecemaker-border,#e5e7eb);height:100%;overflow:auto;background:hsl(var(--background,0 0% 100%));color:var(--telegram-text);font:14px/1.5 var(--piecemaker-font-ui,Inter,ui-sans-serif,system-ui,sans-serif)}
+      .pm-telegram[data-theme=dark]{--telegram-text:hsl(var(--foreground,210 20% 96%));--telegram-muted:hsl(var(--muted-foreground,215 12% 65%));--telegram-ink:hsl(var(--foreground,210 20% 96%));--telegram-border:hsl(var(--border,222 12% 18%))}
+      .pm-telegram *{box-sizing:border-box}.pm-telegram main{max-width:820px;margin:auto;padding:24px 24px 64px}
+      .pm-telegram h1,.pm-telegram h2{font-family:var(--piecemaker-font-editorial,"EB Garamond",Georgia,serif);font-weight:500;color:var(--telegram-ink)}
+      .pm-telegram h1{font-size:1.25rem;letter-spacing:-.02em;margin:0 0 6px}.pm-telegram h2{font-size:1.05rem;margin:0 0 10px}
+      .pm-telegram p{margin:6px 0 12px}.pm-telegram .muted{color:var(--telegram-muted)}
+      .pm-telegram .card{border:1px solid var(--telegram-border);border-radius:12px;padding:18px;margin-top:16px;background:hsl(var(--card,0 0% 100%))}
       .pm-telegram .row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
       .pm-telegram .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
       .pm-telegram button,.pm-telegram input,.pm-telegram select{font:inherit}
-      .pm-telegram button{border:1px solid var(--border,#cad1d9);border-radius:7px;padding:8px 12px;background:var(--background,#fff);color:inherit;cursor:pointer}
-      .pm-telegram button.primary{background:#2563eb;border-color:#2563eb;color:#fff}
-      .pm-telegram button:disabled{opacity:.5;cursor:wait}.pm-telegram button.danger{color:#b42318}
-      .pm-telegram input,.pm-telegram select{width:100%;padding:9px 10px;border:1px solid var(--border,#cad1d9);border-radius:7px;background:var(--background,#fff);color:inherit}
+      .pm-telegram button{display:inline-flex;align-items:center;justify-content:center;min-height:1.75rem;border:1px solid var(--liquid-glass-border-subtle,var(--telegram-border));border-radius:9999px;padding:5px 12px;background:var(--liquid-glass-background-subtle,hsl(var(--card,0 0% 100%)));box-shadow:var(--liquid-glass-shadow-subtle,none);color:var(--telegram-text);font-size:12px;font-weight:500;white-space:nowrap;cursor:pointer;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+      .pm-telegram button:hover{filter:brightness(.97)}.pm-telegram button:active{transform:scale(.98)}
+      .pm-telegram button.primary{background:rgb(3 7 18 / 88%);border-color:transparent;box-shadow:none;color:#fff;backdrop-filter:none}
+      .pm-telegram[data-theme=dark] button.primary{background:hsl(var(--foreground,210 20% 96%));color:hsl(var(--background,222 16% 8%))}
+      .pm-telegram button:disabled{opacity:.4;cursor:not-allowed}.pm-telegram button.danger{color:#b91c1c}
+      .pm-telegram input,.pm-telegram select{width:100%;padding:9px 12px;border:1px solid var(--telegram-border);border-radius:.75rem;background:hsl(var(--background,0 0% 100%));color:var(--telegram-text)}
+      .pm-telegram button:focus-visible,.pm-telegram input:focus-visible,.pm-telegram select:focus-visible{outline:none;box-shadow:0 0 0 2px rgb(0 136 255 / 40%),0 0 0 4px hsl(var(--background,0 0% 100%))}
       .pm-telegram label{display:block;font-weight:600;font-size:12px;margin:12px 0 5px}
       .pm-telegram .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
-      .pm-telegram .hint{font-size:12px;color:var(--muted-foreground,#667085)}
-      .pm-telegram .notice{padding:10px 12px;border-radius:7px;margin-top:14px;background:color-mix(in srgb,#2563eb 10%,var(--background,#fff))}
-      .pm-telegram .error{background:color-mix(in srgb,#b42318 12%,var(--background,#fff));color:#b42318}
-      .pm-telegram a{color:#2563eb}.pm-telegram .status{font-size:12px;font-weight:600}
-      @media(max-width:620px){.pm-telegram main{padding:20px 14px 48px}.pm-telegram .grid{grid-template-columns:1fr}}
+      .pm-telegram .hint{font-size:12px;color:var(--telegram-muted)}
+      .pm-telegram .notice{padding:10px 12px;border-radius:.75rem;margin-top:14px;background:color-mix(in srgb,var(--piecemaker-blue,rgb(0 136 255)) 10%,hsl(var(--card,0 0% 100%)))}
+      .pm-telegram .error{background:color-mix(in srgb,#b91c1c 12%,hsl(var(--card,0 0% 100%)));color:#b91c1c}
+      .pm-telegram a{color:var(--piecemaker-blue,rgb(0 136 255))}.pm-telegram .status{font-size:12px;font-weight:600}
+      .pm-telegram .linked-bot{padding:12px 0;border-top:1px solid var(--telegram-border)}
+      .pm-telegram .link-heading{margin-top:18px}
+      @media(max-width:620px){.pm-telegram main{padding:16px 16px 48px}.pm-telegram .grid{grid-template-columns:1fr}}
     </style>
     <main><div class="row"><div><h1>Telegram</h1><p class="muted">Un bot principal suit vos sessions. Chaque dossier a son propre bot pour discuter avec Claude.</p></div><button data-action="refresh">Actualiser</button></div><div data-content>Chargement…</div></main>`;
   container.appendChild(root);
@@ -35,6 +43,7 @@ export function mount(container, api) {
   const instance = { api, root, content, state: null, message: '', busy: false, selectedProject: api.context.project?.name || '' };
   instances.set(container, instance);
   instance.unsubscribe = api.onContextChange((context) => {
+    root.dataset.theme = context.theme;
     if (!instance.selectedProject && context.project) instance.selectedProject = context.project.name;
   });
   root.addEventListener('submit', (event) => {
@@ -123,8 +132,8 @@ function render(instance) {
       ${main ? `<div class="row"><div><a href="https://t.me/${escape(main.username)}" target="_blank" rel="noreferrer">@${escape(main.username)}</a><div class="hint">Identifiant autorisé : ${escape(main.ownerId)}</div>${state.mainError ? `<div class="hint error">${escape(state.mainError)}</div>` : ''}</div><button class="danger" data-action="remove" data-id="main" ${instance.busy ? 'disabled' : ''}>Retirer</button></div>` : botForm('main', null, [], instance.busy)}
     </section>
     <section class="card"><h2>Un bot par dossier</h2><p class="muted">Chaque bot ouvre une session Claude dans le dossier associé. Le bot principal peut la relancer à distance.</p>
-      ${linked.map((bot) => `<div class="row" style="padding:12px 0;border-top:1px solid var(--border,#d9dee5)"><div><strong>${escape(bot.projectName)}</strong> <span class="status">${bot.active ? '● Active' : '○ Arrêtée'}</span><div><a href="https://t.me/${escape(bot.username)}" target="_blank" rel="noreferrer">@${escape(bot.username)}</a></div></div><div class="actions"><button data-action="${bot.active ? 'restart' : 'start'}" data-id="${escape(bot.id)}" ${instance.busy || !state.installed ? 'disabled' : ''}>${bot.active ? 'Relancer' : 'Démarrer'}</button>${bot.active ? `<button data-action="stop" data-id="${escape(bot.id)}" ${instance.busy ? 'disabled' : ''}>Arrêter</button>` : ''}<button class="danger" data-action="remove" data-id="${escape(bot.id)}" ${instance.busy ? 'disabled' : ''}>Délier</button></div></div>`).join('')}
-      ${available.length ? `<h2 style="margin-top:18px">Lier un dossier</h2>${botForm('project', selected, available, instance.busy)}` : '<p class="hint">Tous les dossiers enregistrés ont un bot, ou aucun dossier n’est encore disponible.</p>'}
+      ${linked.map((bot) => `<div class="row linked-bot"><div><strong>${escape(bot.projectName)}</strong> <span class="status">${bot.active ? '● Active' : '○ Arrêtée'}</span><div><a href="https://t.me/${escape(bot.username)}" target="_blank" rel="noreferrer">@${escape(bot.username)}</a></div></div><div class="actions"><button data-action="${bot.active ? 'restart' : 'start'}" data-id="${escape(bot.id)}" ${instance.busy || !state.installed ? 'disabled' : ''}>${bot.active ? 'Relancer' : 'Démarrer'}</button>${bot.active ? `<button data-action="stop" data-id="${escape(bot.id)}" ${instance.busy ? 'disabled' : ''}>Arrêter</button>` : ''}<button class="danger" data-action="remove" data-id="${escape(bot.id)}" ${instance.busy ? 'disabled' : ''}>Délier</button></div></div>`).join('')}
+      ${available.length ? `<h2 class="link-heading">Lier un dossier</h2>${botForm('project', selected, available, instance.busy)}` : '<p class="hint">Tous les dossiers enregistrés ont un bot, ou aucun dossier n’est encore disponible.</p>'}
     </section>`;
 }
 
