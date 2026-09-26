@@ -21,7 +21,6 @@ import { createDocxDocumentRouter } from './docx-document.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
 import { installModelDiscovery } from './model-discovery/index.js';
 import { startProjectRegistry } from './project-registry.js';
-import { installTelegramTab } from './telegram/install.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -33,7 +32,6 @@ import { installTelegramTab } from './telegram/install.js';
  * `vendor/` (CommonJS, Python, gabarits Markdown) reste dans l'arbre source.
  */
 const applicationRoot = findApplicationRoot(getModuleDirectory(import.meta.url));
-installTelegramTab(applicationRoot);
 const routerPath = path.join(applicationRoot, 'server', 'piecemaker', 'router.cjs');
 
 type PieceMakerRuntimeStatus = {

@@ -19,7 +19,7 @@ Pièges du script à connaître avant de le modifier :
 
 # Système de plugins
 
-Point d'extension upstream, à privilégier pour toute fonctionnalité PieceMaker autonome : un plugin est un dossier hors dépôt, donc zéro empreinte de merge.
+Point d'extension upstream, à privilégier pour toute fonctionnalité PieceMaker autonome : la source des plugins PieceMaker vit dans `plugins/piecemaker-*/`, hors des fichiers CloudCLI, puis la commande `piecemaker` installe chaque plugin dans le répertoire de données de l'application. Leur code ne crée aucune empreinte de merge.
 
 Les deux leviers ne se recouvrent pas, et aucun ne fait le travail de l'autre :
 
@@ -29,7 +29,7 @@ Les deux leviers ne se recouvrent pas, et aucun ne fait le travail de l'autre :
 | Portée | toutes les vues CloudCLI, avant le premier rendu | son seul onglet, monté à la demande |
 | Accès à l'hôte | l'instance i18next, rien d'autre | `context` / `onContextChange` / `rpc`, rien d'autre |
 | Backend | aucun | sous-processus Node optionnel |
-| Livraison | dans le dépôt, buildé avec l'app | dépôt git séparé, installé par l'utilisateur |
+| Livraison | dans le dépôt, buildé avec l'app | `plugins/piecemaker-*/` dans le dépôt PieceMaker, installé par la commande `piecemaker` |
 | Empreinte upstream | 3 lignes dans `src/modules/i18n/config.ts` | nulle |
 
 Corollaire : un plugin ne peut pas rebrander l'UI, et les overrides ne peuvent pas héberger une fonctionnalité. Une fonctionnalité PieceMaker livrée en plugin devra d'ailleurs porter ses propres traductions — l'i18n de l'hôte ne l'atteint pas.
@@ -41,6 +41,8 @@ Ce que le système de plugins permet exactement, avant de s'engager :
 - **Backend optionnel** : `"server"` du manifeste est lancé par `spawn('node', …)` en sous-processus, environnement réduit (`buildPluginEnv`, `plugin-process.service.ts`), port local aléatoire ; le front l'atteint via `api.plugins.rpc()` proxifié par `router.all('/:name/rpc/*')`. Les secrets déclarés en config sont injectés en en-têtes `x-plugin-secret-*` par l'hôte, jamais exposés au navigateur.
 - **Chargement front** : `PluginTabContent.tsx` récupère `dist/index.js` via l'API authentifiée puis l'importe par Blob URL (aucune requête anonyme), et remonte le plugin à chaque changement de `entry`/`enabled`.
 - **Installation** : dépôt git collé dans *Settings > Plugins* → clone, `npm install`, build. Manifeste requis : `name`, `displayName`, `entry` ; `type` ∈ `react`|`module`.
+
+Les plugins livrés avec PieceMaker (`piecemaker-library`, `piecemaker-dossier`, `piecemaker-timesheet`, `piecemaker-tampon`, `piecemaker-telegram`) utilisent chacun leur propre `install.mjs` sous `plugins/`, appelé par `scripts/piecemaker/cli/lib/plugins.mjs`. L'installation depuis une URL Git dans *Settings > Plugins* reste le mécanisme prévu pour les plugins externes.
 
 À lire dans l'ordre avant d'écrire un plugin : `plugins/starter/README.md` et `plugins/starter/src/{types,index,server}.ts` (gabarit officiel vendu dans le dépôt), puis `server/modules/plugins/{plugin-registry,plugin-process,plugins}.service.ts` et `plugins.routes.ts`, enfin `src/modules/plugins/PluginTabContent.tsx`. Doc en ligne : https://cloudcli.ai/docs/plugin-overview.
 

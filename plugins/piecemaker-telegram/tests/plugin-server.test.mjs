@@ -17,7 +17,7 @@ test('Telegram plugin exposes registered projects without leaking bot tokens', a
       username TEXT NOT NULL, owner_id TEXT NOT NULL, desired INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
     INSERT INTO piecemaker_telegram_bots VALUES ('case-1', 'case-1', 'private-token', 'case_bot', '123456', 0, '2026-09-26');`);
   database.close();
-  const source = path.resolve('server/piecemaker/telegram/assets/server.mjs');
+  const source = path.resolve('plugins/piecemaker-telegram/server.mjs');
   fs.copyFileSync(source, path.join(directory, 'server.mjs'));
   fs.writeFileSync(path.join(directory, 'runtime.json'), JSON.stringify({
     databasePath, applicationRoot: process.cwd(), secret: 'test-secret',
@@ -28,7 +28,7 @@ test('Telegram plugin exposes registered projects without leaking bot tokens', a
   let stderr = '';
   child.stderr.on('data', (chunk) => { stderr += String(chunk); });
   try {
-    const port = await new Promise<number>((resolve, reject) => {
+    const port = await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error(`Plugin server did not start: ${stderr}`)), 10000);
       child.once('error', reject);
       child.once('exit', (code) => { clearTimeout(timeout); reject(new Error(`Plugin server exited: ${code}: ${stderr}`)); });
@@ -45,7 +45,7 @@ test('Telegram plugin exposes registered projects without leaking bot tokens', a
       headers: { 'x-plugin-secret-access': 'test-secret' },
     });
     assert.equal(response.status, 200);
-    const state = await response.json() as { projects: Array<{ id: string; name: string }>; bots: unknown[] };
+    const state = await response.json();
     assert.deepEqual(state.projects, [{ id: 'case-1', path: '/tmp/case-1', name: 'Dossier test' }]);
     assert.deepEqual(state.bots, [{
       id: 'case-1', projectId: 'case-1', projectName: 'Dossier test', username: 'case_bot',
