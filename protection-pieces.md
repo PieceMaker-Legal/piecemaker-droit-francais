@@ -36,8 +36,8 @@ du dossier, et absent des deux listes d'exceptions. Tout le reste — `.docx`,
 
 Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 `*_sensitive_map.json`, `central-mapping.json`) et les secrets d'environnement
-(`.env`, `.env.*` hors `example`/`sample`/`template`, `*.env`). Dans un projet
-sans `mapping_default.json`, la lecture des `.md`/`.json` est aussi refusée.
+(`.env`, `.env.*` hors `example`/`sample`/`template`, `*.env`). L'absence de
+`mapping_default.json` ne bloque rien : un projet de code reste lisible.
 
 ## Fichiers d'un dossier (`<projet>/.piecemaker/`, hors Git)
 
@@ -64,7 +64,7 @@ sans `mapping_default.json`, la lecture des `.md`/`.json` est aussi refusée.
 
 | Code | Rôle |
 | --- | --- |
-| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | refus + renvoi vers le Markdown ; mappings, secrets, dossier sans mapping, Grep/Glob à la racine |
+| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | refus + renvoi vers le Markdown ; mappings, secrets, Grep/Glob à la racine |
 | `classify-ai-documents.mjs` (`PostToolUse` Write/Bash) | exceptions pour les PDF/images produits par l'IA |
 | `lib/commits.cjs` | historique : pas d'extraction de texte des pièces protégées |
 | `knowledge/pipeline.ts` | exclut les « ressources » de la conversion et du scan |
@@ -80,9 +80,6 @@ sans `mapping_default.json`, la lecture des `.md`/`.json` est aussi refusée.
   contenant des PDF.
 - Les `.docx` originaux sont lisibles : seul le proxy (dictionnaire) les
   pseudonymise.
-- Tout projet étant un dossier, un projet de code sans `mapping_default.json`
-  voit la lecture de ses `.md`/`.json` refusée tant que l'onglet Dossier ne l'a
-  pas initialisé.
 - Les dossiers enregistrés à la main hors projets CloudCLI ne sont plus
   protégés : les ouvrir comme projets.
 
