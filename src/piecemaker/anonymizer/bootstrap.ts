@@ -5,6 +5,7 @@
  */
 
 import { startIdentityHighlighting } from '@/piecemaker/anonymizer';
+import { startPluginsReloadAfterLogin } from '@/piecemaker/auth/reloadPluginsAfterLogin';
 import { startDocumentVerificationHighlighting } from '@/piecemaker/anonymizer/documentVerifier';
 import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 import { startLibraryDocumentViewer } from '@/piecemaker/library/bootstrap';
@@ -15,4 +16,5 @@ startIdentityHighlighting();
 const stopDocumentVerificationHighlighting = startDocumentVerificationHighlighting();
 const stopCitationPanel = startCitationPanel();
 const stopLibraryDocumentViewer = startLibraryDocumentViewer();
-if (import.meta.hot) import.meta.hot.dispose(() => { stopDocumentVerificationHighlighting(); stopCitationPanel(); stopLibraryDocumentViewer(); });
+const stopPluginsReloadAfterLogin = startPluginsReloadAfterLogin();
+if (import.meta.hot) import.meta.hot.dispose(() => { stopDocumentVerificationHighlighting(); stopCitationPanel(); stopLibraryDocumentViewer(); stopPluginsReloadAfterLogin(); });
