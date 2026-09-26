@@ -42,7 +42,6 @@ import { checkForUpdate, updateRepository } from '../lib/service.mjs';
 const require = createRequire(import.meta.url);
 const CLAUDE_ASSETS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/claude-assets.cjs');
 const CLAUDE_HOOKS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/claude-hooks.cjs');
-const CENTRAL_MAPPING_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../piecemaker-plugin/scripts/lib/central-mapping.cjs');
 const DOCUMENT_INDEX_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/document-index.cjs');
 const ORIGINALS_PIPELINE_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/originals-pipeline.cjs');
 const APP_CLI_LIB = path.join(GIT_REPO_ROOT, 'scripts', 'piecemaker', 'cli', 'lib');
@@ -61,18 +60,7 @@ function loadClaudeIntegrations() {
     : null;
 }
 
-/** Recharge le générateur du mapping central après un reset Git. */
-function loadCentralMappingIntegration() {
-  if (!fs.existsSync(CENTRAL_MAPPING_MODULE)) return null;
-  try {
-    const integration = require(CENTRAL_MAPPING_MODULE);
-    return typeof integration.syncCentralMapping === 'function' ? integration : null;
-  } catch {
-    return null;
-  }
-}
-
-function reconcileCentralMapping() {
+function removeDeprecatedClaudeHooks() {
   let hooksRemoved = false;
   const claude = loadClaudeIntegrations();
   if (typeof claude?.removeDeprecatedHooks === 'function') {
@@ -81,11 +69,6 @@ function reconcileCentralMapping() {
     if (!cleanup.ok) log.warn(`Hooks hérités non nettoyés (${cleanup.reason}).`);
     else if (cleanup.changed) log.ok('Hooks hérités Claude Code retirés.');
   }
-
-  const integration = loadCentralMappingIntegration();
-  const central = integration?.syncCentralMapping(loadConfig());
-  if (central) log.ok(`Mapping central du proxy reconstruit (${central.entities || 0} entité(s)).`);
-  else log.warn('Mapping central du proxy non reconstruit ; relancez « piecemaker ».');
   return hooksRemoved;
 }
 
@@ -648,7 +631,7 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
     const pending = knownUpdate ?? checkForUpdate();
     if (!pending.available) {
       log.ok(`PieceMaker est déjà à jour (${pending.ref}, ${pending.current.slice(0, 7)}).`);
-      if (reconcileCentralMapping()) {
+      if (removeDeprecatedClaudeHooks()) {
         log.info('Rouvrez les sessions Claude Code actives pour oublier les hooks hérités.');
       }
       // « update » reste le geste de remise à niveau : même sans nouveau commit,
@@ -686,7 +669,7 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
       else if (claudeHooks.changed) log.ok(`${claudeHooks.registered} hook(s) PieceMaker synchronisé(s) pour Claude Code.`);
     }
 
-    reconcileCentralMapping();
+    removeDeprecatedClaudeHooks();
     log.info('Rouvrez les sessions Claude Code/Codex actives pour charger les hooks et le MCP mis à jour.');
     // Une mise à jour qui a échoué ne doit pas enchaîner sur une
     // réinstallation en fond : l'exception traverse d'abord.
