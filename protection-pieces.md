@@ -44,16 +44,11 @@ Limites structurelles, à connaître avant de s'y fier :
   exactement la branche déjà traitée par `protect-originals.mjs`, sans
   changement de logique. `installer/lib/codex-skills.mjs` installe ce même
   script dans `~/.codex/hooks.json` (matcher `"*"`, Codex n'exposant pas de
-  tools Read/Grep/Glob distincts), en plus de la sentinelle `SessionStart`
-  (`proxy-guard.mjs`).
+  tools Read/Grep/Glob distincts).
 - **Un hook analyse du texte de commande, pas des syscalls.** `python -c
   "open(...)"`, `find -exec cat`, une variable de shell ou un chemin relatif
   après un `cd` échappent à toute analyse textuelle. C'est la raison d'être de
   la couche 3.
-- `proxy-guard.mjs` est **fail-open** par conception : proxy indisponible ⇒ il
-  retire la configuration du proxy des fichiers clients et laisse la session
-  partir en accès direct, avec un avertissement. Le refus de démarrage, lui,
-  appartient au serveur (couche 2).
 
 ## 2. Proxy PII — le filet
 
@@ -61,7 +56,9 @@ Limites structurelles, à connaître avant de s'y fier :
 `server/piecemaker/index.ts` avant toute écoute HTTP ; `anonymizer/lifecycle.ts`
 refuse le démarrage si le proxy ou le routage Claude/Codex n'est pas prêt, et
 chaque lancement de chat revérifie cet état. Il couvre Claude et Codex au même
-point de passage, en SSE et en JSON, et refuse en 404 tout chemin non routé.
+point de passage, en JSON, SSE et WebSocket, et refuse tout corps qu'il ne sait
+pas anonymiser. Seules les sessions lancées par PieceMaker y passent (routage
+par l'environnement du serveur) ; détail dans `docs/anonymisation.md`.
 
 Ce qu'il ne peut pas faire : empêcher. Une pièce lue localement ne lui parvient
 qu'**au tour suivant**, dans le rappel de l'historique, sous forme de bloc
@@ -103,10 +100,7 @@ jamais les hooks, il se place dessous.**
   (`server/piecemaker/vendor/piecemaker-plugin/scripts/` et `hooks/hooks.json`),
   sans dépendance runtime au dépôt historique PieceMaker-Installer. Les
   étapes `06-hooks` (Claude Code) et `09-codex-plugin` (Codex) sont rejouées
-  automatiquement par la commande `piecemaker`. La sentinelle `SessionStart`
-  reste unique, hors vendorisation, sous `scripts/piecemaker/hooks/proxy-guard.mjs`
-  à la racine du dépôt, partagée par les deux clients via
-  `PIECEMAKER_HOOK_CLIENT`.
+  automatiquement par la commande `piecemaker`.
 - Couche 3 : l'étape `14-mxc-sandbox` a été supprimée du dépôt — `mxc-sandbox.cjs`
   n'a jamais été vendorisé et rien ne la consommait à l'exécution.
   **Elle n'existe pas à l'exécution.**

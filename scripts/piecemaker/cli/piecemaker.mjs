@@ -2,7 +2,6 @@
 
 import { installPiecemakerCommand, piecemakerExecutable } from './install-command.mjs';
 import { APP, APP_URL, PORTS } from './lib/config.mjs';
-import { repairClientProxies } from './lib/piecemaker-anonymizer.mjs';
 import { installComponents } from './lib/composants.mjs';
 import { installPlugins } from './lib/plugins.mjs';
 import { gitAvailable, resolveNodeRuntime } from './lib/node-runtime.mjs';
@@ -129,8 +128,6 @@ async function main() {
   const command = installPiecemakerCommand();
   if (command.shims.length) ok(`installée : ${command.executable}`);
   else warn('commande absente du PATH — relancez node scripts/piecemaker/cli/install-command.mjs');
-
-  await repairClientProxies({ appDir: APP.directory, report });
 
   if (!options.launchOnly || !(await applicationIsRunning())) {
     const running = await resetAndLaunch(runtime);

@@ -1,6 +1,5 @@
 const { execFileSync, spawn } = require('node:child_process');
 const fs = require('node:fs');
-const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -23,17 +22,6 @@ function makeCertificateAuthority(directory) {
     '-addext', 'keyUsage=critical,keyCertSign,cRLSign',
   ], { stdio: 'ignore' });
   return { cert, key };
-}
-
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address();
-      server.close((error) => (error ? reject(error) : resolve(port)));
-    });
-  });
 }
 
 function waitForOutput(child, needle, timeoutMs) {
@@ -71,21 +59,23 @@ async function startHudsuckerSession({
   const ca = makeCertificateAuthority(directory);
   const dictionary = createSqliteDictionaryLoader({ databasePath });
   const bridge = await startRewriterBridge({ dictionary, harness });
-  const port = await freePort();
   const upstreamMap = hosts.map((host) => `${host}=127.0.0.1:${upstreamPort}`).join(',');
   const child = spawn(binary, [
-    '--listen', `127.0.0.1:${port}`,
+    '--listen', '127.0.0.1:0',
     '--rewriter', `http://127.0.0.1:${bridge.port}`,
     '--ca-cert', ca.cert,
     '--ca-key', ca.key,
     '--hosts', hosts.join(','),
     '--upstream-map', upstreamMap,
   ], {
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, HTTPS_PROXY: '', HTTP_PROXY: '', ALL_PROXY: '', http_proxy: '', https_proxy: '' },
   });
+  let logs = '';
+  child.stderr.on('data', (chunk) => { logs += chunk; });
+  let port;
   try {
-    await waitForOutput(child, `listening 127.0.0.1:${port}`, 15000);
+    port = (await waitForOutput(child, 'listening 127.0.0.1:', 15000)).match(/listening 127\.0\.0\.1:(\d+)/)[1];
   } catch (error) {
     child.kill('SIGKILL');
     await bridge.close();
@@ -96,6 +86,9 @@ async function startHudsuckerSession({
     origin: `http://127.0.0.1:${port}`,
     caFile: ca.cert,
     stats: bridge.stats,
+    child,
+    bridge,
+    logs: () => logs,
     async close() {
       child.kill('SIGTERM');
       await new Promise((resolve) => child.once('exit', resolve));

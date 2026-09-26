@@ -6,7 +6,7 @@
  * (`piecemaker-plugin/scripts/verify-citations.mjs`).
  *
  * Ce dépôt n'a pas de hook Claude Code : tout le trafic IA passe par le
- * proxy PII local (`server/piecemaker/anonymizer/proxy.cjs`), qui est donc
+ * proxy PII local (`server/piecemaker/anonymizer/rewriter-bridge.cjs`), qui est donc
  * l'unique point d'observation possible pour un texte produit par le modèle.
  * Contrairement au hook d'origine, ce module n'a pas le pouvoir de bloquer
  * un tour (il n'y a pas de conversation Claude Code à interrompre côté

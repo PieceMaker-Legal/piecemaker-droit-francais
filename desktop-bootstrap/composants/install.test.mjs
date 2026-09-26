@@ -120,8 +120,8 @@ test('garde le venv déplaçable et la configuration au dossier de données', ()
 });
 
 test('fusionne la configuration sans effacer les autres clés', () => {
-  const merged = mergeRuntimeConfig({ mikePiiPort: 4111 }, { pythonPath: '/venv/bin/python', venvPath: '/venv' });
-  assert.deepEqual(merged, { mikePiiPort: 4111, pythonPath: '/venv/bin/python', venvPath: '/venv' });
+  const merged = mergeRuntimeConfig({ theme: 'dark' }, { pythonPath: '/venv/bin/python', venvPath: '/venv' });
+  assert.deepEqual(merged, { theme: 'dark', pythonPath: '/venv/bin/python', venvPath: '/venv' });
   assert.equal(dependenciesReady(readyStatus()), true);
   assert.equal(glinerReady({ ready: true, gliner2_runtime: { boundary_capable: false } }), false);
   assert.equal(runtimeReady(readyStatus()), true);
@@ -165,7 +165,7 @@ test('réutilise un environnement déjà complet et enregistre son interpréteur
     ['warmup-status', JSON.stringify(readyStatus())],
     [layout.mineruConfig, JSON.stringify({ 'models-dir': { pipeline: '/models/pipeline' } })],
     ['/models/pipeline', ''],
-    [layout.configFile, JSON.stringify({ mikePiiPort: 4111 })],
+    [layout.configFile, JSON.stringify({ theme: 'dark' })],
   ]);
   const host = memoryHost(files);
   await installRuntimeComponents({
@@ -179,7 +179,7 @@ test('réutilise un environnement déjà complet et enregistre son interpréteur
   });
   assert.equal(host.commands.some((command) => command.includes('pip')), false);
   const config = JSON.parse(files.get(layout.configFile));
-  assert.equal(config.mikePiiPort, 4111);
+  assert.equal(config.theme, 'dark');
   assert.equal(config.pythonPath, python);
   assert.equal(config.venvPath, layout.venvDir);
 });

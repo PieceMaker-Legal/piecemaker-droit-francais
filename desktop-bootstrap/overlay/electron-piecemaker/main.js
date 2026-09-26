@@ -1,9 +1,5 @@
 import { app, BrowserWindow } from 'electron';
 
-import { reclaimProxyPort } from './reclaimProxyPort.js';
-
-reclaimProxyPort();
-
 const OPEN_LOCAL_EXPRESSION = 'window.cloudcliDesktop && window.cloudcliDesktop.openLocal()';
 
 let alreadyOpened = false;

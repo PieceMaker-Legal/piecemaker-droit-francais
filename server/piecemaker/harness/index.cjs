@@ -1,9 +1,8 @@
 'use strict';
 
 /**
- * Façade du harnais de citations vérifiées, à brancher sur le proxy PII
- * local (`server/piecemaker/anonymizer/proxy.cjs`) — câblage laissé à une
- * tâche ultérieure, ce module ne modifie rien de `proxy.cjs`.
+ * Façade du harnais de citations vérifiées, branchée sur le réécrivain du
+ * proxy PII (`server/piecemaker/anonymizer/rewriter-bridge.cjs`).
  *
  * Deux observateurs, symétriques au sens et au retour du proxy lui-même :
  *  - `observerRequete` regarde ce qui PART vers le fournisseur (avant

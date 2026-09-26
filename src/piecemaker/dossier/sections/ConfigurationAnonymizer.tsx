@@ -17,17 +17,15 @@ import { pmGet, pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
 
 /**
  * `filtered` : le client passe par le proxy. `blocked` : il ne peut pas être
- * filtré et est donc empêché de s'exécuter. `unconfigured` : son câblage a
- * échoué — c'est le seul état qui demande une action.
+ * filtré et est donc empêché de s'exécuter.
  */
-type CoverageState = 'filtered' | 'blocked' | 'unconfigured';
+type CoverageState = 'filtered' | 'blocked';
 
 type Coverage = Record<string, { state: CoverageState; detail: string | null }>;
 
 const COVERAGE_LABELS: Record<CoverageState, string> = {
   filtered: 'filtré',
   blocked: 'bloqué',
-  unconfigured: 'non filtré',
 };
 
 const CLIENT_LABELS: Record<string, string> = {
@@ -86,7 +84,6 @@ export default function ConfigurationAnonymizer() {
   const active = Boolean(status?.enabled);
   const covered = status?.dictionary.entityCount ?? 0;
   const clients = Object.entries(status?.coverage ?? {});
-  const uncovered = clients.filter(([, value]) => value.state === 'unconfigured');
 
   return (
     <Card>
@@ -147,7 +144,7 @@ export default function ConfigurationAnonymizer() {
               {clients.map(([name, value]) => (
                 <li key={name} className="flex items-center gap-2">
                   <Badge
-                    variant={value.state === 'filtered' ? 'default' : value.state === 'blocked' ? 'secondary' : 'destructive'}
+                    variant={value.state === 'filtered' ? 'default' : 'secondary'}
                   >
                     {COVERAGE_LABELS[value.state]}
                   </Badge>
@@ -160,16 +157,6 @@ export default function ConfigurationAnonymizer() {
               Cursor n’accepte aucun relais : son protocole ignore toute base d’URL. Il est bloqué tant qu’un mapping
               existe, plutôt que d’envoyer les noms en clair.
             </p>
-          </div>
-        )}
-
-        {uncovered.length > 0 && (
-          <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-2 text-destructive">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              Câblage incomplet : {uncovered.map(([name]) => CLIENT_LABELS[name] ?? name).join(', ')} peut encore
-              contacter son fournisseur sans passer par le filtre.
-            </span>
           </div>
         )}
 
