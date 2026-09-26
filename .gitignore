@@ -158,6 +158,9 @@ server/piecemaker/vendor/websocket-server/admin-routes.cjs
 
 CLAUDE.md
 docs/
+.agents/skills/piecemaker-*
+.grok/
+.opencode/
 
 server/piecemaker/anonymizer/bin/
 
