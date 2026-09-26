@@ -15,7 +15,8 @@ const VENDOR_ROOT = path.join(__dirname, 'vendor');
 const { createAnonymizerRouter } = require('./anonymizer/routes.cjs');
 const { createAdminRouter, registerLegalCase } = require('./vendor/websocket-server/admin-routes.cjs');
 const { stopOriginalsJobs } = require('./vendor/websocket-server/originals-pipeline.cjs');
-const { readRegistryConfig, resolveCaseReference } = require('./vendor/websocket-server/case-registry.cjs');
+const { resolveCaseReference } = require('./vendor/websocket-server/case-registry.cjs');
+const { publishProjectSource } = require('./vendor/piecemaker-plugin/scripts/lib/case-folders.cjs');
 const protectionLibrary = require('./vendor/piecemaker-plugin/scripts/lib/protection.cjs');
 const { createProtectionBypassRouter } = require('./protection/routes.cjs');
 const { createActivationRouter } = require('./activation/index.cjs');
@@ -52,7 +53,7 @@ function piecemakerHome() {
  * @param {() => object} [options.getRuntimeStatus] Ce que la carte des composants
  *   affiche du serveur hôte (port, hôte, dépendances système).
  */
-function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anonymizer } = {}) {
+function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anonymizer, publishProjects = () => {} } = {}) {
   const express = require('express');
   const router = express.Router();
 
@@ -63,6 +64,7 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anony
   // l'app de bureau (origine `file://`) comme l'accès depuis le réseau local.
   router.post('/repository/cases/selected', async (request, response) => {
     try {
+      publishProjects();
       const result = await registerLegalCase({
         folder: request.body?.folder,
         configFile: path.join(homeDir, 'config.json'),
@@ -77,7 +79,7 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anony
   // Levée de protection à l'échelle du dossier : ajout PieceMaker monté avant
   // le vendor, qui n'expose que le classement pièce par pièce.
   router.use(createProtectionBypassRouter({
-    resolveCase: (reference) => resolveCaseReference(readRegistryConfig(path.join(homeDir, 'config.json')), reference),
+    resolveCase: (reference) => resolveCaseReference(reference),
     protection: protectionLibrary,
   }));
 
@@ -102,4 +104,4 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anony
   return router;
 }
 
-module.exports = { createPieceMakerRouter, piecemakerHome, stopOriginalsJobs, VENDOR_ROOT };
+module.exports = { createPieceMakerRouter, piecemakerHome, publishProjectSource, stopOriginalsJobs, VENDOR_ROOT };

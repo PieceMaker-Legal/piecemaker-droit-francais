@@ -20,6 +20,7 @@ import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
 import { installModelDiscovery } from './model-discovery/index.js';
+import { startProjectRegistry } from './project-registry.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -40,8 +41,9 @@ type PieceMakerRuntimeStatus = {
 };
 
 type PieceMakerVendorModule = {
-  createPieceMakerRouter(options?: { getRuntimeStatus?: () => PieceMakerRuntimeStatus; anonymizer?: unknown }): Router;
+  createPieceMakerRouter(options?: { getRuntimeStatus?: () => PieceMakerRuntimeStatus; anonymizer?: unknown; publishProjects?: () => void }): Router;
   piecemakerHome(): string;
+  publishProjectSource(sourceId: string, folders: string[] | null): void;
   stopOriginalsJobs(): Promise<void>;
 };
 
@@ -49,6 +51,7 @@ const shellEnvironment = await resolveDesktopShellEnvironment();
 const vendor = createRequire(import.meta.url)(routerPath) as PieceMakerVendorModule;
 
 export const { piecemakerHome, stopOriginalsJobs } = vendor;
+const publishProjects = startProjectRegistry(vendor.publishProjectSource);
 const { createAnonymizerService } = createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/anonymizer/service.cjs'));
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
@@ -65,7 +68,7 @@ export function createPieceMakerLocalRouter() {
 }
 
 export function createPieceMakerRouter(options: { getRuntimeStatus?: () => PieceMakerRuntimeStatus } = {}) {
-  const router = vendor.createPieceMakerRouter({ ...options, anonymizer });
+  const router = vendor.createPieceMakerRouter({ ...options, anonymizer, publishProjects });
   router.use(createCitationsRouter(citations, (id) => {
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));

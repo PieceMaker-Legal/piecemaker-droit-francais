@@ -21,10 +21,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { loadPieceMakerConfig, readHookPayload, runHook, noop } from './lib/hook-io.mjs';
+import { readHookPayload, runHook, noop } from './lib/hook-io.mjs';
 
 const require = createRequire(import.meta.url);
-const { locateConfiguredCase } = require('./lib/case-folders.cjs');
+const { locateProjectCase } = require('./lib/case-folders.cjs');
 const { caseHasMapping } = require('./lib/mapping.cjs');
 const {
   isMappingFile,
@@ -189,14 +189,13 @@ function caseRootHasMapping(located) {
 async function main() {
   const payload = await readHookPayload(2000);
   if (!payload) return null;
-  const config = loadPieceMakerConfig();
 
   const toolName = payload.tool_name;
   const cwd = payload.cwd || process.cwd();
 
   if (toolName === 'Bash') {
     for (const candidate of commandPaths(payload.tool_input?.command, cwd)) {
-      const located = locateConfiguredCase(config, candidate);
+      const located = locateProjectCase(candidate);
       if (!located) continue;
       if (isMappingFile(candidate)) return deny(mappingReason(candidate));
       if (isSecretFile(candidate)) return deny(secretReason(candidate));
@@ -214,7 +213,7 @@ async function main() {
 
   const target = absolutePath(payload.tool_input?.file_path || payload.tool_input?.path, cwd);
   if (!target) return null;
-  const located = locateConfiguredCase(config, target);
+  const located = locateProjectCase(target);
   if (!located) return null;
 
   // Un répertoire n'est pas une pièce : `Grep`/`Glob` en visent un couramment,
