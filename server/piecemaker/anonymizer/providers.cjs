@@ -60,7 +60,7 @@ exec cursor-agent "$@"
  * dans le statut, ce qui est l'information utile, plutôt que d'empêcher le
  * serveur de démarrer.
  */
-async function configureProviders({ origin, caFile, userHome = os.homedir(), binDir, mappingFile }) {
+async function configureProviders({ origin, caFile, trustBundle, userHome = os.homedir(), binDir, mappingFile }) {
   const report = {};
 
   const attempt = (name, run) => {
@@ -71,7 +71,7 @@ async function configureProviders({ origin, caFile, userHome = os.homedir(), bin
     }
   };
 
-  attempt('claude', () => configureClaudeCodeProxy({ proxyUrl: origin, caFile, userHome }));
+  attempt('claude', () => configureClaudeCodeProxy({ proxyUrl: origin, caFile, trustBundle, userHome }));
   attempt('codex', () => configureCodexProxy({
     codexHome: process.env.CODEX_HOME || path.join(userHome, '.codex'),
   }));
