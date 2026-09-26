@@ -1,0 +1,43 @@
+#piecemaker-shell-warning {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100vw - 32px));
+  z-index: 80;
+}
+
+.piecemaker-shell-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #d97706;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #78350f;
+  font-family: var(--piecemaker-font-ui, inherit);
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+}
+
+.piecemaker-shell-warning__text {
+  flex: 1;
+}
+
+.piecemaker-shell-warning__close {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dark .piecemaker-shell-warning {
+  border-color: #b45309;
+  background: #451a03;
+  color: #fde68a;
+}
