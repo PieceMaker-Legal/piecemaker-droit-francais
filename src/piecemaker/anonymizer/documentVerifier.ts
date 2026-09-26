@@ -111,12 +111,13 @@ function rangesFor(root: Element, pattern: RegExp | null): Range[] {
     pattern.lastIndex = 0;
     let match = pattern.exec(text);
     while (match && ranges.length < MAX_RANGES) {
-      const start = segments.find((segment) => segment.start <= match.index && segment.end > match.index);
-      const endOffset = match.index + match[0].length;
+      const startOffset = match.index;
+      const start = segments.find((segment) => segment.start <= startOffset && segment.end > startOffset);
+      const endOffset = startOffset + match[0].length;
       const end = segments.find((segment) => segment.start < endOffset && segment.end >= endOffset);
       if (start && end) {
         const range = document.createRange();
-        range.setStart(start.node, match.index - start.start);
+        range.setStart(start.node, startOffset - start.start);
         range.setEnd(end.node, endOffset - end.start);
         ranges.push(range);
       }
@@ -150,12 +151,10 @@ export function startDocumentVerificationHighlighting(): () => void {
     const HighlightConstructor = Highlight as new (...ranges: Range[]) => unknown;
     const factRanges = rangesFor(root, buildDocumentValueRegex(request.facts));
     const personRanges = rangesFor(root, buildDocumentValueRegex(request.people));
-    factRanges.length
-      ? registry.set(FACT_HIGHLIGHT_NAME, new HighlightConstructor(...factRanges))
-      : registry.delete(FACT_HIGHLIGHT_NAME);
-    personRanges.length
-      ? registry.set(PERSON_HIGHLIGHT_NAME, new HighlightConstructor(...personRanges))
-      : registry.delete(PERSON_HIGHLIGHT_NAME);
+    if (factRanges.length) registry.set(FACT_HIGHLIGHT_NAME, new HighlightConstructor(...factRanges));
+    else registry.delete(FACT_HIGHLIGHT_NAME);
+    if (personRanges.length) registry.set(PERSON_HIGHLIGHT_NAME, new HighlightConstructor(...personRanges));
+    else registry.delete(PERSON_HIGHLIGHT_NAME);
   };
 
   const schedule = () => {

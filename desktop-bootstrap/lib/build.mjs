@@ -116,12 +116,16 @@ async function repairStagedTree(stageDir) {
   ui.warn("Certaines dépendances restent introuvables — electron-builder peut échouer.");
 }
 
-const EXCLUDED_RUNTIME_ASSETS = new Set(['node_modules', '__pycache__', '.env', '.DS_Store', '.git', 'target', 'hudsucker-proxy']);
+const EXCLUDED_RUNTIME_ASSETS = new Set(['node_modules', '__pycache__', '.env', '.DS_Store', '.git', 'target', 'hudsucker-proxy', 'tests']);
+const TEST_FILE_PATTERN = /\.test\.[cm]?[jt]sx?(\.map)?$/;
+
+function isShippedFile(target) {
+  const name = path.basename(target);
+  return !EXCLUDED_RUNTIME_ASSETS.has(name) && !TEST_FILE_PATTERN.test(name);
+}
 
 function isRuntimeAsset(target) {
-  const name = path.basename(target);
-  if (EXCLUDED_RUNTIME_ASSETS.has(name)) return false;
-  return !name.endsWith('.ts');
+  return isShippedFile(target) && !path.basename(target).endsWith('.ts');
 }
 
 async function embedRuntimeAssets(sourceDir, stageDir) {
@@ -180,7 +184,7 @@ async function embedLocalServer(sourceDir, stageDir) {
   }
   const to = path.join(stageDir, 'dist-server');
   await fs.rm(to, { recursive: true, force: true });
-  await fs.cp(from, to, { recursive: true });
+  await fs.cp(from, to, { recursive: true, filter: isShippedFile });
   ui.detail('Serveur local embarqué dans l\'application.');
   await embedRuntimeAssets(sourceDir, stageDir);
 }
