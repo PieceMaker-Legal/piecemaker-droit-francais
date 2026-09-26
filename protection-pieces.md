@@ -3,7 +3,9 @@
 Les pièces originales d'un dossier portent les noms réels. La promesse du
 produit est que l'IA ne lit jamais une pièce PDF ou image : elle travaille sur
 le Markdown converti et pseudonymisé. La « protection » est ce qui tient cette
-promesse ; elle est **automatique**, sans aucun réglage dans l'interface.
+promesse. **Règle :** tout projet est protégé par défaut, sans action ; seul
+l'interrupteur de l'onglet Dossier lève la protection d'un projet entier, après
+confirmation.
 
 ## Périmètre : quels dossiers
 
@@ -44,7 +46,7 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 | Fichier | Contenu | Écrit par |
 | --- | --- | --- |
 | `protection.json` | `{version, unprotected, resources}` : uniquement des **exceptions**, jamais la liste des fichiers protégés. Un PDF déposé plus tard est protégé sans mise à jour. | création/enregistrement du dossier (listes vides), hook `classify-ai-documents.mjs`, `PUT /protection` |
-| `protection-bypass.json` | drapeau `{scope: "dossier"}` : sa seule présence lève toute protection du dossier, pièces futures comprises. | `PUT /protection/bypass` (`server/piecemaker/protection/bypass.cjs`) |
+| `protection-bypass.json` | drapeau `{scope: "dossier"}` : sa seule présence lève toute protection du dossier, pièces futures comprises. | interrupteur « Protégé / Protection levée » de l'onglet Dossier (`src/piecemaker/dossier/sections/CaseProtectionToggle.tsx`, confirmation dans les deux sens) → `PUT /protection/bypass` (`server/piecemaker/protection/bypass.cjs`) |
 
 - Les exceptions sont des chemins relatifs : une pièce renommée ou déplacée
   perd la sienne et redevient protégée (défaut sûr).
@@ -55,10 +57,9 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 - `classify-ai-documents.mjs` (après `Write`/`Bash`) n'y inscrit que les PDF et
   images créés par l'IA, pour qu'elle puisse se relire ; il ne réécrit rien si
   l'entrée existe déjà.
-- Aucune interface ne modifie ces fichiers depuis `5ddbee2a` : les routes
-  `/protection` et `/protection/bypass` restent sans appelant côté client.
-  Toute évolution qui réintroduirait une énumération de fichiers protégés
-  serait une régression.
+- Aucune interface ne modifie `protection.json` pièce par pièce : la route
+  `PUT /protection` reste sans appelant côté client. Toute évolution qui
+  réintroduirait une énumération de fichiers protégés serait une régression.
 
 ## Qui applique la règle
 
