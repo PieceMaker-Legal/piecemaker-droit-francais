@@ -31,6 +31,8 @@ import type {
   WorkspacePathValidationResult,
 } from '@/shared/types.js';
 
+import { productDataRoot } from '../../shared/product-config.mjs';
+
 //----------------- ENVIRONMENT UTILITIES ------------
 /**
  * Indicates whether the backend is running in hosted Platform mode rather than
@@ -48,7 +50,7 @@ export const IS_PLATFORM = process.env.VITE_IS_PLATFORM === 'true';
  * this root and must not be redirected through this helper.
  */
 export function getApplicationDataRoot(): string {
-  return process.env.CLOUDCLI_HOME || path.join(os.homedir(), '.cloudcli');
+  return productDataRoot(path.join(os.homedir(), '.cloudcli'));
 }
 
 // ---------------------------

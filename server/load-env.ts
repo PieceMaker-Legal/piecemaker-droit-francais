@@ -4,6 +4,8 @@ import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { productDataRoot } from '../shared/product-config.mjs';
+
 // This bootstrap cannot import shared/utils.ts: that module reads environment
 // defaults during evaluation, before this file has loaded `.env`.
 function getBootstrapApplicationRoot(importMetaUrl: string) {
@@ -40,7 +42,7 @@ try {
 
 // Keep the default database in a stable user-level location so rebuilding dist-server
 // never changes where the backend stores auth.db when DATABASE_PATH is not set explicitly.
-const applicationDataRoot = process.env.CLOUDCLI_HOME || path.join(os.homedir(), '.cloudcli');
+const applicationDataRoot = productDataRoot(path.join(os.homedir(), '.cloudcli'));
 const DEFAULT_DATABASE_PATH = path.join(applicationDataRoot, 'auth.db');
 
 if (!process.env.DATABASE_PATH) {
