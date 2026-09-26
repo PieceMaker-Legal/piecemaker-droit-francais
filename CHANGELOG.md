@@ -3,6 +3,41 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.10](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.9...v2.0.10) (2026-09-26)
+
+### New Features
+
+* **dossier:** interrupteur de levée de protection, avec confirmation ([5492296](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/549229617710b58a3bd195b8f9bcca77bfb7550c))
+* **mistral:** les modèles GLM 5.3 et 5.2 arrivent dans Vibe, avec un effort réel sur Medium 3.5 ([0cea9bf](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0cea9bfbfc4a737318305819cf35c57546c9a1fd))
+* **modeles:** les catalogues Codex et Mistral sont lus depuis leur CLI ([5960978](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5960978a8808ded612e830ace736563a41104916))
+* **piecemaker:** ouvrir et éditer les .docx dans la visionneuse ([2c098e8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2c098e88ab6160ea015ddc4810eaeebfc80b2ebb))
+* **piecemaker:** tout projet CloudCLI est un dossier juridique ([dd3a068](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/dd3a068b5808f06b138b8174a11a4f0d2d6054a8))
+* **protection:** lever la protection d'un dossier depuis son bouclier dans la barre latérale ([5fc9e19](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5fc9e19c1269269a7add2596b0836ae71c0084a5))
+
+### Bug Fixes
+
+* **anonymizer:** le proxy PII hudsucker naît et meurt avec PieceMaker ([7f29092](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7f29092cfd2beb70ec3fbf969ccf4ab9ac6b5a00))
+* **audit:** typecheck et lint au vert, .docx chargé à la demande, tests hors de l'app ([d6fa805](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d6fa805019d54dde6cf2f599ac29b52115fd3020))
+* **desktop:** la désinstallation retire tout sauf auth.db ([0a4f150](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0a4f150a4a402863b504a0c41173f6c5a4595b7b))
+* **garde-secrets:** protéger auth.db à la place de central-mapping.json ([460b1e9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/460b1e9df1cfdf7548400ab62903bcb36ea8f2b9))
+* **protection:** écrire protection.json de façon atomique sous verrou, ne classer que PDF et images ([7a93afa](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7a93afaedae10d515bae0db84c2a7b339a5907f5))
+* **protection:** un projet sans mapping n'est plus bloqué en lecture ([26b54a9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/26b54a97274c9e1924efccd3a8afce9f4578be4f))
+
+### Refactoring
+
+* **anonymizer:** supprimer central-mapping.json ([2ca9abb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2ca9abb345a83f5799f28705308b6ba10a6b61d9))
+* **dossier:** retirer les sections orphelines de l'ancien onglet Dossier ([5d1f405](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5d1f4050478ab9a2f8bc2bffbe70d278a931fed9))
+* **installer:** retirer Telegram, case-instructions et les clés de configuration mortes ([586504c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/586504c10d35fdad15dbdce61d212eaffb1e7ca4))
+* **piecemaker:** retirer telegram-admin, sans appelant côté interface ([bdda340](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/bdda340a83b181cb3cb7335ce8243c8d62760ce3))
+
+### Maintenance
+
+* **gitignore:** garder docs/docx.md hors du dépôt, comme CLAUDE.md ([2cf95d6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2cf95d6706f80af7ecbde5fe06084b0aa1613da9))
+* **gitignore:** ignorer les liens de skills générés par la bibliothèque PieceMaker ([0df1627](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0df1627e44f0449acd10cc657edab071e75b947d))
+* **gitignore:** sortir .piecemaker/ du dépôt et dédoublonner ses règles ([6748aeb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6748aeb276772e9d6d42d5e4ac373ccb475b2731))
+* **gitignore:** sortir tout docs/ du dépôt ([0480652](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0480652428b564ab064af9c9461c650f1893b8c9))
+* **gitignore:** sortir tout docs/ du dépôt ([58c7d57](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/58c7d577e2838365562df225156797bc12df0d6f))
+
 ## [2.0.9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.8...v2.0.9) (2026-09-26)
 
 ### Bug Fixes
