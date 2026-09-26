@@ -3,6 +3,15 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.5...v2.0.6) (2026-09-26)
+
+### Bug Fixes
+
+* **anonymizer:** le proxy PII ne bloque plus les sessions Codex ([a201bdf](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a201bdfeb2b89b3f49afb5ea76aa569297e1507b))
+* **desktop:** l'app de bureau lancée depuis le Finder démarre Claude ([2777f47](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2777f47860e490009d0a0b685484e391b46aa231))
+* **plugins:** les onglets de plugins apparaissent dès la connexion ([e3f5331](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e3f53317101ea9e8b3a8bb666ec999ccf3c40f84))
+* **sidebar:** le bouclier vert apparaît dès la fin de l'analyse ([3373f8b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3373f8be3f6131a31d4f293cd0b55a1f3aae8e9f))
+
 ## [2.0.5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.4...v2.0.5) (2026-09-26)
 
 ### Bug Fixes
