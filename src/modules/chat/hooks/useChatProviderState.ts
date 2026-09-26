@@ -21,7 +21,7 @@ const FALLBACK_PROVIDER_EFFORT_VALUES: Partial<Record<LLMProvider, readonly stri
   // narrows this once available; including the GPT-5.6 tiers here prevents a
   // valid Max/Ultra selection from being reset during catalog hydration.
   codex: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
-  mistral: ['low', 'medium', 'high'],
+  mistral: ['none', 'high'],
   opencode: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
 };
 
