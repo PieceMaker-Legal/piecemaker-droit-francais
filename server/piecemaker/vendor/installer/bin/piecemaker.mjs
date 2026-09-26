@@ -37,14 +37,13 @@ import { COMMANDS, CHRONOLOGY_ACTIONS } from '../lib/commandes.mjs';
 import { loadConfig, readEnv, markStep, loadState, CONFIG_FILE } from '../lib/state.mjs';
 import { scheduleStepResume, selectStepsToResume } from '../lib/resume-steps.mjs';
 import { appServerPort, readLocalScanJob, startLocalScan } from '../lib/conversion-client.mjs';
-import { restartTelegramDaemon, checkForUpdate, updateRepository } from '../lib/service.mjs';
+import { checkForUpdate, updateRepository } from '../lib/service.mjs';
 
 const require = createRequire(import.meta.url);
 const CLAUDE_ASSETS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/claude-assets.cjs');
 const CLAUDE_HOOKS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/claude-hooks.cjs');
 const CENTRAL_MAPPING_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../piecemaker-plugin/scripts/lib/central-mapping.cjs');
 const DOCUMENT_INDEX_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/document-index.cjs');
-const CASE_INSTRUCTIONS_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/case-instructions.cjs');
 const ORIGINALS_PIPELINE_MODULE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket-server/originals-pipeline.cjs');
 const APP_CLI_LIB = path.join(GIT_REPO_ROOT, 'scripts', 'piecemaker', 'cli', 'lib');
 
@@ -88,23 +87,6 @@ function reconcileCentralMapping() {
   if (central) log.ok(`Mapping central du proxy reconstruit (${central.entities || 0} entité(s)).`);
   else log.warn('Mapping central du proxy non reconstruit ; relancez « piecemaker ».');
   return hooksRemoved;
-}
-
-function reconcileCaseInstructions() {
-  if (!fs.existsSync(CASE_INSTRUCTIONS_MODULE)) return false;
-  try {
-    const { refreshRegisteredCaseRules } = require(CASE_INSTRUCTIONS_MODULE);
-    if (typeof refreshRegisteredCaseRules !== 'function') return false;
-    const result = refreshRegisteredCaseRules(REPO_ROOT, loadConfig());
-    if (result.failed.length) {
-      log.warn(`${result.failed.length} règle(s) de dossier n’ont pas pu être actualisées.`);
-    }
-    if (result.refreshed) log.ok(`${result.refreshed} règle(s) de dossier PieceMaker actualisée(s).`);
-    return result.failed.length === 0;
-  } catch (error) {
-    log.warn(`Règles de dossier non actualisées (${error.message}).`);
-    return false;
-  }
 }
 
 /**
@@ -666,7 +648,6 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
     const pending = knownUpdate ?? checkForUpdate();
     if (!pending.available) {
       log.ok(`PieceMaker est déjà à jour (${pending.ref}, ${pending.current.slice(0, 7)}).`);
-      reconcileCaseInstructions();
       if (reconcileCentralMapping()) {
         log.info('Rouvrez les sessions Claude Code actives pour oublier les hooks hérités.');
       }
@@ -681,44 +662,34 @@ async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
       log.info(`Restauration de l’installation depuis le dépôt distant (${pending.localChanges} fichier(s) localement modifié(s)).`);
     }
 
-    try {
-      const result = updateRepository(pending);
-      log.ok(`PieceMaker mis à jour (${result.ref}, ${result.target.slice(0, 7)}).`);
+    const result = updateRepository(pending);
+    log.ok(`PieceMaker mis à jour (${result.ref}, ${result.target.slice(0, 7)}).`);
 
-      reconcileCaseInstructions();
-
-      if (result.pythonChanged) {
-        log.warn('Une dépendance Python a changé : relancez « piecemaker install » (étape 03 si elle est installée).');
-      }
-
-      // Les composants PieceMaker sont découverts directement dans
-      // ~/.claude/{skills,agents}. Les liens symboliques suivent déjà le dépôt ;
-      // cet appel rafraîchit aussi le repli par copie sur les plateformes qui ne
-      // peuvent pas créer de liens.
-      const claudeIntegrations = loadClaudeIntegrations();
-      if (commandExists('claude', ['--version']) && claudeIntegrations) {
-        const claudeAssets = claudeIntegrations.syncClaudeAssets(REPO_ROOT, os.homedir());
-        if (claudeAssets.conflicts.length) {
-          log.warn(`${claudeAssets.conflicts.length} skill(s)/agent(s) Claude personnel(s) homonyme(s) conservé(s).`);
-        } else {
-          log.ok(`${claudeAssets.registered} skill(s)/agent(s) PieceMaker synchronisé(s) pour Claude Code.`);
-        }
-        const claudeHooks = claudeIntegrations.installClaudeHooks(REPO_ROOT, os.homedir());
-        if (!claudeHooks.ok) log.warn(`Hooks Claude Code non synchronisés (${claudeHooks.reason}).`);
-        else if (claudeHooks.changed) log.ok(`${claudeHooks.registered} hook(s) PieceMaker synchronisé(s) pour Claude Code.`);
-      }
-
-      reconcileCentralMapping();
-      log.info('Rouvrez les sessions Claude Code/Codex actives pour charger les hooks et le MCP mis à jour.');
-    } finally {
-      const daemon = restartTelegramDaemon();
-      if (daemon.restarted) log.ok('Moniteur Telegram redémarré.');
-      else if (daemon.reason && daemon.reason !== 'absent' && daemon.reason !== 'unsupported') {
-        log.warn(`Le moniteur Telegram n’a pas redémarré : ${daemon.reason}`);
-      }
+    if (result.pythonChanged) {
+      log.warn('Une dépendance Python a changé : relancez « piecemaker install » (étape 03 si elle est installée).');
     }
-    // Après le `finally` : une mise à jour qui a échoué ne doit pas enchaîner
-    // sur une réinstallation en fond, l'exception traverse d'abord.
+
+    // Les composants PieceMaker sont découverts directement dans
+    // ~/.claude/{skills,agents}. Les liens symboliques suivent déjà le dépôt ;
+    // cet appel rafraîchit aussi le repli par copie sur les plateformes qui ne
+    // peuvent pas créer de liens.
+    const claudeIntegrations = loadClaudeIntegrations();
+    if (commandExists('claude', ['--version']) && claudeIntegrations) {
+      const claudeAssets = claudeIntegrations.syncClaudeAssets(REPO_ROOT, os.homedir());
+      if (claudeAssets.conflicts.length) {
+        log.warn(`${claudeAssets.conflicts.length} skill(s)/agent(s) Claude personnel(s) homonyme(s) conservé(s).`);
+      } else {
+        log.ok(`${claudeAssets.registered} skill(s)/agent(s) PieceMaker synchronisé(s) pour Claude Code.`);
+      }
+      const claudeHooks = claudeIntegrations.installClaudeHooks(REPO_ROOT, os.homedir());
+      if (!claudeHooks.ok) log.warn(`Hooks Claude Code non synchronisés (${claudeHooks.reason}).`);
+      else if (claudeHooks.changed) log.ok(`${claudeHooks.registered} hook(s) PieceMaker synchronisé(s) pour Claude Code.`);
+    }
+
+    reconcileCentralMapping();
+    log.info('Rouvrez les sessions Claude Code/Codex actives pour charger les hooks et le MCP mis à jour.');
+    // Une mise à jour qui a échoué ne doit pas enchaîner sur une
+    // réinstallation en fond : l'exception traverse d'abord.
     await resumePendingStepsAfterUpdate();
     return 0;
   }

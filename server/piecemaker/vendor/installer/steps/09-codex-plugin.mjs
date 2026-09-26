@@ -10,7 +10,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import { log } from '../lib/ui.mjs';
 import { REPO_ROOT, commandExists } from '../lib/platform.mjs';
 import {
@@ -20,10 +19,6 @@ import {
   repositoryCodexSkills,
   syncCodexSkills,
 } from '../lib/codex-skills.mjs';
-import { loadConfig } from '../lib/state.mjs';
-
-const require = createRequire(import.meta.url);
-const { refreshRegisteredCaseRules } = require('../../websocket-server/case-instructions.cjs');
 
 export const meta = {
   id: '09-codex-plugin',
@@ -45,8 +40,6 @@ function dependencies(overrides = {}) {
     installCodexProtectionHook,
     repositoryCodexSkills,
     syncCodexSkills,
-    loadConfig,
-    refreshRegisteredCaseRules,
     ...overrides,
   };
 }
@@ -66,7 +59,6 @@ export async function install(ctx, overrides = {}) {
   }
   if (ctx.dryRun) {
     ops.log.info(`[simulation] enregistrement de ${skills.length} skill(s) PieceMaker dans ~/.codex/skills`);
-    ops.log.info('[simulation] actualisation des instructions AGENTS.md des dossiers enregistrés');
     return { status: 'skipped', note: 'Mode simulation — aucune modification effectuée.' };
   }
 
@@ -80,11 +72,6 @@ export async function install(ctx, overrides = {}) {
     ops.log.warn(`Protection des pièces Codex non enregistrée : ${protectionHook.reason}.`);
   } else {
     ops.log.detail(`Protection des pièces Codex ${protectionHook.changed ? 'enregistrée' : 'déjà à jour'} dans ~/.codex/hooks.json.`);
-  }
-  const instructions = ops.refreshRegisteredCaseRules(REPO_ROOT, ops.loadConfig());
-  ops.log.detail(`${instructions.refreshed} dossier(s) juridique(s) muni(s) des instructions Codex/Claude.`);
-  for (const failure of instructions.failed) {
-    ops.log.warn(`Instructions non actualisées pour ${failure.folder} : ${failure.error}`);
   }
   if (result.conflicts.length || !protectionHook.ok) {
     return {
