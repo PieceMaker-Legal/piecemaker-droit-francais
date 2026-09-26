@@ -1,3 +1,4 @@
+import { VIBE_MODEL_PRESETS, vibeModelOption } from '@/modules/providers/list/mistral/mistral-vibe-models.js';
 import type { IProviderModels } from '@/shared/interfaces.js';
 import type {
   ProviderCurrentActiveModel,
@@ -8,16 +9,8 @@ import { buildDefaultProviderCurrentActiveModel } from '@/shared/utils.js';
 /** Curated Mistral catalog shipped as immutable CloudCLI defaults. */
 export const MISTRAL_PREDEFINED_MODELS: ProviderModelsDefinition = {
   OPTIONS: [
-    {
-      value: 'mistral-medium-3.5',
-      label: 'Mistral Medium 3.5',
-      description: 'mistral-vibe-cli-latest',
-    },
-    {
-      value: 'local',
-      label: 'Devstral (local)',
-      description: 'devstral',
-    },
+    ...VIBE_MODEL_PRESETS.map((preset) => vibeModelOption(preset.alias, preset.display_name, preset.name)),
+    vibeModelOption('local', 'Devstral (local)', 'devstral'),
   ],
   DEFAULT: 'mistral-medium-3.5',
 };

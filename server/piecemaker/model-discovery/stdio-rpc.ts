@@ -13,6 +13,7 @@ export type RpcCall = (method: string, params: unknown) => Promise<unknown>;
 export type StdioRpcServer = {
   command: string;
   args: string[];
+  env?: NodeJS.ProcessEnv;
 };
 
 const CLIENT_INFO = { name: 'piecemaker', title: 'PieceMaker', version: '1' };
@@ -22,7 +23,7 @@ export async function withStdioRpcServer<T>(
   exchange: (call: RpcCall) => Promise<T>,
   timeoutMs: number,
 ): Promise<T> {
-  const child = crossSpawn(server.command, server.args, { env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = crossSpawn(server.command, server.args, { env: server.env ?? process.env, stdio: ['pipe', 'pipe', 'pipe'] });
   const pending = new Map<number, (reply: RpcReply) => void>();
   let nextId = 1;
   let stderr = '';
