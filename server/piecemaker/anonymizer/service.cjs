@@ -72,6 +72,18 @@ function writeTrustBundle(caFile, bundleFile) {
   return bundleFile;
 }
 
+function removeLegacyCentralMapping(homeDir) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(homeDir);
+  } catch {
+    return;
+  }
+  for (const name of entries) {
+    if (name.startsWith('central-mapping.json')) fs.rmSync(path.join(homeDir, name), { force: true });
+  }
+}
+
 function installCursorGuard({ binDir, mappingFile }) {
   fs.mkdirSync(binDir, { recursive: true });
   const file = path.join(binDir, 'cursor-agent');
@@ -198,6 +210,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
       .map((key) => [key, process.env[key]]));
     for (const key of ['HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']) delete process.env[key];
     Object.assign(process.env, environment);
+    removeLegacyCentralMapping(homeDir);
     installCursorGuard({ binDir, mappingFile: path.join(homeDir, 'central-mapping.json') });
     process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
 
