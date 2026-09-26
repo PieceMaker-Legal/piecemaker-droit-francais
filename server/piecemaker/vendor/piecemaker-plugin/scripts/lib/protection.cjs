@@ -81,7 +81,7 @@ const PROTECTED_EXTENSIONS = new Set([
  * celles rangées sous `ignored` et les variantes d'`extracted_data` ressortiraient
  * telles quelles. Le seul traitement correct est le refus.
  */
-const FORBIDDEN_JSON_PATTERNS = [/^mapping.*\.json$/i, /_sensitive_map\.json$/i, /^central-mapping\.json$/i];
+const FORBIDDEN_JSON_PATTERNS = [/^mapping.*\.json$/i, /_sensitive_map\.json$/i];
 
 /** Vrai pour un mapping de dossier ou un scan PII, où qu'il soit rangé. */
 function isMappingFile(filePath) {
@@ -170,37 +170,6 @@ function relativeKey(absolutePath, caseRoot) {
   const relative = path.relative(realpathOrParent(path.resolve(caseRoot)), realpathOrParent(path.resolve(absolutePath)));
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null;
   return relative.split(path.sep).join('/');
-}
-
-/**
- * Situe un chemin dans la racine PieceMaker : chaque enfant direct de cette
- * racine est un dossier juridique indépendant. Retourne `null` hors racine, ce
- * qui est le cas de la grande majorité des appels d'outil — c'est le chemin
- * rapide des hooks.
- */
-function locateCase(casesRoot, target) {
-  if (!casesRoot || !target) return null;
-  let root;
-  try {
-    root = fs.realpathSync(path.resolve(String(casesRoot)));
-  } catch {
-    return null;
-  }
-  // Les deux côtés doivent être résolus : sur macOS `/var/…` est un lien vers
-  // `/private/var/…`, si bien qu'une racine résolue et une cible qui ne l'est
-  // pas ne se recouvrent jamais — le dossier passait alors pour hors racine et
-  // rien n'était protégé.
-  const absolute = realpathOrParent(path.resolve(String(target)));
-  if (absolute === root || !absolute.startsWith(`${root}${path.sep}`)) return null;
-  const [caseName, ...rest] = path.relative(root, absolute).split(path.sep);
-  if (!caseName || caseName.startsWith('.')) return null;
-  const caseRoot = path.join(root, caseName);
-  try {
-    if (!fs.statSync(caseRoot).isDirectory()) return null;
-  } catch {
-    return null;
-  }
-  return { casesRoot: root, caseName, caseRoot, absolute, relative: rest.join('/') };
 }
 
 /** Normalise une liste de chemins relatifs en Set de clés POSIX. */
@@ -448,7 +417,6 @@ module.exports = {
   exceptionKey,
   isMappingFile,
   isSecretFile,
-  locateCase,
   isProtectedFile,
   isProtectionBypassed,
   isOoxmlWorkspacePath,
