@@ -149,6 +149,20 @@ avec repli, au titre de l'isolation des données. Tout le reste est ajouté à
 côté : la surcouche dans son propre dossier, et le manifeste **généré** du
 *stage* complété à la construction.
 
+**5. Environnement du terminal.** Lancée depuis le Finder ou le Dock, l'app ne
+reçoit que le PATH minimal de macOS : `claude`, `codex`, nvm ou Python installés
+via les fichiers du shell (`~/.local/bin`, `.zprofile`, `.zshrc`) sont
+introuvables, alors qu'ils le sont en PWA, dont le serveur est lancé depuis un
+terminal. `server/piecemaker/shell-environment.ts` applique la méthode de VS Code
+et de `shell-env` : au démarrage du serveur de bureau (`ELECTRON_RUN_AS_NODE=1`),
+avant tout processus enfant, il lance une fois `$SHELL -i -l -c`, lit
+l'environnement en JSON entre deux repères, place le PATH du shell en tête et
+ajoute les variables absentes, sans écraser celles fixées par l'app. Délai
+maximal : 10 s. En cas d'échec, le serveur démarre avec le PATH de base et
+l'interface affiche un avertissement (`GET /api/piecemaker/shell-environment`,
+`src/piecemaker/shell-environment/`). Windows n'est pas concerné : une app
+lancée depuis l'Explorateur hérite déjà du PATH du registre.
+
 ## Le certificat auto-signé
 
 Une mini-autorité de certification propre au poste est générée à l'installation

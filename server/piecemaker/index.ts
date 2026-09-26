@@ -8,7 +8,6 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
-import { useBundledClaudeWhenMissingFromPath } from './claude-executable.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
@@ -17,6 +16,7 @@ import { createKnowledgeBackend } from './knowledge/index.js';
 import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
+import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -42,7 +42,7 @@ type PieceMakerVendorModule = {
   stopOriginalsJobs(): Promise<void>;
 };
 
-useBundledClaudeWhenMissingFromPath();
+const shellEnvironment = await resolveDesktopShellEnvironment();
 const vendor = createRequire(import.meta.url)(routerPath) as PieceMakerVendorModule;
 
 export const { piecemakerHome, stopOriginalsJobs } = vendor;
@@ -70,6 +70,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(knowledge.router);
   router.use(createCompanySearchRouter());
   router.use(createBodaccSearchRouter());
+  router.use(createShellEnvironmentRouter(shellEnvironment));
   return router;
 }
 export type { PieceMakerRuntimeStatus };
