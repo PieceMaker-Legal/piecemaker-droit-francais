@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.7...v2.0.8) (2026-09-26)
+
+### Bug Fixes
+
+* **desktop:** le serveur de l'app reprend l'environnement du terminal ([9c1bfdc](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9c1bfdc72c830bdd38e75d8a7b53d59c55576ca7))
+
 ## [2.0.7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.6...v2.0.7) (2026-09-26)
 
 ## [2.0.6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.5...v2.0.6) (2026-09-26)
