@@ -1,7 +1,7 @@
 // Routes tampon et tamponnage, extraites de `websocket-server/server.cjs` de
 // PieceMaker-Installer (endpoints /api/tampon/* et /api/stamping) pour être
 // montées sur le serveur CloudCLI. La logique est reprise telle quelle ; seules
-// les dépendances au module `server.cjs` (PIECEMAKER_HOME, readUserConfig,
+// les dépendances au module `server.cjs` (PIECEMAKER_HOME,
 // readFileStripBOM) sont devenues des paramètres ou des fonctions locales.
 const fs = require('fs');
 const os = require('os');
@@ -13,7 +13,7 @@ const {
   stampDataUrl,
   stampedPiecesDirectory,
 } = require('./lib/stamping.cjs');
-const { isInside, resolveConfiguredLegalCaseFolder } = require('./workspace-paths.cjs');
+const { isInside, resolveProjectCaseFolder } = require('./workspace-paths.cjs');
 
 const ORIGINALS_SUBFOLDER = 'pièces originales';
 const DOSSIER_FOLDERS_FILE = 'dossier_folders.json';
@@ -63,16 +63,7 @@ function createStampingRouter({ homeDir = path.join(os.homedir(), '.piecemaker')
   const express = require('express');
   const router = express.Router();
 
-  const configPath = path.join(homeDir, 'config.json');
   const getSystemDataPath = (...segments) => path.join(homeDir, ...segments);
-
-  const readUserConfig = () => {
-    try {
-      return fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
-    } catch {
-      return {};
-    }
-  };
 
   const readDossierFolders = () => {
     try {
@@ -85,7 +76,7 @@ function createStampingRouter({ homeDir = path.join(os.homedir(), '.piecemaker')
 
   const rememberDossierFolder = (documentId, folder) => {
     if (!documentId || !folder) throw new Error('documentId et dossier de travail requis.');
-    const legalCase = resolveConfiguredLegalCaseFolder(readUserConfig(), folder);
+    const legalCase = resolveProjectCaseFolder(folder);
     const registry = readDossierFolders();
     if (registry[documentId] === legalCase) return legalCase;
     registry[documentId] = legalCase;

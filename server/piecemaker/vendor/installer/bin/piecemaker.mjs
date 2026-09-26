@@ -427,8 +427,8 @@ function formatChronologyText(chronology) {
 }
 
 function locateChronologyCase(flags) {
-  const { locateConfiguredCase } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
-  const located = locateConfiguredCase(loadConfig(), flags.caseTarget || process.cwd());
+  const { locateProjectCase } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
+  const located = locateProjectCase(flags.caseTarget || process.cwd());
   if (!located) {
     throw new Error('Lancez la commande depuis un dossier juridique enregistré ou passez --case <chemin>.');
   }
@@ -625,8 +625,8 @@ async function runConversionCommand(flags) {
   if (!fs.existsSync(ORIGINALS_PIPELINE_MODULE)) {
     throw new Error('Le module de conversion PieceMaker est introuvable.');
   }
-  const { locateConfiguredCase } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
-  const located = locateConfiguredCase(loadConfig(), flags.caseTarget || process.cwd());
+  const { locateProjectCase } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
+  const located = locateProjectCase(flags.caseTarget || process.cwd());
   if (!located) {
     throw new Error('Lancez la commande depuis un dossier juridique enregistré ou passez --case <chemin>.');
   }

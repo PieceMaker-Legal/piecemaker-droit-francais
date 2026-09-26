@@ -40,8 +40,8 @@ dossier ni par utilisateur.
    haute définition : forme, contour, police, couleur et épaisseur, puis
    « Enregistrer le tampon »).
 2. **La liste des pièces vient des dossiers juridiques enregistrés** :
-   `GET /api/admin/dossiers` → `listDossiers` bâtit la liste sur le registre
-   `caseFolders` (quelle que soit sa place dans l'arborescence), et chaque
+   `GET /api/admin/dossiers` → `listDossiers` bâtit la liste sur les projets
+   publiés par le serveur (`~/.piecemaker/projects.json`), et chaque
    pièce est un **fichier original** du dossier (tout fichier qui n'est ni
    `.md` ni `.json`, via `listOriginals`), **identifié par son chemin relatif
    au dossier** — aucun `compilation_dossier_*.json` n'est requis. L'ancien

@@ -5,9 +5,9 @@ const crypto = require('node:crypto');
 const { spawn, spawnSync } = require('child_process');
 const { performance } = require('node:perf_hooks');
 const {
-  listConfiguredCases,
+  listProjectCases,
+  projectCaseEntry,
   readRegistryConfig,
-  registerCaseFolder,
   resolveCaseReference,
   validateSelectedCaseFolder,
 } = require('./case-registry.cjs');
@@ -201,8 +201,9 @@ async function registerLegalCase({
   homeDir,
 } = {}) {
   const root = validateSelectedCaseFolder(folder);
-  const previous = readRegistryConfig(configFile);
-  const structure = ensureCaseFolderStructure(root, previous);
+  const entry = projectCaseEntry(root);
+  if (!entry) throw new Error('Ce dossier n’est pas un projet enregistré.');
+  const structure = ensureCaseFolderStructure(root, readRegistryConfig(configFile));
   const protection = readProtection(root);
   if (!protection.exists) writeProtection(root, { unprotected: [] });
   const currentMapping = readCaseMapping(root);
@@ -210,11 +211,8 @@ async function registerLegalCase({
     ? currentMapping
     : writeCaseMapping(root, { mapping: {}, reverse_mapping: {} });
 
-  const registered = registerCaseFolder(previous, root);
-  atomicWrite(configFile, `${JSON.stringify(registered.config, null, 2)}\n`);
-
   const folderOverview = await caseOverview(path.dirname(root), homeDir, path.basename(root));
-  folderOverview.path = registered.entry.id;
+  folderOverview.path = entry.id;
   folderOverview.location = root;
   folderOverview.registered = true;
   folderOverview.branches = await historyBranches(path.dirname(root), homeDir, path.basename(root));
@@ -769,7 +767,7 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
     && glinerModelReady;
   const mineruReady = hasPackage('mineru') || hasPackage('magic_pdf')
     || fs.existsSync(path.join(venvDir, 'bin', 'mineru'));
-  const folders = listConfiguredCases(readRegistryConfig(path.join(homeDir, 'config.json'))).map((entry) => ({
+  const folders = listProjectCases().map((entry) => ({
     id: entry.id,
     name: entry.name,
     path: entry.root,
@@ -1549,9 +1547,8 @@ function finishAdminTiming(res, metric, startedAt, details = {}) {
 // dans l'arborescence. Chaque dossier expose ses pièces originales — tout fichier
 // qui n'est ni `.md` ni `.json` —, identifiées par leur chemin relatif au dossier.
 async function listDossiers(repoRoot, homeDir) {
-  const config = readRegistryConfig(path.join(homeDir, 'config.json'));
   const dossiers = [];
-  for (const entry of listConfiguredCases(config)) {
+  for (const entry of listProjectCases()) {
     let originals;
     try {
       originals = await listOriginals(entry.root);
@@ -2010,11 +2007,10 @@ function createAdminRouter({
   const envFile = path.join(repoRoot, '.env');
   const registryConfig = () => readRegistryConfig(configFile);
   const selectedCase = (reference) => {
-    const config = registryConfig();
-    const legalCase = resolveCaseReference(config, reference);
+    const legalCase = resolveCaseReference(reference);
     // Migration idempotente des dossiers enregistrés avant l'introduction de
     // l'arborescence métier. Le manifeste fige les noms utilisés par ce dossier.
-    ensureCaseFolderStructure(legalCase.root, config);
+    ensureCaseFolderStructure(legalCase.root, registryConfig());
     return legalCase;
   };
 
@@ -2386,8 +2382,7 @@ function createAdminRouter({
   router.get('/repository', async (req, res) => {
     const startedAt = performance.now();
     try {
-      const config = registryConfig();
-      const entries = listConfiguredCases(config);
+      const entries = listProjectCases();
       const overview = {
         name: 'PieceMaker',
         root: '',
@@ -2406,21 +2401,6 @@ function createAdminRouter({
       res.json(overview);
     } catch (error) {
       res.status(503).json({ error: error.message });
-    }
-  });
-
-  router.post('/repository/cases', async (req, res) => {
-    try {
-      const selected = await pickFolder(process.platform, userHome);
-      if (!selected) return res.json({ ok: true, cancelled: true });
-      const result = await registerLegalCase({
-        folder: selected,
-        configFile,
-        homeDir,
-      });
-      res.status(201).json({ ok: true, ...result });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
     }
   });
 

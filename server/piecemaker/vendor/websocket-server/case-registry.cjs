@@ -1,4 +1,4 @@
-/** Explicit legal-case folder registry used by the local admin and hooks. */
+/** Legal-case registry: every CloudCLI project published by the server is a case. */
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -6,10 +6,7 @@ const path = require('node:path');
 const {
   isTechnicalCaseDirectoryName,
 } = require('../piecemaker-plugin/scripts/lib/commits.cjs');
-const {
-  configuredWatchPaths,
-  registeredCaseFolders,
-} = require('../piecemaker-plugin/scripts/lib/case-folders.cjs');
+const { registeredProjectFolders } = require('../piecemaker-plugin/scripts/lib/case-folders.cjs');
 
 function readRegistryConfig(configFile) {
   try {
@@ -25,8 +22,8 @@ function caseFolderId(folder) {
   return `folder-${digest}`;
 }
 
-function explicitEntries(config) {
-  return registeredCaseFolders(config).map((root) => ({
+function projectEntries() {
+  return registeredProjectFolders().map((root) => ({
     id: caseFolderId(root),
     name: path.basename(root),
     root,
@@ -36,22 +33,21 @@ function explicitEntries(config) {
   }));
 }
 
-/**
- * Admin index: only the explicitly registered legal-case folders. There is no
- * longer a workspace root whose immediate children are listed automatically —
- * a matter appears once it has been registered from the admin panel.
- */
-function listConfiguredCases(config) {
-  return explicitEntries(config).sort((a, b) =>
+function listProjectCases() {
+  return projectEntries().sort((a, b) =>
     a.name.localeCompare(b.name, 'fr') || a.root.localeCompare(b.root, 'fr'));
 }
 
-function resolveCaseReference(config, reference) {
+function resolveCaseReference(reference) {
   const token = String(reference || '').trim();
   if (!token) throw new Error('Dossier juridique invalide.');
-  const explicit = explicitEntries(config).find((entry) => entry.id === token);
-  if (!explicit) throw new Error('Ce dossier juridique n’est pas enregistré.');
-  return explicit;
+  const entry = projectEntries().find((candidate) => candidate.id === token);
+  if (!entry) throw new Error('Ce dossier juridique n’est pas un projet enregistré.');
+  return entry;
+}
+
+function projectCaseEntry(root) {
+  return projectEntries().find((entry) => entry.root === root) || null;
 }
 
 function validateSelectedCaseFolder(folder) {
@@ -71,23 +67,11 @@ function validateSelectedCaseFolder(folder) {
   return root;
 }
 
-function registerCaseFolder(config, folder) {
-  const root = validateSelectedCaseFolder(folder);
-  const existing = registeredCaseFolders(config);
-  const caseFolders = [...new Set([...existing, root])];
-  const next = { ...config, caseFolders };
-  next.anonymization = {
-    ...(config?.anonymization || {}),
-    watchPaths: configuredWatchPaths(next),
-  };
-  return { config: next, entry: explicitEntries(next).find((item) => item.root === root) };
-}
-
 module.exports = {
   caseFolderId,
-  listConfiguredCases,
+  listProjectCases,
+  projectCaseEntry,
   readRegistryConfig,
-  registerCaseFolder,
   resolveCaseReference,
   validateSelectedCaseFolder,
 };

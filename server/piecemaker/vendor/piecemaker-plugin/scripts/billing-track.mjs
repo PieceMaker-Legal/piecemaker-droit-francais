@@ -37,7 +37,7 @@ import {
 } from './lib/hook-io.mjs';
 
 const require = createRequire(import.meta.url);
-const { locateConfiguredCase } = require('./lib/case-folders.cjs');
+const { locateProjectCase } = require('./lib/case-folders.cjs');
 
 const DEFAULT_TIMEOUT_MS = 8000;
 const MAX_TRANSCRIPT_BYTES = 10 * 1024 * 1024; // skip duration/tool-count derivation beyond this
@@ -106,10 +106,10 @@ function derivedDurationMs(analysis) {
   return Number.isFinite(ms) && ms >= 0 ? ms : null;
 }
 
-/** Name of the explicitly registered or legacy legal case containing cwd. */
-function detectDossier(cwd, config) {
+/** Name of the project folder containing cwd. */
+function detectDossier(cwd) {
   if (!cwd) return null;
-  return locateConfiguredCase(config, cwd)?.caseName || null;
+  return locateProjectCase(cwd)?.caseName || null;
 }
 
 function synthesisFilePath(sessionId, isoTimestamp) {
@@ -133,7 +133,7 @@ async function main() {
 
   const nowIso = new Date().toISOString();
   const monthFile = path.join(BILLING_DIR, `${nowIso.slice(0, 7)}.jsonl`); // YYYY-MM.jsonl
-  const dossier = detectDossier(payload.cwd, config);
+  const dossier = detectDossier(payload.cwd);
   const analysis = await analyzeTranscript(payload.transcript_path);
 
   if (eventName === 'TaskCompleted') {
