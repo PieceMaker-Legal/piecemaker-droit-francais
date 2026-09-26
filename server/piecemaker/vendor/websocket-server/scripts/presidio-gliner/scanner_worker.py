@@ -26,6 +26,8 @@ from collections import defaultdict
 from importlib.metadata import PackageNotFoundError, version as package_version
 from typing import Dict, List, Optional
 
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 # ---------------------------------------------------------------------------
 # Heavy imports — these are the expensive ones (~30-60s)
 # ---------------------------------------------------------------------------

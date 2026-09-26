@@ -16,9 +16,9 @@ const PROXY_ENV = {
   NO_PROXY: () => 'localhost,127.0.0.1,::1',
   NODE_USE_ENV_PROXY: () => '1',
   NODE_EXTRA_CA_CERTS: (_proxyUrl, caFile) => caFile,
-  SSL_CERT_FILE: (_proxyUrl, caFile) => caFile,
+  SSL_CERT_FILE: (_proxyUrl, caFile, trustBundle) => trustBundle || caFile,
   CODEX_CA_CERTIFICATE: (_proxyUrl, caFile) => caFile,
-  REQUESTS_CA_BUNDLE: (_proxyUrl, caFile) => caFile,
+  REQUESTS_CA_BUNDLE: (_proxyUrl, caFile, trustBundle) => trustBundle || caFile,
 };
 
 function isLoopbackProxy(value) {
@@ -30,7 +30,7 @@ function isLoopbackProxy(value) {
   }
 }
 
-function configureClaudeCodeProxy({ proxyUrl, caFile, userHome = os.homedir() } = {}) {
+function configureClaudeCodeProxy({ proxyUrl, caFile, trustBundle, userHome = os.homedir() } = {}) {
   const settingsFile = path.join(userHome, '.claude', 'settings.json');
   let settings = {};
   try {
@@ -55,7 +55,7 @@ function configureClaudeCodeProxy({ proxyUrl, caFile, userHome = os.homedir() } 
 
   let changed = false;
   for (const [key, produce] of Object.entries(PROXY_ENV)) {
-    const value = produce(proxyUrl, caFile);
+    const value = produce(proxyUrl, caFile, trustBundle);
     if (!value) continue;
     if (settings.env[key] !== value) {
       settings.env[key] = value;
