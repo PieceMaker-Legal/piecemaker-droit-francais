@@ -25,15 +25,12 @@ import { readHookPayload, runHook, noop } from './lib/hook-io.mjs';
 
 const require = createRequire(import.meta.url);
 const { locateProjectCase } = require('./lib/case-folders.cjs');
-const { caseHasMapping } = require('./lib/mapping.cjs');
 const {
   isMappingFile,
   isSecretFile,
   isProtectedFile,
   markdownCounterpart,
   readProtection,
-  relativeKey,
-  READABLE_EXTENSIONS,
 } = require('./lib/protection.cjs');
 
 /** Au-delà, on ne cherche pas de chemin : une commande pareille n'en cite pas un. */
@@ -79,36 +76,6 @@ function mappingReason(absolute) {
  */
 function secretReason(absolute) {
   return `[PieceMaker] « ${path.basename(absolute)} » est un fichier de secrets d’environnement : il n’est jamais accessible à l’IA.`;
-}
-
-/**
- * Refus « dossier non anonymisé ». Sans `mapping_default.json`, le proxy n'a
- * rien à coder : lire une pièce livrerait des données personnelles en clair.
- * On l'explique synthétiquement au modèle, avec l'action qui débloque la lecture.
- */
-function missingMappingReason(caseName) {
-  return `[PieceMaker] « ${caseName} » est un dossier PieceMaker sans mapping d’anonymisation (mapping_default.json absent) : sa lecture est bloquée car son contenu n’est pas encore anonymisable et partirait en clair. Lancez l’anonymisation du dossier dans l’administration PieceMaker avant toute lecture.`;
-}
-
-/**
- * Surface lisible dont le contenu serait normalement codé à la lecture (`.md`,
- * `.json` de pièce) : c'est précisément ce que `missingMappingReason` doit
- * protéger quand aucun mapping n'existe. On écarte les originaux (déjà refusés
- * par `isProtectedFile`), le mapping et les scans (refusés à part), la
- * configuration du dossier (`.piecemaker/…`, dotfiles) et les consignes
- * structurelles `CLAUDE.md`/`AGENTS.md` — jamais des pièces, et l'assistant du
- * dossier doit pouvoir charger sa consigne même avant anonymisation.
- */
-function isReadableCaseSurface(absolute, caseRoot) {
-  const stat = statSafe(absolute);
-  if (!stat || stat.isDirectory()) return false;
-  const key = relativeKey(absolute, caseRoot);
-  if (!key) return false;
-  if (key.split('/').some((segment) => segment.startsWith('.'))) return false;
-  if (!READABLE_EXTENSIONS.has(path.extname(key).toLowerCase())) return false;
-  if (isMappingFile(absolute)) return false;
-  const base = path.basename(key);
-  return base !== 'CLAUDE.md' && base !== 'AGENTS.md';
 }
 
 function statSafe(target) {
@@ -202,9 +169,6 @@ async function main() {
       if (isProtectedFile(candidate, located.caseRoot)) {
         return deny(protectionReason(candidate, located.caseRoot));
       }
-      if (isReadableCaseSurface(candidate, located.caseRoot) && !caseHasMapping(located.caseRoot)) {
-        return deny(missingMappingReason(located.caseName));
-      }
     }
     return null;
   }
@@ -224,20 +188,6 @@ async function main() {
   const stat = statSafe(target);
   if (!stat?.isDirectory() && isProtectedFile(target, located.caseRoot)) {
     return deny(protectionReason(target, located.caseRoot));
-  }
-
-  // Dossier PieceMaker sans mapping : la garantie « anonymisé à la lecture »
-  // n'existe pas encore. Lire une surface lisible (`.md`/`.json` de pièce) la
-  // ferait sortir en clair, et un `Grep` récursif à la racine en ferait autant
-  // sur tout le dossier (un `Glob`, qui ne ramène que des noms, reste permis).
-  // On calcule l'absence de mapping au plus tard, une fois les refus francs
-  // (mapping, original) écartés — c'est le seul chemin qui paie la lecture du
-  // mapping.
-  if (isReadableCaseSurface(target, located.caseRoot) && !caseHasMapping(located.caseRoot)) {
-    return deny(missingMappingReason(located.caseName));
-  }
-  if (toolName === 'Grep' && located.absolute === located.caseRoot && !caseHasMapping(located.caseRoot)) {
-    return deny(missingMappingReason(located.caseName));
   }
 
   // Un `Grep` récursif ramène le *contenu* du mapping ; un `Glob` n'en ramène
