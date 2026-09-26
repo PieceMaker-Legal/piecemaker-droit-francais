@@ -30,7 +30,7 @@ import {
 
 const require = createRequire(import.meta.url);
 const { classifyAsWorkspace } = require('./lib/protection.cjs');
-const { locateConfiguredCase } = require('./lib/case-folders.cjs');
+const { locateProjectCase } = require('./lib/case-folders.cjs');
 
 /**
  * Une commande Bash ne dit pas quel fichier elle a créé. On ne retient donc
@@ -110,7 +110,7 @@ async function main() {
   for (const absolute of candidatePaths(payload, cwd)) {
     let located;
     try {
-      located = locateConfiguredCase(config, absolute);
+      located = locateProjectCase(absolute);
     } catch {
       continue;
     }

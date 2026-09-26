@@ -1,6 +1,17 @@
-/** Registered PieceMaker legal-case folders, including folders outside a common root. */
+/** Legal-case folders: every CloudCLI project, as published by the PieceMaker server. */
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+
+const PROJECTS_FILE = 'projects.json';
+
+function piecemakerHome() {
+  return process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
+}
+
+function projectsFile() {
+  return path.join(piecemakerHome(), PROJECTS_FILE);
+}
 
 function realDirectory(value) {
   const requested = String(value || '').trim();
@@ -13,23 +24,57 @@ function realDirectory(value) {
   }
 }
 
-/** Absolute, existing and de-duplicated folders explicitly registered by the admin. */
-function registeredCaseFolders(config) {
-  const folders = Array.isArray(config?.caseFolders) ? config.caseFolders : [];
-  return [...new Set(folders.map(realDirectory).filter(Boolean))];
-}
-
-function isInsideOrEqual(root, candidate) {
+function isInsideOrEqualPath(root, candidate) {
   const relative = path.relative(root, candidate);
   return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
-/** Locate a target inside one of the explicitly registered legal-case folders. */
-function locateRegisteredCase(folders, target) {
-  if (!target) return null;
-  let absolute;
+function excludedRoots() {
+  return [os.tmpdir(), '/tmp', '/private/tmp', '/var/folders', '/private/var/folders']
+    .map(realDirectory)
+    .filter(Boolean);
+}
+
+function isEligibleProjectFolder(folder) {
+  const home = realDirectory(os.homedir());
+  if (home && isInsideOrEqualPath(folder, home)) return false;
+  return !excludedRoots().some((root) => isInsideOrEqualPath(root, folder));
+}
+
+function readProjectSources() {
   try {
-    absolute = fs.realpathSync(path.resolve(String(target)));
+    const parsed = JSON.parse(fs.readFileSync(projectsFile(), 'utf8'));
+    return parsed?.sources && typeof parsed.sources === 'object' && !Array.isArray(parsed.sources) ? parsed.sources : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Absolute, existing and de-duplicated project folders, across every publishing server. */
+function registeredProjectFolders() {
+  const folders = Object.values(readProjectSources()).flatMap((list) => (Array.isArray(list) ? list : []));
+  return [...new Set(folders.map(realDirectory).filter(Boolean))].filter(isEligibleProjectFolder);
+}
+
+function publishProjectSource(sourceId, folders) {
+  const file = projectsFile();
+  const sources = readProjectSources();
+  if (folders === null) delete sources[sourceId];
+  else sources[sourceId] = [...new Set(folders.map((folder) => path.resolve(String(folder))))].sort();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temporaryFile = `${file}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(temporaryFile, `${JSON.stringify({ version: 1, sources }, null, 2)}\n`, 'utf8');
+    fs.renameSync(temporaryFile, file);
+  } catch (error) {
+    fs.rmSync(temporaryFile, { force: true });
+    throw error;
+  }
+}
+
+function resolveTarget(target) {
+  try {
+    return fs.realpathSync(path.resolve(String(target)));
   } catch {
     // Write/Edit may target a file that does not exist yet. Resolve its nearest
     // existing parent, then append the missing tail without following links.
@@ -37,22 +82,24 @@ function locateRegisteredCase(folders, target) {
     const tail = [];
     while (path.dirname(current) !== current) {
       try {
-        absolute = path.join(fs.realpathSync(current), ...tail);
-        break;
+        return path.join(fs.realpathSync(current), ...tail);
       } catch {
         tail.unshift(path.basename(current));
         current = path.dirname(current);
       }
     }
-    if (!absolute) return null;
+    return null;
   }
+}
 
-  // A nested registered matter wins over its parent. It prevents a folder
-  // intentionally registered as its own case from sharing the parent's map.
-  const roots = [...new Set((folders || []).map(realDirectory).filter(Boolean))]
-    .sort((a, b) => b.length - a.length);
+/** Locate a target inside one of the project folders; a nested project wins over its parent. */
+function locateProjectCase(target) {
+  if (!target) return null;
+  const absolute = resolveTarget(target);
+  if (!absolute) return null;
+  const roots = registeredProjectFolders().sort((a, b) => b.length - a.length);
   for (const caseRoot of roots) {
-    if (!isInsideOrEqual(caseRoot, absolute)) continue;
+    if (!isInsideOrEqualPath(caseRoot, absolute)) continue;
     return {
       casesRoot: path.dirname(caseRoot),
       caseName: path.basename(caseRoot),
@@ -65,22 +112,8 @@ function locateRegisteredCase(folders, target) {
   return null;
 }
 
-/**
- * Locate a target inside one of the explicitly registered legal-case folders.
- * There is no longer a workspace-root fallback: a matter is protected only once
- * it is explicitly registered, never by mere location under a common root.
- */
-function locateConfiguredCase(config, target) {
-  return locateRegisteredCase(registeredCaseFolders(config), target);
-}
-
-function configuredWatchPaths(config) {
-  return registeredCaseFolders(config);
-}
-
 module.exports = {
-  configuredWatchPaths,
-  locateConfiguredCase,
-  locateRegisteredCase,
-  registeredCaseFolders,
+  locateProjectCase,
+  publishProjectSource,
+  registeredProjectFolders,
 };

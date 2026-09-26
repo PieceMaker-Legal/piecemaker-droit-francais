@@ -28,7 +28,7 @@ import {
 
 const require = createRequire(import.meta.url);
 const { locateCaseFile } = require('./lib/commits.cjs');
-const { locateConfiguredCase } = require('./lib/case-folders.cjs');
+const { locateProjectCase } = require('./lib/case-folders.cjs');
 
 const PENDING_DIR = path.join(HOME_DIR, 'pending');
 
@@ -50,7 +50,7 @@ async function main() {
   const absolute = path.isAbsolute(filePath) ? filePath : path.resolve(cwd, filePath);
   let located;
   try {
-    const configured = locateConfiguredCase(config, absolute);
+    const configured = locateProjectCase(absolute);
     if (!configured) return null;
     located = locateCaseFile(configured.casesRoot, absolute);
   } catch {

@@ -1,36 +1,90 @@
 # Protection des pièces
 
-Les pièces originales d'un dossier (PDF, DOCX, courriels) portent les noms
-réels. La promesse du produit est que l'IA ne les lit jamais : elle travaille
-sur les Markdown convertis et pseudonymisés. La « protection » est ce qui tient
-cette promesse.
+Les pièces originales d'un dossier portent les noms réels. La promesse du
+produit est que l'IA ne lit jamais une pièce PDF ou image : elle travaille sur
+le Markdown converti et pseudonymisé. La « protection » est ce qui tient cette
+promesse ; elle est **automatique**, sans aucun réglage dans l'interface.
 
-**Seuls les PDF et les images sont protégés** (`PROTECTED_EXTENSIONS` dans
-`scripts/lib/protection.cjs`) : ce sont les pièces dont on tire un Markdown
-converti, et un refus renvoie vers ce Markdown. Tout le reste — `.docx`, `.txt`,
-`.eml`, tableurs, `.md`, `.json` — est accessible à l'IA, anonymisé à la lecture
-par le proxy PII. `.piecemaker/protection.json` ne stocke que des *exceptions*,
-jamais la liste des fichiers protégés : un PDF déposé plus tard est donc protégé
-sans que rien n'ait à être mis à jour.
+## Périmètre : quels dossiers
 
-Les exceptions sont des chemins relatifs : une pièce renommée ou déplacée perd la
-sienne et redevient protégée (défaut sûr). Le fichier est réécrit de façon
-atomique (fichier temporaire puis `rename`) sous un verrou
-`protection.json.lock`, car plusieurs hooks peuvent l'écrire en même temps. Le
-hook `classify-ai-documents.mjs` n'y inscrit que les PDF et images créés par
-l'IA : les autres extensions ne sont jamais protégées.
+**Tout projet CloudCLI est un dossier juridique.** Il n'existe plus de registre
+manuel (`caseFolders` de `~/.piecemaker/config.json` n'est plus lu).
 
-Deux familles sont interdites à l'IA en toute circonstance, quelle que soit leur
-extension, et aucune exception ne les atteint : les mappings (`mapping*.json`,
+- `server/piecemaker/project-registry.ts` publie, au démarrage puis toutes les
+  5 s (et avant chaque enregistrement de dossier), les chemins des projets de la
+  base CloudCLI — archivés compris — dans `~/.piecemaker/projects.json`.
+- Le fichier est découpé par source (`database:<chemin de auth.db>`), pour que
+  plusieurs serveurs (dev, app de bureau) cohabitent ; l'autotest de
+  l'installateur publie temporairement sous `installer-selftest`.
+- Les hooks tournent hors du serveur, parfois avec le Node système (v16) : ils
+  ne lisent pas SQLite, seulement ce fichier, via
+  `vendor/piecemaker-plugin/scripts/lib/case-folders.cjs`
+  (`locateProjectCase`, `registeredProjectFolders`).
+- Sont exclus : le dossier personnel et ses parents (un projet ouvert sur `~`
+  ferait de tout le disque un dossier), les répertoires temporaires. Un projet
+  imbriqué l'emporte sur son parent.
+- `case-registry.cjs` (liste de l'administration, `resolveCaseReference`) et
+  `workspace-paths.cjs` (tamponnage) lisent la même liste.
+
+## Règle
+
+`isProtectedFile` (`scripts/lib/protection.cjs`) : un fichier est protégé s'il
+est dans un projet, hors dotfile, hors `.md`/`.json`, avec une extension de
+`PROTECTED_EXTENSIONS` (PDF et images), hors copie OOXML de travail, sans levée
+du dossier, et absent des deux listes d'exceptions. Tout le reste — `.docx`,
+`.txt`, `.eml`, tableurs — est lisible par l'IA, pseudonymisé par le proxy PII.
+
+Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 `*_sensitive_map.json`, `central-mapping.json`) et les secrets d'environnement
-(`.env`, `.env.*` hors `example`/`sample`/`template`, `*.env`).
+(`.env`, `.env.*` hors `example`/`sample`/`template`, `*.env`). Dans un projet
+sans `mapping_default.json`, la lecture des `.md`/`.json` est aussi refusée.
 
-La **levée de protection** (`server/piecemaker/protection/bypass.cjs`, sans
-interface depuis `5ddbee2a`) suit la même
-logique : elle pose un simple drapeau `.piecemaker/protection-bypass.json`
-portant la portée « dossier », **sans aucune liste de fichiers**. Elle vaut donc
-pour les pièces déposées ensuite. Toute évolution qui réintroduirait une
-énumération de fichiers serait une régression.
+## Fichiers d'un dossier (`<projet>/.piecemaker/`, hors Git)
+
+| Fichier | Contenu | Écrit par |
+| --- | --- | --- |
+| `protection.json` | `{version, unprotected, resources}` : uniquement des **exceptions**, jamais la liste des fichiers protégés. Un PDF déposé plus tard est protégé sans mise à jour. | création/enregistrement du dossier (listes vides), hook `classify-ai-documents.mjs`, `PUT /protection` |
+| `protection-bypass.json` | drapeau `{scope: "dossier"}` : sa seule présence lève toute protection du dossier, pièces futures comprises. | `PUT /protection/bypass` (`server/piecemaker/protection/bypass.cjs`) |
+
+- Les exceptions sont des chemins relatifs : une pièce renommée ou déplacée
+  perd la sienne et redevient protégée (défaut sûr).
+- `protection.json` est réécrit de façon atomique (fichier temporaire puis
+  `rename`) sous le verrou `protection.json.lock` (lecture-modification-écriture
+  entière sous verrou, verrou périmé après 10 s) : plusieurs hooks l'écrivent en
+  parallèle.
+- `classify-ai-documents.mjs` (après `Write`/`Bash`) n'y inscrit que les PDF et
+  images créés par l'IA, pour qu'elle puisse se relire ; il ne réécrit rien si
+  l'entrée existe déjà.
+- Aucune interface ne modifie ces fichiers depuis `5ddbee2a` : les routes
+  `/protection` et `/protection/bypass` restent sans appelant côté client.
+  Toute évolution qui réintroduirait une énumération de fichiers protégés
+  serait une régression.
+
+## Qui applique la règle
+
+| Code | Rôle |
+| --- | --- |
+| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | refus + renvoi vers le Markdown ; mappings, secrets, dossier sans mapping, Grep/Glob à la racine |
+| `classify-ai-documents.mjs` (`PostToolUse` Write/Bash) | exceptions pour les PDF/images produits par l'IA |
+| `lib/commits.cjs` | historique : pas d'extraction de texte des pièces protégées |
+| `knowledge/pipeline.ts` | exclut les « ressources » de la conversion et du scan |
+| proxy PII | ne lit ni `protection.json` ni le drapeau (voir couche 2) |
+
+## Limites connues (audit du 2026-09-26)
+
+- Seuls Claude Code et Codex ont les hooks ; les autres fournisseurs pilotés par
+  CloudCLI ne sont couverts que par le proxy.
+- Le hook analyse le texte des commandes : `python -c`, variables, globs
+  (`cat *.pdf`), `cd` puis chemin relatif y échappent.
+- `Grep` n'est bloqué qu'à la racine du dossier, pas dans un sous-dossier
+  contenant des PDF.
+- Les `.docx` originaux sont lisibles : seul le proxy (dictionnaire) les
+  pseudonymise.
+- Tout projet étant un dossier, un projet de code sans `mapping_default.json`
+  voit la lecture de ses `.md`/`.json` refusée tant que l'onglet Dossier ne l'a
+  pas initialisé.
+- Les dossiers enregistrés à la main hors projets CloudCLI ne sont plus
+  protégés : les ouvrir comme projets.
 
 Trois couches défendent cette promesse, dans l'ordre du trajet d'un fichier.
 Elles ne sont pas interchangeables : **seule la première empêche**.

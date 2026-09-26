@@ -17,7 +17,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { locateCase, WORKSPACE_SUBDIR } = require('./protection.cjs');
-const { locateConfiguredCase } = require('./case-folders.cjs');
+const { locateProjectCase } = require('./case-folders.cjs');
 const { isInstitutionalEntity } = require('./institutional-terms.cjs');
 // Le moteur de substitution est extrait dans un module autonome : il est aussi
 // requis par le hook central global, distribué hors du plugin. Une seule
@@ -317,9 +317,9 @@ function resolveCaseMapping(casesRoot, hint) {
   return { caseRoot: located.caseRoot, caseName: located.caseName, ...mapping };
 }
 
-/** Resolve a mapping from the explicit folder registry plus legacy workspace. */
-function resolveConfiguredCaseMapping(config, hint) {
-  const located = locateConfiguredCase(config, hint);
+/** Resolve the mapping of the project folder containing the hint. */
+function resolveProjectCaseMapping(hint) {
+  const located = locateProjectCase(hint);
   if (!located) return null;
   const mapping = readCaseMapping(located.caseRoot);
   if (!mapping.exists) return null;
@@ -337,7 +337,7 @@ module.exports = {
   normalizeProcedureInfo,
   readCaseMapping,
   readJsonFile,
-  resolveConfiguredCaseMapping,
+  resolveProjectCaseMapping,
   resolveCaseMapping,
   resolveMappedPath,
   revertMapping,

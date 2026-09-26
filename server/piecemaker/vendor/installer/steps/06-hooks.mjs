@@ -103,16 +103,16 @@ export async function install(ctx) {
   const testResults = [];
   let testDir = null;
   let selftestRegistered = false;
-  const caseFoldersBefore = Array.isArray(ctx.config?.caseFolders) ? ctx.config.caseFolders : [];
+  const { publishProjectSource } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
 
   try {
     // Un vrai dossier juridique factice, sans point de tête : les hooks
     // ignorent les répertoires cachés, un bac de test caché ne prouverait donc
-    // rien du garde-fou. Comme un dossier n'est protégé qu'une fois enregistré,
-    // on l'ajoute à `caseFolders` le temps du test, puis on rétablit la config.
+    // rien du garde-fou. Comme seul un projet publié est un dossier juridique,
+    // on le publie le temps du test sous une source dédiée, retirée ensuite.
     testDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-hook-selftest-')));
     fs.writeFileSync(path.join(testDir, 'piece-selftest.pdf'), 'PIECE DE TEST', 'utf8');
-    updateConfig({ caseFolders: [...new Set([...caseFoldersBefore, testDir])] });
+    publishProjectSource('installer-selftest', [testDir]);
     selftestRegistered = true;
 
     // 1. protect-originals.mjs — une pièce du bac de test : protégée par
@@ -188,7 +188,7 @@ export async function install(ctx) {
   } finally {
     // Rétablir la liste des dossiers enregistrés : le bac de test ne doit pas
     // rester surveillé après l'installation.
-    if (selftestRegistered) updateConfig({ caseFolders: caseFoldersBefore });
+    if (selftestRegistered) publishProjectSource('installer-selftest', null);
     if (testDir) fs.rmSync(testDir, { recursive: true, force: true });
   }
 

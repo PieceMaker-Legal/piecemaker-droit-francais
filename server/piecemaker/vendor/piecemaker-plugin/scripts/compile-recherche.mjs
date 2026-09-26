@@ -21,15 +21,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   HOME_DIR,
-  loadPieceMakerConfig,
   noop,
   readHookPayload,
   runHook,
 } from './lib/hook-io.mjs';
 
 const require = createRequire(import.meta.url);
-const { locateConfiguredCase } = require('./lib/case-folders.cjs');
-const { resolveConfiguredCaseMapping, revertMapping } = require('./lib/mapping.cjs');
+const { locateProjectCase } = require('./lib/case-folders.cjs');
+const { resolveProjectCaseMapping, revertMapping } = require('./lib/mapping.cjs');
 const { renderMarkdown, reportSlug } = require('./lib/recherche-report.cjs');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -62,10 +61,9 @@ async function main() {
 
   // Le cas cible est porté par le payload (l'agent sait dans quel dossier il
   // travaille) : un chemin absolu situé dans le dossier enregistré.
-  const config = loadPieceMakerConfig();
   const caseHint = data.caseRoot || data.case || data.dossier;
   if (!caseHint || !path.isAbsolute(caseHint)) return null;
-  const located = locateConfiguredCase(config, caseHint);
+  const located = locateProjectCase(caseHint);
   if (!located) return null;
 
   const rechercheDir = path.join(located.caseRoot, 'recherche');
@@ -77,7 +75,7 @@ async function main() {
   // lisible → on ré-identifie le Markdown final avant écriture disque (même
   // logique que commit-track sur les libellés). Idempotent.
   let markdown = renderMarkdown(data, { caseName: located.caseName });
-  const legalCase = resolveConfiguredCaseMapping(config, located.caseRoot);
+  const legalCase = resolveProjectCaseMapping(located.caseRoot);
   if (legalCase?.reverse_mapping) markdown = revertMapping(markdown, legalCase.reverse_mapping);
 
   fs.mkdirSync(rechercheDir, { recursive: true });
