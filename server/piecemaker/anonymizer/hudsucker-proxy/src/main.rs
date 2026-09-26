@@ -229,6 +229,7 @@ impl HttpHandler for Handler {
         let content_type = header_text(&req, "content-type");
         let (mut parts, body) = req.into_parts();
         parts.headers.remove("accept-encoding");
+        parts.headers.remove("sec-websocket-extensions");
 
         let body = if is_json(&content_type.to_ascii_lowercase()) {
             let collected = match body.collect().await {
@@ -358,7 +359,18 @@ impl WebSocketHandler for Handler {
                     let Some(message) = self.handle_message(&ctx, message).await else {
                         continue;
                     };
-                    if sink.send(message).await.is_err() {
+                    let frames = match &ctx {
+                        WebSocketContext::ServerToClient { .. } => json_line_frames(message),
+                        WebSocketContext::ClientToServer { .. } => vec![message],
+                    };
+                    let mut closed = false;
+                    for frame in frames {
+                        if sink.send(frame).await.is_err() {
+                            closed = true;
+                            break;
+                        }
+                    }
+                    if closed {
                         break;
                     }
                 }
@@ -389,6 +401,24 @@ impl WebSocketHandler for Handler {
             }
         }
     }
+}
+
+fn json_line_frames(message: Message) -> Vec<Message> {
+    let Message::Text(text) = &message else {
+        return vec![message];
+    };
+    let lines: Vec<&str> = text.split('\n').filter(|line| !line.trim().is_empty()).collect();
+    let every_line_is_json = lines.len() > 1
+        && lines
+            .iter()
+            .all(|line| serde_json::from_str::<serde_json::Value>(line).is_ok());
+    if !every_line_is_json {
+        return vec![message];
+    }
+    lines
+        .into_iter()
+        .map(|line| Message::Text(line.to_string().into()))
+        .collect()
 }
 
 fn serde_json_messages(bytes: &Bytes) -> Result<Vec<String>, ()> {
