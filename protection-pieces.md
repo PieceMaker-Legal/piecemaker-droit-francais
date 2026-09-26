@@ -37,7 +37,7 @@ du dossier, et absent des deux listes d'exceptions. Tout le reste — `.docx`,
 `.txt`, `.eml`, tableurs — est lisible par l'IA, pseudonymisé par le proxy PII.
 
 Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
-`*_sensitive_map.json`, `central-mapping.json`) et les secrets d'environnement
+`*_sensitive_map.json`) et les secrets d'environnement
 (`.env`, `.env.*` hors `example`/`sample`/`template`, `*.env`). L'absence de
 `mapping_default.json` ne bloque rien : un projet de code reste lisible.
 
@@ -127,7 +127,8 @@ de résultat ; leur appariement n'existe aujourd'hui que pour
 `consulter_decision` (`harness/decisions.cjs`).
 
 **Rien dans `anonymizer/` ni `harness/` ne consulte `protection.json` ni le
-drapeau de levée.** Le seul filtre du proxy est le dictionnaire central. Si l'on
+drapeau de levée.** Le seul filtre du proxy est le dictionnaire lu dans `auth.db`
+(`piecemaker_mappings`). Si l'on
 voulait un jour y ajouter un caviardage des pièces protégées — notamment pour
 couvrir Codex —, la mécanique de substitution existe déjà et est générique
 (`anonymizer/rewrite.cjs`, y compris pour un motif fragmenté entre deltas SSE) ;
@@ -139,7 +140,7 @@ le `tool_result` demeure dans l'historique.
 
 `microsoft/mxc` (« Microsoft eXecution Container ») : le shell est lancé *à
 travers* un binaire qui refuse au niveau du système d'exploitation l'accès au
-venv Python, aux mappings du dossier et au mapping central. Backends `seatbelt`
+venv Python et aux mappings du dossier. Backends `seatbelt`
 sur macOS, `processcontainer` sur Windows, `bubblewrap` sur Linux. Le réseau
 reste autorisé — c'est un confinement du système de fichiers, pas du réseau.
 L'installation vérifie son effectivité par un canari et **se désactive

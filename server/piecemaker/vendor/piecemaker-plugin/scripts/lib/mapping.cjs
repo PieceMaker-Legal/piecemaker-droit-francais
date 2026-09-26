@@ -2,8 +2,7 @@
  * Mapping d'anonymisation d'un dossier juridique — implémentation unique.
  *
  * Le pipeline admin (`websocket-server/originals-pipeline.cjs`), le serveur
- * Word, l'historique et les vues juridiques la partagent. Le proxy PII lit le
- * mapping central produit à partir de ces mappings de dossier.
+ * Word, l'historique et les vues juridiques la partagent.
  *
  * Deux sens, jamais symétriques dans leur usage :
  *  - `applyMapping`  entité → code, sur tout ce que l'IA s'apprête à lire ;
@@ -16,11 +15,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { locateCase, WORKSPACE_SUBDIR } = require('./protection.cjs');
+const { WORKSPACE_SUBDIR } = require('./protection.cjs');
 const { locateProjectCase } = require('./case-folders.cjs');
 const { isInstitutionalEntity } = require('./institutional-terms.cjs');
 // Le moteur de substitution est extrait dans un module autonome : il est aussi
-// requis par le hook central global, distribué hors du plugin. Une seule
+// requis par le proxy PII (`anonymizer/dictionary.cjs`). Une seule
 // implémentation, ré-exportée ici pour les appelants historiques.
 const {
   applyMapping,
@@ -286,36 +285,9 @@ function readCaseMapping(caseRoot) {
   };
 }
 
-/**
- * Un mapping d'anonymisation exploitable existe-t-il pour ce dossier ? C'est la
- * condition de la garantie « anonymisé avant envoi » : sans lui, le proxy n'a
- * rien à coder et une surface lisible partirait en clair. `protect-originals`
- * s'en sert pour refuser la lecture d'un dossier PieceMaker pas encore anonymisé.
- * On s'appuie sur `readCaseMapping` (et non sur la seule présence du fichier) pour
- * qu'un `mapping_default.json` illisible compte comme absent — c'est exactement ce
- * que voit la reconstruction du mapping central.
- */
-function caseHasMapping(caseRoot) {
-  return readCaseMapping(caseRoot).exists;
-}
-
 // La substitution (`applyMapping` / `revertMapping`) vit dans `substitution.cjs`
 // et est importée en tête de fichier. Elle est ré-exportée ci-dessous pour les
 // appelants historiques de `mapping.cjs`.
-
-/**
- * Retrouve le mapping du dossier juridique auquel `hint` appartient. `hint` est
- * un chemin de fichier (Read, Write, Edit) ou un répertoire de travail (Bash,
- * Telegram). Retourne `null` hors dossier juridique ou sans mapping utilisable :
- * les hooks n'ont alors rien à faire.
- */
-function resolveCaseMapping(casesRoot, hint) {
-  const located = locateCase(casesRoot, hint);
-  if (!located) return null;
-  const mapping = readCaseMapping(located.caseRoot);
-  if (!mapping.exists) return null;
-  return { caseRoot: located.caseRoot, caseName: located.caseName, ...mapping };
-}
 
 /** Resolve the mapping of the project folder containing the hint. */
 function resolveProjectCaseMapping(hint) {
@@ -330,7 +302,6 @@ module.exports = {
   applyMapping,
   buildEntityRegex,
   byDescendingEntityLength,
-  caseHasMapping,
   caseMappingFile,
   escapeWithVariants,
   normalizeMappingDocument,
@@ -338,7 +309,6 @@ module.exports = {
   readCaseMapping,
   readJsonFile,
   resolveProjectCaseMapping,
-  resolveCaseMapping,
   resolveMappedPath,
   revertMapping,
   sortedMapping,
