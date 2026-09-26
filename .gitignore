@@ -157,7 +157,7 @@ server/piecemaker/protection/bypass.test.js
 server/piecemaker/vendor/websocket-server/admin-routes.cjs
 
 CLAUDE.md
-docs/docx.md
+docs/
 
 server/piecemaker/anonymizer/bin/
 
