@@ -13,12 +13,10 @@ import { createRequire } from 'node:module';
 
 import { log } from '../lib/ui.mjs';
 import { REPO_ROOT, commandExists } from '../lib/platform.mjs';
-import { loadConfig } from '../lib/state.mjs';
 
 const require = createRequire(import.meta.url);
 const { claudeAssetStatus, repositoryAssets, syncClaudeAssets } = require('../../websocket-server/claude-assets.cjs');
 const { claudeHooksStatus, installClaudeHooks } = require('../../websocket-server/claude-hooks.cjs');
-const { refreshRegisteredCaseRules } = require('../../websocket-server/case-instructions.cjs');
 
 export const meta = {
   id: '09-claude-assets',
@@ -39,8 +37,6 @@ function dependencies(overrides = {}) {
     syncClaudeAssets,
     claudeHooksStatus,
     installClaudeHooks,
-    loadConfig,
-    refreshRegisteredCaseRules,
     ...overrides,
   };
 }
@@ -64,7 +60,6 @@ export async function install(ctx, overrides = {}) {
   if (ctx.dryRun) {
     ops.log.info(`[simulation] enregistrement de ${assets.length} skill(s)/agent(s) PieceMaker dans ~/.claude`);
     ops.log.info('[simulation] fusion des hooks PieceMaker dans ~/.claude/settings.json');
-    ops.log.info('[simulation] actualisation des instructions des dossiers juridiques enregistrés');
     return { status: 'skipped', note: 'Mode simulation — aucune modification effectuée.' };
   }
 
@@ -78,12 +73,6 @@ export async function install(ctx, overrides = {}) {
     return { status: 'partial', note: hooks.reason };
   }
   ops.log.detail(`${hooks.registered} hook(s) PieceMaker enregistré(s) directement dans ~/.claude/settings.json.`);
-
-  const instructions = ops.refreshRegisteredCaseRules(REPO_ROOT, ops.loadConfig());
-  ops.log.detail(`${instructions.refreshed} dossier(s) juridique(s) muni(s) des instructions PieceMaker.`);
-  for (const failure of instructions.failed) {
-    ops.log.warn(`Instructions non actualisées pour ${failure.folder} : ${failure.error}`);
-  }
 
   if (result.conflicts.length) {
     return {

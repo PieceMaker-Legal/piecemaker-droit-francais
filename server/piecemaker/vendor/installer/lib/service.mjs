@@ -1,10 +1,10 @@
 /**
- * Maintenance du dépôt installé : mise à jour Git/npm et redémarrage du démon
- * Telegram. Aucun serveur local n'est piloté ici — l'application et son proxy
- * PII sont démarrés par la commande `piecemaker`.
+ * Maintenance du dépôt installé : mise à jour Git/npm. Aucun serveur local
+ * n'est piloté ici — l'application et son proxy PII sont démarrés par la
+ * commande `piecemaker`.
  */
 
-import { IS_MAC, REPO_ROOT, npmBin, npmEnv, runCapture } from './platform.mjs';
+import { REPO_ROOT, npmBin, npmEnv, runCapture } from './platform.mjs';
 
 function runOrThrow(command, args, label) {
   const result = runCapture(command, args, { cwd: REPO_ROOT });
@@ -12,26 +12,6 @@ function runOrThrow(command, args, label) {
     throw new Error(`${label} : ${result.stderr || result.stdout || result.error?.message || `code ${result.code}`}`);
   }
   return result;
-}
-
-/** launchd label of the Telegram monitor installed by step 08. */
-const TELEGRAM_DAEMON_LABEL = 'com.piecemaker.telegram-monitor';
-
-/**
- * The Telegram monitor runs `orchestrator/piecemaker-daemon.mjs` straight out
- * of the repository, so an update leaves it executing the previous revision
- * until launchd restarts it. Only touched when the service is already loaded.
- */
-export function restartTelegramDaemon() {
-  if (!IS_MAC || typeof process.getuid !== 'function') return { restarted: false, reason: 'unsupported' };
-  const domain = `gui/${process.getuid()}`;
-  if (runCapture('launchctl', ['print', `${domain}/${TELEGRAM_DAEMON_LABEL}`]).code !== 0) {
-    return { restarted: false, reason: 'absent' };
-  }
-  const kick = runCapture('launchctl', ['kickstart', '-k', `${domain}/${TELEGRAM_DAEMON_LABEL}`]);
-  return kick.code === 0
-    ? { restarted: true }
-    : { restarted: false, reason: kick.stderr || `code ${kick.code}` };
 }
 
 function gitOut(args, label) {

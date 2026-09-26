@@ -71,12 +71,25 @@ function cleanCodexHooks(file) {
   return true;
 }
 
+const LEGACY_CONFIG_KEYS = [
+  'mikePiiPort',
+  'caseFolders',
+  'anonymization',
+  'litellmPort',
+  'litellmVenvPath',
+  'mxcPath',
+  'mxcEnabled',
+  'adminTheme',
+  'port',
+];
+
 function cleanPieceMakerConfig(homeDir) {
   const file = path.join(homeDir, 'config.json');
   const config = readObject(file);
   let changed = false;
-  if (config && 'mikePiiPort' in config) {
-    delete config.mikePiiPort;
+  const legacyKeys = config ? LEGACY_CONFIG_KEYS.filter((key) => key in config) : [];
+  if (legacyKeys.length) {
+    for (const key of legacyKeys) delete config[key];
     writeObject(file, config);
     changed = true;
   }
