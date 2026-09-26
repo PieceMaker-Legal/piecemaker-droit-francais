@@ -23,6 +23,7 @@ import CaseFilesSection from '@/piecemaker/dossier/sections/CaseFilesSection';
 import StampingSection from '@/piecemaker/dossier/sections/StampingSection';
 import CaseFilesChronology from '@/piecemaker/dossier/sections/CaseFilesChronology';
 import CaseMappingSetup from '@/piecemaker/dossier/sections/CaseMappingSetup';
+import CaseProtectionToggle from '@/piecemaker/dossier/sections/CaseProtectionToggle';
 
 // AGENTS.md is a symlink to CLAUDE.md at the repo root, so the two always mirror
 // each other — opening either shows the same repo instructions Claude Code and
@@ -103,6 +104,7 @@ export default function DossierPanel({ selectedProject }: { selectedProject: Pro
             </Button>
           </Tooltip>
           <CaseMappingSetup />
+          <CaseProtectionToggle />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
