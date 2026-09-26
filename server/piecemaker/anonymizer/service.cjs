@@ -19,6 +19,7 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const tls = require('node:tls');
 
 const { createSqliteDictionaryLoader } = require('./sqlite-dictionary.cjs');
 const { startRewriterBridge } = require('./rewriter-bridge.cjs');
@@ -100,7 +101,16 @@ function certificatePaths() {
   return {
     cert: path.join(directory, 'piecemaker-ca.crt'),
     key: path.join(directory, 'piecemaker-ca.key'),
+    trustBundle: path.join(directory, 'piecemaker-trust-bundle.pem'),
   };
+}
+
+function writeTrustBundle(caFile, bundleFile) {
+  const content = [...tls.rootCertificates, fs.readFileSync(caFile, 'utf8').trim()].join('\n');
+  const temporary = `${bundleFile}.piecemaker-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(temporary, `${content}\n`, { encoding: 'utf8', mode: 0o644 });
+  fs.renameSync(temporary, bundleFile);
+  return bundleFile;
 }
 
 function waitForOutput(child, needle, timeoutMs) {
@@ -129,7 +139,7 @@ function waitForOutput(child, needle, timeoutMs) {
   });
 }
 
-function proxyEnvironment(proxyUrl, caFile) {
+function proxyEnvironment(proxyUrl, caFile, trustBundle) {
   return {
     HTTPS_PROXY: proxyUrl,
     HTTP_PROXY: proxyUrl,
@@ -137,9 +147,9 @@ function proxyEnvironment(proxyUrl, caFile) {
     NO_PROXY: 'localhost,127.0.0.1,::1',
     NODE_USE_ENV_PROXY: '1',
     NODE_EXTRA_CA_CERTS: caFile,
-    SSL_CERT_FILE: caFile,
+    SSL_CERT_FILE: trustBundle,
     CODEX_CA_CERTIFICATE: caFile,
-    REQUESTS_CA_BUNDLE: caFile,
+    REQUESTS_CA_BUNDLE: trustBundle,
   };
 }
 
@@ -251,12 +261,14 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
       PATH: process.env.PATH,
     };
     for (const key of PROXY_ENV_KEYS) previousEnv[key] = process.env[key];
-    Object.assign(process.env, proxyEnvironment(origin, certificates.cert));
+    const trustBundle = writeTrustBundle(certificates.cert, certificates.trustBundle);
+    Object.assign(process.env, proxyEnvironment(origin, certificates.cert, trustBundle));
     process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
 
     const report = await configureProviders({
       origin,
       caFile: certificates.cert,
+      trustBundle,
       userHome,
       binDir,
       mappingFile: legacyMappingFile,
@@ -336,4 +348,5 @@ module.exports = {
   isDisabled,
   resolveUpstream,
   summarizeCoverage,
+  writeTrustBundle,
 };
