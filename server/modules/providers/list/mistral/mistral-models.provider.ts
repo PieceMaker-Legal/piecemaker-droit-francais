@@ -9,59 +9,17 @@ import { buildDefaultProviderCurrentActiveModel } from '@/shared/utils.js';
 export const MISTRAL_PREDEFINED_MODELS: ProviderModelsDefinition = {
   OPTIONS: [
     {
-      value: 'mistral-large-latest',
-      label: 'Mistral Large',
-      description: 'Most powerful Mistral model for complex reasoning and advanced tasks.',
-      effort: {
-        default: 'medium',
-        values: [
-          { value: 'low' },
-          { value: 'medium' },
-          { value: 'high' },
-        ],
-      },
+      value: 'mistral-medium-3.5',
+      label: 'Mistral Medium 3.5',
+      description: 'mistral-vibe-cli-latest',
     },
     {
-      value: 'mistral-medium-latest',
-      label: 'Mistral Medium',
-      description: 'Balanced model for everyday tasks and coding.',
-      effort: {
-        default: 'medium',
-        values: [
-          { value: 'low' },
-          { value: 'medium' },
-          { value: 'high' },
-        ],
-      },
-    },
-    {
-      value: 'mistral-small-latest',
-      label: 'Mistral Small',
-      description: 'Fast and efficient model for simpler tasks.',
-      effort: {
-        default: 'medium',
-        values: [
-          { value: 'low' },
-          { value: 'medium' },
-          { value: 'high' },
-        ],
-      },
-    },
-    {
-      value: 'codestral-latest',
-      label: 'Codestral',
-      description: 'Mistral model specialized for coding and development tasks.',
-      effort: {
-        default: 'medium',
-        values: [
-          { value: 'low' },
-          { value: 'medium' },
-          { value: 'high' },
-        ],
-      },
+      value: 'local',
+      label: 'Devstral (local)',
+      description: 'devstral',
     },
   ],
-  DEFAULT: 'mistral-large-latest',
+  DEFAULT: 'mistral-medium-3.5',
 };
 
 /** Provider registry model adapter for Mistral predefined models. */
