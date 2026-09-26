@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { capture, run } from './shell.mjs';
 import { ui } from './ui.mjs';
-import { IS_MAC, PRODUCT_NAME } from './paths.mjs';
+import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath } from './paths.mjs';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const bootstrapRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -239,12 +240,29 @@ async function buildAnonymizerProxy(sourceDir) {
   await fs.copyFile(built, destination);
   if (process.platform !== 'win32') await fs.chmod(destination, 0o755);
   ui.detail('Proxy d\'anonymisation embarqué.');
+  return destination;
+}
+
+async function smokeTestAnonymizerProxy(sourceDir, binary) {
+  ui.step("Test du proxy d'anonymisation en bac à sable…");
+  const smokeModule = path.join(sourceDir, 'server', 'piecemaker', 'anonymizer', 'hudsucker-smoke.cjs');
+  const { runHudsuckerSmokeTest } = createRequire(smokeModule)(smokeModule);
+  const result = await runHudsuckerSmokeTest({
+    binary,
+    caCert: caCertPath,
+    caKey: caKeyPath,
+    report: ({ name, ok, detail }) => (ok ? ui.detail(`${name}${detail ? ` — ${detail}` : ''}`) : ui.fail(`${name} — ${detail}`)),
+  });
+  if (!result.ok) {
+    throw new Error("Le proxy d'anonymisation échoue en bac à sable : installation interrompue, l'application en place est conservée.");
+  }
+  ui.ok(`Proxy d'anonymisation validé${result.sandboxed ? ' (sandbox-exec : réseau local seul, écriture confinée)' : ' (dossier et ports isolés)'}.`);
 }
 
 export async function buildDesktopApp(sourceDir) {
   ui.step('Installation des dépendances du projet (plusieurs minutes)…');
   await run(npmCommand, ['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
-  await buildAnonymizerProxy(sourceDir);
+  await smokeTestAnonymizerProxy(sourceDir, await buildAnonymizerProxy(sourceDir));
 
   ui.step('Compilation du client et du serveur…');
   await run(npmCommand, ['run', 'build'], { cwd: sourceDir });
