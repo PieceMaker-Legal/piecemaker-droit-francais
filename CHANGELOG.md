@@ -3,6 +3,13 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.8...v2.0.9) (2026-09-26)
+
+### Bug Fixes
+
+* **anonymizer:** le scanner GLiNER démarre de nouveau derrière le proxy PII ([b48e066](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b48e066574b77bc0c6fe9c2d8a0e58ac9847b76a))
+* **desktop:** la mise à jour intégrée retrouve product.config.json une fois compilée ([e72f997](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e72f997817ea869c5eec6c90a942240f55432b4f))
+
 ## [2.0.8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.7...v2.0.8) (2026-09-26)
 
 ### Bug Fixes
