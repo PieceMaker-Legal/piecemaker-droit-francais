@@ -6,7 +6,7 @@
  * `/api/piecemaker` (see `server/piecemaker/router.cjs`).
  *
  * Deliberately out of scope here: PieceMaker hooks, Ollama,
- * Telegram, git/history and the anonymisation mapping editor — none of them
+ * git/history and the anonymisation mapping editor — none of them
  * are reachable from the endpoints this section calls.
  */
 

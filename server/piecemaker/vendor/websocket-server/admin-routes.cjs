@@ -68,13 +68,6 @@ const {
 } = require('./claude-assets.cjs');
 const { claudeHooksStatus } = require('./claude-hooks.cjs');
 const {
-  controlDossierBot,
-  controlTelegram,
-  getTelegramState,
-  saveDossierBot,
-  saveTelegramConfig,
-} = require('./telegram-admin.cjs');
-const {
   DEFAULT_CASE_FOLDER_STRUCTURE,
   configuredCaseFolderStructure,
   ensureCaseFolderStructure,
@@ -741,7 +734,6 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
     },
   ];
   const models = await ollamaState(fetchImpl);
-  const telegram = getTelegramState({ repoRoot, homeDir, userHome });
 
   // Moteurs Python locaux du venv — détection par présence de paquet, sans import
   // (importer gliner2/mineru chargerait des centaines de Mo à chaque appel).
@@ -777,22 +769,11 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
     && glinerModelReady;
   const mineruReady = hasPackage('mineru') || hasPackage('magic_pdf')
     || fs.existsSync(path.join(venvDir, 'bin', 'mineru'));
-  const folders = listConfiguredCases(readRegistryConfig(path.join(homeDir, 'config.json'))).map((entry) => {
-    const bot = telegram.dossiers.find((candidate) => {
-      try { return path.resolve(candidate.workdir) === path.resolve(entry.root); } catch { return false; }
-    });
-    return {
-      id: entry.id,
-      name: entry.name,
-      path: entry.root,
-      bot: bot ? {
-        id: bot.id,
-        name: bot.name,
-        configured: Boolean(bot.linked),
-        running: Boolean(bot.running),
-      } : null,
-    };
-  });
+  const folders = listConfiguredCases(readRegistryConfig(path.join(homeDir, 'config.json'))).map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    path: entry.root,
+  }));
 
   return {
     components: {
@@ -844,22 +825,6 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
         summary: mineruReady
           ? 'OCR local · PDF scannés et images'
           : 'Optionnel · non installé',
-      },
-      telegram: {
-        name: 'Telegram',
-        installed: true,
-        optional: true,
-        configured: Boolean(telegram.assistant.token.configured || telegram.monitor.token.configured),
-        summary: (() => {
-          const running = [telegram.assistant.running && 'Assistant', telegram.monitor.running && 'Surveillance'].filter(Boolean);
-          if (running.length) return `${running.join(' + ')} en ligne`;
-          if (telegram.assistant.token.configured || telegram.monitor.token.configured) return 'Configuré · arrêté';
-          return 'Aucun bot configuré';
-        })(),
-        bots: [
-          { name: telegram.assistant.name, role: 'Assistant', configured: Boolean(telegram.assistant.token.configured), running: Boolean(telegram.assistant.running) },
-          { name: telegram.monitor.name, role: 'Surveillance', configured: Boolean(telegram.monitor.token.configured), running: Boolean(telegram.monitor.running) },
-        ],
       },
     },
     models: {
@@ -2975,42 +2940,6 @@ function createAdminRouter({
         hash: req.body?.hash,
       });
       res.json({ ok: true, ...result });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  router.get('/telegram', (req, res) => {
-    res.json(getTelegramState({ repoRoot, homeDir, userHome }));
-  });
-
-  router.put('/telegram', (req, res) => {
-    try {
-      res.json({ ok: true, ...saveTelegramConfig({ repoRoot, homeDir, userHome }, req.body) });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  router.post('/telegram/:role/:action', (req, res) => {
-    try {
-      res.json(controlTelegram({ repoRoot, homeDir, userHome }, req.params.role, req.params.action));
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  router.put('/telegram/dossiers/:id', (req, res) => {
-    try {
-      res.json({ ok: true, dossier: saveDossierBot({ repoRoot, homeDir, userHome }, req.params.id, req.body) });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  router.post('/telegram/dossiers/:id/:action', (req, res) => {
-    try {
-      res.json(controlDossierBot({ repoRoot, homeDir, userHome }, req.params.id, req.params.action));
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
