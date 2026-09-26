@@ -229,6 +229,20 @@ Get-ChildItem Cert:\CurrentUser\Root, Cert:\CurrentUser\TrustedPublisher, Cert:\
 Remove-Item -Recurse -Force "$env:USERPROFILE\.piecemaker\certs"
 ```
 
+## Mise à jour depuis l'application
+
+Sur macOS, le bouton « Mettre à jour » de la fenêtre de nouvelle version
+relance cet installateur au lieu de la commande npm de CloudCLI : la route
+`POST /api/system/update` est interceptée par
+`server/piecemaker/desktop-update/` lorsque le serveur tourne depuis un bundle
+`*.app/Contents/Resources/app`. Elle exécute
+`curl …/main/desktop-bootstrap/install.sh | sh -s -- --no-launch` (dernière
+release publiée du dépôt de `product.config.json`), renvoie la sortie à la
+fenêtre, puis quitte l'application et rouvre le bundle réinstallé. Les autres
+installations (sources git, npm, Windows) retombent sur le comportement
+CloudCLI d'origine. Les versions antérieures à ce mécanisme doivent être mises
+à jour une fois à la main avec la commande d'installation.
+
 ## Carte des fichiers
 
 ```
