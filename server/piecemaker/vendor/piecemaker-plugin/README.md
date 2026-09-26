@@ -33,7 +33,7 @@ Légifrance est maintenu séparément dans
 
 L'installateur enregistre ces composants dans les emplacements utilisateur
 découverts par les CLI. Il fusionne tous les hooks dans les réglages Claude
-Code et la sentinelle `SessionStart` dans les réglages Codex.
+Code et la protection des pièces (`PreToolUse`) dans les réglages Codex.
 
 Chaque sous-dossier immédiat de `config.workspacePath` est traité comme un dossier
 juridique indépendant. Son historique Git est conservé hors des données client,
@@ -56,8 +56,7 @@ L'étape `09-claude-assets` enregistre, si Claude Code est présent :
 L'étape `09-codex-plugin` enregistre, si Codex CLI est présent :
 
 - `~/.codex/skills/<slug>/SKILL.md`
-- `~/.codex/hooks.json` — sentinelle `SessionStart` qui affiche l’état réel du
-  proxy : `🔒 Anonymisation PieceMaker active ✓` ou un avertissement explicite.
+- `~/.codex/hooks.json` — refus `PreToolUse` de lecture des pièces protégées.
 
 Ce sont des **liens symboliques** vers `piecemaker-plugin/` : toute
 modification du Markdown (administration ou éditeur) est prise en compte à la
@@ -79,12 +78,6 @@ Les hooks décrits par `hooks/hooks.json` sont fusionnés directement dans
 `~/.claude/settings.json` avec le chemin absolu des scripts du dépôt. Ils ne
 dépendent donc d'aucun cache de plugin. `piecemaker update`, le démarrage du
 serveur et l'étape 06 réconcilient cet enregistrement.
-
-Codex ne permet pas encore d’exécuter une commande arbitraire dans sa
-`tui.status_line`. PieceMaker utilise donc son hook natif `SessionStart` : le
-message figure au début de chaque session et reflète le routage Codex ainsi que
-la disponibilité du proxy au moment du lancement. Codex peut demander une fois
-de confirmer la confiance accordée à ce hook local.
 
 ## Serveur MCP Légifrance
 

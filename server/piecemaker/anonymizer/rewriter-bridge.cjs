@@ -85,6 +85,12 @@ function startRewriterBridge({ dictionary, harness = null }) {
     const provider = header(request, 'x-piecemaker-provider') || 'claude';
     const current = () => dictionary.get();
 
+    if (request.method === 'GET' && request.url === '/health') {
+      response.writeHead(200);
+      response.end('ok');
+      return;
+    }
+
     if (request.method === 'POST' && request.url === '/v1/request') {
       readBody(request).then((body) => {
         stats.requests += 1;

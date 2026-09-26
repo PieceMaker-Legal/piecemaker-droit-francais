@@ -3,7 +3,7 @@
 /**
  * Capture des décisions Légifrance lues via l'outil MCP `consulter_decision`,
  * repérées dans un corps de requête SORTANTE déjà analysé en JSON par le
- * proxy PII (`server/piecemaker/anonymizer/proxy.cjs`).
+ * proxy PII (`server/piecemaker/anonymizer/rewriter-bridge.cjs`).
  *
  * Équivalent serveur du hook `decision-cache.mjs` de l'autre dépôt
  * (`piecemaker-plugin/scripts/decision-cache.mjs`, PostToolUse Claude Code) :
