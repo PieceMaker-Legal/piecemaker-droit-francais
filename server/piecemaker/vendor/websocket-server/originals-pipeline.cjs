@@ -729,7 +729,6 @@ function runManagedPythonJob({ action, script, args, onProgress, signal } = {}) 
     descriptor.resolve = resolve;
     descriptor.reject = reject;
   });
-  runningManaged.add(job);
   if (canAdmit(job)) {
     launchManagedJob(descriptor);
   } else {
@@ -743,6 +742,7 @@ function runManagedPythonJob({ action, script, args, onProgress, signal } = {}) 
 /** Lancement d'un descripteur `runManagedPythonJob` (pas de `legalCase`/commit à gérer ici). */
 function launchManagedJob(descriptor) {
   const { job, run, resolve, reject } = descriptor;
+  runningManaged.add(job);
   reservedBytes += job.reserveBytes;
   const timeoutId = setTimeout(() => {
     void stopRunningJob(job, 'timeout');
