@@ -33,15 +33,6 @@ export function appClientReachable() {
   return httpReachable(`http://127.0.0.1:${PORTS.appClient}/`);
 }
 
-function anonymizerPort() {
-  try {
-    const port = Number.parseInt(JSON.parse(fs.readFileSync(path.join(PIECEMAKER_HOME, 'config.json'), 'utf8')).mikePiiPort, 10);
-    if (Number.isInteger(port) && port > 0) return port;
-  } catch {
-  }
-  return PORTS.anonymizer;
-}
-
 function stopPid(pid) {
   if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) return false;
   if (process.platform === 'win32') {
@@ -61,7 +52,7 @@ export async function stopApplication() {
   } catch {
   }
 
-  for (const port of [PORTS.appClient, PORTS.appServer, anonymizerPort()]) {
+  for (const port of [PORTS.appClient, PORTS.appServer]) {
     const result = await freePort(port);
     killed.push(...result.killed);
     if (!result.released) occupied.push(port);

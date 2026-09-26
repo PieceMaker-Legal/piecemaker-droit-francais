@@ -1,18 +1,23 @@
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use bytes::Bytes;
-use futures::StreamExt;
+use futures::{SinkExt, StreamExt};
 use http_body_util::{BodyExt, BodyStream};
 use hudsucker::certificate_authority::RcgenAuthority;
-use hudsucker::hyper::{Request, Response, StatusCode, Uri};
+use hudsucker::hyper::{Method, Request, Response, StatusCode, Uri};
 use hudsucker::rcgen::{Issuer, KeyPair};
 use hudsucker::rustls::crypto::aws_lc_rs;
-use hudsucker::tokio_tungstenite::tungstenite::Message;
+use hudsucker::tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use hudsucker::tokio_tungstenite::tungstenite::protocol::CloseFrame;
+use hudsucker::tokio_tungstenite::tungstenite::{Error as WsError, Message};
 use hudsucker::{
-    Body, HttpContext, HttpHandler, Proxy, RequestOrResponse, WebSocketContext, WebSocketHandler,
+    decode_request, decode_response, Body, HttpContext, HttpHandler, Proxy, RequestOrResponse,
+    WebSocketContext, WebSocketHandler,
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -27,7 +32,7 @@ struct Handler {
     hosts: Arc<HashSet<String>>,
     upstream: Arc<HashMap<String, String>>,
     http: reqwest::Client,
-    provider: String,
+    provider: &'static str,
     ws_id: Option<String>,
 }
 
@@ -54,9 +59,6 @@ fn request_host(req: &Request<Body>) -> String {
     if let Some(host) = req.uri().host() {
         return host.to_ascii_lowercase();
     }
-    if let Some(authority) = req.uri().authority() {
-        return authority.host().to_ascii_lowercase();
-    }
     req.headers()
         .get("host")
         .and_then(|value| value.to_str().ok())
@@ -72,44 +74,25 @@ fn provider_for(host: &str) -> &'static str {
     }
 }
 
-fn header_text(req: &Request<Body>, name: &str) -> String {
-    req.headers()
-        .get(name)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("")
-        .to_string()
-}
-
-fn response_type(res: &Response<Body>) -> String {
-    res.headers()
+fn content_type<T>(message: &hudsucker::hyper::http::HeaderMap<T>) -> String
+where
+    T: AsRef<[u8]>,
+{
+    message
         .get("content-type")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("")
-        .to_ascii_lowercase()
+        .map(|value| String::from_utf8_lossy(value.as_ref()).to_ascii_lowercase())
+        .unwrap_or_default()
 }
 
-fn is_json(value: &str) -> bool {
-    value.contains("json")
-}
-
-fn is_sse(value: &str) -> bool {
-    value.contains("text/event-stream")
-}
-
-fn health_request(req: &Request<Body>) -> bool {
-    let host = request_host(req);
-    req.method() == hudsucker::hyper::Method::GET
-        && (req.uri().path() == "/" || req.uri().path().is_empty())
-        && (host.is_empty() || host == "127.0.0.1" || host == "localhost")
-}
-
-fn failure() -> Response<Body> {
+fn refusal(status: StatusCode, host: &str, path: &str, cause: &str) -> Response<Body> {
+    eprintln!("refus {} {host}{path} : {cause}", status.as_u16());
+    let message = serde_json::json!({
+        "error": { "type": "piecemaker_proxy", "message": format!("Relais d'anonymisation PieceMaker : {cause}.") }
+    });
     Response::builder()
-        .status(StatusCode::BAD_GATEWAY)
+        .status(status)
         .header("content-type", "application/json")
-        .body(Body::from(
-            "{\"error\":{\"type\":\"piecemaker_proxy\",\"message\":\"Relais d'anonymisation indisponible.\"}}",
-        ))
+        .body(Body::from(message.to_string()))
         .unwrap()
 }
 
@@ -120,18 +103,40 @@ fn uri_path(uri: &Uri) -> String {
     }
 }
 
+async fn collect(body: Body) -> Result<Bytes, &'static str> {
+    let bytes = body
+        .collect()
+        .await
+        .map_err(|_| "corps illisible")?
+        .to_bytes();
+    if bytes.len() > MAX_BODY {
+        return Err("corps trop volumineux");
+    }
+    Ok(bytes)
+}
+
 impl Handler {
     fn allowed(&self, host: &str) -> bool {
         self.hosts.contains(host)
+    }
+
+    fn intercepted_host(&self, uri: &Uri) -> Option<String> {
+        let host = uri.host().map(str::to_ascii_lowercase).unwrap_or_default();
+        if self.allowed(&host) {
+            return Some(host);
+        }
+        let authority = uri.authority()?.as_str();
+        self.upstream
+            .iter()
+            .find(|(_, dest)| dest.as_str() == authority)
+            .map(|(host, _)| host.clone())
     }
 
     fn point_upstream(&self, host: &str, req: &mut Request<Body>) {
         let Some(dest) = self.upstream.get(host) else {
             return;
         };
-        let path = uri_path(req.uri());
-        let rewritten = format!("http://{dest}{path}");
-        if let Ok(uri) = rewritten.parse() {
+        if let Ok(uri) = format!("http://{dest}{}", uri_path(req.uri())).parse() {
             *req.uri_mut() = uri;
         }
         if let Ok(value) = dest.parse() {
@@ -139,25 +144,47 @@ impl Handler {
         }
     }
 
-    async fn post_bytes(&self, path: &str, provider: &str, extra: &[(&str, &str)], body: Bytes) -> Result<Bytes, ()> {
+    async fn rewrite(&self, path: &str, extra: &[(&str, &str)], body: Bytes) -> Result<Bytes, &'static str> {
         let mut request = self
             .http
             .post(format!("{}{path}", self.rewriter))
-            .header("x-piecemaker-provider", provider)
+            .header("x-piecemaker-provider", self.provider)
             .body(body);
         for (name, value) in extra {
             request = request.header(*name, *value);
         }
-        let response = request.send().await.map_err(|_| ())?;
+        let response = request.send().await.map_err(|_| "réécrivain injoignable")?;
         if !response.status().is_success() {
-            return Err(());
+            return Err("réécriture en échec");
         }
-        response.bytes().await.map_err(|_| ())
+        response.bytes().await.map_err(|_| "réécriture interrompue")
     }
 
-    fn spawn_sse(&self, provider: String, body: Body) -> Body {
-        let http = self.http.clone();
-        let url = format!("{}/v1/sse", self.rewriter);
+    async fn health(&self) -> Response<Body> {
+        let alive = self
+            .http
+            .get(format!("{}/health", self.rewriter))
+            .send()
+            .await
+            .map(|response| response.status().is_success())
+            .unwrap_or(false);
+        let (status, text) = if alive {
+            (StatusCode::OK, format!("{{\"pid\":{},\"rewriter\":\"ok\"}}", std::process::id()))
+        } else {
+            (StatusCode::SERVICE_UNAVAILABLE, format!("{{\"pid\":{},\"rewriter\":\"down\"}}", std::process::id()))
+        };
+        Response::builder()
+            .status(status)
+            .header("content-type", "application/json")
+            .body(Body::from(text))
+            .unwrap()
+    }
+
+    fn spawn_sse(&self, body: Body) -> Body {
+        let request = self
+            .http
+            .post(format!("{}/v1/sse", self.rewriter))
+            .header("x-piecemaker-provider", self.provider);
         let (tx, rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(8);
         tokio::spawn(async move {
             let incoming = BodyStream::new(body).filter_map(|frame| async move {
@@ -166,28 +193,57 @@ impl Handler {
                     Err(error) => Some(Err(std::io::Error::other(error.to_string()))),
                 }
             });
-            let sent = http
-                .post(url)
-                .header("x-piecemaker-provider", provider)
-                .body(reqwest::Body::wrap_stream(incoming))
-                .send()
-                .await;
-            match sent {
+            match request.body(reqwest::Body::wrap_stream(incoming)).send().await {
                 Ok(response) => {
                     let mut stream = response.bytes_stream();
                     while let Some(chunk) = stream.next().await {
-                        let mapped = chunk.map_err(|error| std::io::Error::other(error.to_string()));
-                        if tx.send(mapped).await.is_err() {
+                        if tx.send(chunk.map_err(std::io::Error::other)).await.is_err() {
                             break;
                         }
                     }
                 }
                 Err(error) => {
-                    let _ = tx.send(Err(std::io::Error::other(error.to_string()))).await;
+                    eprintln!("refus flux SSE : réécrivain injoignable");
+                    let _ = tx.send(Err(std::io::Error::other(error))).await;
                 }
             }
         });
         Body::from_stream(ReceiverStream::new(rx))
+    }
+
+    async fn rewrite_ws(&mut self, host: &str, outbound: bool, text: &str) -> Result<Option<Message>, &'static str> {
+        let id = self
+            .ws_id
+            .get_or_insert_with(|| format!("ws-{}", WS_IDS.fetch_add(1, Ordering::Relaxed)))
+            .clone();
+        self.provider = provider_for(host);
+        let direction = if outbound { "out" } else { "in" };
+        let rewritten = self
+            .rewrite(
+                "/v1/ws",
+                &[("x-piecemaker-ws", id.as_str()), ("x-piecemaker-direction", direction)],
+                Bytes::from(text.to_string()),
+            )
+            .await?;
+        if rewritten.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(Message::Text(String::from_utf8_lossy(&rewritten).into_owned().into())))
+    }
+
+    async fn flush_ws(&self, host: &str) -> Vec<String> {
+        let Some(id) = self.ws_id.clone() else {
+            return Vec::new();
+        };
+        let mut handler = self.clone();
+        handler.provider = provider_for(host);
+        match handler
+            .rewrite("/v1/ws-end", &[("x-piecemaker-ws", id.as_str())], Bytes::new())
+            .await
+        {
+            Ok(tail) => pending_messages(&tail),
+            Err(_) => Vec::new(),
+        }
     }
 }
 
@@ -208,55 +264,41 @@ impl HttpHandler for Handler {
     }
 
     async fn handle_request(&mut self, _ctx: &HttpContext, req: Request<Body>) -> RequestOrResponse {
-        if health_request(&req) {
-            return Response::builder()
-                .status(StatusCode::OK)
-                .body(Body::from("ok"))
-                .unwrap()
-                .into();
-        }
-
-        if req.method() == hudsucker::hyper::Method::CONNECT {
-            return req.into();
-        }
-
         let host = request_host(&req);
-        if !self.allowed(&host) {
+        if req.method() == Method::GET && req.uri().path() == "/health" && (host == "127.0.0.1" || host == "localhost") {
+            return self.health().await.into();
+        }
+        if req.method() == Method::CONNECT || !self.allowed(&host) {
             return req.into();
         }
-        self.provider = provider_for(&host).to_string();
+        self.provider = provider_for(&host);
+        let path = uri_path(req.uri());
 
-        let content_type = header_text(&req, "content-type");
+        let req = match decode_request(req) {
+            Ok(req) => req,
+            Err(_) => return refusal(StatusCode::UNSUPPORTED_MEDIA_TYPE, &host, &path, "encodage de corps inconnu").into(),
+        };
+        let kind = content_type(req.headers());
         let (mut parts, body) = req.into_parts();
         parts.headers.remove("accept-encoding");
         parts.headers.remove("sec-websocket-extensions");
 
-        let body = if is_json(&content_type.to_ascii_lowercase()) {
-            let collected = match body.collect().await {
-                Ok(collected) => collected.to_bytes(),
-                Err(_) => return failure().into(),
-            };
-            if collected.len() > MAX_BODY {
-                return failure().into();
-            }
-            if collected.is_empty() {
-                Body::empty()
-            } else {
-                match self
-                    .post_bytes("/v1/request", &self.provider.clone(), &[], collected)
-                    .await
-                {
-                    Ok(rewritten) => {
-                        if let Ok(length) = rewritten.len().to_string().parse() {
-                            parts.headers.insert("content-length", length);
-                        }
-                        Body::from(rewritten)
-                    }
-                    Err(_) => return failure().into(),
+        let collected = match collect(body).await {
+            Ok(bytes) => bytes,
+            Err(cause) => return refusal(StatusCode::BAD_GATEWAY, &host, &path, cause).into(),
+        };
+        let body = if collected.is_empty() {
+            Body::empty()
+        } else if kind.contains("json") {
+            match self.rewrite("/v1/request", &[], collected).await {
+                Ok(rewritten) => {
+                    parts.headers.insert("content-length", rewritten.len().into());
+                    Body::from(rewritten)
                 }
+                Err(cause) => return refusal(StatusCode::BAD_GATEWAY, &host, &path, cause).into(),
             }
         } else {
-            body
+            return refusal(StatusCode::UNSUPPORTED_MEDIA_TYPE, &host, &path, "corps non JSON impossible à anonymiser").into();
         };
 
         let mut req = Request::from_parts(parts, body);
@@ -265,142 +307,91 @@ impl HttpHandler for Handler {
     }
 
     async fn handle_response(&mut self, _ctx: &HttpContext, res: Response<Body>) -> Response<Body> {
-        let kind = response_type(&res);
-        let provider = self.provider.clone();
+        let res = match decode_response(res) {
+            Ok(res) => res,
+            Err(_) => return refusal(StatusCode::BAD_GATEWAY, self.provider, "", "réponse compressée illisible"),
+        };
+        let kind = content_type(res.headers());
         let (mut parts, body) = res.into_parts();
-        parts.headers.remove("content-encoding");
-        parts.headers.remove("content-length");
-        parts.headers.remove("transfer-encoding");
-        parts.headers.remove("connection");
-
-        if is_sse(&kind) {
-            parts.headers.remove("content-length");
-            parts.headers.insert(
-                "content-type",
-                "text/event-stream".parse().unwrap(),
-            );
-            return Response::from_parts(parts, self.spawn_sse(provider, body));
+        for name in ["content-encoding", "content-length", "transfer-encoding", "connection"] {
+            parts.headers.remove(name);
         }
 
-        if is_json(&kind) {
-            let collected = match body.collect().await {
-                Ok(collected) => collected.to_bytes(),
-                Err(_) => return failure(),
-            };
-            if collected.len() > MAX_BODY {
-                return failure();
-            }
-            let rewritten = match self.post_bytes("/v1/response", &provider, &[], collected).await {
-                Ok(rewritten) => rewritten,
-                Err(_) => return failure(),
-            };
-            return Response::from_parts(parts, Body::from(rewritten));
+        if kind.contains("text/event-stream") {
+            return Response::from_parts(parts, self.spawn_sse(body));
         }
-
-        Response::from_parts(parts, body)
+        if !kind.contains("json") {
+            return Response::from_parts(parts, body);
+        }
+        let rewritten = match collect(body).await {
+            Ok(bytes) => self.rewrite("/v1/response", &[], bytes).await,
+            Err(cause) => Err(cause),
+        };
+        match rewritten {
+            Ok(bytes) => Response::from_parts(parts, Body::from(bytes)),
+            Err(cause) => refusal(StatusCode::BAD_GATEWAY, self.provider, "", cause),
+        }
     }
 }
 
 impl WebSocketHandler for Handler {
-    async fn handle_message(&mut self, ctx: &WebSocketContext, message: Message) -> Option<Message> {
-        let (outbound, uri) = match ctx {
-            WebSocketContext::ClientToServer { dst, .. } => (true, dst),
-            WebSocketContext::ServerToClient { src, .. } => (false, src),
-        };
-        let host = uri.host().map(|value| value.to_ascii_lowercase()).unwrap_or_default();
-        if !self.allowed(&host) {
-            return Some(message);
-        }
-        let Message::Text(text) = message else {
-            return Some(message);
-        };
-        if self.ws_id.is_none() {
-            self.ws_id = Some(format!("ws-{}", WS_IDS.fetch_add(1, Ordering::Relaxed)));
-        }
-        let id = self.ws_id.clone().unwrap_or_default();
-        let direction = if outbound { "out" } else { "in" };
-        let provider = provider_for(&host);
-        match self
-            .post_bytes(
-                "/v1/ws",
-                provider,
-                &[
-                    ("x-piecemaker-ws", id.as_str()),
-                    ("x-piecemaker-direction", direction),
-                ],
-                Bytes::from(text.to_string()),
-            )
-            .await
-        {
-            Ok(rewritten) if !rewritten.is_empty() => {
-                Some(Message::Text(String::from_utf8_lossy(&rewritten).into_owned().into()))
-            }
-            Ok(_) => None,
-            Err(_) => None,
-        }
-    }
-
     async fn handle_websocket(
         mut self,
         ctx: WebSocketContext,
-        mut stream: impl futures::Stream<Item = Result<Message, hudsucker::tokio_tungstenite::tungstenite::Error>>
-            + Unpin
-            + Send
-            + 'static,
-        mut sink: impl futures::Sink<Message, Error = hudsucker::tokio_tungstenite::tungstenite::Error>
-            + Unpin
-            + Send
-            + 'static,
+        mut stream: impl futures::Stream<Item = Result<Message, WsError>> + Unpin + Send + 'static,
+        mut sink: impl futures::Sink<Message, Error = WsError> + Unpin + Send + 'static,
     ) {
-        use futures::SinkExt;
-        while let Some(message) = stream.next().await {
-            match message {
-                Ok(message) => {
-                    let Some(message) = self.handle_message(&ctx, message).await else {
-                        continue;
-                    };
-                    let frames = match &ctx {
-                        WebSocketContext::ServerToClient { .. } => json_line_frames(message),
-                        WebSocketContext::ClientToServer { .. } => vec![message],
-                    };
-                    let mut closed = false;
-                    for frame in frames {
-                        if sink.send(frame).await.is_err() {
-                            closed = true;
-                            break;
-                        }
+        let (outbound, uri) = match &ctx {
+            WebSocketContext::ClientToServer { dst, .. } => (true, dst),
+            WebSocketContext::ServerToClient { src, .. } => (false, src),
+        };
+        let target = self.intercepted_host(uri);
+        let intercepted = target.is_some();
+        let host = target.unwrap_or_default();
+
+        while let Some(Ok(message)) = stream.next().await {
+            let frames = match (intercepted, message) {
+                (false, message) => vec![message],
+                (true, Message::Text(text)) => match self.rewrite_ws(&host, outbound, &text).await {
+                    Ok(Some(message)) if outbound => vec![message],
+                    Ok(Some(message)) => json_line_frames(message),
+                    Ok(None) => continue,
+                    Err(cause) => {
+                        close_ws(&mut sink, &host, cause).await;
+                        return;
                     }
-                    if closed {
-                        break;
-                    }
+                },
+                (true, Message::Binary(_)) => {
+                    close_ws(&mut sink, &host, "trame binaire impossible à anonymiser").await;
+                    return;
                 }
-                Err(_) => break,
+                (true, message) => vec![message],
+            };
+            for frame in frames {
+                if sink.send(frame).await.is_err() {
+                    return;
+                }
             }
         }
-        if let Some(id) = self.ws_id.clone() {
-            let host = match &ctx {
-                WebSocketContext::ClientToServer { dst, .. } => dst.host().unwrap_or_default().to_string(),
-                WebSocketContext::ServerToClient { src, .. } => src.host().unwrap_or_default().to_string(),
-            };
-            if let Ok(tail) = self
-                .post_bytes(
-                    "/v1/ws-end",
-                    provider_for(&host_of(&host)),
-                    &[("x-piecemaker-ws", id.as_str())],
-                    Bytes::new(),
-                )
-                .await
-            {
-                if let Ok(messages) = serde_json_messages(&tail) {
-                    for message in messages {
-                        if sink.send(Message::Text(message.into())).await.is_err() {
-                            break;
-                        }
-                    }
+
+        if intercepted && !outbound {
+            for message in self.flush_ws(&host).await {
+                if sink.send(Message::Text(message.into())).await.is_err() {
+                    return;
                 }
             }
         }
     }
+}
+
+async fn close_ws(sink: &mut (impl futures::Sink<Message, Error = WsError> + Unpin), host: &str, cause: &str) {
+    eprintln!("refus websocket {host} : {cause}");
+    let frame = CloseFrame {
+        code: CloseCode::Error,
+        reason: "PieceMaker: anonymisation impossible".into(),
+    };
+    let _ = sink.send(Message::Close(Some(frame))).await;
+    let _ = sink.close().await;
 }
 
 fn json_line_frames(message: Message) -> Vec<Message> {
@@ -421,25 +412,23 @@ fn json_line_frames(message: Message) -> Vec<Message> {
         .collect()
 }
 
-fn serde_json_messages(bytes: &Bytes) -> Result<Vec<String>, ()> {
-    let text = std::str::from_utf8(bytes).map_err(|_| ())?;
-    let value: serde_json::Value = serde_json::from_str(text).map_err(|_| ())?;
-    Ok(value
-        .get("messages")
-        .and_then(|entry| entry.as_array())
+fn pending_messages(bytes: &Bytes) -> Vec<String> {
+    serde_json::from_slice::<serde_json::Value>(bytes)
+        .ok()
+        .and_then(|value| value.get("messages").and_then(|entry| entry.as_array()).cloned())
         .map(|entries| {
             entries
                 .iter()
                 .filter_map(|entry| entry.as_str().map(str::to_string))
                 .collect()
         })
-        .unwrap_or_default())
+        .unwrap_or_default()
 }
 
 fn parse_list(value: &str) -> HashSet<String> {
     value
         .split(',')
-        .map(|entry| host_of(entry.trim()))
+        .map(host_of)
         .filter(|entry| !entry.is_empty())
         .collect()
 }
@@ -449,15 +438,28 @@ fn parse_map(value: &str) -> HashMap<String, String> {
         .split(',')
         .filter_map(|entry| {
             let (host, dest) = entry.split_once('=')?;
-            let host = host_of(host.trim());
-            let dest = dest.trim().to_string();
-            if host.is_empty() || dest.is_empty() {
-                None
-            } else {
-                Some((host, dest))
-            }
+            let (host, dest) = (host_of(host), dest.trim().to_string());
+            (!host.is_empty() && !dest.is_empty()).then_some((host, dest))
         })
         .collect()
+}
+
+fn exit_when_parent_dies() {
+    std::thread::spawn(|| {
+        let mut buffer = [0u8; 256];
+        let mut stdin = std::io::stdin();
+        loop {
+            match stdin.read(&mut buffer) {
+                Ok(0) | Err(_) => std::process::exit(0),
+                Ok(_) => {}
+            }
+        }
+    });
+}
+
+fn fail(message: String) -> ! {
+    eprintln!("{message}");
+    std::process::exit(1);
 }
 
 #[tokio::main]
@@ -469,63 +471,44 @@ async fn main() {
     let hosts = parse_list(&arg("--hosts"));
     let upstream = parse_map(&arg("--upstream-map"));
     if listen.is_empty() || rewriter.is_empty() || ca_cert.is_empty() || ca_key.is_empty() || hosts.is_empty() {
-        eprintln!("usage: piecemaker-hudsucker --listen 127.0.0.1:4111 --rewriter http://127.0.0.1:port --ca-cert ca.crt --ca-key ca.key --hosts api.anthropic.com,api.openai.com,chatgpt.com");
+        eprintln!("usage: piecemaker-hudsucker --listen 127.0.0.1:0 --rewriter http://127.0.0.1:port --ca-cert ca.crt --ca-key ca.key --hosts api.anthropic.com,api.openai.com,chatgpt.com");
         std::process::exit(2);
     }
+    exit_when_parent_dies();
 
-    let key = std::fs::read_to_string(&ca_key).unwrap_or_else(|error| {
-        eprintln!("clé d'autorité illisible : {error}");
-        std::process::exit(1);
-    });
-    let cert = std::fs::read_to_string(&ca_cert).unwrap_or_else(|error| {
-        eprintln!("certificat d'autorité illisible : {error}");
-        std::process::exit(1);
-    });
-    let key_pair = KeyPair::from_pem(&key).unwrap_or_else(|error| {
-        eprintln!("clé d'autorité refusée : {error}");
-        std::process::exit(1);
-    });
-    let issuer = Issuer::from_ca_cert_pem(&cert, key_pair).unwrap_or_else(|error| {
-        eprintln!("certificat d'autorité refusé : {error}");
-        std::process::exit(1);
-    });
+    let key = std::fs::read_to_string(&ca_key).unwrap_or_else(|error| fail(format!("clé d'autorité illisible : {error}")));
+    let cert = std::fs::read_to_string(&ca_cert).unwrap_or_else(|error| fail(format!("certificat d'autorité illisible : {error}")));
+    let key_pair = KeyPair::from_pem(&key).unwrap_or_else(|error| fail(format!("clé d'autorité refusée : {error}")));
+    let issuer = Issuer::from_ca_cert_pem(&cert, key_pair).unwrap_or_else(|error| fail(format!("certificat d'autorité refusé : {error}")));
     let authority = RcgenAuthority::new(issuer, 1_000, aws_lc_rs::default_provider());
-    let addr: SocketAddr = listen.parse().unwrap_or_else(|_| {
-        eprintln!("adresse d'écoute invalide");
-        std::process::exit(2);
-    });
+    let addr: SocketAddr = listen.parse().unwrap_or_else(|_| fail("adresse d'écoute invalide".into()));
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .unwrap_or_else(|error| fail(format!("écoute impossible sur {addr} : {error}")));
+    let bound = listener.local_addr().unwrap_or_else(|error| fail(format!("adresse d'écoute inconnue : {error}")));
     let http = reqwest::Client::builder()
         .no_proxy()
+        .connect_timeout(Duration::from_secs(2))
         .build()
-        .unwrap_or_else(|error| {
-            eprintln!("client interne : {error}");
-            std::process::exit(1);
-        });
+        .unwrap_or_else(|error| fail(format!("client interne : {error}")));
     let handler = Handler {
         rewriter,
         hosts: Arc::new(hosts),
         upstream: Arc::new(upstream),
         http,
-        provider: "claude".to_string(),
+        provider: "claude",
         ws_id: None,
     };
-    println!("listening {addr}");
-    let proxy = match Proxy::builder()
-        .with_addr(addr)
+    let proxy = Proxy::builder()
+        .with_listener(listener)
         .with_ca(authority)
         .with_rustls_connector(aws_lc_rs::default_provider())
         .with_http_handler(handler.clone())
         .with_websocket_handler(handler)
         .build()
-    {
-        Ok(proxy) => proxy,
-        Err(error) => {
-            eprintln!("proxy : {error}");
-            std::process::exit(1);
-        }
-    };
+        .unwrap_or_else(|error| fail(format!("proxy : {error}")));
+    println!("listening {bound}");
     if let Err(error) = proxy.start().await {
-        eprintln!("proxy arrêté : {error}");
-        std::process::exit(1);
+        fail(format!("proxy arrêté : {error}"));
     }
 }

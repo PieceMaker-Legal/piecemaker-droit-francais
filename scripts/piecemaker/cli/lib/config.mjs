@@ -25,7 +25,6 @@ export const INSTALLER_ENTRY = path.join(APP.directory, 'server', 'piecemaker', 
 export const PORTS = {
   appServer: numberFromEnv('PIECEMAKER_APP_PORT', 3003),
   appClient: numberFromEnv('PIECEMAKER_VITE_PORT', 5173),
-  anonymizer: numberFromEnv('PIECEMAKER_PII_PORT', 4111),
 };
 
 export const APP_URL = `http://localhost:${PORTS.appClient}`;

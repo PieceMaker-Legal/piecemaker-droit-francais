@@ -48,7 +48,7 @@ const vendor = createRequire(import.meta.url)(routerPath) as PieceMakerVendorMod
 
 export const { piecemakerHome, stopOriginalsJobs } = vendor;
 const { createAnonymizerService } = createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/anonymizer/service.cjs'));
-const anonymizer = createAnonymizerService({ homeDir: piecemakerHome(), required: true });
+const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy });

@@ -26,8 +26,8 @@ flowchart TD
   SCAN --> SQL["SQLite piecemaker_mappings"]
   JSON --> HOOK["protect-originals — refuse un dossier sans mapping"]
   SQL --> DICT["sqlite-dictionary.cjs"]
-  GUARD["proxy-guard.mjs — SessionStart"] -->|"sonde le port, ne substitue pas"| PROXY
-  DICT --> PROXY["anonymizer/proxy.cjs"]
+  DICT --> BRIDGE["rewriter-bridge.cjs — réécrivain"]
+  BRIDGE <--> PROXY["hudsucker — piecemaker-hudsucker"]
   PROXY -->|"applyMapping"| UP["Fournisseur"]
   UP -->|"revertMapping"| DOWN["Client local"]
 ```
@@ -78,21 +78,50 @@ Après un scan réussi, le pipeline fait les deux écritures :
 Sans le JSON, le hook PreToolUse traiterait le dossier comme non anonymisé.
 Sans SQLite, le proxy relayerait en clair.
 
-## 4. Hook proxy PII
-
-`scripts/piecemaker/hooks/proxy-guard.mjs` (SessionStart Claude / Codex).
-
-Il **ne substitue pas**. Il sonde le port du proxy (`mikePiiPort`, défaut 4111)
-et, s’il est mort, retire `ANTHROPIC_BASE_URL` / le bloc Codex pour éviter une
-boucle vers un port fermé. Fail-open : session en accès direct + avertissement.
+## 4. Proxy PII
 
 La substitution n’a jamais lieu dans un hook. `protect-originals.mjs` refuse
 les originaux protégés et un dossier sans `mapping_default.json`.
 
-## 5. Proxy PII
-
 Démarré avec le serveur (`createAnonymizerService`, `startRequiredAnonymizer`).
-Pas de LiteLLM, pas de process Python dédié.
+Deux pièces, un seul cycle de vie :
+
+- `hudsucker-proxy/` (Rust) : proxy HTTPS d’interception avec l’autorité locale
+  `~/.piecemaker/certs/`. N’intercepte que `api.anthropic.com`,
+  `api.openai.com`, `chatgpt.com` (et l’hôte de `ANTHROPIC_BASE_URL` s’il est
+  distant) ; tout le reste passe en tunnel `CONNECT` sans être lu.
+- `rewriter-bridge.cjs` : réécrivain local, dans le processus serveur, que
+  hudsucker appelle pour chaque corps JSON, flux SSE et trame WebSocket.
+
+Cycle de vie :
+
+- hudsucker écoute un port choisi par le système (`127.0.0.1:0`) et n’annonce
+  `listening` qu’une fois le port ouvert. L’app de bureau et le serveur de dev
+  ont chacun leur proxy, sans conflit.
+- hudsucker lit son stdin : quand le serveur meurt, même tué net, le tube se
+  ferme et hudsucker s’arrête. Il ne peut pas survivre à PieceMaker.
+- `GET /health` sur le port du proxy vérifie aussi le réécrivain (200 / 503).
+
+Routage : uniquement par l’environnement du processus serveur
+(`HTTPS_PROXY`, `NODE_EXTRA_CA_CERTS`, `CODEX_CA_CERTIFICATE`,
+`SSL_CERT_FILE`…), hérité par le chat et les terminaux intégrés. Aucun fichier
+de configuration client n’est écrit : une session ouverte hors de PieceMaker
+part en direct ; une session ouverte par PieceMaker ne peut pas contourner le
+proxy, et échoue s’il est arrêté. Au démarrage, `removeLegacyProxyConfig`
+retire les traces des versions précédentes (`HTTPS_PROXY` dans
+`~/.claude/settings.json`, hooks `proxy-guard.mjs`, `mikePiiPort`).
+
+Échec fermé : un corps vers un hôte intercepté est décompressé
+(gzip, br, zstd, deflate) avant réécriture ; un encodage inconnu, un corps non
+JSON ou un réécrivain injoignable sont refusés et journalisés
+(`[piecemaker] hudsucker : refus …`), jamais relayés en clair. Une trame
+WebSocket non anonymisable ferme la connexion (1011).
+
+Le réglage `anonymizer.enabled: false` dans `~/.piecemaker/config.json`
+désactive le démarrage du proxy et laisse les échanges avec les fournisseurs
+partir directement. La commande
+`node scripts/piecemaker/cli/disable-anonymizer.mjs` applique ce réglage.
+La protection des pièces reste indépendante de ce choix.
 
 - Sortant : `anonymize` → `applyMapping` (`substitution.cjs`, plus longue
   entité d’abord, frontières Unicode).
@@ -101,8 +130,9 @@ Pas de LiteLLM, pas de process Python dédié.
 - Dictionnaire : SQLite, rechargé sur `data_version`. Mapping vide = relais
   transparent.
 
-Routes : `/anthropic` (Claude), `/chatgpt` (Codex), `/openai` (opencode).
-Cursor n’est pas interceptable : bloqué tant qu’un mapping existe.
+Cursor n’est pas interceptable : un shim `~/.piecemaker/bin/cursor-agent`,
+placé en tête du `PATH` du serveur seulement, le bloque tant qu’un mapping
+existe.
 
 ---
 
