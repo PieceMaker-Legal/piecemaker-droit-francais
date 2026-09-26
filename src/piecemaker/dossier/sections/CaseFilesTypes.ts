@@ -21,9 +21,6 @@ export type CaseFileEntry = {
   status: 'ready' | 'awaiting-scan' | 'not-converted';
 };
 
-/** Three-state protection model computed from `protected` + `resource` (see admin app.js PIECE_STATES). */
-export type PieceProtectionState = 'vault' | 'workspace' | 'resource';
-
 export type CaseMappingSummary = {
   exists: boolean;
   name: string;
@@ -39,36 +36,6 @@ export type CaseOverview = {
   originals: CaseFileEntry[];
   protectedOriginals: number;
   mapping: CaseMappingSummary;
-};
-
-/** POST /repository/cases */
-export type RegisterCaseResult = {
-  ok: true;
-  cancelled?: boolean;
-  folder?: CaseOverview;
-  installed?: {
-    rule: string;
-    mapping: string;
-    protection: string;
-    structure: string[];
-  };
-};
-
-/** GET /protection */
-export type ProtectionOverview = {
-  case: string;
-  files: CaseFileEntry[];
-  protectedCount: number;
-  resourceCount: number;
-  truncated: boolean;
-};
-
-/** PUT /protection */
-export type ProtectionSaveResult = {
-  ok: true;
-  case: string;
-  unprotected: string[];
-  resources: string[];
 };
 
 /** GET/PUT /protection/bypass: case-wide protection lift and the snapshot kept to undo it. */
@@ -131,16 +98,4 @@ export type ChronologyOverview = {
   case: { path: string; name: string; location: string };
 };
 
-/** Body of PUT /repository/document-meta — always the full effective values, never a partial diff. */
-export type DocumentMetaCorrection = {
-  case: string;
-  path: string;
-  nature: string | null;
-  dateIso: string | null;
-  localisation: string | null;
-  fields: ChronologyField[];
-};
-
 export type ChronologyExportFormat = 'pdf' | 'docx';
-
-export type RevealTarget = 'files' | 'terminal';
