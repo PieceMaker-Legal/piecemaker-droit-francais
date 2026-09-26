@@ -1,0 +1,12 @@
+{
+  "name": "piecemaker-telegram",
+  "displayName": "Telegram",
+  "version": "1.0.0",
+  "description": "Bots Telegram pour le suivi des sessions et les dossiers",
+  "icon": "icon.svg",
+  "type": "module",
+  "slot": "tab",
+  "entry": "index.js",
+  "server": "server.mjs",
+  "permissions": []
+}
