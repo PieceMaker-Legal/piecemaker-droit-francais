@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 
 import { loadProductConfig } from '../../../shared/product-config.mjs';
 
@@ -23,9 +24,9 @@ function runInstaller(command: string, environment: NodeJS.ProcessEnv) {
   });
 }
 
-function productRepository(): string | null {
+function productRepository(appRoot: string): string | null {
   try {
-    return loadProductConfig().repository;
+    return loadProductConfig(process.env.CLOUDCLI_PRODUCT_CONFIG || path.join(appRoot, 'product.config.json')).repository;
   } catch {
     return null;
   }
@@ -39,7 +40,7 @@ export function createPieceMakerDesktopUpdateRouter(appRoot: string) {
   return createDesktopUpdateRouter(createDesktopUpdateService({
     appRoot,
     platform: process.platform,
-    repository: productRepository(),
+    repository: productRepository(appRoot),
     applicationPid: process.ppid,
     environment: process.env,
     runInstaller,
