@@ -31,6 +31,7 @@ import { settingsRoutes } from './modules/settings/index.js';
 import { createSystemModule } from './modules/system/index.js';
 import { createAgentModule } from './modules/agent/index.js';
 import { createPieceMakerLocalRouter, createPieceMakerRouter, stopOriginalsJobs } from './piecemaker/index.js';
+import { createPieceMakerDesktopUpdateRouter } from './piecemaker/desktop-update/index.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import { userRoutes } from './modules/user/index.js';
@@ -174,7 +175,7 @@ app.use('/api/commands', authenticateToken, commandsRoutes);
 // Settings API Routes (protected)
 app.use('/api/settings', authenticateToken, settingsRoutes);
 
-app.use('/api/system', authenticateToken, systemRoutes);
+app.use('/api/system', authenticateToken, createPieceMakerDesktopUpdateRouter(APP_ROOT), systemRoutes);
 
 app.use('/api/notifications', authenticateToken, notificationRoutes);
 
