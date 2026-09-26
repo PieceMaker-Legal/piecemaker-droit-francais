@@ -7,7 +7,7 @@ import { legifranceQuoteUrl } from '@/piecemaker/citations/legifrance';
 
 type PassageRange = { start: number; end: number };
 
-const detachedPassage = { current: null };
+const detachedPassage: RefObject<HTMLElement> = { current: null };
 
 function quoteRanges(block: string, quote: string | undefined) {
   if (!quote) return [];
@@ -20,7 +20,7 @@ function quoteRanges(block: string, quote: string | undefined) {
   return ranges;
 }
 
-function highlightedPassage(source: string, start: number, end: number, ranges: PassageRange[], passage: RefObject<HTMLElement | null>) {
+function highlightedPassage(source: string, start: number, end: number, ranges: PassageRange[], passage: RefObject<HTMLElement>) {
   const parts: ReactNode[] = [];
   let offset = start;
   for (const [index, range] of ranges.entries()) {
@@ -35,7 +35,7 @@ function highlightedPassage(source: string, start: number, end: number, ranges: 
   return parts;
 }
 
-function CitationText({ source, ranges, passage, blocks, quote }: { source: string; ranges: PassageRange[]; passage: RefObject<HTMLElement | null>; blocks: string[] | null; quote: string | undefined }) {
+function CitationText({ source, ranges, passage, blocks, quote }: { source: string; ranges: PassageRange[]; passage: RefObject<HTMLElement>; blocks: string[] | null; quote: string | undefined }) {
   if (!blocks) {
     return <div className="whitespace-pre-wrap break-words p-4 font-serif text-sm leading-relaxed" aria-label="Texte source">{highlightedPassage(source, 0, source.length, ranges, passage)}</div>;
   }
@@ -60,7 +60,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
   const [error, setError] = useState<string | null>(null);
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [blocks, setBlocks] = useState<string[] | null>(null);
-  const passage = useRef<HTMLElement | null>(null);
+  const passage = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
