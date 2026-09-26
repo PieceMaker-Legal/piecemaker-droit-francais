@@ -2,10 +2,8 @@
  * "Réglages" card of the Configuration section: `GET`/`PUT /settings`, restricted
  * to the fields the backend handler (`server/piecemaker/vendor/websocket-server/admin-routes.cjs`,
  * `router.put('/settings', ...)`) actually reads from `req.body`. It also accepts
- * `PIECEMAKER_USER_NAME` (git commit identity) and `config.port`/`config.adminTheme` —
- * left out here on purpose: the first belongs to the excluded "commits" scope, the
- * second two are the standalone admin server's own port and the standalone page's
- * own theme, neither meaningful once PieceMaker runs embedded under CloudCLI.
+ * `PIECEMAKER_USER_NAME` (git commit identity), left out here on purpose: it
+ * belongs to the excluded "commits" scope.
  */
 
 import { useEffect, useState } from 'react';

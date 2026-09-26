@@ -228,18 +228,10 @@ async function registerLegalCase({
 
 function defaultConfig(repoRoot, homeDir = path.join(os.homedir(), '.piecemaker')) {
   return {
-    port: 43098,
     pythonPath: null,
     venvPath: path.join(homeDir, 'venv'),
-    adminTheme: 'light',
     caseFolderStructure: { ...DEFAULT_CASE_FOLDER_STRUCTURE },
   };
-}
-
-function validateAdminTheme(value) {
-  const theme = String(value || '');
-  if (theme !== 'light' && theme !== 'dark') throw new Error('Le thème doit être « light » ou « dark ».');
-  return theme;
 }
 
 function readJson(file, fallback) {
@@ -2127,13 +2119,7 @@ function createAdminRouter({
       const patch = req.body?.config || {};
       const next = { ...current };
 
-      if (patch.port !== undefined) {
-        const port = Number(patch.port);
-        if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Le port doit être compris entre 1024 et 65535.');
-        next.port = port;
-      }
       if (patch.pythonPath !== undefined) next.pythonPath = String(patch.pythonPath || '').trim() || null;
-      if (patch.adminTheme !== undefined) next.adminTheme = validateAdminTheme(patch.adminTheme);
       if (patch.caseFolderStructure !== undefined) {
         next.caseFolderStructure = normalizeCaseFolderStructure({
           ...current.caseFolderStructure,
@@ -2966,5 +2952,4 @@ module.exports = {
   saveManagedFile,
   selectLocalFolder,
   updateEnvFile,
-  validateAdminTheme,
 };
