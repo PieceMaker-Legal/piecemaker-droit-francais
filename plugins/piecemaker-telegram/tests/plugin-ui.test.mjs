@@ -8,11 +8,11 @@ const { JSDOM } = createRequire(import.meta.url)('jsdom');
 
 test('Telegram tab guides setup and escapes project names', async () => {
   const dom = new JSDOM('<div id="tab"></div>');
-  const globals = globalThis as unknown as { document?: unknown };
+  const globals = globalThis;
   const previousDocument = globals.document;
   globals.document = dom.window.document;
   try {
-    const modulePath = pathToFileURL(path.resolve('server/piecemaker/telegram/assets/index.js')).href;
+    const modulePath = pathToFileURL(path.resolve('plugins/piecemaker-telegram/index.js')).href;
     const plugin = await import(modulePath);
     const container = dom.window.document.getElementById('tab');
     plugin.mount(container, {
