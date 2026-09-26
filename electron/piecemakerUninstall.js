@@ -3,7 +3,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { loadProductConfig } from '../shared/product-config.mjs';
 import { macUninstallScript, packagedApplicationRoot, removalPlan, windowsUninstallScript } from './uninstallPlan.js';
+
+function electronPaths(app) {
+  return ['userData', 'sessionData', 'logs', 'crashDumps'].map((name) => {
+    try {
+      return app.getPath(name);
+    } catch {
+      return null;
+    }
+  });
+}
 
 function readJson(file) {
   try {
@@ -24,9 +35,13 @@ export function registerPiecemakerUninstall({ ipcMain, app }) {
     }
     const home = os.homedir();
     const dataHome = process.env.PIECEMAKER_HOME || path.join(home, '.piecemaker');
+    const product = loadProductConfig();
     const plan = removalPlan(appRoot, home, process.env, process.platform, {
       config: readJson(path.join(dataHome, 'config.json')),
       mineru: readJson(path.join(home, 'mineru.json')),
+      productDataRoot: process.env.CLOUDCLI_HOME || path.join(home, product.dataDirectoryName),
+      appId: product.appId,
+      electronPaths: electronPaths(app),
     });
     const helper = path.join(os.tmpdir(), `piecemaker-uninstall-${process.pid}${process.platform === 'win32' ? '.ps1' : '.sh'}`);
     if (process.platform === 'win32') {

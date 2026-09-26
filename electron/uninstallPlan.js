@@ -84,10 +84,53 @@ function safeNamedDirectory(candidate, home, platform, fallback, basename) {
   return resolved;
 }
 
+const DATABASE_FILES = ['', '-wal', '-shm'];
+
+function isWithin(target, root, platform) {
+  const relative = pathFor(platform).relative(root, target);
+  return relative === '' || (!relative.startsWith('..') && !pathFor(platform).isAbsolute(relative));
+}
+
+function macLibraryPaths(home, appId, platform) {
+  if (platform !== 'darwin' || !appId) return [];
+  const library = pathFor(platform).join(home, 'Library');
+  const paths = pathFor(platform);
+  return [
+    paths.join(library, 'Preferences', `${appId}.plist`),
+    paths.join(library, 'Saved Application State', `${appId}.savedState`),
+    paths.join(library, 'Caches', appId),
+    paths.join(library, 'Caches', `${appId}.ShipIt`),
+    paths.join(library, 'HTTPStorages', appId),
+    paths.join(library, 'HTTPStorages', `${appId}.binarycookies`),
+    paths.join(library, 'WebKit', appId),
+  ];
+}
+
+export function removalTargets(candidates, database, home, platform) {
+  const paths = pathFor(platform);
+  const resolvedDatabase = paths.resolve(database);
+  const databaseDirectory = paths.dirname(resolvedDatabase);
+  const keep = DATABASE_FILES.map((suffix) => `${paths.basename(resolvedDatabase)}${suffix}`);
+  const remove = [];
+  const purge = [];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string' || !candidate.trim()) continue;
+    const target = paths.resolve(candidate);
+    if (seen.has(target) || !underHome(target, home, platform)) continue;
+    seen.add(target);
+    if (target === databaseDirectory) purge.push({ directory: target, keep });
+    else if (!isWithin(resolvedDatabase, target, platform)) remove.push(target);
+  }
+  return { remove, purge };
+}
+
 export function removalPlan(appRoot, home = os.homedir(), env = process.env, platform = process.platform, extra = {}) {
   const paths = pathFor(platform);
   const dataHome = env.PIECEMAKER_HOME || paths.join(home, '.piecemaker');
   const componentsHome = env.PIECEMAKER_COMPONENTS_HOME || dataHome;
+  const productHome = extra.productDataRoot || paths.join(home, '.cloudcli');
+  const database = env.DATABASE_PATH || paths.join(productHome, 'auth.db');
   const shortcuts = platform === 'win32'
     ? [
       paths.join(env.APPDATA || paths.join(home, 'AppData', 'Roaming'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', `${PRODUCT_NAME}.lnk`),
@@ -95,17 +138,24 @@ export function removalPlan(appRoot, home = os.homedir(), env = process.env, pla
     ]
     : [];
   const fallbackVenv = paths.join(componentsHome, 'venv');
+  const { remove, purge } = removalTargets([
+    dataHome,
+    productHome,
+    paths.join(componentsHome, 'python'),
+    safeNamedDirectory(extra.config?.venvPath, home, platform, fallbackVenv, 'venv'),
+    env.PIECEMAKER_BOOTSTRAP_HOME || paths.join(dataHome, 'bootstrap'),
+    ...(extra.electronPaths || []),
+    ...macLibraryPaths(home, extra.appId, platform),
+    ...componentModelPaths(home, env, platform, extra.mineru),
+    paths.join(home, 'mineru.json'),
+    ...shortcuts,
+  ], database, home, platform);
   return {
     appRoot,
-    certificates: paths.join(dataHome, 'certs'),
     caCert: paths.join(dataHome, 'certs', 'piecemaker-ca.crt'),
-    python: paths.join(componentsHome, 'python'),
-    venv: safeNamedDirectory(extra.config?.venvPath, home, platform, fallbackVenv, 'venv'),
-    bootstrap: paths.join(dataHome, 'bootstrap'),
     keychain: paths.join(home, 'Library', 'Keychains', 'piecemaker-signing.keychain-db'),
-    mineruConfig: paths.join(home, 'mineru.json'),
-    models: componentModelPaths(home, env, platform, extra.mineru),
-    shortcuts,
+    remove,
+    purge,
   };
 }
 
@@ -118,6 +168,9 @@ function powershellQuote(value) {
 }
 
 export function macUninstallScript(plan) {
+  const purges = plan.purge.map(({ directory, keep }) => (
+    `[ -d ${shellQuote(directory)} ] && find ${shellQuote(directory)} -mindepth 1 -maxdepth 1 ${keep.map((name) => `! -name ${shellQuote(name)}`).join(' ')} -exec rm -rf {} +\n`
+  )).join('');
   return `#!/bin/sh
 set -u
 while kill -0 "$1" 2>/dev/null; do sleep 0.3; done
@@ -128,15 +181,15 @@ if [ -n "$keychain" ]; then
   security delete-certificate -c "PieceMaker Local CA" "$keychain" || true
 fi
 security delete-keychain ${shellQuote(plan.keychain)} || true
-rm -rf ${shellQuote(plan.certificates)} ${shellQuote(plan.python)} ${shellQuote(plan.venv)} ${shellQuote(plan.bootstrap)}
-${plan.models.length ? `rm -rf ${plan.models.map(shellQuote).join(' ')}\n` : ''}rm -f ${shellQuote(plan.mineruConfig)}
-rm -rf ${shellQuote(plan.appRoot)}
+${plan.remove.length ? `rm -rf ${plan.remove.map(shellQuote).join(' ')}\n` : ''}${purges}rm -rf ${shellQuote(plan.appRoot)}
 `;
 }
 
 export function windowsUninstallScript(plan) {
-  const paths = [plan.certificates, plan.python, plan.venv, plan.bootstrap, plan.mineruConfig, ...plan.models, ...plan.shortcuts, plan.appRoot];
-  const removals = paths.map((target) => `Remove-Item -LiteralPath ${powershellQuote(target)} -Recurse -Force -ErrorAction SilentlyContinue`).join('\n');
+  const removals = [...plan.remove, plan.appRoot].map((target) => `Remove-Item -LiteralPath ${powershellQuote(target)} -Recurse -Force -ErrorAction SilentlyContinue`).join('\n');
+  const purges = plan.purge.map(({ directory, keep }) => (
+    `Get-ChildItem -LiteralPath ${powershellQuote(directory)} -Force -ErrorAction SilentlyContinue | Where-Object { @(${keep.map(powershellQuote).join(', ')}) -notcontains $_.Name } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue`
+  )).join('\n');
   return `param([int]$ProcessId)
 while (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 300 }
 Start-Sleep -Milliseconds 500
@@ -144,5 +197,6 @@ Get-ChildItem Cert:\\CurrentUser\\Root, Cert:\\CurrentUser\\TrustedPublisher, Ce
   Where-Object { $_.Subject -match 'PieceMaker Local' } |
   Remove-Item -ErrorAction SilentlyContinue
 ${removals}
+${purges}
 `;
 }
