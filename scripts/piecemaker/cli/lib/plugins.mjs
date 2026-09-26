@@ -12,6 +12,7 @@ export const PLUGINS = [
   { id: 'piecemaker-tampon', label: 'Plugin Bordereau' },
   { id: 'piecemaker-dossier', label: 'Plugin Dossier' },
   { id: 'piecemaker-library', label: 'Plugin Bibliothèque' },
+  { id: 'piecemaker-telegram', label: 'Plugin Telegram' },
 ];
 
 export async function installPlugins(runtime, report) {

@@ -2,6 +2,16 @@
 
 L’onglet **Telegram** apparaît dans l’espace de travail d’un dossier. Il comporte un guide et trois actions : installer le canal officiel, enregistrer le bot principal, puis lier un bot à chaque dossier souhaité.
 
+## Installation locale
+
+La commande `piecemaker` installe ce plugin avec Bibliothèque, Dossier, Timesheet et Bordereau. Pour réinstaller uniquement Telegram depuis le dépôt :
+
+```sh
+node plugins/piecemaker-telegram/install.mjs /chemin/vers/piecemaker-droit-francais
+```
+
+La source est versionnée dans `plugins/piecemaker-telegram/`. L’installateur la copie dans le répertoire de plugins défini par `product.config.json` ou `CLOUDCLI_HOME`. Actualisez l’application après l’installation pour voir l’onglet.
+
 ## Mise en route
 
 1. Dans l’onglet Telegram, cliquez sur **Installer depuis la bibliothèque**. Le canal officiel `telegram@claude-plugins-official` est installé pour l’utilisateur. Il reste désactivé dans les sessions Claude ordinaires ; PieceMaker l’active seulement pour les sessions Telegram qu’il lance.
