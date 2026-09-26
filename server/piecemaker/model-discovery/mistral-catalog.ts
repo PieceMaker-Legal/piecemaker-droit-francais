@@ -1,3 +1,4 @@
+import { buildVibeModelsEnvironment, vibeModelOption } from '@/modules/providers/list/mistral/mistral-vibe-models.js';
 import type { ProviderModelsDefinition } from '@/shared/types.js';
 
 import { withStdioRpcServer, type RpcCall } from './stdio-rpc.js';
@@ -24,15 +25,12 @@ export async function listVibeModels(call: RpcCall): Promise<ProviderModelsDefin
   const aliases = new Set(models.map((model) => model.alias));
   const preferred = [config?.activeModel?.alias, config?.defaultModelAlias].find((alias) => alias && aliases.has(alias));
   return {
-    OPTIONS: models.map((model) => ({
-      value: model.alias,
-      label: model.displayName || model.alias,
-      description: model.name,
-    })),
+    OPTIONS: models.map((model) => vibeModelOption(model.alias, model.displayName || model.alias, model.name)),
     DEFAULT: preferred ?? models[0].alias,
   };
 }
 
 export function discoverMistralModels(timeoutMs: number): Promise<ProviderModelsDefinition> {
-  return withStdioRpcServer({ command: 'vibe-app-server', args: [] }, listVibeModels, timeoutMs);
+  const env = { ...process.env, VIBE_MODELS: buildVibeModelsEnvironment() };
+  return withStdioRpcServer({ command: 'vibe-app-server', args: [], env }, listVibeModels, timeoutMs);
 }

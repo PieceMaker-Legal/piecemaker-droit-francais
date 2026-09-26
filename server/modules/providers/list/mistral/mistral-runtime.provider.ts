@@ -1,5 +1,6 @@
 import crossSpawn from 'cross-spawn';
 
+import { buildVibeModelsEnvironment } from '@/modules/providers/list/mistral/mistral-vibe-models.js';
 import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index.js';
 import type { IProviderRuntime } from '@/shared/interfaces.js';
 import type { AnyRecord, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/types.js';
@@ -300,9 +301,7 @@ async function spawnVibe(
       if (resolvedModel) {
         env.VIBE_ACTIVE_MODEL = resolvedModel;
       }
-      if (resolvedEffort) {
-        env.VIBE_EFFORT = resolvedEffort;
-      }
+      env.VIBE_MODELS = buildVibeModelsEnvironment(resolvedModel ?? undefined, resolvedEffort);
 
       vibeProcess = spawnFunction('vibe', args, {
         cwd: workingDir,
