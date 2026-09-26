@@ -3,12 +3,12 @@
  * PostToolUse hook (Write|Bash) — classe en « espace de travail » tout document
  * que l'IA vient de créer dans un dossier juridique enregistré.
  *
- * La protection est une propriété du fichier et le coffre-fort est le défaut :
- * `.piecemaker/protection.json` n'enregistre que les exceptions. Sans ce hook,
- * un document produit par l'IA elle-même — `.docx` de `docx-cli`, export
- * pandoc/LibreOffice, fichier écrit par `Write` — naît protégé, et le
- * `PreToolUse` `protect-originals.mjs` lui en refuse ensuite la relecture. Il
- * n'y a pourtant rien à protéger de l'IA dans un fichier qu'elle a écrit.
+ * Seuls les PDF et les images sont protégés, et `.piecemaker/protection.json`
+ * n'enregistre que les exceptions. Sans ce hook, un PDF ou une image produits
+ * par l'IA elle-même — export pandoc/LibreOffice, rendu d'une note de
+ * recherche — naît protégé, et le `PreToolUse` `protect-originals.mjs` lui en
+ * refuse ensuite la relecture. Il n'y a pourtant rien à protéger de l'IA dans
+ * un fichier qu'elle a écrit.
  *
  * Le classement reste une *exception ajoutée* : rien de ce que l'IA n'a pas
  * nommé n'est déclassé, et une pièce marquée « ressource » n'est jamais

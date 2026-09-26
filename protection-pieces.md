@@ -13,13 +13,20 @@ par le proxy PII. `.piecemaker/protection.json` ne stocke que des *exceptions*,
 jamais la liste des fichiers protégés : un PDF déposé plus tard est donc protégé
 sans que rien n'ait à être mis à jour.
 
+Les exceptions sont des chemins relatifs : une pièce renommée ou déplacée perd la
+sienne et redevient protégée (défaut sûr). Le fichier est réécrit de façon
+atomique (fichier temporaire puis `rename`) sous un verrou
+`protection.json.lock`, car plusieurs hooks peuvent l'écrire en même temps. Le
+hook `classify-ai-documents.mjs` n'y inscrit que les PDF et images créés par
+l'IA : les autres extensions ne sont jamais protégées.
+
 Deux familles sont interdites à l'IA en toute circonstance, quelle que soit leur
 extension, et aucune exception ne les atteint : les mappings (`mapping*.json`,
 `*_sensitive_map.json`, `central-mapping.json`) et les secrets d'environnement
 (`.env`, `.env.*` hors `example`/`sample`/`template`, `*.env`).
 
-La **levée de protection** (`server/piecemaker/protection/bypass.cjs`, bouton
-`src/piecemaker/dossier/sections/CaseFilesProtectionBypass.tsx`) suit la même
+La **levée de protection** (`server/piecemaker/protection/bypass.cjs`, sans
+interface depuis `5ddbee2a`) suit la même
 logique : elle pose un simple drapeau `.piecemaker/protection-bypass.json`
 portant la portée « dossier », **sans aucune liste de fichiers**. Elle vaut donc
 pour les pièces déposées ensuite. Toute évolution qui réintroduirait une

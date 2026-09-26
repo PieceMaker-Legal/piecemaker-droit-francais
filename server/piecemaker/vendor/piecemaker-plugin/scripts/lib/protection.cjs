@@ -3,8 +3,8 @@
  *
  * L'ancienne règle protégeait le contenu d'un sous-dossier « Pièces
  * originales ». Elle ne protégeait donc rien dans un dossier organisé
- * autrement, ce qui est le cas courant : les PDF et DOCX y côtoient le Markdown
- * qu'on en a tiré. La protection est désormais une propriété du fichier,
+ * autrement, ce qui est le cas courant : les PDF y côtoient le Markdown qu'on
+ * en a tiré. La protection est désormais une propriété du fichier,
  * décidée dans l'administration.
  *
  * **Protégés par défaut : les PDF et les images** (`PROTECTED_EXTENSIONS`), qui
@@ -244,26 +244,76 @@ function readProtection(caseRoot) {
  * que `unprotected` — l'initialisation d'un dossier — n'efface pas les
  * ressources déjà déclarées.
  */
-function writeProtection(caseRoot, { unprotected, resources } = {}) {
+function writeProtection(caseRoot, lists = {}) {
+  return mutateProtection(caseRoot, () => lists);
+}
+
+const PROTECTION_LOCK_TIMEOUT_MS = 3000;
+const PROTECTION_LOCK_STALE_MS = 10000;
+const PROTECTION_LOCK_RETRY_MS = 25;
+
+function sleepSync(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function acquireProtectionLock(lockFile) {
+  const deadline = Date.now() + PROTECTION_LOCK_TIMEOUT_MS;
+  for (;;) {
+    try {
+      fs.closeSync(fs.openSync(lockFile, 'wx'));
+      return;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+    try {
+      if (Date.now() - fs.statSync(lockFile).mtimeMs > PROTECTION_LOCK_STALE_MS) {
+        fs.rmSync(lockFile, { force: true });
+        continue;
+      }
+    } catch {
+      continue;
+    }
+    if (Date.now() > deadline) throw new Error(`Le fichier de protection est verrouillé : ${lockFile}`);
+    sleepSync(PROTECTION_LOCK_RETRY_MS);
+  }
+}
+
+function mutateProtection(caseRoot, mutate) {
   const file = protectionFile(caseRoot);
-  const existing = readProtection(caseRoot);
-  const clean = (list, fallback) => [...new Set(
-    (Array.isArray(list) ? list : [...fallback])
-      .map((entry) => String(entry || '').replaceAll('\\', '/').trim())
-      .filter((entry) => entry && !entry.startsWith('../') && !path.isAbsolute(entry))
-  )].sort((a, b) => a.localeCompare(b, 'fr'));
-  // Une pièce ne peut être à la fois « espace de travail » et « ressource » :
-  // `resources` a priorité, on la retire donc de `unprotected`.
-  const resourcesList = clean(resources, existing.resources);
-  const resourceSet = new Set(resourcesList);
-  const unprotectedList = clean(unprotected, existing.unprotected).filter((key) => !resourceSet.has(key));
+  const lockFile = `${file}.lock`;
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(
-    file,
-    `${JSON.stringify({ version: 1, unprotected: unprotectedList, resources: resourcesList }, null, 2)}\n`,
-    'utf8'
-  );
-  return { file, unprotected: new Set(unprotectedList), resources: resourceSet };
+  acquireProtectionLock(lockFile);
+  try {
+    const existing = readProtection(caseRoot);
+    const next = mutate(existing);
+    if (!next) return { file, unprotected: existing.unprotected, resources: existing.resources };
+    const { unprotected, resources } = next;
+    const clean = (list, fallback) => [...new Set(
+      (Array.isArray(list) ? list : [...fallback])
+        .map((entry) => String(entry || '').replaceAll('\\', '/').trim())
+        .filter((entry) => entry && !entry.startsWith('../') && !path.isAbsolute(entry))
+    )].sort((a, b) => a.localeCompare(b, 'fr'));
+    // Une pièce ne peut être à la fois « espace de travail » et « ressource » :
+    // `resources` a priorité, on la retire donc de `unprotected`.
+    const resourcesList = clean(resources, existing.resources);
+    const resourceSet = new Set(resourcesList);
+    const unprotectedList = clean(unprotected, existing.unprotected).filter((key) => !resourceSet.has(key));
+    const temporaryFile = `${file}.${process.pid}.${Date.now()}.tmp`;
+    try {
+      fs.writeFileSync(
+        temporaryFile,
+        `${JSON.stringify({ version: 1, unprotected: unprotectedList, resources: resourcesList }, null, 2)}\n`,
+        'utf8'
+      );
+      fs.renameSync(temporaryFile, file);
+    } catch (error) {
+      fs.rmSync(temporaryFile, { force: true });
+      throw error;
+    }
+    return { file, unprotected: new Set(unprotectedList), resources: resourceSet };
+  } finally {
+    fs.rmSync(lockFile, { force: true });
+  }
 }
 
 /** Vrai pour un chemin recevable dans une des deux listes d'exceptions. */
@@ -367,9 +417,9 @@ function markdownCounterpart(absolutePath, caseRoot) {
  * de naître au coffre-fort, elle ne pourrait plus se relire.
  *
  * Ne fait rien, et retourne pourquoi, quand le chemin n'est pas une pièce
- * classable : hors dossier, `.md`/`.json` (déjà lisibles), dotfile, mapping ou
- * scan PII (jamais déclassés), espace de travail OOXML implicite, ou clé déjà
- * inscrite. `resources` est prioritaire : une ressource n'est jamais
+ * classable : hors dossier, extension jamais protégée (seuls PDF et images le
+ * sont), dotfile, mapping ou scan PII (jamais déclassés), espace de travail
+ * OOXML implicite, ou clé déjà inscrite. `resources` est prioritaire : une ressource n'est jamais
  * rétrogradée en espace de travail. Idempotent, ne lève jamais.
  */
 function classifyAsWorkspace(absolutePath, caseRoot) {
@@ -378,12 +428,15 @@ function classifyAsWorkspace(absolutePath, caseRoot) {
     if (isMappingFile(absolutePath)) return { classified: false, key: null, reason: 'mapping' };
     const key = exceptionKey(absolutePath, caseRoot);
     if (!key) return { classified: false, key: null, reason: 'non-classable' };
+    if (!PROTECTED_EXTENSIONS.has(path.extname(key).toLowerCase())) return { classified: false, key, reason: 'jamais protégée' };
     if (isOoxmlWorkspacePath(absolutePath, caseRoot)) return { classified: false, key, reason: 'ooxml' };
-    const { unprotected, resources } = readProtection(caseRoot);
-    if (resources.has(key)) return { classified: false, key, reason: 'ressource' };
-    if (unprotected.has(key)) return { classified: false, key, reason: 'déjà classée' };
-    writeProtection(caseRoot, { unprotected: [...unprotected, key] });
-    return { classified: true, key, reason: null };
+    let reason = null;
+    mutateProtection(caseRoot, ({ unprotected, resources }) => {
+      if (resources.has(key)) reason = 'ressource';
+      else if (unprotected.has(key)) reason = 'déjà classée';
+      return reason ? null : { unprotected: [...unprotected, key] };
+    });
+    return { classified: !reason, key, reason };
   } catch (error) {
     return { classified: false, key: null, reason: error?.message || 'erreur' };
   }
