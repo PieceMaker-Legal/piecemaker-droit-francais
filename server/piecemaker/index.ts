@@ -4,6 +4,7 @@ import path from 'path';
 import type { Router } from 'express';
 
 import { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
+import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 
@@ -18,6 +19,7 @@ import { createCompanySearchRouter } from './company-search.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
+import { installModelDiscovery } from './model-discovery/index.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -54,6 +56,7 @@ const citations = createCitationStore(piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy });
 const library = await openLibrary(piecemakerHome(), applicationRoot);
 installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
+installModelDiscovery(providerRegistry);
 const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
 
