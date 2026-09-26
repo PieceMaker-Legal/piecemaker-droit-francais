@@ -126,7 +126,6 @@ await copyRequired('dist');
 await copyRequired('public');
 await copyRequired('product.config.json');
 await copyRequired('shared/product-config.mjs');
-await copyRequired('package-lock.json');
 
 const copiedOptionalDependencies = {};
 for (const [name, version] of Object.entries(packageJson.optionalDependencies || {})) {

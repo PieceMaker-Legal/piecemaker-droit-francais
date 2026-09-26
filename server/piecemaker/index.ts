@@ -8,7 +8,6 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
-import { useBundledClaudeWhenMissingFromPath } from './claude-executable.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
@@ -42,7 +41,6 @@ type PieceMakerVendorModule = {
   stopOriginalsJobs(): Promise<void>;
 };
 
-useBundledClaudeWhenMissingFromPath();
 const vendor = createRequire(import.meta.url)(routerPath) as PieceMakerVendorModule;
 
 export const { piecemakerHome, stopOriginalsJobs } = vendor;
