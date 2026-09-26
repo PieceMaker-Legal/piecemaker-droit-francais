@@ -27,6 +27,9 @@ async function main() {
 
   console.log(`\n${PRODUCT_NAME} — installation de l'application de bureau (${releaseTag})`);
 
+  ui.step("Autorité locale du proxy d'anonymisation");
+  await generateCertificates();
+
   const builtArtifact = await buildDesktopApp(sourceDir);
   const installedPath = await installApplication(builtArtifact);
 
@@ -51,8 +54,6 @@ async function main() {
 
 async function runCertificateStep(installedPath) {
   ui.step('Certificat local');
-
-  await generateCertificates();
 
   if (isCaTrusted()) {
     ui.ok('Certificat local déjà reconnu par le système.');
