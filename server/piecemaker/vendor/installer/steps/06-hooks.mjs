@@ -162,8 +162,8 @@ export async function install(ctx) {
     //    de test enregistré doit ressortir classé « espace de travail » dans
     //    `.piecemaker/protection.json`, sans quoi l'IA ne pourrait pas se
     //    relire. On vérifie l'effet de bord, pas seulement le code de sortie.
-    const createdDoc = path.join(testDir, 'note-selftest.docx');
-    fs.writeFileSync(createdDoc, 'NOTE DE TEST', 'utf8');
+    const createdDoc = path.join(testDir, 'note-selftest.pdf');
+    fs.writeFileSync(createdDoc, '%PDF-1.4 NOTE DE TEST', 'utf8');
     const classifyResult = runHookSelfTest('classify-ai-documents.mjs', HOOK_SCRIPTS.classify, {
       hook_event_name: 'PostToolUse',
       session_id: 'installer-selftest',
@@ -177,7 +177,7 @@ export async function install(ctx) {
     });
     if (classifyResult.ok) {
       const { readProtection } = require('../../piecemaker-plugin/scripts/lib/protection.cjs');
-      if (!readProtection(testDir).unprotected.has('note-selftest.docx')) {
+      if (!readProtection(testDir).unprotected.has('note-selftest.pdf')) {
         classifyResult.ok = false;
         classifyResult.note = 'le document créé n\'a pas été classé « espace de travail »';
       } else {
