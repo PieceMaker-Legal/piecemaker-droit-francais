@@ -19,6 +19,7 @@ import CodeEditorLoadingState from '@/modules/code-editor/CodeEditorLoadingState
 import CodeEditorSurface from '@/modules/code-editor/CodeEditorSurface';
 import CodeEditorBinaryFile from '@/modules/code-editor/CodeEditorBinaryFile';
 import CodeEditorMediaPreview from '@/modules/code-editor/CodeEditorMediaPreview';
+import { DocxDocumentViewer, isDocxDocument } from '@/piecemaker/docx';
 
 type CodeEditorProps = {
   file: CodeEditorFile;
@@ -216,6 +217,8 @@ export default function CodeEditor({
       />
     );
   }
+
+  if (isDocxDocument(file.name)) return <DocxDocumentViewer file={file} projectId={fileProjectId} isSidebar={isSidebar} onClose={onClose} />;
 
   // Binary file display
   if (isBinary) {

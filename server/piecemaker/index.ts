@@ -16,6 +16,7 @@ import { createKnowledgeBackend } from './knowledge/index.js';
 import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
+import { createDocxDocumentRouter } from './docx-document.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
 
 /**
@@ -70,6 +71,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(knowledge.router);
   router.use(createCompanySearchRouter());
   router.use(createBodaccSearchRouter());
+  router.use(createDocxDocumentRouter());
   router.use(createShellEnvironmentRouter(shellEnvironment));
   return router;
 }
