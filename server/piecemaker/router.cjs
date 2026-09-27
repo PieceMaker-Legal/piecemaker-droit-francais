@@ -67,7 +67,6 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anony
       publishProjects();
       const result = await registerLegalCase({
         folder: request.body?.folder,
-        configFile: path.join(homeDir, 'config.json'),
         homeDir,
       });
       response.status(201).json({ ok: true, ...result });

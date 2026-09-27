@@ -7,7 +7,6 @@ const CASE_FOLDER_STRUCTURE_VERSION = 1;
 const CASE_FOLDER_STRUCTURE_RELATIVE = '.piecemaker/case-folder-structure.json';
 
 const DEFAULT_CASE_FOLDER_STRUCTURE = Object.freeze({
-  administrative: '00_ADMINISTRATIF_ET_FACTURATION',
   correspondence: '01_CORRESPONDANCE',
   correspondenceClient: '01_Client',
   correspondenceOpposingCounsel: '02_Avocats_adverses',
@@ -65,7 +64,6 @@ function normalizeCaseFolderStructure(value = {}) {
   }
 
   ensureUniqueSiblingNames(structure, [
-    'administrative',
     'correspondence',
     'dataRoom',
     'drafts',
@@ -107,87 +105,14 @@ function readStructureManifest(caseRoot) {
 }
 
 /**
- * La structure est figée par dossier lors de son premier enregistrement. Ainsi,
- * personnaliser les prochains dossiers ne change pas le routage du Markdown
- * des dossiers déjà existants.
+ * Seuls les anciens dossiers portent encore un manifeste d'arborescence : il
+ * continue de router leur Markdown. Sans manifeste, le dossier n'est pas géré.
  */
 function readCaseFolderStructure(caseRoot, config = {}) {
   const manifest = readStructureManifest(caseRoot);
   return {
     ...manifest,
     structure: manifest.structure || configuredCaseFolderStructure(config),
-  };
-}
-
-function caseFolderDirectoriesFromStructure(structure) {
-  return [
-    structure.administrative,
-    structure.correspondence,
-    path.join(structure.correspondence, structure.correspondenceMarkdown),
-    path.join(structure.correspondence, structure.correspondenceClient),
-    path.join(structure.correspondence, structure.correspondenceOpposingCounsel),
-    path.join(structure.correspondence, structure.correspondenceThirdParties),
-    structure.dataRoom,
-    path.join(structure.dataRoom, structure.dataRoomMarkdown),
-    structure.drafts,
-    structure.notesAndResearch,
-    structure.procedure,
-  ];
-}
-
-/** Chemins relatifs, dans l'ordre lisible de l'arborescence documentée. */
-function caseFolderDirectories(config = {}) {
-  return caseFolderDirectoriesFromStructure(configuredCaseFolderStructure(config));
-}
-
-function writeStructureManifest(file, structure) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temporary = `${file}.piecemaker-${process.pid}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify({
-    version: CASE_FOLDER_STRUCTURE_VERSION,
-    structure,
-  }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
-  fs.renameSync(temporary, file);
-}
-
-/**
- * Crée uniquement les dossiers manquants. Aucun fichier ni dossier existant
- * n'est renommé ou remplacé quand l'utilisateur modifie les noms par défaut.
- */
-function ensureCaseFolderStructure(caseRoot, config = {}) {
-  const requested = String(caseRoot || '').trim();
-  if (!requested || !path.isAbsolute(requested)) throw new Error('Racine du dossier juridique invalide.');
-  const root = path.resolve(requested);
-  let rootStat;
-  try {
-    rootStat = fs.statSync(root);
-  } catch {
-    throw new Error('Racine du dossier juridique introuvable.');
-  }
-  if (!rootStat.isDirectory()) throw new Error('Racine du dossier juridique invalide.');
-
-  const created = [];
-  const manifest = readStructureManifest(root);
-  const structure = manifest.structure || configuredCaseFolderStructure(config);
-  const directories = caseFolderDirectoriesFromStructure(structure);
-  for (const relative of directories) {
-    const target = path.join(root, relative);
-    if (fs.existsSync(target)) {
-      if (!fs.statSync(target).isDirectory()) {
-        throw new Error(`L’emplacement « ${relative} » existe mais n’est pas un dossier.`);
-      }
-      continue;
-    }
-    fs.mkdirSync(target, { recursive: true });
-    created.push(relative.split(path.sep).join('/'));
-  }
-  if (!manifest.exists) writeStructureManifest(manifest.file, structure);
-
-  return {
-    file: manifest.file,
-    names: structure,
-    directories: directories.map((relative) => relative.split(path.sep).join('/')),
-    created,
   };
 }
 
@@ -278,20 +203,7 @@ function structuredMarkdownCounterpart(absolutePath, caseRoot, config = {}) {
 }
 
 module.exports = {
-  CASE_FOLDER_KEYS,
-  CASE_FOLDER_STRUCTURE_KEY,
-  CASE_FOLDER_STRUCTURE_RELATIVE,
-  DEFAULT_CASE_FOLDER_STRUCTURE,
-  caseConversionOutputDirectory,
-  caseFolderDirectories,
-  caseFolderStructureFile,
-  classifyCaseFolderPath,
   classifyRelativeCaseFolderPath,
-  configuredCaseFolderStructure,
-  ensureCaseFolderStructure,
-  isCaseGeneratedPath,
-  normalizeCaseFolderStructure,
   readCaseFolderStructure,
   structuredMarkdownCounterpart,
-  validateCaseFolderName,
 };
