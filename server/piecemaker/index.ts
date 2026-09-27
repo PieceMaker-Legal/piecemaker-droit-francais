@@ -3,11 +3,13 @@ import path from 'path';
 
 import type { Router } from 'express';
 
+import { projectsDb } from '@/modules/database/index.js';
 import { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 
+import { createAgentInstructionsRouter, startAgentInstructionsMirror } from './agent-instructions.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
@@ -62,6 +64,7 @@ installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
 installModelDiscovery(providerRegistry);
 const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
+startAgentInstructionsMirror(() => projectsDb.getProjectPaths().map((row) => row.project_path));
 
 export function createPieceMakerLocalRouter() {
   return knowledge.localRouter;
@@ -78,6 +81,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createCompanySearchRouter());
   router.use(createBodaccSearchRouter());
   router.use(createDocxDocumentRouter());
+  router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));
   router.use(createShellEnvironmentRouter(shellEnvironment));
   return router;
 }
