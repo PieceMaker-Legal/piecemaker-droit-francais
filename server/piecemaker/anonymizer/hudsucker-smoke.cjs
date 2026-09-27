@@ -8,8 +8,7 @@ const tls = require('node:tls');
 
 const Database = require('better-sqlite3');
 
-const { startRewriterBridge } = require('./rewriter-bridge.cjs');
-const { createSqliteDictionaryLoader } = require('./sqlite-dictionary.cjs');
+const { startRewriterWorker } = require('./rewriter-worker.cjs');
 
 const HOST = 'api.anthropic.com';
 const NAME = 'Jean Dupont';
@@ -220,7 +219,6 @@ async function runHudsuckerSmokeTest({ binary: requestedBinary = defaultBinary()
   const sandboxed = sandbox && process.platform === 'darwin' && fs.existsSync(SANDBOX_EXEC);
   let child = null;
   let bridge = null;
-  let dictionary = null;
   let upstream = null;
   try {
     if (!fs.existsSync(binary)) {
@@ -236,8 +234,7 @@ async function runHudsuckerSmokeTest({ binary: requestedBinary = defaultBinary()
     }
     const ca = fs.readFileSync(authority.cert);
 
-    dictionary = createSqliteDictionaryLoader({ databasePath: mappingDatabase(directory) });
-    bridge = await startRewriterBridge({ dictionary });
+    bridge = await startRewriterWorker({ databasePath: mappingDatabase(directory), homeDir: directory });
     upstream = await startUpstream();
 
     const logs = { text: '' };
@@ -322,7 +319,6 @@ async function runHudsuckerSmokeTest({ binary: requestedBinary = defaultBinary()
     }
     if (bridge) await bridge.close();
     if (upstream) await new Promise((resolve) => upstream.server.close(resolve));
-    dictionary?.close();
     fs.rmSync(directory, { recursive: true, force: true });
   }
 }

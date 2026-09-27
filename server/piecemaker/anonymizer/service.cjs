@@ -5,9 +5,8 @@ const path = require('node:path');
 const tls = require('node:tls');
 
 const { createSqliteDictionaryLoader } = require('./sqlite-dictionary.cjs');
-const { startRewriterBridge } = require('./rewriter-bridge.cjs');
+const { startRewriterWorker } = require('./rewriter-worker.cjs');
 const { removeLegacyProxyConfig } = require('./client-config.cjs');
-const { createHarnessJuridique } = require('../harness/index.cjs');
 
 const DEFAULT_UPSTREAM = 'https://api.anthropic.com';
 const INTERCEPTED_HOSTS = ['api.anthropic.com', 'api.openai.com', 'chatgpt.com'];
@@ -138,8 +137,8 @@ function proxyEnvironment(proxyUrl, caFile, trustBundle) {
 }
 
 function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = console }) {
-  const dictionary = createSqliteDictionaryLoader({ databasePath: process.env.DATABASE_PATH || path.join(homeDir, 'auth.db') });
-  const harness = createHarnessJuridique({ homeDir, verifyResponses: false });
+  const databasePath = process.env.DATABASE_PATH || path.join(homeDir, 'auth.db');
+  const dictionary = createSqliteDictionaryLoader({ databasePath });
   const binDir = path.join(homeDir, 'bin');
   const state = { enabled: false, reason: 'not_started', origin: null, upstream: null, coverage: {} };
   let proxy = null;
@@ -167,7 +166,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
     const hosts = [...new Set([...INTERCEPTED_HOSTS, new URL(upstream).hostname])];
 
     try {
-      bridge = await startRewriterBridge({ dictionary, harness });
+      bridge = await startRewriterWorker({ databasePath, homeDir });
     } catch (error) {
       state.reason = `listen_failed: ${error.message}`;
       logger.warn?.(`[piecemaker] réécriture PII non démarrée : ${error.message}`);
