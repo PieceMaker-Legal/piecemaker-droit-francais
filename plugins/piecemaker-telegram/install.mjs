@@ -23,7 +23,7 @@ const databasePath = path.isAbsolute(configuredDatabasePath)
   ? configuredDatabasePath : path.resolve(applicationRoot, configuredDatabasePath);
 
 fs.mkdirSync(target, { recursive: true, mode: 0o700 });
-for (const filename of ['manifest.json', 'icon.svg', 'index.js', 'server.mjs']) {
+for (const filename of ['manifest.json', 'icon.svg', 'index.js', 'launcher.mjs', 'server.mjs']) {
   fs.copyFileSync(path.join(source, filename), path.join(target, filename));
 }
 config['piecemaker-telegram'] = {
@@ -35,6 +35,7 @@ fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
 fs.writeFileSync(path.join(target, 'runtime.json'), JSON.stringify({
   databasePath,
   applicationRoot,
+  nodePath: process.execPath,
   secret,
 }), { mode: 0o600 });
 process.stdout.write(`Telegram installé dans ${target}\n`);
