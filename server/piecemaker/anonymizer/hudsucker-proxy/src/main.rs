@@ -70,6 +70,7 @@ fn provider_for(host: &str) -> &'static str {
     match host {
         "chatgpt.com" => "codex",
         "api.openai.com" => "opencode",
+        "api.mistral.ai" => "mistral",
         _ => "claude",
     }
 }
@@ -471,7 +472,7 @@ async fn main() {
     let hosts = parse_list(&arg("--hosts"));
     let upstream = parse_map(&arg("--upstream-map"));
     if listen.is_empty() || rewriter.is_empty() || ca_cert.is_empty() || ca_key.is_empty() || hosts.is_empty() {
-        eprintln!("usage: piecemaker-hudsucker --listen 127.0.0.1:0 --rewriter http://127.0.0.1:port --ca-cert ca.crt --ca-key ca.key --hosts api.anthropic.com,api.openai.com,chatgpt.com");
+        eprintln!("usage: piecemaker-hudsucker --listen 127.0.0.1:0 --rewriter http://127.0.0.1:port --ca-cert ca.crt --ca-key ca.key --hosts api.anthropic.com,api.openai.com,chatgpt.com,api.mistral.ai");
         std::process::exit(2);
     }
     exit_when_parent_dies();

@@ -49,7 +49,7 @@ async function startHudsuckerSession({
   databasePath,
   upstreamPort,
   harness = null,
-  hosts = ['api.anthropic.com', 'api.openai.com', 'chatgpt.com'],
+  hosts = ['api.anthropic.com', 'api.openai.com', 'chatgpt.com', 'api.mistral.ai'],
   directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-hudsucker-')),
 } = {}) {
   const binary = hudsuckerBinary();
