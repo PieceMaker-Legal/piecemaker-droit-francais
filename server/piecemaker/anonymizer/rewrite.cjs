@@ -218,7 +218,7 @@ function createSseRewriter(transform) {
       return lines(JSON.stringify(parsed), undefined);
     }
     const keys = [...held.keys()].filter((key) => key.startsWith(keyPrefix));
-    return withFlush(keys, JSON.stringify(parsed), parsed.type);
+    return withFlush(keys, JSON.stringify(rewriteJsonValue(parsed, transform)), parsed.type);
   }
 
   function rewriteResponses(parsed) {
@@ -236,7 +236,7 @@ function createSseRewriter(transform) {
     const keys = eventType === 'response.completed'
       ? [...held.keys()]
       : eventType.endsWith('.done') ? [key] : [];
-    return withFlush(keys, JSON.stringify(parsed), parsed.type);
+    return withFlush(keys, JSON.stringify(rewriteJsonValue(parsed, transform)), parsed.type);
   }
 
   function rewriteChatChunk(parsed) {
