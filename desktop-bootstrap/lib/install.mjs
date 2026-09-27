@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { buildDesktopApp } from './build.mjs';
 import { generateCertificates, isCaTrusted, signApplication, trustCertificateAuthority } from './certificates.mjs';
 import { createShortcuts, installApplication, launchApplication } from './place.mjs';
+import { installPieceMakerPlugins } from './plugins.mjs';
 import { ui } from './ui.mjs';
 import {
   IS_MAC,
@@ -40,6 +41,8 @@ async function main() {
   }
 
   createShortcuts(installedPath);
+
+  await installPieceMakerPlugins(sourceDir);
 
   await import('../composants/install.mjs').then((composants) => composants.installRuntimeComponents({ sourceDir }));
 
