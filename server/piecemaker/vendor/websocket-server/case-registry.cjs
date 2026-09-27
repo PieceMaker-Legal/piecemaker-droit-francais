@@ -8,15 +8,6 @@ const {
 } = require('../piecemaker-plugin/scripts/lib/commits.cjs');
 const { registeredProjectFolders } = require('../piecemaker-plugin/scripts/lib/case-folders.cjs');
 
-function readRegistryConfig(configFile) {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
 function caseFolderId(folder) {
   const digest = crypto.createHash('sha256').update(path.resolve(folder)).digest('hex').slice(0, 20);
   return `folder-${digest}`;
@@ -71,7 +62,6 @@ module.exports = {
   caseFolderId,
   listProjectCases,
   projectCaseEntry,
-  readRegistryConfig,
   resolveCaseReference,
   validateSelectedCaseFolder,
 };
