@@ -14,9 +14,9 @@ skill sert de guide pour ranger un ajout personnel au bon endroit.
 
 | Type d'ajout | Emplacement | Portée |
 | --- | --- | --- |
-| Instructions ou préférences globales (style, rappels, habitudes) | `/Users/tsardet/.piecemaker/custom/perso.md` | Toutes les affaires — ce fichier est importé automatiquement dans chaque dossier via `/Users/tsardet/.piecemaker/CLAUDE.md`. |
-| Skill personnelle réutilisable | Nouveau dossier `/Users/tsardet/.claude/skills/<nom>/SKILL.md` | Toutes les sessions Claude Code — découverte automatique, jamais écrasée par PieceMaker (un fichier créé à la main n'est jamais remplacé par l'application). |
-| Gabarit personnel (acte, courrier type…) | `/Users/tsardet/.piecemaker/templates/` | Disponible pour toute rédaction, indépendamment du dépôt de l'application. |
+| Instructions ou préférences globales (style, rappels, habitudes) | `~/.piecemaker/custom/perso.md` | Toutes les affaires — ce fichier est importé automatiquement dans chaque dossier via `~/.piecemaker/CLAUDE.md`. |
+| Skill personnelle réutilisable | Nouveau dossier `~/.claude/skills/<nom>/SKILL.md` | Toutes les sessions Claude Code — découverte automatique, jamais écrasée par PieceMaker (un fichier créé à la main n'est jamais remplacé par l'application). |
+| Gabarit personnel (acte, courrier type…) | `~/.piecemaker/templates/` | Disponible pour toute rédaction, indépendamment du dépôt de l'application. |
 | Élément propre à une seule affaire (parties, juridiction, échéances) | Section « Ce dossier » du `CLAUDE.md` / `AGENTS.md` de ce dossier | Uniquement ce dossier-là. |
 
 Ces emplacements sont hors du dépôt PieceMaker : une mise à jour de PieceMaker
@@ -26,7 +26,7 @@ PieceMaker — la garantie va dans les deux sens.
 
 ## Format minimal d'une skill personnelle
 
-Un fichier `/Users/tsardet/.claude/skills/<nom>/SKILL.md` avec un en-tête
+Un fichier `~/.claude/skills/<nom>/SKILL.md` avec un en-tête
 puis du texte libre :
 
 ```markdown
@@ -50,17 +50,3 @@ Instructions pour l'assistant, en français, centrées sur la tâche.
 3. **Créer ou éditer le fichier correspondant**, en respectant le format
    attendu (front matter pour une skill, section « Ce dossier » pour un
    élément local, etc.).
-4. **Pour un nouveau dossier d'affaire** qui n'a pas encore de wrapper : sur
-   demande, proposer et créer `CLAUDE.md` et `AGENTS.md` à la racine du
-   dossier, avec exactement ce contenu (chemin absolu, jamais `~`) :
-
-   ```
-   @/Users/tsardet/.piecemaker/CLAUDE.md
-
-   # Ce dossier
-   <!-- Éléments propres à ce dossier : parties, juridiction, échéances, particularités. À compléter. -->
-   ```
-
-   Si l'un de ces deux fichiers existe déjà dans le dossier, ne jamais
-   l'écraser : le lire, et s'il ne contient pas déjà cette ligne d'import,
-   l'ajouter en tête sans supprimer le contenu existant.
