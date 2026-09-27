@@ -7,6 +7,6 @@
   "type": "module",
   "slot": "tab",
   "entry": "index.js",
-  "server": "server.mjs",
+  "server": "launcher.mjs",
   "permissions": []
 }
