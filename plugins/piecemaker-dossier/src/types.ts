@@ -55,6 +55,7 @@ export type KnowledgeSnapshot = {
   exclusions?: string[];
   exclusionsInitialized?: boolean;
   anonymizationComplete?: boolean;
+  reservedCodes?: string[];
 };
 
 export type KnowledgeResolvedLink = {

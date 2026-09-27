@@ -367,6 +367,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     { kind: (kindSelect?.value || selectedKind) as NodeKind, legalForm: legalFormInput?.value || '', side: side as PartySide, position: positionSelect?.value || '' },
     data.graph.nodes,
     data.graph.mappings,
+    data.graph.reservedCodes,
   );
   const syncMasked = () => {
     const side = sideSelect?.value || '';
@@ -397,7 +398,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     const sirenNode = sirenValue ? sirenNodes.find((candidate) => [candidate.label, ...candidate.aliases].some((entry) => normalizeSiren(entry) === sirenValue)) : undefined;
     const position = textValue(form.get('position')).trim();
     const change = renameApplies(partySide)
-      ? partyCodeChange({ id, kind, data: node?.data || {} }, { kind, legalForm, side: partySide as PartySide, position }, data.graph.nodes, data.graph.mappings)
+      ? partyCodeChange({ id, kind, data: node?.data || {} }, { kind, legalForm, side: partySide as PartySide, position }, data.graph.nodes, data.graph.mappings, data.graph.reservedCodes)
       : null;
     const nodeId = change ? change.nodeId : id;
     const code = change ? change.code : masked;

@@ -46,12 +46,16 @@ Bridge (`taskpane/modules/python-bridge.js` →
 
 ## Enchaînement avec le scan PII
 
-Pour convertir puis scanner en un seul appel, utiliser
-`websocket-server/scripts/convert_and_scan_pipeline.py <file1> [file2 ...] -o <output_dir> [--engine ...] [--mode ...] [--lang ...]`,
-qui appelle `smart_converter.py` puis le worker
+Le scan PII passe uniquement par PieceMaker (outil `conversion` du serveur MCP
+`piecemaker`, ou le scan du dossier dans l'interface) : ne pas lancer
+`websocket-server/scripts/convert_and_scan_pipeline.py` à la main. Ce script
+appelle `smart_converter.py` puis le worker
 `websocket-server/scripts/presidio-gliner/scanner_worker.py` (GLiNER chargé
-une fois pour tout le lot). Sortie persistante : un Markdown par
-fichier et un unique `{output_dir}/mapping_default.json` cumulatif. Dans le
+une fois pour tout le lot) ; il exige `--database` (les codes déjà attribués
+par tous les dossiers y sont réservés), reçoit le mapping du dossier sur son
+entrée standard et renvoie le mapping fusionné en lignes `MAPPING:` que
+PieceMaker écrit en base. Aucun fichier de mapping n'est écrit. Sortie
+persistante : un Markdown par fichier. Dans le
 pipeline d'administration d'un dossier, `-o` vise le sous-dossier
 `Fichiers convertis PieceMaker/` du dossier (racine réservée aux originaux) ;
 le manifeste technique caché `.piecemaker/anonymization-state.json` reste, lui, à
