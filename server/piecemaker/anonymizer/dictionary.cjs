@@ -49,8 +49,9 @@ function plainObject(value) {
  * ne part pas codé serait un mensonge à l'écran.
  */
 function buildDictionary(document, stamp) {
-  const mapping = plainObject(document?.mapping);
-  const reverse = plainObject(document?.reverse_mapping);
+  const mapping = Object.freeze({ ...plainObject(document?.mapping) });
+  const reverse = Object.freeze(Object.fromEntries(Object.entries(plainObject(document?.reverse_mapping))
+    .map(([code, variants]) => [code, Array.isArray(variants) ? Object.freeze([...variants]) : variants])));
   const canonical = {};
   for (const [code, variants] of Object.entries(reverse)) {
     const name = Array.isArray(variants) ? variants[0] : variants;
