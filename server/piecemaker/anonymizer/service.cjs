@@ -9,11 +9,12 @@ const { startRewriterWorker } = require('./rewriter-worker.cjs');
 const { removeLegacyProxyConfig } = require('./client-config.cjs');
 
 const DEFAULT_UPSTREAM = 'https://api.anthropic.com';
-const INTERCEPTED_HOSTS = ['api.anthropic.com', 'api.openai.com', 'chatgpt.com'];
+const INTERCEPTED_HOSTS = ['api.anthropic.com', 'api.openai.com', 'chatgpt.com', 'api.mistral.ai'];
 const COVERAGE = {
   claude: { state: 'filtered', detail: null, file: null },
   codex: { state: 'filtered', detail: null, file: null },
   opencode: { state: 'filtered', detail: null, file: null },
+  mistral: { state: 'filtered', detail: null, file: null },
   cursor: { state: 'blocked', detail: 'not-interceptable', file: null },
 };
 
@@ -222,7 +223,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
       upstream,
       coverage: COVERAGE,
     });
-    logger.log?.(`[piecemaker] anonymisation active sur ${origin} (claude, codex, opencode ; cursor bloqué)`);
+    logger.log?.(`[piecemaker] anonymisation active sur ${origin} (claude, codex, opencode, mistral ; cursor bloqué)`);
     return state;
   }
 
