@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { log, spinner, columns } from '../lib/ui.mjs';
-import { run, npmBin, npmEnv, REPO_ROOT } from '../lib/platform.mjs';
+import { run, npmBin, npmEnv, GIT_REPO_ROOT } from '../lib/platform.mjs';
 
 export const meta = {
   id: '02-dependances-node',
@@ -36,7 +36,7 @@ function readPackageJson(dir) {
 // Certaines distributions npm conservent spawn-helper de node-pty en 0644.
 // Le module se charge alors normalement mais tout pty.spawn échoue avec
 // « posix_spawnp failed ». Réparer le bit exécutable est idempotent.
-export function repairNodePtySpawnHelpers(repoRoot = REPO_ROOT, { repair = true } = {}) {
+export function repairNodePtySpawnHelpers(repoRoot = GIT_REPO_ROOT, { repair = true } = {}) {
   if (process.platform === 'win32') return { found: 0, repaired: 0, ready: true };
   const prebuilds = path.join(repoRoot, 'node_modules', 'node-pty', 'prebuilds');
   if (!fs.existsSync(prebuilds)) return { found: 0, repaired: 0, ready: false };
@@ -88,7 +88,7 @@ async function npmInstall(dir, label, ctx) {
 export async function install(ctx) {
   const results = [];
 
-  results.push(['racine du projet', await npmInstall(REPO_ROOT, 'Racine', ctx)]);
+  results.push(['racine du projet', await npmInstall(GIT_REPO_ROOT, 'Racine', ctx)]);
 
   if (ctx.dryRun) {
     return { status: 'skipped', note: 'Mode simulation — aucune installation effectuée.' };
@@ -116,8 +116,8 @@ export async function install(ctx) {
 }
 
 export async function check(ctx) {
-  const rootInstalled = fs.existsSync(path.join(REPO_ROOT, 'node_modules'));
-  const ptyReady = repairNodePtySpawnHelpers(REPO_ROOT, { repair: false }).ready;
+  const rootInstalled = fs.existsSync(path.join(GIT_REPO_ROOT, 'node_modules'));
+  const ptyReady = repairNodePtySpawnHelpers(GIT_REPO_ROOT, { repair: false }).ready;
 
   if (rootInstalled && ptyReady) return { status: 'done', note: '' };
   if (rootInstalled) {
