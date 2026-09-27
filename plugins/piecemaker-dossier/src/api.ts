@@ -113,6 +113,7 @@ export const knowledgeApi = {
   searchCompanies: (queryText: string) => request<{ query: string; results: CompanySearchResult[] }>(PIECEMAKER_BASE, '/company-search', { method: 'POST', body: JSON.stringify({ query: queryText }) }),
   searchBodacc: (siren: string, siret: string) => request<BodaccSearchResult>(PIECEMAKER_BASE, '/bodacc-search', { method: 'POST', body: JSON.stringify({ siren, siret }) }),
   update: (projectId: string, operations: KnowledgeUpdateOperation[]) => request(BASE, '/update', { method: 'POST', body: JSON.stringify({ projectId, operations }) }),
+  ensureAgentInstructions: (projectId: string) => request<{ ok: true; created: string[] }>(PIECEMAKER_BASE, '/agent-instructions', { method: 'POST', body: JSON.stringify({ projectId }) }),
   institutionalTerms: () => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms'),
   saveInstitutionalTerms: (terms: string[]) => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms', { method: 'PUT', body: JSON.stringify({ terms }) }),
 };
