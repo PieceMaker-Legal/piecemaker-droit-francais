@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { ServerInstaller } from './serverInstaller.js';
+import { isAdoptableServer } from './piecemakerServerAdoption.js';
 import { loadProductConfig } from '../shared/product-config.mjs';
 
 const DEFAULT_PORT = loadProductConfig().desktopPort || 3001;
@@ -483,7 +484,7 @@ export class LocalServerController {
     if (!forceOwnServer) {
       const candidateUrls = await getExistingServerCandidateUrls(defaultUrl, this.serverMarkerPath);
       for (const candidateUrl of candidateUrls) {
-        if (await isCloudCliServer(candidateUrl)) {
+        if (await isCloudCliServer(candidateUrl) && await isAdoptableServer(candidateUrl, this)) {
           const displayUrl = getDisplayUrl(candidateUrl);
           this.localServerPort = getPortFromUrl(candidateUrl);
           this.appendStartupLog(`Using existing Local ${this.appName} at ${displayUrl}`);
