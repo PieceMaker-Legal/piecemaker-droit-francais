@@ -3,6 +3,40 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.11](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.10...v2.0.11) (2026-09-27)
+
+### New Features
+
+* **desktop:** tester le proxy d'anonymisation en bac à sable avant d'installer ([16d8b16](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/16d8b1664ac154adc53da8ad8c9ebadde6c97705))
+* **dossier:** le bouton Agents.md crée CLAUDE.md et AGENTS.md en miroir ([6f38f6e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6f38f6e2eace2ecad26f0353961dd2cbecfd839e))
+* **telegram:** ajouter un onglet et des bots par dossier ([4e2483d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4e2483d8e1e01ed9420d8f0316f6dc6afa3b3b65))
+
+### Bug Fixes
+
+* **anonymizer:** ne plus couper les réponses en flux de plus de 5 minutes ([3bb24e8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3bb24e82aa9ce752f07fd959998f744e45609dfc))
+* **desktop:** exporter la clé de l'autorité locale sous Windows, en PEM ([f1588bf](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f1588bfa805c07e4646c37df446199c6659ad606))
+* **desktop:** l'app n'adopte plus le serveur de dev, la mise à jour réinstalle le bundle ([4e60109](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4e601096322f1c24e1c2dcb535546113318a750c))
+* **installer:** installer les dépendances à la racine du dépôt, pas dans vendor/ ([28c0967](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/28c0967a94ac7b465f13885b08bc15252dced5dd))
+
+### Performance
+
+* **anonymizer:** 780 → 20 ms par requête ; refuser l'envoi si le dictionnaire est illisible ([f926302](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f926302fc365b4be71eeecfbc72c1f7093173d21))
+* **anonymizer:** anonymiser 12× plus vite, hors de la boucle du serveur ([2ddb9a3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2ddb9a3f5573e7e0767d5c40736e97f2e8cb1c5f))
+
+### Refactoring
+
+* **piecemaker:** ne plus créer l'arborescence 00_ADMINISTRATIF_ET_FACTURATION…05_PROCEDURE ([708733e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/708733e38032b5f952988819497ec92d06987cbb))
+* **telegram:** ranger le plugin avec les extensions PieceMaker ([c99e5b3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c99e5b33645482a7cd7c4a4196c6bf7d6d5b3686))
+
+### Documentation
+
+* **skill:** ajout-de-fonctionnalites ne fait plus créer CLAUDE.md/AGENTS.md dans un dossier ([1eba343](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1eba343e32e8b95a9672091ac7c808cfe5cd587c))
+* **skill:** rétablir la création du wrapper CLAUDE.md/AGENTS.md d'un dossier ([5ff2cce](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5ff2ccea5e9fd3f98e6503bea732176e92efe8fd))
+
+### Styling
+
+* **telegram:** aligner l’onglet sur les plugins PieceMaker ([80b5604](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/80b5604cfabdc738ab0b0be816861513d143f1f7))
+
 ## [2.0.10](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.9...v2.0.10) (2026-09-26)
 
 ### New Features
