@@ -430,7 +430,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         return;
       }
       if (action === 'agents') {
-        api.openFileInEditor('AGENTS.md');
+        if (!context.project) return;
+        knowledgeApi.ensureAgentInstructions(context.project.name)
+          .then(() => api.openFileInEditor('AGENTS.md'))
+          .catch(showError);
         return;
       }
       const partyPicker = target.closest<HTMLElement>('[data-party-picker]');
