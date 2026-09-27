@@ -86,9 +86,11 @@ export function partyCodeChange(
   identity: PartyIdentity,
   nodes: Array<Pick<KnowledgeNode, 'id' | 'data'>>,
   mappings: KnowledgeMapping[],
+  reserved: Iterable<string> = [],
 ): PartyCodeChange {
   const current = nodeCode(node);
   const used = new Set(nodes.filter((entry) => entry.id !== node.id).map((entry) => nodeCode(entry)).filter(Boolean));
+  for (const code of reserved) if (clean(code)) used.add(clean(code));
   for (const mapping of mappings) {
     if (mapping.nodeId !== node.id && clean(mapping.masked)) used.add(clean(mapping.masked));
   }

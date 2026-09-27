@@ -6,10 +6,11 @@ This script chains smart_converter.py (conversion to Markdown) and
 scanner_worker.py (PII scanning) for batch processing of multiple documents.
 
 Usage:
-    python3 convert_and_scan_pipeline.py <file1> [file2 ...] -o <output_dir> [options]
+    python3 convert_and_scan_pipeline.py <file1> [file2 ...] -o <output_dir> --database <auth.db> [options] < case-mapping
 
 Options:
     -o, --output DIR       Output directory for all generated files
+    --database PATH        PieceMaker database; codes held by every case are reserved
     --engine ENGINE        Conversion engine: auto|markitdown|mineru (default: auto)
     --mode MODE           MinerU mode: pipeline|hybrid|vlm (default: pipeline)
     --lang CODE           OCR language code for MinerU (default: auto)
@@ -17,17 +18,17 @@ Options:
 Progress Format:
     PROGRESS:CONVERT:percentage:current:total    (Phase 1: Converting documents)
     PROGRESS:SCAN:percentage:current:total       (Phase 2: Scanning for PII)
+    MAPPING:<json>                               (merged case mapping, written to the database by PieceMaker)
 
 Persistent Output Structure:
     {output_dir}/
     ├── document1.md
     ├── document2.md
-    ├── mapping_default.json
     └── .piecemaker/anonymization-state.json
 
 The per-document sensitive maps are transient scanner payloads. They are
-created in a private temporary directory, merged into mapping_default.json,
-then removed automatically.
+created in a private temporary directory, merged into the case mapping sent
+back on stdout, then removed automatically. No mapping file is written.
 
 Exit Codes:
     0: Success (at least one file fully processed)
@@ -41,9 +42,11 @@ import argparse
 import subprocess
 import json
 import hashlib
+import sqlite3
 import tempfile
 import unicodedata
 import re
+from contextlib import closing
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Set
 
@@ -393,30 +396,30 @@ def convert_file(
         return False, None
 
 
-def load_existing_mapping(mapping_path: Path) -> Optional[Dict]:
-    """Load the case/document mapping file if it exists.
+def read_mapping_seed() -> Dict:
+    """Mapping of the case being scanned, sent by PieceMaker on stdin."""
+    if sys.stdin.isatty():
+        return {}
+    raw = sys.stdin.read().strip()
+    seed = json.loads(raw) if raw else {}
+    print(f"✅ Loaded case mapping: {len(seed.get('mapping', {}))} entries")
+    return seed
 
-    This is the SAME file that the server uses (server.cjs line 2146),
-    ensuring single source of truth for mappings.
 
-    Args:
-        mapping_path: Full path to mapping_default.json (or an explicit target)
-
-    Returns:
-        Existing mapping data or None if file doesn't exist
-    """
-    if not mapping_path.exists():
-        print("ℹ️  No existing mapping found, will create new one")
-        return None
-
-    try:
-        with open(mapping_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        print(f"✅ Loaded existing mapping: {len(data.get('mapping', {}))} entries")
-        return data
-    except Exception as e:
-        print(f"⚠️  Error loading existing mapping: {e}", file=sys.stderr)
-        return None
+def load_reserved_codes(database_path: str) -> Set[str]:
+    """Every code already held by any case: a new code must never reuse one."""
+    database = Path(database_path).resolve()
+    if not database.exists():
+        raise FileNotFoundError(f"PieceMaker database not found: {database}")
+    with closing(sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True)) as connection:
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        codes: Set[str] = set()
+        if "piecemaker_mappings" in tables:
+            codes |= {row[0] for row in connection.execute("SELECT masked_value FROM piecemaker_mappings")}
+        if "piecemaker_nodes" in tables:
+            codes |= {row[0][len("entity:"):] for row in connection.execute("SELECT id FROM piecemaker_nodes WHERE id LIKE 'entity:%'")}
+    print(f"✅ Codes reserved by every case: {len(codes)}")
+    return codes
 
 
 def read_individual_mappings(json_files: List[str]) -> Dict:
@@ -1227,18 +1230,18 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
     }
 
 
-def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Dict]) -> Dict:
+def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Dict], reserved_codes: Set[str] = frozenset()) -> Dict:
     """Merge new mapping with existing mapping, avoiding duplicates.
 
     Args:
         new_mapping: Newly generated mapping from current batch
         existing_mapping: Existing mapping data (or None)
+        reserved_codes: Codes held by any case, never handed out again
 
     Returns:
         Merged mapping data
     """
-    if not existing_mapping:
-        return new_mapping
+    existing_mapping = existing_mapping or {}
 
     # `ignored` is written by the admin editor (originals-pipeline.cjs): entities
     # the lawyer removed by hand are false positives and must not come back.
@@ -1285,7 +1288,10 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
     # URGOT SA), là où un test par sous-chaîne ne reconnaîtrait pas SA_3.
     societe_counters: Dict[str, int] = {}
 
-    for code in set(merged_reverse) | set(merged_mapping.values()):
+    used_codes = set(merged_reverse) | set(merged_mapping.values()) | set(reserved_codes)
+    for code in used_codes:
+        if not re.search(r"_\d+$", code):
+            continue
         if "PERSONNE_PHYSIQUE_" in code or code.startswith("DIRIGEANT_"):
             num = int(code.split("_")[-1])
             code_counters["personnes_physiques"] = max(code_counters["personnes_physiques"], num + 1)
@@ -1296,7 +1302,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
             num = int(code.split("_")[-1])
             code_counters["siren"] = max(code_counters["siren"], num + 1)
 
-    for code in merged_extracted.get("societes", {}).keys():
+    for code in set(merged_extracted.get("societes", {}).keys()) | set(reserved_codes):
         match = re.search(r"_(\d+)$", code)
         if not match:
             continue
@@ -1353,27 +1359,27 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
             continue
 
         # Generate new code with incremented counter
-        if category == "personnes_physiques":
-            new_code = f"PERSONNE_PHYSIQUE_{code_counters[category]:02d}"
+        def next_code() -> str:
+            if category == "societes":
+                # Le sigle du code d'origine est préservé : SA_3 → SA_<n>, legacy
+                # URGOT SA → SA_<n>, sinon PERS_MORALE_<n>. Compteur par sigle.
+                key = _societe_counter_key_of_code(code)
+                n = societe_counters.get(key, 0) + 1
+                societe_counters[key] = n
+                return f"{key}_{n}"
+            prefix = {
+                "personnes_physiques": "PERSONNE_PHYSIQUE",
+                "adresses": "ADRESSE",
+                "siren": "SIREN",
+            }.get(category) or (code.split("_")[0] if "_" in code else "AUTRE")
+            candidate = f"{prefix}_{code_counters[category]:02d}"
             code_counters[category] += 1
-        elif category == "societes":
-            # Le sigle du code d'origine est préservé : SA_3 → SA_<n>, legacy
-            # URGOT SA → SA_<n>, sinon PERS_MORALE_<n>. Compteur par sigle.
-            key = _societe_counter_key_of_code(code)
-            n = societe_counters.get(key, 0) + 1
-            societe_counters[key] = n
-            new_code = f"{key}_{n}"
-        elif category == "adresses":
-            new_code = f"ADRESSE_{code_counters[category]:02d}"
-            code_counters[category] += 1
-        elif category == "siren":
-            new_code = f"SIREN_{code_counters[category]:02d}"
-            code_counters[category] += 1
-        else:
-            # Extract entity type from new code
-            entity_type = code.split("_")[0] if "_" in code else "AUTRE"
-            new_code = f"{entity_type}_{code_counters[category]:02d}"
-            code_counters[category] += 1
+            return candidate
+
+        new_code = next_code()
+        while new_code in used_codes:
+            new_code = next_code()
+        used_codes.add(new_code)
 
         # Add all variants to merged structures (no lowercase duplicates)
         accepted_variants = [variant for variant in variants if variant.lower() not in ignored_lower]
@@ -1439,19 +1445,8 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
     }
 
 
-def save_mapping(mapping_path: Path, mapping_data: Dict) -> Path:
-    """Save the merged mapping to the case/document mapping file.
-
-    Uses the SAME file as server.cjs (line 2146), ensuring the validated
-    mapping can be read by GET /api/anonymize/mapping/:documentId.
-
-    Args:
-        mapping_path: Full path to the mapping file to write
-        mapping_data: Complete mapping data structure
-
-    Returns:
-        Path to saved file
-    """
+def emit_mapping(mapping_data: Dict) -> None:
+    """Send the merged mapping to PieceMaker, which writes it to its database."""
     payload = {
         **mapping_data,
         "mapping": dict(sorted(
@@ -1459,15 +1454,7 @@ def save_mapping(mapping_path: Path, mapping_data: Dict) -> Path:
             key=lambda item: (-len(item[0]), item[0].casefold()),
         )),
     }
-    mapping_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = mapping_path.with_name(f"{mapping_path.name}.piecemaker-{os.getpid()}.tmp")
-    with open(temporary, 'w', encoding='utf-8') as f:
-        json.dump(payload, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-    os.chmod(temporary, 0o600)
-    os.replace(temporary, mapping_path)
-
-    return mapping_path
+    print("MAPPING:" + json.dumps(payload, ensure_ascii=False, separators=(",", ":")), flush=True)
 
 
 def load_anonymization_state(state_path: Path) -> Dict:
@@ -1757,7 +1744,7 @@ def run_pipeline(resources: PipelineResources):
         "-o",
         "--output",
         required=True,
-        help="Output directory for Markdown files and mapping_default.json",
+        help="Output directory for Markdown files",
     )
     parser.add_argument(
         "--engine",
@@ -1777,14 +1764,9 @@ def run_pipeline(resources: PipelineResources):
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
-        "--mapping-dir",
-        default=None,
-        help="Directory for mapping_default.json (default: same as --output)",
-    )
-    parser.add_argument(
-        "--mapping-file",
-        default=None,
-        help="Exact mapping file to read and rewrite (overrides --mapping-dir)",
+        "--database",
+        required=True,
+        help="PieceMaker database (auth.db): codes held by every case are reserved; the case mapping comes on stdin",
     )
     parser.add_argument(
         "--state-file",
@@ -1822,11 +1804,8 @@ def run_pipeline(resources: PipelineResources):
 
     # Ensure output directory exists
     os.makedirs(args.output, exist_ok=True)
-    mapping_target = (
-        Path(args.mapping_file)
-        if args.mapping_file
-        else Path(args.mapping_dir or args.output) / "mapping_default.json"
-    )
+    reserved_codes = load_reserved_codes(args.database)
+    current_mapping = read_mapping_seed()
     state_target = Path(args.state_file) if args.state_file else Path(args.output) / ".piecemaker" / "anonymization-state.json"
     # Base pour les clés du manifeste : le dossier juridique, découplé de --output
     # (désormais un sous-dossier). Les sources vivent sous le dossier, pas sous la
@@ -1961,7 +1940,6 @@ def run_pipeline(resources: PipelineResources):
 
     scan_success_count = 0
     final_mapping_data = None
-    mapping_path = None
     index_path = state_target.parent / "document-index.json"
     # Raw detections contain PII. They live only in a private OS temporary
     # directory and are deleted individually as each file is merged.
@@ -2011,9 +1989,9 @@ def run_pipeline(resources: PipelineResources):
         source = md_sources[md_file]
         consolidated = read_individual_mappings([str(json_path)])
         new_mapping_data = convert_to_anonymization_format(consolidated)
-        existing_mapping = load_existing_mapping(mapping_target)
-        final_mapping_data = merge_with_existing_mapping(new_mapping_data, existing_mapping)
-        mapping_path = save_mapping(mapping_target, final_mapping_data)
+        final_mapping_data = merge_with_existing_mapping(new_mapping_data, current_mapping, reserved_codes)
+        current_mapping = final_mapping_data
+        emit_mapping(final_mapping_data)
         update_anonymization_state(state_target, state_case_root, [source])
 
         record = {
@@ -2046,7 +2024,7 @@ def run_pipeline(resources: PipelineResources):
         print()
         return 1
 
-    print(f"✅ Mapping saved to: {mapping_path}")
+    print("✅ Mapping sent to PieceMaker")
     print(f"   • Total entities: {len(final_mapping_data['mapping'])} variants")
     print(f"   • Unique codes: {len(final_mapping_data['reverse_mapping'])}")
     print()
@@ -2061,7 +2039,6 @@ def run_pipeline(resources: PipelineResources):
     print(f"   • Entities mapped: {len(final_mapping_data['mapping'])} variants")
     print(f"   • Unique entities: {len(final_mapping_data['reverse_mapping'])} codes")
     print(f"📂 Output directory: {args.output}")
-    print(f"📋 Mapping file: {mapping_path}")
     print()
 
     # Exit with success if at least one file was fully processed

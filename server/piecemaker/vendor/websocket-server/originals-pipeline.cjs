@@ -553,7 +553,7 @@ async function verifyJobProcessTreeStopped(job, processGroupId = job.processGrou
   });
 }
 
-function spawnTracked(job, script, args, progressScale = {}) {
+function spawnTracked(job, script, args, progressScale = {}, io = {}) {
   const offset = progressScale.offset || 0;
   const weight = progressScale.weight ?? 100;
   const convertWeight = weight * CONVERT_SUBPHASE_SHARE;
@@ -600,6 +600,14 @@ function spawnTracked(job, script, args, progressScale = {}) {
       const lines = stdoutRest.split(/\r?\n/);
       stdoutRest = lines.pop() || '';
       for (const line of lines) {
+        if (line.startsWith('MAPPING:')) {
+          try {
+            io.onMapping?.(JSON.parse(line.slice('MAPPING:'.length)));
+          } catch (error) {
+            errorLines.push(`mapping illisible : ${error.message}`);
+          }
+          continue;
+        }
         const progress = /^PROGRESS:([A-Z]+):(\d+):(\d+):(\d+)/.exec(line.trim());
         if (!progress) continue;
         const [, marker, pct, current, total] = progress;
@@ -630,6 +638,10 @@ function spawnTracked(job, script, args, progressScale = {}) {
       }
     };
 
+    if (io.input !== undefined) {
+      child.stdin.on('error', () => {});
+      child.stdin.end(io.input);
+    }
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', consumeStdout);
@@ -682,7 +694,7 @@ function spawnTracked(job, script, args, progressScale = {}) {
  * `onProgress`, si fourni, est appelé à chaque mise à jour de la progression
  * avec `{ phase, percent, processed, total }`.
  */
-function runManagedPythonJob({ action, script, args, onProgress, signal } = {}) {
+function runManagedPythonJob({ action, script, args, onProgress, signal, input, onMapping } = {}) {
   if (!['convert', 'anonymize'].includes(action)) throw new Error('Action inconnue.');
   if (!acceptingJobs) throw new Error('Le serveur est en cours d’arrêt : aucun nouveau traitement ne peut démarrer.');
   const job = {
@@ -716,7 +728,7 @@ function runManagedPythonJob({ action, script, args, onProgress, signal } = {}) 
     if (signal.aborted) abort();
     else signal.addEventListener('abort', abort, { once: true });
   }
-  const run = () => spawnTracked(job, script, args);
+  const run = () => spawnTracked(job, script, args, {}, { input, onMapping });
   const descriptor = { job, run };
   const completion = new Promise((resolve, reject) => {
     descriptor.resolve = resolve;
