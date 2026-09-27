@@ -7,7 +7,6 @@ const { performance } = require('node:perf_hooks');
 const {
   listProjectCases,
   projectCaseEntry,
-  readRegistryConfig,
   resolveCaseReference,
   validateSelectedCaseFolder,
 } = require('./case-registry.cjs');
@@ -67,12 +66,6 @@ const {
   unregisterClaudeAsset,
 } = require('./claude-assets.cjs');
 const { claudeHooksStatus } = require('./claude-hooks.cjs');
-const {
-  DEFAULT_CASE_FOLDER_STRUCTURE,
-  configuredCaseFolderStructure,
-  ensureCaseFolderStructure,
-  normalizeCaseFolderStructure,
-} = require('./case-folder-structure.cjs');
 
 const MAX_MARKDOWN_BYTES = 1024 * 1024;
 const SECRET_KEYS = new Set([
@@ -97,14 +90,13 @@ function validateNewCaseName(value) {
   return name;
 }
 
-async function createLegalCase({ casesRoot, homeDir, name, config = {} }) {
+async function createLegalCase({ casesRoot, homeDir, name }) {
   const root = resolveCasesRoot(casesRoot);
   const safeName = validateNewCaseName(name);
   const directory = path.join(root, safeName);
   if (fs.existsSync(directory)) throw new Error(`Le dossier juridique « ${safeName} » existe déjà.`);
   fs.mkdirSync(directory);
   try {
-    const structure = ensureCaseFolderStructure(directory, config);
     writeProtection(directory, { unprotected: [] });
     const mapping = writeCaseMapping(directory, { mapping: {}, reverse_mapping: {} });
     await createCommit({
@@ -120,7 +112,6 @@ async function createLegalCase({ casesRoot, homeDir, name, config = {} }) {
     });
     const folder = await caseOverview(root, homeDir, safeName);
     folder.branches = await historyBranches(root, homeDir, safeName);
-    folder.structure = structure;
     return folder;
   } catch (error) {
     fs.rmSync(directory, { recursive: true, force: true });
@@ -197,13 +188,11 @@ async function selectLocalFolder(platform = process.platform, initialFolder = os
 
 async function registerLegalCase({
   folder,
-  configFile,
   homeDir,
 } = {}) {
   const root = validateSelectedCaseFolder(folder);
   const entry = projectCaseEntry(root);
   if (!entry) throw new Error('Ce dossier n’est pas un projet enregistré.');
-  const structure = ensureCaseFolderStructure(root, readRegistryConfig(configFile));
   const protection = readProtection(root);
   if (!protection.exists) writeProtection(root, { unprotected: [] });
   const currentMapping = readCaseMapping(root);
@@ -221,7 +210,6 @@ async function registerLegalCase({
     installed: {
       mapping: path.relative(root, mapping.file).split(path.sep).join('/'),
       protection: path.relative(root, protection.file).split(path.sep).join('/'),
-      structure: structure.directories,
     },
   };
 }
@@ -230,7 +218,6 @@ function defaultConfig(repoRoot, homeDir = path.join(os.homedir(), '.piecemaker'
   return {
     pythonPath: null,
     venvPath: path.join(homeDir, 'venv'),
-    caseFolderStructure: { ...DEFAULT_CASE_FOLDER_STRUCTURE },
   };
 }
 
@@ -1997,13 +1984,8 @@ function createAdminRouter({
   const router = express.Router();
   const configFile = path.join(homeDir, 'config.json');
   const envFile = path.join(repoRoot, '.env');
-  const registryConfig = () => readRegistryConfig(configFile);
   const selectedCase = (reference) => {
-    const legalCase = resolveCaseReference(reference);
-    // Migration idempotente des dossiers enregistrés avant l'introduction de
-    // l'arborescence métier. Le manifeste fige les noms utilisés par ce dossier.
-    ensureCaseFolderStructure(legalCase.root, registryConfig());
-    return legalCase;
+    return resolveCaseReference(reference);
   };
 
   // Migration : l'identité de commit ne vivait que dans le `.env` du clone
@@ -2101,7 +2083,6 @@ function createAdminRouter({
 
   router.get('/settings', (req, res) => {
     const config = { ...defaultConfig(repoRoot, homeDir), ...readJson(configFile, {}) };
-    config.caseFolderStructure = configuredCaseFolderStructure(config);
     const env = readEnvFile(envFile);
     const publicEnv = {};
     const secrets = {};
@@ -2115,19 +2096,10 @@ function createAdminRouter({
   router.put('/settings', (req, res) => {
     try {
       const current = { ...defaultConfig(repoRoot, homeDir), ...readJson(configFile, {}) };
-      current.caseFolderStructure = configuredCaseFolderStructure(current);
       const patch = req.body?.config || {};
       const next = { ...current };
 
       if (patch.pythonPath !== undefined) next.pythonPath = String(patch.pythonPath || '').trim() || null;
-      if (patch.caseFolderStructure !== undefined) {
-        next.caseFolderStructure = normalizeCaseFolderStructure({
-          ...current.caseFolderStructure,
-          ...(patch.caseFolderStructure && typeof patch.caseFolderStructure === 'object'
-            ? patch.caseFolderStructure
-            : {}),
-        });
-      }
 
       // L'identité de commit est aussi mémorisée dans config.json : le hook
       // d'édition (lancé depuis le cache du plugin) ne peut pas lire le `.env`
