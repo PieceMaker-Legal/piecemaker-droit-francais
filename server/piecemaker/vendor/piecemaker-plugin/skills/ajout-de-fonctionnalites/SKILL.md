@@ -50,3 +50,17 @@ Instructions pour l'assistant, en français, centrées sur la tâche.
 3. **Créer ou éditer le fichier correspondant**, en respectant le format
    attendu (front matter pour une skill, section « Ce dossier » pour un
    élément local, etc.).
+4. **Pour un nouveau dossier d'affaire** qui n'a pas encore de wrapper : sur
+   demande, proposer et créer `CLAUDE.md` et `AGENTS.md` à la racine du
+   dossier, avec exactement ce contenu (chemin absolu, jamais `~`) :
+
+   ```
+   @/Users/tsardet/.piecemaker/CLAUDE.md
+
+   # Ce dossier
+   <!-- Éléments propres à ce dossier : parties, juridiction, échéances, particularités. À compléter. -->
+   ```
+
+   Si l'un de ces deux fichiers existe déjà dans le dossier, ne jamais
+   l'écraser : le lire, et s'il ne contient pas déjà cette ligne d'import,
+   l'ajouter en tête sans supprimer le contenu existant.
