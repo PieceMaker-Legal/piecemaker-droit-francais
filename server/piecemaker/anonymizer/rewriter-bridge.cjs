@@ -208,6 +208,7 @@ function startRewriterBridge({ dictionary, harness = null }) {
     response.writeHead(404);
     response.end();
   });
+  server.requestTimeout = 0;
 
   return new Promise((resolve, reject) => {
     server.once('error', reject);

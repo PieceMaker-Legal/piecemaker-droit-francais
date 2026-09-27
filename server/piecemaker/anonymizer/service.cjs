@@ -52,7 +52,9 @@ function hudsuckerBinary() {
     path.join(__dirname, 'hudsucker-proxy', 'target', 'release', name),
     path.join(__dirname, 'hudsucker-proxy', 'target', 'debug', name),
   ];
-  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
+  const present = candidates.filter((candidate) => fs.existsSync(candidate));
+  if (!present.length) return candidates[0];
+  return present.reduce((newest, candidate) => (fs.statSync(candidate).mtimeMs > fs.statSync(newest).mtimeMs ? candidate : newest));
 }
 
 function certificatePaths() {
