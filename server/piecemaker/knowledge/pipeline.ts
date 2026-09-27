@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { findApplicationRoot, getModuleDirectory } from '../../shared/utils.js';
+import { resolveKnowledgeDatabasePath } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
 import type { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
 import { persistScanResult, scanResultOperations } from '../../../plugins/piecemaker-dossier/src/scan-result.js';
 import type { GlinerDocument, GlinerMappingDocument, JsonData } from '../../../plugins/piecemaker-dossier/src/types.js';
@@ -25,7 +26,6 @@ type PipelineOptions = {
 type OriginalFile = { path: string; resource?: boolean };
 
 type OriginalsPipeline = {
-  caseMappingFile(caseRoot: string): string;
   listOriginals(caseRoot: string): Promise<OriginalFile[]>;
   runManagedPythonJob(options: {
     action: 'convert' | 'anonymize';
@@ -33,16 +33,15 @@ type OriginalsPipeline = {
     args: string[];
     onProgress?: (progress: KnowledgeScanProgress) => void;
     signal?: AbortSignal;
+    input?: string;
+    onMapping?: (mapping: unknown) => void;
   }): Promise<unknown>;
-  writeCaseMapping(caseRoot: string, document: GlinerMappingDocument): unknown;
 };
 
 const require = createRequire(import.meta.url);
 const {
-  caseMappingFile,
   listOriginals,
   runManagedPythonJob,
-  writeCaseMapping,
 } = require(path.join(
   findApplicationRoot(getModuleDirectory(import.meta.url)),
   'server',
@@ -174,34 +173,39 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const explicitFiles = Array.isArray(requestedFiles) && requestedFiles.length > 0;
       const files = await safeFiles(projectPath, requestedFiles);
       if (!files.length) throw new Error('No supported file to scan.');
-      const mappingFile = caseMappingFile(projectPath);
       const stateFile = path.join(projectPath, '.piecemaker', 'anonymization-state.json');
       const outputDirectory = path.join(projectPath, 'Fichiers convertis PieceMaker');
-      fs.mkdirSync(path.dirname(mappingFile), { recursive: true });
       fs.mkdirSync(path.dirname(stateFile), { recursive: true });
       fs.mkdirSync(outputDirectory, { recursive: true });
-      fs.writeFileSync(mappingFile, JSON.stringify(mappingSeed(projectId, projectPath, options.store)), { mode: 0o600 });
+      const seed = mappingSeed(projectId, projectPath, options.store);
       const args = [
         ...files,
         '-o',
         outputDirectory,
-        '--mapping-file',
-        mappingFile,
+        '--database',
+        resolveKnowledgeDatabasePath(),
         '--case-root',
         projectPath,
         '--state-file',
         stateFile,
       ];
       if (!explicitFiles) args.push('--skip-existing');
-      await withPythonPath(pythonExecutable(options.pythonPath), () => runManagedPythonJob({
-        action: 'anonymize',
-        script,
-        args,
-        onProgress,
-        signal,
-      }));
-      const mapping = parseObject(mappingFile) as GlinerMappingDocument;
-      writeCaseMapping(projectPath, mapping);
+      let received: GlinerMappingDocument | null = null;
+      try {
+        await withPythonPath(pythonExecutable(options.pythonPath), () => runManagedPythonJob({
+          action: 'anonymize',
+          script,
+          args,
+          onProgress,
+          signal,
+          input: JSON.stringify(seed),
+          onMapping: (value) => { received = value as GlinerMappingDocument; },
+        }));
+      } catch (error) {
+        if (received) options.store.update({ projectId, operations: scanResultOperations({ projectId, mapping: received, documents: [] }) });
+        throw error;
+      }
+      const mapping: GlinerMappingDocument = received || seed;
       const documents = documentsFromIndex(projectPath, files, readDocumentIndex(projectPath));
       const scanResult = { projectId, mapping, documents };
       const result = explicitFiles

@@ -95,6 +95,19 @@ const arrayValue = (value: unknown, field: string): string[] => { if (value === 
 const originValue = (value: unknown): KnowledgeOrigin => value === 'gliner' || value === 'manual' || value === 'llm' ? value : 'manual';
 const kindValue = (value: unknown): NodeKind => { if (typeof value !== 'string' || !NODE_KINDS.includes(value as NodeKind)) throw new TypeError(`kind must be one of ${NODE_KINDS.join(', ')}`); return value as NodeKind; };
 const searchable = (values: string[]): string => values.join('\u0000').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
+const nextFreeCode = (code: string, used: Set<string>): string => {
+  const match = /^(.*)_(\d+)$/.exec(code);
+  const prefix = match ? match[1] : code;
+  const width = match && match[2].length > 1 ? match[2].length : 0;
+  let highest = 0;
+  for (const candidate of used) {
+    const numbered = /^(.*)_(\d+)$/.exec(candidate);
+    if (numbered && numbered[1] === prefix) highest = Math.max(highest, Number(numbered[2]));
+  }
+  let number = highest + 1;
+  while (used.has(`${prefix}_${String(number).padStart(width, '0')}`)) number += 1;
+  return `${prefix}_${String(number).padStart(width, '0')}`;
+};
 const searchPattern = (value: string): string => `%${searchable([value]).replace(/[\\%_]/g, '\\$&')}%`;
 const toNode = (row: NodeRow): KnowledgeNode => ({ id: row.id, projectId: row.project_id, kind: row.kind, label: row.label, aliases: parseJson<string[]>(row.aliases_json, []), data: parseJson<JsonData>(row.data_json, {}), createdAt: row.created_at, updatedAt: row.updated_at });
 const withoutInstitutionalAliases = (node: KnowledgeNode): KnowledgeNode => ({ ...node, aliases: node.aliases.filter((alias) => !isInstitutionalEntity(alias)) });
@@ -126,6 +139,7 @@ export class KnowledgeStore {
   private readonly deleteMapping;
   private readonly removePartyDesignation;
   private readonly deleteNode;
+  private readonly findCodeOwner;
 
   public constructor(databaseSource: string | DatabaseConnection = resolveKnowledgeDatabasePath()) {
     this.ownsDatabase = typeof databaseSource === 'string';
@@ -141,6 +155,9 @@ export class KnowledgeStore {
     this.deleteMapping = this.database.prepare('DELETE FROM piecemaker_mappings WHERE project_id=@projectId AND node_id=@nodeId AND real_value=@real');
     this.removePartyDesignation = this.database.prepare("UPDATE piecemaker_nodes SET data_json=json_remove(data_json, '$.partySide', '$.position'), updated_at=@at WHERE project_id=@projectId AND id=@nodeId");
     this.deleteNode = this.database.prepare('DELETE FROM piecemaker_nodes WHERE project_id=@projectId AND id=@nodeId');
+    this.findCodeOwner = this.database.prepare(`SELECT project_id FROM piecemaker_mappings WHERE masked_value=@code AND project_id<>@projectId
+      UNION SELECT project_id FROM piecemaker_nodes WHERE id='entity:'||@code AND project_id<>@projectId LIMIT 1`);
+    this.database.transaction(() => this.renumberConflictingCodes())();
     if (typeof databaseSource === 'string') {
       try { fs.chmodSync(databaseSource, 0o600); } catch {}
     }
@@ -222,7 +239,14 @@ export class KnowledgeStore {
       .map(toMapping)
       .filter((mapping) => retained.has(mapping.nodeId) && !isInstitutionalEntity(mapping.real));
     const anonymizationComplete = Boolean(this.database.prepare('SELECT 1 FROM piecemaker_anonymization_status WHERE project_id=?').get(projectId));
-    return { projectId, nodes, links, mappings, exclusions, exclusionsInitialized: Boolean(exclusionsNode), anonymizationComplete };
+    return { projectId, nodes, links, mappings, exclusions, exclusionsInitialized: Boolean(exclusionsNode), anonymizationComplete, reservedCodes: this.reservedCodes(projectId) };
+  }
+
+  public reservedCodes(projectIdInput: string): string[] {
+    const projectId = this.resolveProject(projectIdInput);
+    return (this.database.prepare(`SELECT masked_value AS code FROM piecemaker_mappings WHERE project_id<>?
+      UNION SELECT substr(id, 8) AS code FROM piecemaker_nodes WHERE project_id<>? AND id LIKE 'entity:%'
+      ORDER BY code`).all(projectId, projectId) as Array<{ code: string }>).map(({ code }) => code);
   }
 
   public glinerMappingKeys(projectIdInput: string): Array<{ nodeId: string; real: string }> {
@@ -317,6 +341,7 @@ export class KnowledgeStore {
     if (operation.op === 'upsertMapping') {
       const mapping = operation.mapping;
       const values = { projectId, nodeId: requiredText(mapping.nodeId, 'mapping.nodeId'), real: requiredText(mapping.real, 'mapping.real') };
+      this.assertCodeFree(projectId, requiredText(mapping.masked, 'mapping.masked'));
       this.upsertMapping.run({ ...values, masked: requiredText(mapping.masked, 'mapping.masked'), searchText: searchable([mapping.real, mapping.masked]), data: JSON.stringify(objectValue(mapping.data, 'mapping.data')), origin: originValue(mapping.origin), at: timestamp });
       counts.mappings += 1;
       return;
@@ -329,12 +354,46 @@ export class KnowledgeStore {
     if (operation.op === 'renameNode') {
       const fromNodeId = requiredText(operation.rename.fromNodeId, 'rename.fromNodeId');
       const toNodeId = requiredText(operation.rename.toNodeId, 'rename.toNodeId');
+      if (toNodeId.startsWith('entity:')) this.assertCodeFree(projectId, toNodeId.slice('entity:'.length));
       if (fromNodeId !== toNodeId) this.renameNodeRows(projectId, fromNodeId, toNodeId, timestamp);
       counts.nodes += 1;
       return;
     }
     this.deleteNode.run({ projectId, nodeId: requiredText(operation.nodeId, 'nodeId') });
     counts.nodes += 1;
+  }
+
+  private assertCodeFree(projectId: string, code: string): void {
+    const owner = this.findCodeOwner.get({ projectId, code }) as { project_id: string } | undefined;
+    if (owner) throw new Error(`code ${code} already used by another case`);
+  }
+
+  private renumberConflictingCodes(): number {
+    const holders = this.database.prepare(`SELECT code, project_id, MIN(created_at) AS first_seen FROM (
+        SELECT masked_value AS code, project_id, created_at FROM piecemaker_mappings
+        UNION ALL SELECT substr(id, 8), project_id, created_at FROM piecemaker_nodes WHERE id LIKE 'entity:%'
+      ) GROUP BY code, project_id ORDER BY code, first_seen, project_id`).all() as Array<{ code: string; project_id: string }>;
+    const used = new Set(holders.map(({ code }) => code));
+    const owners = new Map<string, string>();
+    const timestamp = at();
+    let renumbered = 0;
+    for (const { code, project_id: projectId } of holders) {
+      if (!owners.has(code)) {
+        owners.set(code, projectId);
+        continue;
+      }
+      const replacement = nextFreeCode(code, used);
+      used.add(replacement);
+      if (this.database.prepare('SELECT 1 FROM piecemaker_nodes WHERE project_id=? AND id=?').get(projectId, `entity:${code}`)) {
+        this.renameNodeRows(projectId, `entity:${code}`, `entity:${replacement}`, timestamp);
+      }
+      this.database.prepare('UPDATE piecemaker_mappings SET masked_value=?, search_text=replace(search_text, ?, ?), updated_at=? WHERE project_id=? AND masked_value=?')
+        .run(replacement, searchable([code]), searchable([replacement]), timestamp, projectId, code);
+      this.database.prepare("UPDATE piecemaker_nodes SET data_json=json_set(data_json, '$.code', ?), updated_at=? WHERE project_id=? AND json_extract(data_json, '$.code')=?")
+        .run(replacement, timestamp, projectId, code);
+      renumbered += 1;
+    }
+    return renumbered;
   }
 
   private renameNodeRows(projectId: string, fromNodeId: string, toNodeId: string, timestamp: string): void {

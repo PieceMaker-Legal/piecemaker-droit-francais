@@ -542,6 +542,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
               { kind: node.kind, legalForm: typeof node.data.legalForm === 'string' ? node.data.legalForm : '', side, position: typeof node.data.position === 'string' ? node.data.position : '' },
               data?.graph.nodes || [],
               data?.graph.mappings || [],
+              data?.graph.reservedCodes,
             );
             const operations: KnowledgeUpdateOperation[] = [...change.operations];
             operations.push({ op: 'upsertNode', node: { id: change.nodeId, kind: node.kind, label: node.label, aliases: node.aliases, data: change.data, origin: 'manual' } });

@@ -47,10 +47,12 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
     { kind: 'company', legalForm: fields.legalForm || input.legalForm, side: input.partySide, position: input.position },
     graph.nodes,
     graph.mappings,
+    graph.reservedCodes,
   );
   const usedCodes = new Set([
     ...graph.nodes.map((node) => nodeCode(node)),
     ...graph.mappings.map((mapping) => clean(mapping.masked)),
+    ...(graph.reservedCodes || []),
     companyChange.code,
   ].filter(Boolean));
   const operations: KnowledgeUpdateOperation[] = [...companyChange.operations];
