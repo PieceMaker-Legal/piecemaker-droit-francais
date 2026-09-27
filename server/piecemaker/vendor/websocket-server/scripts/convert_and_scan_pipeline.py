@@ -636,6 +636,48 @@ def consolidate_duplicate_entities(entities: List[Dict]) -> List[Dict]:
     return consolidated
 
 
+CIVILITY_TITLE = (
+    r"(?:monsieur|madame|mademoiselle|messieurs|mesdames|ma[iî]tre|docteure|doctoresse|docteur|professeure|professeur"
+    r"|mmes|mlles|mme|mlle|mm|m|me|mrs|mr|ms|miss|dr|pr|prof)\.?\s+"
+)
+CIVILITY_PREFIX = re.compile(
+    rf"^(?:{CIVILITY_TITLE}(?:(?:le|la|les)\s+(?={CIVILITY_TITLE}))?)+",
+    re.IGNORECASE,
+)
+
+
+def strip_civility(text: str) -> str:
+    """« Monsieur Jean Dupont » → « Jean Dupont » ; « Maître Prunelle » → « Prunelle »."""
+    bare = CIVILITY_PREFIX.sub("", text.strip()).strip()
+    if re.match(r"(?:le|la|les)\s|l['’]", bare, re.IGNORECASE):
+        return ""
+    return bare if re.search(r"[^\W\d_]{2,}", bare) else ""
+
+
+def _is_person_code(code: str, person_codes: Set[str]) -> bool:
+    return code in person_codes or "PERSONNE_PHYSIQUE_" in code or code.startswith(("DIRIGEANT_", "AVOCAT_"))
+
+
+def add_bare_person_variants(merged_mapping: Dict, merged_reverse: Dict,
+                             merged_extracted: Dict, ignored_lower: Set[str]) -> None:
+    """Every titled name also gets its title-less variant, under the same code."""
+    person_entries = merged_extracted.setdefault("personnes_physiques", {})
+    person_codes = set(person_entries)
+    known_lower = {text.lower() for text in merged_mapping}
+    for text, code in list(merged_mapping.items()):
+        if not _is_person_code(str(code), person_codes):
+            continue
+        bare = strip_civility(text)
+        if not bare or bare == text or bare.lower() in known_lower or bare.lower() in ignored_lower:
+            continue
+        merged_mapping[bare] = code
+        known_lower.add(bare.lower())
+        merged_reverse[code] = list(dict.fromkeys([*(merged_reverse.get(code) or [text]), bare]))
+        entry = person_entries.get(code)
+        if entry is not None:
+            entry["variants"] = list(dict.fromkeys([*(entry.get("variants") or []), bare]))
+
+
 def _person_entry_texts(code: str, entry: Dict, reverse_mapping: Dict,
                         mapping_texts: Optional[List[str]] = None) -> List[str]:
     values = [entry.get("original", ""), *(entry.get("variants") or [])]
@@ -1436,6 +1478,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
     merged_ignored = list(dict.fromkeys(
         ignored + [str(text).strip() for text in new_mapping.get('ignored', []) if str(text).strip()] + left_visible
     ))
+    add_bare_person_variants(merged_mapping, merged_reverse, merged_extracted, ignored_lower)
     return {
         "mapping": merged_mapping,
         "reverse_mapping": merged_reverse,
