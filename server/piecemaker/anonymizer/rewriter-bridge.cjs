@@ -84,6 +84,7 @@ function startRewriterBridge({ dictionary, harness = null }) {
   const server = http.createServer((request, response) => {
     const provider = header(request, 'x-piecemaker-provider') || 'claude';
     const current = () => dictionary.get();
+    const outbound = () => (dictionary.getForOutbound ? dictionary.getForOutbound() : dictionary.get());
 
     if (request.method === 'GET' && request.url === '/health') {
       response.writeHead(200);
@@ -95,14 +96,14 @@ function startRewriterBridge({ dictionary, harness = null }) {
       readBody(request).then((body) => {
         stats.requests += 1;
         const contentType = header(request, 'content-type') || 'application/json';
-        observeRequest(harness, body, contentType, provider);
-        const dict = current();
+        const dict = outbound();
         const rewritten = !body.length || dict.empty
           ? body
           : Buffer.from(rewriteJsonBody(body, (text) => anonymize(text, dict)), 'utf8');
         if (!rewritten.equals(body)) stats.anonymized += 1;
         response.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': rewritten.length });
         response.end(rewritten);
+        setImmediate(() => observeRequest(harness, body, contentType, provider));
       }).catch((error) => {
         stats.failures += 1;
         stats.lastError = error.message;
@@ -165,15 +166,16 @@ function startRewriterBridge({ dictionary, harness = null }) {
       const id = header(request, 'x-piecemaker-ws');
       const direction = header(request, 'x-piecemaker-direction');
       readBody(request).then((body) => {
-        const dict = current();
         const text = body.toString('utf8');
         if (direction === 'out') {
-          observeRequest(harness, body, 'application/json', provider);
+          const dict = outbound();
           const rewritten = dict.empty ? text : rewriteJsonBody(text, (value) => anonymize(value, dict));
           response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
           response.end(rewritten);
+          setImmediate(() => observeRequest(harness, body, 'application/json', provider));
           return;
         }
+        const dict = current();
         let entry = sessions.get(id);
         if (!entry) {
           entry = { rewriter: createSseRewriter((value) => deanonymize(value, dict)) };

@@ -30,6 +30,19 @@ const EMPTY = Object.freeze({
   empty: true,
 });
 
+const MEMO_MIN_LENGTH = 256;
+const MEMO_BUDGET = 16 * 1024 * 1024;
+const memos = new WeakMap();
+
+function memoFor(dictionary) {
+  let memo = memos.get(dictionary);
+  if (!memo) {
+    memo = { entries: new Map(), size: 0 };
+    memos.set(dictionary, memo);
+  }
+  return memo;
+}
+
 function plainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
@@ -90,7 +103,24 @@ function buildDictionary(document, stamp) {
 
 /** Nom réel → code, sur tout ce qui part vers l'API. */
 function anonymize(text, dictionary) {
-  return dictionary.empty ? text : applyMapping(text, dictionary.mapping);
+  if (dictionary.empty) return text;
+  if (typeof text !== 'string' || text.length < MEMO_MIN_LENGTH) return applyMapping(text, dictionary.mapping);
+  const memo = memoFor(dictionary);
+  const cached = memo.entries.get(text);
+  if (cached !== undefined) {
+    memo.entries.delete(text);
+    memo.entries.set(text, cached);
+    return cached;
+  }
+  const result = applyMapping(text, dictionary.mapping);
+  memo.entries.set(text, result);
+  memo.size += text.length + (result === text ? 0 : result.length);
+  for (const [key, value] of memo.entries) {
+    if (memo.size <= MEMO_BUDGET) break;
+    memo.entries.delete(key);
+    memo.size -= key.length + (value === key ? 0 : value.length);
+  }
+  return result;
 }
 
 /** Code → nom réel, sur tout ce qui revient de l'API vers la machine. */

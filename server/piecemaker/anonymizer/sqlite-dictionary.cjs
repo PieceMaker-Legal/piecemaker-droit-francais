@@ -1,3 +1,4 @@
+const fs = require('node:fs');
 const path = require('node:path');
 
 const Database = require('better-sqlite3');
@@ -62,6 +63,7 @@ function createSqliteDictionaryLoader({ databasePath }) {
   let mappingSignature = null;
   let generation = 0;
   let current = EMPTY_DICTIONARY;
+  let failure = null;
 
   function connection() {
     if (!database) {
@@ -97,15 +99,24 @@ function createSqliteDictionaryLoader({ databasePath }) {
       generation += 1;
       current = buildDictionary(buildMappingDocument(rows), generation);
       dataVersion = nextDataVersion;
+      failure = null;
       return current;
-    } catch {
+    } catch (error) {
+      failure = fs.existsSync(file) ? error : null;
       return current;
     }
+  }
+
+  function loadForOutbound() {
+    const dictionary = load(false);
+    if (failure) throw new Error(`dictionnaire illisible : ${failure.message}`);
+    return dictionary;
   }
 
   return {
     file,
     get: () => load(false),
+    getForOutbound: loadForOutbound,
     refresh: () => load(true),
     exists: () => !load(false).empty,
     close: () => {
