@@ -126,26 +126,35 @@ function literalAnchor(value) {
   return runs.reduce((longest, run) => (run.length > longest.length ? run : longest), '');
 }
 
-function foldCase(text) {
-  return text.toLowerCase().replace(/\u017F/g, 's');
+const ANCHOR_WIDTH = 37;
+const ANCHOR_SYMBOL = new Int8Array(128).fill(-1);
+for (let letter = 0; letter < 26; letter += 1) {
+  ANCHOR_SYMBOL[65 + letter] = letter;
+  ANCHOR_SYMBOL[97 + letter] = letter;
+}
+for (let digit = 0; digit < 10; digit += 1) ANCHOR_SYMBOL[48 + digit] = 26 + digit;
+ANCHOR_SYMBOL[95] = 36;
+const KELVIN_SIGN = 0x212A;
+const LONG_S = 0x017F;
+
+function anchorSymbol(unit) {
+  if (unit < 128) return ANCHOR_SYMBOL[unit];
+  if (unit === KELVIN_SIGN) return ANCHOR_SYMBOL[107];
+  if (unit === LONG_S) return ANCHOR_SYMBOL[115];
+  return -1;
 }
 
-const ANCHOR_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_';
-const ANCHOR_SYMBOL = new Int8Array(128).fill(-1);
-for (let symbol = 0; symbol < ANCHOR_ALPHABET.length; symbol += 1) ANCHOR_SYMBOL[ANCHOR_ALPHABET.charCodeAt(symbol)] = symbol;
-
 function buildAnchorScanner(anchors) {
-  const width = ANCHOR_ALPHABET.length;
-  let transitions = new Int32Array(width * 16).fill(-1);
+  let transitions = new Int32Array(ANCHOR_WIDTH * 16).fill(-1);
   const outputs = [[]];
   let size = 1;
   anchors.forEach((anchor, index) => {
     if (!anchor) return;
     let node = 0;
     for (let position = 0; position < anchor.length; position += 1) {
-      const slot = node * width + ANCHOR_SYMBOL[anchor.charCodeAt(position)];
+      const slot = node * ANCHOR_WIDTH + ANCHOR_SYMBOL[anchor.charCodeAt(position)];
       if (transitions[slot] === -1) {
-        if (size * width >= transitions.length) {
+        if ((size + 1) * ANCHOR_WIDTH > transitions.length) {
           const grown = new Int32Array(transitions.length * 2).fill(-1);
           grown.set(transitions);
           transitions = grown;
@@ -161,7 +170,7 @@ function buildAnchorScanner(anchors) {
 
   const failure = new Int32Array(size);
   const queue = [];
-  for (let symbol = 0; symbol < width; symbol += 1) {
+  for (let symbol = 0; symbol < ANCHOR_WIDTH; symbol += 1) {
     const child = transitions[symbol];
     if (child === -1) transitions[symbol] = 0;
     else queue.push(child);
@@ -169,40 +178,42 @@ function buildAnchorScanner(anchors) {
   for (let head = 0; head < queue.length; head += 1) {
     const node = queue[head];
     outputs[node] = outputs[node].concat(outputs[failure[node]]);
-    for (let symbol = 0; symbol < width; symbol += 1) {
-      const slot = node * width + symbol;
+    for (let symbol = 0; symbol < ANCHOR_WIDTH; symbol += 1) {
+      const slot = node * ANCHOR_WIDTH + symbol;
       const child = transitions[slot];
       if (child === -1) {
-        transitions[slot] = transitions[failure[node] * width + symbol];
+        transitions[slot] = transitions[failure[node] * ANCHOR_WIDTH + symbol];
       } else {
-        failure[child] = transitions[failure[node] * width + symbol];
+        failure[child] = transitions[failure[node] * ANCHOR_WIDTH + symbol];
         queue.push(child);
       }
     }
   }
 
+  const next = new Int32Array(size * ANCHOR_WIDTH);
+  for (let slot = 0; slot < next.length; slot += 1) next[slot] = transitions[slot] * ANCHOR_WIDTH;
+  const emitted = new Array(size * ANCHOR_WIDTH).fill(null);
+  for (let node = 0; node < size; node += 1) if (outputs[node].length) emitted[node * ANCHOR_WIDTH] = outputs[node];
+
   return (text) => {
     const found = new Set();
-    let node = 0;
+    let state = 0;
     for (let position = 0; position < text.length; position += 1) {
-      const unit = text.charCodeAt(position);
-      const symbol = unit < 128 ? ANCHOR_SYMBOL[unit] : -1;
+      const symbol = anchorSymbol(text.charCodeAt(position));
       if (symbol === -1) {
-        node = 0;
+        state = 0;
         continue;
       }
-      node = transitions[node * width + symbol];
-      const matched = outputs[node];
-      for (let item = 0; item < matched.length; item += 1) found.add(matched[item]);
+      state = next[state + symbol];
+      const matched = emitted[state];
+      if (matched !== null) for (const index of matched) found.add(index);
     }
     return found;
   };
 }
 
 function compileReplacements(replacements) {
-  const sensitive = buildAnchorScanner(replacements.map(({ anchor, caseSensitive }) => (caseSensitive ? anchor : '')));
-  const insensitive = buildAnchorScanner(replacements.map(({ anchor, caseSensitive }) => (caseSensitive ? '' : anchor)));
-  return { replacements, sensitive, insensitive };
+  return { replacements, scan: buildAnchorScanner(replacements.map(({ anchor }) => anchor.toLowerCase())) };
 }
 
 function isDeeplyFrozen(object) {
@@ -224,10 +235,8 @@ function compileMapping(mapping) {
   for (const [entity, code] of entries.sort(byDescendingEntityLength(([key]) => key))) {
     const regex = buildEntityRegex(entity);
     if (!regex) continue;
-    const caseSensitive = !regex.flags.includes('i');
     const trimmed = entity.trim();
-    const anchor = literalAnchor(caseSensitive ? trimmed.toUpperCase() : trimmed);
-    replacements.push({ regex, code, caseSensitive, anchor: caseSensitive ? anchor : anchor.toLowerCase() });
+    replacements.push({ regex, code, anchor: literalAnchor(regex.flags.includes('i') ? trimmed : trimmed.toUpperCase()) });
   }
   const compiled = {
     frozen: Object.isFrozen(mapping),
@@ -240,13 +249,13 @@ function compileMapping(mapping) {
   return compiled;
 }
 
-function applyReplacements({ replacements, sensitive, insensitive }, text) {
+function applyReplacements({ replacements, scan }, text) {
   let output = text;
   let present = null;
-  replacements.forEach(({ regex, code, anchor, caseSensitive }, index) => {
+  replacements.forEach(({ regex, code, anchor }, index) => {
     if (anchor) {
-      if (present === null) present = { sensitive: sensitive(output), insensitive: insensitive(foldCase(output)) };
-      if (!(caseSensitive ? present.sensitive : present.insensitive).has(index)) return;
+      if (present === null) present = scan(output);
+      if (!present.has(index)) return;
     }
     const next = output.replace(regex, code);
     if (next !== output) {
@@ -300,7 +309,7 @@ function compileReverseMapping(reverseMapping) {
     const canonical = Array.isArray(variants) ? variants[0] : variants;
     if (!canonical) continue;
     const regex = new RegExp(`${WORD_BOUNDARY_BEFORE}${escapeRegex(String(code))}${WORD_BOUNDARY_AFTER}`, 'giu');
-    replacements.push({ regex, code: String(canonical), caseSensitive: false, anchor: literalAnchor(code).toLowerCase() });
+    replacements.push({ regex, code: String(canonical), anchor: literalAnchor(code) });
   }
   const compiled = { frozen: isDeeplyFrozen(reverseMapping), signature, replacements: compileReplacements(replacements) };
   compiledReverseMappings.set(reverseMapping, compiled);
