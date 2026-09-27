@@ -115,6 +115,148 @@ function byDescendingEntityLength(getEntity) {
   };
 }
 
+function mappingSignature(entries) {
+  let signature = '';
+  for (const [key, value] of entries) signature += key + '\u0000' + value + '\u0001';
+  return signature;
+}
+
+function literalAnchor(value) {
+  const runs = String(value).match(/[A-Za-z0-9_]+/g) || [];
+  return runs.reduce((longest, run) => (run.length > longest.length ? run : longest), '');
+}
+
+function foldCase(text) {
+  return text.toLowerCase().replace(/\u017F/g, 's');
+}
+
+const ANCHOR_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_';
+const ANCHOR_SYMBOL = new Int8Array(128).fill(-1);
+for (let symbol = 0; symbol < ANCHOR_ALPHABET.length; symbol += 1) ANCHOR_SYMBOL[ANCHOR_ALPHABET.charCodeAt(symbol)] = symbol;
+
+function buildAnchorScanner(anchors) {
+  const width = ANCHOR_ALPHABET.length;
+  let transitions = new Int32Array(width * 16).fill(-1);
+  const outputs = [[]];
+  let size = 1;
+  anchors.forEach((anchor, index) => {
+    if (!anchor) return;
+    let node = 0;
+    for (let position = 0; position < anchor.length; position += 1) {
+      const slot = node * width + ANCHOR_SYMBOL[anchor.charCodeAt(position)];
+      if (transitions[slot] === -1) {
+        if (size * width >= transitions.length) {
+          const grown = new Int32Array(transitions.length * 2).fill(-1);
+          grown.set(transitions);
+          transitions = grown;
+        }
+        transitions[slot] = size;
+        outputs.push([]);
+        size += 1;
+      }
+      node = transitions[slot];
+    }
+    outputs[node].push(index);
+  });
+
+  const failure = new Int32Array(size);
+  const queue = [];
+  for (let symbol = 0; symbol < width; symbol += 1) {
+    const child = transitions[symbol];
+    if (child === -1) transitions[symbol] = 0;
+    else queue.push(child);
+  }
+  for (let head = 0; head < queue.length; head += 1) {
+    const node = queue[head];
+    outputs[node] = outputs[node].concat(outputs[failure[node]]);
+    for (let symbol = 0; symbol < width; symbol += 1) {
+      const slot = node * width + symbol;
+      const child = transitions[slot];
+      if (child === -1) {
+        transitions[slot] = transitions[failure[node] * width + symbol];
+      } else {
+        failure[child] = transitions[failure[node] * width + symbol];
+        queue.push(child);
+      }
+    }
+  }
+
+  return (text) => {
+    const found = new Set();
+    let node = 0;
+    for (let position = 0; position < text.length; position += 1) {
+      const unit = text.charCodeAt(position);
+      const symbol = unit < 128 ? ANCHOR_SYMBOL[unit] : -1;
+      if (symbol === -1) {
+        node = 0;
+        continue;
+      }
+      node = transitions[node * width + symbol];
+      const matched = outputs[node];
+      for (let item = 0; item < matched.length; item += 1) found.add(matched[item]);
+    }
+    return found;
+  };
+}
+
+function compileReplacements(replacements) {
+  const sensitive = buildAnchorScanner(replacements.map(({ anchor, caseSensitive }) => (caseSensitive ? anchor : '')));
+  const insensitive = buildAnchorScanner(replacements.map(({ anchor, caseSensitive }) => (caseSensitive ? '' : anchor)));
+  return { replacements, sensitive, insensitive };
+}
+
+function isDeeplyFrozen(object) {
+  return Object.isFrozen(object) && Object.values(object).every((value) => !Array.isArray(value) || Object.isFrozen(value));
+}
+
+const compiledMappings = new WeakMap();
+
+function compileMapping(mapping) {
+  const cached = compiledMappings.get(mapping);
+  if (cached && cached.frozen) return cached;
+  const entries = Object.entries(mapping);
+  const signature = mappingSignature(entries);
+  if (cached && cached.signature === signature) return cached;
+
+  const codes = [...new Set(entries.map(([, code]) => String(code)).filter(Boolean))]
+    .sort((a, b) => b.length - a.length);
+  const replacements = [];
+  for (const [entity, code] of entries.sort(byDescendingEntityLength(([key]) => key))) {
+    const regex = buildEntityRegex(entity);
+    if (!regex) continue;
+    const caseSensitive = !regex.flags.includes('i');
+    const trimmed = entity.trim();
+    const anchor = literalAnchor(caseSensitive ? trimmed.toUpperCase() : trimmed);
+    replacements.push({ regex, code, caseSensitive, anchor: caseSensitive ? anchor : anchor.toLowerCase() });
+  }
+  const compiled = {
+    frozen: Object.isFrozen(mapping),
+    signature,
+    codes,
+    codeProbe: codes.length ? new RegExp(codes.map(escapeRegex).join('|')) : null,
+    replacements: compileReplacements(replacements),
+  };
+  compiledMappings.set(mapping, compiled);
+  return compiled;
+}
+
+function applyReplacements({ replacements, sensitive, insensitive }, text) {
+  let output = text;
+  let present = null;
+  replacements.forEach(({ regex, code, anchor, caseSensitive }, index) => {
+    if (anchor) {
+      if (present === null) present = { sensitive: sensitive(output), insensitive: insensitive(foldCase(output)) };
+      if (!(caseSensitive ? present.sensitive : present.insensitive).has(index)) return;
+    }
+    const next = output.replace(regex, code);
+    if (next !== output) {
+      output = next;
+      present = null;
+    }
+  });
+  return output;
+}
+
 /**
  * Entité → code. Les entrées passent de la plus longue à la plus courte pour
  * qu'un nom contenu dans un autre ne consomme jamais le plus long en premier
@@ -122,39 +264,47 @@ function byDescendingEntityLength(getEntity) {
  */
 function applyMapping(text, mapping) {
   if (typeof text !== 'string' || !text) return text;
-  const entries = Object.entries(mapping || {});
-  if (!entries.length) return text;
+  if (!mapping || typeof mapping !== 'object') return text;
+  const compiled = compileMapping(mapping);
+  if (!compiled.replacements.replacements.length) return text;
 
-  // Masquage préalable des codes déjà présents dans le texte. La substitution en
-  // sous-chaîne (≥ 3 car.) et l'underscore-séparateur (acronymes 2 car.)
-  // pourraient sinon réécrire l'intérieur d'un code — « SA » dans « ORBEX SA »,
-  // « Moral » dans « PERSONNE_MORALE_01 » — et le corrompre. Chaque code distinct
-  // est remplacé par un caractère de zone privée (ni lettre ni chiffre, absent des
-  // documents, jamais matché par une regex d'entité), on anonymise, puis on
-  // restaure. C'est aussi ce qui garantit l'idempotence : réappliquer le mapping à
-  // un texte déjà codé masque ses codes et ne touche à rien. Codes triés du plus
-  // long au plus court pour qu'un code contenu dans un autre ne soit pas masqué
-  // en premier.
-  const codes = [...new Set(entries.map(([, code]) => String(code)).filter(Boolean))]
-    .sort((a, b) => b.length - a.length);
   const restore = [];
   let masked = text;
-  codes.forEach((code, idx) => {
-    if (!masked.includes(code)) return;
-    const token = String.fromCodePoint(0xE000 + idx);
-    restore.push([token, code]);
-    masked = masked.split(code).join(token);
-  });
-
-  let output = masked;
-  for (const [entity, code] of entries.sort(byDescendingEntityLength(([key]) => key))) {
-    const regex = buildEntityRegex(entity);
-    if (!regex) continue;
-    output = output.replace(regex, code);
+  if (compiled.codeProbe && compiled.codeProbe.test(text)) {
+    compiled.codes.forEach((code, idx) => {
+      if (!masked.includes(code)) return;
+      const token = String.fromCodePoint(0xE000 + idx);
+      restore.push([token, code]);
+      masked = masked.split(code).join(token);
+    });
   }
+
+  let output = applyReplacements(compiled.replacements, masked);
+  if (output === masked) return text;
 
   for (const [token, code] of restore) output = output.split(token).join(code);
   return output;
+}
+
+const compiledReverseMappings = new WeakMap();
+
+function compileReverseMapping(reverseMapping) {
+  const cached = compiledReverseMappings.get(reverseMapping);
+  if (cached && cached.frozen) return cached;
+  const entries = Object.entries(reverseMapping);
+  const signature = mappingSignature(entries.map(([code, variants]) => [code, Array.isArray(variants) ? variants[0] : variants]));
+  if (cached && cached.signature === signature) return cached;
+
+  const replacements = [];
+  for (const [code, variants] of entries.sort(byDescendingEntityLength(([key]) => key))) {
+    const canonical = Array.isArray(variants) ? variants[0] : variants;
+    if (!canonical) continue;
+    const regex = new RegExp(`${WORD_BOUNDARY_BEFORE}${escapeRegex(String(code))}${WORD_BOUNDARY_AFTER}`, 'giu');
+    replacements.push({ regex, code: String(canonical), caseSensitive: false, anchor: literalAnchor(code).toLowerCase() });
+  }
+  const compiled = { frozen: isDeeplyFrozen(reverseMapping), signature, replacements: compileReplacements(replacements) };
+  compiledReverseMappings.set(reverseMapping, compiled);
+  return compiled;
 }
 
 /**
@@ -175,20 +325,9 @@ function applyMapping(text, mapping) {
  */
 function revertMapping(text, reverseMapping) {
   if (typeof text !== 'string' || !text) return text;
-  const entries = Object.entries(reverseMapping || {});
-  if (!entries.length) return text;
-
-  let output = text;
-  for (const [code, variants] of entries.sort(byDescendingEntityLength(([key]) => key))) {
-    const canonical = Array.isArray(variants) ? variants[0] : variants;
-    if (!canonical) continue;
-    // Un code est un identifiant ASCII : pas de variantes Unicode à gérer, mais
-    // les mêmes frontières de mots, pour ne pas réécrire un code cité dans un
-    // mot plus long.
-    const regex = new RegExp(`${WORD_BOUNDARY_BEFORE}${escapeRegex(String(code))}${WORD_BOUNDARY_AFTER}`, 'giu');
-    output = output.replace(regex, String(canonical));
-  }
-  return output;
+  if (!reverseMapping || typeof reverseMapping !== 'object') return text;
+  const compiled = compileReverseMapping(reverseMapping);
+  return applyReplacements(compiled.replacements, text);
 }
 
 function normalizedPathName(value) {
