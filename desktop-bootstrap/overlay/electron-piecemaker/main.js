@@ -1,5 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 
+process.env.ELECTRON_FORCE_OWN_SERVER = '1';
+
 const OPEN_LOCAL_EXPRESSION = 'window.cloudcliDesktop && window.cloudcliDesktop.openLocal()';
 
 let alreadyOpened = false;
