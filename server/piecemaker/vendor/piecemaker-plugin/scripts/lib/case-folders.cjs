@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const PROJECTS_FILE = 'projects.json';
+const ANONYMIZED_PROJECTS_FILE = 'anonymized-projects.json';
 
 function piecemakerHome() {
   return process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
@@ -11,6 +12,10 @@ function piecemakerHome() {
 
 function projectsFile() {
   return path.join(piecemakerHome(), PROJECTS_FILE);
+}
+
+function anonymizedProjectsFile() {
+  return path.join(piecemakerHome(), ANONYMIZED_PROJECTS_FILE);
 }
 
 function realDirectory(value) {
@@ -41,24 +46,31 @@ function isEligibleProjectFolder(folder) {
   return !excludedRoots().some((root) => isInsideOrEqualPath(root, folder));
 }
 
-function readProjectSources() {
+function readSources(file) {
   try {
-    const parsed = JSON.parse(fs.readFileSync(projectsFile(), 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
     return parsed?.sources && typeof parsed.sources === 'object' && !Array.isArray(parsed.sources) ? parsed.sources : {};
   } catch {
     return {};
   }
 }
 
-/** Absolute, existing and de-duplicated project folders, across every publishing server. */
-function registeredProjectFolders() {
-  const folders = Object.values(readProjectSources()).flatMap((list) => (Array.isArray(list) ? list : []));
+function publishedFolders(file) {
+  const folders = Object.values(readSources(file)).flatMap((list) => (Array.isArray(list) ? list : []));
   return [...new Set(folders.map(realDirectory).filter(Boolean))].filter(isEligibleProjectFolder);
 }
 
-function publishProjectSource(sourceId, folders) {
-  const file = projectsFile();
-  const sources = readProjectSources();
+/** Absolute, existing and de-duplicated project folders, across every publishing server. */
+function registeredProjectFolders() {
+  return publishedFolders(projectsFile());
+}
+
+function anonymizedProjectFolders() {
+  return publishedFolders(anonymizedProjectsFile());
+}
+
+function writeSource(file, sourceId, folders) {
+  const sources = readSources(file);
   if (folders === null) delete sources[sourceId];
   else sources[sourceId] = [...new Set(folders.map((folder) => path.resolve(String(folder))))].sort();
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -70,6 +82,11 @@ function publishProjectSource(sourceId, folders) {
     fs.rmSync(temporaryFile, { force: true });
     throw error;
   }
+}
+
+function publishProjectSource(sourceId, folders, anonymizedFolders = []) {
+  writeSource(projectsFile(), sourceId, folders);
+  writeSource(anonymizedProjectsFile(), sourceId, folders === null ? null : anonymizedFolders);
 }
 
 function resolveTarget(target) {
@@ -101,6 +118,7 @@ function locateProjectCase(target) {
   for (const caseRoot of roots) {
     if (!isInsideOrEqualPath(caseRoot, absolute)) continue;
     return {
+      anonymized: anonymizedProjectFolders().includes(caseRoot),
       casesRoot: path.dirname(caseRoot),
       caseName: path.basename(caseRoot),
       caseRoot,
@@ -113,6 +131,7 @@ function locateProjectCase(target) {
 }
 
 module.exports = {
+  anonymizedProjectFolders,
   locateProjectCase,
   publishProjectSource,
   registeredProjectFolders,

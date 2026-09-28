@@ -86,13 +86,14 @@ export async function install(ctx) {
     // Un vrai dossier juridique factice, sans point de tête : les hooks
     // ignorent les répertoires cachés, un bac de test caché ne prouverait donc
     // rien du garde-fou. Comme seul un projet publié est un dossier juridique,
-    // on le publie le temps du test sous une source dédiée, retirée ensuite.
+    // on le publie le temps du test sous une source dédiée, retirée ensuite,
+    // et comme anonymisé : le garde-fou n'agit que sous un bouclier vert.
     // Les dossiers temporaires du système ne sont jamais des dossiers
     // juridiques : le bac vit donc dans le répertoire PieceMaker.
     fs.mkdirSync(HOME_DIR, { recursive: true });
     testDir = fs.realpathSync(fs.mkdtempSync(path.join(HOME_DIR, 'hook-selftest-')));
     fs.writeFileSync(path.join(testDir, 'piece-selftest.pdf'), 'PIECE DE TEST', 'utf8');
-    publishProjectSource('installer-selftest', [testDir]);
+    publishProjectSource('installer-selftest', [testDir], [testDir]);
     selftestRegistered = true;
 
     // 1. protect-originals.mjs — une pièce du bac de test : protégée par

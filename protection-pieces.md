@@ -3,9 +3,12 @@
 Les pièces originales d'un dossier portent les noms réels. La promesse du
 produit est que l'IA ne lit jamais une pièce PDF ou image : elle travaille sur
 le Markdown converti et pseudonymisé. La « protection » est ce qui tient cette
-promesse. **Règle :** tout projet est protégé par défaut, sans action ; seul
-un clic sur le bouclier du projet, dans la barre latérale, lève la protection
-d'un projet entier, après confirmation.
+promesse. **Règle :** le garde-fou `protect-originals.mjs` n'agit que dans un
+projet au **bouclier vert** — anonymisation terminée et protection non levée.
+Un clic sur le bouclier, dans la barre latérale, lève la protection d'un projet
+entier, après confirmation. Un projet pas encore anonymisé (sans bouclier) n'est
+**pas** protégé : l'IA y lit les PDF et images, avec les vrais noms, que le
+proxy PII ne connaît pas encore.
 
 ## Périmètre : quels dossiers
 
@@ -18,8 +21,13 @@ manuel (`caseFolders` de `~/.piecemaker/config.json` n'est plus lu).
 - Le fichier est découpé par source (`database:<chemin de auth.db>`), pour que
   plusieurs serveurs (dev, app de bureau) cohabitent ; l'autotest de
   l'installateur publie temporairement sous `installer-selftest`.
+- Le même publieur écrit, par source, les projets dont l'anonymisation est
+  terminée (`piecemaker_anonymization_status`, la donnée du bouclier) dans
+  `~/.piecemaker/anonymized-projects.json` : fichier séparé, pour qu'un serveur
+  plus ancien, qui réécrit `projects.json` en entier, ne l'efface pas.
+  `locateProjectCase` en tire `anonymized`.
 - Les hooks tournent hors du serveur, parfois avec le Node système (v16) : ils
-  ne lisent pas SQLite, seulement ce fichier, via
+  ne lisent pas SQLite, seulement ces fichiers, via
   `vendor/piecemaker-plugin/scripts/lib/case-folders.cjs`
   (`locateProjectCase`, `registeredProjectFolders`).
 - Sont exclus : le dossier personnel et ses parents (un projet ouvert sur `~`
@@ -71,7 +79,7 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 
 | Code | Rôle |
 | --- | --- |
-| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | refus + renvoi vers le Markdown ; mappings, secrets, Grep/Glob à la racine |
+| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | sous bouclier vert seulement : refus + renvoi vers le Markdown ; mappings, secrets, Grep/Glob à la racine |
 | `classify-ai-documents.mjs` (`PostToolUse` Write/Bash) | exceptions pour les PDF/images produits par l'IA |
 | `lib/commits.cjs` | historique : pas d'extraction de texte des pièces protégées |
 | `knowledge/pipeline.ts` | exclut les « ressources » de la conversion et du scan |

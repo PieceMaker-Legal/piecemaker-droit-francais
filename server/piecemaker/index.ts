@@ -45,7 +45,7 @@ type PieceMakerRuntimeStatus = {
 type PieceMakerVendorModule = {
   createPieceMakerRouter(options?: { getRuntimeStatus?: () => PieceMakerRuntimeStatus; anonymizer?: unknown; publishProjects?: () => void }): Router;
   piecemakerHome(): string;
-  publishProjectSource(sourceId: string, folders: string[] | null): void;
+  publishProjectSource(sourceId: string, folders: string[] | null, anonymizedFolders?: string[]): void;
   stopOriginalsJobs(): Promise<void>;
 };
 
