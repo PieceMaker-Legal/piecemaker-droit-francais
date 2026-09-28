@@ -7,5 +7,4 @@
  * est importable sans effet de bord.
  */
 
-export const COMMANDS = new Set(['chronology', 'conversion', 'install', 'doctor', 'check', 'update']);
-export const CHRONOLOGY_ACTIONS = new Set(['read', 'write', 'edit']);
+export const COMMANDS = new Set(['conversion', 'install', 'doctor', 'check', 'update']);

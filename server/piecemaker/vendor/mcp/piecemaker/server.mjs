@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Serveur MCP « piecemaker » — outils de conversion et de chronologie exposés
+ * Serveur MCP « piecemaker » — outil de conversion exposé
  * à Claude Code (et à tout client MCP) sans passer
  * par du texte injecté dans un CLAUDE.md.
  *
@@ -10,10 +10,10 @@
  * d'arguments, même localisation de dossier, une seule implémentation
  * (voir `installer/bin/piecemaker.mjs`).
  *
- * Les commandes lancées ici (`conversion --json`, `chronology --json`, `chronology --action write/edit
- * --json`) court-circuitent toutes le bandeau, la vérification de mise à jour
- * et le menu interactif (`installer/bin/piecemaker.mjs:1006-1009`) : aucun
- * service PieceMaker n'est démarré, arrêté ni redémarré par ce serveur.
+ * La commande lancée ici (`conversion --json`) court-circuite le bandeau, la
+ * vérification de mise à jour et le menu interactif. Elle confie le travail au
+ * serveur applicatif déjà lancé (application de bureau ou `piecemaker`) et ne
+ * démarre un serveur que si aucun ne répond.
  */
 
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -95,28 +95,6 @@ export function conversionArgs({ dossier, pieces, force }) {
   return args;
 }
 
-export function chronologyArgs({ dossier }) {
-  return ['chronology', '--json', '--case', dossier];
-}
-
-export function chronologyCorrectionArgs(action, { dossier, path: piecePath, nature, dateIso, localisation, fields, entityAdditions, entityExclusions, reason }) {
-  const correction = {};
-  if (nature !== undefined) correction.nature = nature;
-  if (dateIso !== undefined) correction.dateIso = dateIso;
-  if (localisation !== undefined) correction.localisation = localisation;
-  if (fields !== undefined) correction.fields = fields;
-  if (reason !== undefined) correction.reason = reason;
-  if (entityAdditions !== undefined || entityExclusions !== undefined) {
-    correction.entityDecisions = {
-      additions: entityAdditions || [],
-      exclusions: entityExclusions || [],
-    };
-  }
-  const args = ['chronology', '--action', action, '--path', piecePath, '--correction-json', JSON.stringify(correction), '--json'];
-  if (dossier) args.push('--case', dossier);
-  return args;
-}
-
 /** Dossier ciblé par un appel d'outil : celui demandé, sinon la session en cours. */
 export function resolveDossier(dossier) {
   return dossier && String(dossier).trim() ? dossier : process.cwd();
@@ -125,21 +103,6 @@ export function resolveDossier(dossier) {
 const DOSSIER_SCHEMA = z.string()
   .optional()
   .describe('Chemin absolu du dossier juridique ciblé. Par défaut, le répertoire de la session Claude Code en cours.');
-
-const CHRONOLOGY_CORRECTION_SCHEMA = {
-  dossier: DOSSIER_SCHEMA,
-  path: z.string().min(1).describe('Chemin relatif de la pièce, tel qu\'indexé par la chronologie.'),
-  nature: z.string().optional().describe('Nature de l\'acte (ex. « Assignation », « Conclusions »).'),
-  dateIso: z.string().optional().describe('Date de la pièce au format ISO 8601 (AAAA-MM-JJ).'),
-  localisation: z.string().optional().describe('Juridiction ou localisation associée à la pièce.'),
-  fields: z.array(z.object({ label: z.string(), value: z.string() })).optional()
-    .describe('Champs personnalisés additionnels de la pièce.'),
-  entityAdditions: z.array(z.string()).optional()
-    .describe('Codes d\'entités (personnes/sociétés pseudonymisées) à rattacher manuellement à la pièce.'),
-  entityExclusions: z.array(z.string()).optional()
-    .describe('Codes d\'entités détectés automatiquement à exclure manuellement de la pièce.'),
-  reason: z.string().optional().describe('Motif de la correction, consigné dans l\'historique du dossier.'),
-};
 
 /**
  * Construit le serveur MCP et y enregistre les outils. Séparé de
@@ -160,42 +123,16 @@ export function createServer({ execFn } = {}) {
         .describe('Noms ou chemins relatifs des pièces à convertir. Par défaut, toutes les pièces pas encore prêtes.'),
       force: z.boolean().optional().describe('Reconvertit et rescanne même les pièces déjà prêtes.'),
     },
+    annotations: {
+      title: 'Conversion et pseudonymisation des pièces',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   }, async ({ dossier, pieces, force }) => {
     const resolved = resolveDossier(dossier);
     const result = await run(conversionArgs({ dossier: resolved, pieces, force }), resolved);
-    return toToolResult(result);
-  });
-
-  server.registerTool('chronologie', {
-    description: 'Affiche la chronologie pseudonymisée du dossier juridique (dates, pièces, événements), en JSON.',
-    inputSchema: {
-      dossier: DOSSIER_SCHEMA,
-    },
-  }, async ({ dossier }) => {
-    const resolved = resolveDossier(dossier);
-    const result = await run(chronologyArgs({ dossier: resolved }), resolved);
-    return toToolResult(result);
-  });
-
-  server.registerTool('write_chronology', {
-    description: 'Crée une correction manuelle de chronologie pour une pièce (date, nature d\'acte, '
-      + 'localisation, personnes citées, champs custom). Échoue si une correction existe déjà pour cette '
-      + 'pièce — utiliser edit_chronology pour la modifier.',
-    inputSchema: CHRONOLOGY_CORRECTION_SCHEMA,
-  }, async ({ dossier, ...params }) => {
-    const resolved = resolveDossier(dossier);
-    const result = await run(chronologyCorrectionArgs('write', { dossier: resolved, ...params }), resolved);
-    return toToolResult(result);
-  });
-
-  server.registerTool('edit_chronology', {
-    description: 'Modifie la correction manuelle de chronologie déjà enregistrée pour une pièce (date, '
-      + 'nature d\'acte, localisation, personnes citées, champs custom). Échoue si aucune correction '
-      + 'n\'existe pour cette pièce — utiliser write_chronology pour en créer une.',
-    inputSchema: CHRONOLOGY_CORRECTION_SCHEMA,
-  }, async ({ dossier, ...params }) => {
-    const resolved = resolveDossier(dossier);
-    const result = await run(chronologyCorrectionArgs('edit', { dossier: resolved, ...params }), resolved);
     return toToolResult(result);
   });
 

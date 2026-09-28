@@ -1,5 +1,5 @@
 /**
- * Étape 12 — serveur MCP « piecemaker » (conversion, chronologie).
+ * Étape 12 — serveur MCP « piecemaker » (conversion).
  *
  * Les commandes de conversion sont aujourd'hui présentées au
  * modèle par du texte injecté dans les templates, sans rien qui relie ce
@@ -21,8 +21,8 @@ import { REPO_ROOT, commandExists, run, runCapture } from '../lib/platform.mjs';
 
 export const meta = {
   id: '12-mcp-piecemaker',
-  label: 'Serveur MCP piecemaker (conversion, chronologie)',
-  description: 'Enregistre dans Claude Code le serveur MCP qui expose la conversion et la chronologie',
+  label: 'Serveur MCP piecemaker (conversion)',
+  description: 'Enregistre dans Claude Code le serveur MCP qui expose la conversion',
 };
 
 const SERVER_NAME = 'piecemaker';

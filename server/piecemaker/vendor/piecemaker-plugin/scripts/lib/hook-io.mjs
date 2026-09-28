@@ -25,8 +25,6 @@ import path from 'node:path';
 
 export const HOME_DIR = path.join(os.homedir(), '.piecemaker');
 export const CONFIG_FILE = path.join(HOME_DIR, 'config.json');
-export const BILLING_DIR = path.join(HOME_DIR, 'billing');
-export const SYNTHESIS_DIR = path.join(BILLING_DIR, 'synthese');
 
 /** Upper bound on waiting for stdout to drain before exiting anyway. */
 const FLUSH_TIMEOUT_MS = 2000;
@@ -231,17 +229,6 @@ export function hasDocumentExtension(filePath, extensions) {
 export function ensureDirSafe(dir) {
   try {
     fs.mkdirSync(dir, { recursive: true });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Append one line to a JSONL file. Single appendFileSync call, never throws. */
-export function appendJsonl(filePath, obj) {
-  try {
-    ensureDirSafe(path.dirname(filePath));
-    fs.appendFileSync(filePath, `${JSON.stringify(obj)}\n`, 'utf8');
     return true;
   } catch {
     return false;

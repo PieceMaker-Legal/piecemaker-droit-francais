@@ -564,33 +564,6 @@ function resolveCase(casesRoot, caseName) {
   return { casesRoot: root, name, root: caseRoot };
 }
 
-function locateCaseFile(casesRoot, filePath) {
-  const root = resolveCasesRoot(casesRoot);
-  const requested = path.resolve(String(filePath || ''));
-  let absolute = requested;
-  try {
-    absolute = fs.realpathSync(requested);
-  } catch {
-    try {
-      absolute = path.join(fs.realpathSync(path.dirname(requested)), path.basename(requested));
-    } catch {}
-  }
-  if (absolute === root || !absolute.startsWith(`${root}${path.sep}`)) return null;
-  const relativeToRoot = path.relative(root, absolute);
-  const [caseName, ...parts] = relativeToRoot.split(path.sep);
-  if (!caseName || parts.length === 0) return null;
-  const legalCase = resolveCase(root, caseName);
-  if (isProtectedFile(absolute, legalCase.root)) {
-    return { ...legalCase, absolute, protected: true, relative: parts.join('/') };
-  }
-  if (path.extname(absolute).toLowerCase() && !SAFE_EXTENSIONS.has(path.extname(absolute).toLowerCase())) {
-    return { ...legalCase, absolute, protected: false, safe: false, relative: parts.join('/') };
-  }
-  const relative = path.relative(legalCase.root, absolute).split(path.sep).join('/');
-  if (!relative || relative.startsWith('../')) return null;
-  return { ...legalCase, absolute, protected: false, safe: SAFE_EXTENSIONS.has(path.extname(relative).toLowerCase()), relative };
-}
-
 async function safeCaseFiles(caseRoot) {
   const startedAt = performance.now();
   const root = await fsp.realpath(caseRoot);
@@ -1668,7 +1641,6 @@ module.exports = {
   logPerformance,
   listHistory,
   listHistoryPeriod,
-  locateCaseFile,
   parseCommitTrailers,
   originalFilesOverview,
   repositoryOverview,
