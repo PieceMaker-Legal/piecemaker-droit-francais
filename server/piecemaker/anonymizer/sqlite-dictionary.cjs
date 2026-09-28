@@ -5,28 +5,6 @@ const Database = require('better-sqlite3');
 
 const { buildDictionary, EMPTY_DICTIONARY } = require('./dictionary.cjs');
 
-function codePrefix(code) {
-  const match = /^(.*?)_(\d+)$/.exec(code);
-  return match ? match[1] : code || 'ENTITE';
-}
-
-function codeNumber(code) {
-  const match = /_(\d+)$/.exec(code);
-  return match ? Number(match[1]) : 0;
-}
-
-function allocateCode(localCode, counters, used) {
-  const prefix = codePrefix(localCode);
-  let index = counters.get(prefix) || 0;
-  let candidate;
-  do {
-    index += 1;
-    candidate = `${prefix}_${String(index).padStart(2, '0')}`;
-  } while (used.has(candidate));
-  counters.set(prefix, index);
-  return candidate;
-}
-
 function buildMappingDocument(rows) {
   const grouped = new Map();
   let updatedAt = null;
@@ -38,20 +16,14 @@ function buildMappingDocument(rows) {
     if (!updatedAt || row.updated_at > updatedAt) updatedAt = row.updated_at;
   }
 
-  const used = new Set();
-  const counters = new Map();
   const mapping = {};
   const reverse_mapping = {};
   for (const group of grouped.values()) {
-    const desired = group.localCode;
-    const globalCode = used.has(desired) ? allocateCode(desired, counters, used) : desired;
-    used.add(globalCode);
-    const prefix = codePrefix(globalCode);
-    counters.set(prefix, Math.max(counters.get(prefix) || 0, codeNumber(globalCode)));
+    const code = group.localCode;
     const canonical = group.variants.includes(group.label) ? group.label : group.variants[0];
     const variants = [canonical, ...group.variants.filter((value) => value !== canonical)];
-    reverse_mapping[globalCode] = variants;
-    for (const variant of variants) if (!mapping[variant]) mapping[variant] = globalCode;
+    reverse_mapping[code] = variants;
+    for (const variant of variants) if (!mapping[variant]) mapping[variant] = code;
   }
   return { mapping, reverse_mapping, updated_at: updatedAt };
 }

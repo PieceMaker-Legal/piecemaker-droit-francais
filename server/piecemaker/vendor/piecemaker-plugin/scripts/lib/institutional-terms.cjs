@@ -9,9 +9,9 @@
  *
  * On ne débranche pas la détection : GLiNER continue de les trouver. C'est au
  * moment de bâtir le mapping qu'elles sont écartées — `normalizeMappingDocument`
- * (mapping.cjs) appelle `isInstitutionalEntity` sur chaque entité, à la lecture
- * comme à l'écriture. Une entité bannie ne persiste donc jamais dans
- * `mapping_default.json` et n'est jamais substituée par les hooks.
+ * (mapping.cjs) appelle `isInstitutionalEntity` sur chaque entité lue, et le
+ * magasin du dossier les retire de la base. Une entité bannie n'est donc jamais
+ * substituée par les hooks.
  *
  * La liste est globale (tous dossiers confondus), éditable depuis les paramètres
  * de l'administration, et la comparaison est insensible à la casse et aux
