@@ -16,6 +16,10 @@
  * le skill `docx-cli` est disponible : il travaille par le binaire `docx`
  * (`docx read pièce.docx`, `docx find`…), qui contournerait entièrement un
  * garde-fou limité à Read/Grep/Glob.
+ *
+ * Le hook n'agit que dans un dossier au bouclier vert : anonymisation terminée
+ * (publiée par le serveur dans `~/.piecemaker/anonymized-projects.json`) et
+ * protection non levée. Ailleurs, il laisse tout passer.
  */
 
 import fs from 'node:fs';
@@ -27,6 +31,7 @@ const require = createRequire(import.meta.url);
 const { locateProjectCase } = require('./lib/case-folders.cjs');
 const {
   isMappingFile,
+  isProtectionBypassed,
   isSecretFile,
   isProtectedFile,
   markdownCounterpart,
@@ -153,6 +158,10 @@ function caseRootHasMapping(located) {
   }
 }
 
+function shieldActive(located) {
+  return Boolean(located?.anonymized) && !isProtectionBypassed(located.caseRoot);
+}
+
 async function main() {
   const payload = await readHookPayload(2000);
   if (!payload) return null;
@@ -163,7 +172,7 @@ async function main() {
   if (toolName === 'Bash') {
     for (const candidate of commandPaths(payload.tool_input?.command, cwd)) {
       const located = locateProjectCase(candidate);
-      if (!located) continue;
+      if (!shieldActive(located)) continue;
       if (isMappingFile(candidate)) return deny(mappingReason(candidate));
       if (isSecretFile(candidate)) return deny(secretReason(candidate));
       if (isProtectedFile(candidate, located.caseRoot)) {
@@ -178,7 +187,7 @@ async function main() {
   const target = absolutePath(payload.tool_input?.file_path || payload.tool_input?.path, cwd);
   if (!target) return null;
   const located = locateProjectCase(target);
-  if (!located) return null;
+  if (!shieldActive(located)) return null;
 
   // Un répertoire n'est pas une pièce : `Grep`/`Glob` en visent un couramment,
   // et c'est `isBroadCaseSearch` qui décide s'il est sûr de le parcourir.
