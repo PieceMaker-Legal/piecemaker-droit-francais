@@ -72,14 +72,17 @@ Code dans `scripts/piecemaker/cli/` :
 `piecemaker conversion [--case <chemin>] [--force] [--json] [pièce…]` convertit
 et pseudonymise les pièces d'un dossier juridique enregistré. C'est un **client
 HTTP** de la porte unique : la requête part en clair sur la boucle locale vers
-`POST /api/piecemaker/local/scan` du serveur applicatif
-(`PIECEMAKER_APP_PORT`, 3003 par défaut), monté avant l'authentification et
+`POST /api/piecemaker/local/scan` du serveur applicatif déjà lancé — celui
+qu'annonce `local-server.json` dans le dossier de données (application de
+bureau comprise), sinon `PIECEMAKER_APP_PORT` (3003 par défaut) —, monté avant
+l'authentification et
 refusé à tout appelant qui n'est pas 127.0.0.1. Le CLI ne détient donc aucun
 secret, et la conversion emprunte exactement le même service, la même file
 d'attente et la même exclusivité GLiNER que l'interface.
 
 Conséquences :
 
+- un `PIECEMAKER_APP_PORT` explicite l'emporte sur `local-server.json` ;
 - serveur applicatif arrêté ⇒ il est **démarré automatiquement** avant la
   conversion, par `startApplication` du CLI principal, donc avec son proxy PII ;
 - sans serveur joignable, la conversion échoue au lieu de lancer un Python isolé ;
@@ -88,7 +91,11 @@ Conséquences :
   n'est nommée) ;
 - tous les Markdown vont dans `Fichiers convertis PieceMaker`.
 
-L'outil MCP `conversion` appelle cette même sous-commande.
+L'outil MCP `conversion` appelle cette même sous-commande. Il déclare les
+annotations MCP `destructiveHint: false` et `openWorldHint: false` : sans elles,
+Codex exige une approbation et, lancé par PieceMaker avec `approval_policy =
+never`, refuse l'appel (« MCP tool call requires approval, but approval policy
+is never »).
 
 Réinstaller la commande après un `git pull` qui la modifie :
 
