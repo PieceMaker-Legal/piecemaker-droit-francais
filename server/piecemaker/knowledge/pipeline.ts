@@ -51,19 +51,19 @@ const {
   'originals-pipeline.cjs',
 )) as OriginalsPipeline;
 
-const SUPPORTED_EXTENSIONS = new Set(['.pdf', '.docx', '.doc', '.odt', '.rtf', '.txt', '.md', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']);
+const SUPPORTED_EXTENSIONS = new Set(['.pdf', '.doc', '.odt', '.rtf', '.txt', '.md', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']);
 
 function relativeKey(projectPath: string, filePath: string): string {
   const relative = path.relative(projectPath, filePath).split(path.sep).join('/').normalize('NFC');
   return crypto.createHash('sha256').update(relative).digest('hex');
 }
 
-/** Pièces scannées par défaut : même liste que l'administration, récursive, hors Markdown généré. */
+/** Pièces scannées par défaut : même liste que l'administration, récursive, hors Markdown généré et hors documents de travail `.docx`, lus et modifiés directement. */
 export async function defaultScanFiles(projectPath: string): Promise<string[]> {
   const root = fs.realpathSync(projectPath);
   const originals = await listOriginals(root);
   return originals
-    .filter((file) => !file.resource)
+    .filter((file) => !file.resource && SUPPORTED_EXTENSIONS.has(path.extname(file.path).toLowerCase()))
     .map((file) => path.resolve(root, file.path));
 }
 
