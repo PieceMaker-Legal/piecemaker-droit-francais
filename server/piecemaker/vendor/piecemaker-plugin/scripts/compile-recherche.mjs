@@ -72,8 +72,8 @@ async function main() {
   const pdfPath = path.join(rechercheDir, `${slug}.pdf`);
 
   // Le modèle n'a vu que des codes ; l'historique du cabinet doit rester
-  // lisible → on ré-identifie le Markdown final avant écriture disque (même
-  // logique que commit-track sur les libellés). Idempotent.
+  // lisible → on ré-identifie le Markdown final avant écriture disque.
+  // Idempotent.
   let markdown = renderMarkdown(data, { caseName: located.caseName });
   const legalCase = resolveProjectCaseMapping(located.caseRoot);
   if (legalCase?.reverse_mapping) markdown = revertMapping(markdown, legalCase.reverse_mapping);

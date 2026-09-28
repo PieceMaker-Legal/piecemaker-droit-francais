@@ -16,6 +16,9 @@ const DEPRECATED_HOOKS = new Set([
   'piecemaker-central-anonymize.mjs',
   'verify-citations.mjs',
   'decision-cache.mjs',
+  'commit-track.mjs',
+  'billing-track.mjs',
+  'session-commit.mjs',
 ]);
 
 function settingsPath(userHome) {
