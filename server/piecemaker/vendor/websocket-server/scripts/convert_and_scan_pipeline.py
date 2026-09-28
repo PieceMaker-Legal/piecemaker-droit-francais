@@ -1483,7 +1483,6 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         "mapping": merged_mapping,
         "reverse_mapping": merged_reverse,
         "extracted_data": merged_extracted,
-        "informations_dossier": existing_mapping.get("informations_dossier", {}),
         **({"ignored": merged_ignored} if merged_ignored else {}),
     }
 

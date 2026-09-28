@@ -19,24 +19,16 @@ const {
   createHistoryBranch,
   historyBranches,
   historyMonths,
-  isTechnicalCaseDirectoryName,
   listCases,
   listHistory,
   listHistoryPeriod,
-  resolveCasesRoot,
   resolveCommitIdentity,
   restoreRevision,
   revisionDetails,
   safeCaseFiles,
   worktreeDetails,
 } = require('../piecemaker-plugin/scripts/lib/commits.cjs');
-const {
-  listOriginals,
-  readCaseMapping,
-  rebuildCaseMapping,
-  saveCaseMapping,
-  writeCaseMapping,
-} = require('./originals-pipeline.cjs');
+const { listOriginals } = require('./originals-pipeline.cjs');
 const { invalidateOriginals, listOriginalsCached } = require('../../originals-cache.cjs');
 const {
   documentKey,
@@ -80,44 +72,6 @@ const ENV_KEYS = new Set([
   'PYTHON_PATH',
   'SMART_CONVERTER_PATH',
 ]);
-
-function validateNewCaseName(value) {
-  const name = String(value || '').trim();
-  if (!name || name.length > 120 || name === '.' || name === '..' || path.basename(name) !== name
-      || name.startsWith('.') || /[\x00-\x1f\x7f]/.test(name) || isTechnicalCaseDirectoryName(name)) {
-    throw new Error('Nom de dossier juridique invalide.');
-  }
-  return name;
-}
-
-async function createLegalCase({ casesRoot, homeDir, name }) {
-  const root = resolveCasesRoot(casesRoot);
-  const safeName = validateNewCaseName(name);
-  const directory = path.join(root, safeName);
-  if (fs.existsSync(directory)) throw new Error(`Le dossier juridique « ${safeName} » existe déjà.`);
-  fs.mkdirSync(directory);
-  try {
-    writeProtection(directory, { unprotected: [] });
-    const mapping = writeCaseMapping(directory, { mapping: {}, reverse_mapping: {} });
-    await createCommit({
-      casesRoot: root,
-      caseName: safeName,
-      homeDir,
-      label: 'Création du dossier juridique',
-      event: 'admin-case-create',
-      // Le mapping vit dans le sous-dossier des fichiers produits : le commit doit
-      // viser son chemin relatif au dossier, pas seulement son nom de base.
-      paths: [path.relative(directory, mapping.file).split(path.sep).join('/')],
-      waitForLockMs: 10_000,
-    });
-    const folder = await caseOverview(root, homeDir, safeName);
-    folder.branches = await historyBranches(root, homeDir, safeName);
-    return folder;
-  } catch (error) {
-    fs.rmSync(directory, { recursive: true, force: true });
-    throw error;
-  }
-}
 
 /** Native folder-picker commands. Arguments stay separate from the shell. */
 function folderPickerCommands(platform, initialFolder) {
@@ -195,10 +149,6 @@ async function registerLegalCase({
   if (!entry) throw new Error('Ce dossier n’est pas un projet enregistré.');
   const protection = readProtection(root);
   if (!protection.exists) writeProtection(root, { unprotected: [] });
-  const currentMapping = readCaseMapping(root);
-  const mapping = currentMapping.exists
-    ? currentMapping
-    : writeCaseMapping(root, { mapping: {}, reverse_mapping: {} });
 
   const folderOverview = await caseOverview(path.dirname(root), homeDir, path.basename(root));
   folderOverview.path = entry.id;
@@ -208,7 +158,6 @@ async function registerLegalCase({
   return {
     folder: folderOverview,
     installed: {
-      mapping: path.relative(root, mapping.file).split(path.sep).join('/'),
       protection: path.relative(root, protection.file).split(path.sep).join('/'),
     },
   };
@@ -2371,18 +2320,12 @@ function createAdminRouter({
       folder.location = legalCase.root;
       folder.registered = legalCase.registered;
       // Les Markdown convertis vivent déjà dans l'historique ; ce cadre ne
-      // présente que les pièces originales et un résumé non sensible du mapping.
-      const mapping = readCaseMapping(legalCase.root);
+      // présente que les pièces originales.
       const [originals, branches] = await Promise.all([
         listOriginalsCached(legalCase.root),
         historyBranches(legalCase.casesRoot, homeDir, legalCase.caseName),
       ]);
       folder.originals = originals;
-      folder.mapping = {
-        exists: mapping.exists,
-        name: path.basename(mapping.file),
-        entries: Object.keys(mapping.mapping).length,
-      };
       folder.branches = branches;
       finishAdminTiming(res, 'case', startedAt, {
         changes: folder.changes,
@@ -2663,94 +2606,6 @@ function createAdminRouter({
     }
   });
 
-  // Le mapping du dossier est le seul fichier de l'administration qui contient
-  // des données personnelles en clair : il n'est jamais journalisé, seulement
-  // rendu au navigateur local qui l'a demandé.
-  router.get('/mapping', (req, res) => {
-    try {
-      const legalCase = selectedCase(req.query.case);
-      const mapping = readCaseMapping(legalCase.root);
-      res.json({
-        case: legalCase.id,
-        name: path.basename(mapping.file),
-        exists: mapping.exists,
-        mapping: mapping.mapping,
-        reverse_mapping: mapping.reverse_mapping,
-        informations_dossier: mapping.informations_dossier,
-      });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  router.put('/mapping', async (req, res) => {
-    try {
-      if (!req.body?.mapping || typeof req.body.mapping !== 'object' || Array.isArray(req.body.mapping)) {
-        throw new Error('Le mapping doit être un objet { entité: code }.');
-      }
-      const legalCase = selectedCase(req.body?.case);
-      const saved = saveCaseMapping(legalCase.root, {
-        mapping: req.body.mapping,
-        reverse_mapping: req.body.reverse_mapping,
-        ...(req.body.informations_dossier !== undefined
-          ? { informations_dossier: req.body.informations_dossier }
-          : {}),
-      });
-      const commit = await createCommit({
-        casesRoot: legalCase.casesRoot,
-        caseName: legalCase.caseName,
-        homeDir,
-        label: 'Modification du mapping d’anonymisation',
-        event: 'admin-mapping-edit',
-        paths: [path.relative(legalCase.root, saved.file).split(path.sep).join('/')],
-        waitForLockMs: 10_000,
-      });
-      if (commit.skipped === 'busy') throw new Error('Mapping enregistré, mais historique occupé : commit automatique non créé.');
-      res.json({
-        ok: true,
-        case: legalCase.id,
-        name: path.basename(saved.file),
-        exists: true,
-        mapping: saved.mapping,
-        reverse_mapping: saved.reverse_mapping,
-        informations_dossier: saved.informations_dossier,
-        commit: { created: commit.created, hash: commit.commit || null },
-      });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  router.post('/mapping/rebuild', async (req, res) => {
-    try {
-      const legalCase = selectedCase(req.body?.case);
-      const rebuilt = await rebuildCaseMapping(legalCase.root);
-      const commit = await createCommit({
-        casesRoot: legalCase.casesRoot,
-        caseName: legalCase.caseName,
-        homeDir,
-        label: 'Régénération du mapping d’anonymisation',
-        event: 'admin-mapping-rebuild',
-        paths: [path.relative(legalCase.root, rebuilt.file).split(path.sep).join('/')],
-        waitForLockMs: 10_000,
-      });
-      if (commit.skipped === 'busy') throw new Error('Mapping régénéré, mais historique occupé : commit automatique non créé.');
-      res.json({
-        ok: true,
-        case: legalCase.id,
-        name: path.basename(rebuilt.file),
-        added: rebuilt.added,
-        total: rebuilt.total,
-        mapping: rebuilt.mapping,
-        reverse_mapping: rebuilt.reverse_mapping,
-        informations_dossier: rebuilt.informations_dossier,
-        commit: { created: commit.created, hash: commit.commit || null },
-      });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
   router.get('/history', async (req, res) => {
     const startedAt = performance.now();
     try {
@@ -2896,7 +2751,6 @@ module.exports = {
   applyPluginComponentSelection,
   checkOllamaModelUpdate,
   configurationOverview,
-  createLegalCase,
   createAdminRouter,
   createManagedFile,
   deleteManagedAsset,

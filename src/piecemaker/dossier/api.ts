@@ -22,11 +22,6 @@ export class PieceMakerApiError extends Error {
 }
 
 type QueryValue = string | number | boolean | null | undefined;
-type CachedGetRequest = { request: Promise<unknown>; resolvedAt: number | null; value: unknown; hasValue: boolean };
-
-const GET_CACHE_MAX_AGE_MS = 30_000;
-const GET_CACHE_MAX_ENTRIES = 32;
-const cachedGetRequests = new Map<string, CachedGetRequest>();
 
 function withQuery(path: string, params?: Record<string, QueryValue>): string {
   if (!params) return `${BASE}${path}`;
@@ -59,52 +54,6 @@ async function unwrap<T>(response: Response): Promise<T> {
 /** GET a JSON endpoint. */
 export function pmGet<T>(path: string, params?: Record<string, QueryValue>, signal?: AbortSignal): Promise<T> {
   return authenticatedFetch(withQuery(path, params), { signal }).then((response) => unwrap<T>(response));
-}
-
-export function pmGetCached<T>(path: string, params?: Record<string, QueryValue>): Promise<T> {
-  const key = withQuery(path, params);
-  const cached = cachedGetRequests.get(key);
-  if (cached && (cached.resolvedAt === null || Date.now() - cached.resolvedAt < GET_CACHE_MAX_AGE_MS)) {
-    cachedGetRequests.delete(key);
-    cachedGetRequests.set(key, cached);
-    return cached.request as Promise<T>;
-  }
-  const retainedValue = cached?.hasValue ? cached.value : undefined;
-  const hadRetainedValue = cached?.hasValue ?? false;
-  cachedGetRequests.delete(key);
-
-  const request = pmGet<T>(path, params)
-    .then((value) => {
-      const entry = cachedGetRequests.get(key);
-      if (entry?.request === request) {
-        entry.resolvedAt = Date.now();
-        entry.value = value;
-        entry.hasValue = true;
-      }
-      return value;
-    })
-    .catch((error) => {
-      const entry = cachedGetRequests.get(key);
-      if (entry?.request === request) entry.resolvedAt = 0;
-      throw error;
-    });
-  cachedGetRequests.set(key, { request, resolvedAt: null, value: retainedValue, hasValue: hadRetainedValue });
-  while (cachedGetRequests.size > GET_CACHE_MAX_ENTRIES) {
-    const oldestKey = cachedGetRequests.keys().next().value;
-    if (oldestKey === undefined) break;
-    cachedGetRequests.delete(oldestKey);
-  }
-  return request;
-}
-
-export function pmPeekCached<T>(path: string, params?: Record<string, QueryValue>): T | null {
-  const cached = cachedGetRequests.get(withQuery(path, params));
-  if (!cached || !cached.hasValue) return null;
-  return cached.value as T;
-}
-
-export function invalidatePmGet(path: string, params?: Record<string, QueryValue>): void {
-  cachedGetRequests.delete(withQuery(path, params));
 }
 
 /** POST/PUT/PATCH/DELETE a JSON endpoint. `body` is omitted when undefined. */

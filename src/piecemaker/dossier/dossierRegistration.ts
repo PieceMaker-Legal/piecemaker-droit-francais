@@ -1,4 +1,4 @@
-import { invalidatePmGet, pmGet, pmPost } from '@/piecemaker/dossier/api';
+import { pmGet, pmPost } from '@/piecemaker/dossier/api';
 
 export type DossierCase = {
   path: string;
@@ -53,18 +53,6 @@ export function ensureDossierRegistration(projectPath?: string | null): Promise<
     const oldestPath = registrations.keys().next().value;
     if (oldestPath === undefined) break;
     registrations.delete(oldestPath);
-  }
-  return registration;
-}
-
-export async function refreshDossierRegistration(projectPath?: string | null): Promise<DossierRegistration> {
-  if (projectPath) registrations.delete(projectPath);
-  const registration = await ensureDossierRegistration(projectPath);
-  if (registration.selectedCase) {
-    const caseQuery = { case: registration.selectedCase.path };
-    invalidatePmGet('/repository/case', caseQuery);
-    invalidatePmGet('/mapping', caseQuery);
-    invalidatePmGet('/repository/chronology', caseQuery);
   }
   return registration;
 }
