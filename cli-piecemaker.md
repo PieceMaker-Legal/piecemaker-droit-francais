@@ -89,7 +89,9 @@ Conséquences :
 - `--force` renvoie la liste complète des pièces, ce que la porte unique traite
   comme une reconversion (elle n'ajoute `--skip-existing` que si aucune pièce
   n'est nommée) ;
-- tous les Markdown vont dans `Fichiers convertis PieceMaker`.
+- tous les Markdown vont dans `Fichiers convertis PieceMaker` ;
+- les `.docx` ne sont jamais convertis : ce sont des documents de travail, lus
+  et modifiés directement.
 
 L'outil MCP `conversion` appelle cette même sous-commande. Il déclare les
 annotations MCP `destructiveHint: false` et `openWorldHint: false` : sans elles,
