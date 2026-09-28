@@ -1,6 +1,6 @@
 ---
 name: conversion-md
-description: Convertir une pièce (PDF, image scannée, etc.) en Markdown avec le smart converter de PieceMaker, y compris choisir entre markitdown et MinerU (OCR). À utiliser dès qu'il faut transformer une pièce en Markdown avant analyse ou anonymisation. Jamais pour un .docx : c'est un document de travail, lu et modifié directement (skill docx-cli).
+description: Convertir un document (PDF, DOCX, image scannée, etc.) en Markdown avec le smart converter de PieceMaker, y compris choisir entre markitdown et MinerU (OCR). À utiliser dès qu'il faut transformer une pièce en Markdown avant analyse, anonymisation ou insertion dans Word.
 ---
 
 # Conversion de documents en Markdown (smart_converter.py)
@@ -33,7 +33,7 @@ Bridge (`taskpane/modules/python-bridge.js` →
 
 ## Quand utiliser markitdown vs MinerU
 
-- **`markitdown`** — documents avec une vraie couche de texte : PPTX,
+- **`markitdown`** — documents avec une vraie couche de texte : DOCX, PPTX,
   XLSX, PDF "propre" (texte sélectionnable, pas d'image de page entière).
   Rapide, pas de modèle OCR à charger.
 - **`mineru`** — PDF scannés ou basés sur image (pas de couche texte), scans
