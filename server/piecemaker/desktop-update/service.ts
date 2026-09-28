@@ -82,9 +82,10 @@ export function createDesktopUpdateService(dependencies: DesktopUpdateDependenci
       );
 
       if (result.exitCode !== 0) {
+        const detail = withoutAnsi(result.errorOutput).trim().slice(-2000);
         return {
           success: false,
-          error: "Échec du téléchargement ou de l'installation de la nouvelle version",
+          error: detail || "Échec du téléchargement ou de l'installation de la nouvelle version",
           output: withoutAnsi(result.output),
           errorOutput: withoutAnsi(result.errorOutput),
         };

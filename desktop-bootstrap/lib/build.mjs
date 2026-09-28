@@ -262,6 +262,7 @@ async function smokeTestAnonymizerProxy(sourceDir, binary) {
 export async function buildDesktopApp(sourceDir) {
   ui.step('Installation des dépendances du projet (plusieurs minutes)…');
   await run(npmCommand, ['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
+  await run(npmCommand, ['rebuild', 'better-sqlite3', '--no-audit', '--no-fund'], { cwd: sourceDir });
   await smokeTestAnonymizerProxy(sourceDir, await buildAnonymizerProxy(sourceDir));
 
   ui.step('Compilation du client et du serveur…');
