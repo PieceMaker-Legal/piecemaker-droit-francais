@@ -80,6 +80,7 @@ export PIECEMAKER_TAG="$TAG"
 export PIECEMAKER_BOOTSTRAP_HOME="$BOOTSTRAP_HOME"
 
 if [ -d "$SRC_DIR/node_modules/better-sqlite3" ]; then
+  say "Recompilation des modules natifs pour $("$NODE_BIN" -v)…"
   (cd "$SRC_DIR" && npm rebuild better-sqlite3 --no-audit --no-fund)
 fi
 
