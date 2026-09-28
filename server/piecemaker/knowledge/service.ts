@@ -1,8 +1,6 @@
 import type { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
-import { exclusionNodeOperation } from '../../../plugins/piecemaker-dossier/src/scan-result.js';
 import type { KnowledgeQueryInput, KnowledgeUpdateInput } from '../../../plugins/piecemaker-dossier/src/types.js';
 
-import { legacyExclusions } from './pipeline.js';
 import type { createKnowledgePipeline } from './pipeline.js';
 import { createKnowledgeScanJobs } from './scan-jobs.js';
 
@@ -22,16 +20,6 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
     if (!projects.getProjectById(id)) throw new Error('Project not found.');
     return id;
   };
-  const snapshot = (id: string) => {
-    const current = store.snapshot(id);
-    if (current.exclusionsInitialized) return current;
-    const project = projects.getProjectById(id);
-    const values = project ? legacyExclusions(project.project_path) : [];
-    if (!values.length) return current;
-    const operation = exclusionNodeOperation(values);
-    store.update({ projectId: id, operations: [operation] });
-    return store.snapshot(id);
-  };
   return {
     query(input: KnowledgeQueryInput) {
       return store.query({ ...input, projectId: ensureProject(input.projectId), projectPath: undefined });
@@ -40,8 +28,7 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
       return store.update({ ...input, projectId: ensureProject(input.projectId) });
     },
     graph(value: unknown) {
-      const id = ensureProject(value);
-      return snapshot(id);
+      return store.snapshot(ensureProject(value));
     },
     scan(value: unknown, files?: unknown) {
       const id = ensureProject(value);

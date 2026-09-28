@@ -6,12 +6,20 @@ import { Button, Dialog, DialogContent, DialogTitle } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 import { pmGet, pmPut, PieceMakerApiError } from '@/piecemaker/dossier/api';
 import { ensureDossierRegistration } from '@/piecemaker/dossier/dossierRegistration';
-import type { ProtectionBypassState } from '@/piecemaker/dossier/sections/CaseFilesTypes';
 
 const LIFT_WARNING = 'Toutes les pièces PDF et images de ce dossier deviendront lisibles par l’IA, y compris celles déposées ensuite. Leur contenu ne sera plus remplacé par le Markdown anonymisé.';
 const RESTORE_NOTICE = 'Les pièces PDF et images de ce dossier redeviendront illisibles pour l’IA, qui sera renvoyée vers leur Markdown anonymisé.';
 const LIFTED_LABEL = 'Protection levée : l’IA lit les PDF et images de ce dossier. Cliquer pour la rétablir.';
 const PROTECTED_HINT = 'Cliquer pour lever la protection du dossier.';
+
+/** GET/PUT /protection/bypass: case-wide protection lift and the snapshot kept to undo it. */
+type ProtectionBypassState = {
+  case: string;
+  active: boolean;
+  savedAt: string | null;
+  savedCount: number;
+  unprotectedCount: number;
+};
 
 type CaseProtectionShieldProps = {
   projectPath: string;

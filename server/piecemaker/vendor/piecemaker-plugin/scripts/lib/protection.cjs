@@ -30,7 +30,7 @@ const PROTECTION_FILE = 'protection.json';
 const PROTECTION_BYPASS_FILE = 'protection-bypass.json';
 
 /**
- * Sous-dossier technique historique et emplacement du `mapping_default.json`.
+ * Sous-dossier technique historique (ancien emplacement du mapping JSON).
  * Le Markdown courant vit dans les sous-dossiers de conversion de
  * Correspondance et Data Room ; ce repli reste nécessaire aux anciens dossiers
  * et aux espaces de travail OOXML. `mapping.cjs` et `commits.cjs` l'importent.

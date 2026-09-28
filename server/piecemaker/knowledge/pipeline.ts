@@ -116,18 +116,7 @@ function pythonExecutable(explicit: string | undefined): string {
   return fs.existsSync(candidate) ? candidate : 'python3';
 }
 
-export function legacyExclusions(projectPath: string): string[] {
-  const candidate = path.join(projectPath, 'Fichiers convertis PieceMaker', 'mapping_default.json');
-  if (!fs.existsSync(candidate)) return [];
-  try {
-    const document = parseObject(candidate);
-    return Array.isArray(document.ignored) ? document.ignored.map(textValue).filter(Boolean) : [];
-  } catch {
-    return [];
-  }
-}
-
-function mappingSeed(projectId: string, projectPath: string, store: KnowledgeStore): GlinerMappingDocument {
+function mappingSeed(projectId: string, store: KnowledgeStore): GlinerMappingDocument {
   const snapshot = store.snapshot(projectId);
   const mapping: Record<string, string> = {};
   const reverseMapping: Record<string, string[]> = {};
@@ -144,7 +133,7 @@ function mappingSeed(projectId: string, projectPath: string, store: KnowledgeSto
     extractedData[category] ||= {};
     extractedData[category][code] = node.data;
   }
-  const ignored = snapshot.exclusionsInitialized ? snapshot.exclusions || [] : legacyExclusions(projectPath);
+  const ignored = snapshot.exclusions || [];
   return { mapping, reverse_mapping: reverseMapping, extracted_data: extractedData, ignored };
 }
 
@@ -177,7 +166,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const outputDirectory = path.join(projectPath, 'Fichiers convertis PieceMaker');
       fs.mkdirSync(path.dirname(stateFile), { recursive: true });
       fs.mkdirSync(outputDirectory, { recursive: true });
-      const seed = mappingSeed(projectId, projectPath, options.store);
+      const seed = mappingSeed(projectId, options.store);
       const args = [
         ...files,
         '-o',

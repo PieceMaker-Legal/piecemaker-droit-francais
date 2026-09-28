@@ -47,8 +47,7 @@ function readJsonFile(file, fallback = null) {
  * Tous les mappings présents, sous-dossier `WORKSPACE_SUBDIR` **et** racine
  * (lecture tolérante pendant la migration). Le fichier canonique du sous-dossier
  * passe en dernier : c'est lui qui gagne quand `readCaseMapping` fusionne, tandis
- * que les copies legacy (racine ou `mapping_<id>.json`) ne servent qu'à ne rien
- * perdre avant le prochain enregistrement.
+ * que les copies legacy (racine ou `mapping_<id>.json`) complètent la lecture.
  */
 function existingMappingFiles(caseRoot) {
   const dirs = [
@@ -80,93 +79,11 @@ function existingMappingFiles(caseRoot) {
 }
 
 /**
- * L'unique cible d'écriture par dossier vit désormais dans le sous-dossier
- * `WORKSPACE_SUBDIR`, pour garder la racine propre. Les anciens
- * `mapping_dossier.json` / `mapping_<id>.json` et un `mapping_default.json` resté
- * à la racine sont lus pour migration (voir `existingMappingFiles`), mais toute
- * écriture converge vers `<dossier>/<WORKSPACE_SUBDIR>/mapping_default.json`.
+ * Emplacement historique du mapping JSON d'un dossier, lu seulement : plus
+ * aucun code ne l'écrit, le mapping vit en base.
  */
 function caseMappingFile(caseRoot) {
   return path.join(caseRoot, WORKSPACE_SUBDIR, CANONICAL_MAPPING_FILE);
-}
-
-function cleanMappingString(value) {
-  return String(value || '').trim();
-}
-
-function normalizePartyAssignments(value) {
-  if (!Array.isArray(value)) return [];
-  return value.map((raw) => {
-    const assignment = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-    const variants = [...new Set((Array.isArray(assignment.variants) ? assignment.variants : [])
-      .map(cleanMappingString).filter(Boolean))];
-    return {
-      field: cleanMappingString(assignment.field),
-      code: cleanMappingString(assignment.code),
-      original_code: cleanMappingString(assignment.original_code),
-      category: cleanMappingString(assignment.category),
-      principal: cleanMappingString(assignment.principal),
-      variants,
-    };
-  }).filter((assignment) => assignment.code && assignment.variants.length);
-}
-
-function normalizeProcedureParty(raw, side) {
-  const party = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const type = party.type === 'societe' ? 'societe' : 'personne_physique';
-  const allowedPositions = new Set(['demandeur', 'defendeur', 'appelant', 'intime', 'requerant', 'mis_en_cause', 'intervenant', 'autre']);
-  const position = allowedPositions.has(party.position) ? party.position : side === 'client' ? 'demandeur' : 'defendeur';
-  return {
-    type,
-    position,
-    position_libelle: position === 'autre' ? cleanMappingString(party.position_libelle) : '',
-    civilite: type === 'personne_physique' ? cleanMappingString(party.civilite) : '',
-    nom: type === 'personne_physique' ? cleanMappingString(party.nom) : '',
-    date_naissance: type === 'personne_physique' ? cleanMappingString(party.date_naissance) : '',
-    lieu_naissance: type === 'personne_physique' ? cleanMappingString(party.lieu_naissance) : '',
-    adresse: type === 'personne_physique' ? cleanMappingString(party.adresse) : '',
-    societe_nom: type === 'societe' ? cleanMappingString(party.societe_nom) : '',
-    forme_sociale: type === 'societe' ? cleanMappingString(party.forme_sociale) : '',
-    pays: type === 'societe' ? cleanMappingString(party.pays) || 'France' : '',
-    siren: type === 'societe' ? cleanMappingString(party.siren) : '',
-    siege_social: type === 'societe' ? cleanMappingString(party.siege_social) : '',
-    representant: type === 'societe' ? cleanMappingString(party.representant) : '',
-    mapping_assignments: normalizePartyAssignments(party.mapping_assignments),
-  };
-}
-
-function relationshipId(source, target, role) {
-  return `relation:${source}\u0000${target}\u0000${role}`;
-}
-
-function normalizeProfileRelationships(value) {
-  if (!Array.isArray(value)) return [];
-  const ids = new Set();
-  const relationships = new Set();
-  return value.flatMap((raw) => {
-    const relationship = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-    const source = cleanMappingString(relationship.source);
-    const original_source = cleanMappingString(relationship.original_source);
-    const target = cleanMappingString(relationship.target);
-    const role = cleanMappingString(relationship.role);
-    const id = cleanMappingString(relationship.id) || relationshipId(source, target, role);
-    const key = `${source}\u0000${target}\u0000${role}`;
-    if (!source || !target || !role || source === target || ids.has(id) || relationships.has(key)) return [];
-    ids.add(id);
-    relationships.add(key);
-    return [{ id, source, original_source, target, role }];
-  });
-}
-
-function normalizeProcedureInfo(raw) {
-  const info = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  return {
-    parties_clientes: (Array.isArray(info.parties_clientes) ? info.parties_clientes : [])
-      .map((party) => normalizeProcedureParty(party, 'client')),
-    parties_adverses: (Array.isArray(info.parties_adverses) ? info.parties_adverses : [])
-      .map((party) => normalizeProcedureParty(party, 'adversaire')),
-    relations: normalizeProfileRelationships(info.relations),
-  };
 }
 
 function normalizeMappingDocument(raw) {
@@ -175,18 +92,14 @@ function normalizeMappingDocument(raw) {
   const reverse = {};
   const source = document.mapping && typeof document.mapping === 'object' ? document.mapping : {};
   // Les entités institutionnelles (juridictions, registres, publications
-  // officielles…) sont écartées ici même : c'est le point de passage unique de la
-  // lecture comme de l'écriture, si bien qu'une entité bannie ne persiste jamais
-  // dans `mapping_default.json` et n'est jamais substituée par les hooks. GLiNER
-  // continue de les détecter — on ne débranche que le codage.
+  // officielles…) sont écartées ici même, à la lecture : une entité bannie n'est
+  // jamais substituée par les hooks. GLiNER continue de les détecter — on ne
+  // débranche que le codage.
   for (const [entity, code] of Object.entries(source)) {
     const from = String(entity || '').trim();
     const to = String(code || '').trim();
     if (from && to && !isInstitutionalEntity(from)) mapping[from] = to;
   }
-  const ignored = [...new Set((Array.isArray(document.ignored) ? document.ignored : [])
-    .map((entity) => String(entity || '').trim())
-    .filter(Boolean))];
   const reverseSource = document.reverse_mapping && typeof document.reverse_mapping === 'object' ? document.reverse_mapping : {};
   for (const [code, value] of Object.entries(reverseSource)) {
     const key = String(code || '').trim();
@@ -202,36 +115,10 @@ function normalizeMappingDocument(raw) {
     if (!reverse[code]) reverse[code] = [entity];
     else if (!reverse[code].includes(entity)) reverse[code].push(entity);
   }
-  // `extracted_data` est écrit par `convert_and_scan_pipeline.py` : c'est lui
-  // qui porte les variants d'une entité et l'analyse des adresses, dont la
-  // dé-anonymisation partielle a besoin (anonymization-server.cjs).
-  // L'administration ne l'édite pas, mais elle ne doit surtout pas le détruire —
-  // seules les entrées dont le code a disparu du mapping sont retirées.
-  const extracted = {};
-  const extractedSource = document.extracted_data && typeof document.extracted_data === 'object'
-    && !Array.isArray(document.extracted_data) ? document.extracted_data : {};
-  for (const [category, codes] of Object.entries(extractedSource)) {
-    if (!codes || typeof codes !== 'object' || Array.isArray(codes)) continue;
-    extracted[category] = Object.fromEntries(
-      Object.entries(codes).filter(([code]) => reverse[code])
-    );
-  }
-  return {
-    mapping,
-    reverse_mapping: reverse,
-    extracted_data: extracted,
-    ignored: ignored.filter((entity) => !mapping[entity]),
-    informations_dossier: normalizeProcedureInfo(document.informations_dossier),
-  };
+  return { mapping, reverse_mapping: reverse };
 }
 
 /** L'ordre d'écriture suit `byDescendingEntityLength`. */
-function sortedMapping(mapping) {
-  return Object.fromEntries(
-    Object.entries(mapping).sort((a, b) => b[0].length - a[0].length || a[0].localeCompare(b[0], 'fr'))
-  );
-}
-
 function readCaseMapping(caseRoot) {
   const file = caseMappingFile(caseRoot);
   const sourceFiles = existingMappingFiles(caseRoot);
@@ -239,15 +126,10 @@ function readCaseMapping(caseRoot) {
     return { file, sourceFiles: [], exists: false, ...normalizeMappingDocument(null) };
   }
 
-  // Migration non destructive à la lecture : tous les anciens mappings sont
-  // réunis en mémoire. Le canonique passe en dernier et gagne donc si une même
-  // entité a été recodée. Le prochain enregistrement écrira l'ensemble dans le
-  // seul `mapping_default.json`.
+  // Tous les anciens mappings sont réunis en mémoire. Le canonique passe en
+  // dernier et gagne donc si une même entité a été recodée.
   const mapping = {};
   const preferredVariants = {};
-  const extracted_data = {};
-  const ignored = [];
-  let informations_dossier = normalizeProcedureInfo();
   const readableFiles = [];
   for (const sourceFile of sourceFiles) {
     const raw = readJsonFile(sourceFile, null);
@@ -255,17 +137,8 @@ function readCaseMapping(caseRoot) {
     readableFiles.push(sourceFile);
     const document = normalizeMappingDocument(raw);
     Object.assign(mapping, document.mapping);
-    ignored.push(...document.ignored);
     for (const [code, variants] of Object.entries(document.reverse_mapping)) {
       preferredVariants[code] = [...new Set([...(preferredVariants[code] || []), ...variants])];
-    }
-    for (const [category, codes] of Object.entries(document.extracted_data)) {
-      extracted_data[category] = { ...(extracted_data[category] || {}), ...codes };
-    }
-    if (path.basename(sourceFile) === CANONICAL_MAPPING_FILE
-        || document.informations_dossier.parties_clientes.length
-        || document.informations_dossier.parties_adverses.length) {
-      informations_dossier = document.informations_dossier;
     }
   }
 
@@ -281,7 +154,7 @@ function readCaseMapping(caseRoot) {
     file,
     sourceFiles: readableFiles,
     exists: readableFiles.length > 0,
-    ...normalizeMappingDocument({ mapping, reverse_mapping, extracted_data, ignored, informations_dossier }),
+    ...normalizeMappingDocument({ mapping, reverse_mapping }),
   };
 }
 
@@ -302,15 +175,9 @@ module.exports = {
   applyMapping,
   buildEntityRegex,
   byDescendingEntityLength,
-  caseMappingFile,
   escapeWithVariants,
-  normalizeMappingDocument,
-  normalizeProcedureInfo,
   readCaseMapping,
-  readJsonFile,
   resolveProjectCaseMapping,
   resolveMappedPath,
   revertMapping,
-  sortedMapping,
-  CANONICAL_MAPPING_FILE,
 };

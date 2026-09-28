@@ -12,17 +12,6 @@ import { EXCLUSIONS_NODE_ID } from './types.js';
 import { KnowledgeStore } from './knowledge.js';
 import { isInstitutionalEntity } from './institutional-terms.js';
 
-type ProcedureAssignment = { field?: unknown; code?: unknown };
-type ProcedureParty = {
-  type?: unknown;
-  position?: unknown;
-  nom?: unknown;
-  societe_nom?: unknown;
-  forme_sociale?: unknown;
-  mapping_assignments?: unknown;
-};
-type ProcedureRelation = { source?: unknown; target?: unknown; role?: unknown };
-
 const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 const strings = (value: unknown): string[] => Array.isArray(value) ? [...new Set(value.map(text).filter(Boolean))] : [];
 const record = (value: unknown): JsonData => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonData : {};
@@ -90,50 +79,6 @@ function entityNodes(mapping: GlinerMappingDocument): Map<string, KnowledgeNodeI
   return nodes;
 }
 
-function procedureOperations(mapping: GlinerMappingDocument, nodes: Map<string, KnowledgeNodeInput>): KnowledgeUpdateOperation[] {
-  const info = record(mapping.informations_dossier);
-  const parties = [
-    ...(Array.isArray(info.parties_clientes) ? info.parties_clientes.map((party) => ({ party: party as ProcedureParty, side: 'client' })) : []),
-    ...(Array.isArray(info.parties_adverses) ? info.parties_adverses.map((party) => ({ party: party as ProcedureParty, side: 'adversaire' })) : []),
-  ];
-  const operations: KnowledgeUpdateOperation[] = [];
-  for (const { party, side } of parties) {
-    const assignments = (Array.isArray(party.mapping_assignments) ? party.mapping_assignments : []) as ProcedureAssignment[];
-    const identity = assignments.find((assignment) => text(assignment.field) === 'identite');
-    const identityCode = text(identity?.code);
-    if (!identityCode) continue;
-    const existing = nodes.get(identityCode);
-    const label = text(party.type) === 'societe' ? text(party.societe_nom) : text(party.nom);
-    if (existing) {
-      nodes.set(identityCode, {
-        ...existing,
-        label: existing.label || label,
-        data: {
-          ...existing.data,
-          partySide: side,
-          position: text(party.position),
-          ...(text(party.forme_sociale) ? { legalForm: text(party.forme_sociale) } : {}),
-        },
-      });
-    }
-    for (const assignment of assignments) {
-      const targetCode = text(assignment.code);
-      const field = text(assignment.field);
-      if (!targetCode || !field || targetCode === identityCode || !nodes.has(targetCode)) continue;
-      operations.push({ op: 'link', link: { fromNodeId: nodeId(identityCode), toNodeId: nodeId(targetCode), relation: field, data: {}, origin: 'gliner' } });
-    }
-  }
-  const relations = (Array.isArray(info.relations) ? info.relations : []) as ProcedureRelation[];
-  for (const relation of relations) {
-    const source = text(relation.source);
-    const target = text(relation.target);
-    const role = text(relation.role);
-    if (!source || !target || !role || !nodes.has(source) || !nodes.has(target)) continue;
-    operations.push({ op: 'link', link: { fromNodeId: nodeId(source), toNodeId: nodeId(target), relation: role, data: {}, origin: 'gliner' } });
-  }
-  return operations;
-}
-
 function documentOperations(documents: GlinerDocument[], nodes: Map<string, KnowledgeNodeInput>): KnowledgeUpdateOperation[] {
   const operations: KnowledgeUpdateOperation[] = [];
   for (const document of documents) {
@@ -151,7 +96,6 @@ function documentOperations(documents: GlinerDocument[], nodes: Map<string, Know
 
 export function scanResultOperations(result: GlinerScanResult): KnowledgeUpdateOperation[] {
   const nodes = entityNodes(result.mapping);
-  const relations = procedureOperations(result.mapping, nodes);
   const operations: KnowledgeUpdateOperation[] = [...nodes.values()].map((node) => ({ op: 'upsertNode', node }));
   operations.push(exclusionNodeOperation(result.mapping.ignored));
   for (const [code, node] of nodes) {
@@ -159,7 +103,6 @@ export function scanResultOperations(result: GlinerScanResult): KnowledgeUpdateO
       operations.push({ op: 'upsertMapping', mapping: { nodeId: nodeId(code), real, masked: code, data: {}, origin: 'gliner' } });
     }
   }
-  operations.push(...relations);
   operations.push(...documentOperations(result.documents, nodes));
   return operations;
 }

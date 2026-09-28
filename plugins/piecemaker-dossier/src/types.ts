@@ -118,7 +118,6 @@ export type GlinerMappingDocument = {
   reverse_mapping?: Record<string, string[] | string>;
   extracted_data?: Record<string, Record<string, JsonData>>;
   ignored?: string[];
-  informations_dossier?: JsonData;
 };
 
 export type GlinerDocument = {

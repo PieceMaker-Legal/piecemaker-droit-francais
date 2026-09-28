@@ -6,14 +6,12 @@
  * les pièces du dossier, sans restriction de zone. Le Markdown d'une pièce de
  * `01_CORRESPONDANCE` ou `02_DATA_ROOM` est rangé dans le sous-dossier de
  * conversion métier correspondant ; celui d'une pièce hors de ces deux zones
- * rejoint le sous-dossier de travail générique. Le mapping canonique reste
- * dans `Fichiers convertis PieceMaker/` et l'état technique dans
- * `.piecemaker/anonymization-state.json`. Seules les lignes `PROGRESS:` et un
+ * rejoint le sous-dossier de travail générique. Le mapping vit en base et
+ * l'état technique dans `.piecemaker/anonymization-state.json`. Seules les lignes `PROGRESS:` et un
  * extrait d'erreur sont conservés dans le journal d'un travail : la sortie
  * brute des scripts peut contenir du texte de pièce, qui ne doit jamais
  * remonter dans l'interface.
  */
-const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -23,28 +21,11 @@ const {
   terminateProcessTree,
 } = require('./process-group.cjs');
 
-const {
-  originalFilesOverview,
-  safeCaseFiles,
-} = require('../piecemaker-plugin/scripts/lib/commits.cjs');
-const { documentKey } = require('../piecemaker-plugin/scripts/lib/protection.cjs');
+const { originalFilesOverview } = require('../piecemaker-plugin/scripts/lib/commits.cjs');
 const {
   classifyRelativeCaseFolderPath,
   readCaseFolderStructure,
 } = require('./case-folder-structure.cjs');
-const { markFilesAnonymized } = require('../piecemaker-plugin/scripts/lib/anonymization-state.cjs');
-// Le mapping vit dans le plugin : c'est le seul des trois consommateurs (hooks,
-// pipeline, routeur du task pane) qui soit distribué seul.
-const {
-  caseMappingFile,
-  normalizeMappingDocument,
-  readCaseMapping,
-  readJsonFile,
-  sortedMapping,
-} = require('../piecemaker-plugin/scripts/lib/mapping.cjs');
-// Vocabulaire des sigles de sociétés (SA_1, SARL_1, PERS_MORALE_1…), miroir de
-// `_LEGAL_FORMS` (scan_utils.py) — sert à classer un code déjà attribué.
-const { isSocieteCode, societeCounterKey, detectCompanySigle, LEGAL_FORM_TOKENS } = require('./legal-forms.cjs');
 
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
 const PIECEMAKER_HOME = path.join(os.homedir(), '.piecemaker');
@@ -109,344 +90,6 @@ async function listOriginals(caseRoot) {
       ...file,
       businessArea: info.area,
     }));
-}
-
-function caseMappingPayload(document) {
-  const normalized = normalizeMappingDocument(document);
-  return {
-    mapping: sortedMapping(normalized.mapping),
-    reverse_mapping: normalized.reverse_mapping,
-    ...(Object.keys(normalized.extracted_data).length ? { extracted_data: normalized.extracted_data } : {}),
-    ...(normalized.ignored.length ? { ignored: normalized.ignored } : {}),
-    informations_dossier: normalized.informations_dossier,
-  };
-}
-
-function writeCaseMapping(caseRoot, document) {
-  const file = caseMappingFile(caseRoot);
-  const payload = caseMappingPayload(document);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temporary = `${file}.piecemaker-${process.pid}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(payload, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
-  fs.renameSync(temporary, file);
-  // Une fois le fichier canonique écrit avec succès, tous les autres mappings
-  // sont supprimés : les legacy (`mapping_<id>.json`) comme un `mapping_default.json`
-  // resté à la racine par une version antérieure — c'est la migration. La
-  // comparaison porte sur le chemin complet, sinon un `mapping_default.json`
-  // racine passerait pour le fichier canonique (même basename) et survivrait.
-  // `readCaseMapping` les a tous fusionnés au préalable ; aucune entité n'est perdue.
-  for (const dir of new Set([caseRoot, path.dirname(file)])) {
-    let entries;
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (!entry.isFile() || !/^mapping.*\.json$/i.test(entry.name)) continue;
-      const full = path.join(dir, entry.name);
-      if (full === file) continue;
-      fs.unlinkSync(full);
-    }
-  }
-  return { file, exists: true, ignored: payload.ignored || [], ...payload };
-}
-
-/**
- * Enregistre un mapping édité à la main. Une entrée supprimée rejoint
- * `ignored` : c'est ce qui empêche un faux positif écarté par le juriste
- * d'être réintroduit par le scan suivant, que `rebuildCaseMapping` relit.
- */
-function saveCaseMapping(caseRoot, document) {
-  const current = readCaseMapping(caseRoot);
-  // L'éditeur n'envoie que `mapping` et `reverse_mapping` : `extracted_data`
-  // est repris du fichier, sinon un simple enregistrement perdrait les variants.
-  const next = normalizeMappingDocument({
-    extracted_data: current.extracted_data,
-    informations_dossier: current.informations_dossier,
-    ...document,
-  });
-  const removed = Object.keys(current.mapping).filter((entity) => !next.mapping[entity]);
-  const ignored = [...new Set([...current.ignored, ...removed])].filter((entity) => !next.mapping[entity]);
-  return writeCaseMapping(caseRoot, { ...next, ignored });
-}
-
-function codePrefix(entityType) {
-  return String(entityType || 'ENTITE')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 32) || 'ENTITE';
-}
-
-// Vocabulaire de codes et regroupement des variantes : mêmes règles que
-// `convert_to_anonymization_format` et `consolidate_duplicate_entities` dans
-// `scripts/convert_and_scan_pipeline.py`. Les deux chemins écrivent le même
-// fichier de mapping — s'ils codaient différemment, une reconstruction depuis
-// l'administration dédoublerait les entités déjà codées par le CLI.
-
-const ENTITY_CATEGORIES = {
-  PERSON: 'personnes_physiques',
-  ORGANIZATION: 'societes',
-  LOCATION: 'adresses',
-  EMAIL: 'autres',
-  PHONE: 'autres',
-  CREDIT_CARD: 'autres',
-  IBAN: 'autres',
-  IP_ADDRESS: 'autres',
-  URL: 'autres',
-};
-
-function entityCategory(entityType) {
-  const type = String(entityType || '').toUpperCase();
-  return ENTITY_CATEGORIES[type] || (type.startsWith('ORGANIZATION_') ? 'societes' : 'autres');
-}
-
-/** Catégorie d'un code déjà attribué — sert à repartir des bons compteurs. */
-function codeCategory(code) {
-  if (code.startsWith('SIREN_')) return 'siren';
-  if (code.startsWith('ADRESSE_') || code.startsWith('LIEU_NAISSANCE_')) return 'adresses';
-  if (code.includes('PERSONNE_PHYSIQUE_') || code.startsWith('DIRIGEANT_') || code.startsWith('AVOCAT_')) return 'personnes_physiques';
-  // Sociétés : repli/legacy (…MORALE…, SOCIETE_…) et codes à sigle (SA_1, GMBH_2).
-  // Testé après les familles distinctives, qui ne portent aucun sigle.
-  if (isSocieteCode(code)) return 'societes';
-  return 'autres';
-}
-
-/** Clé de compteur société (le sigle) déduite du type d'entité scanné. */
-function societeCodeKey(entityType) {
-  const type = String(entityType || '').toUpperCase();
-  return type.startsWith('ORGANIZATION_')
-    ? (codePrefix(type.slice('ORGANIZATION_'.length)) || 'PERS_MORALE')
-    : 'PERS_MORALE';
-}
-
-function entityCode(entityType, category, index) {
-  const type = String(entityType || 'AUTRE').toUpperCase();
-  // Sociétés : sigle en préfixe, sans zéro (SA_1, SARL_1, PERS_MORALE_1), compteur
-  // par sigle. Les autres familles gardent leur padding _01.
-  if (category === 'societes') return `${societeCodeKey(entityType)}_${index}`;
-  const number = String(index).padStart(2, '0');
-  if (category === 'personnes_physiques') return `PERSONNE_PHYSIQUE_${number}`;
-  if (category === 'adresses') return `ADRESSE_${number}`;
-  return `${codePrefix(type)}_${number}`;
-}
-
-/** Forme comparable d'un nom : sans accents, sans civilité, en minuscules. */
-function normalizeEntityName(text) {
-  return String(text || '')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\b(mr\.?|mrs\.?|ms\.?|dr\.?|prof\.?|m\.|mme\.?|mlle\.?|maitre)\s*/g, '')
-    .split(/\s+/)
-    .filter(Boolean)
-    .join(' ')
-    .trim();
-}
-
-/** Deux écritures d'une même personne : « M. Dupont » et « Jean Dupont ». */
-function areNamesSimilar(first, second) {
-  if (!first || !second) return false;
-  if (first === second) return true;
-  if (Math.min(first.length, second.length) >= 3 && (first.includes(second) || second.includes(first))) return true;
-  const tokens = [new Set(first.split(' ')), new Set(second.split(' '))];
-  const [shorter, longer] = tokens[0].size <= tokens[1].size ? tokens : [tokens[1], tokens[0]];
-  return shorter.size > 0 && [...shorter].every((token) => longer.has(token));
-}
-
-const CIVILITY_PREFIX = /^(?:(?:m|mr|mrs|ms|mme|mlle|dr|pr|prof|ma[iî]tre)\.\s*|(?:mr|mrs|ms|mme|mlle|dr|pr|prof|ma[iî]tre)\s+)/i;
-
-function withoutCivility(text) {
-  return String(text || '').replace(CIVILITY_PREFIX, '').trim();
-}
-
-function expandCivilityVariants(texts) {
-  const expanded = [];
-  for (const text of texts) {
-    expanded.push(text);
-    const bare = withoutCivility(text);
-    if (bare && bare !== text) expanded.push(bare);
-  }
-  return [...new Set(expanded)];
-}
-
-function companyIdentity(text) {
-  const tokens = normalizeEntityName(text)
-    .split(/\s+/)
-    .map((token) => token.replace(/[.,'’&"()]/g, ''))
-    .filter(Boolean);
-  const base = tokens.filter((token) => !LEGAL_FORM_TOKENS.has(token.toUpperCase())).join(' ');
-  return { base, sigle: detectCompanySigle(text) };
-}
-
-function areCompaniesSame(first, second) {
-  if (!first.base || !second.base) return false;
-  if (first.base !== second.base) return false;
-  return !first.sigle || !second.sigle || first.sigle === second.sigle;
-}
-
-function groupSimilarNames(texts) {
-  const groups = [];
-  for (const text of texts) {
-    const normalized = normalizeEntityName(text);
-    const group = groups.find((candidate) => candidate.normalized.some((member) => areNamesSimilar(normalized, member)));
-    if (group) {
-      group.texts.push(text);
-      group.normalized.push(normalized);
-    } else {
-      groups.push({ texts: [text], normalized: [normalized] });
-    }
-  }
-  return groups.map((group) => group.texts);
-}
-
-function groupSameCompanies(texts) {
-  const groups = [];
-  for (const text of texts) {
-    const identity = companyIdentity(text);
-    const group = groups.find((candidate) => candidate.identities.some((member) => areCompaniesSame(identity, member)));
-    if (group) {
-      group.texts.push(text);
-      group.identities.push(identity);
-    } else {
-      groups.push({ texts: [text], identities: [identity] });
-    }
-  }
-  return groups.map((group) => group.texts);
-}
-
-function groupEntityHits(hits, category) {
-  const texts = [...new Set(hits.map((hit) => String(hit?.text || '').trim()).filter(Boolean))];
-  if (category === 'personnes_physiques') return groupSimilarNames(expandCivilityVariants(texts));
-  if (category === 'societes') return groupSameCompanies(texts);
-  return texts.map((text) => [text]);
-}
-
-/**
- * Migre les anciens `*_sensitive_map.json` du dossier dans son mapping.
- * Une entrée déjà présente n'est jamais réécrite : un faux positif retiré à la
- * main ne doit pas revenir au scan suivant, et un code ne doit jamais servir
- * deux fois. Les écritures multiples d'une même personne rejoignent le code
- * déjà attribué au lieu d'en obtenir un second.
- */
-async function rebuildCaseMapping(caseRoot) {
-  const current = readCaseMapping(caseRoot);
-  const mapping = { ...current.mapping };
-  const ignored = new Set(current.ignored);
-  const reverse = Object.fromEntries(Object.entries(current.reverse_mapping).map(([code, list]) => [code, [...list]]));
-  const extracted = Object.fromEntries(
-    Object.entries(current.extracted_data).map(([category, codes]) => [category, { ...codes }])
-  );
-
-  // Compteurs amorcés sur les codes déjà attribués. Les sociétés comptent par
-  // sigle : la clé `societes:<sigle>` (SA, SARL, PERS_MORALE…) sépare les suites,
-  // pour que la 1re SA soit SA_1 et la 1re SARL SARL_1 indépendamment.
-  const counters = new Map();
-  for (const code of new Set(Object.values(mapping))) {
-    const match = /_(\d+)$/.exec(code);
-    if (!match) continue;
-    const category = codeCategory(code);
-    const key = category === 'societes' ? `societes:${societeCounterKey(code)}` : category;
-    counters.set(key, Math.max(counters.get(key) || 0, Number(match[1])));
-  }
-
-  // Index des noms déjà codés : une variante détectée plus tard rejoint son
-  // code d'origine plutôt que d'en créer un nouveau.
-  const coded = Object.entries(mapping).map(([entity, code]) => ({
-    normalized: normalizeEntityName(entity),
-    identity: companyIdentity(entity),
-    category: codeCategory(code),
-    code,
-  }));
-
-  let added = 0;
-  for (const relative of await safeCaseFiles(caseRoot)) {
-    if (!relative.toLowerCase().endsWith('_sensitive_map.json')) continue;
-    const payload = readJsonFile(path.join(caseRoot, ...relative.split('/')), null);
-    const entities = payload && typeof payload.entities === 'object' ? payload.entities : {};
-    for (const [entityType, hits] of Object.entries(entities)) {
-      if (!Array.isArray(hits)) continue;
-      const category = entityCategory(entityType);
-      for (const group of groupEntityHits(hits, category)) {
-        const texts = group.filter((text) => !ignored.has(text));
-        if (!texts.length) continue;
-
-        let code = texts.map((text) => mapping[text]).find(Boolean);
-        if (!code && category === 'personnes_physiques') {
-          const normalized = texts.map(normalizeEntityName);
-          code = coded.find((entry) => entry.category === category
-            && normalized.some((name) => areNamesSimilar(name, entry.normalized)))?.code;
-        }
-        if (!code && category === 'societes') {
-          const identities = texts.map(companyIdentity);
-          code = coded.find((entry) => entry.category === category
-            && identities.some((identity) => areCompaniesSame(identity, entry.identity)))?.code;
-        }
-        const isNewCode = !code;
-        if (!code) {
-          const key = category === 'societes' ? `societes:${societeCodeKey(entityType)}` : category;
-          const index = (counters.get(key) || 0) + 1;
-          counters.set(key, index);
-          code = entityCode(entityType, category, index);
-        }
-
-        // Valeur principale : la plus longue écriture, comme côté Python.
-        const principal = [...texts].sort((a, b) => b.length - a.length)[0];
-        for (const text of texts) {
-          if (mapping[text]) continue;
-          mapping[text] = code;
-          coded.push({ normalized: normalizeEntityName(text), identity: companyIdentity(text), category, code });
-          added += 1;
-        }
-        if (isNewCode) reverse[code] = [principal];
-        for (const text of texts) {
-          if (!reverse[code].includes(text)) reverse[code].push(text);
-        }
-
-        if (!extracted[category]) extracted[category] = {};
-        const entry = extracted[category][code] || { original: principal, code, variants: [] };
-        entry.variants = [...new Set([...(entry.variants || []), ...texts])];
-        extracted[category][code] = entry;
-      }
-    }
-  }
-
-  const saved = writeCaseMapping(caseRoot, {
-    mapping,
-    reverse_mapping: reverse,
-    extracted_data: extracted,
-    ignored: [...ignored],
-    informations_dossier: current.informations_dossier,
-  });
-  const migratedScans = await migrateLegacySensitiveMaps(caseRoot);
-  return { ...saved, added, total: Object.keys(saved.mapping).length, migratedScans };
-}
-
-/**
- * Transfère l'état porté par les anciens sensitive maps vers le manifeste sans
- * PII, puis retire ces artefacts devenus inutiles. Le mapping doit avoir été
- * reconstruit avant cet appel.
- */
-async function migrateLegacySensitiveMaps(caseRoot) {
-  const safeFiles = await safeCaseFiles(caseRoot);
-  const legacy = safeFiles.filter((relative) => relative.toLowerCase().endsWith('_sensitive_map.json'));
-  if (!legacy.length) return 0;
-
-  const scannedKeys = new Set(legacy.map((relative) => {
-    const basename = relative.split('/').at(-1) || '';
-    return documentKey(basename).replace(/-sensitive-map$/, '');
-  }));
-  const originals = await listOriginals(caseRoot);
-  const scannedOriginals = originals
-    .filter((original) => scannedKeys.has(documentKey(original.name)))
-    .map((original) => path.join(caseRoot, ...original.path.split('/')));
-  if (scannedOriginals.length) markFilesAnonymized(caseRoot, scannedOriginals);
-
-  for (const relative of legacy) fs.unlinkSync(path.join(caseRoot, ...relative.split('/')));
-  return legacy.length;
 }
 
 // ── Travaux de conversion / anonymisation ──────────────────────────────────
@@ -810,18 +453,10 @@ function stopOriginalsJobs() {
 }
 
 module.exports = {
-  groupEntityHits,
   // Point d'entrée partagé : tout consommateur d'un pipeline GLiNER/markitdown
   // (même hors dossier juridique enregistré, ex. `knowledge/pipeline.ts`) doit
   // passer par ici pour rester sous l'exclusivité GLiNER et le budget RAM.
   runManagedPythonJob,
   stopOriginalsJobs,
-  // Ré-exportés pour les routes de l'administration : l'implémentation vit
-  // désormais dans `piecemaker-plugin/scripts/lib/mapping.cjs`.
-  caseMappingFile,
   listOriginals,
-  readCaseMapping,
-  rebuildCaseMapping,
-  saveCaseMapping,
-  writeCaseMapping,
 };
