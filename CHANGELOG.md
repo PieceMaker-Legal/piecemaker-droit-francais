@@ -3,6 +3,28 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.12](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.11...v2.0.12) (2026-09-28)
+
+### New Features
+
+* **anonymisation:** les sessions Mistral (Vibe) passent par le proxy d'anonymisation ([be3d52d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/be3d52dc1857898b5be223db080a4627b5e8a07e))
+* **conversion:** le Markdown d'une pièce suit le renommage de son PDF ([3f55c9f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3f55c9fd1be88062c401dea530b4f50742534063))
+* **desktop:** installer les plugins PieceMaker ([c51bffd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c51bffd88a9bf2c987c125c9eeff20ec88ebaf29))
+* **protection:** le garde-fou n'agit que sous un bouclier vert ([2e8104d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2e8104d57f0296148e3b48a85e4f0a707a4fb191))
+
+### Bug Fixes
+
+* **anonymisation:** restituer aussi les événements finaux des flux Codex et Claude ([d91c81b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d91c81bc511cd499b913d35de1f8d508d78a8f1e))
+* **anonymisation:** tout nom titré a aussi sa variante sans civilité ([097d571](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/097d5719063a8c543ee0a1117c3f9b6b675f1396))
+* **anonymisation:** un code n'appartient qu'à un seul dossier, sans fichier de mapping ([283fbe7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/283fbe76e23cea56d1f9c529e9b5e77572e08530))
+* **conversion:** les .docx ne sont jamais convertis en Markdown ([8405783](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/84057839c4a9e6c56dc2e7e8b55b6da073364657))
+* **telegram:** lancer le serveur avec le Node du plugin ([527b049](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/527b04914bc6c4d9adf8038281c5311384c8d1f7))
+
+### Refactoring
+
+* **anonymisation:** supprimer le code mort du mapping JSON ([dabd59d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/dabd59d5fdcb27191711f6b62453d91fd9e57bec))
+* **piecemaker:** un seul outil MCP (conversion), hooks sans facturation ni commit de tour ([c1b6fcb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c1b6fcb813933e8d29e1f3f44c0ef85fab11faab))
+
 ## [2.0.11](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.10...v2.0.11) (2026-09-27)
 
 ### New Features
