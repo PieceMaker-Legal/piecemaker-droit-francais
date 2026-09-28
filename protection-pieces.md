@@ -50,6 +50,12 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 
 - Les exceptions sont des chemins relatifs : une pièce renommée ou déplacée
   perd la sienne et redevient protégée (défaut sûr).
+- Son Markdown, lui, suit un renommage sur place (même dossier, même
+  extension) : au listage des pièces (`listOriginals`, hors traitement en
+  cours), `renamed-originals.cjs` reconnaît la pièce à sa taille + mtime
+  inchangées dans `anonymization-state.json`, renomme le `.md` et déplace ses
+  clés d'état et de `document-index.json` — sans reconversion ni rescan.
+  Déplacement vers un autre dossier ou doublon ambigu : non suivi (reconversion).
 - `protection.json` est réécrit de façon atomique (fichier temporaire puis
   `rename`) sous le verrou `protection.json.lock` (lecture-modification-écriture
   entière sous verrou, verrou périmé après 10 s) : plusieurs hooks l'écrivent en

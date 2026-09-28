@@ -26,6 +26,7 @@ const {
   classifyRelativeCaseFolderPath,
   readCaseFolderStructure,
 } = require('./case-folder-structure.cjs');
+const { reconcileRenamedOriginals } = require('./renamed-originals.cjs');
 
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
 const PIECEMAKER_HOME = path.join(os.homedir(), '.piecemaker');
@@ -76,7 +77,10 @@ const PROCESS_TERMINATION_GRACE_MS = () => {
 
 /** Les pièces d'un dossier listées dans l'administration : tout sauf le Markdown. */
 async function listOriginals(caseRoot) {
-  const originals = await originalFilesOverview(caseRoot);
+  let originals = await originalFilesOverview(caseRoot);
+  if (!runningManaged.size && !waiting.length && (await reconcileRenamedOriginals(caseRoot, originals)).length) {
+    originals = await originalFilesOverview(caseRoot);
+  }
   const snapshot = readCaseFolderStructure(caseRoot);
   return originals
     .map((file) => ({
