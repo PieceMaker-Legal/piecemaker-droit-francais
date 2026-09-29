@@ -18,6 +18,14 @@ type DocxDocumentViewerProps = {
   onClose: () => void;
 };
 
+function decodeDocumentPath(filePath: string): string {
+  try {
+    return decodeURIComponent(filePath);
+  } catch {
+    return filePath;
+  }
+}
+
 export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose }: DocxDocumentViewerProps) {
   const { isDarkMode } = useTheme();
   const editorRef = useRef<DocxEditorRef>(null);
@@ -25,21 +33,33 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const userEditingRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const savingRef = useRef(false);
-  const [loaded, setLoaded] = useState<{ buffer: ArrayBuffer; version: number } | null>(null);
+  const resolvedPathRef = useRef(file.path);
+  const [loaded, setLoaded] = useState<{ buffer: ArrayBuffer; version: number; filePath: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const documentQuery = projectId ? `projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(file.path)}` : '';
-
   const fetchVersion = useCallback(async () => {
-    const response = await authenticatedFetch(`/api/piecemaker/docx-document/version?${documentQuery}`);
+    const requestVersion = (filePath: string) => {
+      const query = new URLSearchParams({ projectId: projectId ?? '', path: filePath });
+      return authenticatedFetch(`/api/piecemaker/docx-document/version?${query}`);
+    };
+    let filePath = resolvedPathRef.current;
+    let response = await requestVersion(filePath);
+    if (response.status === 400 || response.status === 404) {
+      const decodedPath = decodeDocumentPath(filePath);
+      if (decodedPath !== filePath) {
+        filePath = decodedPath;
+        response = await requestVersion(filePath);
+      }
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return ((await response.json()) as { version: number }).version;
-  }, [documentQuery]);
+    resolvedPathRef.current = filePath;
+    return { filePath, version: ((await response.json()) as { version: number }).version };
+  }, [projectId]);
 
   const load = useCallback(async () => {
     if (!projectId) return;
-    const version = await fetchVersion();
-    const response = await api.readFileBlob(projectId, file.path);
+    const { filePath, version } = await fetchVersion();
+    const response = await api.readFileBlob(projectId, filePath);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const buffer = await response.arrayBuffer();
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
@@ -47,22 +67,23 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     userEditingRef.current = false;
     versionRef.current = version;
     setError(null);
-    setLoaded({ buffer, version });
-  }, [fetchVersion, file.path, projectId]);
+    setLoaded({ buffer, version, filePath });
+  }, [fetchVersion, projectId]);
 
   useEffect(() => {
+    resolvedPathRef.current = file.path;
     load().catch((loadError: unknown) => setError(String(loadError)));
     const poll = window.setInterval(() => {
       if (savingRef.current) return;
       fetchVersion()
-        .then((version) => { if (!savingRef.current && version !== versionRef.current) return load(); })
+        .then(({ version }) => { if (!savingRef.current && version !== versionRef.current) return load(); })
         .catch(() => undefined);
     }, VERSION_POLL_MS);
     return () => {
       window.clearInterval(poll);
       if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     };
-  }, [fetchVersion, load]);
+  }, [fetchVersion, file.path, load]);
 
   const save = useCallback(async () => {
     saveTimerRef.current = null;
@@ -70,6 +91,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     if (!buffer) return;
     savingRef.current = true;
     try {
+      const documentQuery = new URLSearchParams({ projectId: projectId ?? '', path: resolvedPathRef.current });
       const response = await authenticatedFetch(`/api/piecemaker/docx-document?${documentQuery}`, {
         method: 'PUT',
         headers: { 'Content-Type': DOCX_MIME_TYPE },
@@ -82,7 +104,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     } finally {
       savingRef.current = false;
     }
-  }, [documentQuery]);
+  }, [projectId]);
 
   const scheduleSave = useCallback(() => {
     if (!userEditingRef.current) return;
@@ -100,7 +122,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
           key={loaded.version}
           ref={editorRef}
           documentBuffer={loaded.buffer}
-          documentName={file.name}
+          documentName={loaded.filePath.split(/[\\/]/).pop() || file.name}
           documentNameEditable={false}
           showFileOpen={false}
           mode="editing"
