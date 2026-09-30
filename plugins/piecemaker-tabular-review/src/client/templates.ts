@@ -3,14 +3,14 @@ import { COLUMN_FORMATS } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, formatDate, openModal, toast } from './dom.js';
 
-type DraftColumn = TemplateColumn & { tagsText: string };
+export type DraftColumn = TemplateColumn & { tagsText: string };
 
-function draftColumns(template: Template | null): DraftColumn[] {
+export function draftColumns(template: Template | null): DraftColumn[] {
   const columns = template?.columns.length ? template.columns : [{ name: '', prompt: '', format: 'text' as ColumnFormat }];
   return columns.map((column) => ({ ...column, tagsText: (column.tags ?? []).join(', ') }));
 }
 
-function questionHtml(column: DraftColumn, index: number, count: number): string {
+export function questionHtml(column: DraftColumn, index: number, count: number): string {
   return `
     <div class="ptr-question" data-question="${index}">
       <input class="ptr-input" data-field="name" value="${escapeHtml(column.name)}" placeholder="Titre de la colonne (ex. Durée du préavis)" aria-label="Titre de la question ${index + 1}" maxlength="120">
