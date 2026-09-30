@@ -15,13 +15,7 @@ Les sessions IA sont lancées par le serveur du plugin, sans persistance dans l'
 
 ## Installation
 
-Elle est automatique : la commande `piecemaker` appelle cet installateur à chaque exécution. Pour la rejouer à la main, avec Node 22 ou plus récent et les dépendances de l'application installées, depuis `plugins/piecemaker-tabular-review/` :
-
-```sh
-node install.mjs /chemin/vers/piecemaker-droit-francais
-```
-
-Le client et le serveur sont compilés avec l'esbuild de l'application, puis `dist/`, le manifeste, l'icône et le lanceur sont copiés dans le répertoire de plugins, avec priorité à `CLOUDCLI_HOME`. Le secret d'accès au serveur du plugin est conservé d'une installation à l'autre dans `plugins.json`.
+Comme tous les plugins PieceMaker : compilé et installé par la chaîne commune `plugins/toolchain`, embarqué dans l'application Electron et réinstallé à chaque démarrage si besoin. Depuis le dépôt : `npm run plugins`. Voir `plugins.md` à la racine.
 
 ## Validation
 
@@ -29,6 +23,6 @@ Depuis la racine de l'application :
 
 ```sh
 npx tsc -p plugins/piecemaker-tabular-review
-node plugins/piecemaker-tabular-review/build.mjs
+node plugins/toolchain/cli.mjs --check
 cd plugins/piecemaker-tabular-review && npx vitest run
 ```
