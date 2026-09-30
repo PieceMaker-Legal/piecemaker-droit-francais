@@ -7,11 +7,21 @@ commande, aucune question posée.
 piecemaker
 ```
 
-Elle enchaîne, dans cet ordre : libération des ports (5173, 3003), clonage du
-dépôt s'il est absent, mise à jour en avance rapide, installation des
-dépendances quand le verrou a bougé, installation des composants du socle,
-démarrage de l'application (qui porte son propre proxy PII), installation de
-la PWA, ouverture. Sautée en entier avec `--launch-only`.
+Elle enchaîne, dans cet ordre : clonage du dépôt s'il est absent, mise à jour
+en avance rapide, installation des dépendances quand le verrou a bougé,
+installation des plugins PieceMaker, libération des ports (5173, 3003) et
+démarrage de l'application (qui porte son propre proxy PII), installation des
+composants du socle, installation de la PWA, ouverture. Sautée en entier avec
+`--launch-only`, qui se contente de réparer les plugins manquants ou périmés
+(puis relance l'application si elle tournait) et de démarrer l'application si
+elle est arrêtée.
+
+Les plugins sont installés **avant** le démarrage, jamais après : l'hôte ne
+lance les serveurs de plugins (Telegram, Tabular Review) qu'à son boot et
+l'interface ne lit la liste des plugins qu'au chargement. La liste n'est pas
+codée en dur : tout `plugins/piecemaker-*` doté d'un `install.mjs` est
+installé (`bundledPlugins()` dans `lib/plugins.mjs`, même découverte dans
+`desktop-bootstrap/lib/plugins.mjs`).
 
 Sur une machine nue, sans dépôt ni commande, chaque amorce clone le dépôt puis
 lance ce premier passage :

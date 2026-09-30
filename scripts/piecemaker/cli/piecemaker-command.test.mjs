@@ -23,3 +23,16 @@ test('the desktop launcher binds to the installed piecemaker binary', () => {
     assert.equal(executable.startsWith(BIN_DIR) || executable.includes(`${path.sep}node${path.sep}` ) || executable.includes('versions/node'), true);
   }
 });
+
+test('every plugins/piecemaker-* source is installed, before the application starts', async () => {
+  const { bundledPlugins } = await import('./lib/plugins.mjs');
+  const root = path.resolve(here, '..', '..', '..');
+  const sources = fs.readdirSync(path.join(root, 'plugins'))
+    .filter((name) => name.startsWith('piecemaker-') && fs.existsSync(path.join(root, 'plugins', name, 'install.mjs')))
+    .sort();
+  assert.deepEqual(bundledPlugins(root).map((plugin) => plugin.id), sources);
+  assert.ok(sources.includes('piecemaker-tabular-review'));
+
+  const main = fs.readFileSync(path.join(here, 'piecemaker.mjs'), 'utf8');
+  assert.ok(main.indexOf('await installPlugins(') < main.indexOf('await resetAndLaunch('));
+});
