@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { capture, mustCapture, powershell } from './shell.mjs';
+import { capture, mustCapture, osascript, powershell } from './shell.mjs';
 import { ui } from './ui.mjs';
 import { IS_MAC, PRODUCT_NAME, installTargetCandidates } from './paths.mjs';
 
@@ -41,6 +41,43 @@ async function placeOnWindows(builtDir) {
   await fs.rm(destination, { recursive: true, force: true });
   await fs.cp(builtDir, destination, { recursive: true });
   return destination;
+}
+
+const MAC_PROCESS_PATTERN = `/${PRODUCT_NAME}.app/Contents/`;
+const WINDOWS_IMAGE = `${PRODUCT_NAME}.exe`;
+const QUIT_TIMEOUT_MS = 20_000;
+
+function applicationIsRunning() {
+  if (IS_MAC) return capture('pgrep', ['-f', MAC_PROCESS_PATTERN]).code === 0;
+  const listing = capture('tasklist', ['/FI', `IMAGENAME eq ${WINDOWS_IMAGE}`, '/NH']);
+  return listing.stdout.toLowerCase().includes(WINDOWS_IMAGE.toLowerCase());
+}
+
+async function waitUntilStopped(timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!applicationIsRunning()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return !applicationIsRunning();
+}
+
+/** Ferme l'application (et son serveur local) avant de la remplacer. */
+export async function quitRunningApplication() {
+  if (!applicationIsRunning()) return;
+  ui.step(`Fermeture de ${PRODUCT_NAME} (déjà ouvert)…`);
+  if (IS_MAC) osascript(`tell application "${PRODUCT_NAME}" to quit`);
+  else capture('taskkill', ['/IM', WINDOWS_IMAGE, '/T']);
+  if (await waitUntilStopped(QUIT_TIMEOUT_MS)) {
+    ui.ok(`${PRODUCT_NAME} fermé.`);
+    return;
+  }
+  if (IS_MAC) capture('pkill', ['-9', '-f', MAC_PROCESS_PATTERN]);
+  else capture('taskkill', ['/IM', WINDOWS_IMAGE, '/T', '/F']);
+  if (!(await waitUntilStopped(5_000))) {
+    throw new Error(`${PRODUCT_NAME} est toujours ouvert — fermez-le puis relancez l'installation.`);
+  }
+  ui.ok(`${PRODUCT_NAME} fermé de force.`);
 }
 
 export async function installApplication(builtArtifact) {
