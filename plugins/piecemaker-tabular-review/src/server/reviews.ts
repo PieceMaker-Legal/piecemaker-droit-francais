@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Provider, Review, ReviewDetail, ReviewDocument, ReviewRow, ReviewStatus, ReviewSummary, RowRequest, Template } from '../shared.js';
-import { DOCS_FOLDER } from '../shared.js';
+import { DOCS_FOLDER, reviewCategory } from '../shared.js';
 import { resolveMarkdownDocument } from './documents.js';
 import { assertReviewFile, docsDirectory, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
 
@@ -43,26 +43,36 @@ function uniquePath(directory: string, basename: string, extension: string): str
   return candidate;
 }
 
-function copyDocument(project: string, source: string, copies: Map<string, ReviewDocument>): ReviewDocument {
-  const existing = copies.get(source);
-  if (existing) return existing;
-  const content = fs.readFileSync(source, 'utf8');
+export function storeDocument(project: string, name: string, extension: string, content: string): string {
   const directory = docsDirectory(project);
   fs.mkdirSync(directory, { recursive: true });
-  const extension = path.extname(source);
-  const basename = sanitizeFilename(path.basename(source, extension)) || 'document';
+  const basename = sanitizeFilename(name) || 'document';
   let target = path.join(directory, `${basename}${extension}`);
   for (let attempt = 2; fs.existsSync(target) && fs.readFileSync(target, 'utf8') !== content; attempt += 1) {
     target = path.join(directory, `${basename} (${attempt})${extension}`);
   }
   if (!fs.existsSync(target)) fs.writeFileSync(target, content);
+  return `${DOCS_FOLDER}/${path.basename(target)}`;
+}
+
+function copyDocument(project: string, source: string, copies: Map<string, ReviewDocument>): ReviewDocument {
+  const existing = copies.get(source);
+  if (existing) return existing;
+  const content = fs.readFileSync(source, 'utf8');
+  const extension = path.extname(source);
   const document = {
     source: toPosix(path.relative(project, source)),
-    copy: `${DOCS_FOLDER}/${path.basename(target)}`,
+    copy: storeDocument(project, path.basename(source, extension), extension, content),
     chars: content.length,
   };
   copies.set(source, document);
   return document;
+}
+
+export function writeNewReview(project: string, review: Review): string {
+  const target = uniquePath(reviewDirectory(project), reviewBasename(new Date(review.createdAt), review.templateName, review.title), '.json');
+  writeFileAtomic(target, `${JSON.stringify(review, null, 2)}\n`);
+  return path.basename(target);
 }
 
 export function createReview(project: string, template: Template, title: string, rows: RowRequest[], settings: ReviewSettings): { file: string; review: Review } {
@@ -93,6 +103,7 @@ export function createReview(project: string, template: Template, title: string,
     version: 1,
     title: cleanTitle,
     templateName: template.name,
+    category: 'documents',
     projectPath: project,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
@@ -103,9 +114,7 @@ export function createReview(project: string, template: Template, title: string,
     rows: reviewRows,
     cells: {},
   };
-  const target = uniquePath(reviewDirectory(project), reviewBasename(now, template.name, cleanTitle), '.json');
-  writeFileAtomic(target, `${JSON.stringify(review, null, 2)}\n`);
-  return { file: path.basename(target), review };
+  return { file: writeNewReview(project, review), review };
 }
 
 export function readReview(project: string, file: string): Review {
@@ -167,6 +176,8 @@ export function listReviews(projects: string[], isRunning: (project: string, fil
           file,
           title: review.title,
           templateName: review.templateName,
+          category: reviewCategory(review),
+          ...(review.research ? { query: review.research.query } : {}),
           createdAt: review.createdAt,
           status: deriveStatus(review, isRunning(project, file)),
           rowCount: review.rows.length,

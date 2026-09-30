@@ -7,7 +7,7 @@ import { COLUMN_FORMATS } from '../shared.js';
 import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 
 const TEMPLATES_FILE = path.join(PLUGIN_HOME, 'templates.json');
-const MAX_COLUMNS = 40;
+export const MAX_COLUMNS = 40;
 
 type TemplateSeed = Omit<Template, 'id' | 'updatedAt'>;
 
@@ -83,7 +83,7 @@ function text(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 
-function normalizeColumn(value: unknown): TemplateColumn {
+export function normalizeColumn(value: unknown): TemplateColumn {
   const input = (value ?? {}) as Record<string, unknown>;
   const name = text(input.name, 120);
   const prompt = text(input.prompt, 4000);
