@@ -1,6 +1,9 @@
-import type { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
+import fs from 'node:fs';
+
+import type { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import type { NormalizedMessage } from '@/shared/types.js';
 
+import { splitLibraryHiddenSkills } from './skill-visibility.js';
 import type { createLibraryStore } from './store.js';
 
 const OPEN = '<PIECEMAKER_LIBRARY_INSTRUCTIONS>';
@@ -14,7 +17,17 @@ function stripLibraryInstructions(text: string) {
   return start >= 0 && text.endsWith(CLOSE) ? text.slice(0, start) : text;
 }
 
-export function installLibraryRuntime(runtime: Pick<typeof providerRuntimeService, 'run' | 'getRunner'>, sessions: Pick<typeof sessionsService, 'fetchHistory'>, store: ReturnType<typeof createLibraryStore>) {
+// Skills personnels de la bibliothèque non activés dans le dossier, transmis aux runtimes (ex. Codex) qui les masquent nativement.
+export type LibraryDisabledSkill = { name: string; path: string };
+
+type ListSkills = typeof providerSkillsService.listProviderSkills;
+
+export function installLibraryRuntime(
+  runtime: Pick<typeof providerRuntimeService, 'run' | 'getRunner'>,
+  sessions: Pick<typeof sessionsService, 'fetchHistory'>,
+  store: ReturnType<typeof createLibraryStore>,
+  extras: { listSkills?: ListSkills } = {},
+) {
   const run = runtime.run.bind(runtime);
   const history = sessions.fetchHistory.bind(sessions);
   runtime.run = async (provider, command, options, writer) => {
@@ -25,6 +38,18 @@ export function installLibraryRuntime(runtime: Pick<typeof providerRuntimeServic
         instructions = store.instructions(cwd, { includeSkills: !NATIVE_SKILL_PROVIDERS.includes(String(provider)) });
       } catch (error) {
         console.warn(`[bibliothèque] instructions ignorées pour ${cwd} : ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (cwd && extras.listSkills && store.isManagedWorkspace(cwd)) {
+      try {
+        const { hidden } = splitLibraryHiddenSkills(await extras.listSkills(String(provider), { workspacePath: cwd }), store, cwd);
+        const disabled = new Map<string, LibraryDisabledSkill>();
+        for (const skill of hidden) {
+          try { const file = fs.realpathSync(skill.sourcePath as string); if (!disabled.has(file)) disabled.set(file, { name: skill.name, path: file }); } catch { /* chemin illisible : ignoré */ }
+        }
+        if (disabled.size) options = { ...options, libraryDisabledSkills: [...disabled.values()] };
+      } catch (error) {
+        console.warn(`[bibliothèque] skills masqués ignorés pour ${cwd} : ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     const wrapped = new Proxy(writer, {

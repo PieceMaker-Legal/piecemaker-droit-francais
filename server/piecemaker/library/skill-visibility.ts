@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import type { providerSkillsService } from '@/modules/providers/index.js';
 import { parseFrontMatter } from '@/shared/frontmatter.js';
+import type { ProviderSkill } from '@/shared/types.js';
 
 import type { createLibraryStore } from './store.js';
 import { componentFolderName, updateGitExclude } from './workspace-installation.js';
@@ -15,23 +16,35 @@ function realpath(file: string) {
   try { return fs.realpathSync(file); } catch { return null; }
 }
 
+// Dans un dossier géré, sépare les skills personnels connus de la bibliothèque mais non activés (masqués) des autres.
+export function splitLibraryHiddenSkills(skills: ProviderSkill[], store: Store, workspacePath: string | undefined): { visible: ProviderSkill[]; hidden: ProviderSkill[] } {
+  if (!workspacePath || !store.isManagedWorkspace(workspacePath)) return { visible: skills, hidden: [] };
+  const active = store.activeEntryIds(workspacePath);
+  const visible: ProviderSkill[] = [];
+  const hidden: ProviderSkill[] = [];
+  for (const skill of skills) {
+    let isHidden = false;
+    if (skill.scope === 'user' && !skill.pluginId && !skill.pluginName && skill.sourcePath) {
+      const source = realpath(skill.sourcePath);
+      const entryId = source ? store.originEntryId(source) : null;
+      isHidden = Boolean(entryId) && !active.has(entryId as string);
+    }
+    (isHidden ? hidden : visible).push(skill);
+  }
+  return { visible, hidden };
+}
+
 // Filtre le popup : dans un dossier géré, seuls les skills personnels activés pour lui restent visibles.
+// Retourne le listage d'origine (non filtré), pour calculer les skills masqués côté runtime.
 export function installLibrarySkillVisibility(service: Pick<typeof providerSkillsService, 'listProviderSkills'>, store: Store) {
   const list = service.listProviderSkills.bind(service);
   service.listProviderSkills = async (provider, options) => {
     const skills = await list(provider, options);
     try {
-      const workspacePath = options?.workspacePath;
-      if (!workspacePath || !store.isManagedWorkspace(workspacePath)) return skills;
-      const active = store.activeEntryIds(workspacePath);
-      return skills.filter((skill) => {
-        if (skill.scope !== 'user' || skill.pluginId || skill.pluginName || !skill.sourcePath) return true;
-        const source = realpath(skill.sourcePath);
-        const entryId = source ? store.originEntryId(source) : null;
-        return !entryId || active.has(entryId);
-      });
+      return splitLibraryHiddenSkills(skills, store, options?.workspacePath).visible;
     } catch { return skills; }
   };
+  return list;
 }
 
 type PersonalClaudeSkill = { name: string; file: string; realFile: string; content: string };

@@ -11,8 +11,10 @@
  * - codexRuntime.abort(sessionId) - Cancel an active session
  */
 
+import path from 'node:path';
+
 import { Codex } from '@openai/codex-sdk';
-import type { ModelReasoningEffort, Thread, ThreadOptions } from '@openai/codex-sdk';
+import type { CodexOptions, ModelReasoningEffort, Thread, ThreadOptions } from '@openai/codex-sdk';
 
 import {
   appendFilesInputTag,
@@ -246,6 +248,16 @@ function mapPermissionModeToCodexOptions(permissionMode: string): Pick<ThreadOpt
   }
 }
 
+// Sélection par dossier de la bibliothèque : Codex ignore le config.toml d'un projet pour les skills,
+// seul un réglage de session (--config skills.config) masque un SKILL.md, repéré par son chemin réel.
+export function buildCodexClientOptions(libraryDisabledSkills: unknown): CodexOptions | undefined {
+  const paths = Array.isArray(libraryDisabledSkills)
+    ? libraryDisabledSkills.map((skill) => (skill as AnyRecord | null)?.path).filter((file): file is string => typeof file === 'string' && path.isAbsolute(file))
+    : [];
+  if (!paths.length) return undefined;
+  return { config: { skills: { config: [...new Set(paths)].map((file) => ({ path: file, enabled: false })) } } };
+}
+
 /**
  * Execute a Codex query with streaming
  * @param {string} command - The prompt to send
@@ -304,7 +316,7 @@ async function queryCodex(
   const sessionKey = () => sessionId || capturedSessionId || null;
 
   try {
-    codex = new Codex();
+    codex = new Codex(buildCodexClientOptions(options.libraryDisabledSkills));
 
     const threadOptions: ThreadOptions = {
       workingDirectory,
