@@ -318,7 +318,11 @@ export const RESEARCH_PAGE_SIZE = 10;
 
 export type ResearchPhase = 'counting' | 'listing' | 'downloading' | 'done' | 'too_broad' | 'error' | 'cancelled';
 
-export type ResearchCount = { source: ResearchSource; total: number };
+export type ResearchCount = { source: ResearchSource; total: number; legifrance?: number; judilibre?: number };
+
+export type ResearchOrigin = 'legifrance' | 'judilibre';
+
+export type ZoneOrigin = 'judilibre' | 'formules';
 
 export type ResearchState = {
   id: string;
@@ -333,6 +337,7 @@ export type ResearchState = {
   undetected: number;
   failed: number;
   error?: string;
+  warnings?: string[];
   createdAt: string;
 };
 
@@ -350,6 +355,8 @@ export type ResearchDecision = {
   analysis: string;
   analysisKind: 'analyse' | 'extrait' | 'aucune';
   zone: ResearchZone;
+  zoneOrigin?: ZoneOrigin;
+  origin?: ResearchOrigin;
   link: string;
   chars: number;
   error?: string;
@@ -369,6 +376,7 @@ export type ResearchPage = {
 export type ResearchText = {
   id: string;
   zone: ResearchZone;
+  zoneOrigin?: ZoneOrigin;
   retained: string;
   full: string;
 };
@@ -378,6 +386,16 @@ export const ZONE_LABELS: Record<ResearchZone, string> = {
   dispositif: 'Dispositif seul (motifs non repérés)',
   absente: 'Partie du juge non repérée : texte intégral conservé',
   integral: 'Texte intégral',
+};
+
+export const ZONE_ORIGIN_LABELS: Record<ZoneOrigin, string> = {
+  judilibre: 'découpage officiel Judilibre',
+  formules: 'repérage par formules',
+};
+
+export const ORIGIN_LABELS: Record<ResearchOrigin, string> = {
+  legifrance: 'Légifrance',
+  judilibre: 'Judilibre',
 };
 
 export function researchCriteria(filters: ResearchFilters): string[] {

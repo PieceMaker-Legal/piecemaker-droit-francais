@@ -12,6 +12,9 @@ export type DecisionRecord = {
   titrage: string;
   resume: string;
   text: string;
+  numbers: string[];
+  court: string;
+  siege?: string;
 };
 
 export type Importance = { tier: number; label: string };
@@ -31,7 +34,7 @@ function decodeEntities(value: string): string {
 export function htmlToText(html: string): string {
   return decodeEntities(html
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<br\b[^>]*>/gi, '\n')
     .replace(/<\/(p|div|li|h\d)>/gi, '\n')
     .replace(/<[^>]+>/g, ''));
 }
@@ -80,7 +83,10 @@ export function formatDate(value: unknown): string {
 
 export function decisionRecord(listed: Listed, response: Json): DecisionRecord {
   const text = (response.text && typeof response.text === 'object' ? response.text : {}) as Json;
-  const plain = typeof text.texte === 'string' && text.texte.trim() ? text.texte : typeof text.texteHtml === 'string' ? htmlToText(text.texteHtml) : '';
+  const flat = typeof text.texte === 'string' ? text.texte : '';
+  const html = typeof text.texteHtml === 'string' ? htmlToText(text.texteHtml) : '';
+  const breaks = (value: string) => value.split('\n').length;
+  const plain = html.trim() && (!flat.trim() || breaks(html) > breaks(flat)) ? html : flat;
   const titrage = unique([
     ...sommaireParts(text.sommaire, ['abstrats']),
     ...(Array.isArray(text.titrages) ? text.titrages.map(clean) : []),
@@ -98,6 +104,9 @@ export function decisionRecord(listed: Listed, response: Json): DecisionRecord {
     titrage,
     resume,
     text: plain.trim(),
+    numbers: Array.isArray(text.numeroAffaire) ? text.numeroAffaire.map(clean).filter(Boolean) : [],
+    court: first(text.juridiction, text.natureJuridiction),
+    siege: first(text.siegeAppel) || undefined,
   };
 }
 

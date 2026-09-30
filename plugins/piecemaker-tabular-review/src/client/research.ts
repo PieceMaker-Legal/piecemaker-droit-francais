@@ -5,11 +5,13 @@ import {
   CAA_VILLES,
   CASSATION_MATIERES,
   LEBON_PUBLICATIONS,
+  ORIGIN_LABELS,
   PREMIERE_INSTANCE_TYPES,
   RESEARCH_LIMIT,
   RESEARCH_SOURCES,
   REVIEW_FOLDER,
   ZONE_LABELS,
+  ZONE_ORIGIN_LABELS,
 } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, toast } from './dom.js';
@@ -94,13 +96,23 @@ function filenamePreview(title: string): string {
   return `${stamp} - Tabular Review Recherche juridique - ${title || '…'}`;
 }
 
+function countDetail(count: ResearchState['counts'][number]): string {
+  return count.judilibre === undefined ? '' : ` (Légifrance ${count.legifrance ?? 0} · Judilibre ${count.judilibre})`;
+}
+
 function countsHtml(state: ResearchState): string {
-  return state.counts.map((count) => `<span class="ptr-chip">${escapeHtml(SOURCE_LABEL[count.source])} : ${count.total}</span>`).join('');
+  return state.counts.map((count) => `<span class="ptr-chip">${escapeHtml(SOURCE_LABEL[count.source])} : ${count.total}${countDetail(count)}</span>`).join('');
+}
+
+function warningsHtml(state: ResearchState): string {
+  return (state.warnings ?? []).map((warning) => `<div class="ptr-warning">${escapeHtml(warning)}</div>`).join('');
 }
 
 function decisionHtml(decision: ResearchDecision, dispositifOnly: boolean): string {
   const zone = dispositifOnly && decision.zone !== 'motifs' ? `<span class="ptr-chip ptr-chip-partial" title="${escapeHtml(ZONE_LABELS[decision.zone])}">${decision.zone === 'dispositif' ? 'Dispositif seul' : 'Partie du juge non repérée'}</span>` : '';
   const error = decision.error ? `<span class="ptr-chip ptr-chip-cancelled" title="${escapeHtml(decision.error)}">Texte indisponible</span>` : '';
+  const origin = ORIGIN_LABELS[decision.origin ?? 'legifrance'];
+  const originChip = decision.origin === 'judilibre' ? `<span class="ptr-chip" title="Décision absente de Légifrance, issue de Judilibre">${origin}</span>` : '';
   const analysis = decision.analysisKind === 'aucune'
     ? '<div class="ptr-analysis ptr-muted">Aucune analyse officielle.</div>'
     : `<div class="ptr-analysis ptr-clamp" data-analysis>${decision.analysisKind === 'extrait' ? '<span class="ptr-label">Extrait · </span>' : ''}${escapeHtml(decision.analysis)}</div>`;
@@ -109,8 +121,8 @@ function decisionHtml(decision: ResearchDecision, dispositifOnly: boolean): stri
       <div class="ptr-decision-head">
         <span class="ptr-rank">${decision.rank}</span>
         <span class="ptr-chip${/Inédit|Cour d’appel|Première instance|Cour administrative/.test(decision.importance) ? '' : ' ptr-chip-important'}">${escapeHtml(decision.importance)}</span>
-        <a class="ptr-decision-title" href="${escapeHtml(decision.link)}" target="_blank" rel="noopener noreferrer" title="Ouvrir sur Légifrance">${escapeHtml(decision.title)}</a>
-        ${zone}${error}
+        <a class="ptr-decision-title" href="${escapeHtml(decision.link)}" target="_blank" rel="noopener noreferrer" title="Ouvrir sur ${origin}">${escapeHtml(decision.title)}</a>
+        ${originChip}${zone}${error}
       </div>
       ${decision.titrage ? `<div class="ptr-titrage ptr-clamp-2" title="${escapeHtml(decision.titrage)}">${escapeHtml(decision.titrage)}</div>` : ''}
       ${analysis}
@@ -133,7 +145,7 @@ export function createResearchView(app: App): View {
     </div>
     <div data-legifrance></div>
     <section class="ptr-panel">
-      <div class="ptr-panel-header">Recherche Légifrance</div>
+      <div class="ptr-panel-header">Recherche Légifrance et Judilibre</div>
       <div class="ptr-search-body">
         <label class="ptr-field"><span class="ptr-label">Requête</span>
           <textarea class="ptr-textarea" data-query rows="2" maxlength="2000" placeholder="(&quot;faute grave&quot; OU &quot;faute lourde&quot;) ET licenciement"></textarea>
@@ -144,7 +156,7 @@ export function createResearchView(app: App): View {
         <div class="ptr-search-row">
           <label class="ptr-field" style="width:150px"><span class="ptr-label">Décisions du</span><input class="ptr-input" type="date" data-date-start></label>
           <label class="ptr-field" style="width:150px"><span class="ptr-label">Au</span><input class="ptr-input" type="date" data-date-end></label>
-          <label class="ptr-check ptr-dispositif"><input type="checkbox" data-dispositif checked><span><strong>Chercher dans le dispositif uniquement</strong><br><span class="ptr-small ptr-muted">Seule la partie où le juge statue est lue et transmise à l’IA : motifs de la juridiction (« Sur ce », « Mais attendu que », « Réponse de la Cour », « Considérant »…) et dispositif (« Par ces motifs », « Décide »). Faits, procédure, moyens et prétentions des parties sont écartés.</span></span></label>
+          <label class="ptr-check ptr-dispositif"><input type="checkbox" data-dispositif checked><span><strong>Chercher dans le dispositif uniquement</strong><br><span class="ptr-small ptr-muted">Seule la partie où le juge statue est lue et transmise à l’IA : motifs de la juridiction (« Sur ce », « Mais attendu que », « Réponse de la Cour », « Considérant »…) et dispositif (« Par ces motifs », « Décide »). Faits, procédure, moyens et prétentions des parties sont écartés. Pour les juridictions judiciaires, le découpage officiel de Judilibre est utilisé quand il existe ; sinon, repérage par formules.</span></span></label>
           <span class="ptr-spacer"></span>
           <button type="button" class="ptr-button ptr-button-primary" data-search>Rechercher</button>
         </div>
@@ -242,7 +254,7 @@ export function createResearchView(app: App): View {
     const stop = '<button type="button" class="ptr-button ptr-button-danger" data-stop>Arrêter</button>';
     switch (state.phase) {
       case 'counting':
-        target.innerHTML = `<div class="ptr-status"><span class="ptr-spinner"></span> Comptage des résultats sur Légifrance…<span class="ptr-spacer"></span>${stop}</div>`;
+        target.innerHTML = `<div class="ptr-status"><span class="ptr-spinner"></span> Comptage des résultats sur Légifrance et Judilibre…<span class="ptr-spacer"></span>${stop}</div>`;
         return;
       case 'listing':
         target.innerHTML = `<div class="ptr-status"><span class="ptr-spinner"></span> Liste des résultats : ${state.listed} / ${state.total}${countsHtml(state)}<span class="ptr-spacer"></span>${stop}</div>`;
@@ -253,7 +265,7 @@ export function createResearchView(app: App): View {
         return;
       }
       case 'too_broad':
-        target.innerHTML = `<div class="ptr-warning">Requête trop large : <strong>${state.total} résultats</strong> (${state.counts.map((count) => `${escapeHtml(SOURCE_LABEL[count.source])} ${count.total}`).join(', ')}). Au-delà de ${RESEARCH_LIMIT} résultats, la recherche est refusée pour manque de contexte : précisez les termes (guillemets, ET), l’article visé, la matière ou bornez les dates.</div>`;
+        target.innerHTML = `${warningsHtml(state)}<div class="ptr-warning">Requête trop large : <strong>${state.total} résultats</strong> (${state.counts.map((count) => `${escapeHtml(SOURCE_LABEL[count.source])} ${count.total}${countDetail(count)}`).join(', ')}). Au-delà de ${RESEARCH_LIMIT} résultats, la recherche est refusée pour manque de contexte : précisez les termes (guillemets, ET), l’article visé, la matière ou bornez les dates.</div>`;
         return;
       case 'error':
         target.innerHTML = `<div class="ptr-error-box">${escapeHtml(state.error ?? 'Recherche en échec.')}</div>`;
@@ -266,7 +278,7 @@ export function createResearchView(app: App): View {
         if (state.excluded) details.push(`<button type="button" class="ptr-link-button" data-view="${view === 'excluded' ? 'kept' : 'excluded'}">${view === 'excluded' ? 'Revenir aux décisions retenues' : `${state.excluded} écartée${state.excluded > 1 ? 's' : ''} : termes absents de la partie du juge`}</button>`);
         if (state.undetected) details.push(`${state.undetected} sans partie du juge repérée (conservée${state.undetected > 1 ? 's' : ''}, signalée${state.undetected > 1 ? 's' : ''})`);
         if (state.failed) details.push(`<span class="ptr-status-error">${state.failed} téléchargement${state.failed > 1 ? 's' : ''} en échec (exclu${state.failed > 1 ? 's' : ''} de la revue)</span>`);
-        target.innerHTML = `<div class="ptr-status"><strong>${state.kept} décision${state.kept > 1 ? 's' : ''} retenue${state.kept > 1 ? 's' : ''}</strong> sur ${state.total} résultat${state.total > 1 ? 's' : ''} Légifrance${countsHtml(state)}${details.length ? ` · ${details.join(' · ')}` : ''}</div>`;
+        target.innerHTML = `${warningsHtml(state)}<div class="ptr-status"><strong>${state.kept} décision${state.kept > 1 ? 's' : ''} retenue${state.kept > 1 ? 's' : ''}</strong> sur ${state.listed} décision${state.listed > 1 ? 's' : ''} distincte${state.listed > 1 ? 's' : ''}${countsHtml(state)}${details.length ? ` · ${details.join(' · ')}` : ''}</div>`;
       }
     }
   }
@@ -441,7 +453,7 @@ export function createResearchView(app: App): View {
     try {
       const text = await pending;
       if (box.dataset.kind !== kind) return;
-      box.innerHTML = `<div class="ptr-label">${escapeHtml(kind === 'full' ? 'Texte intégral' : ZONE_LABELS[text.zone])}</div>${escapeHtml(kind === 'full' ? text.full : text.retained)}`;
+      box.innerHTML = `<div class="ptr-label">${escapeHtml(kind === 'full' ? 'Texte intégral' : `${ZONE_LABELS[text.zone]}${text.zoneOrigin ? ` · ${ZONE_ORIGIN_LABELS[text.zoneOrigin]}` : ''}`)}</div>${escapeHtml(kind === 'full' ? text.full : text.retained)}`;
     } catch (error) {
       box.innerHTML = `<span class="ptr-status-error">${escapeHtml(errorMessage(error))}</span>`;
     }

@@ -64,8 +64,8 @@ export function columnsDescription(columns: ReviewColumn[]): string {
 export function reviewNote(review: Pick<Review, 'category' | 'research'>): string {
   if (reviewCategory(review) !== 'recherche-juridique') return '';
   return review.research?.dispositifOnly
-    ? 'Le document est une décision de justice issue de Légifrance dont seule la partie où le juge statue (motifs et dispositif) a été conservée : réponds exclusivement à partir de ce texte.'
-    : 'Le document est le texte intégral d’une décision de justice issue de Légifrance.';
+    ? 'Le document est une décision de justice issue de Légifrance ou de Judilibre dont seule la partie où le juge statue (motifs et dispositif) a été conservée : réponds exclusivement à partir de ce texte.'
+    : 'Le document est le texte intégral d’une décision de justice issue de Légifrance ou de Judilibre.';
 }
 
 export function userPrompt(label: string, documents: PromptDocument[], columns: ReviewColumn[], note = ''): string {

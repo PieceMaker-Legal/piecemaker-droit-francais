@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { Option, ResearchDecision, ResearchFilters, ResearchPage, ResearchSource, ResearchState, ResearchText, ResearchView, ResearchZone, Review, ReviewColumn } from '../shared.js';
+import type { Option, ResearchDecision, ResearchFilters, ResearchPage, ResearchSource, ResearchState, ResearchText, ResearchView, ResearchZone, Review, ReviewColumn, ZoneOrigin } from '../shared.js';
 import {
   APPEL_SIEGES,
   BULLETIN_PUBLICATIONS,
@@ -13,12 +13,16 @@ import {
   RESEARCH_LIMIT,
   RESEARCH_PAGE_SIZE,
   RESEARCH_SOURCES,
+  ZONE_ORIGIN_LABELS,
   researchCriteria,
 } from '../shared.js';
 import { decisionRecord, importance } from './decisions.js';
 import type { DecisionRecord } from './decisions.js';
 import { judgeZone } from './dispositif.js';
-import { createLegifranceApi, legifranceCredentials } from './legifrance.js';
+import type { JudgeZone } from './dispositif.js';
+import { countJudilibre, fetchOfficial, JUDILIBRE_LINK, judilibrePlan, jurisdictionOf, listJudilibre, lookupOfficial, matchesHit, similar, wordSet } from './judilibre.js';
+import type { JudilibreHit, JudilibrePlan, OfficialDecision } from './judilibre.js';
+import { AccessDenied, createLegifranceApi, legifranceCredentials } from './legifrance.js';
 import type { LegifranceApi } from './legifrance.js';
 import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 import { clausesMatch, matchIndex, parseQuery } from './query.js';
@@ -42,6 +46,10 @@ type StoredIndex = { state: ResearchState; decisions: ResearchDecision[] };
 
 type Job = { state: ResearchState; controller: AbortController };
 
+type Pending = { entry: Listed; clauses: Criterion[][]; link: string; hit?: JudilibreHit };
+
+type Official = { zone: JudgeZone | null };
+
 const jobs = new Map<string, Job>();
 const indexes = new Map<string, StoredIndex>();
 let sharedApi: { key: string; api: LegifranceApi } | null = null;
@@ -56,7 +64,7 @@ function researchDirectory(id: string): string {
 }
 
 function textFile(id: string, decision: string): string {
-  if (!/^[A-Z]+\d+$/.test(decision)) throw new UserError('Décision invalide.');
+  if (!/^([A-Z]+\d+|[0-9a-f]{24})$/.test(decision)) throw new UserError('Décision invalide.');
   return path.join(researchDirectory(id), 'texts', `${decision}.json`);
 }
 
@@ -141,7 +149,7 @@ function excerpt(text: string): string {
 
 export type Processed = { decision: Stored; text: ResearchText | null };
 
-export function processDecision(listed: Listed, record: DecisionRecord | null, filters: ResearchFilters, clauses: Criterion[][], link: string, error?: string): Processed {
+export function processDecision(listed: Listed, record: DecisionRecord | null, filters: ResearchFilters, clauses: Criterion[][], link: string, error?: string, official?: Official | null): Processed {
   const rank = importance({ source: listed.source, formation: record?.formation ?? '', publication: record?.publication ?? '', title: record?.title ?? listed.title });
   const base = {
     id: listed.id,
@@ -154,6 +162,7 @@ export function processDecision(listed: Listed, record: DecisionRecord | null, f
     link,
     tier: rank.tier,
     ratio: listed.sourceTotal ? listed.position / listed.sourceTotal : 0,
+    origin: listed.origin,
   };
   if (!record || !record.text) {
     return {
@@ -164,8 +173,10 @@ export function processDecision(listed: Listed, record: DecisionRecord | null, f
   let zone: ResearchZone = 'integral';
   let retained = record.text;
   let kept = true;
+  let zoneOrigin: ZoneOrigin | undefined;
   if (filters.dispositifOnly) {
-    const judge = judgeZone(record.text, listed.source === 'cassation');
+    const judge = official?.zone ?? judgeZone(record.text, listed.source === 'cassation');
+    zoneOrigin = official?.zone ? 'judilibre' : 'formules';
     zone = judge.zone;
     retained = judge.text;
     if (zone === 'motifs') kept = clausesMatch(matchIndex(retained), clauses);
@@ -177,9 +188,10 @@ export function processDecision(listed: Listed, record: DecisionRecord | null, f
       analysis: record.resume || excerpt(retained),
       analysisKind: record.resume ? 'analyse' : retained ? 'extrait' : 'aucune',
       zone,
+      ...(zoneOrigin ? { zoneOrigin } : {}),
       chars: retained.length,
     },
-    text: { id: listed.id, zone, retained: retained === record.text ? '' : retained, full: record.text },
+    text: { id: listed.id, zone, ...(zoneOrigin ? { zoneOrigin } : {}), retained: retained === record.text ? '' : retained, full: record.text },
   };
 }
 
@@ -214,16 +226,36 @@ async function pool<T>(items: T[], workers: number, signal: AbortSignal, work: (
   if (signal.aborted) throw new Error('Annulée.');
 }
 
+const JUDILIBRE_UNAVAILABLE = 'Judilibre indisponible : décisions récentes des cours d’appel et de première instance absentes, motifs repérés par formules.';
+
 async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promise<void> {
   const { state } = job;
   const { signal } = job.controller;
   const { filters } = state;
-  const plans: { plan: SourcePlan; total: number }[] = [];
+  let judilibreEnabled = true;
+  const judilibreFailed = (failure: unknown): boolean => {
+    if (!(failure instanceof AccessDenied)) return false;
+    if (judilibreEnabled) state.warnings = [...(state.warnings ?? []), `${JUDILIBRE_UNAVAILABLE} ${failure.message}`];
+    judilibreEnabled = false;
+    return true;
+  };
+  const plans: { plan: SourcePlan; total: number; clauses: Criterion[][]; official: JudilibrePlan | null; officialTotal: number }[] = [];
   for (const source of filters.sources) {
     const resolved = await resolvePlan(api, sourcePlan(source, filters), parsed, filters, signal);
-    plans.push(resolved);
-    state.counts.push({ source, total: resolved.total });
-    state.total += resolved.total;
+    const clauses = planClauses(resolved.plan, parsed);
+    let official = judilibreEnabled ? judilibrePlan(source, filters, clauses) : null;
+    let officialTotal = 0;
+    if (official) {
+      try {
+        officialTotal = await countJudilibre(api, official, signal);
+      } catch (failure) {
+        if (!judilibreFailed(failure)) throw failure;
+        official = null;
+      }
+    }
+    plans.push({ ...resolved, clauses, official, officialTotal });
+    state.counts.push({ source, total: resolved.total + officialTotal, legifrance: resolved.total, ...(official ? { judilibre: officialTotal } : {}) });
+    state.total += resolved.total + officialTotal;
   }
   if (state.total > RESEARCH_LIMIT) {
     state.phase = 'too_broad';
@@ -231,25 +263,66 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
     return;
   }
   state.phase = 'listing';
-  const listed = new Map<string, { entry: Listed; plan: SourcePlan }>();
-  for (const { plan, total } of plans) {
-    if (!total) continue;
-    const entries = await listPlan(api, plan, parsed, total, signal, (count) => {
-      state.listed += count;
-    });
-    for (const entry of entries) if (!listed.has(entry.id)) listed.set(entry.id, { entry, plan });
+  const listed = new Map<string, Pending>();
+  const onPage = (count: number) => {
+    state.listed += count;
+  };
+  for (const { plan, total, clauses, official, officialTotal } of plans) {
+    if (total) {
+      for (const entry of await listPlan(api, plan, parsed, total, signal, onPage)) {
+        if (!listed.has(entry.id)) listed.set(entry.id, { entry, clauses, link: `${plan.linkBase}${entry.id}` });
+      }
+    }
+    if (official && officialTotal) {
+      for (const { entry, hit } of await listJudilibre(api, official, officialTotal, signal, onPage)) {
+        if (!listed.has(entry.id)) listed.set(entry.id, { entry, clauses, link: `${JUDILIBRE_LINK}${entry.id}`, hit });
+      }
+    }
   }
   state.listed = listed.size;
   state.phase = 'downloading';
   const results = new Map<string, Stored>();
+  const merged = new Set<string>();
   const texts = path.join(researchDirectory(state.id), 'texts');
   fs.mkdirSync(texts, { recursive: true });
+  const queue = [...listed.values()];
+  const legifranceQueue = queue.filter((item) => !item.hit);
+  const judilibreQueue = queue.filter((item) => item.hit);
+  const hitsByDate = new Map<string, Pending[]>();
+  for (const item of judilibreQueue) hitsByDate.set(item.hit!.date, [...(hitsByDate.get(item.hit!.date) ?? []), item]);
+  const finish = (item: Pending, record: DecisionRecord | null, error: string | undefined, official: Official | null) => {
+    const { decision, text } = processDecision(item.entry, record, filters, item.clauses, item.link, error, official);
+    if (text) writeFileAtomic(textFile(state.id, item.entry.id), JSON.stringify(text));
+    results.set(item.entry.id, decision);
+    state.downloaded = results.size + merged.size;
+  };
+  const officialFor = async (record: DecisionRecord): Promise<OfficialDecision | null> => {
+    if (!judilibreEnabled || !jurisdictionOf(record)) return null;
+    const words = wordSet(record.text);
+    try {
+      for (const candidate of hitsByDate.get(record.date) ?? []) {
+        if (merged.has(candidate.entry.id) || !matchesHit(record, candidate.hit!)) continue;
+        const official = await fetchOfficial(api, candidate.entry, signal);
+        if (merged.has(candidate.entry.id) || !similar(official.words, words)) continue;
+        merged.add(candidate.entry.id);
+        return official;
+      }
+      if (!filters.dispositifOnly) return null;
+      const found = await lookupOfficial(api, record, words, signal);
+      if (found && listed.has(found.record.id)) merged.add(found.record.id);
+      return found;
+    } catch (failure) {
+      if (signal.aborted) throw failure;
+      judilibreFailed(failure);
+      return null;
+    }
+  };
   let fatal: UserError | null = null;
-  const fetchDecision = async ({ entry, plan }: { entry: Listed; plan: SourcePlan }, final: boolean) => {
+  const fetchLegifrance = async (item: Pending, final: boolean) => {
     let record: DecisionRecord | null = null;
     let error: string | undefined;
     try {
-      record = decisionRecord(entry, await api.consult(entry.id, signal));
+      record = decisionRecord(item.entry, await api.consult(item.entry.id, signal));
     } catch (failure) {
       if (failure instanceof UserError && !fatal) {
         fatal = failure;
@@ -259,21 +332,36 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
       error = failure instanceof Error ? failure.message : String(failure);
     }
     if (!final && !record?.text) return;
-    const { decision, text } = processDecision(entry, record, filters, planClauses(plan, parsed), `${plan.linkBase}${entry.id}`, error);
-    if (text) writeFileAtomic(textFile(state.id, entry.id), JSON.stringify(text));
-    results.set(entry.id, decision);
-    state.downloaded = results.size;
+    const official = record?.text ? await officialFor(record).catch(() => null) : null;
+    if (signal.aborted) return;
+    finish(item, record, error, official);
   };
-  const queue = [...listed.values()];
+  const fetchJudilibre = async (item: Pending, final: boolean) => {
+    if (merged.has(item.entry.id)) return;
+    let official: OfficialDecision | null = null;
+    let error: string | undefined;
+    try {
+      official = await fetchOfficial(api, item.entry, signal);
+    } catch (failure) {
+      if (signal.aborted) return;
+      judilibreFailed(failure);
+      error = failure instanceof Error ? failure.message : String(failure);
+    }
+    if (!final && !official?.record.text) return;
+    finish(item, official?.record ?? null, error, official);
+  };
   try {
-    await pool(queue, DOWNLOAD_WORKERS, signal, (item) => fetchDecision(item, false));
-    await pool(queue.filter((item) => !results.has(item.entry.id)), 2, signal, (item) => fetchDecision(item, true));
+    await pool(legifranceQueue, DOWNLOAD_WORKERS, signal, (item) => fetchLegifrance(item, false));
+    await pool(legifranceQueue.filter((item) => !results.has(item.entry.id)), 2, signal, (item) => fetchLegifrance(item, true));
+    await pool(judilibreQueue, DOWNLOAD_WORKERS, signal, (item) => fetchJudilibre(item, false));
+    await pool(judilibreQueue.filter((item) => !results.has(item.entry.id) && !merged.has(item.entry.id)), 2, signal, (item) => fetchJudilibre(item, true));
   } catch (error) {
     throw fatal ?? error;
   }
   const decisions = sortDecisions([...results.values()]);
   Object.assign(state, {
     phase: 'done',
+    listed: decisions.length,
     downloaded: decisions.filter((decision) => !decision.error).length,
     kept: decisions.filter((decision) => decision.kept && !decision.error).length,
     excluded: decisions.filter((decision) => !decision.kept).length,
@@ -392,7 +480,7 @@ const ZONE_NOTES: Record<ResearchZone, string> = {
 };
 
 function decisionMarkdown(decision: ResearchDecision, text: ResearchText): string {
-  const note = ZONE_NOTES[text.zone];
+  const note = ZONE_NOTES[text.zone] && text.zoneOrigin ? `${ZONE_NOTES[text.zone].replace(/\.$/, '')} — ${ZONE_ORIGIN_LABELS[text.zoneOrigin]}.` : ZONE_NOTES[text.zone];
   return [`# ${decision.title}`, '', `Source : ${decision.link}`, ...(note ? ['', note] : []), '', text.retained || text.full, ''].join('\n');
 }
 

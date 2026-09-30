@@ -54,7 +54,7 @@ function sourceBody(source: CitationSource): string {
   const partial = source.offset > 0 || source.offset + source.text.length < source.length;
   return `
     <div class="ptr-small ${source.verified ? 'ptr-muted' : 'ptr-status-error'}">${source.verified ? 'Extrait vérifié dans le document source.' : 'Extrait non retrouvé dans le document source.'}${partial ? ' Seule la partie du document autour de l’extrait est affichée.' : ''}</div>
-    ${source.link ? `<div class="ptr-small"><a href="${escapeHtml(source.link)}" target="_blank" rel="noopener noreferrer">Ouvrir sur Légifrance</a></div>` : ''}
+    ${source.link ? `<div class="ptr-small"><a href="${escapeHtml(source.link)}" target="_blank" rel="noopener noreferrer">Ouvrir sur ${/courdecassation\.fr/.test(source.link) ? 'Judilibre' : 'Légifrance'}</a></div>` : ''}
     ${source.verified ? '' : `<blockquote class="ptr-citation-quote">« ${escapeHtml(source.quote)} »</blockquote>`}
     <div class="ptr-source-text">${html}</div>`;
 }
@@ -88,7 +88,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
           <div><div class="ptr-label">Citations</div>${citationList(cell)}${row.corrections ? `<div class="ptr-small ptr-muted">${row.corrections} demande${row.corrections > 1 ? 's' : ''} de correction envoyée${row.corrections > 1 ? 's' : ''} à la session.</div>` : ''}</div>`
           : `<div class="ptr-muted">${row.status === 'done' ? 'Aucune réponse.' : 'Pas encore de réponse pour cette cellule.'}</div>${rowStatus(row)}`}
         <div><button type="button" class="ptr-button" data-run-cell>${isCellFilled(cell) ? 'Relancer cette cellule' : 'Lancer la session pour cette cellule'}</button></div>
-        <div><div class="ptr-label">Documents</div><ul class="ptr-summary-list">${row.documents.map((document) => `<li title="${escapeHtml(document.copy)}">${/^https:\/\//.test(document.source) ? `<a href="${escapeHtml(document.source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(document.source.replace(/^https:\/\/www\.legifrance\.gouv\.fr\/\w+\/id\//, 'Légifrance · '))}</a>` : escapeHtml(document.source)}</li>`).join('')}</ul></div>
+        <div><div class="ptr-label">Documents</div><ul class="ptr-summary-list">${row.documents.map((document) => `<li title="${escapeHtml(document.copy)}">${/^https:\/\//.test(document.source) ? `<a href="${escapeHtml(document.source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(document.source.replace(/^https:\/\/www\.legifrance\.gouv\.fr\/\w+\/id\//, 'Légifrance · ').replace(/^https:\/\/www\.courdecassation\.fr\/decision\//, 'Judilibre · '))}</a>` : escapeHtml(document.source)}</li>`).join('')}</ul></div>
       </aside>`;
   }
 
