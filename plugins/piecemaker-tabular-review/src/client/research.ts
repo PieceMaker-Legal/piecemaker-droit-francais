@@ -277,6 +277,7 @@ export function createResearchView(app: App): View {
         const details: string[] = [];
         if (state.excluded) details.push(`<button type="button" class="ptr-link-button" data-view="${view === 'excluded' ? 'kept' : 'excluded'}">${view === 'excluded' ? 'Revenir aux décisions retenues' : `${state.excluded} écartée${state.excluded > 1 ? 's' : ''} : termes absents de la partie du juge`}</button>`);
         if (state.undetected) details.push(`${state.undetected} sans partie du juge repérée (conservée${state.undetected > 1 ? 's' : ''}, signalée${state.undetected > 1 ? 's' : ''})`);
+        if (state.unmatched) details.push(`${state.unmatched} résultat${state.unmatched > 1 ? 's' : ''} Judilibre sans les termes exacts de la requête, écarté${state.unmatched > 1 ? 's' : ''}`);
         if (state.failed) details.push(`<span class="ptr-status-error">${state.failed} téléchargement${state.failed > 1 ? 's' : ''} en échec (exclu${state.failed > 1 ? 's' : ''} de la revue)</span>`);
         target.innerHTML = `${warningsHtml(state)}<div class="ptr-status"><strong>${state.kept} décision${state.kept > 1 ? 's' : ''} retenue${state.kept > 1 ? 's' : ''}</strong> sur ${state.listed} décision${state.listed > 1 ? 's' : ''} distincte${state.listed > 1 ? 's' : ''}${countsHtml(state)}${details.length ? ` · ${details.join(' · ')}` : ''}</div>`;
       }
