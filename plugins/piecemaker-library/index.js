@@ -74,6 +74,7 @@ export function mount(container, api) {
   let busy = false;
   let error = '';
   let notice = '';
+  let scanErrors = [];
   let revision = 0;
   let disposed = false;
   let creating = null;
@@ -135,6 +136,7 @@ export function mount(container, api) {
       const query = workspace ? `?workspacePath=${encodeURIComponent(workspace)}` : '';
       if (options.sync) {
         const synchronized = await request('POST', '/plugins/sync', { workspacePath: workspace });
+        if (version === revision) scanErrors = Array.isArray(synchronized.scan?.errors) ? synchronized.scan.errors : [];
         if (version === revision && tab === 'plugin' && view === 'mine') plugins = synchronized.plugins || [];
       }
       if (view === 'discover') {
@@ -331,6 +333,13 @@ export function mount(container, api) {
     content.append(toolbar);
     if (error) { const alert = element('p', error); alert.setAttribute('role', 'alert'); content.append(alert); }
     if (notice) { const status = element('p', notice, 'meta'); status.setAttribute('role', 'status'); content.append(status); }
+    if (scanErrors.length) {
+      const details = element('details', undefined, 'meta');
+      details.append(element('summary', `${scanErrors.length} élément(s) non importé(s) lors de l’actualisation`));
+      for (const item of scanErrors.slice(0, 20)) details.append(element('div', `${item.source} — ${item.message}`));
+      if (scanErrors.length > 20) details.append(element('div', `… et ${scanErrors.length - 20} autre(s)`));
+      content.append(details);
+    }
     const body = element('div');
     content.append(body);
     function renderRows() {
@@ -360,12 +369,13 @@ export function mount(container, api) {
           body.append(item);
         }
       } else if (tab === 'skill' || tab === 'agent' || tab === 'connectors') {
-        body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}` : 'Sélectionnez un dossier pour activer un élément.', 'meta'));
+        body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}${tab === 'skill' ? '. Dès qu’un skill y est activé, seuls les skills activés ici apparaissent dans le chat de ce dossier.' : ''}` : 'Sélectionnez un dossier pour activer un élément.', 'meta'));
         const kind = tab === 'connectors' ? 'connector' : tab;
         const visible = entries.filter((item) => item.kind === kind && !item.collectionId && matches(item));
         if (!visible.length) body.append(element('p', 'Aucun élément.'));
         for (const entry of visible) {
           const item = row(entry, () => void open(entry));
+          if (entry.shadowedBy) item.firstChild.append(element('p', `Claude utilisera la version personnelle (${entry.shadowedBy}) : vos modifications ne s'appliquent pas à Claude.`, 'meta'));
           const switchLabel = entry.enabled ? 'Retirer de ce dossier' : 'Installer dans ce dossier';
           item.append(toggle(switchLabel, entry.enabled, !context.project, () => toggleActivation(entry, `/catalog/${entry.id}/activation`, { workspacePath: context.project.path, enabled: !entry.enabled }), false));
           if (entry.kind === 'skill') {
@@ -475,7 +485,7 @@ export function mount(container, api) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = context.project?.path !== next.project?.path;
     context = next;
-    if (changed) { entries = []; plugins = []; pluginTrees.clear(); void load(); }
+    if (changed) { entries = []; plugins = []; scanErrors = []; pluginTrees.clear(); void load(); }
     else render();
   });
   mounts.set(container, () => { disposed = true; revision++; unsubscribe(); layout.remove(); style.remove(); });

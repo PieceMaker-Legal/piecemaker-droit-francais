@@ -94,6 +94,10 @@ export function createLibraryStore(home: string) {
       workspace TEXT NOT NULL, entry_id TEXT NOT NULL REFERENCES entries(id),
       PRIMARY KEY(workspace, entry_id)
     );
+    CREATE TABLE IF NOT EXISTS skill_overrides (
+      workspace TEXT NOT NULL, name TEXT NOT NULL, PRIMARY KEY(workspace, name)
+    );
+    CREATE TABLE IF NOT EXISTS skill_override_files (workspace TEXT PRIMARY KEY, created INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS collections (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, source TEXT NOT NULL
     );
@@ -525,6 +529,53 @@ export function createLibraryStore(home: string) {
     return { ok: true, enabled, skipped };
   }
 
+  function resolveWorkspace(workspacePath: unknown) {
+    try { return workspace(workspacePath); } catch { return null; }
+  }
+
+  function activeEntryIds(workspacePath: string) {
+    const selected = resolveWorkspace(workspacePath);
+    if (!selected) return new Set<string>();
+    return new Set((db.prepare('SELECT entry_id AS entryId FROM activation WHERE workspace = ?').all(selected) as Array<{ entryId: string }>).map((row) => row.entryId));
+  }
+
+  function isManagedWorkspace(workspacePath: string) {
+    const selected = resolveWorkspace(workspacePath);
+    return Boolean(selected && db.prepare(`SELECT 1 FROM activation a JOIN entries e ON e.id = a.entry_id
+      WHERE a.workspace = ? AND e.kind = 'skill' LIMIT 1`).get(selected));
+  }
+
+  function originEntryId(source: string) {
+    const row = db.prepare('SELECT entry_id AS entryId FROM origins WHERE source = ?').get(source) as { entryId: string } | undefined;
+    return row?.entryId ?? null;
+  }
+
+  function activeSkills(workspacePath: string) {
+    const selected = resolveWorkspace(workspacePath);
+    if (!selected) return [];
+    return db.prepare(`SELECT e.id, e.name, e.content FROM entries e JOIN activation a ON a.entry_id = e.id
+      WHERE a.workspace = ? AND e.kind = 'skill' ORDER BY e.name`).all(selected) as Array<{ id: string; name: string; content: string }>;
+  }
+
+  function activeWorkspaces(id: string) {
+    return (db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>).map((row) => row.workspace);
+  }
+
+  function overrideState(selected: string) {
+    const names = (db.prepare('SELECT name FROM skill_overrides WHERE workspace = ? ORDER BY name').all(selected) as Array<{ name: string }>).map((row) => row.name);
+    const file = db.prepare('SELECT created FROM skill_override_files WHERE workspace = ?').get(selected) as { created: number } | undefined;
+    return { names, file: file ? { created: Boolean(file.created) } : null };
+  }
+
+  function saveOverrideState(selected: string, names: string[], file: { created: boolean } | null) {
+    db.transaction(() => {
+      db.prepare('DELETE FROM skill_overrides WHERE workspace = ?').run(selected);
+      for (const name of names) db.prepare('INSERT OR IGNORE INTO skill_overrides VALUES (?, ?)').run(selected, name);
+      if (file) db.prepare('INSERT OR REPLACE INTO skill_override_files VALUES (?, ?)').run(selected, file.created ? 1 : 0);
+      else db.prepare('DELETE FROM skill_override_files WHERE workspace = ?').run(selected);
+    })();
+  }
+
   function instructions(workspacePath: string, options: { includeSkills: boolean }) {
     const selected = workspace(workspacePath);
     const entries = db.prepare(`SELECT e.* FROM entries e JOIN activation a ON a.entry_id = e.id
@@ -560,6 +611,14 @@ export function createLibraryStore(home: string) {
     importConnector,
     setEnabled,
     instructions,
+    resolveWorkspace,
+    activeEntryIds,
+    isManagedWorkspace,
+    originEntryId,
+    activeSkills,
+    activeWorkspaces,
+    overrideState,
+    saveOverrideState,
     upsertCollection,
     hasCollection,
     listCollections,

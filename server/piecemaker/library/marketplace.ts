@@ -10,8 +10,9 @@ import { normalizeProviderConnector } from './connector-installation.js';
 import { importLibraryDirectory } from './migrate.js';
 import { scanAndPersistLibraryProviderAgents } from './provider-agents.js';
 import { scanAndPersistLibraryProviderConnectors } from './provider-connectors.js';
-import { scanAndPersistLibraryProviderSkills } from './provider-skills.js';
+import { scanAndPersistLibraryProjectSkills, scanAndPersistLibraryProviderSkills } from './provider-skills.js';
 import { recordScanError, type LibraryScanError } from './scan-errors.js';
+import { applyWorkspaceSkillVisibility } from './skill-visibility.js';
 
 type MarketplaceKind = 'connector' | 'skill' | 'plugin' | 'agent';
 
@@ -135,7 +136,7 @@ export function scanInstalledLibraryCollections(store: ReturnType<typeof createL
   }
 }
 
-export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLibraryStore>, applicationRoot: string, userHome: string) {
+export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLibraryStore>, applicationRoot: string, userHome: string, listProjectPaths: () => string[] = () => []) {
   const require = createRequire(import.meta.url);
   const { listMarketplaceConnectors, registerOfficialMarketplace } = require(path.join(applicationRoot, 'server/piecemaker/vendor/websocket-server/admin-routes.cjs'));
   const router = express.Router();
@@ -182,10 +183,14 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
     try {
       const workspacePath = typeof req.body?.workspacePath === 'string' ? req.body.workspacePath : undefined;
       const errors: LibraryScanError[] = [];
-      await scanAndPersistLibraryProviderSkills(store, workspacePath, undefined, userHome, errors);
+      // Sans dossier : le filtre de visibilité du popup ne doit pas masquer des skills personnels au scan.
+      await scanAndPersistLibraryProviderSkills(store, undefined, undefined, userHome, errors);
+      try { await scanAndPersistLibraryProjectSkills(store, listProjectPaths(), undefined, errors); }
+      catch (error) { recordScanError(errors, 'projets', error); }
       scanAndPersistLibraryProviderAgents(store, userHome, errors);
       scanAndPersistLibraryProviderConnectors(store, userHome, errors);
       scanInstalledLibraryCollections(store, userHome, errors);
+      if (workspacePath) applyWorkspaceSkillVisibility(store, workspacePath, userHome);
       res.json({ ok: true, plugins: store.listCollections(workspacePath), scan: { errors } });
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
@@ -206,7 +211,10 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
     catch (error) { res.status(409).json({ error: (error as Error).message }); }
   });
   router.put('/plugins/:id/activation', (req, res) => {
-    try { res.json(store.setCollectionEnabled(req.body?.workspacePath, String(req.params.id), req.body?.enabled)); }
+    try {
+      const result = store.setCollectionEnabled(req.body?.workspacePath, String(req.params.id), req.body?.enabled);
+      res.json({ ...result, visibility: applyWorkspaceSkillVisibility(store, req.body.workspacePath, userHome) });
+    }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.post('/plugin/marketplace/register', (req, res) => {
