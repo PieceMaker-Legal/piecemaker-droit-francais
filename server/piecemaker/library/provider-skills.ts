@@ -4,6 +4,7 @@ import { providerSkillsService } from '@/modules/providers/index.js';
 import type { LLMProvider, ProviderSkillListOptions } from '@/shared/types.js';
 
 import { importLibraryDirectory } from './migrate.js';
+import { recordScanError, type LibraryScanError } from './scan-errors.js';
 import type { createLibraryStore } from './store.js';
 
 const LIBRARY_SKILL_PROVIDERS: LLMProvider[] = ['claude', 'codex', 'cursor', 'mistral', 'opencode'];
@@ -39,17 +40,24 @@ export async function scanAndPersistLibraryProviderSkills(
   workspacePath: string | undefined,
   reader: ProviderSkillsReader = providerSkillsService,
   userHome?: string,
+  errors?: LibraryScanError[],
 ) {
   const result = await listLibraryProviderSkills(workspacePath, reader);
   for (const provider of result.providers) {
+    if ('error' in provider && provider.error) recordScanError(errors, `provider:${provider.provider}`, provider.error);
     for (const skill of provider.skills) {
       if (!skill.sourcePath || skill.scope !== 'user' || skill.pluginId || skill.pluginName) continue;
       try { store.importFile(skill.sourcePath, 'skill'); }
-      catch { try { store.importFile(skill.sourcePath, 'skill', false); } catch {} }
+      catch {
+        try { store.importFile(skill.sourcePath, 'skill', false); }
+        catch (error) { recordScanError(errors, skill.sourcePath, error); }
+      }
     }
   }
   if (userHome) {
-    try { importLibraryDirectory(store, path.join(userHome, '.grok', 'skills'), 'skill', false); } catch {}
+    const grokSkills = path.join(userHome, '.grok', 'skills');
+    try { importLibraryDirectory(store, grokSkills, 'skill', false, errors); }
+    catch (error) { recordScanError(errors, grokSkills, error); }
   }
   return result;
 }

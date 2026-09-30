@@ -89,6 +89,7 @@ export function createLibraryStore(home: string) {
     CREATE TABLE IF NOT EXISTS origins (
       source TEXT PRIMARY KEY, entry_id TEXT NOT NULL REFERENCES entries(id), source_hash TEXT
     );
+    CREATE TABLE IF NOT EXISTS deleted_origins (source TEXT PRIMARY KEY);
     CREATE TABLE IF NOT EXISTS activation (
       workspace TEXT NOT NULL, entry_id TEXT NOT NULL REFERENCES entries(id),
       PRIMARY KEY(workspace, entry_id)
@@ -138,6 +139,7 @@ export function createLibraryStore(home: string) {
     const serialized = JSON.stringify(Object.fromEntries(Object.entries(assets).sort(([left], [right]) => left.localeCompare(right))));
     const sourceHash = createHash('sha256').update(`${kind}\0${content}\0${serialized}`).digest('hex');
     const originSource = !path.isAbsolute(source) || source.includes('#') ? source : path.resolve(source);
+    if (db.prepare('SELECT 1 FROM deleted_origins WHERE source = ?').get(originSource)) return null;
     const existingOrigin = db.prepare('SELECT entry_id AS entryId, source_hash AS sourceHash FROM origins WHERE source = ?').get(originSource) as { entryId: string; sourceHash: string | null } | undefined;
     if (existingOrigin) {
       if (existingOrigin.sourceHash === null || existingOrigin.sourceHash === sourceHash) return existingOrigin.entryId;
@@ -210,12 +212,12 @@ export function createLibraryStore(home: string) {
   }
 
   function createEntry(kind: 'skill' | 'agent', name: string, description: string) {
-    const trimmedName = name.trim();
+    const trimmedName = name.replace(/\s+/g, ' ').trim();
     if (!trimmedName) throw new Error('Nom requis.');
     const trimmedDescription = description.trim();
     const id = randomBytes(32).toString('hex');
     const body = kind === 'agent' ? 'Rôle et instructions de l’agent à rédiger ici.' : 'Instructions du skill à rédiger ici.';
-    const content = `---\nname: ${trimmedName}\ndescription: ${trimmedDescription}\n---\n${body}\n`;
+    const content = `---\nname: ${JSON.stringify(trimmedName)}\ndescription: ${JSON.stringify(trimmedDescription)}\n---\n${body}\n`;
     db.prepare('INSERT INTO entries VALUES (?, ?, ?, ?, ?, ?)').run(id, kind, trimmedName, trimmedDescription, content, '{}');
     return document(id);
   }
@@ -250,6 +252,7 @@ export function createLibraryStore(home: string) {
     for (const { workspace: selected } of active) setEnabled(selected, id, false);
     db.transaction(() => {
       db.prepare('DELETE FROM collection_entries WHERE entry_id = ?').run(id);
+      db.prepare('INSERT OR IGNORE INTO deleted_origins (source) SELECT source FROM origins WHERE entry_id = ?').run(id);
       db.prepare('DELETE FROM origins WHERE entry_id = ?').run(id);
       db.prepare('DELETE FROM activation WHERE entry_id = ?').run(id);
       db.prepare('DELETE FROM entries WHERE id = ?').run(id);
@@ -470,10 +473,12 @@ export function createLibraryStore(home: string) {
       prepareConnectorInstallation(selected, entry.name, parseConnectorConfig(entry.content), enabled)();
       if (enabled) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, id);
       else db.prepare('DELETE FROM activation WHERE workspace = ? AND entry_id = ?').run(selected, id);
-      return { ok: true, enabled };
+      return { ok: true, enabled, skipped: [] as string[] };
     }
     const packageRoot = path.join(directory, 'active', createHash('sha256').update(selected).digest('hex'), id);
-    const install = prepareWorkspaceInstallation(selected, id, installationFolder(entry.content, entry.name), packageRoot, entry.kind, enabled);
+    const { data: frontMatter } = parseFrontMatter(entry.content);
+    const install = prepareWorkspaceInstallation(selected, id, String(frontMatter.name || frontMatter.metadata?.title || entry.name), packageRoot, entry.kind, enabled);
+    let skipped: string[] = [];
     if (enabled) {
       fs.mkdirSync(path.dirname(packageRoot), { recursive: true, mode: 0o700 });
       if (!fs.realpathSync(path.dirname(packageRoot)).startsWith(fs.realpathSync(directory) + path.sep)) throw new Error('Répertoire d’activation non autorisé.');
@@ -497,7 +502,7 @@ export function createLibraryStore(home: string) {
         if (fs.existsSync(packageRoot)) fs.renameSync(packageRoot, backup);
         try {
           fs.renameSync(staging, packageRoot);
-          install();
+          ({ skipped } = install());
         }
         catch (error) {
           fs.rmSync(packageRoot, { recursive: true, force: true });
@@ -510,27 +515,37 @@ export function createLibraryStore(home: string) {
       }
     } else if (fs.existsSync(path.dirname(packageRoot))) {
       if (!fs.realpathSync(path.dirname(packageRoot)).startsWith(fs.realpathSync(directory) + path.sep)) throw new Error('Répertoire d’activation non autorisé.');
-      install();
+      ({ skipped } = install());
       fs.rmSync(packageRoot, { recursive: true, force: true });
     } else {
-      install();
+      ({ skipped } = install());
     }
     if (enabled) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, id);
     else db.prepare('DELETE FROM activation WHERE workspace = ? AND entry_id = ?').run(selected, id);
-    return { ok: true, enabled };
+    return { ok: true, enabled, skipped };
   }
 
-  function instructions(workspacePath: string) {
+  function instructions(workspacePath: string, options: { includeSkills: boolean }) {
     const selected = workspace(workspacePath);
     const entries = db.prepare(`SELECT e.* FROM entries e JOIN activation a ON a.entry_id = e.id
       WHERE a.workspace = ? AND e.kind IN ('skill', 'agent') ORDER BY e.name`).all(selected) as StoredLibraryEntry[];
-    return entries.map((entry) => {
+    const root = path.join(directory, 'active', createHash('sha256').update(selected).digest('hex'));
+    const skills = options.includeSkills ? entries.filter((entry) => entry.kind === 'skill').map((entry) => {
+      const assets = Object.keys(JSON.parse(entry.assets) as Record<string, string>);
+      const packageRoot = path.join(root, entry.id);
+      const description = entry.description.replace(/\s+/g, ' ').trim();
+      const summary = description.length > 300 ? `${description.slice(0, 299).trimEnd()}…` : description;
+      const files = assets.length ? ` (fichiers associés dans ${packageRoot}${assets.includes('table-columns.yaml') ? `, dont ${path.join(packageRoot, 'table-columns.yaml')}` : ''})` : '';
+      return `- « ${entry.name} » — ${summary} : ${path.join(packageRoot, 'SKILL.md')}${files}`;
+    }) : [];
+    const agents = entries.filter((entry) => entry.kind === 'agent').map((entry) => {
       const assets = JSON.parse(entry.assets) as Record<string, string>;
       const references = Object.entries(assets).filter(([name]) => name === 'table-columns.yaml')
         .map(([name, bytes]) => `### ${name}\n${Buffer.from(bytes, 'base64').toString('utf8')}`);
-      const packageRoot = path.join(directory, 'active', createHash('sha256').update(selected).digest('hex'), entry.id);
-      return `## ${entry.kind === 'agent' ? 'Instructions de rôle' : 'Skill'} : ${entry.name}\n${entry.content}\n${references.join('\n\n')}\nFichiers associés disponibles dans : ${packageRoot}\n${Object.keys(assets).join('\n')}`;
-    }).join('\n\n');
+      return `## Instructions de rôle : ${entry.name}\n${entry.content}\n${references.join('\n\n')}\nFichiers associés disponibles dans : ${path.join(root, entry.id)}\n${Object.keys(assets).join('\n')}`;
+    });
+    const index = skills.length ? `Skills disponibles pour ce dossier : avant d’appliquer un skill qui concerne la demande, lis son fichier SKILL.md avec ton outil de lecture de fichiers.\n${skills.join('\n')}` : '';
+    return [index, ...agents].filter(Boolean).join('\n\n');
   }
 
   return {
