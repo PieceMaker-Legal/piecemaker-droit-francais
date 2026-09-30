@@ -5,7 +5,6 @@ import express from 'express';
 import { parseFrontMatter } from '@/shared/frontmatter.js';
 
 import type { createLibraryStore } from './store.js';
-import { listLibraryProviderSkills, scanAndPersistLibraryProviderSkills } from './provider-skills.js';
 import { applyWorkspaceSkillVisibility, personalClaudeSkills } from './skill-visibility.js';
 
 export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>, userHome: string = os.homedir()) {
@@ -37,15 +36,6 @@ export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>
     if (typeof name !== 'string' || !name.trim()) { res.status(400).json({ error: 'Nom requis.' }); return; }
     const description = typeof req.body?.description === 'string' ? req.body.description : '';
     try { res.json(store.createEntry(kind, name, description)); }
-    catch (error) { res.status(400).json({ error: (error as Error).message }); }
-  });
-  router.get('/provider-skills', async (req, res) => {
-    const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
-    res.json(await listLibraryProviderSkills(workspacePath));
-  });
-  router.post('/provider-skills/scan', async (req, res) => {
-    const workspacePath = typeof req.body?.workspacePath === 'string' ? req.body.workspacePath : undefined;
-    try { res.json(await scanAndPersistLibraryProviderSkills(store, workspacePath)); }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.get('/catalog/:id', (req, res) => {

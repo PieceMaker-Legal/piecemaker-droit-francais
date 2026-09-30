@@ -300,10 +300,6 @@ export function createLibraryStore(home: string) {
     })();
   }
 
-  function hasCollection(id: string) {
-    return Boolean(db.prepare('SELECT 1 FROM collections WHERE id = ?').get(id));
-  }
-
   function collectionEntries(id: string) {
     return db.prepare(`SELECT ce.entry_id AS entryId, ce.root_path AS rootPath
       FROM collection_entries ce WHERE ce.collection_id = ? ORDER BY ce.root_path COLLATE NOCASE`)
@@ -620,7 +616,6 @@ export function createLibraryStore(home: string) {
     overrideState,
     saveOverrideState,
     upsertCollection,
-    hasCollection,
     listCollections,
     collectionFiles,
     collectionFile,

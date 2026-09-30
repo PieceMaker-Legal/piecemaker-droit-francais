@@ -6,10 +6,10 @@ import type { createLibraryStore } from './store.js';
 const OPEN = '<PIECEMAKER_LIBRARY_INSTRUCTIONS>';
 const CLOSE = '</PIECEMAKER_LIBRARY_INSTRUCTIONS>';
 
-// Providers qui découvrent nativement les skills installés dans le dossier (.claude/skills, .agents/skills, .cursor, .opencode)
+// Providers qui découvrent nativement les skills installés dans le dossier (.claude/skills, .agents/skills)
 export const NATIVE_SKILL_PROVIDERS: readonly string[] = ['claude', 'codex', 'cursor', 'opencode'];
 
-export function stripLibraryInstructions(text: string) {
+function stripLibraryInstructions(text: string) {
   const start = text.lastIndexOf(`\n\n${OPEN}\n`);
   return start >= 0 && text.endsWith(CLOSE) ? text.slice(0, start) : text;
 }

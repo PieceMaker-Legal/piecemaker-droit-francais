@@ -44,11 +44,3 @@ export function scanAndPersistLibraryProviderAgents(store: ReturnType<typeof cre
   try { importTomlAgents(store, codexAgents, errors); }
   catch (error) { recordScanError(errors, codexAgents, error); }
 }
-
-export function scanAndPersistLibraryClaudeAgents(
-  store: ReturnType<typeof createLibraryStore>,
-  _workspacePath: string | undefined,
-  userHome: string,
-) {
-  scanAndPersistLibraryProviderAgents(store, userHome);
-}
