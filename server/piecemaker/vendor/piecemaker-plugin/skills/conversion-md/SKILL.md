@@ -42,7 +42,9 @@ Bridge (`taskpane/modules/python-bridge.js` →
 - **`auto`** (par défaut) — inspecte le fichier et choisit automatiquement
   entre les deux ; c'est le choix par défaut à laisser tel quel sauf besoin
   spécifique (ex. forcer `mineru` sur un PDF qui a une couche de texte
-  corrompue ou illisible).
+  corrompue ou illisible). Si MinerU n'est pas installé, un scan passe par
+  markitdown : le Markdown obtenu est vide ou presque. Le signaler à
+  l'utilisateur plutôt que d'en conclure que la pièce est vide.
 
 ## Enchaînement avec le scan PII
 
