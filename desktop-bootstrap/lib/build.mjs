@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { capture, run } from './shell.mjs';
+import { BUNDLE_DIR, embedBundledPlugins } from './plugins.mjs';
 import { ui } from './ui.mjs';
 import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath } from './paths.mjs';
 
@@ -162,7 +163,7 @@ async function patchStagedManifest(stageDir) {
 
   manifest.main = OVERLAY_ENTRY;
   manifest.build.extraMetadata = { ...manifest.build.extraMetadata, main: OVERLAY_ENTRY };
-  for (const pattern of ['server/**', `${OVERLAY_DIR}/**`]) {
+  for (const pattern of ['server/**', `${OVERLAY_DIR}/**`, `${BUNDLE_DIR}/**`]) {
     if (!manifest.build.files.includes(pattern)) manifest.build.files.push(pattern);
   }
 
@@ -273,6 +274,7 @@ export async function buildDesktopApp(sourceDir) {
   const stageDir = path.join(sourceDir, '.desktop-build', 'desktop-app');
   await embedLocalServer(sourceDir, stageDir);
   await embedDesktopOverlay(stageDir);
+  await embedBundledPlugins(sourceDir, stageDir);
   await patchStagedManifest(stageDir);
   await repairStagedTree(stageDir);
 
