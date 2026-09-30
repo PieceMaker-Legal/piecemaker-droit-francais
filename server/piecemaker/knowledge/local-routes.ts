@@ -53,7 +53,7 @@ export function createKnowledgeLocalRouter(
 
   router.post('/scan', (request, response) => respond(() => {
     const id = resolveProjectId(request.body);
-    return { projectId: id, ...getService().scan(id, request.body?.files) };
+    return { projectId: id, ...getService().scan(id, request.body?.files, request.body?.ocrMissing) };
   }, response));
 
   router.get('/scan/job', (request, response) => respond(() => {

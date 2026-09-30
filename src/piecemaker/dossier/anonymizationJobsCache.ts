@@ -1,14 +1,17 @@
-import { pmGet } from '@/piecemaker/dossier/api';
+import { pmGet, pmPost } from '@/piecemaker/dossier/api';
 
 const STORAGE_KEY = 'piecemaker.sidebarAnonymizationJobs';
 const POLL_INTERVAL_MS = 1_000;
 
+type AnonymizationJobState = 'running' | 'done' | 'error' | 'cancelled' | 'ocr-required';
+
 type AnonymizationJob = {
   id: string;
   case: string;
-  state: 'running' | 'done' | 'error' | 'cancelled';
+  state: AnonymizationJobState;
   percent?: number;
   error?: string | null;
+  ocrRequired?: { files: string[] } | null;
 };
 
 export type TrackedAnonymizationJob = {
@@ -17,15 +20,28 @@ export type TrackedAnonymizationJob = {
   job: AnonymizationJob;
 };
 
+export type AnonymizationTarget = {
+  projectId: string;
+  projectPath: string;
+  projectName: string;
+};
+
+export type OcrDecisionRequest = AnonymizationTarget & { files: string[] };
+
+export type OcrMissingChoice = 'ask' | 'continue';
+
 type KnowledgeScanJob = {
   id: string;
   projectId: string;
-  state: 'running' | 'done' | 'error';
+  state: AnonymizationJobState;
   percent: number;
   error: string | null;
+  ocrRequired?: { files: string[] } | null;
 };
 
 export const ANONYMIZATION_COMPLETED_EVENT = 'piecemaker:anonymization-completed';
+
+export const OCR_DECISION_EVENT = 'piecemaker:ocr-decision';
 
 function jobIsPending(job: AnonymizationJob): boolean {
   return job.state === 'running';
@@ -35,6 +51,17 @@ function announceCompletion(job: AnonymizationJob | null | undefined): void {
   if (job?.state === 'done') window.dispatchEvent(new CustomEvent(ANONYMIZATION_COMPLETED_EVENT));
 }
 
+function announceOcrDecision(entry: Omit<TrackedAnonymizationJob, 'job'>, job: AnonymizationJob | null | undefined): void {
+  if (job?.state !== 'ocr-required') return;
+  const request: OcrDecisionRequest = {
+    projectId: job.case,
+    projectPath: entry.projectPath,
+    projectName: entry.projectName,
+    files: job.ocrRequired?.files ?? [],
+  };
+  window.dispatchEvent(new CustomEvent<OcrDecisionRequest>(OCR_DECISION_EVENT, { detail: request }));
+}
+
 function knowledgeJobAsTracked(job: KnowledgeScanJob): AnonymizationJob {
   return {
     id: job.id,
@@ -42,6 +69,7 @@ function knowledgeJobAsTracked(job: KnowledgeScanJob): AnonymizationJob {
     state: job.state,
     percent: job.percent,
     error: job.error,
+    ocrRequired: job.ocrRequired ?? null,
   };
 }
 
@@ -103,6 +131,7 @@ async function refreshTrackedJobs(): Promise<void> {
     if (!polled.has(entry.job.id)) return [entry];
     const job = polled.get(entry.job.id);
     announceCompletion(job);
+    announceOcrDecision(entry, job);
     return job && jobIsPending(job) ? [{ ...entry, job }] : [];
   }));
 }
@@ -130,6 +159,11 @@ export function trackAnonymizationJob(entry: TrackedAnonymizationJob): void {
   publish([...trackedJobs.filter((tracked) => tracked.projectPath !== entry.projectPath), entry]);
 }
 
+export async function startAnonymization(target: AnonymizationTarget, ocrMissing: OcrMissingChoice): Promise<void> {
+  const { job } = await pmPost<{ job: KnowledgeScanJob }>('/knowledge/scan', { projectId: target.projectId, ocrMissing });
+  trackAnonymizationJob({ projectPath: target.projectPath, projectName: target.projectName, job: knowledgeJobAsTracked(job) });
+}
+
 /** Used by the tests to isolate this module state between cases. */
 export function clearTrackedAnonymizationJobs(): void {
   publish([]);
@@ -149,6 +183,7 @@ export function receiveKnowledgeScanBroadcast(detail: KnowledgeScanBroadcast | n
   if (!detail?.projectPath || !detail.job?.id) return;
   const job = knowledgeJobAsTracked(detail.job);
   announceCompletion(job);
+  announceOcrDecision({ projectPath: detail.projectPath, projectName: detail.projectName || detail.projectPath }, job);
   if (!jobIsPending(job)) {
     publish(trackedJobs.filter((tracked) => tracked.job.id !== job.id));
     return;
