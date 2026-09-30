@@ -1,9 +1,7 @@
-import fs from 'node:fs';
-
-import type { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
+import type { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
 import type { NormalizedMessage } from '@/shared/types.js';
 
-import { installedNames, splitLibraryHiddenSkills } from './skill-visibility.js';
+import { applyWorkspaceSkillVisibility, disabledSkillName, installedNames } from './skill-visibility.js';
 import type { createLibraryStore } from './store.js';
 
 const OPEN = '<PIECEMAKER_LIBRARY_INSTRUCTIONS>';
@@ -17,16 +15,13 @@ function stripLibraryInstructions(text: string) {
   return start >= 0 && text.endsWith(CLOSE) ? text.slice(0, start) : text;
 }
 
-// Skills personnels de la bibliothèque non activés dans le dossier, transmis aux runtimes (ex. Codex) qui les masquent nativement.
+// Skills désactivés dans le dossier, transmis aux runtimes (Codex, Vibe) qui les masquent nativement.
 export type LibraryDisabledSkill = { name: string; path: string };
-
-type ListSkills = typeof providerSkillsService.listProviderSkills;
 
 export function installLibraryRuntime(
   runtime: Pick<typeof providerRuntimeService, 'run' | 'getRunner'>,
   sessions: Pick<typeof sessionsService, 'fetchHistory'>,
   store: ReturnType<typeof createLibraryStore>,
-  extras: { listSkills?: ListSkills } = {},
 ) {
   const run = runtime.run.bind(runtime);
   const history = sessions.fetchHistory.bind(sessions);
@@ -40,15 +35,22 @@ export function installLibraryRuntime(
         console.warn(`[bibliothèque] instructions ignorées pour ${cwd} : ${error instanceof Error ? error.message : String(error)}`);
       }
     }
-    if (cwd && extras.listSkills && store.isManagedWorkspace(cwd)) {
+    if (cwd) {
       try {
-        const { hidden } = splitLibraryHiddenSkills(await extras.listSkills(String(provider), { workspacePath: cwd }), store, cwd);
+        store.reconcileWorkspace(cwd);
+        applyWorkspaceSkillVisibility(store, cwd);
         const disabled = new Map<string, LibraryDisabledSkill>();
-        // Vibe masque par nom : un nom identique à celui d'un skill activé dans le dossier masquerait aussi la copie active.
-        const activeNames = String(provider) === 'mistral' ? installedNames(store, cwd) : null;
-        for (const skill of hidden) {
-          if (activeNames?.has(skill.name.toLowerCase())) continue;
-          try { const file = fs.realpathSync(skill.sourcePath as string); if (!disabled.has(file)) disabled.set(file, { name: skill.name, path: file }); } catch { /* chemin illisible : ignoré */ }
+        const entries = store.disabledEntries(cwd);
+        const isVibe = String(provider) === 'mistral';
+        const contents = isVibe ? store.contents(entries.map((entry) => entry.id)) : null;
+        // Vibe masque par nom : un nom identique à celui d'un skill actif dans le dossier masquerait aussi la copie active.
+        const activeNames = isVibe && entries.length ? installedNames(store, cwd) : null;
+        for (const entry of entries) {
+          for (const file of entry.origins) {
+            const name = contents ? disabledSkillName(contents.get(entry.id), file) : entry.name;
+            if (activeNames?.has(name.toLowerCase()) || disabled.has(file)) continue;
+            disabled.set(file, { name, path: file });
+          }
         }
         if (disabled.size) options = { ...options, libraryDisabledSkills: [...disabled.values()] };
       } catch (error) {

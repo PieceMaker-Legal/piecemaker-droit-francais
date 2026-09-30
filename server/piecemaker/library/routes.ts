@@ -15,10 +15,11 @@ export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>
       const entries: Array<ReturnType<typeof store.list>[number] & { shadowedBy?: string }> = store.list(workspacePath);
       if (workspacePath && entries.some((entry) => entry.enabled && entry.kind === 'skill')) {
         const personal = personalClaudeSkills(userHome);
+        const contents = store.contents(entries.filter((entry) => entry.enabled && entry.kind === 'skill').map((entry) => entry.id));
         for (const entry of entries) {
           if (!entry.enabled || entry.kind !== 'skill') continue;
           try {
-            const { content } = store.document(entry.id);
+            const content = contents.get(entry.id) ?? '';
             const names = [entry.name, String(parseFrontMatter(content).data.name || '')].map((name) => name.trim().toLowerCase());
             const shadow = personal.find((skill) => names.includes(skill.name.toLowerCase()) && skill.content !== content);
             if (shadow) entry.shadowedBy = shadow.file;
@@ -55,7 +56,7 @@ export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>
       const id = String(req.params.id);
       const workspaces = store.activeWorkspaces(id);
       const result = store.deleteEntry(id);
-      const visibility = workspaces.map((workspace) => applyWorkspaceSkillVisibility(store, workspace, userHome));
+      const visibility = workspaces.map((workspace) => applyWorkspaceSkillVisibility(store, workspace));
       res.json({ ...result, visibility });
     }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
@@ -63,7 +64,7 @@ export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>
   router.put('/catalog/:id/activation', (req, res) => {
     try {
       const result = store.setEnabled(req.body?.workspacePath, String(req.params.id), req.body?.enabled);
-      res.json({ ...result, visibility: applyWorkspaceSkillVisibility(store, req.body.workspacePath, userHome) });
+      res.json({ ...result, visibility: applyWorkspaceSkillVisibility(store, req.body.workspacePath) });
     }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });

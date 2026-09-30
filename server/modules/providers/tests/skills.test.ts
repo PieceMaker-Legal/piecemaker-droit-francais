@@ -508,6 +508,7 @@ test('providerSkillsService lists cursor skills from its configured directories'
     assert.equal(cursorByName.get('cursor-project')?.scope, 'project');
     assert.equal(cursorByName.get('cursor-user')?.scope, 'user');
     assert.equal(cursorByName.get('cursor-user')?.command, '/cursor-user');
+    assert.equal(cursorByName.get('agents-user')?.scope, 'user');
   } finally {
     restoreHomeDir();
     await fs.rm(tempRoot, { recursive: true, force: true });

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 
@@ -7,7 +8,8 @@ import Database from 'better-sqlite3';
 import { parseFrontMatter } from '@/shared/frontmatter.js';
 
 import { parseConnectorConfig, prepareConnectorInstallation, type LibraryConnectorConfig } from './connector-installation.js';
-import { componentFolderName, prepareWorkspaceInstallation } from './workspace-installation.js';
+import { personalComponentMatcher, personalSkillClassifier, type PersonalSkillOrigin } from './personal.js';
+import { componentFolderName, prepareWorkspaceInstallation, PreservedComponentError, type SkillTarget } from './workspace-installation.js';
 
 type StoredLibraryEntry = {
   id: string;
@@ -43,6 +45,50 @@ type LibraryCollectionInput = {
 };
 
 const MAX_EDITABLE_FILE_BYTES = 1024 * 1024;
+const NOT_TOGGLEABLE = 'Élément personnel actif partout : désactivation par dossier non prise en charge.';
+
+type LibraryOrigin = 'personnel' | 'dossier' | 'bibliothèque';
+
+// État d'un skill dans un dossier : natif (personnel ou local), réglage explicite éventuel, état effectif.
+type SkillState = {
+  id: string;
+  name: string;
+  origins: string[];
+  personal: boolean;
+  local: boolean;
+  claudeOrigin: boolean;
+  agentsOrigin: boolean;
+  claudeOrigins: string[];
+  native: boolean;
+  explicit: 'on' | 'off' | null;
+  enabled: boolean;
+};
+
+function describeSkill(selected: string, row: { id: string; name: string }, origins: string[], classify: (source: string) => PersonalSkillOrigin, on: boolean, off: boolean): SkillState {
+  const prefix = selected ? `${selected}${path.sep}` : '';
+  const claudeLocal = selected ? path.join(selected, '.claude', 'skills') + path.sep : '';
+  let personal = false;
+  let claudeOrigin = false;
+  let agentsOrigin = false;
+  const claudeOrigins: string[] = [];
+  for (const origin of origins) {
+    const kind = classify(origin);
+    personal ||= kind.personal;
+    claudeOrigin ||= kind.claude;
+    agentsOrigin ||= kind.agents;
+    if (kind.claude || (claudeLocal && origin.startsWith(claudeLocal))) claudeOrigins.push(origin);
+  }
+  const local = Boolean(prefix) && origins.some((origin) => origin.startsWith(prefix));
+  const native = personal || local;
+  const explicit = off ? 'off' : on ? 'on' : null;
+  return { id: row.id, name: row.name, origins, personal, local, claudeOrigin, agentsOrigin, claudeOrigins, native, explicit, enabled: Boolean(selected) && (explicit ? explicit === 'on' : native) };
+}
+
+// Liens à poser dans le dossier pour qu'un skill personnel actif soit lu par tous les providers.
+function coverageTargets(state: SkillState): SkillTarget[] {
+  if (!state.personal) return [];
+  return [...(state.claudeOrigin ? [] : ['.claude' as const]), ...(state.agentsOrigin ? [] : ['.agents' as const])];
+}
 
 function normalizedCollectionPath(value: string) {
   const normalized = value.trim().replace(/\\/g, '/');
@@ -73,7 +119,7 @@ function collectionMainPath(entry: LibraryEntry, rootPath: string) {
   return entry.kind === 'skill' && !rootPath.toLowerCase().endsWith('.md') ? `${rootPath}/SKILL.md` : rootPath;
 }
 
-export function createLibraryStore(home: string) {
+export function createLibraryStore(home: string, { userHome = os.homedir() }: { userHome?: string } = {}) {
   const directory = path.join(home, 'library-backend');
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   const filename = path.join(directory, 'catalog.sqlite');
@@ -91,6 +137,14 @@ export function createLibraryStore(home: string) {
     );
     CREATE TABLE IF NOT EXISTS deleted_origins (source TEXT PRIMARY KEY);
     CREATE TABLE IF NOT EXISTS activation (
+      workspace TEXT NOT NULL, entry_id TEXT NOT NULL REFERENCES entries(id),
+      PRIMARY KEY(workspace, entry_id)
+    );
+    CREATE TABLE IF NOT EXISTS deactivation (
+      workspace TEXT NOT NULL, entry_id TEXT NOT NULL REFERENCES entries(id),
+      PRIMARY KEY(workspace, entry_id)
+    );
+    CREATE TABLE IF NOT EXISTS installation (
       workspace TEXT NOT NULL, entry_id TEXT NOT NULL REFERENCES entries(id),
       PRIMARY KEY(workspace, entry_id)
     );
@@ -128,14 +182,66 @@ export function createLibraryStore(home: string) {
     return { ...entry, assets: JSON.parse(entry.assets) as Record<string, string> };
   }
 
+  function originsByEntry(kind?: StoredLibraryEntry['kind']) {
+    const rows = (kind
+      ? db.prepare('SELECT o.entry_id AS entryId, o.source FROM origins o JOIN entries e ON e.id = o.entry_id WHERE e.kind = ?').all(kind)
+      : db.prepare('SELECT entry_id AS entryId, source FROM origins').all()) as Array<{ entryId: string; source: string }>;
+    const origins = new Map<string, string[]>();
+    for (const row of rows) origins.set(row.entryId, [...(origins.get(row.entryId) ?? []), row.source]);
+    return origins;
+  }
+
+  function entryIds(table: 'activation' | 'deactivation' | 'installation', selected: string) {
+    if (!selected) return new Set<string>();
+    return new Set((db.prepare(`SELECT entry_id AS entryId FROM ${table} WHERE workspace = ?`).all(selected) as Array<{ entryId: string }>).map((row) => row.entryId));
+  }
+
+  // États des skills du catalogue dans le dossier (chaîne vide : hors dossier). Aucune lecture de contenu.
+  function skillStates(selected: string): SkillState[] {
+    const classify = personalSkillClassifier(userHome);
+    const origins = originsByEntry('skill');
+    const on = entryIds('activation', selected);
+    const off = entryIds('deactivation', selected);
+    return (db.prepare("SELECT id, name FROM entries WHERE kind = 'skill' ORDER BY name COLLATE NOCASE").all() as Array<{ id: string; name: string }>)
+      .map((row) => describeSkill(selected, row, origins.get(row.id) ?? [], classify, on.has(row.id), off.has(row.id)));
+  }
+
+  function skillStateOf(selected: string, id: string) {
+    const origins = (db.prepare('SELECT source FROM origins WHERE entry_id = ?').all(id) as Array<{ source: string }>).map((row) => row.source);
+    const on = Boolean(db.prepare('SELECT 1 FROM activation WHERE workspace = ? AND entry_id = ?').get(selected, id));
+    const off = Boolean(db.prepare('SELECT 1 FROM deactivation WHERE workspace = ? AND entry_id = ?').get(selected, id));
+    return describeSkill(selected, { id, name: '' }, origins, personalSkillClassifier(userHome), on, off);
+  }
+
+  // Un agent ou un connecteur personnel est actif partout : PieceMaker ne peut pas le désactiver par dossier.
+  function isPersonalComponent(kind: StoredLibraryEntry['kind'], origins: string[], matcher = personalComponentMatcher(userHome)) {
+    if (kind === 'agent') return origins.some(matcher.agent);
+    if (kind === 'connector') return origins.some(matcher.connector);
+    return false;
+  }
+
   function list(workspacePath?: string) {
     const selected = workspacePath ? workspace(workspacePath) : '';
+    const classify = personalSkillClassifier(userHome);
+    const matcher = personalComponentMatcher(userHome);
+    const origins = originsByEntry();
+    const on = entryIds('activation', selected);
+    const off = entryIds('deactivation', selected);
     return db.prepare(`SELECT e.id, e.kind, e.name, e.description,
-      EXISTS(SELECT 1 FROM activation a WHERE a.entry_id = e.id AND a.workspace = ?) AS enabled,
       (SELECT ce.collection_id FROM collection_entries ce WHERE ce.entry_id = e.id LIMIT 1) AS collectionId
-      FROM entries e ORDER BY e.name COLLATE NOCASE`).all(selected).map((row) => {
-        const entry = row as Omit<StoredLibraryEntry, 'content' | 'assets'> & { enabled: number; collectionId: string | null };
-        return { ...entry, enabled: Boolean(entry.enabled), collectionId: entry.collectionId || null };
+      FROM entries e ORDER BY e.name COLLATE NOCASE`).all().map((row) => {
+        const entry = row as Omit<StoredLibraryEntry, 'content' | 'assets'> & { collectionId: string | null };
+        const sources = origins.get(entry.id) ?? [];
+        const base = { ...entry, collectionId: entry.collectionId || null };
+        if (entry.kind === 'skill') {
+          const state = describeSkill(selected, entry, sources, classify, on.has(entry.id), off.has(entry.id));
+          const origin: LibraryOrigin = state.personal ? 'personnel' : state.local ? 'dossier' : 'bibliothèque';
+          return { ...base, enabled: state.enabled, native: state.native, origin, toggleable: true };
+        }
+        if (isPersonalComponent(entry.kind, sources, matcher)) {
+          return { ...base, enabled: Boolean(selected), native: true, origin: 'personnel' as LibraryOrigin, toggleable: false };
+        }
+        return { ...base, enabled: on.has(entry.id), native: false, origin: 'bibliothèque' as LibraryOrigin, toggleable: true };
       });
   }
 
@@ -226,13 +332,39 @@ export function createLibraryStore(home: string) {
     return document(id);
   }
 
+  // Dossiers où l'élément est installé (activation explicite ou liens de couverture) et qui existent encore.
+  function installedWorkspaces(id: string) {
+    const rows = db.prepare('SELECT workspace FROM activation WHERE entry_id = ? UNION SELECT workspace FROM installation WHERE entry_id = ?').all(id, id) as Array<{ workspace: string }>;
+    return rows.map((row) => resolveWorkspace(row.workspace)).filter((selected): selected is string => Boolean(selected));
+  }
+
+  // Retire l'installation d'un élément dans un dossier, sans toucher aux réglages d'activation (skills) ou en les retirant (agents, connecteurs).
+  function removeInstallation(selected: string, id: string) {
+    const entry = document(id);
+    if (entry.kind === 'skill') materialize(selected, entry, false);
+    else setRawEnabled(selected, entry, false);
+  }
+
+  // Réécrit l'installation d'un élément dans un dossier après modification de son contenu.
+  function refreshInstallation(selected: string, id: string) {
+    const entry = document(id);
+    if (entry.kind !== 'skill') { setRawEnabled(selected, entry, true); return; }
+    const state = skillStateOf(selected, id);
+    if (!state.enabled) { db.prepare('DELETE FROM installation WHERE workspace = ? AND entry_id = ?').run(selected, id); return; }
+    // Activation explicite : installation complète ; skill natif : liens de couverture seulement.
+    const targets = state.explicit === 'on' ? undefined : coverageTargets(state);
+    if (targets?.length === 0) return;
+    materialize(selected, entry, true, targets, state.explicit !== 'on');
+    db.prepare('INSERT OR IGNORE INTO installation VALUES (?, ?)').run(selected, id);
+  }
+
   function updateDocument(id: string, content: string, previousContent: string) {
     return db.transaction(() => {
       const entry = document(id);
       if (entry.content !== previousContent) throw new Error('Le document a été modifié ailleurs. Rouvrez-le avant d’enregistrer.');
-      const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
+      const active = installedWorkspaces(id);
       if (entry.kind !== 'connector' && installationFolder(content) !== installationFolder(entry.content)) {
-        for (const { workspace: selected } of active) setEnabled(selected, id, false);
+        for (const selected of active) removeInstallation(selected, id);
       }
       if (entry.kind === 'connector') {
         const config = parseConnectorConfig(content);
@@ -244,7 +376,7 @@ export function createLibraryStore(home: string) {
         const description = typeof data.description === 'string' ? data.description : '';
         db.prepare('UPDATE entries SET name = ?, description = ?, content = ? WHERE id = ?').run(name, description, content, id);
       }
-      for (const { workspace: selected } of active) setEnabled(selected, id, true);
+      for (const selected of active) refreshInstallation(selected, id);
       return document(id);
     })();
   }
@@ -252,13 +384,14 @@ export function createLibraryStore(home: string) {
   function deleteEntry(id: string) {
     const entry = document(id);
     if (entry.kind !== 'skill') throw new Error('Seuls les skills peuvent être supprimés.');
-    const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
-    for (const { workspace: selected } of active) setEnabled(selected, id, false);
+    for (const selected of installedWorkspaces(id)) removeInstallation(selected, id);
     db.transaction(() => {
       db.prepare('DELETE FROM collection_entries WHERE entry_id = ?').run(id);
       db.prepare('INSERT OR IGNORE INTO deleted_origins (source) SELECT source FROM origins WHERE entry_id = ?').run(id);
       db.prepare('DELETE FROM origins WHERE entry_id = ?').run(id);
       db.prepare('DELETE FROM activation WHERE entry_id = ?').run(id);
+      db.prepare('DELETE FROM deactivation WHERE entry_id = ?').run(id);
+      db.prepare('DELETE FROM installation WHERE entry_id = ?').run(id);
       db.prepare('DELETE FROM entries WHERE id = ?').run(id);
     })();
     return { ok: true };
@@ -276,8 +409,7 @@ export function createLibraryStore(home: string) {
       if (bytes.length > MAX_EDITABLE_FILE_BYTES || content.includes('\0')) throw new Error('Ce fichier ne peut pas être modifié.');
       const assets = { ...entry.assets, [normalized]: bytes.toString('base64') };
       db.prepare('UPDATE entries SET assets = ? WHERE id = ?').run(JSON.stringify(assets), id);
-      const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
-      for (const { workspace: selected } of active) setEnabled(selected, id, true);
+      for (const selected of installedWorkspaces(id)) refreshInstallation(selected, id);
       return { path: normalized, content };
     })();
   }
@@ -308,24 +440,25 @@ export function createLibraryStore(home: string) {
 
   function listCollections(workspacePath?: string) {
     const selected = workspacePath ? workspace(workspacePath) : '';
-    return db.prepare(`SELECT c.id, c.name, c.description, c.source,
-      COUNT(ce.entry_id) AS entryCount,
-      SUM(CASE WHEN a.entry_id IS NOT NULL THEN 1 ELSE 0 END) AS enabledCount
-      FROM collections c
-      LEFT JOIN collection_entries ce ON ce.collection_id = c.id
-      LEFT JOIN activation a ON a.entry_id = ce.entry_id AND a.workspace = ?
-      GROUP BY c.id ORDER BY c.name COLLATE NOCASE`).all(selected).map((row) => {
-        const collection = row as { id: string; name: string; description: string; source: string; entryCount: number; enabledCount: number };
-        return {
-          id: collection.id,
-          name: collection.name,
-          description: collection.description,
-          source: collection.source,
-          enabled: collection.entryCount > 0 && collection.enabledCount === collection.entryCount,
-          partial: collection.enabledCount > 0 && collection.enabledCount < collection.entryCount,
-          componentCount: collection.entryCount,
-        };
-      });
+    const states = new Map(selected ? list(selected).map((entry) => [entry.id, entry.enabled] as const) : []);
+    const members = new Map<string, string[]>();
+    for (const row of db.prepare('SELECT collection_id AS collectionId, entry_id AS entryId FROM collection_entries').all() as Array<{ collectionId: string; entryId: string }>) {
+      members.set(row.collectionId, [...(members.get(row.collectionId) ?? []), row.entryId]);
+    }
+    return db.prepare('SELECT id, name, description, source FROM collections ORDER BY name COLLATE NOCASE').all().map((row) => {
+      const collection = row as { id: string; name: string; description: string; source: string };
+      const entries = members.get(collection.id) ?? [];
+      const enabledCount = entries.filter((entryId) => states.get(entryId)).length;
+      return {
+        id: collection.id,
+        name: collection.name,
+        description: collection.description,
+        source: collection.source,
+        enabled: entries.length > 0 && enabledCount === entries.length,
+        partial: enabledCount > 0 && enabledCount < entries.length,
+        componentCount: entries.length,
+      };
+    });
   }
 
   function collectionSource(id: string): string | null {
@@ -450,11 +583,12 @@ export function createLibraryStore(home: string) {
     const selected = workspace(workspacePath);
     const mappings = collectionEntries(id);
     if (!mappings.length) throw new Error('Plugin introuvable.');
-    const active = new Set((db.prepare('SELECT entry_id AS entryId FROM activation WHERE workspace = ?').all(selected) as Array<{ entryId: string }>).map((entry) => entry.entryId));
+    const states = new Map(list(selected).map((entry) => [entry.id, entry] as const));
     const changed: string[] = [];
     try {
       for (const mapping of mappings) {
-        if (active.has(mapping.entryId) === enabled) continue;
+        const state = states.get(mapping.entryId);
+        if (!state?.toggleable || state.enabled === enabled || changed.includes(mapping.entryId)) continue;
         setEnabled(selected, mapping.entryId, enabled);
         changed.push(mapping.entryId);
       }
@@ -465,19 +599,19 @@ export function createLibraryStore(home: string) {
     return listCollections(selected).find((collection) => collection.id === id);
   }
 
-  function setEnabled(workspacePath: unknown, id: string, enabled: unknown) {
-    if (typeof enabled !== 'boolean') throw new Error('Activation booléenne requise.');
-    const selected = workspace(workspacePath);
-    const entry = document(id);
-    if (entry.kind === 'connector') {
-      prepareConnectorInstallation(selected, entry.name, parseConnectorConfig(entry.content), enabled)();
-      if (enabled) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, id);
-      else db.prepare('DELETE FROM activation WHERE workspace = ? AND entry_id = ?').run(selected, id);
-      return { ok: true, enabled, skipped: [] as string[] };
-    }
+  // Extrait ou retire les fichiers d'un élément dans le dossier ; retourne les cibles conservées (composants personnels).
+  // `targets` restreint les dossiers de skills (défaut : tous) ; `tolerant` : un composant déjà présent n'est pas une erreur.
+  function materialize(selected: string, entry: LibraryEntry, enabled: boolean, targets?: readonly SkillTarget[], tolerant = false) {
+    const { id } = entry;
     const packageRoot = path.join(directory, 'active', createHash('sha256').update(selected).digest('hex'), id);
     const { data: frontMatter } = parseFrontMatter(entry.content);
-    const install = prepareWorkspaceInstallation(selected, id, String(frontMatter.name || frontMatter.metadata?.title || entry.name), packageRoot, entry.kind, enabled);
+    let install: ReturnType<typeof prepareWorkspaceInstallation>;
+    try {
+      install = prepareWorkspaceInstallation(selected, id, String(frontMatter.name || frontMatter.metadata?.title || entry.name), packageRoot, entry.kind as 'skill' | 'agent', enabled, targets);
+    } catch (error) {
+      if (tolerant && error instanceof PreservedComponentError) return [error.target];
+      throw error;
+    }
     let skipped: string[] = [];
     if (enabled) {
       fs.mkdirSync(path.dirname(packageRoot), { recursive: true, mode: 0o700 });
@@ -520,41 +654,149 @@ export function createLibraryStore(home: string) {
     } else {
       ({ skipped } = install());
     }
-    if (enabled) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, id);
-    else db.prepare('DELETE FROM activation WHERE workspace = ? AND entry_id = ?').run(selected, id);
+    return skipped;
+  }
+
+  function setRawEnabled(selected: string, entry: LibraryEntry, enabled: boolean) {
+    if (entry.kind === 'connector') {
+      prepareConnectorInstallation(selected, entry.name, parseConnectorConfig(entry.content), enabled)();
+      if (enabled) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, entry.id);
+      else db.prepare('DELETE FROM activation WHERE workspace = ? AND entry_id = ?').run(selected, entry.id);
+      return { ok: true, enabled, skipped: [] as string[] };
+    }
+    const skipped = materialize(selected, entry, enabled);
+    if (enabled) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, entry.id);
+    else db.prepare('DELETE FROM activation WHERE workspace = ? AND entry_id = ?').run(selected, entry.id);
     return { ok: true, enabled, skipped };
+  }
+
+  // Skill : état explicite par rapport au défaut (activé si natif, désactivé sinon) ; revenir au défaut retire le réglage.
+  function setSkillEnabled(selected: string, entry: LibraryEntry, enabled: boolean) {
+    const state = skillStateOf(selected, entry.id);
+    const forget = (table: 'activation' | 'deactivation' | 'installation') => db.prepare(`DELETE FROM ${table} WHERE workspace = ? AND entry_id = ?`).run(selected, entry.id);
+    let skipped: string[] = [];
+    if (enabled && state.native) {
+      // Natif : seuls les liens manquants pour que tous les providers le lisent sont posés.
+      const targets = coverageTargets(state);
+      if (targets.length) skipped = materialize(selected, entry, true, targets, true);
+      db.transaction(() => {
+        forget('activation');
+        forget('deactivation');
+        if (targets.length) db.prepare('INSERT OR IGNORE INTO installation VALUES (?, ?)').run(selected, entry.id);
+      })();
+    } else if (enabled) {
+      skipped = materialize(selected, entry, true);
+      db.transaction(() => {
+        forget('deactivation');
+        db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, entry.id);
+        db.prepare('INSERT OR IGNORE INTO installation VALUES (?, ?)').run(selected, entry.id);
+      })();
+    } else {
+      materialize(selected, entry, false);
+      db.transaction(() => {
+        forget('activation');
+        forget('installation');
+        if (state.native) db.prepare('INSERT OR IGNORE INTO deactivation VALUES (?, ?)').run(selected, entry.id);
+        else forget('deactivation');
+      })();
+    }
+    return { ok: true, enabled, skipped };
+  }
+
+  function setEnabled(workspacePath: unknown, id: string, enabled: unknown) {
+    if (typeof enabled !== 'boolean') throw new Error('Activation booléenne requise.');
+    const selected = workspace(workspacePath);
+    const entry = document(id);
+    if (entry.kind === 'skill') return setSkillEnabled(selected, entry, enabled);
+    const origins = (db.prepare('SELECT source FROM origins WHERE entry_id = ?').all(id) as Array<{ source: string }>).map((row) => row.source);
+    if (isPersonalComponent(entry.kind, origins)) throw new Error(NOT_TOGGLEABLE);
+    return setRawEnabled(selected, entry, enabled);
   }
 
   function resolveWorkspace(workspacePath: unknown) {
     try { return workspace(workspacePath); } catch { return null; }
   }
 
-  function activeEntryIds(workspacePath: string) {
-    const selected = resolveWorkspace(workspacePath);
-    if (!selected) return new Set<string>();
-    return new Set((db.prepare('SELECT entry_id AS entryId FROM activation WHERE workspace = ?').all(selected) as Array<{ entryId: string }>).map((row) => row.entryId));
+  // Liens posés par la bibliothèque dans .claude, .agents et .grok du dossier : identifiant du skill → cibles présentes.
+  function installedLinks(selected: string) {
+    const root = path.join(directory, 'active', createHash('sha256').update(selected).digest('hex'));
+    const links = new Map<string, Set<SkillTarget>>();
+    for (const provider of ['.claude', '.agents', '.grok'] as const) {
+      const parent = path.join(selected, provider, 'skills');
+      let items: fs.Dirent[];
+      try { items = fs.readdirSync(parent, { withFileTypes: true }); } catch { continue; }
+      for (const item of items) {
+        if (!item.isSymbolicLink()) continue;
+        try {
+          const target = path.resolve(parent, fs.readlinkSync(path.join(parent, item.name)));
+          if (path.dirname(target) !== root || !fs.existsSync(target)) continue;
+          const id = path.basename(target);
+          links.set(id, (links.get(id) ?? new Set()).add(provider));
+        } catch { /* lien illisible : ignoré */ }
+      }
+    }
+    return links;
   }
 
-  function isManagedWorkspace(workspacePath: string) {
-    const selected = resolveWorkspace(workspacePath);
-    return Boolean(selected && db.prepare(`SELECT 1 FROM activation a JOIN entries e ON e.id = a.entry_id
-      WHERE a.workspace = ? AND e.kind = 'skill' LIMIT 1`).get(selected));
+  // Met les liens du dossier en accord avec l'état des skills : couverture posée pour les skills personnels
+  // actifs, liens retirés pour les skills désactivés. Idempotent, sans lecture des fichiers d'un skill déjà en place.
+  function reconcileWorkspace(workspacePath: string) {
+    const skipped: string[] = [];
+    const errors: string[] = [];
+    try {
+      const selected = resolveWorkspace(workspacePath);
+      if (!selected) return { skipped, errors };
+      const links = installedLinks(selected);
+      for (const state of skillStates(selected)) {
+        try {
+          const present = links.get(state.id);
+          if (state.enabled) {
+            const targets = coverageTargets(state);
+            if (!targets.some((target) => !present?.has(target))) continue;
+            skipped.push(...materialize(selected, document(state.id), true, targets, true));
+            db.prepare('INSERT OR IGNORE INTO installation VALUES (?, ?)').run(selected, state.id);
+          } else if (present?.size) {
+            materialize(selected, document(state.id), false);
+            db.prepare('DELETE FROM installation WHERE workspace = ? AND entry_id = ?').run(selected, state.id);
+          }
+        } catch (error) { errors.push(`${state.name} : ${error instanceof Error ? error.message : String(error)}`); }
+      }
+    } catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
+    return { skipped, errors };
   }
 
-  function originEntryId(source: string) {
-    const row = db.prepare('SELECT entry_id AS entryId FROM origins WHERE source = ?').get(source) as { entryId: string } | undefined;
-    return row?.entryId ?? null;
-  }
-
-  function activeSkills(workspacePath: string) {
+  // Skills désactivés dans le dossier (défaut ou réglage explicite) qui ont au moins une origine sur disque.
+  function disabledEntries(workspacePath: string) {
     const selected = resolveWorkspace(workspacePath);
     if (!selected) return [];
-    return db.prepare(`SELECT e.id, e.name, e.content FROM entries e JOIN activation a ON a.entry_id = e.id
-      WHERE a.workspace = ? AND e.kind = 'skill' ORDER BY e.name`).all(selected) as Array<{ id: string; name: string; content: string }>;
+    // Seuls les skills vus nativement (personnels ou du dossier) sont à masquer : un skill de la bibliothèque seule
+    // désactivé n'a aucun lien dans le dossier, et le masquer par nom (Vibe) toucherait des homonymes.
+    return skillStates(selected).filter((state) => !state.enabled && state.native && state.origins.length)
+      .map(({ id, name, origins, claudeOrigins }) => ({ id, name, origins, claudeOrigins }));
+  }
+
+  // Skills actifs dans le dossier (défaut ou réglage explicite), avec leur contenu.
+  function enabledSkills(workspacePath: string) {
+    const selected = resolveWorkspace(workspacePath);
+    if (!selected) return [];
+    const ids = new Set(skillStates(selected).filter((state) => state.enabled).map((state) => state.id));
+    return (db.prepare("SELECT id, name, content FROM entries WHERE kind = 'skill' ORDER BY name").all() as Array<{ id: string; name: string; content: string }>)
+      .filter((entry) => ids.has(entry.id));
+  }
+
+  // Contenus (sans fichiers associés) des éléments demandés.
+  function contents(ids: string[]) {
+    const found = new Map<string, string>();
+    const select = db.prepare('SELECT content FROM entries WHERE id = ?');
+    for (const id of new Set(ids)) {
+      const row = select.get(id) as { content: string } | undefined;
+      if (row) found.set(id, row.content);
+    }
+    return found;
   }
 
   function activeWorkspaces(id: string) {
-    return (db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>).map((row) => row.workspace);
+    return (db.prepare('SELECT workspace FROM activation WHERE entry_id = ? UNION SELECT workspace FROM installation WHERE entry_id = ? UNION SELECT workspace FROM deactivation WHERE entry_id = ?').all(id, id, id) as Array<{ workspace: string }>).map((row) => row.workspace);
   }
 
   function overrideState(selected: string) {
@@ -597,6 +839,7 @@ export function createLibraryStore(home: string) {
 
   return {
     directory,
+    userHome,
     list,
     document,
     createEntry,
@@ -608,10 +851,10 @@ export function createLibraryStore(home: string) {
     setEnabled,
     instructions,
     resolveWorkspace,
-    activeEntryIds,
-    isManagedWorkspace,
-    originEntryId,
-    activeSkills,
+    reconcileWorkspace,
+    disabledEntries,
+    enabledSkills,
+    contents,
     activeWorkspaces,
     overrideState,
     saveOverrideState,

@@ -16,35 +16,39 @@ function realpath(file: string) {
   try { return fs.realpathSync(file); } catch { return null; }
 }
 
-// Dans un dossier géré, sépare les skills personnels connus de la bibliothèque mais non activés (masqués) des autres.
+// Sépare les skills listés en masqués (origine d'un skill désactivé dans le dossier) et visibles.
+// Seuls les skills désactivés sont masqués ; les skills de plugin ne sont jamais filtrés.
 export function splitLibraryHiddenSkills(skills: ProviderSkill[], store: Store, workspacePath: string | undefined): { visible: ProviderSkill[]; hidden: ProviderSkill[] } {
-  if (!workspacePath || !store.isManagedWorkspace(workspacePath)) return { visible: skills, hidden: [] };
-  const active = store.activeEntryIds(workspacePath);
+  if (!workspacePath) return { visible: skills, hidden: [] };
+  const disabled = new Set(store.disabledEntries(workspacePath).flatMap((entry) => entry.origins));
+  if (!disabled.size) return { visible: skills, hidden: [] };
   const visible: ProviderSkill[] = [];
   const hidden: ProviderSkill[] = [];
   for (const skill of skills) {
-    let isHidden = false;
-    if (skill.scope === 'user' && !skill.pluginId && !skill.pluginName && skill.sourcePath) {
-      const source = realpath(skill.sourcePath);
-      const entryId = source ? store.originEntryId(source) : null;
-      isHidden = Boolean(entryId) && !active.has(entryId as string);
-    }
-    (isHidden ? hidden : visible).push(skill);
+    const source = !skill.pluginId && !skill.pluginName && skill.sourcePath ? realpath(skill.sourcePath) : null;
+    (source && disabled.has(source) ? hidden : visible).push(skill);
   }
   return { visible, hidden };
 }
 
-// Filtre le popup : dans un dossier géré, seuls les skills personnels activés pour lui restent visibles.
-// Retourne le listage d'origine (non filtré), pour calculer les skills masqués côté runtime.
+// Filtre le popup : dans un dossier, les skills désactivés disparaissent de la liste ; rien d'autre n'est filtré.
+// Avant un listage pour un dossier, remet ses liens et ses réglages Claude d'aplomb (sans jamais faire échouer le listage).
+// Les scans passent `unfiltered` : ils voient tous les skills.
 export function installLibrarySkillVisibility(service: Pick<typeof providerSkillsService, 'listProviderSkills'>, store: Store) {
   const list = service.listProviderSkills.bind(service);
   service.listProviderSkills = async (provider, options) => {
+    const workspacePath = options?.unfiltered ? undefined : options?.workspacePath;
+    if (workspacePath) {
+      try {
+        store.reconcileWorkspace(workspacePath);
+        applyWorkspaceSkillVisibility(store, workspacePath);
+      } catch { /* la mise en accord ne doit pas empêcher le listage */ }
+    }
     const skills = await list(provider, options);
     try {
-      return splitLibraryHiddenSkills(skills, store, options?.workspacePath).visible;
+      return splitLibraryHiddenSkills(skills, store, workspacePath).visible;
     } catch { return skills; }
   };
-  return list;
 }
 
 type PersonalClaudeSkill = { name: string; file: string; realFile: string; content: string };
@@ -73,9 +77,10 @@ export function personalClaudeSkills(userHome: string): PersonalClaudeSkill[] {
   return found;
 }
 
+// Noms (minuscules) des skills actifs dans le dossier : nom de l'entrée, nom du frontmatter et nom de dossier.
 export function installedNames(store: Store, workspacePath: string) {
   const names = new Set<string>();
-  for (const entry of store.activeSkills(workspacePath)) {
+  for (const entry of store.enabledSkills(workspacePath)) {
     names.add(entry.name.toLowerCase());
     try {
       const { data } = parseFrontMatter(entry.content);
@@ -84,6 +89,14 @@ export function installedNames(store: Store, workspacePath: string) {
     } catch { /* nom déjà couvert par le nom de l'entrée */ }
   }
   return names;
+}
+
+// Nom d'un skill désactivé tel que le lit Claude : nom du frontmatter, sinon nom du dossier (ou du fichier) d'origine.
+export function disabledSkillName(content: string | undefined, origin: string) {
+  let name: unknown;
+  try { name = content === undefined ? undefined : parseFrontMatter(content).data.name; } catch { /* frontmatter illisible */ }
+  if (typeof name === 'string' && name.trim()) return name.trim();
+  return path.basename(origin).toLowerCase() === 'skill.md' ? path.basename(path.dirname(origin)) : path.basename(origin, path.extname(origin));
 }
 
 function assertClaudeDirectory(workspace: string) {
@@ -101,8 +114,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-// Masque dans Claude Code (skillOverrides) les skills personnels non activés dans un dossier géré.
-export function applyWorkspaceSkillVisibility(store: Store, workspacePath: string, userHome: string): { off: string[]; error?: string } {
+// Masque dans Claude Code (skillOverrides) les skills désactivés dans le dossier que Claude voit nativement.
+export function applyWorkspaceSkillVisibility(store: Store, workspacePath: string): { off: string[]; error?: string } {
   let tracked: string[] = [];
   try {
     const workspace = store.resolveWorkspace(workspacePath);
@@ -110,13 +123,14 @@ export function applyWorkspaceSkillVisibility(store: Store, workspacePath: strin
     const state = store.overrideState(workspace);
     tracked = state.names;
     const desired = new Map<string, string>();
-    if (store.isManagedWorkspace(workspace)) {
-      const active = store.activeEntryIds(workspace);
+    const candidates = store.disabledEntries(workspace).filter((entry) => entry.claudeOrigins.length);
+    if (candidates.length) {
+      const contents = store.contents(candidates.map((entry) => entry.id));
       const installed = installedNames(store, workspace);
-      for (const skill of personalClaudeSkills(userHome)) {
-        const entryId = store.originEntryId(skill.realFile);
-        const key = skill.name.toLowerCase();
-        if (entryId && !active.has(entryId) && !installed.has(key) && !desired.has(key)) desired.set(key, skill.name);
+      for (const entry of candidates) {
+        const name = disabledSkillName(contents.get(entry.id), entry.claudeOrigins[0]);
+        const key = name.toLowerCase();
+        if (!installed.has(key) && !desired.has(key)) desired.set(key, name);
       }
     }
     if (!desired.size && !state.names.length) return { off: [] };

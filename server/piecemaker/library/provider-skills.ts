@@ -24,7 +24,7 @@ async function listLibraryProviderSkills(
     try {
       return {
         provider,
-        skills: await reader.listProviderSkills(provider, { workspacePath }),
+        skills: await reader.listProviderSkills(provider, { workspacePath, unfiltered: true }),
       };
     } catch (error) {
       return {
