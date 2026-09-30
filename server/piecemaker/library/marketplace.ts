@@ -154,7 +154,6 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
     const filename = path.join(userHome, '.claude/plugins/installed_plugins.json');
     return fs.existsSync(filename) ? JSON.parse(fs.readFileSync(filename, 'utf8')).plugins || {} : {};
   };
-  const importInstalledCollections = () => scanInstalledLibraryCollections(store, userHome);
   router.get('/plugin/marketplace', (req, res) => {
     try {
       const marketplace = scope(req.query.scope);
@@ -194,10 +193,6 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
       res.json({ ok: true, plugins: store.listCollections(workspacePath), scan: { errors } });
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
-  router.post('/plugins/scan', (_req, res) => {
-    try { importInstalledCollections(); res.json({ ok: true }); }
-    catch (error) { res.status(400).json({ error: (error as Error).message }); }
-  });
   router.get('/plugins/:id/files', (req, res) => {
     try { res.json({ files: store.collectionFiles(String(req.params.id)) }); }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
@@ -234,7 +229,7 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
       try { result = run('claude', ['plugin', 'install', id, '--scope', 'user']); }
       finally { disableNativeClaudePlugin(userHome, id); }
       if (!result.ok) throw new Error(result.output || 'Installation impossible.');
-      importInstalledCollections();
+      scanInstalledLibraryCollections(store, userHome);
       res.json({ ok: true, enabled: false });
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });

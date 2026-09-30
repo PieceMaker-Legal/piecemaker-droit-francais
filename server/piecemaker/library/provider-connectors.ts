@@ -9,7 +9,7 @@ import type { createLibraryStore } from './store.js';
 const require = createRequire(import.meta.url);
 const TOML = require('@iarna/toml') as { parse(value: string): Record<string, unknown> };
 
-export const REGISTRE_PUBLIC_CONNECTOR = Object.freeze({
+const REGISTRE_PUBLIC_CONNECTOR = Object.freeze({
   name: 'registre-public',
   url: 'https://registre-public.com/api/mcp',
 });
@@ -58,7 +58,7 @@ function collectServers(source: string, servers: Record<string, unknown>, collec
   }
 }
 
-export function listUserProviderConnectors(userHome: string) {
+function listUserProviderConnectors(userHome: string) {
   const collected: ImportedConnector[] = [];
   collectServers(path.join(userHome, '.claude.json'), objectRecord(readJson(path.join(userHome, '.claude.json')).mcpServers), collected);
   collectServers(path.join(userHome, '.codex', 'config.toml'), objectRecord(readToml(path.join(userHome, '.codex', 'config.toml')).mcp_servers), collected);
@@ -71,7 +71,7 @@ export function listUserProviderConnectors(userHome: string) {
   return collected;
 }
 
-export function seedDefaultLibraryConnectors(store: ReturnType<typeof createLibraryStore>) {
+function seedDefaultLibraryConnectors(store: ReturnType<typeof createLibraryStore>) {
   return store.importConnector({
     name: REGISTRE_PUBLIC_CONNECTOR.name,
     description: REGISTRE_PUBLIC_CONNECTOR.url,

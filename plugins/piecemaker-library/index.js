@@ -1,24 +1,4 @@
 const mounts = new WeakMap();
-const skillScopes = new Set(['user', 'plugin', 'repo', 'project', 'admin', 'system']);
-
-export function normalizeSkill(provider, skill = {}, project) {
-  const scope = skillScopes.has(skill.scope) ? skill.scope : 'user';
-  const normalized = {
-    provider,
-    name: String(skill.name ?? ''),
-    description: String(skill.description ?? ''),
-    command: String(skill.command ?? ''),
-    scope,
-    sourcePath: String(skill.sourcePath ?? ''),
-  };
-  if (typeof skill.pluginName === 'string') normalized.pluginName = skill.pluginName;
-  if (typeof skill.pluginId === 'string') normalized.pluginId = skill.pluginId;
-  if (scope === 'project' || scope === 'repo') {
-    normalized.projectDisplayName = project?.displayName ?? skill.projectDisplayName;
-    normalized.projectPath = project?.path ?? skill.projectPath;
-  }
-  return normalized;
-}
 
 export function mount(container, api) {
   const root = document.createElement('div');

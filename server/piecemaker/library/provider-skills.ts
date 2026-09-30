@@ -16,7 +16,7 @@ type ProviderSkillsReader = {
   listProviderSkills(provider: string, options?: ProviderSkillListOptions): ReturnType<typeof providerSkillsService.listProviderSkills>;
 };
 
-export async function listLibraryProviderSkills(
+async function listLibraryProviderSkills(
   workspacePath: string | undefined,
   reader: ProviderSkillsReader = providerSkillsService,
 ) {
@@ -117,5 +117,3 @@ export async function scanAndPersistLibraryProjectSkills(
     }
   }
 }
-
-export { scanAndPersistLibraryClaudeAgents, scanAndPersistLibraryProviderAgents } from './provider-agents.js';

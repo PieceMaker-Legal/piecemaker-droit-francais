@@ -34,7 +34,7 @@ export function installLibrarySkillVisibility(service: Pick<typeof providerSkill
   };
 }
 
-export type PersonalClaudeSkill = { name: string; file: string; realFile: string; content: string };
+type PersonalClaudeSkill = { name: string; file: string; realFile: string; content: string };
 
 // Skills personnels de Claude Code : ~/.claude/skills/*/SKILL.md et ~/.claude/skills/synced/*/SKILL.md
 export function personalClaudeSkills(userHome: string): PersonalClaudeSkill[] {
