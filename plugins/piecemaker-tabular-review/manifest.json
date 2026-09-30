@@ -1,0 +1,13 @@
+{
+  "name": "piecemaker-tabular-review",
+  "displayName": "Tabular Review",
+  "version": "1.0.0",
+  "description": "Analyse tabulaire de documents : une ligne par document, une colonne par question, une session IA par ligne.",
+  "icon": "icon.svg",
+  "type": "module",
+  "slot": "tab",
+  "entry": "dist/index.js",
+  "server": "launcher.mjs",
+  "permissions": [],
+  "piecemakerInjections": ["dist/sidebar.js"]
+}
