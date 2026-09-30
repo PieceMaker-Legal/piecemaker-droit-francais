@@ -2,11 +2,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 
 import type { CreateReviewRequest } from '../shared.js';
+import { emptyColumns } from '../shared.js';
 import { listMarkdownDocuments } from './documents.js';
 import { exportReview } from './export.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
-import { createReview, listReviews, readReview, reviewDetail } from './reviews.js';
-import { cancelJob, isRunning, queueRows, stopAllJobs } from './runner.js';
+import { createReview, listReviews, readReview, reviewDetail, updateReview } from './reviews.js';
+import { cancelJob, isRunning, pendingTasks, queueTasks, stopAllJobs } from './runner.js';
+import type { RowTask } from './runner.js';
 import { assertModel, assertProvider, assertProxyOrigin, probeProxy, sessionEnvironment } from './sessions.js';
 import { deleteTemplate, findTemplate, readTemplates, upsertTemplate } from './templates.js';
 
@@ -42,7 +44,7 @@ async function createAndLaunch(body: Body) {
   const settings = { provider: assertProvider(request.provider), model: assertModel(request.model), concurrency: concurrency(request.concurrency) };
   const environment = await launchEnvironment(request.proxyOrigin);
   const { file, review } = createReview(project, template, request.title, request.rows, settings);
-  await queueRows(project, file, review.rows.map((row) => row.id), settings.concurrency, environment);
+  await queueTasks(project, file, review.rows.map((row) => ({ rowId: row.id })), settings.concurrency, environment);
   return reviewDetail(project, file, isRunning(project, file));
 }
 
@@ -52,12 +54,40 @@ async function retry(body: Body) {
   assertReviewFile(project, file);
   const review = readReview(project, file);
   const running = isRunning(project, file);
-  const rowIds = review.rows
-    .filter((row) => row.status === 'error' || row.status === 'cancelled' || (!running && (row.status === 'pending' || row.status === 'running')))
-    .map((row) => row.id);
-  if (!rowIds.length) throw new UserError('Aucune ligne à relancer.');
+  const tasks: RowTask[] = review.rows
+    .filter((row) => row.status === 'error' || row.status === 'cancelled' || (!running && (row.status === 'pending' || row.status === 'running')) || emptyColumns(review, row.id).length)
+    .map((row) => ({ rowId: row.id }));
+  if (!pendingTasks(review, tasks).length) throw new UserError('Toutes les cellules sont déjà remplies : aucune session à lancer.');
   const environment = await launchEnvironment(body.proxyOrigin);
-  await queueRows(project, file, rowIds, review.concurrency || 3, environment);
+  await queueTasks(project, file, tasks, review.concurrency || 3, environment);
+  return reviewDetail(project, file, isRunning(project, file));
+}
+
+async function run(body: Body) {
+  const project = assertProject(body.project);
+  const file = String(body.file ?? '');
+  assertReviewFile(project, file);
+  const review = readReview(project, file);
+  const rowId = typeof body.rowId === 'string' ? body.rowId : null;
+  const column = body.column === undefined || body.column === null ? null : Number(body.column);
+  if (rowId !== null && !review.rows.some((row) => row.id === rowId)) throw new UserError('Ligne introuvable.');
+  if (column !== null && !review.columns.some((entry) => entry.index === column)) throw new UserError('Colonne introuvable.');
+  if (rowId === null && column === null) throw new UserError('Indiquez une cellule, une ligne ou une colonne.');
+  const columns = column === null ? undefined : [column];
+  const tasks: RowTask[] = (rowId === null ? review.rows.map((row) => row.id) : [rowId]).map((id) => ({ rowId: id, columns }));
+  const environment = await launchEnvironment(body.proxyOrigin);
+  if (body.replace === true) {
+    const targets = new Set(columns ?? review.columns.map((entry) => entry.index));
+    await updateReview(project, file, (current) => {
+      for (const task of tasks) {
+        const cells = current.cells[task.rowId];
+        if (!cells) continue;
+        for (const index of targets) delete cells[String(index)];
+      }
+    });
+  }
+  const queued = await queueTasks(project, file, tasks, review.concurrency || 3, environment);
+  if (!queued) throw new UserError('Les cellules demandées sont déjà remplies : aucune session lancée.');
   return reviewDetail(project, file, isRunning(project, file));
 }
 
@@ -83,6 +113,7 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
   }
   if (method === 'POST' && pathname === '/reviews') return createAndLaunch(body);
   if (method === 'POST' && pathname === '/reviews/retry') return retry(body);
+  if (method === 'POST' && pathname === '/reviews/run') return run(body);
   if (method === 'POST' && pathname === '/reviews/cancel') {
     const project = assertProject(body.project);
     const file = String(body.file ?? '');

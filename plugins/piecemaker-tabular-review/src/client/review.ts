@@ -1,5 +1,5 @@
 import type { ExportFormat, ExportResult, ReviewDetail, ReviewRow } from '../shared.js';
-import { FLAG_LABELS, FLAGS, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
+import { emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, renderMarkdown, toast } from './dom.js';
 import { anonymizationProxyOrigin } from './host.js';
@@ -53,6 +53,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
           <div><div class="ptr-label">Réponse</div><div style="display:flex;gap:6px">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div></div><div class="ptr-small ptr-muted">${escapeHtml(FLAG_LABELS[cell.flag])}</div></div>
           <div><div class="ptr-label">Justification</div><div class="ptr-md">${cell.reasoning ? renderMarkdown(cell.reasoning) : '<p class="ptr-muted">—</p>'}</div></div>`
           : `<div class="ptr-muted">${row.status === 'done' ? 'Aucune réponse.' : 'Pas encore de réponse pour cette cellule.'}</div>${rowStatus(row)}`}
+        <div><button type="button" class="ptr-button" data-run-cell>${isCellFilled(cell) ? 'Relancer cette cellule' : 'Lancer la session pour cette cellule'}</button></div>
         <div><div class="ptr-label">Documents</div><ul class="ptr-summary-list">${row.documents.map((document) => `<li title="${escapeHtml(document.copy)}">${escapeHtml(document.source)}</li>`).join('')}</ul></div>
       </aside>`;
   }
@@ -63,7 +64,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     const wrap = element.querySelector<HTMLElement>('.ptr-table-wrap');
     if (wrap) scroll = { top: wrap.scrollTop, left: wrap.scrollLeft };
     const done = review.rows.filter((row) => row.status === 'done').length;
-    const failed = review.rows.some((row) => row.status === 'error' || row.status === 'cancelled') || status === 'interrupted';
+    const failed = review.rows.some((row) => row.status === 'error' || row.status === 'cancelled' || emptyColumns(review, row.id).length > 0) || status === 'interrupted';
     const running = status === 'running';
     element.innerHTML = `
       <div class="ptr-review-top">
@@ -76,7 +77,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
         ${running ? `<div class="ptr-progress" aria-hidden="true"><div style="width:${review.rows.length ? Math.round((done / review.rows.length) * 100) : 0}%"></div></div>` : ''}
         <span class="ptr-spacer"></span>
         ${running ? '<button type="button" class="ptr-button ptr-button-danger" data-cancel>Annuler</button>' : ''}
-        ${!running && failed ? '<button type="button" class="ptr-button" data-retry>Relancer les échecs</button>' : ''}
+        ${!running && failed ? '<button type="button" class="ptr-button" data-retry title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>' : ''}
         <button type="button" class="ptr-button" data-export="docx">Export Word</button>
         <button type="button" class="ptr-button" data-export="pdf">Export PDF</button>
         ${app.api.openFileInEditor ? '<button type="button" class="ptr-button" data-open-json>Ouvrir le JSON</button>' : ''}
@@ -85,7 +86,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
       <div class="ptr-review-body">
         <div class="ptr-table-wrap">
           <table class="ptr-table">
-            <thead><tr><th scope="col">Document</th>${review.columns.map((column) => `<th scope="col" title="${escapeHtml(column.prompt)}">${escapeHtml(column.name)}</th>`).join('')}</tr></thead>
+            <thead><tr><th scope="col">Document</th>${review.columns.map((column) => `<th scope="col" title="${escapeHtml(column.prompt)}"><div class="ptr-th">${escapeHtml(column.name)}<button type="button" class="ptr-icon-button" data-run-column="${column.index}" aria-label="Lancer les cellules vides de la colonne ${escapeHtml(column.name)}" title="Lancer les cellules vides de cette colonne">▶</button></div></th>`).join('')}</tr></thead>
             <tbody>${review.rows.map((row) => `
               <tr>
                 <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}</td>
@@ -166,6 +167,35 @@ export function createReviewView(app: App, project: string, file: string, onBack
       void action(async () => {
         if (!await confirmDialog(app.root, 'Annuler la tabular review ?', '<p>Les sessions IA en cours sont arrêtées ; les lignes déjà analysées sont conservées.</p>', 'Arrêter', true)) return;
         applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/cancel', { project, file }));
+      });
+      return;
+    }
+    const columnButton = target.closest<HTMLElement>('[data-run-column]');
+    if (columnButton && detail) {
+      const index = Number(columnButton.dataset.runColumn);
+      const review = detail.review;
+      const column = review.columns.find((entry) => entry.index === index);
+      const sessions = review.rows.filter((row) => emptyColumns(review, row.id, [index]).length).length;
+      if (!column) return;
+      if (!sessions) {
+        toast(app.root, 'Toutes les cellules de cette colonne sont déjà remplies : aucune session à lancer.');
+        return;
+      }
+      void action(async () => {
+        const confirmed = await confirmDialog(app.root, 'Lancer la colonne ?', `<p>La question « ${escapeHtml(column.name)} » sera posée pour les <strong>${sessions} ligne${sessions > 1 ? 's' : ''}</strong> dont la cellule est vide, soit ${sessions} session${sessions > 1 ? 's' : ''} IA (${escapeHtml(review.provider)} — ${escapeHtml(review.model)}). Les cellules déjà remplies ne sont pas reposées.</p>`, 'Lancer');
+        if (!confirmed) return;
+        const proxyOrigin = await anonymizationProxyOrigin();
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/run', { project, file, column: index, proxyOrigin }));
+      });
+      return;
+    }
+    if (target.closest('[data-run-cell]') && detail && selected) {
+      const { row: rowId, column: index } = selected;
+      const filled = isCellFilled(detail.review.cells[rowId]?.[String(index)]);
+      void action(async () => {
+        if (filled && !await confirmDialog(app.root, 'Relancer cette cellule ?', '<p>La réponse actuelle sera remplacée par celle d’une nouvelle session IA, qui ne pose que cette question.</p>', 'Relancer')) return;
+        const proxyOrigin = await anonymizationProxyOrigin();
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/run', { project, file, rowId, column: index, replace: filled, proxyOrigin }));
       });
       return;
     }

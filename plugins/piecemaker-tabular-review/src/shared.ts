@@ -152,5 +152,25 @@ export function reviewStatusLabel(status: ReviewStatus): string {
   }[status];
 }
 
+export const EMPTY_CELL_SUMMARY = 'Non traité';
+
+export function isCellFilled(cell: Cell | undefined): cell is Cell {
+  return Boolean(cell) && cell!.summary.trim() !== '' && cell!.summary !== EMPTY_CELL_SUMMARY;
+}
+
+export function emptyColumns(review: Review, rowId: string, columns?: number[]): number[] {
+  const wanted = columns ?? review.columns.map((column) => column.index);
+  return wanted.filter((index) => review.columns.some((column) => column.index === index) && !isCellFilled(review.cells[rowId]?.[String(index)]));
+}
+
+export type RunRequest = {
+  project: string;
+  file: string;
+  rowId?: string;
+  column?: number;
+  replace?: boolean;
+  proxyOrigin: string;
+};
+
 export const OPEN_EVENT = 'piecemaker:tabular-review-open';
 export const PENDING_TARGET_KEY = '__piecemakerTabularReviewTarget';
