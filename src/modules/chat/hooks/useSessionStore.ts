@@ -98,14 +98,25 @@ async function requestSessionHistoryPage(
   sessionId: string,
   options: SessionMessagesRequestOptions,
 ): Promise<SessionHistoryPage> {
-  const response = await api.providers.sessionMessages(sessionId, options, {
-    signal: AbortSignal.timeout(SESSION_HISTORY_REQUEST_TIMEOUT_MS),
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const debugStartedAt = performance.now();
+  let response: Response;
+  try {
+    response = await api.providers.sessionMessages(sessionId, options, {
+      signal: AbortSignal.timeout(SESSION_HISTORY_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    console.warn('[DEBUG sessionHistory] request failed', { sessionId, options, ms: Math.round(performance.now() - debugStartedAt), error });
+    throw error;
+  }
+  if (!response.ok) {
+    console.warn('[DEBUG sessionHistory] http error', { sessionId, options, status: response.status, ms: Math.round(performance.now() - debugStartedAt) });
+    throw new Error(`HTTP ${response.status}`);
+  }
 
   const body = await response.json();
   const data = body?.data ?? body;
   const messages: NormalizedMessage[] = Array.isArray(data.messages) ? data.messages : [];
+  console.info('[DEBUG sessionHistory] ok', { sessionId, options, ms: Math.round(performance.now() - debugStartedAt), messages: messages.length, total: data.total, hasMore: data.hasMore });
 
   return {
     messages,
@@ -595,6 +606,7 @@ export function useSessionStore() {
     return enqueueHistoryMutation(slot, async () => {
       const { canRequest = () => true, ...requestOptions } = opts;
       if (!canRequest()) {
+        console.warn('[DEBUG sessionHistory] initial load skipped: canRequest() is false', { sessionId });
         slot.status = 'idle';
         notify(sessionId);
         return null;
