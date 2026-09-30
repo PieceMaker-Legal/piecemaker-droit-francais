@@ -13,6 +13,7 @@ export const PLUGINS = [
   { id: 'piecemaker-dossier', label: 'Plugin Dossier' },
   { id: 'piecemaker-library', label: 'Plugin Bibliothèque' },
   { id: 'piecemaker-telegram', label: 'Plugin Telegram' },
+  { id: 'piecemaker-tabular-review', label: 'Plugin Tabular Review' },
 ];
 
 export async function installPlugins(runtime, report) {
