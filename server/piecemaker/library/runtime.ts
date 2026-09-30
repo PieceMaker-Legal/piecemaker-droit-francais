@@ -3,14 +3,14 @@ import fs from 'node:fs';
 import type { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import type { NormalizedMessage } from '@/shared/types.js';
 
-import { splitLibraryHiddenSkills } from './skill-visibility.js';
+import { installedNames, splitLibraryHiddenSkills } from './skill-visibility.js';
 import type { createLibraryStore } from './store.js';
 
 const OPEN = '<PIECEMAKER_LIBRARY_INSTRUCTIONS>';
 const CLOSE = '</PIECEMAKER_LIBRARY_INSTRUCTIONS>';
 
 // Providers qui découvrent nativement les skills installés dans le dossier (.claude/skills, .agents/skills)
-export const NATIVE_SKILL_PROVIDERS: readonly string[] = ['claude', 'codex', 'cursor', 'opencode'];
+export const NATIVE_SKILL_PROVIDERS: readonly string[] = ['claude', 'codex', 'cursor', 'opencode', 'mistral'];
 
 function stripLibraryInstructions(text: string) {
   const start = text.lastIndexOf(`\n\n${OPEN}\n`);
@@ -44,7 +44,10 @@ export function installLibraryRuntime(
       try {
         const { hidden } = splitLibraryHiddenSkills(await extras.listSkills(String(provider), { workspacePath: cwd }), store, cwd);
         const disabled = new Map<string, LibraryDisabledSkill>();
+        // Vibe masque par nom : un nom identique à celui d'un skill activé dans le dossier masquerait aussi la copie active.
+        const activeNames = String(provider) === 'mistral' ? installedNames(store, cwd) : null;
         for (const skill of hidden) {
+          if (activeNames?.has(skill.name.toLowerCase())) continue;
           try { const file = fs.realpathSync(skill.sourcePath as string); if (!disabled.has(file)) disabled.set(file, { name: skill.name, path: file }); } catch { /* chemin illisible : ignoré */ }
         }
         if (disabled.size) options = { ...options, libraryDisabledSkills: [...disabled.values()] };
