@@ -51,6 +51,10 @@ export function reviewDirectory(project: string): string {
   return path.join(project, REVIEW_FOLDER);
 }
 
+export function documentPath(project: string, copy: string): string {
+  return path.join(reviewDirectory(project), ...copy.split('/'));
+}
+
 export function docsDirectory(project: string): string {
   return path.join(reviewDirectory(project), DOCS_FOLDER);
 }

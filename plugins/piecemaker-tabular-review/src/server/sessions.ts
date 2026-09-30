@@ -18,7 +18,6 @@ export type SessionRequest = {
   model: string;
   mode: 'inline' | 'path';
   system: string;
-  user: string;
   readableDirectory: string;
   environment: NodeJS.ProcessEnv;
   signal: AbortSignal;
@@ -114,6 +113,25 @@ function workDirectory(): string {
 
 type Command = { command: string; args: string[]; outputFile?: string };
 
+export type Conversation = {
+  send(text: string): Promise<string>;
+  close(): void;
+};
+
+function turnTimeout(request: SessionRequest): number {
+  return request.mode === 'path' ? PATH_TIMEOUT_MS : INLINE_TIMEOUT_MS;
+}
+
+function spawnCommand(command: string, args: string[], request: SessionRequest, directory: string) {
+  return spawn(command, args, {
+    cwd: directory,
+    env: request.environment,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+    shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(command),
+  });
+}
+
 function claudeCommand(request: SessionRequest): Command {
   const tools = request.mode === 'path' ? PATH_TOOLS : '';
   return {
@@ -122,7 +140,9 @@ function claudeCommand(request: SessionRequest): Command {
       '-p',
       '--no-session-persistence',
       '--model', request.model,
-      '--output-format', 'text',
+      '--input-format', 'stream-json',
+      '--output-format', 'stream-json',
+      '--verbose',
       '--system-prompt', request.system,
       '--strict-mcp-config',
       '--permission-mode', 'dontAsk',
@@ -140,22 +160,106 @@ function codexCommand(request: SessionRequest, directory: string): Command {
   return { command: codexPath || 'codex', args, outputFile };
 }
 
-export function runSession(request: SessionRequest): Promise<string> {
+type Pending = {
+  resolve(output: string): void;
+  reject(error: Error): void;
+  timer: NodeJS.Timeout;
+};
+
+function claudeConversation(request: SessionRequest): Conversation {
+  const { command, args } = claudeCommand(request);
+  let child: ReturnType<typeof spawnCommand> | null = null;
+  let pending: Pending | null = null;
+  let failure: Error | null = request.signal.aborted ? new Error('Annulée.') : null;
+  let buffer = '';
+  let stderr = '';
+
+  const settle = (error: Error | null, output = '') => {
+    const current = pending;
+    if (!current) return;
+    pending = null;
+    clearTimeout(current.timer);
+    if (error) current.reject(error);
+    else current.resolve(output);
+  };
+  const fail = (error: Error) => {
+    failure ??= error;
+    settle(failure);
+    request.signal.removeEventListener('abort', abort);
+    child?.kill('SIGTERM');
+  };
+  const abort = () => fail(new Error('Annulée.'));
+  const handle = (line: string) => {
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    if (event.type !== 'result') return;
+    if (event.is_error === true || event.subtype !== 'success') settle(new Error(`Session claude en erreur : ${String(event.result ?? event.subtype ?? '').trim().slice(0, 600)}`));
+    else settle(null, typeof event.result === 'string' ? event.result : '');
+  };
+  const start = () => {
+    const worker = spawnCommand(command, args, request, workDirectory());
+    child = worker;
+    request.signal.addEventListener('abort', abort, { once: true });
+    worker.stdout.on('data', (chunk) => {
+      buffer += chunk.toString();
+      for (let index = buffer.indexOf('\n'); index >= 0; index = buffer.indexOf('\n')) {
+        const line = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 1);
+        if (line) handle(line);
+      }
+      if (buffer.length > MAX_OUTPUT) buffer = '';
+    });
+    worker.stderr.on('data', (chunk) => {
+      stderr = `${stderr}${chunk.toString()}`.slice(-4000);
+    });
+    worker.on('error', (error) => fail(new Error(`Impossible de lancer claude : ${error.message}`)));
+    worker.on('close', (code) => {
+      request.signal.removeEventListener('abort', abort);
+      failure ??= new Error(`Session claude terminée${code ? ` en erreur (code ${code})` : ''} : ${stderr.trim().slice(-600) || 'aucune réponse'}`);
+      settle(failure);
+    });
+    worker.stdin.on('error', () => undefined);
+    return worker;
+  };
+
+  return {
+    send(text) {
+      if (failure) return Promise.reject(failure);
+      if (pending) return Promise.reject(new Error('Un message est déjà en attente de réponse dans cette session.'));
+      const worker = child ?? start();
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => fail(new Error('Délai dépassé pour cette session IA.')), turnTimeout(request));
+        pending = { resolve, reject, timer };
+        worker.stdin.write(`${JSON.stringify({ type: 'user', message: { role: 'user', content: text } })}\n`);
+      });
+    },
+    close() {
+      failure ??= new Error('Session fermée.');
+      settle(failure);
+      request.signal.removeEventListener('abort', abort);
+      if (!child || child.exitCode !== null) return;
+      const worker = child;
+      worker.stdin.end();
+      setTimeout(() => {
+        if (worker.exitCode === null) worker.kill('SIGTERM');
+      }, 5000).unref();
+    },
+  };
+}
+
+function runCodexTurn(request: SessionRequest, input: string): Promise<string> {
   const directory = workDirectory();
-  const { command, args, outputFile } = request.provider === 'claude' ? claudeCommand(request) : codexCommand(request, directory);
-  const input = request.provider === 'claude' ? request.user : `${request.system}\n\n---\n\n${request.user}`;
+  const { command, args, outputFile } = codexCommand(request, directory);
   return new Promise((resolve, reject) => {
     if (request.signal.aborted) {
       reject(new Error('Annulée.'));
       return;
     }
-    const child = spawn(command, args, {
-      cwd: directory,
-      env: request.environment,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-      shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(command),
-    });
+    const child = spawnCommand(command, args, request, directory);
     let stdout = '';
     let stderr = '';
     let settled = false;
@@ -175,7 +279,7 @@ export function runSession(request: SessionRequest): Promise<string> {
     const timer = setTimeout(() => {
       child.kill('SIGTERM');
       finish(new Error('Délai dépassé pour cette session IA.'));
-    }, request.mode === 'path' ? PATH_TIMEOUT_MS : INLINE_TIMEOUT_MS);
+    }, turnTimeout(request));
     request.signal.addEventListener('abort', abort, { once: true });
     child.stdout.on('data', (chunk) => {
       if (stdout.length < MAX_OUTPUT) stdout += chunk.toString();
@@ -183,10 +287,10 @@ export function runSession(request: SessionRequest): Promise<string> {
     child.stderr.on('data', (chunk) => {
       stderr = `${stderr}${chunk.toString()}`.slice(-4000);
     });
-    child.on('error', (error) => finish(new Error(`Impossible de lancer ${request.provider} : ${error.message}`)));
+    child.on('error', (error) => finish(new Error(`Impossible de lancer codex : ${error.message}`)));
     child.on('close', (code) => {
       if (code !== 0) {
-        finish(new Error(`Session ${request.provider} terminée en erreur (code ${code}) : ${(stderr || stdout).trim().slice(-600)}`));
+        finish(new Error(`Session codex terminée en erreur (code ${code}) : ${(stderr || stdout).trim().slice(-600)}`));
         return;
       }
       let output = stdout;
@@ -196,4 +300,34 @@ export function runSession(request: SessionRequest): Promise<string> {
     child.stdin.on('error', () => undefined);
     child.stdin.end(input);
   });
+}
+
+export function codexTranscript(system: string, turns: { user: string; assistant?: string }[]): string {
+  const parts = [system, '---', turns[0]?.user ?? ''];
+  for (let index = 1; index < turns.length; index += 1) {
+    parts.push(`=== Ta réponse ===\n${turns[index - 1].assistant ?? ''}`, `=== Nouveau message ===\n${turns[index].user}`);
+  }
+  if (turns.length > 1) parts.push('Réponds uniquement au dernier message, en tenant compte de toute la conversation ci-dessus.');
+  return parts.join('\n\n');
+}
+
+function codexConversation(request: SessionRequest): Conversation {
+  const turns: { user: string; assistant?: string }[] = [];
+  let closed = false;
+  return {
+    async send(text) {
+      if (closed) throw new Error('Session fermée.');
+      turns.push({ user: text });
+      const output = await runCodexTurn(request, codexTranscript(request.system, turns));
+      turns[turns.length - 1].assistant = output;
+      return output;
+    },
+    close() {
+      closed = true;
+    },
+  };
+}
+
+export function openSession(request: SessionRequest): Conversation {
+  return request.provider === 'claude' ? claudeConversation(request) : codexConversation(request);
 }

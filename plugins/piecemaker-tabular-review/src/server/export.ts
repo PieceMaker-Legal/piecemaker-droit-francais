@@ -36,7 +36,8 @@ function rowStatusText(row: ReviewRow): string {
 export function cellContent(review: Review, row: ReviewRow, columnIndex: number): CellContent {
   const cell: Cell | undefined = review.cells[row.id]?.[String(columnIndex)];
   if (!cell) return { flag: null, summary: [rowStatusText(row) || '—'], reasoning: [] };
-  return { flag: cell.flag, summary: markdownToLines(cell.summary), reasoning: markdownToLines(cell.reasoning) };
+  const citations = (cell.citations ?? []).map((citation, index) => `[${index + 1}] « ${citation.quote} » (${citation.document})${citation.verified ? '' : ' — extrait non retrouvé dans la source'}`);
+  return { flag: cell.flag, summary: markdownToLines(cell.summary), reasoning: [...markdownToLines(cell.reasoning), ...citations] };
 }
 
 function metaLines(review: Review): string[] {

@@ -84,6 +84,15 @@ export const PLUGIN_STYLES = `
 .ptr-table td.ptr-cell[aria-selected=true]{box-shadow:inset 0 0 0 2px var(--ptr-accent)}
 .ptr-cell-content{display:flex;gap:6px;max-height:9.5em;overflow:hidden}
 .ptr-cell-content .ptr-md{min-width:0}
+.ptr-cites{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;padding-left:16px}
+.ptr-cite{font-size:11px;line-height:1.4;padding:0 4px;border-radius:4px;border:1px solid var(--ptr-border);color:var(--ptr-accent);text-decoration:none;background:var(--ptr-surface)}
+.ptr-cite:hover{background:var(--ptr-soft)}
+.ptr-cite-ko{color:#b45309;border-color:#f59e0b}
+.ptr-citation-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.ptr-citation-quote{font-style:italic;color:inherit}
+blockquote.ptr-citation-quote{margin:8px 0;padding-left:8px;border-left:3px solid #f59e0b}
+.ptr-source-text{margin-top:8px;white-space:pre-wrap;word-break:break-word;font-family:Georgia,serif;font-size:13px;line-height:1.55;max-height:60vh;overflow:auto;border:1px solid var(--ptr-border);border-radius:8px;padding:10px 12px}
+.ptr-source-text mark{background:#fde68a;color:#111827;border-radius:2px}
 .ptr-md p{margin:0 0 3px}
 .ptr-md ul{margin:0 0 3px;padding-left:16px}
 .ptr-md code{font-size:12px}

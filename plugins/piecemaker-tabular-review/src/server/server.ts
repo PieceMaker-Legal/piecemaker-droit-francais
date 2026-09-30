@@ -4,6 +4,7 @@ import http from 'node:http';
 import type { CreateReviewRequest } from '../shared.js';
 import { emptyColumns } from '../shared.js';
 import { listMarkdownDocuments } from './documents.js';
+import { citationSource } from './citations.js';
 import { exportReview } from './export.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
 import { cancelResearch, createResearchReview, legifranceConfigured, researchPage, researchState, researchText, startResearch, stopAllResearch } from './research.js';
@@ -133,6 +134,10 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
     const project = assertProject(url.searchParams.get('project'));
     const file = url.searchParams.get('file') ?? '';
     return reviewDetail(project, file, isRunning(project, file));
+  }
+  if (method === 'GET' && pathname === '/reviews/citation') {
+    const project = assertProject(url.searchParams.get('project'));
+    return citationSource(project, url.searchParams.get('file') ?? '', url.searchParams.get('row') ?? '', Number(url.searchParams.get('column')), Number(url.searchParams.get('citation')));
   }
   if (method === 'POST' && pathname === '/reviews') return createAndLaunch(body);
   if (method === 'POST' && pathname === '/reviews/retry') return retry(body);

@@ -1,13 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { Review, ReviewRow } from '../shared.js';
-import { emptyColumns } from '../shared.js';
-import { reviewDirectory } from './paths.js';
+import type { Cell, Review, ReviewColumn, ReviewRow } from '../shared.js';
+import { emptyColumns, MAX_CITATION_CORRECTIONS } from '../shared.js';
+import type { CitationDocument } from './citations.js';
+import { citationProblems, correctionPrompt, verifyCells } from './citations.js';
+import { documentPath, reviewDirectory } from './paths.js';
 import { missingCell, parseCells, reviewNote, systemPrompt, userPrompt } from './prompt.js';
 import type { PromptDocument } from './prompt.js';
 import { readReview, reviewKey, updateReview } from './reviews.js';
-import { runSession } from './sessions.js';
+import type { Conversation } from './sessions.js';
+import { openSession } from './sessions.js';
 
 export const INLINE_CHARACTER_LIMIT = 150_000;
 
@@ -36,15 +39,41 @@ export function rowMode(row: ReviewRow): 'inline' | 'path' {
   return row.documents.reduce((total, document) => total + document.chars, 0) <= INLINE_CHARACTER_LIMIT ? 'inline' : 'path';
 }
 
-function promptDocuments(project: string, row: ReviewRow, mode: 'inline' | 'path'): PromptDocument[] {
-  return row.documents.map((document) => {
-    const absolute = path.join(reviewDirectory(project), ...document.copy.split('/'));
-    return {
-      name: document.source,
-      path: absolute,
-      content: mode === 'inline' ? fs.readFileSync(absolute, 'utf8') : null,
-    };
-  });
+function citationDocuments(project: string, row: ReviewRow): CitationDocument[] {
+  return row.documents.map((document) => ({ name: document.source, text: fs.readFileSync(documentPath(project, document.copy), 'utf8') }));
+}
+
+function promptDocuments(documents: CitationDocument[], project: string, row: ReviewRow, mode: 'inline' | 'path'): PromptDocument[] {
+  return row.documents.map((document, index) => ({
+    name: document.source,
+    path: documentPath(project, document.copy),
+    content: mode === 'inline' ? documents[index].text : null,
+  }));
+}
+
+async function askWithCorrections(job: Job, rowId: string, session: Conversation, first: string, columns: ReviewColumn[], documents: CitationDocument[]): Promise<{ cells: Map<number, Cell>; corrections: number }> {
+  const fallback = documents.length === 1 ? documents[0].name : '';
+  const output = await session.send(first);
+  const cells = verifyCells(parseCells(output, columns, fallback), documents);
+  if (!cells.size) throw new Error(`Réponse IA inexploitable : ${output.trim().slice(0, 400) || 'réponse vide'}`);
+  let corrections = 0;
+  for (let problems = citationProblems(cells, columns); problems.length && corrections < MAX_CITATION_CORRECTIONS; problems = citationProblems(cells, columns)) {
+    corrections += 1;
+    await updateReview(job.project, job.file, (current) => {
+      const target = current.rows.find((entry) => entry.id === rowId);
+      if (target) target.corrections = corrections;
+    });
+    let answer: string;
+    try {
+      answer = await session.send(correctionPrompt(problems, corrections, MAX_CITATION_CORRECTIONS));
+    } catch (error) {
+      if (job.controller.signal.aborted) throw error;
+      break;
+    }
+    const corrected = verifyCells(parseCells(answer, problems.map((problem) => problem.column), fallback), documents);
+    for (const [index, cell] of corrected) cells.set(index, cell);
+  }
+  return { cells, corrections };
 }
 
 async function runRow(job: Job, task: RowTask): Promise<void> {
@@ -65,28 +94,29 @@ async function runRow(job: Job, task: RowTask): Promise<void> {
   await updateReview(job.project, job.file, (current) => {
     const target = current.rows.find((entry) => entry.id === rowId);
     if (!target) return;
-    Object.assign(target, { status: 'running', mode, startedAt: new Date().toISOString(), finishedAt: undefined, error: undefined });
+    Object.assign(target, { status: 'running', mode, startedAt: new Date().toISOString(), finishedAt: undefined, error: undefined, corrections: undefined });
   });
+  let session: Conversation | null = null;
   try {
-    const output = await runSession({
+    const documents = citationDocuments(job.project, row);
+    session = openSession({
       provider: review.provider,
       model: review.model,
       mode,
       system: systemPrompt(mode),
-      user: userPrompt(row.label, promptDocuments(job.project, row, mode), columns, reviewNote(review)),
       readableDirectory: path.join(reviewDirectory(job.project), 'docs'),
       environment: job.environment,
       signal: job.controller.signal,
     });
-    const parsed = parseCells(output, columns);
-    if (!parsed.size) throw new Error(`Réponse IA inexploitable : ${output.trim().slice(0, 400) || 'réponse vide'}`);
+    const first = userPrompt(row.label, promptDocuments(documents, job.project, row, mode), columns, reviewNote(review));
+    const { cells: parsed, corrections } = await askWithCorrections(job, rowId, session, first, columns, documents);
     await updateReview(job.project, job.file, (current) => {
       const target = current.rows.find((entry) => entry.id === rowId);
       if (!target) return;
       const cells = { ...current.cells[rowId] };
       for (const column of columns) cells[String(column.index)] = parsed.get(column.index) ?? missingCell();
       current.cells[rowId] = cells;
-      Object.assign(target, { status: 'done', finishedAt: new Date().toISOString(), error: undefined });
+      Object.assign(target, { status: 'done', finishedAt: new Date().toISOString(), error: undefined, corrections: corrections || undefined });
     });
   } catch (error) {
     const cancelled = job.controller.signal.aborted;
@@ -99,6 +129,8 @@ async function runRow(job: Job, task: RowTask): Promise<void> {
         error: cancelled ? undefined : (error instanceof Error ? error.message : String(error)),
       });
     });
+  } finally {
+    session?.close();
   }
 }
 
