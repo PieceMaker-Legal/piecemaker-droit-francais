@@ -1,8 +1,9 @@
 /**
- * Client HTTP de la conversion PieceMaker.
+ * Client HTTP de la conversion PieceMaker et des fiches du dossier.
  *
  * La conversion et l'analyse PII n'ont qu'un seul point d'entrée : la route
- * `knowledge/scan` du serveur applicatif. Le CLI en est un client, sur la
+ * `knowledge/scan` du serveur applicatif. Les fiches (personnes, sociétés…)
+ * passent de même par le service `knowledge`. Le CLI en est un client, sur la
  * boucle locale, via le montage `/api/piecemaker/local` placé avant
  * l'authentification. Le serveur applicatif écoute en clair sur la boucle
  * locale : celui qui tourne déjà (application de bureau comprise, annoncé par
@@ -130,4 +131,20 @@ export function startLocalScan({ folder, files }) {
 export function readLocalScanJob({ folder, id }) {
   const query = new URLSearchParams({ folder, ...(id ? { id } : {}) });
   return requestJson({ method: 'GET', path: `${LOCAL_BASE}/scan/job?${query}` });
+}
+
+export function searchLocalEntities({ folder, query, kind, limit }) {
+  return requestJson({
+    method: 'POST',
+    path: `${LOCAL_BASE}/entities/search`,
+    body: { folder, ...(query ? { query } : {}), ...(kind ? { kind } : {}), ...(limit ? { limit } : {}) },
+  });
+}
+
+export function updateLocalEntity({ folder, target, fields }) {
+  return requestJson({
+    method: 'POST',
+    path: `${LOCAL_BASE}/entities/update`,
+    body: { folder, target, fields },
+  });
 }

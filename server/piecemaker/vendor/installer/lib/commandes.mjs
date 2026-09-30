@@ -7,4 +7,4 @@
  * est importable sans effet de bord.
  */
 
-export const COMMANDS = new Set(['conversion', 'install', 'doctor', 'check', 'update']);
+export const COMMANDS = new Set(['conversion', 'personne', 'install', 'doctor', 'check', 'update']);

@@ -9,6 +9,7 @@
  * Usage:
  *   piecemaker                 menu interactif
  *   piecemaker conversion      convertit et pseudonymise les pièces manquantes
+ *   piecemaker personne [nom]  cherche une personne du dossier et affiche sa fiche
  *   piecemaker install         ouvre le menu des composants
  *   piecemaker doctor          diagnostic seul
  *   piecemaker update          met à jour le dépôt et les dépendances
@@ -31,7 +32,15 @@ import { GIT_REPO_ROOT, HOME_DIR, REPO_ROOT, commandExists, findPython } from '.
 import { COMMANDS } from '../lib/commandes.mjs';
 import { loadConfig, readEnv, markStep, loadState, CONFIG_FILE } from '../lib/state.mjs';
 import { scheduleStepResume, selectStepsToResume } from '../lib/resume-steps.mjs';
-import { adoptRunningServerPort, appServerPort, localServerReachable, readLocalScanJob, startLocalScan } from '../lib/conversion-client.mjs';
+import {
+  adoptRunningServerPort,
+  appServerPort,
+  localServerReachable,
+  readLocalScanJob,
+  searchLocalEntities,
+  startLocalScan,
+  updateLocalEntity,
+} from '../lib/conversion-client.mjs';
 import { checkForUpdate, updateRepository } from '../lib/service.mjs';
 
 const require = createRequire(import.meta.url);
@@ -123,6 +132,10 @@ function parseArgs(argv) {
     check: false,
     dryRun: false,
     conversionDocuments: [],
+    entityTerms: [],
+    entityKind: null,
+    entityFields: null,
+    entityLimit: null,
     force: false,
     json: false,
     resumeSteps: null,
@@ -134,6 +147,10 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (!arg.startsWith('-') && !flags.command && COMMANDS.has(arg)) flags.command = arg;
     else if (!arg.startsWith('-') && flags.command === 'conversion') flags.conversionDocuments.push(arg);
+    else if (!arg.startsWith('-') && flags.command === 'personne') flags.entityTerms.push(arg);
+    else if (arg === '--type') flags.entityKind = argv[++i];
+    else if (arg === '--champs') flags.entityFields = argv[++i];
+    else if (arg === '--limite') flags.entityLimit = argv[++i];
     else if (arg === '--all') flags.all = true;
     else if (arg === '--case') flags.caseTarget = argv[++i];
     else if (arg === '--check') flags.check = true;
@@ -300,14 +317,18 @@ function printHelp() {
   write(`  ${c.bold('piecemaker')} — PieceMaker local`);
   blank();
   write('  conversion [pièce…] convertit et pseudonymise les pièces manquantes ou indiquées');
+  write('  personne [nom|code] cherche une personne du dossier et affiche sa fiche complète');
+  write('  personne <nom|code> --champs <json>  ajoute ou modifie des champs de la fiche');
   write('  install         ouvre le menu d’installation/réparation');
   write('  doctor, check   diagnostic seul, n’installe rien');
   write('  update          met à jour PieceMaker');
   blank();
   write('  --all           installe tout sans menu');
-  write('  --case <chemin> cible un dossier enregistré (conversion)');
+  write('  --case <chemin> cible un dossier enregistré (conversion, personne)');
   write('  --force         retraite les pièces');
-  write('  --json          produit une sortie JSON sans décor (conversion)');
+  write('  --json          produit une sortie JSON sans décor (conversion, personne)');
+  write('  --type <type>   limite la recherche à un type : person, company, address… (personne)');
+  write('  --limite <n>    nombre maximal de fiches rendues, 50 au plus (personne)');
   write('  --check         diagnostic seul, n\'installe rien');
   write('  --step <id>     rejoue une seule étape');
   write('  --resume-steps <ids> rejoue les étapes indiquées sans interaction (usage interne)');
@@ -421,16 +442,16 @@ async function waitForConversionJob({ folder, id }, { json = false } = {}) {
   return job;
 }
 
-async function ensureServerForConversion({ json = false } = {}) {
+async function ensureApplicationServer({ json = false, command = 'conversion' } = {}) {
   await adoptRunningServerPort();
   if (await localServerReachable()) return;
   const servicesModule = path.join(APP_CLI_LIB, 'services.mjs');
   if (!fs.existsSync(servicesModule)) {
-    throw new Error(`Le serveur applicatif doit être démarré par la commande « piecemaker » avant la conversion (port ${appServerPort()}).`);
+    throw new Error(`Le serveur applicatif doit être démarré par la commande « piecemaker » avant « ${command} » (port ${appServerPort()}).`);
   }
   const { appServerReachable, startApplication } = await import(pathToFileURL(servicesModule).href);
   if (await appServerReachable()) return;
-  if (!json) log.info(`Serveur applicatif arrêté : démarrage sur le port ${appServerPort()} avant conversion.`);
+  if (!json) log.info(`Serveur applicatif arrêté : démarrage sur le port ${appServerPort()} avant « ${command} ».`);
   const { resolveNodeRuntime } = await import(pathToFileURL(path.join(APP_CLI_LIB, 'node-runtime.mjs')).href);
   const outcome = await startApplication(resolveNodeRuntime(), {
     step: (text) => { if (!json) log.info(text); },
@@ -444,11 +465,7 @@ async function runConversionCommand(flags) {
   if (!fs.existsSync(ORIGINALS_PIPELINE_MODULE)) {
     throw new Error('Le module de conversion PieceMaker est introuvable.');
   }
-  const { locateProjectCase } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
-  const located = locateProjectCase(flags.caseTarget || process.cwd());
-  if (!located) {
-    throw new Error('Lancez la commande depuis un dossier juridique enregistré ou passez --case <chemin>.');
-  }
+  const located = locateCaseOrFail(flags);
 
   const { listOriginals } = require(ORIGINALS_PIPELINE_MODULE);
   const originals = await listOriginals(located.caseRoot);
@@ -466,7 +483,7 @@ async function runConversionCommand(flags) {
       : 'Conversion et pseudonymisation des pièces qui ne sont pas encore prêtes.');
   }
 
-  await ensureServerForConversion({ json: flags.json });
+  await ensureApplicationServer({ json: flags.json });
   const started = await startLocalScan({ folder: located.caseRoot, files: requestedFiles });
   const job = await waitForConversionJob(
     { folder: located.caseRoot, id: started.job?.id },
@@ -478,8 +495,86 @@ async function runConversionCommand(flags) {
   return 0;
 }
 
+function locateCaseOrFail(flags) {
+  const { locateProjectCase } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
+  const located = locateProjectCase(flags.caseTarget || process.cwd());
+  if (!located) {
+    throw new Error('Lancez la commande depuis un dossier juridique enregistré ou passez --case <chemin>.');
+  }
+  return located;
+}
+
+function parseEntityFields(raw) {
+  let fields = null;
+  try {
+    fields = JSON.parse(raw);
+  } catch {
+    fields = null;
+  }
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+    throw new Error('--champs attend un objet JSON, par exemple {"profession":"Médecin"}.');
+  }
+  return fields;
+}
+
+function entityHeading(entity) {
+  return `${entity.code || entity.id} — ${entity.label || 'sans nom'} (${entity.kind})`;
+}
+
+function printEntity(entity, indent = '  ') {
+  write(`${indent}${c.bold(entityHeading(entity))}`);
+  if (entity.aliases?.length) write(`${indent}  variantes : ${entity.aliases.join(', ')}`);
+  for (const [name, value] of Object.entries(entity.data || {})) {
+    if (name === 'code' || value === null || value === undefined || value === '') continue;
+    write(`${indent}  ${name} : ${typeof value === 'string' ? value : JSON.stringify(value)}`);
+  }
+  for (const link of entity.relations || []) {
+    write(`${indent}  ${link.direction === 'incoming' ? '←' : '→'} ${link.relation} : ${entityHeading(link.entity)}`);
+  }
+}
+
+/**
+ * `piecemaker personne` : sans `--champs`, cherche des fiches du dossier (tous
+ * les mots forment la recherche, aucune recherche liste le dossier) ; avec
+ * `--champs`, les mots désignent la fiche à compléter. Les pièces qui
+ * mentionnent la personne ne sont jamais incluses.
+ */
+async function runPersonneCommand(flags) {
+  const located = locateCaseOrFail(flags);
+  const words = flags.entityTerms.join(' ').trim();
+  const fields = flags.entityFields === null ? null : parseEntityFields(flags.entityFields);
+  if (fields && !words) throw new Error('Indiquez la personne à modifier (code ou nom) avant --champs.');
+  const limit = flags.entityLimit === null ? undefined : Number.parseInt(flags.entityLimit, 10);
+  if (limit !== undefined && !(limit > 0)) throw new Error('--limite attend un nombre entier positif.');
+
+  await ensureApplicationServer({ json: flags.json, command: 'personne' });
+  const result = fields
+    ? await updateLocalEntity({ folder: located.caseRoot, target: words, fields })
+    : await searchLocalEntities({ folder: located.caseRoot, query: words, kind: flags.entityKind || undefined, limit });
+  if (flags.json) {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return 0;
+  }
+  if (fields) {
+    log.ok(`Fiche mise à jour (${result.fields.join(', ')}) :`);
+    printEntity(result.entity);
+    return 0;
+  }
+  if (!result.matches.length) {
+    log.warn(words ? `Aucune fiche ne correspond à « ${words} ».` : 'Aucune fiche dans ce dossier.');
+    return 0;
+  }
+  for (const entity of result.matches) {
+    printEntity(entity);
+    blank();
+  }
+  if (result.truncated) log.info('Liste tronquée : affinez la recherche ou augmentez --limite.');
+  return 0;
+}
+
 async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
   if (command === 'conversion') return runConversionCommand(flags);
+  if (command === 'personne') return runPersonneCommand(flags);
   if (command === 'update') {
     const pending = knownUpdate ?? checkForUpdate();
     if (!pending.available) {
@@ -602,14 +697,20 @@ async function main() {
     return 1;
   }
 
-  if (flags.command !== 'conversion' && (flags.caseTarget || flags.json)) {
+  const casesCommand = flags.command === 'conversion' || flags.command === 'personne';
+  if (!casesCommand && (flags.caseTarget || flags.json)) {
     banner();
-    log.error('Les options --case et --json sont réservées à la commande conversion.');
+    log.error('Les options --case et --json sont réservées aux commandes conversion et personne.');
+    return 1;
+  }
+  if (flags.command !== 'personne' && (flags.entityKind || flags.entityFields !== null || flags.entityLimit !== null)) {
+    banner();
+    log.error('Les options --type, --limite et --champs sont réservées à la commande personne.');
     return 1;
   }
 
   // Les sorties JSON sont directement consommées par les assistants.
-  if (flags.command === 'conversion' && flags.json) {
+  if (casesCommand && flags.json) {
     return runOperationalCommand(flags.command, null, flags);
   }
 

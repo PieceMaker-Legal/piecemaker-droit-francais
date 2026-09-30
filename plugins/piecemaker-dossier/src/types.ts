@@ -78,6 +78,7 @@ export type KnowledgeQueryInput = {
   query?: string;
   depth?: number;
   limit?: number;
+  excludeDocuments?: boolean;
 };
 
 export type KnowledgeQueryResult = {
@@ -97,6 +98,7 @@ export type KnowledgeUpdateOperation =
   | { op: 'upsertMapping'; mapping: KnowledgeMappingInput }
   | { op: 'deleteMapping'; mapping: Pick<KnowledgeMappingInput, 'nodeId' | 'real'> }
   | { op: 'removePartyDesignation'; nodeId: string }
+  | { op: 'mergeNodeData'; nodeId: string; data: JsonData }
   | { op: 'deleteNode'; nodeId: string }
   | { op: 'renameNode'; rename: { fromNodeId: string; toNodeId: string } };
 

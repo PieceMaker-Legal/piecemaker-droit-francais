@@ -108,7 +108,6 @@ const nextFreeCode = (code: string, used: Set<string>): string => {
   while (used.has(`${prefix}_${String(number).padStart(width, '0')}`)) number += 1;
   return `${prefix}_${String(number).padStart(width, '0')}`;
 };
-const searchPattern = (value: string): string => `%${searchable([value]).replace(/[\\%_]/g, '\\$&')}%`;
 const toNode = (row: NodeRow): KnowledgeNode => ({ id: row.id, projectId: row.project_id, kind: row.kind, label: row.label, aliases: parseJson<string[]>(row.aliases_json, []), data: parseJson<JsonData>(row.data_json, {}), createdAt: row.created_at, updatedAt: row.updated_at });
 const withoutInstitutionalAliases = (node: KnowledgeNode): KnowledgeNode => ({ ...node, aliases: node.aliases.filter((alias) => !isInstitutionalEntity(alias)) });
 const toMapping = (row: MappingRow): KnowledgeMapping => ({ projectId: row.project_id, nodeId: row.node_id, real: row.real_value, masked: row.masked_value, data: parseJson<JsonData>(row.data_json, {}) });
@@ -138,6 +137,7 @@ export class KnowledgeStore {
   private readonly upsertMapping;
   private readonly deleteMapping;
   private readonly removePartyDesignation;
+  private readonly mergeNodeData;
   private readonly deleteNode;
   private readonly findCodeOwner;
 
@@ -146,7 +146,7 @@ export class KnowledgeStore {
     if (typeof databaseSource === 'string') fs.mkdirSync(path.dirname(databaseSource), { recursive: true, mode: 0o700 });
     this.database = typeof databaseSource === 'string' ? new Database(databaseSource) : databaseSource;
     initializeKnowledgeSchema(this.database);
-    this.findRoots = this.database.prepare(`SELECT DISTINCT n.* FROM piecemaker_nodes n LEFT JOIN piecemaker_mappings m ON m.project_id=n.project_id AND m.node_id=n.id WHERE n.project_id=@projectId AND n.id NOT LIKE 'system:%' AND (@kind IS NULL OR n.kind=@kind) AND (@pattern='' OR n.search_text LIKE @pattern ESCAPE '\\' OR m.search_text LIKE @pattern ESCAPE '\\') ORDER BY CASE WHEN n.search_text=@exact THEN 0 ELSE 1 END,n.label,n.id LIMIT @limit`);
+    this.findRoots = this.database.prepare(`SELECT DISTINCT n.* FROM piecemaker_nodes n LEFT JOIN piecemaker_mappings m ON m.project_id=n.project_id AND m.node_id=n.id WHERE n.project_id=@projectId AND n.id NOT LIKE 'system:%' AND (@kind IS NULL OR n.kind=@kind) AND (@excludeDocuments=0 OR n.kind<>'document') AND (@needle='' OR instr(n.search_text, @needle)>0 OR instr(m.search_text, @needle)>0) ORDER BY CASE WHEN n.search_text=@exact THEN 0 ELSE 1 END,n.label,n.id LIMIT @limit`);
     this.findProject = this.database.prepare('SELECT project_id FROM projects WHERE project_id=@value OR project_path=@value LIMIT 1');
     this.upsertNode = this.database.prepare(`INSERT INTO piecemaker_nodes(project_id,id,kind,label,search_text,aliases_json,data_json,origin,created_at,updated_at) VALUES(@projectId,@id,@kind,@label,@searchText,@aliases,@data,@origin,@at,@at) ON CONFLICT(project_id,id) DO UPDATE SET kind=excluded.kind,label=excluded.label,search_text=excluded.search_text,aliases_json=excluded.aliases_json,data_json=excluded.data_json,origin=excluded.origin,updated_at=excluded.updated_at`);
     this.upsertLink = this.database.prepare(`INSERT INTO piecemaker_links(project_id,from_node_id,to_node_id,relation,data_json,origin,created_at,updated_at) VALUES(@projectId,@fromNodeId,@toNodeId,@relation,@data,@origin,@at,@at) ON CONFLICT(project_id,from_node_id,to_node_id,relation) DO UPDATE SET data_json=excluded.data_json,origin=excluded.origin,updated_at=excluded.updated_at`);
@@ -154,6 +154,7 @@ export class KnowledgeStore {
     this.upsertMapping = this.database.prepare(`INSERT INTO piecemaker_mappings(project_id,node_id,real_value,masked_value,search_text,data_json,origin,created_at,updated_at) VALUES(@projectId,@nodeId,@real,@masked,@searchText,@data,@origin,@at,@at) ON CONFLICT(project_id,node_id,real_value) DO UPDATE SET masked_value=excluded.masked_value,search_text=excluded.search_text,data_json=excluded.data_json,origin=excluded.origin,updated_at=excluded.updated_at`);
     this.deleteMapping = this.database.prepare('DELETE FROM piecemaker_mappings WHERE project_id=@projectId AND node_id=@nodeId AND real_value=@real');
     this.removePartyDesignation = this.database.prepare("UPDATE piecemaker_nodes SET data_json=json_remove(data_json, '$.partySide', '$.position'), updated_at=@at WHERE project_id=@projectId AND id=@nodeId");
+    this.mergeNodeData = this.database.prepare('UPDATE piecemaker_nodes SET data_json=json_patch(data_json, @data), updated_at=@at WHERE project_id=@projectId AND id=@nodeId');
     this.deleteNode = this.database.prepare('DELETE FROM piecemaker_nodes WHERE project_id=@projectId AND id=@nodeId');
     this.findCodeOwner = this.database.prepare(`SELECT project_id FROM piecemaker_mappings WHERE masked_value=@code AND project_id<>@projectId
       UNION SELECT project_id FROM piecemaker_nodes WHERE id='entity:'||@code AND project_id<>@projectId LIMIT 1`);
@@ -169,7 +170,7 @@ export class KnowledgeStore {
     const depth = Math.max(0, Math.min(12, Number.isFinite(input.depth) ? Math.floor(input.depth as number) : 3));
     const limit = Math.max(1, Math.min(50, Number.isFinite(input.limit) ? Math.floor(input.limit as number) : 20));
     const kind = input.kind === undefined ? null : kindValue(input.kind);
-    const roots = this.findRoots.all({ projectId, kind, pattern: query ? searchPattern(query) : '', exact: searchable([query]), limit }) as NodeRow[];
+    const roots = this.findRoots.all({ projectId, kind, excludeDocuments: input.excludeDocuments ? 1 : 0, needle: query ? searchable([query]) : '', exact: searchable([query]), limit }) as NodeRow[];
     const graph = this.loadGraph(projectId, roots.map((row) => row.id), depth);
     const matches = roots.map((row) => this.assembleNode(row.id, graph, depth, new Set<string>()));
     return { projectId, query, kind, depth, matches, ambiguous: matches.length > 1, truncated: matches.length === limit };
@@ -302,7 +303,7 @@ export class KnowledgeStore {
   }
 
   private validateOperation(operation: KnowledgeUpdateOperation): KnowledgeUpdateOperation {
-    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','upsertMapping','deleteMapping','removePartyDesignation','deleteNode','renameNode'].includes(operation.op)) throw new TypeError('unsupported operation');
+    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','upsertMapping','deleteMapping','removePartyDesignation','mergeNodeData','deleteNode','renameNode'].includes(operation.op)) throw new TypeError('unsupported operation');
     return operation;
   }
 
@@ -348,6 +349,13 @@ export class KnowledgeStore {
     }
     if (operation.op === 'removePartyDesignation') {
       this.removePartyDesignation.run({ projectId, nodeId: requiredText(operation.nodeId, 'nodeId'), at: timestamp });
+      counts.nodes += 1;
+      return;
+    }
+    if (operation.op === 'mergeNodeData') {
+      const nodeId = requiredText(operation.nodeId, 'nodeId');
+      const merged = this.mergeNodeData.run({ projectId, nodeId, data: JSON.stringify(objectValue(operation.data, 'data')), at: timestamp });
+      if (!merged.changes) throw new Error(`node not found: ${nodeId}`);
       counts.nodes += 1;
       return;
     }
