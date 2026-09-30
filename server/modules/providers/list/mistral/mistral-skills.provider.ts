@@ -26,6 +26,12 @@ export class MistralSkillsProvider extends SkillsProvider {
         rootDir: path.join(os.homedir(), '.vibe', 'skills'),
         commandPrefix: '/',
       },
+      // Vibe lit aussi ~/.agents/skills (norme Agent Skills) : le masquage par dossier en dépend.
+      {
+        scope: 'user',
+        rootDir: path.join(os.homedir(), '.agents', 'skills'),
+        commandPrefix: '/',
+      },
     ];
   }
 

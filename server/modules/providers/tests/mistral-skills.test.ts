@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { MistralSkillsProvider } from '@/modules/providers/list/mistral/mistral-skills.provider.js';
 
-test('MistralSkillsProvider liste les skills du projet (.agents, .vibe) et de ~/.vibe', { concurrency: false }, async () => {
+test('MistralSkillsProvider liste les skills du projet (.agents, .vibe) et de ~/.vibe et ~/.agents', { concurrency: false }, async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mistral-skills-'));
   const originalHomedir = os.homedir;
   (os as any).homedir = () => path.join(tempRoot, 'home');
@@ -19,6 +19,7 @@ test('MistralSkillsProvider liste les skills du projet (.agents, .vibe) et de ~/
     await write(path.join(workspacePath, '.agents', 'skills'), 'x', 'projet-agents');
     await write(path.join(workspacePath, '.vibe', 'skills'), 'y', 'projet-vibe');
     await write(path.join(tempRoot, 'home', '.vibe', 'skills'), 'z', 'utilisateur');
+    await write(path.join(tempRoot, 'home', '.agents', 'skills'), 'w', 'utilisateur-agents');
 
     const skills = await new MistralSkillsProvider().listSkills({ workspacePath });
     const byName = new Map(skills.map((skill) => [skill.name, skill]));
@@ -26,6 +27,7 @@ test('MistralSkillsProvider liste les skills du projet (.agents, .vibe) et de ~/
     assert.equal(byName.get('projet-agents')?.command, '/projet-agents');
     assert.equal(byName.get('projet-vibe')?.scope, 'project');
     assert.equal(byName.get('utilisateur')?.scope, 'user');
+    assert.equal(byName.get('utilisateur-agents')?.scope, 'user');
     assert.ok(skills.every((skill) => skill.provider === 'mistral'));
   } finally {
     (os as any).homedir = originalHomedir;

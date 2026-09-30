@@ -73,7 +73,7 @@ export function personalClaudeSkills(userHome: string): PersonalClaudeSkill[] {
   return found;
 }
 
-function installedNames(store: Store, workspacePath: string) {
+export function installedNames(store: Store, workspacePath: string) {
   const names = new Set<string>();
   for (const entry of store.activeSkills(workspacePath)) {
     names.add(entry.name.toLowerCase());
