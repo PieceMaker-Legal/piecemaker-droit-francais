@@ -1,5 +1,5 @@
 import type { ExportFormat, ExportResult, ReviewDetail, ReviewRow } from '../shared.js';
-import { emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
+import { CATEGORY_LABELS, emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, renderMarkdown, toast } from './dom.js';
 import { anonymizationProxyOrigin } from './host.js';
@@ -54,7 +54,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
           <div><div class="ptr-label">Justification</div><div class="ptr-md">${cell.reasoning ? renderMarkdown(cell.reasoning) : '<p class="ptr-muted">—</p>'}</div></div>`
           : `<div class="ptr-muted">${row.status === 'done' ? 'Aucune réponse.' : 'Pas encore de réponse pour cette cellule.'}</div>${rowStatus(row)}`}
         <div><button type="button" class="ptr-button" data-run-cell>${isCellFilled(cell) ? 'Relancer cette cellule' : 'Lancer la session pour cette cellule'}</button></div>
-        <div><div class="ptr-label">Documents</div><ul class="ptr-summary-list">${row.documents.map((document) => `<li title="${escapeHtml(document.copy)}">${escapeHtml(document.source)}</li>`).join('')}</ul></div>
+        <div><div class="ptr-label">Documents</div><ul class="ptr-summary-list">${row.documents.map((document) => `<li title="${escapeHtml(document.copy)}">${/^https:\/\//.test(document.source) ? `<a href="${escapeHtml(document.source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(document.source.replace(/^https:\/\/www\.legifrance\.gouv\.fr\/\w+\/id\//, 'Légifrance · '))}</a>` : escapeHtml(document.source)}</li>`).join('')}</ul></div>
       </aside>`;
   }
 
@@ -72,7 +72,9 @@ export function createReviewView(app: App, project: string, file: string, onBack
         <div style="min-width:0">
           <div class="ptr-review-title">${escapeHtml(review.title)}</div>
           <div class="ptr-small ptr-muted">${escapeHtml(review.templateName)} · ${escapeHtml(app.projectName(project))} · ${escapeHtml(review.provider)} ${escapeHtml(review.model)} · ${escapeHtml(formatDate(review.createdAt))}</div>
+          ${review.research ? `<div class="ptr-small ptr-muted" title="${escapeHtml(review.research.criteria.join('\n'))}">Requête : <code>${escapeHtml(review.research.query)}</code> · ${escapeHtml(review.research.criteria.join(' · '))}</div>` : ''}
         </div>
+        ${review.category === 'recherche-juridique' ? `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS['recherche-juridique'])}</span>` : ''}
         <span class="ptr-chip ptr-chip-${status}">${running ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(status))} · ${done}/${review.rows.length}</span>
         ${running ? `<div class="ptr-progress" aria-hidden="true"><div style="width:${review.rows.length ? Math.round((done / review.rows.length) * 100) : 0}%"></div></div>` : ''}
         <span class="ptr-spacer"></span>
@@ -86,7 +88,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
       <div class="ptr-review-body">
         <div class="ptr-table-wrap">
           <table class="ptr-table">
-            <thead><tr><th scope="col">Document</th>${review.columns.map((column) => `<th scope="col" title="${escapeHtml(column.prompt)}"><div class="ptr-th">${escapeHtml(column.name)}<button type="button" class="ptr-icon-button" data-run-column="${column.index}" aria-label="Lancer les cellules vides de la colonne ${escapeHtml(column.name)}" title="Lancer les cellules vides de cette colonne">▶</button></div></th>`).join('')}</tr></thead>
+            <thead><tr><th scope="col">${review.category === 'recherche-juridique' ? 'Décision' : 'Document'}</th>${review.columns.map((column) => `<th scope="col" title="${escapeHtml(column.prompt)}"><div class="ptr-th">${escapeHtml(column.name)}<button type="button" class="ptr-icon-button" data-run-column="${column.index}" aria-label="Lancer les cellules vides de la colonne ${escapeHtml(column.name)}" title="Lancer les cellules vides de cette colonne">▶</button></div></th>`).join('')}</tr></thead>
             <tbody>${review.rows.map((row) => `
               <tr>
                 <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}</td>

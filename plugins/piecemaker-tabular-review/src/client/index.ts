@@ -6,20 +6,23 @@ import { createHistoryView } from './history.js';
 import { createRpc, loadHostProjects } from './host.js';
 import type { HostProject, PluginApi } from './host.js';
 import { createLaunchView } from './launch.js';
+import { createResearchView } from './research.js';
 import { createReviewView } from './review.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { createTemplatesView } from './templates.js';
 
-type TabId = 'launch' | 'templates' | 'history';
+type TabId = 'launch' | 'research' | 'templates' | 'history';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'launch', label: 'Lancer' },
+  { id: 'research', label: 'Recherche juridique' },
   { id: 'templates', label: 'Modèles' },
   { id: 'history', label: 'Historique' },
 ];
 
 const FACTORIES: Record<TabId, (app: App) => View> = {
   launch: createLaunchView,
+  research: createResearchView,
   templates: createTemplatesView,
   history: createHistoryView,
 };

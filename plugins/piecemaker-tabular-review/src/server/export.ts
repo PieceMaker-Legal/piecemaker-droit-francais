@@ -42,6 +42,7 @@ export function cellContent(review: Review, row: ReviewRow, columnIndex: number)
 function metaLines(review: Review): string[] {
   return [
     `Modèle : ${review.templateName}`,
+    ...(review.research ? [`Requête Légifrance : ${review.research.query}`, `Critères : ${review.research.criteria.join(' · ')}`] : []),
     `Dossier : ${review.projectPath}`,
     `Date : ${new Date(review.createdAt).toLocaleString('fr-FR')}`,
     `IA : ${review.provider} — ${review.model}`,

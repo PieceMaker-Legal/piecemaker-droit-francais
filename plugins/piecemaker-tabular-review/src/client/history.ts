@@ -1,5 +1,5 @@
-import type { ReviewSummary } from '../shared.js';
-import { reviewStatusLabel } from '../shared.js';
+import type { ReviewCategory, ReviewSummary } from '../shared.js';
+import { CATEGORY_LABELS, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { errorMessage, escapeHtml, formatDate } from './dom.js';
 import type { HostProject } from './host.js';
@@ -13,14 +13,17 @@ export function createHistoryView(app: App): View {
   element.innerHTML = `
     <div style="display:flex;align-items:flex-end;gap:8px">
       <label class="ptr-field" style="width:280px"><span class="ptr-label">Dossier</span><select class="ptr-select" data-filter><option value="">Tous les dossiers</option></select></label>
+      <label class="ptr-field" style="width:220px"><span class="ptr-label">Catégorie</span><select class="ptr-select" data-category><option value="">Toutes les catégories</option></select></label>
       <span class="ptr-spacer"></span>
       <button type="button" class="ptr-button" data-refresh>Actualiser</button>
     </div>
     <div data-list><div class="ptr-empty"><span class="ptr-spinner"></span> Chargement…</div></div>`;
   const filter = element.querySelector<HTMLSelectElement>('[data-filter]')!;
+  const categoryFilter = element.querySelector<HTMLSelectElement>('[data-category]')!;
   const list = element.querySelector<HTMLElement>('[data-list]')!;
   let projects: HostProject[] = [];
   let reviews: ReviewSummary[] = [];
+  let visible: ReviewSummary[] = [];
   let timer = 0;
   let request = 0;
   let destroyed = false;
@@ -31,16 +34,26 @@ export function createHistoryView(app: App): View {
     filter.value = projects.some((project) => project.fullPath === current) ? current : ALL;
   }
 
+  function renderCategories() {
+    const current = categoryFilter.value;
+    const present = (Object.keys(CATEGORY_LABELS) as ReviewCategory[]).filter((category) => category === current || reviews.some((review) => review.category === category));
+    categoryFilter.innerHTML = `<option value="${ALL}">Toutes les catégories</option>${present.map((category) => `<option value="${category}">${escapeHtml(CATEGORY_LABELS[category])}</option>`).join('')}`;
+    categoryFilter.value = present.includes(current as ReviewCategory) ? current : ALL;
+  }
+
   function render() {
-    if (!reviews.length) {
+    renderCategories();
+    visible = categoryFilter.value ? reviews.filter((review) => review.category === categoryFilter.value) : reviews;
+    if (!visible.length) {
       list.innerHTML = '<div class="ptr-empty">Aucune tabular review pour ce filtre.</div>';
       return;
     }
-    list.innerHTML = `<div class="ptr-list">${reviews.map((review, index) => `
+    list.innerHTML = `<div class="ptr-list">${visible.map((review, index) => `
       <div class="ptr-list-row" data-index="${index}" role="button" tabindex="0" title="${escapeHtml(review.file)}">
         <span class="ptr-small ptr-muted" style="flex-shrink:0;width:92px;padding-left:6px">${escapeHtml(formatDate(review.createdAt))}</span>
         <strong>${escapeHtml(review.title)}</strong>
-        <span class="ptr-ellipsis ptr-muted">${escapeHtml(review.templateName)}</span>
+        ${review.category === 'documents' ? '' : `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS[review.category])}</span>`}
+        <span class="ptr-ellipsis ptr-muted">${escapeHtml(review.query ? `Requête : ${review.query}` : review.templateName)}</span>
         <span class="ptr-chip" title="${escapeHtml(review.project)}">${escapeHtml(app.projectName(review.project))}</span>
         <span class="ptr-small ptr-muted" style="flex-shrink:0">${review.doneCount}/${review.rowCount} ligne${review.rowCount > 1 ? 's' : ''}</span>
         <span class="ptr-chip ptr-chip-${review.status}">${review.status === 'running' ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(review.status))}</span>
@@ -81,12 +94,13 @@ export function createHistoryView(app: App): View {
   }
 
   const open = (target: HTMLElement) => {
-    const review = reviews[Number(target.closest<HTMLElement>('[data-index]')?.dataset.index)];
+    const review = visible[Number(target.closest<HTMLElement>('[data-index]')?.dataset.index)];
     if (review) app.openReview(review.project, review.file);
   };
 
   element.addEventListener('change', (event) => {
     if (event.target === filter) void load();
+    else if (event.target === categoryFilter) render();
   });
   element.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;

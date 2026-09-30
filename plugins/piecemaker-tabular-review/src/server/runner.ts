@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Review, ReviewRow } from '../shared.js';
 import { emptyColumns } from '../shared.js';
 import { reviewDirectory } from './paths.js';
-import { missingCell, parseCells, systemPrompt, userPrompt } from './prompt.js';
+import { missingCell, parseCells, reviewNote, systemPrompt, userPrompt } from './prompt.js';
 import type { PromptDocument } from './prompt.js';
 import { readReview, reviewKey, updateReview } from './reviews.js';
 import { runSession } from './sessions.js';
@@ -73,7 +73,7 @@ async function runRow(job: Job, task: RowTask): Promise<void> {
       model: review.model,
       mode,
       system: systemPrompt(mode),
-      user: userPrompt(row.label, promptDocuments(job.project, row, mode), columns),
+      user: userPrompt(row.label, promptDocuments(job.project, row, mode), columns, reviewNote(review)),
       readableDirectory: path.join(reviewDirectory(job.project), 'docs'),
       environment: job.environment,
       signal: job.controller.signal,
