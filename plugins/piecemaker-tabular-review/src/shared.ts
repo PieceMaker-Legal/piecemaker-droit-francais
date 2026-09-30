@@ -36,13 +36,37 @@ export type ReviewRow = {
   error?: string;
   startedAt?: string;
   finishedAt?: string;
+  corrections?: number;
+};
+
+export type TextRange = { start: number; end: number };
+
+export type CellCitation = {
+  document: string;
+  quote: string;
+  verified: boolean;
+  ranges?: TextRange[];
 };
 
 export type Cell = {
   summary: string;
   flag: Flag;
   reasoning: string;
+  citations?: CellCitation[];
 };
+
+export type CitationSource = {
+  document: string;
+  link: string | null;
+  quote: string;
+  verified: boolean;
+  text: string;
+  offset: number;
+  length: number;
+  ranges: TextRange[];
+};
+
+export const MAX_CITATION_CORRECTIONS = 3;
 
 export type Provider = 'claude' | 'codex';
 
@@ -175,6 +199,18 @@ export function reviewStatusLabel(status: ReviewStatus): string {
 }
 
 export const EMPTY_CELL_SUMMARY = 'Non traité';
+export const NOT_FOUND_SUMMARY = 'Non trouvé';
+
+export function citationRequired(cell: Cell): boolean {
+  const summary = cell.summary.trim();
+  return summary !== EMPTY_CELL_SUMMARY && summary.replace(/[.\s]+$/, '').toLowerCase() !== NOT_FOUND_SUMMARY.toLowerCase();
+}
+
+export function citationIssue(cell: Cell): 'missing' | 'unverified' | null {
+  if (!citationRequired(cell)) return null;
+  if (!cell.citations?.length) return 'missing';
+  return cell.citations.some((citation) => !citation.verified) ? 'unverified' : null;
+}
 
 export function isCellFilled(cell: Cell | undefined): cell is Cell {
   return Boolean(cell) && cell!.summary.trim() !== '' && cell!.summary !== EMPTY_CELL_SUMMARY;
