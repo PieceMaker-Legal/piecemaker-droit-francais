@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   bundledPythonPath,
   componentLayout,
+  createHost,
   dependenciesReady,
   glinerReady,
   installRuntimeComponents,
@@ -127,6 +129,22 @@ test('fusionne la configuration sans effacer les autres clés', () => {
   assert.equal(runtimeReady(readyStatus()), true);
   assert.equal(runtimeReady({ ...readyStatus(), tools: { mineru: false } }), false);
   assert.deepEqual(parseStatus('avertissement\n{"ready":true}'), { ready: true });
+});
+
+test('lance les commandes hors d\'un dossier courant supprimé par l\'installation', {
+  skip: process.platform === 'win32',
+}, async () => {
+  const origin = process.cwd();
+  const doomed = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-app-remplacee-'));
+  process.chdir(doomed);
+  fs.rmdirSync(doomed);
+  try {
+    const result = await createHost().run(process.execPath, ['-e', 'console.log(process.cwd())'], { capture: true });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.stdout.trim(), fs.realpathSync(os.homedir()));
+  } finally {
+    process.chdir(origin);
+  }
 });
 
 test('l\'installeur Electron ne lance les composants que par une ligne', () => {

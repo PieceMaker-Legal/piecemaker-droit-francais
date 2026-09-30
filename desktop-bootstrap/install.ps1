@@ -19,6 +19,9 @@ $nodeArch = if ([Environment]::Is64BitOperatingSystem) {
 } else { Fail 'Windows 64 bits est requis.' }
 
 New-Item -ItemType Directory -Force -Path $bootstrapHome | Out-Null
+$bootstrapHome = (Resolve-Path -LiteralPath $bootstrapHome).ProviderPath
+Set-Location -LiteralPath $bootstrapHome
+[Environment]::CurrentDirectory = $bootstrapHome
 
 Say 'Recherche de la derniere version publiee de PieceMaker...'
 $tag = if ($env:PIECEMAKER_TAG) { $env:PIECEMAKER_TAG } else {
