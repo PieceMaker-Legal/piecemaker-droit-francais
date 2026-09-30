@@ -3,6 +3,22 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.14](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.13...v2.0.14) (2026-09-30)
+
+### New Features
+
+* **tabular-review:** amorcer le plugin piecemaker-tabular-review (WIP) ([7bcad80](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7bcad804ef6c006147070b15cfa641ea2b2af7fa))
+* **tabular-review:** lancer une cellule ou une colonne sans reposer les cellules remplies ([a8bb778](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a8bb7784086a2200cc5626dae2c2257aca99c606))
+* **tabular-review:** terminer les onglets et le bouton de la barre latérale ([f85ee4f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f85ee4f6d829f6c91f1dce9c089c318385538e33))
+
+### Bug Fixes
+
+* **docx:** ouvrir les liens encodés du chat ([79d186c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/79d186c94d510b20fd27072936f0864e2c54a429))
+
+### Maintenance
+
+* **debug:** tracer le chargement de l'historique des sessions ([dffdcf1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/dffdcf1461b78f9ec40ff72160fc07ecad026532))
+
 ## [2.0.13](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.12...v2.0.13) (2026-09-28)
 
 ### Bug Fixes
