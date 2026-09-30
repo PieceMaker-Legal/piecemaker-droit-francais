@@ -336,6 +336,7 @@ export type ResearchState = {
   excluded: number;
   undetected: number;
   failed: number;
+  unmatched?: number;
   error?: string;
   warnings?: string[];
   createdAt: string;

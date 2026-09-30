@@ -20,6 +20,9 @@ export const JUDILIBRE_LINK = 'https://www.courdecassation.fr/decision/';
 const PAGE_SIZE = 50;
 const UPPER_DATE_LIMIT = '2998-12-31';
 const SIMILARITY = 0.8;
+const MAX_QUERIES = 32;
+const ELISION = /^(?:[cdjlmnst]|qu|jusqu|lorsqu|puisqu|quoiqu)['’]/i;
+const ARTICLE = /^([LRDC])(\d+(?:-\d+)*)$/;
 const GAP = '[…]';
 
 const FIRST_DEGREE: Record<string, Jurisdiction> = { TRIBUNAL_JUDICIAIRE: 'tj', TRIBUNAL_COMMERCE: 'tcom' };
@@ -32,21 +35,22 @@ export function siegeLocation(siege: string): string {
   return `ca_${fold(siege).replace(/[^a-z]+/g, '_').replace(/^_|_$/g, '')}`;
 }
 
-function articleForm(value: string): string {
-  return value.replace(/\b([LRDC])(\d+(?:-\d+)*)\b/g, '$1. $2');
+function alternatives(word: string): string[] {
+  const bare = word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').replace(ELISION, '');
+  const article = ARTICLE.exec(bare);
+  if (article) return [`+"${article[1]}. ${article[2]}"`, `+${bare}`];
+  if (!bare) return [];
+  return [/^[\p{L}\p{N}]+$/u.test(bare) ? `+${bare}` : `+"${bare}"`];
 }
 
-function phrase(value: string): string {
-  return `+"${articleForm(value).replace(/["«»“”]/g, ' ').replace(/\s+/g, ' ').trim()}"`;
-}
-
-function terms(criterion: Criterion): string[] {
-  if (criterion.typeRecherche === 'EXACTE') return [phrase(criterion.valeur)];
-  return criterion.valeur.split(/\s+/).filter(Boolean).map((word) => (/^[\p{L}\p{N}’']+$/u.test(word) ? `+${word}` : phrase(word)));
+function clauseQueries(clause: Criterion[]): string[] {
+  const choices = clause.flatMap((criterion) => criterion.valeur.split(/\s+/)).map(alternatives).filter((options) => options.length);
+  const combined = choices.reduce<string[][]>((queries, options) => queries.flatMap((query) => options.map((option) => [...query, option])), [[]]);
+  return (combined.length > MAX_QUERIES ? [choices.map((options) => options[0])] : combined).map((terms) => terms.join(' '));
 }
 
 export function judilibreQueries(clauses: Criterion[][]): string[] {
-  return [...new Set(clauses.map((clause) => clause.flatMap(terms).join(' ')).filter(Boolean))];
+  return [...new Set(clauses.flatMap(clauseQueries).filter(Boolean))];
 }
 
 export function judilibrePlan(source: ResearchSource, filters: ResearchFilters, clauses: Criterion[][]): JudilibrePlan | null {

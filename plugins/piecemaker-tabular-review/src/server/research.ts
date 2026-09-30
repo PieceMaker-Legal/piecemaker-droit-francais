@@ -283,6 +283,7 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
   state.phase = 'downloading';
   const results = new Map<string, Stored>();
   const merged = new Set<string>();
+  const unmatched = new Set<string>();
   const texts = path.join(researchDirectory(state.id), 'texts');
   fs.mkdirSync(texts, { recursive: true });
   const queue = [...listed.values()];
@@ -294,7 +295,7 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
     const { decision, text } = processDecision(item.entry, record, filters, item.clauses, item.link, error, official);
     if (text) writeFileAtomic(textFile(state.id, item.entry.id), JSON.stringify(text));
     results.set(item.entry.id, decision);
-    state.downloaded = results.size + merged.size;
+    state.downloaded = results.size + merged.size + unmatched.size;
   };
   const officialFor = async (record: DecisionRecord): Promise<OfficialDecision | null> => {
     if (!judilibreEnabled || !jurisdictionOf(record)) return null;
@@ -348,13 +349,18 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
       error = failure instanceof Error ? failure.message : String(failure);
     }
     if (!final && !official?.record.text) return;
+    if (official?.record.text && !clausesMatch(matchIndex(official.record.text), item.clauses)) {
+      unmatched.add(item.entry.id);
+      state.downloaded = results.size + merged.size + unmatched.size;
+      return;
+    }
     finish(item, official?.record ?? null, error, official);
   };
   try {
     await pool(legifranceQueue, DOWNLOAD_WORKERS, signal, (item) => fetchLegifrance(item, false));
     await pool(legifranceQueue.filter((item) => !results.has(item.entry.id)), 2, signal, (item) => fetchLegifrance(item, true));
     await pool(judilibreQueue, DOWNLOAD_WORKERS, signal, (item) => fetchJudilibre(item, false));
-    await pool(judilibreQueue.filter((item) => !results.has(item.entry.id) && !merged.has(item.entry.id)), 2, signal, (item) => fetchJudilibre(item, true));
+    await pool(judilibreQueue.filter((item) => !results.has(item.entry.id) && !merged.has(item.entry.id) && !unmatched.has(item.entry.id)), 2, signal, (item) => fetchJudilibre(item, true));
   } catch (error) {
     throw fatal ?? error;
   }
@@ -367,6 +373,7 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
     excluded: decisions.filter((decision) => !decision.kept).length,
     undetected: filters.dispositifOnly ? decisions.filter((decision) => !decision.error && decision.zone !== 'motifs').length : 0,
     failed: decisions.filter((decision) => decision.error).length,
+    unmatched: unmatched.size,
   });
   persist(state, decisions);
 }
