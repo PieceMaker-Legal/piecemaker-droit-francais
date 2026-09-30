@@ -11,6 +11,7 @@ import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 import { startLibraryDocumentViewer } from '@/piecemaker/library/bootstrap';
 import { startShellEnvironmentWarning } from '@/piecemaker/shell-environment/bootstrap';
 import '@/piecemaker/sidebar-anonymization/bootstrap';
+import '@/piecemaker/plugin-injections/bootstrap';
 import '@/piecemaker/theme.css';
 
 startIdentityHighlighting();
