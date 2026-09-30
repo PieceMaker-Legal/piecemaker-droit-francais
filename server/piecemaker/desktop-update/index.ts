@@ -34,7 +34,7 @@ function productRepository(appRoot: string): string | null {
 }
 
 function launchDetached(command: string) {
-  spawn('sh', ['-c', command], { detached: true, stdio: 'ignore' }).unref();
+  spawn('sh', ['-c', command], { cwd: os.homedir(), detached: true, stdio: 'ignore' }).unref();
 }
 
 export function createPieceMakerDesktopUpdateRouter(appRoot: string) {

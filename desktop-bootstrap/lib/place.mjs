@@ -26,11 +26,82 @@ async function pickTarget() {
   throw new Error("Aucun dossier d'installation accessible en écriture.");
 }
 
+const LOCKED_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+const REMOVE_OPTIONS = { recursive: true, force: true, maxRetries: 5 };
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function exists(target) {
+  try {
+    await fs.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function moveAside(destination, previous, attempts, delayMs) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await fs.rename(destination, previous);
+      return;
+    } catch (error) {
+      if (!LOCKED_CODES.has(error.code)) throw error;
+      if (attempt >= attempts) {
+        throw new Error(`${destination} est encore utilisé (${error.code}) : fermez ${PRODUCT_NAME} puis relancez l'installation. L'application en place n'a pas été modifiée.`);
+      }
+      await wait(delayMs);
+    }
+  }
+}
+
+export async function replaceDirectory(source, destination, copy, { attempts = 20, delayMs = 500 } = {}) {
+  const previous = path.join(path.dirname(destination), `.${path.basename(destination)}.previous`);
+  await fs.rm(previous, REMOVE_OPTIONS);
+  const hadPrevious = await exists(destination);
+  if (hadPrevious) await moveAside(destination, previous, attempts, delayMs);
+  try {
+    await copy(source, destination);
+  } catch (error) {
+    await fs.rm(destination, REMOVE_OPTIONS);
+    if (hadPrevious) await fs.rename(previous, destination);
+    throw error;
+  }
+  try {
+    await fs.rm(previous, REMOVE_OPTIONS);
+  } catch {
+    ui.warn(`Ancienne version conservée dans ${previous} : elle sera retirée à la prochaine installation.`);
+  }
+}
+
+export function stopProcessesScript(directory) {
+  const running = `@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith(${quote(`${directory}\\`)}, [StringComparison]::OrdinalIgnoreCase) })`;
+  return [
+    `function Running { ${running} }`,
+    '$found = Running',
+    'foreach ($process in $found) { try { $null = (Get-Process -Id $process.ProcessId -ErrorAction Stop).CloseMainWindow() } catch {} }',
+    '$deadline = (Get-Date).AddSeconds(15)',
+    'while ((Running).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }',
+    'foreach ($process in Running) { Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue }',
+    '$found.Count',
+  ].join('; ');
+}
+
+function closeRunningCopies(destination) {
+  try {
+    const stopped = Number.parseInt(powershell(stopProcessesScript(destination)), 10) || 0;
+    if (stopped > 0) ui.detail(`${PRODUCT_NAME} était ouvert : ${stopped} processus fermé(s) avant le remplacement.`);
+  } catch (error) {
+    ui.warn(`Fermeture automatique de ${PRODUCT_NAME} impossible (${error.message}).`);
+  }
+}
+
 async function placeOnMac(builtApp) {
   const target = await pickTarget();
   const destination = path.join(target, `${PRODUCT_NAME}.app`);
-  await fs.rm(destination, { recursive: true, force: true });
-  mustCapture('ditto', [builtApp, destination]);
+  await replaceDirectory(builtApp, destination, async (from, to) => mustCapture('ditto', [from, to]));
   capture('xattr', ['-dr', 'com.apple.quarantine', destination]);
   return destination;
 }
@@ -38,8 +109,8 @@ async function placeOnMac(builtApp) {
 async function placeOnWindows(builtDir) {
   const target = await pickTarget();
   const destination = path.join(target, PRODUCT_NAME);
-  await fs.rm(destination, { recursive: true, force: true });
-  await fs.cp(builtDir, destination, { recursive: true });
+  closeRunningCopies(destination);
+  await replaceDirectory(builtDir, destination, (from, to) => fs.cp(from, to, { recursive: true }));
   return destination;
 }
 
