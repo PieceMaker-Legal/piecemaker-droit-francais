@@ -6,6 +6,9 @@ import type { createLibraryStore } from './store.js';
 const OPEN = '<PIECEMAKER_LIBRARY_INSTRUCTIONS>';
 const CLOSE = '</PIECEMAKER_LIBRARY_INSTRUCTIONS>';
 
+// Providers qui découvrent nativement les skills installés dans le dossier (.claude/skills, .agents/skills, .cursor, .opencode)
+export const NATIVE_SKILL_PROVIDERS: readonly string[] = ['claude', 'codex', 'cursor', 'opencode'];
+
 export function stripLibraryInstructions(text: string) {
   const start = text.lastIndexOf(`\n\n${OPEN}\n`);
   return start >= 0 && text.endsWith(CLOSE) ? text.slice(0, start) : text;
@@ -16,7 +19,14 @@ export function installLibraryRuntime(runtime: Pick<typeof providerRuntimeServic
   const history = sessions.fetchHistory.bind(sessions);
   runtime.run = async (provider, command, options, writer) => {
     const cwd = String(options.cwd ?? options.projectPath ?? '');
-    const instructions = cwd ? store.instructions(cwd) : '';
+    let instructions = '';
+    if (cwd) {
+      try {
+        instructions = store.instructions(cwd, { includeSkills: !NATIVE_SKILL_PROVIDERS.includes(String(provider)) });
+      } catch (error) {
+        console.warn(`[bibliothèque] instructions ignorées pour ${cwd} : ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     const wrapped = new Proxy(writer, {
       get(target, key) {
         if (key === 'send') return (value: unknown) => {

@@ -11,6 +11,7 @@ import { importLibraryDirectory } from './migrate.js';
 import { scanAndPersistLibraryProviderAgents } from './provider-agents.js';
 import { scanAndPersistLibraryProviderConnectors } from './provider-connectors.js';
 import { scanAndPersistLibraryProviderSkills } from './provider-skills.js';
+import { recordScanError, type LibraryScanError } from './scan-errors.js';
 
 type MarketplaceKind = 'connector' | 'skill' | 'plugin' | 'agent';
 
@@ -61,105 +62,77 @@ function disableNativeClaudePlugin(userHome: string, id: string) {
   fs.renameSync(temporary, settingsFilename);
 }
 
-export function scanInstalledLibraryCollections(store: ReturnType<typeof createLibraryStore>, userHome: string) {
+export function scanInstalledLibraryCollections(store: ReturnType<typeof createLibraryStore>, userHome: string, errors?: LibraryScanError[]) {
   const filename = path.join(userHome, '.claude/plugins/installed_plugins.json');
-  const registry = fs.existsSync(filename) ? JSON.parse(fs.readFileSync(filename, 'utf8')).plugins || {} : {};
+  let registry: Record<string, unknown> = {};
+  try { if (fs.existsSync(filename)) registry = JSON.parse(fs.readFileSync(filename, 'utf8')).plugins || {}; }
+  catch (error) { recordScanError(errors, filename, error); return; }
   const pluginsDirectory = path.join(userHome, '.claude', 'plugins');
   if (!fs.existsSync(pluginsDirectory) || fs.lstatSync(pluginsDirectory).isSymbolicLink()) return;
   const pluginsRoot = fs.realpathSync(pluginsDirectory);
   for (const [id, installs] of Object.entries(registry)) {
-    if (!Array.isArray(installs)) continue;
-    const install = installs.find((entry) => entry && typeof entry.installPath === 'string') as { installPath: string } | undefined;
-    if (!install || !fs.existsSync(install.installPath)) continue;
-    const installRoot = fs.realpathSync(install.installPath);
-    if (!installRoot.startsWith(`${pluginsRoot}${path.sep}`)) continue;
-    let manifest: { name?: string; displayName?: string; description?: string } = {};
-    const manifestPath = path.join(installRoot, '.claude-plugin', 'plugin.json');
-    try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch {}
-    const imported: Array<{ source: string; id: string; linked: boolean; rootPath?: string }> = [
-      ...importLibraryDirectory(store, path.join(installRoot, 'skills'), 'skill', false),
-      ...importLibraryDirectory(store, path.join(installRoot, 'agents'), 'agent', false),
-    ];
-    const commandsDirectory = path.join(installRoot, 'commands');
-    if (fs.existsSync(commandsDirectory) && !fs.lstatSync(commandsDirectory).isSymbolicLink()) {
-      for (const command of fs.readdirSync(commandsDirectory, { withFileTypes: true })) {
-        if (!command.isFile() || !command.name.toLowerCase().endsWith('.md')) continue;
-        const source = path.join(commandsDirectory, command.name);
-        imported.push({ source, id: store.importFile(source, 'skill', false), linked: false });
+    let scanSource = id;
+    try {
+      if (!Array.isArray(installs)) continue;
+      const install = installs.find((entry) => entry && typeof entry.installPath === 'string') as { installPath: string } | undefined;
+      if (!install || !fs.existsSync(install.installPath)) continue;
+      scanSource = install.installPath;
+      const installRoot = fs.realpathSync(install.installPath);
+      if (!installRoot.startsWith(`${pluginsRoot}${path.sep}`)) continue;
+      let manifest: { name?: string; displayName?: string; description?: string } = {};
+      const manifestPath = path.join(installRoot, '.claude-plugin', 'plugin.json');
+      try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch {}
+      const imported: Array<{ source: string; id: string; linked: boolean; rootPath?: string }> = [
+        ...importLibraryDirectory(store, path.join(installRoot, 'skills'), 'skill', false, errors),
+        ...importLibraryDirectory(store, path.join(installRoot, 'agents'), 'agent', false, errors),
+      ];
+      const commandsDirectory = path.join(installRoot, 'commands');
+      if (fs.existsSync(commandsDirectory) && !fs.lstatSync(commandsDirectory).isSymbolicLink()) {
+        for (const command of fs.readdirSync(commandsDirectory, { withFileTypes: true })) {
+          if (!command.isFile() || !command.name.toLowerCase().endsWith('.md')) continue;
+          const source = path.join(commandsDirectory, command.name);
+          try {
+            const id = store.importFile(source, 'skill', false);
+            if (id) imported.push({ source, id, linked: false });
+          } catch (error) { recordScanError(errors, source, error); }
+        }
       }
-    }
-    const mcpPath = path.join(installRoot, '.mcp.json');
-    if (fs.existsSync(mcpPath) && !fs.lstatSync(mcpPath).isSymbolicLink()) {
-      try {
-        const parsed = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
-        const servers = parsed?.mcpServers && typeof parsed.mcpServers === 'object' && !Array.isArray(parsed.mcpServers)
-          ? parsed.mcpServers as Record<string, unknown>
-          : {};
-        for (const [name, raw] of Object.entries(servers)) {
-          const config = normalizeProviderConnector(raw);
-          if (!config) continue;
-          const source = `${mcpPath}#${name}`;
-          imported.push({
-            source,
-            id: store.importConnector({
+      const mcpPath = path.join(installRoot, '.mcp.json');
+      if (fs.existsSync(mcpPath) && !fs.lstatSync(mcpPath).isSymbolicLink()) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+          const servers = parsed?.mcpServers && typeof parsed.mcpServers === 'object' && !Array.isArray(parsed.mcpServers)
+            ? parsed.mcpServers as Record<string, unknown>
+            : {};
+          for (const [name, raw] of Object.entries(servers)) {
+            const config = normalizeProviderConnector(raw);
+            if (!config) continue;
+            const source = `${mcpPath}#${name}`;
+            const connectorId = store.importConnector({
               name,
               description: config.url || config.command || name,
               config,
               source,
               namespace: id,
-            }),
-            linked: false,
-            rootPath: `mcp/${name}.json`,
-          });
-        }
-      } catch {}
-    }
-    const fallbackEntryName = imported.length ? store.document(imported[0].id).name : null;
-    store.upsertCollection({
-      id,
-      name: manifest.displayName || manifest.name || fallbackEntryName || 'Plugin sans nom',
-      description: manifest.description || '',
-      source: installRoot,
-      entries: imported.map((entry) => ({
-        entryId: entry.id,
-        rootPath: entry.rootPath || path.relative(installRoot, entry.source).split(path.sep).join('/'),
-      })),
-      files: [],
-    });
+            });
+            if (connectorId) imported.push({ source, id: connectorId, linked: false, rootPath: `mcp/${name}.json` });
+          }
+        } catch (error) { recordScanError(errors, mcpPath, error); }
+      }
+      const fallbackEntryName = imported.length ? store.document(imported[0].id).name : null;
+      store.upsertCollection({
+        id,
+        name: manifest.displayName || manifest.name || fallbackEntryName || 'Plugin sans nom',
+        description: manifest.description || '',
+        source: installRoot,
+        entries: imported.map((entry) => ({
+          entryId: entry.id,
+          rootPath: entry.rootPath || path.relative(installRoot, entry.source).split(path.sep).join('/'),
+        })),
+        files: [],
+      });
+    } catch (error) { recordScanError(errors, scanSource, error); }
   }
-}
-
-function readInstalledClaudePlugins(userHome: string) {
-  const filename = path.join(userHome, '.claude/plugins/installed_plugins.json');
-  if (!fs.existsSync(filename)) return {};
-  const config = JSON.parse(fs.readFileSync(filename, 'utf8'));
-  return config.plugins && typeof config.plugins === 'object' && !Array.isArray(config.plugins)
-    ? config.plugins as Record<string, unknown>
-    : {};
-}
-
-function synchronizeInstalledPluginActivation(
-  store: ReturnType<typeof createLibraryStore>,
-  userHome: string,
-  workspacePath: string,
-) {
-  const settingsFilename = path.join(userHome, '.claude/settings.json');
-  if (!fs.existsSync(settingsFilename)) return store.listCollections(workspacePath);
-  const settings = JSON.parse(fs.readFileSync(settingsFilename, 'utf8'));
-  const enabledPlugins = settings.enabledPlugins && typeof settings.enabledPlugins === 'object' && !Array.isArray(settings.enabledPlugins)
-    ? settings.enabledPlugins as Record<string, unknown>
-    : {};
-  const installedPlugins = readInstalledClaudePlugins(userHome);
-  const collections = store.listCollections(workspacePath);
-
-  for (const id of Object.keys(installedPlugins)) {
-    const collection = collections.find((entry) => entry.id === id);
-    const enabled = enabledPlugins[id];
-    if (!collection || collection.componentCount === 0 || typeof enabled !== 'boolean' || collection.enabled === enabled) continue;
-    store.setCollectionEnabled(workspacePath, id, enabled);
-  }
-
-  return store.listCollections(workspacePath);
 }
 
 export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLibraryStore>, applicationRoot: string, userHome: string) {
@@ -208,16 +181,12 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
   router.post('/plugins/sync', async (req, res) => {
     try {
       const workspacePath = typeof req.body?.workspacePath === 'string' ? req.body.workspacePath : undefined;
-      await scanAndPersistLibraryProviderSkills(store, workspacePath, undefined, userHome);
-      scanAndPersistLibraryProviderAgents(store, userHome);
-      scanAndPersistLibraryProviderConnectors(store, userHome);
-      scanInstalledLibraryCollections(store, userHome);
-      res.json({
-        ok: true,
-        plugins: workspacePath
-          ? synchronizeInstalledPluginActivation(store, userHome, workspacePath)
-          : store.listCollections(),
-      });
+      const errors: LibraryScanError[] = [];
+      await scanAndPersistLibraryProviderSkills(store, workspacePath, undefined, userHome, errors);
+      scanAndPersistLibraryProviderAgents(store, userHome, errors);
+      scanAndPersistLibraryProviderConnectors(store, userHome, errors);
+      scanInstalledLibraryCollections(store, userHome, errors);
+      res.json({ ok: true, plugins: store.listCollections(workspacePath), scan: { errors } });
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.post('/plugins/scan', (_req, res) => {

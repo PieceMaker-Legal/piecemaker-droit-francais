@@ -73,6 +73,7 @@ export function mount(container, api) {
   let loading = false;
   let busy = false;
   let error = '';
+  let notice = '';
   let revision = 0;
   let disposed = false;
   let creating = null;
@@ -171,8 +172,13 @@ export function mount(container, api) {
   function toggleActivation(item, path, body) {
     const previous = item.enabled;
     item.enabled = !previous;
+    notice = '';
     render();
-    request('PUT', path, body).catch((cause) => {
+    request('PUT', path, body).then((result) => {
+      if (!Array.isArray(result?.skipped) || !result.skipped.length) return;
+      notice = 'Élément personnel conservé, non remplacé : ' + result.skipped.join(', ');
+      if (!disposed) render();
+    }).catch((cause) => {
       item.enabled = previous;
       error = cause.message;
       if (!disposed) render();
@@ -323,7 +329,8 @@ export function mount(container, api) {
     if (view === 'mine' && tab === 'skill') toolbar.append(button('Nouveau skill', () => openCreate('skill')));
     if (view === 'mine' && tab === 'agent') toolbar.append(button('Nouvel agent', () => openCreate('agent')));
     content.append(toolbar);
-    if (error) { const notice = element('p', error); notice.setAttribute('role', 'alert'); content.append(notice); }
+    if (error) { const alert = element('p', error); alert.setAttribute('role', 'alert'); content.append(alert); }
+    if (notice) { const status = element('p', notice, 'meta'); status.setAttribute('role', 'status'); content.append(status); }
     const body = element('div');
     content.append(body);
     function renderRows() {

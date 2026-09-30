@@ -10,6 +10,7 @@ import { createLibraryMarketplaceRouter, scanInstalledLibraryCollections } from 
 import { scanAndPersistLibraryProviderAgents } from './provider-agents.js';
 import { scanAndPersistLibraryProviderConnectors } from './provider-connectors.js';
 import { scanAndPersistLibraryProviderSkills } from './provider-skills.js';
+import type { LibraryScanError } from './scan-errors.js';
 
 export { installLibraryRuntime } from './runtime.js';
 
@@ -17,10 +18,12 @@ const LIBRARY_BODY_LIMIT = 1024 * 1024;
 
 export async function openLibrary(home: string, applicationRoot: string) {
   const store = createLibraryStore(home);
-  try { await scanAndPersistLibraryProviderSkills(store, undefined, undefined, os.homedir()); } catch {}
-  try { scanAndPersistLibraryProviderAgents(store, os.homedir()); } catch {}
-  try { scanAndPersistLibraryProviderConnectors(store, os.homedir()); } catch {}
-  try { scanInstalledLibraryCollections(store, os.homedir()); } catch {}
+  const errors: LibraryScanError[] = [];
+  try { await scanAndPersistLibraryProviderSkills(store, undefined, undefined, os.homedir(), errors); } catch {}
+  try { scanAndPersistLibraryProviderAgents(store, os.homedir(), errors); } catch {}
+  try { scanAndPersistLibraryProviderConnectors(store, os.homedir(), errors); } catch {}
+  try { scanInstalledLibraryCollections(store, os.homedir(), errors); } catch {}
+  if (errors.length) console.warn(`Bibliothèque : ${errors.length} élément(s) non importé(s) (${errors.slice(0, 3).map((error) => error.source).join(', ')}${errors.length > 3 ? ', …' : ''})`);
   try { fs.unlinkSync(path.join(store.directory, 'connection.json')); } catch {}
   const router = express.Router();
   router.use((req, res, next) => {
