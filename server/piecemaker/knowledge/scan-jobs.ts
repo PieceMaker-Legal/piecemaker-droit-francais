@@ -9,17 +9,29 @@ export type KnowledgeScanProgress = {
   total: number;
 };
 
+export type OcrMissingChoice = 'ask' | 'continue';
+
+export class OcrRequiredError extends Error {
+  readonly files: string[];
+
+  constructor(files: string[]) {
+    super('Pièces scannées : MinerU (OCR) n’est pas installé.');
+    this.files = files;
+  }
+}
+
 export type KnowledgeScanJob = {
   id: string;
   projectId: string;
   source: 'knowledge';
   action: 'anonymize';
-  state: 'running' | 'done' | 'error' | 'cancelled';
+  state: 'running' | 'done' | 'error' | 'cancelled' | 'ocr-required';
   phase: KnowledgeScanPhase;
   percent: number;
   processed: number;
   total: number;
   error: string | null;
+  ocrRequired: { files: string[] } | null;
   result: unknown;
   startedAt: string;
   finishedAt: string | null;
@@ -64,6 +76,7 @@ export function createKnowledgeScanJobs() {
         processed: 0,
         total: 0,
         error: null,
+        ocrRequired: null,
         result: null,
         startedAt: new Date().toISOString(),
         finishedAt: null,
@@ -86,6 +99,11 @@ export function createKnowledgeScanJobs() {
         job.result = result ?? null;
       }, (error: unknown) => {
         if (job.state !== 'running') return;
+        if (error instanceof OcrRequiredError) {
+          job.state = 'ocr-required';
+          job.ocrRequired = { files: error.files };
+          return;
+        }
         job.state = 'error';
         job.error = error instanceof Error ? error.message : String(error);
       }).finally(() => {

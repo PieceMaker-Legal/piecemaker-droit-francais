@@ -10,7 +10,8 @@ import type { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/kno
 import { persistScanResult, scanResultOperations } from '../../../plugins/piecemaker-dossier/src/scan-result.js';
 import type { GlinerDocument, GlinerMappingDocument, JsonData } from '../../../plugins/piecemaker-dossier/src/types.js';
 
-import type { KnowledgeScanProgress } from './scan-jobs.js';
+import { OcrRequiredError } from './scan-jobs.js';
+import type { KnowledgeScanProgress, OcrMissingChoice } from './scan-jobs.js';
 
 type ProjectLookup = {
   getProjectById(projectId: string): { project_id: string; project_path: string } | null;
@@ -35,6 +36,7 @@ type OriginalsPipeline = {
     signal?: AbortSignal;
     input?: string;
     onMapping?: (mapping: unknown) => void;
+    onOcrRequired?: (payload: unknown) => void;
   }): Promise<unknown>;
 };
 
@@ -141,6 +143,11 @@ function textValue(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function ocrRequiredFiles(payload: unknown): string[] {
+  const files = payload && typeof payload === 'object' ? (payload as { files?: unknown }).files : null;
+  return Array.isArray(files) ? files.filter((file): file is string => typeof file === 'string') : [];
+}
+
 async function withPythonPath<T>(pythonPath: string, run: () => Promise<T>): Promise<T> {
   const previous = process.env.PYTHON_PATH;
   process.env.PYTHON_PATH = pythonPath;
@@ -155,7 +162,13 @@ async function withPythonPath<T>(pythonPath: string, run: () => Promise<T>): Pro
 export function createKnowledgePipeline(options: PipelineOptions) {
   const script = path.join(options.applicationRoot, 'server', 'piecemaker', 'vendor', 'websocket-server', 'scripts', 'convert_and_scan_pipeline.py');
   return {
-    async scan(projectId: string, requestedFiles?: unknown, onProgress?: (progress: KnowledgeScanProgress) => void, signal?: AbortSignal) {
+    async scan(
+      projectId: string,
+      requestedFiles?: unknown,
+      onProgress?: (progress: KnowledgeScanProgress) => void,
+      signal?: AbortSignal,
+      ocrMissing: OcrMissingChoice = 'continue',
+    ) {
       const project = options.projects.getProjectById(projectId);
       if (!project) throw new Error('Project not found.');
       const projectPath = fs.realpathSync(project.project_path);
@@ -177,9 +190,12 @@ export function createKnowledgePipeline(options: PipelineOptions) {
         projectPath,
         '--state-file',
         stateFile,
+        '--ocr-missing',
+        ocrMissing,
       ];
       if (!explicitFiles) args.push('--skip-existing');
       let received: GlinerMappingDocument | null = null;
+      let ocrRequired: string[] | null = null;
       try {
         await withPythonPath(pythonExecutable(options.pythonPath), () => runManagedPythonJob({
           action: 'anonymize',
@@ -189,8 +205,10 @@ export function createKnowledgePipeline(options: PipelineOptions) {
           signal,
           input: JSON.stringify(seed),
           onMapping: (value) => { received = value as GlinerMappingDocument; },
+          onOcrRequired: (value) => { ocrRequired = ocrRequiredFiles(value); },
         }));
       } catch (error) {
+        if (ocrRequired) throw new OcrRequiredError(ocrRequired);
         if (received) options.store.update({ projectId, operations: scanResultOperations({ projectId, mapping: received, documents: [] }) });
         throw error;
       }

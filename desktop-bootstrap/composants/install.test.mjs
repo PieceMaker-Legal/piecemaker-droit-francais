@@ -147,6 +147,14 @@ test('lance les commandes hors d\'un dossier courant supprimé par l\'installati
   }
 });
 
+test('installe la même version de MinerU que l\'installation à la demande depuis l\'application', () => {
+  const specOf = (file) => fs.readFileSync(file, 'utf8').match(/const MINERU_SPEC = '([^']+)'/)?.[1];
+  const desktop = specOf(path.join(root, 'install.mjs'));
+  const onDemand = specOf(path.join(root, '..', '..', 'server', 'piecemaker', 'vendor', 'installer', 'steps', '04-conversion-md.mjs'));
+  assert.ok(desktop);
+  assert.equal(onDemand, desktop);
+});
+
 test('l\'installeur Electron ne lance les composants que par une ligne', () => {
   const source = fs.readFileSync(path.join(root, '..', 'lib', 'install.mjs'), 'utf8');
   assert.deepEqual(source.match(/composants\/install\.mjs/g), ['composants/install.mjs']);

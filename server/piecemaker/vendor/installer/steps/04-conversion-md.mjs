@@ -23,6 +23,47 @@ export const meta = {
 
 const SCRIPTS_DIR = path.join(REPO_ROOT, 'websocket-server', 'scripts');
 const SMART_CONVERTER = path.join(SCRIPTS_DIR, 'smart_converter.py');
+const MINERU_SPEC = 'mineru[pipeline,vlm]==2.7.6';
+
+function venvScript(vp, name) {
+  return path.join(vp.binDir, process.platform === 'win32' ? `${name}.exe` : name);
+}
+
+function pipelineModelsReady() {
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(os.homedir(), 'mineru.json'), 'utf8'));
+    const modelDir = config?.['models-dir']?.pipeline;
+    return Boolean(modelDir) && fs.existsSync(modelDir);
+  } catch {
+    return false;
+  }
+}
+
+async function installMineru(vp) {
+  const spin = spinner('Installation de MinerU...');
+  const installed = await run(vp.python, ['-m', 'pip', 'install', MINERU_SPEC], {
+    cwd: os.homedir(),
+    onLine: (line) => spin.update(line.slice(0, 100)),
+  });
+  if (installed !== 0) {
+    spin.fail('Échec de l\'installation de MinerU');
+    return false;
+  }
+  spin.succeed('MinerU installé');
+  if (pipelineModelsReady()) return true;
+  const models = spinner('Téléchargement des modèles MinerU...');
+  const downloaded = await run(venvScript(vp, 'mineru-models-download'), ['-s', 'huggingface', '-m', 'pipeline'], {
+    cwd: os.homedir(),
+    env: { ...process.env, MINERU_MODEL_SOURCE: 'huggingface' },
+    onLine: (line) => models.update(line.slice(0, 100)),
+  });
+  if (downloaded !== 0) {
+    models.fail('Échec du téléchargement des modèles MinerU');
+    return false;
+  }
+  models.succeed('Modèles MinerU téléchargés');
+  return true;
+}
 
 function checkImports(pythonBin) {
   return runCapture(pythonBin, ['-c', 'import markitdown, pypdf']);
@@ -89,19 +130,15 @@ export async function install(ctx) {
 
   // 2. Optional MinerU install — heavy (PyTorch-class deps), only needed for
   // scanned PDFs / images that have no extractable text layer.
-  const wantMineru = await confirm(
+  const mineruRequested = process.env.PIECEMAKER_INSTALL_MINERU === '1';
+  const wantMineru = mineruRequested || await confirm(
     'Installer MinerU (OCR pour PDF scannés et images) ? Optionnel, volumineux (plusieurs centaines de Mo à quelques Go de dépendances).',
     false
   );
   let mineruNote = '';
   if (wantMineru) {
-    const spin = spinner('Installation de MinerU...');
-    const code = await run(vp.python, ['-m', 'pip', 'install', '-U', 'mineru'], {
-      onLine: (line) => spin.update(line.slice(0, 100)),
-    });
-    if (code === 0) spin.succeed('MinerU installé');
-    else {
-      spin.fail('Échec de l\'installation de MinerU');
+    if (!(await installMineru(vp))) {
+      if (mineruRequested) return { status: 'failed', note: 'MinerU n\'a pas pu être installé.' };
       mineruNote = ' MinerU n\'a pas pu être installé automatiquement — consultez sa documentation pour l\'installer manuellement.';
     }
   } else {
@@ -139,7 +176,7 @@ export async function check(ctx) {
     return { status: 'failed', note: 'markitdown ou pypdf non installés.' };
   }
   // MinerU is optional (OCR only) — its absence does not degrade the status.
-  const mineruAvailable = runCapture('mineru', ['--version']).code === 0;
+  const mineruAvailable = runCapture(venvScript(vp, 'mineru'), ['--version']).code === 0;
   return {
     status: 'done',
     note: mineruAvailable ? '' : 'MinerU non installé (optionnel — nécessaire seulement pour l\'OCR des PDF scannés).',
