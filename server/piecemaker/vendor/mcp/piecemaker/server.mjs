@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Serveur MCP « piecemaker » — outil de conversion exposé
- * à Claude Code (et à tout client MCP) sans passer
- * par du texte injecté dans un CLAUDE.md.
+ * Serveur MCP « piecemaker » — conversion des pièces et fiches du dossier
+ * (personnes, sociétés…) exposées à Claude Code, Codex et Mistral Vibe (et à
+ * tout client MCP) sans passer par du texte injecté dans un CLAUDE.md.
  *
  * Chaque outil lance le binaire `piecemaker` en sous-processus plutôt que
  * d'importer les modules internes : c'est ce qui garantit l'absence de
@@ -10,7 +10,7 @@
  * d'arguments, même localisation de dossier, une seule implémentation
  * (voir `installer/bin/piecemaker.mjs`).
  *
- * La commande lancée ici (`conversion --json`) court-circuite le bandeau, la
+ * Les commandes lancées ici (`conversion --json`, `personne --json`) court-circuitent le bandeau, la
  * vérification de mise à jour et le menu interactif. Elle confie le travail au
  * serveur applicatif déjà lancé (application de bureau ou `piecemaker`) et ne
  * démarre un serveur que si aucun ne répond.
@@ -95,6 +95,18 @@ export function conversionArgs({ dossier, pieces, force }) {
   return args;
 }
 
+export function rechercherPersonneArgs({ dossier, recherche, type, limite }) {
+  const args = ['personne', '--json', '--case', dossier];
+  if (type) args.push('--type', type);
+  if (limite) args.push('--limite', String(limite));
+  if (recherche && String(recherche).trim()) args.push(String(recherche).trim());
+  return args;
+}
+
+export function modifierPersonneArgs({ dossier, personne, champs }) {
+  return ['personne', '--json', '--case', dossier, String(personne).trim(), '--champs', JSON.stringify(champs)];
+}
+
 /** Dossier ciblé par un appel d'outil : celui demandé, sinon la session en cours. */
 export function resolveDossier(dossier) {
   return dossier && String(dossier).trim() ? dossier : process.cwd();
@@ -102,7 +114,10 @@ export function resolveDossier(dossier) {
 
 const DOSSIER_SCHEMA = z.string()
   .optional()
-  .describe('Chemin absolu du dossier juridique ciblé. Par défaut, le répertoire de la session Claude Code en cours.');
+  .describe('Chemin absolu du dossier juridique ciblé. Par défaut, le répertoire de la session en cours.');
+
+/** Types de fiches consultables ; les pièces (`document`) n'en font pas partie. */
+const ENTITY_KINDS = ['person', 'company', 'address', 'iban', 'phone', 'email', 'url', 'siren', 'other'];
 
 /**
  * Construit le serveur MCP et y enregistre les outils. Séparé de
@@ -133,6 +148,57 @@ export function createServer({ execFn } = {}) {
   }, async ({ dossier, pieces, force }) => {
     const resolved = resolveDossier(dossier);
     const result = await run(conversionArgs({ dossier: resolved, pieces, force }), resolved);
+    return toToolResult(result);
+  });
+
+  server.registerTool('rechercher_personne', {
+    description: 'Cherche une personne du dossier — physique ou morale — ou une autre fiche (adresse, IBAN, '
+      + 'téléphone, e-mail, SIREN…) par nom, variante ou code de pseudonymisation, et rend sa fiche complète : '
+      + 'tous les champs enregistrés, les variantes du nom et les fiches liées (société dirigée, SIREN…). '
+      + 'Sans recherche, liste les fiches du dossier. Les pièces qui la mentionnent ne sont pas incluses.',
+    inputSchema: {
+      dossier: DOSSIER_SCHEMA,
+      recherche: z.string().optional()
+        .describe('Nom, variante ou code (ex. « CLIENT_DEMANDEUR_PERSONNE_PHYSIQUE_01 »). Vide : toutes les fiches.'),
+      type: z.enum(ENTITY_KINDS).optional()
+        .describe('Limite la recherche à un type : person (personne physique), company (personne morale), address, iban, phone, email, url, siren, other.'),
+      limite: z.number().int().min(1).max(50).optional().describe('Nombre maximal de fiches rendues (20 par défaut).'),
+    },
+    annotations: {
+      title: 'Fiche d\'une personne du dossier',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  }, async ({ dossier, recherche, type, limite }) => {
+    const resolved = resolveDossier(dossier);
+    const result = await run(rechercherPersonneArgs({ dossier: resolved, recherche, type, limite }), resolved);
+    return toToolResult(result);
+  });
+
+  server.registerTool('modifier_personne', {
+    description: 'Ajoute ou modifie des champs de la fiche d\'une personne (ou d\'une autre fiche) du dossier : '
+      + 'profession, date de naissance, qualité, coordonnées… Les champs non cités sont conservés. La fiche est '
+      + 'désignée par son code de pseudonymisation ou par un nom exact ; un nom partagé par plusieurs fiches est '
+      + 'refusé. Les champs code, originalCode, category, partySide, position, legalForm et systemRole '
+      + 'déterminent le code de pseudonymisation : ils se modifient dans l\'onglet Dossier.',
+    inputSchema: {
+      dossier: DOSSIER_SCHEMA,
+      personne: z.string().min(1).describe('Code de pseudonymisation (de préférence) ou nom exact de la fiche.'),
+      champs: z.record(z.string(), z.any())
+        .describe('Champs à ajouter ou remplacer, ex. { "profession": "Médecin", "dateNaissance": "1970-01-02" }. Aucune valeur null.'),
+    },
+    annotations: {
+      title: 'Compléter la fiche d\'une personne du dossier',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  }, async ({ dossier, personne, champs }) => {
+    const resolved = resolveDossier(dossier);
+    const result = await run(modifierPersonneArgs({ dossier: resolved, personne, champs }), resolved);
     return toToolResult(result);
   });
 

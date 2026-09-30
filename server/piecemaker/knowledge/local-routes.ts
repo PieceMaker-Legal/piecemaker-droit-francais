@@ -10,8 +10,19 @@ type ProjectPathLookup = {
 
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
+// En-têtes qu'un navigateur ou un proxy ajoute et que le CLI n'envoie jamais.
+// Le serveur répond à toutes les origines (`cors()`) : sans ce contrôle,
+// n'importe quelle page web ouverte sur la machine lirait les parties d'un
+// dossier via 127.0.0.1, et un proxy placé devant le serveur (Vite en
+// développement) ferait passer un appelant distant pour local.
+const BROWSER_OR_PROXY_HEADERS = ['origin', 'sec-fetch-site', 'x-forwarded-for', 'forwarded'];
+
 function isLoopback(request: express.Request): boolean {
   return LOOPBACK_ADDRESSES.has(request.socket.remoteAddress || '');
+}
+
+function isDirectLocalCaller(request: express.Request): boolean {
+  return isLoopback(request) && !BROWSER_OR_PROXY_HEADERS.some((header) => request.headers[header] !== undefined);
 }
 
 function statusFor(error: unknown): number {
@@ -27,8 +38,8 @@ export function createKnowledgeLocalRouter(
   const router = express.Router();
 
   router.use((request, response, next) => {
-    if (!isLoopback(request)) {
-      response.status(403).json({ error: 'Local scan is restricted to loopback callers.' });
+    if (!isDirectLocalCaller(request)) {
+      response.status(403).json({ error: 'Local routes are restricted to direct loopback callers.' });
       return;
     }
     next();
@@ -47,7 +58,7 @@ export function createKnowledgeLocalRouter(
 
   const respond = (operation: () => unknown | Promise<unknown>, response: express.Response) => {
     Promise.resolve().then(operation).then((result) => response.json(result)).catch((error: unknown) => {
-      response.status(statusFor(error)).json({ error: error instanceof Error ? error.message : 'Local scan failed.' });
+      response.status(statusFor(error)).json({ error: error instanceof Error ? error.message : 'Local operation failed.' });
     });
   };
 
@@ -66,6 +77,16 @@ export function createKnowledgeLocalRouter(
   router.post('/scan/cancel', (request, response) => respond(() => {
     const id = resolveProjectId(request.body);
     return { projectId: id, ...getService().cancelScan(request.body?.id, id) };
+  }, response));
+
+  router.post('/entities/search', (request, response) => respond(() => {
+    const id = resolveProjectId(request.body);
+    return { projectId: id, ...getService().searchEntities(id, request.body ?? {}) };
+  }, response));
+
+  router.post('/entities/update', (request, response) => respond(() => {
+    const id = resolveProjectId(request.body);
+    return { projectId: id, ...getService().updateEntityFields(id, request.body?.target, request.body?.fields) };
   }, response));
 
   return router;

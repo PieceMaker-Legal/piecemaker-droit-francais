@@ -97,6 +97,46 @@ Codex exige une approbation et, lancé par PieceMaker avec `approval_policy =
 never`, refuse l'appel (« MCP tool call requires approval, but approval policy
 is never »).
 
+## Sous-commande `personne`
+
+`piecemaker personne [recherche…] [--type <type>] [--limite <n>] [--case <chemin>] [--json]`
+cherche une fiche du dossier — personne physique ou morale, adresse, IBAN,
+téléphone, e-mail, SIREN… — par nom, variante ou code de pseudonymisation, et
+rend la fiche complète : tous les champs, les variantes du nom et les fiches
+liées (société dirigée, SIREN…), sur deux niveaux. Sans recherche, elle liste
+les fiches du dossier. Les pièces qui mentionnent la personne ne sont jamais
+rendues.
+
+`piecemaker personne <code|nom> --champs '<json>' [--case <chemin>] [--json]`
+ajoute ou remplace des champs libres de la fiche (`{"profession":"Médecin"}`),
+sans toucher aux autres. La fiche est désignée par son code ou par un nom
+exact ; un nom partagé par plusieurs fiches est refusé. Les champs qui
+déterminent le code de pseudonymisation (`code`, `originalCode`, `category`,
+`partySide`, `position`, `legalForm`, `systemRole`) restent réservés à l'onglet
+Dossier, et une valeur `null` est refusée.
+
+Comme `conversion`, c'est un client HTTP de la boucle locale
+(`POST /api/piecemaker/local/entities/search` et `…/entities/update`), qui
+démarre le serveur applicatif s'il est arrêté. Les routes locales refusent en
+outre toute requête portant un en-tête `Origin`, `Sec-Fetch-Site`,
+`X-Forwarded-For` ou `Forwarded` : le serveur répond à toutes les origines, et
+sans ce contrôle une page web ouverte sur la machine pourrait lire les parties
+d'un dossier par 127.0.0.1.
+
+Les outils MCP `rechercher_personne` (lecture seule) et `modifier_personne`
+appellent cette sous-commande. Le proxy PII pseudonymise leurs réponses comme
+le reste de la conversation.
+
+## Serveur MCP et assistants
+
+L'étape `12-mcp-piecemaker` enregistre le serveur MCP `piecemaker`
+(`conversion`, `rechercher_personne`, `modifier_personne`) auprès de chaque
+assistant présent : Claude Code par `claude mcp add -s user`, Codex dans
+`config.toml` de `CODEX_HOME` (`~/.codex`, `[mcp_servers.piecemaker]`) et
+Mistral Vibe dans `config.toml` de `VIBE_HOME` (`~/.vibe`, `[[mcp_servers]]`).
+Un assistant absent est ignoré. Son diagnostic échoue tant qu'un assistant
+présent n'a pas l'enregistrement : `piecemaker update` la rejoue alors d'office.
+
 Réinstaller la commande après un `git pull` qui la modifie :
 
 ```
