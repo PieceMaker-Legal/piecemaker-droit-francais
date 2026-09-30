@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { Cell, Review, ReviewRow } from '../shared.js';
+import type { Review, ReviewRow } from '../shared.js';
+import { emptyColumns } from '../shared.js';
 import { reviewDirectory } from './paths.js';
 import { missingCell, parseCells, systemPrompt, userPrompt } from './prompt.js';
 import type { PromptDocument } from './prompt.js';
@@ -10,10 +11,16 @@ import { runSession } from './sessions.js';
 
 export const INLINE_CHARACTER_LIMIT = 150_000;
 
+export type RowTask = {
+  rowId: string;
+  columns?: number[];
+};
+
 type Job = {
   project: string;
   file: string;
-  queue: string[];
+  queue: RowTask[];
+  active: Set<string>;
   workers: number;
   controller: AbortController;
   environment: NodeJS.ProcessEnv;
@@ -40,14 +47,20 @@ function promptDocuments(project: string, row: ReviewRow, mode: 'inline' | 'path
   });
 }
 
-function completeCells(review: Review, parsed: Map<number, Cell>): Record<string, Cell> {
-  return Object.fromEntries(review.columns.map((column) => [String(column.index), parsed.get(column.index) ?? missingCell()]));
-}
-
-async function runRow(job: Job, rowId: string): Promise<void> {
+async function runRow(job: Job, task: RowTask): Promise<void> {
+  const { rowId } = task;
   const review = readReview(job.project, job.file);
   const row = review.rows.find((entry) => entry.id === rowId);
   if (!row) return;
+  const targets = emptyColumns(review, rowId, task.columns);
+  if (!targets.length) {
+    await updateReview(job.project, job.file, (current) => {
+      const target = current.rows.find((entry) => entry.id === rowId);
+      if (target?.status === 'pending') Object.assign(target, { status: 'done', error: undefined });
+    });
+    return;
+  }
+  const columns = review.columns.filter((column) => targets.includes(column.index));
   const mode = rowMode(row);
   await updateReview(job.project, job.file, (current) => {
     const target = current.rows.find((entry) => entry.id === rowId);
@@ -60,17 +73,19 @@ async function runRow(job: Job, rowId: string): Promise<void> {
       model: review.model,
       mode,
       system: systemPrompt(mode),
-      user: userPrompt(row.label, promptDocuments(job.project, row, mode), review.columns),
+      user: userPrompt(row.label, promptDocuments(job.project, row, mode), columns),
       readableDirectory: path.join(reviewDirectory(job.project), 'docs'),
       environment: job.environment,
       signal: job.controller.signal,
     });
-    const parsed = parseCells(output, review.columns);
+    const parsed = parseCells(output, columns);
     if (!parsed.size) throw new Error(`Réponse IA inexploitable : ${output.trim().slice(0, 400) || 'réponse vide'}`);
     await updateReview(job.project, job.file, (current) => {
       const target = current.rows.find((entry) => entry.id === rowId);
       if (!target) return;
-      current.cells[rowId] = completeCells(current, parsed);
+      const cells = { ...current.cells[rowId] };
+      for (const column of columns) cells[String(column.index)] = parsed.get(column.index) ?? missingCell();
+      current.cells[rowId] = cells;
       Object.assign(target, { status: 'done', finishedAt: new Date().toISOString(), error: undefined });
     });
   } catch (error) {
@@ -87,13 +102,20 @@ async function runRow(job: Job, rowId: string): Promise<void> {
   }
 }
 
+function takeTask(job: Job): RowTask | null {
+  const index = job.queue.findIndex((task) => !job.active.has(task.rowId));
+  return index >= 0 ? job.queue.splice(index, 1)[0] : null;
+}
+
 async function worker(job: Job): Promise<void> {
-  while (!job.controller.signal.aborted && job.queue.length) {
-    const rowId = job.queue.shift()!;
+  for (let task = takeTask(job); task && !job.controller.signal.aborted; task = takeTask(job)) {
+    job.active.add(task.rowId);
     try {
-      await runRow(job, rowId);
+      await runRow(job, task);
     } catch (error) {
       process.stderr.write(`Tabular Review : ${error instanceof Error ? error.message : String(error)}\n`);
+    } finally {
+      job.active.delete(task.rowId);
     }
   }
 }
@@ -108,23 +130,43 @@ function spawnWorkers(job: Job, count: number): void {
   }
 }
 
-export async function queueRows(project: string, file: string, rowIds: string[], concurrency: number, environment: NodeJS.ProcessEnv): Promise<void> {
-  const key = reviewKey(project, file);
-  const existing = jobs.get(key);
-  if (existing && !existing.controller.signal.aborted) {
-    const queued = new Set(existing.queue);
-    existing.queue.push(...rowIds.filter((rowId) => !queued.has(rowId)));
-    spawnWorkers(existing, Math.max(0, Math.min(concurrency, existing.queue.length) - existing.workers));
+function mergeTask(queue: RowTask[], task: RowTask): void {
+  const existing = queue.find((entry) => entry.rowId === task.rowId);
+  if (!existing) {
+    queue.push({ ...task });
     return;
   }
-  await updateReview(project, file, (review) => {
+  existing.columns = existing.columns && task.columns ? [...new Set([...existing.columns, ...task.columns])] : undefined;
+}
+
+export function pendingTasks(review: Review, tasks: RowTask[]): RowTask[] {
+  const merged: RowTask[] = [];
+  for (const task of tasks) mergeTask(merged, task);
+  return merged.filter((task) => review.rows.some((row) => row.id === task.rowId) && emptyColumns(review, task.rowId, task.columns).length);
+}
+
+export async function queueTasks(project: string, file: string, tasks: RowTask[], concurrency: number, environment: NodeJS.ProcessEnv): Promise<number> {
+  const key = reviewKey(project, file);
+  const runnable = pendingTasks(readReview(project, file), tasks);
+  const count = runnable.length;
+  if (!count) return 0;
+  const existing = jobs.get(key);
+  const markPending = (review: Review) => {
     for (const row of review.rows) {
-      if (rowIds.includes(row.id)) Object.assign(row, { status: 'pending', error: undefined, startedAt: undefined, finishedAt: undefined });
+      if (runnable.some((task) => task.rowId === row.id) && row.status !== 'running') Object.assign(row, { status: 'pending', error: undefined, startedAt: undefined, finishedAt: undefined });
     }
-  });
-  const job: Job = { project, file, queue: [...rowIds], workers: 0, controller: new AbortController(), environment };
+  };
+  if (existing && !existing.controller.signal.aborted) {
+    await updateReview(project, file, markPending);
+    for (const task of runnable) mergeTask(existing.queue, task);
+    spawnWorkers(existing, Math.max(0, Math.min(concurrency, existing.queue.length) - existing.workers));
+    return count;
+  }
+  await updateReview(project, file, markPending);
+  const job: Job = { project, file, queue: [...runnable], active: new Set(), workers: 0, controller: new AbortController(), environment };
   jobs.set(key, job);
-  spawnWorkers(job, Math.max(1, Math.min(concurrency, rowIds.length)));
+  spawnWorkers(job, Math.max(1, Math.min(concurrency, count)));
+  return count;
 }
 
 export async function cancelJob(project: string, file: string): Promise<void> {
