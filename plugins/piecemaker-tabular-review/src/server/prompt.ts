@@ -1,5 +1,5 @@
 import type { Cell, Flag, ReviewColumn } from '../shared.js';
-import { FLAGS } from '../shared.js';
+import { EMPTY_CELL_SUMMARY, FLAGS } from '../shared.js';
 
 export type PromptDocument = {
   name: string;
@@ -8,7 +8,7 @@ export type PromptDocument = {
 };
 
 const NOT_FOUND = 'Non trouvé';
-const NOT_ADDRESSED = 'Non traité';
+const NOT_ADDRESSED = EMPTY_CELL_SUMMARY;
 
 export function formatSuffix(column: Pick<ReviewColumn, 'format' | 'tags'>): string {
   switch (column.format) {
