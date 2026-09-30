@@ -6,6 +6,7 @@ import { emptyColumns } from '../shared.js';
 import { listMarkdownDocuments } from './documents.js';
 import { exportReview } from './export.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
+import { cancelResearch, createResearchReview, legifranceConfigured, researchPage, researchState, researchText, startResearch, stopAllResearch } from './research.js';
 import { createReview, listReviews, readReview, reviewDetail, updateReview } from './reviews.js';
 import { cancelJob, isRunning, pendingTasks, queueTasks, stopAllJobs } from './runner.js';
 import type { RowTask } from './runner.js';
@@ -91,8 +92,30 @@ async function run(body: Body) {
   return reviewDetail(project, file, isRunning(project, file));
 }
 
+async function launchResearch(body: Body) {
+  const project = assertProject(body.project);
+  const settings = { provider: assertProvider(body.provider), model: assertModel(body.model), concurrency: concurrency(body.concurrency) };
+  const environment = await launchEnvironment(body.proxyOrigin);
+  const { file, review } = createResearchReview(project, String(body.id ?? ''), body.title, body.columns, settings);
+  await queueTasks(project, file, review.rows.map((row) => ({ rowId: row.id })), settings.concurrency, environment);
+  return reviewDetail(project, file, isRunning(project, file));
+}
+
+function researchRoute(method: string, pathname: string, url: URL, body: Body): Promise<unknown> | unknown {
+  const id = url.searchParams.get('id') ?? String(body.id ?? '');
+  if (method === 'GET' && pathname === '/research/legifrance') return { configured: legifranceConfigured() };
+  if (method === 'POST' && pathname === '/research') return startResearch(body);
+  if (method === 'GET' && pathname === '/research/state') return researchState(id);
+  if (method === 'GET' && pathname === '/research/page') return researchPage(id, url.searchParams.get('page'), url.searchParams.get('view'));
+  if (method === 'GET' && pathname === '/research/text') return researchText(id, url.searchParams.get('decision'));
+  if (method === 'POST' && pathname === '/research/cancel') return cancelResearch(id);
+  if (method === 'POST' && pathname === '/research/review') return launchResearch(body);
+  throw new UserError('Commande inconnue.');
+}
+
 async function route(method: string, url: URL, body: Body): Promise<unknown> {
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
+  if (pathname.startsWith('/research')) return researchRoute(method, pathname, url, body);
   if (method === 'GET' && pathname === '/templates') return { templates: readTemplates() };
   if (method === 'PUT' && pathname === '/templates') return { templates: upsertTemplate(body.template) };
   if (method === 'DELETE' && pathname === '/templates') return { templates: deleteTemplate(url.searchParams.get('id')) };
@@ -165,6 +188,7 @@ server.listen(0, '127.0.0.1', () => {
 
 const shutdown = () => {
   stopAllJobs();
+  stopAllResearch();
   server.close();
   setTimeout(() => process.exit(0), 500).unref();
 };

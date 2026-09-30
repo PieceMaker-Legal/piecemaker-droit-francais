@@ -1,5 +1,5 @@
-import type { Cell, Flag, ReviewColumn } from '../shared.js';
-import { EMPTY_CELL_SUMMARY, FLAGS } from '../shared.js';
+import type { Cell, Flag, Review, ReviewColumn } from '../shared.js';
+import { EMPTY_CELL_SUMMARY, FLAGS, reviewCategory } from '../shared.js';
 
 export type PromptDocument = {
   name: string;
@@ -60,12 +60,20 @@ export function columnsDescription(columns: ReviewColumn[]): string {
     .join('\n');
 }
 
-export function userPrompt(label: string, documents: PromptDocument[], columns: ReviewColumn[]): string {
+export function reviewNote(review: Pick<Review, 'category' | 'research'>): string {
+  if (reviewCategory(review) !== 'recherche-juridique') return '';
+  return review.research?.dispositifOnly
+    ? 'Le document est une décision de justice issue de Légifrance dont seule la partie où le juge statue (motifs et dispositif) a été conservée : réponds exclusivement à partir de ce texte.'
+    : 'Le document est le texte intégral d’une décision de justice issue de Légifrance.';
+}
+
+export function userPrompt(label: string, documents: PromptDocument[], columns: ReviewColumn[], note = ''): string {
   const blocks = documents.map((document) => document.content === null
     ? `=== Document : ${document.name} ===\nChemin à lire : ${document.path}`
     : `=== Document : ${document.name} ===\n${document.content}`);
   return [
     `Ligne analysée : « ${label} » (${documents.length} document${documents.length > 1 ? 's' : ''})`,
+    ...(note ? [note] : []),
     '',
     blocks.join('\n\n'),
     '',
