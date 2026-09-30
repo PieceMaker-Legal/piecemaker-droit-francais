@@ -106,7 +106,11 @@ export function installChatCitationHarness(options: {
   options.sessions.fetchHistory = async (sessionId, pageOptions = {}) => {
     const details = options.sessions.getSessionDetailsById(sessionId);
     if (details.provider !== 'claude' && details.provider !== 'codex') return fetchHistory(sessionId, pageOptions);
+    const debugStartedAt = performance.now();
     const history = await fetchHistory(sessionId, { limit: null, offset: 0 });
+    const debugLoadedAt = performance.now();
+    let debugTurns = 0;
+    let debugFinishMs = 0;
     const messages: NormalizedMessage[] = [];
     let lastTextIndex = -1;
     const makeTurn = () => createCitationTurn({
@@ -115,7 +119,10 @@ export function installChatCitationHarness(options: {
     });
     let turn = makeTurn();
     const finish = async () => {
+      const debugFinishStartedAt = performance.now();
+      debugTurns++;
       const suffix = await turn.finish();
+      debugFinishMs += performance.now() - debugFinishStartedAt;
       if (suffix && lastTextIndex >= 0) {
         const message = messages[lastTextIndex];
         messages[lastTextIndex] = { ...message, content: `${message.content ?? ''}${suffix}` };
@@ -140,6 +147,7 @@ export function installChatCitationHarness(options: {
     const limit = pageOptions.limit ?? null;
     const end = Math.max(0, messages.length - offset);
     const start = limit === null ? 0 : Math.max(0, end - Math.max(0, limit));
+    console.log(`[DEBUG harness.fetchHistory] session=${sessionId} provider=${details.provider} limit=${limit} offset=${offset} rows=${messages.length} turns=${debugTurns} upstreamMs=${(debugLoadedAt - debugStartedAt).toFixed(0)} citationReplayMs=${(performance.now() - debugLoadedAt).toFixed(0)} turnFinishMs=${debugFinishMs.toFixed(0)} totalMs=${(performance.now() - debugStartedAt).toFixed(0)} returned=${end - start}`);
     return { ...history, messages: messages.slice(start, end), offset, limit, hasMore: start > 0 };
   };
 
