@@ -26,6 +26,11 @@ export class CursorSkillsProvider extends SkillsProvider {
         rootDir: path.join(os.homedir(), '.cursor', 'skills'),
         commandPrefix: '/',
       },
+      {
+        scope: 'user',
+        rootDir: path.join(os.homedir(), '.agents', 'skills'),
+        commandPrefix: '/',
+      },
     ];
   }
 

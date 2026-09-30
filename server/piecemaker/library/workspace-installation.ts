@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const SKILL_PROVIDERS = ['.claude', '.agents', '.grok'];
+const SKILL_PROVIDERS = ['.claude', '.agents', '.grok'] as const;
+export type SkillTarget = typeof SKILL_PROVIDERS[number];
 const LEGACY_SKILL_PROVIDERS = ['.cursor', '.opencode'];
 
 const AGENT_TARGETS = [
@@ -104,14 +105,22 @@ function removeOwnedLegacy(legacy: string, source: string, kind: 'skill' | 'agen
   if (owned) fs.unlinkSync(legacy);
 }
 
-export function prepareWorkspaceInstallation(workspace: string, id: string, name: string, packageRoot: string, kind: 'skill' | 'agent', enabled: boolean) {
+// Composant déjà présent dans le dossier et n'appartenant pas à la bibliothèque : conservé, jamais remplacé.
+export class PreservedComponentError extends Error {
+  constructor(readonly target: string) {
+    super(`Composant personnel préservé : ${target}`);
+  }
+}
+
+// `targets` restreint les dossiers de skills visés (défaut : .claude, .agents et .grok) ; sans effet sur les agents.
+export function prepareWorkspaceInstallation(workspace: string, id: string, name: string, packageRoot: string, kind: 'skill' | 'agent', enabled: boolean, targets?: readonly SkillTarget[]) {
   const slug = componentFolderName(name);
   let legacySlug = '';
   try { legacySlug = legacyComponentFolderName(name); } catch { /* nom sans ancien équivalent */ }
   if (legacySlug === slug) legacySlug = '';
   const legacyNames = (extension = '') => [`piecemaker-${id}${extension}`, ...(legacySlug ? [`${legacySlug}${extension}`] : [])];
-  const targets = kind === 'skill'
-    ? SKILL_PROVIDERS.map((provider) => {
+  const components = kind === 'skill'
+    ? SKILL_PROVIDERS.filter((provider) => !targets || targets.includes(provider)).map((provider) => {
       const parent = path.join(workspace, provider, 'skills');
       for (const directory of [path.dirname(parent), parent]) assertWorkspaceDirectory(workspace, directory, enabled);
       return {
@@ -137,7 +146,7 @@ export function prepareWorkspaceInstallation(workspace: string, id: string, name
     ? LEGACY_SKILL_PROVIDERS.flatMap((provider) => [slug, ...legacyNames()].map((legacyName) => path.join(workspace, provider, 'skills', legacyName)))
     : [];
 
-  const prepared = targets.map((entry) => {
+  const prepared = components.map((entry) => {
     let existing: fs.Stats;
     try { existing = fs.lstatSync(entry.target); }
     catch (error) {
@@ -151,7 +160,7 @@ export function prepareWorkspaceInstallation(workspace: string, id: string, name
     if (!owned) return { ...entry, installed: false, content: null, skipped: true };
     return { ...entry, installed: true, content, skipped: false };
   });
-  if (enabled && prepared.every((entry) => entry.skipped)) throw new Error(`Composant personnel préservé : ${prepared[0].target}`);
+  if (enabled && prepared.length && prepared.every((entry) => entry.skipped)) throw new PreservedComponentError(prepared[0].target);
 
   return () => {
     const changed: typeof prepared = [];

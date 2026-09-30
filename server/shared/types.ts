@@ -506,6 +506,8 @@ export type ProviderSkillScope = 'user' | 'project' | 'plugin' | 'repo' | 'admin
  */
 export type ProviderSkillListOptions = {
   workspacePath?: string;
+  /** Bibliothèque : désactive le filtre des skills désactivés par dossier (scans de collecte). */
+  unfiltered?: boolean;
 };
 
 /**

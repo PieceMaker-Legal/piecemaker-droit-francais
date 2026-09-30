@@ -189,7 +189,10 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
       scanAndPersistLibraryProviderAgents(store, userHome, errors);
       scanAndPersistLibraryProviderConnectors(store, userHome, errors);
       scanInstalledLibraryCollections(store, userHome, errors);
-      if (workspacePath) applyWorkspaceSkillVisibility(store, workspacePath, userHome);
+      if (workspacePath) {
+        store.reconcileWorkspace(workspacePath);
+        applyWorkspaceSkillVisibility(store, workspacePath);
+      }
       res.json({ ok: true, plugins: store.listCollections(workspacePath), scan: { errors } });
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
@@ -208,7 +211,7 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
   router.put('/plugins/:id/activation', (req, res) => {
     try {
       const result = store.setCollectionEnabled(req.body?.workspacePath, String(req.params.id), req.body?.enabled);
-      res.json({ ...result, visibility: applyWorkspaceSkillVisibility(store, req.body.workspacePath, userHome) });
+      res.json({ ...result, visibility: applyWorkspaceSkillVisibility(store, req.body.workspacePath) });
     }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
