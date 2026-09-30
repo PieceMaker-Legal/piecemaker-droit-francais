@@ -30,11 +30,12 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
     graph(value: unknown) {
       return store.snapshot(ensureProject(value));
     },
-    scan(value: unknown, files?: unknown) {
+    scan(value: unknown, files?: unknown, ocrMissing?: unknown) {
       const id = ensureProject(value);
+      const ocrChoice = ocrMissing === 'ask' ? 'ask' : 'continue';
       return {
         job: scanJobs.start(id, async (report, signal) => {
-          const result = await pipeline.scan(id, files, report, signal);
+          const result = await pipeline.scan(id, files, report, signal, ocrChoice);
           store.markAnonymizationComplete(id);
           return result;
         }),
