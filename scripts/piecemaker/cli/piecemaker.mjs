@@ -3,7 +3,7 @@
 import { installPiecemakerCommand, piecemakerExecutable } from './install-command.mjs';
 import { APP, APP_URL, PORTS } from './lib/config.mjs';
 import { installComponents } from './lib/composants.mjs';
-import { installPlugins, pluginsToRepair } from './lib/plugins.mjs';
+import { installPlugins } from './lib/plugins.mjs';
 import { gitAvailable, resolveNodeRuntime } from './lib/node-runtime.mjs';
 import { ensureDependencies, ensureRepository, rebuildNativeModules } from './lib/repos.mjs';
 import { APP_LOG, appClientReachable, appServerReachable, startApplication, stopApplication } from './lib/services.mjs';
@@ -133,20 +133,9 @@ async function main() {
   // plugins (Telegram, Tabular Review) qu'à son boot, et l'interface ne lit la
   // liste des plugins qu'au chargement. Installés après coup, ils restaient
   // invisibles ou inertes jusqu'au lancement suivant.
-  let pluginsChanged = false;
-  if (!options.launchOnly) {
-    await synchroniseRepositories(runtime);
-    step('Plugins PieceMaker');
-    await installPlugins(runtime, report);
-    pluginsChanged = true;
-  } else {
-    const missing = pluginsToRepair();
-    if (missing.length) {
-      step('Plugins PieceMaker — réparation');
-      await installPlugins(runtime, report, missing);
-      pluginsChanged = true;
-    }
-  }
+  if (!options.launchOnly) await synchroniseRepositories(runtime);
+  step('Plugins PieceMaker');
+  const pluginsChanged = await installPlugins(report, { rebuild: !options.launchOnly });
 
   if (!options.launchOnly || pluginsChanged || !(await applicationIsRunning())) {
     const running = await resetAndLaunch(runtime);

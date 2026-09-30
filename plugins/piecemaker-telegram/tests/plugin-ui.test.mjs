@@ -12,7 +12,7 @@ test('Telegram tab guides setup and escapes project names', async () => {
   const previousDocument = globals.document;
   globals.document = dom.window.document;
   try {
-    const modulePath = pathToFileURL(path.resolve('plugins/piecemaker-telegram/index.js')).href;
+    const modulePath = pathToFileURL(path.resolve('plugins/piecemaker-telegram/src/index.js')).href;
     const plugin = await import(modulePath);
     const container = dom.window.document.getElementById('tab');
     let updateContext;

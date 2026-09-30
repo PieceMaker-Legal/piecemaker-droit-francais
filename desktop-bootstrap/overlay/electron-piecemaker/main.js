@@ -1,10 +1,9 @@
 import { app, BrowserWindow } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { loadProductConfig } from '../shared/product-config.mjs';
-import { syncBundledPlugins } from './bundled-plugins.js';
 
 process.env.ELECTRON_FORCE_OWN_SERVER = '1';
 
@@ -32,17 +31,16 @@ function adoptWindow(window) {
 app.on('browser-window-created', (_event, window) => adoptWindow(window));
 
 // Avant electron/main.js : le serveur local lit les plugins (et lance leurs
-// sous-processus) une seule fois, à son démarrage.
+// sous-processus) une seule fois, à son démarrage. Le bundle et son sync.mjs
+// sont produits par plugins/toolchain (voir plugins.md).
 try {
   const appRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const bundleDir = path.join(appRoot, 'piecemaker-plugins');
+  const { syncPlugins } = await import(pathToFileURL(path.join(bundleDir, 'sync.mjs')).href);
   const dataRoot = process.env.CLOUDCLI_HOME || path.join(os.homedir(), loadProductConfig().dataDirectoryName);
-  syncBundledPlugins({
-    bundleDir: path.join(appRoot, 'piecemaker-plugins'),
-    dataRoot,
-    databasePath: process.env.DATABASE_PATH || path.join(dataRoot, 'auth.db'),
-  });
+  syncPlugins({ bundleDir, dataRoot, databasePath: process.env.DATABASE_PATH || path.join(dataRoot, 'auth.db') });
 } catch (error) {
-  console.error(`[PieceMaker] Synchronisation des plugins impossible : ${error.message}`);
+  console.error(`[PieceMaker] Installation des plugins impossible : ${error.message}`);
 }
 
 await import('../electron/main.js');

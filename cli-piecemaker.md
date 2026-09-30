@@ -16,12 +16,9 @@ composants du socle, installation de la PWA, ouverture. Sautée en entier avec
 (puis relance l'application si elle tournait) et de démarrer l'application si
 elle est arrêtée.
 
-Les plugins sont installés **avant** le démarrage, jamais après : l'hôte ne
-lance les serveurs de plugins (Telegram, Tabular Review) qu'à son boot et
-l'interface ne lit la liste des plugins qu'au chargement. La liste n'est pas
-codée en dur : tout `plugins/piecemaker-*` doté d'un `install.mjs` est
-installé (`bundledPlugins()` dans `lib/plugins.mjs`, même découverte dans
-`desktop-bootstrap/lib/plugins.mjs`).
+Les plugins sont installés **avant** le démarrage, jamais après, par la chaîne
+commune `plugins/toolchain` (recompilation complète, ou réinstallation depuis le
+dernier bundle avec `--launch-only`) : voir `plugins.md`.
 
 Sur une machine nue, sans dépôt ni commande, chaque amorce clone le dépôt puis
 lance ce premier passage :
