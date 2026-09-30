@@ -9,17 +9,18 @@ import { createLibraryRouter } from './routes.js';
 import { createLibraryMarketplaceRouter, scanInstalledLibraryCollections } from './marketplace.js';
 import { scanAndPersistLibraryProviderAgents } from './provider-agents.js';
 import { scanAndPersistLibraryProviderConnectors } from './provider-connectors.js';
-import { scanAndPersistLibraryProviderSkills } from './provider-skills.js';
-import type { LibraryScanError } from './scan-errors.js';
+import { scanAndPersistLibraryProjectSkills, scanAndPersistLibraryProviderSkills } from './provider-skills.js';
+import { recordScanError, type LibraryScanError } from './scan-errors.js';
 
 export { installLibraryRuntime } from './runtime.js';
 
 const LIBRARY_BODY_LIMIT = 1024 * 1024;
 
-export async function openLibrary(home: string, applicationRoot: string) {
+export async function openLibrary(home: string, applicationRoot: string, listProjectPaths: () => string[] = () => []) {
   const store = createLibraryStore(home);
   const errors: LibraryScanError[] = [];
   try { await scanAndPersistLibraryProviderSkills(store, undefined, undefined, os.homedir(), errors); } catch {}
+  try { await scanAndPersistLibraryProjectSkills(store, listProjectPaths(), undefined, errors); } catch (error) { recordScanError(errors, 'projets', error); }
   try { scanAndPersistLibraryProviderAgents(store, os.homedir(), errors); } catch {}
   try { scanAndPersistLibraryProviderConnectors(store, os.homedir(), errors); } catch {}
   try { scanInstalledLibraryCollections(store, os.homedir(), errors); } catch {}
@@ -35,7 +36,7 @@ export async function openLibrary(home: string, applicationRoot: string) {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  router.use(createLibraryRouter(store));
-  router.use(createLibraryMarketplaceRouter(store, applicationRoot, os.homedir()));
+  router.use(createLibraryRouter(store, os.homedir()));
+  router.use(createLibraryMarketplaceRouter(store, applicationRoot, os.homedir(), listProjectPaths));
   return { store, router };
 }
