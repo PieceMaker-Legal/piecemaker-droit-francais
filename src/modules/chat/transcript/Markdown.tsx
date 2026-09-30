@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState } from 'react';
+import React, { createContext, memo, useContext, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -42,6 +42,27 @@ const looksLikeFilePath = (value?: string): value is string => {
   return /[\\/]/.test(cleaned) || /\.[a-z0-9]+$/i.test(cleaned);
 };
 
+// Code punctuation (`foo()`, `a = b`, `*.docx`) or a URL scheme rules out a file.
+const INLINE_CODE_NON_PATH = /[()<>{}[\]=;,"'`|*?!$&]|:\/\//;
+
+// Claude Code cites files as inline code (`src/app.ts:42`) and expects the UI to
+// make them clickable. Inline code counts as a file reference when its last
+// segment is a filename with a stem and an extension containing a letter, so
+// `contrat.docx` and `/Dossier Dupont/Conclusions v2.docx` match while
+// `v2.0.14`, `.env` and `npm run build` do not.
+const looksLikeInlineFileRef = (value: string): boolean => {
+  const cleaned = stripLineSuffix(value.trim());
+  if (!cleaned || INLINE_CODE_NON_PATH.test(cleaned)) {
+    return false;
+  }
+  const lastSegment = cleaned.split(/[\\/]/).pop() ?? '';
+  return /[^.]\.(?=[a-z0-9]{1,10}$)[a-z0-9]*[a-z][a-z0-9]*$/i.test(lastSegment);
+};
+
+// Set inside a rendered link so inline code in its label (`[`foo.ts`](foo.ts)`)
+// does not become a second, nested link.
+const InsideLinkContext = createContext(false);
+
 // Extract plain text from link children so a reference rendered only as link
 // text (e.g. `[src/foo.ts]()` with an empty href) can still be opened.
 const childrenToText = (children: React.ReactNode): string => {
@@ -74,6 +95,8 @@ type CodeBlockProps = {
 const CodeBlock = ({ node: _node, className, children, forceBlock, ...props }: CodeBlockProps) => {
   const { t } = useTranslation('chat');
   const [copied, setCopied] = useState(false);
+  const { openFileInEditor } = usePaletteOps();
+  const insideLink = useContext(InsideLinkContext);
   // Fenced blocks carry a trailing newline in the tree; trim it so the
   // highlighter doesn't render an empty final line.
   const raw = (Array.isArray(children) ? children.join('') : String(children ?? '')).replace(/\n$/, '');
@@ -82,14 +105,32 @@ const CodeBlock = ({ node: _node, className, children, forceBlock, ...props }: C
   const shouldInline = !forceBlock && !/[\r\n]/.test(raw);
 
   if (shouldInline) {
-    return (
+    const fileRef = !insideLink && looksLikeInlineFileRef(raw) ? raw.trim() : undefined;
+    const code = (
       <code
-        className={`whitespace-pre-wrap break-words rounded-md border border-border/70 bg-muted px-1.5 py-0.5 font-mono text-[0.875em] text-foreground ${className || ''
+        className={`whitespace-pre-wrap break-words rounded-md border border-border/70 bg-muted px-1.5 py-0.5 font-mono text-[0.875em] ${fileRef ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'} ${className || ''
           }`}
         {...props}
       >
         {children}
       </code>
+    );
+
+    if (!fileRef) {
+      return code;
+    }
+
+    return (
+      <a
+        href={fileRef}
+        className="cursor-pointer hover:underline"
+        onClick={(event) => {
+          event.preventDefault();
+          openFileInEditor(stripLineSuffix(fileRef));
+        }}
+      >
+        {code}
+      </a>
     );
   }
 
@@ -287,7 +328,7 @@ function MarkdownBodyRenderer({ children, breaks = false }: Omit<MarkdownProps, 
                 openFileInEditor(stripLineSuffix(fileRef));
               }}
             >
-              {linkChildren}
+              <InsideLinkContext.Provider value>{linkChildren}</InsideLinkContext.Provider>
             </a>
           );
         }
@@ -299,7 +340,7 @@ function MarkdownBodyRenderer({ children, breaks = false }: Omit<MarkdownProps, 
             target="_blank"
             rel="noopener noreferrer"
           >
-            {linkChildren}
+            <InsideLinkContext.Provider value>{linkChildren}</InsideLinkContext.Provider>
           </a>
         );
       },
