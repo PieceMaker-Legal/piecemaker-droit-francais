@@ -36,8 +36,11 @@ async function main() {
 
   const builtArtifact = await buildDesktopApp(sourceDir);
   // Une instance encore ouverte garderait son serveur, donc ses plugins, et
-  // `open` ou `start` ne ferait que la ramener au premier plan.
-  await quitRunningApplication();
+  // `open` ou `start` ne ferait que la ramener au premier plan. Avec
+  // --no-launch (mise à jour lancée depuis l'application, sous-processus de son
+  // serveur : server/piecemaker/desktop-update), c'est l'appelant qui quitte et
+  // relance l'application ; la fermer ici tuerait la mise à jour en cours.
+  if (!skipLaunch) await quitRunningApplication();
   const installedPath = await installApplication(builtArtifact);
 
   if (skipCertificates) {
