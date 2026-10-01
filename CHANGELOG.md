@@ -3,6 +3,18 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.17](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.16...v2.0.17) (2026-10-01)
+
+### Bug Fixes
+
+* **desktop:** embarquer les plugins PieceMaker dans l'application Electron ([58d035e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/58d035e1ad6d77a64944af3c11367946597d46e3))
+* **desktop:** ne pas fermer l'application pendant sa mise à jour intégrée ([881009e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/881009eb5054d6532b758dfeb9d2d423e0d9b4ee))
+* **plugins:** installer les plugins PieceMaker avant le démarrage et sans liste figée ([bb744d9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/bb744d926522cb90e0c5414d692055a0d7d67604))
+
+### Refactoring
+
+* **plugins:** un seul contrat, une seule chaîne d'installation ([fb71f3f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fb71f3f41d035a087b7e91bb67d859d89cd8d384))
+
 ## [2.0.16](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.15...v2.0.16) (2026-10-01)
 
 ### New Features
