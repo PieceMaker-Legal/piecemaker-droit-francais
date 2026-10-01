@@ -6,7 +6,11 @@
   "icon": "icon.svg",
   "type": "module",
   "slot": "tab",
-  "entry": "index.js",
+  "entry": "dist/index.js",
   "server": "launcher.mjs",
-  "permissions": []
+  "permissions": [],
+  "piecemakerSources": {
+    "index": "src/index.js",
+    "server": "src/server.mjs"
+  }
 }

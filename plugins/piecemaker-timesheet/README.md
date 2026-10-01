@@ -4,13 +4,7 @@ Plugin CloudCLI qui affiche le temps passé et les conclusions des sessions, par
 
 ## Installation
 
-Elle est automatique : la commande `piecemaker` appelle cet installateur à chaque exécution. Pour la rejouer à la main, avec Node 22 ou plus récent, depuis `plugins/piecemaker-timesheet/` :
-
-```sh
-node install.mjs /chemin/vers/piecemaker-droit-francais
-```
-
-La source TypeScript est compilée avec le TypeScript de l'application, puis `dist/`, le manifeste et l'icône sont copiés dans le répertoire de plugins déterminé par `product.config.json`, avec priorité à `CLOUDCLI_HOME`. Le répertoire cible est remplacé à chaque installation : il ne contient que des fichiers produits ici, jamais un dépôt cloné. Aucun dépôt distant n'est requis.
+Comme tous les plugins PieceMaker : compilé et installé par la chaîne commune `plugins/toolchain`, embarqué dans l'application Electron et réinstallé à chaque démarrage si besoin. Depuis le dépôt : `npm run plugins`. Voir `plugins.md` à la racine.
 
 ## Validation
 

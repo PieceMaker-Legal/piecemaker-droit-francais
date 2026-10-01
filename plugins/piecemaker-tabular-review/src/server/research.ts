@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { Option, ResearchDecision, ResearchFilters, ResearchPage, ResearchSource, ResearchState, ResearchText, ResearchView, ResearchZone, Review, ReviewColumn, ZoneOrigin } from '../shared.js';
+import type { Option, ResearchDecision, ResearchFilters, ResearchPage, ResearchSource, ResearchState, ResearchTarget, ResearchText, ResearchView, ResearchZone, Review, ReviewColumn, ReviewRow, ZoneOrigin } from '../shared.js';
 import {
   APPEL_SIEGES,
   BULLETIN_PUBLICATIONS,
@@ -15,6 +15,7 @@ import {
   RESEARCH_SOURCES,
   ZONE_ORIGIN_LABELS,
   researchCriteria,
+  reviewCategory,
 } from '../shared.js';
 import { decisionRecord, importance } from './decisions.js';
 import type { DecisionRecord } from './decisions.js';
@@ -28,7 +29,7 @@ import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 import { clausesMatch, matchIndex, parseQuery } from './query.js';
 import type { Criterion, ParsedQuery } from './query.js';
 import type { ReviewSettings } from './reviews.js';
-import { sanitizeFilename, storeDocument, writeNewReview } from './reviews.js';
+import { readReview, sanitizeFilename, storeDocument, updateReview, writeNewReview } from './reviews.js';
 import { listPlan, planClauses, resolvePlan, sourcePlan } from './sources.js';
 import type { Listed, SourcePlan } from './sources.js';
 import { MAX_COLUMNS, normalizeColumn } from './templates.js';
@@ -44,7 +45,7 @@ type Stored = ResearchDecision & { tier: number; ratio: number };
 
 type StoredIndex = { state: ResearchState; decisions: ResearchDecision[] };
 
-type Job = { state: ResearchState; controller: AbortController };
+type Job = { state: ResearchState; controller: AbortController; known: Set<string> };
 
 type Pending = { entry: Listed; clauses: Criterion[][]; link: string; hit?: JudilibreHit };
 
@@ -264,22 +265,29 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
   }
   state.phase = 'listing';
   const listed = new Map<string, Pending>();
+  const skipped = new Set<string>();
+  const knownHits: Pending[] = [];
   const onPage = (count: number) => {
     state.listed += count;
   };
   for (const { plan, total, clauses, official, officialTotal } of plans) {
     if (total) {
       for (const entry of await listPlan(api, plan, parsed, total, signal, onPage)) {
-        if (!listed.has(entry.id)) listed.set(entry.id, { entry, clauses, link: `${plan.linkBase}${entry.id}` });
+        if (job.known.has(entry.id)) skipped.add(entry.id);
+        else if (!listed.has(entry.id)) listed.set(entry.id, { entry, clauses, link: `${plan.linkBase}${entry.id}` });
       }
     }
     if (official && officialTotal) {
       for (const { entry, hit } of await listJudilibre(api, official, officialTotal, signal, onPage)) {
-        if (!listed.has(entry.id)) listed.set(entry.id, { entry, clauses, link: `${JUDILIBRE_LINK}${entry.id}`, hit });
+        if (job.known.has(entry.id)) {
+          skipped.add(entry.id);
+          knownHits.push({ entry, clauses, link: `${JUDILIBRE_LINK}${entry.id}`, hit });
+        } else if (!listed.has(entry.id)) listed.set(entry.id, { entry, clauses, link: `${JUDILIBRE_LINK}${entry.id}`, hit });
       }
     }
   }
   state.listed = listed.size;
+  state.skipped = skipped.size;
   state.phase = 'downloading';
   const results = new Map<string, Stored>();
   const merged = new Set<string>();
@@ -290,12 +298,13 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
   const legifranceQueue = queue.filter((item) => !item.hit);
   const judilibreQueue = queue.filter((item) => item.hit);
   const hitsByDate = new Map<string, Pending[]>();
-  for (const item of judilibreQueue) hitsByDate.set(item.hit!.date, [...(hitsByDate.get(item.hit!.date) ?? []), item]);
+  const twins = new Set<string>();
+  for (const item of [...judilibreQueue, ...knownHits]) hitsByDate.set(item.hit!.date, [...(hitsByDate.get(item.hit!.date) ?? []), item]);
   const finish = (item: Pending, record: DecisionRecord | null, error: string | undefined, official: Official | null) => {
     const { decision, text } = processDecision(item.entry, record, filters, item.clauses, item.link, error, official);
     if (text) writeFileAtomic(textFile(state.id, item.entry.id), JSON.stringify(text));
     results.set(item.entry.id, decision);
-    state.downloaded = results.size + merged.size + unmatched.size;
+    state.downloaded = results.size + merged.size + unmatched.size + twins.size;
   };
   const officialFor = async (record: DecisionRecord): Promise<OfficialDecision | null> => {
     if (!judilibreEnabled || !jurisdictionOf(record)) return null;
@@ -335,7 +344,14 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
     if (!final && !record?.text) return;
     const official = record?.text ? await officialFor(record).catch(() => null) : null;
     if (signal.aborted) return;
+    if (official && job.known.has(official.record.id)) {
+      twins.add(item.entry.id);
+      state.downloaded = results.size + merged.size + unmatched.size + twins.size;
+      return;
+    }
     finish(item, record, error, official);
+    const decision = results.get(item.entry.id);
+    if (decision && official && official.record.id !== item.entry.id) decision.aliases = [official.record.id];
   };
   const fetchJudilibre = async (item: Pending, final: boolean) => {
     if (merged.has(item.entry.id)) return;
@@ -358,7 +374,7 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
   };
   try {
     await pool(legifranceQueue, DOWNLOAD_WORKERS, signal, (item) => fetchLegifrance(item, false));
-    await pool(legifranceQueue.filter((item) => !results.has(item.entry.id)), 2, signal, (item) => fetchLegifrance(item, true));
+    await pool(legifranceQueue.filter((item) => !results.has(item.entry.id) && !twins.has(item.entry.id)), 2, signal, (item) => fetchLegifrance(item, true));
     await pool(judilibreQueue, DOWNLOAD_WORKERS, signal, (item) => fetchJudilibre(item, false));
     await pool(judilibreQueue.filter((item) => !results.has(item.entry.id) && !merged.has(item.entry.id) && !unmatched.has(item.entry.id)), 2, signal, (item) => fetchJudilibre(item, true));
   } catch (error) {
@@ -380,21 +396,60 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
     undetected: filters.dispositifOnly ? decisions.filter((decision) => !decision.error && decision.zone !== 'motifs').length : 0,
     failed: decisions.filter((decision) => decision.error).length,
     unmatched: unmatched.size,
+    skipped: skipped.size + twins.size,
   });
   persist(state, decisions);
+  if (state.update && !state.kept) await recordUpdate(state).catch(() => undefined);
+}
+
+export function decisionId(row: ReviewRow): string | null {
+  if (row.decision) return row.decision;
+  for (const document of row.documents) {
+    const match = /^https:\/\/www\.(?:legifrance\.gouv\.fr\/\w+\/id\/([A-Z]+\d+)|courdecassation\.fr\/decision\/([0-9a-f]{24}))$/.exec(document.source);
+    if (match) return match[1] ?? match[2];
+  }
+  return null;
+}
+
+function knownDecisions(review: Review): Set<string> {
+  return new Set(review.rows.flatMap((row) => [decisionId(row), ...(row.aliases ?? [])]).filter((id): id is string => id !== null));
+}
+
+function researchReview(project: string, file: string): Review & { research: NonNullable<Review['research']> } {
+  const review = readReview(project, file);
+  if (reviewCategory(review) !== 'recherche-juridique' || !review.research) throw new UserError('Cette tabular review ne provient pas d’une recherche juridique.');
+  return review as Review & { research: NonNullable<Review['research']> };
 }
 
 export function startResearch(input: unknown, api?: LegifranceApi): ResearchState {
   const { filters, parsed } = validateFilters(input);
+  return launchResearch(filters, parsed, api, new Set());
+}
+
+export function startResearchUpdate(project: string, file: string, since: unknown, api?: LegifranceApi): ResearchState {
+  const review = researchReview(project, file);
+  const stored = review.research.filters;
+  if (!stored) throw new UserError('Cette recherche a été lancée avant l’enregistrement de ses critères : elle ne peut pas être mise à jour. Relancez-la depuis l’onglet Recherche juridique.');
+  const start = date(since, 'de mise à jour');
+  if (!start) throw new UserError('Indiquez la date à partir de laquelle chercher les nouvelles décisions.');
+  if (stored.dateFin && stored.dateFin < start) throw new UserError(`La recherche d’origine s’arrête au ${stored.dateFin} : aucune décision postérieure au ${start} ne peut s’y ajouter.`);
+  const { filters, parsed } = validateFilters({ ...stored, dateDebut: stored.dateDebut > start ? stored.dateDebut : start });
+  const target: ResearchTarget = { project, file, title: review.title, since: filters.dateDebut };
+  return launchResearch(filters, parsed, api, knownDecisions(review), target);
+}
+
+function launchResearch(filters: ResearchFilters, parsed: ParsedQuery, api: LegifranceApi | undefined, known: Set<string>, update?: ResearchTarget): ResearchState {
   const client = api ?? defaultApi();
   pruneOldResearch();
   const state: ResearchState = {
     id: randomUUID(),
     phase: 'counting',
     filters,
+    ...(update ? { update } : {}),
     counts: [],
     total: 0,
     listed: 0,
+    skipped: 0,
     downloaded: 0,
     kept: 0,
     excluded: 0,
@@ -403,13 +458,14 @@ export function startResearch(input: unknown, api?: LegifranceApi): ResearchStat
     createdAt: new Date().toISOString(),
   };
   fs.mkdirSync(researchDirectory(state.id), { recursive: true });
-  const job: Job = { state, controller: new AbortController() };
+  const job: Job = { state, controller: new AbortController(), known };
   jobs.set(state.id, job);
   void execute(job, client, parsed)
     .catch((error: unknown) => {
       state.phase = job.controller.signal.aborted && !(error instanceof UserError) ? 'cancelled' : 'error';
       if (state.phase === 'error') state.error = error instanceof Error ? error.message : String(error);
       try {
+        fs.rmSync(path.join(researchDirectory(state.id), 'texts'), { recursive: true, force: true });
         persist(state, []);
       } catch {
         return;
@@ -455,6 +511,18 @@ export function stopAllResearch(): void {
 export function cancelResearch(id: string): ResearchState {
   jobs.get(id)?.controller.abort();
   return researchState(id);
+}
+
+export async function discardResearch(id: string): Promise<{ discarded: true }> {
+  const directory = researchDirectory(id);
+  const job = jobs.get(id);
+  if (job) {
+    job.controller.abort();
+    await waitForResearch(id);
+  }
+  indexes.delete(id);
+  fs.rmSync(directory, { recursive: true, force: true });
+  return { discarded: true };
 }
 
 export function researchPage(id: string, page: unknown, view: unknown): ResearchPage {
@@ -506,25 +574,24 @@ export function createResearchReview(project: string, id: string, title: unknown
   if (questions.length > MAX_COLUMNS) throw new UserError(`Une tabular review contient au plus ${MAX_COLUMNS} questions.`);
   const index = loadIndex(id);
   if (index.state.phase !== 'done') throw new UserError('Aucun résultat à analyser pour cette recherche.');
+  if (index.state.update) throw new UserError('Cette recherche met à jour une revue existante.');
   const decisions = index.decisions.filter((decision) => decision.kept && !decision.error);
   if (!decisions.length) throw new UserError('Aucune décision à analyser.');
-  const rows = decisions.map((decision) => {
-    const text = researchText(id, decision.id);
-    const content = decisionMarkdown(decision, text);
-    return {
-      id: randomUUID(),
-      label: decision.title,
-      documents: [{ source: decision.link, copy: storeDocument(project, sanitizeFilename(decision.title).slice(0, 150) || decision.id, '.md', content), chars: content.length }],
-      status: 'pending' as const,
-    };
-  });
+  const rows = decisionRows(project, id, decisions);
   const now = new Date().toISOString();
   const review: Review = {
     version: 1,
     title: cleanTitle,
     templateName: RESEARCH_TEMPLATE_NAME,
     category: 'recherche-juridique',
-    research: { query: index.state.filters.query, criteria: researchCriteria(index.state.filters), dispositifOnly: index.state.filters.dispositifOnly, total: index.state.total },
+    research: {
+      query: index.state.filters.query,
+      criteria: researchCriteria(index.state.filters),
+      dispositifOnly: index.state.filters.dispositifOnly,
+      total: index.state.total,
+      filters: index.state.filters,
+      searchedAt: index.state.createdAt,
+    },
     projectPath: project,
     createdAt: now,
     updatedAt: now,
@@ -536,4 +603,46 @@ export function createResearchReview(project: string, id: string, title: unknown
     cells: {},
   };
   return { file: writeNewReview(project, review), review };
+}
+
+function decisionRows(project: string, id: string, decisions: ResearchDecision[]): ReviewRow[] {
+  return decisions.map((decision) => {
+    const text = researchText(id, decision.id);
+    const content = decisionMarkdown(decision, text);
+    return {
+      id: randomUUID(),
+      label: decision.title,
+      decision: decision.id,
+      ...(decision.aliases?.length ? { aliases: decision.aliases } : {}),
+      documents: [{ source: decision.link, copy: storeDocument(project, sanitizeFilename(decision.title).slice(0, 150) || decision.id, '.md', content), chars: content.length }],
+      status: 'pending',
+    };
+  });
+}
+
+async function recordUpdate(state: ResearchState, rows: ReviewRow[] = []): Promise<ReviewRow[]> {
+  const target = state.update!;
+  let added: ReviewRow[] = [];
+  await updateReview(target.project, target.file, (review) => {
+    const known = knownDecisions(review);
+    added = rows.filter((row) => !known.has(row.decision!));
+    review.rows.push(...added);
+    if (!review.research) return;
+    review.research.searchedAt = state.createdAt;
+    review.research.updates = [...(review.research.updates ?? []), { searchedAt: state.createdAt, since: target.since, found: state.kept, added: added.length }];
+  });
+  return added;
+}
+
+export async function appendResearchUpdate(project: string, file: string, id: string): Promise<string[]> {
+  if (jobs.has(id)) throw new UserError('Recherche en cours : attendez la fin du téléchargement.');
+  const index = loadIndex(id);
+  const target = index.state.update;
+  if (!target || target.project !== project || target.file !== file) throw new UserError('Cette recherche ne correspond pas à la tabular review.');
+  if (index.state.phase !== 'done') throw new UserError('Aucun résultat à ajouter pour cette mise à jour.');
+  const known = knownDecisions(researchReview(project, file));
+  const decisions = index.decisions.filter((decision) => decision.kept && !decision.error && !known.has(decision.id));
+  const added = await recordUpdate(index.state, decisionRows(project, id, decisions));
+  await discardResearch(id);
+  return added.map((row) => row.id);
 }

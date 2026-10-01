@@ -4,17 +4,9 @@ Plugin CloudCLI autonome : une bibliothèque de skills et de plugins, une liste 
 
 Les onglets Connecteurs, Skills, Plugins et Agents lisent le catalogue SQLite. Chaque plugin expose toute son arborescence importée ; les fichiers texte peuvent être ouverts et enregistrés dans l’éditeur natif. Un MCP, une skill ou un agent livré par un plugin reste dans cet onglet Plugins.
 
-## Installation locale
+## Installation
 
-Avec Node 22 ou plus récent, depuis `plugins/piecemaker-library/` :
-
-```sh
-node install.mjs /chemin/vers/piecemaker-droit-francais
-```
-
-Le plugin est copié dans le répertoire de plugins déterminé par `product.config.json` de PieceMaker, avec priorité à `CLOUDCLI_HOME`. Il nécessite le module `server/piecemaker/library` et le pont de visionneuse `src/piecemaker/library` de PieceMaker. Sur CloudCLI sans ces extensions, le backend de bibliothèque n’est pas disponible.
-
-La source du plugin est versionnée dans `plugins/piecemaker-library/` du dépôt PieceMaker. Relancer l’installation après une modification locale. Aucun dépôt distant n’est requis pour cette installation.
+Comme tous les plugins PieceMaker : compilé et installé par la chaîne commune `plugins/toolchain`, embarqué dans l'application Electron et réinstallé à chaque démarrage si besoin. Depuis le dépôt : `npm run plugins`. Voir `plugins.md` à la racine.
 
 ## Données et activation
 

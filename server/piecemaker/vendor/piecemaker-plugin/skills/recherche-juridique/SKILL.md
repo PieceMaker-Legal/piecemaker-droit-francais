@@ -22,51 +22,37 @@ effectivement disponibles, puis le format exact que le vérificateur accepte.
 
 | Outil | Rôle |
 | --- | --- |
-| `Search_Cour_Cassation` | Recherche ciblée dans la jurisprudence de la Cour de cassation (mots-clés, opérateurs ET/OU, expression exacte, référence d'article), filtrable par matière et publication au bulletin. |
-| `Search_Conseil_Etat` | Même recherche ciblée dans la jurisprudence du Conseil d'État, filtrable par publication au recueil Lebon. |
-| `Search_Cour_Appel` | Même recherche dans les cours d'appel, filtrable par ville — bien cibler (ville + dates), le volume est important. |
-| `Search_CAA` | Même recherche dans les cours administratives d'appel, filtrable par ville. |
-| `Search_Premiere_Instance` | Recherche dans les juridictions de première instance — volume très limité (~50 décisions), opérateur OU par défaut. |
+| `Search_Jurisprudence` | Seul outil de recherche jurisprudentielle : interroge en un appel Légifrance et Judilibre pour la Cour de cassation, les cours d'appel, la première instance, le Conseil d'État et les CAA, avec les mêmes filtres (`matiere` obligatoire en cassation, publication, villes, `types_premiere_instance` obligatoire en première instance, recueil Lebon, dates) et la même requête (guillemets, `ET`, `OU`, parenthèses, articles). Les doublons Légifrance/Judilibre sont fusionnés ; au-delà de 500 résultats cumulés, la recherche est refusée. |
 | `Search_Code` | Recherche dans les codes juridiques français (Code civil, Code du travail…) — référence d'article exacte (`L. 1235-3`), mots-clés ou expression exacte. Renvoie les identifiants `LEGIARTI…` des articles trouvés. |
 | `consulter_article` | Texte intégral et vigueur d'une version précise d'article, à partir de son identifiant `LEGIARTI…` rendu par `Search_Code`. |
-| `consulter_decision` | Rapatrie le texte intégral d'une décision à partir de son identifiant (`JURITEXT…`, `CETATEXT…`). **Rapatrie le texte intégral et le met en cache** (voir plus bas) — c'est le moyen normal de lire une décision avant de la citer. |
-| `Download_Query_Results` | Télécharge en masse tous les résultats d'une requête dans un dossier local, pour trier sans paginer. **Ne rapatrie pas le texte intégral** (voir l'avertissement ci-dessous) — sert au tri, jamais directement à la citation. |
-| `Build_Research_Corpus` | Construit un corpus exhaustif et reproductible sur une question de droit : plusieurs requêtes, déduplication, téléchargement et scan du texte intégral de chaque décision. **Rapatrie le texte intégral.** À utiliser pour une recherche large et systématique plutôt qu'un enchaînement manuel de `Search_*`. |
-| `Validate_Research_Cards` | Valide mécaniquement (sans LLM) le résultat de `Build_Research_Corpus` : une fiche par décision, citations confirmées dans le texte intégral, rapport de couverture. |
+| `consulter_decision` | Rapatrie le texte intégral d'une décision à partir de son identifiant Légifrance (`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux). **Rapatrie le texte intégral et le met en cache** (voir plus bas) — c'est le moyen normal de lire une décision avant de la citer. |
+| `Build_Research_Corpus` | Construit un corpus exhaustif et reproductible sur une question de droit : une formulation, recherchée par le même moteur et avec les mêmes filtres que `Search_Jurisprudence`, déduplication, téléchargement et scan du texte intégral de chaque décision. **Rapatrie le texte intégral.** À utiliser pour une recherche large et systématique plutôt qu'une suite de pages de `Search_Jurisprudence`. |
 | `Tracking_BODACC` | Situation d'une entreprise (procédures collectives) via son SIREN — hors jurisprudence, utile pour qualifier une partie. |
 
 ### Le fait décisif : seuls deux chemins rendent une citation vérifiable
 
 Le vérificateur ne peut confirmer une citation que si le texte intégral de sa
-source est quelque part sur disque. Sur les trois façons dont le MCP restitue
-une décision, **une seule ne rapatrie pas ce texte** :
+source est quelque part sur disque :
 
 - **`Build_Research_Corpus`** écrit `decisions.jsonl` (une décision par ligne,
   champ `texte` = texte intégral réel) — vérifiable.
 - **`consulter_decision`** renvoie le texte intégral dans sa réponse d'outil ;
   le hook `decision-cache.mjs` le capte au passage et l'écrit dans
   `~/.piecemaker/decisions/<id>.json` — vérifiable.
-- **`Download_Query_Results`** écrit `results.json`, mais chaque entrée ne
-  contient que `id`, `titre`, `lien`, `date`, `analyse` (un sommaire) et,
-  optionnellement, `solution.dispositif` (le dispositif seul — jamais les
-  motifs). **Pas de texte intégral.** Citer une décision connue uniquement par
-  ce canal produira une citation non vérifiée et bloquera le tour.
 
-**Conséquence pratique** : `Download_Query_Results` sert à trier une liste de
-résultats (lire les titres/sommaires, écarter le hors-sujet). Dès qu'une
-décision de cette liste doit être citée, il faut d'abord la lire avec
-`consulter_decision` (ou l'avoir dans un corpus `Build_Research_Corpus`) —
-jamais citer directement depuis `results.json`.
+**Conséquence pratique** : les résultats de `Search_Jurisprudence` (titre,
+analyse, extraits) servent à trier. Dès qu'une décision doit être citée, il
+faut d'abord la lire avec `consulter_decision` (ou l'avoir dans un corpus
+`Build_Research_Corpus`).
 
 ## Déroulé de recherche
 
-1. **Recherche large** avec l'outil `Search_*` adapté à la juridiction visée
+1. **Recherche large** avec `Search_Jurisprudence` sur les juridictions visées
    (ou `Build_Research_Corpus` pour une question de droit qui mérite un
    balayage systématique plutôt qu'une requête isolée). Pour un texte de loi,
    `Search_Code`.
-2. **Tri** des résultats sur les seuls éléments déjà renvoyés (titre, sommaire,
-   date, `analyse`) — sans lire chaque décision en entier. `Download_Query_Results`
-   aide à trier un grand volume hors ligne.
+2. **Tri** des résultats sur les seuls éléments déjà renvoyés (titre, analyse,
+   date, extraits) — sans lire chaque décision en entier.
 3. **Lecture** des seules décisions/articles retenus comme potentiellement
    cite-worthy : `consulter_decision` (jurisprudence) ou `consulter_article`
    (texte de loi), ou relecture du `decisions.jsonl` d'un corpus déjà construit.
@@ -114,9 +100,9 @@ prend l'une des deux formes suivantes.
 ### Forme « jurisprudence » (`kind: "case"`)
 
 Identifie la décision par `decision_id` — l'identifiant Légifrance
-(`JURITEXT…`, `CETATEXT…`) tel que rendu par `Search_*`/`Download_Query_Results`/
-`Build_Research_Corpus`, et lu avec `consulter_decision` (ou présent dans un
-`decisions.jsonl`).
+(`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux) tel que
+rendu par `Search_Jurisprudence`/`Build_Research_Corpus`, et lu avec
+`consulter_decision` (ou présent dans un `decisions.jsonl`).
 
 ```json
 {
@@ -208,9 +194,8 @@ retombe sur un tableau `quotes` d'un seul élément :
 
 1. Parse le bloc `<CITATIONS>` du dernier message.
 2. Pour chaque citation, résout sa source réelle — texte intégral de la
-   décision (corpus `Build_Research_Corpus`, cache `consulter_decision`, ou en
-   dernier recours le sommaire de `Download_Query_Results`) ou pièce
-   Markdown du dossier.
+   décision (corpus `Build_Research_Corpus` ou cache `consulter_decision`) ou
+   pièce Markdown du dossier.
 3. Localise mécaniquement chaque extrait dans ce texte. Un extrait qui a
    légèrement dérivé (espace, casse, ponctuation) est **corrigé
    automatiquement** avec l'extrait source exact — ce n'est pas une faute.
@@ -224,8 +209,8 @@ citation si elle ne peut pas être justifiée par une source effectivement lue.
 
 ## Ce qu'il ne faut pas faire
 
-- Ne jamais citer une décision connue uniquement par un résultat
-  `Download_Query_Results` sans l'avoir d'abord lue avec `consulter_decision`.
+- Ne jamais citer une décision connue uniquement par un résultat de
+  `Search_Jurisprudence` sans l'avoir d'abord lue avec `consulter_decision`.
 - Ne jamais paraphraser un extrait pour qu'il « sonne » comme la source — le
   vérificateur tolère l'espace/la casse/la ponctuation, pas le sens.
 - Ne jamais laisser un `ref` sauter un numéro ou repartir en désordre.

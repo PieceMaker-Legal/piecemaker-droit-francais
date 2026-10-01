@@ -7,11 +7,18 @@ commande, aucune question posée.
 piecemaker
 ```
 
-Elle enchaîne, dans cet ordre : libération des ports (5173, 3003), clonage du
-dépôt s'il est absent, mise à jour en avance rapide, installation des
-dépendances quand le verrou a bougé, installation des composants du socle,
-démarrage de l'application (qui porte son propre proxy PII), installation de
-la PWA, ouverture. Sautée en entier avec `--launch-only`.
+Elle enchaîne, dans cet ordre : clonage du dépôt s'il est absent, mise à jour
+en avance rapide, installation des dépendances quand le verrou a bougé,
+installation des plugins PieceMaker, libération des ports (5173, 3003) et
+démarrage de l'application (qui porte son propre proxy PII), installation des
+composants du socle, installation de la PWA, ouverture. Sautée en entier avec
+`--launch-only`, qui se contente de réparer les plugins manquants ou périmés
+(puis relance l'application si elle tournait) et de démarrer l'application si
+elle est arrêtée.
+
+Les plugins sont installés **avant** le démarrage, jamais après, par la chaîne
+commune `plugins/toolchain` (recompilation complète, ou réinstallation depuis le
+dernier bundle avec `--launch-only`) : voir `plugins.md`.
 
 Sur une machine nue, sans dépôt ni commande, chaque amorce clone le dépôt puis
 lance ce premier passage :

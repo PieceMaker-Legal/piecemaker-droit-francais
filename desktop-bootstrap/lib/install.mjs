@@ -1,8 +1,7 @@
 import fs from 'node:fs/promises';
 import { buildDesktopApp } from './build.mjs';
 import { generateCertificates, isCaTrusted, signApplication, trustCertificateAuthority } from './certificates.mjs';
-import { createShortcuts, installApplication, launchApplication } from './place.mjs';
-import { installPieceMakerPlugins } from './plugins.mjs';
+import { createShortcuts, installApplication, launchApplication, quitRunningApplication } from './place.mjs';
 import { ui } from './ui.mjs';
 import {
   IS_MAC,
@@ -36,6 +35,12 @@ async function main() {
   await generateCertificates();
 
   const builtArtifact = await buildDesktopApp(sourceDir);
+  // Une instance encore ouverte garderait son serveur, donc ses plugins, et
+  // `open` ou `start` ne ferait que la ramener au premier plan. Avec
+  // --no-launch (mise à jour lancée depuis l'application, sous-processus de son
+  // serveur : server/piecemaker/desktop-update), c'est l'appelant qui quitte et
+  // relance l'application ; la fermer ici tuerait la mise à jour en cours.
+  if (!skipLaunch) await quitRunningApplication();
   const installedPath = await installApplication(builtArtifact);
 
   if (skipCertificates) {
@@ -45,8 +50,6 @@ async function main() {
   }
 
   createShortcuts(installedPath);
-
-  await installPieceMakerPlugins(sourceDir);
 
   await import('../composants/install.mjs').then((composants) => composants.installRuntimeComponents({ sourceDir }));
 

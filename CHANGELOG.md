@@ -3,6 +3,37 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.18](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.17...v2.0.18) (2026-10-01)
+
+## [2.0.17](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.16...v2.0.17) (2026-10-01)
+
+### Bug Fixes
+
+* **desktop:** embarquer les plugins PieceMaker dans l'application Electron ([58d035e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/58d035e1ad6d77a64944af3c11367946597d46e3))
+* **desktop:** ne pas fermer l'application pendant sa mise à jour intégrée ([881009e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/881009eb5054d6532b758dfeb9d2d423e0d9b4ee))
+* **plugins:** installer les plugins PieceMaker avant le démarrage et sans liste figée ([bb744d9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/bb744d926522cb90e0c5414d692055a0d7d67604))
+
+### Refactoring
+
+* **plugins:** un seul contrat, une seule chaîne d'installation ([fb71f3f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fb71f3f41d035a087b7e91bb67d859d89cd8d384))
+
+## [2.0.16](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.15...v2.0.16) (2026-10-01)
+
+### New Features
+
+* **anonymisation:** proposer MinerU devant une pièce scannée, sinon continuer sans OCR ([2f49279](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2f49279639851d0b2a7f1a96486d2eb56791f351))
+* **tabular-review:** ajouter le mode recherche juridique Légifrance ([f210137](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f210137f1533c1dae8d1301e97af816c71009820))
+* **tabular-review:** annuler et mettre à jour une recherche juridique ([edc3b73](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/edc3b73aa702ab05dde7b0df094da08f7397509d))
+* **tabular-review:** fusionner Judilibre à la recherche juridique et utiliser ses zones ([93f3179](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/93f3179bf77db2f0d8aef369b1be5fefea22999d))
+* **tabular-review:** vérifier les citations et relancer la session ([908a6e3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/908a6e32cbd7f5fd009e09912d1ee6489594d270))
+
+### Bug Fixes
+
+* **desktop:** lancer la mise à jour hors du dossier de l'app remplacée ([de4b30d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/de4b30df3728cb3beac59f6dc61b2ccc1314db21))
+* **desktop:** ne plus dépendre du dossier courant ni d'un remplacement destructif ([0eba78f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0eba78f361e4fcad9bb99d3765ed6472a5fc8ffb))
+* **legifrance:** installer le vrai plugin MCP et suivre sa recherche unique Légifrance + Judilibre ([1bf1872](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1bf18726f4370fa188f8f6715fe9fe6bd35f045f))
+* **tabular-review:** ne plus confier les expressions exactes aux guillemets de Judilibre ([9bed528](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9bed528f429ffd6e4fff9212b383fda5dfa48f79))
+
 ## [2.0.15](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.14...v2.0.15) (2026-09-30)
 
 ## [2.0.14](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.13...v2.0.14) (2026-09-30)

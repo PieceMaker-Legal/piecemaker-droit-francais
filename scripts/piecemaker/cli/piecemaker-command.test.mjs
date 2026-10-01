@@ -23,3 +23,10 @@ test('the desktop launcher binds to the installed piecemaker binary', () => {
     assert.equal(executable.startsWith(BIN_DIR) || executable.includes(`${path.sep}node${path.sep}` ) || executable.includes('versions/node'), true);
   }
 });
+
+test('plugins are installed through the shared toolchain, before the application starts', () => {
+  const plugins = fs.readFileSync(path.join(here, 'lib', 'plugins.mjs'), 'utf8');
+  assert.match(plugins, /'plugins', 'toolchain', 'index\.mjs'/);
+  const main = fs.readFileSync(path.join(here, 'piecemaker.mjs'), 'utf8');
+  assert.ok(main.indexOf('await installPlugins(') < main.indexOf('await resetAndLaunch('));
+});
