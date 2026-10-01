@@ -1638,7 +1638,12 @@ function startInstallJob(repoRoot, component) {
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
     // PIECEMAKER_YES=1 : accepte les valeurs par défaut (MinerU inclus) sans TTY.
-    env: { ...process.env, PIECEMAKER_YES: '1', NO_COLOR: '1' },
+    env: {
+      ...process.env,
+      PIECEMAKER_YES: '1',
+      NO_COLOR: '1',
+      ...(component === 'mineru' ? { PIECEMAKER_INSTALL_MINERU: '1' } : {}),
+    },
   });
   const tailStderr = [];
   const onLine = (chunk) => {

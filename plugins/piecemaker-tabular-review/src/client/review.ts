@@ -1,7 +1,7 @@
-import type { ExportFormat, ExportResult, ReviewDetail, ReviewRow } from '../shared.js';
-import { CATEGORY_LABELS, emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
+import type { Cell, CitationSource, ExportFormat, ExportResult, ReviewDetail, ReviewRow } from '../shared.js';
+import { CATEGORY_LABELS, citationIssue, lastSearchDate, emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, MAX_CITATION_CORRECTIONS, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
-import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, renderMarkdown, toast } from './dom.js';
+import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, openModal, renderMarkdown, toast } from './dom.js';
 import { anonymizationProxyOrigin } from './host.js';
 
 const POLL_INTERVAL = 2500;
@@ -16,7 +16,9 @@ function rowStatus(row: ReviewRow): string {
     case 'pending':
       return '<div class="ptr-row-status">En attente</div>';
     case 'running':
-      return '<div class="ptr-row-status"><span class="ptr-spinner"></span> Analyse en cours…</div>';
+      return row.corrections
+        ? `<div class="ptr-row-status"><span class="ptr-spinner"></span> Correction des citations (${row.corrections}/${MAX_CITATION_CORRECTIONS})…</div>`
+        : '<div class="ptr-row-status"><span class="ptr-spinner"></span> Analyse en cours…</div>';
     case 'error':
       return `<div class="ptr-row-status ptr-status-error">Erreur : ${escapeHtml(row.error ?? 'session IA en échec')}</div>`;
     case 'cancelled':
@@ -24,6 +26,37 @@ function rowStatus(row: ReviewRow): string {
     default:
       return '';
   }
+}
+
+function citationLinks(cell: Cell): string {
+  const links = (cell.citations ?? []).map((citation, index) => `<a href="#" class="ptr-cite${citation.verified ? '' : ' ptr-cite-ko'}" data-citation="${index}" title="${escapeHtml(`${citation.verified ? '' : 'Extrait non retrouvé dans la source — '}« ${citation.quote} » (${citation.document})`)}">[${index + 1}]</a>`);
+  if (citationIssue(cell) === 'missing') links.push('<span class="ptr-cite ptr-cite-ko" title="Aucune citation fournie malgré les relances">sans citation</span>');
+  return links.length ? `<div class="ptr-cites">${links.join('')}</div>` : '';
+}
+
+function citationList(cell: Cell): string {
+  const citations = cell.citations ?? [];
+  if (!citations.length) return citationIssue(cell) === 'missing' ? '<p class="ptr-status-error ptr-small">Aucune citation fournie malgré les relances.</p>' : '<p class="ptr-muted">—</p>';
+  return `<ol class="ptr-citation-list">${citations.map((citation, index) => `
+    <li><a href="#" class="ptr-citation-quote" data-citation="${index}">« ${escapeHtml(citation.quote)} »</a>
+      <div class="ptr-small ${citation.verified ? 'ptr-muted' : 'ptr-status-error'}">${escapeHtml(citation.document)}${citation.verified ? '' : ' · extrait non retrouvé dans la source'}</div></li>`).join('')}</ol>`;
+}
+
+function sourceBody(source: CitationSource): string {
+  let html = '';
+  let cursor = 0;
+  for (const range of [...source.ranges].sort((left, right) => left.start - right.start)) {
+    if (range.start < cursor) continue;
+    html += `${escapeHtml(source.text.slice(cursor, range.start))}<mark>${escapeHtml(source.text.slice(range.start, range.end))}</mark>`;
+    cursor = range.end;
+  }
+  html += escapeHtml(source.text.slice(cursor));
+  const partial = source.offset > 0 || source.offset + source.text.length < source.length;
+  return `
+    <div class="ptr-small ${source.verified ? 'ptr-muted' : 'ptr-status-error'}">${source.verified ? 'Extrait vérifié dans le document source.' : 'Extrait non retrouvé dans le document source.'}${partial ? ' Seule la partie du document autour de l’extrait est affichée.' : ''}</div>
+    ${source.link ? `<div class="ptr-small"><a href="${escapeHtml(source.link)}" target="_blank" rel="noopener noreferrer">Ouvrir sur ${/courdecassation\.fr/.test(source.link) ? 'Judilibre' : 'Légifrance'}</a></div>` : ''}
+    ${source.verified ? '' : `<blockquote class="ptr-citation-quote">« ${escapeHtml(source.quote)} »</blockquote>`}
+    <div class="ptr-source-text">${html}</div>`;
 }
 
 export function createReviewView(app: App, project: string, file: string, onBack: () => void): View {
@@ -51,10 +84,11 @@ export function createReviewView(app: App, project: string, file: string, onBack
         <div><div class="ptr-label">Question</div><div class="ptr-md">${renderMarkdown(column.prompt)}</div></div>
         ${cell ? `
           <div><div class="ptr-label">Réponse</div><div style="display:flex;gap:6px">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div></div><div class="ptr-small ptr-muted">${escapeHtml(FLAG_LABELS[cell.flag])}</div></div>
-          <div><div class="ptr-label">Justification</div><div class="ptr-md">${cell.reasoning ? renderMarkdown(cell.reasoning) : '<p class="ptr-muted">—</p>'}</div></div>`
+          <div><div class="ptr-label">Justification</div><div class="ptr-md">${cell.reasoning ? renderMarkdown(cell.reasoning) : '<p class="ptr-muted">—</p>'}</div></div>
+          <div><div class="ptr-label">Citations</div>${citationList(cell)}${row.corrections ? `<div class="ptr-small ptr-muted">${row.corrections} demande${row.corrections > 1 ? 's' : ''} de correction envoyée${row.corrections > 1 ? 's' : ''} à la session.</div>` : ''}</div>`
           : `<div class="ptr-muted">${row.status === 'done' ? 'Aucune réponse.' : 'Pas encore de réponse pour cette cellule.'}</div>${rowStatus(row)}`}
         <div><button type="button" class="ptr-button" data-run-cell>${isCellFilled(cell) ? 'Relancer cette cellule' : 'Lancer la session pour cette cellule'}</button></div>
-        <div><div class="ptr-label">Documents</div><ul class="ptr-summary-list">${row.documents.map((document) => `<li title="${escapeHtml(document.copy)}">${/^https:\/\//.test(document.source) ? `<a href="${escapeHtml(document.source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(document.source.replace(/^https:\/\/www\.legifrance\.gouv\.fr\/\w+\/id\//, 'Légifrance · '))}</a>` : escapeHtml(document.source)}</li>`).join('')}</ul></div>
+        <div><div class="ptr-label">Documents</div><ul class="ptr-summary-list">${row.documents.map((document) => `<li title="${escapeHtml(document.copy)}">${/^https:\/\//.test(document.source) ? `<a href="${escapeHtml(document.source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(document.source.replace(/^https:\/\/www\.legifrance\.gouv\.fr\/\w+\/id\//, 'Légifrance · ').replace(/^https:\/\/www\.courdecassation\.fr\/decision\//, 'Judilibre · '))}</a>` : escapeHtml(document.source)}</li>`).join('')}</ul></div>
       </aside>`;
   }
 
@@ -72,13 +106,14 @@ export function createReviewView(app: App, project: string, file: string, onBack
         <div style="min-width:0">
           <div class="ptr-review-title">${escapeHtml(review.title)}</div>
           <div class="ptr-small ptr-muted">${escapeHtml(review.templateName)} · ${escapeHtml(app.projectName(project))} · ${escapeHtml(review.provider)} ${escapeHtml(review.model)} · ${escapeHtml(formatDate(review.createdAt))}</div>
-          ${review.research ? `<div class="ptr-small ptr-muted" title="${escapeHtml(review.research.criteria.join('\n'))}">Requête : <code>${escapeHtml(review.research.query)}</code> · ${escapeHtml(review.research.criteria.join(' · '))}</div>` : ''}
+          ${review.research ? `<div class="ptr-small ptr-muted" title="${escapeHtml(review.research.criteria.join('\n'))}">Requête : <code>${escapeHtml(review.research.query)}</code> · ${escapeHtml(review.research.criteria.join(' · '))} · dernière recherche le ${escapeHtml(formatDate(lastSearchDate(review)))}${review.research.updates?.length ? ` (${review.research.updates.length} mise${review.research.updates.length > 1 ? 's' : ''} à jour)` : ''}</div>` : ''}
         </div>
         ${review.category === 'recherche-juridique' ? `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS['recherche-juridique'])}</span>` : ''}
         <span class="ptr-chip ptr-chip-${status}">${running ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(status))} · ${done}/${review.rows.length}</span>
         ${running ? `<div class="ptr-progress" aria-hidden="true"><div style="width:${review.rows.length ? Math.round((done / review.rows.length) * 100) : 0}%"></div></div>` : ''}
         <span class="ptr-spacer"></span>
         ${running ? '<button type="button" class="ptr-button ptr-button-danger" data-cancel>Annuler</button>' : ''}
+        ${review.research ? `<button type="button" class="ptr-button" data-update-research${review.research.filters ? ` title="Chercher les décisions rendues depuis la dernière recherche (${escapeHtml(formatDate(lastSearchDate(review)))}) et les analyser"` : ' disabled title="Recherche lancée avant l’enregistrement de ses critères : relancez-la depuis l’onglet Recherche juridique"'}>Mettre à jour la recherche</button>` : ''}
         ${!running && failed ? '<button type="button" class="ptr-button" data-retry title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>' : ''}
         <button type="button" class="ptr-button" data-export="docx">Export Word</button>
         <button type="button" class="ptr-button" data-export="pdf">Export PDF</button>
@@ -96,7 +131,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
                   const cell = review.cells[row.id]?.[String(column.index)];
                   const isSelected = selected?.row === row.id && selected.column === column.index;
                   const content = cell
-                    ? `<div class="ptr-cell-content">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div></div>`
+                    ? `<div class="ptr-cell-content">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div></div>${citationLinks(cell)}`
                     : row.status === 'running' ? '<span class="ptr-muted"><span class="ptr-spinner"></span></span>' : '<span class="ptr-muted">—</span>';
                   return `<td class="ptr-cell" tabindex="0" data-row="${escapeHtml(row.id)}" data-column="${column.index}" aria-selected="${isSelected}">${content}</td>`;
                 }).join('')}
@@ -149,6 +184,27 @@ export function createReviewView(app: App, project: string, file: string, onBack
     }
   }
 
+  function openCitation(rowId: string, column: number, index: number) {
+    const params = new URLSearchParams({ project, file, row: rowId, column: String(column), citation: String(index) });
+    void openModal(app.root, {
+      title: `Citation [${index + 1}]`,
+      body: '<div class="ptr-empty"><span class="ptr-spinner"></span> Chargement de la source…</div>',
+      wide: true,
+      actions: [{ label: 'Fermer', value: 'close', kind: 'primary' }],
+      onMount(dialog) {
+        const body = dialog.querySelector<HTMLElement>('.ptr-modal-body')!;
+        app.rpc<CitationSource>('GET', `/reviews/citation?${params}`).then((source) => {
+          const title = dialog.querySelector<HTMLElement>('.ptr-modal-header h2');
+          if (title) title.textContent = `Citation [${index + 1}] · ${source.document}`;
+          body.innerHTML = sourceBody(source);
+          body.querySelector('mark')?.scrollIntoView({ block: 'center' });
+        }).catch((error: unknown) => {
+          body.innerHTML = `<div class="ptr-error-box">${escapeHtml(errorMessage(error))}</div>`;
+        });
+      },
+    });
+  }
+
   const applyDetail = (next: ReviewDetail) => {
     detail = next;
     schedule();
@@ -156,6 +212,14 @@ export function createReviewView(app: App, project: string, file: string, onBack
 
   element.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    const citation = target.closest<HTMLElement>('[data-citation]');
+    if (citation) {
+      event.preventDefault();
+      const host = citation.closest<HTMLElement>('td.ptr-cell');
+      const position = host ? { row: host.dataset.row ?? '', column: Number(host.dataset.column) } : selected;
+      if (position) openCitation(position.row, position.column, Number(citation.dataset.citation));
+      return;
+    }
     if (target.closest('[data-back]')) {
       onBack();
       return;
@@ -199,6 +263,10 @@ export function createReviewView(app: App, project: string, file: string, onBack
         const proxyOrigin = await anonymizationProxyOrigin();
         applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/run', { project, file, rowId, column: index, replace: filled, proxyOrigin }));
       });
+      return;
+    }
+    if (target.closest('[data-update-research]')) {
+      app.updateResearch(project, file);
       return;
     }
     if (target.closest('[data-retry]')) {

@@ -5,7 +5,8 @@ type State = 'court' | 'party' | 'other';
 const GAP = '[…]';
 const HEADING_MAX = 120;
 
-const ANNEX = /^(moyens? annexes?|moyens? produits? par|moyen annexe)\b/;
+const ANNEX = /^(moyens? annexes?|moyens? produits?,? (?:\S+ ){0,8}?par|moyen annexe)\b/;
+const GLUED_ANNEX = /([^\n])[ \t]*(MOYENS? ANNEX[EÉ]S?\b)/g;
 const ANNEX_HEADING = /^annexes?$/;
 const DISPOSITIF = /^par ces motifs\b/;
 const DISPOSITIF_HEADING = /^(d ?e ?c ?i ?d ?e|dispositif)$/;
@@ -113,8 +114,18 @@ function courtStart(entries: Line[], limit: number): number {
   return entries.findIndex((line, index) => index < limit && ((line.short && COURT_HEADING.test(line.heading)) || COURT_START.test(line.body)));
 }
 
+function separateAnnexes(text: string): string {
+  return text.replace(GLUED_ANNEX, '$1\n$2');
+}
+
+export function withoutAnnexes(text: string): string {
+  const paragraphs = splitParagraphs(separateAnnexes(text));
+  const annex = lines(paragraphs).findIndex((line, index) => index > 0 && ANNEX.test(line.body));
+  return (annex > 0 ? paragraphs.slice(0, annex) : paragraphs).join('\n\n');
+}
+
 export function judgeZone(text: string, cassation: boolean): JudgeZone {
-  const paragraphs = splitParagraphs(text);
+  const paragraphs = splitParagraphs(separateAnnexes(text));
   const entries = lines(paragraphs);
   const { end, dispositif } = bounds(entries);
   if (cassation) {

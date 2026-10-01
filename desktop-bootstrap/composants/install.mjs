@@ -145,7 +145,7 @@ export async function pipelineModelsReady(host, mineruConfig) {
   }
 }
 
-function createHost() {
+export function createHost() {
   return {
     async exists(target) {
       try {
@@ -173,7 +173,7 @@ function createHost() {
   };
 }
 
-function spawnCommand(command, args, { cwd, env, capture = false, timeoutMs = 0 } = {}) {
+function spawnCommand(command, args, { cwd = os.homedir(), env, capture = false, timeoutMs = 0 } = {}) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (result) => {

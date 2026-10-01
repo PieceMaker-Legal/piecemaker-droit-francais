@@ -9,7 +9,10 @@ export type Json = Record<string, unknown>;
 export type LegifranceApi = {
   search(body: Json, signal: AbortSignal): Promise<Json>;
   consult(id: string, signal: AbortSignal): Promise<Json>;
+  judilibre(route: string, params: URLSearchParams, signal: AbortSignal): Promise<Json>;
 };
+
+type Service = { label: string; subscription: string; request(bearer: string): { url: string; init: RequestInit } };
 
 type Credentials = { id: string; secret: string; sandbox: boolean };
 
@@ -48,8 +51,8 @@ export function legifranceCredentials(environment: NodeJS.ProcessEnv = process.e
 
 function endpoints(sandbox: boolean) {
   return sandbox
-    ? { token: 'https://sandbox-oauth.piste.gouv.fr/api/oauth/token', api: 'https://sandbox-api.piste.gouv.fr/dila/legifrance/lf-engine-app' }
-    : { token: 'https://oauth.piste.gouv.fr/api/oauth/token', api: 'https://api.piste.gouv.fr/dila/legifrance/lf-engine-app' };
+    ? { token: 'https://sandbox-oauth.piste.gouv.fr/api/oauth/token', api: 'https://sandbox-api.piste.gouv.fr/dila/legifrance/lf-engine-app', judilibre: 'https://sandbox-api.piste.gouv.fr/cassation/judilibre/v1.0' }
+    : { token: 'https://oauth.piste.gouv.fr/api/oauth/token', api: 'https://api.piste.gouv.fr/dila/legifrance/lf-engine-app', judilibre: 'https://api.piste.gouv.fr/cassation/judilibre/v1.0' };
 }
 
 function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -69,6 +72,8 @@ function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
     signal.addEventListener('abort', abort, { once: true });
   });
 }
+
+export class AccessDenied extends UserError {}
 
 class RetryableError extends Error {
   constructor(message: string, readonly delay?: number) {
@@ -104,40 +109,36 @@ export function createLegifranceApi(credentials: Credentials, fetchImpl: typeof 
     return pendingToken;
   }
 
-  async function once(endpoint: string, body: Json, signal: AbortSignal): Promise<Json> {
+  async function once(service: Service, signal: AbortSignal): Promise<Json> {
     const bearer = await accessToken(signal);
+    const { url, init } = service.request(bearer);
     let response: Response;
     try {
-      response = await fetchImpl(`${urls.api}${endpoint}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]),
-      });
+      response = await fetchImpl(url, { ...init, signal: AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) });
     } catch (error) {
       if (signal.aborted) throw new Error('Annulée.');
-      throw new RetryableError(`API Légifrance injoignable : ${error instanceof Error ? error.message : String(error)}`);
+      throw new RetryableError(`${service.label} injoignable : ${error instanceof Error ? error.message : String(error)}`);
     }
     if (response.status === 401) {
       token = null;
       throw new RetryableError('Jeton PISTE expiré.', 0);
     }
-    if (response.status === 403) throw new UserError('Accès refusé par PISTE : l’application doit être abonnée à l’API Légifrance.');
+    if (response.status === 403) throw new AccessDenied(`Accès refusé par PISTE : l’application doit être abonnée à ${service.subscription}.`);
     if (response.status === 429 || response.status >= 500) {
       const retryAfter = Number(response.headers.get('retry-after'));
-      throw new RetryableError(`API Légifrance indisponible (HTTP ${response.status}).`, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : undefined);
+      throw new RetryableError(`${service.label} indisponible (HTTP ${response.status}).`, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : undefined);
     }
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      throw new UserError(`Requête refusée par l’API Légifrance (HTTP ${response.status})${detail ? ` : ${detail.slice(0, 300)}` : ''}.`);
+      throw new UserError(`Requête refusée par ${service.label.replace(/^API/, 'l’API')} (HTTP ${response.status})${detail ? ` : ${detail.slice(0, 300)}` : ''}.`);
     }
     return await response.json() as Json;
   }
 
-  async function call(endpoint: string, body: Json, signal: AbortSignal): Promise<Json> {
+  async function call(service: Service, signal: AbortSignal): Promise<Json> {
     for (let attempt = 1; ; attempt += 1) {
       try {
-        return await once(endpoint, body, signal);
+        return await once(service, signal);
       } catch (error) {
         if (!(error instanceof RetryableError) || attempt >= ATTEMPTS || signal.aborted) throw error instanceof RetryableError ? new Error(error.message) : error;
         await pause(error.delay ?? 500 * 2 ** (attempt - 1), signal);
@@ -145,8 +146,27 @@ export function createLegifranceApi(credentials: Credentials, fetchImpl: typeof 
     }
   }
 
+  const legifrance = (endpoint: string, body: Json): Service => ({
+    label: 'API Légifrance',
+    subscription: 'l’API Légifrance',
+    request: (bearer) => ({
+      url: `${urls.api}${endpoint}`,
+      init: { method: 'POST', headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body) },
+    }),
+  });
+
+  const judilibre = (route: string, params: URLSearchParams): Service => ({
+    label: 'API Judilibre',
+    subscription: 'l’API Judilibre',
+    request: (bearer) => ({
+      url: `${urls.judilibre}${route}?${params}`,
+      init: { method: 'GET', headers: { authorization: `Bearer ${bearer}`, accept: 'application/json' } },
+    }),
+  });
+
   return {
-    search: (body, signal) => call('/search', body, signal),
-    consult: (id, signal) => call('/consult/juri', { textId: id }, signal),
+    search: (body, signal) => call(legifrance('/search', body), signal),
+    consult: (id, signal) => call(legifrance('/consult/juri', { textId: id }), signal),
+    judilibre: (route, params, signal) => call(judilibre(route, params), signal),
   };
 }

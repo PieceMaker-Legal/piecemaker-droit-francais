@@ -7,6 +7,7 @@ import {
   IS_MAC,
   IS_WINDOWS,
   PRODUCT_NAME,
+  bootstrapHome,
   certsDir,
   releaseTag,
   sourceDir,
@@ -24,6 +25,9 @@ async function main() {
   if (!sourceDir) {
     throw new Error('PIECEMAKER_SRC_DIR est absent — lancez install.sh ou install.ps1.');
   }
+
+  await fs.mkdir(bootstrapHome, { recursive: true });
+  process.chdir(bootstrapHome);
 
   console.log(`\n${PRODUCT_NAME} — installation de l'application de bureau (${releaseTag})`);
 

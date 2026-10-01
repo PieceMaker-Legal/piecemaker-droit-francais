@@ -6,14 +6,15 @@ import { api } from '@/shared/api';
 import type { Project } from '@/shared/types';
 import { Button, Dialog, DialogContent, DialogTitle } from '@/shared/ui';
 import { cn } from '@/shared/utils';
-import { pmPost, PieceMakerApiError } from '@/piecemaker/dossier/api';
+import { PieceMakerApiError } from '@/piecemaker/dossier/api';
 import {
   ANONYMIZATION_COMPLETED_EVENT,
   getTrackedAnonymizationJobs,
+  startAnonymization,
   subscribeTrackedAnonymizationJobs,
-  trackAnonymizationJob,
 } from '@/piecemaker/dossier/anonymizationJobsCache';
 import type { TrackedAnonymizationJob } from '@/piecemaker/dossier/anonymizationJobsCache';
+import { OcrDecisionDialog } from '@/piecemaker/sidebar-anonymization/OcrDecisionDialog';
 
 type AnonymizationLauncherProps = {
   buttonSlots: HTMLElement[];
@@ -117,21 +118,12 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
     const failures: string[] = [];
     for (const project of selectedProjects) {
       try {
-        const { job } = await pmPost<{ job: { id: string; state: 'running' | 'done' | 'error'; percent: number; error: string | null } }>('/knowledge/scan', {
+        await startAnonymization({
           projectId: project.projectId,
-        });
-        launchedCount += 1;
-        trackAnonymizationJob({
           projectPath: project.fullPath,
           projectName: project.displayName,
-          job: {
-            id: job.id,
-            case: project.projectId,
-            state: job.state,
-            percent: job.percent,
-            error: job.error,
-          },
-        });
+        }, 'ask');
+        launchedCount += 1;
       } catch (cause) {
         failures.push(`${project.displayName} : ${cause instanceof PieceMakerApiError ? cause.message : String(cause)}`);
       }
@@ -240,6 +232,8 @@ export function AnonymizationLauncher({ buttonSlots, progressSlots, onProjectsCh
           </div>
         </DialogContent>
       </Dialog>
+
+      <OcrDecisionDialog />
     </>
   );
 }

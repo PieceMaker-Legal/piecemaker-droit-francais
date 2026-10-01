@@ -84,25 +84,16 @@ serveur et l'étape 06 réconcilient cet enregistrement.
 L'étape `07-legifrance` installe le plugin autonome depuis
 `PieceMaker-Legal/mcp-legifrance`. Son runtime, ses tests, son venv et sa
 configuration MCP ne vivent plus dans ce dépôt. Le plugin est identifié dans
-Claude par `legifrance`, avec le namespace `mcp__plugin_legifrance_legifrance`.
+Claude par `piecemaker@mcp-legifrance`, avec le namespace
+`mcp__plugin_piecemaker_legifrance`.
 
 Les identifiants PISTE sont copiés avec des permissions 0600 dans
 `~/.config/mcp-legifrance/.env`. Le `.env` PieceMaker reste alimenté pour
 l'administration et la migration des installations antérieures.
 
-Deux outils complètent les recherches ponctuelles :
-
-- `Build_Research_Corpus` fige plusieurs requêtes, déduplique, télécharge et
-  scanne chaque texte intégral ; un filtre booléen auditable ferme les
-  incompatibilités certaines, puis prépare toutes les candidates en lots de
-  30 décisions au plus par défaut ;
-- `Validate_Research_Cards` exige une fiche par décision, confirme chaque
-  citation dans le texte source et produit la matrice ainsi que les métriques
-  de couverture et de consommation.
-
-Ce flux n'utilise ni embeddings, ni base vectorielle, ni top-k. Le filtre
-statique exige la présence conjointe d'un contexte SA et d'une révocation située
-à 300 caractères au plus d'une fonction dirigeante ; chaque cooccurrence d'une
-candidate est conservée. Les tokens sont annoncés comme estimés tant qu'un usage
-exact du fournisseur n'a pas été passé au validateur. L'implémentation et ses
-tests appartiennent désormais au dépôt MCP autonome.
+`Search_Jurisprudence` est le seul outil de recherche jurisprudentielle : il
+interroge Légifrance et Judilibre en un appel, avec les mêmes filtres et la même
+requête booléenne, et fusionne les doublons. `Build_Research_Corpus` utilise le
+même moteur pour figer une formulation, télécharger et scanner chaque texte
+intégral, puis préparer les lots de revue, sans embeddings, base vectorielle ni
+top-k. L'implémentation et ses tests appartiennent au dépôt MCP autonome.
