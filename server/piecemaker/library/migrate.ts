@@ -19,38 +19,3 @@ export function importLibraryDirectory(store: ReturnType<typeof createLibrarySto
   }
   return imported;
 }
-
-export function migratePersonalLibrary(store: ReturnType<typeof createLibraryStore>, userHome: string, applicationRoot: string, withdraw = false) {
-  const imported = [];
-  for (const folder of ['assistant-workflows', 'tabular-review-workflows']) {
-    imported.push(...importLibraryDirectory(store, path.join(applicationRoot, 'server/piecemaker/vendor/mike-defaults-fr', folder), 'skill'));
-  }
-  for (const [directory, kind] of [
-    [path.join(userHome, '.claude', 'skills'), 'skill'],
-    [path.join(userHome, '.codex', 'skills'), 'skill'],
-    [path.join(userHome, '.agents', 'skills'), 'skill'],
-    [path.join(userHome, '.cursor', 'skills'), 'skill'],
-    [path.join(userHome, '.config', 'opencode', 'skills'), 'skill'],
-    [path.join(userHome, '.grok', 'skills'), 'skill'],
-    [path.join(userHome, '.claude', 'agents'), 'agent'],
-    [path.join(userHome, '.cursor', 'agents'), 'agent'],
-    [path.join(userHome, '.grok', 'agents'), 'agent'],
-    [path.join(userHome, '.config', 'opencode', 'agents'), 'agent'],
-    [path.join(userHome, '.config', 'opencode', 'agent'), 'agent'],
-    [path.join(userHome, '.piecemaker', 'library', 'skills'), 'skill'],
-    [path.join(userHome, '.piecemaker', 'library', 'agents'), 'agent'],
-  ] as const) imported.push(...importLibraryDirectory(store, directory, kind));
-  if (withdraw) {
-    const candidates = imported.filter((entry) => ['.claude', '.codex', '.agents', '.cursor', '.grok', path.join('.config', 'opencode')].some((provider) => entry.source.startsWith(path.join(userHome, provider) + path.sep)));
-    const backup = path.join(store.directory, `migration-${Date.now()}`);
-    fs.mkdirSync(backup, { recursive: true, mode: 0o700 });
-    fs.writeFileSync(path.join(backup, 'manifest.json'), JSON.stringify(candidates, null, 2), { mode: 0o600 });
-    for (const entry of candidates.sort((a, b) => Number(b.linked) - Number(a.linked))) {
-      const destination = path.join(backup, path.relative(userHome, entry.source));
-      fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
-      fs.renameSync(entry.source, destination);
-    }
-    fs.writeFileSync(path.join(store.directory, 'centralized.json'), JSON.stringify({ migratedAt: new Date().toISOString(), count: candidates.length }), { mode: 0o600 });
-  }
-  return imported;
-}
