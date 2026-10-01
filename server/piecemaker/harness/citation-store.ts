@@ -60,7 +60,7 @@ export function createCitationStore(homeDir: string) {
       try {
         const snapshot = JSON.parse(await readFile(path.join(directory, `${token}.json`), 'utf8')) as CitationSnapshot;
         const id = snapshot.citation.decision_id;
-        if (forViewing && !snapshot.source && typeof id === 'string' && /^(JURITEXT|CETATEXT)\d{12}$/.test(id)) {
+        if (forViewing && !snapshot.source && typeof id === 'string' && /^(?:(?:JURITEXT|CETATEXT)\d{12}|[0-9a-f]{24})$/.test(id)) {
           try {
             const file = path.join(homeDir, 'decisions', `${id}.json`);
             const info = await lstat(file);
