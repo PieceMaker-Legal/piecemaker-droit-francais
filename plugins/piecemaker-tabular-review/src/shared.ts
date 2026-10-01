@@ -68,7 +68,7 @@ export type CitationSource = {
 
 export const MAX_CITATION_CORRECTIONS = 3;
 
-export type Provider = 'claude' | 'codex';
+export type Provider = 'claude' | 'codex' | 'mistral';
 
 export type ReviewStatus = 'running' | 'done' | 'partial' | 'cancelled' | 'interrupted';
 

@@ -15,6 +15,7 @@ type DraftRow = {
 const PROVIDERS: { value: Provider; label: string }[] = [
   { value: 'claude', label: 'Claude' },
   { value: 'codex', label: 'Codex' },
+  { value: 'mistral', label: 'Mistral' },
 ];
 
 function stripExtension(value: string): string {

@@ -12,6 +12,7 @@ type Runtime = {
   claudePath?: string | null;
   codexPath?: string | null;
   codexLauncher?: string | null;
+  vibePath?: string | null;
 };
 
 export type SessionRequest = {
@@ -28,6 +29,12 @@ const INLINE_TIMEOUT_MS = 10 * 60_000;
 const PATH_TIMEOUT_MS = 25 * 60_000;
 const MAX_OUTPUT = 5 * 1024 * 1024;
 const PATH_TOOLS = 'Read,Grep,Glob';
+const VIBE_PATH_TOOLS = ['read_file', 'grep'];
+const VIBE_MODELS = JSON.stringify({
+  'mistral-medium-3.5': { name: 'mistral-vibe-cli-latest', provider: 'mistral', alias: 'mistral-medium-3.5', display_name: 'Mistral Medium 3.5' },
+  'glm-5.3': { name: 'zai-glm-5-3', provider: 'mistral', alias: 'glm-5.3', display_name: 'Z.ai GLM 5.3' },
+  'glm-5.2': { name: 'zai-glm-5-2', provider: 'mistral', alias: 'glm-5.2', display_name: 'Z.ai GLM 5.2' },
+});
 
 let runtimeCache: Runtime | null = null;
 
@@ -47,7 +54,7 @@ export function assertModel(value: unknown): string {
 }
 
 export function assertProvider(value: unknown): Provider {
-  if (value !== 'claude' && value !== 'codex') throw new UserError('Fournisseur IA non pris en charge.');
+  if (value !== 'claude' && value !== 'codex' && value !== 'mistral') throw new UserError('Fournisseur IA non pris en charge.');
   return value;
 }
 
@@ -112,7 +119,7 @@ function workDirectory(): string {
   return directory;
 }
 
-type Command = { command: string; args: string[]; outputFile?: string };
+type Command = { command: string; args: string[]; outputFile?: string; environment?: NodeJS.ProcessEnv };
 
 export type Conversation = {
   send(text: string): Promise<string>;
@@ -123,10 +130,10 @@ function turnTimeout(request: SessionRequest): number {
   return request.mode === 'path' ? PATH_TIMEOUT_MS : INLINE_TIMEOUT_MS;
 }
 
-function spawnCommand(command: string, args: string[], request: SessionRequest, directory: string) {
+function spawnCommand(command: string, args: string[], request: SessionRequest, directory: string, environment?: NodeJS.ProcessEnv) {
   return spawn(command, args, {
     cwd: directory,
-    env: request.environment,
+    env: { ...request.environment, ...environment },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
     shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(command),
@@ -159,6 +166,34 @@ function codexCommand(request: SessionRequest, directory: string): Command {
   const { nodePath, codexLauncher, codexPath } = runtime();
   if (nodePath && codexLauncher && fs.existsSync(codexLauncher)) return { command: nodePath, args: [codexLauncher, ...args], outputFile };
   return { command: codexPath || 'codex', args, outputFile };
+}
+
+function vibeCommand(request: SessionRequest, directory: string): Command {
+  const tools = request.mode === 'path' ? VIBE_PATH_TOOLS : ['re:^$'];
+  return {
+    command: runtime().vibePath || 'vibe',
+    args: [
+      '-p',
+      '--output', 'json',
+      '--trust',
+      '--workdir', directory,
+      '--auto-approve',
+      ...tools.flatMap((tool) => ['--enabled-tools', tool]),
+      ...(request.mode === 'path' ? ['--add-dir', request.readableDirectory] : []),
+    ],
+    environment: {
+      VIBE_ACTIVE_MODEL: request.model,
+      VIBE_MODELS,
+      VIBE_SESSION_LOGGING__ENABLED: 'false',
+      VIBE_INCLUDE_PROJECT_CONTEXT: 'false',
+    },
+  };
+}
+
+function vibeAnswer(stdout: string): string {
+  const messages = JSON.parse(stdout) as { type?: string; role?: string; content?: { type?: string; text?: string }[] }[];
+  const answer = messages.filter((message) => message.type === 'message' && message.role === 'assistant').at(-1);
+  return (answer?.content ?? []).filter((part) => part.type === 'text').map((part) => part.text ?? '').join('');
 }
 
 type Pending = {
@@ -252,15 +287,15 @@ function claudeConversation(request: SessionRequest): Conversation {
   };
 }
 
-function runCodexTurn(request: SessionRequest, input: string): Promise<string> {
+function runTurn(request: SessionRequest, input: string, name: 'codex' | 'mistral'): Promise<string> {
   const directory = workDirectory();
-  const { command, args, outputFile } = codexCommand(request, directory);
+  const { command, args, outputFile, environment } = name === 'codex' ? codexCommand(request, directory) : vibeCommand(request, directory);
   return new Promise((resolve, reject) => {
     if (request.signal.aborted) {
       reject(new Error('Annulée.'));
       return;
     }
-    const child = spawnCommand(command, args, request, directory);
+    const child = spawnCommand(command, args, request, directory, environment);
     let stdout = '';
     let stderr = '';
     let settled = false;
@@ -288,10 +323,18 @@ function runCodexTurn(request: SessionRequest, input: string): Promise<string> {
     child.stderr.on('data', (chunk) => {
       stderr = `${stderr}${chunk.toString()}`.slice(-4000);
     });
-    child.on('error', (error) => finish(new Error(`Impossible de lancer codex : ${error.message}`)));
+    child.on('error', (error) => finish(new Error(`Impossible de lancer ${name} : ${error.message}`)));
     child.on('close', (code) => {
       if (code !== 0) {
-        finish(new Error(`Session codex terminée en erreur (code ${code}) : ${(stderr || stdout).trim().slice(-600)}`));
+        finish(new Error(`Session ${name} terminée en erreur (code ${code}) : ${(stderr || stdout).trim().slice(-600)}`));
+        return;
+      }
+      if (name === 'mistral') {
+        try {
+          finish(null, vibeAnswer(stdout));
+        } catch {
+          finish(new Error(`Réponse illisible de la session mistral : ${(stderr || stdout).trim().slice(-600)}`));
+        }
         return;
       }
       let output = stdout;
@@ -312,14 +355,14 @@ export function codexTranscript(system: string, turns: { user: string; assistant
   return parts.join('\n\n');
 }
 
-function codexConversation(request: SessionRequest): Conversation {
+function transcriptConversation(request: SessionRequest, name: 'codex' | 'mistral'): Conversation {
   const turns: { user: string; assistant?: string }[] = [];
   let closed = false;
   return {
     async send(text) {
       if (closed) throw new Error('Session fermée.');
       turns.push({ user: text });
-      const output = await runCodexTurn(request, codexTranscript(request.system, turns));
+      const output = await runTurn(request, codexTranscript(request.system, turns), name);
       turns[turns.length - 1].assistant = output;
       return output;
     },
@@ -330,5 +373,5 @@ function codexConversation(request: SessionRequest): Conversation {
 }
 
 export function openSession(request: SessionRequest): Conversation {
-  return request.provider === 'claude' ? claudeConversation(request) : codexConversation(request);
+  return request.provider === 'claude' ? claudeConversation(request) : transcriptConversation(request, request.provider);
 }
