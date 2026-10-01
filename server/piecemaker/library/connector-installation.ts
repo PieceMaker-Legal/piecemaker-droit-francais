@@ -126,6 +126,24 @@ function grokServer(config: LibraryConnectorConfig, enabled: boolean) {
   };
 }
 
+function vibeServer(name: string, config: LibraryConnectorConfig) {
+  if (config.transport === 'http') {
+    return {
+      name,
+      transport: 'http',
+      url: config.url,
+      ...(config.headers && Object.keys(config.headers).length ? { headers: config.headers } : {}),
+    };
+  }
+  return {
+    name,
+    transport: 'stdio',
+    command: config.command,
+    args: config.args ?? [],
+    ...(config.env && Object.keys(config.env).length ? { env: config.env } : {}),
+  };
+}
+
 function opencodeServer(config: LibraryConnectorConfig, enabled: boolean) {
   if (config.transport === 'http') {
     return {
@@ -211,11 +229,12 @@ export function prepareConnectorInstallation(workspace: string, name: string, co
   const cursorPath = path.join(workspace, '.cursor', 'mcp.json');
   const opencodePath = opencodeConfigPath(workspace);
   const grokPath = path.join(workspace, '.grok', 'config.toml');
-  for (const filePath of [mcpJsonPath, claudeSettingsPath, codexPath, cursorPath, opencodePath, grokPath]) {
+  const vibePath = path.join(workspace, '.vibe', 'config.toml');
+  for (const filePath of [mcpJsonPath, claudeSettingsPath, codexPath, cursorPath, opencodePath, grokPath, vibePath]) {
     assertWorkspaceFile(workspace, filePath);
   }
 
-  const snapshots = [mcpJsonPath, claudeSettingsPath, codexPath, cursorPath, opencodePath, grokPath].map(snapshotFile);
+  const snapshots = [mcpJsonPath, claudeSettingsPath, codexPath, cursorPath, opencodePath, grokPath, vibePath].map(snapshotFile);
 
   return () => {
     try {
@@ -262,6 +281,14 @@ export function prepareConnectorInstallation(workspace: string, name: string, co
         : { ...objectRecord(grokServers[name]), ...grokServer(config, false), enabled: false };
       grokConfig.mcp_servers = grokServers;
       writeToml(grokPath, grokConfig);
+
+      if (enabled || fs.existsSync(vibePath)) {
+        const vibeConfig = readToml(vibePath);
+        const vibeServers = (Array.isArray(vibeConfig.mcp_servers) ? vibeConfig.mcp_servers : [])
+          .filter((server) => objectRecord(server).name !== name);
+        vibeConfig.mcp_servers = enabled ? [...vibeServers, vibeServer(name, config)] : vibeServers;
+        writeToml(vibePath, vibeConfig);
+      }
     } catch (error) {
       for (const snapshot of snapshots.reverse()) restoreFile(snapshot);
       throw error;
