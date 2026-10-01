@@ -7,6 +7,7 @@ import express from 'express';
 import { createLibraryStore } from './store.js';
 import { createLibraryRouter } from './routes.js';
 import { createLibraryMarketplaceRouter, scanInstalledLibraryCollections } from './marketplace.js';
+import { importLibraryDirectory } from './migrate.js';
 import { scanAndPersistLibraryProviderAgents } from './provider-agents.js';
 import { scanAndPersistLibraryProviderConnectors } from './provider-connectors.js';
 import { scanAndPersistLibraryProviderSkills } from './provider-skills.js';
@@ -22,6 +23,12 @@ export async function openLibrary(home: string, applicationRoot: string) {
   try { scanAndPersistLibraryProviderConnectors(store, os.homedir()); } catch {}
   try { scanInstalledLibraryCollections(store, os.homedir()); } catch {}
   try { fs.unlinkSync(path.join(store.directory, 'connection.json')); } catch {}
+  const bundled = path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin');
+  const defaults: string[] = [];
+  for (const [folder, kind] of [['skills', 'skill'], ['agents', 'agent']] as const) {
+    try { defaults.push(...importLibraryDirectory(store, path.join(bundled, folder), kind).map((entry) => entry.id)); } catch {}
+  }
+  store.setDefaultEntries(defaults);
   const router = express.Router();
   router.use((req, res, next) => {
     const length = Number(req.headers['content-length'] || 0);
