@@ -58,5 +58,6 @@ fs.writeFileSync(path.join(target, 'runtime.json'), JSON.stringify({
   claudePath: locate('claude'),
   codexPath: locate('codex'),
   codexLauncher: fs.existsSync(codexLauncher) ? codexLauncher : null,
+  vibePath: locate('vibe'),
 }), { mode: 0o600 });
 process.stdout.write(`Tabular Review installé dans ${target}\n`);

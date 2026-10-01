@@ -27,6 +27,7 @@ const RUNNING: ResearchState['phase'][] = ['counting', 'listing', 'downloading']
 const PROVIDERS: { value: Provider; label: string }[] = [
   { value: 'claude', label: 'Claude' },
   { value: 'codex', label: 'Codex' },
+  { value: 'mistral', label: 'Mistral' },
 ];
 
 const SOURCE_LABEL = Object.fromEntries(RESEARCH_SOURCES.map((source) => [source.value, source.label])) as Record<ResearchSource, string>;
