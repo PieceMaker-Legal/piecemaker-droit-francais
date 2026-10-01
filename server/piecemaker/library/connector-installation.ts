@@ -184,7 +184,7 @@ export function normalizeProviderConnector(raw: unknown): LibraryConnectorConfig
   };
 }
 
-export function prepareConnectorInstallation(workspace: string, name: string, config: LibraryConnectorConfig, enabled: boolean) {
+export function prepareConnectorInstallation(workspace: string, name: string, config: LibraryConnectorConfig, enabled: boolean, skipClaude = false) {
   const mcpJsonPath = path.join(workspace, '.mcp.json');
   const claudeSettingsPath = path.join(workspace, '.claude', 'settings.local.json');
   const codexPath = path.join(workspace, '.codex', 'config.toml');
@@ -199,19 +199,21 @@ export function prepareConnectorInstallation(workspace: string, name: string, co
 
   return () => {
     try {
-      const mcpJson = readJson(mcpJsonPath);
-      const mcpServers = objectRecord(mcpJson.mcpServers);
-      if (enabled) mcpServers[name] = claudeServer(config);
-      else delete mcpServers[name];
-      mcpJson.mcpServers = mcpServers;
-      writeJson(mcpJsonPath, mcpJson);
+      if (!skipClaude) {
+        const mcpJson = readJson(mcpJsonPath);
+        const mcpServers = objectRecord(mcpJson.mcpServers);
+        if (enabled) mcpServers[name] = claudeServer(config);
+        else delete mcpServers[name];
+        mcpJson.mcpServers = mcpServers;
+        writeJson(mcpJsonPath, mcpJson);
 
-      const claudeSettings = readJson(claudeSettingsPath);
-      const disabled = Array.isArray(claudeSettings.disabledMcpServers)
-        ? claudeSettings.disabledMcpServers.filter((entry) => entry !== name)
-        : [];
-      claudeSettings.disabledMcpServers = enabled ? disabled : [...disabled, name];
-      writeJson(claudeSettingsPath, claudeSettings);
+        const claudeSettings = readJson(claudeSettingsPath);
+        const disabled = Array.isArray(claudeSettings.disabledMcpServers)
+          ? claudeSettings.disabledMcpServers.filter((entry) => entry !== name)
+          : [];
+        claudeSettings.disabledMcpServers = enabled ? disabled : [...disabled, name];
+        writeJson(claudeSettingsPath, claudeSettings);
+      }
 
       const codexConfig = readToml(codexPath);
       const codexServers = objectRecord(codexConfig.mcp_servers);
