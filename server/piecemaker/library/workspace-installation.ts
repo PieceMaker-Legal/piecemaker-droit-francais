@@ -5,10 +5,11 @@ import { createHash } from 'node:crypto';
 const SKILL_LINK_PROVIDERS = ['.claude', '.cursor', '.opencode', '.grok'];
 
 const AGENT_TARGETS = [
-  { provider: '.claude', folder: 'agents', extension: '.md' },
-  { provider: '.codex', folder: 'agents', extension: '.toml' },
-  { provider: '.opencode', folder: 'agent', extension: '.md' },
-  { provider: '.grok', folder: 'agents', extension: '.md' },
+  { provider: '.claude', folder: 'agents', extension: '.md', format: 'markdown' },
+  { provider: '.codex', folder: 'agents', extension: '.toml', format: 'codex' },
+  { provider: '.vibe', folder: 'agents', extension: '.toml', format: 'vibe' },
+  { provider: '.opencode', folder: 'agent', extension: '.md', format: 'markdown' },
+  { provider: '.grok', folder: 'agents', extension: '.md', format: 'markdown' },
 ] as const;
 
 const MANIFEST_PATH = '.piecemaker/library.json';
@@ -24,7 +25,7 @@ export type LibraryManifestEntry = {
 
 export type LibraryComponent =
   | { kind: 'skill'; slug: string; files: Record<string, Buffer> }
-  | { kind: 'agent'; slug: string; markdown: string; toml: string };
+  | { kind: 'agent'; slug: string; markdown: string; codex: string; vibe: string };
 
 export function componentFolderName(name: string) {
   const slug = String(name).normalize('NFKD').replace(/[^\p{Letter}\p{Number}._-]+/gu, '-').replace(/^[-._]+|[-._]+$/g, '');
@@ -84,7 +85,7 @@ function componentFiles(workspace: string, component: LibraryComponent, skipClau
   if (component.kind === 'agent') {
     return Object.fromEntries(AGENT_TARGETS.filter((target) => !(skipClaude && target.provider === '.claude')).map((target) => [
       path.posix.join(target.provider, target.folder, `${component.slug}${target.extension}`),
-      Buffer.from(target.extension === '.toml' ? component.toml : component.markdown, 'utf8'),
+      Buffer.from(component[target.format], 'utf8'),
     ]));
   }
   const root = skillRoot(component.slug);

@@ -86,9 +86,16 @@ function installableComponent(entry: LibraryEntry): LibraryComponent {
     return { kind: 'skill', slug, files: { ...files, 'SKILL.md': Buffer.from(entry.content, 'utf8') } };
   }
   const { data, content } = parseFrontMatter(entry.content);
-  const toml = Object.entries({ name: String(data.name || entry.name), description: entry.description || entry.name, developer_instructions: content })
-    .map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n');
-  return { kind: 'agent', slug, markdown: entry.content, toml: `${toml}\n` };
+  const toml = (fields: Record<string, string>) => `${Object.entries(fields).map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n')}\n`;
+  const name = String(data.name || entry.name);
+  const description = entry.description || entry.name;
+  return {
+    kind: 'agent',
+    slug,
+    markdown: entry.content,
+    codex: toml({ name, description, developer_instructions: content }),
+    vibe: toml({ display_name: name, description, agent_type: 'subagent', instructions: content }),
+  };
 }
 
 function collectionMainPath(entry: LibraryEntry, rootPath: string) {
