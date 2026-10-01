@@ -186,7 +186,7 @@ export function createResearchView(app: App): View {
       <label class="ptr-field" style="width:240px"><span class="ptr-label">Modèle IA</span><select class="ptr-select" data-model></select></label>
       <label class="ptr-field" style="width:150px"><span class="ptr-label">Sessions simultanées</span><select class="ptr-select" data-concurrency>${[1, 2, 3, 4, 5, 6, 8].map((value) => `<option value="${value}"${value === 3 ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
       <span class="ptr-spacer"></span>
-      <span class="ptr-small ptr-muted" data-filename></span>
+      <span class="ptr-small" data-launch-note></span>
       <button type="button" class="ptr-button ptr-button-primary" data-launch>Lancer la revue</button>
     </div>
     <div data-model-warning></div>`;
@@ -379,9 +379,18 @@ export function createResearchView(app: App): View {
     }
     const count = launchable();
     const button = $<HTMLButtonElement>('[data-launch]');
-    button.disabled = launching || !projectSelect.value || !titleInput.value.trim() || !preparedQuestions().length || !modelSelect.value;
+    const missing = [
+      ...(projectSelect.value ? [] : ['le dossier']),
+      ...(titleInput.value.trim() ? [] : ['le nom de la tabular review (en haut de page)']),
+      ...(preparedQuestions().length ? [] : ['la consigne d’au moins une question (grand champ sous le titre de la colonne)']),
+      ...(modelSelect.value ? [] : ['le modèle IA']),
+    ];
+    button.disabled = launching || missing.length > 0;
     button.textContent = launching ? 'Lancement…' : `Lancer la revue (${count} décision${count > 1 ? 's' : ''})`;
-    $('[data-filename]').textContent = `${REVIEW_FOLDER}/${filenamePreview(titleInput.value.trim())}`;
+    const note = $('[data-launch-note]');
+    note.classList.toggle('ptr-launch-missing', missing.length > 0);
+    note.classList.toggle('ptr-muted', !missing.length);
+    note.textContent = missing.length ? `Pour lancer, renseignez : ${missing.join(', ')}.` : `${REVIEW_FOLDER}/${filenamePreview(titleInput.value.trim())}`;
     $('[data-model-warning]').innerHTML = modelSelect.value && modelSelect.value !== models.cheapest
       ? `<div class="ptr-warning">Modèle plus puissant que le modèle par défaut : chaque décision lance une session IA complète (${count} session${count > 1 ? 's' : ''}), la consommation de tokens peut être très élevée.</div>`
       : '';
