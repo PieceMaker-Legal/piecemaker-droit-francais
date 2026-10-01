@@ -186,7 +186,7 @@ export function createResearchView(app: App): View {
       <label class="ptr-field" style="width:240px"><span class="ptr-label">Modèle IA</span><select class="ptr-select" data-model></select></label>
       <label class="ptr-field" style="width:150px"><span class="ptr-label">Sessions simultanées</span><select class="ptr-select" data-concurrency>${[1, 2, 3, 4, 5, 6, 8].map((value) => `<option value="${value}"${value === 3 ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
       <span class="ptr-spacer"></span>
-      <span class="ptr-small" data-launch-note></span>
+      <span class="ptr-small ptr-muted" data-filename></span>
       <button type="button" class="ptr-button ptr-button-primary" data-launch>Lancer la revue</button>
     </div>
     <div data-model-warning></div>`;
@@ -369,6 +369,16 @@ export function createResearchView(app: App): View {
       }));
   }
 
+  function missingLaunchFields(): HTMLElement[] {
+    const prompt = element.querySelector<HTMLElement>('[data-question-list] [data-field="prompt"]');
+    return [
+      ...(projectSelect.value ? [] : [projectSelect]),
+      ...(titleInput.value.trim() ? [] : [titleInput]),
+      ...(preparedQuestions().length || !prompt ? [] : [prompt]),
+      ...(modelSelect.value ? [] : [modelSelect]),
+    ];
+  }
+
   function renderLaunch() {
     const ready = state?.phase === 'done' && launchable() > 0;
     $('[data-questions]').hidden = !ready;
@@ -379,18 +389,11 @@ export function createResearchView(app: App): View {
     }
     const count = launchable();
     const button = $<HTMLButtonElement>('[data-launch]');
-    const missing = [
-      ...(projectSelect.value ? [] : ['le dossier']),
-      ...(titleInput.value.trim() ? [] : ['le nom de la tabular review (en haut de page)']),
-      ...(preparedQuestions().length ? [] : ['la consigne d’au moins une question (grand champ sous le titre de la colonne)']),
-      ...(modelSelect.value ? [] : ['le modèle IA']),
-    ];
-    button.disabled = launching || missing.length > 0;
+    const missing = missingLaunchFields();
+    element.querySelectorAll('.ptr-invalid').forEach((field) => field.classList.toggle('ptr-invalid', missing.includes(field as HTMLElement)));
+    button.disabled = launching;
     button.textContent = launching ? 'Lancement…' : `Lancer la revue (${count} décision${count > 1 ? 's' : ''})`;
-    const note = $('[data-launch-note]');
-    note.classList.toggle('ptr-launch-missing', missing.length > 0);
-    note.classList.toggle('ptr-muted', !missing.length);
-    note.textContent = missing.length ? `Pour lancer, renseignez : ${missing.join(', ')}.` : `${REVIEW_FOLDER}/${filenamePreview(titleInput.value.trim())}`;
+    $('[data-filename]').textContent = `${REVIEW_FOLDER}/${filenamePreview(titleInput.value.trim())}`;
     $('[data-model-warning]').innerHTML = modelSelect.value && modelSelect.value !== models.cheapest
       ? `<div class="ptr-warning">Modèle plus puissant que le modèle par défaut : chaque décision lance une session IA complète (${count} session${count > 1 ? 's' : ''}), la consommation de tokens peut être très élevée.</div>`
       : '';
@@ -666,7 +669,10 @@ export function createResearchView(app: App): View {
       return;
     }
     if (target.closest('[data-launch]')) {
-      void launch();
+      const missing = missingLaunchFields();
+      missing.forEach((field) => field.classList.add('ptr-invalid'));
+      if (missing.length) missing[0].focus();
+      else void launch();
       return;
     }
     if (target.closest('[data-add-question]')) {

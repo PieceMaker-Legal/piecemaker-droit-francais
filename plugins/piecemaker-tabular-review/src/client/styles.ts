@@ -39,7 +39,8 @@ export const PLUGIN_STYLES = `
 .ptr-input,.ptr-select,.ptr-textarea{width:100%;min-width:0;border:1px solid var(--ptr-border);border-radius:8px;background:var(--ptr-surface);color:var(--ptr-text);font:13px inherit;font-family:inherit;padding:5px 8px}
 .ptr-textarea{resize:vertical;min-height:52px}
 .ptr-root .ptr-input::placeholder,.ptr-root .ptr-textarea::placeholder{color:var(--ptr-muted);opacity:.6;font-style:italic}
-.ptr-launch-missing{color:var(--ptr-warning);font-weight:600;max-width:420px}
+.ptr-root .ptr-invalid{border-color:var(--ptr-danger)}
+.ptr-root .ptr-invalid::placeholder{color:var(--ptr-danger);opacity:1;font-style:normal}
 .ptr-field{display:flex;flex-direction:column;gap:3px;min-width:0}
 .ptr-label{font-size:11px;font-weight:600;color:var(--ptr-muted);text-transform:uppercase;letter-spacing:.03em}
 .ptr-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
