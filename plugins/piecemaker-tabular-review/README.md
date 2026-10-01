@@ -20,6 +20,8 @@ L'onglet **Recherche juridique** construit une review à partir d'une recherche 
 - **Panneau** : décisions par ordre d'importance (formation solennelle, puis publication au Bulletin ou au Lebon, tables, inédits, puis cours d'appel et première instance ; à rang égal, pertinence Légifrance puis date), par pages de 10 avec titrage et résumé officiels (ou un extrait à défaut), lecture à la demande de la partie retenue ou du texte intégral, flèches du clavier pour tourner les pages.
 - **Dispositif uniquement** (coché par défaut) : pour les juridictions judiciaires, la partie retenue est celle du découpage officiel de Judilibre, zones « motivations » et « dispositif » (énoncés des moyens intercalés et moyens annexés écartés). Une décision Légifrance est retrouvée dans Judilibre par juridiction, date et numéro, puis vérifiée par similarité de texte. Judilibre n'a pas de zones pour la Cour de cassation de 2008 à 2014, ni pour une partie des arrêts antérieurs, et ne couvre pas l'ordre administratif : la partie où le juge statue y est repérée par ses formules : « Réponse de la Cour », « Mais attendu que », visas et « En statuant ainsi » pour la Cour de cassation (faits, énoncé des moyens, griefs et moyens annexes écartés, y compris « MOYENS ANNEXES » collé à la dernière ligne) ; « Motifs de la décision », « Sur ce », « Considérant » pour les autres juridictions ; puis « Par ces motifs » ou « Décide ». L'origine du découpage (Judilibre ou formules) est indiquée à la lecture et dans le document transmis à l'IA. La requête est réévaluée sur cette partie seule : les décisions où ses termes n'y figurent pas sont écartées (consultables à part). Une décision dont les motifs ne sont pas repérés est conservée et signalée (dispositif seul ou texte intégral). Seule la partie retenue est écrite dans `Tabular Review/docs/` et transmise à l'IA.
 - **Lancement** : les questions se saisissent librement ou partent d'un modèle ; la review porte la catégorie « Recherche juridique », affichée en étiquette et filtrable dans l'historique, ainsi que la requête et les critères, repris dans les exports.
+- **Annulation** : « Annuler la recherche » interrompt à tout moment le comptage, la liste ou le téléchargement (par exemple si la requête se révèle trop large) ; les décisions déjà téléchargées sont supprimées et le formulaire reste rempli pour corriger la requête. Une fois la recherche terminée, « Abandonner ces résultats » efface les résultats sans lancer de revue. L'analyse IA lancée ensuite s'annule depuis la revue (bouton « Annuler »), en conservant les lignes déjà analysées.
+- **Mise à jour** : une review issue d'une recherche enregistre ses critères complets, la date de la dernière recherche et les identifiants de chaque décision (Légifrance, Judilibre, ou les deux quand une décision a été fusionnée). « Mettre à jour la recherche » (dans la review) ou le sélecteur « Mettre à jour une recherche existante » (onglet Recherche juridique) relance la même recherche à partir d'une date choisie : par défaut six mois avant la dernière recherche, pour rattraper les décisions publiées avec retard, sans remonter avant la date de début d'origine. Les décisions déjà présentes dans la table sont écartées avant tout téléchargement, y compris quand elles reviennent sous leur identifiant de l'autre base ; les nouvelles sont affichées pour contrôle, puis, après confirmation, ajoutées comme lignes et analysées avec les mêmes questions et la même IA que la review. Sans nouvelle décision, seule la date de dernière recherche est actualisée. Chaque mise à jour est historisée dans la review (date de départ, décisions trouvées et ajoutées). Les reviews créées avant l'enregistrement des critères ne peuvent pas être mises à jour.
 
 Les résultats de recherche sont conservés sept jours dans `~/.piecemaker/tabular-review/research/`.
 
@@ -29,13 +31,7 @@ Les sessions IA sont lancées par le serveur du plugin, sans persistance dans l'
 
 ## Installation
 
-Elle est automatique : la commande `piecemaker` appelle cet installateur à chaque exécution. Pour la rejouer à la main, avec Node 22 ou plus récent et les dépendances de l'application installées, depuis `plugins/piecemaker-tabular-review/` :
-
-```sh
-node install.mjs /chemin/vers/piecemaker-droit-francais
-```
-
-Le client et le serveur sont compilés avec l'esbuild de l'application, puis `dist/`, le manifeste, l'icône et le lanceur sont copiés dans le répertoire de plugins, avec priorité à `CLOUDCLI_HOME`. Le secret d'accès au serveur du plugin est conservé d'une installation à l'autre dans `plugins.json`.
+Comme tous les plugins PieceMaker : compilé et installé par la chaîne commune `plugins/toolchain`, embarqué dans l'application Electron et réinstallé à chaque démarrage si besoin. Depuis le dépôt : `npm run plugins`. Voir `plugins.md` à la racine.
 
 ## Validation
 
@@ -43,6 +39,6 @@ Depuis la racine de l'application :
 
 ```sh
 npx tsc -p plugins/piecemaker-tabular-review
-node plugins/piecemaker-tabular-review/build.mjs
+node plugins/toolchain/cli.mjs --check
 cd plugins/piecemaker-tabular-review && npx vitest run
 ```

@@ -1,5 +1,5 @@
 import type { Cell, CitationSource, ExportFormat, ExportResult, ReviewDetail, ReviewRow } from '../shared.js';
-import { CATEGORY_LABELS, citationIssue, emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, MAX_CITATION_CORRECTIONS, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
+import { CATEGORY_LABELS, citationIssue, lastSearchDate, emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, MAX_CITATION_CORRECTIONS, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, openModal, renderMarkdown, toast } from './dom.js';
 import { anonymizationProxyOrigin } from './host.js';
@@ -106,13 +106,14 @@ export function createReviewView(app: App, project: string, file: string, onBack
         <div style="min-width:0">
           <div class="ptr-review-title">${escapeHtml(review.title)}</div>
           <div class="ptr-small ptr-muted">${escapeHtml(review.templateName)} · ${escapeHtml(app.projectName(project))} · ${escapeHtml(review.provider)} ${escapeHtml(review.model)} · ${escapeHtml(formatDate(review.createdAt))}</div>
-          ${review.research ? `<div class="ptr-small ptr-muted" title="${escapeHtml(review.research.criteria.join('\n'))}">Requête : <code>${escapeHtml(review.research.query)}</code> · ${escapeHtml(review.research.criteria.join(' · '))}</div>` : ''}
+          ${review.research ? `<div class="ptr-small ptr-muted" title="${escapeHtml(review.research.criteria.join('\n'))}">Requête : <code>${escapeHtml(review.research.query)}</code> · ${escapeHtml(review.research.criteria.join(' · '))} · dernière recherche le ${escapeHtml(formatDate(lastSearchDate(review)))}${review.research.updates?.length ? ` (${review.research.updates.length} mise${review.research.updates.length > 1 ? 's' : ''} à jour)` : ''}</div>` : ''}
         </div>
         ${review.category === 'recherche-juridique' ? `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS['recherche-juridique'])}</span>` : ''}
         <span class="ptr-chip ptr-chip-${status}">${running ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(status))} · ${done}/${review.rows.length}</span>
         ${running ? `<div class="ptr-progress" aria-hidden="true"><div style="width:${review.rows.length ? Math.round((done / review.rows.length) * 100) : 0}%"></div></div>` : ''}
         <span class="ptr-spacer"></span>
         ${running ? '<button type="button" class="ptr-button ptr-button-danger" data-cancel>Annuler</button>' : ''}
+        ${review.research ? `<button type="button" class="ptr-button" data-update-research${review.research.filters ? ` title="Chercher les décisions rendues depuis la dernière recherche (${escapeHtml(formatDate(lastSearchDate(review)))}) et les analyser"` : ' disabled title="Recherche lancée avant l’enregistrement de ses critères : relancez-la depuis l’onglet Recherche juridique"'}>Mettre à jour la recherche</button>` : ''}
         ${!running && failed ? '<button type="button" class="ptr-button" data-retry title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>' : ''}
         <button type="button" class="ptr-button" data-export="docx">Export Word</button>
         <button type="button" class="ptr-button" data-export="pdf">Export PDF</button>
@@ -262,6 +263,10 @@ export function createReviewView(app: App, project: string, file: string, onBack
         const proxyOrigin = await anonymizationProxyOrigin();
         applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/run', { project, file, rowId, column: index, replace: filled, proxyOrigin }));
       });
+      return;
+    }
+    if (target.closest('[data-update-research]')) {
+      app.updateResearch(project, file);
       return;
     }
     if (target.closest('[data-retry]')) {

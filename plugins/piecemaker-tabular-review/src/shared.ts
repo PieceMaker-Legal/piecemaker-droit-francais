@@ -37,6 +37,8 @@ export type ReviewRow = {
   startedAt?: string;
   finishedAt?: string;
   corrections?: number;
+  decision?: string;
+  aliases?: string[];
 };
 
 export type TextRange = { start: number; end: number };
@@ -83,12 +85,36 @@ export function reviewCategory(review: { category?: unknown }): ReviewCategory {
   return review.category === 'recherche-juridique' ? 'recherche-juridique' : 'documents';
 }
 
+export type ResearchUpdate = {
+  searchedAt: string;
+  since: string;
+  found: number;
+  added: number;
+};
+
 export type ReviewResearch = {
   query: string;
   criteria: string[];
   dispositifOnly: boolean;
   total: number;
+  filters?: ResearchFilters;
+  searchedAt?: string;
+  updates?: ResearchUpdate[];
 };
+
+export const UPDATE_MARGIN_MONTHS = 6;
+
+export function lastSearchDate(review: Pick<Review, 'createdAt' | 'research'>): string {
+  return review.research?.searchedAt ?? review.createdAt;
+}
+
+export function defaultUpdateSince(review: Pick<Review, 'createdAt' | 'research'>): string {
+  const since = new Date(lastSearchDate(review));
+  since.setMonth(since.getMonth() - UPDATE_MARGIN_MONTHS);
+  const value = since.toISOString().slice(0, 10);
+  const start = review.research?.filters?.dateDebut ?? '';
+  return start > value ? start : value;
+}
 
 export type Review = {
   version: 1;
@@ -121,6 +147,8 @@ export type ReviewSummary = {
   columnCount: number;
   provider: Provider;
   model: string;
+  updatable?: boolean;
+  searchedAt?: string;
 };
 
 export type ReviewDetail = {
@@ -324,13 +352,22 @@ export type ResearchOrigin = 'legifrance' | 'judilibre';
 
 export type ZoneOrigin = 'judilibre' | 'formules';
 
+export type ResearchTarget = {
+  project: string;
+  file: string;
+  title: string;
+  since: string;
+};
+
 export type ResearchState = {
   id: string;
   phase: ResearchPhase;
   filters: ResearchFilters;
+  update?: ResearchTarget;
   counts: ResearchCount[];
   total: number;
   listed: number;
+  skipped: number;
   downloaded: number;
   kept: number;
   excluded: number;
@@ -358,6 +395,7 @@ export type ResearchDecision = {
   zone: ResearchZone;
   zoneOrigin?: ZoneOrigin;
   origin?: ResearchOrigin;
+  aliases?: string[];
   link: string;
   chars: number;
   error?: string;
