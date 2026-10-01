@@ -3,6 +3,28 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.19](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.18...v2.0.19) (2026-10-01)
+
+### New Features
+
+* **library:** active d'office les skills et agents PieceMaker dans un nouveau dossier ([3d9d9cb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3d9d9cb53bf512106e54f662725335114375fc33))
+* **library:** agents et MCP natifs pour Mistral Vibe dans le dossier ([020ef66](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/020ef665378c01db69386ad99166ba5038d4ee1b))
+* **library:** matérialise les composants dans le dossier, avec manifeste ([369a0ad](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/369a0adf6c1221c56efbd53a2f96ce8a791169ca))
+* **library:** plugins Claude complets par dossier, et état global visible ([71757ff](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/71757ffaa74a60aad22c3e7d46a510a511eb5e6b))
+* **piecemaker-library:** interrupteur global des plugins et signalement de l'actif partout ([6fd36f9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6fd36f953adba3849ae8db7a0dc29cb1bd647820))
+* **tabular-review:** indiquer ce qui manque pour lancer la revue et estomper les placeholders ([e47e7bd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e47e7bd91d5034d937030f099c8e2f8ed85fe475))
+* **tabular-review:** ouvrir les décisions de la recherche dans la visionneuse ([4dd2d56](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4dd2d56a0aabf8786da15b272301f5a93d7eea6e))
+* **tabular-review:** proposer Mistral (Vibe) comme troisième IA ([ea69de8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ea69de8129e2051c97a426e8eef9e7efd5130d9b))
+* **tabular-review:** signaler en rouge les champs manquants au clic sur Lancer la revue ([a3ea5ad](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a3ea5ad346ebdd1594d6a381f81404d9c98157c1))
+
+### Bug Fixes
+
+* **desktop:** la désinstallation conserve la Bibliothèque ([d877d0c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d877d0cdca741895545ac7e1d391271bd1fa1b60))
+* **library:** ne retire plus les skills et agents personnels des providers ([6fa83d1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6fa83d1de8fc9e1e9c6fbb02a6985b3727439ddb))
+* **tabular-review:** afficher le nombre de décisions Judilibre vérifiées en fin de recherche ([0f4da9c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0f4da9c6df3dbf2074c2df4ea68195ae5519cbb7))
+* **tabular-review:** ne plus afficher les résultats Judilibre écartés ([c3f3106](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c3f3106f9d8f9b7620306ae14b734b38022d419e))
+* **tabular-review:** transmettre USER aux sessions Claude ([72bb717](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/72bb717290607812464b67c65608863915b85a0c))
+
 ## [2.0.18](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.17...v2.0.18) (2026-10-01)
 
 ## [2.0.17](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.16...v2.0.17) (2026-10-01)
