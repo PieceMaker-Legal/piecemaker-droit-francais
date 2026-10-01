@@ -17,12 +17,13 @@ test('Telegram plugin exposes registered projects without leaking bot tokens', a
       username TEXT NOT NULL, owner_id TEXT NOT NULL, desired INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
     INSERT INTO piecemaker_telegram_bots VALUES ('case-1', 'case-1', 'private-token', 'case_bot', '123456', 0, '2026-09-26');`);
   database.close();
-  const source = path.resolve('plugins/piecemaker-telegram/server.mjs');
-  fs.copyFileSync(source, path.join(directory, 'server.mjs'));
+  const source = path.resolve('plugins/piecemaker-telegram/src/server.mjs');
+  fs.mkdirSync(path.join(directory, 'dist'));
+  fs.copyFileSync(source, path.join(directory, 'dist', 'server.mjs'));
   fs.writeFileSync(path.join(directory, 'runtime.json'), JSON.stringify({
     databasePath, applicationRoot: process.cwd(), secret: 'test-secret',
   }));
-  const child = spawn(process.execPath, [path.join(directory, 'server.mjs')], {
+  const child = spawn(process.execPath, [path.join(directory, 'dist', 'server.mjs')], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stderr = '';

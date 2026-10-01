@@ -1,26 +1,17 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
-import { run } from './shell.mjs';
+import { buildPlugins } from '../../plugins/toolchain/build.mjs';
 import { ui } from './ui.mjs';
 
-const PLUGINS = [
-  ['piecemaker-timesheet', 'Timesheet'],
-  ['piecemaker-tampon', 'Bordereau'],
-  ['piecemaker-dossier', 'Dossier'],
-  ['piecemaker-library', 'Bibliothèque'],
-  ['piecemaker-telegram', 'Telegram'],
-];
+// Dossier du paquet Electron où la chaîne commune (plugins/toolchain, voir
+// plugins.md) dépose le bundle ; l'overlay l'installe à chaque démarrage.
+export const BUNDLE_DIR = 'piecemaker-plugins';
 
-export async function installPieceMakerPlugins(sourceDir) {
-  ui.step('Plugins PieceMaker');
-  for (const [name, label] of PLUGINS) {
-    const installer = path.join(sourceDir, 'plugins', name, 'install.mjs');
-    try {
-      await fs.access(installer);
-      await run(process.execPath, [installer, sourceDir], { cwd: sourceDir });
-      ui.ok(`Plugin ${label} installé`);
-    } catch (error) {
-      ui.warn(`${label} — installation échouée : ${error.message}`);
-    }
-  }
+export async function embedBundledPlugins(sourceDir, stageDir) {
+  ui.step('Compilation des plugins PieceMaker…');
+  const plugins = await buildPlugins({
+    appRoot: sourceDir,
+    outDir: path.join(stageDir, BUNDLE_DIR),
+    log: (plugin) => ui.detail(`Plugin ${plugin.label} embarqué.`),
+  });
+  ui.ok(`${plugins.length} plugins PieceMaker embarqués dans l'application.`);
 }

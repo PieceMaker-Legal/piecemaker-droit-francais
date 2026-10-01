@@ -6,6 +6,9 @@
   "icon": "icon.svg",
   "type": "module",
   "slot": "tab",
-  "entry": "dist/client.js",
-  "permissions": []
+  "entry": "dist/index.js",
+  "permissions": [],
+  "piecemakerSources": {
+    "index": "src/client.ts"
+  }
 }
