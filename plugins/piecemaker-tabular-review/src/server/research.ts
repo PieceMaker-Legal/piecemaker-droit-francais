@@ -365,8 +365,14 @@ async function execute(job: Job, api: LegifranceApi, parsed: ParsedQuery): Promi
     throw fatal ?? error;
   }
   const decisions = sortDecisions([...results.values()]);
+  const verifiedCounts = state.counts.map((count) => {
+    if (count.judilibre === undefined) return count;
+    const judilibre = decisions.filter((decision) => decision.source === count.source && decision.origin === 'judilibre').length;
+    return { ...count, judilibre, total: (count.legifrance ?? 0) + judilibre };
+  });
   Object.assign(state, {
     phase: 'done',
+    counts: verifiedCounts,
     listed: decisions.length,
     downloaded: decisions.filter((decision) => !decision.error).length,
     kept: decisions.filter((decision) => decision.kept && !decision.error).length,
