@@ -184,6 +184,26 @@ export function normalizeProviderConnector(raw: unknown): LibraryConnectorConfig
   };
 }
 
+export function workspaceClaudePlugins(workspace: string) {
+  const merged: Record<string, unknown> = {};
+  for (const name of ['settings.json', 'settings.local.json']) {
+    try { Object.assign(merged, objectRecord(readJson(path.join(workspace, '.claude', name)).enabledPlugins)); } catch {}
+  }
+  return merged;
+}
+
+export function setWorkspaceClaudePlugin(workspace: string, id: string, enabled: boolean | null) {
+  const settingsPath = path.join(workspace, '.claude', 'settings.local.json');
+  assertWorkspaceFile(workspace, settingsPath);
+  if (enabled === null && !fs.existsSync(settingsPath)) return;
+  const settings = readJson(settingsPath);
+  const enabledPlugins = objectRecord(settings.enabledPlugins);
+  if (enabled === null) delete enabledPlugins[id];
+  else enabledPlugins[id] = enabled;
+  settings.enabledPlugins = enabledPlugins;
+  writeJson(settingsPath, settings);
+}
+
 export function prepareConnectorInstallation(workspace: string, name: string, config: LibraryConnectorConfig, enabled: boolean, skipClaude = false) {
   const mcpJsonPath = path.join(workspace, '.mcp.json');
   const claudeSettingsPath = path.join(workspace, '.claude', 'settings.local.json');

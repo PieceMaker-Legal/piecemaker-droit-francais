@@ -189,10 +189,11 @@ export function createLibraryStore(home: string) {
     if (selected) reconcile(selected);
     return db.prepare(`SELECT e.id, e.kind, e.name, e.description,
       EXISTS(SELECT 1 FROM activation a WHERE a.entry_id = e.id AND a.workspace = ?) AS enabled,
-      (SELECT ce.collection_id FROM collection_entries ce WHERE ce.entry_id = e.id LIMIT 1) AS collectionId
+      (SELECT ce.collection_id FROM collection_entries ce WHERE ce.entry_id = e.id LIMIT 1) AS collectionId,
+      (SELECT json_group_array(o.source) FROM origins o WHERE o.entry_id = e.id) AS sources
       FROM entries e ORDER BY e.name COLLATE NOCASE`).all(selected).map((row) => {
-        const entry = row as Omit<StoredLibraryEntry, 'content' | 'assets'> & { enabled: number; collectionId: string | null };
-        return { ...entry, enabled: Boolean(entry.enabled), collectionId: entry.collectionId || null };
+        const entry = row as Omit<StoredLibraryEntry, 'content' | 'assets'> & { enabled: number; collectionId: string | null; sources: string };
+        return { ...entry, enabled: Boolean(entry.enabled), collectionId: entry.collectionId || null, sources: JSON.parse(entry.sources) as string[] };
       });
   }
 

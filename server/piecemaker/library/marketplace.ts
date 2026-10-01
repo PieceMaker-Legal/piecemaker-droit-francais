@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import express from 'express';
 
 import type { createLibraryStore } from './store.js';
-import { normalizeProviderConnector } from './connector-installation.js';
+import { normalizeProviderConnector, setWorkspaceClaudePlugin, workspaceClaudePlugins } from './connector-installation.js';
 import { importLibraryDirectory } from './migrate.js';
 import { scanAndPersistLibraryProviderAgents } from './provider-agents.js';
 import { scanAndPersistLibraryProviderConnectors } from './provider-connectors.js';
@@ -45,7 +45,16 @@ function marketplacePackageKinds(userHome: string, marketplaceName: string, plug
   return [...kinds];
 }
 
-function disableNativeClaudePlugin(userHome: string, id: string) {
+function userClaudePlugins(userHome: string) {
+  const settingsFilename = path.join(userHome, '.claude/settings.json');
+  if (!fs.existsSync(settingsFilename)) return {};
+  const enabledPlugins = JSON.parse(fs.readFileSync(settingsFilename, 'utf8')).enabledPlugins;
+  return enabledPlugins && typeof enabledPlugins === 'object' && !Array.isArray(enabledPlugins)
+    ? enabledPlugins as Record<string, unknown>
+    : {};
+}
+
+function setNativeClaudePlugin(userHome: string, id: string, enabled: boolean) {
   const settingsFilename = path.join(userHome, '.claude/settings.json');
   const settings = fs.existsSync(settingsFilename)
     ? JSON.parse(fs.readFileSync(settingsFilename, 'utf8'))
@@ -53,8 +62,8 @@ function disableNativeClaudePlugin(userHome: string, id: string) {
   const enabledPlugins = settings.enabledPlugins && typeof settings.enabledPlugins === 'object' && !Array.isArray(settings.enabledPlugins)
     ? settings.enabledPlugins
     : {};
-  if (enabledPlugins[id] === false) return;
-  settings.enabledPlugins = { ...enabledPlugins, [id]: false };
+  if (enabledPlugins[id] === enabled) return;
+  settings.enabledPlugins = { ...enabledPlugins, [id]: enabled };
   fs.mkdirSync(path.dirname(settingsFilename), { recursive: true, mode: 0o700 });
   const temporary = `${settingsFilename}.library.tmp`;
   fs.writeFileSync(temporary, JSON.stringify(settings, null, 2), { mode: 0o600 });
@@ -129,39 +138,6 @@ export function scanInstalledLibraryCollections(store: ReturnType<typeof createL
   }
 }
 
-function readInstalledClaudePlugins(userHome: string) {
-  const filename = path.join(userHome, '.claude/plugins/installed_plugins.json');
-  if (!fs.existsSync(filename)) return {};
-  const config = JSON.parse(fs.readFileSync(filename, 'utf8'));
-  return config.plugins && typeof config.plugins === 'object' && !Array.isArray(config.plugins)
-    ? config.plugins as Record<string, unknown>
-    : {};
-}
-
-function synchronizeInstalledPluginActivation(
-  store: ReturnType<typeof createLibraryStore>,
-  userHome: string,
-  workspacePath: string,
-) {
-  const settingsFilename = path.join(userHome, '.claude/settings.json');
-  if (!fs.existsSync(settingsFilename)) return store.listCollections(workspacePath);
-  const settings = JSON.parse(fs.readFileSync(settingsFilename, 'utf8'));
-  const enabledPlugins = settings.enabledPlugins && typeof settings.enabledPlugins === 'object' && !Array.isArray(settings.enabledPlugins)
-    ? settings.enabledPlugins as Record<string, unknown>
-    : {};
-  const installedPlugins = readInstalledClaudePlugins(userHome);
-  const collections = store.listCollections(workspacePath);
-
-  for (const id of Object.keys(installedPlugins)) {
-    const collection = collections.find((entry) => entry.id === id);
-    const enabled = enabledPlugins[id];
-    if (!collection || collection.componentCount === 0 || typeof enabled !== 'boolean' || collection.enabled === enabled) continue;
-    store.setCollectionEnabled(workspacePath, id, enabled);
-  }
-
-  return store.listCollections(workspacePath);
-}
-
 export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLibraryStore>, applicationRoot: string, userHome: string) {
   const require = createRequire(import.meta.url);
   const { listMarketplaceConnectors, registerOfficialMarketplace } = require(path.join(applicationRoot, 'server/piecemaker/vendor/websocket-server/admin-routes.cjs'));
@@ -181,6 +157,19 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
     return fs.existsSync(filename) ? JSON.parse(fs.readFileSync(filename, 'utf8')).plugins || {} : {};
   };
   const importInstalledCollections = () => scanInstalledLibraryCollections(store, userHome);
+  const describeCollections = (workspacePath?: string) => {
+    const collections = store.listCollections(workspacePath);
+    const registry = installed();
+    const everywhere = userClaudePlugins(userHome);
+    const here = workspacePath ? workspaceClaudePlugins(fs.realpathSync(workspacePath)) : {};
+    return collections.map((collection) => {
+      const native = Boolean(registry[collection.id]);
+      if (!native) return { ...collection, native, global: false };
+      const global = everywhere[collection.id] === true;
+      const local = here[collection.id];
+      return { ...collection, native, global, partial: false, enabled: Boolean(workspacePath) && (typeof local === 'boolean' ? local : global) };
+    });
+  };
   router.get('/plugin/marketplace', (req, res) => {
     try {
       const marketplace = scope(req.query.scope);
@@ -202,7 +191,7 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
   router.get('/plugins', (req, res) => {
     try {
       const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
-      res.json({ plugins: store.listCollections(workspacePath) });
+      res.json({ plugins: describeCollections(workspacePath) });
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.post('/plugins/sync', async (req, res) => {
@@ -212,12 +201,7 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
       scanAndPersistLibraryProviderAgents(store, userHome);
       scanAndPersistLibraryProviderConnectors(store, userHome);
       scanInstalledLibraryCollections(store, userHome);
-      res.json({
-        ok: true,
-        plugins: workspacePath
-          ? synchronizeInstalledPluginActivation(store, userHome, workspacePath)
-          : store.listCollections(),
-      });
+      res.json({ ok: true, plugins: describeCollections(workspacePath) });
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.post('/plugins/scan', (_req, res) => {
@@ -237,8 +221,28 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
     catch (error) { res.status(409).json({ error: (error as Error).message }); }
   });
   router.put('/plugins/:id/activation', (req, res) => {
-    try { res.json(store.setCollectionEnabled(req.body?.workspacePath, String(req.params.id), req.body?.enabled)); }
-    catch (error) { res.status(400).json({ error: (error as Error).message }); }
+    try {
+      const id = String(req.params.id);
+      const workspacePath = req.body?.workspacePath;
+      const enabled = req.body?.enabled;
+      if (typeof workspacePath !== 'string') throw new Error('Dossier absolu requis.');
+      if (typeof enabled !== 'boolean') throw new Error('Activation booléenne requise.');
+      const collection = store.listCollections(workspacePath).find((entry) => entry.id === id);
+      const native = Boolean(installed()[id]);
+      if (!collection || (!native && !collection.componentCount)) throw new Error('Plugin introuvable.');
+      if (collection.componentCount) store.setCollectionEnabled(workspacePath, id, enabled, { skipClaude: native });
+      if (native) setWorkspaceClaudePlugin(fs.realpathSync(workspacePath), id, enabled ? true : userClaudePlugins(userHome)[id] === true ? false : null);
+      res.json(describeCollections(workspacePath).find((entry) => entry.id === id));
+    } catch (error) { res.status(400).json({ error: (error as Error).message }); }
+  });
+  router.put('/plugins/:id/global', (req, res) => {
+    try {
+      const id = String(req.params.id);
+      if (typeof req.body?.enabled !== 'boolean') throw new Error('Activation booléenne requise.');
+      if (!installed()[id]) throw new Error('Plugin absent de Claude Code.');
+      setNativeClaudePlugin(userHome, id, req.body.enabled);
+      res.json({ ok: true, global: req.body.enabled });
+    } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.post('/plugin/marketplace/register', (req, res) => {
     try { res.json(registerOfficialMarketplace(run, scope(req.body?.scope))); }
@@ -252,10 +256,10 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
       if (installed()[id]) throw new Error('Déjà installé. Son activation se règle par dossier.');
       const catalog = listMarketplaceConnectors(run, { marketplaceName: marketplace.name });
       if (!catalog.plugins.some((plugin: { id: string }) => plugin.id === id)) throw new Error('Élément absent du catalogue.');
-      disableNativeClaudePlugin(userHome, id);
+      setNativeClaudePlugin(userHome, id, false);
       let result;
       try { result = run('claude', ['plugin', 'install', id, '--scope', 'user']); }
-      finally { disableNativeClaudePlugin(userHome, id); }
+      finally { setNativeClaudePlugin(userHome, id, false); }
       if (!result.ok) throw new Error(result.output || 'Installation impossible.');
       importInstalledCollections();
       res.json({ ok: true, enabled: false });
