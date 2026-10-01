@@ -179,6 +179,17 @@ export function mount(container, api) {
     });
   }
 
+  function toggleGlobal(plugin) {
+    const previous = plugin.global;
+    plugin.global = !previous;
+    render();
+    request('PUT', `/plugins/${encodeURIComponent(plugin.id)}/global`, { enabled: !previous }).then(() => load()).catch((cause) => {
+      plugin.global = previous;
+      error = cause.message;
+      if (!disposed) render();
+    });
+  }
+
   async function open(entry) {
     const version = revision;
     try {
@@ -276,6 +287,7 @@ export function mount(container, api) {
     if (action) { const title = button(item.name, action, 'title piecemaker-button'); details.append(title); }
     else details.append(element('strong', item.name));
     details.append(element('p', item.description || 'Aucune description.'));
+    if (item.globalProviders?.length) details.append(element('p', `Actif partout · ${item.globalProviders.join(', ')}`, 'meta'));
     node.append(details);
     return node;
   }
@@ -388,12 +400,15 @@ export function mount(container, api) {
       } else if (tab === 'plugin') {
         body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}` : 'Sélectionnez un dossier pour activer un plugin.', 'meta'));
 
+        body.append(element('p', '« Dans ce dossier » charge le plugin pour ce seul dossier. « Partout » l’active dans tous les dossiers de Claude Code, sauf ceux où vous l’avez retiré.', 'meta'));
         if (!plugins.length) body.append(element('p', 'Aucun plugin dans la bibliothèque.'));
         for (const plugin of plugins.filter(matches)) {
             const item = row(plugin);
             const actions = element('div', undefined, 'toolbar');
             actions.append(button(pluginTrees.has(plugin.id) ? 'Masquer l’arborescence' : pluginTreeBusy === plugin.id ? 'Chargement…' : 'Voir l’arborescence', () => void togglePluginTree(plugin)));
-            item.append(actions, toggle(plugin.componentCount ? (plugin.partial ? 'Partiellement installé' : 'Dans ce dossier') : 'Aucun composant portable', plugin.enabled, !context.project || !plugin.componentCount, () => toggleActivation(plugin, `/plugins/${encodeURIComponent(plugin.id)}/activation`, { workspacePath: context.project.path, enabled: !plugin.enabled })));
+            const activable = plugin.native || plugin.componentCount;
+            item.append(actions, toggle(activable ? (plugin.partial ? 'Partiellement installé' : 'Dans ce dossier') : 'Aucun composant portable', plugin.enabled, !context.project || !activable, () => toggleActivation(plugin, `/plugins/${encodeURIComponent(plugin.id)}/activation`, { workspacePath: context.project.path, enabled: !plugin.enabled })));
+            if (plugin.native) item.append(toggle('Partout', plugin.global, false, () => toggleGlobal(plugin)));
             body.append(item);
             if (pluginTrees.has(plugin.id)) {
               const tree = element('div', undefined, 'tree');
