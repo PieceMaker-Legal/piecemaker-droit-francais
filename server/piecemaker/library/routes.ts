@@ -1,12 +1,19 @@
+import os from 'node:os';
+
 import express from 'express';
 
 import type { createLibraryStore } from './store.js';
+import { globalProviderIndex } from './global-state.js';
 import { listLibraryProviderSkills, scanAndPersistLibraryProviderSkills } from './provider-skills.js';
 
-export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>) {
+export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>, userHome = os.homedir()) {
   const router = express.Router();
   router.get('/catalog', (req, res) => {
-    try { res.json({ entries: store.list(typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined) }); }
+    try {
+      const globalProviders = globalProviderIndex(userHome);
+      const entries = store.list(typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined);
+      res.json({ entries: entries.map(({ sources, ...entry }) => ({ ...entry, globalProviders: globalProviders(sources) })) });
+    }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.post('/catalog', (req, res) => {
