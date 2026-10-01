@@ -36,13 +36,39 @@ export type ReviewRow = {
   error?: string;
   startedAt?: string;
   finishedAt?: string;
+  corrections?: number;
+  decision?: string;
+  aliases?: string[];
+};
+
+export type TextRange = { start: number; end: number };
+
+export type CellCitation = {
+  document: string;
+  quote: string;
+  verified: boolean;
+  ranges?: TextRange[];
 };
 
 export type Cell = {
   summary: string;
   flag: Flag;
   reasoning: string;
+  citations?: CellCitation[];
 };
+
+export type CitationSource = {
+  document: string;
+  link: string | null;
+  quote: string;
+  verified: boolean;
+  text: string;
+  offset: number;
+  length: number;
+  ranges: TextRange[];
+};
+
+export const MAX_CITATION_CORRECTIONS = 3;
 
 export type Provider = 'claude' | 'codex';
 
@@ -59,12 +85,36 @@ export function reviewCategory(review: { category?: unknown }): ReviewCategory {
   return review.category === 'recherche-juridique' ? 'recherche-juridique' : 'documents';
 }
 
+export type ResearchUpdate = {
+  searchedAt: string;
+  since: string;
+  found: number;
+  added: number;
+};
+
 export type ReviewResearch = {
   query: string;
   criteria: string[];
   dispositifOnly: boolean;
   total: number;
+  filters?: ResearchFilters;
+  searchedAt?: string;
+  updates?: ResearchUpdate[];
 };
+
+export const UPDATE_MARGIN_MONTHS = 6;
+
+export function lastSearchDate(review: Pick<Review, 'createdAt' | 'research'>): string {
+  return review.research?.searchedAt ?? review.createdAt;
+}
+
+export function defaultUpdateSince(review: Pick<Review, 'createdAt' | 'research'>): string {
+  const since = new Date(lastSearchDate(review));
+  since.setMonth(since.getMonth() - UPDATE_MARGIN_MONTHS);
+  const value = since.toISOString().slice(0, 10);
+  const start = review.research?.filters?.dateDebut ?? '';
+  return start > value ? start : value;
+}
 
 export type Review = {
   version: 1;
@@ -97,6 +147,8 @@ export type ReviewSummary = {
   columnCount: number;
   provider: Provider;
   model: string;
+  updatable?: boolean;
+  searchedAt?: string;
 };
 
 export type ReviewDetail = {
@@ -175,6 +227,18 @@ export function reviewStatusLabel(status: ReviewStatus): string {
 }
 
 export const EMPTY_CELL_SUMMARY = 'Non traité';
+export const NOT_FOUND_SUMMARY = 'Non trouvé';
+
+export function citationRequired(cell: Cell): boolean {
+  const summary = cell.summary.trim();
+  return summary !== EMPTY_CELL_SUMMARY && summary.replace(/[.\s]+$/, '').toLowerCase() !== NOT_FOUND_SUMMARY.toLowerCase();
+}
+
+export function citationIssue(cell: Cell): 'missing' | 'unverified' | null {
+  if (!citationRequired(cell)) return null;
+  if (!cell.citations?.length) return 'missing';
+  return cell.citations.some((citation) => !citation.verified) ? 'unverified' : null;
+}
 
 export function isCellFilled(cell: Cell | undefined): cell is Cell {
   return Boolean(cell) && cell!.summary.trim() !== '' && cell!.summary !== EMPTY_CELL_SUMMARY;
@@ -282,21 +346,36 @@ export const RESEARCH_PAGE_SIZE = 10;
 
 export type ResearchPhase = 'counting' | 'listing' | 'downloading' | 'done' | 'too_broad' | 'error' | 'cancelled';
 
-export type ResearchCount = { source: ResearchSource; total: number };
+export type ResearchCount = { source: ResearchSource; total: number; legifrance?: number; judilibre?: number };
+
+export type ResearchOrigin = 'legifrance' | 'judilibre';
+
+export type ZoneOrigin = 'judilibre' | 'formules';
+
+export type ResearchTarget = {
+  project: string;
+  file: string;
+  title: string;
+  since: string;
+};
 
 export type ResearchState = {
   id: string;
   phase: ResearchPhase;
   filters: ResearchFilters;
+  update?: ResearchTarget;
   counts: ResearchCount[];
   total: number;
   listed: number;
+  skipped: number;
   downloaded: number;
   kept: number;
   excluded: number;
   undetected: number;
   failed: number;
+  unmatched?: number;
   error?: string;
+  warnings?: string[];
   createdAt: string;
 };
 
@@ -314,6 +393,9 @@ export type ResearchDecision = {
   analysis: string;
   analysisKind: 'analyse' | 'extrait' | 'aucune';
   zone: ResearchZone;
+  zoneOrigin?: ZoneOrigin;
+  origin?: ResearchOrigin;
+  aliases?: string[];
   link: string;
   chars: number;
   error?: string;
@@ -333,6 +415,7 @@ export type ResearchPage = {
 export type ResearchText = {
   id: string;
   zone: ResearchZone;
+  zoneOrigin?: ZoneOrigin;
   retained: string;
   full: string;
 };
@@ -342,6 +425,16 @@ export const ZONE_LABELS: Record<ResearchZone, string> = {
   dispositif: 'Dispositif seul (motifs non repérés)',
   absente: 'Partie du juge non repérée : texte intégral conservé',
   integral: 'Texte intégral',
+};
+
+export const ZONE_ORIGIN_LABELS: Record<ZoneOrigin, string> = {
+  judilibre: 'découpage officiel Judilibre',
+  formules: 'repérage par formules',
+};
+
+export const ORIGIN_LABELS: Record<ResearchOrigin, string> = {
+  legifrance: 'Légifrance',
+  judilibre: 'Judilibre',
 };
 
 export function researchCriteria(filters: ResearchFilters): string[] {

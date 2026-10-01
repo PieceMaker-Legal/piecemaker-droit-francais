@@ -5,19 +5,31 @@ Supports both pipeline (direct PDF) and VLM/hybrid (image-based) modes
 """
 
 import argparse
+import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 
 
-def mineru_executable():
+def find_mineru():
     name = 'mineru.exe' if os.name == 'nt' else 'mineru'
-    sibling = Path(sys.executable).resolve().parent / name
-    if sibling.is_file():
-        return str(sibling)
-    return 'mineru'
+    for directory in (sysconfig.get_path('scripts'), Path(sys.executable).parent, Path(sys.executable).resolve().parent):
+        candidate = Path(directory) / name
+        if candidate.is_file():
+            return str(candidate)
+    return shutil.which(name)
+
+
+def mineru_executable():
+    return find_mineru() or 'mineru'
+
+
+def mineru_available():
+    return importlib.util.find_spec('mineru') is not None and find_mineru() is not None
 
 def parse_with_pipeline(pdf_path, output_dir, lang=None):
     """

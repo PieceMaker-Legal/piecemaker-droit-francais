@@ -20,6 +20,7 @@ export type Listed = {
   position: number;
   sourceTotal: number;
   result: Json;
+  origin: 'legifrance' | 'judilibre';
 };
 
 const PAGE_SIZE = 100;
@@ -186,7 +187,7 @@ export async function listPlan(api: LegifranceApi, plan: SourcePlan, parsed: Par
     const batch = Array.isArray(response.results) ? response.results as Json[] : [];
     for (const result of batch) {
       const { id, title } = identity(result);
-      if (id) listed.push({ id, title, source: plan.source, position: listed.length, sourceTotal: total, result });
+      if (id) listed.push({ id, title, source: plan.source, position: listed.length, sourceTotal: total, result, origin: 'legifrance' });
     }
     onPage(batch.length);
     if (batch.length < PAGE_SIZE) break;
