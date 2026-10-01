@@ -7,7 +7,7 @@ import { listMarkdownDocuments } from './documents.js';
 import { citationSource } from './citations.js';
 import { exportReview } from './export.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
-import { cancelResearch, createResearchReview, legifranceConfigured, researchPage, researchState, researchText, startResearch, stopAllResearch } from './research.js';
+import { appendResearchUpdate, cancelResearch, createResearchReview, discardResearch, legifranceConfigured, researchPage, researchState, researchText, startResearch, startResearchUpdate, stopAllResearch } from './research.js';
 import { createReview, listReviews, readReview, reviewDetail, updateReview } from './reviews.js';
 import { cancelJob, isRunning, pendingTasks, queueTasks, stopAllJobs } from './runner.js';
 import type { RowTask } from './runner.js';
@@ -102,15 +102,36 @@ async function launchResearch(body: Body) {
   return reviewDetail(project, file, isRunning(project, file));
 }
 
+async function appendUpdate(body: Body) {
+  const project = assertProject(body.project);
+  const file = String(body.file ?? '');
+  assertReviewFile(project, file);
+  const review = readReview(project, file);
+  const environment = await launchEnvironment(body.proxyOrigin);
+  const rows = await appendResearchUpdate(project, file, String(body.id ?? ''));
+  if (rows.length) await queueTasks(project, file, rows.map((rowId) => ({ rowId })), review.concurrency || 3, environment);
+  return reviewDetail(project, file, isRunning(project, file));
+}
+
+function startUpdate(body: Body) {
+  const update = (body.update ?? {}) as Body;
+  const project = assertProject(update.project);
+  const file = String(update.file ?? '');
+  assertReviewFile(project, file);
+  return startResearchUpdate(project, file, update.since);
+}
+
 function researchRoute(method: string, pathname: string, url: URL, body: Body): Promise<unknown> | unknown {
   const id = url.searchParams.get('id') ?? String(body.id ?? '');
   if (method === 'GET' && pathname === '/research/legifrance') return { configured: legifranceConfigured() };
-  if (method === 'POST' && pathname === '/research') return startResearch(body);
+  if (method === 'POST' && pathname === '/research') return body.update ? startUpdate(body) : startResearch(body);
   if (method === 'GET' && pathname === '/research/state') return researchState(id);
   if (method === 'GET' && pathname === '/research/page') return researchPage(id, url.searchParams.get('page'), url.searchParams.get('view'));
   if (method === 'GET' && pathname === '/research/text') return researchText(id, url.searchParams.get('decision'));
   if (method === 'POST' && pathname === '/research/cancel') return cancelResearch(id);
+  if (method === 'POST' && pathname === '/research/discard') return discardResearch(id);
   if (method === 'POST' && pathname === '/research/review') return launchResearch(body);
+  if (method === 'POST' && pathname === '/research/append') return appendUpdate(body);
   throw new UserError('Commande inconnue.');
 }
 

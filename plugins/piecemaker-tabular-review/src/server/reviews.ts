@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Provider, Review, ReviewDetail, ReviewDocument, ReviewRow, ReviewStatus, ReviewSummary, RowRequest, Template } from '../shared.js';
-import { DOCS_FOLDER, reviewCategory } from '../shared.js';
+import { DOCS_FOLDER, lastSearchDate, reviewCategory } from '../shared.js';
 import { resolveMarkdownDocument } from './documents.js';
 import { assertReviewFile, docsDirectory, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
 
@@ -185,6 +185,7 @@ export function listReviews(projects: string[], isRunning: (project: string, fil
           columnCount: review.columns.length,
           provider: review.provider,
           model: review.model,
+          ...(review.research ? { updatable: Boolean(review.research.filters), searchedAt: lastSearchDate(review) } : {}),
         });
       } catch {
         continue;
