@@ -1,18 +1,21 @@
-import type { ColumnFormat, Option, Provider, ResearchDecision, ResearchFilters, ResearchPage, ResearchSource, ResearchState, ResearchText, ResearchView, ReviewDetail, Template } from '../shared.js';
+import type { ColumnFormat, Option, Provider, ResearchDecision, ResearchFilters, ResearchPage, ResearchSource, ResearchState, ResearchText, ResearchView, ReviewDetail, ReviewSummary, Template } from '../shared.js';
 import {
   APPEL_SIEGES,
   BULLETIN_PUBLICATIONS,
   CAA_VILLES,
   CASSATION_MATIERES,
+  defaultUpdateSince,
   LEBON_PUBLICATIONS,
+  ORIGIN_LABELS,
   PREMIERE_INSTANCE_TYPES,
   RESEARCH_LIMIT,
   RESEARCH_SOURCES,
   REVIEW_FOLDER,
   ZONE_LABELS,
+  ZONE_ORIGIN_LABELS,
 } from '../shared.js';
 import type { App, View } from './app.js';
-import { confirmDialog, errorMessage, escapeHtml, toast } from './dom.js';
+import { confirmDialog, errorMessage, escapeHtml, formatDate, toast } from './dom.js';
 import { anonymizationProxyOrigin, loadModels } from './host.js';
 import type { HostProject, ModelOption } from './host.js';
 import type { DraftColumn } from './templates.js';
@@ -30,6 +33,26 @@ const PROVIDERS: { value: Provider; label: string }[] = [
 const SOURCE_LABEL = Object.fromEntries(RESEARCH_SOURCES.map((source) => [source.value, source.label])) as Record<ResearchSource, string>;
 
 type Form = Omit<ResearchFilters, 'query' | 'dateDebut' | 'dateFin' | 'dispositifOnly'>;
+
+type UpdateTarget = {
+  project: string;
+  file: string;
+  title: string;
+  query: string;
+  criteria: string[];
+  searchedAt: string;
+  since: string;
+  settings: string;
+};
+
+function plural(count: number, word: string): string {
+  return `${count} ${word.replace(/(\S)(?=\s|$)/g, `$1${count > 1 ? 's' : ''}`)}`;
+}
+
+function day(value: string): string {
+  const [year, month, date] = value.slice(0, 10).split('-');
+  return `${date}/${month}/${year}`;
+}
 
 function checkboxes(name: keyof Form, options: Option[], selected: string[]): string {
   return options.map((option) => `<label class="ptr-check"><input type="checkbox" data-form="${name}" value="${escapeHtml(option.value)}"${selected.includes(option.value) ? ' checked' : ''}> ${escapeHtml(option.label)}</label>`).join('');
@@ -94,13 +117,23 @@ function filenamePreview(title: string): string {
   return `${stamp} - Tabular Review Recherche juridique - ${title || '…'}`;
 }
 
+function countDetail(count: ResearchState['counts'][number]): string {
+  return count.judilibre === undefined ? '' : ` (Légifrance ${count.legifrance ?? 0} · Judilibre ${count.judilibre})`;
+}
+
 function countsHtml(state: ResearchState): string {
-  return state.counts.map((count) => `<span class="ptr-chip">${escapeHtml(SOURCE_LABEL[count.source])} : ${count.total}</span>`).join('');
+  return state.counts.map((count) => `<span class="ptr-chip">${escapeHtml(SOURCE_LABEL[count.source])} : ${count.total}${countDetail(count)}</span>`).join('');
+}
+
+function warningsHtml(state: ResearchState): string {
+  return (state.warnings ?? []).map((warning) => `<div class="ptr-warning">${escapeHtml(warning)}</div>`).join('');
 }
 
 function decisionHtml(decision: ResearchDecision, dispositifOnly: boolean): string {
   const zone = dispositifOnly && decision.zone !== 'motifs' ? `<span class="ptr-chip ptr-chip-partial" title="${escapeHtml(ZONE_LABELS[decision.zone])}">${decision.zone === 'dispositif' ? 'Dispositif seul' : 'Partie du juge non repérée'}</span>` : '';
   const error = decision.error ? `<span class="ptr-chip ptr-chip-cancelled" title="${escapeHtml(decision.error)}">Texte indisponible</span>` : '';
+  const origin = ORIGIN_LABELS[decision.origin ?? 'legifrance'];
+  const originChip = decision.origin === 'judilibre' ? `<span class="ptr-chip" title="Décision absente de Légifrance, issue de Judilibre">${origin}</span>` : '';
   const analysis = decision.analysisKind === 'aucune'
     ? '<div class="ptr-analysis ptr-muted">Aucune analyse officielle.</div>'
     : `<div class="ptr-analysis ptr-clamp" data-analysis>${decision.analysisKind === 'extrait' ? '<span class="ptr-label">Extrait · </span>' : ''}${escapeHtml(decision.analysis)}</div>`;
@@ -109,8 +142,8 @@ function decisionHtml(decision: ResearchDecision, dispositifOnly: boolean): stri
       <div class="ptr-decision-head">
         <span class="ptr-rank">${decision.rank}</span>
         <span class="ptr-chip${/Inédit|Cour d’appel|Première instance|Cour administrative/.test(decision.importance) ? '' : ' ptr-chip-important'}">${escapeHtml(decision.importance)}</span>
-        <a class="ptr-decision-title" href="${escapeHtml(decision.link)}" target="_blank" rel="noopener noreferrer" title="Ouvrir sur Légifrance">${escapeHtml(decision.title)}</a>
-        ${zone}${error}
+        <a class="ptr-decision-title" href="${escapeHtml(decision.link)}" target="_blank" rel="noopener noreferrer" title="Ouvrir sur ${origin}">${escapeHtml(decision.title)}</a>
+        ${originChip}${zone}${error}
       </div>
       ${decision.titrage ? `<div class="ptr-titrage ptr-clamp-2" title="${escapeHtml(decision.titrage)}">${escapeHtml(decision.titrage)}</div>` : ''}
       ${analysis}
@@ -127,13 +160,17 @@ export function createResearchView(app: App): View {
   const element = document.createElement('div');
   element.className = 'ptr-page';
   element.innerHTML = `
-    <div class="ptr-grid">
+    <div class="ptr-search-row" data-existing-row hidden>
+      <label class="ptr-field" style="flex:1;max-width:560px"><span class="ptr-label">Mettre à jour une recherche existante</span><select class="ptr-select" data-existing></select></label>
+    </div>
+    <section class="ptr-panel" data-update-panel hidden></section>
+    <div class="ptr-grid" data-new-only>
       <label class="ptr-field"><span class="ptr-label">Dossier</span><select class="ptr-select" data-project></select></label>
       <label class="ptr-field" style="grid-column:span 2"><span class="ptr-label">Nom de la tabular review</span><input class="ptr-input" data-title maxlength="120" placeholder="ex. Faute grave et dissimulation de documents"></label>
     </div>
     <div data-legifrance></div>
-    <section class="ptr-panel">
-      <div class="ptr-panel-header">Recherche Légifrance</div>
+    <section class="ptr-panel" data-new-only>
+      <div class="ptr-panel-header">Recherche Légifrance et Judilibre</div>
       <div class="ptr-search-body">
         <label class="ptr-field"><span class="ptr-label">Requête</span>
           <textarea class="ptr-textarea" data-query rows="2" maxlength="2000" placeholder="(&quot;faute grave&quot; OU &quot;faute lourde&quot;) ET licenciement"></textarea>
@@ -144,7 +181,7 @@ export function createResearchView(app: App): View {
         <div class="ptr-search-row">
           <label class="ptr-field" style="width:150px"><span class="ptr-label">Décisions du</span><input class="ptr-input" type="date" data-date-start></label>
           <label class="ptr-field" style="width:150px"><span class="ptr-label">Au</span><input class="ptr-input" type="date" data-date-end></label>
-          <label class="ptr-check ptr-dispositif"><input type="checkbox" data-dispositif checked><span><strong>Chercher dans le dispositif uniquement</strong><br><span class="ptr-small ptr-muted">Seule la partie où le juge statue est lue et transmise à l’IA : motifs de la juridiction (« Sur ce », « Mais attendu que », « Réponse de la Cour », « Considérant »…) et dispositif (« Par ces motifs », « Décide »). Faits, procédure, moyens et prétentions des parties sont écartés.</span></span></label>
+          <label class="ptr-check ptr-dispositif"><input type="checkbox" data-dispositif checked><span><strong>Chercher dans le dispositif uniquement</strong><br><span class="ptr-small ptr-muted">Seule la partie où le juge statue est lue et transmise à l’IA : motifs de la juridiction (« Sur ce », « Mais attendu que », « Réponse de la Cour », « Considérant »…) et dispositif (« Par ces motifs », « Décide »). Faits, procédure, moyens et prétentions des parties sont écartés. Pour les juridictions judiciaires, le découpage officiel de Judilibre est utilisé quand il existe ; sinon, repérage par formules.</span></span></label>
           <span class="ptr-spacer"></span>
           <button type="button" class="ptr-button ptr-button-primary" data-search>Rechercher</button>
         </div>
@@ -167,9 +204,10 @@ export function createResearchView(app: App): View {
       <div class="ptr-search-body" data-question-list></div>
     </section>
     <div class="ptr-footer-bar" data-launch-bar hidden>
-      <label class="ptr-field" style="width:120px"><span class="ptr-label">IA</span><select class="ptr-select" data-provider>${PROVIDERS.map((provider) => `<option value="${provider.value}">${provider.label}</option>`).join('')}</select></label>
-      <label class="ptr-field" style="width:240px"><span class="ptr-label">Modèle IA</span><select class="ptr-select" data-model></select></label>
-      <label class="ptr-field" style="width:150px"><span class="ptr-label">Sessions simultanées</span><select class="ptr-select" data-concurrency>${[1, 2, 3, 4, 5, 6, 8].map((value) => `<option value="${value}"${value === 3 ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
+      <span class="ptr-small ptr-muted" data-update-settings hidden></span>
+      <label class="ptr-field" style="width:120px" data-new-only><span class="ptr-label">IA</span><select class="ptr-select" data-provider>${PROVIDERS.map((provider) => `<option value="${provider.value}">${provider.label}</option>`).join('')}</select></label>
+      <label class="ptr-field" style="width:240px" data-new-only><span class="ptr-label">Modèle IA</span><select class="ptr-select" data-model></select></label>
+      <label class="ptr-field" style="width:150px" data-new-only><span class="ptr-label">Sessions simultanées</span><select class="ptr-select" data-concurrency>${[1, 2, 3, 4, 5, 6, 8].map((value) => `<option value="${value}"${value === 3 ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
       <span class="ptr-spacer"></span>
       <span class="ptr-small ptr-muted" data-filename></span>
       <button type="button" class="ptr-button ptr-button-primary" data-launch>Lancer la revue</button>
@@ -206,6 +244,8 @@ export function createResearchView(app: App): View {
   let models: { options: ModelOption[]; cheapest: string } = { options: [], cheapest: '' };
   let configured = true;
   let state: ResearchState | null = null;
+  let update: UpdateTarget | null = null;
+  let existing: ReviewSummary[] = [];
   let view: ResearchView = 'kept';
   let page = 1;
   let pageCount = 1;
@@ -239,10 +279,11 @@ export function createResearchView(app: App): View {
       target.innerHTML = '';
       return;
     }
-    const stop = '<button type="button" class="ptr-button ptr-button-danger" data-stop>Arrêter</button>';
+    const stop = '<button type="button" class="ptr-button ptr-button-danger" data-stop>Annuler la recherche</button>';
+    const discard = `<button type="button" class="ptr-button" data-discard>${state.phase === 'done' && (update ? state.kept : launchable()) ? 'Abandonner ces résultats' : 'Effacer'}</button>`;
     switch (state.phase) {
       case 'counting':
-        target.innerHTML = `<div class="ptr-status"><span class="ptr-spinner"></span> Comptage des résultats sur Légifrance…<span class="ptr-spacer"></span>${stop}</div>`;
+        target.innerHTML = `<div class="ptr-status"><span class="ptr-spinner"></span> Comptage des résultats sur Légifrance et Judilibre…<span class="ptr-spacer"></span>${stop}</div>`;
         return;
       case 'listing':
         target.innerHTML = `<div class="ptr-status"><span class="ptr-spinner"></span> Liste des résultats : ${state.listed} / ${state.total}${countsHtml(state)}<span class="ptr-spacer"></span>${stop}</div>`;
@@ -253,20 +294,30 @@ export function createResearchView(app: App): View {
         return;
       }
       case 'too_broad':
-        target.innerHTML = `<div class="ptr-warning">Requête trop large : <strong>${state.total} résultats</strong> (${state.counts.map((count) => `${escapeHtml(SOURCE_LABEL[count.source])} ${count.total}`).join(', ')}). Au-delà de ${RESEARCH_LIMIT} résultats, la recherche est refusée pour manque de contexte : précisez les termes (guillemets, ET), l’article visé, la matière ou bornez les dates.</div>`;
+        target.innerHTML = `${warningsHtml(state)}<div class="ptr-warning">Requête trop large : <strong>${state.total} résultats</strong> (${state.counts.map((count) => `${escapeHtml(SOURCE_LABEL[count.source])} ${count.total}${countDetail(count)}`).join(', ')}). Au-delà de ${RESEARCH_LIMIT} résultats, la recherche est refusée pour manque de contexte : ${update ? 'choisissez une date de départ plus récente.' : 'précisez les termes (guillemets, ET), l’article visé, la matière ou bornez les dates.'}</div>`;
         return;
       case 'error':
         target.innerHTML = `<div class="ptr-error-box">${escapeHtml(state.error ?? 'Recherche en échec.')}</div>`;
         return;
       case 'cancelled':
-        target.innerHTML = '<div class="ptr-status ptr-muted">Recherche arrêtée.</div>';
+        target.innerHTML = `<div class="ptr-status ptr-muted">Recherche annulée : les décisions déjà téléchargées ont été supprimées. ${update ? 'Changez la date de départ' : 'Modifiez la requête ou les filtres'} puis relancez.<span class="ptr-spacer"></span>${discard}</div>`;
         return;
       case 'done': {
+        if (update) {
+          const skipped = state.skipped ?? 0;
+          const known = skipped ? ` · ${plural(skipped, 'décision')} déjà dans la table (ignorée${skipped > 1 ? 's' : ''})` : '';
+          const failed = state.failed ? ` · <span class="ptr-status-error">${plural(state.failed, 'téléchargement')} en échec</span>` : '';
+          target.innerHTML = state.kept
+            ? `<div class="ptr-status"><strong>${plural(state.kept, 'nouvelle décision')}</strong> depuis le ${escapeHtml(day(update.since))}${known}${failed}${state.excluded ? ` · <button type="button" class="ptr-link-button" data-view="${view === 'excluded' ? 'kept' : 'excluded'}">${view === 'excluded' ? 'Revenir aux nouvelles décisions' : `${state.excluded} écartée${state.excluded > 1 ? 's' : ''}`}</button>` : ''}<span class="ptr-spacer"></span>${discard}</div>`
+            : `<div class="ptr-status">Aucune nouvelle décision depuis le ${escapeHtml(day(update.since))}${known}${failed}. La date de dernière recherche de la revue a été mise à jour.</div>`;
+          return;
+        }
         const details: string[] = [];
         if (state.excluded) details.push(`<button type="button" class="ptr-link-button" data-view="${view === 'excluded' ? 'kept' : 'excluded'}">${view === 'excluded' ? 'Revenir aux décisions retenues' : `${state.excluded} écartée${state.excluded > 1 ? 's' : ''} : termes absents de la partie du juge`}</button>`);
         if (state.undetected) details.push(`${state.undetected} sans partie du juge repérée (conservée${state.undetected > 1 ? 's' : ''}, signalée${state.undetected > 1 ? 's' : ''})`);
+        if (state.unmatched) details.push(`${state.unmatched} résultat${state.unmatched > 1 ? 's' : ''} Judilibre sans les termes exacts de la requête, écarté${state.unmatched > 1 ? 's' : ''}`);
         if (state.failed) details.push(`<span class="ptr-status-error">${state.failed} téléchargement${state.failed > 1 ? 's' : ''} en échec (exclu${state.failed > 1 ? 's' : ''} de la revue)</span>`);
-        target.innerHTML = `<div class="ptr-status"><strong>${state.kept} décision${state.kept > 1 ? 's' : ''} retenue${state.kept > 1 ? 's' : ''}</strong> sur ${state.total} résultat${state.total > 1 ? 's' : ''} Légifrance${countsHtml(state)}${details.length ? ` · ${details.join(' · ')}` : ''}</div>`;
+        target.innerHTML = `${warningsHtml(state)}<div class="ptr-status"><strong>${state.kept} décision${state.kept > 1 ? 's' : ''} retenue${state.kept > 1 ? 's' : ''}</strong> sur ${state.listed} décision${state.listed > 1 ? 's' : ''} distincte${state.listed > 1 ? 's' : ''}${countsHtml(state)}${details.length ? ` · ${details.join(' · ')}` : ''}<span class="ptr-spacer"></span>${discard}</div>`;
       }
     }
   }
@@ -356,7 +407,7 @@ export function createResearchView(app: App): View {
 
   function renderLaunch() {
     const ready = state?.phase === 'done' && launchable() > 0;
-    $('[data-questions]').hidden = !ready;
+    $('[data-questions]').hidden = !ready || Boolean(update);
     $('[data-launch-bar]').hidden = !ready;
     if (!ready) {
       $('[data-model-warning]').innerHTML = '';
@@ -364,6 +415,14 @@ export function createResearchView(app: App): View {
     }
     const count = launchable();
     const button = $<HTMLButtonElement>('[data-launch]');
+    if (update) {
+      button.disabled = launching;
+      button.textContent = launching ? 'Ajout…' : `Ajouter ${plural(count, 'décision')} à la revue et les analyser`;
+      $('[data-update-settings]').textContent = `Mêmes questions et même IA que la revue (${update.settings})`;
+      $('[data-filename]').textContent = `${REVIEW_FOLDER}/${update.file}`;
+      $('[data-model-warning]').innerHTML = '';
+      return;
+    }
     button.disabled = launching || !projectSelect.value || !titleInput.value.trim() || !preparedQuestions().length || !modelSelect.value;
     button.textContent = launching ? 'Lancement…' : `Lancer la revue (${count} décision${count > 1 ? 's' : ''})`;
     $('[data-filename]').textContent = `${REVIEW_FOLDER}/${filenamePreview(titleInput.value.trim())}`;
@@ -372,10 +431,157 @@ export function createResearchView(app: App): View {
       : '';
   }
 
+  function updatePanelHtml(target: UpdateTarget): string {
+    const busy = searching || running();
+    return `
+      <div class="ptr-panel-header">Mise à jour de « ${escapeHtml(target.title)} »<span class="ptr-spacer"></span><button type="button" class="ptr-button" data-leave-update${busy ? ' disabled' : ''}>Quitter la mise à jour</button></div>
+      <div class="ptr-search-body">
+        <div class="ptr-small">Requête : <code>${escapeHtml(target.query)}</code></div>
+        <div class="ptr-small ptr-muted">${escapeHtml(target.criteria.join(' · '))}</div>
+        <div class="ptr-small ptr-muted">Dernière recherche le ${escapeHtml(formatDate(target.searchedAt))} (${escapeHtml(app.projectName(target.project))}). La même recherche est relancée à partir de la date choisie ; les décisions déjà présentes dans la table sont ignorées, seules les nouvelles sont téléchargées puis analysées avec les mêmes questions.</div>
+        <div class="ptr-search-row">
+          <label class="ptr-field" style="width:230px"><span class="ptr-label">Décisions rendues depuis le</span><input class="ptr-input" type="date" data-update-since value="${escapeHtml(target.since)}"${busy ? ' disabled' : ''}></label>
+          <span class="ptr-small ptr-muted" style="flex:1">Par défaut, six mois avant la dernière recherche : Légifrance publie certaines décisions plusieurs mois après leur date.</span>
+          <button type="button" class="ptr-button ptr-button-primary" data-update-search${busy || !target.since ? ' disabled' : ''}>${busy ? 'Recherche…' : 'Chercher les nouvelles décisions'}</button>
+        </div>
+      </div>`;
+  }
+
+  function renderMode() {
+    element.querySelectorAll<HTMLElement>('[data-new-only]').forEach((node) => { node.hidden = Boolean(update); });
+    $('[data-update-settings]').hidden = !update;
+    const panel = $('[data-update-panel]');
+    panel.hidden = !update;
+    panel.innerHTML = update ? updatePanelHtml(update) : '';
+    const choices = existing.filter((review) => review.updatable);
+    $('[data-existing-row]').hidden = Boolean(update) || !choices.length;
+    $<HTMLSelectElement>('[data-existing]').innerHTML = `<option value="">Choisir une revue de recherche juridique…</option>${choices.map((review, index) => `<option value="${index}">${escapeHtml(`${review.title} — ${app.projectName(review.project)} · dernière recherche le ${formatDate(review.searchedAt ?? review.createdAt)}`)}</option>`).join('')}`;
+  }
+
   function renderAll() {
+    renderMode();
     renderMissing();
     renderStatus();
     renderLaunch();
+  }
+
+  function clearResults() {
+    view = 'kept';
+    page = 1;
+    pages.clear();
+    texts.clear();
+    results.hidden = true;
+    list.innerHTML = '';
+  }
+
+  function dropState() {
+    const previous = state;
+    state = null;
+    clearResults();
+    if (previous) void app.rpc('POST', '/research/discard', { id: previous.id }).catch(() => undefined);
+  }
+
+  async function loadExisting() {
+    try {
+      const loaded = await app.projects();
+      const result = await app.rpc<{ reviews: ReviewSummary[] }>('POST', '/reviews/list', { projects: loaded.map((project) => project.fullPath) });
+      if (destroyed) return;
+      existing = result.reviews.filter((review) => review.category === 'recherche-juridique');
+    } catch {
+      existing = [];
+    }
+    renderMode();
+  }
+
+  async function enterUpdate(project: string, file: string) {
+    if (searching || running()) {
+      toast(app.root, 'Une recherche est en cours : annulez-la avant de mettre à jour une revue.', 'error');
+      return;
+    }
+    let detail: ReviewDetail;
+    try {
+      detail = await app.rpc<ReviewDetail>('GET', `/reviews/item?project=${encodeURIComponent(project)}&file=${encodeURIComponent(file)}`);
+    } catch (error) {
+      toast(app.root, errorMessage(error), 'error');
+      return;
+    }
+    const { review } = detail;
+    if (!review.research?.filters) {
+      toast(app.root, 'Cette recherche a été lancée avant l’enregistrement de ses critères : elle ne peut pas être mise à jour.', 'error');
+      return;
+    }
+    if (destroyed) return;
+    dropState();
+    update = {
+      project,
+      file,
+      title: review.title,
+      query: review.research.query,
+      criteria: review.research.criteria,
+      searchedAt: review.research.searchedAt ?? review.createdAt,
+      since: defaultUpdateSince(review),
+      settings: `${review.provider} — ${review.model}`,
+    };
+    renderAll();
+    $('[data-update-panel]').scrollIntoView({ block: 'start' });
+  }
+
+  function leaveUpdate() {
+    if (searching || running()) return;
+    dropState();
+    update = null;
+    renderAll();
+    void loadExisting();
+  }
+
+  async function searchUpdate() {
+    if (!update || searching || running()) return;
+    const since = element.querySelector<HTMLInputElement>('[data-update-since]')?.value ?? update.since;
+    update.since = since;
+    searching = true;
+    renderAll();
+    try {
+      const previous = state;
+      state = await app.rpc<ResearchState>('POST', '/research', { update: { project: update.project, file: update.file, since } });
+      if (previous) void app.rpc('POST', '/research/discard', { id: previous.id }).catch(() => undefined);
+      update.since = state.update?.since ?? since;
+      clearResults();
+    } catch (error) {
+      toast(app.root, errorMessage(error), 'error');
+    } finally {
+      searching = false;
+      renderAll();
+      schedule();
+    }
+  }
+
+  async function appendUpdate() {
+    if (!update || !state || launching) return;
+    const count = launchable();
+    const target = update;
+    const confirmed = await confirmDialog(
+      app.root,
+      'Ajouter les nouvelles décisions ?',
+      `<p><strong>${plural(count, 'décision')}</strong> ${count > 1 ? 'seront ajoutées' : 'sera ajoutée'} à « ${escapeHtml(target.title)} », puis analysée${count > 1 ? 's' : ''} avec les questions de la revue : <strong>${plural(count, 'session')} IA</strong> (${escapeHtml(target.settings)}).</p><p class="ptr-muted">Les lignes déjà présentes ne sont pas reposées.</p>`,
+      'Ajouter et analyser',
+    );
+    if (!confirmed) return;
+    launching = true;
+    renderLaunch();
+    try {
+      const proxyOrigin = await anonymizationProxyOrigin();
+      const detail = await app.rpc<ReviewDetail>('POST', '/research/append', { id: state.id, project: target.project, file: target.file, proxyOrigin });
+      state = null;
+      update = null;
+      clearResults();
+      renderAll();
+      app.openReview(detail.project, detail.file);
+    } catch (error) {
+      toast(app.root, errorMessage(error), 'error');
+    } finally {
+      launching = false;
+      renderLaunch();
+    }
   }
 
   function schedule() {
@@ -405,13 +611,10 @@ export function createResearchView(app: App): View {
     renderMissing();
     try {
       const filters: ResearchFilters = { ...form, query: queryInput.value.trim(), dateDebut: startInput.value, dateFin: endInput.value, dispositifOnly: dispositifInput.checked };
+      const previous = state;
       state = await app.rpc<ResearchState>('POST', '/research', filters);
-      view = 'kept';
-      page = 1;
-      pages.clear();
-      texts.clear();
-      results.hidden = true;
-      list.innerHTML = '';
+      if (previous) void app.rpc('POST', '/research/discard', { id: previous.id }).catch(() => undefined);
+      clearResults();
     } catch (error) {
       toast(app.root, errorMessage(error), 'error');
     } finally {
@@ -441,13 +644,17 @@ export function createResearchView(app: App): View {
     try {
       const text = await pending;
       if (box.dataset.kind !== kind) return;
-      box.innerHTML = `<div class="ptr-label">${escapeHtml(kind === 'full' ? 'Texte intégral' : ZONE_LABELS[text.zone])}</div>${escapeHtml(kind === 'full' ? text.full : text.retained)}`;
+      box.innerHTML = `<div class="ptr-label">${escapeHtml(kind === 'full' ? 'Texte intégral' : `${ZONE_LABELS[text.zone]}${text.zoneOrigin ? ` · ${ZONE_ORIGIN_LABELS[text.zoneOrigin]}` : ''}`)}</div>${escapeHtml(kind === 'full' ? text.full : text.retained)}`;
     } catch (error) {
       box.innerHTML = `<span class="ptr-status-error">${escapeHtml(errorMessage(error))}</span>`;
     }
   }
 
   async function launch() {
+    if (update) {
+      await appendUpdate();
+      return;
+    }
     const title = titleInput.value.trim();
     const columns = preparedQuestions();
     const project = projectSelect.value;
@@ -524,6 +731,14 @@ export function createResearchView(app: App): View {
     if ((target instanceof HTMLInputElement || target instanceof HTMLSelectElement) && target.dataset.form) updateForm(target);
     else if (target === providerSelect) void loadProviderModels();
     else if (target === modelSelect || target === projectSelect) renderLaunch();
+    else if (target.matches('[data-existing]')) {
+      const choice = (target as HTMLSelectElement).value ? existing.filter((review) => review.updatable)[Number((target as HTMLSelectElement).value)] : undefined;
+      if (choice) void enterUpdate(choice.project, choice.file);
+    } else if (target.matches('[data-update-since]') && update) {
+      update.since = (target as HTMLInputElement).value;
+      const button = element.querySelector<HTMLButtonElement>('[data-update-search]');
+      if (button) button.disabled = !update.since;
+    }
     else if (target === templateSource) {
       const template = templates.find((entry) => entry.id === templateSource.value);
       templateSource.value = '';
@@ -571,7 +786,26 @@ export function createResearchView(app: App): View {
       return;
     }
     if (target.closest('[data-stop]') && state) {
-      void app.rpc<ResearchState>('POST', '/research/cancel', { id: state.id }).catch((error: unknown) => toast(app.root, errorMessage(error), 'error'));
+      const id = state.id;
+      void app.rpc<ResearchState>('POST', '/research/cancel', { id }).then((next) => {
+        if (state?.id !== id) return;
+        state = next;
+        renderAll();
+        schedule();
+      }).catch((error: unknown) => toast(app.root, errorMessage(error), 'error'));
+      return;
+    }
+    if (target.closest('[data-discard]') && state && !running()) {
+      dropState();
+      renderAll();
+      return;
+    }
+    if (target.closest('[data-update-search]')) {
+      void searchUpdate();
+      return;
+    }
+    if (target.closest('[data-leave-update]')) {
+      leaveUpdate();
       return;
     }
     const pageButton = target.closest<HTMLButtonElement>('[data-page]');
@@ -648,6 +882,13 @@ export function createResearchView(app: App): View {
     renderTemplateSource();
     renderProjects(app.context().project?.path ?? null);
     renderLaunch();
+    await consumeUpdate();
+  }
+
+  async function consumeUpdate() {
+    const requested = app.takeResearchUpdate();
+    if (requested) await enterUpdate(requested.project, requested.file);
+    else await loadExisting();
   }
 
   void initialize();
@@ -660,6 +901,7 @@ export function createResearchView(app: App): View {
         renderProjects(null);
         renderLaunch();
       }).catch(() => undefined);
+      void consumeUpdate();
       schedule();
     },
     destroy() {

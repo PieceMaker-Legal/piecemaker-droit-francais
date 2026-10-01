@@ -20,7 +20,7 @@ export function createKnowledgeRouter(service: KnowledgeService) {
   router.get('/knowledge/graph', (request, response) => respond(() => service.graph(request.query.projectId), response));
   router.post('/knowledge/query', (request, response) => respond(() => service.query(request.body), response));
   router.post('/knowledge/update', (request, response) => respond(() => service.update(request.body), response));
-  router.post('/knowledge/scan', (request, response) => respond(() => service.scan(request.body?.projectId, request.body?.files), response));
+  router.post('/knowledge/scan', (request, response) => respond(() => service.scan(request.body?.projectId, request.body?.files, request.body?.ocrMissing), response));
   router.get('/knowledge/scan/job', (request, response) => respond(() => service.scanJob(request.query.id, request.query.projectId), response));
   router.post('/knowledge/scan/cancel', (request, response) => respond(() => service.cancelScan(request.body?.id, request.body?.projectId), response));
   return router;

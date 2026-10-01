@@ -5,9 +5,10 @@ export type InstitutionalTerms = { file: string; terms: string[] };
 export type ScanJob = {
   id: string;
   projectId: string;
-  state: 'running' | 'done' | 'error' | 'cancelled';
+  state: 'running' | 'done' | 'error' | 'cancelled' | 'ocr-required';
   percent: number;
   error: string | null;
+  ocrRequired?: { files: string[] } | null;
 };
 export type CompanyDirector = { name: string; role: string };
 export type CompanySearchFields = {
@@ -107,7 +108,7 @@ export const knowledgeApi = {
     const reference = await caseReference(projectPath);
     return request<KnowledgeDocumentPreview>(PIECEMAKER_BASE, `/repository/document?case=${encodeURIComponent(reference)}&path=${encodeURIComponent(path)}`);
   },
-  scan: (projectId: string) => request<{ job: ScanJob }>(BASE, '/scan', { method: 'POST', body: JSON.stringify({ projectId }) }),
+  scan: (projectId: string) => request<{ job: ScanJob }>(BASE, '/scan', { method: 'POST', body: JSON.stringify({ projectId, ocrMissing: 'ask' }) }),
   scanJob: (jobId: string, projectId: string) => request<{ job: ScanJob | null }>(BASE, `/scan/job?id=${encodeURIComponent(jobId)}&projectId=${encodeURIComponent(projectId)}`),
   cancelScan: (jobId: string, projectId: string) => request<{ job: ScanJob | null }>(BASE, '/scan/cancel', { method: 'POST', body: JSON.stringify({ id: jobId, projectId }) }),
   searchCompanies: (queryText: string) => request<{ query: string; results: CompanySearchResult[] }>(PIECEMAKER_BASE, '/company-search', { method: 'POST', body: JSON.stringify({ query: queryText }) }),

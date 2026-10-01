@@ -62,6 +62,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const views = new Map<TabId, View>();
   let activeTab: TabId = 'launch';
   let reviewView: View | null = null;
+  let pendingUpdate: { project: string; file: string } | null = null;
 
   const app: App = {
     root,
@@ -115,6 +116,15 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       setSelectedTab(null);
       main.appendChild(reviewView.element);
       reviewView.show?.();
+    },
+    updateResearch(project, file) {
+      pendingUpdate = { project, file };
+      showTab('research');
+    },
+    takeResearchUpdate() {
+      const update = pendingUpdate;
+      pendingUpdate = null;
+      return update;
     },
     takeTargetProject() {
       const target = (window as PendingWindow)[PENDING_TARGET_KEY];

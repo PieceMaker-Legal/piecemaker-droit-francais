@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 
 import { loadProductConfig } from '../../../shared/product-config.mjs';
@@ -8,7 +9,7 @@ import { createDesktopUpdateService } from './service.js';
 
 function runInstaller(command: string, environment: NodeJS.ProcessEnv) {
   return new Promise<{ exitCode: number | null; output: string; errorOutput: string }>((resolve, reject) => {
-    const child = spawn('sh', ['-c', command], { env: environment, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn('sh', ['-c', command], { cwd: os.homedir(), env: environment, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
     let errorOutput = '';
     child.stdout.on('data', (chunk: Buffer) => {
@@ -33,7 +34,7 @@ function productRepository(appRoot: string): string | null {
 }
 
 function launchDetached(command: string) {
-  spawn('sh', ['-c', command], { detached: true, stdio: 'ignore' }).unref();
+  spawn('sh', ['-c', command], { cwd: os.homedir(), detached: true, stdio: 'ignore' }).unref();
 }
 
 export function createPieceMakerDesktopUpdateRouter(appRoot: string) {

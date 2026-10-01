@@ -50,7 +50,10 @@ from contextlib import closing
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Set
 
+from smart_converter import mineru_available, needs_ocr
 
+
+EXIT_OCR_REQUIRED = 3
 GLINER_CHUNK_SIZE = 384
 GLINER_CHUNK_OVERLAP = 64
 
@@ -1575,7 +1578,9 @@ def source_is_anonymized(state: Dict, source_file: str, case_root: str) -> bool:
     return source_is_processed(state, source_file, case_root, "scanned")
 
 
-def update_processing_state(state_path: Path, case_root: str, source_files: List[str], phase: str) -> None:
+def update_processing_state(
+    state_path: Path, case_root: str, source_files: List[str], phase: str, ocr_missing: bool = False
+) -> None:
     """Atomically add successful conversions/scans without paths or entities."""
     if not source_files:
         return
@@ -1587,9 +1592,12 @@ def update_processing_state(state_path: Path, case_root: str, source_files: List
             continue
         fingerprint = {**source_fingerprint(source_file), "updatedAt": updated_at}
         entry = state["files"].get(key, {})
+        previous_ocr = entry.get("converted", {}).get("ocr")
         entry[phase] = fingerprint
+        if phase == "converted" and ocr_missing:
+            entry["converted"] = {**fingerprint, "ocr": "missing"}
         if phase == "scanned":
-            entry["converted"] = fingerprint
+            entry["converted"] = {**fingerprint, **({"ocr": previous_ocr} if previous_ocr else {})}
         state["files"][key] = entry
     state_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = state_path.with_name(f"{state_path.name}.piecemaker-{os.getpid()}.tmp")
@@ -1801,6 +1809,15 @@ def run_pipeline(resources: PipelineResources):
     )
     parser.add_argument("--lang", help="OCR language code (only used if engine=mineru)")
     parser.add_argument(
+        "--ocr-missing",
+        choices=["ask", "continue"],
+        default="continue",
+        help=(
+            "When scanned documents need OCR but MinerU is not installed: 'ask' stops before "
+            "any work and prints OCR_REQUIRED:<json>; 'continue' converts them from their text layer only"
+        ),
+    )
+    parser.add_argument(
         "--document-id",
         default="default",
         help=argparse.SUPPRESS,
@@ -1871,7 +1888,36 @@ def run_pipeline(resources: PipelineResources):
     def markdown_path(input_file: str) -> Path:
         return Path(args.output) / f"{Path(input_file).stem}.md"
 
-    scan_needed = any(
+    mineru_ready = args.engine == "mineru" or (args.engine == "auto" and mineru_available())
+
+    def converted_without_ocr(input_file: str) -> bool:
+        entry = source_state_entry(anonymization_state, input_file, state_case_root) or {}
+        return entry.get("converted", {}).get("ocr") == "missing"
+
+    def markdown_is_reusable(input_file: str) -> bool:
+        if not markdown_path(input_file).exists():
+            return False
+        if mineru_ready and converted_without_ocr(input_file):
+            return False
+        state_entry = source_state_entry(anonymization_state, input_file, state_case_root)
+        return state_entry is None or source_is_converted(anonymization_state, input_file, state_case_root)
+
+    def case_relative_name(input_file: str) -> str:
+        try:
+            return Path(input_file).resolve().relative_to(Path(state_case_root).resolve()).as_posix()
+        except ValueError:
+            return Path(input_file).name
+
+    conversions = [f for f in input_files if not (args.skip_existing and markdown_is_reusable(f))]
+    ocr_fallback = set() if mineru_ready else {f for f in conversions if needs_ocr(f)}
+    reconverted_with_ocr = {f for f in conversions if mineru_ready and converted_without_ocr(f)}
+
+    if ocr_fallback and args.engine == "auto" and args.ocr_missing == "ask":
+        files = sorted(case_relative_name(f) for f in ocr_fallback)
+        print(f"OCR_REQUIRED:{json.dumps({'files': files}, ensure_ascii=False)}", flush=True)
+        return EXIT_OCR_REQUIRED
+
+    scan_needed = bool(reconverted_with_ocr) or any(
         not (args.skip_existing and source_is_anonymized(anonymization_state, f, state_case_root))
         for f in input_files
     )
@@ -1899,31 +1945,38 @@ def run_pipeline(resources: PipelineResources):
         print_progress("CONVERT", i, len(input_files))
         existing_md = markdown_path(input_file)
 
-        state_entry = source_state_entry(anonymization_state, input_file, state_case_root)
-        reusable_markdown = existing_md.exists() and (
-            state_entry is None
-            or source_is_converted(anonymization_state, input_file, state_case_root)
-        )
-        if args.skip_existing and reusable_markdown:
+        if input_file not in conversions:
             print(f"📄 [{i}/{len(input_files)}] Already converted, reusing: {existing_md.name}")
             md_files.append(str(existing_md))
             md_sources[str(existing_md)] = input_file
-            update_processing_state(state_target, state_case_root, [input_file], "converted")
+            update_processing_state(
+                state_target, state_case_root, [input_file], "converted",
+                ocr_missing=converted_without_ocr(input_file),
+            )
             convert_success_count += 1
             print()
             continue
 
         print(f"📄 [{i}/{len(input_files)}] Converting: {Path(input_file).name}")
+        without_ocr = input_file in ocr_fallback
+        if without_ocr:
+            print("   ⚠️  Scanned document converted without OCR (MinerU not installed): text layer only")
 
         success, md_path = convert_file(
-            input_file, args.output, engine=args.engine, mode=args.mode, lang=args.lang
+            input_file,
+            args.output,
+            engine="markitdown" if without_ocr else args.engine,
+            mode=args.mode,
+            lang=args.lang,
         )
 
         if success and md_path:
             print(f"   ✅ Markdown generated: {Path(md_path).name}")
             md_files.append(md_path)
             md_sources[md_path] = input_file
-            update_processing_state(state_target, state_case_root, [input_file], "converted")
+            update_processing_state(
+                state_target, state_case_root, [input_file], "converted", ocr_missing=without_ocr
+            )
             convert_success_count += 1
         else:
             print(f"   ❌ Conversion failed, skipping...")
@@ -1948,7 +2001,8 @@ def run_pipeline(resources: PipelineResources):
     pending_scans = [
         md_file
         for md_file in md_files
-        if not (
+        if md_sources[md_file] in reconverted_with_ocr
+        or not (
             args.skip_existing
             and source_is_anonymized(anonymization_state, md_sources[md_file], state_case_root)
         )

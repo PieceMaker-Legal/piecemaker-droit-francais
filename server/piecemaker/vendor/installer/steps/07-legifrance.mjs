@@ -25,9 +25,9 @@ export const meta = {
 
 const MARKETPLACE_NAME = 'mcp-legifrance';
 const MARKETPLACE_REPO = 'PieceMaker-Legal/mcp-legifrance';
-const PLUGIN_NAME = 'legifrance';
+const PLUGIN_NAME = 'piecemaker';
 const PLUGIN_SPEC = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
-const MINIMUM_PLUGIN_VERSION = '1.0.0';
+const MINIMUM_PLUGIN_VERSION = '1.1.0';
 const REGISTRATION_URL = 'https://piste.gouv.fr/registration';
 const CATALOG_URL = 'https://piste.gouv.fr/api-catalog-all';
 const PISTE_ENV = 'production';
@@ -53,7 +53,7 @@ function pluginState(capture = runCapture) {
   if (result.code !== 0) return { known: false, installed: false, enabled: false, installPath: null, version: null };
   const plugins = parseJson(result.stdout, []);
   const plugin = Array.isArray(plugins)
-    ? plugins.find((item) => item.id === PLUGIN_SPEC || item.name === PLUGIN_NAME)
+    ? plugins.find((item) => item.id === PLUGIN_SPEC)
     : null;
   return {
     known: true,

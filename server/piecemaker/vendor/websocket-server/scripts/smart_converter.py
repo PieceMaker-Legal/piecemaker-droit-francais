@@ -24,6 +24,10 @@ import argparse
 import subprocess
 from pathlib import Path
 
+from mineru_improved_1 import mineru_available
+
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.gif'}
+
 # ---------------------------------------------------------------------------
 # Markdown whitespace normalisation
 # ---------------------------------------------------------------------------
@@ -188,6 +192,19 @@ def pdf_has_text_layer(pdf_path):
         return False  # Assume scanned if inspection fails
 
 
+def needs_ocr(file_path):
+    ext = Path(file_path).suffix.lower()
+    if ext in IMAGE_EXTENSIONS:
+        return True
+    return ext == '.pdf' and not pdf_has_text_layer(file_path)
+
+
+def ocr_engine(reason):
+    if HAS_MARKITDOWN and not mineru_available():
+        return 'markitdown', f'{reason}, but MinerU is not installed — text layer only'
+    return 'mineru', reason
+
+
 def inspect_file(file_path):
     """Determine best conversion engine based on file inspection.
 
@@ -197,8 +214,8 @@ def inspect_file(file_path):
     ext = Path(file_path).suffix.lower()
 
     # Images always need OCR → MinerU
-    if ext in ['.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.gif']:
-        return 'mineru', 'Image file requires OCR'
+    if ext in IMAGE_EXTENSIONS:
+        return ocr_engine('Image file requires OCR')
 
     # Office docs have native text → markitdown
     if ext in ['.docx', '.pptx', '.xlsx', '.xls', '.doc', '.ppt']:
@@ -214,7 +231,7 @@ def inspect_file(file_path):
         if pdf_has_text_layer(file_path):
             return 'markitdown', 'PDF has extractable text layer'
         else:
-            return 'mineru', 'Scanned PDF requires OCR (no text layer)'
+            return ocr_engine('Scanned PDF requires OCR (no text layer)')
 
     # HTML, TXT, etc. — try markitdown
     if ext in ['.html', '.htm', '.txt', '.md', '.csv']:
