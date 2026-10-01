@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const PRODUCT_NAME = 'PieceMaker';
+const LIBRARY_DIRECTORY = 'library-backend';
 const COMPONENT_MODEL_IDS = [
   'fastino/gliner2.5-multi-v1',
   'fastino/gliner2-multi-v1',
@@ -150,6 +151,13 @@ export function removalPlan(appRoot, home = os.homedir(), env = process.env, pla
     paths.join(home, 'mineru.json'),
     ...shortcuts,
   ], database, home, platform);
+  const libraryHome = paths.resolve(dataHome);
+  const purgedLibraryHome = purge.find((entry) => entry.directory === libraryHome);
+  if (purgedLibraryHome) purgedLibraryHome.keep.push(LIBRARY_DIRECTORY);
+  else if (remove.includes(libraryHome)) {
+    remove.splice(remove.indexOf(libraryHome), 1);
+    purge.push({ directory: libraryHome, keep: [LIBRARY_DIRECTORY] });
+  }
   return {
     appRoot,
     caCert: paths.join(dataHome, 'certs', 'piecemaker-ca.crt'),

@@ -22,7 +22,7 @@ test('repère le dossier Windows', () => {
   );
 });
 
-test('retire tout, y compris les données, sauf la base auth.db', () => {
+test('retire tout, y compris les données, sauf la base auth.db et la bibliothèque', () => {
   const plan = removalPlan('/Applications/PieceMaker.app', '/Users/me', {}, 'darwin', {
     config: { venvPath: '/Users/me/.piecemaker/venv' },
     mineru: {
@@ -35,7 +35,8 @@ test('retire tout, y compris les données, sauf la base auth.db', () => {
     appId: 'legal.piecemaker.droitfrancais',
     electronPaths: ['/Users/me/Library/Application Support/PieceMaker', '/Users/me/Library/Logs/PieceMaker', null],
   });
-  assert.ok(plan.remove.includes('/Users/me/.piecemaker'));
+  assert.equal(plan.remove.includes('/Users/me/.piecemaker'), false);
+  assert.ok(plan.remove.includes('/Users/me/.piecemaker/venv'));
   assert.ok(plan.remove.includes('/Users/me/Library/Application Support/PieceMaker'));
   assert.ok(plan.remove.includes('/Users/me/Library/Logs/PieceMaker'));
   assert.ok(plan.remove.includes('/Users/me/Library/Preferences/legal.piecemaker.droitfrancais.plist'));
@@ -48,11 +49,16 @@ test('retire tout, y compris les données, sauf la base auth.db', () => {
   assert.deepEqual(plan.purge, [{
     directory: '/Users/me/.piecemaker-droit-francais',
     keep: ['auth.db', 'auth.db-wal', 'auth.db-shm'],
+  }, {
+    directory: '/Users/me/.piecemaker',
+    keep: ['library-backend'],
   }]);
   const script = macUninstallScript(plan);
   assert.match(script, /security remove-trusted-cert/);
   assert.match(script, /PieceMaker\.app/);
   assert.match(script, /find '\/Users\/me\/\.piecemaker-droit-francais' -mindepth 1 -maxdepth 1 ! -name 'auth\.db' ! -name 'auth\.db-wal' ! -name 'auth\.db-shm' -exec rm -rf/);
+  assert.match(script, /find '\/Users\/me\/\.piecemaker' -mindepth 1 -maxdepth 1 ! -name 'library-backend' -exec rm -rf/);
+  assert.doesNotMatch(script, /rm -rf [^\n]*'\/Users\/me\/\.piecemaker'( |\n)/);
   assert.doesNotMatch(script, /'\/Users\/me\/\.cache\/huggingface'/);
   assert.doesNotMatch(script, /'\/Users\/me'( |\n)/);
 });
@@ -88,7 +94,8 @@ test('le script Windows retire les raccourcis et le certificat local', () => {
     APPDATA: 'C:\\Users\\me\\AppData\\Roaming',
   }, 'win32', { productDataRoot: 'C:\\Users\\me\\.piecemaker-droit-francais' });
   const script = windowsUninstallScript(plan);
-  assert.match(script, /Remove-Item -LiteralPath 'C:\\Users\\me\\\.piecemaker' /);
+  assert.doesNotMatch(script, /Remove-Item -LiteralPath 'C:\\Users\\me\\\.piecemaker' /);
+  assert.match(script, /Get-ChildItem -LiteralPath 'C:\\Users\\me\\\.piecemaker' [^\n]*'library-backend'/);
   assert.match(script, /-notcontains \$_\.Name/);
   assert.match(script, /'auth\.db', 'auth\.db-wal', 'auth\.db-shm'/);
   assert.match(script, /PieceMaker Local/);
