@@ -5,6 +5,9 @@
   "version": "1.0.0",
   "type": "module",
   "slot": "tab",
-  "entry": "index.js",
-  "icon": "icon.svg"
+  "entry": "dist/index.js",
+  "icon": "icon.svg",
+  "piecemakerSources": {
+    "index": "src/index.js"
+  }
 }

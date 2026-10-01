@@ -1,39 +1,37 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { APP } from './config.mjs';
-import { runInherited } from './exec.mjs';
-import { runtimeEnv } from './node-runtime.mjs';
 
-const INSTALL_TIMEOUT = 2 * 60_000;
+// Délègue à la chaîne commune du dépôt cible (plugins/toolchain, voir
+// plugins.md) — la même que celle de l'application Electron.
+async function toolchain() {
+  const entry = path.join(APP.directory, 'plugins', 'toolchain', 'index.mjs');
+  if (!fs.existsSync(entry)) throw new Error(`chaîne des plugins absente (${entry})`);
+  return import(pathToFileURL(entry).href);
+}
 
-export const PLUGINS = [
-  { id: 'piecemaker-timesheet', label: 'Plugin Timesheet' },
-  { id: 'piecemaker-tampon', label: 'Plugin Bordereau' },
-  { id: 'piecemaker-dossier', label: 'Plugin Dossier' },
-  { id: 'piecemaker-library', label: 'Plugin Bibliothèque' },
-  { id: 'piecemaker-telegram', label: 'Plugin Telegram' },
-  { id: 'piecemaker-tabular-review', label: 'Plugin Tabular Review' },
-];
-
-export async function installPlugins(runtime, report) {
-  for (const plugin of PLUGINS) {
-    const installer = path.join(APP.directory, 'plugins', plugin.id, 'install.mjs');
-    if (!fs.existsSync(installer)) {
-      report.warn(`${plugin.label} — source introuvable`);
-      continue;
-    }
-
-    report.step(`${plugin.label} — installation`);
-    const result = await runInherited(runtime.nodePath, [installer, APP.directory], {
-      cwd: APP.directory,
-      env: runtimeEnv(runtime),
-      timeout: INSTALL_TIMEOUT,
+/**
+ * `rebuild` : recompile depuis les sources (installation complète). Sinon,
+ * réinstalle seulement depuis le dernier bundle (réparation au lancement).
+ * Renvoie vrai si un plugin a été posé ou retiré.
+ */
+export async function installPlugins(report, { rebuild }) {
+  try {
+    const { installPlugins: install } = await toolchain();
+    const result = await install({
+      appRoot: APP.directory,
+      rebuild,
+      log: (plugin) => report.detail(`${plugin.label} compilé`),
+      logger: { log() {}, error: (message) => report.warn(message) },
     });
-
-    if (result.timedOut) report.warn(`${plugin.label} — délai dépassé`);
-    else if (result.error) report.warn(`${plugin.label} — échec de démarrage : ${result.error.message}`);
-    else if (result.code !== 0) report.warn(`${plugin.label} — échec (code ${result.code})`);
-    else report.ok(`${plugin.label} — installé`);
+    for (const id of result.installed) report.ok(`Plugin ${id} — installé`);
+    for (const id of result.removed) report.ok(`Plugin ${id} — retiré`);
+    if (!result.installed.length && !result.removed.length && !result.failed.length) report.ok('Plugins PieceMaker — à jour');
+    return result.installed.length > 0 || result.removed.length > 0;
+  } catch (error) {
+    report.warn(`Plugins PieceMaker — ${error.message}`);
+    return false;
   }
 }

@@ -129,7 +129,15 @@ async function main() {
   if (command.shims.length) ok(`installée : ${command.executable}`);
   else warn('commande absente du PATH — relancez node scripts/piecemaker/cli/install-command.mjs');
 
-  if (!options.launchOnly || !(await applicationIsRunning())) {
+  // Les plugins sont posés AVANT le démarrage : l'hôte ne lance les serveurs de
+  // plugins (Telegram, Tabular Review) qu'à son boot, et l'interface ne lit la
+  // liste des plugins qu'au chargement. Installés après coup, ils restaient
+  // invisibles ou inertes jusqu'au lancement suivant.
+  if (!options.launchOnly) await synchroniseRepositories(runtime);
+  step('Plugins PieceMaker');
+  const pluginsChanged = await installPlugins(report, { rebuild: !options.launchOnly });
+
+  if (!options.launchOnly || pluginsChanged || !(await applicationIsRunning())) {
     const running = await resetAndLaunch(runtime);
     if (!running) return 1;
   } else {
@@ -137,9 +145,7 @@ async function main() {
   }
 
   if (!options.launchOnly) {
-    await synchroniseRepositories(runtime);
     await installComponents(runtime, report);
-    await installPlugins(runtime, report);
   }
 
   await installPwa();

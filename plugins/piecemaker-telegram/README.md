@@ -2,15 +2,9 @@
 
 L’onglet **Telegram** apparaît dans l’espace de travail d’un dossier. Il comporte un guide et trois actions : installer le canal officiel, enregistrer le bot principal, puis lier un bot à chaque dossier souhaité.
 
-## Installation locale
+## Installation
 
-La commande `piecemaker` installe ce plugin avec Bibliothèque, Dossier, Timesheet et Bordereau. Pour réinstaller uniquement Telegram depuis le dépôt :
-
-```sh
-node plugins/piecemaker-telegram/install.mjs /chemin/vers/piecemaker-droit-francais
-```
-
-La source est versionnée dans `plugins/piecemaker-telegram/`. L’installateur la copie dans le répertoire de plugins défini par `product.config.json` ou `CLOUDCLI_HOME`. Actualisez l’application après l’installation pour voir l’onglet.
+Comme tous les plugins PieceMaker : compilé et installé par la chaîne commune `plugins/toolchain`, embarqué dans l'application Electron et réinstallé à chaque démarrage si besoin. Depuis le dépôt : `npm run plugins`. Voir `plugins.md` à la racine.
 
 ## Mise en route
 

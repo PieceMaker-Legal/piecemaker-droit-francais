@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 
-const runtime = JSON.parse(fs.readFileSync(new URL('./runtime.json', import.meta.url), 'utf8'));
+const runtime = JSON.parse(fs.readFileSync(new URL('../runtime.json', import.meta.url), 'utf8'));
 const requireApp = createRequire(path.join(runtime.applicationRoot, 'package.json'));
 const Database = requireApp('better-sqlite3');
 const pty = requireApp('node-pty');
