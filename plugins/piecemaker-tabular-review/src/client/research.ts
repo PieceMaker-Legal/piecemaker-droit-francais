@@ -14,7 +14,7 @@ import {
   ZONE_ORIGIN_LABELS,
 } from '../shared.js';
 import type { App, View } from './app.js';
-import { confirmDialog, errorMessage, escapeHtml, toast } from './dom.js';
+import { confirmDialog, errorMessage, escapeHtml, openModal, toast } from './dom.js';
 import { anonymizationProxyOrigin, loadModels } from './host.js';
 import type { HostProject, ModelOption } from './host.js';
 import type { DraftColumn } from './templates.js';
@@ -108,6 +108,8 @@ function warningsHtml(state: ResearchState): string {
   return (state.warnings ?? []).map((warning) => `<div class="ptr-warning">${escapeHtml(warning)}</div>`).join('');
 }
 
+const EXTERNAL_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+
 function decisionHtml(decision: ResearchDecision, dispositifOnly: boolean): string {
   const zone = dispositifOnly && decision.zone !== 'motifs' ? `<span class="ptr-chip ptr-chip-partial" title="${escapeHtml(ZONE_LABELS[decision.zone])}">${decision.zone === 'dispositif' ? 'Dispositif seul' : 'Partie du juge non repérée'}</span>` : '';
   const error = decision.error ? `<span class="ptr-chip ptr-chip-cancelled" title="${escapeHtml(decision.error)}">Texte indisponible</span>` : '';
@@ -121,8 +123,9 @@ function decisionHtml(decision: ResearchDecision, dispositifOnly: boolean): stri
       <div class="ptr-decision-head">
         <span class="ptr-rank">${decision.rank}</span>
         <span class="ptr-chip${/Inédit|Cour d’appel|Première instance|Cour administrative/.test(decision.importance) ? '' : ' ptr-chip-important'}">${escapeHtml(decision.importance)}</span>
-        <a class="ptr-decision-title" href="${escapeHtml(decision.link)}" target="_blank" rel="noopener noreferrer" title="Ouvrir sur ${origin}">${escapeHtml(decision.title)}</a>
+        ${decision.error ? `<span class="ptr-decision-title">${escapeHtml(decision.title)}</span>` : `<a class="ptr-decision-title" href="#" data-open title="Ouvrir dans la visionneuse">${escapeHtml(decision.title)}</a>`}
         ${originChip}${zone}${error}
+        <a class="ptr-icon-button" href="${escapeHtml(decision.link)}" target="_blank" rel="noopener noreferrer" title="Ouvrir sur ${origin}" aria-label="Ouvrir sur ${origin}">${EXTERNAL_ICON}</a>
       </div>
       ${decision.titrage ? `<div class="ptr-titrage ptr-clamp-2" title="${escapeHtml(decision.titrage)}">${escapeHtml(decision.titrage)}</div>` : ''}
       ${analysis}
@@ -433,13 +436,7 @@ export function createResearchView(app: App): View {
     }
   }
 
-  async function readText(article: HTMLElement, kind: 'retained' | 'full') {
-    const id = article.dataset.decision ?? '';
-    const box = article.querySelector<HTMLElement>('[data-text]')!;
-    if (!box.hidden && box.dataset.kind === kind) {
-      box.hidden = true;
-      return;
-    }
+  function loadText(id: string): Promise<ResearchText> {
     let pending = texts.get(id);
     if (!pending) {
       pending = app.rpc<ResearchText>('GET', `/research/text?id=${encodeURIComponent(state!.id)}&decision=${encodeURIComponent(id)}`);
@@ -447,6 +444,49 @@ export function createResearchView(app: App): View {
       texts.set(id, pending);
       if (texts.size > TEXT_CACHE) texts.delete(texts.keys().next().value!);
     }
+    return pending;
+  }
+
+  function openViewer(article: HTMLElement) {
+    const id = article.dataset.decision ?? '';
+    const link = article.querySelector<HTMLAnchorElement>('a.ptr-icon-button')!;
+    const dispositifOnly = state!.filters.dispositifOnly;
+    void openModal(app.root, {
+      title: article.querySelector('.ptr-decision-title')?.textContent ?? '',
+      body: '<div class="ptr-empty"><span class="ptr-spinner"></span> Chargement de la décision…</div>',
+      wide: true,
+      actions: [{ label: 'Fermer', value: 'close', kind: 'primary' }],
+      onMount(dialog) {
+        const body = dialog.querySelector<HTMLElement>('.ptr-modal-body')!;
+        loadText(id).then((text) => {
+          const show = (kind: 'retained' | 'full') => {
+            const label = kind === 'full' ? 'Texte intégral' : `${ZONE_LABELS[text.zone]}${text.zoneOrigin ? ` · ${ZONE_ORIGIN_LABELS[text.zoneOrigin]}` : ''}`;
+            const toggle = dispositifOnly ? ` · <button type="button" class="ptr-link-button" data-viewer="${kind === 'full' ? 'retained' : 'full'}">${kind === 'full' ? 'Lire la partie retenue' : 'Texte intégral'}</button>` : '';
+            body.innerHTML = `
+              <div class="ptr-small ptr-muted">${escapeHtml(label)}${toggle}</div>
+              <div class="ptr-small"><a href="${escapeHtml(link.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.title)}</a></div>
+              <div class="ptr-source-text">${escapeHtml(kind === 'full' ? text.full : text.retained)}</div>`;
+          };
+          body.addEventListener('click', (event) => {
+            const toggle = (event.target as HTMLElement).closest<HTMLElement>('[data-viewer]');
+            if (toggle) show(toggle.dataset.viewer === 'full' ? 'full' : 'retained');
+          });
+          show('retained');
+        }).catch((error: unknown) => {
+          body.innerHTML = `<div class="ptr-error-box">${escapeHtml(errorMessage(error))}</div>`;
+        });
+      },
+    });
+  }
+
+  async function readText(article: HTMLElement, kind: 'retained' | 'full') {
+    const id = article.dataset.decision ?? '';
+    const box = article.querySelector<HTMLElement>('[data-text]')!;
+    if (!box.hidden && box.dataset.kind === kind) {
+      box.hidden = true;
+      return;
+    }
+    const pending = loadText(id);
     box.hidden = false;
     box.dataset.kind = kind;
     box.innerHTML = '<span class="ptr-muted"><span class="ptr-spinner"></span> Chargement…</span>';
@@ -603,6 +643,12 @@ export function createResearchView(app: App): View {
       const analysis = more.closest('.ptr-decision')?.querySelector<HTMLElement>('[data-analysis]');
       const collapsed = analysis?.classList.toggle('ptr-clamp');
       more.textContent = collapsed ? 'Lire la suite' : 'Réduire';
+      return;
+    }
+    const open = target.closest<HTMLElement>('[data-open]');
+    if (open && state) {
+      event.preventDefault();
+      openViewer(open.closest<HTMLElement>('[data-decision]')!);
       return;
     }
     const read = target.closest<HTMLElement>('[data-read]');
