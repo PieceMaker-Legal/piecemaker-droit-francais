@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 
 import type { Provider } from '../shared.js';
@@ -100,7 +101,7 @@ export function proxyEnvironment(origin: string): NodeJS.ProcessEnv {
 }
 
 export function sessionEnvironment(origin: string): NodeJS.ProcessEnv {
-  const environment: NodeJS.ProcessEnv = { ...process.env, ...proxyEnvironment(origin) };
+  const environment: NodeJS.ProcessEnv = { USER: os.userInfo().username, ...process.env, ...proxyEnvironment(origin) };
   for (const key of ['HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy', 'CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT']) delete environment[key];
   return environment;
 }
