@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 
@@ -7,7 +8,16 @@ import Database from 'better-sqlite3';
 import { parseFrontMatter } from '@/shared/frontmatter.js';
 
 import { parseConnectorConfig, prepareConnectorInstallation, type LibraryConnectorConfig } from './connector-installation.js';
-import { componentFolderName, prepareWorkspaceInstallation } from './workspace-installation.js';
+import {
+  componentFileHashes,
+  componentFolderName,
+  prepareWorkspaceInstallation,
+  readLibraryManifest,
+  removeLegacyLinks,
+  writeLibraryManifest,
+  type LibraryComponent,
+  type LibraryManifestEntry,
+} from './workspace-installation.js';
 
 type StoredLibraryEntry = {
   id: string;
@@ -69,6 +79,18 @@ function installationFolder(content: string, fallback = '') {
   return componentFolderName(String(data.name || data.metadata?.title || fallback));
 }
 
+function installableComponent(entry: LibraryEntry): LibraryComponent {
+  const slug = installationFolder(entry.content, entry.name);
+  if (entry.kind === 'skill') {
+    const files = Object.fromEntries(Object.entries(entry.assets).map(([name, bytes]) => [name, Buffer.from(bytes, 'base64')]));
+    return { kind: 'skill', slug, files: { ...files, 'SKILL.md': Buffer.from(entry.content, 'utf8') } };
+  }
+  const { data, content } = parseFrontMatter(entry.content);
+  const toml = Object.entries({ name: String(data.name || entry.name), description: entry.description || entry.name, developer_instructions: content })
+    .map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n');
+  return { kind: 'agent', slug, markdown: entry.content, toml: `${toml}\n` };
+}
+
 function collectionMainPath(entry: LibraryEntry, rootPath: string) {
   return entry.kind === 'skill' && !rootPath.toLowerCase().endsWith('.md') ? `${rootPath}/SKILL.md` : rootPath;
 }
@@ -109,6 +131,7 @@ export function createLibraryStore(home: string) {
   `);
   const originColumns = db.prepare('PRAGMA table_info(origins)').all() as Array<{ name: string }>;
   if (!originColumns.some((column) => column.name === 'source_hash')) db.exec('ALTER TABLE origins ADD COLUMN source_hash TEXT');
+  let defaultEntries: string[] = [];
 
   function workspace(value: unknown) {
     if (typeof value !== 'string' || !path.isAbsolute(value)) throw new Error('Dossier absolu requis.');
@@ -123,8 +146,47 @@ export function createLibraryStore(home: string) {
     return { ...entry, assets: JSON.parse(entry.assets) as Record<string, string> };
   }
 
+  function activeEntries(selected: string) {
+    return (db.prepare('SELECT entry_id AS entryId FROM activation WHERE workspace = ?').all(selected) as Array<{ entryId: string }>).map((row) => row.entryId);
+  }
+
+  function reconcile(selected: string) {
+    const known = (id: string) => Boolean(db.prepare('SELECT 1 FROM entries WHERE id = ?').get(id));
+    const manifest = readLibraryManifest(selected);
+    if (manifest) {
+      const expected = manifest.map((entry) => entry.id).filter(known);
+      const current = activeEntries(selected);
+      if (expected.length === current.length && expected.every((id) => current.includes(id))) return;
+      db.transaction(() => {
+        db.prepare('DELETE FROM activation WHERE workspace = ?').run(selected);
+        for (const id of expected) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, id);
+      })();
+      return;
+    }
+    const inherited = activeEntries(selected);
+    const defaults = selected === fs.realpathSync(os.homedir()) ? [] : defaultEntries.filter((id) => known(id) && !inherited.includes(id));
+    if (!inherited.length && !defaults.length) return;
+    const legacy = path.join(directory, 'active');
+    try {
+      removeLegacyLinks(selected, legacy);
+      writeLibraryManifest(selected, inherited.map((id) => {
+        const entry = document(id);
+        const slug = entry.kind === 'connector' ? entry.name : installationFolder(entry.content, entry.name);
+        const files = entry.kind === 'connector' ? {} : componentFileHashes(selected, installableComponent(entry), false);
+        return { id, kind: entry.kind, name: entry.name, slug, files, skipClaude: false };
+      }));
+    } catch { return; }
+    db.prepare('DELETE FROM activation WHERE workspace = ?').run(selected);
+    for (const id of [...inherited, ...defaults]) {
+      try { setEnabled(selected, id, true); }
+      catch { writeLibraryManifest(selected, (readLibraryManifest(selected) ?? []).filter((entry) => entry.id !== id)); }
+    }
+    fs.rmSync(path.join(legacy, createHash('sha256').update(selected).digest('hex')), { recursive: true, force: true });
+  }
+
   function list(workspacePath?: string) {
     const selected = workspacePath ? workspace(workspacePath) : '';
+    if (selected) reconcile(selected);
     return db.prepare(`SELECT e.id, e.kind, e.name, e.description,
       EXISTS(SELECT 1 FROM activation a WHERE a.entry_id = e.id AND a.workspace = ?) AS enabled,
       (SELECT ce.collection_id FROM collection_entries ce WHERE ce.entry_id = e.id LIMIT 1) AS collectionId
@@ -225,9 +287,6 @@ export function createLibraryStore(home: string) {
       const entry = document(id);
       if (entry.content !== previousContent) throw new Error('Le document a été modifié ailleurs. Rouvrez-le avant d’enregistrer.');
       const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
-      if (entry.kind !== 'connector' && installationFolder(content) !== installationFolder(entry.content)) {
-        for (const { workspace: selected } of active) setEnabled(selected, id, false);
-      }
       if (entry.kind === 'connector') {
         const config = parseConnectorConfig(content);
         const description = config.url || config.command || entry.name;
@@ -305,6 +364,7 @@ export function createLibraryStore(home: string) {
 
   function listCollections(workspacePath?: string) {
     const selected = workspacePath ? workspace(workspacePath) : '';
+    if (selected) reconcile(selected);
     return db.prepare(`SELECT c.id, c.name, c.description, c.source,
       COUNT(ce.entry_id) AS entryCount,
       SUM(CASE WHEN a.entry_id IS NOT NULL THEN 1 ELSE 0 END) AS enabledCount
@@ -442,7 +502,7 @@ export function createLibraryStore(home: string) {
     throw new Error('Fichier introuvable.');
   }
 
-  function setCollectionEnabled(workspacePath: unknown, id: string, enabled: unknown) {
+  function setCollectionEnabled(workspacePath: unknown, id: string, enabled: unknown, options: { skipClaude?: boolean } = {}) {
     if (typeof enabled !== 'boolean') throw new Error('Activation booléenne requise.');
     const selected = workspace(workspacePath);
     const mappings = collectionEntries(id);
@@ -452,7 +512,7 @@ export function createLibraryStore(home: string) {
     try {
       for (const mapping of mappings) {
         if (active.has(mapping.entryId) === enabled) continue;
-        setEnabled(selected, mapping.entryId, enabled);
+        setEnabled(selected, mapping.entryId, enabled, options);
         changed.push(mapping.entryId);
       }
     } catch (error) {
@@ -462,59 +522,26 @@ export function createLibraryStore(home: string) {
     return listCollections(selected).find((collection) => collection.id === id);
   }
 
-  function setEnabled(workspacePath: unknown, id: string, enabled: unknown) {
+  function setEnabled(workspacePath: unknown, id: string, enabled: unknown, options: { skipClaude?: boolean } = {}) {
     if (typeof enabled !== 'boolean') throw new Error('Activation booléenne requise.');
     const selected = workspace(workspacePath);
     const entry = document(id);
+    const manifest = readLibraryManifest(selected) ?? [];
+    const previous = manifest.find((item) => item.id === id);
+    const skipClaude = options.skipClaude ?? previous?.skipClaude ?? false;
+    const installed: LibraryManifestEntry = { id, kind: entry.kind, name: entry.name, slug: entry.name, files: {}, skipClaude };
     if (entry.kind === 'connector') {
-      prepareConnectorInstallation(selected, entry.name, parseConnectorConfig(entry.content), enabled)();
-      if (enabled) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, id);
-      else db.prepare('DELETE FROM activation WHERE workspace = ? AND entry_id = ?').run(selected, id);
-      return { ok: true, enabled };
-    }
-    const packageRoot = path.join(directory, 'active', createHash('sha256').update(selected).digest('hex'), id);
-    const install = prepareWorkspaceInstallation(selected, id, installationFolder(entry.content, entry.name), packageRoot, entry.kind, enabled);
-    if (enabled) {
-      fs.mkdirSync(path.dirname(packageRoot), { recursive: true, mode: 0o700 });
-      if (!fs.realpathSync(path.dirname(packageRoot)).startsWith(fs.realpathSync(directory) + path.sep)) throw new Error('Répertoire d’activation non autorisé.');
-      const staging = fs.mkdtempSync(path.join(directory, '.activation-'));
-      const backup = `${staging}.previous`;
-      try {
-        for (const [relative, bytes] of Object.entries(entry.assets)) {
-          const target = path.resolve(staging, relative);
-          if (!target.startsWith(staging + path.sep)) throw new Error('Chemin associé invalide.');
-          fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
-          fs.writeFileSync(target, Buffer.from(bytes, 'base64'), { mode: 0o600 });
-        }
-        if (entry.kind === 'skill') fs.writeFileSync(path.join(staging, 'SKILL.md'), entry.content, { mode: 0o600 });
-        else {
-          fs.writeFileSync(path.join(staging, 'agent.md'), entry.content, { mode: 0o600 });
-          const { data, content } = parseFrontMatter(entry.content);
-          const toml = Object.entries({ name: String(data.name || entry.name), description: entry.description || entry.name, developer_instructions: content })
-            .map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n');
-          fs.writeFileSync(path.join(staging, 'agent.toml'), `${toml}\n`, { mode: 0o600 });
-        }
-        if (fs.existsSync(packageRoot)) fs.renameSync(packageRoot, backup);
-        try {
-          fs.renameSync(staging, packageRoot);
-          install();
-        }
-        catch (error) {
-          fs.rmSync(packageRoot, { recursive: true, force: true });
-          if (fs.existsSync(backup)) fs.renameSync(backup, packageRoot);
-          throw error;
-        }
-      } finally {
-        fs.rmSync(staging, { recursive: true, force: true });
-        fs.rmSync(backup, { recursive: true, force: true });
-      }
-    } else if (fs.existsSync(path.dirname(packageRoot))) {
-      if (!fs.realpathSync(path.dirname(packageRoot)).startsWith(fs.realpathSync(directory) + path.sep)) throw new Error('Répertoire d’activation non autorisé.');
-      install();
-      fs.rmSync(packageRoot, { recursive: true, force: true });
+      prepareConnectorInstallation(selected, entry.name, parseConnectorConfig(entry.content), enabled, skipClaude)();
     } else {
-      install();
+      const component = installableComponent(entry);
+      const installation = prepareWorkspaceInstallation(selected, previous, enabled ? { component, skipClaude } : null);
+      installation.commit();
+      installed.slug = component.slug;
+      installed.files = installation.files;
     }
+    const others = manifest.filter((item) => item.id !== id);
+    if (enabled) writeLibraryManifest(selected, [...others, installed]);
+    else if (previous) writeLibraryManifest(selected, others);
     if (enabled) db.prepare('INSERT OR IGNORE INTO activation VALUES (?, ?)').run(selected, id);
     else db.prepare('DELETE FROM activation WHERE workspace = ? AND entry_id = ?').run(selected, id);
     return { ok: true, enabled };
@@ -522,13 +549,14 @@ export function createLibraryStore(home: string) {
 
   function instructions(workspacePath: string) {
     const selected = workspace(workspacePath);
+    reconcile(selected);
     const entries = db.prepare(`SELECT e.* FROM entries e JOIN activation a ON a.entry_id = e.id
       WHERE a.workspace = ? AND e.kind IN ('skill', 'agent') ORDER BY e.name`).all(selected) as StoredLibraryEntry[];
     return entries.map((entry) => {
       const assets = JSON.parse(entry.assets) as Record<string, string>;
       const references = Object.entries(assets).filter(([name]) => name === 'table-columns.yaml')
         .map(([name, bytes]) => `### ${name}\n${Buffer.from(bytes, 'base64').toString('utf8')}`);
-      const packageRoot = path.join(directory, 'active', createHash('sha256').update(selected).digest('hex'), entry.id);
+      const packageRoot = path.join(selected, '.agents', 'skills', installationFolder(entry.content, entry.name));
       return `## ${entry.kind === 'agent' ? 'Instructions de rôle' : 'Skill'} : ${entry.name}\n${entry.content}\n${references.join('\n\n')}\nFichiers associés disponibles dans : ${packageRoot}\n${Object.keys(assets).join('\n')}`;
     }).join('\n\n');
   }
@@ -552,6 +580,7 @@ export function createLibraryStore(home: string) {
     collectionFile,
     updateCollectionFile,
     setCollectionEnabled,
+    setDefaultEntries: (ids: string[]) => { defaultEntries = ids; },
     close: () => db.close(),
   };
 }
