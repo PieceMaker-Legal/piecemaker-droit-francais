@@ -43,11 +43,15 @@ _CORPORATE_SUFFIXES_RE = re.compile(
 
 # Preference when two spans of different types cover the same characters. A name is
 # more specific than the organisation it belongs to, which is more specific than the
-# place it sits in.
+# place it sits in. A 14-digit SIRET that also passes Luhn is a valid CREDIT_CARD on the
+# very same span, at the same length and score: SIRET ranks just after those three, so it
+# wins that tie (and only that one: every other type keeps sharing the last rank, below
+# SIRET, which no other detector can match on an identical span).
 _TYPE_PRIORITY = {
     "PERSON": 0,
     "ORGANIZATION": 1,
     "LOCATION": 2,
+    "SIRET": 3,
 }
 
 

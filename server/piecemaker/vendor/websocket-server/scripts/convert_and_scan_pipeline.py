@@ -1273,6 +1273,7 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
         "PERSON": "personnes_physiques",
         "ORGANIZATION": "societes",
         "LOCATION": "adresses",
+        "SIREN": "siren",
         "EMAIL": "autres",
         "PHONE": "autres",
         "CREDIT_CARD": "autres",
