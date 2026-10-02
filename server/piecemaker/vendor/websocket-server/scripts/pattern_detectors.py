@@ -577,6 +577,99 @@ _PHONE_PATTERNS = [
 
 
 # ---------------------------------------------------------------------------
+# SIRET, SIREN, intra-community VAT number (French)
+# ---------------------------------------------------------------------------
+# Score 1.0 for all three, as for the phone number: a checksum (Luhn, VAT key) makes the
+# shape specific, and the SIREN also requires a context word. The RCS number of a company
+# IS its SIREN ("RCS Paris B 732 829 320"), so there is no RCS detector: the RCS context
+# word is one of the SIREN's. The VAT number is detected because it spells out the SIREN
+# (key + SIREN). A SIRET or VAT number contains a SIREN: the longer span wins in
+# resolve_overlapping_spans, so the SIREN pattern firing inside them is harmless.
+# Out of scope: VAT numbers with an alphanumeric key (old ones) and of other countries.
+
+# Separators inside a number: space, dot, no-break space, narrow no-break space.
+_ID_SEP = r"[ .\u00a0\u202f]?"
+# Not inside a longer run of digits, not glued to a letter, an underscore or a "+".
+_ID_START = r"(?<![\w+])"
+_ID_END = r"(?!\w)"
+_SIREN_NUMBER = r"[0-9]{3}" + _ID_SEP + r"[0-9]{3}" + _ID_SEP + r"[0-9]{3}"
+
+_SIRET_PATTERNS = [(_ID_START + _SIREN_NUMBER + _ID_SEP + r"[0-9]{5}" + _ID_END, 0.5)]
+
+# The SIREN must follow one of these words in the same sentence (no ". ", "? ", "! " or
+# blank line in between), at most 80 characters away: Luhn lets one 9-digit number in ten
+# through, and amounts ("123 456 789 euros") are 9-digit numbers too. A greffe letter and
+# a city ("RCS Nanterre B 732 829 320", "registre du commerce et des sociétés de Paris
+# sous le numéro 732 829 320") fit in the gap. "R.C.S." takes its final dot so that it
+# does not read as the end of the sentence.
+_SIREN_CONTEXT = (
+    r"(?:\bSIRE[NT]\b|(?<!\w)R\.?C\.?S(?!\w)\.?|registre\s+du\s+commerce|immatricul[ée]e?s?"
+    r"|num[ée]ro\s+unique\s+d['’]identification|(?<!\w)n\s?[°º]\s*d['’]identification)"
+)
+_SIREN_GAP = r"(?:(?![.!?](?:\s|$))(?!\n\s*\n).){0,80}?"
+_SIREN_PATTERNS = [(_ID_START + _SIREN_NUMBER + _ID_END, 0.5)]
+# The text before a candidate is checked for the context, anchored on the candidate: each
+# number is judged on its own, whatever the other numbers around it.
+_SIREN_CONTEXT_BEFORE = re.compile(_SIREN_CONTEXT + _SIREN_GAP + r"\Z", _DEFAULT_FLAGS)
+_SIREN_CONTEXT_WINDOW = 150  # 80-character gap + the longest keyword
+
+# "FR", 2-digit key, SIREN; spaces optional ("FR40732829320", "FR 40 732 829 320").
+_VAT_SEP = r"[ \u00a0\u202f]?"
+_VAT_PATTERNS = [
+    (
+        _ID_START + r"FR" + _VAT_SEP + r"[0-9]{2}" + _VAT_SEP + r"[0-9]{3}" + _VAT_SEP
+        + r"[0-9]{3}" + _VAT_SEP + r"[0-9]{3}" + _ID_END,
+        0.5,
+    ),
+]
+
+
+def _digits(text: str) -> str:
+    return re.sub(r"[^0-9]", "", text)
+
+
+def _is_valid_luhn_id(digits: str) -> bool:
+    """Luhn (``_is_valid_card`` is the plain check); a run of zeros passes it, but is no number."""
+    return int(digits) != 0 and _is_valid_card(digits)
+
+
+def _is_valid_siren(text: str) -> bool:
+    return _is_valid_luhn_id(_digits(text))
+
+
+class SirenDetector(PatternDetector):
+    """SIREN needs its own loop: a candidate counts only with a context word before it."""
+
+    def __init__(self):
+        super().__init__("FrSirenRecognizer", "SIREN", _SIREN_PATTERNS)
+
+    def analyze(self, text: str) -> List[Detection]:
+        results = []
+        for compiled, _ in self._patterns:
+            for match in compiled.finditer(text):
+                start, end = match.span()
+                if _is_valid_siren(match.group()) and _SIREN_CONTEXT_BEFORE.search(
+                    text, max(0, start - _SIREN_CONTEXT_WINDOW), start
+                ):
+                    results.append(self._detection(start, end, 1.0))
+        return results
+
+
+def _is_valid_siret(text: str) -> bool:
+    """Luhn on the 14 digits; La Poste (SIREN 356000000) instead needs a digit sum divisible by 5."""
+    digits = _digits(text)
+    if digits.startswith("356000000"):
+        return sum(int(d) for d in digits) % 5 == 0
+    return _is_valid_luhn_id(digits)
+
+
+def _is_valid_vat(text: str) -> bool:
+    """Key == (12 + 3 * (SIREN mod 97)) mod 97."""
+    digits = _digits(text)
+    return int(digits[:2]) == (12 + 3 * (int(digits[2:]) % 97)) % 97
+
+
+# ---------------------------------------------------------------------------
 # Public factory
 # ---------------------------------------------------------------------------
 
@@ -596,4 +689,7 @@ def build_detectors() -> List[PatternDetector]:
                         invalidate=_is_invalid_mac),
         PatternDetector("UrlRecognizer", "URL", _URL_PATTERNS),
         PatternDetector("FrPhoneRecognizer", "TELEPHONE", _PHONE_PATTERNS),
+        PatternDetector("FrSiretRecognizer", "SIRET", _SIRET_PATTERNS, validate=_is_valid_siret),
+        SirenDetector(),
+        PatternDetector("FrVatRecognizer", "TVA", _VAT_PATTERNS, validate=_is_valid_vat),
     ]
