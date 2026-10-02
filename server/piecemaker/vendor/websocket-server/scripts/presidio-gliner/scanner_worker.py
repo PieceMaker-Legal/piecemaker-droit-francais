@@ -292,11 +292,12 @@ class GLiNER2Recognizer(LocalRecognizer):
             )
         if self.model is not None:
             return
-        self.model = GLiNER2.from_pretrained(
-            self.model_name,
-            local_files_only=True,
-            map_location=_gliner_map_location(),
-        )
+        with contextlib.redirect_stdout(sys.stderr):
+            self.model = GLiNER2.from_pretrained(
+                self.model_name,
+                local_files_only=True,
+                map_location=_gliner_map_location(),
+            )
 
     def analyze(self, text, entities, nlp_artifacts=None):
         if self.model is None:
@@ -429,11 +430,12 @@ def _ensure_gliner_loaded():
     if _gliner_model is None and GLINER2_AVAILABLE:
         _log("Loading GLiNER2 model...")
         device = _gliner_map_location()
-        _gliner_model = GLiNER2.from_pretrained(
-            GLINER_MODEL,
-            local_files_only=True,
-            map_location=device,
-        )
+        with contextlib.redirect_stdout(sys.stderr):
+            _gliner_model = GLiNER2.from_pretrained(
+                GLINER_MODEL,
+                local_files_only=True,
+                map_location=device,
+            )
         _log(f"GLiNER2 model loaded ({device}).")
 
 
