@@ -489,11 +489,9 @@ def normalize_name(text: str) -> str:
     # Convert to lowercase
     text_lower = text_no_accents.lower()
 
-    # Remove honorifics/titles (French and English)
-    # Matches: Mr., Mrs., Ms., Dr., M., Mme., Maître, etc.
-    # Important: "m." and "me." must have the dot to avoid matching "martin" or "marie"
-    honorifics_pattern = r'\b(mr\.?|mrs\.?|ms\.?|dr\.?|prof\.?|m\.|mme\.?|mlle\.?|maitre)\s*'
-    text_no_titles = re.sub(honorifics_pattern, '', text_lower, flags=re.IGNORECASE)
+    # Remove leading civilities (French and English): same vocabulary as strip_civility()
+    # A title without dot needs whitespace after it, so "Marie", "Meunier" stay intact
+    text_no_titles = CIVILITY_PREFIX.sub('', text_lower.strip())
 
     # Normalize whitespace (multiple spaces/newlines → single space)
     text_normalized = ' '.join(text_no_titles.split())
@@ -641,7 +639,7 @@ def consolidate_duplicate_entities(entities: List[Dict]) -> List[Dict]:
 
 CIVILITY_TITLE = (
     r"(?:monsieur|madame|mademoiselle|messieurs|mesdames|ma[iî]tre|docteure|doctoresse|docteur|professeure|professeur"
-    r"|mmes|mlles|mme|mlle|mm|m|me|mrs|mr|ms|miss|dr|pr|prof)\.?\s+"
+    r"|mmes|mlles|mme|mlle|mm|m|me|mrs|mr|ms|miss|dr|pr|prof)(?:\.\s*|\s+)"  # "M.Dupont" accepted (OCR), "Meunier" not
 )
 CIVILITY_PREFIX = re.compile(
     rf"^(?:{CIVILITY_TITLE}(?:(?:le|la|les)\s+(?={CIVILITY_TITLE}))?)+",
