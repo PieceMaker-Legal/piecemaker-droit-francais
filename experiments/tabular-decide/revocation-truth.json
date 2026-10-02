@@ -1,0 +1,62 @@
+{
+  "JURITEXT000027424134": {
+    "solution": "Cassation partielle",
+    "abus": "Favorable au dirigeant",
+    "contradiction": "Oui",
+    "fonction": "Administrateur"
+  },
+  "JURITEXT000007032847": {
+    "solution": "Cassation totale",
+    "abus": "Favorable au dirigeant",
+    "contradiction": "Oui",
+    "fonction": "Directeur général"
+  },
+  "JURITEXT000007035122": {
+    "solution": "Cassation totale",
+    "abus": "Défavorable au dirigeant",
+    "contradiction": "Non",
+    "fonction": "Directeur général"
+  },
+  "JURITEXT000007078112": {
+    "solution": "Rejet",
+    "abus": "Défavorable au dirigeant",
+    "contradiction": "Non",
+    "fonction": null
+  },
+  "JURITEXT000027337866": {
+    "solution": "Cassation partielle",
+    "abus": null,
+    "contradiction": "Non",
+    "fonction": "Directeur général"
+  },
+  "JURITEXT000007474005": {
+    "solution": "Rejet",
+    "abus": "Défavorable au dirigeant",
+    "contradiction": "Oui",
+    "fonction": "Président"
+  },
+  "JURITEXT000007482866": {
+    "solution": "Rejet",
+    "abus": "Favorable au dirigeant",
+    "contradiction": "Oui",
+    "fonction": "Directeur général"
+  },
+  "JURITEXT000007372094": {
+    "solution": "Cassation totale",
+    "abus": "Favorable au dirigeant",
+    "contradiction": "Oui",
+    "fonction": "Directeur général"
+  },
+  "JURITEXT000007469373": {
+    "solution": "Rejet",
+    "abus": "Défavorable au dirigeant",
+    "contradiction": "Oui",
+    "fonction": "Directeur général"
+  },
+  "JURITEXT000007492255": {
+    "solution": "Cassation partielle",
+    "abus": "Défavorable au dirigeant",
+    "contradiction": "Oui",
+    "fonction": "Directeur général"
+  }
+}

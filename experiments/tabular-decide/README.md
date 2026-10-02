@@ -21,6 +21,7 @@ Le dossier contient son propre environnement Python (`.venv/`), le modèle tél�
 | `decide.py` | GLiNER2.5-multi-Decide en local, CPU seul, 3 threads, priorité basse. `sweep` compare les réglages de vitesse, `run <réglage>` traite le corpus. |
 | `truth.py`, `truth-manual.json` | Vérité de référence : solution et inaptitude par expression régulière, harcèlement et sécurité par lecture des dispositifs et motifs. |
 | `score.ts` | Compare les deux modèles à la vérité et vérifie les citations de Decide avec le vérifieur du plugin. |
+| `revocation-*` | Second jeu : 10 décisions sur la révocation abusive d'un dirigeant, questions et référence. |
 | `results/` | Sorties brutes et `report.json`. |
 | `RESULTATS.md` | Synthèse. |
 
@@ -35,6 +36,8 @@ npx tsx luna.ts
 .venv/bin/python decide.py sweep
 .venv/bin/python decide.py run chunk384-b4
 npx tsx score.ts
+PREFIX=revocation- npx tsx fetch.ts
+.venv/bin/python decide.py run full revocation-
 ```
 
 Luna est appelée directement par Codex, sans le proxy d'anonymisation : le corpus ne contient que des décisions publiées sur Légifrance.

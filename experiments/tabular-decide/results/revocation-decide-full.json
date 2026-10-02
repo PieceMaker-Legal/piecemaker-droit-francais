@@ -1,0 +1,272 @@
+{
+  "model": "fastino/GLiNER2.5-multi-Decide",
+  "threads": 3,
+  "load_seconds": 29.58,
+  "config": {
+    "name": "full",
+    "mode": "full",
+    "batch_size": 1
+  },
+  "rows": [
+    {
+      "id": "JURITEXT000027424134",
+      "chars": 4168,
+      "answer_seconds": 38.03,
+      "citation_seconds": 0.001,
+      "seconds": 38.031,
+      "answers": {
+        "solution": {
+          "label": "Cassation partielle",
+          "confidence": 0.8335026502609253
+        },
+        "abus": {
+          "label": "Défavorable au dirigeant",
+          "confidence": 0.6206868886947632
+        },
+        "contradiction": {
+          "label": "Oui",
+          "confidence": 0.8182532787322998
+        },
+        "fonction": {
+          "label": "Administrateur",
+          "confidence": 0.9215174913406372
+        }
+      },
+      "citations": {}
+    },
+    {
+      "id": "JURITEXT000007032847",
+      "chars": 2705,
+      "answer_seconds": 19.516,
+      "citation_seconds": 0.0,
+      "seconds": 19.516,
+      "answers": {
+        "solution": {
+          "label": "Rejet",
+          "confidence": 0.4464668333530426
+        },
+        "abus": {
+          "label": "Défavorable au dirigeant",
+          "confidence": 0.8313531875610352
+        },
+        "contradiction": {
+          "label": "Non",
+          "confidence": 0.7613413333892822
+        },
+        "fonction": {
+          "label": "Directeur général",
+          "confidence": 0.7431923151016235
+        }
+      },
+      "citations": {}
+    },
+    {
+      "id": "JURITEXT000007035122",
+      "chars": 2659,
+      "answer_seconds": 13.466,
+      "citation_seconds": 0.0,
+      "seconds": 13.466,
+      "answers": {
+        "solution": {
+          "label": "Cassation totale",
+          "confidence": 0.4285777807235718
+        },
+        "abus": {
+          "label": "Défavorable au dirigeant",
+          "confidence": 0.8780486583709717
+        },
+        "contradiction": {
+          "label": "Non",
+          "confidence": 0.6384982466697693
+        },
+        "fonction": {
+          "label": "Directeur général",
+          "confidence": 0.973960280418396
+        }
+      },
+      "citations": {}
+    },
+    {
+      "id": "JURITEXT000007078112",
+      "chars": 4941,
+      "answer_seconds": 43.587,
+      "citation_seconds": 0.0,
+      "seconds": 43.588,
+      "answers": {
+        "solution": {
+          "label": "Rejet",
+          "confidence": 0.847603976726532
+        },
+        "abus": {
+          "label": "Défavorable au dirigeant",
+          "confidence": 0.8031072020530701
+        },
+        "contradiction": {
+          "label": "Non",
+          "confidence": 0.7078630924224854
+        },
+        "fonction": {
+          "label": "Administrateur",
+          "confidence": 0.8769496083259583
+        }
+      },
+      "citations": {}
+    },
+    {
+      "id": "JURITEXT000027337866",
+      "chars": 3876,
+      "answer_seconds": 25.413,
+      "citation_seconds": 0.0,
+      "seconds": 25.414,
+      "answers": {
+        "solution": {
+          "label": "Cassation partielle",
+          "confidence": 0.8854334354400635
+        },
+        "abus": {
+          "label": "Défavorable au dirigeant",
+          "confidence": 0.8173627853393555
+        },
+        "contradiction": {
+          "label": "Non",
+          "confidence": 0.6550034284591675
+        },
+        "fonction": {
+          "label": "Directeur général",
+          "confidence": 0.7457486391067505
+        }
+      },
+      "citations": {}
+    },
+    {
+      "id": "JURITEXT000007474005",
+      "chars": 4313,
+      "answer_seconds": 28.46,
+      "citation_seconds": 0.0,
+      "seconds": 28.46,
+      "answers": {
+        "solution": {
+          "label": "Rejet",
+          "confidence": 0.8046150803565979
+        },
+        "abus": {
+          "label": "Défavorable au dirigeant",
+          "confidence": 0.6394504904747009
+        },
+        "contradiction": {
+          "label": "Non",
+          "confidence": 0.7495547533035278
+        },
+        "fonction": {
+          "label": "Directeur général",
+          "confidence": 0.6183472871780396
+        }
+      },
+      "citations": {}
+    },
+    {
+      "id": "JURITEXT000007482866",
+      "chars": 4731,
+      "answer_seconds": 33.235,
+      "citation_seconds": 0.001,
+      "seconds": 33.235,
+      "answers": {
+        "solution": {
+          "label": "Rejet",
+          "confidence": 0.8400469422340393
+        },
+        "abus": {
+          "label": "Défavorable au dirigeant",
+          "confidence": 0.8145586848258972
+        },
+        "contradiction": {
+          "label": "Non",
+          "confidence": 0.8672820925712585
+        },
+        "fonction": {
+          "label": "Président",
+          "confidence": 0.4657363295555115
+        }
+      },
+      "citations": {}
+    },
+    {
+      "id": "JURITEXT000007372094",
+      "chars": 2077,
+      "answer_seconds": 6.903,
+      "citation_seconds": 0.0,
+      "seconds": 6.903,
+      "answers": {
+        "solution": {
+          "label": "Cassation totale",
+          "confidence": 0.39281076192855835
+        },
+        "abus": {
+          "label": "Défavorable au dirigeant",
+          "confidence": 0.8256998658180237
+        },
+        "contradiction": {
+          "label": "Non",
+          "confidence": 0.7719817161560059
+        },
+        "fonction": {
+          "label": "Directeur général",
+          "confidence": 0.8946517109870911
+        }
+      },
+      "citations": {}
+    },
+    {
+      "id": "JURITEXT000007469373",
+      "chars": 2896,
+      "answer_seconds": 6.857,
+      "citation_seconds": 0.0,
+      "seconds": 6.857,
+      "answers": {
+        "solution": {
+          "label": "Rejet",
+          "confidence": 0.7810857892036438
+        },
+        "abus": {
+          "label": "Défavorable au dirigeant",
+          "confidence": 0.6162325143814087
+        },
+        "contradiction": {
+          "label": "Non",
+          "confidence": 0.6808862090110779
+        },
+        "fonction": {
+          "label": "Directeur général",
+          "confidence": 0.9410598874092102
+        }
+      },
+      "citations": {}
+    },
+    {
+      "id": "JURITEXT000007492255",
+      "chars": 4598,
+      "answer_seconds": 26.346,
+      "citation_seconds": 0.0,
+      "seconds": 26.346,
+      "answers": {
+        "solution": {
+          "label": "Cassation partielle",
+          "confidence": 0.8732140064239502
+        },
+        "abus": {
+          "label": "Défavorable au dirigeant",
+          "confidence": 0.7423902750015259
+        },
+        "contradiction": {
+          "label": "Non",
+          "confidence": 0.6801803112030029
+        },
+        "fonction": {
+          "label": "Directeur général",
+          "confidence": 0.9864758849143982
+        }
+      },
+      "citations": {}
+    }
+  ]
+}
