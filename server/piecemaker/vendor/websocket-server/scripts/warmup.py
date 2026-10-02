@@ -187,7 +187,6 @@ def check_python_dependencies() -> Dict[str, bool]:
     dependencies = {
         "gliner2": False,
         "huggingface_hub": False,
-        "spacy": False,
         "markitdown": False,
         "pypdf": False,
     }
@@ -308,7 +307,7 @@ def get_status() -> Dict:
     runtime = gliner2_runtime()
     status["gliner2_runtime"] = runtime
     status["dependencies"]["gliner2"] = runtime["boundary_capable"]
-    for pkg in ["huggingface_hub", "spacy", "markitdown", "pypdf"]:
+    for pkg in ["huggingface_hub", "markitdown", "pypdf"]:
         try:
             __import__(pkg)
             status["dependencies"][pkg] = True

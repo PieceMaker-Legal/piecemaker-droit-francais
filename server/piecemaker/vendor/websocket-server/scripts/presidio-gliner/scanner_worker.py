@@ -31,15 +31,6 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 # ---------------------------------------------------------------------------
 # Heavy imports — these are the expensive ones (~30-60s)
 # ---------------------------------------------------------------------------
-import spacy
-from presidio_analyzer import (
-    AnalysisExplanation,
-    AnalyzerEngine,
-    LocalRecognizer,
-    RecognizerResult,
-)
-from presidio_analyzer.nlp_engine import SpacyNlpEngine
-
 try:
     from gliner2 import AutoExtractor
     GLINER2_AVAILABLE = True
@@ -56,16 +47,10 @@ from model_config import PREFERRED_GLINER_MODEL
 _PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _PARENT_DIR)
 
-_real_presidio_mods = {
-    k: sys.modules.pop(k)
-    for k in list(sys.modules)
-    if k.startswith("presidio_analyzer")
-}
-
+from pattern_detectors import Detection  # noqa: E402
 from scan_utils import (  # noqa: E402
     build_output_payload,
     build_pattern_recognizers,
-    detect_language,
     extract_legal_form,
     normalize_entity_text,
     print_summary,
@@ -73,8 +58,6 @@ from scan_utils import (  # noqa: E402
     run_pattern_recognizers,
     validate_md_input,
 )
-
-sys.modules.update(_real_presidio_mods)
 
 # ---------------------------------------------------------------------------
 # Device: official GLiNER2 path — PyTorch CUDA if present, otherwise CPU.
@@ -306,22 +289,41 @@ def chunk_text_by_words(text: str, max_words: int = CHUNK_SIZE, overlap: int = C
 # GLiNER2 Recognizer
 # ---------------------------------------------------------------------------
 
-class GLiNER2Recognizer(LocalRecognizer):
+def _drop_contained_same_type(results: List[Detection]) -> List[Detection]:
+    """Drop a span contained in a higher-or-equally scored span of the same type.
+
+    This is Presidio's ``EntityRecognizer.remove_duplicates``, which ``AnalyzerEngine.analyze``
+    applied to the GLiNER2 results before they reached ``resolve_overlapping_spans``. It is
+    not redundant with it: it removes the contained span even when its container is later
+    discarded in favour of a longer span of another type ("Alice" next to "Alice Martin",
+    itself overlapped by the longer place "Martin Lyon Cedex").
+    """
+    ranked = sorted(results, key=lambda r: (-r.score, r.start, -(r.end - r.start)))
+    kept: List[Detection] = []
+    for candidate in ranked:
+        if any(
+            candidate.entity_type == k.entity_type
+            and candidate.start >= k.start and candidate.end <= k.end
+            for k in kept
+        ):
+            continue
+        kept.append(candidate)
+    return kept
+
+
+class GLiNER2Recognizer:
+    name = "GLiNER2Recognizer"
+
     def __init__(self, model_name=GLINER_MODEL, entity_mapping=None,
-                 supported_language="en", threshold=GLINER_THRESHOLD, batch_size=BATCH_SIZE,
-                 model=None):
+                 threshold=GLINER_THRESHOLD, batch_size=BATCH_SIZE, model=None):
         self.model_name = model_name
-        self.model_to_presidio = entity_mapping or ENTITY_MAPPING
-        self.gliner_labels = list(self.model_to_presidio.keys())
+        self.label_to_entity_type = entity_mapping or ENTITY_MAPPING
         self.threshold = threshold
         self.batch_size = batch_size
-        # Assigned BEFORE super().__init__, which calls load() (presidio
-        # EntityRecognizer.__init__ does so): assigning the shared model afterwards left
-        # every recognizer loading, then discarding, its own copy of a 1 GB model.
+        # Passed in rather than assigned afterwards: load() runs here, and a recognizer
+        # built without the shared model would load, then discard, its own copy of a 1 GB model.
         self.model = model
-        supported_entities = list(set(self.model_to_presidio.values()))
-        super().__init__(supported_entities=supported_entities, name="GLiNER2Recognizer",
-                         supported_language=supported_language)
+        self.load()
 
     def load(self):
         if not GLINER2_AVAILABLE:
@@ -341,10 +343,7 @@ class GLiNER2Recognizer(LocalRecognizer):
             map_location=_gliner_map_location(),
         )
 
-    def analyze(self, text, entities, nlp_artifacts=None):
-        if self.model is None:
-            self.load()
-
+    def analyze(self, text) -> List[Detection]:
         chunks = chunk_text_by_words(text, CHUNK_SIZE)
         total_chunks = len(chunks)
         _log(f"Processing {total_chunks} chunks in batches of {self.batch_size}...")
@@ -370,22 +369,22 @@ class GLiNER2Recognizer(LocalRecognizer):
 
         for chunk_idx, (chunk, batch_result) in enumerate(zip(chunks, batch_results)):
             for label, matches in batch_result.get("entities", {}).items():
-                presidio_type = self.model_to_presidio.get(label, label.upper())
-                if entities and presidio_type not in entities:
+                entity_type = self.label_to_entity_type.get(label)
+                if entity_type is None:
                     continue
                 for match in matches:
                     abs_start = chunk["start_char"] + match["start"]
                     abs_end = chunk["start_char"] + match["end"]
                     entity_text = match["text"]
                     entity_key = (entity_text, abs_start, abs_end)
-                    if entity_key not in unique_entities[presidio_type]:
-                        unique_entities[presidio_type][entity_key] = {
+                    if entity_key not in unique_entities[entity_type]:
+                        unique_entities[entity_type][entity_key] = {
                             "text": entity_text, "start": abs_start,
                             "end": abs_end, "score": match["confidence"],
                         }
                     else:
-                        if match["confidence"] > unique_entities[presidio_type][entity_key]["score"]:
-                            unique_entities[presidio_type][entity_key]["score"] = match["confidence"]
+                        if match["confidence"] > unique_entities[entity_type][entity_key]["score"]:
+                            unique_entities[entity_type][entity_key]["score"] = match["confidence"]
 
         # Read each ORGANIZATION's legal form straight out of the text. Memoised by
         # normalised name: the entity keys are per-occurrence, so the same company is
@@ -399,24 +398,19 @@ class GLiNER2Recognizer(LocalRecognizer):
                 form_cache[name] = extract_legal_form(name, trailing)
             form, nationality = form_cache[name]
 
-            entity_data["presidio_type"] = f"ORGANIZATION_{form}" if form else "ORGANIZATION"
+            entity_data["entity_type"] = f"ORGANIZATION_{form}" if form else "ORGANIZATION"
             entity_data["nationality"] = nationality
 
-        for presidio_type, entity_dict in unique_entities.items():
+        for entity_type, entity_dict in unique_entities.items():
             for entity_data in entity_dict.values():
-                final_type = entity_data.get("presidio_type", presidio_type)
-                results.append(RecognizerResult(
-                    entity_type=final_type,
+                results.append(Detection(
+                    entity_type=entity_data.get("entity_type", entity_type),
                     start=entity_data["start"],
                     end=entity_data["end"],
                     score=entity_data["score"],
-                    analysis_explanation=AnalysisExplanation(
-                        recognizer=self.name,
-                        original_score=entity_data["score"],
-                        textual_explanation="GLiNER2 batch processing",
-                    ),
+                    recognition_metadata={"recognizer_name": self.name},
                 ))
-        return results
+        return _drop_contained_same_type(results)
 
 
 # ---------------------------------------------------------------------------
@@ -427,53 +421,9 @@ def _log(msg: str):
 
 
 # ---------------------------------------------------------------------------
-# Analyzer cache — avoids rebuilding for same language
+# Shared GLiNER2 model
 # ---------------------------------------------------------------------------
-_analyzer_cache: Dict[str, AnalyzerEngine] = {}
 _gliner_model = None  # Shared GLiNER2 model instance
-
-
-def _build_tokenizer_only_engine(language: str) -> SpacyNlpEngine:
-    """Build a presidio NLP engine that only tokenises, with no trained model."""
-    nlp = spacy.blank(language)
-    nlp.max_length = 5_000_000
-
-    engine = SpacyNlpEngine()
-    engine.nlp = {language: nlp}
-    return engine
-
-
-def _get_or_build_analyzer(language: str) -> AnalyzerEngine:
-    """Get a cached analyzer or build one for the given language.
-
-    Reuses the same GLiNER2 model instance across languages.
-    """
-    global _gliner_model
-
-    if language in _analyzer_cache:
-        return _analyzer_cache[language]
-
-    _log(f"Building analyzer for language: {language}")
-
-    nlp_engine = _build_tokenizer_only_engine(language)
-
-    analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=[language])
-
-    # Passed in, not assigned after construction: presidio's EntityRecognizer.__init__
-    # calls load(), so a recognizer built without a model loads its own copy first.
-    gliner_recognizer = GLiNER2Recognizer(
-        model_name=GLINER_MODEL,
-        entity_mapping=ENTITY_MAPPING,
-        supported_language=language,
-        batch_size=BATCH_SIZE,
-        model=_gliner_model,
-    )
-
-    analyzer.registry.add_recognizer(gliner_recognizer)
-    analyzer.registry.remove_recognizer("SpacyRecognizer")
-
-    _analyzer_cache[language] = analyzer
-    return analyzer
 
 
 def _ensure_gliner_loaded():
@@ -504,37 +454,20 @@ def scan_file(md_file: str, output_dir: str) -> str:
     with open(md_file, "r", encoding="utf-8") as fh:
         text = fh.read()
 
-    detected_lang = detect_language(text)
-    _log(f"Detected language: {detected_lang}")
-
     # Pattern recognizers (fast, no model needed)
     pattern_recognizers = build_pattern_recognizers()
     all_results = run_pattern_recognizers(text, pattern_recognizers)
 
-    # NER with Presidio + GLiNER2
-    _log("Running NER with Presidio + GLiNER2...")
-    analyzer = _get_or_build_analyzer(detected_lang)
-
-    # Make sure the GLiNER2 model is shared
+    # NER with GLiNER2
+    _log("Running NER with GLiNER2...")
+    # The recognizer reuses the shared model; if it had to load one itself (scan_file
+    # called without main()), keep it for the next scans and for extract_document_meta.
     global _gliner_model
-    for rec in analyzer.registry.recognizers:
-        if isinstance(rec, GLiNER2Recognizer) and rec.model is None and _gliner_model is not None:
-            rec.model = _gliner_model
+    recognizer = GLiNER2Recognizer(model=_gliner_model)
+    _gliner_model = recognizer.model
+    ner_results = recognizer.analyze(text)
 
-    ner_results = analyzer.analyze(
-        text=text,
-        language=detected_lang,
-        entities=["PERSON", "ORGANIZATION", "LOCATION"],
-        return_decision_process=False,
-    )
-
-    # Capture the model reference if it was just loaded
-    for rec in analyzer.registry.recognizers:
-        if isinstance(rec, GLiNER2Recognizer) and rec.model is not None:
-            _gliner_model = rec.model
-            break
-
-    _log(f"Presidio-GLiNER2 NER complete ({len(ner_results)} unique entities)")
+    _log(f"GLiNER2 NER complete ({len(ner_results)} unique entities)")
     # One stderr line per entity is 3 586 lines on ZETABIO_URD. A parent that does not
     # drain stderr continuously fills the 64 KB pipe and the worker blocks forever inside
     # print() — observed as a 25-minute hang, mid-scan, with no error. The volume buys
@@ -547,8 +480,8 @@ def scan_file(md_file: str, output_dir: str) -> str:
     extra_summary = {"ner_engine": "presidio-gliner2"}
     all_results.extend(ner_results)
 
-    # resolve_overlapping_spans replaces EntityRecognizer.remove_duplicates, which only
-    # drops a contained span when both results share an entity_type and therefore lets
+    # resolve_overlapping_spans completes _drop_contained_same_type, which only drops a
+    # contained span when both results share an entity_type and therefore lets
     # cross-type overlaps through (81 double-typed spans and 179 overlapping pairs on
     # ZETABIO_URD, e.g. LOCATION "French" inside ORGANIZATION "French Monetary and
     # Financial Code" — the inner one corrupts the outer during substitution).
@@ -592,11 +525,8 @@ def main():
     # Pre-load GLiNER2 model (the expensive part)
     _ensure_gliner_loaded()
 
-    # Pre-build analyzers for both languages
-    _log("Pre-building French analyzer...")
-    _get_or_build_analyzer("fr")
-    _log("Pre-building English analyzer...")
-    _get_or_build_analyzer("en")
+    # Fail before READY, not on the first scan, if gliner2 is unusable.
+    GLiNER2Recognizer(model=_gliner_model)
 
     # Signal readiness to the orchestrator via stdout
     print("READY", flush=True)
