@@ -27,6 +27,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const STORE_VERSION = 1;
+const DEFAULT_TERMS_FILE = path.join(__dirname, 'institutional-terms.default.json');
 
 function piecemakerHome() {
   return process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
@@ -101,6 +102,12 @@ function writeInstitutionalTerms(terms) {
   return { file, terms: clean };
 }
 
+function installDefaultInstitutionalTerms() {
+  if (fs.existsSync(institutionalTermsFile())) return false;
+  writeInstitutionalTerms(readTermsFrom(DEFAULT_TERMS_FILE));
+  return true;
+}
+
 // ── Détection ────────────────────────────────────────────────────────────────
 // `isInstitutionalEntity` est appelé sur chaque entité à chaque lecture de
 // mapping (donc à chaque hook Read) : les regex sont compilées une fois et le
@@ -152,6 +159,7 @@ function isInstitutionalEntity(entity) {
 module.exports = {
   cleanTerm,
   dedupeTerms,
+  installDefaultInstitutionalTerms,
   institutionalTermsFile,
   isInstitutionalEntity,
   normalizeForMatch,
