@@ -102,7 +102,7 @@ export function partyCodeChange(
     ...node.data,
     code: code || undefined,
     partySide: side,
-    position: clean(identity.position) || null,
+    position: identity.side === 'client' || identity.side === 'adversaire' ? clean(identity.position) || null : null,
     originalCode: originalCode || undefined,
   };
   const operations: KnowledgeUpdateOperation[] = nodeId === node.id
