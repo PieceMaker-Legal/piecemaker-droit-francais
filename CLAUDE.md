@@ -62,6 +62,16 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 Forking CloudCLI. Never modify original code, only plug additions on top so upstream merges stay possible. Clear separation in folder (PieceMaker subfolder). **Never comment inside code files** — self-evident names, one comment in the commit message. **Always commit once a task is over. Never push.**
 
+## Real data NEVER enters the repo
+
+**No real name, company, address, ID number or document title taken from the user's cases, test corpora or scanned documents may appear anywhere in the repo or its git history: code, tests, fixtures, docs, comments, descriptions/prompts, file names, branch names, commit messages.** This has leaked before and required rewriting the whole history — it must never happen again.
+
+- Always write fictitious data: `Jean Dupont`, `Société Exemple SAS`, `12 rue des Lilas, Paris`, `ZETABIO`. Invent it; never "lightly alter" a real value.
+- When reading a real document or scan output to build a test or example, retype the example with invented values. Never paste entity text, excerpts, file names or benchmark document names.
+- Real benchmark documents stay outside the repo (scratchpad, `~/.piecemaker`). Never reference their real names in a commit.
+- Mechanical guard, hashed (no plaintext list in the repo): `scripts/piecemaker/guard-donnees-reelles/` — `.husky/pre-push` scans every pushed commit (messages, added lines, paths), `.github/workflows/guard-donnees-reelles.yml` re-checks on GitHub, and a Claude Code `PreToolUse` hook (`check.mjs claude-hook`, in `.claude/settings.local.json`, git-ignored) blocks writes. Add a newly discovered real term with `printf '%s\n' 'terme' | node scripts/piecemaker/guard-donnees-reelles/check.mjs add -` (hashes it; `--exact` keeps accents). Never bypass with `--no-verify`.
+- If the guard flags something, fix the content — never the guard. Details: `docs/donnees-reelles.md`.
+
 ## Plugging code in / rebranding CloudCLI
 
 Merge procedure and writing rules: `docs/upstream-cloudcli.md`. Upstream merges must stay mechanical — every added line is a future conflict.
