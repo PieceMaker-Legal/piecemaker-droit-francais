@@ -670,6 +670,37 @@ def _is_valid_vat(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# NIR (French social security number)
+# ---------------------------------------------------------------------------
+# 15 characters: sex, year, month, department (2 digits or 2A / 2B), commune, order, key.
+# Score 1.0 after validation, as for the other identifiers: the key (97 - N mod 97) makes
+# the shape specific, so no context word is required. A direct identifier (EDPB guidelines
+# 01/2025), hence its own type. The month is not range-checked (fictitious months 20, 30-42,
+# 50-99 exist). Sex digits: 1, 2 (born in France or abroad), 3, 4, 7, 8 (provisional
+# numbers); 5, 6 and 9 are not personal numbers. The 13 digits cannot all be zero: the
+# first one is not 0. A same-length CREDIT_CARD on the 15 contiguous digits (Luhn passes
+# one time in ten) loses the tie through ``_TYPE_PRIORITY``; longer or shorter fragments
+# (phone, SIREN, SIRET, card) lose by length or never fire in the grouped spellings.
+# Out of scope: the 13-digit form without its key.
+
+_NIR_PATTERNS = [
+    (
+        _ID_START + r"[1-478]" + _ID_SEP + r"[0-9]{2}" + _ID_SEP + r"[0-9]{2}" + _ID_SEP
+        + r"(?:[0-9]{2}|2[AB])" + _ID_SEP + r"[0-9]{3}" + _ID_SEP + r"[0-9]{3}" + _ID_SEP
+        + r"[0-9]{2}" + _ID_END,
+        0.5,
+    ),
+]
+
+
+def _is_valid_nir(text: str) -> bool:
+    """Key == 97 - (N mod 97); in N, Corsica's 2A reads 19 and 2B reads 18 (INSEE rule)."""
+    chars = re.sub(r"[ .\u00a0\u202f]", "", text).upper()
+    number = int(chars[:13].replace("2A", "19").replace("2B", "18"))
+    return int(chars[13:]) == 97 - number % 97
+
+
+# ---------------------------------------------------------------------------
 # Public factory
 # ---------------------------------------------------------------------------
 
@@ -692,4 +723,5 @@ def build_detectors() -> List[PatternDetector]:
         PatternDetector("FrSiretRecognizer", "SIRET", _SIRET_PATTERNS, validate=_is_valid_siret),
         SirenDetector(),
         PatternDetector("FrVatRecognizer", "TVA", _VAT_PATTERNS, validate=_is_valid_vat),
+        PatternDetector("FrNirRecognizer", "NIR", _NIR_PATTERNS, validate=_is_valid_nir),
     ]

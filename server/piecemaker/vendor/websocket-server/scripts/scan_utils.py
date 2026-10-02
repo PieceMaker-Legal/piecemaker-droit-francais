@@ -46,12 +46,14 @@ _CORPORATE_SUFFIXES_RE = re.compile(
 # place it sits in. A 14-digit SIRET that also passes Luhn is a valid CREDIT_CARD on the
 # very same span, at the same length and score: SIRET ranks just after those three, so it
 # wins that tie (and only that one: every other type keeps sharing the last rank, below
-# SIRET, which no other detector can match on an identical span).
+# SIRET, which no other detector can match on an identical span). Same for a 15-digit NIR
+# that also passes Luhn as a CREDIT_CARD: NIR ranks right after SIRET.
 _TYPE_PRIORITY = {
     "PERSON": 0,
     "ORGANIZATION": 1,
     "LOCATION": 2,
     "SIRET": 3,
+    "NIR": 4,
 }
 
 
