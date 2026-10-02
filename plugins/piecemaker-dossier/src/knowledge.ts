@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 
 import { isInstitutionalEntity } from './institutional-terms.js';
 
-import { NODE_KINDS } from './types.js';
+import { EXCLUSIONS_NODE_ID, NODE_KINDS } from './types.js';
 import type {
   JsonData,
   KnowledgeLinkInput,
@@ -180,7 +180,9 @@ export class KnowledgeStore {
     if (!Array.isArray(input.operations)) throw new TypeError('operations must be an array');
     const operations = input.operations.map((operation) => this.validateOperation(operation));
     const counts = this.database.transaction(() => {
+      const before = this.mappingReals(projectId);
       const applied = this.applyOperations(projectId, operations);
+      this.syncExclusions(projectId, before, this.mappingReals(projectId));
       this.removeInstitutionalEntities(projectId);
       return applied;
     })();
@@ -292,6 +294,22 @@ export class KnowledgeStore {
       }
     }
     return removed;
+  }
+
+  private mappingReals(projectId: string): Map<string, string> {
+    return new Map((this.database.prepare('SELECT DISTINCT real_value FROM piecemaker_mappings WHERE project_id=?').all(projectId) as Array<{ real_value: string }>).map(({ real_value: real }) => [real.toLowerCase(), real]));
+  }
+
+  // A variant removed from every entity must not come back at the next GLiNER scan; one (re)added leaves the exclusions. Keys are lowercase, like the scanner's `ignored` match.
+  private syncExclusions(projectId: string, before: Map<string, string>, after: Map<string, string>): void {
+    const row = this.database.prepare('SELECT data_json FROM piecemaker_nodes WHERE project_id=? AND id=?').get(projectId, EXCLUSIONS_NODE_ID) as { data_json: string } | undefined;
+    const data = parseJson<JsonData>(row?.data_json ?? '{}', {});
+    const current = arrayValue(data.values, 'exclusions');
+    const kept = current.filter((value) => !after.has(value.toLowerCase()));
+    const known = new Set(kept.map((value) => value.toLowerCase()));
+    const next = [...kept, ...[...before].filter(([key]) => !after.has(key) && !known.has(key)).map(([, real]) => real)];
+    if (JSON.stringify(next) === JSON.stringify(current)) return;
+    this.applyOperations(projectId, [{ op: 'upsertNode', node: { id: EXCLUSIONS_NODE_ID, kind: 'other', label: 'Exclusions GLiNER', data: { ...data, systemRole: 'gliner-exclusions', values: next }, origin: 'manual' } }]);
   }
 
   private resolveProject(value: string | undefined): string {
