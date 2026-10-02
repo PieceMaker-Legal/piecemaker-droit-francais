@@ -59,6 +59,37 @@ export function askConfirm(root: HTMLElement, title: string, confirmLabel = 'Con
   });
 }
 
+export function askDeleteEntity(root: HTMLElement, label: string): Promise<{ neverPseudonymise: boolean } | null> {
+  return new Promise((resolve) => {
+    const layer = overlay(root, `
+      <div class="pmd-confirm">
+        <h2 class="pmd-title piecemaker-display">Supprimer cet élément et ses relations ?</h2>
+        <label class="pmd-confirm-option"><input type="checkbox" data-never-pseudonymise><span>Ne plus jamais pseudonymiser « ${escapeHtml(label)} », dans tous les dossiers</span></label>
+        <div class="pmd-form-actions">
+          <button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button>
+          <button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-confirm>Supprimer</button>
+        </div>
+      </div>`);
+    const option = layer.querySelector<HTMLInputElement>('[data-never-pseudonymise]');
+    let settled = false;
+    const finish = (confirmed: boolean) => {
+      if (settled) return;
+      settled = true;
+      closeOverlay(layer, onKey);
+      resolve(confirmed ? { neverPseudonymise: Boolean(option?.checked) } : null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+      if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+    };
+    document.addEventListener('keydown', onKey);
+    layer.addEventListener('click', (event) => { if (event.target === layer) finish(false); });
+    layer.querySelector('[data-close]')?.addEventListener('click', () => finish(false));
+    layer.querySelector('[data-confirm]')?.addEventListener('click', () => finish(true));
+    layer.querySelector<HTMLButtonElement>('[data-confirm]')?.focus();
+  });
+}
+
 export function askPrompt(root: HTMLElement, title: string, value = '', confirmLabel = 'Enregistrer'): Promise<string | null> {
   return new Promise((resolve) => {
     const layer = overlay(root, `

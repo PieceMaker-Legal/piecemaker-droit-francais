@@ -223,6 +223,7 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-confirm{display:grid;gap:14px}
 .pmd-confirm .pmd-title{font-size:1.25rem}
 .pmd-confirm .pmd-form-actions{margin-top:2px}
+.pmd-confirm-option{display:flex;align-items:flex-start;gap:8px;color:var(--pmd-muted);font-size:13px;cursor:pointer}
 .pmd-form{display:grid;gap:12px}
 .pmd-form-section{display:grid;gap:12px;padding-bottom:16px;border-bottom:1px solid var(--pmd-border)}
 .pmd-form-section:last-of-type{border-bottom:0;padding-bottom:0}
