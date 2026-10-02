@@ -1,4 +1,4 @@
-import type { JsonData, KnowledgeMapping, KnowledgeNode, KnowledgeUpdateOperation, NodeKind } from './types.js';
+import type { JsonData, KnowledgeMapping, KnowledgeNode, KnowledgeSnapshot, KnowledgeUpdateOperation, NodeKind } from './types.js';
 
 const LEGAL_FORM_TOKENS = new Set([
   'SELARL', 'SELAS', 'SELCA', 'SELCS', 'SASU', 'SARL', 'EURL', 'EARL',
@@ -39,7 +39,7 @@ export type PartyCodeChange = {
 
 const clean = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 const entityId = (code: string): string => `entity:${code}`;
-const isPartyCode = (code: string): boolean => /^(CLIENT|ADVERSAIRE)_/.test(code);
+export const isPartyCode = (code: string): boolean => /^(CLIENT|ADVERSAIRE)_/.test(code);
 
 export function codeToken(value: unknown, fallback = 'AUTRE'): string {
   return clean(value)
@@ -72,7 +72,7 @@ function numberedCode(prefix: string, used: Set<string>, current: string): strin
 export function partyCode(identity: PartyIdentity, current: string, used: Set<string>, originalCode = ''): string {
   if (identity.side !== 'client' && identity.side !== 'adversaire') {
     if (originalCode && (originalCode === current || !used.has(originalCode))) return originalCode;
-    return numberedCode(identity.kind === 'company' ? 'PERSONNE_MORALE' : 'PERSONNE_PHYSIQUE', used, current);
+    return numberedCode(identity.kind === 'company' ? companyFormToken(identity.legalForm) : 'PERSONNE_PHYSIQUE', used, current);
   }
   const sideToken = identity.side === 'client' ? 'CLIENT' : 'ADVERSAIRE';
   const fallbackPosition = identity.side === 'client' ? 'DEMANDEUR' : 'DEFENDEUR';
@@ -109,4 +109,21 @@ export function partyCodeChange(
     ? []
     : [{ op: 'renameNode', rename: { fromNodeId: node.id, toNodeId: nodeId } }];
   return { nodeId, code, data, operations };
+}
+
+export function partyRemovalOperations(
+  node: Pick<KnowledgeNode, 'id' | 'kind' | 'label' | 'aliases' | 'data'>,
+  graph: Pick<KnowledgeSnapshot, 'nodes' | 'mappings' | 'reservedCodes'>,
+): KnowledgeUpdateOperation[] {
+  const change = partyCodeChange(
+    node,
+    { kind: node.kind, legalForm: typeof node.data.legalForm === 'string' ? node.data.legalForm : '', side: '', position: '' },
+    graph.nodes,
+    graph.mappings,
+    graph.reservedCodes,
+  );
+  const operations: KnowledgeUpdateOperation[] = [...change.operations];
+  operations.push({ op: 'upsertNode', node: { id: change.nodeId, kind: node.kind, label: node.label, aliases: node.aliases, data: change.data, origin: 'manual' } });
+  for (const real of [node.label, ...node.aliases]) if (change.code) operations.push({ op: 'upsertMapping', mapping: { nodeId: change.nodeId, real, masked: change.code, origin: 'manual' } });
+  return operations;
 }
