@@ -158,3 +158,6 @@ server/piecemaker/anonymizer/bin/
 
 # Corpus d'évaluation GLiNER (textes réels, jamais versionnés)
 server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/eval/
+
+__pycache__/
+*.pyc
