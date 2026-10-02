@@ -606,12 +606,9 @@ _SIREN_CONTEXT = (
     r"(?:\bSIRE[NT]\b|(?<!\w)R\.?C\.?S(?!\w)\.?|registre\s+du\s+commerce|immatricul[ée]e?s?"
     r"|num[ée]ro\s+unique\s+d['’]identification|(?<!\w)n\s?[°º]\s*d['’]identification)"
 )
-_SIREN_GAP = r"(?:(?![.!?](?:\s|$))(?!\n\s*\n).){0,80}?"
+_CONTEXT_GAP = r"(?:(?![.!?](?:\s|$))(?!\n\s*\n).){0,80}?"
 _SIREN_PATTERNS = [(_ID_START + _SIREN_NUMBER + _ID_END, 0.5)]
-# The text before a candidate is checked for the context, anchored on the candidate: each
-# number is judged on its own, whatever the other numbers around it.
-_SIREN_CONTEXT_BEFORE = re.compile(_SIREN_CONTEXT + _SIREN_GAP + r"\Z", _DEFAULT_FLAGS)
-_SIREN_CONTEXT_WINDOW = 150  # 80-character gap + the longest keyword
+_CONTEXT_WINDOW = 150  # 80-character gap + the longest keyword
 
 # "FR", 2-digit key, SIREN; spaces optional ("FR40732829320", "FR 40 732 829 320").
 _VAT_SEP = r"[ \u00a0\u202f]?"
@@ -637,20 +634,36 @@ def _is_valid_siren(text: str) -> bool:
     return _is_valid_luhn_id(_digits(text))
 
 
-class SirenDetector(PatternDetector):
-    """SIREN needs its own loop: a candidate counts only with a context word before it."""
+class ContextDetector(PatternDetector):
+    """Candidates of ``context_patterns`` count only with a ``context`` keyword before them.
 
-    def __init__(self):
-        super().__init__("FrSirenRecognizer", "SIREN", _SIREN_PATTERNS)
+    The text before a candidate is checked for the keyword, anchored on the candidate: each
+    number is judged on its own, whatever the other numbers around it. ``patterns`` (no
+    context needed, score as given) and ``validate`` (context candidates only) are optional.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        entity_type: str,
+        context_patterns: List[Tuple[str, float]],
+        context: str,
+        validate: Optional[Callable[[str], bool]] = None,
+        patterns: Optional[List[Tuple[str, float]]] = None,
+    ):
+        super().__init__(name, entity_type, patterns or [])
+        self._context_patterns = [re.compile(regex, _DEFAULT_FLAGS) for regex, _ in context_patterns]
+        self._context_before = re.compile(context + _CONTEXT_GAP + r"\Z", _DEFAULT_FLAGS)
+        self._context_validate = validate
 
     def analyze(self, text: str) -> List[Detection]:
-        results = []
-        for compiled, _ in self._patterns:
+        results = super().analyze(text)
+        for compiled in self._context_patterns:
             for match in compiled.finditer(text):
                 start, end = match.span()
-                if _is_valid_siren(match.group()) and _SIREN_CONTEXT_BEFORE.search(
-                    text, max(0, start - _SIREN_CONTEXT_WINDOW), start
-                ):
+                if (
+                    self._context_validate is None or self._context_validate(match.group())
+                ) and self._context_before.search(text, max(0, start - _CONTEXT_WINDOW), start):
                     results.append(self._detection(start, end, 1.0))
         return results
 
@@ -701,6 +714,44 @@ def _is_valid_nir(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Vehicle registration plate (French)
+# ---------------------------------------------------------------------------
+# A plate identifies the owner of a vehicle. Score 1.0, as for the other identifiers.
+# SIV (since 2009): 2 letters, 3 digits, 2 letters; no I, O or U, block 000 unused. With
+# hyphens ("AB-123-CD") the shape is specific enough to need no keyword. Spaced or glued
+# ("AB 123 CD", "AB123CD") it crosses references, acronyms and capitalised titles ("LE 123
+# DE"), so it takes a keyword, like the SIREN (same sentence, at most 80 characters before).
+# FNI (before 2009, still in old documents): 1 to 4 digits, 1 to 3 letters, department
+# (01-95, 2A, 2B, 971-976): too ambiguous to go without a keyword.
+# Out of scope: other FNI departments (Monaco 98, old Corsica 20), trailers, diplomatic and
+# temporary plates (WW, W garage). "immatriculé" is also a SIREN keyword: the context check
+# is the same, and which type fires depends on the shape of the number that follows.
+
+_PLATE_SIV_LETTERS = r"[A-HJ-NP-TV-Z]{2}"
+_PLATE_SIV_DIGITS = r"(?!000)[0-9]{3}"
+_PLATE_SEP = r"[ \u00a0\u202f]?"
+_PLATE_FREE_PATTERNS = [
+    (_ID_START + _PLATE_SIV_LETTERS + "-" + _PLATE_SIV_DIGITS + "-" + _PLATE_SIV_LETTERS + _ID_END, 1.0),
+]
+_PLATE_PATTERNS = [
+    (
+        _ID_START + _PLATE_SIV_LETTERS + _PLATE_SEP + _PLATE_SIV_DIGITS + _PLATE_SEP
+        + _PLATE_SIV_LETTERS + _ID_END,
+        1.0,
+    ),
+    (
+        _ID_START + r"[0-9]{1,4}" + _PLATE_SEP + r"[A-Z]{1,3}" + _PLATE_SEP
+        + r"(?:0[1-9]|[1-8][0-9]|9[0-5]|2[AB]|97[1-6])" + _ID_END,
+        1.0,
+    ),
+]
+_PLATE_CONTEXT = (
+    r"(?:(?<!\w)(?:immatricul(?:ation|[ée]e?s?)|plaques?|v[ée]hicules?|voitures?|automobiles?"
+    r"|motos?|camions?)(?!\w)|(?<!\w)cartes?\s+grises?(?!\w))"
+)
+
+
+# ---------------------------------------------------------------------------
 # Public factory
 # ---------------------------------------------------------------------------
 
@@ -721,7 +772,10 @@ def build_detectors() -> List[PatternDetector]:
         PatternDetector("UrlRecognizer", "URL", _URL_PATTERNS),
         PatternDetector("FrPhoneRecognizer", "TELEPHONE", _PHONE_PATTERNS),
         PatternDetector("FrSiretRecognizer", "SIRET", _SIRET_PATTERNS, validate=_is_valid_siret),
-        SirenDetector(),
+        ContextDetector("FrSirenRecognizer", "SIREN", _SIREN_PATTERNS, _SIREN_CONTEXT,
+                        validate=_is_valid_siren),
         PatternDetector("FrVatRecognizer", "TVA", _VAT_PATTERNS, validate=_is_valid_vat),
         PatternDetector("FrNirRecognizer", "NIR", _NIR_PATTERNS, validate=_is_valid_nir),
+        ContextDetector("FrPlateRecognizer", "IMMATRICULATION", _PLATE_PATTERNS, _PLATE_CONTEXT,
+                        patterns=_PLATE_FREE_PATTERNS),
     ]
