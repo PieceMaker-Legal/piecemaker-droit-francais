@@ -164,6 +164,11 @@ courtes pour six labels (`person`, `company`, `organization`, `address`, `city`,
 les institutions à ne pas anonymiser sont écartées en aval, à la construction du mapping, par
 `institutional-terms.cjs`.
 
+La liste vit dans `~/.piecemaker/institutional-terms.json` (globale, éditable depuis le mapping du
+dossier, « Termes institutionnels »). Si ce fichier n’existe pas au démarrage du serveur, il est
+créé à partir de `institutional-terms.default.json`, livré à côté du module ; une liste
+existante, même vide, n’est jamais remplacée.
+
 ---
 
 ## Invariants

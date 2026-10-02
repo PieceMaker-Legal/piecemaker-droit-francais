@@ -54,6 +54,7 @@ const vendor = createRequire(import.meta.url)(routerPath) as PieceMakerVendorMod
 
 export const { piecemakerHome, stopOriginalsJobs } = vendor;
 const publishProjects = startProjectRegistry(vendor.publishProjectSource);
+createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin/scripts/lib/institutional-terms.cjs')).installDefaultInstitutionalTerms();
 const { createAnonymizerService } = createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/anonymizer/service.cjs'));
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
