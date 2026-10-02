@@ -1,6 +1,6 @@
 // Construction unique des plugins PieceMaker : tout `plugins/piecemaker-*` est
 // compilé de la même façon, avec l'esbuild de l'application, d'après le champ
-// `piecemakerSources` de son manifest.json. Contrat : voir plugins.md.
+// `piecemakerSources` de son manifest.json. Contrat : voir docs/plugins.md.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';

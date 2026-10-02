@@ -18,7 +18,7 @@ elle est arrêtée.
 
 Les plugins sont installés **avant** le démarrage, jamais après, par la chaîne
 commune `plugins/toolchain` (recompilation complète, ou réinstallation depuis le
-dernier bundle avec `--launch-only`) : voir `plugins.md`.
+dernier bundle avec `--launch-only`) : voir `docs/plugins.md`.
 
 Sur une machine nue, sans dépôt ni commande, chaque amorce clone le dépôt puis
 lance ce premier passage :

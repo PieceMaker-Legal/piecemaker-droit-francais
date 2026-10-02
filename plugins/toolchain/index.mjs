@@ -1,6 +1,6 @@
 // Point d'entrée unique de l'installation des plugins PieceMaker, partagé par
 // l'application Electron (desktop-bootstrap), la commande `piecemaker` et
-// `npm run plugins`. Contrat et fonctionnement : plugins.md.
+// `npm run plugins`. Contrat et fonctionnement : docs/plugins.md.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

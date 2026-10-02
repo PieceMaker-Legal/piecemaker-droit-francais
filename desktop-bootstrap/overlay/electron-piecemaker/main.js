@@ -32,7 +32,7 @@ app.on('browser-window-created', (_event, window) => adoptWindow(window));
 
 // Avant electron/main.js : le serveur local lit les plugins (et lance leurs
 // sous-processus) une seule fois, à son démarrage. Le bundle et son sync.mjs
-// sont produits par plugins/toolchain (voir plugins.md).
+// sont produits par plugins/toolchain (voir docs/plugins.md).
 try {
   const appRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const bundleDir = path.join(appRoot, 'piecemaker-plugins');

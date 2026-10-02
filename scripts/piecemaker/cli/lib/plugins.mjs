@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { APP } from './config.mjs';
 
 // Délègue à la chaîne commune du dépôt cible (plugins/toolchain, voir
-// plugins.md) — la même que celle de l'application Electron.
+// docs/plugins.md) — la même que celle de l'application Electron.
 async function toolchain() {
   const entry = path.join(APP.directory, 'plugins', 'toolchain', 'index.mjs');
   if (!fs.existsSync(entry)) throw new Error(`chaîne des plugins absente (${entry})`);
