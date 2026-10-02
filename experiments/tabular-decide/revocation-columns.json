@@ -1,0 +1,58 @@
+[
+  {
+    "index": 0,
+    "key": "solution",
+    "name": "Solution",
+    "format": "tags",
+    "tags": [
+      "Cassation totale",
+      "Cassation partielle",
+      "Rejet"
+    ],
+    "labels": {
+      "Cassation totale": "L'arrêt de la cour d'appel est cassé et annulé dans toutes ses dispositions",
+      "Cassation partielle": "L'arrêt de la cour d'appel est cassé seulement sur certains chefs",
+      "Rejet": "Le pourvoi est rejeté, aucune cassation"
+    },
+    "prompt": "Quelle est la solution retenue par la Cour de cassation dans le dispositif ?"
+  },
+  {
+    "index": 1,
+    "key": "abus",
+    "name": "Abus dans la révocation",
+    "format": "tags",
+    "tags": [
+      "Favorable au dirigeant",
+      "Défavorable au dirigeant"
+    ],
+    "labels": {
+      "Favorable au dirigeant": "La Cour de cassation approuve la condamnation pour révocation abusive, ou casse l'arrêt qui avait écarté l'abus",
+      "Défavorable au dirigeant": "La Cour de cassation approuve le rejet de la demande pour révocation abusive, ou casse l'arrêt qui avait retenu l'abus"
+    },
+    "prompt": "Sur le caractère abusif de la révocation, la décision de la Cour de cassation est-elle favorable ou défavorable au dirigeant révoqué ?"
+  },
+  {
+    "index": 2,
+    "key": "contradiction",
+    "name": "Contradiction examinée",
+    "format": "yes_no",
+    "prompt": "La Cour de cassation examine-t-elle, dans cette affaire, si le dirigeant a été mis en mesure de présenter ses observations avant sa révocation (principe de la contradiction) ?"
+  },
+  {
+    "index": 3,
+    "key": "fonction",
+    "name": "Fonction révoquée",
+    "format": "tags",
+    "tags": [
+      "Administrateur",
+      "Directeur général",
+      "Président"
+    ],
+    "labels": {
+      "Administrateur": "Le dirigeant est révoqué de ses fonctions d'administrateur",
+      "Directeur général": "Le dirigeant est révoqué de ses fonctions de directeur général, directeur général adjoint ou délégué",
+      "Président": "Le dirigeant est révoqué de ses fonctions de président-directeur général ou de président du conseil d'administration"
+    },
+    "prompt": "De quelles fonctions le dirigeant a-t-il été révoqué ?"
+  }
+]

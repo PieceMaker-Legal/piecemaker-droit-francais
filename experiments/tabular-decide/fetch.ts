@@ -4,7 +4,8 @@ import path from 'node:path';
 import { discardResearch, researchPage, researchState, researchText, startResearch, waitForResearch } from '../../plugins/piecemaker-tabular-review/src/server/research.js';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
-const filters = JSON.parse(fs.readFileSync(path.join(here, 'search.json'), 'utf8'));
+const prefix = process.env.PREFIX ?? '';
+const filters = JSON.parse(fs.readFileSync(path.join(here, `${prefix}search.json`), 'utf8'));
 const limit = Number(process.env.LIMIT ?? 100);
 const countOnly = process.env.COUNT_ONLY === '1';
 
@@ -37,7 +38,7 @@ for (let page = 1; ; page += 1) {
   if (page >= result.pageCount) break;
 }
 
-const corpus = path.join(here, 'corpus');
+const corpus = path.join(here, `${prefix}corpus`);
 fs.rmSync(corpus, { recursive: true, force: true });
 fs.mkdirSync(corpus, { recursive: true });
 const selected = decisions.filter((decision) => !decision.error).slice(0, limit);
@@ -47,6 +48,6 @@ const index = selected.map((decision) => {
   fs.writeFileSync(path.join(corpus, `${decision.id}.md`), markdown);
   return { id: decision.id, title: decision.title, link: decision.link, date: decision.date, importance: decision.importance, zone: text.zone, zoneOrigin: text.zoneOrigin ?? null, chars: markdown.length };
 });
-fs.writeFileSync(path.join(here, 'corpus.json'), `${JSON.stringify({ filters: state.filters, total: state.total, kept: state.kept, excluded: state.excluded, failed: state.failed, selected: index.length, decisions: index }, null, 2)}\n`);
+fs.writeFileSync(path.join(here, `${prefix}corpus.json`), `${JSON.stringify({ filters: state.filters, total: state.total, kept: state.kept, excluded: state.excluded, failed: state.failed, selected: index.length, decisions: index }, null, 2)}\n`);
 await discardResearch(started.id);
 console.log(JSON.stringify({ total: state.total, kept: state.kept, excluded: state.excluded, failed: state.failed, selected: index.length }));

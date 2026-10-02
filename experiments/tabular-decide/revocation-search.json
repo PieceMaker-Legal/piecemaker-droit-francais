@@ -1,0 +1,13 @@
+{
+  "query": "\"révocation\" ET \"conseil d'administration\" ET (\"abusive\" OU \"vexatoires\" OU \"brutale\" OU \"brutales\")",
+  "sources": [
+    "cassation"
+  ],
+  "matieres": [
+    "COMMERCIAL"
+  ],
+  "publicationBulletin": "TOUS",
+  "dateDebut": "",
+  "dateFin": "",
+  "dispositifOnly": true
+}

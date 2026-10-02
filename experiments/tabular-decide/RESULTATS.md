@@ -71,3 +71,33 @@ Le dernier bloc est un indicateur mécanique (présence de « casse / rejette »
 - 84 décisions sur 100 sont des cassations partielles : la question « solution » discrimine peu.
 - La référence sur le harcèlement et la sécurité repose sur une seule lecture.
 - Modèle utilisé tel quel, sans entraînement sur des décisions françaises.
+
+## Complément : sans découpage
+
+Réglages vérifiés dans la bibliothèque `gliner2` et sur les fiches Fastino : la question (`prompt`) et les descriptions d'étiquettes sont transmises au modèle, la fenêtre est de 4 096 mots, et le découpage en blocs de 384 mots est la méthode « documents longs » par défaut. Aucune décision du corpus ne dépasse 2 400 mots : le découpage n'était pas nécessaire. Sans découpage, le modèle ne renvoie aucun extrait.
+
+### Droit social, 45 décisions sur 100 (passage interrompu)
+
+| Question | Sans découpage | Avec découpage | Réponse constante |
+| --- | --- | --- | --- |
+| Solution | 44 / 45 | 41 / 45 | 41 / 45 |
+| Cassation sur le harcèlement moral | 19 / 44 | 22 / 44 | 25 / 44 |
+| Cassation sur l'obligation de sécurité | 16 / 44 | 16 / 44 | 30 / 44 |
+| Inaptitude mentionnée | 39 / 45 | 41 / 45 | 37 / 45 |
+
+Temps : 2 206 s pour 45 décisions (médiane 20,6 s), contre 560 s avec découpage pour les mêmes décisions. « Oui » 43 fois sur 45 au harcèlement, « Non » 40 fois sur 45 à la sécurité.
+
+### Révocation d'un dirigeant de société anonyme, 10 décisions
+
+Recherche `"révocation" ET "conseil d'administration" ET ("abusive" OU "vexatoires" OU "brutale" OU "brutales")`, chambre commerciale, dispositif uniquement : 88 résultats, 20 retenus, 10 choisis à la main (1988-2013). Référence : lecture intégrale des 10 décisions, deux cas ambigus exclus.
+
+| Question | Justes | Réponses données |
+| --- | --- | --- |
+| Solution | 9 / 10 | variées |
+| Fonction révoquée | 7 / 9 | variées |
+| Abus : favorable ou défavorable au dirigeant | 5 / 9 | « Défavorable » 10 fois sur 10 |
+| Respect de la contradiction examiné | 4 / 10 | « Non » 9 fois sur 10 |
+
+Temps : 242 s pour 10 décisions, 30 s de chargement.
+
+Le découpage n'explique donc pas les mauvais résultats : le modèle lit correctement ce qui figure en surface (dispositif, fonction) et répond de façon constante dès que la question porte sur le raisonnement.

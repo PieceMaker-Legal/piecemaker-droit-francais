@@ -49,7 +49,7 @@ function luna(): System {
 }
 
 function decide(): System {
-  const data = read('results/decide.json') as { load_seconds: number; threads: number; config: unknown; rows: { id: string; seconds: number; answer_seconds: number; answers: Record<string, { label: string; confidence: number }>; citations: Record<string, { quote: string } | null> }[] };
+  const data = read(`results/decide-${process.env.DECIDE ?? 'chunk384-b4'}.json`) as { load_seconds: number; threads: number; config: unknown; rows: { id: string; seconds: number; answer_seconds: number; answers: Record<string, { label: string; confidence: number }>; citations: Record<string, { quote: string } | null | undefined> }[] };
   const answers: System['answers'] = {};
   for (const row of data.rows) {
     const decision = decisions.find((entry) => entry.id === row.id)!;
@@ -139,7 +139,7 @@ function disagreements(systems: System[]) {
 
 const systems = [luna(), decide()];
 const report = { systems: systems.map(score), errors: disagreements(systems) };
-fs.writeFileSync(path.join(here, 'results', 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
+fs.writeFileSync(path.join(here, 'results', `report-${process.env.DECIDE ?? 'chunk384-b4'}.json`), `${JSON.stringify(report, null, 2)}\n`);
 for (const system of report.systems) {
   console.log(`\n${system.name} — ${system.decisions} décisions, ${system.wallSeconds.toFixed(0)} s au total, médiane ${system.medianSeconds.toFixed(1)} s, max ${system.maxSeconds.toFixed(1)} s`, JSON.stringify(system.extra));
   console.table(system.columns.map((column) => ({ ...column, accuracy: `${(column.accuracy * 100).toFixed(1)} %` })));
