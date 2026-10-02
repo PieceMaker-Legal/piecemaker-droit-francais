@@ -21,7 +21,7 @@ flowchart TD
   LIST --> LOCK["runManagedPythonJob — un GLiNER à la fois"]
   LOCK --> PY["convert_and_scan_pipeline.py"]
   PY --> MD["smart_converter.py — markitdown / MinerU"]
-  PY --> SCAN["scanner_worker.py — GLiNER2.5"]
+  PY --> SCAN["scanner_worker.py — GLiNER2-PII"]
   SCAN --> JSON["mapping_default.json + central-mapping.json"]
   SCAN --> SQL["SQLite piecemaker_mappings"]
   JSON --> HOOK["protect-originals — refuse un dossier sans mapping"]
@@ -69,7 +69,7 @@ budget RAM, nice, timeout).
   dès que MinerU est disponible, elles sont reconverties puis réanalysées au
   lancement suivant. MinerU est cherché dans le venv (`sysconfig` scripts),
   jamais à côté de l'interpréteur système résolu.
-- Phase SCAN : `scanner_worker.py` charge GLiNER2.5 **une fois**,
+- Phase SCAN : `scanner_worker.py` charge GLiNER2-PII (`fastino/gliner2-privacy-filter-PII-multi`) **une fois**,
   puis scanne chaque Markdown (protocole JSON-line). Les cartes brutes
   (`*_sensitive_map.json`) restent dans un répertoire temporaire et sont
   détruites après fusion.
@@ -156,6 +156,13 @@ CPU. Pas de CoreML (API Apple, hors doc Fastino).
 Le temps est dans l’encodeur, pas dans le glue Python. `--skip-existing` évite
 de recharger GLiNER sur un dossier déjà scanné. `classify_text` par occurrence
 a été retiré ; il reste un appel sur l’en-tête (nature / date).
+
+Réglages Fastino : seuil 0,5, chunks de 384 mots (recouvrement 64), batch 8, descriptions
+courtes pour six labels (`person`, `company`, `organization`, `address`, `city`, `country`).
+`progress_extraction.py` rejoue la boucle de `extract_entities_long` par tranches pour
+épingler la progression ; un test garantit un résultat identique. La détection reste large :
+les institutions à ne pas anonymiser sont écartées en aval, à la construction du mapping, par
+`institutional-terms.cjs`.
 
 ---
 

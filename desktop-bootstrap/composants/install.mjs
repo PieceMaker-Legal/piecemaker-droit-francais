@@ -369,9 +369,9 @@ export async function installRuntimeComponents({
 
   status = await readWarmupStatus(host, python, warmup, scriptsDir);
   if (glinerReady(status)) {
-    output.ok('Modèle GLiNER2.5 déjà présent.');
+    output.ok('Modèle GLiNER2-PII déjà présent.');
   } else {
-    output.step('Téléchargement du modèle GLiNER2.5…');
+    output.step('Téléchargement du modèle GLiNER2-PII…');
     await required(host, python, [warmup], { cwd: scriptsDir });
     status = await readWarmupStatus(host, python, warmup, scriptsDir);
   }

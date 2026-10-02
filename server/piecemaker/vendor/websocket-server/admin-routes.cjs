@@ -673,7 +673,7 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
   })();
   const hasPackage = (name) => Boolean(sitePackages) && fs.existsSync(path.join(sitePackages, name));
   const glinerDir = path.join(repoRoot, 'websocket-server', 'scripts', 'presidio-gliner');
-  const glinerModelId = 'fastino/gliner2.5-multi-v1';
+  const glinerModelId = 'fastino/gliner2-privacy-filter-PII-multi';
   const huggingFaceHubCache = process.env.HF_HUB_CACHE
     || path.join(process.env.HF_HOME || path.join(userHome, '.cache', 'huggingface'), 'hub');
   const glinerModelCache = path.join(
@@ -734,7 +734,7 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
         items: mcpItems,
       },
       gliner: {
-        name: 'GLiNER2.5 · PII',
+        name: 'GLiNER2-PII',
         installed: glinerReady,
         summary: glinerReady
           ? 'Détection locale · PyTorch'

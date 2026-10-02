@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Long-lived scanner worker — loads GLiNER2.5 once, processes multiple files
+Long-lived scanner worker — loads GLiNER2-PII once, processes multiple files
 via a JSON-line stdin/stdout protocol.
 
 Protocol:
@@ -41,7 +41,7 @@ from presidio_analyzer import (
 from presidio_analyzer.nlp_engine import SpacyNlpEngine
 
 try:
-    from gliner2 import AutoExtractor
+    from gliner2 import GLiNER2
     GLINER2_AVAILABLE = True
     GLINER2_IMPORT_ERROR = None
 except ImportError as exc:
@@ -49,6 +49,7 @@ except ImportError as exc:
     GLINER2_IMPORT_ERROR = exc
 
 from model_config import PREFERRED_GLINER_MODEL
+from progress_extraction import extract_entities_with_progress
 
 # ---------------------------------------------------------------------------
 # Import scan_utils from the parent scripts/ directory.
@@ -108,39 +109,20 @@ ENTITY_MAPPING = {
     "person":       "PERSON",
     "company":      "ORGANIZATION",
     "organization": "ORGANIZATION",
-    "location":     "LOCATION",
+    "address":      "LOCATION",
+    "city":         "LOCATION",
+    "country":      "LOCATION",
 }
 
 ENTITY_DESCRIPTIONS = {
-    # Wording measured against the reference corpus: spelling out what each label
-    # EXCLUDES raises precision from 0.485 to 0.648 at equal (perfect) recall and
-    # nearly halves the number of words a false positive would rewrite. The previous
-    # one-line descriptions left the exclusions implicit and the model read job titles
-    # as people, generic bodies as organisations and nationalities as places.
-    "person": (
-        "Full name of a specific individual human being, such as Jean Dupont or "
-        "Mrs Laurence Vidal. Never a job title, never a role, never an acronym, "
-        "never a gene or a product name"
-    ),
-    "company": (
-        "Name of a specific named commercial company, such as Novartis or Investis "
-        "Partners SAS. Never a generic word like company, group or shareholders"
-    ),
-    "organization": (
-        "Name of a specific named institution, agency or regulator, such as FDA, "
-        "EMA or Inserm. Never a generic body such as board of directors, "
-        "committee or working group"
-    ),
-    "location": (
-        "Name of a specific geographic place: a country, a city, a region or a postal "
-        "address. Never a nationality adjective such as French or European, never an "
-        "anatomical part"
-    ),
+    "person": "Full name of a specific individual, e.g. Jean Dupont. Not a job title or group",
+    "company": "Name of a specific commercial company, e.g. Novartis SAS. Not a generic word",
+    "organization": "Name of a specific institution or agency, e.g. FDA, Inserm. Not a generic body",
+    "address": "Street address with number, e.g. 12 rue des Lilas, Paris",
+    "city": "Name of a specific city, e.g. Paris",
+    "country": "Name of a country, e.g. France. Not a nationality",
 }
 
-# GLiNER2.5 has a different boundary head and its scores are not calibrated like
-# those of the former span checkpoint. Start from Fastino's documented default;
-# anonymisation favours recall, and the mapping remains reviewable for false positives.
 GLINER_THRESHOLD = 0.5
 
 # The legal form of an organisation is read literally from the text by
@@ -148,12 +130,6 @@ GLINER_THRESHOLD = 0.5
 # per-occurrence classify_text call are gone: measured at 2 890 ms per call on real
 # contexts (81 min for this document's 1 689 ORGANIZATION mentions) and answering
 # "Osakeyhtio", "EIRELI" or "No Liability" for French and American companies.
-
-# Réglage officiel Fastino pour les documents longs GLiNER2.5 : 384 mots avec
-# 64 mots de recouvrement.
-CHUNK_SIZE = 384
-CHUNK_OVERLAP = 64
-BATCH_SIZE = 8
 
 # ---------------------------------------------------------------------------
 # Document-level metadata (nature / date / juridiction) — GLiNER2 schema tasks
@@ -282,25 +258,7 @@ def extract_document_meta(text: str) -> Dict:
         _log(f"document header record skipped: {exc}")
     return meta
 
-# ---------------------------------------------------------------------------
-# Chunking
-# ---------------------------------------------------------------------------
 import re
-
-def chunk_text_by_words(text: str, max_words: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[Dict]:
-    word_spans = [(m.start(), m.end()) for m in re.finditer(r"\S+", text)]
-    if not word_spans:
-        return []
-    step = max(1, max_words - overlap)
-    chunks = []
-    for i in range(0, len(word_spans), step):
-        span_group = word_spans[i : i + max_words]
-        start_char = span_group[0][0]
-        end_char = span_group[-1][1]
-        chunks.append({"text": text[start_char:end_char], "start_char": start_char, "end_char": end_char})
-        if i + max_words >= len(word_spans):
-            break
-    return chunks
 
 # ---------------------------------------------------------------------------
 # GLiNER2 Recognizer
@@ -308,13 +266,12 @@ def chunk_text_by_words(text: str, max_words: int = CHUNK_SIZE, overlap: int = C
 
 class GLiNER2Recognizer(LocalRecognizer):
     def __init__(self, model_name=GLINER_MODEL, entity_mapping=None,
-                 supported_language="en", threshold=GLINER_THRESHOLD, batch_size=BATCH_SIZE,
+                 supported_language="en", threshold=GLINER_THRESHOLD,
                  model=None):
         self.model_name = model_name
         self.model_to_presidio = entity_mapping or ENTITY_MAPPING
         self.gliner_labels = list(self.model_to_presidio.keys())
         self.threshold = threshold
-        self.batch_size = batch_size
         # Assigned BEFORE super().__init__, which calls load() (presidio
         # EntityRecognizer.__init__ does so): assigning the shared model afterwards left
         # every recognizer loading, then discarding, its own copy of a 1 GB model.
@@ -330,12 +287,12 @@ class GLiNER2Recognizer(LocalRecognizer):
             except PackageNotFoundError:
                 installed_version = "non installé"
             raise ImportError(
-                f"gliner2 {installed_version} est incompatible : AutoExtractor est absent "
+                f"gliner2 {installed_version} est incompatible : GLiNER2 est absent "
                 f"(version requise >= 2.0). Erreur d'import : {GLINER2_IMPORT_ERROR}"
             )
         if self.model is not None:
             return
-        self.model = AutoExtractor.from_pretrained(
+        self.model = GLiNER2.from_pretrained(
             self.model_name,
             local_files_only=True,
             map_location=_gliner_map_location(),
@@ -345,47 +302,34 @@ class GLiNER2Recognizer(LocalRecognizer):
         if self.model is None:
             self.load()
 
-        chunks = chunk_text_by_words(text, CHUNK_SIZE)
-        total_chunks = len(chunks)
-        _log(f"Processing {total_chunks} chunks in batches of {self.batch_size}...")
-
-        batch_texts = [chunk["text"] for chunk in chunks]
-        batch_results = []
-        for batch_start in range(0, total_chunks, self.batch_size):
-            batch_end = min(batch_start + self.batch_size, total_chunks)
-            slice_results = self.model.batch_extract_entities(
-                batch_texts[batch_start:batch_end],
-                ENTITY_DESCRIPTIONS,
-                batch_size=self.batch_size,
-                threshold=self.threshold,
-                include_confidence=True,
-                include_spans=True,
-            )
-            batch_results.extend(slice_results)
-            pct = int(batch_end * 100 / total_chunks)
-            _log(f"PROGRESS:CHUNKS:{pct}:{batch_end}:{total_chunks}")
+        extraction = extract_entities_with_progress(
+            self.model,
+            text,
+            ENTITY_DESCRIPTIONS,
+            self.threshold,
+            on_progress=_log_chunk_progress,
+        )
 
         unique_entities = defaultdict(lambda: defaultdict(dict))
         results = []
 
-        for chunk_idx, (chunk, batch_result) in enumerate(zip(chunks, batch_results)):
-            for label, matches in batch_result.get("entities", {}).items():
-                presidio_type = self.model_to_presidio.get(label, label.upper())
-                if entities and presidio_type not in entities:
-                    continue
-                for match in matches:
-                    abs_start = chunk["start_char"] + match["start"]
-                    abs_end = chunk["start_char"] + match["end"]
-                    entity_text = match["text"]
-                    entity_key = (entity_text, abs_start, abs_end)
-                    if entity_key not in unique_entities[presidio_type]:
-                        unique_entities[presidio_type][entity_key] = {
-                            "text": entity_text, "start": abs_start,
-                            "end": abs_end, "score": match["confidence"],
-                        }
-                    else:
-                        if match["confidence"] > unique_entities[presidio_type][entity_key]["score"]:
-                            unique_entities[presidio_type][entity_key]["score"] = match["confidence"]
+        for label, matches in extraction.get("entities", {}).items():
+            presidio_type = self.model_to_presidio.get(label, label.upper())
+            if entities and presidio_type not in entities:
+                continue
+            for match in matches:
+                abs_start = match["start"]
+                abs_end = match["end"]
+                entity_text = match["text"]
+                entity_key = (entity_text, abs_start, abs_end)
+                if entity_key not in unique_entities[presidio_type]:
+                    unique_entities[presidio_type][entity_key] = {
+                        "text": entity_text, "start": abs_start,
+                        "end": abs_end, "score": match["confidence"],
+                    }
+                else:
+                    if match["confidence"] > unique_entities[presidio_type][entity_key]["score"]:
+                        unique_entities[presidio_type][entity_key]["score"] = match["confidence"]
 
         # Read each ORGANIZATION's legal form straight out of the text. Memoised by
         # normalised name: the entity keys are per-occurrence, so the same company is
@@ -424,6 +368,10 @@ class GLiNER2Recognizer(LocalRecognizer):
 # ---------------------------------------------------------------------------
 def _log(msg: str):
     print(msg, file=sys.stderr, flush=True)
+
+
+def _log_chunk_progress(done: int, total: int):
+    _log(f"PROGRESS:CHUNKS:{int(done * 100 / total)}:{done}:{total}")
 
 
 # ---------------------------------------------------------------------------
@@ -465,7 +413,6 @@ def _get_or_build_analyzer(language: str) -> AnalyzerEngine:
         model_name=GLINER_MODEL,
         entity_mapping=ENTITY_MAPPING,
         supported_language=language,
-        batch_size=BATCH_SIZE,
         model=_gliner_model,
     )
 
@@ -482,7 +429,7 @@ def _ensure_gliner_loaded():
     if _gliner_model is None and GLINER2_AVAILABLE:
         _log("Loading GLiNER2 model...")
         device = _gliner_map_location()
-        _gliner_model = AutoExtractor.from_pretrained(
+        _gliner_model = GLiNER2.from_pretrained(
             GLINER_MODEL,
             local_files_only=True,
             map_location=device,
