@@ -26,20 +26,6 @@ from legal_forms import (  # noqa: E402,F401
     normalize_entity_text,
 )
 
-# ---------------------------------------------------------------------------
-# Language detection (zero new dependencies)
-# ---------------------------------------------------------------------------
-_FR_STOPWORDS = frozenset([
-    "le", "la", "les", "des", "du", "un", "une", "est", "sont", "dans",
-    "pour", "avec", "sur", "par", "qui", "que", "aux", "cette", "ces",
-    "nous", "vous", "ils", "elle", "mais", "ou", "donc", "soit",
-])
-_EN_STOPWORDS = frozenset([
-    "the", "is", "are", "was", "were", "been", "being", "have", "has",
-    "had", "does", "did", "will", "would", "could", "should", "may",
-    "might", "shall", "can", "this", "that", "these", "those", "which",
-])
-
 _CORPORATE_SUFFIXES_RE = re.compile(
     r'\b(?:SELARL|SELAS|SELCA|SELCS|SASU|SARL|EURL|EARL|SCOP|SCIC|GAEC'
     r'|SAS|SCI|SCA|SCS|SCP|SCM|SNC|SCR|GIE|SLP|SEL|SEM|SA|SE'
@@ -49,16 +35,6 @@ _CORPORATE_SUFFIXES_RE = re.compile(
     r'|NV|BV|SpA|Srl|Lda|ApS)\b',
     re.IGNORECASE,
 )
-
-
-def detect_language(text: str, sample_size: int = 10000) -> str:
-    """Detect document language (fr/en) using stop-word frequency."""
-    sample = text[:sample_size].lower()
-    words = set(re.findall(r'\b[a-zàâéèêëïîôùûüç]+\b', sample))
-    fr_hits = len(words & _FR_STOPWORDS)
-    en_hits = len(words & _EN_STOPWORDS)
-    return 'fr' if fr_hits > en_hits else 'en'
-
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +205,7 @@ def run_pattern_recognizers(text: str, recognizers: list) -> List[Detection]:
                 r for r in results if _pattern_result_is_plausible(r, text)
             )
         except Exception as exc:  # noqa: BLE001
-            warnings.warn(f"[presidio] {rec.name} raised: {exc}", stacklevel=2)
+            warnings.warn(f"[pattern] {rec.name} raised: {exc}", stacklevel=2)
     return all_results
 
 
