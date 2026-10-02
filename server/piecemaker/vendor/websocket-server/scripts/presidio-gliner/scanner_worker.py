@@ -92,6 +92,9 @@ ENTITY_MAPPING = {
     "company":      "ORGANIZATION",
     "organization": "ORGANIZATION",
     "location":     "LOCATION",
+    # One word on purpose: the pipeline codes an unknown type as <first segment>_NN,
+    # so NAISSANCE gives NAISSANCE_01 where DATE_NAISSANCE would give an ambiguous DATE_01.
+    "date of birth": "NAISSANCE",
 }
 
 ENTITY_DESCRIPTIONS = {
@@ -118,6 +121,14 @@ ENTITY_DESCRIPTIONS = {
         "Name of a specific geographic place: a country, a city, a region or a postal "
         "address. Never a nationality adjective such as French or European, never an "
         "anatomical part"
+    ),
+    "date of birth": (
+        "Date of birth of a specific person, only the text of the date, such as "
+        "12 mars 1980 in 'né le 12 mars 1980 à Lyon' or 03/04/1975 after 'date de "
+        "naissance :'. Never the words 'né le', never the place of birth, never "
+        "any other date such as a hearing, judgment, ruling, contract, signature, "
+        "filing, deadline, time limit, event or document date, never an age, never "
+        "a year alone without a birth context"
     ),
 }
 
