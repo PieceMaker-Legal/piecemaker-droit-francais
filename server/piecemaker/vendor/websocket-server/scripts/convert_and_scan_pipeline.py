@@ -56,6 +56,10 @@ from smart_converter import mineru_available, needs_ocr
 EXIT_OCR_REQUIRED = 3
 GLINER_CHUNK_SIZE = 384
 GLINER_CHUNK_OVERLAP = 64
+GLINER_WORD_RE = re.compile(
+    r"(?:https?://[^\s]+|www\.[^\s]+)|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|@[a-z0-9_]+|\w+(?:[-_]\w+)*|\S",
+    re.IGNORECASE,
+)
 
 
 def print_progress(phase: str, current: int, total: int) -> None:
@@ -547,7 +551,7 @@ def are_names_similar(name1: str, norm1: str, name2: str, norm2: str) -> bool:
 
 def count_gliner_chunks(md_file: str) -> int:
     try:
-        word_count = len(re.findall(r"\S+", Path(md_file).read_text(encoding="utf-8")))
+        word_count = sum(1 for _ in GLINER_WORD_RE.finditer(Path(md_file).read_text(encoding="utf-8")))
     except (OSError, UnicodeError):
         return 1
     if not word_count:
