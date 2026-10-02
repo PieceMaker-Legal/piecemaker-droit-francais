@@ -1,0 +1,9 @@
+{
+  "query": "\"harcèlement moral\" ET \"obligation de sécurité\"",
+  "sources": ["cassation"],
+  "matieres": ["SOCIAL"],
+  "publicationBulletin": "TOUS",
+  "dateDebut": "2022-01-01",
+  "dateFin": "2026-09-30",
+  "dispositifOnly": true
+}

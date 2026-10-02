@@ -3,7 +3,7 @@ import { buildPlugins } from '../../plugins/toolchain/build.mjs';
 import { ui } from './ui.mjs';
 
 // Dossier du paquet Electron où la chaîne commune (plugins/toolchain, voir
-// plugins.md) dépose le bundle ; l'overlay l'installe à chaque démarrage.
+// docs/plugins.md) dépose le bundle ; l'overlay l'installe à chaque démarrage.
 export const BUNDLE_DIR = 'piecemaker-plugins';
 
 export async function embedBundledPlugins(sourceDir, stageDir) {

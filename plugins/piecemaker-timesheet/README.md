@@ -4,7 +4,7 @@ Plugin CloudCLI qui affiche le temps passé et les conclusions des sessions, par
 
 ## Installation
 
-Comme tous les plugins PieceMaker : compilé et installé par la chaîne commune `plugins/toolchain`, embarqué dans l'application Electron et réinstallé à chaque démarrage si besoin. Depuis le dépôt : `npm run plugins`. Voir `plugins.md` à la racine.
+Comme tous les plugins PieceMaker : compilé et installé par la chaîne commune `plugins/toolchain`, embarqué dans l'application Electron et réinstallé à chaque démarrage si besoin. Depuis le dépôt : `npm run plugins`. Voir `docs/plugins.md`.
 
 ## Validation
 
