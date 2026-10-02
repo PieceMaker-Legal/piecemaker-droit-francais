@@ -1,0 +1,31 @@
+[
+  {
+    "index": 0,
+    "key": "solution",
+    "name": "Solution",
+    "format": "tags",
+    "tags": ["Cassation totale", "Cassation partielle", "Rejet", "Autre"],
+    "prompt": "Quelle est la solution retenue par la Cour de cassation dans le dispositif : cassation de l’arrêt en toutes ses dispositions (Cassation totale), cassation limitée à certains chefs (Cassation partielle), rejet du pourvoi sans aucune cassation (Rejet), ou autre issue (Autre) ?"
+  },
+  {
+    "index": 1,
+    "key": "harcelement",
+    "name": "Cassation sur le harcèlement moral",
+    "format": "yes_no",
+    "prompt": "La Cour de cassation casse-t-elle l’arrêt de la cour d’appel sur un chef relatif au harcèlement moral ?"
+  },
+  {
+    "index": 2,
+    "key": "securite",
+    "name": "Cassation sur l’obligation de sécurité",
+    "format": "yes_no",
+    "prompt": "La Cour de cassation casse-t-elle l’arrêt de la cour d’appel sur un chef relatif à l’obligation de sécurité ou de prévention de l’employeur ?"
+  },
+  {
+    "index": 3,
+    "key": "inaptitude",
+    "name": "Inaptitude mentionnée",
+    "format": "yes_no",
+    "prompt": "La décision mentionne-t-elle une inaptitude du salarié ?"
+  }
+]
