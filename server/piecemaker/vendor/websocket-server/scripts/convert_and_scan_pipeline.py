@@ -714,6 +714,25 @@ def _merge_person_entry(merged_mapping: Dict, merged_reverse: Dict,
         entry.setdefault("recognizer", source_entry.get("recognizer", "unknown"))
 
 
+def _record_retired_code(entries: Dict, survivor: str, dropped_code: str,
+                         dropped_entry: Optional[Dict] = None) -> None:
+    """Remember in the survivor's entry that `dropped_code` was merged into it.
+
+    To call from every merge that drops a code (persons, companies...), with
+    `entries` the extracted_data bucket holding the survivor. The retired codes
+    (the dropped one plus those it had itself retired) are stored, deduplicated
+    and in order, under `codes_retires`: merge_with_existing_mapping never
+    reissues them (older AI conversations may still contain them) and the
+    Node side moves the dropped code's SQLite rows onto the survivor.
+    """
+    entry = entries.setdefault(survivor, {"code": survivor})
+    entry["codes_retires"] = list(dict.fromkeys([
+        *(entry.get("codes_retires") or []),
+        *((dropped_entry or {}).get("codes_retires") or []),
+        dropped_code,
+    ]))
+
+
 def _prune_existing_person_duplicates(merged_mapping: Dict, merged_reverse: Dict,
                                        merged_extracted: Dict) -> None:
     entries = merged_extracted.setdefault("personnes_physiques", {})
@@ -755,6 +774,7 @@ def _prune_existing_person_duplicates(merged_mapping: Dict, merged_reverse: Dict
                 merged_mapping[text] = survivor
         merged_reverse.pop(code, None)
         entries.pop(code, None)
+        _record_retired_code(entries, survivor, code, entry)
 
 
 def is_known_city_or_country(text: str) -> bool:
@@ -1331,7 +1351,18 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
     # ORBEX SA), là où un test par sous-chaîne ne reconnaîtrait pas SA_3.
     societe_counters: Dict[str, int] = {}
 
-    used_codes = set(merged_reverse) | set(merged_mapping.values()) | set(reserved_codes)
+    # Codes retired by a merge no longer appear anywhere else but must never be
+    # reissued to another entity.
+    def retired_in(*buckets: str) -> set:
+        return {
+            retired
+            for bucket in buckets
+            for entry in merged_extracted.get(bucket, {}).values()
+            for retired in (entry.get("codes_retires") or [])
+        }
+
+    retired_codes = retired_in(*merged_extracted)
+    used_codes = set(merged_reverse) | set(merged_mapping.values()) | set(reserved_codes) | retired_codes
     for code in used_codes:
         if not re.search(r"_\d+$", code):
             continue
@@ -1345,7 +1376,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
             num = int(code.split("_")[-1])
             code_counters["siren"] = max(code_counters["siren"], num + 1)
 
-    for code in set(merged_extracted.get("societes", {}).keys()) | set(reserved_codes):
+    for code in set(merged_extracted.get("societes", {}).keys()) | set(reserved_codes) | retired_in("societes"):
         match = re.search(r"_(\d+)$", code)
         if not match:
             continue

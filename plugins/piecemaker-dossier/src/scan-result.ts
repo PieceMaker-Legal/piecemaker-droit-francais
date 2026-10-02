@@ -96,7 +96,15 @@ function documentOperations(documents: GlinerDocument[], nodes: Map<string, Know
 
 export function scanResultOperations(result: GlinerScanResult): KnowledgeUpdateOperation[] {
   const nodes = entityNodes(result.mapping);
-  const operations: KnowledgeUpdateOperation[] = [...nodes.values()].map((node) => ({ op: 'upsertNode', node }));
+  const operations: KnowledgeUpdateOperation[] = [];
+  // A code merged into another one by the pipeline (data.codes_retires): move its node, mappings and links onto the
+  // survivor before the upserts, so the next scan finds nothing left to move and the dropped code never stays in SQLite.
+  for (const [code, node] of nodes) {
+    for (const retired of strings(node.data?.codes_retires)) {
+      if (retired !== code) operations.push({ op: 'renameNode', rename: { fromNodeId: nodeId(retired), toNodeId: nodeId(code) } });
+    }
+  }
+  operations.push(...[...nodes.values()].map((node): KnowledgeUpdateOperation => ({ op: 'upsertNode', node })));
   operations.push(exclusionNodeOperation(result.mapping.ignored));
   for (const [code, node] of nodes) {
     for (const real of [node.label || '', ...(node.aliases || [])].filter(Boolean)) {
