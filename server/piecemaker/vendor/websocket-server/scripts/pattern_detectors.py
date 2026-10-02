@@ -541,11 +541,47 @@ _URL_PATTERNS = [
 
 
 # ---------------------------------------------------------------------------
+# Telephone (French numbering plan: 9 digits after the 0 / +33 prefix)
+# ---------------------------------------------------------------------------
+# No check digit exists, so the score is fixed. 1.0, like a validated identifier: the
+# shape (prefix, exact length, bounds) is specific, and resolve_overlapping_spans breaks a
+# same-length tie with GLiNER by score first, then by type (PERSON/ORGANIZATION/LOCATION
+# rank before any other type). Anything below 1.0 would lose against a GLiNER span of the
+# same length scoring higher; the phone is the better reading of those characters. A longer
+# IBAN, SIRET, card or address containing the digits wins by length, whatever the score.
+# Out of scope: numbers of other countries.
+
+# Separators between pairs: space, dot, hyphen, no-break space, narrow no-break space.
+_PHONE_SEP = r"[ .\-\u00a0\u202f]?"
+_PHONE_PAIR = _PHONE_SEP + r"[0-9]{2}"
+# Not inside a longer run of digits, not glued to a letter, an underscore or a "+".
+_PHONE_START = r"(?<![\w+])"
+_PHONE_END = r"(?!\w)"
+
+_PHONE_PATTERNS = [
+    # 06 12 34 56 78, 0612345678, 0262 12 34 56 (overseas national form, same plan)
+    (_PHONE_START + r"0[1-9](?:" + _PHONE_PAIR + r"){4}" + _PHONE_END, 1.0),
+    # +33 6 12 34 56 78, +33 (0)6 12 34 56 78, 0033 1 23 45 67 89
+    (
+        _PHONE_START + r"(?:\+|00)33" + _PHONE_SEP + r"(?:\(0\)" + _PHONE_SEP + r")?"
+        r"[1-9]" + _PHONE_SEP + r"[0-9]{2}(?:" + _PHONE_PAIR + r"){3}" + _PHONE_END,
+        1.0,
+    ),
+    # +262 262 12 34 56 (Réunion), +590 (Guadeloupe), +594 (Guyane), +596 (Martinique)
+    (
+        _PHONE_START + r"\+(?:262|590|594|596)" + _PHONE_SEP
+        + r"[1-9][0-9]{2}(?:" + _PHONE_PAIR + r"){3}" + _PHONE_END,
+        1.0,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
 # Public factory
 # ---------------------------------------------------------------------------
 
 def build_detectors() -> List[PatternDetector]:
-    """The seven detectors, in the order the scanner has always run them."""
+    """The seven ported detectors in their historical order, then the French ones."""
     return [
         PatternDetector("CreditCardRecognizer", "CREDIT_CARD", _CREDIT_CARD_PATTERNS,
                         validate=_is_valid_card),
@@ -559,4 +595,5 @@ def build_detectors() -> List[PatternDetector]:
         PatternDetector("MacAddressRecognizer", "MAC_ADDRESS", _MAC_PATTERNS,
                         invalidate=_is_invalid_mac),
         PatternDetector("UrlRecognizer", "URL", _URL_PATTERNS),
+        PatternDetector("FrPhoneRecognizer", "TELEPHONE", _PHONE_PATTERNS),
     ]
