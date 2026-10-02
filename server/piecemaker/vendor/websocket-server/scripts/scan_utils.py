@@ -12,19 +12,7 @@ import warnings
 from datetime import datetime, timezone
 from typing import Dict, List
 
-# ---------------------------------------------------------------------------
-# Ensure vendored presidio_analyzer is importable
-# ---------------------------------------------------------------------------
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from presidio_analyzer import RecognizerResult  # noqa: E402
-from presidio_analyzer.predefined_recognizers.generic.credit_card_recognizer import CreditCardRecognizer  # noqa: E402
-from presidio_analyzer.predefined_recognizers.generic.crypto_recognizer import CryptoRecognizer  # noqa: E402
-from presidio_analyzer.predefined_recognizers.generic.email_recognizer import EmailRecognizer  # noqa: E402
-from presidio_analyzer.predefined_recognizers.generic.iban_recognizer import IbanRecognizer  # noqa: E402
-from presidio_analyzer.predefined_recognizers.generic.ip_recognizer import IpRecognizer  # noqa: E402
-from presidio_analyzer.predefined_recognizers.generic.mac_recognizer import MacAddressRecognizer  # noqa: E402
-from presidio_analyzer.predefined_recognizers.generic.url_recognizer import UrlRecognizer  # noqa: E402
+from pattern_detectors import Detection, build_detectors
 
 # Legal-form vocabulary and entity normalisation live in legal_forms.py (stdlib only,
 # shared with the pipeline); re-exported here so existing imports keep working.
@@ -95,11 +83,11 @@ def _type_rank(entity_type: str) -> int:
     return len(_TYPE_PRIORITY)
 
 
-def resolve_overlapping_spans(results: List[RecognizerResult]) -> List[RecognizerResult]:
+def resolve_overlapping_spans(results: List[Detection]) -> List[Detection]:
     """Keep one entity per stretch of text, whatever the types involved.
 
-    ``EntityRecognizer.remove_duplicates`` only drops a contained span when the two
-    results share an ``entity_type``. Cross-type overlaps therefore survive: measured
+    The detectors' own de-duplication (``pattern_detectors._remove_duplicates``) only
+    drops a contained span when the two results share an ``entity_type``. Cross-type overlaps therefore survive: measured
     on ZETABIO_URD, 81 spans carried two types at once and 179 pairs overlapped —
     including LOCATION "French" nested inside ORGANIZATION "French Monetary and
     Financial Code". Since anonymisation substitutes entity strings one after the
@@ -112,7 +100,7 @@ def resolve_overlapping_spans(results: List[RecognizerResult]) -> List[Recognize
         key=lambda r: (-(r.end - r.start), -r.score, _type_rank(r.entity_type), r.start),
     )
 
-    kept: List[RecognizerResult] = []
+    kept: List[Detection] = []
     for candidate in ranked:
         if any(candidate.start < k.end and k.start < candidate.end for k in kept):
             continue
@@ -127,7 +115,7 @@ def resolve_overlapping_spans(results: List[RecognizerResult]) -> List[Recognize
 # NER score adjustment heuristics
 # ---------------------------------------------------------------------------
 
-def adjust_ner_scores(results: List[RecognizerResult], text: str) -> List[RecognizerResult]:
+def adjust_ner_scores(results: List[Detection], text: str) -> List[Detection]:
     """Adjust NER scores: penalize likely-false PERSON, rescue high-quality ORGANIZATION."""
     for r in results:
         entity_text = text[r.start:r.end]
@@ -164,16 +152,8 @@ def adjust_ner_scores(results: List[RecognizerResult], text: str) -> List[Recogn
 # ---------------------------------------------------------------------------
 
 def build_pattern_recognizers() -> list:
-    """Instantiate pattern-based recognizers (no NLP dependency)."""
-    return [
-        CreditCardRecognizer(),
-        CryptoRecognizer(),
-        EmailRecognizer(),
-        IbanRecognizer(),
-        IpRecognizer(),
-        MacAddressRecognizer(),
-        UrlRecognizer(),
-    ]
+    """Instantiate the regex detectors (see pattern_detectors.py)."""
+    return build_detectors()
 
 
 # Words that make a dotted quad plausibly an actual address rather than a heading number.
@@ -226,7 +206,7 @@ def _is_plausible_url(entity_text: str) -> bool:
     return bool(_PLAUSIBLE_TLD_RE.search(lowered))
 
 
-def _pattern_result_is_plausible(result: RecognizerResult, text: str) -> bool:
+def _pattern_result_is_plausible(result: Detection, text: str) -> bool:
     entity_text = text[result.start:result.end]
     if result.entity_type == "IP_ADDRESS":
         return _is_plausible_ip(entity_text, text, result.start, result.end)
@@ -235,16 +215,16 @@ def _pattern_result_is_plausible(result: RecognizerResult, text: str) -> bool:
     return True
 
 
-def run_pattern_recognizers(text: str, recognizers: list) -> List[RecognizerResult]:
+def run_pattern_recognizers(text: str, recognizers: list) -> List[Detection]:
     """Run all pattern recognizers on *text* and return combined results.
 
     Results are filtered for the false-positive classes these recognizers are known to
     produce on converted documents (see _is_plausible_ip / _is_plausible_url).
     """
-    all_results: List[RecognizerResult] = []
+    all_results: List[Detection] = []
     for rec in recognizers:
         try:
-            results = rec.analyze(text, entities=rec.supported_entities, nlp_artifacts=None)
+            results = rec.analyze(text)
             all_results.extend(
                 r for r in results if _pattern_result_is_plausible(r, text)
             )
@@ -258,12 +238,12 @@ def run_pattern_recognizers(text: str, recognizers: list) -> List[RecognizerResu
 # ---------------------------------------------------------------------------
 
 def build_output_payload(
-    results: List[RecognizerResult],
+    results: List[Detection],
     text: str,
     source_file: str,
     extra_summary: Dict = None,
 ) -> dict:
-    """Build the JSON entity-map payload from a list of RecognizerResult."""
+    """Build the JSON entity-map payload from a list of Detection."""
     entities_map: Dict[str, list] = {}
     for r in results:
         # The mapping is keyed by entity string downstream, so store the normalised
