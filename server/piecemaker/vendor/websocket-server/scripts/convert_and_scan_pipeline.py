@@ -499,48 +499,26 @@ def normalize_name(text: str) -> str:
     return text_normalized.strip()
 
 
-def are_names_similar(name1: str, norm1: str, name2: str, norm2: str) -> bool:
-    """Check if two names refer to the same person.
+def cluster_person_groups(groups: List[List[str]]) -> List[List[int]]:
+    """Decide which groups of PERSON texts are the same person (whole tokens only).
 
-    Uses multiple matching strategies:
-    - Exact match after normalization
-    - Substring match (one contains the other, min 3 chars)
-    - Token-based match (all tokens of shorter name appear in longer)
-
-    Args:
-        name1: First name (original)
-        norm1: First name (normalized)
-        name2: Second name (original)
-        norm2: Second name (normalized)
-
-    Returns:
-        True if names are similar enough to be considered the same person
+    A group's tokens are the whitespace tokens of its normalized texts. Groups
+    with identical tokens are one person; a group whose tokens are strictly
+    contained in those of exactly one maximal group joins it. When several
+    maximal groups contain it ("Dumas" with "Laurent Dumas" and "Sophie Dumas")
+    it stays alone. Returns clusters of group indices, in order of appearance.
     """
-    # Exact match after normalization
-    if norm1 == norm2:
-        return True
-
-    # Substring match (one contains the other, min 3 chars)
-    min_length = min(len(norm1), len(norm2))
-    if min_length >= 3:
-        if norm1 in norm2 or norm2 in norm1:
-            return True
-
-    # Token-based match: all tokens of shorter name appear in longer
-    tokens1 = set(norm1.split())
-    tokens2 = set(norm2.split())
-
-    if not tokens1 or not tokens2:
-        return False
-
-    # Check if all tokens of shorter set appear in longer set
-    shorter_tokens = tokens1 if len(tokens1) <= len(tokens2) else tokens2
-    longer_tokens = tokens2 if len(tokens1) <= len(tokens2) else tokens1
-
-    if shorter_tokens and shorter_tokens.issubset(longer_tokens):
-        return True
-
-    return False
+    tokens = [
+        frozenset(token for text in texts for token in normalize_name(text).split())
+        or frozenset(text.casefold() for text in texts)
+        for texts in groups
+    ]
+    maximal = {own for own in tokens if not any(own < other for other in tokens)}
+    clusters: Dict[frozenset, List[int]] = {}
+    for index, own in enumerate(tokens):
+        supersets = [other for other in maximal if own < other]
+        clusters.setdefault(supersets[0] if len(supersets) == 1 else own, []).append(index)
+    return list(clusters.values())
 
 
 def count_gliner_chunks(md_file: str) -> int:
@@ -565,9 +543,9 @@ def emit_chunk_progress(current: int, total: int) -> None:
 def consolidate_duplicate_entities(entities: List[Dict]) -> List[Dict]:
     """Consolidate duplicate entities into single entries with variants.
 
-    Groups entities by similarity (exact duplicates and variations like
-    "Mr. Dupont" vs "Jean Dupont"), choosing the longest variant as
-    canonical and storing all unique variants.
+    Groups entities that are the same person (see cluster_person_groups, e.g.
+    "Mr. Dupont" vs "Jean Dupont"), choosing the longest variant as canonical
+    and storing all unique variants.
 
     Args:
         entities: List of entity dictionaries with 'text', 'score', etc.
@@ -578,37 +556,10 @@ def consolidate_duplicate_entities(entities: List[Dict]) -> List[Dict]:
     if not entities:
         return []
 
-    # Pre-compute normalized forms
-    entities_with_norm = [
-        {**entity, '_normalized': normalize_name(entity['text'])}
-        for entity in entities
+    groups = [
+        [entities[index] for index in cluster]
+        for cluster in cluster_person_groups([[entity['text']] for entity in entities])
     ]
-
-    # Group similar entities
-    groups = []
-    used_indices = set()
-
-    for i, entity1 in enumerate(entities_with_norm):
-        if i in used_indices:
-            continue
-
-        # Start a new group with this entity
-        group = [entity1]
-        used_indices.add(i)
-
-        # Find all similar entities
-        for j, entity2 in enumerate(entities_with_norm):
-            if j in used_indices:
-                continue
-
-            if are_names_similar(
-                entity1['text'], entity1['_normalized'],
-                entity2['text'], entity2['_normalized']
-            ):
-                group.append(entity2)
-                used_indices.add(j)
-
-        groups.append(group)
 
     # Consolidate each group
     consolidated = []
@@ -733,48 +684,57 @@ def _record_retired_code(entries: Dict, survivor: str, dropped_code: str,
     ]))
 
 
-def _prune_existing_person_duplicates(merged_mapping: Dict, merged_reverse: Dict,
-                                       merged_extracted: Dict) -> None:
+def _merge_person_clusters(merged_mapping: Dict, merged_reverse: Dict, merged_extracted: Dict,
+                           new_groups: Dict[str, List[str]]) -> Dict[str, str]:
+    """Apply cluster_person_groups to every existing person code and every new group.
+
+    Existing codes of a cluster collapse into one survivor (party code first,
+    then DIRIGEANT_/AVOCAT_..., then the lowest PERSONNE_PHYSIQUE_; distinct party
+    codes are never merged). Returns {new group code: survivor} for the new groups
+    that join an existing code.
+    """
     entries = merged_extracted.setdefault("personnes_physiques", {})
-    mapping_texts_by_code: Dict[str, List[str]] = {}
+    mapping_texts: Dict[str, List[str]] = {}
     for text, code in merged_mapping.items():
-        mapping_texts_by_code.setdefault(code, []).append(text)
+        mapping_texts.setdefault(code, []).append(text)
+    person_codes = set(entries)
+    codes = [
+        code for code in dict.fromkeys([*entries, *merged_reverse, *merged_mapping.values()])
+        if _is_person_code(str(code), person_codes)
+    ]
+    texts = {code: _person_entry_texts(code, entries.get(code, {}), merged_reverse, mapping_texts.get(code))
+             for code in codes}
+    codes = [code for code in codes if texts[code]]
+    groups = [texts[code] for code in codes] + list(new_groups.values())
+    new_codes = list(new_groups)
 
-    canonical_by_name: Dict[str, str] = {}
-    for code in list(entries):
-        entry = entries.get(code, {})
-        texts = _person_entry_texts(
-            code,
-            entry,
-            merged_reverse,
-            mapping_texts_by_code.get(code),
-        )
-        names = [normalize_name(text) for text in texts]
-        names = list(dict.fromkeys(name for name in names if name))
-        survivor = next((canonical_by_name[name] for name in names if name in canonical_by_name), None)
-        if survivor is None:
-            for name in names:
-                canonical_by_name[name] = code
-            continue
-        if survivor == code:
-            continue
+    def is_party(code: str) -> bool:
+        return bool(re.match(r"(CLIENT|ADVERSAIRE)_", code))
 
-        _merge_person_entry(
-            merged_mapping,
-            merged_reverse,
-            merged_extracted,
-            survivor,
-            texts,
-            entry,
-        )
-        for name in names:
-            canonical_by_name[name] = survivor
-        for text, mapped_code in list(merged_mapping.items()):
-            if mapped_code == code:
-                merged_mapping[text] = survivor
-        merged_reverse.pop(code, None)
-        entries.pop(code, None)
-        _record_retired_code(entries, survivor, code, entry)
+    def rank(code: str):
+        number = re.search(r"_(\d+)$", code)
+        kind = 0 if is_party(code) else 2 if code.startswith("PERSONNE_PHYSIQUE_") else 1
+        return kind, int(number.group(1)) if number else 0, code
+
+    attached: Dict[str, str] = {}
+    for cluster in cluster_person_groups(groups):
+        members = [codes[index] for index in cluster if index < len(codes)]
+        if not members:
+            continue
+        survivor = min(members, key=rank)
+        attached.update({new_codes[index - len(codes)]: survivor for index in cluster if index >= len(codes)})
+        for code in members:
+            if code == survivor or is_party(code):
+                continue
+            entry = entries.get(code, {})
+            _merge_person_entry(merged_mapping, merged_reverse, merged_extracted, survivor, texts[code], entry)
+            for text, mapped_code in list(merged_mapping.items()):
+                if mapped_code == code:
+                    merged_mapping[text] = survivor
+            merged_reverse.pop(code, None)
+            entries.pop(code, None)
+            _record_retired_code(entries, survivor, code, entry)
+    return attached
 
 
 def is_known_city_or_country(text: str) -> bool:
@@ -1322,21 +1282,20 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         "autres": {**existing_mapping.get('extracted_data', {}).get('autres', {})}
     }
 
-    _prune_existing_person_duplicates(merged_mapping, merged_reverse, merged_extracted)
+    new_texts: Dict[str, List[str]] = {}
+    for text, code in new_mapping.get('mapping', {}).items():
+        new_texts.setdefault(code, []).append(text)
+    new_person_groups = {}
+    for code, entry in new_mapping.get('extracted_data', {}).get('personnes_physiques', {}).items():
+        texts = [
+            text for text in _person_entry_texts(code, entry, new_mapping.get('reverse_mapping', {}), new_texts.get(code))
+            if text.lower() not in ignored_lower
+        ]
+        if texts:
+            new_person_groups[code] = texts
+    person_survivors = _merge_person_clusters(merged_mapping, merged_reverse, merged_extracted, new_person_groups)
 
     seen_entities_lower = {k.lower(): v for k, v in merged_mapping.items()}
-    existing_person_by_name: Dict[str, str] = {}
-    for code, entry in merged_extracted["personnes_physiques"].items():
-        for entity_text in _person_entry_texts(code, entry, merged_reverse):
-            normalized = normalize_name(entity_text)
-            if normalized:
-                existing_person_by_name.setdefault(normalized, code)
-    for entity_text, code in merged_mapping.items():
-        if "PERSONNE_PHYSIQUE_" not in str(code) and not str(code).startswith(("DIRIGEANT_", "AVOCAT_")):
-            continue
-        normalized = normalize_name(entity_text)
-        if normalized:
-            existing_person_by_name.setdefault(normalized, code)
 
     # Find highest existing code numbers per category
     code_counters = {
@@ -1401,15 +1360,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         candidate_texts = list(dict.fromkeys([text, *variants]))
 
         if category == "personnes_physiques":
-            existing_code = next(
-                (
-                    existing_person_by_name[normalized]
-                    for candidate in candidate_texts
-                    for normalized in [normalize_name(candidate)]
-                    if normalized in existing_person_by_name
-                ),
-                None,
-            )
+            existing_code = person_survivors.get(code)
             if existing_code:
                 accepted_texts = [candidate for candidate in candidate_texts if candidate.lower() not in ignored_lower]
                 _merge_person_entry(
@@ -1460,9 +1411,6 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         for variant in accepted_variants:
             merged_mapping[variant] = new_code
             seen_entities_lower[variant.lower()] = new_code
-            normalized = normalize_name(variant) if category == "personnes_physiques" else ""
-            if normalized:
-                existing_person_by_name.setdefault(normalized, new_code)
 
         seen_entities_lower[text_lower] = new_code
 
