@@ -1,0 +1,233 @@
+{
+  "version": 1,
+  "terms": [
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "110f84056d76694c781639bf6cc390cbdc811d89eb002878c57ef68bc7fd410f",
+      "hash": "110f84056d76694c781639bf6cc390cbdc811d89eb002878c57ef68bc7fd410f"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "a6b988796bd91c209657d13fc7c14b8a7c9652cec0232f97046adb2e916ed5cc",
+      "hash": "132212344b84b36bb0488128478c65f08e950afc43250076888ae462a7592099"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "c857d09db23e6822e3600bc06ad8d58f92ed62bc8efd81c753f77048662cb97d",
+      "hash": "1afafd3f852271ed4e03986a491098512fb31c5f80a8336da27cf716f4846a5d"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "9d82529905cccc378c5b93cadaa0e57869d4da07916c8282a4e98a22c8f6a39c",
+      "hash": "25dc257a6e6af577dd959447e62177d5e2f5f9c77726a933e77e6065964c89be"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "2725ff2501004cbe4c458a2a6aa8916cd6c4edab873a6a9015010ea64a0bf756",
+      "hash": "2725ff2501004cbe4c458a2a6aa8916cd6c4edab873a6a9015010ea64a0bf756"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "3790b82653fb1c321296c0fd65e8e4daa427840e093a34fb424b0519508c4fa0",
+      "hash": "3790b82653fb1c321296c0fd65e8e4daa427840e093a34fb424b0519508c4fa0"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "12a303c224c250d07c81691de6e0fd74699ce6bd78c234057de70413a58457cf",
+      "hash": "3d6030717823f99c51489df716b3c36c08ff9f51e9b9321892e984fd9a7e1702"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "4e1b1331c320aa8657e830bc4e47334a1af822e7d4083c79b6349a15c8c7f14b",
+      "hash": "4e1b1331c320aa8657e830bc4e47334a1af822e7d4083c79b6349a15c8c7f14b"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "1ba9cca03ed88668961492132d7de08e7494e2e7b195148388d27aa9ac2dda5c",
+      "hash": "5944f2e29aaaa07022bed4227734be40fe048e9281cdd41581b4d2b271e96566"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "223e110fe8e7c02e402e27b2530bb27f85a98d62648b582b30c06ac20261f4a2",
+      "hash": "5d46206af4a1a62faf25036cf8f34b46b3b8201323bae44c3d2805bd8868c34a"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "97fdb8daab9eb0c2ca933d31ddd51a48f0af8e5b9372a3ac19d777a70a90b69b",
+      "hash": "5f3dccadc530f7ffd4412e622bc573ec72ddbfef6e27458dc8ad66c15803e43f"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "6795270259181ddf376b4863f092ecbcfe42a42b3703b120f8c43ef1115aeb00",
+      "hash": "6795270259181ddf376b4863f092ecbcfe42a42b3703b120f8c43ef1115aeb00"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "c8ec03ed9ce7765f29aa574e50412bd72cf0a36864fe798712c6ef2b398bf283",
+      "hash": "6d4b99670aa41f9346329c2417e4584ecda01d770d281958f34dfd89dce7e9e5"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "855d5325996c22eb54fbf99ec5e640dce1f0fc549921e55236561fe7896c96f2",
+      "hash": "855d5325996c22eb54fbf99ec5e640dce1f0fc549921e55236561fe7896c96f2"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "d0784c6b1785dcd474688d46b1fe99792ff66f6b56bebf26dda0c08516bac22e",
+      "hash": "8cf10374a8028d8204c99338b4ebea442066b5fc01b3d6cd6085a8648f117f41"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "aedb71445fd9dbd8b0476dcd1c1c5d3780f9adb59344643bf2adeb7b55881408",
+      "hash": "9683d25f2fccb2b12b4cf01b1e2aee2931f11a38f81720da14b2cf9bea1c0509"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "a352b8acdf519bbd2e5025e489291116ea4f2b6922dfb18f9596b83a6737d032",
+      "hash": "a352b8acdf519bbd2e5025e489291116ea4f2b6922dfb18f9596b83a6737d032"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "a7bb6541d0de6a4173d2e81ccb7dae89751b73902006b77a9768445357d6e533",
+      "hash": "a7bb6541d0de6a4173d2e81ccb7dae89751b73902006b77a9768445357d6e533"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "ab268e402c79a1e449b1a7472823698f1ece2bf14b78d95598359f07393e09f5",
+      "hash": "ab268e402c79a1e449b1a7472823698f1ece2bf14b78d95598359f07393e09f5"
+    },
+    {
+      "mode": "fold",
+      "words": 3,
+      "first": "4ff17bc8ee5f240c792b8a41bfa2c58af726d83b925cf696af0c811627714c85",
+      "hash": "b10631f1cfc6afb4af1b04a9ddf6dfdae8fbdf310b0de6d487890773b3e11812"
+    },
+    {
+      "mode": "exact",
+      "words": 1,
+      "first": "b89d4177e7528f9248c759dbd44ae5fc6716a4fe24245c955aa55d0291d71f5d",
+      "hash": "b89d4177e7528f9248c759dbd44ae5fc6716a4fe24245c955aa55d0291d71f5d"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "bc54c9238c5dbda86b36a0e1613a5600855d4c7d3856c5269371ae2d6d514d94",
+      "hash": "bc54c9238c5dbda86b36a0e1613a5600855d4c7d3856c5269371ae2d6d514d94"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "c17323fc0b1bab00dda3764def32f1432d0af144bfd5f7f8c87e719696430559",
+      "hash": "c17323fc0b1bab00dda3764def32f1432d0af144bfd5f7f8c87e719696430559"
+    },
+    {
+      "mode": "fold",
+      "words": 3,
+      "first": "c6d17a3613b9914e68707fcfac8410f097643bc5840681bb533030d73cbb18f8",
+      "hash": "c1a784ffb2fd25e1e5da9fe7959c7aac11178f6db73f084bc1f94d8fda538ee9"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "ca89e2af346374ffa6d0442ba9d76ced798770decf2188ca814aa76b5cca5b32",
+      "hash": "ca89e2af346374ffa6d0442ba9d76ced798770decf2188ca814aa76b5cca5b32"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "cd7212773208ab24d4888a8a5bf8e26fe1863dea693d0b8697c370f359d7962b",
+      "hash": "cd7212773208ab24d4888a8a5bf8e26fe1863dea693d0b8697c370f359d7962b"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "d41c177944c3a76d3edcf69978723314b5016fcd749aff17cd181db8ab886f2f",
+      "hash": "d41c177944c3a76d3edcf69978723314b5016fcd749aff17cd181db8ab886f2f"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "d98af8a449603c0922ab53df4550225ffb0169220112aafd8217d5d38d83c21c",
+      "hash": "d98af8a449603c0922ab53df4550225ffb0169220112aafd8217d5d38d83c21c"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "dd7c37b4cc83e1ea48bc336d237b0e8ee228555fc9597ff4e56b86c87eabef17",
+      "hash": "dd7c37b4cc83e1ea48bc336d237b0e8ee228555fc9597ff4e56b86c87eabef17"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "eb59c318543da6fcdbf7e856555fd57d95be750bcd9882f1613d5237c24b4591",
+      "hash": "eb59c318543da6fcdbf7e856555fd57d95be750bcd9882f1613d5237c24b4591"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "f138acc95db413e1efc75b2c0260caba72a5d3560c3b70a8f1170f62b0a35fcc",
+      "hash": "f138acc95db413e1efc75b2c0260caba72a5d3560c3b70a8f1170f62b0a35fcc"
+    },
+    {
+      "mode": "exact",
+      "words": 1,
+      "first": "f1414f4c28782a452669d453dac6b9bb957d5252e436be2c04310a34dc88564b",
+      "hash": "f1414f4c28782a452669d453dac6b9bb957d5252e436be2c04310a34dc88564b"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "f26182189435f47cbd150da72eb4239514421090c379e8ec94b4dfc124286d3d",
+      "hash": "f26182189435f47cbd150da72eb4239514421090c379e8ec94b4dfc124286d3d"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "cd879f74c6ffe6e4ae973145798ca26489fa2a61f7b29ac5fd816c0ad959511f",
+      "hash": "f3281407550d6824833cd651ec629c099b5fe875ed292050d55ac92281dedf35"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "eb9512d8149684a621bf8bd30933bd8c657c6dd9e307874b81e6dec93b17453f",
+      "hash": "f38806119b29cbc31a4114c8d816e46bc3c78e1c2ca2f2d58c3586179cedc332"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "f66e2270c626810bbe801c4c8951d2c9eb1245bb025c4c0ba7031971fe198327",
+      "hash": "f66e2270c626810bbe801c4c8951d2c9eb1245bb025c4c0ba7031971fe198327"
+    },
+    {
+      "mode": "fold",
+      "words": 1,
+      "first": "fbcbfef5862bb8913ac8087b2b8a9b5a038d8e2376230a55f912386a9b9e6d44",
+      "hash": "fbcbfef5862bb8913ac8087b2b8a9b5a038d8e2376230a55f912386a9b9e6d44"
+    },
+    {
+      "mode": "fold",
+      "words": 2,
+      "first": "d522ad509b1be71790250c6d03410e53239ee7af33093cffa9ecb2bf33f13397",
+      "hash": "fd19eeafa3759bd9b8d351b8c0112956e6b11fead74efb284a84e34803e52484"
+    }
+  ]
+}
