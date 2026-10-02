@@ -3,7 +3,7 @@ import path from 'path';
 
 import type { Router } from 'express';
 
-import { projectsDb } from '@/modules/database/index.js';
+import { getConnection, projectsDb } from '@/modules/database/index.js';
 import { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
@@ -21,6 +21,7 @@ import { createCompanySearchRouter } from './company-search.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
+import { createInstitutionalTermsRouter, openInstitutionalTerms } from './institutional-terms.js';
 import { installModelDiscovery } from './model-discovery/index.js';
 import { startProjectRegistry } from './project-registry.js';
 
@@ -54,7 +55,7 @@ const vendor = createRequire(import.meta.url)(routerPath) as PieceMakerVendorMod
 
 export const { piecemakerHome, stopOriginalsJobs } = vendor;
 const publishProjects = startProjectRegistry(vendor.publishProjectSource);
-createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin/scripts/lib/institutional-terms.cjs')).installDefaultInstitutionalTerms();
+const institutionalTerms = openInstitutionalTerms(getConnection(), applicationRoot);
 const { createAnonymizerService } = createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/anonymizer/service.cjs'));
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
@@ -82,6 +83,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createCompanySearchRouter());
   router.use(createBodaccSearchRouter());
   router.use(createDocxDocumentRouter());
+  router.use(createInstitutionalTermsRouter(institutionalTerms));
   router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));
   router.use(createShellEnvironmentRouter(shellEnvironment));
   return router;

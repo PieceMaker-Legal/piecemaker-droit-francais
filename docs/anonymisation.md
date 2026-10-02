@@ -164,10 +164,14 @@ courtes pour six labels (`person`, `company`, `organization`, `address`, `city`,
 les institutions à ne pas anonymiser sont écartées en aval, à la construction du mapping, par
 `institutional-terms.cjs`.
 
-La liste vit dans `~/.piecemaker/institutional-terms.json` (globale, éditable depuis le mapping du
-dossier, « Termes institutionnels »). Si ce fichier n’existe pas au démarrage du serveur, il est
-créé à partir de `institutional-terms.default.json`, livré à côté du module ; une liste
-existante, même vide, n’est jamais remplacée.
+La liste (globale, éditable depuis le mapping du dossier, « Termes institutionnels ») vit dans la
+table `piecemaker_institutional_terms` de `auth.db`, que la désinstallation conserve
+(`server/piecemaker/institutional-terms.ts`). À la création de la table, elle reprend
+`~/.piecemaker/institutional-terms.json` s’il existe, sinon `institutional-terms.default.json`
+livré à côté du module ; une liste vidée ensuite reste vide. Le fichier JSON n’est plus qu’une
+copie, réécrite depuis la base à chaque démarrage et à chaque enregistrement : c’est elle que
+lisent `institutional-terms.cjs` et le plugin Dossier, sans dépendance SQLite. Une modification
+faite à la main dans ce fichier est donc perdue.
 
 ---
 
