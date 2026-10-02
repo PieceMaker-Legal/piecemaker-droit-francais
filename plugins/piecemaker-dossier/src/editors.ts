@@ -370,6 +370,13 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     data.graph.mappings,
     data.graph.reservedCodes,
   );
+  const positionField = layer.querySelector<HTMLElement>('[data-position-field]');
+  const syncPosition = () => {
+    const isParty = sideSelect?.value === 'client' || sideSelect?.value === 'adversaire';
+    if (positionField) positionField.hidden = !isParty;
+    if (!isParty && positionSelect) positionSelect.value = '';
+  };
+  syncPosition();
   const syncMasked = () => {
     const side = sideSelect?.value || '';
     if (!maskedInput) return;
@@ -377,7 +384,10 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     if (renameApplies(side)) maskedInput.value = codeChangeFor(side).code;
     else if (isPartyCode(maskedInput.value)) maskedInput.value = initialMasked;
   };
-  sideSelect?.addEventListener('change', syncMasked);
+  sideSelect?.addEventListener('change', () => {
+    syncPosition();
+    syncMasked();
+  });
   positionSelect?.addEventListener('change', syncMasked);
   kindSelect?.addEventListener('change', syncMasked);
   legalFormInput?.addEventListener('input', syncMasked);
@@ -404,7 +414,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       : null;
     const nodeId = change ? change.nodeId : id;
     const code = change ? change.code : masked;
-    const nodeData = change ? change.data : { ...(node?.data || {}), partySide: partySide || null, legalForm: legalForm || null, position: position || null };
+    const nodeData = change ? change.data : { ...(node?.data || {}), partySide: partySide || null, legalForm: legalForm || null, position: (partySide === 'client' || partySide === 'adversaire') && position ? position : null };
     const rename = (value: string): string => value === id ? nodeId : value;
     const operations: KnowledgeUpdateOperation[] = [];
     if (change && node && nodeId !== id) operations.push(...change.operations);

@@ -229,6 +229,7 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-form-section h3{margin:0;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--pmd-muted)}
 .pmd-form-note{margin:0;color:var(--pmd-muted);font-size:12px;line-height:1.5}
 .pmd-form label{display:grid;gap:5px;color:var(--pmd-muted);font-size:12px}
+.pmd-form label[hidden]{display:none}
 .pmd-input,.pmd-select,.pmd-textarea{width:100%;box-sizing:border-box;border:1px solid var(--pmd-border);border-radius:.75rem;background:var(--pmd-surface);color:var(--pmd-text);padding:9px 11px;font:inherit;box-shadow:none}
 .pmd-input:focus,.pmd-select:focus,.pmd-textarea:focus,.pmd-mapping-input:focus{border-color:color-mix(in srgb,var(--pmd-accent) 55%,var(--pmd-border));outline:2px solid rgb(0 136 255 / 18%)}
 .pmd-textarea{min-height:90px;resize:vertical}
