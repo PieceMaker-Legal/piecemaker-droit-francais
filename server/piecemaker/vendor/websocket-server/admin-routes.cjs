@@ -46,10 +46,6 @@ const { renderChronologyHtml, renderHistoryHtml } = require('./lib/export-render
 const { outputExtension } = require('./lib/office-to-pdf.cjs');
 const { generateDocument } = require('./lib/doc-generate.cjs');
 const {
-  readInstitutionalTerms,
-  writeInstitutionalTerms,
-} = require('../piecemaker-plugin/scripts/lib/institutional-terms.cjs');
-const {
   claudeAssetOf,
   claudeAssetStatus,
   registerClaudeAsset,
@@ -2071,28 +2067,6 @@ function createAdminRouter({
         ok: true,
         restartRequired: patch.port !== undefined || patch.pythonPath !== undefined,
       });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Entités institutionnelles à ne jamais anonymiser — liste globale, éditable.
-  // La détection GLiNER n'est pas touchée : ces termes sont écartés au moment de
-  // bâtir le mapping (voir mapping.cjs / institutional-terms.cjs).
-  router.get('/institutional-terms', (req, res) => {
-    try {
-      res.json(readInstitutionalTerms());
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  router.put('/institutional-terms', (req, res) => {
-    try {
-      const terms = req.body?.terms;
-      if (!Array.isArray(terms)) throw new Error('Le corps doit contenir un tableau « terms ».');
-      if (terms.length > 1000) throw new Error('Liste trop longue (1000 termes maximum).');
-      res.json({ ok: true, ...writeInstitutionalTerms(terms) });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
