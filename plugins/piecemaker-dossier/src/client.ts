@@ -1,7 +1,7 @@
 import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
-import { partyCodeChange } from './party-codes.js';
+import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { chronologyView, escapeHtml, generalView, mappingView, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
 import type { BodaccScanState, Tab, ViewData } from './views.js';
@@ -451,7 +451,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (!nodeId) return;
         void askConfirm(root, 'Retirer la désignation de partie de ce profil ?', 'Retirer').then((confirmed) => {
           if (!confirmed) return;
-          void save([{ op: 'removePartyDesignation', nodeId }]).catch(showError);
+          const node = data?.graph.nodes.find((entry) => entry.id === nodeId);
+          void save(data && node ? partyRemovalOperations(node, data.graph) : [{ op: 'removePartyDesignation', nodeId }]).catch(showError);
         });
         return;
       }

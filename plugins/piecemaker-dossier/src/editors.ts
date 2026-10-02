@@ -4,7 +4,7 @@ import type { CompanySearchResult } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import type { ViewData } from './views.js';
 import type { KnowledgeNode, KnowledgeUpdateOperation, NodeKind } from './types.js';
-import { PROCEDURE_POSITIONS, partyCodeChange } from './party-codes.js';
+import { PROCEDURE_POSITIONS, isPartyCode, nodeCode, partyCodeChange } from './party-codes.js';
 import type { PartySide } from './party-codes.js';
 
 export function modal(root: HTMLElement, body: string): HTMLElement {
@@ -294,6 +294,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const sideSelect = layer.querySelector<HTMLSelectElement>('select[name="partySide"]');
   const positionSelect = layer.querySelector<HTMLSelectElement>('select[name="position"]');
   const maskedInput = layer.querySelector<HTMLInputElement>('input[name="masked"]');
+  const initialMasked = maskedInput?.value || '';
   const legalFormInput = layer.querySelector<HTMLInputElement>('input[name="legalForm"]');
   const labelInput = layer.querySelector<HTMLInputElement>('input[name="label"]');
   const companySearchPanel = layer.querySelector<HTMLElement>('[data-company-search]');
@@ -361,7 +362,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       renderCompanySearchPanel();
     }
   });
-  const renameApplies = (side: string): boolean => side === 'client' || side === 'adversaire' || Boolean(textValue(node?.data.originalCode));
+  const renameApplies = (side: string): boolean => side === 'client' || side === 'adversaire' || Boolean(textValue(node?.data.originalCode)) || Boolean(node && isPartyCode(nodeCode(node)));
   const codeChangeFor = (side: string) => partyCodeChange(
     { id, kind: (kindSelect?.value || selectedKind) as NodeKind, data: node?.data || {} },
     { kind: (kindSelect?.value || selectedKind) as NodeKind, legalForm: legalFormInput?.value || '', side: side as PartySide, position: positionSelect?.value || '' },
@@ -374,6 +375,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     if (!maskedInput) return;
     maskedInput.readOnly = side === 'client' || side === 'adversaire';
     if (renameApplies(side)) maskedInput.value = codeChangeFor(side).code;
+    else if (isPartyCode(maskedInput.value)) maskedInput.value = initialMasked;
   };
   sideSelect?.addEventListener('change', syncMasked);
   positionSelect?.addEventListener('change', syncMasked);
