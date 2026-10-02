@@ -1,6 +1,6 @@
 import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
-import { askConfirm, askPrompt, bindAliasEditors, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
+import { askConfirm, askDeleteEntity, askPrompt, bindAliasEditors, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { partyCodeChange } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { chronologyView, escapeHtml, generalView, mappingView, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
@@ -203,6 +203,19 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     await load();
   };
 
+  const deleteNode = async (nodeId: string): Promise<boolean> => {
+    const node = data?.graph.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) return false;
+    const choice = await askDeleteEntity(root, node.label);
+    if (!choice) return false;
+    if (choice.neverPseudonymise) {
+      const { terms } = await knowledgeApi.institutionalTerms();
+      await knowledgeApi.saveInstitutionalTerms([...terms, node.label]);
+    }
+    await save([{ op: 'deleteNode', nodeId }]);
+    return true;
+  };
+
   const openMapping = () => {
     if (!data) return;
     const mappingData = data;
@@ -260,10 +273,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }));
     layer.querySelectorAll<HTMLElement>('[data-delete-node]').forEach((entry) => entry.addEventListener('click', async () => {
       const nodeId = entry.dataset.deleteNode;
-      if (!nodeId || !await askConfirm(root, 'Supprimer cet élément et ses relations ?', 'Supprimer')) return;
-      layer.remove();
+      if (!nodeId) return;
       try {
-        await save([{ op: 'deleteNode', nodeId }]);
+        if (!await deleteNode(nodeId)) return;
+        layer.remove();
         openMapping();
       } catch (error) {
         showError(error);
@@ -470,14 +483,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (data && node) nodeEditor(root, data, node, save);
         return;
       }
-      const deleteNode = target.closest<HTMLElement>('[data-delete-node]');
-      if (deleteNode) {
-        const nodeId = deleteNode.dataset.deleteNode;
-        if (!nodeId) return;
-        void askConfirm(root, 'Supprimer cet élément et ses relations ?', 'Supprimer').then((confirmed) => {
-          if (!confirmed) return;
-          void save([{ op: 'deleteNode', nodeId }]).catch(showError);
-        });
+      const deleteTrigger = target.closest<HTMLElement>('[data-delete-node]');
+      if (deleteTrigger) {
+        const nodeId = deleteTrigger.dataset.deleteNode;
+        if (nodeId) void deleteNode(nodeId).catch(showError);
         return;
       }
       const editDocument = target.closest<HTMLElement>('[data-edit-document]');
