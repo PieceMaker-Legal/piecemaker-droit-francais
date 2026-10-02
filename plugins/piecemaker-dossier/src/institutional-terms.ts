@@ -2,8 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export type InstitutionalTermsStore = { file: string; terms: string[] };
-
 type MatcherCache = { key: string; terms: string[]; matchers: RegExp[] };
 
 let cache: MatcherCache | null = null;
@@ -55,11 +53,6 @@ function readTermsFrom(file: string): string[] {
   } catch {
     return [];
   }
-}
-
-export function readInstitutionalTerms(): InstitutionalTermsStore {
-  const file = institutionalTermsFile();
-  return { file, terms: readTermsFrom(file) };
 }
 
 function statSignature(file: string): string {

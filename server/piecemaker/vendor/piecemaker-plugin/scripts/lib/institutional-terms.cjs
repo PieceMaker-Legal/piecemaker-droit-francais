@@ -150,11 +150,9 @@ function isInstitutionalEntity(entity) {
 }
 
 module.exports = {
-  cleanTerm,
   dedupeTerms,
   institutionalTermsFile,
   isInstitutionalEntity,
-  normalizeForMatch,
   readInstitutionalTerms,
   writeInstitutionalTerms,
 };

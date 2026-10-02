@@ -21,10 +21,9 @@ import contextlib
 import json
 import os
 import sys
-import warnings
 from collections import defaultdict
 from importlib.metadata import PackageNotFoundError, version as package_version
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 
