@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Set
 
 from smart_converter import mineru_available, needs_ocr
+from legal_forms import _FORM_NATIONALITY, _LEGAL_FORM_RE, extract_legal_form, normalize_entity_text
 
 
 EXIT_OCR_REQUIRED = 3
@@ -643,8 +644,9 @@ def _person_entry_texts(code: str, entry: Dict, reverse_mapping: Dict,
 
 def _merge_person_entry(merged_mapping: Dict, merged_reverse: Dict,
                         merged_extracted: Dict, code: str, texts: List[str],
-                        source_entry: Optional[Dict] = None) -> None:
-    entries = merged_extracted.setdefault("personnes_physiques", {})
+                        source_entry: Optional[Dict] = None,
+                        bucket: str = "personnes_physiques") -> None:
+    entries = merged_extracted.setdefault(bucket, {})
     entry = entries.setdefault(code, {
         "original": texts[0] if texts else "",
         "code": code,
@@ -1061,7 +1063,7 @@ def parse_address(address_text: str) -> Dict:
 # Société codes : le sigle sert de préfixe (SA_1, SARL_1, SCI_1, GMBH_1, LLC_1…)
 # ---------------------------------------------------------------------------
 # Une organisation dont le nom (ou son contexte immédiat) porte une forme juridique
-# — détectée littéralement par scan_utils.extract_legal_form, qui a typé l'entité
+# — détectée littéralement par legal_forms.extract_legal_form, qui a typé l'entité
 # ORGANIZATION_<sigle> — est codée <sigle>_<n>. Sans sigle, elle tombe sur
 # PERS_MORALE_<n>. Chaque sigle a son propre compteur (SA_1, SA_2, puis SARL_1…),
 # non paddé, conformément au choix du cabinet. Les personnes/adresses gardent leur
@@ -1098,6 +1100,141 @@ def _next_societe_code(entity_type: str, societe_counters: Dict[str, int]) -> st
     n = societe_counters.get(key, 0) + 1
     societe_counters[key] = n
     return f"{key}_{n}"
+
+
+# ---------------------------------------------------------------------------
+# Même société : une seule règle de tri, dans le fichier, entre fichiers, en réparation
+# ---------------------------------------------------------------------------
+# GLiNER détecte, le code trie : il n'invente aucune variante et n'écarte aucune
+# détection. Deux textes sont la même société si leur clé (le texte sans sa forme
+# juridique, sans accents ni casse ni ponctuation) est identique et non vide — jamais
+# de sous-chaîne ("Orbex" ≠ "Orbex Holding"). Le code d'une société est, dans l'ordre :
+# un code de partie (CLIENT_/ADVERSAIRE_), puis le code de sa forme juridique (SA_1,
+# SARL_1…), puis PERS_MORALE_<n>. Le code de forme prime donc toujours sur PERS_MORALE.
+
+def company_key(text: str) -> str:
+    """Clé de comparaison d'une société : "Orbex S.A." et "ORBEX" → "orbex".
+
+    La forme juridique est retirée du texte d'origine (la regex est sensible à la
+    casse, voulu), avant de passer en minuscules.
+    """
+    bare = _LEGAL_FORM_RE.sub(" ", normalize_entity_text(text))
+    decomposed = unicodedata.normalize("NFKD", bare)
+    folded = "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
+    return " ".join(re.sub(r"[\W_]+", " ", folded).split())
+
+
+def _known_legal_form(token: str) -> Optional[str]:
+    """`token` s'il désigne une forme juridique connue (SA, GMBH…), sinon None."""
+    token = str(token).upper()
+    return token if token in _FORM_NATIONALITY else None
+
+
+def _societe_code_form(code: str) -> Optional[str]:
+    """Forme juridique que porte un code (SA_3, ORBEX SA, CLIENT_DEMANDEUR_SA_1) ; None pour PERS_MORALE."""
+    return _known_legal_form(_societe_counter_key_of_code(code))
+
+
+def _societe_text_form(texts: List[str]) -> Optional[str]:
+    """Première forme juridique lue dans les textes."""
+    return next((form for form in (extract_legal_form(text)[0] for text in texts) if form), None)
+
+
+def cluster_company_groups(groups: List[List[str]], forms: List[Optional[str]]) -> List[List[int]]:
+    """Decide which groups of ORGANIZATION texts are the same company.
+
+    Groups sharing a company_key are the same company. Several distinct legal
+    forms (SA / SAS) are never merged: one cluster per form, and the form-less
+    groups join only when a single form is present, else they form their own
+    cluster. Returns clusters of group indices, in order of appearance.
+    """
+    parent = list(range(len(groups)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    owner: Dict[str, int] = {}
+    for index, texts in enumerate(groups):
+        for key in filter(None, map(company_key, texts)):
+            parent[find(index)] = find(owner.setdefault(key, index))
+    components: Dict[int, List[int]] = {}
+    for index in range(len(groups)):
+        components.setdefault(find(index), []).append(index)
+
+    clusters: List[List[int]] = []
+    for members in components.values():
+        present = list(dict.fromkeys(forms[index] for index in members if forms[index]))
+        if len(present) <= 1:
+            clusters.append(members)
+            continue
+        clusters.extend([index for index in members if forms[index] == form] for form in present)
+        formless = [index for index in members if not forms[index]]
+        if formless:
+            clusters.append(formless)
+    return sorted(clusters, key=min)
+
+
+def _merge_societe_clusters(merged_mapping: Dict, merged_reverse: Dict, merged_extracted: Dict,
+                            new_groups: Dict[str, List[str]], mint_code) -> Dict[str, str]:
+    """Apply cluster_company_groups to every existing company code and every new group.
+
+    The survivor of a cluster is its party code, else its legal-form code, else
+    PERS_MORALE_<n>; the lowest number within a kind, an existing code before a new
+    one. Existing codes of a cluster collapse into it (distinct party codes are
+    never merged). When the survivor is a new group's code (a form code over an
+    existing PERS_MORALE), `mint_code(new code)` issues its real code. Returns
+    {new group code: survivor} for the new groups that join a code.
+    """
+    entries = merged_extracted.setdefault("societes", {})
+    mapping_texts: Dict[str, List[str]] = {}
+    for text, code in merged_mapping.items():
+        mapping_texts.setdefault(code, []).append(text)
+    texts = {code: _person_entry_texts(code, entry, merged_reverse, mapping_texts.get(code))
+             for code, entry in entries.items()}
+    codes = [code for code in entries if texts[code]]
+    new_codes = list(new_groups)
+    all_codes = codes + new_codes
+    groups = [texts[code] for code in codes] + list(new_groups.values())
+    forms = [_societe_code_form(code) or _societe_text_form(group) for code, group in zip(all_codes, groups)]
+
+    def is_party(code: str) -> bool:
+        return bool(re.match(r"(CLIENT|ADVERSAIRE)_", code))
+
+    def rank(index: int):
+        code = all_codes[index]
+        kind = 0 if is_party(code) else 1 if _societe_code_form(code) else 2
+        number = re.search(r"_(\d+)$", code)
+        return kind, index >= len(codes), int(number.group(1)) if number else 0, code
+
+    attached: Dict[str, str] = {}
+    for cluster in cluster_company_groups(groups, forms):
+        if len(cluster) < 2:
+            continue
+        best = min(cluster, key=rank)
+        joining = [all_codes[index] for index in cluster if index >= len(codes)]
+        if not joining:
+            survivor = all_codes[best]
+        elif best >= len(codes):
+            survivor = mint_code(all_codes[best])
+        else:
+            survivor = all_codes[best]
+        attached.update({code: survivor for code in joining})
+        for index in cluster:
+            code = all_codes[index]
+            if index >= len(codes) or code == survivor or is_party(code):
+                continue
+            entry = entries.get(code, {})
+            _merge_person_entry(merged_mapping, merged_reverse, merged_extracted, survivor, texts[code], entry, "societes")
+            for text, mapped_code in list(merged_mapping.items()):
+                if mapped_code == code:
+                    merged_mapping[text] = survivor
+            merged_reverse.pop(code, None)
+            entries.pop(code, None)
+            _record_retired_code(entries, survivor, code, entry)
+    return attached
 
 
 def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
@@ -1295,7 +1432,14 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
             new_person_groups[code] = texts
     person_survivors = _merge_person_clusters(merged_mapping, merged_reverse, merged_extracted, new_person_groups)
 
-    seen_entities_lower = {k.lower(): v for k, v in merged_mapping.items()}
+    new_societe_groups = {}
+    for code, entry in new_mapping.get('extracted_data', {}).get('societes', {}).items():
+        texts = [
+            text for text in _person_entry_texts(code, entry, new_mapping.get('reverse_mapping', {}), new_texts.get(code))
+            if text.lower() not in ignored_lower
+        ]
+        if texts:
+            new_societe_groups[code] = texts
 
     # Find highest existing code numbers per category
     code_counters = {
@@ -1342,6 +1486,29 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         key = _societe_counter_key_of_code(code)
         societe_counters[key] = max(societe_counters.get(key, 0), int(match.group(1)) + 1)
 
+    # Sociétés : même société = même code (cf. cluster_company_groups). Un code de
+    # forme (SA_n) l'emporte sur PERS_MORALE_n ; les codes écartés sont retirés.
+    def next_societe_code(source_code: str) -> str:
+        # Le sigle du code d'origine est préservé : SA_3 → SA_<n>, legacy
+        # ORBEX SA → SA_<n>, sinon PERS_MORALE_<n>. Compteur par sigle.
+        key = _societe_counter_key_of_code(source_code)
+        n = societe_counters.get(key, 0) + 1
+        societe_counters[key] = n
+        return f"{key}_{n}"
+
+    def mint_societe_code(source_code: str) -> str:
+        new_code = next_societe_code(source_code)
+        while new_code in used_codes:
+            new_code = next_societe_code(source_code)
+        used_codes.add(new_code)
+        return new_code
+
+    societe_survivors = _merge_societe_clusters(
+        merged_mapping, merged_reverse, merged_extracted, new_societe_groups, mint_societe_code
+    )
+
+    seen_entities_lower = {k.lower(): v for k, v in merged_mapping.items()}
+
     # Merge new entries
     for text, code in new_mapping.get('mapping', {}).items():
         text_lower = text.lower()
@@ -1375,6 +1542,23 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
                     seen_entities_lower[candidate.lower()] = existing_code
                 continue
 
+        if category == "societes":
+            existing_code = societe_survivors.get(code)
+            if existing_code:
+                accepted_texts = [candidate for candidate in candidate_texts if candidate.lower() not in ignored_lower]
+                _merge_person_entry(
+                    merged_mapping,
+                    merged_reverse,
+                    merged_extracted,
+                    existing_code,
+                    accepted_texts,
+                    old_entry,
+                    "societes",
+                )
+                for candidate in accepted_texts:
+                    seen_entities_lower[candidate.lower()] = existing_code
+                continue
+
         # Skip if already exists (use existing code)
         if text_lower in seen_entities_lower:
             continue
@@ -1386,12 +1570,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         # Generate new code with incremented counter
         def next_code() -> str:
             if category == "societes":
-                # Le sigle du code d'origine est préservé : SA_3 → SA_<n>, legacy
-                # ORBEX SA → SA_<n>, sinon PERS_MORALE_<n>. Compteur par sigle.
-                key = _societe_counter_key_of_code(code)
-                n = societe_counters.get(key, 0) + 1
-                societe_counters[key] = n
-                return f"{key}_{n}"
+                return next_societe_code(code)
             prefix = {
                 "personnes_physiques": "PERSONNE_PHYSIQUE",
                 "adresses": "ADRESSE",
