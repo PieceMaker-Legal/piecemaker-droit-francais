@@ -4,6 +4,7 @@ import path from 'node:path';
 const PRODUCT_NAME = 'PieceMaker';
 const LIBRARY_DIRECTORY = 'library-backend';
 const COMPONENT_MODEL_IDS = [
+  'fastino/gliner2-privacy-filter-PII-multi',
   'fastino/gliner2.5-multi-v1',
   'fastino/gliner2-multi-v1',
   'opendatalab/PDF-Extract-Kit-1.0',

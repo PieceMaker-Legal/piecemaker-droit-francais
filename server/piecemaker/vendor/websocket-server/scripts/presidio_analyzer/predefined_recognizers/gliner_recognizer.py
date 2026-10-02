@@ -1,4 +1,4 @@
-"""GLiNER2.5-based entity recognizer for Presidio.
+"""GLiNER2-PII-based entity recognizer for Presidio.
 
 Wraps the gliner2 library into a Presidio LocalRecognizer so it can be used
 as a drop-in NER backend alongside pattern-based recognizers.
@@ -38,7 +38,7 @@ DEFAULT_ENTITY_DESCRIPTIONS = {
 
 
 class GLiNERRecognizer(LocalRecognizer):
-    """GLiNER2.5 model based entity recognizer."""
+    """GLiNER2-PII model based entity recognizer."""
 
     def __init__(
         self,
@@ -49,13 +49,13 @@ class GLiNERRecognizer(LocalRecognizer):
         context: Optional[List[str]] = None,
         entity_mapping: Optional[Dict[str, str]] = None,
         entity_descriptions: Optional[Dict[str, str]] = None,
-        model_name: str = "fastino/gliner2.5-multi-v1",
+        model_name: str = "fastino/gliner2-privacy-filter-PII-multi",
         threshold: float = 0.5,
         chunk_size: int = 15000,
         chunk_overlap: int = 1500,
         defer_load: bool = False,
     ):
-        """GLiNER2.5 model based entity recognizer.
+        """GLiNER2-PII model based entity recognizer.
 
         :param entity_mapping: GLiNER2 label → Presidio entity type mapping.
         :param entity_descriptions: Label descriptions for GLiNER2's API.

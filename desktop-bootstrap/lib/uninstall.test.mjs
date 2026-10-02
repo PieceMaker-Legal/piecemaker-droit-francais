@@ -41,6 +41,7 @@ test('retire tout, y compris les données, sauf la base auth.db et la bibliothè
   assert.ok(plan.remove.includes('/Users/me/Library/Logs/PieceMaker'));
   assert.ok(plan.remove.includes('/Users/me/Library/Preferences/legal.piecemaker.droitfrancais.plist'));
   assert.ok(plan.remove.includes('/Users/me/Library/Caches/legal.piecemaker.droitfrancais'));
+  assert.ok(plan.remove.includes('/Users/me/.cache/huggingface/hub/models--fastino--gliner2-privacy-filter-PII-multi'));
   assert.ok(plan.remove.includes('/Users/me/.cache/huggingface/hub/models--fastino--gliner2.5-multi-v1'));
   assert.ok(plan.remove.includes('/Users/me/.cache/huggingface/hub/models--fastino--gliner2-multi-v1'));
   assert.ok(plan.remove.includes('/Users/me/.cache/huggingface/hub/models--opendatalab--PDF-Extract-Kit-1.0'));

@@ -160,7 +160,7 @@ si tout passe, 1 sinon.
 - le venv `<destination>/venv`, avec `requirements.txt` (MarkItDown, pypdf,
   GLiNER, Presidio, spaCy) puis `mineru[pipeline,vlm]==2.7.6` ;
 - les modèles MinerU du moteur *pipeline* (OCR des pièces scannées) et le
-  modèle GLiNER2.5.
+  modèle GLiNER2-PII.
 
 `<destination>` est `PIECEMAKER_COMPONENTS_HOME`, ou `PIECEMAKER_HOME` si cette
 variable est absente. Elle ne contient que l'interpréteur et le venv. Les

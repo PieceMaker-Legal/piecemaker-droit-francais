@@ -37,8 +37,8 @@ from model_config import (  # noqa: E402
 MODELS_CONFIG = {
     "gliner2": {
         "model_id": PREFERRED_GLINER_MODEL,
-        "description": "GLiNER2.5 multilingual boundary model (287M params)",
-        "size_mb": "~1.1GB",
+        "description": "GLiNER2-PII multilingual privacy filter (205M params)",
+        "size_mb": "~1.2GB",
         "optional": False,
         "type": "huggingface",
     },

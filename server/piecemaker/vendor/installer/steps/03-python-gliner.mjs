@@ -3,8 +3,8 @@
  *
  * This is the anonymisation core: a venv is created at config.venvPath,
  * websocket-server/scripts/requirements.txt is installed into it, then
- * warmup.py downloads GLiNER2.5 multilingual (~1.1GB). An
- * existing GLiNER2 checkpoint triggers an explicit, mandatory migration prompt.
+ * warmup.py downloads GLiNER2-PII multilingual (~1.2GB). An
+ * existing GLiNER checkpoint triggers an explicit, mandatory migration prompt.
  * warmup.py emits JSON status lines on stdout (see log_json in warmup.py) interleaved
  * with plain emoji lines (log_plain) — both are surfaced through the spinner.
  */
@@ -50,7 +50,7 @@ export function parseWarmupStatus(result) {
 
 export function glinerInstallState(status) {
   const migration = status?.migration || {};
-  const preferredModelId = migration.preferred_model_id || 'fastino/gliner2.5-multi-v1';
+  const preferredModelId = migration.preferred_model_id || 'fastino/gliner2-privacy-filter-PII-multi';
   const preferredCached = Boolean(
     migration.preferred_cached ?? status?.models?.gliner2?.cached,
   );
@@ -67,8 +67,8 @@ export function glinerInstallState(status) {
 
 export function glinerDownloadQuestion(state) {
   return state.replacementRequired
-    ? `GLiNER2.5 multilingue remplace obligatoirement l’ancien modèle ${state.legacyModels.join(', ')}. Télécharger et activer ${state.preferredModelId} (environ 1,1 Go) ?`
-    : `Télécharger et activer ${state.preferredModelId} (environ 1,1 Go) ?`;
+    ? `GLiNER2-PII remplace obligatoirement l’ancien modèle ${state.legacyModels.join(', ')}. Télécharger et activer ${state.preferredModelId} (environ 1,2 Go) ?`
+    : `Télécharger et activer ${state.preferredModelId} (environ 1,2 Go) ?`;
 }
 
 function readWarmupStatus(python) {
@@ -92,7 +92,7 @@ export async function install(ctx) {
   if (ctx.dryRun) {
     log.info(`[simulation] Création du venv dans ${venvDir}`);
     log.info(`[simulation] pip install -r ${REQUIREMENTS}`);
-    log.info('[simulation] Proposition de migration obligatoire vers GLiNER2.5');
+    log.info('[simulation] Proposition de migration obligatoire vers GLiNER2-PII');
     log.info('[simulation] python warmup.py (téléchargement des modèles)');
     return { status: 'skipped', note: 'Mode simulation — aucune installation effectuée.' };
   }
@@ -144,8 +144,7 @@ export async function install(ctx) {
   updateConfig({ pythonPath: vp.python, venvPath: venvDir });
   writeEnv({ PYTHON_PATH: vp.python });
 
-  // 4. GLiNER2.5 is a boundary checkpoint and cannot be loaded by the former
-  // GLiNER2 class. Migration is mandatory: declining keeps the step incomplete
+  // 4. GLiNER2-PII replaces the former checkpoints. Migration is mandatory: declining keeps the step incomplete
   // and the scanner deliberately has no fallback to the legacy checkpoint.
   const beforeWarmup = readWarmupStatus(vp.python);
   const installState = glinerInstallState(beforeWarmup);
@@ -154,11 +153,11 @@ export async function install(ctx) {
   if (!proceed) {
     return {
       status: 'partial',
-      note: 'Migration GLiNER2.5 obligatoire refusée — l’anonymisation reste indisponible. Relancez l’étape « 03-python-gliner » pour terminer la migration.',
+      note: 'Migration GLiNER2-PII obligatoire refusée — l’anonymisation reste indisponible. Relancez l’étape « 03-python-gliner » pour terminer la migration.',
     };
   }
 
-  const spin = spinner('Installation du modèle GLiNER2.5...');
+  const spin = spinner('Installation du modèle GLiNER2-PII...');
   const code = await run(vp.python, [WARMUP], { cwd: SCRIPTS_DIR, onLine: onWarmupLine(spin) });
 
   if (code !== 0) {
@@ -175,13 +174,13 @@ export async function install(ctx) {
     .filter(([, info]) => !info.cached && !info.config?.optional)
     .map(([key]) => key);
   if (!installedState.preferredCached || !afterWarmup?.ready) {
-    spin.fail('Migration vers GLiNER2.5 incomplète');
+    spin.fail('Migration vers GLiNER2-PII incomplète');
     return {
       status: 'partial',
       note: `Les modèles requis ne sont pas prêts (${missingAfterWarmup.join(', ') || installedState.preferredModelId}). Relancez l’étape « 03-python-gliner » pour réessayer.`,
     };
   }
-  spin.succeed('GLiNER2.5 multilingue prêt');
+  spin.succeed('GLiNER2-PII prêt');
 
   return { status: 'done', note: '' };
 }
@@ -216,7 +215,7 @@ export async function check(ctx) {
       : 'gliner2 absent';
     return {
       status: 'failed',
-      note: `${installed} : l'architecture boundary de GLiNER2.5 exige gliner2 >= ${runtime.required_release || '2.0'}. Relancez cette étape pour réinstaller les dépendances.`,
+      note: `${installed} : le moteur GLiNER2 exige gliner2 >= ${runtime.required_release || '2.0'}. Relancez cette étape pour réinstaller les dépendances.`,
     };
   }
 

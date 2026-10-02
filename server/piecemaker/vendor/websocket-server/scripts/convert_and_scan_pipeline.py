@@ -1883,7 +1883,7 @@ def run_pipeline(resources: PipelineResources):
     print()
 
     # What is left to do, decided before anything runs: the scanner worker loads
-    # ~1.1GB of GLiNER2.5 weights, so it must only start when at least one
+    # ~1.2GB of GLiNER2-PII weights, so it must only start when at least one
     # file actually needs a PII scan.
     def markdown_path(input_file: str) -> Path:
         return Path(args.output) / f"{Path(input_file).stem}.md"

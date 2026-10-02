@@ -1,17 +1,16 @@
 """Sélection et chargement du checkpoint GLiNER local de PieceMaker.
 
-GLiNER2.5 utilise une architecture ``boundary`` que l'ancienne classe
-``GLiNER2`` (architecture ``span``) ne sait pas charger. ``AutoExtractor``
-choisit la bonne implémentation. Le checkpoint historique n'est conservé ici
-que pour que l'installateur puisse détecter qu'une migration est nécessaire :
-il n'est jamais sélectionné à l'exécution.
+Le checkpoint GLiNER2-PII (architecture ``span``) se charge avec ``GLiNER2``.
+Les checkpoints historiques ne sont conservés ici que pour que l'installateur
+puisse détecter qu'une migration est nécessaire : ils ne sont jamais
+sélectionnés à l'exécution.
 """
 
 import os
 
 
-PREFERRED_GLINER_MODEL = "fastino/gliner2.5-multi-v1"
-LEGACY_GLINER_MODELS = ("fastino/gliner2-multi-v1",)
+PREFERRED_GLINER_MODEL = "fastino/gliner2-privacy-filter-PII-multi"
+LEGACY_GLINER_MODELS = ("fastino/gliner2.5-multi-v1", "fastino/gliner2-multi-v1")
 
 
 REQUIRED_GLINER2_RELEASE = (2, 0)
