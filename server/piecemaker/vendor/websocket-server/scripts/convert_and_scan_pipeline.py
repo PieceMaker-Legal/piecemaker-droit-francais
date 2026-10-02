@@ -1533,7 +1533,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         if not match:
             continue
         key = _societe_counter_key_of_code(code)
-        societe_counters[key] = max(societe_counters.get(key, 0), int(match.group(1)) + 1)
+        societe_counters[key] = max(societe_counters.get(key, 0), int(match.group(1)))
 
     # Sociétés : même société = même code (cf. cluster_company_groups). Un code de
     # forme (SA_n) l'emporte sur PERS_MORALE_n ; les codes écartés sont retirés.
