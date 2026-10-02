@@ -213,11 +213,6 @@ export class KnowledgeStore {
     })();
   }
 
-  public purgeInstitutionalEntities(projectIdInput: string): number {
-    const projectId = this.resolveProject(projectIdInput);
-    return this.database.transaction(() => this.removeInstitutionalEntities(projectId))();
-  }
-
   public snapshot(projectIdInput: string): KnowledgeSnapshot {
     const projectId = this.resolveProject(projectIdInput);
     const storedNodes = (this.database.prepare('SELECT * FROM piecemaker_nodes WHERE project_id=? ORDER BY kind,label,id').all(projectId) as NodeRow[]).map(toNode);

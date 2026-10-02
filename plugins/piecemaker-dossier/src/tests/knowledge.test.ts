@@ -247,7 +247,7 @@ describe('GLiNER result persistence', () => {
       documents: [],
     }));
     useInstitutionalTerms(['Tribunal Judiciaire']);
-    expect(store.purgeInstitutionalEntities('project-1')).toBe(1);
+    store.update({ projectId: 'project-1', operations: [] });
     useInstitutionalTerms([]);
     const snapshot = store.snapshot('project-1');
     expect(snapshot.nodes.map((node) => node.id)).toEqual(['entity:Monsieur Laurent Dumas']);
