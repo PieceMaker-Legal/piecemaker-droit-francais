@@ -1237,6 +1237,42 @@ def _merge_societe_clusters(merged_mapping: Dict, merged_reverse: Dict, merged_e
     return attached
 
 
+# ---------------------------------------------------------------------------
+# Même valeur écrite de plusieurs façons : un seul code
+# ---------------------------------------------------------------------------
+# Deux écritures d'un même identifiant, du même type, partagent un code ; la nouvelle
+# écriture devient une variante de l'entrée existante. Le type d'une entrée existante se
+# lit au préfixe de son code (le seed SQLite la range dans `autres` sans catégorie, et
+# merge_with_existing_mapping réécrit CREDIT_CARD_01 en CREDIT_01). Les autres types
+# (personnes, sociétés, adresses, e-mails, dates de naissance...) ne sont pas concernés.
+
+IDENTIFIER_KINDS = ("TELEPHONE", "SIREN", "SIRET", "NIR", "TVA", "IBAN", "CREDIT_CARD", "IMMATRICULATION")
+_CODE_PREFIX_KIND = {"PHONE": "TELEPHONE", "CREDIT": "CREDIT_CARD", **{kind: kind for kind in IDENTIFIER_KINDS}}
+_PHONE_INTERNATIONAL = re.compile(r"(?:\+|00)(?:33|262|590|594|596)(.*)", re.DOTALL)
+
+
+def identifier_kind(code: str) -> Optional[str]:
+    """Type d'identifiant d'un code (TELEPHONE_01, PHONE_02, CREDIT_CARD_01...), sinon None."""
+    return _CODE_PREFIX_KIND.get(str(code).split("_")[0].upper())
+
+
+def identifier_key(kind: str, text: str) -> Optional[str]:
+    """Clé de comparaison d'un identifiant : deux écritures de même type et de même clé sont la même valeur.
+
+    Téléphone : chiffres seuls, +33 / 0033 / +262 / +590 / +594 / +596 ramenés à « 0 » (un « (0) »
+    éventuel retiré). Autres identifiants : lettres et chiffres en majuscules. None pour un
+    autre type, ou si rien ne reste.
+    """
+    if kind == "TELEPHONE":
+        compact = re.sub(r"\s", "", text)
+        international = _PHONE_INTERNATIONAL.match(compact)
+        digits = re.sub(r"\D", "", international.group(1).replace("(0)", "") if international else compact)
+        return ("0" if international and digits else "") + digits or None
+    if kind in IDENTIFIER_KINDS:
+        return re.sub(r"[\W_]", "", text).upper() or None
+    return None
+
+
 def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
     """Convert consolidated entities to anonymization mapping format.
 
@@ -1296,6 +1332,7 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
 
     # Track seen entities to avoid duplicates across files
     seen_entities = {}  # text -> code
+    seen_identifiers = {}  # (type, identifier_key) -> code
 
     # Consolidate PERSON entities to remove duplicates
     for entity_type in consolidated_entities.get("entities", {}).keys():
@@ -1317,6 +1354,15 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
             # Skip if already processed
             if text_lower in seen_entities:
                 mapping[text] = seen_entities[text_lower]
+                continue
+
+            # Same identifier written another way: a variant of the code of the first spelling
+            identifier = identifier_key(entity_type, text)
+            if identifier is not None and (entity_type, identifier) in seen_identifiers:
+                code = seen_identifiers[(entity_type, identifier)]
+                mapping[text] = code
+                seen_entities[text_lower] = code
+                extracted_data[category][code]["variants"].append(text)
                 continue
 
             # Generate code based on category
@@ -1345,6 +1391,8 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
 
             reverse_mapping[code] = [text]  # Principal value (array for consistency)
             seen_entities[text_lower] = code
+            if identifier is not None:
+                seen_identifiers[(entity_type, identifier)] = code
 
             # Store in extracted_data
             extracted_data[category][code] = {
@@ -1510,6 +1558,25 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
 
     seen_entities_lower = {k.lower(): v for k, v in merged_mapping.items()}
 
+    # Identifiants (téléphone, SIREN...) : (type, clé) -> code existant, d'après le préfixe du code.
+    # Une nouvelle écriture de la même valeur rejoint ce code ; les doublons déjà présents restent.
+    identifier_codes: Dict[tuple, str] = {}
+    for code, texts in [*((c, [t]) for t, c in merged_mapping.items()), *merged_reverse.items()]:
+        kind = identifier_kind(code)
+        for text in texts if kind else ():
+            key = identifier_key(kind, text)
+            if key is not None:
+                identifier_codes.setdefault((kind, key), code)
+    # Une écriture supprimée par l'utilisateur écarte les autres écritures de la même valeur.
+    ignored_keys = {
+        kind: {key for key in (identifier_key(kind, text) for text in ignored) if key is not None}
+        for kind in IDENTIFIER_KINDS
+    }
+
+    def is_ignored(kind: Optional[str], text: str) -> bool:
+        return text.lower() in ignored_lower or (
+            kind is not None and identifier_key(kind, text) in ignored_keys[kind])
+
     # Merge new entries
     for text, code in new_mapping.get('mapping', {}).items():
         text_lower = text.lower()
@@ -1565,7 +1632,31 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
             continue
 
         # Skip entities the lawyer discarded from the mapping
-        if text_lower in ignored_lower:
+        kind = identifier_kind(code) if category in ("siren", "autres") else None
+        if is_ignored(kind, text):
+            continue
+
+        # Same identifier as an existing code, written another way: one more variant of that code
+        key = identifier_key(kind, text) if kind else None
+        existing_code = identifier_codes.get((kind, key)) if key is not None else None
+        if existing_code:
+            bucket = next((name for name, entries in merged_extracted.items() if existing_code in entries), "autres")
+            entry = merged_extracted[bucket].get(existing_code, {})
+            known_texts = [t for t, c in merged_mapping.items() if c == existing_code]
+            original = entry.get("original") or next(iter(known_texts), text)
+            accepted_texts = [candidate for candidate in candidate_texts if not is_ignored(kind, candidate)]
+            _merge_person_entry(
+                merged_mapping,
+                merged_reverse,
+                merged_extracted,
+                existing_code,
+                [*_person_entry_texts(existing_code, entry, merged_reverse, known_texts), *accepted_texts],
+                None,
+                bucket,
+            )
+            merged_extracted[bucket][existing_code]["original"] = original
+            for candidate in accepted_texts:
+                seen_entities_lower[candidate.lower()] = existing_code
             continue
 
         # Generate new code with incremented counter
@@ -1587,10 +1678,13 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         used_codes.add(new_code)
 
         # Add all variants to merged structures (no lowercase duplicates)
-        accepted_variants = [variant for variant in variants if variant.lower() not in ignored_lower]
+        accepted_variants = [variant for variant in variants if not is_ignored(kind, variant)]
         for variant in accepted_variants:
             merged_mapping[variant] = new_code
             seen_entities_lower[variant.lower()] = new_code
+            variant_key = identifier_key(kind, variant) if kind else None
+            if variant_key is not None:
+                identifier_codes.setdefault((kind, variant_key), new_code)
 
         seen_entities_lower[text_lower] = new_code
 
