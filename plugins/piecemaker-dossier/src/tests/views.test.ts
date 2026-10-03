@@ -60,6 +60,27 @@ describe('BODACC on designated parties', () => {
     expect(html).not.toContain('data-bodacc-family=');
   });
 
+  const clientWithSiren = {
+    ...snapshot,
+    nodes: [...snapshot.nodes, { id: 'siren', projectId: 'project-1', kind: 'siren' as const, label: '123456789', aliases: [], data: {}, createdAt: '', updatedAt: '' }],
+    links: [...snapshot.links, { projectId: 'project-1', fromNodeId: 'client', toNodeId: 'siren', relation: 'SIREN', data: {} }],
+  };
+
+  it('disables the BODACC button while the report is being generated', () => {
+    const html = generalView({ graph: clientWithSiren }, false, null, new Map([['client', { status: 'loading' as const }]]));
+
+    expect(html).toMatch(/data-action="bodacc-search"[^>]*disabled/);
+    expect(html).toContain('Recherche…');
+    expect(html).not.toContain('pmd-bodacc-accordion');
+  });
+
+  it('shows a BODACC error on one line without an accordion', () => {
+    const html = generalView({ graph: clientWithSiren }, false, null, new Map([['client', { status: 'error' as const, error: 'x' }]]));
+
+    expect(html).toContain('<p class="pmd-bodacc-status pmd-bodacc-error">x</p>');
+    expect(html).not.toContain('pmd-bodacc-accordion');
+  });
+
   it('hides the BODACC action until a SIREN or SIRET is known', () => {
     const html = generalView({ graph: snapshot });
 

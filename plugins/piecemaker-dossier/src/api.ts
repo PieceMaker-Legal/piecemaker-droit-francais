@@ -52,6 +52,7 @@ export type BodaccSearchResult = {
   total: number;
   alertes: string[];
   annonces: BodaccAnnouncement[];
+  reportPath: string;
 };
 type RepositoryCase = { path: string; location: string };
 type RepositoryOverview = { folders?: RepositoryCase[] };
@@ -112,7 +113,7 @@ export const knowledgeApi = {
   scanJob: (jobId: string, projectId: string) => request<{ job: ScanJob | null }>(BASE, `/scan/job?id=${encodeURIComponent(jobId)}&projectId=${encodeURIComponent(projectId)}`),
   cancelScan: (jobId: string, projectId: string) => request<{ job: ScanJob | null }>(BASE, '/scan/cancel', { method: 'POST', body: JSON.stringify({ id: jobId, projectId }) }),
   searchCompanies: (queryText: string) => request<{ query: string; results: CompanySearchResult[] }>(PIECEMAKER_BASE, '/company-search', { method: 'POST', body: JSON.stringify({ query: queryText }) }),
-  searchBodacc: (siren: string, siret: string) => request<BodaccSearchResult>(PIECEMAKER_BASE, '/bodacc-search', { method: 'POST', body: JSON.stringify({ siren, siret }) }),
+  searchBodacc: (projectPath: string, siren: string, siret: string) => request<BodaccSearchResult>(PIECEMAKER_BASE, '/bodacc-search', { method: 'POST', body: JSON.stringify({ projectPath, siren, siret }) }),
   update: (projectId: string, operations: KnowledgeUpdateOperation[]) => request(BASE, '/update', { method: 'POST', body: JSON.stringify({ projectId, operations }) }),
   ensureAgentInstructions: (projectId: string) => request<{ ok: true; created: string[] }>(PIECEMAKER_BASE, '/agent-instructions', { method: 'POST', body: JSON.stringify({ projectId }) }),
   institutionalTerms: () => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms'),
