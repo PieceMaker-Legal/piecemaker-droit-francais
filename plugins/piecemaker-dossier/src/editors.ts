@@ -497,7 +497,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
           <div class="pmd-document-form-header"><h3>Corriger la pièce</h3></div>
           <div class="pmd-document-form-body">
             <div class="pmd-document-grid">
-              <label class="pmd-document-wide">Type de pièce<select class="pmd-select" name="nature"><option value="">— Sélectionner —</option>${natureOptions}<option value="__piecemaker_custom_nature__">Autre type…</option></select></label>
+              <label class="pmd-document-wide">Type de pièce<select class="pmd-select" name="nature"><option value="">— Sélectionner —</option>${natureOptions}<option value="__piecemaker_custom_nature__">Autre type…</option></select><input class="pmd-input" name="customNature" placeholder="Saisissez le type de pièce" aria-label="Type de pièce personnalisé" hidden></label>
               <label>Date<input class="pmd-input" type="date" name="date" value="${escapeHtml(dateFor(node))}"></label>
               <label>Lieu<input class="pmd-input" name="localisation" placeholder="Ex. TJ de ADRESSE_02" value="${escapeHtml(textValue(node.data.localisation))}"></label>
             </div>
@@ -616,6 +616,12 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     renderFields();
   };
   layer.querySelector<HTMLElement>('[data-add-field]')?.addEventListener('click', () => addFieldRow());
+  const customNatureInput = layer.querySelector<HTMLInputElement>('input[name="customNature"]');
+  layer.querySelector<HTMLSelectElement>('select[name="nature"]')?.addEventListener('change', (event) => {
+    if (!customNatureInput) return;
+    customNatureInput.hidden = (event.target as HTMLSelectElement).value !== '__piecemaker_custom_nature__';
+    if (!customNatureInput.hidden) customNatureInput.focus();
+  });
   layer.addEventListener('click', (event) => {
     const remove = (event.target as HTMLElement).closest<HTMLElement>('[data-remove-field]');
     if (!remove) return;
@@ -632,12 +638,13 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     }
     const form = new FormData(event.currentTarget as HTMLFormElement);
     const natureSelection = textValue(form.get('nature'));
-    const customNature = natureSelection === '__piecemaker_custom_nature__' ? (await askPrompt(root, 'Type de pièce personnalisé', '', 'Utiliser')) || '' : '';
+    const customNature = natureSelection === '__piecemaker_custom_nature__' ? textValue(form.get('customNature')).trim() : '';
     if (natureSelection === '__piecemaker_custom_nature__' && !customNature) {
       if (submit) {
         submit.disabled = false;
         submit.textContent = 'Enregistrer';
       }
+      customNatureInput?.focus();
       return;
     }
     const savedNature = natureSelection === '__piecemaker_custom_nature__' ? customNature : natureSelection;
