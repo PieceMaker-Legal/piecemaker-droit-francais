@@ -1,8 +1,9 @@
-import type { Cell, CitationSource, ExportFormat, ExportResult, ReviewDetail, ReviewRow } from '../shared.js';
+import type { Cell, CitationSource, ExportFormat, ExportResult, Provider, ReviewDetail, ReviewRow } from '../shared.js';
 import { CATEGORY_LABELS, citationIssue, lastSearchDate, emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, MAX_CITATION_CORRECTIONS, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, openModal, renderMarkdown, toast } from './dom.js';
-import { anonymizationProxyOrigin } from './host.js';
+import { anonymizationProxyOrigin, loadModels } from './host.js';
+import type { ModelOption } from './host.js';
 
 const POLL_INTERVAL = 2500;
 
@@ -10,6 +11,12 @@ const MIME_TYPES: Record<ExportFormat, string> = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   pdf: 'application/pdf',
 };
+
+const PROVIDERS: { value: Provider; label: string }[] = [
+  { value: 'claude', label: 'Claude' },
+  { value: 'codex', label: 'Codex' },
+  { value: 'mistral', label: 'Mistral' },
+];
 
 function rowStatus(row: ReviewRow): string {
   switch (row.status) {
@@ -69,6 +76,36 @@ export function createReviewView(app: App, project: string, file: string, onBack
   let destroyed = false;
   let busy = false;
   let scroll = { top: 0, left: 0 };
+  let choice: { provider: Provider; model: string } | null = null;
+  let models: { provider: Provider; options: ModelOption[]; cheapest: string } | null = null;
+
+  async function loadChoiceModels(provider: Provider) {
+    try {
+      models = { provider, ...await loadModels(provider) };
+    } catch {
+      models = { provider, options: [], cheapest: '' };
+    }
+    if (choice && !choice.model) choice.model = models.cheapest || models.options[0]?.value || '';
+    if (!destroyed) render();
+  }
+
+  function modelSelector(running: boolean): string {
+    if (!choice) return '';
+    const options = models?.provider === choice.provider ? models.options : [];
+    const listed = !choice.model || options.some((option) => option.value === choice!.model) ? options : [{ value: choice.model, label: choice.model }, ...options];
+    return `
+        <label class="ptr-field" style="width:110px"><span class="ptr-label">IA</span><select class="ptr-select" data-choice-provider${running ? ' disabled' : ''}>${PROVIDERS.map((provider) => `<option value="${provider.value}"${provider.value === choice!.provider ? ' selected' : ''}>${provider.label}</option>`).join('')}</select></label>
+        <label class="ptr-field" style="width:200px"><span class="ptr-label">Modèle IA pour les relances</span><select class="ptr-select" data-choice-model${running ? ' disabled' : ''}>${listed.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === choice!.model ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`;
+  }
+
+  function costlyChoice(): string {
+    return choice && models?.provider === choice.provider && models.cheapest && choice.model !== models.cheapest
+      ? '<div class="ptr-warning">Attention : ce modèle consomme beaucoup de tokens.</div>'
+      : '';
+  }
+
+  const choiceLabel = () => escapeHtml(choice ? `${choice.provider} — ${choice.model}` : '');
+  const choiceBody = () => (choice?.model ? { provider: choice.provider, model: choice.model } : {});
 
   function renderDetail(): string {
     if (!detail || !selected) return '';
@@ -95,6 +132,10 @@ export function createReviewView(app: App, project: string, file: string, onBack
   function render() {
     if (!detail) return;
     const { review, status } = detail;
+    if (!choice) {
+      choice = { provider: review.provider, model: review.model };
+      void loadChoiceModels(choice.provider);
+    }
     const wrap = element.querySelector<HTMLElement>('.ptr-table-wrap');
     if (wrap) scroll = { top: wrap.scrollTop, left: wrap.scrollLeft };
     const done = review.rows.filter((row) => row.status === 'done').length;
@@ -105,13 +146,14 @@ export function createReviewView(app: App, project: string, file: string, onBack
         <button type="button" class="ptr-button" data-back>← Retour</button>
         <div style="min-width:0">
           <div class="ptr-review-title">${escapeHtml(review.title)}</div>
-          <div class="ptr-small ptr-muted">${escapeHtml(review.templateName)} · ${escapeHtml(app.projectName(project))} · ${escapeHtml(review.provider)} ${escapeHtml(review.model)} · ${escapeHtml(formatDate(review.createdAt))}</div>
+          <div class="ptr-small ptr-muted">${escapeHtml(review.templateName)} · ${escapeHtml(app.projectName(project))} · ${escapeHtml(formatDate(review.createdAt))}</div>
           ${review.research ? `<div class="ptr-small ptr-muted" title="${escapeHtml(review.research.criteria.join('\n'))}">Requête : <code>${escapeHtml(review.research.query)}</code> · ${escapeHtml(review.research.criteria.join(' · '))} · dernière recherche le ${escapeHtml(formatDate(lastSearchDate(review)))}${review.research.updates?.length ? ` (${review.research.updates.length} mise${review.research.updates.length > 1 ? 's' : ''} à jour)` : ''}</div>` : ''}
         </div>
         ${review.category === 'recherche-juridique' ? `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS['recherche-juridique'])}</span>` : ''}
         <span class="ptr-chip ptr-chip-${status}">${running ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(status))} · ${done}/${review.rows.length}</span>
         ${running ? `<div class="ptr-progress" aria-hidden="true"><div style="width:${review.rows.length ? Math.round((done / review.rows.length) * 100) : 0}%"></div></div>` : ''}
         <span class="ptr-spacer"></span>
+        ${modelSelector(running)}
         ${running ? '<button type="button" class="ptr-button ptr-button-danger" data-cancel>Annuler</button>' : ''}
         ${review.research ? `<button type="button" class="ptr-button" data-update-research${review.research.filters ? ` title="Chercher les décisions rendues depuis la dernière recherche (${escapeHtml(formatDate(lastSearchDate(review)))}) et les analyser"` : ' disabled title="Recherche lancée avant l’enregistrement de ses critères : relancez-la depuis l’onglet Recherche juridique"'}>Mettre à jour la recherche</button>` : ''}
         ${!running && failed ? '<button type="button" class="ptr-button" data-retry title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>' : ''}
@@ -210,6 +252,18 @@ export function createReviewView(app: App, project: string, file: string, onBack
     schedule();
   };
 
+  element.addEventListener('change', (event) => {
+    const target = event.target as HTMLElement;
+    if (!choice) return;
+    if (target.matches('[data-choice-provider]')) {
+      choice = { provider: (target as HTMLSelectElement).value as Provider, model: '' };
+      void loadChoiceModels(choice.provider);
+    } else if (target.matches('[data-choice-model]')) {
+      choice.model = (target as HTMLSelectElement).value;
+      render();
+    }
+  });
+
   element.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     const citation = target.closest<HTMLElement>('[data-citation]');
@@ -248,10 +302,10 @@ export function createReviewView(app: App, project: string, file: string, onBack
         return;
       }
       void action(async () => {
-        const confirmed = await confirmDialog(app.root, 'Lancer la colonne ?', `<p>La question « ${escapeHtml(column.name)} » sera posée pour les <strong>${sessions} ligne${sessions > 1 ? 's' : ''}</strong> dont la cellule est vide, soit ${sessions} session${sessions > 1 ? 's' : ''} IA (${escapeHtml(review.provider)} — ${escapeHtml(review.model)}). Les cellules déjà remplies ne sont pas reposées.</p>`, 'Lancer');
+        const confirmed = await confirmDialog(app.root, 'Lancer la colonne ?', `<p>La question « ${escapeHtml(column.name)} » sera posée pour les <strong>${sessions} ligne${sessions > 1 ? 's' : ''}</strong> dont la cellule est vide, soit ${sessions} session${sessions > 1 ? 's' : ''} IA (${choiceLabel()}). Les cellules déjà remplies ne sont pas reposées.</p>${costlyChoice()}`, 'Lancer');
         if (!confirmed) return;
         const proxyOrigin = await anonymizationProxyOrigin();
-        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/run', { project, file, column: index, proxyOrigin }));
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/run', { project, file, column: index, proxyOrigin, ...choiceBody() }));
       });
       return;
     }
@@ -259,9 +313,9 @@ export function createReviewView(app: App, project: string, file: string, onBack
       const { row: rowId, column: index } = selected;
       const filled = isCellFilled(detail.review.cells[rowId]?.[String(index)]);
       void action(async () => {
-        if (filled && !await confirmDialog(app.root, 'Relancer cette cellule ?', '<p>La réponse actuelle sera remplacée par celle d’une nouvelle session IA, qui ne pose que cette question.</p>', 'Relancer')) return;
+        if (filled && !await confirmDialog(app.root, 'Relancer cette cellule ?', `<p>La réponse actuelle sera remplacée par celle d’une nouvelle session IA (${choiceLabel()}), qui ne pose que cette question.</p>${costlyChoice()}`, 'Relancer')) return;
         const proxyOrigin = await anonymizationProxyOrigin();
-        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/run', { project, file, rowId, column: index, replace: filled, proxyOrigin }));
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/run', { project, file, rowId, column: index, replace: filled, proxyOrigin, ...choiceBody() }));
       });
       return;
     }
@@ -272,7 +326,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     if (target.closest('[data-retry]')) {
       void action(async () => {
         const proxyOrigin = await anonymizationProxyOrigin();
-        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/retry', { project, file, proxyOrigin }));
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/retry', { project, file, proxyOrigin, ...choiceBody() }));
       });
       return;
     }
