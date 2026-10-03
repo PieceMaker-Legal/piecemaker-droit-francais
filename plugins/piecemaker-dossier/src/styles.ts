@@ -108,9 +108,9 @@ button.pmd-column-empty span{font-size:12px;color:var(--pmd-text)}
 button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-profile-card{position:relative;display:flex;flex-direction:column;overflow:visible;border:1px solid var(--pmd-border);border-radius:16px;background:var(--pmd-surface);box-shadow:var(--pmd-glass-shadow)}
 .pmd-profile-card:has(.pmd-profile-menu[data-open=true]){z-index:20}
-.pmd-profile-card[data-side=client]{border-color:color-mix(in srgb,var(--pmd-client) 45%,var(--pmd-border));border-left:3px solid var(--pmd-client);background:color-mix(in srgb,var(--pmd-client) 12%,var(--pmd-surface))}
-.pmd-profile-card[data-side=adverse]{border-color:color-mix(in srgb,var(--pmd-adverse) 45%,var(--pmd-border));border-left:3px solid var(--pmd-adverse);background:color-mix(in srgb,var(--pmd-adverse) 12%,var(--pmd-surface))}
-.pmd-profile-card[data-side=neutral]{border-color:color-mix(in srgb,var(--pmd-tiers) 45%,var(--pmd-border));border-left:3px solid var(--pmd-tiers);background:color-mix(in srgb,var(--pmd-tiers) 12%,var(--pmd-surface))}
+.pmd-profile-card[data-side=client]{border-left:3px solid var(--pmd-client)}
+.pmd-profile-card[data-side=adverse]{border-left:3px solid var(--pmd-adverse)}
+.pmd-profile-card[data-side=neutral]{border-left:3px solid var(--pmd-tiers)}
 .pmd-profile-accent{display:none}
 .pmd-profile-card .pmd-card-head{padding:14px 16px 10px}
 .pmd-kind-icon{display:flex;width:36px;height:36px;flex:0 0 36px;align-items:center;justify-content:center;border-radius:10px;background:var(--pmd-soft);color:var(--pmd-muted)}
