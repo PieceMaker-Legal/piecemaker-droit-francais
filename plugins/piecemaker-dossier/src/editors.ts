@@ -6,6 +6,8 @@ import type { ViewData } from './views.js';
 import type { KnowledgeNode, KnowledgeUpdateOperation, NodeKind } from './types.js';
 import { PROCEDURE_POSITIONS, partyCodeChange } from './party-codes.js';
 import type { PartySide } from './party-codes.js';
+import { changeNodeSide, cleanSelection, createEntity, findEntityBySelection, parseSelectionDate } from './selection-categories.js';
+import type { SelectionChange, SelectionGraph } from './selection-categories.js';
 
 export function modal(root: HTMLElement, body: string): HTMLElement {
   const layer = document.createElement('div');
@@ -498,6 +500,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
               <label>Date<input class="pmd-input" type="date" name="date" value="${escapeHtml(dateFor(node))}"></label>
               <label>Lieu<input class="pmd-input" name="localisation" placeholder="Ex. TJ de ADRESSE_02" value="${escapeHtml(textValue(node.data.localisation))}"></label>
             </div>
+            <p class="pmd-document-muted pmd-selection-message" data-selection-message hidden></p>
             <div class="pmd-document-form-section"><span>Personnes citées</span><div class="pmd-document-entities">${entityButtons || '<p class="pmd-document-muted">Aucune personne connue.</p>'}</div></div>
             <div class="pmd-document-form-section"><div class="pmd-document-section-heading"><span>Champs libres</span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" type="button" data-add-field>＋ Ajouter</button></div><div data-fields>${fieldRows}</div><p class="pmd-document-muted" data-empty-fields ${fields.length ? 'hidden' : ''}>Aucun champ libre.</p></div>
           </div>
@@ -507,16 +510,23 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     </div>`);
   const preview = layer.querySelector<HTMLElement>('[data-document-preview]');
   const selectedEntities = new Set(linked);
+  let working: SelectionGraph = { nodes: data.graph.nodes, mappings: data.graph.mappings, reservedCodes: data.graph.reservedCodes };
+  let previewContent = '';
+  const queuedOperations: KnowledgeUpdateOperation[] = [];
+  const renamedIds = new Map<string, string>();
+  const selectionValues: Record<'date' | 'fact', string[]> = { date: [], fact: [] };
+  const dateInput = layer.querySelector<HTMLInputElement>('input[name="date"]');
+  const readFields = () => Array.from(layer.querySelectorAll<HTMLElement>('[data-field-row]')).map((row) => ({ label: row.querySelector<HTMLInputElement>('[data-field-label]')?.value.trim() || '', value: row.querySelector<HTMLInputElement>('[data-field-value]')?.value.trim() || '' })).filter((field) => field.label || field.value);
   const datePreviewValues = (): string[] => {
-    const iso = dateFor(node);
+    const iso = dateInput?.value || dateFor(node);
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
     const numeric = match ? [`${match[3]}/${match[2]}/${match[1]}`, `${match[3]}-${match[2]}-${match[1]}`, `${match[3]}.${match[2]}.${match[1]}`] : [];
-    return [textValue(node.data.doc_date), textValue(node.data.date), iso, ...numeric].filter(Boolean);
+    return [textValue(node.data.doc_date), textValue(node.data.date), iso, ...numeric, ...selectionValues.date].filter(Boolean);
   };
   const sideOf = (entry: KnowledgeNode): 'client' | 'adverse' | 'tiers' => entry.data.partySide === 'client' ? 'client' : entry.data.partySide === 'adversaire' ? 'adverse' : 'tiers';
   const mappedPreviewValues = (side: 'client' | 'adverse' | 'tiers' | null): string[] => {
-    const nodesById = new Map(data.graph.nodes.map((entry) => [entry.id, entry]));
-    return data.graph.mappings
+    const nodesById = new Map(working.nodes.map((entry) => [entry.id, entry]));
+    return working.mappings
       .filter((mapping) => {
         const entry = nodesById.get(mapping.nodeId);
         const party = entry?.kind === 'person' || entry?.kind === 'company';
@@ -527,8 +537,8 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   };
   const previewValues = (category: HighlightCategory): string[] => {
     if (category === 'date') return datePreviewValues();
-    if (category === 'fact') return [nature, textValue(node.data.localisation), ...fields.flatMap((field) => [field.label, field.value]), ...mappedPreviewValues(null)].filter(Boolean);
-    return [...entities.filter((entry) => sideOf(entry) === category).flatMap((entry) => [entry.label, ...entry.aliases]), ...mappedPreviewValues(category)];
+    if (category === 'fact') return [nature, textValue(node.data.localisation), ...readFields().flatMap((field) => [field.label, field.value]), ...selectionValues.fact, ...mappedPreviewValues(null)].filter(Boolean);
+    return [...working.nodes.filter((entry) => (entry.kind === 'person' || entry.kind === 'company') && sideOf(entry) === category).flatMap((entry) => [entry.label, ...entry.aliases]), ...mappedPreviewValues(category)];
   };
   const highlightPreview = (content: string): string => {
     const categories: HighlightCategory[] = ['client', 'adverse', 'tiers', 'date', 'fact'];
@@ -554,6 +564,9 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   const setPreviewError = (message: string) => {
     if (preview) preview.innerHTML = `<p class="pmd-document-muted">${escapeHtml(message)}</p>`;
   };
+  const renderPreview = () => {
+    if (preview && previewContent) preview.innerHTML = `<pre>${highlightPreview(previewContent)}</pre>`;
+  };
   const loadPreview = async () => {
     if (!pathValue) {
       setPreviewError('Cette pièce n’a pas de Markdown converti.');
@@ -561,7 +574,8 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     }
     try {
       const result = await knowledgeApi.document(projectPath, pathValue);
-      if (preview) preview.innerHTML = `<pre>${highlightPreview(result.content)}</pre>`;
+      previewContent = result.content;
+      renderPreview();
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : String(error));
     }
@@ -571,7 +585,12 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     const empty = layer.querySelector<HTMLElement>('[data-empty-fields]');
     if (fieldsTarget && empty) empty.hidden = fieldsTarget.querySelectorAll('[data-field-row]').length > 0;
   };
-  layer.querySelectorAll<HTMLElement>('[data-document-entity]').forEach((button) => button.addEventListener('click', () => {
+  const markEntitySelected = (button: HTMLElement) => {
+    button.classList.add('is-selected');
+    button.setAttribute('aria-pressed', 'true');
+    if (!button.querySelector('span')) button.insertAdjacentHTML('afterbegin', '<span aria-hidden="true">✓</span>');
+  };
+  const toggleEntity = (button: HTMLElement) => {
     const id = button.dataset.documentEntity || '';
     if (!id) return;
     if (selectedEntities.has(id)) {
@@ -581,18 +600,21 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
       button.querySelector('span')?.remove();
     } else {
       selectedEntities.add(id);
-      button.classList.add('is-selected');
-      button.setAttribute('aria-pressed', 'true');
-      button.insertAdjacentHTML('afterbegin', '<span aria-hidden="true">✓</span>');
+      markEntitySelected(button);
     }
-  }));
-  layer.querySelector<HTMLElement>('[data-add-field]')?.addEventListener('click', () => {
+  };
+  layer.querySelectorAll<HTMLElement>('[data-document-entity]').forEach((button) => button.addEventListener('click', () => toggleEntity(button)));
+  const addFieldRow = (value = '') => {
     const fieldsTarget = layer.querySelector<HTMLElement>('[data-fields]');
     if (!fieldsTarget) return;
     fieldsTarget.insertAdjacentHTML('beforeend', '<div class="pmd-document-field-row" data-field-row><input class="pmd-input" data-field-label placeholder="Libellé"><input class="pmd-input" data-field-value placeholder="Valeur"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" type="button" data-remove-field aria-label="Supprimer le champ">×</button></div>');
-    layer.querySelector<HTMLInputElement>('[data-fields] [data-field-row]:last-child [data-field-label]')?.focus();
+    const row = layer.querySelector<HTMLElement>('[data-fields] [data-field-row]:last-child');
+    const valueInput = row?.querySelector<HTMLInputElement>('[data-field-value]');
+    if (valueInput) valueInput.value = value;
+    row?.querySelector<HTMLInputElement>('[data-field-label]')?.focus();
     renderFields();
-  });
+  };
+  layer.querySelector<HTMLElement>('[data-add-field]')?.addEventListener('click', () => addFieldRow());
   layer.addEventListener('click', (event) => {
     const remove = (event.target as HTMLElement).closest<HTMLElement>('[data-remove-field]');
     if (!remove) return;
@@ -618,12 +640,13 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
       return;
     }
     const savedNature = natureSelection === '__piecemaker_custom_nature__' ? customNature : natureSelection;
-    const documentFields = Array.from(layer.querySelectorAll<HTMLElement>('[data-field-row]')).map((row) => ({ label: row.querySelector<HTMLInputElement>('[data-field-label]')?.value.trim() || '', value: row.querySelector<HTMLInputElement>('[data-field-value]')?.value.trim() || '' })).filter((field) => field.label || field.value);
-    const operations: KnowledgeUpdateOperation[] = [{
+    const documentFields = readFields();
+    const operations: KnowledgeUpdateOperation[] = [...queuedOperations, {
       op: 'upsertNode',
       node: { id: node.id, kind: 'document', label: node.label, aliases: node.aliases, data: { ...node.data, nature: savedNature.trim() || null, doc_date_iso: textValue(form.get('date')) || null, localisation: textValue(form.get('localisation')).trim() || null, fields: documentFields }, origin: 'manual' },
     }];
-    for (const link of mentionLinks) operations.push({ op: 'unlink', link: { fromNodeId: link.fromNodeId, toNodeId: link.toNodeId, relation: link.relation } });
+    const renamed = (id: string): string => renamedIds.get(id) || id;
+    for (const link of mentionLinks) operations.push({ op: 'unlink', link: { fromNodeId: renamed(link.fromNodeId), toNodeId: renamed(link.toNodeId), relation: link.relation } });
     for (const target of selectedEntities) operations.push({ op: 'link', link: { fromNodeId: node.id, toNodeId: target, relation: 'mentions', origin: 'manual' } });
     try {
       await save(operations);
@@ -635,6 +658,107 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
         submit.textContent = 'Enregistrer';
       }
     }
+  });
+  const selectionMessage = layer.querySelector<HTMLElement>('[data-selection-message]');
+  const showSelectionMessage = (message: string) => {
+    if (!selectionMessage) return;
+    selectionMessage.textContent = message;
+    selectionMessage.hidden = !message;
+  };
+  const applyEntityChange = (change: SelectionChange, label: string) => {
+    queuedOperations.push(...change.operations);
+    working = change.graph;
+    if (change.previousId !== change.nodeId) {
+      for (const [from, to] of renamedIds) if (to === change.previousId) renamedIds.set(from, change.nodeId);
+      renamedIds.set(change.previousId, change.nodeId);
+      if (selectedEntities.delete(change.previousId)) selectedEntities.add(change.nodeId);
+      layer.querySelectorAll<HTMLElement>('[data-document-entity]').forEach((button) => { if (button.dataset.documentEntity === change.previousId) button.dataset.documentEntity = change.nodeId; });
+    }
+    let button = Array.from(layer.querySelectorAll<HTMLElement>('[data-document-entity]')).find((entry) => entry.dataset.documentEntity === change.nodeId);
+    if (!button) {
+      const list = layer.querySelector<HTMLElement>('.pmd-document-entities');
+      list?.querySelector('p')?.remove();
+      list?.insertAdjacentHTML('afterbegin', `<button class="pmd-document-entity" type="button" aria-pressed="false" data-document-entity="${escapeHtml(change.nodeId)}">${escapeHtml(label)}</button>`);
+      button = list?.querySelector<HTMLElement>('[data-document-entity]') || undefined;
+      button?.addEventListener('click', () => button && toggleEntity(button));
+    }
+    selectedEntities.add(change.nodeId);
+    if (button) markEntitySelected(button);
+    renderPreview();
+  };
+  const designateParty = (selection: string, side: 'client' | 'adversaire' | 'tiers') => {
+    const existing = findEntityBySelection(selection, working);
+    if (existing) {
+      applyEntityChange(changeNodeSide(existing, side, working), existing.label);
+      return;
+    }
+    partyTypePicker(root, side, (kind) => applyEntityChange(createEntity(selection, kind, side, working), cleanSelection(selection)));
+  };
+  const chooseCategory = (category: HighlightCategory, selection: string) => {
+    showSelectionMessage('');
+    if (category === 'date') {
+      const iso = parseSelectionDate(selection);
+      if (!iso || !dateInput) {
+        showSelectionMessage(`Date non reconnue : « ${selection} »`);
+        return;
+      }
+      dateInput.value = iso;
+      selectionValues.date.push(selection);
+      renderPreview();
+      return;
+    }
+    if (category === 'fact') {
+      selectionValues.fact.push(selection);
+      addFieldRow(selection);
+      renderPreview();
+      return;
+    }
+    designateParty(selection, category === 'adverse' ? 'adversaire' : category);
+  };
+  const menuCategories: Array<{ category: HighlightCategory; label: string }> = [
+    { category: 'client', label: 'Partie cliente' },
+    { category: 'adverse', label: 'Partie adverse' },
+    { category: 'tiers', label: 'Tiers' },
+    { category: 'date', label: 'Date' },
+    { category: 'fact', label: 'Fait' },
+  ];
+  let closeSelectionMenu = () => {};
+  const openSelectionMenu = (x: number, y: number, selection: string) => {
+    closeSelectionMenu();
+    const menu = document.createElement('div');
+    menu.className = 'pmd-selection-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = menuCategories.map((entry) => `<button type="button" role="menuitem" data-selection-category="${entry.category}"><i aria-hidden="true"></i>${entry.label}</button>`).join('');
+    layer.appendChild(menu);
+    const bounds = (layer.querySelector('.pmd-document-dialog') || layer).getBoundingClientRect();
+    menu.style.left = `${Math.max(bounds.left + 4, Math.min(x, bounds.right - menu.offsetWidth - 4))}px`;
+    menu.style.top = `${Math.max(bounds.top + 4, Math.min(y, bounds.bottom - menu.offsetHeight - 4))}px`;
+    const onOutside = (event: Event) => { if (!menu.contains(event.target as Node)) closeSelectionMenu(); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') closeSelectionMenu(); };
+    closeSelectionMenu = () => {
+      document.removeEventListener('mousedown', onOutside, true);
+      document.removeEventListener('keydown', onKey, true);
+      layer.removeEventListener('scroll', closeSelectionMenu, true);
+      menu.remove();
+      closeSelectionMenu = () => {};
+    };
+    document.addEventListener('mousedown', onOutside, true);
+    document.addEventListener('keydown', onKey, true);
+    layer.addEventListener('scroll', closeSelectionMenu, true);
+    menu.addEventListener('mousedown', (event) => event.preventDefault());
+    menu.addEventListener('click', (event) => {
+      const choice = (event.target as HTMLElement).closest<HTMLElement>('[data-selection-category]')?.dataset.selectionCategory as HighlightCategory | undefined;
+      if (!choice) return;
+      closeSelectionMenu();
+      chooseCategory(choice, selection);
+    });
+  };
+  preview?.addEventListener('contextmenu', (event) => {
+    const range = window.getSelection();
+    const selection = cleanSelection(range?.toString() || '');
+    if (!preview || !range || range.isCollapsed || !selection || !preview.contains(range.anchorNode) || !preview.contains(range.focusNode)) return;
+    event.preventDefault();
+    openSelectionMenu(event.clientX, event.clientY, selection);
   });
   void loadPreview();
 }
