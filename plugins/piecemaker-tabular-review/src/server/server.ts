@@ -8,7 +8,7 @@ import { citationSource } from './citations.js';
 import { exportReview } from './export.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
 import { appendResearchUpdate, cancelResearch, createResearchReview, discardResearch, legifranceConfigured, researchPage, researchState, researchText, startResearch, startResearchUpdate, stopAllResearch } from './research.js';
-import { createReview, listReviews, readReview, reviewDetail, updateReview } from './reviews.js';
+import { createReview, deleteReview, listReviews, readReview, reviewDetail, updateReview } from './reviews.js';
 import { cancelJob, isRunning, pendingTasks, queueTasks, stopAllJobs } from './runner.js';
 import type { RowTask } from './runner.js';
 import { assertModel, assertProvider, assertProxyOrigin, probeProxy, sessionEnvironment } from './sessions.js';
@@ -50,6 +50,16 @@ async function createAndLaunch(body: Body) {
   return reviewDetail(project, file, isRunning(project, file));
 }
 
+async function adoptModel(project: string, file: string, body: Body) {
+  if (body.provider === undefined && body.model === undefined) return;
+  const provider = assertProvider(body.provider);
+  const model = assertModel(body.model);
+  await updateReview(project, file, (current) => {
+    current.provider = provider;
+    current.model = model;
+  });
+}
+
 async function retry(body: Body) {
   const project = assertProject(body.project);
   const file = String(body.file ?? '');
@@ -61,6 +71,7 @@ async function retry(body: Body) {
     .map((row) => ({ rowId: row.id }));
   if (!pendingTasks(review, tasks).length) throw new UserError('Toutes les cellules sont déjà remplies : aucune session à lancer.');
   const environment = await launchEnvironment(body.proxyOrigin);
+  await adoptModel(project, file, body);
   await queueTasks(project, file, tasks, review.concurrency || 3, environment);
   return reviewDetail(project, file, isRunning(project, file));
 }
@@ -78,6 +89,7 @@ async function run(body: Body) {
   const columns = column === null ? undefined : [column];
   const tasks: RowTask[] = (rowId === null ? review.rows.map((row) => row.id) : [rowId]).map((id) => ({ rowId: id, columns }));
   const environment = await launchEnvironment(body.proxyOrigin);
+  await adoptModel(project, file, body);
   if (body.replace === true) {
     const targets = new Set(columns ?? review.columns.map((entry) => entry.index));
     await updateReview(project, file, (current) => {
@@ -169,6 +181,14 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
     assertReviewFile(project, file);
     await cancelJob(project, file);
     return reviewDetail(project, file, isRunning(project, file));
+  }
+  if (method === 'POST' && pathname === '/reviews/delete') {
+    const project = assertProject(body.project);
+    const file = String(body.file ?? '');
+    assertReviewFile(project, file);
+    if (isRunning(project, file)) throw new UserError('Annulez la tabular review en cours avant de la supprimer.');
+    deleteReview(project, file);
+    return { deleted: true };
   }
   if (method === 'POST' && pathname === '/reviews/export') {
     const project = assertProject(body.project);

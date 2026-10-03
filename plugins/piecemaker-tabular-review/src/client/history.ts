@@ -1,7 +1,7 @@
 import type { ReviewCategory, ReviewSummary } from '../shared.js';
 import { CATEGORY_LABELS, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
-import { errorMessage, escapeHtml, formatDate } from './dom.js';
+import { confirmDialog, errorMessage, escapeHtml, formatDate, toast } from './dom.js';
 import type { HostProject } from './host.js';
 
 const ALL = '';
@@ -57,6 +57,7 @@ export function createHistoryView(app: App): View {
         <span class="ptr-chip" title="${escapeHtml(review.project)}">${escapeHtml(app.projectName(review.project))}</span>
         <span class="ptr-small ptr-muted" style="flex-shrink:0">${review.doneCount}/${review.rowCount} ligne${review.rowCount > 1 ? 's' : ''}</span>
         <span class="ptr-chip ptr-chip-${review.status}">${review.status === 'running' ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(review.status))}</span>
+        ${review.status === 'running' ? '' : '<button type="button" class="ptr-icon-button" data-delete aria-label="Supprimer la tabular review" title="Supprimer la tabular review">🗑</button>'}
       </div>`).join('')}</div>`;
   }
 
@@ -98,6 +99,20 @@ export function createHistoryView(app: App): View {
     if (review) app.openReview(review.project, review.file);
   };
 
+  const remove = async (target: HTMLElement) => {
+    const review = visible[Number(target.closest<HTMLElement>('[data-index]')?.dataset.index)];
+    if (!review) return;
+    const confirmed = await confirmDialog(app.root, 'Supprimer la tabular review', `<p>« ${escapeHtml(review.title)} » sera supprimée définitivement : son fichier JSON, ses exports Word/PDF et les copies de documents qu’elle est seule à utiliser.</p>`, 'Supprimer', true);
+    if (!confirmed) return;
+    try {
+      await app.rpc('POST', '/reviews/delete', { project: review.project, file: review.file });
+      toast(app.root, 'Tabular review supprimée.');
+      await load();
+    } catch (error) {
+      toast(app.root, errorMessage(error), 'error');
+    }
+  };
+
   element.addEventListener('change', (event) => {
     if (event.target === filter) void load();
     else if (event.target === categoryFilter) render();
@@ -105,6 +120,7 @@ export function createHistoryView(app: App): View {
   element.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     if (target.closest('[data-refresh]')) void load();
+    else if (target.closest('[data-delete]')) void remove(target);
     else open(target);
   });
   element.addEventListener('keydown', (event) => {

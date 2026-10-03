@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { Provider, Review, ReviewDetail, ReviewDocument, ReviewRow, ReviewStatus, ReviewSummary, RowRequest, Template } from '../shared.js';
 import { DOCS_FOLDER, lastSearchDate, reviewCategory } from '../shared.js';
 import { resolveMarkdownDocument } from './documents.js';
-import { assertReviewFile, docsDirectory, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
+import { assertReviewFile, docsDirectory, isInside, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
 
 const MAX_ROWS = 500;
 const MAX_DOCUMENTS_PER_ROW = 50;
@@ -193,4 +193,31 @@ export function listReviews(projects: string[], isRunning: (project: string, fil
     }
   }
   return summaries.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+function referencedCopies(project: string, excludedFile: string): Set<string> {
+  const referenced = new Set<string>();
+  for (const file of fs.readdirSync(reviewDirectory(project)).filter((entry) => entry.endsWith('.json') && !entry.startsWith('.') && entry !== excludedFile)) {
+    try {
+      for (const row of readReview(project, file).rows) for (const document of row.documents) referenced.add(document.copy);
+    } catch {
+      continue;
+    }
+  }
+  return referenced;
+}
+
+export function deleteReview(project: string, file: string): void {
+  const target = assertReviewFile(project, file);
+  const review = readReview(project, file);
+  const shared = referencedCopies(project, file);
+  const docs = docsDirectory(project);
+  for (const copy of new Set(review.rows.flatMap((row) => row.documents.map((document) => document.copy)))) {
+    const copyPath = path.join(reviewDirectory(project), ...copy.split('/'));
+    if (!shared.has(copy) && isInside(docs, copyPath)) fs.rmSync(copyPath, { force: true });
+  }
+  const basename = path.basename(file, '.json');
+  for (const extension of ['docx', 'pdf']) fs.rmSync(path.join(reviewDirectory(project), `${basename}.${extension}`), { force: true });
+  fs.rmSync(target);
+  if (fs.existsSync(docs) && !fs.readdirSync(docs).length) fs.rmdirSync(docs);
 }
