@@ -195,32 +195,34 @@ type ViewState = {
 };
 
 const STYLE_TEXT = `
-  .pm-timesheet { height: 100%; overflow: auto; padding: 24px; box-sizing: border-box; color: var(--piecemaker-text, #374151); background: hsl(var(--background, 0 0% 100%)); font: 14px var(--piecemaker-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
+  .pm-timesheet { --pm-timesheet-text: var(--piecemaker-text, #374151); --pm-timesheet-muted: var(--piecemaker-muted, #6b7280); height: 100%; overflow: auto; padding: 24px; box-sizing: border-box; color: var(--pm-timesheet-text); background: hsl(var(--background, 0 0% 100%)); font: 14px var(--piecemaker-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
+  .pm-timesheet[data-theme=dark] { --pm-timesheet-text: hsl(var(--foreground, 210 20% 96%)); --pm-timesheet-muted: hsl(210 16% 82%); }
+  .pm-timesheet[data-theme=dark] .piecemaker-button--glass { color: var(--pm-timesheet-text); }
   .pm-timesheet * { box-sizing: border-box; }
   .pm-timesheet__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin: 0 0 20px; }
   .pm-timesheet__title { margin: 0 0 6px; font-family: var(--piecemaker-font-editorial, EB Garamond, Georgia, serif); font-size: 1.25rem; font-weight: 500; letter-spacing: -.02em; }
-  .pm-timesheet__subtitle { margin: 4px 0; color: var(--piecemaker-muted, #6b7280); line-height: 1.5; }
+  .pm-timesheet__subtitle { margin: 4px 0; color: var(--pm-timesheet-muted); line-height: 1.5; }
   .pm-timesheet__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
   .pm-timesheet__select { font: inherit; cursor: pointer; color: inherit; background: transparent; border: 1px solid var(--piecemaker-border, #e5e7eb); border-radius: .75rem; padding: 7px 12px; box-shadow: none; }
   .pm-timesheet__button:disabled { opacity: .4; cursor: not-allowed; }
   .pm-timesheet__button:focus-visible, .pm-timesheet__select:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(0 136 255 / 40%), 0 0 0 4px hsl(var(--background, 0 0% 100%)); }
-  .pm-timesheet__status { min-height: 24px; margin: 12px 0; color: var(--piecemaker-muted, #6b7280); }
+  .pm-timesheet__status { min-height: 24px; margin: 12px 0; color: var(--pm-timesheet-muted); }
   .pm-timesheet__status--error { color: #b91c1c; }
   .pm-timesheet__sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  .pm-timesheet__empty { padding: 16px 0; color: var(--piecemaker-muted, #6b7280); line-height: 1.5; }
+  .pm-timesheet__empty { padding: 16px 0; color: var(--pm-timesheet-muted); line-height: 1.5; }
   .pm-timesheet__table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .pm-timesheet__table { width: 100%; min-width: 760px; border-collapse: collapse; }
   .pm-timesheet__table th, .pm-timesheet__table td { padding: 16px 10px; border-bottom: 1px solid var(--piecemaker-border, #e5e7eb); text-align: left; vertical-align: top; }
   .pm-timesheet__table th:first-child, .pm-timesheet__table td:first-child { padding-left: 10px; }
   .pm-timesheet__table th:last-child, .pm-timesheet__table td:last-child { padding-right: 10px; }
-  .pm-timesheet__table th { color: var(--piecemaker-muted, #6b7280); font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: .04em; }
+  .pm-timesheet__table th { color: var(--pm-timesheet-muted); font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: .04em; }
   .pm-timesheet__table td { line-height: 1.5; }
   .pm-timesheet__table tr:last-child td { border-bottom: 0; }
   .pm-timesheet__month td { padding: 10px 0; background: hsl(var(--muted, 0 0% 93%)); font-weight: 600; }
   .pm-timesheet__month:first-child td { border-top: 0; }
   .pm-timesheet__month-content { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .pm-timesheet__month-label { flex: 1; min-width: 0; }
-  .pm-timesheet__month-total { margin-left: auto; color: var(--piecemaker-muted, #6b7280); font-weight: 400; white-space: nowrap; }
+  .pm-timesheet__month-total { margin-left: auto; color: var(--pm-timesheet-muted); font-weight: 400; white-space: nowrap; }
   .pm-timesheet__month-actions { display: inline-flex; gap: 6px; flex-shrink: 0; }
   .pm-timesheet__month-actions button:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(0 136 255 / 40%), 0 0 0 4px hsl(var(--background, 0 0% 100%)); }
   .pm-timesheet__date { white-space: nowrap; }
@@ -229,8 +231,8 @@ const STYLE_TEXT = `
   .pm-timesheet__conclusion { max-width: 420px; white-space: pre-wrap; }
   .pm-timesheet__conclusion summary { cursor: pointer; color: inherit; }
   .pm-timesheet__conclusion summary:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(0 136 255 / 40%); }
-  .pm-timesheet__conclusion p { margin: 4px 0; color: var(--piecemaker-muted, #6b7280); line-height: 1.5; }
-  .pm-timesheet__muted { color: var(--piecemaker-muted, #6b7280); }
+  .pm-timesheet__conclusion p { margin: 4px 0; color: var(--pm-timesheet-muted); line-height: 1.5; }
+  .pm-timesheet__muted { color: var(--pm-timesheet-muted); }
   @media (max-width: 600px) {
     .pm-timesheet { padding: 16px; }
     .pm-timesheet__header { display: block; }
@@ -763,6 +765,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
   style.textContent = STYLE_TEXT;
   const root = makeElement('main', 'pm-timesheet piecemaker-ui');
   root.setAttribute('aria-label', 'Timesheet');
+  root.dataset.theme = api.context.theme;
   container.append(style, root);
   const state: ViewState = {
     context: api.context,
@@ -787,6 +790,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     const previousProject = state.context.project?.name ?? null;
     const nextProject = context.project?.name ?? null;
     state.context = context;
+    state.root.dataset.theme = context.theme;
     if (previousProject === nextProject) return;
     if (state.scope === 'project') state.folder = '';
     void load(state, false);
