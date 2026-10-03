@@ -3,6 +3,24 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.20](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.19...v2.0.20) (2026-10-03)
+
+### New Features
+
+* **anonymisation:** livrer une liste par défaut de termes institutionnels ([6d7712e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6d7712e12367aefc53eae03db764e795bcef6dd2))
+* **anonymizer:** remplacer GLiNER2.5 multi par GLiNER2-PII multi ([766ab76](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/766ab7656e76876510cfd852100251faf55a71d5))
+* **guard:** interdire toute donnée réelle dans le dépôt et son historique ([3cd20b0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3cd20b0675171a23dfe22319c981171420cf9de7))
+
+### Maintenance
+
+* reorg md & tests files ([4bf1db1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4bf1db11a53632497f4fd769820fef96ba98a943))
+* **tabular-review:** retirer le banc d'essai GLiNER2.5-multi-Decide ([ca24332](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ca243324b48a2537641df8ab92fc5e921f4d6dff))
+
+### Tests
+
+* **tabular-review:** banc d'essai GLiNER2.5-multi-Decide contre Luna ([c8f0e5a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c8f0e5abdba6df2fc89b9cb0d3311ac51834039d))
+* **tabular-review:** essai de Decide sans découpage et jeu révocation de dirigeant ([7c6152e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7c6152e019d027ab1515911f38faa9050f6487c0))
+
 ## [2.0.19](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.18...v2.0.19) (2026-10-01)
 
 ### New Features
