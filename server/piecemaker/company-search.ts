@@ -50,7 +50,7 @@ function parseMcpPayload(body: string): JsonRpcPayload {
     .filter(Boolean)
     .map((line) => JSON.parse(line) as JsonRpcPayload);
   const payload = payloads.at(-1);
-  if (!payload) throw new Error('Réponse PERS_MORALE_1 invalide.');
+  if (!payload) throw new Error('Réponse du serveur MCP invalide.');
   return payload;
 }
 
