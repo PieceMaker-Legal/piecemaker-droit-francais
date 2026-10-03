@@ -29,6 +29,7 @@ export const PLUGIN_STYLES = `
   --pmd-glass-shadow:var(--liquid-glass-shadow-subtle,inset 0 1px 0 rgb(255 255 255 / .8),0 1px 2px rgb(15 23 42 / .05));
 }
 .pmd-root[data-theme=dark]{
+  color:var(--pmd-text);
   --pmd-bg:hsl(var(--background));
   --pmd-surface:hsl(var(--card));
   --pmd-soft:hsl(var(--muted));
