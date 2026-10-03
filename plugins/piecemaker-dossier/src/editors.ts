@@ -478,6 +478,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   const natures = ['assignation', 'conclusions', 'requête', 'courrier', 'courriel', 'mise en demeure', 'contrat', 'facture', 'devis', 'attestation', 'jugement', 'arrêt', 'ordonnance', 'procès-verbal', 'constat', 'expertise', 'statuts de société', 'extrait Kbis', 'relevé bancaire', 'acte notarié', 'bordereau de pièces'];
   const nature = textValue(node.data.nature);
   const natureOptions = [...new Set([nature, ...natures].filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, 'fr', { sensitivity: 'base' }))
     .map((value) => `<option value="${escapeHtml(value)}" ${value === nature ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
   const entityButtons = entities.map((entry) => {
     const selected = linked.has(entry.id);
