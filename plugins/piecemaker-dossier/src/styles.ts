@@ -148,18 +148,7 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-bodacc-content{padding:0 12px 12px}
 .pmd-bodacc-status,.pmd-bodacc-summary{margin:8px 0 0;color:var(--pmd-muted);font-size:11px}
 .pmd-bodacc-error{color:var(--pmd-danger)}
-.pmd-bodacc-alerts{display:grid;gap:6px;margin-top:10px}
-.pmd-bodacc-alerts span{border-radius:8px;background:color-mix(in srgb,var(--pmd-danger) 8%,var(--pmd-surface));color:var(--pmd-danger);padding:8px 10px;font-size:11px}
-.pmd-bodacc-list{display:grid;gap:8px;margin-top:10px}
-.pmd-bodacc-announcement{border:1px solid var(--pmd-border);border-radius:10px;background:var(--pmd-surface);padding:10px 12px}
-.pmd-bodacc-announcement-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.pmd-bodacc-announcement-head strong{font-size:12px;font-weight:600;color:var(--pmd-ink)}
-.pmd-bodacc-announcement-head time{color:var(--pmd-muted);font-size:10px}
-.pmd-bodacc-announcement dl{display:grid;gap:5px;margin:8px 0 0}
-.pmd-bodacc-announcement dl div{display:grid;grid-template-columns:82px minmax(0,1fr);gap:8px;font-size:11px}
-.pmd-bodacc-announcement dt{color:var(--pmd-muted);font-size:10px;letter-spacing:.04em;text-transform:uppercase}
-.pmd-bodacc-announcement dd{margin:0;overflow-wrap:anywhere}
-.pmd-bodacc-announcement a,.pmd-company-result-link{display:inline-block;margin-top:8px;color:var(--pmd-accent);font-size:11px}
+.pmd-company-result-link{display:inline-block;margin-top:8px;color:var(--pmd-accent);font-size:11px}
 .pmd-company-result{display:grid;gap:8px;border-bottom:1px solid var(--pmd-border);padding:12px 2px}
 .pmd-company-result:last-child{border-bottom:0}
 .pmd-company-result h4{margin:0;font-size:13px;font-weight:600;color:var(--pmd-ink)}

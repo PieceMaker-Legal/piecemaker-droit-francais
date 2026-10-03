@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -189,14 +189,53 @@ async function searchBodacc(siren: string, siret: string, requestedFamilies: str
   return filterFamilies(readHistory(resultContent(response), normalized), requestedFamilies);
 }
 
+const oneLine = (value: string) => value.replace(/\s*[\r\n]+\s*/g, ' ').trim();
+
+export function bodaccReportMarkdown(result: BodaccSearchResult, generatedAt = new Date()): string {
+  const lines = [`# Annonces BODACC — SIREN ${result.siren}`, '', `Généré le ${generatedAt.toLocaleDateString('fr-FR')}`, ''];
+  if (!result.annonces.length) return [...lines, `Aucune annonce BODACC trouvée pour le SIREN ${result.siren}.`, ''].join('\n');
+  lines.push(`${result.annonces.length} annonce${result.annonces.length > 1 ? 's' : ''} sur ${result.total}.`, '');
+  if (result.alertes.length) lines.push('## Alertes', '', ...result.alertes.map((alerte) => `- ${oneLine(alerte)}`), '');
+  for (const announcement of result.annonces) {
+    const details = [
+      ['Date', announcement.datePublication],
+      ['Avis', announcement.typeAvis],
+      ['Famille', announcement.familleAvis],
+      ['Entreprise', announcement.commercant],
+      ['Ville', announcement.ville],
+      ['Tribunal', announcement.tribunal],
+      ['Jugement', announcement.jugement],
+      ['Acte', announcement.acte],
+    ].filter((entry) => entry[1]);
+    lines.push(`## ${oneLine(announcement.typeAvis || announcement.familleAvis || 'Annonce BODACC')} — ${oneLine(announcement.datePublication)}`, '', ...details.map(([label, value]) => `- ${label} : ${oneLine(value)}`));
+    if (announcement.url) lines.push('', `[Ouvrir l’annonce officielle](${announcement.url})`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function writeBodaccReport(projectPath: string, result: BodaccSearchResult): string {
+  const directory = path.join(projectPath, '.piecemaker', 'bodacc');
+  mkdirSync(directory, { recursive: true });
+  const reportPath = path.join(directory, `BODACC-${result.siren}.md`);
+  writeFileSync(reportPath, bodaccReportMarkdown(result));
+  return reportPath;
+}
+
 export function createBodaccSearchRouter() {
   const router = express.Router();
   router.post('/bodacc-search', async (request: Request, response: Response) => {
     const siren = typeof request.body?.siren === 'string' ? request.body.siren : '';
     const siret = typeof request.body?.siret === 'string' ? request.body.siret : '';
     const families = Array.isArray(request.body?.families) ? request.body.families.filter((family: unknown): family is string => typeof family === 'string') : null;
+    const projectPath = typeof request.body?.projectPath === 'string' ? request.body.projectPath : '';
+    if (!projectPath || !path.isAbsolute(projectPath) || !existsSync(projectPath) || !statSync(projectPath).isDirectory()) {
+      response.status(400).json({ error: 'Le dossier du projet est introuvable.' });
+      return;
+    }
     try {
-      response.json(await searchBodacc(siren, siret, families));
+      const result = await searchBodacc(siren, siret, families);
+      response.json({ ...result, reportPath: writeBodaccReport(projectPath, result) });
     } catch (error) {
       response.status(502).json({ error: error instanceof Error ? error.message : 'Recherche BODACC impossible.' });
     }

@@ -1,13 +1,11 @@
 import { NODE_KINDS } from './types.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
-import type { BodaccSearchResult, CompanySearchResult, ScanJob } from './api.js';
+import type { CompanySearchResult, ScanJob } from './api.js';
 
 export type Tab = 'general' | 'chronology';
 export type BodaccScanState = {
-  status: 'idle' | 'loading' | 'loaded' | 'error';
-  result?: BodaccSearchResult;
+  status: 'idle' | 'loading' | 'error';
   error?: string;
-  open?: boolean;
   companySearchStatus?: 'idle' | 'loading' | 'loaded' | 'error';
   companySearchResults?: CompanySearchResult[];
   companySearchError?: string;
@@ -232,47 +230,16 @@ function companyEnrichment(node: KnowledgeNode, graph: KnowledgeSnapshot, state?
   const hasIdentifier = Boolean(identifiers.siren || identifiers.siret);
   const identifierLabel = [identifiers.siren ? `SIREN ${identifiers.siren}` : '', identifiers.siret ? `SIRET ${identifiers.siret}` : ''].filter(Boolean).join(' · ') || 'SIREN / SIRET non renseigné';
   const searchOpen = Boolean(state?.companySearchStatus && state.companySearchStatus !== 'idle');
-  const showPanel = searchOpen || (hasIdentifier && Boolean(state && state.status !== 'idle'));
-  const accordionTitle = searchOpen
-    ? 'Résultats Registre Public'
-    : state?.status === 'loaded' && state.result
-      ? `Annonces BODACC · ${state.result.annonces.length}`
-      : 'Annonces BODACC';
-  const accordionContent = searchOpen
-    ? companySearchStateMarkup(state || { status: 'idle' }, node.id)
-    : bodaccStateMarkup(state || { status: 'idle' }, identifiers.siren || identifiers.siret);
-  const open = Boolean(state?.open || searchOpen || state?.status === 'loading' || state?.status === 'error');
+  const bodaccLoading = state?.status === 'loading';
   return `<div class="pmd-company-enrichment">
     <div class="pmd-company-enrichment-row">
       <p>${escapeHtml(identifierLabel)}</p>
       ${identified ? '' : `<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="company-search" data-scan-company="${escapeHtml(node.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" title="Rechercher dans le Registre Public">${companySearchIcon}<span>Identifier</span></button>`}
-      ${hasIdentifier ? `<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="bodacc-search" data-scan-company="${escapeHtml(node.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" title="Rechercher les annonces BODACC">${bodaccSearchIcon}<span>Annonces BODACC</span></button>` : ''}
+      ${hasIdentifier ? `<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="bodacc-search" data-scan-company="${escapeHtml(node.id)}" data-siren="${escapeHtml(identifiers.siren)}" data-siret="${escapeHtml(identifiers.siret)}" title="Rechercher les annonces BODACC" ${bodaccLoading ? 'disabled' : ''}>${bodaccSearchIcon}<span>${bodaccLoading ? 'Recherche…' : 'Annonces BODACC'}</span></button>` : ''}
     </div>
-    ${showPanel ? `<details class="pmd-bodacc-accordion" data-bodacc-details="${escapeHtml(node.id)}" ${open ? 'open' : ''}><summary>${accordionTitle}</summary><div class="pmd-bodacc-content">${accordionContent}</div></details>` : ''}
+    ${state?.status === 'error' ? `<p class="pmd-bodacc-status pmd-bodacc-error">${escapeHtml(state.error || 'Recherche impossible.')}</p>` : ''}
+    ${searchOpen ? `<details class="pmd-bodacc-accordion" open><summary>Résultats Registre Public</summary><div class="pmd-bodacc-content">${companySearchStateMarkup(state || { status: 'idle' }, node.id)}</div></details>` : ''}
   </div>`;
-}
-
-function bodaccAnnouncement(announcement: BodaccSearchResult['annonces'][number]): string {
-  const details = [
-    ['Date', announcement.datePublication],
-    ['Avis', announcement.typeAvis],
-    ['Famille', announcement.familleAvis],
-    ['Entreprise', announcement.commercant],
-    ['Ville', announcement.ville],
-    ['Tribunal', announcement.tribunal],
-    ['Jugement', announcement.jugement],
-    ['Acte', announcement.acte],
-  ].filter((entry) => entry[1]);
-  return `<article class="pmd-bodacc-announcement"><div class="pmd-bodacc-announcement-head"><strong>${escapeHtml(announcement.typeAvis || announcement.familleAvis || 'Annonce BODACC')}</strong>${announcement.datePublication ? `<time>${escapeHtml(announcement.datePublication)}</time>` : ''}</div><dl>${details.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>${announcement.url ? `<a href="${escapeHtml(announcement.url)}" target="_blank" rel="noopener noreferrer">Ouvrir l’annonce officielle ↗</a>` : ''}</article>`;
-}
-
-function bodaccStateMarkup(state: BodaccScanState, siren: string): string {
-  if (state.status === 'loading') return '<p class="pmd-bodacc-status">Recherche des annonces BODACC…</p>';
-  if (state.status === 'error') return `<p class="pmd-bodacc-status pmd-bodacc-error">${escapeHtml(state.error || 'Recherche impossible.')}</p>`;
-  if (state.status === 'idle') return `<p class="pmd-bodacc-status">Rechercher les annonces liées au SIREN ${escapeHtml(siren)}.</p>`;
-  const result = state.result;
-  if (!result || !result.annonces.length) return `<p class="pmd-bodacc-status">Aucune annonce BODACC trouvée pour le SIREN ${escapeHtml(siren)}.</p>`;
-  return `${result.alertes.length ? `<div class="pmd-bodacc-alerts">${result.alertes.map((alerte) => `<span>${escapeHtml(alerte)}</span>`).join('')}</div>` : ''}<p class="pmd-bodacc-summary">${result.annonces.length} annonce${result.annonces.length > 1 ? 's' : ''} affichée${result.annonces.length > 1 ? 's' : ''} sur ${result.total}.</p><div class="pmd-bodacc-list">${result.annonces.map(bodaccAnnouncement).join('')}</div>`;
 }
 
 function companySearchResultMarkup(result: CompanySearchResult, companyId: string, index: number): string {

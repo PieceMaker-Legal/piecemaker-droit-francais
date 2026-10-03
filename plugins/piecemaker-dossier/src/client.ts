@@ -54,7 +54,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const searchBodaccCompany = async (companyId: string, siren: string, siret: string) => {
     if (!designatedCompany(companyId)) return;
     const state = bodaccStates.get(companyId) || { status: 'idle' as const };
-    state.open = true;
     if (!siren && !siret) {
       state.status = 'error';
       state.error = 'Aucun SIREN ou SIRET n’est renseigné pour cette personne morale.';
@@ -67,8 +66,9 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     bodaccStates.set(companyId, state);
     render();
     try {
-      state.result = await knowledgeApi.searchBodacc(siren, siret);
-      state.status = 'loaded';
+      const result = await knowledgeApi.searchBodacc(context.project?.path || '', siren, siret);
+      state.status = 'idle';
+      api.openFileInEditor(result.reportPath);
     } catch (error) {
       state.status = 'error';
       state.error = error instanceof Error ? error.message : 'Recherche BODACC impossible.';
@@ -90,7 +90,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const searchCompanyIdentity = async (companyId: string, siren: string, siret: string) => {
     if (!designatedCompany(companyId)) return;
     const state = bodaccStates.get(companyId) || { status: 'idle' as const };
-    state.open = true;
     state.companySearchStatus = 'loading';
     state.companySearchResults = [];
     state.companySearchError = '';
@@ -501,14 +500,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (data && node) documentEditor(root, data, node, context.project?.path || '', save);
       }
     });
-    root.addEventListener('toggle', (event) => {
-      const details = event.target as HTMLElement;
-      const companyId = details.dataset?.bodaccDetails;
-      if (!companyId) return;
-      const state = bodaccStates.get(companyId) || { status: 'idle' as const };
-      state.open = (details as HTMLDetailsElement).open;
-      bodaccStates.set(companyId, state);
-    }, true);
     root.addEventListener('dragstart', (event) => {
       const card = (event.target as HTMLElement).closest<HTMLElement>('[data-profile-id]');
       if (!card) return;
