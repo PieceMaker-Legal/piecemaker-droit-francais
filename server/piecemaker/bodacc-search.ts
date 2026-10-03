@@ -81,7 +81,7 @@ function collectLauncherCandidates(): string[] {
 
 function resolveLauncher(): string {
   const launcher = collectLauncherCandidates().find((candidate) => existsSync(candidate));
-  if (!launcher) throw new Error('Le lanceur du PERS_MORALE_1 Légifrance est introuvable.');
+  if (!launcher) throw new Error('Le lanceur du serveur MCP Légifrance est introuvable.');
   return launcher;
 }
 
@@ -95,7 +95,7 @@ function mcpCall(tool: string, argumentsValue: Record<string, string>): Promise<
     let settled = false;
     const timeout = setTimeout(() => {
       processHandle.kill('SIGTERM');
-      reject(new Error('Le PERS_MORALE_1 Légifrance n’a pas répondu à temps.'));
+      reject(new Error('Le serveur MCP Légifrance n’a pas répondu à temps.'));
     }, MCP_TIMEOUT_MS);
     const finish = (callback: () => void) => {
       if (settled) return;
