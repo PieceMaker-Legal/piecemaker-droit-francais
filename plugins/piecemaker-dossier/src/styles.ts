@@ -15,8 +15,12 @@ export const PLUGIN_STYLES = `
   --pmd-ink:var(--piecemaker-ink,#111827);
   --pmd-accent:var(--piecemaker-blue,rgb(0 136 255));
   --pmd-danger:#9f3b3b;
-  --pmd-client:#4b5563;
-  --pmd-adverse:#6b5e58;
+  --pmd-client:#a8d5b5;
+  --pmd-client-ink:#4e7a5c;
+  --pmd-adverse:#efb4b4;
+  --pmd-adverse-ink:#9a5555;
+  --pmd-tiers:#b3cdee;
+  --pmd-tiers-ink:#55759e;
   --pmd-radius:12px;
   --pmd-glass-bg:var(--liquid-glass-background-subtle,rgb(255 255 255 / .78));
   --pmd-glass-border:var(--liquid-glass-border-subtle,rgb(229 231 235 / .9));
@@ -31,8 +35,12 @@ export const PLUGIN_STYLES = `
   --pmd-muted:hsl(var(--muted-foreground));
   --pmd-ink:hsl(var(--foreground));
   --pmd-danger:#d7a3a3;
-  --pmd-client:#9ca3af;
-  --pmd-adverse:#b8a9a2;
+  --pmd-client:#7fae8d;
+  --pmd-client-ink:#b7dcc2;
+  --pmd-adverse:#c98a8a;
+  --pmd-adverse-ink:#f0c4c4;
+  --pmd-tiers:#87a6cc;
+  --pmd-tiers-ink:#c3d7f0;
   --pmd-glass-bg:var(--liquid-glass-background-subtle,rgb(24 28 36 / .72));
   --pmd-glass-border:var(--liquid-glass-border-subtle,rgb(255 255 255 / .08));
   --pmd-glass-shadow:var(--liquid-glass-shadow-subtle,inset 0 1px 0 rgb(255 255 255 / .06),0 1px 2px rgb(0 0 0 / .35));
@@ -100,8 +108,9 @@ button.pmd-column-empty span{font-size:12px;color:var(--pmd-text)}
 button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-profile-card{position:relative;display:flex;flex-direction:column;overflow:visible;border:1px solid var(--pmd-border);border-radius:16px;background:var(--pmd-surface);box-shadow:var(--pmd-glass-shadow)}
 .pmd-profile-card:has(.pmd-profile-menu[data-open=true]){z-index:20}
-.pmd-profile-card[data-side=client]{border-left:2px solid var(--pmd-client)}
-.pmd-profile-card[data-side=adverse]{border-left:2px solid var(--pmd-adverse)}
+.pmd-profile-card[data-side=client]{border-color:color-mix(in srgb,var(--pmd-client) 45%,var(--pmd-border));border-left:3px solid var(--pmd-client);background:color-mix(in srgb,var(--pmd-client) 12%,var(--pmd-surface))}
+.pmd-profile-card[data-side=adverse]{border-color:color-mix(in srgb,var(--pmd-adverse) 45%,var(--pmd-border));border-left:3px solid var(--pmd-adverse);background:color-mix(in srgb,var(--pmd-adverse) 12%,var(--pmd-surface))}
+.pmd-profile-card[data-side=neutral]{border-color:color-mix(in srgb,var(--pmd-tiers) 45%,var(--pmd-border));border-left:3px solid var(--pmd-tiers);background:color-mix(in srgb,var(--pmd-tiers) 12%,var(--pmd-surface))}
 .pmd-profile-accent{display:none}
 .pmd-profile-card .pmd-card-head{padding:14px 16px 10px}
 .pmd-kind-icon{display:flex;width:36px;height:36px;flex:0 0 36px;align-items:center;justify-content:center;border-radius:10px;background:var(--pmd-soft);color:var(--pmd-muted)}
@@ -120,8 +129,8 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-profile-menu .pmd-menu-danger{color:var(--pmd-danger)}
 .pmd-party-line{padding:0 16px 12px}
 .pmd-party-badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--pmd-glass-border);border-radius:999px;background:var(--pmd-glass-bg);padding:4px 6px 4px 10px;color:var(--pmd-muted);font-size:11px;font-weight:500}
-.pmd-party-badge[data-side=client]{color:var(--pmd-client)}
-.pmd-party-badge[data-side=adverse]{color:var(--pmd-adverse)}
+.pmd-party-badge[data-side=client]{border-color:color-mix(in srgb,var(--pmd-client) 60%,transparent);background:color-mix(in srgb,var(--pmd-client) 22%,var(--pmd-surface));color:var(--pmd-client-ink)}
+.pmd-party-badge[data-side=adverse]{border-color:color-mix(in srgb,var(--pmd-adverse) 60%,transparent);background:color-mix(in srgb,var(--pmd-adverse) 22%,var(--pmd-surface));color:var(--pmd-adverse-ink)}
 .pmd-party-badge-remove{display:flex;width:16px;height:16px;align-items:center;justify-content:center;border:0;border-radius:50%;background:transparent;color:inherit;cursor:pointer;font:inherit;line-height:1}
 .pmd-party-badge-remove:hover{background:var(--pmd-soft)}
 .pmd-relations-box{margin:0 16px 12px;padding:10px;border:1px dashed var(--pmd-border);border-radius:12px;background:color-mix(in srgb,var(--pmd-soft) 35%,transparent)}
