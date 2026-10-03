@@ -456,6 +456,8 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   });
 }
 
+type HighlightCategory = 'client' | 'adverse' | 'tiers' | 'date' | 'fact';
+
 export function documentEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode, projectPath: string, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>): void {
   const mentionLinks = data.graph.links.filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id));
   const linked = new Set(mentionLinks.map((link) => link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId));
@@ -511,24 +513,26 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     const numeric = match ? [`${match[3]}/${match[2]}/${match[1]}`, `${match[3]}-${match[2]}-${match[1]}`, `${match[3]}.${match[2]}.${match[1]}`] : [];
     return [textValue(node.data.doc_date), textValue(node.data.date), iso, ...numeric].filter(Boolean);
   };
-  const mappedPreviewValues = (personMappings: boolean): string[] => {
-    const kinds = new Map(data.graph.nodes.map((entry) => [entry.id, entry.kind]));
+  const sideOf = (entry: KnowledgeNode): 'client' | 'adverse' | 'tiers' => entry.data.partySide === 'client' ? 'client' : entry.data.partySide === 'adversaire' ? 'adverse' : 'tiers';
+  const mappedPreviewValues = (side: 'client' | 'adverse' | 'tiers' | null): string[] => {
+    const nodesById = new Map(data.graph.nodes.map((entry) => [entry.id, entry]));
     return data.graph.mappings
       .filter((mapping) => {
-        const kind = kinds.get(mapping.nodeId);
-        return personMappings ? kind === 'person' || kind === 'company' : kind !== 'person' && kind !== 'company';
+        const entry = nodesById.get(mapping.nodeId);
+        const party = entry?.kind === 'person' || entry?.kind === 'company';
+        return side ? party && sideOf(entry) === side : !party;
       })
       .flatMap((mapping) => [mapping.real, mapping.masked])
       .filter(Boolean);
   };
-  const previewValues = (category: 'person' | 'date' | 'fact'): string[] => {
-    if (category === 'person') return [...entities.flatMap((entry) => [entry.label, ...entry.aliases]), ...mappedPreviewValues(true)];
+  const previewValues = (category: HighlightCategory): string[] => {
     if (category === 'date') return datePreviewValues();
-    return [nature, textValue(node.data.localisation), ...fields.flatMap((field) => [field.label, field.value]), ...mappedPreviewValues(false)].filter(Boolean);
+    if (category === 'fact') return [nature, textValue(node.data.localisation), ...fields.flatMap((field) => [field.label, field.value]), ...mappedPreviewValues(null)].filter(Boolean);
+    return [...entities.filter((entry) => sideOf(entry) === category).flatMap((entry) => [entry.label, ...entry.aliases]), ...mappedPreviewValues(category)];
   };
   const highlightPreview = (content: string): string => {
-    const categories: Array<'person' | 'date' | 'fact'> = ['person', 'date', 'fact'];
-    const spans: Array<{ start: number; end: number; category: 'person' | 'date' | 'fact' }> = [];
+    const categories: HighlightCategory[] = ['client', 'adverse', 'tiers', 'date', 'fact'];
+    const spans: Array<{ start: number; end: number; category: HighlightCategory }> = [];
     for (const category of categories) {
       const values = [...new Set(previewValues(category))].sort((left, right) => right.length - left.length);
       if (!values.length) continue;
@@ -544,8 +548,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     return spans.map((span) => {
       const before = content.slice(cursor, span.start);
       cursor = span.end;
-      const className = span.category === 'person' ? 'pmd-highlight-person' : span.category === 'date' ? 'pmd-highlight-date' : 'pmd-highlight-fact';
-      return `${escapeHtml(before)}<mark class="${className}">${escapeHtml(content.slice(span.start, span.end))}</mark>`;
+      return `${escapeHtml(before)}<mark class="pmd-highlight-${span.category}">${escapeHtml(content.slice(span.start, span.end))}</mark>`;
     }).join('') + escapeHtml(content.slice(cursor));
   };
   const setPreviewError = (message: string) => {
