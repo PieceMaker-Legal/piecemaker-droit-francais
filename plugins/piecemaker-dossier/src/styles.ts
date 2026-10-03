@@ -338,9 +338,10 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-document-grid .pmd-document-wide{grid-column:1/-1}
 .pmd-document-form-section{margin-top:18px}
 .pmd-document-entities{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;border:1px solid var(--pmd-border);border-radius:10px;padding:8px}
-.pmd-document-entity{display:inline-flex;height:32px;align-items:center;justify-content:center;gap:7px;border:1px solid var(--pmd-border);border-radius:999px;background:var(--pmd-bg);color:var(--pmd-text);padding:0 12px;font:500 12px inherit;cursor:pointer}
-.pmd-document-entity:hover{background:var(--pmd-soft)}
-.pmd-document-entity.is-selected{border-color:transparent;background:var(--pmd-soft);color:var(--pmd-ink)}
+.pmd-document-entity{display:inline-flex;height:28px;align-items:center;gap:4px;border-radius:999px;background:var(--pmd-soft);color:var(--pmd-ink);padding:0 4px 0 12px;font:500 12px inherit}
+.pmd-document-entity-remove{display:inline-flex;width:20px;height:20px;align-items:center;justify-content:center;border:0;border-radius:999px;background:transparent;color:var(--pmd-muted);cursor:pointer;font-size:14px;line-height:1}
+.pmd-document-entity-remove:hover{background:var(--pmd-border);color:var(--pmd-ink)}
+.pmd-document-entity-add{margin-top:8px;width:100%}
 .pmd-document-section-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .pmd-document-field-row{display:flex;align-items:center;gap:8px;margin-top:8px}
 .pmd-document-field-row .pmd-input:first-child{width:33%}

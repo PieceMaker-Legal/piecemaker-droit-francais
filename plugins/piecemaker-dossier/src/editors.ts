@@ -463,14 +463,6 @@ type HighlightCategory = 'client' | 'adverse' | 'tiers' | 'date' | 'fact';
 export function documentEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode, projectPath: string, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>): void {
   const mentionLinks = data.graph.links.filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id));
   const linked = new Set(mentionLinks.map((link) => link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId));
-  const entities = data.graph.nodes
-    .filter((entry) => entry.kind === 'person' || entry.kind === 'company')
-    .sort((left, right) => {
-      const leftSelected = linked.has(left.id);
-      const rightSelected = linked.has(right.id);
-      if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
-      return left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' });
-    });
   const pathValue = textValue(node.data.path);
   const fields = Array.isArray(node.data.fields)
     ? node.data.fields.filter((field): field is { label: string; value: string } => Boolean(field) && typeof field === 'object' && typeof (field as { label?: unknown }).label === 'string' && typeof (field as { value?: unknown }).value === 'string')
@@ -480,10 +472,6 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   const natureOptions = [...new Set([nature, ...natures].filter(Boolean))]
     .sort((left, right) => left.localeCompare(right, 'fr', { sensitivity: 'base' }))
     .map((value) => `<option value="${escapeHtml(value)}" ${value === nature ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
-  const entityButtons = entities.map((entry) => {
-    const selected = linked.has(entry.id);
-    return `<button class="pmd-document-entity${selected ? ' is-selected' : ''}" type="button" aria-pressed="${selected}" data-document-entity="${escapeHtml(entry.id)}">${selected ? '<span aria-hidden="true">✓</span>' : ''}${escapeHtml(entry.label)}</button>`;
-  }).join('');
   const fieldRows = fields.map((field, index) => `<div class="pmd-document-field-row" data-field-row><input class="pmd-input" data-field-label value="${escapeHtml(field.label)}" placeholder="Libellé"><input class="pmd-input" data-field-value value="${escapeHtml(field.value)}" placeholder="Valeur"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" type="button" data-remove-field="${index}" aria-label="Supprimer le champ">×</button></div>`).join('');
   const layer = modal(root, `
     <div role="dialog" aria-modal="true" class="pmd-document-dialog" data-piecemaker-identity-highlight="off">
@@ -502,7 +490,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
               <label>Lieu<input class="pmd-input" name="localisation" placeholder="Ex. TJ de ADRESSE_02" value="${escapeHtml(textValue(node.data.localisation))}"></label>
             </div>
             <p class="pmd-document-muted pmd-selection-message" data-selection-message hidden></p>
-            <div class="pmd-document-form-section"><span>Personnes citées</span><div class="pmd-document-entities">${entityButtons || '<p class="pmd-document-muted">Aucune personne connue.</p>'}</div></div>
+            <div class="pmd-document-form-section"><span>Personnes citées</span><div class="pmd-document-entities" data-document-entities></div><select class="pmd-select pmd-document-entity-add" data-add-entity aria-label="Ajouter une personne citée"></select></div>
             <div class="pmd-document-form-section"><div class="pmd-document-section-heading"><span>Champs libres</span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" type="button" data-add-field>＋ Ajouter</button></div><div data-fields>${fieldRows}</div><p class="pmd-document-muted" data-empty-fields ${fields.length ? 'hidden' : ''}>Aucun champ libre.</p></div>
           </div>
           <div class="pmd-document-form-actions"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" type="button" data-close>Annuler</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" type="submit" data-document-submit>Enregistrer</button></div>
@@ -586,25 +574,33 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     const empty = layer.querySelector<HTMLElement>('[data-empty-fields]');
     if (fieldsTarget && empty) empty.hidden = fieldsTarget.querySelectorAll('[data-field-row]').length > 0;
   };
-  const markEntitySelected = (button: HTMLElement) => {
-    button.classList.add('is-selected');
-    button.setAttribute('aria-pressed', 'true');
-    if (!button.querySelector('span')) button.insertAdjacentHTML('afterbegin', '<span aria-hidden="true">✓</span>');
-  };
-  const toggleEntity = (button: HTMLElement) => {
-    const id = button.dataset.documentEntity || '';
-    if (!id) return;
-    if (selectedEntities.has(id)) {
-      selectedEntities.delete(id);
-      button.classList.remove('is-selected');
-      button.setAttribute('aria-pressed', 'false');
-      button.querySelector('span')?.remove();
-    } else {
-      selectedEntities.add(id);
-      markEntitySelected(button);
+  const entityList = layer.querySelector<HTMLElement>('[data-document-entities]');
+  const entityAdd = layer.querySelector<HTMLSelectElement>('[data-add-entity]');
+  const renderEntities = () => {
+    const people = working.nodes
+      .filter((entry) => entry.kind === 'person' || entry.kind === 'company')
+      .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
+    const cited = people.filter((entry) => selectedEntities.has(entry.id));
+    const others = people.filter((entry) => !selectedEntities.has(entry.id));
+    if (entityList) entityList.innerHTML = cited.map((entry) => `<span class="pmd-document-entity" data-document-entity="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}<button type="button" class="pmd-document-entity-remove" data-remove-entity="${escapeHtml(entry.id)}" aria-label="Retirer ${escapeHtml(entry.label)}">×</button></span>`).join('')
+      || '<p class="pmd-document-muted">Aucune personne citée. Sélectionnez un nom dans la pièce puis faites un clic droit.</p>';
+    if (entityAdd) {
+      entityAdd.innerHTML = `<option value="">＋ Ajouter une personne du dossier…</option>${others.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join('')}`;
+      entityAdd.hidden = others.length === 0;
     }
   };
-  layer.querySelectorAll<HTMLElement>('[data-document-entity]').forEach((button) => button.addEventListener('click', () => toggleEntity(button)));
+  entityList?.addEventListener('click', (event) => {
+    const id = (event.target as HTMLElement).closest<HTMLElement>('[data-remove-entity]')?.dataset.removeEntity;
+    if (!id) return;
+    selectedEntities.delete(id);
+    renderEntities();
+  });
+  entityAdd?.addEventListener('change', () => {
+    if (!entityAdd.value) return;
+    selectedEntities.add(entityAdd.value);
+    renderEntities();
+  });
+  renderEntities();
   const addFieldRow = (value = '') => {
     const fieldsTarget = layer.querySelector<HTMLElement>('[data-fields]');
     if (!fieldsTarget) return;
@@ -673,34 +669,25 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     selectionMessage.textContent = message;
     selectionMessage.hidden = !message;
   };
-  const applyEntityChange = (change: SelectionChange, label: string) => {
+  const applyEntityChange = (change: SelectionChange) => {
     queuedOperations.push(...change.operations);
     working = change.graph;
     if (change.previousId !== change.nodeId) {
       for (const [from, to] of renamedIds) if (to === change.previousId) renamedIds.set(from, change.nodeId);
       renamedIds.set(change.previousId, change.nodeId);
-      if (selectedEntities.delete(change.previousId)) selectedEntities.add(change.nodeId);
-      layer.querySelectorAll<HTMLElement>('[data-document-entity]').forEach((button) => { if (button.dataset.documentEntity === change.previousId) button.dataset.documentEntity = change.nodeId; });
-    }
-    let button = Array.from(layer.querySelectorAll<HTMLElement>('[data-document-entity]')).find((entry) => entry.dataset.documentEntity === change.nodeId);
-    if (!button) {
-      const list = layer.querySelector<HTMLElement>('.pmd-document-entities');
-      list?.querySelector('p')?.remove();
-      list?.insertAdjacentHTML('afterbegin', `<button class="pmd-document-entity" type="button" aria-pressed="false" data-document-entity="${escapeHtml(change.nodeId)}">${escapeHtml(label)}</button>`);
-      button = list?.querySelector<HTMLElement>('[data-document-entity]') || undefined;
-      button?.addEventListener('click', () => button && toggleEntity(button));
+      selectedEntities.delete(change.previousId);
     }
     selectedEntities.add(change.nodeId);
-    if (button) markEntitySelected(button);
+    renderEntities();
     renderPreview();
   };
   const designateParty = (selection: string, side: 'client' | 'adversaire' | 'tiers') => {
     const existing = findEntityBySelection(selection, working);
     if (existing) {
-      applyEntityChange(changeNodeSide(existing, side, working), existing.label);
+      applyEntityChange(changeNodeSide(existing, side, working));
       return;
     }
-    partyTypePicker(root, side, (kind) => applyEntityChange(createEntity(selection, kind, side, working), cleanSelection(selection)));
+    partyTypePicker(root, side, (kind) => applyEntityChange(createEntity(selection, kind, side, working)));
   };
   const chooseCategory = (category: HighlightCategory, selection: string) => {
     showSelectionMessage('');
