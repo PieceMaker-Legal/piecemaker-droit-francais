@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.23](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.22...v2.0.23) (2026-10-05)
+
+### Bug Fixes
+
+* **mcp:** embarquer le SDK MCP dans l'app de bureau ([fe5080f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fe5080ffee4fc0da1acaf5f6f33db34c03c569fe))
+
 ## [2.0.22](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.21...v2.0.22) (2026-10-05)
 
 ### New Features
