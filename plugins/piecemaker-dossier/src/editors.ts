@@ -1,7 +1,11 @@
-import { aliasEditorMarkup, entityKinds, escapeHtml, kindLabels, nodeVariants, parseAliases, proposedPieceName, textValue, dateFor } from './views.js';
+import { aliasEditorMarkup, citationListMarkup, entityKinds, escapeHtml, kindLabels, nodeVariants, parseAliases, proposedPieceName, textValue, dateFor } from './views.js';
 import { knowledgeApi } from './api.js';
 import type { CompanySearchResult } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
+import { citableEntities, citationSource, citationsOfEntity, citationsOfMention, pieceMentionOperations } from './citations.js';
+import type { PendingCitation } from './citations.js';
+import { removedAliasOperations } from './exclusions.js';
+import type { DeleteScope } from './exclusions.js';
 import type { ViewData } from './views.js';
 import type { KnowledgeNode, KnowledgeUpdateOperation, NodeKind } from './types.js';
 import { PROCEDURE_POSITIONS, partyCodeChange } from './party-codes.js';
@@ -61,34 +65,60 @@ export function askConfirm(root: HTMLElement, title: string, confirmLabel = 'Con
   });
 }
 
-export function askDeleteEntity(root: HTMLElement, label: string): Promise<{ neverPseudonymise: boolean } | null> {
+export function askDeleteEntity(root: HTMLElement, label: string): Promise<DeleteScope | null> {
   return new Promise((resolve) => {
     const layer = overlay(root, `
       <div class="pmd-confirm">
         <h2 class="pmd-title piecemaker-display">Supprimer cet élément et ses relations ?</h2>
-        <label class="pmd-confirm-option"><input type="checkbox" data-never-pseudonymise><span>Ne plus jamais pseudonymiser « ${escapeHtml(label)} », dans tous les dossiers</span></label>
+        <div class="pmd-confirm-choices">
+          <button type="button" class="pmd-confirm-choice" data-delete-scope="dossier"><strong>Exclure de ce dossier</strong><small>« ${escapeHtml(label)} » est supprimé et l’analyse ne le recréera plus dans ce dossier.</small></button>
+          <button type="button" class="pmd-confirm-choice" data-delete-scope="tous"><strong>Exclure de tous les dossiers</strong><small>« ${escapeHtml(label)} » n’est plus jamais pseudonymisé, dans aucun dossier.</small></button>
+        </div>
         <div class="pmd-form-actions">
           <button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button>
-          <button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-confirm>Supprimer</button>
         </div>
       </div>`);
-    const option = layer.querySelector<HTMLInputElement>('[data-never-pseudonymise]');
     let settled = false;
-    const finish = (confirmed: boolean) => {
+    const finish = (scope: DeleteScope | null) => {
       if (settled) return;
       settled = true;
       closeOverlay(layer, onKey);
-      resolve(confirmed ? { neverPseudonymise: Boolean(option?.checked) } : null);
+      resolve(scope);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); finish(false); }
-      if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+      if (event.key === 'Escape') { event.preventDefault(); finish(null); }
     };
     document.addEventListener('keydown', onKey);
-    layer.addEventListener('click', (event) => { if (event.target === layer) finish(false); });
-    layer.querySelector('[data-close]')?.addEventListener('click', () => finish(false));
-    layer.querySelector('[data-confirm]')?.addEventListener('click', () => finish(true));
-    layer.querySelector<HTMLButtonElement>('[data-confirm]')?.focus();
+    layer.addEventListener('click', (event) => { if (event.target === layer) finish(null); });
+    layer.querySelector('[data-close]')?.addEventListener('click', () => finish(null));
+    layer.querySelectorAll<HTMLElement>('[data-delete-scope]').forEach((button) => button.addEventListener('click', () => finish(button.dataset.deleteScope === 'tous' ? 'tous' : 'dossier')));
+  });
+}
+
+export function askEntity(root: HTMLElement, title: string, entries: Array<{ id: string; label: string; detail: string }>): Promise<string | null> {
+  return new Promise((resolve) => {
+    const layer = overlay(root, `
+      <div class="pmd-confirm">
+        <h2 class="pmd-title piecemaker-display">${escapeHtml(title)}</h2>
+        <div class="pmd-entity-choice-list">${entries.map((entry) => `<button type="button" class="pmd-confirm-choice" data-entity-choice="${escapeHtml(entry.id)}"><strong>${escapeHtml(entry.label)}</strong><small>${escapeHtml(entry.detail)}</small></button>`).join('') || '<p class="pmd-document-muted">Aucune personne dans le dossier.</p>'}</div>
+        <div class="pmd-form-actions">
+          <button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button>
+        </div>
+      </div>`);
+    let settled = false;
+    const finish = (id: string | null) => {
+      if (settled) return;
+      settled = true;
+      closeOverlay(layer, onKey);
+      resolve(id);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); finish(null); }
+    };
+    document.addEventListener('keydown', onKey);
+    layer.addEventListener('click', (event) => { if (event.target === layer) finish(null); });
+    layer.querySelector('[data-close]')?.addEventListener('click', () => finish(null));
+    layer.querySelectorAll<HTMLElement>('[data-entity-choice]').forEach((button) => button.addEventListener('click', () => finish(button.dataset.entityChoice || null)));
   });
 }
 
@@ -123,6 +153,13 @@ export function askPrompt(root: HTMLElement, title: string, value = '', confirmL
     });
     input?.focus();
     input?.select();
+  });
+}
+
+export function bindCitationToggles(container: HTMLElement | null): void {
+  container?.addEventListener('click', (event) => {
+    const text = (event.target as HTMLElement).closest<HTMLElement>('[data-toggle-citation]');
+    if (text) text.dataset.expanded = String(text.dataset.expanded !== 'true');
   });
 }
 
@@ -248,6 +285,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     return { relation, index, relatedNode, relatedNodeId };
   }).filter((entry) => entry.relation.relation !== 'mentions' && (entry.relatedNode?.kind === 'person' || entry.relatedNode?.kind === 'company'));
   const mentionCount = relations.filter((relation) => relation.relation === 'mentions').length;
+  const entityCitations = node ? citationsOfEntity(data.graph.citations, node.id) : [];
   const linkTargets = data.graph.nodes.filter((entry) => entry.id !== id && (entry.kind === 'person' || entry.kind === 'company'));
   const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
   const layer = modal(root, `
@@ -269,6 +307,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       </section>
       <section class="pmd-form-section"><h3>Liens</h3>
       ${mentionCount ? `<p class="pmd-form-note">Cité dans ${mentionCount} pièce${mentionCount > 1 ? 's' : ''} — à corriger depuis la chronologie.</p>` : ''}
+      ${entityCitations.length ? `<p class="pmd-form-note">Citations qui justifient ces mentions</p>${citationListMarkup(entityCitations.map((citation) => ({ texte: citation.texte, source: citationSource(citation, data.graph.nodes) })))}` : ''}
       <label>Lier à<select class="pmd-select" name="target"><option value="">Personne ou société…</option>${linkTargets.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join('')}</select></label>
       <label>Nature du lien<select class="pmd-select" name="relation">${relationSelectOptions()}</select></label>
       <label data-custom-relation hidden>Lien personnalisé<input class="pmd-input" name="customRelation" placeholder="Saisissez le type de lien"></label>
@@ -286,6 +325,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   });
   const removals = new Set<number>();
   bindAliasEditors(layer);
+  bindCitationToggles(layer);
   layer.querySelectorAll<HTMLElement>('[data-unlink]').forEach((button) => button.addEventListener('click', () => {
     removals.add(Number(button.dataset.unlink));
     button.style.display = 'none';
@@ -442,6 +482,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     operations.push({ op: 'upsertNode', node: { id: nodeId, kind, label, aliases: savedAliases, data: nodeData } });
     for (const mapping of mappings) operations.push({ op: 'deleteMapping', mapping: { nodeId, real: mapping.real } });
     for (const real of [label, ...savedAliases]) if (code) operations.push({ op: 'upsertMapping', mapping: { nodeId, real, masked: code } });
+    if (node) operations.push(...removedAliasOperations(nodeId, [node.label, ...variants], [label, ...savedAliases]));
     for (const index of removals) {
       const relation = relations[index];
       operations.push({ op: 'unlink', link: { fromNodeId: rename(relation.fromNodeId), toNodeId: rename(relation.toNodeId), relation: relation.relation } });
@@ -505,6 +546,9 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   let previewContent = '';
   const queuedOperations: KnowledgeUpdateOperation[] = [];
   const renamedIds = new Map<string, string>();
+  const renamed = (id: string): string => renamedIds.get(id) || id;
+  const removedCitationIds = new Set<number>();
+  const pendingCitations: PendingCitation[] = [];
   const selectionValues: Record<'date' | 'fact', string[]> = { date: [], fact: [] };
   const dateInput = layer.querySelector<HTMLInputElement>('input[name="date"]');
   const readFields = () => Array.from(layer.querySelectorAll<HTMLElement>('[data-field-row]')).map((row) => ({ label: row.querySelector<HTMLInputElement>('[data-field-label]')?.value.trim() || '', value: row.querySelector<HTMLInputElement>('[data-field-value]')?.value.trim() || '' })).filter((field) => field.label || field.value);
@@ -578,13 +622,25 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   };
   const entityList = layer.querySelector<HTMLElement>('[data-document-entities]');
   const entityAdd = layer.querySelector<HTMLSelectElement>('[data-add-entity]');
+  const citationEntries = (entityId: string) => [
+    ...citationsOfMention(data.graph.citations, node.id, entityId, renamed)
+      .filter((citation) => !removedCitationIds.has(citation.id))
+      .map((citation) => ({ texte: citation.texte, source: citationSource(citation, data.graph.nodes), remove: { attribute: 'data-remove-citation', value: String(citation.id) } })),
+    ...pendingCitations
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => renamed(entry.entityId) === entityId)
+      .map(({ entry, index }) => ({ texte: entry.texte, source: node.label, remove: { attribute: 'data-remove-pending', value: String(index) } })),
+  ];
   const renderEntities = () => {
     const people = working.nodes
       .filter((entry) => entry.kind === 'person' || entry.kind === 'company')
       .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
     const cited = people.filter((entry) => selectedEntities.has(entry.id));
     const others = people.filter((entry) => !selectedEntities.has(entry.id));
-    if (entityList) entityList.innerHTML = cited.map((entry) => `<span class="pmd-document-entity" data-document-entity="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}<button type="button" class="pmd-document-entity-remove" data-remove-entity="${escapeHtml(entry.id)}" aria-label="Retirer ${escapeHtml(entry.label)}">×</button></span>`).join('')
+    if (entityList) entityList.innerHTML = cited.map((entry) => {
+      const entries = citationEntries(entry.id);
+      return `<div class="pmd-document-cited" ${entries.length ? 'data-citations' : ''}><span class="pmd-document-entity" data-document-entity="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}<button type="button" class="pmd-document-entity-remove" data-remove-entity="${escapeHtml(entry.id)}" aria-label="Retirer ${escapeHtml(entry.label)}">×</button></span>${citationListMarkup(entries)}</div>`;
+    }).join('')
       || '<p class="pmd-document-muted">Aucune personne citée. Sélectionnez un nom dans la pièce puis faites un clic droit.</p>';
     if (entityAdd) {
       entityAdd.innerHTML = `<option value="">＋ Ajouter une personne du dossier…</option>${others.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join('')}`;
@@ -592,11 +648,25 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     }
   };
   entityList?.addEventListener('click', (event) => {
-    const id = (event.target as HTMLElement).closest<HTMLElement>('[data-remove-entity]')?.dataset.removeEntity;
+    const target = event.target as HTMLElement;
+    const removedCitation = target.closest<HTMLElement>('[data-remove-citation]')?.dataset.removeCitation;
+    if (removedCitation) {
+      removedCitationIds.add(Number(removedCitation));
+      renderEntities();
+      return;
+    }
+    const removedPending = target.closest<HTMLElement>('[data-remove-pending]')?.dataset.removePending;
+    if (removedPending) {
+      pendingCitations.splice(Number(removedPending), 1);
+      renderEntities();
+      return;
+    }
+    const id = target.closest<HTMLElement>('[data-remove-entity]')?.dataset.removeEntity;
     if (!id) return;
     selectedEntities.delete(id);
     renderEntities();
   });
+  bindCitationToggles(entityList);
   entityAdd?.addEventListener('change', () => {
     if (!entityAdd.value) return;
     selectedEntities.add(entityAdd.value);
@@ -663,9 +733,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
       op: 'upsertNode',
       node: { id: node.id, kind: 'document', label: node.label, aliases: node.aliases, data: { ...node.data, nature: savedNature.trim() || null, localisation: textValue(form.get('localisation')).trim() || null, fields: documentFields }, date: textValue(form.get('date')) || null },
     }];
-    const renamed = (id: string): string => renamedIds.get(id) || id;
-    for (const link of mentionLinks) operations.push({ op: 'unlink', link: { fromNodeId: renamed(link.fromNodeId), toNodeId: renamed(link.toNodeId), relation: link.relation } });
-    for (const target of selectedEntities) operations.push({ op: 'link', link: { fromNodeId: node.id, toNodeId: target, relation: 'mentions' } });
+    operations.push(...pieceMentionOperations({ pieceId: node.id, mentionLinks, selected: selectedEntities, removedCitationIds, pending: pendingCitations, renamed }));
     try {
       await save(operations);
       if (pathValue && newName && newName !== pieceName) await rename(pathValue, newName);
@@ -732,13 +800,22 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     { category: 'date', label: 'Date' },
     { category: 'fact', label: 'Fait' },
   ];
+  const citeSelection = async (selection: string) => {
+    showSelectionMessage('');
+    const entities = citableEntities(working.nodes, selectedEntities);
+    const entityId = await askEntity(root, 'Citer pour…', entities.map((entry) => ({ id: entry.id, label: entry.label, detail: selectedEntities.has(entry.id) ? 'Citée dans la pièce' : kindLabels[entry.kind] })));
+    if (!entityId) return;
+    if (!pendingCitations.some((entry) => renamed(entry.entityId) === entityId && entry.texte === selection)) pendingCitations.push({ entityId, texte: selection });
+    selectedEntities.add(entityId);
+    renderEntities();
+  };
   let closeSelectionMenu = () => {};
   const openSelectionMenu = (x: number, y: number, selection: string) => {
     closeSelectionMenu();
     const menu = document.createElement('div');
     menu.className = 'pmd-selection-menu';
     menu.setAttribute('role', 'menu');
-    menu.innerHTML = menuCategories.map((entry) => `<button type="button" role="menuitem" data-selection-category="${entry.category}"><i aria-hidden="true"></i>${entry.label}</button>`).join('');
+    menu.innerHTML = menuCategories.map((entry) => `<button type="button" role="menuitem" data-selection-category="${entry.category}"><i aria-hidden="true"></i>${entry.label}</button>`).join('') + '<button type="button" role="menuitem" data-selection-cite>Citer pour…</button>';
     layer.appendChild(menu);
     const bounds = (layer.querySelector('.pmd-document-dialog') || layer).getBoundingClientRect();
     menu.style.left = `${Math.max(bounds.left + 4, Math.min(x, bounds.right - menu.offsetWidth - 4))}px`;
@@ -757,6 +834,11 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     layer.addEventListener('scroll', closeSelectionMenu, true);
     menu.addEventListener('mousedown', (event) => event.preventDefault());
     menu.addEventListener('click', (event) => {
+      if ((event.target as HTMLElement).closest('[data-selection-cite]')) {
+        closeSelectionMenu();
+        void citeSelection(selection);
+        return;
+      }
       const choice = (event.target as HTMLElement).closest<HTMLElement>('[data-selection-category]')?.dataset.selectionCategory as HighlightCategory | undefined;
       if (!choice) return;
       closeSelectionMenu();

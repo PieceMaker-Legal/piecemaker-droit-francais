@@ -63,6 +63,13 @@ export function aliasEditorMarkup(variants: string[]): string {
   return `<div class="pmd-alias-editor" data-alias-editor><div class="pmd-alias-pills" data-alias-pills>${variants.map((variant, index) => `<span class="pmd-alias-pill">${escapeHtml(variant)}<button type="button" data-remove-alias="${index}" aria-label="Supprimer ${escapeHtml(variant)}">×</button></span>`).join('')}</div><input class="pmd-input pmd-alias-input" data-alias-input placeholder="Autre écriture, puis Entrée"><input type="hidden" name="aliases" value="${escapeHtml(variants.join('\n'))}"></div>`;
 }
 
+export type CitationEntry = { texte: string; source: string; remove?: { attribute: string; value: string } };
+
+export function citationListMarkup(entries: CitationEntry[]): string {
+  if (!entries.length) return '';
+  return `<ul class="pmd-citations">${entries.map((entry) => `<li class="pmd-citation"><span class="pmd-citation-text" data-toggle-citation title="${escapeHtml(entry.texte)}">${escapeHtml(entry.texte)}</span><small class="pmd-citation-source">${escapeHtml(entry.source)}</small>${entry.remove ? `<button type="button" class="pmd-document-entity-remove" ${entry.remove.attribute}="${escapeHtml(entry.remove.value)}" aria-label="Supprimer cette citation">×</button>` : ''}</li>`).join('')}</ul>`;
+}
+
 const userIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"></path><circle cx="10" cy="7" r="4"></circle><path d="M22 21a8 8 0 0 0-5-7.7"></path></svg>';
 const companyIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4c0-.5.4-1 1-1h10c.6 0 1 .5 1 1v18"></path><path d="M6 12H4c-.6 0-1 .4-1 1v9"></path><path d="M18 9h2c.6 0 1 .4 1 1v12"></path><path d="M10 6h4M10 10h4M10 14h4M10 18h4"></path></svg>';
 const tagIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.8A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .8 1.4l8.5 8.5a2.4 2.4 0 0 0 3.4 0l6.4-6.4a2.4 2.4 0 0 0 0-3.4z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>';

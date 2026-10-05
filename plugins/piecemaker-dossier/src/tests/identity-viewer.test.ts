@@ -67,6 +67,7 @@ describe('writingRemovalOperations', () => {
     expect(writingRemovalOperations(graph.nodes[0], graph, 'Jean Dupont')).toEqual([
       { op: 'upsertNode', node: { id: 'entity:PERSONNE_PHYSIQUE_01', kind: 'person', label: 'J. Dupont', aliases: [], data: { code: 'PERSONNE_PHYSIQUE_01' } } },
       { op: 'deleteMapping', mapping: { nodeId: 'entity:PERSONNE_PHYSIQUE_01', real: 'Jean Dupont' } },
+      { op: 'excludeAlias', exclusion: { entite: 'entity:PERSONNE_PHYSIQUE_01', alias: 'Jean Dupont' } },
     ]);
   });
 

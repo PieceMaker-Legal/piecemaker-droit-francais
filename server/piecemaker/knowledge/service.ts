@@ -38,6 +38,9 @@ export function createKnowledgeService(store: KnowledgeStore, projects: ProjectL
     graph(value: unknown) {
       return store.snapshot(ensureProject(value));
     },
+    version() {
+      return { version: store.dataVersion() };
+    },
     projects() {
       const counts = store.mappingCounts();
       return {

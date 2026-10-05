@@ -216,6 +216,7 @@ export class KnowledgeStore {
   private readonly addMappingIfAbsent;
   private readonly deleteMapping;
   private readonly addCitation;
+  private readonly deleteCitation;
   private readonly removePartyDesignation;
   private readonly deleteNode;
   private readonly findCodeOwner;
@@ -235,6 +236,7 @@ export class KnowledgeStore {
     this.addMappingIfAbsent = this.database.prepare(`INSERT INTO piecemaker_mappings(project_id,node_id,real_value,masked_value,search_text,data_json,created_at,updated_at) VALUES(@projectId,@nodeId,@real,@masked,@searchText,@data,@at,@at) ON CONFLICT(project_id,node_id,real_value) DO NOTHING`);
     this.deleteMapping = this.database.prepare('DELETE FROM piecemaker_mappings WHERE project_id=@projectId AND node_id=@nodeId AND real_value=@real');
     this.addCitation = this.database.prepare(`INSERT INTO piecemaker_citations(project_id,from_node_id,to_node_id,relation,texte,piece_id,source) SELECT @projectId,@fromNodeId,@toNodeId,@relation,@texte,@pieceId,@source WHERE NOT EXISTS (SELECT 1 FROM piecemaker_citations WHERE project_id=@projectId AND from_node_id=@fromNodeId AND to_node_id=@toNodeId AND relation=@relation AND texte=@texte AND piece_id IS @pieceId AND source IS @source)`);
+    this.deleteCitation = this.database.prepare('DELETE FROM piecemaker_citations WHERE project_id=@projectId AND id=@id');
     this.removePartyDesignation = this.database.prepare("UPDATE piecemaker_nodes SET data_json=json_remove(data_json, '$.partySide', '$.position'), updated_at=@at WHERE project_id=@projectId AND id=@nodeId");
     this.deleteNode = this.database.prepare('DELETE FROM piecemaker_nodes WHERE project_id=@projectId AND id=@nodeId');
     this.findCodeOwner = this.database.prepare(`SELECT project_id FROM piecemaker_mappings WHERE masked_value=@code AND project_id<>@projectId
@@ -332,6 +334,8 @@ export class KnowledgeStore {
     `).run(projectId, at());
   }
 
+  public dataVersion(): number { return this.database.pragma('data_version', { simple: true }) as number; }
+
   public close(): void { if (this.ownsDatabase) this.database.close(); }
   public tableNames(): string[] { return (this.database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'piecemaker_%' ORDER BY name").all() as Array<{ name: string }>).map(({ name }) => name); }
 
@@ -371,7 +375,7 @@ export class KnowledgeStore {
   }
 
   private validateOperation(operation: KnowledgeUpdateOperation): KnowledgeUpdateOperation {
-    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','cite','upsertMapping','deleteMapping','removePartyDesignation','deleteNode','renameNode','excludeTerm','excludeLink','excludeAlias'].includes(operation.op)) throw new TypeError('unsupported operation');
+    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','cite','uncite','upsertMapping','deleteMapping','removePartyDesignation','deleteNode','renameNode','excludeTerm','excludeLink','excludeAlias'].includes(operation.op)) throw new TypeError('unsupported operation');
     return operation;
   }
 
@@ -403,6 +407,11 @@ export class KnowledgeStore {
     }
     if (operation.op === 'cite') {
       this.addCitation.run(this.citationValues(projectId, operation.citation));
+      return;
+    }
+    if (operation.op === 'uncite') {
+      if (!Number.isInteger(operation.id)) throw new TypeError('citation id must be an integer');
+      this.deleteCitation.run({ projectId, id: operation.id });
       return;
     }
     if (operation.op === 'deleteMapping') {

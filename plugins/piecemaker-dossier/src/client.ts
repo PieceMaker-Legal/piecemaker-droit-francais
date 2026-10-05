@@ -1,9 +1,10 @@
 import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askDeleteEntity, askPrompt, bindAliasEditors, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
+import { deleteEntityOperations, removedAliasOperations } from './exclusions.js';
 import { partyCodeChange } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { chronologyView, escapeHtml, generalView, mappingView, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
+import { chronologyView, escapeHtml, generalView, mappingView, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
 import type { BodaccScanState, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -23,6 +24,7 @@ type PluginApi = {
 
 const KNOWLEDGE_SCAN_EVENT = 'piecemaker:knowledge-scan-job';
 const SCAN_POLL_INTERVAL_MS = 1000;
+const VERSION_POLL_INTERVAL_MS = 5000;
 const viewCache = new Map<string, ViewData>();
 
 export function mount(container: HTMLElement, api: PluginApi): void {
@@ -168,8 +170,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (cached) {
       data = cached;
       render();
-    } else {
-      data = null;
+    } else if (!data) {
       render();
     }
     try {
@@ -180,10 +181,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       render();
     } catch (error) {
       if (sequence !== loadSequence) return;
-      if (!cached) {
-        data = null;
-        render();
-      }
       showError(error);
     }
   };
@@ -212,13 +209,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const deleteNode = async (nodeId: string): Promise<boolean> => {
     const node = data?.graph.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) return false;
-    const choice = await askDeleteEntity(root, node.label);
-    if (!choice) return false;
-    if (choice.neverPseudonymise) {
+    const scope = await askDeleteEntity(root, node.label);
+    if (!scope) return false;
+    if (scope === 'tous') {
       const { terms } = await knowledgeApi.institutionalTerms();
-      await knowledgeApi.saveInstitutionalTerms([...terms, node.label]);
+      if (!terms.includes(node.label)) await knowledgeApi.saveInstitutionalTerms([...terms, node.label]);
     }
-    await save([{ op: 'deleteNode', nodeId }]);
+    await save(deleteEntityOperations(nodeId, [node.label, ...nodeVariants(node, data?.graph.mappings || [])], scope));
     return true;
   };
 
@@ -239,6 +236,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       const operations: KnowledgeUpdateOperation[] = [{ op: 'upsertNode', node: { id: node.id, kind: node.kind, label, aliases, data: node.data } }];
       for (const mapping of mappings) operations.push({ op: 'deleteMapping', mapping: { nodeId: node.id, real: mapping.real } });
       for (const real of [...new Set([label, ...aliases])]) operations.push({ op: 'upsertMapping', mapping: { nodeId: node.id, real, masked } });
+      operations.push(...removedAliasOperations(node.id, [node.label, ...nodeVariants(node, mappingData.graph.mappings)], [label, ...aliases]));
       return operations;
     };
     layer.querySelectorAll<HTMLFormElement>('[data-mapping-row]').forEach((row) => row.addEventListener('submit', async (event) => {
@@ -586,6 +584,28 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     paintContent();
   };
 
+  let knownVersion: number | null = null;
+  let refreshPending = false;
+  let versionCheckRunning = false;
+  const refreshWhenChanged = async () => {
+    if (versionCheckRunning || document.visibilityState !== 'visible' || !context.project) return;
+    versionCheckRunning = true;
+    try {
+      const { version } = await knowledgeApi.version();
+      if (knownVersion !== null && version !== knownVersion) refreshPending = true;
+      knownVersion = version;
+    } catch {
+      return;
+    } finally {
+      versionCheckRunning = false;
+    }
+    if (!refreshPending || !context.project || root.querySelector('.pmd-modal')) return;
+    refreshPending = false;
+    viewCache.delete(context.project.name);
+    void load();
+  };
+  const versionTimer = window.setInterval(() => void refreshWhenChanged(), VERSION_POLL_INTERVAL_MS);
+
   render();
   void load();
   void resumeScan();
@@ -603,7 +623,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       root.dataset.theme = context.theme;
     }
   });
-  (container as HTMLElement & { pmdUnsubscribe?: () => void }).pmdUnsubscribe = unsubscribe;
+  (container as HTMLElement & { pmdUnsubscribe?: () => void }).pmdUnsubscribe = () => {
+    unsubscribe();
+    window.clearInterval(versionTimer);
+  };
 }
 
 export function unmount(container: HTMLElement): void {

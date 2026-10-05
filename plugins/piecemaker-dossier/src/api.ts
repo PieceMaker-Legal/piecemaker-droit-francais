@@ -105,6 +105,7 @@ function caseReference(projectPath: string): Promise<string> {
 
 export const knowledgeApi = {
   graph: (projectId: string) => request<KnowledgeSnapshot>(BASE, `/graph${query(projectId)}`),
+  version: () => request<{ version: number }>(BASE, '/version'),
   projects: () => request<{ projects: CaseSummary[] }>(BASE, '/projects'),
   document: async (projectPath: string, path: string) => {
     if (!projectPath) throw new Error('Le chemin du dossier CloudCLI est indisponible.');
