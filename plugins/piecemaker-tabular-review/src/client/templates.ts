@@ -1,5 +1,5 @@
-import type { ColumnFormat, Template, TemplateColumn } from '../shared.js';
-import { COLUMN_FORMATS } from '../shared.js';
+import type { ColumnAction, ColumnFormat, Template, TemplateColumn } from '../shared.js';
+import { COLUMN_ACTIONS, COLUMN_FORMATS } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, formatDate, openModal, toast } from './dom.js';
 
@@ -16,6 +16,10 @@ export function questionHtml(column: DraftColumn, index: number, count: number):
       <input class="ptr-input" data-field="name" value="${escapeHtml(column.name)}" placeholder="Titre de la colonne (ex. Durée du préavis)" aria-label="Titre de la question ${index + 1}" maxlength="120">
       <select class="ptr-select" data-field="format" aria-label="Format de la réponse">
         ${COLUMN_FORMATS.map((format) => `<option value="${format.value}"${format.value === column.format ? ' selected' : ''}>${escapeHtml(format.label)}</option>`).join('')}
+      </select>
+      <select class="ptr-select" data-field="action" aria-label="Action appliquée à la pièce" title="Une réponse « Renommer » ou « Ranger » s’applique à la pièce avec le bouton « Appliquer » de la review">
+        <option value="">Aucune action</option>
+        ${COLUMN_ACTIONS.map((action) => `<option value="${action.value}"${action.value === column.action ? ' selected' : ''}>${escapeHtml(action.label)}</option>`).join('')}
       </select>
       <div class="ptr-question-actions">
         <button type="button" class="ptr-icon-button" data-move="-1" aria-label="Monter la question"${index === 0 ? ' disabled' : ''}>↑</button>
@@ -64,6 +68,8 @@ async function editTemplate(app: App, template: Template | null, duplicate = fal
           if (key === 'format') {
             column.format = field.value as ColumnFormat;
             renderQuestions(dialog);
+          } else if (key === 'action') {
+            column.action = (field.value || undefined) as ColumnAction | undefined;
           } else if (key === 'name' || key === 'prompt' || key === 'tagsText') {
             column[key] = field.value;
           }
@@ -114,6 +120,7 @@ async function editTemplate(app: App, template: Template | null, duplicate = fal
         prompt: column.prompt.trim(),
         format: column.format,
         ...(column.format === 'tags' ? { tags: column.tagsText.split(',').map((tag) => tag.trim()).filter(Boolean) } : {}),
+        ...(column.action ? { action: column.action } : {}),
       })),
     };
     try {

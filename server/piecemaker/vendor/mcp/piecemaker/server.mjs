@@ -95,6 +95,10 @@ export function conversionArgs({ dossier, pieces, force }) {
   return args;
 }
 
+export function renommageArgs({ dossier, piece, nom }) {
+  return ['renommage', '--json', '--case', dossier, piece, nom];
+}
+
 /** Dossier ciblé par un appel d'outil : celui demandé, sinon la session en cours. */
 export function resolveDossier(dossier) {
   return dossier && String(dossier).trim() ? dossier : process.cwd();
@@ -133,6 +137,29 @@ export function createServer({ execFn } = {}) {
   }, async ({ dossier, pieces, force }) => {
     const resolved = resolveDossier(dossier);
     const result = await run(conversionArgs({ dossier: resolved, pieces, force }), resolved);
+    return toToolResult(result);
+  });
+
+  server.registerTool('renommage', {
+    description: 'Renomme une pièce du dossier en « AAAA-MM-JJ_titre » (date de la pièce, puis son type et '
+      + 'les précisions utiles : « 2024-01-09_Jugement du Tribunal judiciaire de Paris »). Le Markdown converti '
+      + 'prend le même nom et l\'état PieceMaker suit la pièce. Refusé si le nom est hors format, déjà pris dans '
+      + 'le dossier ou si une conversion est en cours.',
+    inputSchema: {
+      dossier: DOSSIER_SCHEMA,
+      piece: z.string().describe('Nom ou chemin relatif de la pièce à renommer.'),
+      nom: z.string().describe('Nouveau nom, sans extension : AAAA-MM-JJ_titre.'),
+    },
+    annotations: {
+      title: 'Renommage d\'une pièce',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  }, async ({ dossier, piece, nom }) => {
+    const resolved = resolveDossier(dossier);
+    const result = await run(renommageArgs({ dossier: resolved, piece, nom }), resolved);
     return toToolResult(result);
   });
 

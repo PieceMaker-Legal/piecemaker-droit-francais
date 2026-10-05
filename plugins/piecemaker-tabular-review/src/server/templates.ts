@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { ColumnFormat, Template, TemplateColumn } from '../shared.js';
-import { COLUMN_FORMATS } from '../shared.js';
+import type { ColumnAction, ColumnFormat, Template, TemplateColumn } from '../shared.js';
+import { COLUMN_ACTIONS, COLUMN_FORMATS } from '../shared.js';
 import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 
 const TEMPLATES_FILE = path.join(PLUGIN_HOME, 'templates.json');
@@ -12,6 +12,19 @@ export const MAX_COLUMNS = 40;
 type TemplateSeed = Omit<Template, 'id' | 'updatedAt'>;
 
 const column = (name: string, prompt: string, format: ColumnFormat = 'text', tags?: string[]): TemplateColumn => ({ name, prompt, format, ...(tags ? { tags } : {}) });
+const action = (name: string, prompt: string, kind: ColumnAction): TemplateColumn => ({ name, prompt, format: 'text', action: kind });
+
+export const SORTING_TEMPLATE: TemplateSeed = {
+  name: 'Tri des pièces',
+  description: 'Renomme les pièces en AAAA-MM-JJ_titre et les range dans les sous-dossiers du dossier. Les colonnes « Nouveau nom » et « Dossier cible » s’appliquent avec « Appliquer » ; modifiez leurs consignes pour changer la règle.',
+  columns: [
+    column('Date', 'Quelle est la date de la pièce (date de l’acte, de la décision, du courrier) ?', 'date'),
+    column('Type de pièce', 'Quel est le type de pièce (jugement, contrat, courrier, mise en demeure…) ?'),
+    column('Parties', 'Quelles sont les parties concernées par la pièce ?', 'list'),
+    action('Nouveau nom', 'Propose le nom de fichier de la pièce, sans extension, au format AAAA-MM-JJ_<type de pièce> <précisions utiles : juridiction, parties, objet>, par exemple « 2024-01-09_Jugement du Tribunal judiciaire de Paris - Société A c- Société B ». N’utilise aucun des caractères / \\ : * ? " < > | (écris « c- » pour « contre »). Réponds par le nom seul. Si la date de la pièce est introuvable, réponds « Non trouvé ».', 'rename'),
+    action('Dossier cible', 'Dans quel sous-dossier du dossier faut-il ranger cette pièce ? Réponds par un chemin relatif seul, avec « / » entre les niveaux (par exemple « Procédure/Jugements »). Réponds « Non trouvé » si la pièce doit rester où elle est.', 'move'),
+  ],
+};
 
 export const DEFAULT_TEMPLATES: TemplateSeed[] = [
   {
@@ -56,27 +69,47 @@ export const DEFAULT_TEMPLATES: TemplateSeed[] = [
   },
 ];
 
-function seeded(): Template[] {
+// Modèles ajoutés après la première installation : proposés une seule fois,
+// puis libres d'être modifiés ou supprimés.
+const LATER_SEEDS: Record<string, TemplateSeed> = { 'tri-pieces': SORTING_TEMPLATE };
+
+function seeded(seeds: TemplateSeed[]): Template[] {
   const now = new Date().toISOString();
-  return DEFAULT_TEMPLATES.map((template) => ({ ...template, id: randomUUID(), updatedAt: now }));
+  return seeds.map((template) => ({ ...template, id: randomUUID(), updatedAt: now }));
 }
 
 export function readTemplates(): Template[] {
   if (!fs.existsSync(TEMPLATES_FILE)) {
-    const templates = seeded();
-    saveTemplates(templates);
+    const templates = seeded([...DEFAULT_TEMPLATES, ...Object.values(LATER_SEEDS)]);
+    saveTemplates(templates, Object.keys(LATER_SEEDS));
     return templates;
   }
+  let parsed: { templates?: unknown; seeds?: unknown };
   try {
-    const parsed = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8')) as { templates?: unknown };
-    return Array.isArray(parsed.templates) ? parsed.templates.map(normalizeTemplate) : [];
+    parsed = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8')) as { templates?: unknown; seeds?: unknown };
   } catch {
     throw new UserError(`Fichier de modèles illisible : ${TEMPLATES_FILE}`);
   }
+  const templates = Array.isArray(parsed.templates) ? parsed.templates.map(normalizeTemplate) : [];
+  const seeds = Array.isArray(parsed.seeds) ? parsed.seeds.filter((seed): seed is string => typeof seed === 'string') : [];
+  const missing = Object.keys(LATER_SEEDS).filter((seed) => !seeds.includes(seed));
+  if (!missing.length) return templates;
+  const next = [...templates, ...seeded(missing.map((seed) => LATER_SEEDS[seed]))];
+  saveTemplates(next, [...seeds, ...missing]);
+  return next;
 }
 
-function saveTemplates(templates: Template[]): void {
-  writeFileAtomic(TEMPLATES_FILE, `${JSON.stringify({ version: 1, templates }, null, 2)}\n`);
+function savedSeeds(): string[] {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(TEMPLATES_FILE, 'utf8')) as { seeds?: unknown };
+    return Array.isArray(parsed.seeds) ? parsed.seeds.filter((seed): seed is string => typeof seed === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveTemplates(templates: Template[], seeds = savedSeeds()): void {
+  writeFileAtomic(TEMPLATES_FILE, `${JSON.stringify({ version: 1, seeds, templates }, null, 2)}\n`);
 }
 
 function text(value: unknown, max: number): string {
@@ -90,7 +123,8 @@ export function normalizeColumn(value: unknown): TemplateColumn {
   if (!name || !prompt) throw new UserError('Chaque question doit avoir un titre et une consigne.');
   const format = COLUMN_FORMATS.some((entry) => entry.value === input.format) ? input.format as ColumnFormat : 'text';
   const tags = Array.isArray(input.tags) ? input.tags.map((tag) => text(tag, 60)).filter(Boolean).slice(0, 30) : [];
-  return { name, prompt, format, ...(format === 'tags' && tags.length ? { tags } : {}) };
+  const action = COLUMN_ACTIONS.some((entry) => entry.value === input.action) ? input.action as ColumnAction : undefined;
+  return { name, prompt, format, ...(format === 'tags' && tags.length ? { tags } : {}), ...(action ? { action } : {}) };
 }
 
 export function normalizeTemplate(value: unknown): Template {
@@ -100,6 +134,9 @@ export function normalizeTemplate(value: unknown): Template {
   const columns = Array.isArray(input.columns) ? input.columns.map(normalizeColumn) : [];
   if (!columns.length) throw new UserError('Le modèle doit contenir au moins une question.');
   if (columns.length > MAX_COLUMNS) throw new UserError(`Un modèle contient au plus ${MAX_COLUMNS} questions.`);
+  for (const { value, label } of COLUMN_ACTIONS) {
+    if (columns.filter((entry) => entry.action === value).length > 1) throw new UserError(`Une seule question peut porter l’action « ${label} ».`);
+  }
   const id = typeof input.id === 'string' && /^[\w-]{1,80}$/.test(input.id) ? input.id : randomUUID();
   return { id, name, description: text(input.description, 500), columns, updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : new Date().toISOString() };
 }

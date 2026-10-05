@@ -1,14 +1,14 @@
 import fs from 'node:fs';
 import http from 'node:http';
 
-import type { CreateReviewRequest } from '../shared.js';
+import type { CreateReviewRequest, RowRequest } from '../shared.js';
 import { emptyColumns } from '../shared.js';
 import { listMarkdownDocuments } from './documents.js';
 import { citationSource } from './citations.js';
 import { exportReview } from './export.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
 import { appendResearchUpdate, cancelResearch, createResearchReview, discardResearch, legifranceConfigured, researchPage, researchState, researchText, startResearch, startResearchUpdate, stopAllResearch } from './research.js';
-import { createReview, deleteReview, listReviews, readReview, reviewDetail, updateReview } from './reviews.js';
+import { appendRows, createReview, deleteReview, editCell, listReviews, markApplied, readReview, reviewDetail, updateReview } from './reviews.js';
 import { cancelJob, isRunning, pendingTasks, queueTasks, stopAllJobs } from './runner.js';
 import type { RowTask } from './runner.js';
 import { assertModel, assertProvider, assertProxyOrigin, probeProxy, sessionEnvironment } from './sessions.js';
@@ -133,6 +133,24 @@ function startUpdate(body: Body) {
   return startResearchUpdate(project, file, update.since);
 }
 
+async function appendPieces(body: Body) {
+  const project = assertProject(body.project);
+  const file = String(body.file ?? '');
+  assertReviewFile(project, file);
+  const review = readReview(project, file);
+  const environment = await launchEnvironment(body.proxyOrigin);
+  const rows = await appendRows(project, file, body.rows as RowRequest[]);
+  if (rows.length) await queueTasks(project, file, rows.map((rowId) => ({ rowId })), review.concurrency || 3, environment);
+  return reviewDetail(project, file, isRunning(project, file));
+}
+
+function reviewTarget(body: Body): { project: string; file: string } {
+  const project = assertProject(body.project);
+  const file = String(body.file ?? '');
+  assertReviewFile(project, file);
+  return { project, file };
+}
+
 function researchRoute(method: string, pathname: string, url: URL, body: Body): Promise<unknown> | unknown {
   const id = url.searchParams.get('id') ?? String(body.id ?? '');
   if (method === 'GET' && pathname === '/research/legifrance') return { configured: legifranceConfigured() };
@@ -174,6 +192,17 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
   }
   if (method === 'POST' && pathname === '/reviews') return createAndLaunch(body);
   if (method === 'POST' && pathname === '/reviews/retry') return retry(body);
+  if (method === 'POST' && pathname === '/reviews/append') return appendPieces(body);
+  if (method === 'POST' && pathname === '/reviews/cell') {
+    const { project, file } = reviewTarget(body);
+    await editCell(project, file, body.rowId, body.column, body.summary);
+    return reviewDetail(project, file, isRunning(project, file));
+  }
+  if (method === 'POST' && pathname === '/reviews/applied') {
+    const { project, file } = reviewTarget(body);
+    await markApplied(project, file, body.rowId, body.current, body.markdown);
+    return reviewDetail(project, file, isRunning(project, file));
+  }
   if (method === 'POST' && pathname === '/reviews/run') return run(body);
   if (method === 'POST' && pathname === '/reviews/cancel') {
     const project = assertProject(body.project);

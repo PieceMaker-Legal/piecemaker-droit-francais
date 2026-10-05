@@ -85,6 +85,7 @@ function ensureStyleElement(): void {
   style.textContent = `::highlight(${HIGHLIGHT_NAME}) {
   background-color: rgb(249 115 22 / 0.18);
   border-radius: 2px;
+  text-decoration: underline dotted rgb(249 115 22 / 0.6);
 }`;
   document.head.appendChild(style);
 }

@@ -26,8 +26,12 @@ type PipelineOptions = {
 
 type OriginalFile = { path: string; resource?: boolean };
 
+type RenamedPiece = { previous: string; current: string; markdown: string | null };
+
+type CasePiece = { path: string; status: string; markdown: string | null };
+
 type OriginalsPipeline = {
-  listOriginals(caseRoot: string): Promise<OriginalFile[]>;
+  listOriginals(caseRoot: string): Promise<Array<OriginalFile & { status: string }>>;
   runManagedPythonJob(options: {
     action: 'convert' | 'anonymize';
     script: string;
@@ -52,6 +56,30 @@ const {
   'websocket-server',
   'originals-pipeline.cjs',
 )) as OriginalsPipeline;
+const { renamePiece } = require(path.join(
+  findApplicationRoot(getModuleDirectory(import.meta.url)),
+  'server',
+  'piecemaker',
+  'vendor',
+  'websocket-server',
+  'renamed-originals.cjs',
+)) as { renamePiece(caseRoot: string, piecePath: string, name: unknown, directory?: unknown): Promise<RenamedPiece> };
+const { invalidateOriginals } = require(path.join(
+  findApplicationRoot(getModuleDirectory(import.meta.url)),
+  'server',
+  'piecemaker',
+  'originals-cache.cjs',
+)) as { invalidateOriginals(caseRoot: string): void };
+const { markdownCounterpart } = require(path.join(
+  findApplicationRoot(getModuleDirectory(import.meta.url)),
+  'server',
+  'piecemaker',
+  'vendor',
+  'piecemaker-plugin',
+  'scripts',
+  'lib',
+  'protection.cjs',
+)) as { markdownCounterpart(filePath: string, caseRoot: string): { path: string; exists: boolean } };
 
 const SUPPORTED_EXTENSIONS = new Set(['.pdf', '.docx', '.doc', '.odt', '.rtf', '.txt', '.md', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']);
 
@@ -219,6 +247,40 @@ export function createKnowledgePipeline(options: PipelineOptions) {
         ? options.store.update({ projectId, operations: scanResultOperations(scanResult) })
         : persistScanResult(scanResult, options.store);
       return { ...result, documents: documents.length };
+    },
+
+    /** Pièces originales du dossier, avec leur statut et leur Markdown converti. */
+    async pieces(projectId: string): Promise<CasePiece[]> {
+      const project = options.projects.getProjectById(projectId);
+      if (!project) throw new Error('Project not found.');
+      const projectPath = fs.realpathSync(project.project_path);
+      return (await listOriginals(projectPath)).map((file) => {
+        const markdown = markdownCounterpart(path.join(projectPath, file.path), projectPath);
+        return { path: file.path, status: file.status, markdown: markdown.exists ? path.relative(projectPath, markdown.path).split(path.sep).join('/') : null };
+      });
+    },
+
+    /** Renomme et/ou range une pièce avec son Markdown, puis reporte le nouveau chemin sur son nœud document. */
+    async rename(projectId: string, piecePath: unknown, name: unknown, directory?: unknown): Promise<RenamedPiece> {
+      const project = options.projects.getProjectById(projectId);
+      if (!project) throw new Error('Project not found.');
+      const projectPath = fs.realpathSync(project.project_path);
+      const renamed = await renamePiece(projectPath, String(piecePath ?? ''), name, directory);
+      if (renamed.current === renamed.previous) return renamed;
+      invalidateOriginals(projectPath);
+      const fromNodeId = `document:${relativeKey(projectPath, path.join(projectPath, renamed.previous))}`;
+      const node = options.store.snapshot(projectId).nodes.find((candidate) => candidate.id === fromNodeId);
+      if (!node) return renamed;
+      const currentPath = path.join(projectPath, renamed.current);
+      const toNodeId = `document:${relativeKey(projectPath, currentPath)}`;
+      options.store.update({
+        projectId,
+        operations: [
+          { op: 'renameNode', rename: { fromNodeId, toNodeId } },
+          { op: 'upsertNode', node: { id: toNodeId, kind: 'document', label: path.basename(currentPath), aliases: node.aliases, data: { ...node.data, path: currentPath }, origin: 'manual' } },
+        ],
+      });
+      return renamed;
     },
   };
 }

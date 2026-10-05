@@ -1,5 +1,6 @@
 import express from 'express';
 
+import { CONVERSION_RUNNING, RENAME_RUNNING } from './service.js';
 import type { createKnowledgeService } from './service.js';
 
 type KnowledgeService = ReturnType<typeof createKnowledgeService>;
@@ -17,6 +18,7 @@ function isLoopback(request: express.Request): boolean {
 function statusFor(error: unknown): number {
   if (error instanceof TypeError) return 400;
   if (error instanceof Error && error.message === 'Project not found.') return 404;
+  if (error instanceof Error && (error.message === CONVERSION_RUNNING || error.message === RENAME_RUNNING)) return 409;
   return 500;
 }
 
@@ -54,6 +56,11 @@ export function createKnowledgeLocalRouter(
   router.post('/scan', (request, response) => respond(() => {
     const id = resolveProjectId(request.body);
     return { projectId: id, ...getService().scan(id, request.body?.files, request.body?.ocrMissing) };
+  }, response));
+
+  router.post('/rename', (request, response) => respond(async () => {
+    const id = resolveProjectId(request.body);
+    return { projectId: id, ...(await getService().rename(id, request.body?.path, request.body?.name, request.body?.directory)) };
   }, response));
 
   router.get('/scan/job', (request, response) => respond(() => {

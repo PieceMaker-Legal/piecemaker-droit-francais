@@ -9,6 +9,7 @@
 
 import { fetchIdentityDictionary } from '@/piecemaker/anonymizer/names';
 import { createIdentityHighlighter } from '@/piecemaker/anonymizer/highlighter';
+import { IDENTITY_CHANGED_EVENT, startIdentityInteractions } from '@/piecemaker/anonymizer/identityInteractions';
 
 /** Le mapping ne bouge qu'à la conversion d'un dossier : un sondage lent suffit. */
 const POLL_INTERVAL_MS = 60_000;
@@ -35,15 +36,24 @@ export function startIdentityHighlighting(): () => void {
       highlighter.setNames(dictionary.names, dictionary.acronyms);
     }
     const known = dictionary.names.length + dictionary.acronyms.length;
+    if (timer) clearTimeout(timer);
     timer = setTimeout(() => void tick(), known ? POLL_INTERVAL_MS : RETRY_INTERVAL_MS);
   };
 
+  const refreshNow = () => {
+    if (timer) clearTimeout(timer);
+    void tick();
+  };
+  const stopInteractions = startIdentityInteractions();
+  window.addEventListener(IDENTITY_CHANGED_EVENT, refreshNow);
   void tick();
 
   return () => {
     stopped = true;
     started = false;
     if (timer) clearTimeout(timer);
+    window.removeEventListener(IDENTITY_CHANGED_EVENT, refreshNow);
+    stopInteractions();
     highlighter.stop();
   };
 }

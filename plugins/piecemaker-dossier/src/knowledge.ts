@@ -220,7 +220,7 @@ export class KnowledgeStore {
     const exclusions = arrayValue(exclusionsNode?.data.values, 'exclusions');
     const nodes = storedNodes
       .filter((node) => node.data.systemRole !== 'gliner-exclusions')
-      .filter((node) => !isInstitutionalEntity(node.label))
+      .filter((node) => node.kind === 'document' || !isInstitutionalEntity(node.label))
       .map(withoutInstitutionalAliases);
     const retained = new Set(nodes.map((node) => node.id));
     const links = (this.database.prepare('SELECT from_node_id,to_node_id,relation,data_json,origin FROM piecemaker_links WHERE project_id=? ORDER BY relation,from_node_id,to_node_id').all(projectId) as LinkRow[]).map((row): KnowledgeLink => ({
@@ -235,6 +235,11 @@ export class KnowledgeStore {
       .filter((mapping) => retained.has(mapping.nodeId) && !isInstitutionalEntity(mapping.real));
     const anonymizationComplete = Boolean(this.database.prepare('SELECT 1 FROM piecemaker_anonymization_status WHERE project_id=?').get(projectId));
     return { projectId, nodes, links, mappings, exclusions, exclusionsInitialized: Boolean(exclusionsNode), anonymizationComplete, reservedCodes: this.reservedCodes(projectId) };
+  }
+
+  public mappingCounts(): Map<string, number> {
+    const rows = this.database.prepare('SELECT project_id, COUNT(*) AS count FROM piecemaker_mappings GROUP BY project_id').all() as Array<{ project_id: string; count: number }>;
+    return new Map(rows.map((row) => [row.project_id, row.count]));
   }
 
   public reservedCodes(projectIdInput: string): string[] {
@@ -262,7 +267,7 @@ export class KnowledgeStore {
   public tableNames(): string[] { return (this.database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'piecemaker_%' ORDER BY name").all() as Array<{ name: string }>).map(({ name }) => name); }
 
   private removeInstitutionalEntities(projectId: string): number {
-    const rows = this.database.prepare("SELECT id,label,aliases_json FROM piecemaker_nodes WHERE project_id=? AND id NOT LIKE 'system:%'").all(projectId) as Array<{ id: string; label: string; aliases_json: string }>;
+    const rows = this.database.prepare("SELECT id,kind,label,aliases_json FROM piecemaker_nodes WHERE project_id=? AND id NOT LIKE 'system:%'").all(projectId) as Array<{ id: string; kind: string; label: string; aliases_json: string }>;
     const dropNode = this.database.prepare('DELETE FROM piecemaker_nodes WHERE project_id=? AND id=?');
     const dropNodeMappings = this.database.prepare('DELETE FROM piecemaker_mappings WHERE project_id=? AND node_id=?');
     const dropNodeLinks = this.database.prepare('DELETE FROM piecemaker_links WHERE project_id=? AND (from_node_id=? OR to_node_id=?)');
@@ -272,7 +277,7 @@ export class KnowledgeStore {
     const timestamp = new Date().toISOString();
     let removed = 0;
     for (const row of rows) {
-      if (isInstitutionalEntity(row.label)) {
+      if (row.kind !== 'document' && isInstitutionalEntity(row.label)) {
         dropNodeMappings.run(projectId, row.id);
         dropNodeLinks.run(projectId, row.id, row.id);
         dropNode.run(projectId, row.id);

@@ -194,15 +194,14 @@ export function reportFindings(findings, write = (line) => process.stderr.write(
 
 async function runPrePush(remoteName) {
   const input = await readStdin();
-  const matcher = createMatcher();
-  const findings = [];
+  const pushedShas = new Set();
   for (const line of input.split('\n').filter(Boolean)) {
     const [, localSha] = line.split(' ');
-    if (!localSha || ZERO_SHA.test(localSha)) continue;
-    const known = remoteName ? [`--remotes=${remoteName}`] : ['--remotes'];
-    findings.push(...(await scanRevisions([localSha, '--not', ...known], matcher)));
+    if (localSha && !ZERO_SHA.test(localSha)) pushedShas.add(localSha);
   }
-  return findings;
+  if (!pushedShas.size) return [];
+  const known = remoteName ? [`--remotes=${remoteName}`] : ['--remotes'];
+  return scanRevisions([...pushedShas, '--not', ...known]);
 }
 
 async function runClaudeHook() {

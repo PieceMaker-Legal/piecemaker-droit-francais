@@ -56,13 +56,22 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 | `protection.json` | `{version, unprotected, resources}` : uniquement des **exceptions**, jamais la liste des fichiers protégés. Un PDF déposé plus tard est protégé sans mise à jour. | création/enregistrement du dossier (listes vides), hook `classify-ai-documents.mjs`, `PUT /protection` |
 | `protection-bypass.json` | drapeau `{scope: "dossier"}` : sa seule présence lève toute protection du dossier, pièces futures comprises. | bouclier de la ligne du projet dans la barre latérale — vert si anonymisé et protégé, rouge barré si levé (`src/piecemaker/dossier/CaseProtectionShield.tsx`, monté par `SidebarProjectItem.tsx`, confirmation dans les deux sens) → `PUT /protection/bypass` (`server/piecemaker/protection/bypass.cjs`) |
 
-- Les exceptions sont des chemins relatifs : une pièce renommée ou déplacée
-  perd la sienne et redevient protégée (défaut sûr).
-- Son Markdown, lui, suit un renommage sur place (même dossier, même
-  extension) : au listage des pièces (`listOriginals`, hors traitement en
-  cours), `renamed-originals.cjs` reconnaît la pièce à sa taille + mtime
-  inchangées dans `anonymization-state.json`, renomme le `.md` et déplace ses
-  clés d'état et de `document-index.json` — sans reconversion ni rescan.
+- Les exceptions sont des chemins relatifs : une pièce déplacée vers un autre
+  dossier perd la sienne et redevient protégée (défaut sûr).
+- Une pièce renommée sur place (même dossier, même extension) garde son
+  Markdown, son état et ses exceptions : `renamed-originals.cjs` renomme le
+  `.md` et déplace ses clés dans `anonymization-state.json`,
+  `document-index.json` et `protection.json` — sans reconversion ni rescan.
+  - Renommage délibéré (`renamePiece`) : fiche de la pièce dans la chronologie,
+    `piecemaker renommage`, outil MCP `renommage`, tri des pièces de la Tabular
+    Review (qui peut aussi ranger la pièce dans un autre sous-dossier, créé au
+    besoin, hors `Fichiers convertis PieceMaker`, `Tabular Review`, `Pièces
+    tamponnées` et dossiers cachés). Le nom doit suivre `AAAA-MM-JJ_<titre>` et
+    rester unique dans le dossier (les `.md` sont à plat) ; le nœud document du
+    graphe suit aussi. Refusé pendant une conversion.
+  - Renommage manuel : au listage des pièces (`listOriginals`, hors traitement
+    en cours), la pièce est reconnue à sa taille + mtime inchangées dans
+    `anonymization-state.json` ; son nœud document est remplacé au scan suivant.
   Déplacement vers un autre dossier ou doublon ambigu : non suivi (reconversion).
 - `protection.json` est réécrit de façon atomique (fichier temporaire puis
   `rename`) sous le verrou `protection.json.lock` (lecture-modification-écriture

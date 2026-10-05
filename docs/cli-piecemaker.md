@@ -104,6 +104,15 @@ Codex exige une approbation et, lancé par PieceMaker avec `approval_policy =
 never`, refuse l'appel (« MCP tool call requires approval, but approval policy
 is never »).
 
+## Sous-commande `renommage`
+
+`piecemaker renommage [--case <chemin>] [--json] <pièce> <AAAA-MM-JJ_titre>`
+renomme une pièce dans son dossier, par la même porte unique
+(`POST /api/piecemaker/local/rename`). Son Markdown prend le même nom et l'état
+PieceMaker suit la pièce (voir `protection-pieces.md`). La pièce se désigne
+comme pour `conversion` (nom ou chemin relatif). L'outil MCP `renommage`
+(`piece`, `nom`, `dossier?`) appelle cette sous-commande.
+
 Réinstaller la commande après un `git pull` qui la modifie :
 
 ```

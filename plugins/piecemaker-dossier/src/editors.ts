@@ -1,4 +1,4 @@
-import { aliasEditorMarkup, entityKinds, escapeHtml, kindLabels, nodeVariants, parseAliases, textValue, dateFor } from './views.js';
+import { aliasEditorMarkup, entityKinds, escapeHtml, kindLabels, nodeVariants, parseAliases, proposedPieceName, textValue, dateFor } from './views.js';
 import { knowledgeApi } from './api.js';
 import type { CompanySearchResult } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
@@ -460,10 +460,11 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
 
 type HighlightCategory = 'client' | 'adverse' | 'tiers' | 'date' | 'fact';
 
-export function documentEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode, projectPath: string, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>): void {
+export function documentEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode, projectPath: string, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>, rename: (piecePath: string, name: string) => Promise<void>): void {
   const mentionLinks = data.graph.links.filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id));
   const linked = new Set(mentionLinks.map((link) => link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId));
   const pathValue = textValue(node.data.path);
+  const pieceName = node.label.replace(/\.[^.]+$/, '');
   const fields = Array.isArray(node.data.fields)
     ? node.data.fields.filter((field): field is { label: string; value: string } => Boolean(field) && typeof field === 'object' && typeof (field as { label?: unknown }).label === 'string' && typeof (field as { value?: unknown }).value === 'string')
     : [];
@@ -485,6 +486,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
           <div class="pmd-document-form-header"><h3>Corriger la pièce</h3></div>
           <div class="pmd-document-form-body">
             <div class="pmd-document-grid">
+              ${pathValue ? `<label class="pmd-document-wide">Nom de la pièce<input class="pmd-input" name="pieceName" placeholder="AAAA-MM-JJ_Type de pièce et précisions" value="${escapeHtml(pieceName)}"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" type="button" data-propose-name>Proposer un nom</button></label>` : ''}
               <label class="pmd-document-wide">Type de pièce<select class="pmd-select" name="nature"><option value="">— Sélectionner —</option>${natureOptions}<option value="__piecemaker_custom_nature__">Autre type…</option></select><input class="pmd-input" name="customNature" placeholder="Saisissez le type de pièce" aria-label="Type de pièce personnalisé" hidden></label>
               <label>Date<input class="pmd-input" type="date" name="date" value="${escapeHtml(dateFor(node))}"></label>
               <label>Lieu<input class="pmd-input" name="localisation" placeholder="Ex. TJ de ADRESSE_02" value="${escapeHtml(textValue(node.data.localisation))}"></label>
@@ -618,6 +620,17 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     customNatureInput.hidden = (event.target as HTMLSelectElement).value !== '__piecemaker_custom_nature__';
     if (!customNatureInput.hidden) customNatureInput.focus();
   });
+  layer.querySelector<HTMLElement>('[data-propose-name]')?.addEventListener('click', () => {
+    const natureSelect = layer.querySelector<HTMLSelectElement>('select[name="nature"]');
+    const type = natureSelect?.value === '__piecemaker_custom_nature__' ? customNatureInput?.value || '' : natureSelect?.value || '';
+    const proposal = proposedPieceName(dateInput?.value || '', type, layer.querySelector<HTMLInputElement>('input[name="localisation"]')?.value || '');
+    const nameInput = layer.querySelector<HTMLInputElement>('input[name="pieceName"]');
+    showSelectionMessage(proposal ? '' : 'Renseignez la date et le type de pièce pour proposer un nom.');
+    if (proposal && nameInput) {
+      nameInput.value = proposal;
+      nameInput.focus();
+    }
+  });
   layer.addEventListener('click', (event) => {
     const remove = (event.target as HTMLElement).closest<HTMLElement>('[data-remove-field]');
     if (!remove) return;
@@ -644,6 +657,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
       return;
     }
     const savedNature = natureSelection === '__piecemaker_custom_nature__' ? customNature : natureSelection;
+    const newName = textValue(form.get('pieceName')).trim();
     const documentFields = readFields();
     const operations: KnowledgeUpdateOperation[] = [...queuedOperations, {
       op: 'upsertNode',
@@ -654,6 +668,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     for (const target of selectedEntities) operations.push({ op: 'link', link: { fromNodeId: node.id, toNodeId: target, relation: 'mentions', origin: 'manual' } });
     try {
       await save(operations);
+      if (pathValue && newName && newName !== pieceName) await rename(pathValue, newName);
       layer.remove();
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : String(error));
