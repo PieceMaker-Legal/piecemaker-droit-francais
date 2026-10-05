@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { agentInstructionsTemplate, ensureAgentInstructionFiles, mirrorAgentInstructionFiles } from './agent-instructions.js';
+import { agentInstructionsTemplate, ensureAgentInstructionFiles, mirrorAgentInstructionFiles, startAgentInstructionsMirror } from './agent-instructions.js';
 
 const SHARED = '/home/avocat/.piecemaker/CLAUDE.md';
 
@@ -77,4 +77,14 @@ test('mirror leaves a symlinked pair untouched', () => withProject(async (root) 
   await symlink('CLAUDE.md', path.join(root, 'AGENTS.md'));
   await mirrorAgentInstructionFiles(root);
   assert.equal(await read(root, 'AGENTS.md'), 'lien\n');
+}));
+
+test('the watch loop hands each project to the callback once', () => withProject(async (root) => {
+  const seen: string[] = [];
+  const stop = startAgentInstructionsMirror(() => [root], (projectRoot) => seen.push(projectRoot));
+  try {
+    assert.deepEqual(seen, [path.resolve(root)]);
+  } finally {
+    stop();
+  }
 }));

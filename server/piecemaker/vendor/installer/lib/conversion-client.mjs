@@ -105,7 +105,7 @@ function requestJson({ method, path, body }) {
             return;
           }
           if (response.statusCode >= 400) {
-            reject(new Error(parsed?.error || `Le serveur PieceMaker a répondu ${response.statusCode}.`));
+            reject(new Error(parsed?.error || parsed?.erreur || `Le serveur PieceMaker a répondu ${response.statusCode}.`));
             return;
           }
           resolve(parsed);
@@ -133,6 +133,16 @@ export function renameLocalPiece({ folder, path: piecePath, name }) {
     path: `${LOCAL_BASE}/rename`,
     body: { folder, path: piecePath, name },
   });
+}
+
+export async function runSql({ requete, cwd }) {
+  await adoptRunningServerPort();
+  const response = await requestJson({
+    method: 'POST',
+    path: `${LOCAL_BASE}/sql`,
+    body: { requete, ...(cwd ? { cwd } : {}) },
+  });
+  return response.resultat;
 }
 
 export function readLocalScanJob({ folder, id }) {

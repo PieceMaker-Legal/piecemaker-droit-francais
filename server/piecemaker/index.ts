@@ -16,6 +16,7 @@ import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
 import { openLibrary, installLibraryRuntime } from './library/index.js';
 import { createKnowledgeBackend } from './knowledge/index.js';
+import { declarePieceMakerServer } from './mcp-declaration.js';
 import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
@@ -66,7 +67,7 @@ installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
 installModelDiscovery(providerRegistry);
 const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
-startAgentInstructionsMirror(() => projectsDb.getProjectPaths().map((row) => row.project_path));
+startAgentInstructionsMirror(() => projectsDb.getProjectPaths().map((row) => row.project_path), declarePieceMakerServer);
 
 export function createPieceMakerLocalRouter() {
   return knowledge.localRouter;

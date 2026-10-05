@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { getConnection, projectsDb } from '@/modules/database/index.js';
+import { getConnection, getDatabasePath, projectsDb } from '@/modules/database/index.js';
 
 import { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
 
@@ -10,6 +10,7 @@ import { importDocumentIndexOverrides } from './overrides-import.js';
 import { createKnowledgePipeline } from './pipeline.js';
 import { createKnowledgeRouter } from './routes.js';
 import { createKnowledgeService } from './service.js';
+import { createSqlTool } from './sql-tool.js';
 
 export function createKnowledgeBackend(applicationRoot: string) {
   let store: KnowledgeStore | null = null;
@@ -21,6 +22,17 @@ export function createKnowledgeBackend(applicationRoot: string) {
       if (report?.imported.length) console.info(`[piecemaker] analyses importées depuis ${report.source} : ${report.imported.join(', ')}`);
     }
     return store;
+  };
+  let sqlTool: ReturnType<typeof createSqlTool> | null = null;
+  const getSqlTool = () => {
+    if (!sqlTool) {
+      sqlTool = createSqlTool({
+        databasePath: getDatabasePath(),
+        rename: (projectId, piecePath, name) => getService().rename(projectId, piecePath, name),
+      });
+      process.once('exit', () => sqlTool?.close());
+    }
+    return sqlTool;
   };
   const getService = () => {
     if (!service) {
@@ -43,5 +55,5 @@ export function createKnowledgeBackend(applicationRoot: string) {
     knowledgeRouter(request, response, next);
   });
 
-  return { router, localRouter: createKnowledgeLocalRouter(getService, projectsDb) };
+  return { router, localRouter: createKnowledgeLocalRouter(getService, projectsDb, getSqlTool) };
 }
