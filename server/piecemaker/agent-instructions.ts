@@ -77,7 +77,7 @@ export async function mirrorAgentInstructionFiles(projectRoot: string): Promise<
   }
 }
 
-export function startAgentInstructionsMirror(listProjectRoots: () => string[]): () => void {
+export function startAgentInstructionsMirror(listProjectRoots: () => string[], onProjectWatched?: (projectRoot: string) => void): () => void {
   const watchers = new Map<string, FSWatcher>();
   const pendingMirrors = new Map<string, NodeJS.Timeout>();
 
@@ -113,6 +113,7 @@ export function startAgentInstructionsMirror(listProjectRoots: () => string[]): 
         watcher.on('error', () => forget(projectRoot));
         watchers.set(projectRoot, watcher);
         scheduleMirror(projectRoot);
+        onProjectWatched?.(projectRoot);
       } catch {
         continue;
       }

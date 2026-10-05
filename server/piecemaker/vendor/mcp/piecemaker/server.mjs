@@ -20,6 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
+import { runSql } from '../../installer/lib/conversion-client.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
@@ -95,10 +96,6 @@ export function conversionArgs({ dossier, pieces, force }) {
   return args;
 }
 
-export function renommageArgs({ dossier, piece, nom }) {
-  return ['renommage', '--json', '--case', dossier, piece, nom];
-}
-
 /** Dossier ciblé par un appel d'outil : celui demandé, sinon la session en cours. */
 export function resolveDossier(dossier) {
   return dossier && String(dossier).trim() ? dossier : process.cwd();
@@ -108,11 +105,20 @@ const DOSSIER_SCHEMA = z.string()
   .optional()
   .describe('Chemin absolu du dossier juridique ciblé. Par défaut, le répertoire de la session Claude Code en cours.');
 
+const SQL_DESCRIPTION = [
+  'SQL libre (SQLite) sur la base PieceMaker ; noms réels masqués.',
+  "dossier() = dossier courant ; dossier('nom ou début d'id') = un autre.",
+  "piecemaker_nodes(project_id, id, kind, label, doc_date, aliases_json, data_json) : kind 'document' = pièce (doc_date AAAA-MM-JJ ; data_json.nature, .localisation) ; sinon personne, société, coordonnée (data_json.partySide, .position, .legalForm).",
+  "piecemaker_links(project_id, from_node_id, to_node_id, relation) : 'mentions' = la pièce cite l'entité.",
+  'piecemaker_citations(project_id, from_node_id, to_node_id, relation, texte, piece_id, source) : extraits qui justifient un lien, autant que voulu ; source = pièce (piece_id) ou référence libre.',
+  'Dates automatiques. Renommer une pièce = UPDATE de son label (AAAA-MM-JJ_titre).',
+].join('\n');
+
 /**
  * Construit le serveur MCP et y enregistre les outils. Séparé de
  * `main()` pour rester testable sans jamais brancher de transport stdio.
  */
-export function createServer({ execFn } = {}) {
+export function createServer({ execFn, sqlFn = runSql } = {}) {
   const server = new McpServer({ name: 'piecemaker', version: '1.0.0' });
   const run = (args, dossier) => runPiecemakerCommand(args, { cwd: dossier, execFn });
 
@@ -140,27 +146,25 @@ export function createServer({ execFn } = {}) {
     return toToolResult(result);
   });
 
-  server.registerTool('renommage', {
-    description: 'Renomme une pièce du dossier en « AAAA-MM-JJ_titre » (date de la pièce, puis son type et '
-      + 'les précisions utiles : « 2024-01-09_Jugement du Tribunal judiciaire de Paris »). Le Markdown converti '
-      + 'prend le même nom et l\'état PieceMaker suit la pièce. Refusé si le nom est hors format, déjà pris dans '
-      + 'le dossier ou si une conversion est en cours.',
+  server.registerTool('sql', {
+    description: SQL_DESCRIPTION,
     inputSchema: {
-      dossier: DOSSIER_SCHEMA,
-      piece: z.string().describe('Nom ou chemin relatif de la pièce à renommer.'),
-      nom: z.string().describe('Nouveau nom, sans extension : AAAA-MM-JJ_titre.'),
+      requete: z.string(),
     },
     annotations: {
-      title: 'Renommage d\'une pièce',
+      title: 'SQL sur la base PieceMaker',
       readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
+      destructiveHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     },
-  }, async ({ dossier, piece, nom }) => {
-    const resolved = resolveDossier(dossier);
-    const result = await run(renommageArgs({ dossier: resolved, piece, nom }), resolved);
-    return toToolResult(result);
+  }, async ({ requete }) => {
+    try {
+      const resultat = await sqlFn({ requete, cwd: process.cwd() });
+      return { content: [{ type: 'text', text: resultat }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
+    }
   });
 
   return server;

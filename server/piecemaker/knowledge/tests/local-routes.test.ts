@@ -13,10 +13,11 @@ type Calls = {
   scanJob: Array<{ id: unknown; projectId: string }>;
   cancelScan: Array<{ id: unknown; projectId: string }>;
   rename: unknown[][];
+  sql: Array<{ requete: string; cwd?: string }>;
 };
 
 function harness() {
-  const calls: Calls = { scan: [], scanJob: [], cancelScan: [], rename: [] };
+  const calls: Calls = { scan: [], scanJob: [], cancelScan: [], rename: [], sql: [] };
   const service = {
     scan(projectId: string, files: unknown) {
       calls.scan.push({ projectId, files });
@@ -43,9 +44,16 @@ function harness() {
       return { project_id: 'project-alpha', project_path: projectPath };
     },
   };
+  const sqlTool = {
+    async execute(input: { requete: string; cwd?: string }) {
+      calls.sql.push(input);
+      if (input.requete === 'erreur') throw new Error('aucun dossier');
+      return 'label\nPERSONNE_1';
+    },
+  };
   const app = express();
   app.use(express.json());
-  app.use('/api/piecemaker/local', createKnowledgeLocalRouter(() => service, projects));
+  app.use('/api/piecemaker/local', createKnowledgeLocalRouter(() => service, projects, () => sqlTool));
   return { app, calls };
 }
 
@@ -167,5 +175,55 @@ test('POST /rename distingue un nom refusé (400) d’une conversion en cours (4
     });
     assert.equal((await post('invalide')).status, 400);
     assert.equal((await post('occupé')).status, 409);
+  });
+});
+
+test('POST /sql transmet la requête et le dossier courant à l’outil', async () => {
+  const { app, calls } = harness();
+  await withServer(app, async (base) => {
+    const response = await fetch(`${base}/sql`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requete: 'SELECT label FROM piecemaker_nodes', cwd: '/dossiers/alpha' }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { resultat: 'label\nPERSONNE_1' });
+    assert.deepEqual(calls.sql, [{ requete: 'SELECT label FROM piecemaker_nodes', cwd: '/dossiers/alpha' }]);
+  });
+});
+
+test('POST /sql renvoie l’erreur de l’outil (400) et refuse une requête absente (400)', async () => {
+  const { app, calls } = harness();
+  await withServer(app, async (base) => {
+    const post = (body: unknown) => fetch(`${base}/sql`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const failed = await post({ requete: 'erreur' });
+    assert.equal(failed.status, 400);
+    assert.deepEqual(await failed.json(), { erreur: 'aucun dossier' });
+    const missing = await post({ cwd: '/dossiers/alpha' });
+    assert.equal(missing.status, 400);
+    assert.equal(calls.sql.length, 1);
+  });
+});
+
+test('POST /sql est refusé hors boucle locale', async () => {
+  const { app, calls } = harness();
+  const guarded = express();
+  guarded.use((request, _response, next) => {
+    Object.defineProperty(request.socket, 'remoteAddress', { value: '203.0.113.7', configurable: true });
+    next();
+  });
+  guarded.use(app);
+  await withServer(guarded as unknown as express.Express, async (base) => {
+    const response = await fetch(`${base}/sql`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requete: 'SELECT 1' }),
+    });
+    assert.equal(response.status, 403);
+    assert.deepEqual(calls.sql, []);
   });
 });

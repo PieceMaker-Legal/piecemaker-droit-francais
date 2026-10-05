@@ -20,7 +20,7 @@ type ImportedConnector = {
   source: string;
 };
 
-function readJson(filePath: string) {
+export function readJson(filePath: string) {
   if (!fs.existsSync(filePath)) return {};
   try {
     const value = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -30,7 +30,7 @@ function readJson(filePath: string) {
   }
 }
 
-function readToml(filePath: string) {
+export function readToml(filePath: string) {
   if (!fs.existsSync(filePath)) return {};
   try {
     const value = TOML.parse(fs.readFileSync(filePath, 'utf8'));

@@ -161,7 +161,7 @@ function opencodeServer(config: LibraryConnectorConfig, enabled: boolean) {
   };
 }
 
-function opencodeConfigPath(workspace: string) {
+export function opencodeConfigPath(workspace: string) {
   const jsonPath = path.join(workspace, 'opencode.json');
   const jsoncPath = path.join(workspace, 'opencode.jsonc');
   if (fs.existsSync(jsonPath)) return jsonPath;

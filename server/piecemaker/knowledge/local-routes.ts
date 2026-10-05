@@ -5,6 +5,10 @@ import type { createKnowledgeService } from './service.js';
 
 type KnowledgeService = ReturnType<typeof createKnowledgeService>;
 
+type SqlExecutor = {
+  execute(input: { requete: string; cwd?: string }): Promise<string>;
+};
+
 type ProjectPathLookup = {
   getProjectPath(projectPath: string): { project_id: string; project_path: string } | null;
 };
@@ -25,6 +29,7 @@ function statusFor(error: unknown): number {
 export function createKnowledgeLocalRouter(
   getService: () => KnowledgeService,
   projects: ProjectPathLookup,
+  getSqlTool: () => SqlExecutor,
 ) {
   const router = express.Router();
 
@@ -62,6 +67,21 @@ export function createKnowledgeLocalRouter(
     const id = resolveProjectId(request.body);
     return { projectId: id, ...(await getService().rename(id, request.body?.path, request.body?.name, request.body?.directory)) };
   }, response));
+
+  router.post('/sql', async (request, response) => {
+    const requete = request.body?.requete;
+    const cwd = request.body?.cwd;
+    if (typeof requete !== 'string' || !requete.trim()) {
+      response.status(400).json({ erreur: 'requete is required.' });
+      return;
+    }
+    try {
+      const resultat = await getSqlTool().execute({ requete, ...(typeof cwd === 'string' && cwd ? { cwd } : {}) });
+      response.json({ resultat });
+    } catch (error) {
+      response.status(400).json({ erreur: error instanceof Error ? error.message : 'Requête impossible.' });
+    }
+  });
 
   router.get('/scan/job', (request, response) => respond(() => {
     const id = typeof request.query.projectId === 'string' && request.query.projectId.trim()
