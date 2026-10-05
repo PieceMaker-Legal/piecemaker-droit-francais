@@ -117,7 +117,7 @@ const optionalText = (value: unknown): string => typeof value === 'string' ? val
 const objectValue = (value: unknown, field: string): JsonData => { if (value === undefined) return {}; if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${field} must be an object`); return value as JsonData; };
 const arrayValue = (value: unknown, field: string): string[] => { if (value === undefined) return []; if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) throw new TypeError(`${field} must be an array of strings`); return [...new Set(value.map((entry) => entry.trim()).filter(Boolean))]; };
 const kindValue = (value: unknown): NodeKind => { if (typeof value !== 'string' || !NODE_KINDS.includes(value as NodeKind)) throw new TypeError(`kind must be one of ${NODE_KINDS.join(', ')}`); return value as NodeKind; };
-const searchable = (values: string[]): string => values.join('\u0000').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
+export const searchable = (values: string[]): string => values.join('\u0000').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
 const nextFreeCode = (code: string, used: Set<string>): string => {
   const match = /^(.*)_(\d+)$/.exec(code);
   const prefix = match ? match[1] : code;
