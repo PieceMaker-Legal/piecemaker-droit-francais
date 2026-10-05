@@ -6,6 +6,7 @@ import { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledg
 
 import { importLegacyKnowledge } from './legacy-import.js';
 import { createKnowledgeLocalRouter } from './local-routes.js';
+import { importDocumentIndexOverrides } from './overrides-import.js';
 import { createKnowledgePipeline } from './pipeline.js';
 import { createKnowledgeRouter } from './routes.js';
 import { createKnowledgeService } from './service.js';
@@ -28,6 +29,12 @@ export function createKnowledgeBackend(applicationRoot: string) {
     }
     return service;
   };
+
+  try {
+    importDocumentIndexOverrides(getStore(), { listProjects: () => getConnection().prepare('SELECT project_id, project_path FROM projects').all() as Array<{ project_id: string; project_path: string }> });
+  } catch (error) {
+    console.warn(`[piecemaker] import des corrections de pièces impossible : ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   const router = express.Router();
   let knowledgeRouter: express.Router | null = null;

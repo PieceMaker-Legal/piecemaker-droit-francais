@@ -35,14 +35,7 @@ const {
   readProtection,
   writeProtection,
 } = require('../piecemaker-plugin/scripts/lib/protection.cjs');
-const { stateKey } = require('../piecemaker-plugin/scripts/lib/anonymization-state.cjs');
-const {
-  applyDocumentIndexCorrection,
-  buildChronology,
-  documentIndexFile,
-  readDocumentIndex,
-} = require('./document-index.cjs');
-const { renderChronologyHtml, renderHistoryHtml } = require('./lib/export-render.cjs');
+const { renderHistoryHtml } = require('./lib/export-render.cjs');
 const { outputExtension } = require('./lib/office-to-pdf.cjs');
 const { generateDocument } = require('./lib/doc-generate.cjs');
 const {
@@ -68,73 +61,6 @@ const ENV_KEYS = new Set([
   'PYTHON_PATH',
   'SMART_CONVERTER_PATH',
 ]);
-
-/** Native folder-picker commands. Arguments stay separate from the shell. */
-function folderPickerCommands(platform, initialFolder) {
-  const start = path.resolve(initialFolder || os.homedir());
-  if (platform === 'darwin') {
-    return [{
-      command: 'osascript',
-      args: [
-        '-e', 'on run argv',
-        '-e', 'set initialFolder to POSIX file (item 1 of argv)',
-        '-e', 'set selectedFolder to choose folder with prompt "Choisir un dossier juridique PieceMaker" default location initialFolder',
-        '-e', 'return POSIX path of selectedFolder',
-        '-e', 'end run',
-        start,
-      ],
-    }];
-  }
-  if (platform === 'win32') {
-    const script = [
-      'Add-Type -AssemblyName System.Windows.Forms',
-      '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
-      '$dialog.Description = "Choisir un dossier juridique PieceMaker"',
-      '$dialog.ShowNewFolderButton = $false',
-      'if (Test-Path -LiteralPath $args[0]) { $dialog.SelectedPath = $args[0] }',
-      'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Write($dialog.SelectedPath) }',
-    ].join('; ');
-    return [{ command: 'powershell.exe', args: ['-NoProfile', '-STA', '-Command', script, start] }];
-  }
-  const withSlash = start.endsWith(path.sep) ? start : `${start}${path.sep}`;
-  return [
-    { command: 'zenity', args: ['--file-selection', '--directory', '--title=Choisir un dossier juridique PieceMaker', `--filename=${withSlash}`] },
-    { command: 'kdialog', args: ['--getexistingdirectory', start, '--title', 'Choisir un dossier juridique PieceMaker'] },
-  ];
-}
-
-function captureProcess(command, args, { cwd } = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    const stdout = [];
-    const stderr = [];
-    child.stdout.on('data', (chunk) => stdout.push(chunk));
-    child.stderr.on('data', (chunk) => stderr.push(chunk));
-    child.once('error', (error) => resolve({ code: null, stdout: '', stderr: '', error }));
-    child.once('close', (code) => resolve({
-      code,
-      stdout: Buffer.concat(stdout).toString('utf8').trim(),
-      stderr: Buffer.concat(stderr).toString('utf8').trim(),
-      error: null,
-    }));
-  });
-}
-
-async function selectLocalFolder(platform = process.platform, initialFolder = os.homedir()) {
-  let lastError = null;
-  for (const candidate of folderPickerCommands(platform, initialFolder)) {
-    const result = await captureProcess(candidate.command, candidate.args);
-    if (result.code === 0) return result.stdout ? validateSelectedCaseFolder(result.stdout) : null;
-    if (result.error?.code === 'ENOENT') {
-      lastError = result.error;
-      continue;
-    }
-    // Native dialogs use a non-zero status for an ordinary user cancellation.
-    if (!result.stdout && (result.code === 1 || /cancel|annul/i.test(result.stderr))) return null;
-    lastError = result.error || new Error(result.stderr || `Le sélecteur s’est arrêté avec le code ${result.code}.`);
-  }
-  throw new Error(`Aucun sélecteur de dossier n’est disponible sur ce poste (${lastError?.message || 'commande introuvable'}).`);
-}
 
 async function registerLegalCase({
   folder,
@@ -1728,8 +1654,7 @@ function asciiFallbackFilename(name) {
  *
  * Les en-têtes ne sont posés qu'une fois le document produit : tant que
  * `generateDocument` n'a pas résolu, l'appelant peut encore répondre en JSON
- * en cas d'erreur (voir les routes `/repository/chronology/export` et
- * `/history/export`).
+ * en cas d'erreur (voir la route `/history/export`).
  */
 async function sendGeneratedDocument(res, { html, filename, format }) {
   validateExportFormat(format);
@@ -1785,141 +1710,12 @@ async function sendGeneratedDocument(res, { html, filename, format }) {
   stream.pipe(res);
 }
 
-const documentMetaMutationQueues = new Map();
-
-async function serializeDocumentMetaMutation(caseRoot, callback) {
-  const key = path.resolve(caseRoot);
-  const previous = documentMetaMutationQueues.get(key) || Promise.resolve();
-  const current = previous.catch(() => {}).then(callback);
-  documentMetaMutationQueues.set(key, current);
-  try {
-    return await current;
-  } finally {
-    if (documentMetaMutationQueues.get(key) === current) documentMetaMutationQueues.delete(key);
-  }
-}
-
-async function applyDocumentMetaMutation({
-  legalCase,
-  relativePath,
-  correction,
-  homeDir,
-  envFile,
-  applyCorrection = applyDocumentIndexCorrection,
-  createHistoryCommit = createCommit,
-}) {
-  return serializeDocumentMetaMutation(legalCase.root, async () => {
-    const mutation = applyCorrection(legalCase.root, relativePath, correction);
-    let history;
-    try {
-      history = await createHistoryCommit({
-        casesRoot: legalCase.casesRoot,
-        caseName: legalCase.caseName,
-        homeDir,
-        envFile,
-        label: 'Correction manuelle de la chronologie',
-        description: `Mise à jour déterministe de la pièce ${mutation.documentKey.slice(0, 12).toUpperCase()}.`,
-        event: 'admin-document-meta-edit',
-        paths: [path.relative(legalCase.root, documentIndexFile(legalCase.root)).split(path.sep).join('/')],
-        waitForLockMs: 10_000,
-      });
-    } catch (error) {
-      history = { created: false, error: error.message };
-    }
-    return {
-      mutation,
-      history: {
-        created: Boolean(history?.created),
-        hash: history?.commit || null,
-        skipped: history?.skipped || null,
-        error: history?.error || null,
-      },
-    };
-  });
-}
-
-async function loadAdminChronology({
-  caseRoot,
-  buildLocalChronology = buildChronology,
-}) {
-  return buildLocalChronology(caseRoot, {
-    deanonymizeLabels: true,
-    includeManualDecisions: true,
-  });
-}
-
-function normalizeChronologyScope(caseRoot, value) {
-  const scope = String(value || '').trim().replaceAll('\\', '/').replace(/^\/|\/$/g, '');
-  if (!scope) return null;
-  const parts = scope.split('/');
-  if (parts.some((part) => !part || part === '.' || part === '..')) throw new Error('Sous-dossier invalide.');
-  const root = fs.realpathSync(caseRoot);
-  const absolute = path.resolve(caseRoot, ...parts);
-  const resolved = fs.realpathSync(absolute);
-  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error('Sous-dossier hors du dossier juridique.');
-  if (!fs.statSync(resolved).isDirectory()) throw new Error('La cible choisie n’est pas un sous-dossier.');
-  return parts.join('/');
-}
-
-function chronologyScopeFromFolder(caseRoot, selectedFolder) {
-  const root = fs.realpathSync(caseRoot);
-  const selected = fs.realpathSync(selectedFolder);
-  if (selected !== root && !selected.startsWith(`${root}${path.sep}`)) throw new Error('Sous-dossier hors du dossier juridique.');
-  const relative = path.relative(root, selected).split(path.sep).join('/');
-  return relative ? normalizeChronologyScope(root, relative) : null;
-}
-
-function chronologyFolders(documents) {
-  const folders = new Set();
-  for (const document of documents || []) {
-    const parts = String(document.path || '').replaceAll('\\', '/').split('/');
-    parts.pop();
-    for (let index = 1; index <= parts.length; index += 1) folders.add(parts.slice(0, index).join('/'));
-  }
-  return [...folders].sort((left, right) => left.localeCompare(right, 'fr'));
-}
-
-function scopeChronology(chronology, scope) {
-  const folders = chronology.folders || chronologyFolders(chronology.documents);
-  const documents = scope
-    ? chronology.documents.filter((document) => {
-      const documentPath = String(document.path || '');
-      return documentPath === scope || documentPath.startsWith(`${scope}/`);
-    })
-    : chronology.documents;
-  const datedDocuments = documents.filter((document) => document.dateIso);
-  const undatedDocuments = documents.filter((document) => !document.dateIso);
-  const documentIds = new Set(documents.map((document) => document.id));
-  const entities = (chronology.entities || [])
-    .map((entity) => ({ ...entity, documents: (entity.documents || []).filter((id) => documentIds.has(id)) }))
-    .filter((entity) => entity.documents.length > 0);
-  const dated = datedDocuments.map((document) => document.dateIso).sort();
-  return {
-    ...chronology,
-    scope: scope || null,
-    folders,
-    documents,
-    datedDocuments,
-    undatedDocuments,
-    entities,
-    stats: {
-      ...chronology.stats,
-      documents: documents.length,
-      indexed: documents.filter((document) => document.indexed).length,
-      dated: datedDocuments.length,
-      entities: entities.length,
-      span: dated.length ? { from: dated[0], to: dated[dated.length - 1] } : null,
-    },
-  };
-}
-
 function createAdminRouter({
   repoRoot = path.resolve(__dirname, '..'),
   homeDir = path.join(os.homedir(), '.piecemaker'),
   userHome = os.homedir(),
   getRuntimeStatus = () => ({}),
   fetchImpl = global.fetch,
-  pickFolder = selectLocalFolder,
   // Adaptation PieceMaker/CloudCLI : monté sur le serveur CloudCLI, le routeur
   // est déjà protégé par `authenticateToken`, et l'origine peut être une app
   // Electron (`file://`) ou un hôte LAN. L'appelant peut donc fournir sa propre
@@ -2314,145 +2110,6 @@ function createAdminRouter({
     }
   });
 
-  router.get('/repository/chronology', async (req, res) => {
-    const startedAt = performance.now();
-    try {
-      const legalCase = selectedCase(req.query.case);
-      const scope = normalizeChronologyScope(legalCase.root, req.query.scope);
-      // Cette route est une vue cabinet et n'expose plus de branche publique
-      // pseudonymisée. `deanonymize=0` est volontairement ignoré : les données
-      // destinées au modèle empruntent les chemins internes dédiés.
-      const chronology = await loadAdminChronology({ caseRoot: legalCase.root });
-      const scopedChronology = scopeChronology(chronology, scope);
-      scopedChronology.case = { path: legalCase.id, name: legalCase.caseName, location: legalCase.root };
-      finishAdminTiming(res, 'chronology', startedAt, {
-        documents: scopedChronology.stats.documents,
-        entities: scopedChronology.stats.entities,
-      });
-      res.json(scopedChronology);
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  router.post('/repository/chronology/scope', async (req, res) => {
-    try {
-      const legalCase = selectedCase(req.body?.case);
-      const selectedFolder = await pickFolder(process.platform, legalCase.root);
-      if (!selectedFolder) return res.json({ ok: true, cancelled: true, scope: null });
-      res.json({ ok: true, scope: chronologyScopeFromFolder(legalCase.root, selectedFolder) });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  router.get('/repository/chronology/export', async (req, res) => {
-    const startedAt = performance.now();
-    try {
-      const format = validateExportFormat(String(req.query.format || ''));
-      const legalCase = selectedCase(req.query.case);
-      const scope = normalizeChronologyScope(legalCase.root, req.query.scope);
-      const chronology = await loadAdminChronology({ caseRoot: legalCase.root });
-      const scopedChronology = scopeChronology(chronology, scope);
-      const html = renderChronologyHtml(scopedChronology, { caseName: legalCase.caseName });
-      finishAdminTiming(res, 'chronology-export', startedAt, {
-        documents: scopedChronology.stats.documents,
-        format,
-      });
-      await sendGeneratedDocument(res, {
-        html,
-        filename: `Chronologie — ${legalCase.caseName}`,
-        format,
-      });
-    } catch (error) {
-      // Une fois l'envoi du document entamé, les en-têtes sont partis : on ne
-      // peut plus répondre en JSON, seulement couper la connexion.
-      if (res.headersSent) return res.destroy();
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Correction manuelle des métadonnées d'une pièce dans la chronologie —
-  // nature (type), date, lieu (juridiction) et champs libres ajoutés/retirés par
-  // le cabinet. Stocké avec sa provenance dans l'index documentaire que le
-  // pipeline relit en préservant décisions et révisions : un re-scan rafraîchit
-  // la détection sans écraser la correction.
-  // `path` désigne la pièce ORIGINALE (comme le reste de la chronologie) et sert
-  // seulement à calculer la clé de hachage — il n'est jamais lu. Envoyer une
-  // correction entièrement vide efface l'entrée (retour aux valeurs détectées).
-  router.put('/repository/document-meta', async (req, res) => {
-    try {
-      const legalCase = selectedCase(req.body?.case);
-      const relativePath = String(req.body?.path || '').trim();
-      if (!relativePath) throw new Error('Chemin de pièce manquant.');
-      // Validation d'appartenance au dossier (même règle que le reste) ; on ne
-      // lit pas la pièce, on refuse seulement un chemin hors racine.
-      resolveCasePath(legalCase.root, relativePath);
-      const body = req.body || {};
-      const result = await applyDocumentMetaMutation({
-        legalCase,
-        relativePath,
-        homeDir,
-        envFile,
-        correction: {
-          nature: body.nature,
-          dateIso: body.dateIso,
-          localisation: body.localisation,
-          fields: body.fields,
-          reason: body.reason,
-          ...(Object.hasOwn(body, 'entityDecisions')
-            ? { entityDecisions: body.entityDecisions }
-            : {}),
-        },
-      });
-      res.json({
-        ok: true,
-        override: result.mutation.override,
-        entityDecisions: result.mutation.entityDecisions,
-        editRevision: result.mutation.editRevision,
-        revisions: result.mutation.revisions,
-        commit: result.history,
-      });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Décisions d'entité propres à une pièce. Contrairement à l'éditeur de
-  // mapping global, cette route préserve l'override de métadonnées existant et
-  // ne supprime ni ne renomme aucun code dans le reste du dossier.
-  router.put('/repository/document-entities', async (req, res) => {
-    try {
-      const legalCase = selectedCase(req.body?.case);
-      const relativePath = String(req.body?.path || '').trim();
-      if (!relativePath) throw new Error('Chemin de pièce manquant.');
-      resolveCasePath(legalCase.root, relativePath);
-      const index = readDocumentIndex(legalCase.root);
-      const key = stateKey(relativePath);
-      const existingOverride = index.overrides?.[key] || {};
-      const result = await applyDocumentMetaMutation({
-        legalCase,
-        relativePath,
-        homeDir,
-        envFile,
-        correction: {
-          ...existingOverride,
-          reason: req.body?.reason,
-          entityDecisions: req.body?.entityDecisions,
-        },
-      });
-      res.json({
-        ok: true,
-        entityDecisions: result.mutation.entityDecisions,
-        editRevision: result.mutation.editRevision,
-        revisions: result.mutation.revisions,
-        commit: result.history,
-      });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
   // Contenu en lecture seule du Markdown converti d'une pièce — la seule
   // surface sûre : `path` est le chemin de la pièce ORIGINALE (comme partout
   // ailleurs dans la chronologie/l'aperçu), jamais lu directement. Sert
@@ -2719,11 +2376,6 @@ function createAdminRouter({
 }
 
 module.exports = {
-  loadAdminChronology,
-  normalizeChronologyScope,
-  chronologyScopeFromFolder,
-  scopeChronology,
-  applyDocumentMetaMutation,
   applyMarketplaceSelection,
   applyPluginComponentSelection,
   checkOllamaModelUpdate,
@@ -2733,7 +2385,6 @@ module.exports = {
   deleteManagedAsset,
   deleteManagedFile,
   ensureClaudePluginActive,
-  folderPickerCommands,
   installedPluginSkills,
   reapplyDeletedOfficialSkills,
   isLocalOrigin,
@@ -2753,6 +2404,5 @@ module.exports = {
   revealCommands,
   saveManagedAsset,
   saveManagedFile,
-  selectLocalFolder,
   updateEnvFile,
 };
