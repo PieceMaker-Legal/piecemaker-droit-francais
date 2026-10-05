@@ -63,7 +63,8 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
   `.md` et déplace ses clés dans `anonymization-state.json`,
   `document-index.json` et `protection.json` — sans reconversion ni rescan.
   - Renommage délibéré (`renamePiece`) : fiche de la pièce dans la chronologie,
-    `piecemaker renommage`, outil MCP `renommage`, tri des pièces de la Tabular
+    `piecemaker renommage`, outil MCP `sql` (`UPDATE` du `label`, voir
+    `outil-sql.md`), tri des pièces de la Tabular
     Review (qui peut aussi ranger la pièce dans un autre sous-dossier, créé au
     besoin, hors `Fichiers convertis PieceMaker`, `Tabular Review`, `Pièces
     tamponnées` et dossiers cachés). Le nom doit suivre `AAAA-MM-JJ_<titre>` et
