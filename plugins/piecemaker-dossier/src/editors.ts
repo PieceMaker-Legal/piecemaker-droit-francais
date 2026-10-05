@@ -439,9 +439,9 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     const rename = (value: string): string => value === id ? nodeId : value;
     const operations: KnowledgeUpdateOperation[] = [];
     if (change && node && nodeId !== id) operations.push(...change.operations);
-    operations.push({ op: 'upsertNode', node: { id: nodeId, kind, label, aliases: savedAliases, data: nodeData, origin: 'manual' } });
+    operations.push({ op: 'upsertNode', node: { id: nodeId, kind, label, aliases: savedAliases, data: nodeData } });
     for (const mapping of mappings) operations.push({ op: 'deleteMapping', mapping: { nodeId, real: mapping.real } });
-    for (const real of [label, ...savedAliases]) if (code) operations.push({ op: 'upsertMapping', mapping: { nodeId, real, masked: code, origin: 'manual' } });
+    for (const real of [label, ...savedAliases]) if (code) operations.push({ op: 'upsertMapping', mapping: { nodeId, real, masked: code } });
     for (const index of removals) {
       const relation = relations[index];
       operations.push({ op: 'unlink', link: { fromNodeId: rename(relation.fromNodeId), toNodeId: rename(relation.toNodeId), relation: relation.relation } });
@@ -451,8 +451,8 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     const customRelation = textValue(form.get('customRelation')).trim();
     const relation = selectedRelation === '__custom__' ? customRelation : selectedRelation;
     if (selectedRelation === '__custom__' && customRelation) customRelationOptions.add(customRelation);
-    if (target && relation) operations.push({ op: 'link', link: { fromNodeId: nodeId, toNodeId: target, relation, origin: 'manual' } });
-    if (sirenNode && !data.graph.links.some((link) => link.fromNodeId === id && link.toNodeId === sirenNode.id && link.relation.toLocaleLowerCase() === 'siren')) operations.push({ op: 'link', link: { fromNodeId: nodeId, toNodeId: sirenNode.id, relation: 'SIREN', origin: 'manual' } });
+    if (target && relation) operations.push({ op: 'link', link: { fromNodeId: nodeId, toNodeId: target, relation } });
+    if (sirenNode && !data.graph.links.some((link) => link.fromNodeId === id && link.toNodeId === sirenNode.id && link.relation.toLocaleLowerCase() === 'siren')) operations.push({ op: 'link', link: { fromNodeId: nodeId, toNodeId: sirenNode.id, relation: 'SIREN' } });
     await save(operations);
     layer.remove();
   });
@@ -661,11 +661,11 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     const documentFields = readFields();
     const operations: KnowledgeUpdateOperation[] = [...queuedOperations, {
       op: 'upsertNode',
-      node: { id: node.id, kind: 'document', label: node.label, aliases: node.aliases, data: { ...node.data, nature: savedNature.trim() || null, doc_date_iso: textValue(form.get('date')) || null, localisation: textValue(form.get('localisation')).trim() || null, fields: documentFields }, origin: 'manual' },
+      node: { id: node.id, kind: 'document', label: node.label, aliases: node.aliases, data: { ...node.data, nature: savedNature.trim() || null, localisation: textValue(form.get('localisation')).trim() || null, fields: documentFields }, date: textValue(form.get('date')) || null },
     }];
     const renamed = (id: string): string => renamedIds.get(id) || id;
     for (const link of mentionLinks) operations.push({ op: 'unlink', link: { fromNodeId: renamed(link.fromNodeId), toNodeId: renamed(link.toNodeId), relation: link.relation } });
-    for (const target of selectedEntities) operations.push({ op: 'link', link: { fromNodeId: node.id, toNodeId: target, relation: 'mentions', origin: 'manual' } });
+    for (const target of selectedEntities) operations.push({ op: 'link', link: { fromNodeId: node.id, toNodeId: target, relation: 'mentions' } });
     try {
       await save(operations);
       if (pathValue && newName && newName !== pieceName) await rename(pathValue, newName);

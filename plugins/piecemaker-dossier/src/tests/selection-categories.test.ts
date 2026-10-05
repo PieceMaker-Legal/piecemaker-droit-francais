@@ -4,7 +4,7 @@ import { changeNodeSide, createEntity, findEntityBySelection, parseSelectionDate
 import type { SelectionGraph } from '../selection-categories.js';
 import type { KnowledgeMapping, KnowledgeNode } from '../types.js';
 
-const node = (id: string, kind: 'person' | 'company', label: string, data: Record<string, unknown> = {}, aliases: string[] = []): KnowledgeNode => ({ projectId: 'p', id, kind, label, aliases, data, createdAt: '', updatedAt: '' });
+const node = (id: string, kind: 'person' | 'company', label: string, data: Record<string, unknown> = {}, aliases: string[] = []): KnowledgeNode => ({ projectId: 'p', id, kind, label, aliases, data, date: null, createdAt: '', updatedAt: '' });
 const mapping = (nodeId: string, real: string, masked: string): KnowledgeMapping => ({ projectId: 'p', nodeId, real, masked, data: {} });
 
 const graph = (): SelectionGraph => ({
@@ -53,8 +53,8 @@ describe('createEntity', () => {
     const first = createEntity('  Marie   Martin ', 'person', 'adversaire', graph());
     expect(first.nodeId).toBe('entity:ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01');
     expect(first.operations).toEqual([
-      { op: 'upsertNode', node: expect.objectContaining({ id: first.nodeId, kind: 'person', label: 'Marie Martin', aliases: [], origin: 'manual' }) },
-      { op: 'upsertMapping', mapping: { nodeId: first.nodeId, real: 'Marie Martin', masked: 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01', origin: 'manual' } },
+      { op: 'upsertNode', node: expect.objectContaining({ id: first.nodeId, kind: 'person', label: 'Marie Martin', aliases: [] }) },
+      { op: 'upsertMapping', mapping: { nodeId: first.nodeId, real: 'Marie Martin', masked: 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01' } },
     ]);
     const second = createEntity('Paul Durand', 'person', 'adversaire', first.graph);
     expect(second.nodeId).toBe('entity:ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_02');
@@ -78,7 +78,7 @@ describe('changeNodeSide', () => {
     const change = changeNodeSide(base.nodes[0], 'adversaire', base);
     expect(change.nodeId).toBe('entity:ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01');
     expect(change.operations[0]).toEqual({ op: 'renameNode', rename: { fromNodeId: base.nodes[0].id, toNodeId: change.nodeId } });
-    expect(change.operations).toContainEqual({ op: 'upsertMapping', mapping: { nodeId: change.nodeId, real: 'J. Dupont', masked: 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01', origin: 'manual' } });
+    expect(change.operations).toContainEqual({ op: 'upsertMapping', mapping: { nodeId: change.nodeId, real: 'J. Dupont', masked: 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01' } });
     expect(change.graph.nodes.find((entry) => entry.id === change.nodeId)?.data.partySide).toBe('adversaire');
   });
 

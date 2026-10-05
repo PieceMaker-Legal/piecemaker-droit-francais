@@ -9,7 +9,7 @@ import type {
   NodeKind,
 } from './types.js';
 import { EXCLUSIONS_NODE_ID } from './types.js';
-import { KnowledgeStore } from './knowledge.js';
+import { KnowledgeStore, splitDocumentDate } from './knowledge.js';
 import { isInstitutionalEntity } from './institutional-terms.js';
 
 const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
@@ -17,9 +17,9 @@ const strings = (value: unknown): string[] => Array.isArray(value) ? [...new Set
 const record = (value: unknown): JsonData => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonData : {};
 const nodeId = (code: string): string => `entity:${code}`;
 const documentId = (id: string): string => `document:${id}`;
-export function exclusionNodeOperation(values: unknown, origin: 'gliner' | 'manual' = 'gliner'): KnowledgeUpdateOperation {
+export function exclusionNodeOperation(values: unknown): KnowledgeUpdateOperation {
   const exclusions = strings(values);
-  return { op: 'upsertNode', node: { id: EXCLUSIONS_NODE_ID, kind: 'other', label: 'Exclusions GLiNER', data: { systemRole: 'gliner-exclusions', values: exclusions }, origin } };
+  return { op: 'upsertNode', node: { id: EXCLUSIONS_NODE_ID, kind: 'other', label: 'Exclusions GLiNER', data: { systemRole: 'gliner-exclusions', values: exclusions } } };
 }
 
 function kindFromCode(code: string, principal: string, bucket: string): NodeKind {
@@ -73,7 +73,6 @@ function entityNodes(mapping: GlinerMappingDocument): Map<string, KnowledgeNodeI
       label,
       aliases: names.slice(1),
       data: { code, category: details?.bucket || null, ...details?.data },
-      origin: 'gliner',
     });
   }
   return nodes;
@@ -85,10 +84,11 @@ function documentOperations(documents: GlinerDocument[], nodes: Map<string, Know
     const id = text(document.id);
     const name = text(document.name);
     if (!id || !name) continue;
-    operations.push({ op: 'upsertNode', node: { id: documentId(id), kind: 'document', label: name, data: { path: text(document.path), ...record(document.metadata) }, origin: 'gliner' } });
+    const { date, data: metadata } = splitDocumentDate(record(document.metadata));
+    operations.push({ op: 'upsertNode', node: { id: documentId(id), kind: 'document', label: name, data: { path: text(document.path), ...metadata }, date: date ?? undefined } });
     for (const code of strings(document.entityCodes)) {
       if (!nodes.has(code)) continue;
-      operations.push({ op: 'link', link: { fromNodeId: documentId(id), toNodeId: nodeId(code), relation: 'mentions', data: {}, origin: 'gliner' } });
+      operations.push({ op: 'link', link: { fromNodeId: documentId(id), toNodeId: nodeId(code), relation: 'mentions', data: {} } });
     }
   }
   return operations;
@@ -100,7 +100,7 @@ export function scanResultOperations(result: GlinerScanResult): KnowledgeUpdateO
   operations.push(exclusionNodeOperation(result.mapping.ignored));
   for (const [code, node] of nodes) {
     for (const real of [node.label || '', ...(node.aliases || [])].filter(Boolean)) {
-      operations.push({ op: 'upsertMapping', mapping: { nodeId: nodeId(code), real, masked: code, data: {}, origin: 'gliner' } });
+      operations.push({ op: 'upsertMapping', mapping: { nodeId: nodeId(code), real, masked: code, data: {} } });
     }
   }
   operations.push(...documentOperations(result.documents, nodes));
@@ -108,10 +108,10 @@ export function scanResultOperations(result: GlinerScanResult): KnowledgeUpdateO
 }
 
 export function persistScanResult(result: GlinerScanResult, store?: KnowledgeStore): KnowledgeUpdateResult {
-  if (store) return store.replaceOrigin(result.projectId, 'gliner', scanResultOperations(result));
+  if (store) return store.mergeScan(result.projectId, scanResultOperations(result));
   const ownedStore = new KnowledgeStore();
   try {
-    return ownedStore.replaceOrigin(result.projectId, 'gliner', scanResultOperations(result));
+    return ownedStore.mergeScan(result.projectId, scanResultOperations(result));
   } finally {
     ownedStore.close();
   }

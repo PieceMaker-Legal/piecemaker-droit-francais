@@ -43,7 +43,7 @@ export const kindLabels: Record<NodeKind, string> = {
 export const entityKinds = NODE_KINDS.filter((kind) => kind !== 'document');
 export const escapeHtml = (value: unknown): string => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] || character);
 export const textValue = (value: unknown): string => typeof value === 'string' ? value : '';
-export const dateFor = (node: KnowledgeNode): string => textValue(node.data.doc_date_iso) || textValue(node.data.dateIso) || '';
+export const dateFor = (node: KnowledgeNode): string => node.date || '';
 export const parseAliases = (value: unknown): string[] => String(value || '').split(/[\n,]/).map((entry) => entry.trim()).filter(Boolean);
 
 export function nodeVariants(node: KnowledgeNode, mappings: Array<{ nodeId: string; real: string }>): string[] {

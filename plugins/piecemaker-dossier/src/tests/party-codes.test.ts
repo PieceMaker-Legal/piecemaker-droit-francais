@@ -29,10 +29,10 @@ const seedCompany = (store: KnowledgeStore): void => {
   store.update({
     projectId: 'project-1',
     operations: [
-      { op: 'upsertNode', node: { id: 'entity:SOCIETE_SA_06', kind: 'company', label: 'Comptoir Dubreuil', data: { code: 'SOCIETE_SA_06', legalForm: 'SA' }, origin: 'gliner' } },
+      { op: 'upsertNode', node: { id: 'entity:SOCIETE_SA_06', kind: 'company', label: 'Comptoir Dubreuil', data: { code: 'SOCIETE_SA_06', legalForm: 'SA' } } },
       { op: 'upsertNode', node: { id: 'document:1', kind: 'document', label: 'Assignation' } },
-      { op: 'upsertMapping', mapping: { nodeId: 'entity:SOCIETE_SA_06', real: 'Comptoir Dubreuil', masked: 'SOCIETE_SA_06', origin: 'gliner' } },
-      { op: 'link', link: { fromNodeId: 'document:1', toNodeId: 'entity:SOCIETE_SA_06', relation: 'mentions', origin: 'gliner' } },
+      { op: 'upsertMapping', mapping: { nodeId: 'entity:SOCIETE_SA_06', real: 'Comptoir Dubreuil', masked: 'SOCIETE_SA_06' } },
+      { op: 'link', link: { fromNodeId: 'document:1', toNodeId: 'entity:SOCIETE_SA_06', relation: 'mentions' } },
     ],
   });
 };
@@ -104,8 +104,8 @@ describe('node renaming in sqlite', () => {
       projectId: 'project-1',
       operations: [
         ...change.operations,
-        { op: 'upsertNode', node: { id: change.nodeId, kind: 'company', label: 'Comptoir Dubreuil', data: change.data, origin: 'manual' } },
-        { op: 'upsertMapping', mapping: { nodeId: change.nodeId, real: 'Comptoir Dubreuil', masked: change.code, origin: 'manual' } },
+        { op: 'upsertNode', node: { id: change.nodeId, kind: 'company', label: 'Comptoir Dubreuil', data: change.data } },
+        { op: 'upsertMapping', mapping: { nodeId: change.nodeId, real: 'Comptoir Dubreuil', masked: change.code } },
       ],
     });
 
@@ -122,13 +122,13 @@ describe('node renaming in sqlite', () => {
     const toParty = partyCodeChange(nodeOf(store, 'entity:SOCIETE_SA_06')!, { kind: 'company', legalForm: 'SA', side: 'adversaire', position: 'demandeur' }, store.snapshot('project-1').nodes, store.snapshot('project-1').mappings);
     store.update({
       projectId: 'project-1',
-      operations: [...toParty.operations, { op: 'upsertNode', node: { id: toParty.nodeId, kind: 'company', label: 'Comptoir Dubreuil', data: toParty.data, origin: 'manual' } }],
+      operations: [...toParty.operations, { op: 'upsertNode', node: { id: toParty.nodeId, kind: 'company', label: 'Comptoir Dubreuil', data: toParty.data } }],
     });
 
     const back = partyCodeChange(nodeOf(store, toParty.nodeId)!, { kind: 'company', legalForm: 'SA', side: 'tiers' }, store.snapshot('project-1').nodes, store.snapshot('project-1').mappings);
     store.update({
       projectId: 'project-1',
-      operations: [...back.operations, { op: 'upsertNode', node: { id: back.nodeId, kind: 'company', label: 'Comptoir Dubreuil', data: back.data, origin: 'manual' } }],
+      operations: [...back.operations, { op: 'upsertNode', node: { id: back.nodeId, kind: 'company', label: 'Comptoir Dubreuil', data: back.data } }],
     });
 
     const snapshot = store.snapshot('project-1');

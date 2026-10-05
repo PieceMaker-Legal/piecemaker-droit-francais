@@ -69,7 +69,7 @@ function applyOperations(graph: SelectionGraph, operations: KnowledgeUpdateOpera
     } else if (operation.op === 'upsertNode') {
       const input = operation.node;
       const previous = nodes.find((node) => node.id === input.id);
-      const next: KnowledgeNode = { projectId: '', createdAt: '', updatedAt: '', ...previous, id: input.id, kind: input.kind, label: input.label || '', aliases: input.aliases || [], data: input.data || {} };
+      const next: KnowledgeNode = { projectId: '', date: null, createdAt: '', updatedAt: '', ...previous, id: input.id, kind: input.kind, label: input.label || '', aliases: input.aliases || [], data: input.data || {} };
       nodes = previous ? nodes.map((node) => node.id === input.id ? next : node) : [...nodes, next];
     } else if (operation.op === 'upsertMapping') {
       const input = operation.mapping;
@@ -87,7 +87,7 @@ function applyOperations(graph: SelectionGraph, operations: KnowledgeUpdateOpera
 }
 
 function mappingOperations(nodeId: string, code: string, reals: string[]): KnowledgeUpdateOperation[] {
-  return code ? [...new Set(reals.filter(Boolean))].map((real) => ({ op: 'upsertMapping', mapping: { nodeId, real, masked: code, origin: 'manual' } })) : [];
+  return code ? [...new Set(reals.filter(Boolean))].map((real) => ({ op: 'upsertMapping', mapping: { nodeId, real, masked: code } })) : [];
 }
 
 export function changeNodeSide(node: KnowledgeNode, side: SelectionSide, graph: SelectionGraph): SelectionChange {
@@ -101,7 +101,7 @@ export function changeNodeSide(node: KnowledgeNode, side: SelectionSide, graph: 
   );
   const operations: KnowledgeUpdateOperation[] = [
     ...change.operations,
-    { op: 'upsertNode', node: { id: change.nodeId, kind: node.kind, label: node.label, aliases: node.aliases, data: change.data, origin: 'manual' } },
+    { op: 'upsertNode', node: { id: change.nodeId, kind: node.kind, label: node.label, aliases: node.aliases, data: change.data } },
     ...mappingOperations(change.nodeId, change.code, [node.label, ...node.aliases, ...graph.mappings.filter((mapping) => mapping.nodeId === node.id).map((mapping) => mapping.real)]),
   ];
   if (side === 'tiers') operations.push({ op: 'removePartyDesignation', nodeId: change.nodeId });
@@ -119,7 +119,7 @@ export function createEntity(label: string, kind: NodeKind, side: SelectionSide,
     graph.reservedCodes,
   );
   const operations: KnowledgeUpdateOperation[] = [
-    { op: 'upsertNode', node: { id: change.nodeId, kind, label: name, aliases: [], data: change.data, origin: 'manual' } },
+    { op: 'upsertNode', node: { id: change.nodeId, kind, label: name, aliases: [], data: change.data } },
     ...mappingOperations(change.nodeId, change.code, [name]),
   ];
   return { operations, graph: applyOperations(graph, operations), nodeId: change.nodeId, previousId: change.nodeId };
