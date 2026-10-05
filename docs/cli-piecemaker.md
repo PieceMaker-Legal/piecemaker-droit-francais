@@ -111,7 +111,8 @@ renomme une pièce dans son dossier, par la même porte unique
 (`POST /api/piecemaker/local/rename`). Son Markdown prend le même nom et l'état
 PieceMaker suit la pièce (voir `protection-pieces.md`). La pièce se désigne
 comme pour `conversion` (nom ou chemin relatif). L'outil MCP `renommage`
-(`piece`, `nom`, `dossier?`) appelle cette sous-commande.
+n'existe plus : l'IA renomme une pièce par l'outil MCP `sql` (`UPDATE` du
+`label`, voir `outil-sql.md`).
 
 Réinstaller la commande après un `git pull` qui la modifie :
 

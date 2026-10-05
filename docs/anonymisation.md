@@ -75,7 +75,10 @@ budget RAM, nice, timeout).
   détruites après fusion.
 
 État technique : `.piecemaker/anonymization-state.json` et
-`.piecemaker/document-index.json` du dossier, pas un temp jeté.
+`.piecemaker/document-index.json` du dossier, pas un temp jeté. Ce dernier ne
+sert plus qu'à transmettre le résultat du scan Python au serveur (et à porter
+les anciens `overrides` en attente d'import en base) ; les corrections vivent
+dans SQLite (voir `outil-sql.md`).
 
 ## 3. SQLite et mapping disque
 
