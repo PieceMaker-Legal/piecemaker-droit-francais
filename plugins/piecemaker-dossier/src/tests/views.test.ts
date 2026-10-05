@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { chronologyView, generalView, isConformingPieceName, mappingView, proposedPieceName, shell } from '../views.js';
+import { chronologyView, citationListMarkup, generalView, isConformingPieceName, mappingView, proposedPieceName, shell } from '../views.js';
 import type { KnowledgeSnapshot } from '../types.js';
 
 const snapshot: KnowledgeSnapshot = {
@@ -240,5 +240,23 @@ describe('piece names', () => {
       { id: 'b', projectId: 'project-1', kind: 'document', label: '2024-01-09_Jugement.pdf', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
     ], links: [] } } as never);
     expect(html.match(/Nom non conforme/g)).toHaveLength(1);
+  });
+});
+
+describe('citationListMarkup', () => {
+  it('renders nothing without citations', () => {
+    expect(citationListMarkup([])).toBe('');
+  });
+
+  it('shows the text with its full value on hover, the source and a removal button', () => {
+    const html = citationListMarkup([
+      { texte: 'Jean Dupont signe <le> contrat.', source: 'Contrat.pdf', remove: { attribute: 'data-remove-citation', value: '12' } },
+      { texte: 'Société Exemple SAS', source: 'Registre national des entreprises' },
+    ]);
+    expect(html).toContain('title="Jean Dupont signe &lt;le&gt; contrat."');
+    expect(html).toContain('<small class="pmd-citation-source">Contrat.pdf</small>');
+    expect(html).toContain('data-remove-citation="12"');
+    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html.match(/<li /g)).toHaveLength(2);
   });
 });

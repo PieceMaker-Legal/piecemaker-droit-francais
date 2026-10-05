@@ -656,6 +656,25 @@ describe('citations', () => {
     expect(store.snapshot('project-1').citations).toHaveLength(2);
   });
 
+  it('deletes one citation by id and keeps the others', () => {
+    const store = createStore();
+    seed(store);
+    const [first, second] = store.snapshot('project-1').citations;
+    store.update({ projectId: 'project-1', operations: [{ op: 'uncite', id: first.id }] });
+    expect(store.snapshot('project-1').citations.map((citation) => citation.id)).toEqual([second.id]);
+    store.update({ projectId: 'project-1', operations: [{ op: 'uncite', id: first.id }] });
+    expect(store.snapshot('project-1').citations).toHaveLength(1);
+    expect(store.snapshot('project-1').links).toHaveLength(2);
+  });
+
+  it('rejects an uncite without an integer id', () => {
+    const store = createStore();
+    seed(store);
+    expect(() => store.update({ projectId: 'project-1', operations: [{ op: 'uncite', id: 'x' as never }] })).toThrow(/integer/);
+    expect(() => store.update({ projectId: 'project-1', operations: [{ op: 'uncite', id: 1.5 }] })).toThrow(/integer/);
+    expect(store.snapshot('project-1').citations).toHaveLength(2);
+  });
+
   it('follows a renamed piece through its links and its piece_id', () => {
     const store = createStore();
     seed(store);

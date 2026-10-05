@@ -110,6 +110,7 @@ export type KnowledgeUpdateOperation =
   | { op: 'unlink'; link: Pick<KnowledgeLinkInput, 'fromNodeId' | 'toNodeId' | 'relation'> }
   | { op: 'upsertMapping'; mapping: KnowledgeMappingInput }
   | { op: 'cite'; citation: KnowledgeCitationInput }
+  | { op: 'uncite'; id: number }
   | { op: 'deleteMapping'; mapping: Pick<KnowledgeMappingInput, 'nodeId' | 'real'> }
   | { op: 'removePartyDesignation'; nodeId: string }
   | { op: 'deleteNode'; nodeId: string }

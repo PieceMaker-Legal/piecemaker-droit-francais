@@ -20,6 +20,7 @@ export function createKnowledgeRouter(service: KnowledgeService) {
     });
   };
   router.get('/knowledge/graph', (request, response) => respond(() => service.graph(request.query.projectId), response));
+  router.get('/knowledge/version', (_request, response) => respond(() => service.version(), response));
   router.get('/knowledge/projects', (_request, response) => respond(() => service.projects(), response));
   router.post('/knowledge/query', (request, response) => respond(() => service.query(request.body), response));
   router.post('/knowledge/update', (request, response) => respond(() => service.update(request.body), response));

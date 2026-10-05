@@ -100,6 +100,7 @@ export function writingRemovalOperations(node: KnowledgeNode, graph: KnowledgeSn
   return [
     { op: 'upsertNode', node: { id: node.id, kind: node.kind, label, aliases: node.aliases.filter((alias) => alias !== real && alias !== label), data: node.data } },
     { op: 'deleteMapping', mapping: { nodeId: node.id, real } },
+    { op: 'excludeAlias', exclusion: { entite: node.id, alias: real } },
   ];
 }
 
