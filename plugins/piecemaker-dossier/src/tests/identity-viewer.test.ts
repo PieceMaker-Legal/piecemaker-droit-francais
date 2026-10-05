@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { locateWord, mappingRows, variantOperations, writingRemovalOperations } from '../identity-viewer.js';
 import type { KnowledgeMapping, KnowledgeNode, KnowledgeSnapshot } from '../types.js';
 
-const node = (projectId: string, id: string, label: string, aliases: string[] = [], kind: KnowledgeNode['kind'] = 'person'): KnowledgeNode => ({ projectId, id, kind, label, aliases, data: { code: id.replace('entity:', '') }, createdAt: '', updatedAt: '' });
+const node = (projectId: string, id: string, label: string, aliases: string[] = [], kind: KnowledgeNode['kind'] = 'person'): KnowledgeNode => ({ projectId, id, kind, label, aliases, data: { code: id.replace('entity:', '') }, date: null, createdAt: '', updatedAt: '' });
 const mapping = (projectId: string, nodeId: string, real: string, masked: string): KnowledgeMapping => ({ projectId, nodeId, real, masked, data: {} });
 
 const graphs = (): Map<string, KnowledgeSnapshot> => new Map([
@@ -57,7 +57,7 @@ describe('variantOperations', () => {
     const graph = graphs().get('dossier-a')!;
     const operations = variantOperations(graph.nodes[0], graph, '  M. Dupont ');
     expect(operations[0]).toMatchObject({ op: 'upsertNode', node: { aliases: ['J. Dupont', 'M. Dupont'] } });
-    expect(operations[1]).toEqual({ op: 'upsertMapping', mapping: { nodeId: 'entity:PERSONNE_PHYSIQUE_01', real: 'M. Dupont', masked: 'PERSONNE_PHYSIQUE_01', origin: 'manual' } });
+    expect(operations[1]).toEqual({ op: 'upsertMapping', mapping: { nodeId: 'entity:PERSONNE_PHYSIQUE_01', real: 'M. Dupont', masked: 'PERSONNE_PHYSIQUE_01' } });
   });
 });
 
@@ -65,7 +65,7 @@ describe('writingRemovalOperations', () => {
   it('retire une écriture et promeut la suivante quand le nom principal disparaît', () => {
     const graph = graphs().get('dossier-a')!;
     expect(writingRemovalOperations(graph.nodes[0], graph, 'Jean Dupont')).toEqual([
-      { op: 'upsertNode', node: { id: 'entity:PERSONNE_PHYSIQUE_01', kind: 'person', label: 'J. Dupont', aliases: [], data: { code: 'PERSONNE_PHYSIQUE_01' }, origin: 'manual' } },
+      { op: 'upsertNode', node: { id: 'entity:PERSONNE_PHYSIQUE_01', kind: 'person', label: 'J. Dupont', aliases: [], data: { code: 'PERSONNE_PHYSIQUE_01' } } },
       { op: 'deleteMapping', mapping: { nodeId: 'entity:PERSONNE_PHYSIQUE_01', real: 'Jean Dupont' } },
     ]);
   });

@@ -9,6 +9,7 @@ const graph: KnowledgeSnapshot = {
   nodes: [],
   links: [],
   mappings: [],
+  citations: [],
 };
 
 const result: CompanySearchResult = {
@@ -54,5 +55,25 @@ describe('company search validation', () => {
     expect(sirenMapping?.op === 'upsertMapping' && sirenMapping.mapping.masked).toBe('SIREN_01');
     expect(director?.op === 'upsertNode' && director.node.data.code).toBe('PERSONNE_PHYSIQUE_01');
     expect(directorLink?.op === 'link' && directorLink.link.data?.source).toBe('registre-public');
+  });
+
+  it('cites the public register for every link it creates', () => {
+    const operations = buildCompanyValidationOperations(result, {
+      nodeId: 'manual:company',
+      node: null,
+      partySide: 'client',
+      position: 'demandeur',
+      legalForm: 'SAS',
+    }, graph);
+
+    const citations = operations.flatMap((operation) => operation.op === 'cite' ? [operation.citation] : []);
+    const links = operations.flatMap((operation) => operation.op === 'link' ? [operation.link] : []);
+
+    expect(links.length).toBeGreaterThan(0);
+    expect(citations).toHaveLength(links.length);
+    expect(citations.every((citation) => citation.source === 'Registre national des entreprises')).toBe(true);
+    expect(citations.find((citation) => citation.relation === 'SIREN')?.texte).toBe('123456789');
+    expect(citations.find((citation) => citation.relation === 'dirigeant')?.texte).toBe('Alice Martin');
+    for (const citation of citations) expect(links).toContainEqual(expect.objectContaining({ fromNodeId: citation.fromNodeId, toNodeId: citation.toNodeId, relation: citation.relation }));
   });
 });

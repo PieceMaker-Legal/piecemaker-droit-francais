@@ -88,8 +88,8 @@ export function variantOperations(node: KnowledgeNode, graph: KnowledgeSnapshot,
   if (!code) throw new Error('Cette entité n’a pas de code anonymisé.');
   const value = cleanSelection(word);
   return [
-    { op: 'upsertNode', node: { id: node.id, kind: node.kind, label: node.label, aliases: [...new Set([...node.aliases, value])].filter((alias) => alias !== node.label), data: node.data, origin: 'manual' } },
-    { op: 'upsertMapping', mapping: { nodeId: node.id, real: value, masked: code, origin: 'manual' } },
+    { op: 'upsertNode', node: { id: node.id, kind: node.kind, label: node.label, aliases: [...new Set([...node.aliases, value])].filter((alias) => alias !== node.label), data: node.data } },
+    { op: 'upsertMapping', mapping: { nodeId: node.id, real: value, masked: code } },
   ];
 }
 
@@ -98,7 +98,7 @@ export function writingRemovalOperations(node: KnowledgeNode, graph: KnowledgeSn
   if (!remaining.length) return [{ op: 'deleteNode', nodeId: node.id }];
   const label = node.label === real ? remaining[0] : node.label;
   return [
-    { op: 'upsertNode', node: { id: node.id, kind: node.kind, label, aliases: node.aliases.filter((alias) => alias !== real && alias !== label), data: node.data, origin: 'manual' } },
+    { op: 'upsertNode', node: { id: node.id, kind: node.kind, label, aliases: node.aliases.filter((alias) => alias !== real && alias !== label), data: node.data } },
     { op: 'deleteMapping', mapping: { nodeId: node.id, real } },
   ];
 }

@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import type Database from 'better-sqlite3';
 
+import { splitDocumentDate } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
+
 type LegacyProject = {
   project_id: string;
   project_path: string;
@@ -14,9 +16,10 @@ type LegacyProject = {
 
 export type LegacyImportReport = { source: string; imported: string[]; skipped: string[] };
 
-const NODE_COLUMNS = 'id,kind,label,search_text,aliases_json,data_json,origin,created_at,updated_at';
-const LINK_COLUMNS = 'from_node_id,to_node_id,relation,data_json,origin,created_at,updated_at';
-const MAPPING_COLUMNS = 'node_id,real_value,masked_value,search_text,data_json,origin,created_at,updated_at';
+const LINK_COLUMNS = 'from_node_id,to_node_id,relation,data_json,created_at,updated_at';
+const MAPPING_COLUMNS = 'node_id,real_value,masked_value,search_text,data_json,created_at,updated_at';
+
+type LegacyNode = { id: string; kind: string; label: string; search_text: string; aliases_json: string; data_json: string; created_at: string; updated_at: string; doc_date: string | null };
 
 export function legacyDatabasePath(): string {
   return path.join(os.homedir(), '.cloudcli', 'auth.db');
@@ -56,7 +59,12 @@ function copyProject(database: Database.Database, sourceId: string, targetId: st
   database.prepare('DELETE FROM piecemaker_links WHERE project_id=?').run(targetId);
   database.prepare('DELETE FROM piecemaker_mappings WHERE project_id=?').run(targetId);
   database.prepare('DELETE FROM piecemaker_nodes WHERE project_id=?').run(targetId);
-  database.prepare(`INSERT INTO piecemaker_nodes (project_id,${NODE_COLUMNS}) SELECT ?,${NODE_COLUMNS} FROM legacy.piecemaker_nodes WHERE project_id=?`).run(targetId, sourceId);
+  const insertNode = database.prepare('INSERT INTO piecemaker_nodes (project_id,id,kind,label,search_text,aliases_json,data_json,doc_date,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)');
+  const dateColumn = (database.pragma('legacy.table_info(piecemaker_nodes)') as Array<{ name: string }>).some(({ name }) => name === 'doc_date') ? 'doc_date' : 'NULL AS doc_date';
+  for (const node of database.prepare(`SELECT id,kind,label,search_text,aliases_json,data_json,${dateColumn},created_at,updated_at FROM legacy.piecemaker_nodes WHERE project_id=?`).all(sourceId) as LegacyNode[]) {
+    const { date, data } = splitDocumentDate(JSON.parse(node.data_json));
+    insertNode.run(targetId, node.id, node.kind, node.label, node.search_text, node.aliases_json, JSON.stringify(data), node.doc_date ?? date, node.created_at, node.updated_at);
+  }
   database.prepare(`INSERT INTO piecemaker_links (project_id,${LINK_COLUMNS}) SELECT ?,${LINK_COLUMNS} FROM legacy.piecemaker_links WHERE project_id=?`).run(targetId, sourceId);
   database.prepare(`INSERT INTO piecemaker_mappings (project_id,${MAPPING_COLUMNS}) SELECT ?,${MAPPING_COLUMNS} FROM legacy.piecemaker_mappings WHERE project_id=?`).run(targetId, sourceId);
   if (withStatus) {

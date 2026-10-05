@@ -6,11 +6,11 @@ import type { KnowledgeSnapshot } from '../types.js';
 const snapshot: KnowledgeSnapshot = {
   projectId: 'project-1',
   nodes: [
-    { id: 'doc', projectId: 'project-1', kind: 'document', label: 'Contrat', aliases: [], data: {}, createdAt: '', updatedAt: '' },
-    { id: 'client', projectId: 'project-1', kind: 'company', label: 'Société cliente', aliases: [], data: { partySide: 'client' }, createdAt: '', updatedAt: '' },
-    { id: 'company-with-siren', projectId: 'project-1', kind: 'company', label: 'Société BODACC', aliases: [], data: {}, createdAt: '', updatedAt: '' },
-    { id: 'adverse', projectId: 'project-1', kind: 'person', label: 'Mme Adverse', aliases: [], data: { partySide: 'adversaire' }, createdAt: '', updatedAt: '' },
-    { id: 'iban', projectId: 'project-1', kind: 'iban', label: 'IBAN 1', aliases: [], data: {}, createdAt: '', updatedAt: '' },
+    { id: 'doc', projectId: 'project-1', kind: 'document', label: 'Contrat', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
+    { id: 'client', projectId: 'project-1', kind: 'company', label: 'Société cliente', aliases: [], data: { partySide: 'client' }, date: null, createdAt: '', updatedAt: '' },
+    { id: 'company-with-siren', projectId: 'project-1', kind: 'company', label: 'Société BODACC', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
+    { id: 'adverse', projectId: 'project-1', kind: 'person', label: 'Mme Adverse', aliases: [], data: { partySide: 'adversaire' }, date: null, createdAt: '', updatedAt: '' },
+    { id: 'iban', projectId: 'project-1', kind: 'iban', label: 'IBAN 1', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
   ],
   links: [
     { projectId: 'project-1', fromNodeId: 'doc', toNodeId: 'client', relation: 'mentions', data: {} },
@@ -19,6 +19,7 @@ const snapshot: KnowledgeSnapshot = {
     { projectId: 'project-1', fromNodeId: 'company-with-siren', toNodeId: 'siret', relation: 'SIRET', data: {} },
   ],
   mappings: [],
+  citations: [],
 };
 
 describe('chronology document cards', () => {
@@ -30,6 +31,16 @@ describe('chronology document cards', () => {
     expect(html).toContain('data-open-document="doc"');
     expect(html).toContain('aria-label="Modifier Contrat"');
   });
+
+  it('reads the date of a document from its doc_date column', () => {
+    const html = chronologyView({ graph: { ...snapshot, nodes: [
+      { id: 'dated', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: {}, date: '2024-03-05', createdAt: '', updatedAt: '' },
+      { id: 'undated', projectId: 'project-1', kind: 'document', label: 'Facture.pdf', aliases: [], data: { date_non_reconnue: '5 mars 2024' }, date: null, createdAt: '', updatedAt: '' },
+    ], links: [] } } as never);
+    expect(html).toContain('data-dated="true"');
+    expect(html).toContain('Date non renseignée');
+    expect(html.match(/data-dated="true"/g)).toHaveLength(1);
+  });
 });
 
 describe('BODACC on designated parties', () => {
@@ -39,8 +50,8 @@ describe('BODACC on designated parties', () => {
         ...snapshot,
         nodes: [
           ...snapshot.nodes,
-          { id: 'siren', projectId: 'project-1', kind: 'siren', label: '123456789', aliases: [], data: {}, createdAt: '', updatedAt: '' },
-          { id: 'siret', projectId: 'project-1', kind: 'other', label: '12345678900010', aliases: [], data: {}, createdAt: '', updatedAt: '' },
+          { id: 'siren', projectId: 'project-1', kind: 'siren', label: '123456789', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
+          { id: 'siret', projectId: 'project-1', kind: 'other', label: '12345678900010', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
         ],
         links: [
           ...snapshot.links,
@@ -62,7 +73,7 @@ describe('BODACC on designated parties', () => {
 
   const clientWithSiren = {
     ...snapshot,
-    nodes: [...snapshot.nodes, { id: 'siren', projectId: 'project-1', kind: 'siren' as const, label: '123456789', aliases: [], data: {}, createdAt: '', updatedAt: '' }],
+    nodes: [...snapshot.nodes, { id: 'siren', projectId: 'project-1', kind: 'siren' as const, label: '123456789', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' }],
     links: [...snapshot.links, { projectId: 'project-1', fromNodeId: 'client', toNodeId: 'siren', relation: 'SIREN', data: {} }],
   };
 
@@ -120,7 +131,7 @@ describe('mapping dialog header', () => {
       graph: {
         ...snapshot,
         nodes: [
-          { id: 'person-1', projectId: 'project-1', kind: 'person', label: 'Madame Claire Reynaud', aliases: ['Claire Reynaud'], data: { code: 'PERSONNE_PHYSIQUE_02' }, createdAt: '', updatedAt: '' },
+          { id: 'person-1', projectId: 'project-1', kind: 'person', label: 'Madame Claire Reynaud', aliases: ['Claire Reynaud'], data: { code: 'PERSONNE_PHYSIQUE_02' }, date: null, createdAt: '', updatedAt: '' },
         ],
         mappings: [
           { projectId: 'project-1', nodeId: 'person-1', real: 'Madame Claire Reynaud', masked: 'PERSONNE_PHYSIQUE_02', data: {} },
@@ -143,6 +154,7 @@ describe('empty parties state', () => {
     nodes: snapshot.nodes.filter((node) => node.kind === 'document'),
     links: [],
     mappings: [],
+    citations: [],
   };
 
   it('prompts to scan when the case has not been analyzed', () => {
@@ -224,8 +236,8 @@ describe('piece names', () => {
 
   it('flags a non-conforming piece in the chronology', () => {
     const html = chronologyView({ graph: { ...snapshot, nodes: [
-      { id: 'a', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: {}, createdAt: '', updatedAt: '' },
-      { id: 'b', projectId: 'project-1', kind: 'document', label: '2024-01-09_Jugement.pdf', aliases: [], data: {}, createdAt: '', updatedAt: '' },
+      { id: 'a', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
+      { id: 'b', projectId: 'project-1', kind: 'document', label: '2024-01-09_Jugement.pdf', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
     ], links: [] } } as never);
     expect(html.match(/Nom non conforme/g)).toHaveLength(1);
   });

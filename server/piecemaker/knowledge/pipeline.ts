@@ -277,7 +277,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
         projectId,
         operations: [
           { op: 'renameNode', rename: { fromNodeId, toNodeId } },
-          { op: 'upsertNode', node: { id: toNodeId, kind: 'document', label: path.basename(currentPath), aliases: node.aliases, data: { ...node.data, path: currentPath }, origin: 'manual' } },
+          { op: 'upsertNode', node: { id: toNodeId, kind: 'document', label: path.basename(currentPath), aliases: node.aliases, data: { ...node.data, path: currentPath } } },
         ],
       });
       return renamed;

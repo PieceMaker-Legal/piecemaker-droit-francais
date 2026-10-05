@@ -20,6 +20,7 @@ type ValueEntity = {
 
 type EntityReference = { code: string; nodeId: string };
 
+const PUBLIC_REGISTER_SOURCE = 'Registre national des entreprises';
 const clean = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 
 function allocateCode(prefix: string, used: Set<string>): string {
@@ -77,8 +78,8 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
     const code = allocateCode(entity.prefix, usedCodes);
     const nodeId = `entity:${code}`;
     const data: JsonData = { code, source: 'registre-public' };
-    operations.push({ op: 'upsertNode', node: { id: nodeId, kind: entity.kind, label: value, aliases: [], data, origin: 'manual' } });
-    operations.push({ op: 'upsertMapping', mapping: { nodeId, real: value, masked: code, data: { source: 'registre-public' }, origin: 'manual' } });
+    operations.push({ op: 'upsertNode', node: { id: nodeId, kind: entity.kind, label: value, aliases: [], data } });
+    operations.push({ op: 'upsertMapping', mapping: { nodeId, real: value, masked: code, data: { source: 'registre-public' } } });
     const reference = { code, nodeId };
     references.set(key, reference);
     if (includeRelation) fieldOperations.push({ entity: { ...entity, value }, reference });
@@ -120,14 +121,16 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
       finances: fields.finances,
     },
   };
-  operations.push({ op: 'upsertNode', node: { id: companyChange.nodeId, kind: 'company', label: legalName, aliases, data: companyData, origin: 'manual' } });
-  for (const real of unique([legalName, ...aliases])) operations.push({ op: 'upsertMapping', mapping: { nodeId: companyChange.nodeId, real, masked: companyChange.code, origin: 'manual' } });
+  operations.push({ op: 'upsertNode', node: { id: companyChange.nodeId, kind: 'company', label: legalName, aliases, data: companyData } });
+  for (const real of unique([legalName, ...aliases])) operations.push({ op: 'upsertMapping', mapping: { nodeId: companyChange.nodeId, real, masked: companyChange.code } });
   for (const { entity, reference } of fieldOperations) {
-    operations.push({ op: 'link', link: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: entity.relation, data: { source: 'registre-public' }, origin: 'manual' } });
+    operations.push({ op: 'link', link: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: entity.relation, data: { source: 'registre-public' } } });
+    operations.push({ op: 'cite', citation: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: entity.relation, texte: entity.value, source: PUBLIC_REGISTER_SOURCE } });
   }
   for (const { director, reference } of directorReferences) {
-    operations.push({ op: 'upsertNode', node: { id: reference.nodeId, kind: 'person', label: director.name, aliases: [], data: { code: reference.code, role: director.role, source: 'registre-public' }, origin: 'manual' } });
-    operations.push({ op: 'link', link: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: 'dirigeant', data: { role: director.role, source: 'registre-public' }, origin: 'manual' } });
+    operations.push({ op: 'upsertNode', node: { id: reference.nodeId, kind: 'person', label: director.name, aliases: [], data: { code: reference.code, role: director.role, source: 'registre-public' } } });
+    operations.push({ op: 'link', link: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: 'dirigeant', data: { role: director.role, source: 'registre-public' } } });
+    operations.push({ op: 'cite', citation: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: 'dirigeant', texte: director.name, source: PUBLIC_REGISTER_SOURCE } });
   }
   return operations;
 }

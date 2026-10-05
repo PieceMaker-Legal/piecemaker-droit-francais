@@ -54,9 +54,10 @@ test('rename moves the piece, its markdown and its document node with its links'
     store.update({
       projectId: 'project-1',
       operations: [
-        { op: 'upsertNode', node: { id: before, kind: 'document', label: 'jugement.pdf', aliases: [], data: { path: path.join(root, 'Pièces', 'jugement.pdf'), nature: 'jugement' }, origin: 'gliner' } },
-        { op: 'upsertNode', node: { id: 'entity:SOCIETE_01', kind: 'company', label: 'SOCIETE_01', aliases: [], data: {}, origin: 'gliner' } },
-        { op: 'link', link: { fromNodeId: before, toNodeId: 'entity:SOCIETE_01', relation: 'mentions', data: {}, origin: 'gliner' } },
+        { op: 'upsertNode', node: { id: before, kind: 'document', label: 'jugement.pdf', aliases: [], data: { path: path.join(root, 'Pièces', 'jugement.pdf'), nature: 'jugement' }, date: '2024-01-09' } },
+        { op: 'upsertNode', node: { id: 'entity:SOCIETE_01', kind: 'company', label: 'SOCIETE_01', aliases: [], data: {} } },
+        { op: 'link', link: { fromNodeId: before, toNodeId: 'entity:SOCIETE_01', relation: 'mentions', data: {} } },
+        { op: 'cite', citation: { fromNodeId: before, toNodeId: 'entity:SOCIETE_01', relation: 'mentions', texte: 'Société Exemple SAS est condamnée.', pieceId: before } },
       ],
     });
     const projects = { getProjectById: (id: string) => (id === 'project-1' ? { project_id: id, project_path: root } : null) };
@@ -73,6 +74,8 @@ test('rename moves the piece, its markdown and its document node with its links'
     assert.equal(document?.label, '2024-01-09_Jugement du Tribunal judiciaire de Paris.pdf');
     assert.equal(document?.data.path, path.join(root, 'Pièces', '2024-01-09_Jugement du Tribunal judiciaire de Paris.pdf'));
     assert.equal(document?.data.nature, 'jugement');
+    assert.equal(document?.date, '2024-01-09');
+    assert.deepEqual(graph.citations.map((citation) => [citation.fromNodeId, citation.toNodeId, citation.pieceId]), [[after, 'entity:SOCIETE_01', after]]);
     assert.deepEqual(graph.links.map((link) => [link.fromNodeId, link.toNodeId, link.relation]), [[after, 'entity:SOCIETE_01', 'mentions']]);
 
     const moved = await pipeline.rename('project-1', renamed.current, '', 'Procédure');

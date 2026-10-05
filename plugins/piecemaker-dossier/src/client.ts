@@ -236,9 +236,9 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       const aliases = parseAliases(form.get('aliases'));
       if (!label) return [];
       const mappings = mappingData.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
-      const operations: KnowledgeUpdateOperation[] = [{ op: 'upsertNode', node: { id: node.id, kind: node.kind, label, aliases, data: node.data, origin: 'manual' } }];
+      const operations: KnowledgeUpdateOperation[] = [{ op: 'upsertNode', node: { id: node.id, kind: node.kind, label, aliases, data: node.data } }];
       for (const mapping of mappings) operations.push({ op: 'deleteMapping', mapping: { nodeId: node.id, real: mapping.real } });
-      for (const real of [...new Set([label, ...aliases])]) operations.push({ op: 'upsertMapping', mapping: { nodeId: node.id, real, masked, origin: 'manual' } });
+      for (const real of [...new Set([label, ...aliases])]) operations.push({ op: 'upsertMapping', mapping: { nodeId: node.id, real, masked } });
       return operations;
     };
     layer.querySelectorAll<HTMLFormElement>('[data-mapping-row]').forEach((row) => row.addEventListener('submit', async (event) => {
@@ -552,8 +552,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
               data?.graph.reservedCodes,
             );
             const operations: KnowledgeUpdateOperation[] = [...change.operations];
-            operations.push({ op: 'upsertNode', node: { id: change.nodeId, kind: node.kind, label: node.label, aliases: node.aliases, data: change.data, origin: 'manual' } });
-            for (const real of [node.label, ...node.aliases]) if (change.code) operations.push({ op: 'upsertMapping', mapping: { nodeId: change.nodeId, real, masked: change.code, origin: 'manual' } });
+            operations.push({ op: 'upsertNode', node: { id: change.nodeId, kind: node.kind, label: node.label, aliases: node.aliases, data: change.data } });
+            for (const real of [node.label, ...node.aliases]) if (change.code) operations.push({ op: 'upsertMapping', mapping: { nodeId: change.nodeId, real, masked: change.code } });
             await save(operations);
           } catch (error) {
             showError(error);
@@ -569,7 +569,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       if (!source || !destination || source === destination) return;
       void askPrompt(root, 'Nommez le lien entre ces profils', 'Dirigeant', 'Lier').then((relation) => {
         if (!relation) return;
-        void save([{ op: 'link', link: { fromNodeId: source, toNodeId: destination, relation, origin: 'manual' } }]).catch(showError);
+        void save([{ op: 'link', link: { fromNodeId: source, toNodeId: destination, relation } }]).catch(showError);
       });
     });
   };

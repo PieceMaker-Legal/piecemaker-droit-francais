@@ -10,8 +10,8 @@ import { CONVERSION_RUNNING, createKnowledgeService, RENAME_RUNNING } from '../s
 const snapshot: KnowledgeSnapshot = {
   projectId: 'project-1',
   nodes: [
-    { id: 'person-1', projectId: 'project-1', kind: 'person', label: 'Mme Dupont', aliases: [], data: {}, createdAt: '', updatedAt: '' },
-    { id: 'document-1', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: {}, createdAt: '', updatedAt: '' },
+    { id: 'person-1', projectId: 'project-1', kind: 'person', label: 'Mme Dupont', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
+    { id: 'document-1', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
   ],
   links: [
     { projectId: 'project-1', fromNodeId: 'document-1', toNodeId: 'person-1', relation: 'mentions', data: {} },
@@ -19,6 +19,7 @@ const snapshot: KnowledgeSnapshot = {
   mappings: [
     { projectId: 'project-1', nodeId: 'person-1', real: 'Mme Dupont', masked: 'PERSONNE_PHYSIQUE_01', data: {} },
   ],
+  citations: [],
 };
 
 const scanCalls: { projectId: string; files?: unknown }[] = [];

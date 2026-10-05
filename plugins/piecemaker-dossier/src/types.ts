@@ -2,7 +2,6 @@ export const NODE_KINDS = ['person', 'company', 'document', 'iban', 'address', '
 export const EXCLUSIONS_NODE_ID = 'system:gliner-exclusions';
 
 export type NodeKind = (typeof NODE_KINDS)[number];
-export type KnowledgeOrigin = 'gliner' | 'manual' | 'llm';
 export type JsonData = Record<string, unknown>;
 
 export type KnowledgeNodeInput = {
@@ -11,14 +10,15 @@ export type KnowledgeNodeInput = {
   label?: string;
   aliases?: string[];
   data?: JsonData;
-  origin?: KnowledgeOrigin;
+  date?: string | null;
 };
 
-export type KnowledgeNode = Omit<KnowledgeNodeInput, 'origin'> & {
+export type KnowledgeNode = Omit<KnowledgeNodeInput, 'date'> & {
   projectId: string;
   label: string;
   aliases: string[];
   data: JsonData;
+  date: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -28,11 +28,25 @@ export type KnowledgeLinkInput = {
   toNodeId: string;
   relation: string;
   data?: JsonData;
-  origin?: KnowledgeOrigin;
 };
 
-export type KnowledgeLink = Omit<Required<KnowledgeLinkInput>, 'origin'> & {
+export type KnowledgeLink = Required<KnowledgeLinkInput> & {
   projectId: string;
+};
+
+export type KnowledgeCitationInput = {
+  fromNodeId: string;
+  toNodeId: string;
+  relation: string;
+  texte: string;
+  pieceId?: string | null;
+  source?: string | null;
+};
+
+export type KnowledgeCitation = Required<KnowledgeCitationInput> & {
+  id: number;
+  projectId: string;
+  createdAt: string;
 };
 
 export type KnowledgeMappingInput = {
@@ -40,10 +54,9 @@ export type KnowledgeMappingInput = {
   real: string;
   masked: string;
   data?: JsonData;
-  origin?: KnowledgeOrigin;
 };
 
-export type KnowledgeMapping = Omit<Required<KnowledgeMappingInput>, 'origin'> & {
+export type KnowledgeMapping = Required<KnowledgeMappingInput> & {
   projectId: string;
 };
 
@@ -52,6 +65,7 @@ export type KnowledgeSnapshot = {
   nodes: KnowledgeNode[];
   links: KnowledgeLink[];
   mappings: KnowledgeMapping[];
+  citations: KnowledgeCitation[];
   exclusions?: string[];
   exclusionsInitialized?: boolean;
   anonymizationComplete?: boolean;
@@ -95,6 +109,7 @@ export type KnowledgeUpdateOperation =
   | { op: 'link'; link: KnowledgeLinkInput }
   | { op: 'unlink'; link: Pick<KnowledgeLinkInput, 'fromNodeId' | 'toNodeId' | 'relation'> }
   | { op: 'upsertMapping'; mapping: KnowledgeMappingInput }
+  | { op: 'cite'; citation: KnowledgeCitationInput }
   | { op: 'deleteMapping'; mapping: Pick<KnowledgeMappingInput, 'nodeId' | 'real'> }
   | { op: 'removePartyDesignation'; nodeId: string }
   | { op: 'deleteNode'; nodeId: string }
