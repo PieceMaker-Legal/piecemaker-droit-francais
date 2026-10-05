@@ -34,7 +34,10 @@ type MappingRow = { project_id: string; node_id: string; real_value: string; mas
 type CitationRow = { id: number; from_node_id: string; to_node_id: string; relation: string; texte: string; piece_id: string | null; source: string | null; created_at: string };
 type Counts = { nodes: number; links: number; mappings: number };
 type LoadedGraph = { nodes: Map<string, NodeRow>; links: LinkRow[]; mappings: Map<string, KnowledgeMapping[]> };
+type ExclusionRules = { terms: Set<string>; links: Set<string>; aliases: Set<string> };
+type MergeContext = { rules: ExclusionRules; skipped: Set<string>; newLinks: Set<string> };
 
+const EXCLUSIONS_LABEL = 'Exclusions GLiNER';
 const NOW_DEFAULT = "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))";
 const nodesTable = (name: string): string => `CREATE TABLE ${name} (
   project_id TEXT NOT NULL,
@@ -128,6 +131,15 @@ const nextFreeCode = (code: string, used: Set<string>): string => {
   while (used.has(`${prefix}_${String(number).padStart(width, '0')}`)) number += 1;
   return `${prefix}_${String(number).padStart(width, '0')}`;
 };
+const linkKey = (piece: string, entite: string, relation: string): string => [piece, entite, relation].join('\u0000');
+const aliasKey = (entite: string, alias: string): string => `${entite}\u0000${searchable([alias])}`;
+const exclusionEntries = (value: unknown): JsonData[] => Array.isArray(value) ? value.filter((entry): entry is JsonData => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry)) : [];
+const exclusionRulesOf = (data: JsonData | null): ExclusionRules => ({
+  terms: new Set((Array.isArray(data?.values) ? data.values : []).map((value) => searchable([optionalText(value)])).filter(Boolean)),
+  links: new Set(exclusionEntries(data?.liens).map((entry) => linkKey(optionalText(entry.piece), optionalText(entry.entite), optionalText(entry.relation)))),
+  aliases: new Set(exclusionEntries(data?.alias).map((entry) => aliasKey(optionalText(entry.entite), optionalText(entry.alias)))),
+});
+const isExcludedValue = (rules: ExclusionRules, nodeId: string, value: string): boolean => rules.terms.has(searchable([value])) || rules.aliases.has(aliasKey(nodeId, value));
 const searchPattern = (value: string): string => `%${searchable([value]).replace(/[\\%_]/g, '\\$&')}%`;
 const toNode = (row: NodeRow): KnowledgeNode => ({ id: row.id, projectId: row.project_id, kind: row.kind, label: row.label, aliases: parseJson<string[]>(row.aliases_json, []), data: parseJson<JsonData>(row.data_json, {}), date: row.doc_date, createdAt: row.created_at, updatedAt: row.updated_at });
 const withoutInstitutionalAliases = (node: KnowledgeNode): KnowledgeNode => ({ ...node, aliases: node.aliases.filter((alias) => !isInstitutionalEntity(alias)) });
@@ -227,7 +239,7 @@ export class KnowledgeStore {
     this.deleteNode = this.database.prepare('DELETE FROM piecemaker_nodes WHERE project_id=@projectId AND id=@nodeId');
     this.findCodeOwner = this.database.prepare(`SELECT project_id FROM piecemaker_mappings WHERE masked_value=@code AND project_id<>@projectId
       UNION SELECT project_id FROM piecemaker_nodes WHERE id='entity:'||@code AND project_id<>@projectId LIMIT 1`);
-    this.database.transaction(() => this.renumberConflictingCodes())();
+    this.database.transaction(() => { this.renumberConflictingCodes(); this.removeGhostDocuments(); })();
     if (typeof databaseSource === 'string') {
       try { fs.chmodSync(databaseSource, 0o600); } catch {}
     }
@@ -262,7 +274,11 @@ export class KnowledgeStore {
     const validated = operations.map((operation) => this.validateOperation(operation));
     return this.database.transaction(() => {
       const counts = { nodes: 0, links: 0, mappings: 0 };
-      for (const operation of validated) this.mergeOperation(projectId, operation, counts);
+      const context: MergeContext = { rules: exclusionRulesOf(this.readExclusionData(projectId)), skipped: new Set(), newLinks: new Set() };
+      for (const operation of validated) {
+        if (operation.op === 'upsertNode' && operation.node.kind !== 'document' && operation.node.id !== EXCLUSIONS_NODE_ID && context.rules.terms.has(searchable([optionalText(operation.node.label)]))) context.skipped.add(optionalText(operation.node.id));
+      }
+      for (const operation of validated) this.mergeOperation(projectId, operation, counts, context);
       this.removeInstitutionalEntities(projectId);
       return { projectId, applied: validated.length, ...counts };
     })();
@@ -355,7 +371,7 @@ export class KnowledgeStore {
   }
 
   private validateOperation(operation: KnowledgeUpdateOperation): KnowledgeUpdateOperation {
-    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','cite','upsertMapping','deleteMapping','removePartyDesignation','deleteNode','renameNode'].includes(operation.op)) throw new TypeError('unsupported operation');
+    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','cite','upsertMapping','deleteMapping','removePartyDesignation','deleteNode','renameNode','excludeTerm','excludeLink','excludeAlias'].includes(operation.op)) throw new TypeError('unsupported operation');
     return operation;
   }
 
@@ -416,8 +432,73 @@ export class KnowledgeStore {
       counts.nodes += 1;
       return;
     }
+    if (operation.op === 'excludeTerm' || operation.op === 'excludeLink' || operation.op === 'excludeAlias') {
+      this.recordExclusion(projectId, operation, timestamp);
+      counts.nodes += 1;
+      return;
+    }
     this.deleteNode.run({ projectId, nodeId: requiredText(operation.nodeId, 'nodeId') });
     counts.nodes += 1;
+  }
+
+  private readExclusionData(projectId: string): JsonData | null {
+    const row = this.database.prepare('SELECT data_json FROM piecemaker_nodes WHERE project_id=? AND id=?').get(projectId, EXCLUSIONS_NODE_ID) as { data_json: string } | undefined;
+    return row ? parseJson<JsonData>(row.data_json, {}) : null;
+  }
+
+  private writeExclusionData(projectId: string, data: JsonData, timestamp: string): void {
+    this.upsertNode.run({ projectId, id: EXCLUSIONS_NODE_ID, kind: 'other', label: EXCLUSIONS_LABEL, searchText: searchable([EXCLUSIONS_LABEL]), aliases: '[]', data: JSON.stringify({ ...data, systemRole: 'gliner-exclusions' }), date: null, dateGiven: 0, at: timestamp });
+  }
+
+  private recordExclusion(projectId: string, operation: Extract<KnowledgeUpdateOperation, { op: 'excludeTerm' | 'excludeLink' | 'excludeAlias' }>, timestamp: string): void {
+    const data = this.readExclusionData(projectId) ?? {};
+    if (operation.op === 'excludeTerm') {
+      const term = requiredText(operation.term, 'term');
+      const values = arrayValue(data.values, 'exclusions');
+      if (!values.some((value) => searchable([value]) === searchable([term]))) this.writeExclusionData(projectId, { ...data, values: [...values, term] }, timestamp);
+      return;
+    }
+    if (operation.op === 'excludeLink') {
+      const entry = { piece: requiredText(operation.exclusion?.piece, 'exclusion.piece'), entite: requiredText(operation.exclusion?.entite, 'exclusion.entite'), relation: requiredText(operation.exclusion?.relation, 'exclusion.relation') };
+      const liens = exclusionEntries(data.liens);
+      if (!liens.some((existing) => linkKey(optionalText(existing.piece), optionalText(existing.entite), optionalText(existing.relation)) === linkKey(entry.piece, entry.entite, entry.relation))) this.writeExclusionData(projectId, { ...data, liens: [...liens, entry] }, timestamp);
+      return;
+    }
+    const entry = { entite: requiredText(operation.exclusion?.entite, 'exclusion.entite'), alias: requiredText(operation.exclusion?.alias, 'exclusion.alias') };
+    const aliases = exclusionEntries(data.alias);
+    if (!aliases.some((existing) => aliasKey(optionalText(existing.entite), optionalText(existing.alias)) === aliasKey(entry.entite, entry.alias))) this.writeExclusionData(projectId, { ...data, alias: [...aliases, entry] }, timestamp);
+  }
+
+  private retargetExclusions(projectId: string, fromNodeId: string, toNodeId: string, timestamp: string): void {
+    const data = this.readExclusionData(projectId);
+    if (!data) return;
+    const retarget = (field: string, keys: string[]): JsonData[] => exclusionEntries(data[field]).map((entry) => Object.fromEntries(Object.entries(entry).map(([key, value]) => [key, keys.includes(key) && value === fromNodeId ? toNodeId : value])));
+    const liens = retarget('liens', ['piece', 'entite']);
+    const alias = retarget('alias', ['entite']);
+    if (JSON.stringify(liens) === JSON.stringify(exclusionEntries(data.liens)) && JSON.stringify(alias) === JSON.stringify(exclusionEntries(data.alias))) return;
+    this.writeExclusionData(projectId, { ...data, ...(data.liens === undefined ? {} : { liens }), ...(data.alias === undefined ? {} : { alias }) }, timestamp);
+  }
+
+  private removeGhostDocuments(): number {
+    const candidates = this.database.prepare(`SELECT project_id,id,data_json,doc_date FROM piecemaker_nodes n WHERE kind='document'
+      AND NOT EXISTS (SELECT 1 FROM piecemaker_links l WHERE l.project_id=n.project_id AND (l.from_node_id=n.id OR l.to_node_id=n.id))
+      AND NOT EXISTS (SELECT 1 FROM piecemaker_citations c WHERE c.project_id=n.project_id AND (c.from_node_id=n.id OR c.to_node_id=n.id OR c.piece_id=n.id))`).all() as Array<{ project_id: string; id: string; data_json: string; doc_date: string | null }>;
+    const stemOf = (file: string): string => searchable([path.basename(file, path.extname(file))]);
+    const pathOf = (dataJson: string): string => optionalText(parseJson<JsonData>(dataJson, {}).path);
+    const siblings = this.database.prepare("SELECT id,data_json,doc_date FROM piecemaker_nodes WHERE project_id=? AND kind='document' AND id<>?");
+    let removed = 0;
+    for (const ghost of candidates) {
+      const ghostPath = pathOf(ghost.data_json);
+      if (!path.isAbsolute(ghostPath) || fs.existsSync(ghostPath)) continue;
+      const successor = (siblings.all(ghost.project_id, ghost.id) as Array<{ id: string; data_json: string; doc_date: string | null }>).some((other) => {
+        const otherPath = pathOf(other.data_json);
+        return path.isAbsolute(otherPath) && stemOf(otherPath) === stemOf(ghostPath) && fs.existsSync(otherPath) && (ghost.doc_date === null || ghost.doc_date === other.doc_date);
+      });
+      if (!successor) continue;
+      this.deleteNode.run({ projectId: ghost.project_id, nodeId: ghost.id });
+      removed += 1;
+    }
+    return removed;
   }
 
   private citationValues(projectId: string, citation: KnowledgeCitationInput) {
@@ -427,12 +508,16 @@ export class KnowledgeStore {
     return { projectId, fromNodeId: requiredText(citation.fromNodeId, 'citation.fromNodeId'), toNodeId: requiredText(citation.toNodeId, 'citation.toNodeId'), relation: requiredText(citation.relation, 'citation.relation'), texte: requiredText(citation.texte, 'citation.texte'), pieceId, source };
   }
 
-  private mergeOperation(projectId: string, operation: KnowledgeUpdateOperation, counts: Counts): void {
+  private mergeOperation(projectId: string, operation: KnowledgeUpdateOperation, counts: Counts, context: MergeContext): void {
     const timestamp = at();
+    const { rules, skipped, newLinks } = context;
     if (operation.op === 'upsertNode') {
-      const node = operation.node as KnowledgeNodeInput;
-      const row = this.database.prepare('SELECT * FROM piecemaker_nodes WHERE project_id=? AND id=?').get(projectId, requiredText(node.id, 'node.id')) as NodeRow | undefined;
-      if (!row) return this.applyOperation(projectId, operation, counts);
+      const id = requiredText(operation.node.id, 'node.id');
+      if (skipped.has(id)) return;
+      const isEntity = operation.node.kind !== 'document' && id !== EXCLUSIONS_NODE_ID;
+      const node: KnowledgeNodeInput = isEntity ? { ...operation.node, aliases: arrayValue(operation.node.aliases, 'node.aliases').filter((alias) => !isExcludedValue(rules, id, alias)) } : operation.node;
+      const row = this.database.prepare('SELECT * FROM piecemaker_nodes WHERE project_id=? AND id=?').get(projectId, id) as NodeRow | undefined;
+      if (!row) return this.applyOperation(projectId, { op: 'upsertNode', node }, counts);
       const current = toNode(row);
       const incomingData = objectValue(node.data, 'node.data');
       const mergedData: JsonData = { ...incomingData, ...current.data };
@@ -446,19 +531,28 @@ export class KnowledgeStore {
     }
     if (operation.op === 'link') {
       const link = operation.link as KnowledgeLinkInput;
-      this.addLinkIfAbsent.run({ projectId, fromNodeId: requiredText(link.fromNodeId, 'link.fromNodeId'), toNodeId: requiredText(link.toNodeId, 'link.toNodeId'), relation: requiredText(link.relation, 'link.relation'), data: JSON.stringify(objectValue(link.data, 'link.data')), at: timestamp });
+      const values = { projectId, fromNodeId: requiredText(link.fromNodeId, 'link.fromNodeId'), toNodeId: requiredText(link.toNodeId, 'link.toNodeId'), relation: requiredText(link.relation, 'link.relation') };
+      if (skipped.has(values.fromNodeId) || skipped.has(values.toNodeId) || rules.links.has(linkKey(values.fromNodeId, values.toNodeId, values.relation))) return;
+      if (this.addLinkIfAbsent.run({ ...values, data: JSON.stringify(objectValue(link.data, 'link.data')), at: timestamp }).changes) newLinks.add(linkKey(values.fromNodeId, values.toNodeId, values.relation));
       counts.links += 1;
       return;
     }
     if (operation.op === 'upsertMapping') {
       const mapping = operation.mapping;
       const masked = requiredText(mapping.masked, 'mapping.masked');
+      const nodeId = requiredText(mapping.nodeId, 'mapping.nodeId');
+      const real = requiredText(mapping.real, 'mapping.real');
+      if (skipped.has(nodeId) || isExcludedValue(rules, nodeId, real)) return;
       this.assertCodeFree(projectId, masked);
-      this.addMappingIfAbsent.run({ projectId, nodeId: requiredText(mapping.nodeId, 'mapping.nodeId'), real: requiredText(mapping.real, 'mapping.real'), masked, searchText: searchable([mapping.real, masked]), data: JSON.stringify(objectValue(mapping.data, 'mapping.data')), at: timestamp });
+      this.addMappingIfAbsent.run({ projectId, nodeId, real, masked, searchText: searchable([real, masked]), data: JSON.stringify(objectValue(mapping.data, 'mapping.data')), at: timestamp });
       counts.mappings += 1;
       return;
     }
-    if (operation.op === 'cite') return this.applyOperation(projectId, operation, counts);
+    if (operation.op === 'cite') {
+      const citation = operation.citation;
+      if (newLinks.has(linkKey(optionalText(citation.fromNodeId), optionalText(citation.toNodeId), optionalText(citation.relation)))) this.applyOperation(projectId, operation, counts);
+      return;
+    }
     throw new TypeError('mergeScan only accepts upsertNode, link, upsertMapping and cite');
   }
 
@@ -520,6 +614,7 @@ export class KnowledgeStore {
       this.database.prepare('DELETE FROM piecemaker_links WHERE project_id=? AND from_node_id=? AND to_node_id=? AND relation=?').run(projectId, link.from_node_id, link.to_node_id, link.relation);
     }
     this.database.prepare('UPDATE piecemaker_citations SET piece_id=? WHERE project_id=? AND piece_id=?').run(toNodeId, projectId, fromNodeId);
+    this.retargetExclusions(projectId, fromNodeId, toNodeId, timestamp);
     this.deleteNode.run({ projectId, nodeId: fromNodeId });
   }
 
