@@ -22,16 +22,6 @@
 
 const { formatDurationFr } = require('../../piecemaker-plugin/scripts/lib/session-timing.cjs');
 
-// Mêmes libellés que la vue chronologie de l'admin (admin/app.js, CATEGORY_LABELS)
-// — on garde le vocabulaire déjà connu du cabinet plutôt que d'en inventer un autre.
-const CATEGORY_LABELS = {
-  personne: 'Personne',
-  societe: 'Société',
-  adresse: 'Adresse',
-  siren: 'SIREN',
-  autre: 'Autre',
-};
-
 /**
  * Échappe une valeur pour insertion dans du HTML. Il n'existe pas d'équivalent
  * serveur : celui d'admin/app.js tourne dans le navigateur (DOM `String.prototype`
@@ -45,22 +35,6 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-/**
- * `'2024-03-12'` (ou un ISO complet) → `'12/03/2024'`. Entrée vide/invalide → null,
- * pour laisser l'appelant décider de l'affichage de repli (« Sans date », etc.).
- */
-function formatDateFr(iso) {
-  if (typeof iso !== 'string' || !iso.trim()) return null;
-  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return null;
-  const [, year, month, day] = match;
-  // On valide via Date plutôt que de faire confiance à la seule forme du texte :
-  // un "2024-13-40" a la bonne syntaxe mais n'est pas une date.
-  const asDate = new Date(`${year}-${month}-${day}T00:00:00Z`);
-  if (Number.isNaN(asDate.getTime())) return null;
-  return `${day}/${month}/${year}`;
 }
 
 /**
@@ -208,13 +182,6 @@ function documentHtml({ title, byline, subtitle, bodyHtml }) {
     font-weight: bold;
     background-color: #f2f2f2;
   }
-  .export-summary {
-    margin-bottom: 16px;
-  }
-  .export-summary td, .export-summary th {
-    border: none;
-    padding: 2px 12px 2px 0;
-  }
   .export-daysep td {
     background-color: #f2f2f2;
     font-weight: bold;
@@ -280,81 +247,6 @@ ${safeSubtitle ? `<p class="export-subtitle">${safeSubtitle}</p>` : ''}
 ${bodyHtml}
 </body>
 </html>`;
-}
-
-/** Rendu HTML papier de la chronologie (`buildChronology()` de document-index.cjs). */
-function renderChronologyHtml(chronology, { caseName } = {}) {
-  const stats = (chronology && chronology.stats) || {};
-  const documents = Array.isArray(chronology && chronology.documents) ? chronology.documents : [];
-  const entities = Array.isArray(chronology && chronology.entities) ? chronology.entities : [];
-  const span = stats.span || null;
-
-  const now = new Date();
-  const generatedAtFr = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-  const subtitle = `${caseName ? `Dossier « ${caseName} » — ` : ''}généré le ${generatedAtFr}`;
-
-  const periode = span ? `${formatDateFr(span.from) || span.from} → ${formatDateFr(span.to) || span.to}` : '—';
-
-  const summaryHtml = `
-<table class="export-summary" width="100%" border="0" cellspacing="0" cellpadding="4">
-  <tr><th>Pièces</th><td>${escapeHtml(stats.documents ?? 0)}</td>
-      <th>Indexées</th><td>${escapeHtml(stats.indexed ?? 0)}</td></tr>
-  <tr><th>Datées</th><td>${escapeHtml(stats.dated ?? 0)}</td>
-      <th>Entités</th><td>${escapeHtml(stats.entities ?? 0)}</td></tr>
-  <tr><th>Période couverte</th><td colspan="3">${escapeHtml(periode)}</td></tr>
-</table>`;
-
-  const docRows = documents.map((doc) => {
-    const dateLabel = formatDateFr(doc.dateIso) || 'Sans date';
-    const fields = Array.isArray(doc.fields) ? doc.fields : [];
-    const infosHtml = fields.length
-      ? fields.map((field) => `${escapeHtml(field.label)} : ${escapeHtml(field.value)}`).join('<br>')
-      : '';
-    const codes = Array.isArray(doc.codes) ? doc.codes : [];
-    const entitesHtml = codes.length
-      ? codes.map((code) => escapeHtml(code.label || code.code)).join('<br>')
-      : '';
-    return `<tr>
-      <td>${escapeHtml(dateLabel)}</td>
-      <td>${escapeHtml(doc.nature || '')}</td>
-      <td>${escapeHtml(doc.name)}</td>
-      <td>${escapeHtml(doc.localisation || '')}</td>
-      <td>${infosHtml}</td>
-      <td>${entitesHtml}</td>
-    </tr>`;
-  }).join('\n');
-
-  const frizeTableHtml = `
-<h2>Frise chronologique</h2>
-<table width="100%" border="1" cellspacing="0" cellpadding="4">
-  <thead>
-    <tr><th>Date</th><th>Nature</th><th>Pièce</th><th>Lieu</th><th>Informations</th><th>Personnes visées</th></tr>
-  </thead>
-  <tbody>
-    ${docRows || '<tr><td colspan="6" class="export-empty">Aucune pièce indexée.</td></tr>'}
-  </tbody>
-</table>`;
-
-  const entityRows = entities.map((entity) => `<tr>
-      <td>${escapeHtml(entity.label || entity.code)}</td>
-      <td>${escapeHtml(CATEGORY_LABELS[entity.category] || entity.category || '')}</td>
-      <td>${escapeHtml(entity.documentCount ?? 0)}</td>
-    </tr>`).join('\n');
-
-  const entitiesTableHtml = `
-<h2>Entités</h2>
-<table width="100%" border="1" cellspacing="0" cellpadding="4">
-  <thead>
-    <tr><th>Entité</th><th>Catégorie</th><th>Nombre de pièces</th></tr>
-  </thead>
-  <tbody>
-    ${entityRows || '<tr><td colspan="3" class="export-empty">Aucune entité détectée.</td></tr>'}
-  </tbody>
-</table>`;
-
-  const bodyHtml = `${summaryHtml}\n${frizeTableHtml}\n${entitiesTableHtml}`;
-
-  return documentHtml({ title: 'Chronologie du dossier', subtitle, bodyHtml });
 }
 
 /** Rendu HTML papier de la feuille de temps (commits) d'un mois donné. */
@@ -433,8 +325,6 @@ function formatMonthFr(month) {
 module.exports = {
   escapeHtml,
   documentHtml,
-  formatDateFr,
   decumulateDurations,
-  renderChronologyHtml,
   renderHistoryHtml,
 };
