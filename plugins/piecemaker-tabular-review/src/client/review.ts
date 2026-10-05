@@ -2,8 +2,10 @@ import type { Cell, CitationSource, ExportFormat, ExportResult, Provider, Review
 import { CATEGORY_LABELS, citationIssue, lastSearchDate, emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, MAX_CITATION_CORRECTIONS, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, openModal, renderMarkdown, toast } from './dom.js';
-import { anonymizationProxyOrigin, loadModels } from './host.js';
+import { anonymizationProxyOrigin, caseFiles, loadModels } from './host.js';
 import type { ModelOption } from './host.js';
+import { newPieces, plannedChange, targetPath } from './sorting.js';
+import type { PlannedChange } from './sorting.js';
 
 const POLL_INTERVAL = 2500;
 
@@ -33,6 +35,11 @@ function rowStatus(row: ReviewRow): string {
     default:
       return '';
   }
+}
+
+function pieceStatus(row: ReviewRow): string {
+  if (!row.piece) return '';
+  return `<div class="ptr-row-status" title="${escapeHtml(row.piece)}">${escapeHtml(row.piece)}</div>${row.applied ? `<div class="ptr-row-status" title="Ancien emplacement : ${escapeHtml(row.applied.from)}">✓ Appliqué le ${escapeHtml(formatDate(row.applied.at))}</div>` : ''}`;
 }
 
 function citationLinks(cell: Cell): string {
@@ -72,6 +79,8 @@ export function createReviewView(app: App, project: string, file: string, onBack
   element.innerHTML = '<div class="ptr-empty"><span class="ptr-spinner"></span> Chargement…</div>';
   let detail: ReviewDetail | null = null;
   let selected: { row: string; column: number } | null = null;
+  // Saisie en cours dans la cellule sélectionnée : survit au rafraîchissement périodique.
+  let draft: { key: string; value: string } | null = null;
   let timer = 0;
   let destroyed = false;
   let busy = false;
@@ -125,6 +134,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
           <div><div class="ptr-label">Citations</div>${citationList(cell)}${row.corrections ? `<div class="ptr-small ptr-muted">${row.corrections} demande${row.corrections > 1 ? 's' : ''} de correction envoyée${row.corrections > 1 ? 's' : ''} à la session.</div>` : ''}</div>`
           : `<div class="ptr-muted">${row.status === 'done' ? 'Aucune réponse.' : 'Pas encore de réponse pour cette cellule.'}</div>${rowStatus(row)}`}
         <div><button type="button" class="ptr-button" data-run-cell>${isCellFilled(cell) ? 'Relancer cette cellule' : 'Lancer la session pour cette cellule'}</button></div>
+        <div><div class="ptr-label">${cell?.edited ? 'Réponse modifiée à la main' : 'Modifier la réponse'}</div><textarea class="ptr-textarea" data-edit-summary rows="3" aria-label="Réponse de la cellule"${row.status === 'running' ? ' disabled' : ''}>${escapeHtml(draft?.key === `${row.id}:${column.index}` ? draft.value : isCellFilled(cell) ? cell.summary : '')}</textarea><button type="button" class="ptr-button" data-save-cell style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Enregistrer la modification</button></div>
         <div><div class="ptr-label">Documents</div><ul class="ptr-summary-list">${row.documents.map((document) => `<li title="${escapeHtml(document.copy)}">${/^https:\/\//.test(document.source) ? `<a href="${escapeHtml(document.source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(document.source.replace(/^https:\/\/www\.legifrance\.gouv\.fr\/\w+\/id\//, 'Légifrance · ').replace(/^https:\/\/www\.courdecassation\.fr\/decision\//, 'Judilibre · '))}</a>` : escapeHtml(document.source)}</li>`).join('')}</ul></div>
       </aside>`;
   }
@@ -141,6 +151,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     const done = review.rows.filter((row) => row.status === 'done').length;
     const failed = review.rows.some((row) => row.status === 'error' || row.status === 'cancelled' || emptyColumns(review, row.id).length > 0) || status === 'interrupted';
     const running = status === 'running';
+    const sorting = review.category === 'tri-pieces';
     element.innerHTML = `
       <div class="ptr-review-top">
         <button type="button" class="ptr-button" data-back>← Retour</button>
@@ -149,7 +160,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
           <div class="ptr-small ptr-muted">${escapeHtml(review.templateName)} · ${escapeHtml(app.projectName(project))} · ${escapeHtml(formatDate(review.createdAt))}</div>
           ${review.research ? `<div class="ptr-small ptr-muted" title="${escapeHtml(review.research.criteria.join('\n'))}">Requête : <code>${escapeHtml(review.research.query)}</code> · ${escapeHtml(review.research.criteria.join(' · '))} · dernière recherche le ${escapeHtml(formatDate(lastSearchDate(review)))}${review.research.updates?.length ? ` (${review.research.updates.length} mise${review.research.updates.length > 1 ? 's' : ''} à jour)` : ''}</div>` : ''}
         </div>
-        ${review.category === 'recherche-juridique' ? `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS['recherche-juridique'])}</span>` : ''}
+        ${review.category === 'recherche-juridique' || sorting ? `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS[review.category!])}</span>` : ''}
         <span class="ptr-chip ptr-chip-${status}">${running ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(status))} · ${done}/${review.rows.length}</span>
         ${running ? `<div class="ptr-progress" aria-hidden="true"><div style="width:${review.rows.length ? Math.round((done / review.rows.length) * 100) : 0}%"></div></div>` : ''}
         <span class="ptr-spacer"></span>
@@ -157,6 +168,8 @@ export function createReviewView(app: App, project: string, file: string, onBack
         ${running ? '<button type="button" class="ptr-button ptr-button-danger" data-cancel>Annuler</button>' : ''}
         ${review.research ? `<button type="button" class="ptr-button" data-update-research${review.research.filters ? ` title="Chercher les décisions rendues depuis la dernière recherche (${escapeHtml(formatDate(lastSearchDate(review)))}) et les analyser"` : ' disabled title="Recherche lancée avant l’enregistrement de ses critères : relancez-la depuis l’onglet Recherche juridique"'}>Mettre à jour la recherche</button>` : ''}
         ${!running && failed ? '<button type="button" class="ptr-button" data-retry title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>' : ''}
+        ${sorting ? `<button type="button" class="ptr-button" data-add-pieces title="Ajoute une ligne par pièce absente du tri (converties d’abord si besoin) et lance leur analyse">Ajouter les nouvelles pièces</button>
+        <button type="button" class="ptr-button ptr-button-primary" data-apply-all title="Renomme et range toutes les pièces selon les colonnes d’action, après confirmation">Appliquer pour tous</button>` : ''}
         <button type="button" class="ptr-button" data-export="docx">Export Word</button>
         <button type="button" class="ptr-button" data-export="pdf">Export PDF</button>
         ${app.api.openFileInEditor ? '<button type="button" class="ptr-button" data-open-json>Ouvrir le JSON</button>' : ''}
@@ -168,12 +181,12 @@ export function createReviewView(app: App, project: string, file: string, onBack
             <thead><tr><th scope="col">${review.category === 'recherche-juridique' ? 'Décision' : 'Document'}</th>${review.columns.map((column) => `<th scope="col" title="${escapeHtml(column.prompt)}"><div class="ptr-th">${escapeHtml(column.name)}<button type="button" class="ptr-icon-button" data-run-column="${column.index}" aria-label="Lancer les cellules vides de la colonne ${escapeHtml(column.name)}" title="Lancer les cellules vides de cette colonne">▶</button></div></th>`).join('')}</tr></thead>
             <tbody>${review.rows.map((row) => `
               <tr>
-                <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}</td>
+                <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${sorting && row.piece ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>
                 ${review.columns.map((column) => {
                   const cell = review.cells[row.id]?.[String(column.index)];
                   const isSelected = selected?.row === row.id && selected.column === column.index;
                   const content = cell
-                    ? `<div class="ptr-cell-content">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div></div>${citationLinks(cell)}`
+                    ? `<div class="ptr-cell-content">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div>${cell.edited ? '<span class="ptr-small ptr-muted" title="Réponse modifiée à la main">✎</span>' : ''}</div>${citationLinks(cell)}`
                     : row.status === 'running' ? '<span class="ptr-muted"><span class="ptr-spinner"></span></span>' : '<span class="ptr-muted">—</span>';
                   return `<td class="ptr-cell" tabindex="0" data-row="${escapeHtml(row.id)}" data-column="${column.index}" aria-selected="${isSelected}">${content}</td>`;
                 }).join('')}
@@ -252,6 +265,76 @@ export function createReviewView(app: App, project: string, file: string, onBack
     schedule();
   };
 
+  async function projectId(): Promise<string> {
+    const id = (await app.projects()).find((entry) => entry.fullPath === project)?.projectId;
+    if (!id) throw new Error('Ce dossier est inconnu de PieceMaker.');
+    return id;
+  }
+
+  /** Renomme et range les pièces des lignes indiquées, après confirmation des noms finaux. */
+  async function applyRows(rowIds: string[] | null) {
+    if (!detail) return;
+    const id = await projectId();
+    const pseudonyms = await caseFiles.pseudonyms(id);
+    const review = detail.review;
+    const changes = review.rows
+      .filter((row) => (!rowIds || rowIds.includes(row.id)) && row.status !== 'running')
+      .map((row) => plannedChange(review, row, pseudonyms))
+      .filter((change): change is PlannedChange => Boolean(change));
+    if (!changes.length) {
+      toast(app.root, 'Rien à appliquer : les colonnes « Renommer » et « Ranger » sont vides ou la pièce est déjà en place.');
+      return;
+    }
+    const confirmed = await confirmDialog(app.root, `Appliquer ${changes.length} changement${changes.length > 1 ? 's' : ''} ?`, `
+      <p>Les pièces originales sont renommées ou rangées sur le disque ; leur Markdown et leur état PieceMaker les suivent. Les codes d’anonymisation sont remplacés par les noms réels.</p>
+      <ul class="ptr-summary-list" style="max-height:320px;overflow:auto">${changes.map((change) => `<li><code>${escapeHtml(change.piece)}</code><br>→ <code>${escapeHtml(targetPath(change))}</code></li>`).join('')}</ul>`, 'Appliquer');
+    if (!confirmed) return;
+    const failures: string[] = [];
+    for (const change of changes) {
+      try {
+        const result = await caseFiles.rename(id, change.piece, change.name, change.directory);
+        detail = await app.rpc<ReviewDetail>('POST', '/reviews/applied', { project, file, rowId: change.row.id, current: result.current, markdown: result.markdown });
+      } catch (error) {
+        failures.push(`${change.piece} : ${errorMessage(error)}`);
+      }
+    }
+    const applied = changes.length - failures.length;
+    if (applied) toast(app.root, `${applied} pièce${applied > 1 ? 's' : ''} renommée${applied > 1 ? 's' : ''} ou rangée${applied > 1 ? 's' : ''}.`);
+    if (failures.length) {
+      await openModal(app.root, {
+        title: `${failures.length} changement${failures.length > 1 ? 's' : ''} non appliqué${failures.length > 1 ? 's' : ''}`,
+        body: `<ul class="ptr-summary-list">${failures.map((failure) => `<li>${escapeHtml(failure)}</li>`).join('')}</ul>`,
+        actions: [{ label: 'Fermer', value: 'close', kind: 'primary' }],
+      });
+    }
+  }
+
+  /** Ajoute au tri les pièces qui n'y figurent pas, en convertissant d'abord celles qui n'ont pas de Markdown. */
+  async function addNewPieces() {
+    if (!detail) return;
+    const id = await projectId();
+    const fresh = newPieces(detail.review, await caseFiles.pieces(id));
+    if (!fresh.length) {
+      toast(app.root, 'Aucune nouvelle pièce dans le dossier.');
+      return;
+    }
+    const toConvert = fresh.filter((piece) => !piece.markdown).map((piece) => piece.path);
+    const confirmed = await confirmDialog(app.root, 'Ajouter les nouvelles pièces ?', `
+      <p><strong>${fresh.length} pièce${fresh.length > 1 ? 's' : ''}</strong> ne figure${fresh.length > 1 ? 'nt' : ''} pas encore dans ce tri${toConvert.length ? `, dont ${toConvert.length} à convertir d’abord en Markdown` : ''}. Chacune devient une ligne analysée par une session IA (${choiceLabel()}).</p>
+      <ul class="ptr-summary-list" style="max-height:240px;overflow:auto">${fresh.map((piece) => `<li>${escapeHtml(piece.path)}</li>`).join('')}</ul>${costlyChoice()}`, 'Ajouter');
+    if (!confirmed) return;
+    if (toConvert.length) {
+      toast(app.root, `Conversion de ${toConvert.length} pièce${toConvert.length > 1 ? 's' : ''}…`);
+      await caseFiles.convert(id, toConvert);
+    }
+    const ready = newPieces(detail.review, await caseFiles.pieces(id)).filter((piece) => piece.markdown);
+    if (ready.length < fresh.length) toast(app.root, `${fresh.length - ready.length} pièce${fresh.length - ready.length > 1 ? 's n’ont' : ' n’a'} pas pu être convertie${fresh.length - ready.length > 1 ? 's' : ''}.`, 'error');
+    if (!ready.length) return;
+    const proxyOrigin = await anonymizationProxyOrigin();
+    const rows = ready.map((piece) => ({ label: piece.path.split('/').pop()!.replace(/\.[^.]+$/, ''), documents: [piece.markdown], piece: piece.path }));
+    applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/append', { project, file, rows, proxyOrigin }));
+  }
+
   element.addEventListener('change', (event) => {
     const target = event.target as HTMLElement;
     if (!choice) return;
@@ -319,6 +402,29 @@ export function createReviewView(app: App, project: string, file: string, onBack
       });
       return;
     }
+    const applyRow = target.closest<HTMLElement>('[data-apply-row]');
+    if (applyRow) {
+      void action(() => applyRows([applyRow.dataset.applyRow ?? '']));
+      return;
+    }
+    if (target.closest('[data-apply-all]')) {
+      void action(() => applyRows(null));
+      return;
+    }
+    if (target.closest('[data-add-pieces]')) {
+      void action(addNewPieces);
+      return;
+    }
+    if (target.closest('[data-save-cell]') && selected) {
+      const summary = element.querySelector<HTMLTextAreaElement>('[data-edit-summary]')?.value ?? '';
+      const { row: rowId, column } = selected;
+      void action(async () => {
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/cell', { project, file, rowId, column, summary }));
+        draft = null;
+        toast(app.root, summary.trim() ? 'Réponse modifiée.' : 'Réponse effacée.');
+      });
+      return;
+    }
     if (target.closest('[data-update-research]')) {
       app.updateResearch(project, file);
       return;
@@ -349,6 +455,11 @@ export function createReviewView(app: App, project: string, file: string, onBack
       selected = { row: cell.dataset.row ?? '', column: Number(cell.dataset.column) };
       render();
     }
+  });
+
+  element.addEventListener('input', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.matches('[data-edit-summary]') && selected) draft = { key: `${selected.row}:${selected.column}`, value: (target as HTMLTextAreaElement).value };
   });
 
   element.addEventListener('keydown', (event) => {

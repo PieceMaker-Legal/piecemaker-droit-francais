@@ -31,7 +31,7 @@ import { GIT_REPO_ROOT, HOME_DIR, REPO_ROOT, commandExists, findPython } from '.
 import { COMMANDS } from '../lib/commandes.mjs';
 import { loadConfig, readEnv, markStep, loadState, CONFIG_FILE } from '../lib/state.mjs';
 import { scheduleStepResume, selectStepsToResume } from '../lib/resume-steps.mjs';
-import { adoptRunningServerPort, appServerPort, localServerReachable, readLocalScanJob, startLocalScan } from '../lib/conversion-client.mjs';
+import { adoptRunningServerPort, appServerPort, localServerReachable, readLocalScanJob, renameLocalPiece, startLocalScan } from '../lib/conversion-client.mjs';
 import { checkForUpdate, updateRepository } from '../lib/service.mjs';
 
 const require = createRequire(import.meta.url);
@@ -123,6 +123,7 @@ function parseArgs(argv) {
     check: false,
     dryRun: false,
     conversionDocuments: [],
+    renameArguments: [],
     force: false,
     json: false,
     resumeSteps: null,
@@ -134,6 +135,7 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (!arg.startsWith('-') && !flags.command && COMMANDS.has(arg)) flags.command = arg;
     else if (!arg.startsWith('-') && flags.command === 'conversion') flags.conversionDocuments.push(arg);
+    else if (!arg.startsWith('-') && flags.command === 'renommage') flags.renameArguments.push(arg);
     else if (arg === '--all') flags.all = true;
     else if (arg === '--case') flags.caseTarget = argv[++i];
     else if (arg === '--check') flags.check = true;
@@ -300,14 +302,15 @@ function printHelp() {
   write(`  ${c.bold('piecemaker')} — PieceMaker local`);
   blank();
   write('  conversion [pièce…] convertit et pseudonymise les pièces manquantes ou indiquées');
+  write('  renommage <pièce> <AAAA-MM-JJ_titre> renomme une pièce et son Markdown');
   write('  install         ouvre le menu d’installation/réparation');
   write('  doctor, check   diagnostic seul, n’installe rien');
   write('  update          met à jour PieceMaker');
   blank();
   write('  --all           installe tout sans menu');
-  write('  --case <chemin> cible un dossier enregistré (conversion)');
+  write('  --case <chemin> cible un dossier enregistré (conversion, renommage)');
   write('  --force         retraite les pièces');
-  write('  --json          produit une sortie JSON sans décor (conversion)');
+  write('  --json          produit une sortie JSON sans décor (conversion, renommage)');
   write('  --check         diagnostic seul, n\'installe rien');
   write('  --step <id>     rejoue une seule étape');
   write('  --resume-steps <ids> rejoue les étapes indiquées sans interaction (usage interne)');
@@ -478,8 +481,28 @@ async function runConversionCommand(flags) {
   return 0;
 }
 
+async function runRenameCommand(flags) {
+  const [piece, name, ...extra] = flags.renameArguments || [];
+  if (!piece || !name || extra.length) {
+    throw new Error('Usage : piecemaker renommage <pièce> <AAAA-MM-JJ_titre> (citez le nom s’il contient des espaces).');
+  }
+  const { locateProjectCase } = require('../../piecemaker-plugin/scripts/lib/case-folders.cjs');
+  const located = locateProjectCase(flags.caseTarget || process.cwd());
+  if (!located) {
+    throw new Error('Lancez la commande depuis un dossier juridique enregistré ou passez --case <chemin>.');
+  }
+  const { listOriginals } = require(ORIGINALS_PIPELINE_MODULE);
+  const [piecePath] = resolveConversionFiles(await listOriginals(located.caseRoot), [piece], located.caseRoot);
+  await ensureServerForConversion({ json: flags.json });
+  const { previous, current, markdown } = await renameLocalPiece({ folder: located.caseRoot, path: piecePath, name });
+  if (flags.json) process.stdout.write(`${JSON.stringify({ previous, current, markdown }, null, 2)}\n`);
+  else log.ok(`Pièce renommée : ${previous} → ${current}${markdown ? ` (Markdown : ${markdown})` : ''}`);
+  return 0;
+}
+
 async function runOperationalCommand(command, knownUpdate = null, flags = {}) {
   if (command === 'conversion') return runConversionCommand(flags);
+  if (command === 'renommage') return runRenameCommand(flags);
   if (command === 'update') {
     const pending = knownUpdate ?? checkForUpdate();
     if (!pending.available) {
@@ -602,14 +625,14 @@ async function main() {
     return 1;
   }
 
-  if (flags.command !== 'conversion' && (flags.caseTarget || flags.json)) {
+  if (flags.command !== 'conversion' && flags.command !== 'renommage' && (flags.caseTarget || flags.json)) {
     banner();
-    log.error('Les options --case et --json sont réservées à la commande conversion.');
+    log.error('Les options --case et --json sont réservées aux commandes conversion et renommage.');
     return 1;
   }
 
   // Les sorties JSON sont directement consommées par les assistants.
-  if (flags.command === 'conversion' && flags.json) {
+  if ((flags.command === 'conversion' || flags.command === 'renommage') && flags.json) {
     return runOperationalCommand(flags.command, null, flags);
   }
 

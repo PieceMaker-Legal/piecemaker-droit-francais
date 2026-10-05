@@ -5,16 +5,18 @@ import test from 'node:test';
 import express from 'express';
 
 import { createKnowledgeLocalRouter } from '../local-routes.js';
+import { CONVERSION_RUNNING } from '../service.js';
 import type { createKnowledgeService } from '../service.js';
 
 type Calls = {
   scan: Array<{ projectId: string; files: unknown }>;
   scanJob: Array<{ id: unknown; projectId: string }>;
   cancelScan: Array<{ id: unknown; projectId: string }>;
+  rename: unknown[][];
 };
 
 function harness() {
-  const calls: Calls = { scan: [], scanJob: [], cancelScan: [] };
+  const calls: Calls = { scan: [], scanJob: [], cancelScan: [], rename: [] };
   const service = {
     scan(projectId: string, files: unknown) {
       calls.scan.push({ projectId, files });
@@ -27,6 +29,12 @@ function harness() {
     cancelScan(id: unknown, projectId: string) {
       calls.cancelScan.push({ id, projectId });
       return { cancelled: true };
+    },
+    async rename(projectId: string, piecePath: unknown, name: unknown, directory?: unknown) {
+      calls.rename.push([projectId, piecePath, name, directory]);
+      if (name === 'occupé') throw new Error(CONVERSION_RUNNING);
+      if (name === 'invalide') throw new TypeError('Le nom doit commencer par une date.');
+      return { previous: piecePath, current: `${name}.pdf`, markdown: `Fichiers convertis PieceMaker/${name}.md` };
     },
   } as unknown as ReturnType<typeof createKnowledgeService>;
   const projects = {
@@ -127,5 +135,37 @@ test('un appelant hors boucle locale est refusé', async () => {
     });
     assert.equal(response.status, 403);
     assert.deepEqual(calls.scan, []);
+  });
+});
+
+test('POST /rename renomme la pièce du dossier résolu', async () => {
+  const { app, calls } = harness();
+  await withServer(app, async (base) => {
+    const response = await fetch(`${base}/rename`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: '/dossiers/alpha', path: 'jugement.pdf', name: '2024-01-09_Jugement' }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      projectId: 'project-alpha',
+      previous: 'jugement.pdf',
+      current: '2024-01-09_Jugement.pdf',
+      markdown: 'Fichiers convertis PieceMaker/2024-01-09_Jugement.md',
+    });
+    assert.deepEqual(calls.rename, [['project-alpha', 'jugement.pdf', '2024-01-09_Jugement', undefined]]);
+  });
+});
+
+test('POST /rename distingue un nom refusé (400) d’une conversion en cours (409)', async () => {
+  const { app } = harness();
+  await withServer(app, async (base) => {
+    const post = (name: string) => fetch(`${base}/rename`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: '/dossiers/alpha', path: 'jugement.pdf', name }),
+    });
+    assert.equal((await post('invalide')).status, 400);
+    assert.equal((await post('occupé')).status, 409);
   });
 });

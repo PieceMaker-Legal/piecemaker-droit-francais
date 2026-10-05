@@ -127,6 +127,14 @@ export function startLocalScan({ folder, files }) {
   });
 }
 
+export function renameLocalPiece({ folder, path: piecePath, name }) {
+  return requestJson({
+    method: 'POST',
+    path: `${LOCAL_BASE}/rename`,
+    body: { folder, path: piecePath, name },
+  });
+}
+
 export function readLocalScanJob({ folder, id }) {
   const query = new URLSearchParams({ folder, ...(id ? { id } : {}) });
   return requestJson({ method: 'GET', path: `${LOCAL_BASE}/scan/job?${query}` });

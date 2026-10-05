@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { chronologyView, generalView, mappingView, shell } from '../views.js';
+import { chronologyView, generalView, isConformingPieceName, mappingView, proposedPieceName, shell } from '../views.js';
 import type { KnowledgeSnapshot } from '../types.js';
 
 const snapshot: KnowledgeSnapshot = {
@@ -197,5 +197,36 @@ describe('scan status badge', () => {
 
     expect(html).toContain('>10 %<');
     expect(html).not.toContain('Conversion');
+  });
+});
+
+describe('piece names', () => {
+  it('recognises the AAAA-MM-JJ_titre naming rule', () => {
+    expect(isConformingPieceName('2024-01-09_Jugement du Tribunal judiciaire de Paris.pdf')).toBe(true);
+    expect(isConformingPieceName('Contrat.pdf')).toBe(false);
+    expect(isConformingPieceName('2024-01-09_.pdf')).toBe(false);
+  });
+
+  it('proposes a name from the date, the type and the place', () => {
+    expect(proposedPieceName('2024-01-09', 'jugement', 'Tribunal judiciaire de Paris')).toBe('2024-01-09_Jugement - Tribunal judiciaire de Paris');
+    expect(proposedPieceName('2023-05-12', 'contrat', '')).toBe('2023-05-12_Contrat');
+  });
+
+  it('leaves out a place that still holds a pseudonym code and forbidden characters', () => {
+    expect(proposedPieceName('2024-01-09', 'jugement', 'TJ de ADRESSE_02')).toBe('2024-01-09_Jugement');
+    expect(proposedPieceName('2024-01-09', 'contrat', 'Société A c/ Société B')).toBe('2024-01-09_Contrat - Société A c- Société B');
+  });
+
+  it('proposes nothing without a date or a type', () => {
+    expect(proposedPieceName('', 'jugement', '')).toBe('');
+    expect(proposedPieceName('2024-01-09', ' ', '')).toBe('');
+  });
+
+  it('flags a non-conforming piece in the chronology', () => {
+    const html = chronologyView({ graph: { ...snapshot, nodes: [
+      { id: 'a', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: {}, createdAt: '', updatedAt: '' },
+      { id: 'b', projectId: 'project-1', kind: 'document', label: '2024-01-09_Jugement.pdf', aliases: [], data: {}, createdAt: '', updatedAt: '' },
+    ], links: [] } } as never);
+    expect(html.match(/Nom non conforme/g)).toHaveLength(1);
   });
 });

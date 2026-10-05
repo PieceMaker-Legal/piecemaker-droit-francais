@@ -54,6 +54,7 @@ export type BodaccSearchResult = {
   annonces: BodaccAnnouncement[];
   reportPath: string;
 };
+export type CaseSummary = { projectId: string; name: string; mappings: number };
 type RepositoryCase = { path: string; location: string };
 type RepositoryOverview = { folders?: RepositoryCase[] };
 type RegisteredCase = { folder: RepositoryCase };
@@ -104,6 +105,7 @@ function caseReference(projectPath: string): Promise<string> {
 
 export const knowledgeApi = {
   graph: (projectId: string) => request<KnowledgeSnapshot>(BASE, `/graph${query(projectId)}`),
+  projects: () => request<{ projects: CaseSummary[] }>(BASE, '/projects'),
   document: async (projectPath: string, path: string) => {
     if (!projectPath) throw new Error('Le chemin du dossier CloudCLI est indisponible.');
     const reference = await caseReference(projectPath);
@@ -114,6 +116,7 @@ export const knowledgeApi = {
   cancelScan: (jobId: string, projectId: string) => request<{ job: ScanJob | null }>(BASE, '/scan/cancel', { method: 'POST', body: JSON.stringify({ id: jobId, projectId }) }),
   searchCompanies: (queryText: string) => request<{ query: string; results: CompanySearchResult[] }>(PIECEMAKER_BASE, '/company-search', { method: 'POST', body: JSON.stringify({ query: queryText }) }),
   searchBodacc: (projectPath: string, siren: string, siret: string) => request<BodaccSearchResult>(PIECEMAKER_BASE, '/bodacc-search', { method: 'POST', body: JSON.stringify({ projectPath, siren, siret }) }),
+  rename: (projectId: string, path: string, name: string) => request<{ previous: string; current: string; markdown: string | null }>(BASE, '/rename', { method: 'POST', body: JSON.stringify({ projectId, path, name }) }),
   update: (projectId: string, operations: KnowledgeUpdateOperation[]) => request(BASE, '/update', { method: 'POST', body: JSON.stringify({ projectId, operations }) }),
   ensureAgentInstructions: (projectId: string) => request<{ ok: true; created: string[] }>(PIECEMAKER_BASE, '/agent-instructions', { method: 'POST', body: JSON.stringify({ projectId }) }),
   institutionalTerms: () => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms'),

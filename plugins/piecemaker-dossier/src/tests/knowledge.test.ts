@@ -54,6 +54,30 @@ describe('knowledge graph schema', () => {
     expect(() => store.update({ projectId: 'missing-project', operations: [{ op: 'upsertNode', node: { id: 'x', kind: 'person' } }] })).toThrow();
   });
 
+  it('counts pseudonyms per project', () => {
+    const store = createStore();
+    expect(store.mappingCounts().size).toBe(0);
+    store.update({ projectId: 'project-1', operations: [
+      { op: 'upsertNode', node: { id: 'person-1', kind: 'person', label: 'Jean Dupont' } },
+      { op: 'upsertMapping', mapping: { nodeId: 'person-1', real: 'Jean Dupont', masked: 'PERSONNE_PHYSIQUE_01' } },
+      { op: 'upsertMapping', mapping: { nodeId: 'person-1', real: 'J. Dupont', masked: 'PERSONNE_PHYSIQUE_01' } },
+    ] });
+    expect(store.mappingCounts()).toEqual(new Map([['project-1', 2]]));
+  });
+
+  it('purges a newly excluded writing on an empty update', () => {
+    const store = createStore();
+    store.update({ projectId: 'project-1', operations: [
+      { op: 'upsertNode', node: { id: 'person-1', kind: 'person', label: 'Jean Dupont', aliases: ['Tribunal Exemple'] } },
+      { op: 'upsertMapping', mapping: { nodeId: 'person-1', real: 'Jean Dupont', masked: 'PERSONNE_PHYSIQUE_01' } },
+      { op: 'upsertMapping', mapping: { nodeId: 'person-1', real: 'Tribunal Exemple', masked: 'PERSONNE_PHYSIQUE_01' } },
+    ] });
+    useInstitutionalTerms(['Tribunal Exemple']);
+    store.update({ projectId: 'project-1', operations: [] });
+    expect(store.snapshot('project-1').mappings.map((mapping) => mapping.real)).toEqual(['Jean Dupont']);
+    expect(store.mappingCounts()).toEqual(new Map([['project-1', 1]]));
+  });
+
   it('persists anonymization completion independently of the mapping contents', () => {
     const store = createStore();
     expect(store.snapshot('project-1').anonymizationComplete).toBe(false);
@@ -252,6 +276,16 @@ describe('GLiNER result persistence', () => {
     const snapshot = store.snapshot('project-1');
     expect(snapshot.nodes.map((node) => node.id)).toEqual(['entity:Monsieur Laurent Dumas']);
     expect(snapshot.mappings.map((mapping) => mapping.real)).toEqual(['Alice']);
+  });
+
+  it('keeps a piece whose name cites an institution', () => {
+    const store = createStore();
+    useInstitutionalTerms(['Tribunal Judiciaire']);
+    store.update({
+      projectId: 'project-1',
+      operations: [{ op: 'upsertNode', node: { id: 'document:1', kind: 'document', label: '2024-01-09_Jugement du Tribunal judiciaire de Paris.pdf', origin: 'gliner' } }],
+    });
+    expect(store.snapshot('project-1').nodes.map((node) => node.id)).toEqual(['document:1']);
   });
 
   it('replaces stale GLiNER rows while retaining manual additions', () => {

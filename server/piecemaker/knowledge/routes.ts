@@ -1,5 +1,6 @@
 import express from 'express';
 
+import { CONVERSION_RUNNING, RENAME_RUNNING } from './service.js';
 import type { createKnowledgeService } from './service.js';
 
 type KnowledgeService = ReturnType<typeof createKnowledgeService>;
@@ -7,6 +8,7 @@ type KnowledgeService = ReturnType<typeof createKnowledgeService>;
 function statusFor(error: unknown): number {
   if (error instanceof TypeError) return 400;
   if (error instanceof Error && error.message === 'Project not found.') return 404;
+  if (error instanceof Error && (error.message === CONVERSION_RUNNING || error.message === RENAME_RUNNING)) return 409;
   return 500;
 }
 
@@ -18,8 +20,11 @@ export function createKnowledgeRouter(service: KnowledgeService) {
     });
   };
   router.get('/knowledge/graph', (request, response) => respond(() => service.graph(request.query.projectId), response));
+  router.get('/knowledge/projects', (_request, response) => respond(() => service.projects(), response));
   router.post('/knowledge/query', (request, response) => respond(() => service.query(request.body), response));
   router.post('/knowledge/update', (request, response) => respond(() => service.update(request.body), response));
+  router.get('/knowledge/pieces', (request, response) => respond(() => service.pieces(request.query.projectId), response));
+  router.post('/knowledge/rename', (request, response) => respond(() => service.rename(request.body?.projectId, request.body?.path, request.body?.name, request.body?.directory), response));
   router.post('/knowledge/scan', (request, response) => respond(() => service.scan(request.body?.projectId, request.body?.files, request.body?.ocrMissing), response));
   router.get('/knowledge/scan/job', (request, response) => respond(() => service.scanJob(request.query.id, request.query.projectId), response));
   router.post('/knowledge/scan/cancel', (request, response) => respond(() => service.cancelScan(request.body?.id, request.body?.projectId), response));

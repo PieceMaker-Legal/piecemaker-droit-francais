@@ -202,6 +202,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     await load();
   };
 
+  const renamePiece = async (piecePath: string, name: string) => {
+    if (!context.project) return;
+    viewCache.delete(context.project.name);
+    await knowledgeApi.rename(context.project.name, piecePath, name);
+    await load();
+  };
+
   const deleteNode = async (nodeId: string): Promise<boolean> => {
     const node = data?.graph.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) return false;
@@ -491,13 +498,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       const editDocument = target.closest<HTMLElement>('[data-edit-document]');
       if (editDocument) {
         const node = data?.graph.nodes.find((entry) => entry.id === editDocument.dataset.editDocument);
-        if (data && node) documentEditor(root, data, node, context.project?.path || '', save);
+        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece);
         return;
       }
       const openDocument = target.closest<HTMLElement>('[data-open-document]');
       if (openDocument) {
         const node = data?.graph.nodes.find((entry) => entry.id === openDocument.dataset.openDocument);
-        if (data && node) documentEditor(root, data, node, context.project?.path || '', save);
+        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece);
       }
     });
     root.addEventListener('dragstart', (event) => {

@@ -2,11 +2,20 @@ export type Flag = 'green' | 'yellow' | 'red' | 'grey';
 
 export type ColumnFormat = 'text' | 'list' | 'date' | 'amount' | 'yes_no' | 'tags';
 
+/** Colonne dont la réponse s'applique à la pièce : la renommer ou la ranger dans un sous-dossier. */
+export type ColumnAction = 'rename' | 'move';
+
+export const COLUMN_ACTIONS: { value: ColumnAction; label: string }[] = [
+  { value: 'rename', label: 'Renommer la pièce' },
+  { value: 'move', label: 'Ranger la pièce' },
+];
+
 export type TemplateColumn = {
   name: string;
   prompt: string;
   format: ColumnFormat;
   tags?: string[];
+  action?: ColumnAction;
 };
 
 export type Template = {
@@ -39,6 +48,9 @@ export type ReviewRow = {
   corrections?: number;
   decision?: string;
   aliases?: string[];
+  /** Tri des pièces : chemin de la pièce originale, relatif au dossier. */
+  piece?: string;
+  applied?: { at: string; from: string };
 };
 
 export type TextRange = { start: number; end: number };
@@ -55,6 +67,8 @@ export type Cell = {
   flag: Flag;
   reasoning: string;
   citations?: CellCitation[];
+  /** Réponse corrigée à la main : elle n'a pas à être étayée par une citation. */
+  edited?: boolean;
 };
 
 export type CitationSource = {
@@ -74,15 +88,20 @@ export type Provider = 'claude' | 'codex' | 'mistral';
 
 export type ReviewStatus = 'running' | 'done' | 'partial' | 'cancelled' | 'interrupted';
 
-export type ReviewCategory = 'documents' | 'recherche-juridique';
+export type ReviewCategory = 'documents' | 'recherche-juridique' | 'tri-pieces';
 
 export const CATEGORY_LABELS: Record<ReviewCategory, string> = {
   documents: 'Analyse de documents',
   'recherche-juridique': 'Recherche juridique',
+  'tri-pieces': 'Tri des pièces',
 };
 
 export function reviewCategory(review: { category?: unknown }): ReviewCategory {
-  return review.category === 'recherche-juridique' ? 'recherche-juridique' : 'documents';
+  return review.category === 'recherche-juridique' || review.category === 'tri-pieces' ? review.category : 'documents';
+}
+
+export function hasActions(columns: TemplateColumn[]): boolean {
+  return columns.some((column) => column.action);
 }
 
 export type ResearchUpdate = {
@@ -167,6 +186,7 @@ export type MarkdownDocument = {
 export type RowRequest = {
   label: string;
   documents: string[];
+  piece?: string;
 };
 
 export type CreateReviewRequest = {
@@ -235,7 +255,7 @@ export function citationRequired(cell: Cell): boolean {
 }
 
 export function citationIssue(cell: Cell): 'missing' | 'unverified' | null {
-  if (!citationRequired(cell)) return null;
+  if (cell.edited || !citationRequired(cell)) return null;
   if (!cell.citations?.length) return 'missing';
   return cell.citations.some((citation) => !citation.verified) ? 'unverified' : null;
 }

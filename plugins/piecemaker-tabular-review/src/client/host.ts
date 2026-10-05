@@ -1,4 +1,5 @@
 import type { Provider } from '../shared.js';
+import type { CasePiece, Pseudonym } from './sorting.js';
 
 export type PluginContext = {
   theme: 'dark' | 'light';
@@ -25,15 +26,21 @@ type AnonymizerStatus = { enabled?: boolean; listening?: boolean; origin?: strin
 
 type ProviderModelsResponse = { data?: { models?: { OPTIONS?: ModelOption[]; DEFAULT?: string } } };
 
-async function hostJson<T>(url: string): Promise<T> {
+async function hostJson<T>(url: string, body?: unknown): Promise<T> {
   const token = localStorage.getItem('auth-token');
-  const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await fetch(url, body === undefined
+    ? { headers }
+    : { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const refreshed = response.headers.get('X-Refreshed-Token');
   if (refreshed) {
     localStorage.setItem('auth-token', refreshed);
     window.dispatchEvent(new CustomEvent('auth-token-refreshed', { detail: refreshed }));
   }
-  if (!response.ok) throw new Error(`Erreur ${response.status} sur ${url}`);
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null) as { error?: unknown } | null;
+    throw new Error(typeof detail?.error === 'string' ? detail.error : `Erreur ${response.status} sur ${url}`);
+  }
   return response.json() as Promise<T>;
 }
 
@@ -71,3 +78,31 @@ export async function loadModels(provider: Provider): Promise<{ options: ModelOp
     ?? (provider === 'claude' ? 'haiku' : options[0]?.value ?? '');
   return { options, cheapest };
 }
+
+const KNOWLEDGE = '/api/piecemaker/knowledge';
+
+type ConversionJob = { id: string; state: string; error?: string | null };
+
+/** Dossier juridique vu par PieceMaker : pièces, pseudonymes, renommage et conversion. */
+export const caseFiles = {
+  async pieces(projectId: string): Promise<CasePiece[]> {
+    return (await hostJson<{ pieces: CasePiece[] }>(`${KNOWLEDGE}/pieces?projectId=${encodeURIComponent(projectId)}`)).pieces;
+  },
+  async pseudonyms(projectId: string): Promise<Pseudonym[]> {
+    const graph = await hostJson<{ nodes: { id: string; label: string }[]; mappings: { nodeId: string; real: string; masked: string }[] }>(`${KNOWLEDGE}/graph?projectId=${encodeURIComponent(projectId)}`);
+    const labels = new Map(graph.nodes.map((node) => [node.id, node.label]));
+    return graph.mappings.map((mapping) => ({ masked: mapping.masked, real: labels.get(mapping.nodeId) || mapping.real }));
+  },
+  rename(projectId: string, piece: string, name: string | undefined, directory: string | undefined) {
+    return hostJson<{ previous: string; current: string; markdown: string | null }>(`${KNOWLEDGE}/rename`, { projectId, path: piece, name, directory });
+  },
+  /** Convertit les pièces indiquées et attend la fin de la conversion. */
+  async convert(projectId: string, files: string[]): Promise<void> {
+    let { job } = await hostJson<{ job: ConversionJob }>(`${KNOWLEDGE}/scan`, { projectId, files });
+    while (job.state === 'running') {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      ({ job } = await hostJson<{ job: ConversionJob }>(`${KNOWLEDGE}/scan/job?id=${encodeURIComponent(job.id)}&projectId=${encodeURIComponent(projectId)}`));
+    }
+    if (job.state !== 'done') throw new Error(job.error || `Conversion interrompue (${job.state}).`);
+  },
+};

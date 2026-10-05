@@ -263,6 +263,22 @@ export function mappingView(data: ViewData): string {
   }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-save-mapping>✓ Enregistrer le mapping</button></div></div>`;
 }
 
+const PIECE_NAME = /^\d{4}-\d{2}-\d{2}_\S/;
+
+/** Vrai pour une pièce nommée `AAAA-MM-JJ_<titre>`, extension mise à part. */
+export function isConformingPieceName(label: string): boolean {
+  return PIECE_NAME.test(label.replace(/\.[^.]+$/, ''));
+}
+
+/** Nom proposé `AAAA-MM-JJ_<Type>[ - <lieu>]`, vide tant que la date ou le type manque. */
+export function proposedPieceName(date: string, nature: string, localisation: string): string {
+  const type = nature.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !type) return '';
+  const place = localisation.trim();
+  const title = `${type.charAt(0).toLocaleUpperCase('fr')}${type.slice(1)}${place && !/\b[A-Z][A-Z_]*_\d+\b/.test(place) ? ` - ${place}` : ''}`;
+  return `${date}_${title.replace(/[\\/:*?"<>|]/g, '-')}`;
+}
+
 function chronologyDateLabel(value: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
@@ -281,7 +297,7 @@ function chronologyEvent(node: KnowledgeNode, dated: boolean, byId: Map<string, 
     .filter((entry): entry is KnowledgeNode => Boolean(entry && entry.kind !== 'document'));
   const nature = textValue(node.data.nature);
   const localisation = textValue(node.data.localisation);
-  return `<article class="pmd-chronology-event" data-dated="${dated}" data-open-document="${escapeHtml(node.id)}"><div class="pmd-chronology-marker" aria-hidden="true"></div><div class="pmd-chronology-date">${escapeHtml(dated ? chronologyDateLabel(dateFor(node)) : 'Date non renseignée')}</div><div class="pmd-chronology-document pmd-card"><div class="pmd-card-head"><div class="pmd-document-heading"><div class="pmd-card-title">${escapeHtml(node.label)}</div><div class="pmd-document-meta">${escapeHtml(nature || 'Type non renseigné')}${localisation ? ` · ${escapeHtml(localisation)}` : ''}</div></div><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></div>${chronologyFields(node)}<div class="pmd-document-related"><span class="pmd-document-related-label">Mentions</span><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('') || '<span class="pmd-badge pmd-badge-muted">Aucune personne liée</span>'}</div></div></div></article>`;
+  return `<article class="pmd-chronology-event" data-dated="${dated}" data-open-document="${escapeHtml(node.id)}"><div class="pmd-chronology-marker" aria-hidden="true"></div><div class="pmd-chronology-date">${escapeHtml(dated ? chronologyDateLabel(dateFor(node)) : 'Date non renseignée')}</div><div class="pmd-chronology-document pmd-card"><div class="pmd-card-head"><div class="pmd-document-heading"><div class="pmd-card-title">${escapeHtml(node.label)}${isConformingPieceName(node.label) ? '' : ' <span class="pmd-badge pmd-badge-muted">Nom non conforme</span>'}</div><div class="pmd-document-meta">${escapeHtml(nature || 'Type non renseigné')}${localisation ? ` · ${escapeHtml(localisation)}` : ''}</div></div><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></div>${chronologyFields(node)}<div class="pmd-document-related"><span class="pmd-document-related-label">Mentions</span><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('') || '<span class="pmd-badge pmd-badge-muted">Aucune personne liée</span>'}</div></div></div></article>`;
 }
 
 function chronologySection(title: string, hint: string, nodes: KnowledgeNode[], dated: boolean, byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {

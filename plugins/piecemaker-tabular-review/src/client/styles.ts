@@ -125,7 +125,7 @@ blockquote.ptr-citation-quote{margin:8px 0;padding-left:8px;border-left:3px soli
 .ptr-modal-body{padding:12px 14px;overflow:auto;display:flex;flex-direction:column;gap:10px}
 .ptr-modal-body p{margin:0}
 .ptr-modal-footer{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;padding:10px 14px;border-top:1px solid var(--ptr-border)}
-.ptr-question{display:grid;grid-template-columns:minmax(0,1fr) 130px auto;gap:6px;padding:8px;border:1px solid var(--ptr-border);border-radius:10px}
+.ptr-question{display:grid;grid-template-columns:minmax(0,1fr) 130px 160px auto;gap:6px;padding:8px;border:1px solid var(--ptr-border);border-radius:10px}
 .ptr-question .ptr-textarea,.ptr-question [data-tags-field]{grid-column:1 / -1}
 .ptr-question-actions{display:flex;gap:2px}
 .ptr-toast{position:absolute;right:14px;bottom:14px;z-index:60;max-width:420px;padding:8px 12px;border-radius:10px;background:rgb(3 7 18 / 90%);color:#fff;font-size:12px;box-shadow:0 8px 24px rgb(0 0 0 / 20%)}

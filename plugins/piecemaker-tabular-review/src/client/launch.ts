@@ -1,8 +1,9 @@
 import type { MarkdownDocument, Provider, ReviewDetail, Template } from '../shared.js';
-import { REVIEW_FOLDER } from '../shared.js';
+import { hasActions, REVIEW_FOLDER } from '../shared.js';
 import type { App, View } from './app.js';
 import { basename, confirmDialog, errorMessage, escapeHtml, toast } from './dom.js';
-import { anonymizationProxyOrigin, loadModels } from './host.js';
+import { anonymizationProxyOrigin, caseFiles, loadModels } from './host.js';
+import type { CasePiece } from './sorting.js';
 import type { HostProject, ModelOption } from './host.js';
 
 type DraftRow = {
@@ -10,6 +11,7 @@ type DraftRow = {
   label: string;
   documents: string[];
   checked: boolean;
+  piece?: string;
 };
 
 const PROVIDERS: { value: Provider; label: string }[] = [
@@ -93,8 +95,14 @@ export function createLaunchView(app: App): View {
   let models: { options: ModelOption[]; cheapest: string } = { options: [], cheapest: '' };
   let launching = false;
   let documentsRequest = 0;
+  // Tri des pièces : chaque ligne est une pièce originale, analysée par son Markdown converti.
+  let pieces: CasePiece[] | null = null;
+  let piecesError = '';
+  let sortingMode = false;
 
   const selectedTemplate = () => templates.find((template) => template.id === templateSelect.value) ?? null;
+  const isSorting = () => hasActions(selectedTemplate()?.columns ?? []);
+  const pieceByMarkdown = () => new Map((pieces ?? []).filter((piece) => piece.markdown && piece.path.split('/')[0] !== REVIEW_FOLDER).map((piece) => [piece.markdown!, piece.path]));
   const documentRow = new Map<string, DraftRow>();
   const reindex = () => {
     documentRow.clear();
@@ -103,7 +111,8 @@ export function createLaunchView(app: App): View {
 
   const filteredDocuments = () => {
     const query = normalize(filterInput.value.trim());
-    return (documents ?? []).filter((document) => !query || normalize(document.path).includes(query));
+    const sortable = isSorting() ? pieceByMarkdown() : null;
+    return (documents ?? []).filter((document) => (!sortable || sortable.has(document.path)) && (!query || normalize(document.path).includes(query)));
   };
 
   function renderNotice() {
@@ -112,6 +121,12 @@ export function createLaunchView(app: App): View {
       notices.push('<div class="ptr-warning">Ce dossier n’est pas sous bouclier vert (anonymisation non terminée ou protection levée) : vérifiez que les documents Markdown sélectionnés sont bien pseudonymisés.</div>');
     }
     if (documentsError) notices.push(`<div class="ptr-error-box">${escapeHtml(documentsError)}</div>`);
+    if (isSorting()) {
+      const waiting = (pieces ?? []).filter((piece) => !piece.markdown && piece.path.split('/')[0] !== REVIEW_FOLDER).length;
+      notices.push(piecesError
+        ? `<div class="ptr-error-box">Pièces du dossier indisponibles : ${escapeHtml(piecesError)}</div>`
+        : `<div class="ptr-muted">Tri des pièces : chaque ligne est une pièce du dossier, lue dans son Markdown converti.${waiting ? ` ${waiting} pièce${waiting > 1 ? 's ne sont' : ' n’est'} pas encore convertie${waiting > 1 ? 's' : ''} : « Ajouter les nouvelles pièces », dans la review, la${waiting > 1 ? 's' : ''} convertira.` : ''}</div>`);
+    }
     $('[data-notice]').innerHTML = notices.join('');
   }
 
@@ -170,7 +185,7 @@ export function createLaunchView(app: App): View {
     $('[data-filename]').textContent = template ? `${REVIEW_FOLDER}/${filenamePreview(template.name, titleInput.value.trim())}` : '';
     $<HTMLButtonElement>('[data-launch]').disabled = launching || !project || !template || !rows.length || !titleInput.value.trim() || !modelSelect.value;
     $<HTMLButtonElement>('[data-launch]').textContent = launching ? 'Lancement…' : 'Lancer la tabular review';
-    $<HTMLButtonElement>('[data-group]').disabled = rows.filter((row) => row.checked).length < 2;
+    $<HTMLButtonElement>('[data-group]').disabled = isSorting() || rows.filter((row) => row.checked).length < 2;
     $<HTMLButtonElement>('[data-ungroup]').disabled = !rows.some((row) => row.checked && row.documents.length > 1);
     const costly = modelSelect.value && modelSelect.value !== models.cheapest;
     $('[data-model-warning]').innerHTML = costly
@@ -200,13 +215,27 @@ export function createLaunchView(app: App): View {
     if (templates.some((template) => template.id === current)) templateSelect.value = current;
   }
 
+  async function loadPieces(request: number) {
+    const projectId = projects.find((entry) => entry.fullPath === project)?.projectId;
+    try {
+      if (!projectId) throw new Error('dossier inconnu de PieceMaker.');
+      const loaded = await caseFiles.pieces(projectId);
+      if (request === documentsRequest) pieces = loaded;
+    } catch (error) {
+      if (request === documentsRequest) piecesError = errorMessage(error);
+    }
+  }
+
   async function loadDocuments() {
     const request = ++documentsRequest;
     documents = null;
     documentsError = '';
+    pieces = null;
+    piecesError = '';
     rows = [];
     renderAll();
     if (!project) return;
+    const piecesLoaded = loadPieces(request);
     try {
       const result = await app.rpc<{ documents: MarkdownDocument[] }>('GET', `/documents?project=${encodeURIComponent(project)}`);
       if (request !== documentsRequest) return;
@@ -216,7 +245,8 @@ export function createLaunchView(app: App): View {
       documents = [];
       documentsError = errorMessage(error);
     }
-    renderAll();
+    await piecesLoaded;
+    if (request === documentsRequest) renderAll();
   }
 
   async function selectProject(path: string | null) {
@@ -242,7 +272,8 @@ export function createLaunchView(app: App): View {
 
   function toggleDocument(path: string, selected: boolean) {
     const row = documentRow.get(path);
-    if (selected && !row) rows.push({ key: `r${rowSequence += 1}`, label: stripExtension(path), documents: [path], checked: false });
+    const piece = isSorting() ? pieceByMarkdown().get(path) : undefined;
+    if (selected && !row) rows.push({ key: `r${rowSequence += 1}`, label: piece ? basename(piece).replace(/\.[^.]+$/, '') : stripExtension(path), documents: [path], checked: false, ...(piece ? { piece } : {}) });
     if (!selected && row) {
       row.documents = row.documents.filter((document) => document !== path);
       if (!row.documents.length) rows = rows.filter((entry) => entry !== row);
@@ -274,7 +305,7 @@ export function createLaunchView(app: App): View {
         project,
         templateId: template.id,
         title,
-        rows: rows.map((row) => ({ label: row.label.trim(), documents: row.documents })),
+        rows: rows.map((row) => ({ label: row.label.trim(), documents: row.documents, ...(row.piece ? { piece: row.piece } : {}) })),
         provider,
         model,
         concurrency: Number(concurrencySelect.value),
@@ -296,7 +327,12 @@ export function createLaunchView(app: App): View {
     const target = event.target as HTMLElement;
     if (target === projectSelect) void selectProject(projectSelect.value);
     else if (target === providerSelect) void loadProviderModels();
-    else if (target === templateSelect || target === modelSelect) renderFooter();
+    else if (target === templateSelect && isSorting() !== sortingMode) {
+      // Les lignes d'un tri portent une pièce : on ne mélange pas les deux modes.
+      sortingMode = isSorting();
+      rows = [];
+      renderAll();
+    } else if (target === templateSelect || target === modelSelect) renderFooter();
     else if (target instanceof HTMLInputElement && target.dataset.doc) {
       toggleDocument(target.dataset.doc, target.checked);
       reindex();
@@ -356,6 +392,11 @@ export function createLaunchView(app: App): View {
   const stopTemplates = app.onTemplatesChange((next) => {
     templates = next;
     renderTemplates();
+    if (isSorting() !== sortingMode) {
+      sortingMode = isSorting();
+      rows = [];
+      renderAll();
+    }
     renderFooter();
   });
 
@@ -375,6 +416,7 @@ export function createLaunchView(app: App): View {
       toast(app.root, errorMessage(error), 'error');
     }
     renderTemplates();
+    sortingMode = isSorting();
     const preferred = app.takeTargetProject() ?? app.context().project?.path ?? null;
     const initial = projects.find((entry) => entry.fullPath === preferred)?.fullPath ?? projects[0]?.fullPath ?? null;
     project = null;

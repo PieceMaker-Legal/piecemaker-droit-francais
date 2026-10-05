@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { Provider, Review, ReviewDetail, ReviewDocument, ReviewRow, ReviewStatus, ReviewSummary, RowRequest, Template } from '../shared.js';
-import { DOCS_FOLDER, lastSearchDate, reviewCategory } from '../shared.js';
+import type { Cell, Provider, Review, ReviewDetail, ReviewDocument, ReviewRow, ReviewStatus, ReviewSummary, RowRequest, Template } from '../shared.js';
+import { DOCS_FOLDER, emptyColumns, hasActions, lastSearchDate, reviewCategory } from '../shared.js';
 import { resolveMarkdownDocument } from './documents.js';
-import { assertReviewFile, docsDirectory, isInside, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
+import { assertReviewFile, docsDirectory, documentPath, isInside, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
 
 const MAX_ROWS = 500;
 const MAX_DOCUMENTS_PER_ROW = 50;
@@ -75,35 +75,54 @@ export function writeNewReview(project: string, review: Review): string {
   return path.basename(target);
 }
 
-export function createReview(project: string, template: Template, title: string, rows: RowRequest[], settings: ReviewSettings): { file: string; review: Review } {
-  const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 120) : '';
-  if (!cleanTitle) throw new UserError('Donnez un nom à la tabular review.');
-  if (!Array.isArray(rows) || !rows.length) throw new UserError('Sélectionnez au moins un document.');
-  if (rows.length > MAX_ROWS) throw new UserError(`Une tabular review contient au plus ${MAX_ROWS} lignes.`);
+/** Pièce originale d'une ligne de tri : chemin relatif au dossier, sans remontée ni dossier caché. */
+function piecePath(value: unknown): string {
+  const piece = typeof value === 'string' ? value.trim() : '';
+  if (!piece || path.posix.isAbsolute(piece) || piece.split('/').some((segment) => !segment || segment === '..' || segment.startsWith('.'))) {
+    throw new UserError(`Pièce invalide : ${String(value)}`);
+  }
+  return piece;
+}
+
+/** Lignes prêtes à analyser ; en tri des pièces, chacune porte une seule pièce et son Markdown. */
+function buildRows(project: string, rows: RowRequest[], sorting: boolean, copies = new Map<string, ReviewDocument>()): ReviewRow[] {
   const resolvedRows = rows.map((row) => {
     const documents = Array.isArray(row?.documents) ? row.documents : [];
     if (!documents.length) throw new UserError('Chaque ligne doit contenir au moins un document.');
     if (documents.length > MAX_DOCUMENTS_PER_ROW) throw new UserError(`Une ligne regroupe au plus ${MAX_DOCUMENTS_PER_ROW} documents.`);
-    return { label: typeof row.label === 'string' ? row.label.trim().slice(0, 200) : '', sources: documents.map((document) => resolveMarkdownDocument(project, document)) };
+    if (sorting && documents.length !== 1) throw new UserError('En tri des pièces, chaque ligne porte une seule pièce.');
+    return {
+      label: typeof row.label === 'string' ? row.label.trim().slice(0, 200) : '',
+      sources: documents.map((document) => resolveMarkdownDocument(project, document)),
+      ...(sorting ? { piece: piecePath(row.piece) } : {}),
+    };
   });
-
-  const copies = new Map<string, ReviewDocument>();
-  const reviewRows: ReviewRow[] = resolvedRows.map(({ label, sources }) => {
+  return resolvedRows.map(({ label, sources, piece }) => {
     const documents = sources.map((source) => copyDocument(project, source, copies));
     return {
       id: randomUUID(),
       label: label || path.basename(documents[0].source, path.extname(documents[0].source)),
       documents,
       status: 'pending',
+      ...(piece ? { piece } : {}),
     };
   });
+}
+
+export function createReview(project: string, template: Template, title: string, rows: RowRequest[], settings: ReviewSettings): { file: string; review: Review } {
+  const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 120) : '';
+  if (!cleanTitle) throw new UserError('Donnez un nom à la tabular review.');
+  if (!Array.isArray(rows) || !rows.length) throw new UserError('Sélectionnez au moins un document.');
+  if (rows.length > MAX_ROWS) throw new UserError(`Une tabular review contient au plus ${MAX_ROWS} lignes.`);
+  const sorting = hasActions(template.columns);
+  const reviewRows = buildRows(project, rows, sorting);
 
   const now = new Date();
   const review: Review = {
     version: 1,
     title: cleanTitle,
     templateName: template.name,
-    category: 'documents',
+    category: sorting ? 'tri-pieces' : 'documents',
     projectPath: project,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
@@ -141,6 +160,53 @@ export function updateReview(project: string, file: string, mutate: (review: Rev
     if (locks.get(key) === next) locks.delete(key);
   }).catch(() => undefined);
   return next;
+}
+
+/** Ajoute à un tri des pièces les lignes des pièces nouvelles ; renvoie leurs identifiants. */
+export async function appendRows(project: string, file: string, rows: RowRequest[]): Promise<string[]> {
+  if (!Array.isArray(rows) || !rows.length) return [];
+  let added: string[] = [];
+  await updateReview(project, file, (review) => {
+    if (reviewCategory(review) !== 'tri-pieces') throw new UserError('Seul un tri des pièces accueille de nouvelles pièces.');
+    const known = new Set(review.rows.map((row) => row.piece));
+    const fresh = buildRows(project, rows.filter((row) => !known.has(row.piece)), true);
+    if (review.rows.length + fresh.length > MAX_ROWS) throw new UserError(`Une tabular review contient au plus ${MAX_ROWS} lignes.`);
+    review.rows.push(...fresh);
+    added = fresh.map((row) => row.id);
+  });
+  return added;
+}
+
+/** Remplace une réponse par une saisie de l'utilisateur, sans citation exigée. */
+export function editCell(project: string, file: string, rowId: unknown, column: unknown, summary: unknown): Promise<Review> {
+  const value = typeof summary === 'string' ? summary.trim().slice(0, 4000) : '';
+  return updateReview(project, file, (review) => {
+    const row = review.rows.find((entry) => entry.id === rowId);
+    const target = review.columns.find((entry) => entry.index === Number(column));
+    if (!row || !target) throw new UserError('Cellule introuvable.');
+    if (row.status === 'running') throw new UserError('Attendez la fin de l’analyse de cette ligne pour la modifier.');
+    const cells = review.cells[row.id] ?? (review.cells[row.id] = {});
+    if (!value) {
+      delete cells[String(target.index)];
+      return;
+    }
+    const previous: Cell | undefined = cells[String(target.index)];
+    cells[String(target.index)] = { summary: value, flag: previous?.flag ?? 'grey', reasoning: previous?.reasoning ?? '', ...(previous?.citations ? { citations: previous.citations } : {}), edited: true };
+    if (!emptyColumns(review, row.id).length) Object.assign(row, { status: 'done', error: undefined });
+  });
+}
+
+/** Enregistre qu'une ligne a été appliquée : la pièce porte désormais son nouveau chemin. */
+export function markApplied(project: string, file: string, rowId: unknown, current: unknown, markdown: unknown): Promise<Review> {
+  return updateReview(project, file, (review) => {
+    const row = review.rows.find((entry) => entry.id === rowId);
+    if (!row?.piece) throw new UserError('Ligne de tri introuvable.');
+    const next = piecePath(current);
+    row.applied = { at: new Date().toISOString(), from: row.piece };
+    row.piece = next;
+    row.label = path.posix.basename(next, path.posix.extname(next));
+    if (typeof markdown === 'string' && markdown && row.documents[0]) row.documents[0].source = markdown;
+  });
 }
 
 export function deriveStatus(review: Review, running: boolean): ReviewStatus {
@@ -213,7 +279,7 @@ export function deleteReview(project: string, file: string): void {
   const shared = referencedCopies(project, file);
   const docs = docsDirectory(project);
   for (const copy of new Set(review.rows.flatMap((row) => row.documents.map((document) => document.copy)))) {
-    const copyPath = path.join(reviewDirectory(project), ...copy.split('/'));
+    const copyPath = documentPath(project, copy);
     if (!shared.has(copy) && isInside(docs, copyPath)) fs.rmSync(copyPath, { force: true });
   }
   const basename = path.basename(file, '.json');
