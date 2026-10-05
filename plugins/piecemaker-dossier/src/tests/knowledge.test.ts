@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { KnowledgeStore } from '../knowledge.js';
 import { scanResultOperations } from '../scan-result.js';
 import { EXCLUSIONS_NODE_ID } from '../types.js';
+import type { KnowledgeUpdateOperation } from '../types.js';
 
 const stores: KnowledgeStore[] = [];
 const directories: string[] = [];
@@ -676,5 +677,231 @@ describe('citations', () => {
     const citations = store.snapshot('project-1').citations;
     expect(citations).toHaveLength(2);
     expect(citations.every((citation) => citation.toNodeId === 'entity:ADVERSAIRE_01')).toBe(true);
+  });
+});
+
+describe('second scans with exclusions and citations', () => {
+  const codes = { PERSONNE_PHYSIQUE_01: 'Jean Dupont', SOCIETE_SAS_01: 'Société Exemple SAS' };
+  const contract = { id: 'hash-1', name: 'Contrat.pdf', path: '/cases/one/Contrat.pdf', metadata: { doc_date_iso: '2024-01-09', nature: 'Contrat' }, entityCodes: ['PERSONNE_PHYSIQUE_01', 'SOCIETE_SAS_01'] };
+  const markdown = 'Entre les soussignés. Société Exemple SAS, représentée par son gérant, vend le fonds. Jean Dupont, demeurant 12 rue des Lilas, Paris, achète.';
+  const scan = (store: KnowledgeStore, scanned: Record<string, string>, documents: typeof contract[] = [contract], ignored: string[] = [], text: string | null = markdown) => store.mergeScan('project-1', scanResultOperations({
+    projectId: 'project-1',
+    mapping: { mapping: Object.fromEntries(Object.entries(scanned).map(([code, real]) => [real, code])), ignored },
+    documents,
+  }, () => text));
+  const links = (store: KnowledgeStore) => store.snapshot('project-1').links.map((link) => `${link.fromNodeId}>${link.toNodeId}`).sort();
+
+  it('adds a citation with the sentence of the first occurrence to each new mention', () => {
+    const store = createStore();
+    scan(store, codes);
+    const citations = store.snapshot('project-1').citations;
+    expect(citations.map((citation) => [citation.toNodeId, citation.texte, citation.pieceId, citation.source])).toEqual([
+      ['entity:PERSONNE_PHYSIQUE_01', 'Jean Dupont, demeurant 12 rue des Lilas, Paris, achète.', 'document:hash-1', null],
+      ['entity:SOCIETE_SAS_01', 'Société Exemple SAS, représentée par son gérant, vend le fonds.', 'document:hash-1', null],
+    ]);
+  });
+
+  it('adds the mention without citation when the markdown is missing or lacks the name', () => {
+    const store = createStore();
+    scan(store, codes, [contract], [], null);
+    scan(store, { ...codes, ADRESSE_01: '12 rue des Lilas, Paris' }, [{ ...contract, entityCodes: [...contract.entityCodes, 'ADRESSE_01'] }], [], 'Un texte sans aucun des noms.');
+    expect(links(store)).toHaveLength(3);
+    expect(store.snapshot('project-1').citations).toEqual([]);
+  });
+
+  it('cites only the mentions created by the scan and never duplicates a citation', () => {
+    const store = createStore();
+    scan(store, codes);
+    store.update({ projectId: 'project-1', operations: [{ op: 'cite', citation: { fromNodeId: 'document:hash-1', toNodeId: 'entity:PERSONNE_PHYSIQUE_01', relation: 'mentions', texte: 'Jean Dupont signe.', pieceId: 'document:hash-1' } }] });
+    scan(store, codes, [contract], [], 'Jean Dupont est cité ailleurs dans le texte.');
+    const citations = store.snapshot('project-1').citations.map((citation) => citation.texte);
+    expect(citations).toEqual(['Jean Dupont, demeurant 12 rue des Lilas, Paris, achète.', 'Société Exemple SAS, représentée par son gérant, vend le fonds.', 'Jean Dupont signe.']);
+  });
+
+  it('keeps a corrected date and a removed excluded mention through a second scan, and adds a new entity with its citation', () => {
+    const store = createStore();
+    scan(store, codes);
+    store.update({ projectId: 'project-1', operations: [
+      { op: 'upsertNode', node: { id: 'document:hash-1', kind: 'document', label: 'Contrat.pdf', data: { path: '/cases/one/Contrat.pdf', nature: 'Contrat' }, date: '2024-02-02' } },
+      { op: 'unlink', link: { fromNodeId: 'document:hash-1', toNodeId: 'entity:SOCIETE_SAS_01', relation: 'mentions' } },
+      { op: 'excludeLink', exclusion: { piece: 'document:hash-1', entite: 'entity:SOCIETE_SAS_01', relation: 'mentions' } },
+    ] });
+    scan(store, { ...codes, ADRESSE_01: '12 rue des Lilas, Paris' }, [{ ...contract, entityCodes: [...contract.entityCodes, 'ADRESSE_01'] }]);
+    const snapshot = store.snapshot('project-1');
+    expect(snapshot.nodes.find((node) => node.id === 'document:hash-1')?.date).toBe('2024-02-02');
+    expect(links(store)).toEqual(['document:hash-1>entity:ADRESSE_01', 'document:hash-1>entity:PERSONNE_PHYSIQUE_01']);
+    expect(snapshot.citations.find((citation) => citation.toNodeId === 'entity:ADRESSE_01')?.texte).toBe('Jean Dupont, demeurant 12 rue des Lilas, Paris, achète.');
+    expect(snapshot.nodes.map((node) => node.id)).toContain('entity:SOCIETE_SAS_01');
+    expect(snapshot.exclusions).toEqual([]);
+  });
+
+  it('does not recreate a term excluded for the case, as node, mapping, alias or link', () => {
+    const store = createStore();
+    store.update({ projectId: 'project-1', operations: [{ op: 'excludeTerm', term: 'société exemple sas' }] });
+    scan(store, codes);
+    const snapshot = store.snapshot('project-1');
+    expect(snapshot.nodes.map((node) => node.id)).not.toContain('entity:SOCIETE_SAS_01');
+    expect(snapshot.mappings.map((mapping) => mapping.real)).toEqual(['Jean Dupont']);
+    expect(links(store)).toEqual(['document:hash-1>entity:PERSONNE_PHYSIQUE_01']);
+    expect(snapshot.citations).toHaveLength(1);
+    expect(snapshot.exclusions).toEqual(['société exemple sas']);
+  });
+
+  it('drops an excluded term from the aliases and mappings of an entity that is kept', () => {
+    const store = createStore();
+    store.update({ projectId: 'project-1', operations: [{ op: 'excludeTerm', term: 'M. Dupont' }] });
+    store.mergeScan('project-1', scanResultOperations({ projectId: 'project-1', mapping: { mapping: { 'Jean Dupont': 'PERSONNE_PHYSIQUE_01', 'M. Dupont': 'PERSONNE_PHYSIQUE_01', 'J. Dupont': 'PERSONNE_PHYSIQUE_01' } }, documents: [] }));
+    const snapshot = store.snapshot('project-1');
+    expect(snapshot.nodes.find((node) => node.id === 'entity:PERSONNE_PHYSIQUE_01')?.aliases).toEqual(['J. Dupont']);
+    expect(snapshot.mappings.map((mapping) => mapping.real).sort()).toEqual(['J. Dupont', 'Jean Dupont']);
+  });
+
+  it('does not bring back an alias removed and excluded for its entity', () => {
+    const store = createStore();
+    const withVariants = { mapping: { 'Jean Dupont': 'PERSONNE_PHYSIQUE_01', 'M. Dupont': 'PERSONNE_PHYSIQUE_01' } };
+    store.mergeScan('project-1', scanResultOperations({ projectId: 'project-1', mapping: withVariants, documents: [] }));
+    store.update({ projectId: 'project-1', operations: [
+      { op: 'upsertNode', node: { id: 'entity:PERSONNE_PHYSIQUE_01', kind: 'person', label: 'Jean Dupont', aliases: [], data: { code: 'PERSONNE_PHYSIQUE_01' } } },
+      { op: 'deleteMapping', mapping: { nodeId: 'entity:PERSONNE_PHYSIQUE_01', real: 'M. Dupont' } },
+      { op: 'excludeAlias', exclusion: { entite: 'entity:PERSONNE_PHYSIQUE_01', alias: 'm. dupont' } },
+    ] });
+    store.mergeScan('project-1', scanResultOperations({ projectId: 'project-1', mapping: withVariants, documents: [] }));
+    const snapshot = store.snapshot('project-1');
+    expect(snapshot.nodes.find((node) => node.id === 'entity:PERSONNE_PHYSIQUE_01')?.aliases).toEqual([]);
+    expect(snapshot.mappings.map((mapping) => mapping.real)).toEqual(['Jean Dupont']);
+    expect(snapshot.exclusions).toEqual([]);
+  });
+
+  it('does not recreate an institutional term and cites nothing for it', () => {
+    useInstitutionalTerms(['Greffe Exemple']);
+    const store = createStore();
+    scan(store, { ...codes, SOCIETE_SAS_02: 'Greffe Exemple' }, [{ ...contract, entityCodes: [...contract.entityCodes, 'SOCIETE_SAS_02'] }], [], `${markdown} Le Greffe Exemple a enregistré.`);
+    const snapshot = store.snapshot('project-1');
+    expect(snapshot.nodes.map((node) => node.id)).not.toContain('entity:SOCIETE_SAS_02');
+    expect(snapshot.mappings.map((mapping) => mapping.real).sort()).toEqual(['Jean Dupont', 'Société Exemple SAS']);
+    expect(snapshot.citations).toHaveLength(2);
+  });
+
+  it('keeps the case exclusions through scans and a scan of part of the case erases nothing', () => {
+    const store = createStore();
+    store.update({ projectId: 'project-1', operations: [
+      { op: 'excludeTerm', term: 'RCS de Paris' },
+      { op: 'excludeLink', exclusion: { piece: 'document:hash-9', entite: 'entity:SOCIETE_SAS_01', relation: 'mentions' } },
+      { op: 'excludeAlias', exclusion: { entite: 'entity:SOCIETE_SAS_01', alias: 'La Société' } },
+    ] });
+    const second = { id: 'hash-2', name: 'Facture.pdf', path: '/cases/one/Facture.pdf', metadata: {}, entityCodes: ['SOCIETE_SAS_01'] };
+    scan(store, codes, [contract, second], ['Mme Reynaud']);
+    const before = store.snapshot('project-1');
+    scan(store, { SOCIETE_SAS_01: 'Société Exemple SAS' }, [second], ['Greffe Exemple']);
+    const after = store.snapshot('project-1');
+    expect(after.nodes.map((node) => node.id)).toEqual(before.nodes.map((node) => node.id));
+    expect(after.links).toEqual(before.links);
+    expect(after.mappings).toEqual(before.mappings);
+    expect(after.citations).toEqual(before.citations);
+    expect(after.exclusions).toEqual(['RCS de Paris', 'Mme Reynaud', 'Greffe Exemple']);
+    const raw = new Database((store as unknown as { database: InstanceType<typeof Database> }).database.name);
+    const stored = JSON.parse((raw.prepare('SELECT data_json FROM piecemaker_nodes WHERE id=?').get(EXCLUSIONS_NODE_ID) as { data_json: string }).data_json);
+    raw.close();
+    expect(stored.liens).toEqual([{ piece: 'document:hash-9', entite: 'entity:SOCIETE_SAS_01', relation: 'mentions' }]);
+    expect(stored.alias).toEqual([{ entite: 'entity:SOCIETE_SAS_01', alias: 'La Société' }]);
+  });
+
+  it('records each exclusion once, validates it, and rejects the exclusion operations in a scan', () => {
+    const store = createStore();
+    const operations = [
+      { op: 'excludeTerm', term: 'RCS de Paris' },
+      { op: 'excludeTerm', term: 'rcs de  paris' },
+      { op: 'excludeTerm', term: 'RCS de Pàris' },
+      { op: 'excludeLink', exclusion: { piece: 'document:a', entite: 'entity:B', relation: 'mentions' } },
+      { op: 'excludeLink', exclusion: { piece: 'document:a', entite: 'entity:B', relation: 'mentions' } },
+      { op: 'excludeAlias', exclusion: { entite: 'entity:B', alias: 'Alias' } },
+      { op: 'excludeAlias', exclusion: { entite: 'entity:B', alias: 'ALIAS' } },
+    ] as KnowledgeUpdateOperation[];
+    store.update({ projectId: 'project-1', operations });
+    expect(store.snapshot('project-1').exclusions).toEqual(['RCS de Paris', 'rcs de  paris']);
+    const raw = new Database((store as unknown as { database: InstanceType<typeof Database> }).database.name);
+    const stored = JSON.parse((raw.prepare('SELECT data_json FROM piecemaker_nodes WHERE id=?').get(EXCLUSIONS_NODE_ID) as { data_json: string }).data_json);
+    raw.close();
+    expect(stored.liens).toHaveLength(1);
+    expect(stored.alias).toHaveLength(1);
+    expect(stored.systemRole).toBe('gliner-exclusions');
+    expect(() => store.update({ projectId: 'project-1', operations: [{ op: 'excludeTerm', term: '  ' }] })).toThrow(/term/);
+    expect(() => store.update({ projectId: 'project-1', operations: [{ op: 'excludeLink', exclusion: { piece: 'document:a', entite: '', relation: 'mentions' } }] })).toThrow(/exclusion.entite/);
+    expect(() => store.update({ projectId: 'project-1', operations: [{ op: 'excludeAlias', exclusion: { entite: 'entity:B', alias: '' } }] })).toThrow(/exclusion.alias/);
+    expect(() => store.mergeScan('project-1', [{ op: 'excludeTerm', term: 'x' }])).toThrow(/mergeScan only accepts/);
+  });
+
+  it('makes the exclusions of a renamed piece or entity follow the new identifier', () => {
+    const store = createStore();
+    store.update({ projectId: 'project-1', operations: [
+      { op: 'upsertNode', node: { id: 'document:old', kind: 'document', label: 'Contrat.pdf' } },
+      { op: 'upsertNode', node: { id: 'entity:PERSONNE_01', kind: 'person', label: 'Jean Dupont' } },
+      { op: 'excludeLink', exclusion: { piece: 'document:old', entite: 'entity:SOCIETE_SAS_01', relation: 'mentions' } },
+      { op: 'excludeAlias', exclusion: { entite: 'entity:PERSONNE_01', alias: 'M. Dupont' } },
+      { op: 'renameNode', rename: { fromNodeId: 'document:old', toNodeId: 'document:new' } },
+      { op: 'renameNode', rename: { fromNodeId: 'entity:PERSONNE_01', toNodeId: 'entity:PERSONNE_PHYSIQUE_01' } },
+    ] });
+    const raw = new Database((store as unknown as { database: InstanceType<typeof Database> }).database.name);
+    const stored = JSON.parse((raw.prepare('SELECT data_json FROM piecemaker_nodes WHERE id=?').get(EXCLUSIONS_NODE_ID) as { data_json: string }).data_json);
+    raw.close();
+    expect(stored.liens).toEqual([{ piece: 'document:new', entite: 'entity:SOCIETE_SAS_01', relation: 'mentions' }]);
+    expect(stored.alias).toEqual([{ entite: 'entity:PERSONNE_PHYSIQUE_01', alias: 'M. Dupont' }]);
+  });
+});
+
+describe('ghost documents', () => {
+  const directory = (): string => { const folder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-ghost-'))); directories.push(folder); return folder; };
+  const caseDatabase = (): string => {
+    const folder = directory();
+    const databasePath = path.join(folder, 'auth.db');
+    const database = new Database(databasePath);
+    database.exec('CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT NOT NULL UNIQUE)');
+    database.prepare('INSERT INTO projects (project_id, project_path) VALUES (?, ?)').run('project-1', '/cases/one');
+    database.close();
+    return databasePath;
+  };
+  const seed = (databasePath: string, operations: KnowledgeUpdateOperation[]): void => {
+    const store = new KnowledgeStore(databasePath);
+    store.update({ projectId: 'project-1', operations });
+    store.close();
+  };
+  const idsAfterReopening = (databasePath: string): string[] => {
+    const store = new KnowledgeStore(databasePath);
+    stores.push(store);
+    return store.snapshot('project-1').nodes.map((node) => node.id).sort();
+  };
+  const document = (id: string, file: string, date?: string): KnowledgeUpdateOperation => ({ op: 'upsertNode', node: { id, kind: 'document', label: path.basename(file), data: { path: file }, date } });
+
+  it('removes a document without links whose file is gone while the same file exists under another node', () => {
+    const databasePath = caseDatabase();
+    const folder = directory();
+    fs.mkdirSync(path.join(folder, 'Procédure'));
+    fs.writeFileSync(path.join(folder, 'Procédure', '2024-01-09_Contrat.pdf'), 'x');
+    seed(databasePath, [document('document:ghost', path.join(folder, '2024-01-09_Contrat.pdf'), '2024-01-09'), document('document:moved', path.join(folder, 'Procédure', '2024-01-09_Contrat.pdf'), '2024-01-09')]);
+    expect(idsAfterReopening(databasePath)).toEqual(['document:moved']);
+    expect(idsAfterReopening(databasePath)).toEqual(['document:moved']);
+  });
+
+  it('keeps a legitimate piece: file present, links or citations, no counterpart, or a date to preserve', () => {
+    const databasePath = caseDatabase();
+    const folder = directory();
+    fs.mkdirSync(path.join(folder, 'Procédure'));
+    fs.writeFileSync(path.join(folder, 'Procédure', 'Bail.pdf'), 'x');
+    fs.writeFileSync(path.join(folder, 'Present.pdf'), 'x');
+    fs.writeFileSync(path.join(folder, 'Procédure', 'Present.pdf'), 'x');
+    fs.writeFileSync(path.join(folder, 'Procédure', 'Datee.pdf'), 'x');
+    seed(databasePath, [
+      document('document:linked', path.join(folder, 'Bail.pdf')),
+      document('document:successor', path.join(folder, 'Procédure', 'Bail.pdf')),
+      { op: 'upsertNode', node: { id: 'entity:PERSONNE_01', kind: 'person', label: 'Jean Dupont' } },
+      { op: 'link', link: { fromNodeId: 'document:linked', toNodeId: 'entity:PERSONNE_01', relation: 'mentions' } },
+      document('document:offline', path.join(folder, 'Lettre.pdf')),
+      document('document:here', path.join(folder, 'Present.pdf')),
+      document('document:also-here', path.join(folder, 'Procédure', 'Present.pdf')),
+      document('document:corrected', path.join(folder, 'Datee.pdf'), '2024-03-03'),
+      document('document:corrected-successor', path.join(folder, 'Procédure', 'Datee.pdf'), '2024-04-04'),
+      document('document:no-path', ''),
+    ]);
+    expect(idsAfterReopening(databasePath)).toEqual(['document:also-here', 'document:corrected', 'document:corrected-successor', 'document:here', 'document:linked', 'document:no-path', 'document:offline', 'document:successor', 'entity:PERSONNE_01']);
   });
 });

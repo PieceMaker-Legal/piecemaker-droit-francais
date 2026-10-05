@@ -7,7 +7,7 @@ import path from 'node:path';
 import { findApplicationRoot, getModuleDirectory } from '../../shared/utils.js';
 import { resolveKnowledgeDatabasePath } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
 import type { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
-import { persistScanResult, scanResultOperations } from '../../../plugins/piecemaker-dossier/src/scan-result.js';
+import { persistScanResult } from '../../../plugins/piecemaker-dossier/src/scan-result.js';
 import type { GlinerDocument, GlinerMappingDocument, JsonData } from '../../../plugins/piecemaker-dossier/src/types.js';
 
 import { OcrRequiredError } from './scan-jobs.js';
@@ -136,6 +136,15 @@ function documentsFromIndex(projectPath: string, files: string[], documentIndex:
   });
 }
 
+function convertedMarkdown(projectPath: string, document: GlinerDocument): string | null {
+  try {
+    const markdown = markdownCounterpart(String(document.path || ''), projectPath);
+    return markdown.exists ? fs.readFileSync(markdown.path, 'utf8') : null;
+  } catch {
+    return null;
+  }
+}
+
 function pythonExecutable(explicit: string | undefined): string {
   if (explicit) return explicit;
   if (process.env.PYTHON_PATH) return process.env.PYTHON_PATH;
@@ -237,15 +246,13 @@ export function createKnowledgePipeline(options: PipelineOptions) {
         }));
       } catch (error) {
         if (ocrRequired) throw new OcrRequiredError(ocrRequired);
-        if (received) options.store.update({ projectId, operations: scanResultOperations({ projectId, mapping: received, documents: [] }) });
+        if (received) persistScanResult({ projectId, mapping: received, documents: [] }, options.store);
         throw error;
       }
       const mapping: GlinerMappingDocument = received || seed;
       const documents = documentsFromIndex(projectPath, files, readDocumentIndex(projectPath));
       const scanResult = { projectId, mapping, documents };
-      const result = explicitFiles
-        ? options.store.update({ projectId, operations: scanResultOperations(scanResult) })
-        : persistScanResult(scanResult, options.store);
+      const result = persistScanResult(scanResult, options.store, (document) => convertedMarkdown(projectPath, document));
       return { ...result, documents: documents.length };
     },
 

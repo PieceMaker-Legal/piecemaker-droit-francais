@@ -11,6 +11,9 @@ import type {
 import { EXCLUSIONS_NODE_ID } from './types.js';
 import { KnowledgeStore, splitDocumentDate } from './knowledge.js';
 import { isInstitutionalEntity } from './institutional-terms.js';
+import { sentenceContaining } from './excerpt.js';
+
+export type MarkdownReader = (document: GlinerDocument) => string | null;
 
 const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 const strings = (value: unknown): string[] => Array.isArray(value) ? [...new Set(value.map(text).filter(Boolean))] : [];
@@ -78,7 +81,7 @@ function entityNodes(mapping: GlinerMappingDocument): Map<string, KnowledgeNodeI
   return nodes;
 }
 
-function documentOperations(documents: GlinerDocument[], nodes: Map<string, KnowledgeNodeInput>): KnowledgeUpdateOperation[] {
+function documentOperations(documents: GlinerDocument[], nodes: Map<string, KnowledgeNodeInput>, readMarkdown?: MarkdownReader): KnowledgeUpdateOperation[] {
   const operations: KnowledgeUpdateOperation[] = [];
   for (const document of documents) {
     const id = text(document.id);
@@ -86,15 +89,19 @@ function documentOperations(documents: GlinerDocument[], nodes: Map<string, Know
     if (!id || !name) continue;
     const { date, data: metadata } = splitDocumentDate(record(document.metadata));
     operations.push({ op: 'upsertNode', node: { id: documentId(id), kind: 'document', label: name, data: { path: text(document.path), ...metadata }, date: date ?? undefined } });
-    for (const code of strings(document.entityCodes)) {
-      if (!nodes.has(code)) continue;
+    const codes = strings(document.entityCodes).filter((code) => nodes.has(code));
+    const markdown = codes.length && readMarkdown ? readMarkdown(document) : null;
+    for (const code of codes) {
       operations.push({ op: 'link', link: { fromNodeId: documentId(id), toNodeId: nodeId(code), relation: 'mentions', data: {} } });
+      const node = nodes.get(code) as KnowledgeNodeInput;
+      const excerpt = markdown ? sentenceContaining(markdown, [node.label || '', ...(node.aliases || [])].filter(Boolean)) : null;
+      if (excerpt) operations.push({ op: 'cite', citation: { fromNodeId: documentId(id), toNodeId: nodeId(code), relation: 'mentions', texte: excerpt, pieceId: documentId(id) } });
     }
   }
   return operations;
 }
 
-export function scanResultOperations(result: GlinerScanResult): KnowledgeUpdateOperation[] {
+export function scanResultOperations(result: GlinerScanResult, readMarkdown?: MarkdownReader): KnowledgeUpdateOperation[] {
   const nodes = entityNodes(result.mapping);
   const operations: KnowledgeUpdateOperation[] = [...nodes.values()].map((node) => ({ op: 'upsertNode', node }));
   operations.push(exclusionNodeOperation(result.mapping.ignored));
@@ -103,15 +110,15 @@ export function scanResultOperations(result: GlinerScanResult): KnowledgeUpdateO
       operations.push({ op: 'upsertMapping', mapping: { nodeId: nodeId(code), real, masked: code, data: {} } });
     }
   }
-  operations.push(...documentOperations(result.documents, nodes));
+  operations.push(...documentOperations(result.documents, nodes, readMarkdown));
   return operations;
 }
 
-export function persistScanResult(result: GlinerScanResult, store?: KnowledgeStore): KnowledgeUpdateResult {
-  if (store) return store.mergeScan(result.projectId, scanResultOperations(result));
+export function persistScanResult(result: GlinerScanResult, store?: KnowledgeStore, readMarkdown?: MarkdownReader): KnowledgeUpdateResult {
+  if (store) return store.mergeScan(result.projectId, scanResultOperations(result, readMarkdown));
   const ownedStore = new KnowledgeStore();
   try {
-    return ownedStore.mergeScan(result.projectId, scanResultOperations(result));
+    return ownedStore.mergeScan(result.projectId, scanResultOperations(result, readMarkdown));
   } finally {
     ownedStore.close();
   }

@@ -8,6 +8,7 @@ import test from 'node:test';
 import Database from 'better-sqlite3';
 
 import { KnowledgeStore } from '../../../../plugins/piecemaker-dossier/src/knowledge.js';
+import { persistScanResult } from '../../../../plugins/piecemaker-dossier/src/scan-result.js';
 import { createKnowledgePipeline, defaultScanFiles } from '../pipeline.js';
 
 function writeFile(root: string, relative: string, contents = 'x') {
@@ -85,6 +86,46 @@ test('rename moves the piece, its markdown and its document node with its links'
     assert.deepEqual(await pipeline.pieces('project-1'), [
       { path: moved.current, status: 'awaiting-scan', markdown: 'Fichiers convertis PieceMaker/2024-01-09_Jugement du Tribunal judiciaire de Paris.md' },
     ]);
+  } finally {
+    database.close();
+    if (previousTerms === undefined) delete process.env.PIECEMAKER_INSTITUTIONAL_TERMS;
+    else process.env.PIECEMAKER_INSTITUTIONAL_TERMS = previousTerms;
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a scan after a rename leaves no ghost node, keeps the citations and adds nothing twice', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-rescan-')));
+  const termsFile = path.join(root, 'institutional-terms.json');
+  fs.writeFileSync(termsFile, JSON.stringify({ version: 1, terms: [] }));
+  const previousTerms = process.env.PIECEMAKER_INSTITUTIONAL_TERMS;
+  process.env.PIECEMAKER_INSTITUTIONAL_TERMS = termsFile;
+  const database = new Database(':memory:');
+  database.exec('CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT NOT NULL UNIQUE)');
+  database.prepare('INSERT INTO projects (project_id, project_path) VALUES (?, ?)').run('project-1', root);
+  const store = new KnowledgeStore(database);
+  try {
+    writeFile(root, path.join('Pièces', 'contrat.pdf'));
+    writeFile(root, path.join('Fichiers convertis PieceMaker', 'contrat.md'), 'Jean Dupont signe le contrat avec Société Exemple SAS.');
+    const hash = (relative: string) => crypto.createHash('sha256').update(relative).digest('hex');
+    const scanOf = (relative: string) => ({
+      projectId: 'project-1',
+      mapping: { mapping: { 'Jean Dupont': 'PERSONNE_PHYSIQUE_01' } },
+      documents: [{ id: hash(relative), name: path.basename(relative), path: path.join(root, relative), metadata: {}, entityCodes: ['PERSONNE_PHYSIQUE_01'] }],
+    });
+    const reader = () => 'Jean Dupont signe le contrat avec Société Exemple SAS.';
+    persistScanResult(scanOf('Pièces/contrat.pdf'), store, reader);
+    const projects = { getProjectById: (id: string) => (id === 'project-1' ? { project_id: id, project_path: root } : null) };
+    const pipeline = createKnowledgePipeline({ applicationRoot: root, projects, store });
+
+    const renamed = await pipeline.rename('project-1', 'Pièces/contrat.pdf', '2024-01-09_Contrat de vente');
+    persistScanResult(scanOf(renamed.current), store, reader);
+
+    const graph = store.snapshot('project-1');
+    const after = `document:${hash(renamed.current)}`;
+    assert.deepEqual(graph.nodes.filter((node) => node.kind === 'document').map((node) => node.id), [after]);
+    assert.deepEqual(graph.links.map((link) => [link.fromNodeId, link.toNodeId]), [[after, 'entity:PERSONNE_PHYSIQUE_01']]);
+    assert.deepEqual(graph.citations.map((citation) => [citation.pieceId, citation.texte]), [[after, 'Jean Dupont signe le contrat avec Société Exemple SAS.']]);
   } finally {
     database.close();
     if (previousTerms === undefined) delete process.env.PIECEMAKER_INSTITUTIONAL_TERMS;

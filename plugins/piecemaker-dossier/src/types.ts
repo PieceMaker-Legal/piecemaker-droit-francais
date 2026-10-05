@@ -113,7 +113,10 @@ export type KnowledgeUpdateOperation =
   | { op: 'deleteMapping'; mapping: Pick<KnowledgeMappingInput, 'nodeId' | 'real'> }
   | { op: 'removePartyDesignation'; nodeId: string }
   | { op: 'deleteNode'; nodeId: string }
-  | { op: 'renameNode'; rename: { fromNodeId: string; toNodeId: string } };
+  | { op: 'renameNode'; rename: { fromNodeId: string; toNodeId: string } }
+  | { op: 'excludeTerm'; term: string }
+  | { op: 'excludeLink'; exclusion: { piece: string; entite: string; relation: string } }
+  | { op: 'excludeAlias'; exclusion: { entite: string; alias: string } };
 
 export type KnowledgeUpdateInput = {
   projectId: string;
