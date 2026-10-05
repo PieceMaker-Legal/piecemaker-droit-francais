@@ -3,6 +3,54 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.22](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.21...v2.0.22) (2026-10-05)
+
+### New Features
+
+* **anonymisation:** conserver les termes institutionnels dans la base SQLite ([ee23510](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ee235102056c87dc83168dc38f7718cabbc2253a))
+* **dossier:** catégoriser une sélection de la pièce par clic droit ([c582747](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c582747aa6a200485ba91b6197528b644278fbb4))
+* **dossier:** citations, exclusions et rafraîchissement dans l'onglet Dossier ([4673c1e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4673c1e421dbd86e8eaf52edfb11ea9c6a3ec00a))
+* **dossier:** date en colonne, citations des liens, scan qui ne fait qu'ajouter ([01562f1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/01562f1f6538e8edecb12c5651eda26a08d9db75))
+* **dossier:** exclusions par dossier et citations extraites par le scan ([476f830](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/476f8302ff75fafee782036ba4dec2fb340ba937))
+* **dossier:** ouvrir les annonces BODACC dans la visionneuse au lieu de l'accordéon ([aa97a32](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/aa97a3232e7f8436788b127bdac49c3a0e94687d))
+* **dossier:** proposer de ne plus jamais pseudonymiser une entité à sa suppression ([46397a4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/46397a4bce3f57523d32b655503d59fecab38e04))
+* **dossier:** renommer les pièces et trier le dossier depuis le Tabular Review ([efa9586](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/efa958607c06f19ea5758ffd5dab926c96ce91e4))
+* **dossier:** saisir directement un type de pièce personnalisé ([c681005](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c6810059344f50a7c72987f258b6ab9cf5c72124))
+* **dossier:** surlignage pastel des pièces selon le camp et le type ([fecf9e6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fecf9e60dc46afe3fcb0a5c4f675285e1f765ca6))
+* **dossier:** teintes pastel pour client, partie adverse et tiers ([11f6d1c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/11f6d1c99ba66aa2708466647d4bb3172392da9a))
+* **knowledge:** moteur de l'outil sql ([3abbac0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3abbac0890de6ec76d57059c7634e1bd3b057e87))
+* **mcp:** outil sql pour Claude, Codex et Vibe ([eb7ec99](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/eb7ec99119af2818618dbefa05feced794590ddd))
+* **tabular-review:** supprimer une review de l'historique et choisir le modèle des relances ([78dbdd4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/78dbdd450870e30820dab69a4459a24619c6cae6))
+
+### Bug Fixes
+
+* **anonymisation:** ne jamais pseudonymiser « Serveur MCP » ([c3fc5ac](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c3fc5acecf47fd6d00e335d61a6dee8c1c61b2c2))
+* **anonymisation:** retirer trois termes trop larges de la liste institutionnelle par défaut ([879e564](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/879e5642d437983cda749b141bc97915ead5cfea))
+* **anonymizer:** garder la bannière GLiNER2-PII hors du protocole du worker ([49d01a2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/49d01a2bbc300b716ce1c1b3be878e6d7f86177b))
+* **dossier:** n'afficher que les personnes citées dans la pièce ([265f166](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/265f1668244cf605f8d02becd4d42f7e4a9e7b70))
+* **dossier:** texte principal clair en thème sombre ([c04f777](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c04f77707bb9ef9f650320e7397f46e82557e897))
+* **dossier:** trier alphabétiquement la liste des types de pièce ([0d881b2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0d881b2576960710622132bf544d662ac0de6743))
+* **guard:** scanner une seule fois les commits de tous les refs poussés ([cc066b7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/cc066b73cce314f2a75b97d154111bb2b03622c4))
+* **timesheet:** eclaircit le texte du mode sombre ([5e9dbe9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5e9dbe948379b99653930f405fde4e45ed06d8bf))
+
+### Refactoring
+
+* **dossier:** corrections uniquement en base, retrait des vestiges document-index ([e7a5bf6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e7a5bf6218df39941822f96960f3fc098a455d3a))
+
+### Documentation
+
+* **sql:** documenter l'outil sql, les citations et le scan additif ([6b1c964](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6b1c9645b03a56a7a42b5f405b4fcacbffc7775f))
+
+### Styling
+
+* **dossier:** ne colorer que le liseré latéral des cartes de parties ([6ebd91b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6ebd91bbed605cc1c6767668171ccb0ba3851d2e))
+
+### Maintenance
+
+* **anonymisation:** retirer le code mort autour des termes institutionnels et du worker ([ec2220e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ec2220e20e46d44cbc60ab5df894189e837acb9f))
+* ne plus suivre les fichiers .pyc ([302a576](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/302a576dc03bee44002bb3031312ce68e862270d))
+* retirer les fichiers .pyc du dépôt ([d7b94e4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d7b94e4d64c79094e1fcb0d9d027b0647a52246d))
+
 ## [2.0.21](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.20...v2.0.21) (2026-10-03)
 
 ## [2.0.20](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.19...v2.0.20) (2026-10-03)
