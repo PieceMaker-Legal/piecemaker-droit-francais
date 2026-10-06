@@ -158,7 +158,7 @@ si tout passe, 1 sinon.
 - un Python 3.10 à 3.13 déjà présent sur le poste, sinon un CPython 3.12
   autonome (python-build-standalone) dans `<destination>/python` ;
 - le venv `<destination>/venv`, avec `requirements.txt` (MarkItDown, pypdf,
-  GLiNER, Presidio, spaCy) puis `mineru[pipeline,vlm]==2.7.6` ;
+  GLiNER2) puis `mineru[pipeline,vlm]==2.7.6` ;
 - les modèles MinerU du moteur *pipeline* (OCR des pièces scannées) et le
   modèle GLiNER2-PII.
 
