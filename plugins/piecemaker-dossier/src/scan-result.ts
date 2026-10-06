@@ -32,6 +32,7 @@ function kindFromCode(code: string, principal: string, bucket: string): NodeKind
   if (normalizedBucket.includes('societ') || normalizedCode.includes('MORALE') || normalizedCode.includes('SOCIETE')) return 'company';
   if (normalizedBucket.includes('adresse') || normalizedCode.startsWith('ADRESSE_') || normalizedCode.startsWith('LOCATION_')) return 'address';
   if (normalizedBucket.includes('siren') || normalizedCode.startsWith('SIREN_')) return 'siren';
+  if (normalizedCode.startsWith('SIRET_') || normalizedCode.startsWith('TVA_')) return 'other';
   if (normalizedCode.startsWith('IBAN_') || /^[A-Z]{2}\d{2}[A-Z0-9\s]{10,34}$/i.test(principal)) return 'iban';
   if (normalizedCode.startsWith('PHONE_') || normalizedCode.startsWith('TELEPHONE_')) return 'phone';
   if (normalizedCode.startsWith('EMAIL_') || normalizedCode.startsWith('MAIL_')) return 'email';
@@ -103,7 +104,15 @@ function documentOperations(documents: GlinerDocument[], nodes: Map<string, Know
 
 export function scanResultOperations(result: GlinerScanResult, readMarkdown?: MarkdownReader): KnowledgeUpdateOperation[] {
   const nodes = entityNodes(result.mapping);
-  const operations: KnowledgeUpdateOperation[] = [...nodes.values()].map((node) => ({ op: 'upsertNode', node }));
+  const operations: KnowledgeUpdateOperation[] = [];
+  // A code merged into another one by the pipeline (data.codes_retires): move its node, mappings and links onto the
+  // survivor before the upserts, so the next scan finds nothing left to move and the dropped code never stays in SQLite.
+  for (const [code, node] of nodes) {
+    for (const retired of strings(node.data?.codes_retires)) {
+      if (retired !== code) operations.push({ op: 'renameNode', rename: { fromNodeId: nodeId(retired), toNodeId: nodeId(code) } });
+    }
+  }
+  operations.push(...[...nodes.values()].map((node): KnowledgeUpdateOperation => ({ op: 'upsertNode', node })));
   operations.push(exclusionNodeOperation(result.mapping.ignored));
   for (const [code, node] of nodes) {
     for (const real of [node.label || '', ...(node.aliases || [])].filter(Boolean)) {

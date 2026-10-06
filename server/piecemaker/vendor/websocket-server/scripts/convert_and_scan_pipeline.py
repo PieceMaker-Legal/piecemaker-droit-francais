@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Set
 
 from smart_converter import mineru_available, needs_ocr
+from legal_forms import _FORM_NATIONALITY, _LEGAL_FORM_RE, extract_legal_form, normalize_entity_text
 
 
 EXIT_OCR_REQUIRED = 3
@@ -493,11 +494,9 @@ def normalize_name(text: str) -> str:
     # Convert to lowercase
     text_lower = text_no_accents.lower()
 
-    # Remove honorifics/titles (French and English)
-    # Matches: Mr., Mrs., Ms., Dr., M., Mme., Maître, etc.
-    # Important: "m." and "me." must have the dot to avoid matching "martin" or "marie"
-    honorifics_pattern = r'\b(mr\.?|mrs\.?|ms\.?|dr\.?|prof\.?|m\.|mme\.?|mlle\.?|maitre)\s*'
-    text_no_titles = re.sub(honorifics_pattern, '', text_lower, flags=re.IGNORECASE)
+    # Remove leading civilities (French and English): same vocabulary as strip_civility()
+    # A title without dot needs whitespace after it, so "Marie", "Meunier" stay intact
+    text_no_titles = CIVILITY_PREFIX.sub('', text_lower.strip())
 
     # Normalize whitespace (multiple spaces/newlines → single space)
     text_normalized = ' '.join(text_no_titles.split())
@@ -505,48 +504,26 @@ def normalize_name(text: str) -> str:
     return text_normalized.strip()
 
 
-def are_names_similar(name1: str, norm1: str, name2: str, norm2: str) -> bool:
-    """Check if two names refer to the same person.
+def cluster_person_groups(groups: List[List[str]]) -> List[List[int]]:
+    """Decide which groups of PERSON texts are the same person (whole tokens only).
 
-    Uses multiple matching strategies:
-    - Exact match after normalization
-    - Substring match (one contains the other, min 3 chars)
-    - Token-based match (all tokens of shorter name appear in longer)
-
-    Args:
-        name1: First name (original)
-        norm1: First name (normalized)
-        name2: Second name (original)
-        norm2: Second name (normalized)
-
-    Returns:
-        True if names are similar enough to be considered the same person
+    A group's tokens are the whitespace tokens of its normalized texts. Groups
+    with identical tokens are one person; a group whose tokens are strictly
+    contained in those of exactly one maximal group joins it. When several
+    maximal groups contain it ("Dumas" with "Laurent Dumas" and "Sophie Dumas")
+    it stays alone. Returns clusters of group indices, in order of appearance.
     """
-    # Exact match after normalization
-    if norm1 == norm2:
-        return True
-
-    # Substring match (one contains the other, min 3 chars)
-    min_length = min(len(norm1), len(norm2))
-    if min_length >= 3:
-        if norm1 in norm2 or norm2 in norm1:
-            return True
-
-    # Token-based match: all tokens of shorter name appear in longer
-    tokens1 = set(norm1.split())
-    tokens2 = set(norm2.split())
-
-    if not tokens1 or not tokens2:
-        return False
-
-    # Check if all tokens of shorter set appear in longer set
-    shorter_tokens = tokens1 if len(tokens1) <= len(tokens2) else tokens2
-    longer_tokens = tokens2 if len(tokens1) <= len(tokens2) else tokens1
-
-    if shorter_tokens and shorter_tokens.issubset(longer_tokens):
-        return True
-
-    return False
+    tokens = [
+        frozenset(token for text in texts for token in normalize_name(text).split())
+        or frozenset(text.casefold() for text in texts)
+        for texts in groups
+    ]
+    maximal = {own for own in tokens if not any(own < other for other in tokens)}
+    clusters: Dict[frozenset, List[int]] = {}
+    for index, own in enumerate(tokens):
+        supersets = [other for other in maximal if own < other]
+        clusters.setdefault(supersets[0] if len(supersets) == 1 else own, []).append(index)
+    return list(clusters.values())
 
 
 def count_gliner_chunks(md_file: str) -> int:
@@ -571,9 +548,9 @@ def emit_chunk_progress(current: int, total: int) -> None:
 def consolidate_duplicate_entities(entities: List[Dict]) -> List[Dict]:
     """Consolidate duplicate entities into single entries with variants.
 
-    Groups entities by similarity (exact duplicates and variations like
-    "Mr. Dupont" vs "Jean Dupont"), choosing the longest variant as
-    canonical and storing all unique variants.
+    Groups entities that are the same person (see cluster_person_groups, e.g.
+    "Mr. Dupont" vs "Jean Dupont"), choosing the longest variant as canonical
+    and storing all unique variants.
 
     Args:
         entities: List of entity dictionaries with 'text', 'score', etc.
@@ -584,37 +561,10 @@ def consolidate_duplicate_entities(entities: List[Dict]) -> List[Dict]:
     if not entities:
         return []
 
-    # Pre-compute normalized forms
-    entities_with_norm = [
-        {**entity, '_normalized': normalize_name(entity['text'])}
-        for entity in entities
+    groups = [
+        [entities[index] for index in cluster]
+        for cluster in cluster_person_groups([[entity['text']] for entity in entities])
     ]
-
-    # Group similar entities
-    groups = []
-    used_indices = set()
-
-    for i, entity1 in enumerate(entities_with_norm):
-        if i in used_indices:
-            continue
-
-        # Start a new group with this entity
-        group = [entity1]
-        used_indices.add(i)
-
-        # Find all similar entities
-        for j, entity2 in enumerate(entities_with_norm):
-            if j in used_indices:
-                continue
-
-            if are_names_similar(
-                entity1['text'], entity1['_normalized'],
-                entity2['text'], entity2['_normalized']
-            ):
-                group.append(entity2)
-                used_indices.add(j)
-
-        groups.append(group)
 
     # Consolidate each group
     consolidated = []
@@ -645,7 +595,7 @@ def consolidate_duplicate_entities(entities: List[Dict]) -> List[Dict]:
 
 CIVILITY_TITLE = (
     r"(?:monsieur|madame|mademoiselle|messieurs|mesdames|ma[iî]tre|docteure|doctoresse|docteur|professeure|professeur"
-    r"|mmes|mlles|mme|mlle|mm|m|me|mrs|mr|ms|miss|dr|pr|prof)\.?\s+"
+    r"|mmes|mlles|mme|mlle|mm|m|me|mrs|mr|ms|miss|dr|pr|prof)(?:\.\s*|\s+)"  # "M.Dupont" accepted (OCR), "Meunier" not
 )
 CIVILITY_PREFIX = re.compile(
     rf"^(?:{CIVILITY_TITLE}(?:(?:le|la|les)\s+(?={CIVILITY_TITLE}))?)+",
@@ -698,8 +648,9 @@ def _person_entry_texts(code: str, entry: Dict, reverse_mapping: Dict,
 
 def _merge_person_entry(merged_mapping: Dict, merged_reverse: Dict,
                         merged_extracted: Dict, code: str, texts: List[str],
-                        source_entry: Optional[Dict] = None) -> None:
-    entries = merged_extracted.setdefault("personnes_physiques", {})
+                        source_entry: Optional[Dict] = None,
+                        bucket: str = "personnes_physiques") -> None:
+    entries = merged_extracted.setdefault(bucket, {})
     entry = entries.setdefault(code, {
         "original": texts[0] if texts else "",
         "code": code,
@@ -720,47 +671,76 @@ def _merge_person_entry(merged_mapping: Dict, merged_reverse: Dict,
         entry.setdefault("recognizer", source_entry.get("recognizer", "unknown"))
 
 
-def _prune_existing_person_duplicates(merged_mapping: Dict, merged_reverse: Dict,
-                                       merged_extracted: Dict) -> None:
+def _record_retired_code(entries: Dict, survivor: str, dropped_code: str,
+                         dropped_entry: Optional[Dict] = None) -> None:
+    """Remember in the survivor's entry that `dropped_code` was merged into it.
+
+    To call from every merge that drops a code (persons, companies...), with
+    `entries` the extracted_data bucket holding the survivor. The retired codes
+    (the dropped one plus those it had itself retired) are stored, deduplicated
+    and in order, under `codes_retires`: merge_with_existing_mapping never
+    reissues them (older AI conversations may still contain them) and the
+    Node side moves the dropped code's SQLite rows onto the survivor.
+    """
+    entry = entries.setdefault(survivor, {"code": survivor})
+    entry["codes_retires"] = list(dict.fromkeys([
+        *(entry.get("codes_retires") or []),
+        *((dropped_entry or {}).get("codes_retires") or []),
+        dropped_code,
+    ]))
+
+
+def _merge_person_clusters(merged_mapping: Dict, merged_reverse: Dict, merged_extracted: Dict,
+                           new_groups: Dict[str, List[str]]) -> Dict[str, str]:
+    """Apply cluster_person_groups to every existing person code and every new group.
+
+    Existing codes of a cluster collapse into one survivor (party code first,
+    then DIRIGEANT_/AVOCAT_..., then the lowest PERSONNE_PHYSIQUE_; distinct party
+    codes are never merged). Returns {new group code: survivor} for the new groups
+    that join an existing code.
+    """
     entries = merged_extracted.setdefault("personnes_physiques", {})
-    mapping_texts_by_code: Dict[str, List[str]] = {}
+    mapping_texts: Dict[str, List[str]] = {}
     for text, code in merged_mapping.items():
-        mapping_texts_by_code.setdefault(code, []).append(text)
+        mapping_texts.setdefault(code, []).append(text)
+    person_codes = set(entries)
+    codes = [
+        code for code in dict.fromkeys([*entries, *merged_reverse, *merged_mapping.values()])
+        if _is_person_code(str(code), person_codes)
+    ]
+    texts = {code: _person_entry_texts(code, entries.get(code, {}), merged_reverse, mapping_texts.get(code))
+             for code in codes}
+    codes = [code for code in codes if texts[code]]
+    groups = [texts[code] for code in codes] + list(new_groups.values())
+    new_codes = list(new_groups)
 
-    canonical_by_name: Dict[str, str] = {}
-    for code in list(entries):
-        entry = entries.get(code, {})
-        texts = _person_entry_texts(
-            code,
-            entry,
-            merged_reverse,
-            mapping_texts_by_code.get(code),
-        )
-        names = [normalize_name(text) for text in texts]
-        names = list(dict.fromkeys(name for name in names if name))
-        survivor = next((canonical_by_name[name] for name in names if name in canonical_by_name), None)
-        if survivor is None:
-            for name in names:
-                canonical_by_name[name] = code
-            continue
-        if survivor == code:
-            continue
+    def is_party(code: str) -> bool:
+        return bool(re.match(r"(CLIENT|ADVERSAIRE)_", code))
 
-        _merge_person_entry(
-            merged_mapping,
-            merged_reverse,
-            merged_extracted,
-            survivor,
-            texts,
-            entry,
-        )
-        for name in names:
-            canonical_by_name[name] = survivor
-        for text, mapped_code in list(merged_mapping.items()):
-            if mapped_code == code:
-                merged_mapping[text] = survivor
-        merged_reverse.pop(code, None)
-        entries.pop(code, None)
+    def rank(code: str):
+        number = re.search(r"_(\d+)$", code)
+        kind = 0 if is_party(code) else 2 if code.startswith("PERSONNE_PHYSIQUE_") else 1
+        return kind, int(number.group(1)) if number else 0, code
+
+    attached: Dict[str, str] = {}
+    for cluster in cluster_person_groups(groups):
+        members = [codes[index] for index in cluster if index < len(codes)]
+        if not members:
+            continue
+        survivor = min(members, key=rank)
+        attached.update({new_codes[index - len(codes)]: survivor for index in cluster if index >= len(codes)})
+        for code in members:
+            if code == survivor or is_party(code):
+                continue
+            entry = entries.get(code, {})
+            _merge_person_entry(merged_mapping, merged_reverse, merged_extracted, survivor, texts[code], entry)
+            for text, mapped_code in list(merged_mapping.items()):
+                if mapped_code == code:
+                    merged_mapping[text] = survivor
+            merged_reverse.pop(code, None)
+            entries.pop(code, None)
+            _record_retired_code(entries, survivor, code, entry)
+    return attached
 
 
 def is_known_city_or_country(text: str) -> bool:
@@ -1087,7 +1067,7 @@ def parse_address(address_text: str) -> Dict:
 # Société codes : le sigle sert de préfixe (SA_1, SARL_1, SCI_1, GMBH_1, LLC_1…)
 # ---------------------------------------------------------------------------
 # Une organisation dont le nom (ou son contexte immédiat) porte une forme juridique
-# — détectée littéralement par scan_utils.extract_legal_form, qui a typé l'entité
+# — détectée littéralement par legal_forms.extract_legal_form, qui a typé l'entité
 # ORGANIZATION_<sigle> — est codée <sigle>_<n>. Sans sigle, elle tombe sur
 # PERS_MORALE_<n>. Chaque sigle a son propre compteur (SA_1, SA_2, puis SARL_1…),
 # non paddé, conformément au choix du cabinet. Les personnes/adresses gardent leur
@@ -1126,6 +1106,177 @@ def _next_societe_code(entity_type: str, societe_counters: Dict[str, int]) -> st
     return f"{key}_{n}"
 
 
+# ---------------------------------------------------------------------------
+# Même société : une seule règle de tri, dans le fichier, entre fichiers, en réparation
+# ---------------------------------------------------------------------------
+# GLiNER détecte, le code trie : il n'invente aucune variante et n'écarte aucune
+# détection. Deux textes sont la même société si leur clé (le texte sans sa forme
+# juridique, sans accents ni casse ni ponctuation) est identique et non vide — jamais
+# de sous-chaîne ("Orbex" ≠ "Orbex Holding"). Le code d'une société est, dans l'ordre :
+# un code de partie (CLIENT_/ADVERSAIRE_), puis le code de sa forme juridique (SA_1,
+# SARL_1…), puis PERS_MORALE_<n>. Le code de forme prime donc toujours sur PERS_MORALE.
+
+def company_key(text: str) -> str:
+    """Clé de comparaison d'une société : "Orbex S.A." et "ORBEX" → "orbex".
+
+    La forme juridique est retirée du texte d'origine (la regex est sensible à la
+    casse, voulu), avant de passer en minuscules.
+    """
+    bare = _LEGAL_FORM_RE.sub(" ", normalize_entity_text(text))
+    decomposed = unicodedata.normalize("NFKD", bare)
+    folded = "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
+    return " ".join(re.sub(r"[\W_]+", " ", folded).split())
+
+
+def _known_legal_form(token: str) -> Optional[str]:
+    """`token` s'il désigne une forme juridique connue (SA, GMBH…), sinon None."""
+    token = str(token).upper()
+    return token if token in _FORM_NATIONALITY else None
+
+
+def _societe_code_form(code: str) -> Optional[str]:
+    """Forme juridique que porte un code (SA_3, ORBEX SA, CLIENT_DEMANDEUR_SA_1) ; None pour PERS_MORALE."""
+    return _known_legal_form(_societe_counter_key_of_code(code))
+
+
+def _societe_text_form(texts: List[str]) -> Optional[str]:
+    """Première forme juridique lue dans les textes."""
+    return next((form for form in (extract_legal_form(text)[0] for text in texts) if form), None)
+
+
+def cluster_company_groups(groups: List[List[str]], forms: List[Optional[str]]) -> List[List[int]]:
+    """Decide which groups of ORGANIZATION texts are the same company.
+
+    Groups sharing a company_key are the same company. Several distinct legal
+    forms (SA / SAS) are never merged: one cluster per form, and the form-less
+    groups join only when a single form is present, else they form their own
+    cluster. Returns clusters of group indices, in order of appearance.
+    """
+    parent = list(range(len(groups)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    owner: Dict[str, int] = {}
+    for index, texts in enumerate(groups):
+        for key in filter(None, map(company_key, texts)):
+            parent[find(index)] = find(owner.setdefault(key, index))
+    components: Dict[int, List[int]] = {}
+    for index in range(len(groups)):
+        components.setdefault(find(index), []).append(index)
+
+    clusters: List[List[int]] = []
+    for members in components.values():
+        present = list(dict.fromkeys(forms[index] for index in members if forms[index]))
+        if len(present) <= 1:
+            clusters.append(members)
+            continue
+        clusters.extend([index for index in members if forms[index] == form] for form in present)
+        formless = [index for index in members if not forms[index]]
+        if formless:
+            clusters.append(formless)
+    return sorted(clusters, key=min)
+
+
+def _merge_societe_clusters(merged_mapping: Dict, merged_reverse: Dict, merged_extracted: Dict,
+                            new_groups: Dict[str, List[str]], mint_code) -> Dict[str, str]:
+    """Apply cluster_company_groups to every existing company code and every new group.
+
+    The survivor of a cluster is its party code, else its legal-form code, else
+    PERS_MORALE_<n>; the lowest number within a kind, an existing code before a new
+    one. Existing codes of a cluster collapse into it (distinct party codes are
+    never merged). When the survivor is a new group's code (a form code over an
+    existing PERS_MORALE), `mint_code(new code)` issues its real code. Returns
+    {new group code: survivor} for the new groups that join a code.
+    """
+    entries = merged_extracted.setdefault("societes", {})
+    mapping_texts: Dict[str, List[str]] = {}
+    for text, code in merged_mapping.items():
+        mapping_texts.setdefault(code, []).append(text)
+    texts = {code: _person_entry_texts(code, entry, merged_reverse, mapping_texts.get(code))
+             for code, entry in entries.items()}
+    codes = [code for code in entries if texts[code]]
+    new_codes = list(new_groups)
+    all_codes = codes + new_codes
+    groups = [texts[code] for code in codes] + list(new_groups.values())
+    forms = [_societe_code_form(code) or _societe_text_form(group) for code, group in zip(all_codes, groups)]
+
+    def is_party(code: str) -> bool:
+        return bool(re.match(r"(CLIENT|ADVERSAIRE)_", code))
+
+    def rank(index: int):
+        code = all_codes[index]
+        kind = 0 if is_party(code) else 1 if _societe_code_form(code) else 2
+        number = re.search(r"_(\d+)$", code)
+        return kind, index >= len(codes), int(number.group(1)) if number else 0, code
+
+    attached: Dict[str, str] = {}
+    for cluster in cluster_company_groups(groups, forms):
+        if len(cluster) < 2:
+            continue
+        best = min(cluster, key=rank)
+        joining = [all_codes[index] for index in cluster if index >= len(codes)]
+        if not joining:
+            survivor = all_codes[best]
+        elif best >= len(codes):
+            survivor = mint_code(all_codes[best])
+        else:
+            survivor = all_codes[best]
+        attached.update({code: survivor for code in joining})
+        for index in cluster:
+            code = all_codes[index]
+            if index >= len(codes) or code == survivor or is_party(code):
+                continue
+            entry = entries.get(code, {})
+            _merge_person_entry(merged_mapping, merged_reverse, merged_extracted, survivor, texts[code], entry, "societes")
+            for text, mapped_code in list(merged_mapping.items()):
+                if mapped_code == code:
+                    merged_mapping[text] = survivor
+            merged_reverse.pop(code, None)
+            entries.pop(code, None)
+            _record_retired_code(entries, survivor, code, entry)
+    return attached
+
+
+# ---------------------------------------------------------------------------
+# Même valeur écrite de plusieurs façons : un seul code
+# ---------------------------------------------------------------------------
+# Deux écritures d'un même identifiant, du même type, partagent un code ; la nouvelle
+# écriture devient une variante de l'entrée existante. Le type d'une entrée existante se
+# lit au préfixe de son code (le seed SQLite la range dans `autres` sans catégorie, et
+# merge_with_existing_mapping réécrit CREDIT_CARD_01 en CREDIT_01). Les autres types
+# (personnes, sociétés, adresses, e-mails, dates de naissance...) ne sont pas concernés.
+
+IDENTIFIER_KINDS = ("TELEPHONE", "SIREN", "SIRET", "NIR", "TVA", "IBAN", "CREDIT_CARD", "IMMATRICULATION")
+_CODE_PREFIX_KIND = {"PHONE": "TELEPHONE", "CREDIT": "CREDIT_CARD", **{kind: kind for kind in IDENTIFIER_KINDS}}
+_PHONE_INTERNATIONAL = re.compile(r"(?:\+|00)(?:33|262|590|594|596)(.*)", re.DOTALL)
+
+
+def identifier_kind(code: str) -> Optional[str]:
+    """Type d'identifiant d'un code (TELEPHONE_01, PHONE_02, CREDIT_CARD_01...), sinon None."""
+    return _CODE_PREFIX_KIND.get(str(code).split("_")[0].upper())
+
+
+def identifier_key(kind: str, text: str) -> Optional[str]:
+    """Clé de comparaison d'un identifiant : deux écritures de même type et de même clé sont la même valeur.
+
+    Téléphone : chiffres seuls, +33 / 0033 / +262 / +590 / +594 / +596 ramenés à « 0 » (un « (0) »
+    éventuel retiré). Autres identifiants : lettres et chiffres en majuscules. None pour un
+    autre type, ou si rien ne reste.
+    """
+    if kind == "TELEPHONE":
+        compact = re.sub(r"\s", "", text)
+        international = _PHONE_INTERNATIONAL.match(compact)
+        digits = re.sub(r"\D", "", international.group(1).replace("(0)", "") if international else compact)
+        return ("0" if international and digits else "") + digits or None
+    if kind in IDENTIFIER_KINDS:
+        return re.sub(r"[\W_]", "", text).upper() or None
+    return None
+
+
 def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
     """Convert consolidated entities to anonymization mapping format.
 
@@ -1162,6 +1313,7 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
         "PERSON": "personnes_physiques",
         "ORGANIZATION": "societes",
         "LOCATION": "adresses",
+        "SIREN": "siren",
         "EMAIL": "autres",
         "PHONE": "autres",
         "CREDIT_CARD": "autres",
@@ -1184,6 +1336,7 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
 
     # Track seen entities to avoid duplicates across files
     seen_entities = {}  # text -> code
+    seen_identifiers = {}  # (type, identifier_key) -> code
 
     # Consolidate PERSON entities to remove duplicates
     for entity_type in consolidated_entities.get("entities", {}).keys():
@@ -1205,6 +1358,15 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
             # Skip if already processed
             if text_lower in seen_entities:
                 mapping[text] = seen_entities[text_lower]
+                continue
+
+            # Same identifier written another way: a variant of the code of the first spelling
+            identifier = identifier_key(entity_type, text)
+            if identifier is not None and (entity_type, identifier) in seen_identifiers:
+                code = seen_identifiers[(entity_type, identifier)]
+                mapping[text] = code
+                seen_entities[text_lower] = code
+                extracted_data[category][code]["variants"].append(text)
                 continue
 
             # Generate code based on category
@@ -1233,6 +1395,8 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
 
             reverse_mapping[code] = [text]  # Principal value (array for consistency)
             seen_entities[text_lower] = code
+            if identifier is not None:
+                seen_identifiers[(entity_type, identifier)] = code
 
             # Store in extracted_data
             extracted_data[category][code] = {
@@ -1308,21 +1472,27 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         "autres": {**existing_mapping.get('extracted_data', {}).get('autres', {})}
     }
 
-    _prune_existing_person_duplicates(merged_mapping, merged_reverse, merged_extracted)
+    new_texts: Dict[str, List[str]] = {}
+    for text, code in new_mapping.get('mapping', {}).items():
+        new_texts.setdefault(code, []).append(text)
+    new_person_groups = {}
+    for code, entry in new_mapping.get('extracted_data', {}).get('personnes_physiques', {}).items():
+        texts = [
+            text for text in _person_entry_texts(code, entry, new_mapping.get('reverse_mapping', {}), new_texts.get(code))
+            if text.lower() not in ignored_lower
+        ]
+        if texts:
+            new_person_groups[code] = texts
+    person_survivors = _merge_person_clusters(merged_mapping, merged_reverse, merged_extracted, new_person_groups)
 
-    seen_entities_lower = {k.lower(): v for k, v in merged_mapping.items()}
-    existing_person_by_name: Dict[str, str] = {}
-    for code, entry in merged_extracted["personnes_physiques"].items():
-        for entity_text in _person_entry_texts(code, entry, merged_reverse):
-            normalized = normalize_name(entity_text)
-            if normalized:
-                existing_person_by_name.setdefault(normalized, code)
-    for entity_text, code in merged_mapping.items():
-        if "PERSONNE_PHYSIQUE_" not in str(code) and not str(code).startswith(("DIRIGEANT_", "AVOCAT_")):
-            continue
-        normalized = normalize_name(entity_text)
-        if normalized:
-            existing_person_by_name.setdefault(normalized, code)
+    new_societe_groups = {}
+    for code, entry in new_mapping.get('extracted_data', {}).get('societes', {}).items():
+        texts = [
+            text for text in _person_entry_texts(code, entry, new_mapping.get('reverse_mapping', {}), new_texts.get(code))
+            if text.lower() not in ignored_lower
+        ]
+        if texts:
+            new_societe_groups[code] = texts
 
     # Find highest existing code numbers per category
     code_counters = {
@@ -1337,7 +1507,18 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
     # ORBEX SA), là où un test par sous-chaîne ne reconnaîtrait pas SA_3.
     societe_counters: Dict[str, int] = {}
 
-    used_codes = set(merged_reverse) | set(merged_mapping.values()) | set(reserved_codes)
+    # Codes retired by a merge no longer appear anywhere else but must never be
+    # reissued to another entity.
+    def retired_in(*buckets: str) -> set:
+        return {
+            retired
+            for bucket in buckets
+            for entry in merged_extracted.get(bucket, {}).values()
+            for retired in (entry.get("codes_retires") or [])
+        }
+
+    retired_codes = retired_in(*merged_extracted)
+    used_codes = set(merged_reverse) | set(merged_mapping.values()) | set(reserved_codes) | retired_codes
     for code in used_codes:
         if not re.search(r"_\d+$", code):
             continue
@@ -1351,12 +1532,54 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
             num = int(code.split("_")[-1])
             code_counters["siren"] = max(code_counters["siren"], num + 1)
 
-    for code in set(merged_extracted.get("societes", {}).keys()) | set(reserved_codes):
+    for code in set(merged_extracted.get("societes", {}).keys()) | set(reserved_codes) | retired_in("societes"):
         match = re.search(r"_(\d+)$", code)
         if not match:
             continue
         key = _societe_counter_key_of_code(code)
-        societe_counters[key] = max(societe_counters.get(key, 0), int(match.group(1)) + 1)
+        societe_counters[key] = max(societe_counters.get(key, 0), int(match.group(1)))
+
+    # Sociétés : même société = même code (cf. cluster_company_groups). Un code de
+    # forme (SA_n) l'emporte sur PERS_MORALE_n ; les codes écartés sont retirés.
+    def next_societe_code(source_code: str) -> str:
+        # Le sigle du code d'origine est préservé : SA_3 → SA_<n>, legacy
+        # ORBEX SA → SA_<n>, sinon PERS_MORALE_<n>. Compteur par sigle.
+        key = _societe_counter_key_of_code(source_code)
+        n = societe_counters.get(key, 0) + 1
+        societe_counters[key] = n
+        return f"{key}_{n}"
+
+    def mint_societe_code(source_code: str) -> str:
+        new_code = next_societe_code(source_code)
+        while new_code in used_codes:
+            new_code = next_societe_code(source_code)
+        used_codes.add(new_code)
+        return new_code
+
+    societe_survivors = _merge_societe_clusters(
+        merged_mapping, merged_reverse, merged_extracted, new_societe_groups, mint_societe_code
+    )
+
+    seen_entities_lower = {k.lower(): v for k, v in merged_mapping.items()}
+
+    # Identifiants (téléphone, SIREN...) : (type, clé) -> code existant, d'après le préfixe du code.
+    # Une nouvelle écriture de la même valeur rejoint ce code ; les doublons déjà présents restent.
+    identifier_codes: Dict[tuple, str] = {}
+    for code, texts in [*((c, [t]) for t, c in merged_mapping.items()), *merged_reverse.items()]:
+        kind = identifier_kind(code)
+        for text in texts if kind else ():
+            key = identifier_key(kind, text)
+            if key is not None:
+                identifier_codes.setdefault((kind, key), code)
+    # Une écriture supprimée par l'utilisateur écarte les autres écritures de la même valeur.
+    ignored_keys = {
+        kind: {key for key in (identifier_key(kind, text) for text in ignored) if key is not None}
+        for kind in IDENTIFIER_KINDS
+    }
+
+    def is_ignored(kind: Optional[str], text: str) -> bool:
+        return text.lower() in ignored_lower or (
+            kind is not None and identifier_key(kind, text) in ignored_keys[kind])
 
     # Merge new entries
     for text, code in new_mapping.get('mapping', {}).items():
@@ -1376,15 +1599,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         candidate_texts = list(dict.fromkeys([text, *variants]))
 
         if category == "personnes_physiques":
-            existing_code = next(
-                (
-                    existing_person_by_name[normalized]
-                    for candidate in candidate_texts
-                    for normalized in [normalize_name(candidate)]
-                    if normalized in existing_person_by_name
-                ),
-                None,
-            )
+            existing_code = person_survivors.get(code)
             if existing_code:
                 accepted_texts = [candidate for candidate in candidate_texts if candidate.lower() not in ignored_lower]
                 _merge_person_entry(
@@ -1399,23 +1614,59 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
                     seen_entities_lower[candidate.lower()] = existing_code
                 continue
 
+        if category == "societes":
+            existing_code = societe_survivors.get(code)
+            if existing_code:
+                accepted_texts = [candidate for candidate in candidate_texts if candidate.lower() not in ignored_lower]
+                _merge_person_entry(
+                    merged_mapping,
+                    merged_reverse,
+                    merged_extracted,
+                    existing_code,
+                    accepted_texts,
+                    old_entry,
+                    "societes",
+                )
+                for candidate in accepted_texts:
+                    seen_entities_lower[candidate.lower()] = existing_code
+                continue
+
         # Skip if already exists (use existing code)
         if text_lower in seen_entities_lower:
             continue
 
         # Skip entities the lawyer discarded from the mapping
-        if text_lower in ignored_lower:
+        kind = identifier_kind(code) if category in ("siren", "autres") else None
+        if is_ignored(kind, text):
+            continue
+
+        # Same identifier as an existing code, written another way: one more variant of that code
+        key = identifier_key(kind, text) if kind else None
+        existing_code = identifier_codes.get((kind, key)) if key is not None else None
+        if existing_code:
+            bucket = next((name for name, entries in merged_extracted.items() if existing_code in entries), "autres")
+            entry = merged_extracted[bucket].get(existing_code, {})
+            known_texts = [t for t, c in merged_mapping.items() if c == existing_code]
+            original = entry.get("original") or next(iter(known_texts), text)
+            accepted_texts = [candidate for candidate in candidate_texts if not is_ignored(kind, candidate)]
+            _merge_person_entry(
+                merged_mapping,
+                merged_reverse,
+                merged_extracted,
+                existing_code,
+                [*_person_entry_texts(existing_code, entry, merged_reverse, known_texts), *accepted_texts],
+                None,
+                bucket,
+            )
+            merged_extracted[bucket][existing_code]["original"] = original
+            for candidate in accepted_texts:
+                seen_entities_lower[candidate.lower()] = existing_code
             continue
 
         # Generate new code with incremented counter
         def next_code() -> str:
             if category == "societes":
-                # Le sigle du code d'origine est préservé : SA_3 → SA_<n>, legacy
-                # ORBEX SA → SA_<n>, sinon PERS_MORALE_<n>. Compteur par sigle.
-                key = _societe_counter_key_of_code(code)
-                n = societe_counters.get(key, 0) + 1
-                societe_counters[key] = n
-                return f"{key}_{n}"
+                return next_societe_code(code)
             prefix = {
                 "personnes_physiques": "PERSONNE_PHYSIQUE",
                 "adresses": "ADRESSE",
@@ -1431,13 +1682,13 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         used_codes.add(new_code)
 
         # Add all variants to merged structures (no lowercase duplicates)
-        accepted_variants = [variant for variant in variants if variant.lower() not in ignored_lower]
+        accepted_variants = [variant for variant in variants if not is_ignored(kind, variant)]
         for variant in accepted_variants:
             merged_mapping[variant] = new_code
             seen_entities_lower[variant.lower()] = new_code
-            normalized = normalize_name(variant) if category == "personnes_physiques" else ""
-            if normalized:
-                existing_person_by_name.setdefault(normalized, new_code)
+            variant_key = identifier_key(kind, variant) if kind else None
+            if variant_key is not None:
+                identifier_codes.setdefault((kind, variant_key), new_code)
 
         seen_entities_lower[text_lower] = new_code
 
