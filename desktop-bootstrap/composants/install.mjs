@@ -15,7 +15,7 @@ const MAX_PYTHON_MINOR = 13;
 const MAX_WINDOWS_PYTHON_MINOR = 12;
 const PROBE_TIMEOUT_MS = 15_000;
 const MINERU_SPEC = 'mineru[pipeline,vlm]==2.7.6';
-const REQUIRED_PACKAGES = ['gliner2', 'huggingface_hub', 'spacy', 'markitdown', 'pypdf'];
+const REQUIRED_PACKAGES = ['gliner2', 'huggingface_hub', 'markitdown', 'pypdf'];
 
 const log = {
   step(message) {
@@ -344,7 +344,7 @@ export async function installRuntimeComponents({
   if (dependenciesReady(status)) {
     output.ok('MarkItDown, GLiNER et les bibliothèques associées sont déjà installés.');
   } else {
-    output.step('Installation des bibliothèques Python (MarkItDown, GLiNER, Presidio)…');
+    output.step('Installation des bibliothèques Python (MarkItDown, GLiNER)…');
     await required(host, python, ['-m', 'pip', 'install', '-U', 'pip']);
     await required(host, python, ['-m', 'pip', 'install', '--upgrade', '-r', requirements]);
     status = null;

@@ -1,9 +1,3 @@
-# Core dependencies (required for pattern-based recognition)
-regex>=2026.1.15
-tldextract>=5.3.1
-pydantic>=2.12.5
-PyYAML>=6.0.3
-
 # Document conversion dependencies
 markitdown[all]>=0.1.4  # Markitdown with all optional dependencies
 pypdf>=6.6.2  # PDF text layer inspection (actively maintained fork of PyPDF2)
@@ -12,7 +6,3 @@ pypdf>=6.6.2  # PDF text layer inspection (actively maintained fork of PyPDF2)
 # (torch, transformers...) live behind the `local` extra.
 gliner2[local]>=2.0.0
 huggingface-hub>=0.20.0  # Required for model downloading with progress
-
-# Presidio + GLiNER integration
-presidio-analyzer>=2.2.0
-spacy>=3.7.0  # Tokenizer only, via spacy.blank() — no language model needed

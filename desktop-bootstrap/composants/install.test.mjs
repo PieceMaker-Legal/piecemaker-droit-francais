@@ -35,7 +35,6 @@ function readyStatus() {
     dependencies: {
       gliner2: true,
       huggingface_hub: true,
-      spacy: true,
       markitdown: true,
       pypdf: true,
     },

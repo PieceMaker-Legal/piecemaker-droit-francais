@@ -1,6 +1,6 @@
 /**
  * Vocabulaire des formes juridiques de sociétés — miroir JS de `_LEGAL_FORMS`
- * dans `scripts/scan_utils.py`.
+ * dans `scripts/legal_forms.py` (réexporté par `scan_utils.py`).
  *
  * Depuis le choix du cabinet, une société dont le nom porte un sigle est codée
  * avec ce sigle en préfixe : `SA_1`, `SARL_1`, `SCI_1`, `GMBH_1`, `LLC_1`,
@@ -11,13 +11,13 @@
  *
  * Ce module ne sert qu'à *classer* un code déjà attribué (à quelle famille
  * appartient `SA_1` ?) et à retrouver sa clé de compteur. La *détection* du sigle
- * dans le texte reste côté Python (scan_utils.extract_legal_form) : c'est elle qui
+ * dans le texte reste côté Python (legal_forms.extract_legal_form) : c'est elle qui
  * type l'entité `ORGANIZATION_<sigle>`, d'où le préfixe du code sort ensuite.
  *
  * Toute modification de `_LEGAL_FORMS` (ajout d'un sigle) doit être répercutée ici.
  */
 
-// Jetons canoniques, tenus synchronisés avec `_LEGAL_FORMS` (scan_utils.py).
+// Jetons canoniques, tenus synchronisés avec `_LEGAL_FORMS` (legal_forms.py).
 const LEGAL_FORM_TOKENS = new Set([
   // France — exercice libéral / commercial / civil / coopératif / agricole
   'SELARL', 'SELAS', 'SELCA', 'SELCS', 'SASU', 'SARL', 'EURL', 'EARL',

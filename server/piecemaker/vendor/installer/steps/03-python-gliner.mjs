@@ -124,7 +124,7 @@ export async function install(ctx) {
     spin.succeed('pip à jour');
   }
 
-  // 3. Install/upgrade requirements.txt (markitdown, pypdf, gliner2, presidio-analyzer, spacy...).
+  // 3. Install/upgrade requirements.txt (markitdown, pypdf, gliner2...).
   {
     const spin = spinner('Installation des dépendances Python (requirements.txt)...');
     const code = await run(vp.python, ['-m', 'pip', 'install', '--upgrade', '-r', REQUIREMENTS], {

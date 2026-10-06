@@ -8,7 +8,7 @@ import { removedAliasOperations } from './exclusions.js';
 import type { DeleteScope } from './exclusions.js';
 import type { ViewData } from './views.js';
 import type { KnowledgeNode, KnowledgeUpdateOperation, NodeKind } from './types.js';
-import { PROCEDURE_POSITIONS, partyCodeChange } from './party-codes.js';
+import { PROCEDURE_POSITIONS, isPartyCode, nodeCode, partyCodeChange } from './party-codes.js';
 import type { PartySide } from './party-codes.js';
 import { changeNodeSide, cleanSelection, createEntity, findEntityBySelection, parseSelectionDate } from './selection-categories.js';
 import type { SelectionChange, SelectionGraph } from './selection-categories.js';
@@ -298,7 +298,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       <label>Code anonymisé<input class="pmd-input" name="masked" value="${escapeHtml(mappings[0]?.masked || '')}"></label>
       </section>
       <section class="pmd-form-section"><h3>Rôle dans le dossier</h3>
-      <label>Partie<select class="pmd-select" name="partySide"><option value="">Aucune</option><option value="client" ${(!node && defaults.partySide === 'client') || (node && node.data.partySide === 'client') || (!node && !defaults.partySide) ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${(node && node.data.partySide === 'adversaire') || (!node && defaults.partySide === 'adversaire') ? 'selected' : ''}>Partie adverse</option><option value="tiers" ${(node && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire') || (!node && defaults.partySide === 'tiers') ? 'selected' : ''}>Tiers</option></select></label>
+      <label>Partie<select class="pmd-select" name="partySide"><option value="client" ${(!node && defaults.partySide === 'client') || (node && node.data.partySide === 'client') || (!node && !defaults.partySide) ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${(node && node.data.partySide === 'adversaire') || (!node && defaults.partySide === 'adversaire') ? 'selected' : ''}>Partie adverse</option><option value="tiers" ${(node && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire') || (!node && defaults.partySide === 'tiers') ? 'selected' : ''}>Tiers</option></select></label>
       <label data-position-field>Position<select class="pmd-select" name="position">${positionOptions(textValue(node?.data.position))}</select></label>
       <div data-company-fields ${companyFieldsHidden ? 'hidden' : ''}>
         <label>Forme sociale<input class="pmd-input" name="legalForm" value="${escapeHtml(textValue(node?.data.legalForm))}"></label>
@@ -367,6 +367,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const sideSelect = layer.querySelector<HTMLSelectElement>('select[name="partySide"]');
   const positionSelect = layer.querySelector<HTMLSelectElement>('select[name="position"]');
   const maskedInput = layer.querySelector<HTMLInputElement>('input[name="masked"]');
+  const initialMasked = maskedInput?.value || '';
   const legalFormInput = layer.querySelector<HTMLInputElement>('input[name="legalForm"]');
   const labelInput = layer.querySelector<HTMLInputElement>('input[name="label"]');
   const companySearchPanel = layer.querySelector<HTMLElement>('[data-company-search]');
@@ -434,7 +435,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       renderCompanySearchPanel();
     }
   });
-  const renameApplies = (side: string): boolean => side === 'client' || side === 'adversaire' || Boolean(textValue(node?.data.originalCode));
+  const renameApplies = (side: string): boolean => side === 'client' || side === 'adversaire' || Boolean(textValue(node?.data.originalCode)) || Boolean(node && isPartyCode(nodeCode(node)));
   const codeChangeFor = (side: string) => partyCodeChange(
     { id, kind: (kindSelect?.value || selectedKind) as NodeKind, data: node?.data || {} },
     { kind: (kindSelect?.value || selectedKind) as NodeKind, legalForm: legalFormInput?.value || '', side: side as PartySide, position: positionSelect?.value || '' },
@@ -442,13 +443,24 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     data.graph.mappings,
     data.graph.reservedCodes,
   );
+  const positionField = layer.querySelector<HTMLElement>('[data-position-field]');
+  const syncPosition = () => {
+    const isParty = sideSelect?.value === 'client' || sideSelect?.value === 'adversaire';
+    if (positionField) positionField.hidden = !isParty;
+    if (!isParty && positionSelect) positionSelect.value = '';
+  };
+  syncPosition();
   const syncMasked = () => {
     const side = sideSelect?.value || '';
     if (!maskedInput) return;
     maskedInput.readOnly = side === 'client' || side === 'adversaire';
     if (renameApplies(side)) maskedInput.value = codeChangeFor(side).code;
+    else if (isPartyCode(maskedInput.value)) maskedInput.value = initialMasked;
   };
-  sideSelect?.addEventListener('change', syncMasked);
+  sideSelect?.addEventListener('change', () => {
+    syncPosition();
+    syncMasked();
+  });
   positionSelect?.addEventListener('change', syncMasked);
   kindSelect?.addEventListener('change', syncMasked);
   legalFormInput?.addEventListener('input', syncMasked);
@@ -475,7 +487,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       : null;
     const nodeId = change ? change.nodeId : id;
     const code = change ? change.code : masked;
-    const nodeData = change ? change.data : { ...(node?.data || {}), partySide: partySide || null, legalForm: legalForm || null, position: position || null };
+    const nodeData = change ? change.data : { ...(node?.data || {}), partySide: partySide || null, legalForm: legalForm || null, position: (partySide === 'client' || partySide === 'adversaire') && position ? position : null };
     const rename = (value: string): string => value === id ? nodeId : value;
     const operations: KnowledgeUpdateOperation[] = [];
     if (change && node && nodeId !== id) operations.push(...change.operations);
