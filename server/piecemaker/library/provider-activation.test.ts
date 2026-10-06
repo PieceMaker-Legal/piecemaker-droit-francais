@@ -115,7 +115,7 @@ async function injectedCommand(store: ReturnType<typeof createLibraryStore>, pro
 for (const provider of PROVIDERS) {
   test(`skill activation reaches ${provider}`, async (t) => {
     const { store, workspace, skillDir } = fixture(t);
-    const id = store.importFile(path.join(skillDir, 'SKILL.md'), 'skill');
+    const id = store.importFile(path.join(skillDir, 'SKILL.md'), 'skill')!;
     store.setEnabled(workspace, id, true);
     const target = skillTarget(workspace, provider, 'review');
     if (target) {
@@ -124,7 +124,7 @@ for (const provider of PROVIDERS) {
     } else {
       assert.equal(fs.existsSync(path.join(workspace, '.mistral')), false);
     }
-    assert.match(await injectedCommand(store, provider, workspace), /Instructions privées/);
+    assert.equal(await injectedCommand(store, provider, workspace), 'Relire');
     store.setEnabled(workspace, id, false);
     if (target) assert.equal(fs.existsSync(target), false);
     assert.equal(await injectedCommand(store, provider, workspace), 'Relire');
@@ -132,7 +132,7 @@ for (const provider of PROVIDERS) {
 
   test(`agent activation reaches ${provider}`, async (t) => {
     const { store, workspace, agentFile } = fixture(t);
-    const id = store.importFile(agentFile, 'agent');
+    const id = store.importFile(agentFile, 'agent')!;
     store.setEnabled(workspace, id, true);
     const target = agentTarget(workspace, provider, 'review-agent');
     if (target) {
@@ -161,7 +161,7 @@ for (const provider of PROVIDERS) {
       description: 'https://registre-public.com/api/mcp',
       config: { transport: 'http', url: 'https://registre-public.com/api/mcp' },
       source: 'piecemaker:default:registre-public',
-    });
+    })!;
     store.setEnabled(workspace, id, true);
     const enabled = mcpState(workspace, provider, 'registre-public');
     if (enabled.native) {
@@ -177,15 +177,15 @@ for (const provider of PROVIDERS) {
 
   test(`plugin activation reaches ${provider}`, async (t) => {
     const { store, workspace, skillDir, agentFile } = fixture(t);
-    const skillId = store.importFile(path.join(skillDir, 'SKILL.md'), 'skill');
-    const agentId = store.importFile(agentFile, 'agent');
+    const skillId = store.importFile(path.join(skillDir, 'SKILL.md'), 'skill')!;
+    const agentId = store.importFile(agentFile, 'agent')!;
     const mcpId = store.importConnector({
       name: 'legifrance',
       description: 'python3',
       config: { transport: 'stdio', command: 'python3', args: ['server.py'] },
       source: '/plugins/legal/.mcp.json#legifrance',
       namespace: 'legal@market',
-    });
+    })!;
     store.upsertCollection({
       id: 'legal@market',
       name: 'Legal',
@@ -211,7 +211,7 @@ for (const provider of PROVIDERS) {
       assert.equal(fs.existsSync(path.join(workspace, '.mistral')), false);
     }
     const injected = await injectedCommand(store, provider, workspace);
-    assert.match(injected, /Skill : review/);
+    assert.doesNotMatch(injected, /Instructions privées/);
     assert.match(injected, /Instructions de rôle : review-agent/);
     assert.match(injected, /Rôle privé/);
     store.setCollectionEnabled(workspace, 'legal@market', false);

@@ -1,24 +1,5 @@
 const mounts = new WeakMap();
-const skillScopes = new Set(['user', 'plugin', 'repo', 'project', 'admin', 'system']);
-
-export function normalizeSkill(provider, skill = {}, project) {
-  const scope = skillScopes.has(skill.scope) ? skill.scope : 'user';
-  const normalized = {
-    provider,
-    name: String(skill.name ?? ''),
-    description: String(skill.description ?? ''),
-    command: String(skill.command ?? ''),
-    scope,
-    sourcePath: String(skill.sourcePath ?? ''),
-  };
-  if (typeof skill.pluginName === 'string') normalized.pluginName = skill.pluginName;
-  if (typeof skill.pluginId === 'string') normalized.pluginId = skill.pluginId;
-  if (scope === 'project' || scope === 'repo') {
-    normalized.projectDisplayName = project?.displayName ?? skill.projectDisplayName;
-    normalized.projectPath = project?.path ?? skill.projectPath;
-  }
-  return normalized;
-}
+const ORIGINS = { personnel: 'Personnel', dossier: 'Dossier', 'bibliothèque': 'Bibliothèque' };
 
 export function mount(container, api) {
   const root = document.createElement('div');
@@ -33,7 +14,7 @@ export function mount(container, api) {
     .pm-library button:disabled{opacity:.4;cursor:not-allowed}
     .pm-library input[type=search]{font:inherit;color:inherit;background:transparent;border:1px solid var(--piecemaker-border,#e5e7eb);border-radius:.75rem;padding:9px 12px;flex:1;min-width:160px;box-shadow:none}
     .pm-library .row{display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--piecemaker-border,#e5e7eb);padding:16px 0}
-    .pm-library .title{display:block;border:0;background:transparent;box-shadow:none;text-align:left;padding:0;font-weight:600;border-radius:0;height:auto;filter:none}.pm-library .details{flex:1;min-width:0}.pm-library .details p{white-space:pre-wrap;overflow-wrap:anywhere}
+    .pm-library .title{display:inline-block;border:0;background:transparent;box-shadow:none;text-align:left;padding:0;font-weight:600;border-radius:0;height:auto;filter:none}.pm-library .details{flex:1;min-width:0}.pm-library .details p{white-space:pre-wrap;overflow-wrap:anywhere}
     .pm-library .switch,.pm-library .piecemaker-toggle{display:inline-flex;align-items:center;gap:.625rem;width:fit-content;color:#4b5563;font-size:.875rem;white-space:nowrap}
     .pm-library input[role=switch]{appearance:none;width:2.25rem;height:1.25rem;border-radius:9999px;background:#d1d5db;position:relative;cursor:pointer;margin:0;flex:0 0 auto;border:0}
     .pm-library input[role=switch]:before{content:'';position:absolute;width:.75rem;height:.75rem;border-radius:50%;background:white;top:.25rem;left:.25rem;box-shadow:0 1px 2px rgb(0 0 0 / 12%);transition:transform 200ms ease}
@@ -41,7 +22,7 @@ export function mount(container, api) {
     .pm-library input[role=switch]:checked:before{transform:translateX(1rem);left:.25rem}
     .pm-library input:focus-visible,.pm-library button:focus-visible{outline:none;box-shadow:0 0 0 2px rgb(0 136 255 / 40%),0 0 0 4px hsl(var(--background, 0 0% 100%))}.pm-library [role=alert]{color:#b91c1c;margin:12px 0}.pm-library .meta{font-size:12px;color:var(--piecemaker-muted,#6b7280)}
     .pm-library .tree{margin:0 0 12px 18px;padding:6px 0 6px 14px;border-left:1px solid var(--piecemaker-border,#e5e7eb)}.pm-library .tree-row{display:flex;align-items:center;gap:8px;min-height:28px;font-size:12px}.pm-library .tree-row button{border:0;padding:3px 5px;text-align:left;height:auto;border-radius:.5rem}.pm-library .tree-row .meta{margin-left:auto;padding-right:8px}
-    .pm-library .entry-actions{position:relative}.pm-library .more{border:0;font-size:20px;line-height:1;width:1.5rem;height:1.5rem;padding:0}.pm-library .entry-menu{position:absolute;right:0;top:100%;z-index:10;min-width:120px;padding:4px;background:hsl(var(--background, 0 0% 100%));border:1px solid var(--piecemaker-border,#e5e7eb);border-radius:.75rem;box-shadow:0 18px 50px rgb(15 23 42 / .12)}.pm-library .entry-menu button{width:100%;border:0;text-align:left;color:#fff;background:rgb(220 38 38 / 90%);border-radius:.5rem}
+    .pm-library .origin{margin-left:8px}.pm-library .entry-actions{position:relative}.pm-library .more{border:0;font-size:20px;line-height:1;width:1.5rem;height:1.5rem;padding:0}.pm-library .entry-menu{position:absolute;right:0;top:100%;z-index:10;min-width:120px;padding:4px;background:hsl(var(--background, 0 0% 100%));border:1px solid var(--piecemaker-border,#e5e7eb);border-radius:.75rem;box-shadow:0 18px 50px rgb(15 23 42 / .12)}.pm-library .entry-menu button{width:100%;border:0;text-align:left;color:#fff;background:rgb(220 38 38 / 90%);border-radius:.5rem}
     .pm-library .modal-backdrop{position:fixed;inset:0;background:rgb(17 24 39 / .18);display:flex;align-items:center;justify-content:center;z-index:50}
     .pm-library .modal{background:hsl(var(--background, 0 0% 100%));border:1px solid var(--piecemaker-border,#e5e7eb);border-radius:1rem;padding:20px;width:min(420px,90vw);display:flex;flex-direction:column;gap:10px;box-shadow:0 18px 50px rgb(15 23 42 / .12)}
     .pm-library .modal h2{margin:0 0 4px;font-size:1.25rem}
@@ -73,6 +54,7 @@ export function mount(container, api) {
   let loading = false;
   let busy = false;
   let error = '';
+  let scanErrors = [];
   let revision = 0;
   let disposed = false;
   let creating = null;
@@ -80,6 +62,7 @@ export function mount(container, api) {
   let createError = '';
   let pinnedScrollTop = null;
   let openMenuId = '';
+  let pendingToggles = 0;
 
   function element(tag, text, className) {
     const node = document.createElement(tag);
@@ -134,6 +117,7 @@ export function mount(container, api) {
       const query = workspace ? `?workspacePath=${encodeURIComponent(workspace)}` : '';
       if (options.sync) {
         const synchronized = await request('POST', '/plugins/sync', { workspacePath: workspace });
+        if (version === revision) scanErrors = Array.isArray(synchronized.scan?.errors) ? synchronized.scan.errors : [];
         if (version === revision && tab === 'plugin' && view === 'mine') plugins = synchronized.plugins || [];
       }
       if (view === 'discover') {
@@ -164,19 +148,35 @@ export function mount(container, api) {
 
   /**
    * "Dans ce dossier" switches: flip locally, re-render once, save in the
-   * background. No loading/busy round trip and no catalog reload, so the
-   * switch just stays where the user left it instead of flashing on every
-   * click. Revert only if the save itself fails.
+   * background. No loading/busy round trip, so the switch just stays where
+   * the user left it instead of flashing on every click. Revert only if the
+   * save itself fails. With `reload`, the catalog is refreshed silently once
+   * every save has settled, so effective states and warnings stay exact.
    */
-  function toggleActivation(item, path, body) {
+  function toggleActivation(item, path, body, reload = false) {
     const previous = item.enabled;
     item.enabled = !previous;
+    if (reload) { pendingToggles += 1; revision++; }
     render();
     request('PUT', path, body).catch((cause) => {
       item.enabled = previous;
       error = cause.message;
       if (!disposed) render();
+    }).finally(() => {
+      if (!reload) return;
+      pendingToggles -= 1;
+      void reloadCatalog();
     });
+  }
+
+  async function reloadCatalog() {
+    if (pendingToggles || disposed || view !== 'mine' || !['skill', 'agent', 'connectors'].includes(tab)) return;
+    const version = ++revision;
+    try {
+      const workspace = context.project?.path;
+      const data = await request('GET', `/catalog${workspace ? `?workspacePath=${encodeURIComponent(workspace)}` : ''}`);
+      if (version === revision && !disposed && Array.isArray(data.entries)) { entries = data.entries; render(); }
+    } catch {}
   }
 
   function toggleGlobal(plugin) {
@@ -336,6 +336,13 @@ export function mount(container, api) {
     if (view === 'mine' && tab === 'agent') toolbar.append(button('Nouvel agent', () => openCreate('agent')));
     content.append(toolbar);
     if (error) { const notice = element('p', error); notice.setAttribute('role', 'alert'); content.append(notice); }
+    if (scanErrors.length) {
+      const details = element('details', undefined, 'meta');
+      details.append(element('summary', `${scanErrors.length} élément(s) non importé(s) lors de l’actualisation`));
+      for (const item of scanErrors.slice(0, 20)) details.append(element('div', `${item.source} — ${item.message}`));
+      if (scanErrors.length > 20) details.append(element('div', `… et ${scanErrors.length - 20} autre(s)`));
+      content.append(details);
+    }
     const body = element('div');
     content.append(body);
     function renderRows() {
@@ -365,14 +372,16 @@ export function mount(container, api) {
           body.append(item);
         }
       } else if (tab === 'skill' || tab === 'agent' || tab === 'connectors') {
-        body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}` : 'Sélectionnez un dossier pour activer un élément.', 'meta'));
+        body.append(element('p', !context.project ? 'Sélectionnez un dossier pour activer un élément.' : tab === 'skill' ? `État dans ${context.project.path} : vos skills personnels et ceux du dossier sont activés par défaut ; désactivez-les ici pour ce seul dossier.` : `Activation automatique dans ${context.project.path}`, 'meta'));
         const kind = tab === 'connectors' ? 'connector' : tab;
         const visible = entries.filter((item) => item.kind === kind && !item.collectionId && matches(item));
         if (!visible.length) body.append(element('p', 'Aucun élément.'));
         for (const entry of visible) {
           const item = row(entry, () => void open(entry));
-          const switchLabel = entry.enabled ? 'Retirer de ce dossier' : 'Installer dans ce dossier';
-          item.append(toggle(switchLabel, entry.enabled, !context.project, () => toggleActivation(entry, `/catalog/${entry.id}/activation`, { workspacePath: context.project.path, enabled: !entry.enabled }), false));
+          if (ORIGINS[entry.origin]) item.firstChild.firstChild.after(element('span', ORIGINS[entry.origin], 'meta origin'));
+          if (entry.shadowedBy) item.firstChild.append(element('p', `Claude utilisera la version personnelle (${entry.shadowedBy}) : vos modifications ne s’appliquent pas à Claude.`, 'meta'));
+          const switchLabel = entry.kind === 'skill' ? (entry.enabled ? 'Activé dans ce dossier' : 'Désactivé dans ce dossier') : entry.enabled ? 'Retirer de ce dossier' : 'Installer dans ce dossier';
+          item.append(toggle(switchLabel, entry.enabled, !context.project, () => toggleActivation(entry, `/catalog/${entry.id}/activation`, { workspacePath: context.project.path, enabled: !entry.enabled }, entry.kind === 'skill'), false));
           if (entry.kind === 'skill') {
             const actions = element('div', undefined, 'entry-actions');
             const more = button('⋮', (event) => {
@@ -483,7 +492,7 @@ export function mount(container, api) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = context.project?.path !== next.project?.path;
     context = next;
-    if (changed) { entries = []; plugins = []; pluginTrees.clear(); void load(); }
+    if (changed) { entries = []; plugins = []; scanErrors = []; pluginTrees.clear(); void load(); }
     else render();
   });
   mounts.set(container, () => { disposed = true; revision++; unsubscribe(); layout.remove(); style.remove(); });

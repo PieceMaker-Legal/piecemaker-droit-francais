@@ -116,6 +116,24 @@ Ces points ont déjà été perdus ou ont failli l'être. Les contrôler un par 
 | `package.json` | nom `@piecemaker-legal/piecemaker`, version PieceMaker (**ne jamais prendre la version upstream**), `homepage`/`repository` PieceMaker |
 | `src/modules/chat/ChatInterface.tsx`, `hooks/useChatComposerState.ts`, `hooks/useSlashCommands.ts` | la transmission de `isActive` |
 | `src/shared/types.ts` | `'mistral'` dans l'union `LLMProvider` |
+| `server/modules/providers/list/codex/codex-runtime.provider.ts` | `codex = new Codex(options.libraryCodexOptions);` (au lieu de `new Codex()`) |
+
+### `codex-runtime.provider.ts` — le masquage des skills par dossier dans Codex
+
+Désactiver un skill dans un dossier depuis la Bibliothèque le masque dans
+Codex. Codex ignore le `config.toml` d'un projet pour les skills : seul un
+réglage passé au client (`--config skills.config`) peut le faire. Le runtime de
+la Bibliothèque (`server/piecemaker/library/runtime.ts`) calcule ce réglage et le
+transmet dans `options.libraryCodexOptions` ; la seule ligne CloudCLI touchée le
+remet au constructeur `Codex`. Sans option, le comportement est celui
+d'upstream (`new Codex(undefined)`).
+
+Un merge résolu « vers CloudCLI » remet `new Codex()` : les skills désactivés
+réapparaissent dans Codex, sans erreur. Le garde-fou est
+`server/piecemaker/library/codex-options.test.ts` (« exception CloudCLI : Codex
+démarre / reprend… ») : il échoue alors. Restaurer la ligne, ne jamais supprimer
+le test. Si upstream passe lui-même des options à `new Codex(...)`, les fusionner
+avec `options.libraryCodexOptions` plutôt que d'en écraser une.
 
 ### `AuthContext.tsx` — le piège le plus coûteux
 
@@ -271,8 +289,8 @@ le code se comporte comme upstream si la configuration est absente.
 
 ### Une exception upstream se paie par un test
 
-Les deux exceptions assumées (amorçage d'authentification, `isActive` du chat)
-ne sont pas des permissions : ce sont des dettes. Chacune doit porter un test
+Les exceptions assumées (amorçage d'authentification, `isActive` du chat,
+options du client Codex) ne sont pas des permissions : ce sont des dettes. Chacune doit porter un test
 **à nous** qui échoue si un merge la révoque. Sans ce test, l'exception
 disparaîtra un jour sans que personne ne le voie.
 

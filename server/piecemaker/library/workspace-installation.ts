@@ -21,16 +21,24 @@ export type LibraryManifestEntry = {
   slug: string;
   files: Record<string, string>;
   skipClaude: boolean;
+  claudeOnly?: boolean;
 };
+
+export type InstallVariant = { skipClaude: boolean; claudeOnly: boolean };
 
 export type LibraryComponent =
   | { kind: 'skill'; slug: string; files: Record<string, Buffer> }
   | { kind: 'agent'; slug: string; markdown: string; codex: string; vibe: string };
 
+const LIGATURES: Record<string, string> = { œ: 'oe', æ: 'ae', ß: 'ss', ø: 'o', đ: 'd', ł: 'l' };
+
 export function componentFolderName(name: string) {
-  const slug = String(name).normalize('NFKD').replace(/[^\p{Letter}\p{Number}._-]+/gu, '-').replace(/^[-._]+|[-._]+$/g, '');
-  if (!slug) throw new Error(`Nom de composant inutilisable : ${name}`);
-  return slug;
+  const text = String(name);
+  if (!text.trim()) throw new Error(`Nom de composant inutilisable : ${name}`);
+  const slug = text.normalize('NFKD').replace(/\p{M}+/gu, '').toLowerCase()
+    .replace(/[œæßøđł]/g, (letter) => LIGATURES[letter])
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64).replace(/-+$/, '');
+  return slug || `composant-${digest(Buffer.from(text, 'utf8')).slice(0, 12)}`;
 }
 
 function digest(bytes: Buffer) {
@@ -69,26 +77,30 @@ export function writeLibraryManifest(workspace: string, entries: LibraryManifest
   fs.renameSync(temporary, filename);
 }
 
-function skillRoot(slug: string) {
-  return path.posix.join('.agents', 'skills', slug);
+export function skillRoot(slug: string, claudeOnly = false) {
+  return path.posix.join(claudeOnly ? '.claude' : '.agents', 'skills', slug);
 }
 
-function componentShape(kind: LibraryManifestEntry['kind'], slug: string, skipClaude: boolean) {
+export function manifestVariant(entry: LibraryManifestEntry): InstallVariant {
+  return { skipClaude: entry.skipClaude, claudeOnly: entry.claudeOnly === true };
+}
+
+function componentShape(kind: LibraryManifestEntry['kind'], slug: string, variant: InstallVariant) {
   if (kind !== 'skill') return { root: null, links: [] as string[] };
   return {
-    root: skillRoot(slug),
-    links: SKILL_LINK_PROVIDERS.filter((provider) => !(skipClaude && provider === '.claude')).map((provider) => path.posix.join(provider, 'skills', slug)),
+    root: skillRoot(slug, variant.claudeOnly),
+    links: variant.claudeOnly ? [] : SKILL_LINK_PROVIDERS.filter((provider) => !(variant.skipClaude && provider === '.claude')).map((provider) => path.posix.join(provider, 'skills', slug)),
   };
 }
 
-function componentFiles(workspace: string, component: LibraryComponent, skipClaude: boolean) {
+function componentFiles(workspace: string, component: LibraryComponent, variant: InstallVariant) {
   if (component.kind === 'agent') {
-    return Object.fromEntries(AGENT_TARGETS.filter((target) => !(skipClaude && target.provider === '.claude')).map((target) => [
+    return Object.fromEntries(AGENT_TARGETS.filter((target) => !(variant.skipClaude && target.provider === '.claude')).map((target) => [
       path.posix.join(target.provider, target.folder, `${component.slug}${target.extension}`),
       Buffer.from(component[target.format], 'utf8'),
     ]));
   }
-  const root = skillRoot(component.slug);
+  const root = skillRoot(component.slug, variant.claudeOnly);
   return Object.fromEntries(Object.entries(component.files).map(([name, bytes]) => {
     const relative = path.posix.join(root, name);
     if (!path.resolve(workspace, relative).startsWith(path.join(workspace, root) + path.sep)) throw new Error('Chemin associé invalide.');
@@ -96,8 +108,8 @@ function componentFiles(workspace: string, component: LibraryComponent, skipClau
   }));
 }
 
-export function componentFileHashes(workspace: string, component: LibraryComponent, skipClaude: boolean) {
-  return Object.fromEntries(Object.entries(componentFiles(workspace, component, skipClaude)).map(([relative, bytes]) => [relative, digest(bytes)]));
+export function componentFileHashes(workspace: string, component: LibraryComponent, variant: InstallVariant) {
+  return Object.fromEntries(Object.entries(componentFiles(workspace, component, variant)).map(([relative, bytes]) => [relative, digest(bytes)]));
 }
 
 function walkFiles(workspace: string, relative: string, visit: (relative: string) => void) {
@@ -123,11 +135,11 @@ export function removeLegacyLinks(workspace: string, legacyDirectory: string) {
 export function prepareWorkspaceInstallation(
   workspace: string,
   previous: LibraryManifestEntry | undefined,
-  next: { component: LibraryComponent; skipClaude: boolean } | null,
+  next: { component: LibraryComponent; variant: InstallVariant } | null,
 ) {
-  const before = previous ? componentShape(previous.kind, previous.slug, previous.skipClaude) : null;
-  const after = next ? componentShape(next.component.kind, next.component.slug, next.skipClaude) : null;
-  const nextFiles = next ? componentFiles(workspace, next.component, next.skipClaude) : {};
+  const before = previous ? componentShape(previous.kind, previous.slug, manifestVariant(previous)) : null;
+  const after = next ? componentShape(next.component.kind, next.component.slug, next.variant) : null;
+  const nextFiles = next ? componentFiles(workspace, next.component, next.variant) : {};
   const owned = previous?.files ?? {};
 
   for (const relative of [...Object.keys(nextFiles), ...(after?.links ?? [])]) assertWorkspaceParents(workspace, relative, true);

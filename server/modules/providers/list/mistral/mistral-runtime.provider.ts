@@ -1,3 +1,8 @@
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import os from 'node:os';
+import path from 'node:path';
+
 import crossSpawn from 'cross-spawn';
 
 import { buildVibeModelsEnvironment } from '@/modules/providers/list/mistral/mistral-vibe-models.js';
@@ -5,6 +10,9 @@ import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index
 import type { IProviderRuntime } from '@/shared/interfaces.js';
 import type { AnyRecord, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/types.js';
 import { createCompleteMessage, createNormalizedMessage, flattenPromptForWindowsShell } from '@/shared/utils.js';
+
+const require = createRequire(import.meta.url);
+const TOML = require('@iarna/toml') as { parse(value: string): Record<string, unknown> };
 
 // cross-spawn resolves .cmd shims/PATHEXT on Windows and delegates to
 // child_process.spawn everywhere else.
@@ -26,6 +34,48 @@ type RunNotificationInput = {
 // the actual provider-facing shape at this TypeScript boundary.
 const notifyRunStoppedForProvider = notifyRunStopped as unknown as (input: RunNotificationInput) => void;
 const notifyRunFailedForProvider = notifyRunFailed as unknown as (input: RunNotificationInput) => void;
+
+let enabledSkillsWarned = false;
+
+export function vibeUserConfigEnablesSkills(): boolean {
+  try {
+    const home = process.env.VIBE_HOME?.trim();
+    const directory = home ? path.resolve(home.replace(/^~(?=$|[\\/])/, os.homedir())) : path.join(os.homedir(), '.vibe');
+    const enabled = TOML.parse(fs.readFileSync(path.join(directory, 'config.toml'), 'utf8')).enabled_skills;
+    return Array.isArray(enabled) && enabled.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function escapeVibeGlob(name: string): string {
+  return name.replace(/[[*?]/g, (char) => `[${char}]`);
+}
+
+export function buildVibeDisabledSkills(libraryDisabledSkills: unknown, inherited: string | undefined): string | undefined {
+  if (!Array.isArray(libraryDisabledSkills)) return undefined;
+  const seen = new Set<string>();
+  const patterns: string[] = [];
+  for (const skill of libraryDisabledSkills) {
+    const name = typeof (skill as { name?: unknown } | null)?.name === 'string' ? (skill as { name: string }).name.trim() : '';
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    const pattern = escapeVibeGlob(name);
+    patterns.push(/^re:/i.test(pattern) ? `[${pattern[0]}]${pattern.slice(1)}` : pattern);
+  }
+  if (!patterns.length) return undefined;
+  let previous: string[] = [];
+  if (inherited?.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(inherited);
+      if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === 'string')) return undefined;
+      previous = parsed;
+    } catch {
+      return undefined;
+    }
+  }
+  return JSON.stringify([...previous, ...patterns]);
+}
 
 /**
  * Maps the UI permission mode onto Vibe's `--agent` presets.
@@ -130,6 +180,7 @@ async function spawnVibe(
       maxTurns,
       maxPrice,
       maxTokens,
+      libraryDisabledSkills,
     } = options as {
       sessionId?: string;
       projectPath?: string;
@@ -141,6 +192,7 @@ async function spawnVibe(
       maxTurns?: number;
       maxPrice?: number;
       maxTokens?: number;
+      libraryDisabledSkills?: unknown;
     };
 
     // Callers pass the stable app session id; Vibe resumes with the
@@ -302,6 +354,17 @@ async function spawnVibe(
         env.VIBE_ACTIVE_MODEL = resolvedModel;
       }
       env.VIBE_MODELS = buildVibeModelsEnvironment(resolvedModel ?? undefined, resolvedEffort);
+      const disabledSkills = buildVibeDisabledSkills(libraryDisabledSkills, process.env.VIBE_DISABLED_SKILLS);
+      if (disabledSkills) {
+        if (vibeUserConfigEnablesSkills()) {
+          if (!enabledSkillsWarned) {
+            enabledSkillsWarned = true;
+            console.warn('[Mistral] enabled_skills est défini dans la config Vibe : les skills désactivés dans un dossier ne peuvent pas être masqués.');
+          }
+        } else {
+          env.VIBE_DISABLED_SKILLS = disabledSkills;
+        }
+      }
 
       vibeProcess = spawnFunction('vibe', args, {
         cwd: workingDir,
