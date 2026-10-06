@@ -4,31 +4,28 @@ import path from 'node:path';
 
 import express from 'express';
 
+import { providerSkillsService } from '@/modules/providers/index.js';
+
 import { createLibraryStore } from './store.js';
 import { createLibraryRouter } from './routes.js';
-import { createLibraryMarketplaceRouter, scanInstalledLibraryCollections } from './marketplace.js';
+import { createLibraryMarketplaceRouter, scanLibrarySources } from './marketplace.js';
 import { importLibraryDirectory } from './migrate.js';
-import { scanAndPersistLibraryProviderAgents } from './provider-agents.js';
-import { scanAndPersistLibraryProviderConnectors } from './provider-connectors.js';
-import { scanAndPersistLibraryProviderSkills } from './provider-skills.js';
 
 export { installLibraryRuntime } from './runtime.js';
+export { installLibrarySkillVisibility } from './skill-visibility.js';
 
 const LIBRARY_BODY_LIMIT = 1024 * 1024;
 
-export async function openLibrary(home: string, applicationRoot: string) {
+export async function openLibrary(home: string, applicationRoot: string, listProjectPaths: () => string[] = () => []) {
   const store = createLibraryStore(home);
-  try { await scanAndPersistLibraryProviderSkills(store, undefined, undefined, os.homedir()); } catch {}
-  try { scanAndPersistLibraryProviderAgents(store, os.homedir()); } catch {}
-  try { scanAndPersistLibraryProviderConnectors(store, os.homedir()); } catch {}
-  try { scanInstalledLibraryCollections(store, os.homedir()); } catch {}
+  const reader = { listProviderSkills: providerSkillsService.listProviderSkills.bind(providerSkillsService) };
+  const errors = await scanLibrarySources(store, os.homedir(), listProjectPaths, reader);
+  if (errors.length) console.warn(`Bibliothèque : ${errors.length} élément(s) non importé(s) (${errors.slice(0, 3).map((error) => error.source).join(', ')}${errors.length > 3 ? ', …' : ''})`);
   try { fs.unlinkSync(path.join(store.directory, 'connection.json')); } catch {}
   const bundled = path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin');
-  const defaults: string[] = [];
   for (const [folder, kind] of [['skills', 'skill'], ['agents', 'agent']] as const) {
-    try { defaults.push(...importLibraryDirectory(store, path.join(bundled, folder), kind).map((entry) => entry.id)); } catch {}
+    try { importLibraryDirectory(store, path.join(bundled, folder), kind); } catch {}
   }
-  store.setDefaultEntries(defaults);
   const router = express.Router();
   router.use((req, res, next) => {
     const length = Number(req.headers['content-length'] || 0);
@@ -40,6 +37,6 @@ export async function openLibrary(home: string, applicationRoot: string) {
     next();
   });
   router.use(createLibraryRouter(store));
-  router.use(createLibraryMarketplaceRouter(store, applicationRoot, os.homedir()));
+  router.use(createLibraryMarketplaceRouter(store, applicationRoot, os.homedir(), listProjectPaths, reader));
   return { store, router };
 }

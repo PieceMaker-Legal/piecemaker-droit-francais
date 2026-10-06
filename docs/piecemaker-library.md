@@ -1,6 +1,6 @@
 # Bibliothèque centrale
 
-Le plugin Bibliothèque est développé dans `plugins/piecemaker-library/`, à la demande de l’utilisateur. Son installation copie uniquement ses fichiers exécutables dans le répertoire de plugins de l’application. Il utilise le slot `tab` et le RPC de CloudCLI. L’intégration hôte est limitée aux ajouts PieceMaker décrits ci-dessous ; la seule modification de CloudCLI concerne l’isolation de son répertoire de plugins via `product.config.json`, avec repli sur `~/.claude-code-ui` lorsque cette configuration est absente.
+Le plugin Bibliothèque est développé dans `plugins/piecemaker-library/`, à la demande de l’utilisateur. Son installation copie uniquement ses fichiers exécutables dans le répertoire de plugins de l’application. Il utilise le slot `tab` et le RPC de CloudCLI. L’intégration hôte est limitée aux ajouts PieceMaker décrits ci-dessous. Deux lignes de CloudCLI sont touchées : l’isolation de son répertoire de plugins via `product.config.json`, avec repli sur `~/.claude-code-ui` lorsque cette configuration est absente, et `new Codex(options.libraryCodexOptions)` dans `codex-runtime.provider.ts` pour masquer dans Codex un skill désactivé dans un dossier (exception documentée dans `docs/upstream-cloudcli.md` §4, garde-fou `codex-options.test.ts`).
 
 ## Backend
 
@@ -8,28 +8,17 @@ Le plugin Bibliothèque est développé dans `plugins/piecemaker-library/`, à l
 
 Un serveur interne sur une adresse de boucle locale et un port aléatoire expose uniquement le catalogue, les activations et les routes utiles aux MCP / marketplaces. Un jeton renouvelé à chaque démarrage protège cette interface. Le sous-processus du plugin, atteint par le RPC authentifié de CloudCLI, relaie les appels. Ni le jeton interne ni la base ne sont servis comme assets du plugin.
 
-Le harnais de bibliothèque décore le service public des providers après le harnais de citations. Il ajoute les seules instructions activées pour le chemin canonique du dossier et masque ce complément dans l’écho utilisateur et l’historique affiché. Les noms de commandes restent au début du message. Les agents activés fournissent leurs instructions de rôle ; cette activation ne crée pas de sous-agent.
+Le harnais de bibliothèque décore le service public des providers après le harnais de citations. Avant chaque message, il remet l’état du dossier d’aplomb (copies de la Bibliothèque, `skillOverrides` de Claude), ajoute les instructions de rôle des agents activés et masque ce complément dans l’écho utilisateur et l’historique affiché. Les skills ne sont pas joints aux messages : Claude, Codex, Cursor, Mistral et OpenCode les lisent dans le dossier. Les skills désactivés dans le dossier sont transmis aux runtimes (`libraryDisabledSkills`, `libraryCodexOptions`) : Codex les reçoit en `--config skills.config`, Mistral Vibe en `VIBE_DISABLED_SKILLS`. Une erreur de la Bibliothèque est journalisée et n’empêche jamais l’envoi. Le service des skills est aussi décoré : le popup du chat n’affiche pas les skills désactivés dans le dossier.
 
-Une activation vaut simultanément pour Claude, Codex, Cursor, Mistral, OpenCode et Grok. Le harnais commun décore `run` et `getRunner`, de sorte que le choix du provider ne crée aucune activation séparée. Les copies de découverte natives sont posées dans le dossier pour tous les providers qui exposent un répertoire (skills : `.claude`, `.agents`, `.cursor`, `.opencode`, `.grok` ; agents : `.claude`, `.codex`, `.opencode`, `.grok` ; MCP projet : `.mcp.json`, `.codex/config.toml`, `.cursor/mcp.json`, `opencode.json`, `.grok/config.toml`). Mistral n’en expose actuellement aucun : seul le harnais s’applique.
+L’état d’un skill dans un dossier dépend de son origine : un skill personnel ou du dossier est activé par défaut et se désactive explicitement (table `deactivation`) ; un skill de la Bibliothèque seule, y compris ceux livrés par PieceMaker, est désactivé par défaut et s’installe à l’activation. Le manifeste `.piecemaker/library.json` du dossier fait foi pour tout ce que la Bibliothèque y a écrit. Règles détaillées, emplacements par provider et limites : `plugins/piecemaker-library/README.md`.
 
-## Import et retrait des installations globales
+## Collecte
 
-Depuis la racine, avec la version de Node compatible avec `better-sqlite3` :
-
-```sh
-npx tsx --tsconfig server/tsconfig.json server/piecemaker/library/migrate-cli.ts
-npx tsx --tsconfig server/tsconfig.json server/piecemaker/library/migrate-cli.ts --withdraw
-```
-
-Le premier appel importe les cinq workflows vendus dans `mike-defaults-fr`, les skills personnelles Claude/Codex/Agents/Cursor/OpenCode/Grok, les agents Claude/Codex/Cursor/OpenCode/Grok et l’ancienne bibliothèque personnelle PieceMaker. Le second retire les installations globales importées après vérification et conserve une sauvegarde avec manifeste dans `library-backend/migration-*`. Aucun original n’est retiré en cas d’échec d’import préalable. Les skills système et les règles d’architecture locales du dépôt sont exclues. Au démarrage, le backend recopie aussi dans SQLite les MCP utilisateur de chaque provider et le connecteur Registre Public.
-
-Le marqueur `centralized.json` empêche les installateurs de skills PieceMaker de recréer leurs liens globaux lors d’une mise à jour. Les hooks de protection restent indépendants de cette politique.
-
-Pour restaurer une installation, consulter le manifeste de migration puis remettre l’entrée sauvegardée à son chemin `source`, uniquement si ce chemin est libre. Les liens relatifs retrouvent leur validité à leur emplacement d’origine. Retirer le marqueur seulement si l’on souhaite rétablir la gestion globale historique.
+Au démarrage et à chaque « Actualiser », le backend recopie dans SQLite les skills personnels de chaque provider (dont `~/.claude/skills/synced`, `~/.claude/commands` et `~/.vibe/skills`), les skills de projet des dossiers connus (hors copies du manifeste), les agents, les MCP utilisateur, les plugins Claude installés et le connecteur Registre Public. Les originaux ne sont jamais déplacés ni modifiés. Un fichier invalide est signalé sans interrompre la collecte ; un skill supprimé de la Bibliothèque n’est plus réimporté (table `deleted_origins`).
 
 ## Limites de portée
 
-Les éléments inactifs ne sont ni ajoutés au contexte du chat, ni copiés dans les répertoires de découverte des providers. La base et les sauvegardes restent des fichiers de l’utilisateur : ce mécanisme n’est pas un sandbox interdisant toute lecture par un shell disposant des mêmes droits. Les copies vendorisées et les catalogues de plugins tiers restent leurs sources de livraison.
+Les skills désactivés ne sont pas copiés dans le dossier et sont masqués là où le provider le permet ; Cursor et OpenCode n’ont pas de réglage par dossier, et un provider lancé hors de PieceMaker voit encore les skills personnels. La base et les sauvegardes restent des fichiers de l’utilisateur : ce mécanisme n’est pas un sandbox interdisant toute lecture par un shell disposant des mêmes droits. Les copies vendorisées et les catalogues de plugins tiers restent leurs sources de livraison.
 
 Une désactivation concerne les prochains messages ; elle ne retire pas les contenus déjà présents dans un transcript. L’activation des MCP et plugins existants conserve leurs règles de portée et peut nécessiter une nouvelle session du provider.
 

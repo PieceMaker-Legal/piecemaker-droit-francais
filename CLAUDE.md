@@ -93,7 +93,7 @@ Merge procedure and writing rules: `docs/upstream-cloudcli.md`. Upstream merges 
 - **Anonymisation** — GLiNER scan & mapping, applied to AI traffic by the hudsucker proxy (`server/piecemaker/anonymizer/`).
 - **Documents Word (`.docx`)** — assistant via the `docx-cli` skill (installer step 11, `redaction-juridique`), lawyer via the in-app editor (`src/piecemaker/docx/`, route `docx-document.ts`, single hook line in `CodeEditor.tsx`). Operation and known defects from the audit: `docs/docx.md`.
 - **Research** — French legal research via LEGIFRANCE MCP: `/Users/tsardet/Sites/mcp-legifrance`.
-- **Surcharge i18n & Système de plugins** — i18n overrides rename existing UI (vocabulary/brand) without touching upstream locale files; the plugin system is the extension point for genuinely new screens/features (single `tab` slot, minimal host API). They don't overlap — full detail, comparison table and known upstream exceptions (auth bootstrap, chat tab visibility): `docs/i18n-et-plugins.md`.
+- **Surcharge i18n & Système de plugins** — i18n overrides rename existing UI (vocabulary/brand) without touching upstream locale files; the plugin system is the extension point for genuinely new screens/features (single `tab` slot, minimal host API). They don't overlap — full detail, comparison table and known upstream exceptions (auth bootstrap, chat tab visibility, Codex client options for per-folder skill masking): `docs/i18n-et-plugins.md`.
 
 ### Frontend code standards
 

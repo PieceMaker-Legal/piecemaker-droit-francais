@@ -11,6 +11,7 @@ test('DELETE /catalog/:id removes a skill from the library', async () => {
   const id = 'a'.repeat(64);
   const deleted: string[] = [];
   const store = {
+    deactivatedWorkspaces: () => [],
     deleteEntry(entryId: string) {
       deleted.push(entryId);
       return { ok: true };

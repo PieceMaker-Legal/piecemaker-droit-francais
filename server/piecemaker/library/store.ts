@@ -8,13 +8,16 @@ import Database from 'better-sqlite3';
 import { parseFrontMatter } from '@/shared/frontmatter.js';
 
 import { parseConnectorConfig, prepareConnectorInstallation, type LibraryConnectorConfig } from './connector-installation.js';
+import { personalSkillClassifier } from './personal.js';
 import {
   componentFileHashes,
   componentFolderName,
+  manifestVariant,
   prepareWorkspaceInstallation,
   readLibraryManifest,
   removeLegacyLinks,
   writeLibraryManifest,
+  type InstallVariant,
   type LibraryComponent,
   type LibraryManifestEntry,
 } from './workspace-installation.js';
@@ -53,6 +56,28 @@ type LibraryCollectionInput = {
 };
 
 const MAX_EDITABLE_FILE_BYTES = 1024 * 1024;
+
+const FULL_INSTALL: InstallVariant = { skipClaude: false, claudeOnly: false };
+
+type SkillState = {
+  id: string;
+  name: string;
+  origins: string[];
+  personal: boolean;
+  local: boolean;
+  native: boolean;
+  claude: boolean;
+  agents: boolean;
+  claudeOrigins: string[];
+  enabled: boolean;
+};
+
+function coverageVariant(state: SkillState): InstallVariant | null {
+  if (!state.personal || (state.claude && state.agents)) return null;
+  if (state.claude) return { skipClaude: true, claudeOnly: false };
+  if (state.agents) return { skipClaude: false, claudeOnly: true };
+  return FULL_INSTALL;
+}
 
 function normalizedCollectionPath(value: string) {
   const normalized = value.trim().replace(/\\/g, '/');
@@ -102,7 +127,7 @@ function collectionMainPath(entry: LibraryEntry, rootPath: string) {
   return entry.kind === 'skill' && !rootPath.toLowerCase().endsWith('.md') ? `${rootPath}/SKILL.md` : rootPath;
 }
 
-export function createLibraryStore(home: string) {
+export function createLibraryStore(home: string, { userHome = os.homedir() }: { userHome?: string } = {}) {
   const directory = path.join(home, 'library-backend');
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   const filename = path.join(directory, 'catalog.sqlite');
@@ -118,10 +143,19 @@ export function createLibraryStore(home: string) {
     CREATE TABLE IF NOT EXISTS origins (
       source TEXT PRIMARY KEY, entry_id TEXT NOT NULL REFERENCES entries(id), source_hash TEXT
     );
+    CREATE TABLE IF NOT EXISTS deleted_origins (source TEXT PRIMARY KEY);
     CREATE TABLE IF NOT EXISTS activation (
       workspace TEXT NOT NULL, entry_id TEXT NOT NULL REFERENCES entries(id),
       PRIMARY KEY(workspace, entry_id)
     );
+    CREATE TABLE IF NOT EXISTS deactivation (
+      workspace TEXT NOT NULL, entry_id TEXT NOT NULL REFERENCES entries(id),
+      PRIMARY KEY(workspace, entry_id)
+    );
+    CREATE TABLE IF NOT EXISTS skill_overrides (
+      workspace TEXT NOT NULL, name TEXT NOT NULL, PRIMARY KEY(workspace, name)
+    );
+    CREATE TABLE IF NOT EXISTS skill_override_files (workspace TEXT PRIMARY KEY, created INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS collections (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, source TEXT NOT NULL
     );
@@ -138,7 +172,6 @@ export function createLibraryStore(home: string) {
   `);
   const originColumns = db.prepare('PRAGMA table_info(origins)').all() as Array<{ name: string }>;
   if (!originColumns.some((column) => column.name === 'source_hash')) db.exec('ALTER TABLE origins ADD COLUMN source_hash TEXT');
-  let defaultEntries: string[] = [];
 
   function workspace(value: unknown) {
     if (typeof value !== 'string' || !path.isAbsolute(value)) throw new Error('Dossier absolu requis.');
@@ -157,7 +190,7 @@ export function createLibraryStore(home: string) {
     return (db.prepare('SELECT entry_id AS entryId FROM activation WHERE workspace = ?').all(selected) as Array<{ entryId: string }>).map((row) => row.entryId);
   }
 
-  function reconcile(selected: string) {
+  function synchronizeActivation(selected: string) {
     const known = (id: string) => Boolean(db.prepare('SELECT 1 FROM entries WHERE id = ?').get(id));
     const manifest = readLibraryManifest(selected);
     if (manifest) {
@@ -171,36 +204,107 @@ export function createLibraryStore(home: string) {
       return;
     }
     const inherited = activeEntries(selected);
-    const defaults = selected === fs.realpathSync(os.homedir()) ? [] : defaultEntries.filter((id) => known(id) && !inherited.includes(id));
-    if (!inherited.length && !defaults.length) return;
+    if (!inherited.length) return;
     const legacy = path.join(directory, 'active');
     try {
       removeLegacyLinks(selected, legacy);
       writeLibraryManifest(selected, inherited.map((id) => {
         const entry = document(id);
         const slug = entry.kind === 'connector' ? entry.name : installationFolder(entry.content, entry.name);
-        const files = entry.kind === 'connector' ? {} : componentFileHashes(selected, installableComponent(entry), false);
+        const files = entry.kind === 'connector' ? {} : componentFileHashes(selected, installableComponent(entry), FULL_INSTALL);
         return { id, kind: entry.kind, name: entry.name, slug, files, skipClaude: false };
       }));
     } catch { return; }
     db.prepare('DELETE FROM activation WHERE workspace = ?').run(selected);
-    for (const id of [...inherited, ...defaults]) {
-      try { setEnabled(selected, id, true); }
+    for (const id of inherited) {
+      try { install(selected, document(id), true); }
       catch { writeLibraryManifest(selected, (readLibraryManifest(selected) ?? []).filter((entry) => entry.id !== id)); }
     }
     fs.rmSync(path.join(legacy, createHash('sha256').update(selected).digest('hex')), { recursive: true, force: true });
   }
 
+  function skillStates(selected: string): SkillState[] {
+    const classify = personalSkillClassifier(userHome);
+    const origins = new Map<string, string[]>();
+    const rows = db.prepare("SELECT o.entry_id AS entryId, o.source FROM origins o JOIN entries e ON e.id = o.entry_id WHERE e.kind = 'skill'").all() as Array<{ entryId: string; source: string }>;
+    for (const row of rows) origins.set(row.entryId, [...(origins.get(row.entryId) ?? []), row.source]);
+    const installed = new Set(selected ? activeEntries(selected) : []);
+    const off = new Set((db.prepare('SELECT entry_id AS entryId FROM deactivation WHERE workspace = ?').all(selected) as Array<{ entryId: string }>).map((row) => row.entryId));
+    const prefix = `${selected}${path.sep}`;
+    const claudeLocal = path.join(selected, '.claude', 'skills') + path.sep;
+    return (db.prepare("SELECT id, name FROM entries WHERE kind = 'skill' ORDER BY name COLLATE NOCASE").all() as Array<{ id: string; name: string }>).map(({ id, name }) => {
+      const sources = origins.get(id) ?? [];
+      const kinds = sources.map(classify);
+      const personal = kinds.some((kind) => kind.personal);
+      const local = Boolean(selected) && sources.some((source) => source.startsWith(prefix));
+      const native = personal || local;
+      return {
+        id,
+        name,
+        origins: sources,
+        personal,
+        local,
+        native,
+        claude: kinds.some((kind) => kind.claude),
+        agents: kinds.some((kind) => kind.agents),
+        claudeOrigins: sources.filter((source, index) => kinds[index].claude || (Boolean(selected) && source.startsWith(claudeLocal))),
+        enabled: Boolean(selected) && (native ? !off.has(id) : installed.has(id)),
+      };
+    });
+  }
+
+  function installationIsCurrent(selected: string, item: LibraryManifestEntry) {
+    if (item.kind === 'connector') return true;
+    const component = installableComponent(document(item.id));
+    const expected = Object.entries(componentFileHashes(selected, component, manifestVariant(item))).sort();
+    const installed = Object.entries(item.files).sort();
+    return item.slug === component.slug && JSON.stringify(expected) === JSON.stringify(installed);
+  }
+
+  function synchronizeNativeSkill(selected: string, state: SkillState) {
+    const variant = state.enabled && selected !== fs.realpathSync(userHome) ? coverageVariant(state) : null;
+    const previous = (readLibraryManifest(selected) ?? []).find((item) => item.id === state.id);
+    if (!variant) {
+      if (previous) install(selected, document(state.id), false);
+      return;
+    }
+    const unchanged = previous && previous.skipClaude === variant.skipClaude && (previous.claudeOnly === true) === variant.claudeOnly;
+    if (unchanged && installationIsCurrent(selected, previous)) return;
+    install(selected, document(state.id), true, variant);
+  }
+
+  function reconcile(selected: string) {
+    synchronizeActivation(selected);
+    const states = skillStates(selected);
+    const native = new Set(states.filter((state) => state.native).map((state) => state.id));
+    for (const item of readLibraryManifest(selected) ?? []) {
+      if (native.has(item.id)) continue;
+      try { if (!installationIsCurrent(selected, item)) install(selected, document(item.id), true); } catch {}
+    }
+    for (const state of states) {
+      if (!state.native) continue;
+      try { synchronizeNativeSkill(selected, state); } catch {}
+    }
+  }
+
+  function resolveWorkspace(workspacePath: unknown) {
+    try { return workspace(workspacePath); } catch { return null; }
+  }
+
   function list(workspacePath?: string) {
     const selected = workspacePath ? workspace(workspacePath) : '';
     if (selected) reconcile(selected);
+    const skills = new Map(skillStates(selected).map((state) => [state.id, state]));
     return db.prepare(`SELECT e.id, e.kind, e.name, e.description,
       EXISTS(SELECT 1 FROM activation a WHERE a.entry_id = e.id AND a.workspace = ?) AS enabled,
       (SELECT ce.collection_id FROM collection_entries ce WHERE ce.entry_id = e.id LIMIT 1) AS collectionId,
       (SELECT json_group_array(o.source) FROM origins o WHERE o.entry_id = e.id) AS sources
       FROM entries e ORDER BY e.name COLLATE NOCASE`).all(selected).map((row) => {
         const entry = row as Omit<StoredLibraryEntry, 'content' | 'assets'> & { enabled: number; collectionId: string | null; sources: string };
-        return { ...entry, enabled: Boolean(entry.enabled), collectionId: entry.collectionId || null, sources: JSON.parse(entry.sources) as string[] };
+        const base = { ...entry, enabled: Boolean(entry.enabled), collectionId: entry.collectionId || null, sources: JSON.parse(entry.sources) as string[] };
+        const state = skills.get(entry.id);
+        if (!state) return { ...base, origin: null };
+        return { ...base, enabled: state.enabled, origin: state.personal ? 'personnel' : state.local ? 'dossier' : 'bibliothèque' };
       });
   }
 
@@ -208,6 +312,7 @@ export function createLibraryStore(home: string) {
     const serialized = JSON.stringify(Object.fromEntries(Object.entries(assets).sort(([left], [right]) => left.localeCompare(right))));
     const sourceHash = createHash('sha256').update(`${kind}\0${content}\0${serialized}`).digest('hex');
     const originSource = !path.isAbsolute(source) || source.includes('#') ? source : path.resolve(source);
+    if (db.prepare('SELECT 1 FROM deleted_origins WHERE source = ?').get(originSource)) return null;
     const existingOrigin = db.prepare('SELECT entry_id AS entryId, source_hash AS sourceHash FROM origins WHERE source = ?').get(originSource) as { entryId: string; sourceHash: string | null } | undefined;
     if (existingOrigin) {
       if (existingOrigin.sourceHash === null || existingOrigin.sourceHash === sourceHash) return existingOrigin.entryId;
@@ -280,12 +385,12 @@ export function createLibraryStore(home: string) {
   }
 
   function createEntry(kind: 'skill' | 'agent', name: string, description: string) {
-    const trimmedName = name.trim();
+    const trimmedName = name.replace(/\s+/g, ' ').trim();
     if (!trimmedName) throw new Error('Nom requis.');
     const trimmedDescription = description.trim();
     const id = randomBytes(32).toString('hex');
     const body = kind === 'agent' ? 'Rôle et instructions de l’agent à rédiger ici.' : 'Instructions du skill à rédiger ici.';
-    const content = `---\nname: ${trimmedName}\ndescription: ${trimmedDescription}\n---\n${body}\n`;
+    const content = `---\nname: ${JSON.stringify(trimmedName)}\ndescription: ${JSON.stringify(trimmedDescription)}\n---\n${body}\n`;
     db.prepare('INSERT INTO entries VALUES (?, ?, ?, ?, ?, ?)').run(id, kind, trimmedName, trimmedDescription, content, '{}');
     return document(id);
   }
@@ -305,7 +410,7 @@ export function createLibraryStore(home: string) {
         const description = typeof data.description === 'string' ? data.description : '';
         db.prepare('UPDATE entries SET name = ?, description = ?, content = ? WHERE id = ?').run(name, description, content, id);
       }
-      for (const { workspace: selected } of active) setEnabled(selected, id, true);
+      for (const { workspace: selected } of active) install(selected, document(id), true);
       return document(id);
     })();
   }
@@ -314,11 +419,13 @@ export function createLibraryStore(home: string) {
     const entry = document(id);
     if (entry.kind !== 'skill') throw new Error('Seuls les skills peuvent être supprimés.');
     const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
-    for (const { workspace: selected } of active) setEnabled(selected, id, false);
+    for (const { workspace: selected } of active) install(selected, entry, false);
     db.transaction(() => {
       db.prepare('DELETE FROM collection_entries WHERE entry_id = ?').run(id);
+      db.prepare('INSERT OR IGNORE INTO deleted_origins (source) SELECT source FROM origins WHERE entry_id = ?').run(id);
       db.prepare('DELETE FROM origins WHERE entry_id = ?').run(id);
       db.prepare('DELETE FROM activation WHERE entry_id = ?').run(id);
+      db.prepare('DELETE FROM deactivation WHERE entry_id = ?').run(id);
       db.prepare('DELETE FROM entries WHERE id = ?').run(id);
     })();
     return { ok: true };
@@ -337,7 +444,7 @@ export function createLibraryStore(home: string) {
       const assets = { ...entry.assets, [normalized]: bytes.toString('base64') };
       db.prepare('UPDATE entries SET assets = ? WHERE id = ?').run(JSON.stringify(assets), id);
       const active = db.prepare('SELECT workspace FROM activation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>;
-      for (const { workspace: selected } of active) setEnabled(selected, id, true);
+      for (const { workspace: selected } of active) install(selected, document(id), true);
       return { path: normalized, content };
     })();
   }
@@ -358,10 +465,6 @@ export function createLibraryStore(home: string) {
       }
       return input.id;
     })();
-  }
-
-  function hasCollection(id: string) {
-    return Boolean(db.prepare('SELECT 1 FROM collections WHERE id = ?').get(id));
   }
 
   function collectionEntries(id: string) {
@@ -520,29 +623,28 @@ export function createLibraryStore(home: string) {
     try {
       for (const mapping of mappings) {
         if (active.has(mapping.entryId) === enabled) continue;
-        setEnabled(selected, mapping.entryId, enabled, options);
+        install(selected, document(mapping.entryId), enabled, options);
         changed.push(mapping.entryId);
       }
     } catch (error) {
-      for (const entryId of changed.reverse()) setEnabled(selected, entryId, !enabled);
+      for (const entryId of changed.reverse()) install(selected, document(entryId), !enabled);
       throw error;
     }
     return listCollections(selected).find((collection) => collection.id === id);
   }
 
-  function setEnabled(workspacePath: unknown, id: string, enabled: unknown, options: { skipClaude?: boolean } = {}) {
-    if (typeof enabled !== 'boolean') throw new Error('Activation booléenne requise.');
-    const selected = workspace(workspacePath);
-    const entry = document(id);
+  function install(selected: string, entry: LibraryEntry, enabled: boolean, options: Partial<InstallVariant> = {}) {
+    const { id } = entry;
     const manifest = readLibraryManifest(selected) ?? [];
     const previous = manifest.find((item) => item.id === id);
     const skipClaude = options.skipClaude ?? previous?.skipClaude ?? false;
-    const installed: LibraryManifestEntry = { id, kind: entry.kind, name: entry.name, slug: entry.name, files: {}, skipClaude };
+    const claudeOnly = options.claudeOnly ?? previous?.claudeOnly ?? false;
+    const installed: LibraryManifestEntry = { id, kind: entry.kind, name: entry.name, slug: entry.name, files: {}, skipClaude, ...(claudeOnly ? { claudeOnly } : {}) };
     if (entry.kind === 'connector') {
       prepareConnectorInstallation(selected, entry.name, parseConnectorConfig(entry.content), enabled, skipClaude)();
     } else {
       const component = installableComponent(entry);
-      const installation = prepareWorkspaceInstallation(selected, previous, enabled ? { component, skipClaude } : null);
+      const installation = prepareWorkspaceInstallation(selected, previous, enabled ? { component, variant: { skipClaude, claudeOnly } } : null);
       installation.commit();
       installed.slug = component.slug;
       installed.files = installation.files;
@@ -555,17 +657,77 @@ export function createLibraryStore(home: string) {
     return { ok: true, enabled };
   }
 
+  function setEnabled(workspacePath: unknown, id: string, enabled: unknown) {
+    if (typeof enabled !== 'boolean') throw new Error('Activation booléenne requise.');
+    const selected = workspace(workspacePath);
+    const entry = document(id);
+    const state = entry.kind === 'skill' ? skillStates(selected).find((item) => item.id === id) : undefined;
+    if (!state?.native) return install(selected, entry, enabled);
+    if (enabled) db.prepare('DELETE FROM deactivation WHERE workspace = ? AND entry_id = ?').run(selected, id);
+    else db.prepare('INSERT OR IGNORE INTO deactivation VALUES (?, ?)').run(selected, id);
+    synchronizeNativeSkill(selected, { ...state, enabled });
+    return { ok: true, enabled };
+  }
+
+  function reconcileWorkspace(workspacePath: unknown) {
+    const selected = resolveWorkspace(workspacePath);
+    if (selected) reconcile(selected);
+  }
+
+  function disabledEntries(workspacePath: unknown) {
+    const selected = resolveWorkspace(workspacePath);
+    if (!selected) return [];
+    return skillStates(selected).filter((state) => state.native && !state.enabled && state.origins.length)
+      .map(({ id, name, origins, claudeOrigins }) => ({ id, name, origins, claudeOrigins }));
+  }
+
+  function enabledSkills(workspacePath: unknown) {
+    const selected = resolveWorkspace(workspacePath);
+    if (!selected) return [];
+    const ids = new Set(skillStates(selected).filter((state) => state.enabled).map((state) => state.id));
+    return (db.prepare("SELECT id, name, content FROM entries WHERE kind = 'skill' ORDER BY name").all() as Array<{ id: string; name: string; content: string }>)
+      .filter((entry) => ids.has(entry.id));
+  }
+
+  function contents(ids: string[]) {
+    const found = new Map<string, string>();
+    const select = db.prepare('SELECT content FROM entries WHERE id = ?');
+    for (const id of new Set(ids)) {
+      const row = select.get(id) as { content: string } | undefined;
+      if (row) found.set(id, row.content);
+    }
+    return found;
+  }
+
+  function deactivatedWorkspaces(id: string) {
+    return (db.prepare('SELECT workspace FROM deactivation WHERE entry_id = ?').all(id) as Array<{ workspace: string }>).map((row) => row.workspace);
+  }
+
+  function overrideState(selected: string) {
+    const names = (db.prepare('SELECT name FROM skill_overrides WHERE workspace = ? ORDER BY name').all(selected) as Array<{ name: string }>).map((row) => row.name);
+    const file = db.prepare('SELECT created FROM skill_override_files WHERE workspace = ?').get(selected) as { created: number } | undefined;
+    return { names, file: file ? { created: Boolean(file.created) } : null };
+  }
+
+  function saveOverrideState(selected: string, names: string[], file: { created: boolean } | null) {
+    db.transaction(() => {
+      db.prepare('DELETE FROM skill_overrides WHERE workspace = ?').run(selected);
+      for (const name of names) db.prepare('INSERT OR IGNORE INTO skill_overrides VALUES (?, ?)').run(selected, name);
+      if (file) db.prepare('INSERT OR REPLACE INTO skill_override_files VALUES (?, ?)').run(selected, file.created ? 1 : 0);
+      else db.prepare('DELETE FROM skill_override_files WHERE workspace = ?').run(selected);
+    })();
+  }
+
   function instructions(workspacePath: string) {
     const selected = workspace(workspacePath);
     reconcile(selected);
     const entries = db.prepare(`SELECT e.* FROM entries e JOIN activation a ON a.entry_id = e.id
-      WHERE a.workspace = ? AND e.kind IN ('skill', 'agent') ORDER BY e.name`).all(selected) as StoredLibraryEntry[];
+      WHERE a.workspace = ? AND e.kind = 'agent' ORDER BY e.name`).all(selected) as StoredLibraryEntry[];
     return entries.map((entry) => {
       const assets = JSON.parse(entry.assets) as Record<string, string>;
       const references = Object.entries(assets).filter(([name]) => name === 'table-columns.yaml')
         .map(([name, bytes]) => `### ${name}\n${Buffer.from(bytes, 'base64').toString('utf8')}`);
-      const packageRoot = path.join(selected, '.agents', 'skills', installationFolder(entry.content, entry.name));
-      return `## ${entry.kind === 'agent' ? 'Instructions de rôle' : 'Skill'} : ${entry.name}\n${entry.content}\n${references.join('\n\n')}\nFichiers associés disponibles dans : ${packageRoot}\n${Object.keys(assets).join('\n')}`;
+      return `## Instructions de rôle : ${entry.name}\n${entry.content}\n${references.join('\n\n')}`;
     }).join('\n\n');
   }
 
@@ -581,14 +743,20 @@ export function createLibraryStore(home: string) {
     importConnector,
     setEnabled,
     instructions,
+    resolveWorkspace,
+    reconcileWorkspace,
+    disabledEntries,
+    enabledSkills,
+    contents,
+    deactivatedWorkspaces,
+    overrideState,
+    saveOverrideState,
     upsertCollection,
-    hasCollection,
     listCollections,
     collectionFiles,
     collectionFile,
     updateCollectionFile,
     setCollectionEnabled,
-    setDefaultEntries: (ids: string[]) => { defaultEntries = ids; },
     close: () => db.close(),
   };
 }

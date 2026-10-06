@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 
-import { mount, normalizeSkill, unmount } from './index.js';
+import { mount, unmount } from './src/index.js';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -129,17 +129,32 @@ test('a connector toggle activates the catalog entry for the current dossier', a
 
 test('a toggle sends the current dossier and no global activation', async (t) => {
   const writes = [];
+  let enabled = false;
   const { container } = fixture(t, async (method, path, body) => {
-    if (method === 'PUT') { writes.push({ path, body }); return { ok: true }; }
-    return { entries: [{ id: 'abc', name: 'Relire', description: '', kind: 'skill', enabled: false }] };
+    if (method === 'PUT') { writes.push({ path, body }); enabled = body.enabled; return { ok: true }; }
+    return { entries: [{ id: 'abc', name: 'Relire', description: '', kind: 'skill', enabled, origin: 'bibliothèque' }] };
   });
   await settle();
-  assert.equal(container.querySelector('[role=switch]').title, 'Installer dans ce dossier');
+  assert.equal(container.querySelector('[role=switch]').title, 'Désactivé dans ce dossier');
   assert.doesNotMatch(container.textContent, /Dans ce dossier/);
   container.querySelector('[role=switch]').click();
   await settle();
   assert.deepEqual(writes, [{ path: '/catalog/abc/activation', body: { workspacePath: '/case-a', enabled: true } }]);
-  assert.equal(container.querySelector('[role=switch]').title, 'Retirer de ce dossier');
+  assert.equal(container.querySelector('[role=switch]').title, 'Activé dans ce dossier');
+});
+
+test('skills show their origin, a personal Claude override and the items a refresh could not import', async (t) => {
+  const { container } = fixture(t, async (method, path) => {
+    if (path === '/plugins/sync') return { ok: true, plugins: [], scan: { errors: [{ source: '/home/u/.claude/skills/casse/SKILL.md', message: 'Ce fichier ne peut pas être modifié.' }] } };
+    return { entries: [{ id: 'abc', name: 'Relire', description: '', kind: 'skill', enabled: true, origin: 'personnel', shadowedBy: '/home/u/.claude/skills/relire/SKILL.md' }] };
+  });
+  await settle();
+  assert.match(container.textContent, /Personnel/);
+  assert.match(container.textContent, /Claude utilisera la version personnelle \(\/home\/u\/\.claude\/skills\/relire\/SKILL\.md\)/);
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Actualiser').click();
+  await settle();
+  assert.match(container.textContent, /1 élément\(s\) non importé\(s\)/);
+  assert.match(container.textContent, /casse\/SKILL\.md — Ce fichier ne peut pas être modifié\./);
 });
 
 test('each section switches between personal items and its filtered marketplace', async (t) => {
@@ -249,42 +264,6 @@ test('the create dialog requires a name and can be cancelled', async (t) => {
   [...container.querySelectorAll('button')].find((button) => button.textContent === 'Annuler').click();
   await settle();
   assert.equal(container.querySelector('[aria-label="Nom"]'), null);
-});
-
-test('provider skills are normalized for every platform and only project scopes retain dossier metadata', () => {
-  for (const provider of ['claude', 'codex', 'cursor', 'mistral', 'opencode', 'grok']) {
-    const normalized = normalizeSkill(provider, {
-      name: null,
-      description: 42,
-      command: undefined,
-      sourcePath: 7,
-      scope: 'invalid',
-      projectPath: '/leak',
-      projectDisplayName: 'Leak',
-    });
-    assert.deepEqual(normalized, {
-      provider,
-      name: '',
-      description: '42',
-      command: '',
-      scope: 'user',
-      sourcePath: '7',
-    });
-  }
-
-  for (const scope of ['project', 'repo']) {
-    const normalized = normalizeSkill('claude', { scope, projectPath: '/fallback', projectDisplayName: 'Fallback' }, { path: '/case-a', displayName: 'Dossier A' });
-    assert.equal(normalized.scope, scope);
-    assert.equal(normalized.projectPath, '/case-a');
-    assert.equal(normalized.projectDisplayName, 'Dossier A');
-  }
-
-  for (const scope of ['user', 'plugin', 'admin', 'system']) {
-    const normalized = normalizeSkill('codex', { scope, projectPath: '/leak', projectDisplayName: 'Leak' });
-    assert.equal(normalized.scope, scope);
-    assert.equal('projectPath' in normalized, false);
-    assert.equal('projectDisplayName' in normalized, false);
-  }
 });
 
 test('a native plugin offers a dossier switch and a global switch, and global entries are flagged', async (t) => {

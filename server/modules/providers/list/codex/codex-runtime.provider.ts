@@ -304,7 +304,7 @@ async function queryCodex(
   const sessionKey = () => sessionId || capturedSessionId || null;
 
   try {
-    codex = new Codex();
+    codex = new Codex(options.libraryCodexOptions);
 
     const threadOptions: ThreadOptions = {
       workingDirectory,

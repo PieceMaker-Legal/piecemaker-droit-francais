@@ -28,7 +28,7 @@ function fixture(t: { after: (fn: () => void) => void }) {
 
 test('imports preserve YAML metadata and assets without publishing instructions', (t) => {
   const { store, skill, workspace } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   const list = store.list(workspace);
   assert.equal(list.length, 1);
   assert.equal(list[0].enabled, false);
@@ -46,7 +46,7 @@ test('createEntry adds a listable entry with placeholder content and no assets',
   assert.equal(created.kind, 'skill');
   assert.equal(created.name, 'Nouveau skill');
   assert.equal(created.description, 'À utiliser pour...');
-  assert.match(created.content, /^---\nname: Nouveau skill\ndescription: À utiliser pour\.\.\.\n---\n/);
+  assert.match(created.content, /^---\nname: "Nouveau skill"\ndescription: "À utiliser pour\.\.\."\n---\n/);
   assert.deepEqual(created.assets, {});
   const list = store.list(workspace);
   assert.equal(list.length, 1);
@@ -66,20 +66,21 @@ test('imports reject binary main documents before storing replacement characters
 
 test('activation is persistent, canonical and confined to the selected dossier', (t) => {
   const { store, skill, workspace, other, root, home } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   const alias = path.join(root, 'alias');
   fs.symlinkSync(workspace, alias);
   store.setEnabled(alias, id, true);
-  assert.match(store.instructions(workspace), /Instructions privées/);
-  assert.match(store.instructions(workspace), /columns:/);
-  assert.equal(store.instructions(other), '');
+  assert.match(fs.readFileSync(path.join(workspace, '.agents/skills/review/SKILL.md'), 'utf8'), /Instructions privées/);
+  assert.match(fs.readFileSync(path.join(workspace, '.agents/skills/review/table-columns.yaml'), 'utf8'), /columns:/);
+  assert.equal(store.instructions(workspace), '');
+  assert.equal(fs.existsSync(path.join(other, '.agents')), false);
   assert.equal(store.importFile(path.join(skill, 'SKILL.md'), 'skill'), id);
   assert.equal(store.list(workspace)[0].enabled, true);
   const reopened = createLibraryStore(path.join(home, '.piecemaker'));
   assert.equal(reopened.list(workspace)[0].enabled, true);
   reopened.close();
   store.setEnabled(workspace, id, false);
-  assert.equal(store.instructions(workspace), '');
+  assert.equal(fs.existsSync(path.join(workspace, '.agents/skills/review')), false);
   assert.equal(store.list(workspace)[0].enabled, false);
   assert.throws(() => store.setEnabled(workspace, id, 'true'));
   assert.throws(() => store.setEnabled('../case', id, true));
@@ -88,7 +89,7 @@ test('activation is persistent, canonical and confined to the selected dossier',
 
 test('deleting a skill removes every active copy and its catalogue entry', (t) => {
   const { store, skill, workspace, other } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   store.setEnabled(workspace, id, true);
   store.setEnabled(other, id, true);
   store.deleteEntry(id);
@@ -123,9 +124,10 @@ test('library instructions are removed from echoes without rewriting user prose'
   assert.equal(stripLibraryInstructions('Mention <PIECEMAKER_LIBRARY_INSTRUCTIONS> dans le texte'), 'Mention <PIECEMAKER_LIBRARY_INSTRUCTIONS> dans le texte');
 });
 
-test('runtime injects only active dossier instructions and preserves the visible user message', async (t) => {
+test('runtime injects only active dossier role instructions and preserves the visible user message', async (t) => {
   const { store, workspace, other, skill } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const skillId = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
+  const id = store.importContent('/agents/clerk.md', 'agent', '---\nname: clerk\ndescription: Greffe\n---\nRôle du greffier.')!;
   const commands: Array<{ provider: string; command: string }> = [];
   const received: unknown[] = [];
   const run: Parameters<typeof installLibraryRuntime>[0]['run'] = async (provider, command, _options, writer) => {
@@ -139,11 +141,12 @@ test('runtime injects only active dossier instructions and preserves the visible
   await runtime.run('claude', 'Relire', { cwd: workspace }, writer);
   assert.equal(commands[0].command, 'Relire');
   store.setEnabled(workspace, id, true);
+  store.setEnabled(workspace, skillId, true);
   for (const provider of ['claude', 'codex', 'cursor', 'mistral', 'opencode'] as const) {
     await runtime.getRunner(provider)('Relire', { cwd: workspace }, writer);
   }
   assert.deepEqual(commands.slice(1).map(({ provider }) => provider), ['claude', 'codex', 'cursor', 'mistral', 'opencode']);
-  assert.ok(commands.slice(1).every(({ command }) => command.includes('Instructions privées')));
+  assert.ok(commands.slice(1).every(({ command }) => command.includes('Rôle du greffier.') && !command.includes('Instructions privées')));
   assert.ok(received.slice(1).every((message) => JSON.stringify(message) === JSON.stringify({ kind: 'text', role: 'user', content: 'Relire' })));
   await runtime.run('codex', 'Relire', { cwd: other }, writer);
   assert.equal(commands[6].command, 'Relire');
@@ -157,7 +160,7 @@ test('runtime injects only active dossier instructions and preserves the visible
 
 test('editing updates YAML and active instructions without changing assets or activation', (t) => {
   const { store, skill, workspace, other, home } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   store.setEnabled(workspace, id, true);
   const before = store.document(id);
   const content = '---\nname: Relire\ndescription: Nouvelle description\n---\nNouvelles instructions';
@@ -167,8 +170,9 @@ test('editing updates YAML and active instructions without changing assets or ac
   assert.equal(store.list(workspace)[0].enabled, true);
   assert.equal(store.list(other)[0].enabled, false);
   assert.deepEqual(store.document(id).assets, before.assets);
-  assert.match(store.instructions(workspace), /Nouvelles instructions/);
-  assert.equal(store.instructions(other), '');
+  assert.match(fs.readFileSync(path.join(workspace, '.agents/skills/relire/SKILL.md'), 'utf8'), /Nouvelles instructions/);
+  assert.equal(fs.existsSync(path.join(workspace, '.agents/skills/review')), false);
+  assert.equal(fs.existsSync(path.join(other, '.agents')), false);
   assert.throws(() => store.updateDocument(id, 'stale', before.content), /modifié ailleurs/);
   assert.throws(() => store.updateDocument(id, '---\nname: [invalid\n---', content));
   const reopened = createLibraryStore(path.join(home, '.piecemaker'));
@@ -178,7 +182,7 @@ test('editing updates YAML and active instructions without changing assets or ac
 
 test('plugin collections expose an editable tree and activate every imported component', async (t) => {
   const { store, skill, workspace } = fixture(t);
-  const skillId = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const skillId = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   store.upsertCollection({
     id: 'legal-tools@marketplace',
     name: 'Legal tools',
@@ -205,7 +209,7 @@ test('plugin collections expose an editable tree and activate every imported com
   assert.throws(() => store.updateCollectionFile('legal-tools@marketplace', file.path, 'stale', file.content), /modifié ailleurs/);
   store.setCollectionEnabled(workspace, 'legal-tools@marketplace', true);
   assert.equal(store.listCollections(workspace)[0].enabled, true);
-  assert.match(store.instructions(workspace), /Échéance/);
+  assert.match(fs.readFileSync(path.join(workspace, '.agents/skills/review/table-columns.yaml'), 'utf8'), /Échéance/);
   store.setCollectionEnabled(workspace, 'legal-tools@marketplace', false);
   assert.equal(store.listCollections(workspace)[0].enabled, false);
 });
@@ -249,7 +253,7 @@ test('collection files are read from source on first tree access', (t) => {
 
 test('toggle installs and removes discoverable skills for every provider with their assets', (t) => {
   const { store, skill, workspace, other } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   store.setEnabled(workspace, id, true);
   store.setEnabled(workspace, id, true);
   for (const provider of ['.claude', '.agents', '.cursor', '.opencode', '.grok']) {
@@ -269,7 +273,7 @@ test('toggle installs and removes discoverable skills for every provider with th
 
 test('toggle installs native subagents for both providers and refreshes their definitions', (t) => {
   const { store, skill, workspace } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'agent');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'agent')!;
   const claude = path.join(workspace, '.claude/agents', 'review.md');
   const codex = path.join(workspace, '.codex/agents', 'review.toml');
   const opencode = path.join(workspace, '.opencode/agent', 'review.md');
@@ -300,7 +304,7 @@ test('toggle installs native subagents for both providers and refreshes their de
 
 test('installation refuses personal collisions before installing either provider', (t) => {
   const { store, skill, workspace } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   const personal = path.join(workspace, '.agents/skills', 'review');
   fs.mkdirSync(personal, { recursive: true });
   fs.writeFileSync(path.join(personal, 'SKILL.md'), 'Personnel');
@@ -312,7 +316,7 @@ test('installation refuses personal collisions before installing either provider
 
 test('installation refuses provider directories redirected outside the dossier', (t) => {
   const { store, skill, workspace, other } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   fs.symlinkSync(other, path.join(workspace, '.claude'));
   assert.throws(() => store.setEnabled(workspace, id, true), /hors du dossier/);
   assert.deepEqual(fs.readdirSync(other), []);
@@ -321,7 +325,7 @@ test('installation refuses provider directories redirected outside the dossier',
 
 test('uninstallation preserves a locally edited subagent and its activation', (t) => {
   const { store, skill, workspace } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'agent');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'agent')!;
   store.setEnabled(workspace, id, true);
   const target = path.join(workspace, '.codex/agents', 'review.toml');
   fs.writeFileSync(target, 'Personal edits');
@@ -338,7 +342,7 @@ test('standalone connectors are catalogued once and installed in every provider 
     description: 'https://registre-public.com/api/mcp',
     config: { transport: 'http', url: 'https://registre-public.com/api/mcp' },
     source: 'piecemaker:default:registre-public',
-  });
+  })!;
   assert.equal(store.importConnector({
     name: 'registre-public',
     description: 'https://registre-public.com/api/mcp',
@@ -376,7 +380,7 @@ test('plugin connectors stay attached to their collection', (t) => {
     config: { transport: 'stdio', command: 'python3', args: ['server.py'] },
     source: '/plugins/legal/.mcp.json#legifrance',
     namespace: 'legifrance@market',
-  });
+  })!;
   store.upsertCollection({
     id: 'legifrance@market',
     name: 'Légifrance',
@@ -393,7 +397,7 @@ test('plugin connectors stay attached to their collection', (t) => {
 
 test('renaming a skill moves its installed folders', (t) => {
   const { store, skill, workspace } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   store.setEnabled(workspace, id, true);
   const previous = store.document(id).content;
   store.updateDocument(id, previous.replace('name: review', 'name: relecture'), previous);
@@ -406,7 +410,7 @@ test('renaming a skill moves its installed folders', (t) => {
 
 test('an activated skill is a real copy in the dossier with relative provider links and a manifest', (t) => {
   const { store, skill, workspace, home } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   store.setEnabled(workspace, id, true);
   assert.equal(fs.lstatSync(path.join(workspace, '.agents/skills/review')).isDirectory(), true);
   assert.equal(fs.readlinkSync(path.join(workspace, '.claude/skills/review')), path.join('..', '..', '.agents', 'skills', 'review'));
@@ -425,7 +429,7 @@ test('an activated skill is a real copy in the dossier with relative provider li
 
 test('a skill edited by hand in the dossier is never overwritten nor removed', (t) => {
   const { store, skill, workspace } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   store.setEnabled(workspace, id, true);
   const installed = path.join(workspace, '.agents/skills/review/SKILL.md');
   fs.writeFileSync(installed, 'Retouche personnelle');
@@ -436,7 +440,7 @@ test('a skill edited by hand in the dossier is never overwritten nor removed', (
 
 test('activations from the former linked layout are migrated and their dead links removed', (t) => {
   const { store, skill, workspace, home } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
+  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   store.setEnabled(workspace, id, true);
   store.setEnabled(workspace, id, false);
   fs.rmSync(path.join(workspace, '.piecemaker'), { recursive: true });
@@ -456,22 +460,11 @@ test('activations from the former linked layout are migrated and their dead link
   assert.match(fs.readFileSync(path.join(workspace, '.claude/skills/review/SKILL.md'), 'utf8'), /Instructions privées/);
 });
 
-test('default entries join a new dossier once and stay removed afterwards', (t) => {
-  const { store, skill, workspace } = fixture(t);
-  const id = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
-  store.setDefaultEntries([id]);
-  assert.equal(store.list(workspace)[0].enabled, true);
-  assert.ok(fs.existsSync(path.join(workspace, '.agents/skills/review/SKILL.md')));
-  store.setEnabled(workspace, id, false);
-  assert.equal(store.list(workspace)[0].enabled, false);
-  assert.equal(fs.existsSync(path.join(workspace, '.agents/skills/review')), false);
-});
-
 test('components delegated to a native Claude plugin skip every Claude location', (t) => {
   const { store, skill, workspace } = fixture(t);
-  const skillId = store.importFile(path.join(skill, 'SKILL.md'), 'skill');
-  const agentId = store.importContent('/plugins/legal/agents/clerk.md', 'agent', '---\nname: clerk\ndescription: Greffe\n---\nRôle.');
-  const mcpId = store.importConnector({ name: 'legifrance', description: 'python3', config: { transport: 'stdio', command: 'python3' }, source: '/plugins/legal/.mcp.json#legifrance', namespace: 'legal@market' });
+  const skillId = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
+  const agentId = store.importContent('/plugins/legal/agents/clerk.md', 'agent', '---\nname: clerk\ndescription: Greffe\n---\nRôle.')!;
+  const mcpId = store.importConnector({ name: 'legifrance', description: 'python3', config: { transport: 'stdio', command: 'python3' }, source: '/plugins/legal/.mcp.json#legifrance', namespace: 'legal@market' })!;
   store.upsertCollection({
     id: 'legal@market', name: 'Legal', description: '', source: '/plugins/legal', files: [],
     entries: [{ entryId: skillId, rootPath: 'skills/review' }, { entryId: agentId, rootPath: 'agents/clerk.md' }, { entryId: mcpId, rootPath: 'mcp/legifrance.json' }],

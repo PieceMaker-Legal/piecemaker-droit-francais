@@ -4,7 +4,7 @@ import path from 'path';
 import type { Router } from 'express';
 
 import { getConnection, projectsDb } from '@/modules/database/index.js';
-import { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
+import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
@@ -14,7 +14,7 @@ import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
-import { openLibrary, installLibraryRuntime } from './library/index.js';
+import { openLibrary, installLibraryRuntime, installLibrarySkillVisibility } from './library/index.js';
 import { createKnowledgeBackend } from './knowledge/index.js';
 import { declarePieceMakerServer } from './mcp-declaration.js';
 import { createTimesheetBackend } from './timesheet/index.js';
@@ -62,7 +62,8 @@ const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy });
-const library = await openLibrary(piecemakerHome(), applicationRoot);
+const library = await openLibrary(piecemakerHome(), applicationRoot, () => projectsDb.getProjectPaths().map((row) => row.project_path));
+installLibrarySkillVisibility(providerSkillsService, library.store);
 installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
 installModelDiscovery(providerRegistry);
 const timesheet = createTimesheetBackend(piecemakerHome());

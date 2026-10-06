@@ -2,17 +2,38 @@ import os from 'node:os';
 
 import express from 'express';
 
+import { parseFrontMatter } from '@/shared/frontmatter.js';
+
 import type { createLibraryStore } from './store.js';
 import { globalProviderIndex } from './global-state.js';
-import { listLibraryProviderSkills, scanAndPersistLibraryProviderSkills } from './provider-skills.js';
+import { applyWorkspaceSkillVisibility, personalClaudeSkills } from './skill-visibility.js';
+
+function shadowingPersonalSkills(store: ReturnType<typeof createLibraryStore>, entries: Array<{ id: string; kind: string; name: string; enabled: boolean }>, userHome: string) {
+  const shadows = new Map<string, string>();
+  const enabled = entries.filter((entry) => entry.enabled && entry.kind === 'skill');
+  if (!enabled.length) return shadows;
+  const personal = personalClaudeSkills(userHome);
+  const contents = store.contents(enabled.map((entry) => entry.id));
+  for (const entry of enabled) {
+    try {
+      const content = contents.get(entry.id) ?? '';
+      const names = [entry.name, String(parseFrontMatter(content).data.name || '')].map((name) => name.trim().toLowerCase());
+      const shadow = personal.find((skill) => names.includes(skill.name.toLowerCase()) && skill.content !== content);
+      if (shadow) shadows.set(entry.id, shadow.file);
+    } catch {}
+  }
+  return shadows;
+}
 
 export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>, userHome = os.homedir()) {
   const router = express.Router();
   router.get('/catalog', (req, res) => {
     try {
       const globalProviders = globalProviderIndex(userHome);
-      const entries = store.list(typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined);
-      res.json({ entries: entries.map(({ sources, ...entry }) => ({ ...entry, globalProviders: globalProviders(sources) })) });
+      const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
+      const entries = store.list(workspacePath);
+      const shadows = workspacePath ? shadowingPersonalSkills(store, entries, userHome) : new Map<string, string>();
+      res.json({ entries: entries.map(({ sources, ...entry }) => ({ ...entry, globalProviders: globalProviders(sources), ...(shadows.has(entry.id) ? { shadowedBy: shadows.get(entry.id) } : {}) })) });
     }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
@@ -23,15 +44,6 @@ export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>
     if (typeof name !== 'string' || !name.trim()) { res.status(400).json({ error: 'Nom requis.' }); return; }
     const description = typeof req.body?.description === 'string' ? req.body.description : '';
     try { res.json(store.createEntry(kind, name, description)); }
-    catch (error) { res.status(400).json({ error: (error as Error).message }); }
-  });
-  router.get('/provider-skills', async (req, res) => {
-    const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
-    res.json(await listLibraryProviderSkills(workspacePath));
-  });
-  router.post('/provider-skills/scan', async (req, res) => {
-    const workspacePath = typeof req.body?.workspacePath === 'string' ? req.body.workspacePath : undefined;
-    try { res.json(await scanAndPersistLibraryProviderSkills(store, workspacePath)); }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.get('/catalog/:id', (req, res) => {
@@ -47,11 +59,20 @@ export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>
     catch (error) { res.status(409).json({ error: (error as Error).message }); }
   });
   router.delete('/catalog/:id', (req, res) => {
-    try { res.json(store.deleteEntry(String(req.params.id))); }
+    try {
+      const id = String(req.params.id);
+      const workspaces = store.deactivatedWorkspaces(id);
+      const result = store.deleteEntry(id);
+      for (const workspace of workspaces) applyWorkspaceSkillVisibility(store, workspace);
+      res.json(result);
+    }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.put('/catalog/:id/activation', (req, res) => {
-    try { res.json(store.setEnabled(req.body?.workspacePath, String(req.params.id), req.body?.enabled)); }
+    try {
+      const result = store.setEnabled(req.body?.workspacePath, String(req.params.id), req.body?.enabled);
+      res.json({ ...result, visibility: applyWorkspaceSkillVisibility(store, req.body.workspacePath) });
+    }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   return router;

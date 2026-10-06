@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 import { normalizeProviderConnector, type LibraryConnectorConfig } from './connector-installation.js';
+import { recordScanError, type LibraryScanError } from './scan-errors.js';
 import type { createLibraryStore } from './store.js';
 
 const require = createRequire(import.meta.url);
@@ -79,11 +80,14 @@ export function seedDefaultLibraryConnectors(store: ReturnType<typeof createLibr
   });
 }
 
-export function scanAndPersistLibraryProviderConnectors(store: ReturnType<typeof createLibraryStore>, userHome: string) {
+export function scanAndPersistLibraryProviderConnectors(store: ReturnType<typeof createLibraryStore>, userHome: string, errors?: LibraryScanError[]) {
   seedDefaultLibraryConnectors(store);
   const imported: string[] = [];
   for (const connector of listUserProviderConnectors(userHome)) {
-    try { imported.push(store.importConnector(connector)); } catch {}
+    try {
+      const id = store.importConnector(connector);
+      if (id) imported.push(id);
+    } catch (error) { recordScanError(errors, connector.source, error); }
   }
   return imported;
 }
