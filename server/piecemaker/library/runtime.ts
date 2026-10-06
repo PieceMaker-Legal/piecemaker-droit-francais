@@ -16,7 +16,7 @@ export function installLibraryRuntime(runtime: Pick<typeof providerRuntimeServic
   const history = sessions.fetchHistory.bind(sessions);
   runtime.run = async (provider, command, options, writer) => {
     const cwd = String(options.cwd ?? options.projectPath ?? '');
-    const instructions = cwd ? store.instructions(cwd) : '';
+    const instructions = cwd && !command.startsWith('/') ? store.instructions(cwd) : '';
     const wrapped = new Proxy(writer, {
       get(target, key) {
         if (key === 'send') return (value: unknown) => {
