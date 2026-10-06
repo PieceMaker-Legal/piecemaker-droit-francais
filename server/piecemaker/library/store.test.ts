@@ -150,6 +150,9 @@ test('runtime injects only active dossier instructions and preserves the visible
   store.setEnabled(workspace, id, false);
   await runtime.run('codex', 'Relire', { cwd: workspace }, writer);
   assert.equal(commands[7].command, 'Relire');
+  store.setEnabled(workspace, id, true);
+  await runtime.run('claude', '/compact', { cwd: workspace }, writer);
+  assert.equal(commands[8].command, '/compact');
 });
 
 test('editing updates YAML and active instructions without changing assets or activation', (t) => {
