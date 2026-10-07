@@ -14,7 +14,7 @@ export function createCitationsRouter(
   router.get('/citations/:token/legifrance', async (request, response) => {
     const snapshot = await store.read(String(request.params.token), { forViewing: true });
     response.setHeader('Cache-Control', 'no-store');
-    const id = snapshot?.citation.decision_id ?? '';
+    const id = snapshot?.citation.decision_id ?? snapshot?.citation.article_id ?? '';
     if (!snapshot || !sessionExists(snapshot.sessionId) || !TEXT_ID.test(id)) {
       response.status(404).json({ error: 'Page indisponible.' });
       return;

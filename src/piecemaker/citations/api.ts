@@ -7,6 +7,7 @@ type CitationSource = {
   citation: {
     ref: number;
     decision_id?: string;
+    article_id?: string;
     verified?: boolean;
     quotes: Array<{
       quote: string;

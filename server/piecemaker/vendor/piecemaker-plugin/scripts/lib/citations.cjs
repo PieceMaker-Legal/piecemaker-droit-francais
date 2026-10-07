@@ -48,6 +48,22 @@ function normalizeCitation(raw) {
   if (typeof ref !== 'number') return null;
   const quote = typeof c.quote === 'string' ? c.quote : c.text;
 
+  const rawArticleId =
+    typeof c.article_id === 'string'
+      ? c.article_id
+      : typeof c.articleId === 'string'
+        ? c.articleId
+        : null;
+  const articleId = rawArticleId ? rawArticleId.trim() : '';
+  if (articleId) {
+    const quotes = normalizeCaseCitationQuotes(c);
+    if (!quotes.length) {
+      if (typeof quote !== 'string' || !quote) return null;
+      quotes.push({ type: null, author: null, quote });
+    }
+    return { kind: 'article', ref, article_id: articleId, quotes };
+  }
+
   const rawDecisionId =
     typeof c.decision_id === 'string'
       ? c.decision_id

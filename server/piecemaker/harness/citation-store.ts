@@ -12,6 +12,7 @@ type CitationSnapshot = {
   citation: {
     ref: number;
     decision_id?: string;
+    article_id?: string;
     verified?: boolean;
     quotes: Array<{
       quote: string;
@@ -27,14 +28,14 @@ type CitationSnapshot = {
 export function createCitationStore(homeDir: string) {
   const directory = path.join(homeDir, 'citation-sources');
   return {
-    async recordVerification(sessionId: string, citations: Array<{ ref: number; kind: string; doc_id?: string; decision_id?: string; verified?: boolean }>) {
+    async recordVerification(sessionId: string, citations: Array<{ ref: number; kind: string; doc_id?: string; decision_id?: string; article_id?: string; verified?: boolean }>) {
       try {
         await mkdir(homeDir, { recursive: true, mode: 0o700 });
         await appendFile(path.join(homeDir, 'citations-verifiees.jsonl'), `${JSON.stringify({
           session_id: sessionId, at: new Date().toISOString(), citations: citations.length,
           non_verifiees: citations.filter((citation) => citation.verified === false).length,
           details: citations.map((citation) => ({
-            id: `${citation.kind === 'case' ? 'decision' : 'document'}:${citation.decision_id ?? citation.doc_id}#${citation.ref}`,
+            id: `${citation.kind === 'case' ? 'decision' : citation.kind}:${citation.decision_id ?? citation.article_id ?? citation.doc_id}#${citation.ref}`,
             verified: citation.verified === true,
           })),
         })}\n`, { mode: 0o600 });

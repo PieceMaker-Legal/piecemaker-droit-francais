@@ -21,8 +21,9 @@ const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_CHARACTERS = 32 * 1024 * 1024;
 
 type Citation = Parameters<ReturnType<typeof createCitationStore>['save']>[0]['citation'] & {
-  kind: 'case' | 'document';
+  kind: 'case' | 'article' | 'document';
   decision_id?: string;
+  article_id?: string;
   doc_id?: string;
 };
 
@@ -172,13 +173,14 @@ export function createCitationTurn(options: {
         const links: string[] = [];
         const labels: string[] = [];
         for (const citation of citations) {
-          const source = citation.kind === 'case'
-            ? decisions.get(citation.decision_id ?? '') ?? '' : await documentText(citation.doc_id ?? '');
+          const lawId = citation.decision_id ?? citation.article_id;
+          const source = citation.kind === 'case' || citation.kind === 'article'
+            ? decisions.get(lawId ?? '') ?? '' : await documentText(citation.doc_id ?? '');
           const ranges = locateSourcePassages(source, citation.quotes);
           try {
             const token = await options.store.save({
               sessionId: options.sessionId,
-              title: decisionTitle(citation.decision_id) ?? citation.decision_id ?? citation.doc_id ?? 'Source',
+              title: decisionTitle(lawId) ?? lawId ?? citation.doc_id ?? 'Source',
               source, citation, ranges,
             });
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
