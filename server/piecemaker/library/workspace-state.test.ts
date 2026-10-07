@@ -123,13 +123,14 @@ test('le popup et le runtime masquent les skills désactivés dans le dossier', 
 });
 
 test('une erreur de bibliothèque ne bloque pas l’envoi du message', async (t) => {
-  const { store } = fixture(t);
+  const { store, workspace } = fixture(t);
+  t.mock.method(store, 'disabledEntries', () => { throw new Error('base indisponible'); });
   const commands: string[] = [];
   const run = async (_provider: string, command: string, _options?: unknown, _writer?: unknown) => { commands.push(command); };
   const runtime = { run, getRunner: (provider: string) => (command: string) => run(provider, command) };
   installLibraryRuntime(runtime as never, { fetchHistory: async () => ({ messages: [] }) } as never, store);
   const warn = t.mock.method(console, 'warn', () => {});
-  await runtime.run('claude', 'Relire', { cwd: '/dossier/introuvable' }, { send() {} } as never);
+  await runtime.run('claude', 'Relire', { cwd: workspace }, { send() {} } as never);
   assert.deepEqual(commands, ['Relire']);
   assert.equal(warn.mock.calls.length, 1);
 });

@@ -718,19 +718,6 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
     })();
   }
 
-  function instructions(workspacePath: string) {
-    const selected = workspace(workspacePath);
-    reconcile(selected);
-    const entries = db.prepare(`SELECT e.* FROM entries e JOIN activation a ON a.entry_id = e.id
-      WHERE a.workspace = ? AND e.kind = 'agent' ORDER BY e.name`).all(selected) as StoredLibraryEntry[];
-    return entries.map((entry) => {
-      const assets = JSON.parse(entry.assets) as Record<string, string>;
-      const references = Object.entries(assets).filter(([name]) => name === 'table-columns.yaml')
-        .map(([name, bytes]) => `### ${name}\n${Buffer.from(bytes, 'base64').toString('utf8')}`);
-      return `## Instructions de rôle : ${entry.name}\n${entry.content}\n${references.join('\n\n')}`;
-    }).join('\n\n');
-  }
-
   return {
     directory,
     list,
@@ -742,7 +729,6 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
     importContent,
     importConnector,
     setEnabled,
-    instructions,
     resolveWorkspace,
     reconcileWorkspace,
     disabledEntries,
