@@ -135,8 +135,9 @@ test('un article lu avec consulter_article est vérifiable et titré par son cod
   const message = (fields: Omit<Parameters<typeof createNormalizedMessage>[0], 'provider'> & { kind: 'tool_use' | 'tool_result' }) => createNormalizedMessage({ ...fields, provider: 'claude', sessionId: 'session' });
   turn.observe(message({ kind: 'tool_use', toolId: 'call-1', toolName: 'mcp__legifrance__consulter_article', toolInput: { article_id: 'LEGIARTI000032040777' } }));
   turn.observe(message({ kind: 'tool_result', toolId: 'call-1', content: resultat }));
-  turn.text(block([{ ref: 1, decision_id: 'LEGIARTI000032040777', quote: 'tiennent lieu de loi à ceux qui les ont faits' }]));
+  turn.text(block([{ ref: 1, kind: 'article', article_id: 'LEGIARTI000032040777', quote: 'tiennent lieu de loi à ceux qui les ont faits' }]));
   const suffix = await turn.finish();
+  assert.equal(events.at(-1)?.citations[0].kind, 'article');
   assert.equal(events.at(-1)?.citations[0].verified, true);
   const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
   assert.ok(token);

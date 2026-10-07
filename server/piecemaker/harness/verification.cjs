@@ -59,6 +59,7 @@ function ensureDirSafe(dir) {
 /** Identifiant lisible d'une citation pour le journal. */
 function citationIdentifier(citation) {
   if (citation?.kind === 'case') return `decision:${citation.decision_id ?? '?'}#${citation.ref ?? '?'}`;
+  if (citation?.kind === 'article') return `article:${citation.article_id ?? '?'}#${citation.ref ?? '?'}`;
   return `document:${citation?.doc_id ?? '?'}#${citation?.ref ?? '?'}`;
 }
 
@@ -73,8 +74,8 @@ function citationIdentifier(citation) {
 async function classifyFailureReason(citation, getSourceText, getDecisionText) {
   let source = '';
   try {
-    source = citation.kind === 'case'
-      ? await getDecisionText(citation.decision_id)
+    source = citation.kind === 'case' || citation.kind === 'article'
+      ? await getDecisionText(citation.decision_id ?? citation.article_id)
       : await getSourceText(citation.doc_id);
   } catch {
     source = '';

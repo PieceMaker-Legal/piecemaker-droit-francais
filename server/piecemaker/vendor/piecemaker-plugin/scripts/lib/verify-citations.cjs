@@ -191,13 +191,15 @@ function withVerifiedDocumentQuotes(documentValue, verifiedQuotes) {
  */
 async function verifyCaseCitationAnnotation(annotation, getDecisionText) {
   const a = record(annotation);
-  if (!a || a.kind !== 'case') return annotation;
+  if (!a || (a.kind !== 'case' && a.kind !== 'article')) return annotation;
   const rawDecisionId =
-    typeof a.decision_id === 'string'
-      ? a.decision_id
-      : typeof a.decisionId === 'string'
-        ? a.decisionId
-        : null;
+    a.kind === 'article' && typeof a.article_id === 'string'
+      ? a.article_id
+      : typeof a.decision_id === 'string'
+        ? a.decision_id
+        : typeof a.decisionId === 'string'
+          ? a.decisionId
+          : null;
   const decisionId = rawDecisionId ? rawDecisionId.trim() : '';
   if (!decisionId) return annotation;
 
@@ -246,7 +248,7 @@ async function verifyCaseCitationAnnotation(annotation, getDecisionText) {
 async function verifyDocumentCitationAnnotation(annotation, getSourceText) {
   if (!annotation || typeof annotation !== 'object') return annotation;
   const a = annotation;
-  if (a.kind === 'case') return annotation;
+  if (a.kind === 'case' || a.kind === 'article') return annotation;
   const docId = typeof a.doc_id === 'string' ? a.doc_id : null;
   if (!docId) return annotation;
 
@@ -301,7 +303,7 @@ async function verifyCitations(annotations, getSourceText, getDecisionText) {
   return Promise.all(
     annotations.map((annotation) => {
       const value = record(annotation);
-      return value?.kind === 'case'
+      return value?.kind === 'case' || value?.kind === 'article'
         ? verifyCaseCitationAnnotation(annotation, getDecisionText)
         : verifyDocumentCitationAnnotation(annotation, getSourceText);
     }),

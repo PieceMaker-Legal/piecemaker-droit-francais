@@ -61,6 +61,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [blocks, setBlocks] = useState<string[] | null>(null);
   const passage = useRef<HTMLElement>(null);
+  const lawId = source?.citation.decision_id ?? source?.citation.article_id;
   const closeButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -75,7 +76,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
   }, [token]);
 
   useEffect(() => {
-    if (!source?.citation.decision_id) return;
+    if (!lawId) return;
     const controller = new AbortController();
     void fetchLegifranceBlocks(token, controller.signal).then((value) => {
       if (!controller.signal.aborted) setBlocks(value);
@@ -83,7 +84,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
       if (!controller.signal.aborted) setBlocks(null);
     });
     return () => controller.abort();
-  }, [token, source?.citation.decision_id]);
+  }, [token, lawId]);
 
   useEffect(() => {
     passage.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -96,7 +97,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
   }, [onClose]);
 
   const quote = source?.citation.quotes[quoteIndex];
-  const officialUrl = legifranceQuoteUrl(source?.citation.decision_id, quote?.quote);
+  const officialUrl = legifranceQuoteUrl(lawId, quote?.quote);
   const ranges = (source?.ranges ?? []).filter((range) => range.quoteIndex === quoteIndex).sort((a, b) => a.start - b.start);
 
   return (
