@@ -557,12 +557,13 @@ export class KnowledgeStore {
       counts.mappings += 1;
       return;
     }
+    if (operation.op === 'renameNode') return this.applyOperation(projectId, operation, counts);
     if (operation.op === 'cite') {
       const citation = operation.citation;
       if (newLinks.has(linkKey(optionalText(citation.fromNodeId), optionalText(citation.toNodeId), optionalText(citation.relation)))) this.applyOperation(projectId, operation, counts);
       return;
     }
-    throw new TypeError('mergeScan only accepts upsertNode, link, upsertMapping and cite');
+    throw new TypeError('mergeScan only accepts upsertNode, link, upsertMapping, cite and renameNode');
   }
 
   private assertCodeFree(projectId: string, code: string): void {
