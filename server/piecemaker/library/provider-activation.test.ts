@@ -100,7 +100,7 @@ function mcpState(workspace: string, provider: ProviderId, name: string) {
   return { native: true as const, enabled: Boolean(Object.keys(server).length) && server.enabled !== false, config: server };
 }
 
-async function injectedCommand(store: ReturnType<typeof createLibraryStore>, provider: ProviderId, workspace: string) {
+async function sentCommand(store: ReturnType<typeof createLibraryStore>, provider: ProviderId, workspace: string) {
   let command = '';
   const runtime = {
     run: async (_provider: string, value: string, _options?: { cwd?: string }, _writer?: { send: (value: unknown) => void }) => { command = value; },
@@ -124,10 +124,10 @@ for (const provider of PROVIDERS) {
     } else {
       assert.equal(fs.existsSync(path.join(workspace, '.mistral')), false);
     }
-    assert.equal(await injectedCommand(store, provider, workspace), 'Relire');
+    assert.equal(await sentCommand(store, provider, workspace), 'Relire');
     store.setEnabled(workspace, id, false);
     if (target) assert.equal(fs.existsSync(target), false);
-    assert.equal(await injectedCommand(store, provider, workspace), 'Relire');
+    assert.equal(await sentCommand(store, provider, workspace), 'Relire');
   });
 
   test(`agent activation reaches ${provider}`, async (t) => {
@@ -148,10 +148,10 @@ for (const provider of PROVIDERS) {
     } else {
       assert.equal(fs.existsSync(path.join(workspace, provider === 'cursor' ? '.cursor/agents' : '.mistral')), false);
     }
-    assert.match(await injectedCommand(store, provider, workspace), /Instructions de rôle/);
+    assert.equal(await sentCommand(store, provider, workspace), 'Relire');
     store.setEnabled(workspace, id, false);
     if (target) assert.equal(fs.existsSync(target), false);
-    assert.equal(await injectedCommand(store, provider, workspace), 'Relire');
+    assert.equal(await sentCommand(store, provider, workspace), 'Relire');
   });
 
   test(`mcp activation reaches ${provider}`, (t) => {
@@ -210,14 +210,11 @@ for (const provider of PROVIDERS) {
     } else {
       assert.equal(fs.existsSync(path.join(workspace, '.mistral')), false);
     }
-    const injected = await injectedCommand(store, provider, workspace);
-    assert.doesNotMatch(injected, /Instructions privées/);
-    assert.match(injected, /Instructions de rôle : review-agent/);
-    assert.match(injected, /Rôle privé/);
+    assert.equal(await sentCommand(store, provider, workspace), 'Relire');
     store.setCollectionEnabled(workspace, 'legal@market', false);
     if (skillPath) assert.equal(fs.existsSync(skillPath), false);
     if (agentPath) assert.equal(fs.existsSync(agentPath), false);
     if (mcp.native) assert.equal(mcpState(workspace, provider, 'legifrance').enabled, false);
-    assert.equal(await injectedCommand(store, provider, workspace), 'Relire');
+    assert.equal(await sentCommand(store, provider, workspace), 'Relire');
   });
 }

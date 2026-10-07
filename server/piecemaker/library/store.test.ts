@@ -34,7 +34,6 @@ test('imports preserve YAML metadata and assets without publishing instructions'
   assert.equal(list[0].enabled, false);
   assert.equal(list[0].description, 'Lire et comparer.\nVérifier les dates.\n');
   assert.equal('content' in list[0], false);
-  assert.equal(store.instructions(workspace), '');
   assert.equal(Buffer.from(store.document(id).assets['table-columns.yaml'], 'base64').toString(), 'columns:\n  - name: Date\n');
   assert.equal(fs.existsSync(path.join(store.directory, 'active')), false);
 });
@@ -72,7 +71,6 @@ test('activation is persistent, canonical and confined to the selected dossier',
   store.setEnabled(alias, id, true);
   assert.match(fs.readFileSync(path.join(workspace, '.agents/skills/review/SKILL.md'), 'utf8'), /Instructions privées/);
   assert.match(fs.readFileSync(path.join(workspace, '.agents/skills/review/table-columns.yaml'), 'utf8'), /columns:/);
-  assert.equal(store.instructions(workspace), '');
   assert.equal(fs.existsSync(path.join(other, '.agents')), false);
   assert.equal(store.importFile(path.join(skill, 'SKILL.md'), 'skill'), id);
   assert.equal(store.list(workspace)[0].enabled, true);
@@ -94,7 +92,6 @@ test('deleting a skill removes every active copy and its catalogue entry', (t) =
   store.setEnabled(other, id, true);
   store.deleteEntry(id);
   assert.equal(store.list(workspace).length, 0);
-  assert.equal(store.instructions(workspace), '');
   for (const selected of [workspace, other]) {
     for (const provider of ['.claude', '.agents', '.cursor', '.opencode', '.grok']) {
       assert.equal(fs.existsSync(path.join(selected, provider, 'skills', 'review')), false);
@@ -124,7 +121,7 @@ test('library instructions are removed from echoes without rewriting user prose'
   assert.equal(stripLibraryInstructions('Mention <PIECEMAKER_LIBRARY_INSTRUCTIONS> dans le texte'), 'Mention <PIECEMAKER_LIBRARY_INSTRUCTIONS> dans le texte');
 });
 
-test('runtime injects only active dossier role instructions and preserves the visible user message', async (t) => {
+test('runtime sends commands unchanged with active skills and agents', async (t) => {
   const { store, workspace, other, skill } = fixture(t);
   const skillId = store.importFile(path.join(skill, 'SKILL.md'), 'skill')!;
   const id = store.importContent('/agents/clerk.md', 'agent', '---\nname: clerk\ndescription: Greffe\n---\nRôle du greffier.')!;
@@ -146,7 +143,7 @@ test('runtime injects only active dossier role instructions and preserves the vi
     await runtime.getRunner(provider)('Relire', { cwd: workspace }, writer);
   }
   assert.deepEqual(commands.slice(1).map(({ provider }) => provider), ['claude', 'codex', 'cursor', 'mistral', 'opencode']);
-  assert.ok(commands.slice(1).every(({ command }) => command.includes('Rôle du greffier.') && !command.includes('Instructions privées')));
+  assert.ok(commands.slice(1).every(({ command }) => command === 'Relire'));
   assert.ok(received.slice(1).every((message) => JSON.stringify(message) === JSON.stringify({ kind: 'text', role: 'user', content: 'Relire' })));
   await runtime.run('codex', 'Relire', { cwd: other }, writer);
   assert.equal(commands[6].command, 'Relire');
@@ -369,7 +366,6 @@ test('standalone connectors are catalogued once and installed in every provider 
   assert.equal(JSON.parse(fs.readFileSync(path.join(workspace, '.cursor/mcp.json'), 'utf8')).mcpServers['registre-public'].disabled, true);
   assert.equal(JSON.parse(fs.readFileSync(path.join(workspace, 'opencode.json'), 'utf8')).mcp['registre-public'].enabled, false);
   assert.equal((TOML.parse(fs.readFileSync(path.join(workspace, '.grok/config.toml'), 'utf8')) as { mcp_servers: Record<string, { enabled: boolean }> }).mcp_servers['registre-public'].enabled, false);
-  assert.equal(store.instructions(workspace), '');
 });
 
 test('plugin connectors stay attached to their collection', (t) => {
