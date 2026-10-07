@@ -21,7 +21,7 @@ async function setup(t: test.TestContext, messages: NormalizedMessage[]) {
   const sent: NormalizedMessage[] = [];
   const runtime: Dependencies['runtime'] = {
     run: async (_provider, command, _options, writer) => {
-      assert.match(command, /QUOTE_INSTRUCTION/);
+      assert.match(command, /CITATION_INSTRUCTION/);
       writer.setSessionId?.('native-session');
       for (const message of messages) writer.send(message);
     },
@@ -119,7 +119,7 @@ test('un tour interrompu ne publie pas des annotations finales', async (t) => {
 });
 
 test('les instructions ajoutées au lancement sont retirées sans modifier le texte utilisateur', () => {
-  const original = 'Question <QUOTE_INSTRUCTION> à conserver';
+  const original = 'Question <CITATION_INSTRUCTION> à conserver';
   assert.equal(withoutCitationInstructions(withCitationInstructions(original)), original);
   assert.equal(withoutCitationInstructions(original), original);
 });
