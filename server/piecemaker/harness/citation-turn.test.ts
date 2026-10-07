@@ -70,6 +70,17 @@ test('les résultats consulter_decision Claude et Codex sont appariés et resten
   }
 });
 
+test('une décision Judilibre lue par consulter_decision est vérifiée sous son identifiant hexadécimal', async (t) => {
+  const { turn, events } = await fixture(t);
+  const id = '0123456789abcdef01234567';
+  const result = ['DÉCISION: Cour de cassation, Chambre sociale, 12 janvier 2024, 22-10.000', '', 'Solution: Cassation', '', '='.repeat(80), 'TEXTE INTÉGRAL:', '='.repeat(80), '', 'Le salarié Jean Dupont a été licencié sans cause réelle et sérieuse.', '', `Lien: https://www.courdecassation.fr/decision/${id}`].join('\n');
+  turn.observe(createNormalizedMessage({ provider: 'claude', sessionId: 'session', kind: 'tool_use', toolId: 'call-1', toolName: 'mcp__legifrance__consulter_decision', toolInput: { text_id: id } }));
+  turn.observe(createNormalizedMessage({ provider: 'claude', sessionId: 'session', kind: 'tool_result', toolId: 'call-1', content: [{ type: 'text', text: result }] }));
+  turn.text(block([{ ref: 1, kind: 'case', decision_id: id, quotes: [{ quote: 'licencié sans cause réelle et sérieuse' }] }]));
+  await turn.finish();
+  assert.equal(events.at(-1)?.citations[0].verified, true);
+});
+
 test('une réponse MCP en erreur et un résultat de sous-agent ne constituent pas une lecture du tour', async (t) => {
   const { turn, events } = await fixture(t);
   const base = { provider: 'codex' as const, sessionId: 'session', toolId: 'call' };

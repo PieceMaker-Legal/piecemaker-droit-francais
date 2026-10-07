@@ -70,6 +70,21 @@ test('capture une décision consulter_decision au format Anthropic Messages (app
   assert.equal(cached.session, 'sess-1');
 });
 
+test('capture une décision Judilibre (identifiant hexadécimal) lue par consulter_decision', () => {
+  const decisionsDir = path.join(makeHome(), 'decisions');
+  const id = '0123456789abcdef01234567';
+  const texte = ['DÉCISION: Cour de cassation, Chambre sociale, 12 janvier 2024, 22-10.000', '', '='.repeat(80), 'TEXTE INTÉGRAL:', '='.repeat(80), '', EXTRAIT_ATTENDU, '', `Lien: https://www.courdecassation.fr/decision/${id}`].join('\n');
+  const payload = {
+    messages: [
+      { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'mcp__legifrance__consulter_decision', input: { text_id: id } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: [{ type: 'text', text: texte }] }] },
+    ],
+  };
+  assert.equal(captureDecisions(payload, { decisionsDir, session: 's' }), 1);
+  const cached = JSON.parse(fs.readFileSync(path.join(decisionsDir, `${id}.json`), 'utf8'));
+  assert.equal(cached.texte, EXTRAIT_ATTENDU);
+});
+
 test('capture une décision consulter_decision au format OpenAI Responses (appariement call_id)', () => {
   const homeDir = makeHome();
   const decisionsDir = path.join(homeDir, 'decisions');
