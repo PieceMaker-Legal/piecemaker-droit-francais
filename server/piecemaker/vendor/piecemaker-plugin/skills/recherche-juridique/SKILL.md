@@ -95,7 +95,7 @@ Le bloc est ajouté **à la toute fin** de la réponse, tel que parsé par
 
 Le contenu entre les balises doit être un tableau JSON valide (`JSON.parse`
 strict — pas de virgule finale, pas de commentaire). Chaque entrée du tableau
-prend l'une des deux formes suivantes.
+prend l'une des trois formes suivantes.
 
 ### Forme « jurisprudence » (`kind: "case"`)
 
@@ -133,6 +133,27 @@ Plusieurs extraits de la même décision (jusqu'à 3) :
 informatifs, jamais vérifiés). `doc_id`, `page`, `sheet`, `cell` ou un `quote`
 au premier niveau n'ont pas de sens pour une citation de jurisprudence — ne
 pas les utiliser sur une entrée `case`.
+
+### Forme « article » (`kind: "article"`)
+
+Identifie un article de code par `article_id` — l'identifiant `LEGIARTI…`
+rendu par `Search_Code` et passé à `consulter_article`. Ne pas utiliser
+l'identifiant du code (`LEGITEXT…`) ni une référence en clair (« art. 1103
+C. civ. ») : seul le texte lu sous cet identifiant sert à la vérification.
+
+```json
+{
+  "ref": 4,
+  "kind": "article",
+  "article_id": "LEGIARTI000012345678",
+  "quotes": [
+    { "quote": "les contrats légalement formés tiennent lieu de loi" }
+  ]
+}
+```
+
+Mêmes règles que pour une décision : jusqu'à 3 extraits littéraux, pas de
+`doc_id`, `page`, `sheet` ni `cell`.
 
 ### Forme « document » (`kind: "document"`, ou `doc_id` sans `decision_id`)
 
