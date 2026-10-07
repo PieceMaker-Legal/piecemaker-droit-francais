@@ -1,10 +1,10 @@
-const OPEN = '<QUOTE_INSTRUCTION>';
-const CLOSE = '</QUOTE_INSTRUCTION>';
+const OPEN = '<CITATION_INSTRUCTION>';
+const CLOSE = '</CITATION_INSTRUCTION>';
 const INSTRUCTIONS = `${OPEN}
-Chaque affirmation doit être justifiée par une citation mot pour mot d'une pièce ou d'une décision lue en entier dans ce tour (décisions : consulter_decision). C'est la seule règle.
-Marqueurs [1], [2]… dans le texte, puis en fin de réponse <CITATIONS>[…]</CITATIONS> (JSON strict) :
-{"ref":1,"kind":"case","decision_id":"<id lu>","quotes":[{"quote":"…"}]}
-{"ref":2,"kind":"document","doc_id":"<chemin .md relatif au dossier>","quotes":[{"page":1,"quote":"…"}]}
+Chaque affirmation doit être justifiée par une citation mot pour mot d'une pièce, d'un texte de loi ou d'une décision lue.
+Marqueurs [1], [2]. Finir par <CITATIONS>[…]</CITATIONS> (JSON strict) :
+Décision : {"ref":1,"kind":"case","decision_id":"identifiant Légifrance ou Judilibre lu","quotes":[{"quote":"extrait exact"}]}. (idem pour les articles)
+Pièce : {"ref":2,"kind":"document","doc_id":"chemin relatif au dossier du Markdown converti","quotes":[{"page":1,"quote":"extrait exact"}]}.
 Plage de pages "1-2", segments séparés par [[PAGE_BREAK]] ; tableur : champs sheet et cell.
 ${CLOSE}`;
 
