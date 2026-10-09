@@ -1,6 +1,8 @@
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nodeEditor } from '../editors.js';
+import { knowledgeApi } from '../api.js';
+import type { CompanySearchResult } from '../api.js';
 import type { KnowledgeNode, KnowledgeSnapshot } from '../types.js';
 
 let dom: JSDOM;
@@ -14,6 +16,7 @@ const input = (name: string) => root.querySelector<HTMLInputElement | HTMLTextAr
 const select = (name: string, value: string) => { input(name).value = value; input(name).dispatchEvent(new dom.window.Event('change')); };
 const fill = (name: string, value: string) => { input(name).value = value; input(name).dispatchEvent(new dom.window.Event('input')); };
 const submit = () => root.querySelector('form')!.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+const registryCompany: CompanySearchResult = { name: 'Société Exemple SAS', siren: '123456789', summary: 'SAS · En activité', url: 'https://registre-public.com/?e=123456789', details: 'Fiche de société fictive', fields: { legalName: 'Société Exemple SAS', legalForm: 'SAS', status: 'En activité', siren: '123456789', siret: '12345678900010', vat: '', legalFormCode: '5710', naf: '62.01Z', creationDate: '2020-01-01', category: 'PME', address: '24 rue des Roses, Lyon', capital: '10 000 EUR', directors: [], finances: [], source: 'https://registre-public.com/?e=123456789' } };
 
 beforeEach(() => {
   dom = new JSDOM('<div id="root"></div>');
@@ -22,9 +25,66 @@ beforeEach(() => {
   root = dom.window.document.getElementById('root')!;
 });
 
-afterEach(() => { dom.window.close(); vi.unstubAllGlobals(); });
+afterEach(() => { dom.window.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('entity editor', () => {
+  it('offers identity search only for companies', () => {
+    nodeEditor(root, { graph: graph() }, company, vi.fn().mockResolvedValue(undefined));
+    const button = root.querySelector<HTMLButtonElement>('[data-search-identity]')!;
+    expect(button.hidden).toBe(false);
+    expect(button.parentElement!.querySelector('h3')!.textContent).toBe('Informations principales');
+    select('kind', 'person');
+    expect(button.hidden).toBe(true);
+    select('kind', 'company');
+    expect(button.hidden).toBe(false);
+  });
+
+  it('searches companies in a separate popup and saves only the chosen identity', async () => {
+    const search = vi.spyOn(knowledgeApi, 'searchCompanies').mockResolvedValue({ query: company.label, results: [registryCompany, { ...registryCompany, name: 'Autre Société Exemple', siren: '987654321' }] });
+    const save = vi.fn().mockResolvedValue(undefined);
+    nodeEditor(root, { graph: graphWithAddress() }, company, save);
+    fill('masked', 'ENTITE_EXEMPLE_07');
+    root.querySelector<HTMLButtonElement>('[data-search-identity]')!.click();
+    await vi.waitFor(() => expect(root.querySelectorAll('.pmd-company-result')).toHaveLength(2));
+    expect(search).toHaveBeenCalledExactlyOnceWith(company.label);
+    expect(save).not.toHaveBeenCalled();
+    expect(root.querySelector('.pmd-company-search-dialog')!.textContent).toContain('10 000 EUR');
+    root.querySelector<HTMLButtonElement>('[data-company-result="0"]')!.click();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0][0]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ kind: 'company', id: 'entity:ENTITE_EXEMPLE_07', data: expect.objectContaining({ capital: '10 000 EUR', legalForm: 'SAS' }) }) }),
+      { op: 'unlink', link: { fromNodeId: 'entity:ENTITE_EXEMPLE_07', toNodeId: address.id, relation: 'adresse' } },
+      expect.objectContaining({ op: 'link', link: expect.objectContaining({ relation: 'SIREN' }) }),
+    ]));
+    await vi.waitFor(() => expect(root.querySelector('.pmd-company-search-dialog')).toBeNull());
+  });
+
+  it('allows retrying a failed registry search and closing without saving', async () => {
+    const search = vi.spyOn(knowledgeApi, 'searchCompanies').mockRejectedValueOnce(new Error('Registre indisponible')).mockResolvedValueOnce({ query: 'ZETABIO', results: [] });
+    const save = vi.fn().mockResolvedValue(undefined);
+    nodeEditor(root, { graph: graph() }, company, save);
+    root.querySelector<HTMLButtonElement>('[data-search-identity]')!.click();
+    await vi.waitFor(() => expect(root.querySelector('[data-company-status]')!.textContent).toBe('Registre indisponible'));
+    const popup = root.querySelector('.pmd-company-search-dialog')!;
+    popup.querySelector<HTMLInputElement>('input[name="query"]')!.value = 'ZETABIO';
+    popup.querySelector('form')!.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+    await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(popup.querySelector('[data-company-status]')!.textContent).toContain('Aucune société'));
+    popup.querySelector<HTMLButtonElement>('[data-close]')!.click();
+    expect(root.querySelector('.pmd-company-search-dialog')).toBeNull();
+    expect(root.querySelector('[data-node-form]')).not.toBeNull();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('saves a manually entered capital', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    nodeEditor(root, { graph: graph() }, company, save);
+    fill('capital', '20 000 EUR');
+    submit();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0][0]).toEqual(expect.arrayContaining([expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ data: expect.objectContaining({ capital: '20 000 EUR' }) }) })]));
+  });
+
   it('keeps existing variants visible while adding another with Enter', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     nodeEditor(root, { graph: graph() }, company, save);

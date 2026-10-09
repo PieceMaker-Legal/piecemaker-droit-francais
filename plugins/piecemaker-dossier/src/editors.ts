@@ -1,5 +1,7 @@
-import { aliasEditorMarkup, citationListMarkup, entityKinds, escapeHtml, kindLabels, nodeVariants, parseAliases, proposedPieceName, textValue, dateFor } from './views.js';
+import { aliasEditorMarkup, citationListMarkup, companySearchResultMarkup, entityKinds, escapeHtml, kindLabels, nodeVariants, parseAliases, proposedPieceName, textValue, dateFor } from './views.js';
 import { knowledgeApi } from './api.js';
+import type { CompanySearchResult } from './api.js';
+import { buildCompanyValidationOperations } from './company-search.js';
 import { citableEntities, citationSource, citationsOfEntity, citationsOfMention, pieceMentionOperations } from './citations.js';
 import type { PendingCitation } from './citations.js';
 import { removedAliasOperations } from './exclusions.js';
@@ -247,6 +249,58 @@ const profileTagIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 const profileFileIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 0v6h6"></path></svg>';
 const profileSirenIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 4v6c0 4-8 8-8 8s-8-4-8-8V7l8-4Z"></path><circle cx="12" cy="10" r="2"></circle><path d="M12 12v3"></path></svg>';
 
+function companyIdentitySearch(root: HTMLElement, query: string, apply: (result: CompanySearchResult) => Promise<void>): void {
+  const layer = modal(root, `<div class="pmd-company-search-dialog" role="dialog" aria-modal="true" aria-label="Recherche d’identité Registre Public">
+    <div class="pmd-toolbar"><h2 class="pmd-title piecemaker-display">Registre Public</h2><span class="pmd-spacer"></span><button type="button" class="pmd-icon-button" data-close aria-label="Fermer la recherche">×</button></div>
+    <form class="pmd-company-query" data-company-query><input class="pmd-input" name="query" aria-label="Nom ou SIREN" value="${escapeHtml(query)}" placeholder="Nom, SIREN ou SIRET" required><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm">Rechercher</button></form>
+    <p class="pmd-form-note" data-company-status role="status"></p><div class="pmd-company-search-results" data-company-results></div>
+  </div>`);
+  layer.querySelector('.pmd-dialog')?.classList.add('pmd-dialog-compact');
+  const form = layer.querySelector<HTMLFormElement>('[data-company-query]')!;
+  const input = form.querySelector<HTMLInputElement>('input')!;
+  const button = form.querySelector<HTMLButtonElement>('button')!;
+  const status = layer.querySelector<HTMLElement>('[data-company-status]')!;
+  const results = layer.querySelector<HTMLElement>('[data-company-results]')!;
+  const search = async () => {
+    const value = input.value.trim();
+    if (!value || button.disabled) return;
+    button.disabled = true;
+    results.replaceChildren();
+    status.textContent = 'Recherche dans le Registre Public…';
+    status.classList.remove('pmd-error');
+    try {
+      const response = await knowledgeApi.searchCompanies(value);
+      if (!layer.isConnected) return;
+      status.textContent = response.results.length ? `${response.results.length} société${response.results.length > 1 ? 's' : ''} proposée${response.results.length > 1 ? 's' : ''}` : 'Aucune société trouvée. Essayez un autre nom ou un SIREN.';
+      results.innerHTML = response.results.map((result, index) => companySearchResultMarkup(result, '', index)).join('');
+      results.querySelectorAll<HTMLButtonElement>('[data-company-result]').forEach((choice) => choice.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const choices = results.querySelectorAll<HTMLButtonElement>('[data-company-result]');
+        choices.forEach((entry) => { entry.disabled = true; });
+        button.disabled = true;
+        try {
+          await apply(response.results[Number(choice.dataset.companyResult)]);
+          layer.remove();
+        } catch (error) {
+          status.textContent = error instanceof Error ? error.message : 'Validation impossible.';
+          status.classList.add('pmd-error');
+          choices.forEach((entry) => { entry.disabled = false; });
+          button.disabled = false;
+        }
+      }));
+    } catch (error) {
+      if (!layer.isConnected) return;
+      status.textContent = error instanceof Error ? error.message : 'Recherche Registre Public impossible.';
+      status.classList.add('pmd-error');
+    } finally {
+      button.disabled = false;
+    }
+  };
+  form.addEventListener('submit', (event) => { event.preventDefault(); void search(); });
+  input.focus();
+  if (query.trim()) void search();
+}
+
 export function partyTypePicker(root: HTMLElement, side: 'client' | 'adversaire' | 'tiers', onSelect: (kind: 'person' | 'company') => void): HTMLElement {
   const sideLabel = side === 'client' ? 'cliente' : side === 'adversaire' ? 'adverse' : 'tierce';
   const layer = modal(root, `
@@ -297,13 +351,14 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
         <span class="pmd-profile-watermark">${profileCompanyIcon}</span>
         <button type="button" class="pmd-icon-button pmd-profile-close" data-close aria-label="Fermer">×</button>
       </header>
-      <section class="pmd-form-section pmd-profile-section"><h3>${profilePersonIcon}Informations principales</h3>
+      <section class="pmd-form-section pmd-profile-section"><div class="pmd-profile-section-heading"><h3>${profilePersonIcon}Informations principales</h3><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-search-identity ${companyFieldsHidden ? 'hidden' : ''}>Registre Public</button></div>
       <div class="pmd-profile-info">
       <label>Type<span class="pmd-profile-field"><span class="pmd-profile-type-icon" data-profile-type-icon>${selectedKind === 'company' ? profileCompanyIcon : profilePersonIcon}</span><select class="pmd-select" name="kind">${kindOptions(selectedKind)}</select></span></label>
       <label>Adresse<span class="pmd-profile-field"><input class="pmd-input" name="address" value="${escapeHtml(linkedAddressNode?.label || '')}" placeholder="—"></span></label>
       <div class="pmd-profile-company-fields" data-company-fields ${companyFieldsHidden ? 'hidden' : ''}>
         <label>Forme sociale<span class="pmd-profile-field">${profileFileIcon}<input class="pmd-input" name="legalForm" value="${escapeHtml(textValue(node?.data.legalForm))}" placeholder="—"></span></label>
         <label>Numéro SIREN<span class="pmd-profile-field">${profileSirenIcon}<input class="pmd-input" name="siren" inputmode="numeric" autocomplete="off" value="${escapeHtml(linkedSirenNode?.label || '')}" placeholder="9 chiffres"></span><div class="pmd-siren-suggestions" data-siren-suggestions hidden></div></label>
+        <label class="pmd-profile-capital">Capital social<span class="pmd-profile-field"><input class="pmd-input" name="capital" value="${escapeHtml(textValue(node?.data.capital))}" placeholder="Montant et devise"></span></label>
       </div>
       </div>
       <div class="pmd-profile-role-fields">
@@ -344,6 +399,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const customRelationField = layer.querySelector<HTMLElement>('[data-custom-relation]');
   const kindSelect = layer.querySelector<HTMLSelectElement>('select[name="kind"]');
   const companyFields = layer.querySelector<HTMLElement>('[data-company-fields]');
+  const identitySearchButton = layer.querySelector<HTMLButtonElement>('[data-search-identity]');
   const sirenInput = layer.querySelector<HTMLInputElement>('input[name="siren"]');
   const sirenSuggestions = layer.querySelector<HTMLElement>('[data-siren-suggestions]');
   const normalizeSiren = (value: string): string => value.replace(/\D/g, '');
@@ -367,6 +423,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   kindSelect?.addEventListener('change', () => {
     if (!companyFields || !kindSelect) return;
     companyFields.hidden = kindSelect.value !== 'company';
+    if (identitySearchButton) identitySearchButton.hidden = companyFields.hidden;
     if (kindSelect.value === 'company') renderSirenSuggestions();
   });
   sirenInput?.addEventListener('input', renderSirenSuggestions);
@@ -427,6 +484,20 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   positionSelect?.addEventListener('change', syncMasked);
   kindSelect?.addEventListener('change', syncMasked);
   legalFormInput?.addEventListener('input', syncMasked);
+  identitySearchButton?.addEventListener('click', () => {
+    const pseudonym = /^(?:CLIENT|ADVERSAIRE|PERSONNE_MORALE|PERSONNE_PHYSIQUE|PERS_MORALE|PERS_PHYSIQUE)(?:_|$)/;
+    const name = labelInput?.value.trim() || '';
+    const realName = !pseudonym.test(name) ? name : mappings.map((entry) => entry.real).find((value) => !pseudonym.test(value)) || '';
+    const query = sirenInput?.value.trim() || [realName, legalFormInput?.value.trim()].filter(Boolean).join(' ');
+    companyIdentitySearch(root, query, async (result) => {
+      const form = new FormData(layer.querySelector<HTMLFormElement>('[data-node-form]')!);
+      const currentNode = node ? { ...node, label: textValue(form.get('label')).trim(), aliases: parseAliases(form.get('aliases')) } : null;
+      await save(buildCompanyValidationOperations(result, {
+        nodeId: id, node: currentNode, partySide: textValue(form.get('partySide')) as PartySide, position: textValue(form.get('position')), legalForm: textValue(form.get('legalForm')), capital: textValue(form.get('capital')), maskedCode: maskedEdited ? textValue(form.get('masked')).trim() : undefined,
+      }, data.graph));
+      layer.remove();
+    });
+  });
   relationSelect?.addEventListener('change', () => {
     if (!customRelationField) return;
     customRelationField.hidden = relationSelect.value !== '__custom__';
@@ -456,7 +527,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     }
     const nodeId = change ? change.nodeId : id;
     const code = change ? change.code : masked;
-    const nodeData = { ...(change ? change.data : { ...(node?.data || {}), partySide: partySide || null, position: (partySide === 'client' || partySide === 'adversaire') && position ? position : null }), legalForm: legalForm || null };
+    const nodeData = { ...(change ? change.data : { ...(node?.data || {}), partySide: partySide || null, position: (partySide === 'client' || partySide === 'adversaire') && position ? position : null }), legalForm: legalForm || null, capital: kind === 'company' ? textValue(form.get('capital')).trim() || null : null };
     const rename = (value: string): string => value === id ? nodeId : value;
     const operations: KnowledgeUpdateOperation[] = [];
     if (change && node && nodeId !== id) operations.push(...change.operations);

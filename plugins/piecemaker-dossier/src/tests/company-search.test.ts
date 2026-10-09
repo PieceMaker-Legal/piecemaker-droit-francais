@@ -37,6 +37,16 @@ const result: CompanySearchResult = {
 };
 
 describe('company search validation', () => {
+  it('uses the legal form from the registry summary when details omit it', () => {
+    const operations = buildCompanyValidationOperations({ ...result, summary: 'SAS · En activité', fields: { ...result.fields, legalForm: '' } }, { nodeId: 'manual:company', node: null, partySide: 'client', position: 'demandeur', legalForm: 'SARL' }, graph);
+    expect(operations).toEqual(expect.arrayContaining([expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ kind: 'company', data: expect.objectContaining({ legalForm: 'SAS' }) }) })]));
+  });
+
+  it('preserves a manually entered capital when the provider does not return it', () => {
+    const operations = buildCompanyValidationOperations(result, { nodeId: 'manual:company', node: null, partySide: 'client', position: 'demandeur', legalForm: 'SAS', capital: '20 000 EUR' }, graph);
+    expect(operations).toEqual(expect.arrayContaining([expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ kind: 'company', data: expect.objectContaining({ capital: '20 000 EUR' }) }) })]));
+  });
+
   it('stores the validated company and its returned identifiers with pseudonymous codes', () => {
     const operations = buildCompanyValidationOperations(result, {
       nodeId: 'manual:company',

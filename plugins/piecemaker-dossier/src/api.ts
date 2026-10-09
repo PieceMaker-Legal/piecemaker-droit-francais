@@ -22,6 +22,7 @@ export type CompanySearchFields = {
   naf: string;
   creationDate: string;
   category: string;
+  capital?: string;
   address: string;
   directors: CompanyDirector[];
   finances: string[];
