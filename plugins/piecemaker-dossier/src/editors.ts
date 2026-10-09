@@ -322,7 +322,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       ${profileLinks.length ? `<div class="pmd-current-relations"><div class="pmd-relation-list">${profileLinks.map(({ relation, index, relatedNode, relatedNodeId }) => {
         const relatedLabel = relatedNode?.label || relatedNodeId;
         const relatedKind = relatedNode?.kind === 'person' ? 'Personne physique' : 'Personne morale';
-        return `<button type="button" class="pmd-relation-row" data-unlink="${index}" aria-label="Supprimer le lien ${escapeHtml(relationLabel(relation.relation))} avec ${escapeHtml(relatedLabel)}"><span class="pmd-relation-copy"><span class="pmd-relation-type">${escapeHtml(relationLabel(relation.relation))}</span><strong class="pmd-relation-target">${escapeHtml(relatedLabel)}</strong><small class="pmd-relation-kind">${escapeHtml(relatedKind)}</small></span><span class="pmd-relation-remove" aria-hidden="true">×</span></button>`;
+        return `<div class="pmd-relation-row"><span class="pmd-relation-copy"><span class="pmd-relation-type">${escapeHtml(relationLabel(relation.relation))}</span><strong class="pmd-relation-target">${escapeHtml(relatedLabel)}</strong><small class="pmd-relation-kind">${escapeHtml(relatedKind)}</small></span><button type="button" class="pmd-relation-remove" data-unlink="${index}" aria-label="Supprimer le lien ${escapeHtml(relationLabel(relation.relation))} avec ${escapeHtml(relatedLabel)}">×</button></div>`;
       }).join('')}</div></div>` : '<p class="pmd-form-note">Aucun lien avec une autre personne.</p>'}
       <div class="pmd-profile-link-fields">
       <label>Ajouter un lien<select class="pmd-select" name="target"><option value="">Personne ou société…</option>${linkTargets.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join('')}</select></label>
@@ -338,7 +338,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   bindCitationToggles(layer);
   layer.querySelectorAll<HTMLElement>('[data-unlink]').forEach((button) => button.addEventListener('click', () => {
     removals.add(Number(button.dataset.unlink));
-    button.style.display = 'none';
+    button.closest('.pmd-relation-row')?.remove();
   }));
   const relationSelect = layer.querySelector<HTMLSelectElement>('select[name="relation"]');
   const customRelationField = layer.querySelector<HTMLElement>('[data-custom-relation]');

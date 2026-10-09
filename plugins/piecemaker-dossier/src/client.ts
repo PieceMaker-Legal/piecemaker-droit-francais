@@ -263,7 +263,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     layer.querySelectorAll<HTMLElement>('[data-edit-node]').forEach((entry) => entry.addEventListener('click', () => {
       const node = mappingData.graph.nodes.find((candidate) => candidate.id === entry.dataset.editNode);
       layer.remove();
-      if (node) nodeEditor(root, mappingData, node, save);
+      if (node) api.openFileInEditor(`piecemaker://identity/open/${encodeURIComponent(node.label)}`);
     }));
     layer.querySelectorAll<HTMLElement>('[data-row-menu]').forEach((trigger) => trigger.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -485,7 +485,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       const editNode = target.closest<HTMLElement>('[data-edit-node]');
       if (editNode) {
         const node = data?.graph.nodes.find((entry) => entry.id === editNode.dataset.editNode);
-        if (data && node) nodeEditor(root, data, node, save);
+        if (node) api.openFileInEditor(`piecemaker://identity/open/${encodeURIComponent(node.label)}`);
         return;
       }
       const deleteTrigger = target.closest<HTMLElement>('[data-delete-node]');
