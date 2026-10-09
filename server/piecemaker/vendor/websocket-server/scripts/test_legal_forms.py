@@ -138,9 +138,13 @@ class LegalFormTests(unittest.TestCase):
             self.assertIn(f"'{token}'", cjs)
             self.assertIn(f"'{token}'", typescript)
 
-    def test_birth_date_uses_the_gliner_label(self):
+    def test_date_labels_are_the_gliner_ones(self):
         source = Path(__file__).with_name("presidio-gliner").joinpath("scanner_worker.py").read_text(encoding="utf-8")
-        self.assertIn('"date_of_birth"', source)
+        for label in (
+            "date_of_birth", "sensitive_date", "document_date",
+            "expiration_date", "transaction_date",
+        ):
+            self.assertIn(f'"{label}"', source)
         self.assertNotIn("date of birth", source)
         self.assertNotIn("NAISSANCE", source)
 

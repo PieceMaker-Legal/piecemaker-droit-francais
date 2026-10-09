@@ -93,6 +93,10 @@ ENTITY_MAPPING = {
     "city":         "LOCATION",
     "country":      "LOCATION",
     "date_of_birth": "DATE_OF_BIRTH",
+    "sensitive_date": "SENSITIVE_DATE",
+    "document_date": "DOCUMENT_DATE",
+    "expiration_date": "EXPIRATION_DATE",
+    "transaction_date": "TRANSACTION_DATE",
 }
 
 ENTITY_DESCRIPTIONS = {
@@ -103,6 +107,10 @@ ENTITY_DESCRIPTIONS = {
     "city": "Name of a specific city, e.g. Paris",
     "country": "Name of a country, e.g. France. Not a nationality",
     "date_of_birth": None,
+    "sensitive_date": None,
+    "document_date": None,
+    "expiration_date": None,
+    "transaction_date": None,
 }
 
 GLINER_THRESHOLD = 0.5

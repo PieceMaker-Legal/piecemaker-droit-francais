@@ -201,8 +201,18 @@ class PageEntitesTests(unittest.TestCase):
 
         self.assertNotIn("NAISSANCE", payload["entities"])
         self.assertNotIn("date of birth", json.dumps(payload))
-        birth_spans = [item["text"] for item in payload["entities"].get("DATE_OF_BIRTH", [])]
-        self.assertTrue(any(span == "14 mars 1984" for span in birth_spans), birth_spans)
+        self.assertEqual(
+            [item["text"] for item in payload["entities"].get("DATE_OF_BIRTH", [])],
+            ["14 mars 1984"],
+        )
+        self.assertEqual(
+            [item["text"] for item in payload["entities"].get("EXPIRATION_DATE", [])],
+            ["12 janvier 2026"],
+        )
+        self.assertEqual(
+            [item["text"] for item in payload["entities"].get("TRANSACTION_DATE", [])],
+            ["2 novembre 2025"],
+        )
         found = {
             entity_type: {item["text"] for item in items}
             for entity_type, items in payload["entities"].items()
@@ -217,6 +227,8 @@ class PageEntitesTests(unittest.TestCase):
         coded = pipeline.convert_to_anonymization_format(entities)
         self.assertNotIn("NAISSANCE", coded["extracted_data"])
         self.assertEqual(coded["mapping"].get("14 mars 1984"), "DATE_OF_BIRTH_01")
+        self.assertEqual(coded["mapping"].get("12 janvier 2026"), "EXPIRATION_DATE_15")
+        self.assertEqual(coded["mapping"].get("2 novembre 2025"), "TRANSACTION_DATE_16")
         for text, code in SCANNED_CODES.items():
             self.assertEqual(coded["mapping"].get(text), code, text)
         societes = coded["extracted_data"]["societes"]
