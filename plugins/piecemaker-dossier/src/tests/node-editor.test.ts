@@ -25,6 +25,26 @@ beforeEach(() => {
 afterEach(() => { dom.window.close(); vi.unstubAllGlobals(); });
 
 describe('entity editor', () => {
+  it('keeps existing variants visible while adding another with Enter', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    nodeEditor(root, { graph: graph() }, company, save);
+    const editor = root.querySelector<HTMLElement>('[data-alias-editor]')!;
+    const aliasInput = editor.querySelector<HTMLInputElement>('[data-alias-input]')!;
+    expect(aliasInput.closest('label')).toBeNull();
+    root.querySelector<HTMLElement>('.pmd-alias-pill')!.click();
+    expect(input('aliases').value).toBe('ZETABIO');
+    editor.click();
+    expect(dom.window.document.activeElement).toBe(aliasInput);
+    aliasInput.value = 'Société Exemple';
+    aliasInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(aliasInput.value).toBe('');
+    expect(Array.from(editor.querySelectorAll('.pmd-alias-pill')).map((pill) => pill.firstChild!.textContent)).toEqual(['ZETABIO', 'Société Exemple']);
+    expect(save).not.toHaveBeenCalled();
+    submit();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0][0]).toEqual(expect.arrayContaining([expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ aliases: ['ZETABIO', 'Société Exemple'] }) })]));
+  });
+
   it('shows the linked address in main information and groups identity fields in anonymisation', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     nodeEditor(root, { graph: graphWithAddress() }, company, save);

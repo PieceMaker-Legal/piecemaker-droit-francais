@@ -60,7 +60,7 @@ export function nodeVariants(node: KnowledgeNode, mappings: Array<{ nodeId: stri
 }
 
 export function aliasEditorMarkup(variants: string[]): string {
-  return `<div class="pmd-alias-editor" data-alias-editor><div class="pmd-alias-pills" data-alias-pills>${variants.map((variant, index) => `<span class="pmd-alias-pill">${escapeHtml(variant)}<button type="button" data-remove-alias="${index}" aria-label="Supprimer ${escapeHtml(variant)}">×</button></span>`).join('')}</div><input class="pmd-input pmd-alias-input" data-alias-input placeholder="Autre écriture, puis Entrée"><input type="hidden" name="aliases" value="${escapeHtml(variants.join('\n'))}"></div>`;
+  return `<div class="pmd-alias-editor" data-alias-editor><div class="pmd-alias-pills" data-alias-pills>${variants.map((variant, index) => `<span class="pmd-alias-pill">${escapeHtml(variant)}<button type="button" data-remove-alias="${index}" aria-label="Supprimer ${escapeHtml(variant)}">×</button></span>`).join('')}</div><input class="pmd-input pmd-alias-input" data-alias-input aria-label="Ajouter une variante" placeholder="Ajouter une variante, puis Entrée"><input type="hidden" name="aliases" value="${escapeHtml(variants.join('\n'))}"></div>`;
 }
 
 export type CitationEntry = { texte: string; source: string; remove?: { attribute: string; value: string } };
