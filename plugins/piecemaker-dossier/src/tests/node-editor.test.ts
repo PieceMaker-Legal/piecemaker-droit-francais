@@ -28,6 +28,89 @@ beforeEach(() => {
 afterEach(() => { dom.window.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('entity editor', () => {
+  it.each(['person', 'company'] as const)('excludes an existing %s and all its variants only in this case', async (kind) => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const terms = vi.spyOn(knowledgeApi, 'institutionalTerms');
+    const node = { ...company, kind };
+    const snapshot = graph();
+    snapshot.mappings.push({ ...snapshot.mappings[0], real: 'Société Fictive' });
+    nodeEditor(root, { graph: snapshot }, node, save);
+    fill('label', 'Nom non enregistré');
+    root.querySelector<HTMLButtonElement>('[data-delete-entity]')!.click();
+    expect(save).not.toHaveBeenCalled();
+    expect(root.querySelector('[data-node-form]')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-delete-scope="dossier"]')!.click();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledExactlyOnceWith([
+      { op: 'excludeTerm', term: company.label },
+      { op: 'excludeTerm', term: 'ZETABIO' },
+      { op: 'excludeTerm', term: 'Société Fictive' },
+      { op: 'deleteNode', nodeId: company.id },
+    ]));
+    await vi.waitFor(() => expect(root.querySelector('[data-node-form]')).toBeNull());
+    expect(terms).not.toHaveBeenCalled();
+  });
+
+  it('adds the stored name to the global exclusions before deleting', async () => {
+    vi.spyOn(knowledgeApi, 'institutionalTerms').mockResolvedValue({ file: '/exclusions-fictives.txt', terms: ['Mot exclu'] });
+    const exclude = vi.spyOn(knowledgeApi, 'saveInstitutionalTerms').mockResolvedValue({ file: '/exclusions-fictives.txt', terms: ['Mot exclu', company.label] });
+    const save = vi.fn().mockImplementation(async () => {
+      expect(exclude).toHaveBeenCalledExactlyOnceWith(['Mot exclu', company.label]);
+    });
+    nodeEditor(root, { graph: graph() }, company, save);
+    root.querySelector<HTMLButtonElement>('[data-delete-entity]')!.click();
+    expect(root.querySelector('[data-delete-scope="tous"]')!.textContent).toContain('Ajouter à la liste des exclusions');
+    root.querySelector<HTMLButtonElement>('[data-delete-scope="tous"]')!.click();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledExactlyOnceWith([{ op: 'deleteNode', nodeId: company.id }]));
+    await vi.waitFor(() => expect(root.querySelector('[data-node-form]')).toBeNull());
+  });
+
+  it.each(['button', 'escape', 'backdrop'])('cancels deletion with %s and keeps unsaved edits', async (method) => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    nodeEditor(root, { graph: graph() }, company, save);
+    fill('label', 'Nom non enregistré');
+    root.querySelector<HTMLButtonElement>('[data-delete-entity]')!.click();
+    const overlay = root.querySelector<HTMLElement>('.pmd-modal:has([data-delete-scope])')!;
+    if (method === 'button') overlay.querySelector<HTMLButtonElement>('[data-close]')!.click();
+    else if (method === 'escape') dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    else overlay.click();
+    await vi.waitFor(() => expect(root.querySelector<HTMLButtonElement>('[data-delete-entity]')!.disabled).toBe(false));
+    expect(save).not.toHaveBeenCalled();
+    expect(input('label').value).toBe('Nom non enregistré');
+    expect(root.querySelector('[data-delete-scope]')).toBeNull();
+  });
+
+  it('keeps the editor open and allows retrying a failed deletion', async () => {
+    const save = vi.fn().mockRejectedValueOnce(new Error('Enregistrement impossible')).mockResolvedValue(undefined);
+    nodeEditor(root, { graph: graph() }, company, save);
+    const button = root.querySelector<HTMLButtonElement>('[data-delete-entity]')!;
+    button.click();
+    root.querySelector<HTMLButtonElement>('[data-delete-scope="dossier"]')!.click();
+    await vi.waitFor(() => expect(root.querySelector('[data-delete-error]')!.textContent).toBe('Enregistrement impossible'));
+    expect(button.disabled).toBe(false);
+    expect(root.querySelector('[data-node-form]')).not.toBeNull();
+    button.click();
+    root.querySelector<HTMLButtonElement>('[data-delete-scope="dossier"]')!.click();
+    await vi.waitFor(() => expect(root.querySelector('[data-node-form]')).toBeNull());
+    expect(save).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not delete when saving global exclusions fails', async () => {
+    vi.spyOn(knowledgeApi, 'institutionalTerms').mockResolvedValue({ file: '/exclusions-fictives.txt', terms: [] });
+    vi.spyOn(knowledgeApi, 'saveInstitutionalTerms').mockRejectedValue(new Error('Exclusion impossible'));
+    const save = vi.fn().mockResolvedValue(undefined);
+    nodeEditor(root, { graph: graph() }, company, save);
+    root.querySelector<HTMLButtonElement>('[data-delete-entity]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-delete-scope="tous"]')!.click();
+    await vi.waitFor(() => expect(root.querySelector('[data-delete-error]')!.textContent).toBe('Exclusion impossible'));
+    expect(save).not.toHaveBeenCalled();
+    expect(root.querySelector('[data-node-form]')).not.toBeNull();
+  });
+
+  it('does not offer deletion when creating a person', () => {
+    nodeEditor(root, { graph: graph() }, null, vi.fn());
+    expect(root.querySelector('[data-delete-entity]')).toBeNull();
+  });
+
   it.each(['demandeur', 'defendeur', 'appelant', 'intime', 'requerant', 'mis_en_cause', 'intervenant', 'autre'])('leaves the position empty when it is absent from the database (%s)', (position) => {
     const masked = `ADVERSAIRE_${position.toUpperCase()}_PERSONNE_PHYSIQUE_01`;
     const person: KnowledgeNode = { ...company, id: `entity:${masked}`, kind: 'person', label: 'Jean Dupont', aliases: [], data: { code: masked, partySide: 'adversaire' } };
