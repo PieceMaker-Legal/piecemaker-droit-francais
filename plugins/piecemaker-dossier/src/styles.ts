@@ -289,8 +289,10 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-profile-editor .pmd-button:focus-visible,.pmd-profile-editor .pmd-icon-button:focus-visible{box-shadow:0 0 0 2px var(--pmd-muted),0 0 0 4px var(--pmd-bg)}
 .pmd-profile-editor .pmd-profile-code{min-height:48px;resize:vertical;background:var(--pmd-soft);padding:6px 9px;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
 .pmd-profile-info .pmd-alias-editor{min-width:0;align-content:flex-start;border:0;background:transparent;padding:0}
-.pmd-profile-info .pmd-alias-input{width:100%;min-width:0;flex-basis:100%;padding:5px 0;font-size:11px}
+.pmd-profile-info .pmd-alias-pills{display:contents}
+.pmd-profile-info .pmd-alias-input{width:auto;min-width:140px;flex:1;padding:5px 0;font-size:11px}
 .pmd-profile-info .pmd-alias-pill{font-size:12px}
+.pmd-profile-variants{display:flex;grid-column:1/-1;min-width:0;flex-direction:column;gap:6px;padding:8px 0;border-top:1px solid var(--pmd-border);color:var(--pmd-muted);font-size:12px}
 .pmd-profile-role-fields,.pmd-profile-link-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .pmd-profile-role-fields{padding-top:10px;border-top:1px solid var(--pmd-border)}
 .pmd-profile-role-fields:has([data-position-field][hidden]){grid-template-columns:minmax(0,1fr)}

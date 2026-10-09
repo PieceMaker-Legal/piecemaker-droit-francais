@@ -171,6 +171,7 @@ export function bindAliasEditors(layer: HTMLElement): void {
     const input = editor.querySelector<HTMLInputElement>('[data-alias-input]');
     const hidden = editor.querySelector<HTMLInputElement>('input[name="aliases"]');
     if (!pills || !hidden) return;
+    editor.addEventListener('click', (event) => { if (event.target === editor || event.target === pills) input?.focus(); });
     const aliases = parseAliases(hidden.value);
     const sync = () => {
       hidden.value = aliases.join('\n');
@@ -311,10 +312,10 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       </div>
       </section>
       <section class="pmd-form-section pmd-profile-section"><h3>${profileTagIcon}Anonymisation</h3>
-      <label>Nom principal<span class="pmd-profile-field">${profileTagIcon}<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></span></label>
       <div class="pmd-profile-info">
-      <label>Variantes détectées${aliasEditorMarkup(variants)}</label>
+      <label>Nom principal<span class="pmd-profile-field">${profileTagIcon}<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></span></label>
       <label>Code anonymisé<textarea class="pmd-input pmd-profile-code" name="masked" rows="2" spellcheck="false">${escapeHtml(mappings[0]?.masked || '')}</textarea></label>
+      <div class="pmd-profile-variants">Variantes détectées${aliasEditorMarkup(variants)}</div>
       </div>
       </section>
       <section class="pmd-form-section pmd-profile-section"><h3>${profileTagIcon}Liens</h3>
