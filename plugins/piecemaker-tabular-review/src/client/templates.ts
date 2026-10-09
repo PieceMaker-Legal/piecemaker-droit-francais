@@ -24,7 +24,7 @@ export function questionHtml(column: DraftColumn, index: number, count: number):
     <div class="ptr-question" data-question="${index}">
       <input class="ptr-input" data-field="name" value="${escapeHtml(column.name)}" placeholder="Titre de la colonne (ex. Durée du préavis)" aria-label="Titre de la question ${index + 1}" maxlength="120">
       <select class="ptr-select" data-field="format" aria-label="Format de la réponse">
-        ${COLUMN_FORMATS.map((format) => `<option value="${format.value}"${format.value === column.format ? ' selected' : ''}>${escapeHtml(format.label)}</option>`).join('')}
+        ${COLUMN_FORMATS.map((format) => `<option value="${format.value}"${format.value === column.format ? ' selected' : ''}>${escapeHtml(format.label)} — ${escapeHtml(FORMAT_DESCRIPTIONS[format.value])}</option>`).join('')}
       </select>
       <select class="ptr-select" data-field="action" aria-label="Action appliquée à la pièce" title="Une réponse « Renommer » ou « Ranger » s’applique à la pièce avec le bouton « Appliquer » de la review">
         <option value="">Aucune action</option>
@@ -35,6 +35,7 @@ export function questionHtml(column: DraftColumn, index: number, count: number):
         <button type="button" class="ptr-icon-button" data-move="1" aria-label="Descendre la question"${index === count - 1 ? ' disabled' : ''}>↓</button>
         <button type="button" class="ptr-icon-button" data-remove aria-label="Supprimer la question"${count === 1 ? ' disabled' : ''}>✕</button>
       </div>
+      ${column.action === 'custom' ? `<textarea class="ptr-textarea" data-field="customAction" rows="2" maxlength="4000" placeholder="Décrivez l’action souhaitée…" aria-label="Action personnalisée">${escapeHtml(column.customAction ?? '')}</textarea>` : ''}
       <textarea class="ptr-textarea" data-field="prompt" rows="2" placeholder="Consigne donnée à l’IA (ex. Quelle est la durée du préavis de résiliation ?)" aria-label="Consigne de la question ${index + 1}">${escapeHtml(column.prompt)}</textarea>
       ${column.format === 'tags' ? `<input class="ptr-input" data-tags-field data-field="tagsText" value="${escapeHtml(column.tagsText)}" placeholder="Étiquettes autorisées, séparées par des virgules" aria-label="Étiquettes autorisées">` : ''}
     </div>`;
@@ -65,19 +66,15 @@ async function editTemplate(app: App, template: Template | null, duplicate = fal
   const renderEditor = (dialog: HTMLElement) => {
     const column = columns[selectedIndex];
     dialog.querySelector<HTMLElement>('[data-question-editor]')!.innerHTML = `
-      <div class="ptr-template-detail-header">
-        <span class="ptr-template-number">${selectedIndex + 1}</span>
-        <h3 data-question-title>${escapeHtml(column.name || 'Nouvelle question')}</h3>
-        <button type="button" class="ptr-icon-button" data-remove aria-label="Supprimer la question"${columns.length === 1 ? ' disabled' : ''}>×</button>
-      </div>
-      <label class="ptr-field"><span class="ptr-label">Nom</span><input class="ptr-input" data-field="name" value="${escapeHtml(column.name)}" placeholder="ex. Durée du préavis" maxlength="120"></label>
+      <div class="ptr-field"><div class="ptr-template-field-heading"><label class="ptr-label" for="ptr-template-column-name">Nom</label><button type="button" class="ptr-icon-button" data-remove aria-label="Supprimer la question"${columns.length === 1 ? ' disabled' : ''}>×</button></div><input id="ptr-template-column-name" class="ptr-input" data-field="name" value="${escapeHtml(column.name)}" placeholder="ex. Durée du préavis" maxlength="120"></div>
       <label class="ptr-field"><span class="ptr-label">Type</span><select class="ptr-select" data-field="format">
-        ${COLUMN_FORMATS.map((format) => `<option value="${format.value}"${format.value === column.format ? ' selected' : ''}>${escapeHtml(format.label)}</option>`).join('')}
+        ${COLUMN_FORMATS.map((format) => `<option value="${format.value}"${format.value === column.format ? ' selected' : ''}>${escapeHtml(format.label)} — ${escapeHtml(FORMAT_DESCRIPTIONS[format.value])}</option>`).join('')}
       </select></label>
       <label class="ptr-field"><span class="ptr-label">Action</span><select class="ptr-select" data-field="action" title="Une réponse « Renommer » ou « Ranger » s’applique à la pièce avec le bouton « Appliquer » de la review">
         <option value="">Aucune action</option>
         ${COLUMN_ACTIONS.map((action) => `<option value="${action.value}"${action.value === column.action ? ' selected' : ''}>${escapeHtml(action.label)}</option>`).join('')}
       </select></label>
+      ${column.action === 'custom' ? `<label class="ptr-field"><span class="ptr-label">Action personnalisée</span><textarea class="ptr-textarea" data-field="customAction" rows="2" maxlength="4000" placeholder="Décrivez l’action souhaitée…">${escapeHtml(column.customAction ?? '')}</textarea></label>` : ''}
       <label class="ptr-field"><span class="ptr-label">Question / consigne</span><textarea class="ptr-textarea" data-field="prompt" rows="5" placeholder="Quelle information l’IA doit-elle extraire ?">${escapeHtml(column.prompt)}</textarea></label>
       ${column.format === 'tags' ? `<label class="ptr-field"><span class="ptr-label">Étiquettes autorisées</span><input class="ptr-input" data-field="tagsText" value="${escapeHtml(column.tagsText)}" placeholder="Séparées par des virgules"></label>` : ''}`;
   };
@@ -94,9 +91,6 @@ async function editTemplate(app: App, template: Template | null, duplicate = fal
       body: `
         <label class="ptr-field"><span class="ptr-label">Nom</span><input class="ptr-input" data-template-name maxlength="120" value="${escapeHtml(name)}" placeholder="ex. Baux commerciaux"></label>
         <label class="ptr-field"><span class="ptr-label">Description</span><textarea class="ptr-textarea" data-template-description rows="2" maxlength="500" placeholder="À quoi sert ce modèle ?">${escapeHtml(description)}</textarea></label>
-        <aside class="ptr-template-legend" aria-label="Types de réponse">
-          ${COLUMN_FORMATS.map((format) => `<div><strong>${escapeHtml(format.label)}</strong><span>${escapeHtml(FORMAT_DESCRIPTIONS[format.value])}</span></div>`).join('')}
-        </aside>
         <div class="ptr-template-workspace">
           <section class="ptr-template-questions">
             <div class="ptr-template-list-header"><span class="ptr-label" data-question-count></span><button type="button" class="ptr-button" data-add-question>+ Ajouter une question</button></div>
@@ -124,11 +118,12 @@ async function editTemplate(app: App, template: Template | null, duplicate = fal
             dialog.querySelector<HTMLSelectElement>('[data-field="format"]')?.focus();
           } else if (key === 'action') {
             column.action = (field.value || undefined) as ColumnAction | undefined;
-          } else if (key === 'name' || key === 'prompt' || key === 'tagsText') {
+            renderEditor(dialog);
+            dialog.querySelector<HTMLSelectElement>('[data-field="action"]')?.focus();
+          } else if (key === 'name' || key === 'prompt' || key === 'tagsText' || key === 'customAction') {
             column[key] = field.value;
             if (key === 'name') {
               renderList(dialog);
-              dialog.querySelector<HTMLElement>('[data-question-title]')!.textContent = field.value || 'Nouvelle question';
             }
           }
         });
@@ -196,6 +191,7 @@ async function editTemplate(app: App, template: Template | null, duplicate = fal
         format: column.format,
         ...(column.format === 'tags' ? { tags: column.tagsText.split(',').map((tag) => tag.trim()).filter(Boolean) } : {}),
         ...(column.action ? { action: column.action } : {}),
+        ...(column.action === 'custom' ? { customAction: column.customAction?.trim() ?? '' } : {}),
       })),
     };
     try {

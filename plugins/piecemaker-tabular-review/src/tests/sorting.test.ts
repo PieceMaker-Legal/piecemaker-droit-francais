@@ -5,10 +5,11 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Cell, Review, Template } from '../shared.js';
-import { citationIssue } from '../shared.js';
+import { citationIssue, hasActions } from '../shared.js';
 import { actionValue, depseudonymize, newPieces, plannedChange, targetPath } from '../client/sorting.js';
 import { appendRows, createReview, editCell, markApplied, readReview } from '../server/reviews.js';
-import { normalizeTemplate } from '../server/templates.js';
+import { normalizeColumn, normalizeTemplate } from '../server/templates.js';
+import { columnsDescription } from '../server/prompt.js';
 
 const directories: string[] = [];
 
@@ -153,6 +154,20 @@ describe('modèles', () => {
     expect(normalizeTemplate(sortingTemplate).columns.map((column) => column.action)).toEqual([undefined, 'rename', 'move']);
     const doubled = { ...sortingTemplate, columns: [...sortingTemplate.columns, { name: 'Autre nom', prompt: 'Nom ?', format: 'text', action: 'rename' }] };
     expect(() => normalizeTemplate(doubled)).toThrow(/Renommer la pièce/);
+  });
+
+  it('conserve plusieurs actions personnalisées et les transmet à l’analyse sans créer un tri', () => {
+    const custom = { name: 'Synthèse', prompt: 'Identifier l’objet.', format: 'text', action: 'custom', customAction: '  Résumer les obligations.  ' };
+    const normalized = normalizeTemplate({ name: 'Modèle exemple', columns: [custom, { ...custom, name: 'Autre synthèse' }] });
+    expect(normalized.columns[0]).toMatchObject({ action: 'custom', customAction: 'Résumer les obligations.' });
+    expect(hasActions(normalized.columns)).toBe(false);
+    const prompt = columnsDescription(normalized.columns.map((column, index) => ({ ...column, index })));
+    expect(prompt).toContain('Action personnalisée : Résumer les obligations.');
+    expect(normalizeColumn({ ...custom, action: 'rename' })).not.toHaveProperty('customAction');
+  });
+
+  it('refuse une action personnalisée sans texte', () => {
+    expect(() => normalizeColumn({ name: 'Objet', prompt: 'Identifier l’objet.', action: 'custom', customAction: ' ' })).toThrow('Décrivez l’action personnalisée.');
   });
 
   it('propose une seule fois le modèle « Tri des pièces » à une installation existante', async () => {

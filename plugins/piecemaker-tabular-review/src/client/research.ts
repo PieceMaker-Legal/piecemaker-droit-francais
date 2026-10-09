@@ -1,4 +1,4 @@
-import type { ColumnFormat, Option, Provider, ResearchDecision, ResearchFilters, ResearchPage, ResearchSource, ResearchState, ResearchText, ResearchView, ReviewDetail, ReviewSummary, Template } from '../shared.js';
+import type { ColumnAction, ColumnFormat, Option, Provider, ResearchDecision, ResearchFilters, ResearchPage, ResearchSource, ResearchState, ResearchText, ResearchView, ReviewDetail, ReviewSummary, Template } from '../shared.js';
 import {
   APPEL_SIEGES,
   BULLETIN_PUBLICATIONS,
@@ -405,6 +405,7 @@ export function createResearchView(app: App): View {
         prompt: column.prompt.trim(),
         format: column.format,
         ...(column.format === 'tags' ? { tags: column.tagsText.split(',').map((tag) => tag.trim()).filter(Boolean) } : {}),
+        ...(column.action === 'custom' ? { action: column.action, customAction: column.customAction?.trim() ?? '' } : {}),
       }));
   }
 
@@ -813,7 +814,10 @@ export function createResearchView(app: App): View {
       if (key === 'format') {
         column.format = target.value as ColumnFormat;
         renderQuestions();
-      } else if (key === 'name' || key === 'prompt' || key === 'tagsText') {
+      } else if (key === 'action') {
+        column.action = (target.value || undefined) as ColumnAction | undefined;
+        renderQuestions();
+      } else if (key === 'name' || key === 'prompt' || key === 'tagsText' || key === 'customAction') {
         column[key] = target.value;
       }
       renderLaunch();

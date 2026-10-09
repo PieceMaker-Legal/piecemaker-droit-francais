@@ -124,7 +124,9 @@ export function normalizeColumn(value: unknown): TemplateColumn {
   const format = COLUMN_FORMATS.some((entry) => entry.value === input.format) ? input.format as ColumnFormat : 'text';
   const tags = Array.isArray(input.tags) ? input.tags.map((tag) => text(tag, 60)).filter(Boolean).slice(0, 30) : [];
   const action = COLUMN_ACTIONS.some((entry) => entry.value === input.action) ? input.action as ColumnAction : undefined;
-  return { name, prompt, format, ...(format === 'tags' && tags.length ? { tags } : {}), ...(action ? { action } : {}) };
+  const customAction = text(input.customAction, 4000);
+  if (action === 'custom' && !customAction) throw new UserError('Décrivez l’action personnalisée.');
+  return { name, prompt, format, ...(format === 'tags' && tags.length ? { tags } : {}), ...(action ? { action } : {}), ...(action === 'custom' ? { customAction } : {}) };
 }
 
 export function normalizeTemplate(value: unknown): Template {
@@ -135,7 +137,7 @@ export function normalizeTemplate(value: unknown): Template {
   if (!columns.length) throw new UserError('Le modèle doit contenir au moins une question.');
   if (columns.length > MAX_COLUMNS) throw new UserError(`Un modèle contient au plus ${MAX_COLUMNS} questions.`);
   for (const { value, label } of COLUMN_ACTIONS) {
-    if (columns.filter((entry) => entry.action === value).length > 1) throw new UserError(`Une seule question peut porter l’action « ${label} ».`);
+    if (value !== 'custom' && columns.filter((entry) => entry.action === value).length > 1) throw new UserError(`Une seule question peut porter l’action « ${label} ».`);
   }
   const id = typeof input.id === 'string' && /^[\w-]{1,80}$/.test(input.id) ? input.id : randomUUID();
   return { id, name, description: text(input.description, 500), columns, updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : new Date().toISOString() };
