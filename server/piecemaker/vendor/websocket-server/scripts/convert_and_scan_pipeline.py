@@ -51,7 +51,13 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Set
 
 from smart_converter import mineru_available, needs_ocr
-from legal_forms import _FORM_NATIONALITY, _LEGAL_FORM_RE, extract_legal_form, normalize_entity_text
+from legal_forms import (
+    _FORM_NATIONALITY,
+    cluster_indexes_by_stem,
+    company_key,
+    extract_legal_form,
+    resolve_company_occurrences,
+)
 
 
 EXIT_OCR_REQUIRED = 3
@@ -456,14 +462,16 @@ def read_individual_mappings(json_files: List[str]) -> Dict:
         with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        # Merge entities by type
+        source = data.get("source_file") or json_file
         for entity_type, entities in data.get("entities", {}).items():
             if entity_type not in consolidated["entities"]:
                 consolidated["entities"][entity_type] = []
-            consolidated["entities"][entity_type].extend(entities)
+            for entity in entities:
+                if isinstance(entity, dict):
+                    entity.setdefault("source_file", source)
+                consolidated["entities"][entity_type].append(entity)
 
-        # Update summary
-        consolidated["summary"]["source_files"].append(data.get("source_file", json_file))
+        consolidated["summary"]["source_files"].append(source)
         consolidated["summary"]["entity_types"].update(data.get("summary", {}).get("entity_types", []))
 
     # Convert set to list for JSON serialization
@@ -669,6 +677,8 @@ def _merge_person_entry(merged_mapping: Dict, merged_reverse: Dict,
     if source_entry:
         entry["score"] = max(entry.get("score", 0.0), source_entry.get("score", 0.0))
         entry.setdefault("recognizer", source_entry.get("recognizer", "unknown"))
+        if source_entry.get("legalForm") and not entry.get("legalForm"):
+            entry["legalForm"] = source_entry["legalForm"]
 
 
 def _record_retired_code(entries: Dict, survivor: str, dropped_code: str,
@@ -1064,20 +1074,16 @@ def parse_address(address_text: str) -> Dict:
 
 
 # ---------------------------------------------------------------------------
-# Société codes : le sigle sert de préfixe (SA_1, SARL_1, SCI_1, GMBH_1, LLC_1…)
+# Société codes : le sigle sert de préfixe (SA_01, SARL_01, SCI_01, GMBH_01…)
 # ---------------------------------------------------------------------------
-# Une organisation dont le nom (ou son contexte immédiat) porte une forme juridique
-# — détectée littéralement par legal_forms.extract_legal_form, qui a typé l'entité
-# ORGANIZATION_<sigle> — est codée <sigle>_<n>. Sans sigle, elle tombe sur
-# PERS_MORALE_<n>. Chaque sigle a son propre compteur (SA_1, SA_2, puis SARL_1…),
-# non paddé, conformément au choix du cabinet. Les personnes/adresses gardent leur
-# padding _01. Ce vocabulaire est reflété à l'identique côté administration
-# (`originals-pipeline.cjs`) : les deux chemins écrivent le même mapping.
+# Après le scan, les variantes d'une même société sont réunies, puis la forme est
+# lue dans les mots qui entourent chaque mention. Une forme donne <sigle>_01.
+# Sans forme, le code est PERS_MORALE_01. Chaque sigle a son compteur.
 
 def _societe_form_key(entity_type: str) -> str:
     """Clé de compteur / préfixe de code d'une organisation.
 
-    ORGANIZATION_SA → 'SA' (code SA_1) ; ORGANIZATION nu → 'PERS_MORALE'.
+    ORGANIZATION_SA → 'SA' (code SA_01) ; ORGANIZATION nu → 'PERS_MORALE'.
     """
     if entity_type.startswith("ORGANIZATION_"):
         return entity_type.split("_", 1)[1] or "PERS_MORALE"
@@ -1103,29 +1109,13 @@ def _next_societe_code(entity_type: str, societe_counters: Dict[str, int]) -> st
     key = _societe_form_key(entity_type)
     n = societe_counters.get(key, 0) + 1
     societe_counters[key] = n
-    return f"{key}_{n}"
+    return f"{key}_{n:02d}"
 
 
-# ---------------------------------------------------------------------------
-# Même société : une seule règle de tri, dans le fichier, entre fichiers, en réparation
-# ---------------------------------------------------------------------------
-# GLiNER détecte, le code trie : il n'invente aucune variante et n'écarte aucune
-# détection. Deux textes sont la même société si leur clé (le texte sans sa forme
-# juridique, sans accents ni casse ni ponctuation) est identique et non vide — jamais
-# de sous-chaîne ("Orbex" ≠ "Orbex Holding"). Le code d'une société est, dans l'ordre :
-# un code de partie (CLIENT_/ADVERSAIRE_), puis le code de sa forme juridique (SA_1,
-# SARL_1…), puis PERS_MORALE_<n>. Le code de forme prime donc toujours sur PERS_MORALE.
-
-def company_key(text: str) -> str:
-    """Clé de comparaison d'une société : "Orbex S.A." et "ORBEX" → "orbex".
-
-    La forme juridique est retirée du texte d'origine (la regex est sensible à la
-    casse, voulu), avant de passer en minuscules.
-    """
-    bare = _LEGAL_FORM_RE.sub(" ", normalize_entity_text(text))
-    decomposed = unicodedata.normalize("NFKD", bare)
-    folded = "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
-    return " ".join(re.sub(r"[\W_]+", " ", folded).split())
+# Même société : clé identique, ou clé plus courte qui est un préfixe de mots
+# (« Calice », « Calice SA », « Calice International »). Deux formes lues dans
+# les mots voisins restent deux sociétés. Le code retenu est, dans l'ordre, un
+# code de partie, puis le code de forme (SA_01), puis PERS_MORALE_01.
 
 
 def _known_legal_form(token: str) -> Optional[str]:
@@ -1145,40 +1135,9 @@ def _societe_text_form(texts: List[str]) -> Optional[str]:
 
 
 def cluster_company_groups(groups: List[List[str]], forms: List[Optional[str]]) -> List[List[int]]:
-    """Decide which groups of ORGANIZATION texts are the same company.
-
-    Groups sharing a company_key are the same company. Several distinct legal
-    forms (SA / SAS) are never merged: one cluster per form, and the form-less
-    groups join only when a single form is present, else they form their own
-    cluster. Returns clusters of group indices, in order of appearance.
-    """
-    parent = list(range(len(groups)))
-
-    def find(index: int) -> int:
-        while parent[index] != index:
-            parent[index] = parent[parent[index]]
-            index = parent[index]
-        return index
-
-    owner: Dict[str, int] = {}
-    for index, texts in enumerate(groups):
-        for key in filter(None, map(company_key, texts)):
-            parent[find(index)] = find(owner.setdefault(key, index))
-    components: Dict[int, List[int]] = {}
-    for index in range(len(groups)):
-        components.setdefault(find(index), []).append(index)
-
-    clusters: List[List[int]] = []
-    for members in components.values():
-        present = list(dict.fromkeys(forms[index] for index in members if forms[index]))
-        if len(present) <= 1:
-            clusters.append(members)
-            continue
-        clusters.extend([index for index in members if forms[index] == form] for form in present)
-        formless = [index for index in members if not forms[index]]
-        if formless:
-            clusters.append(formless)
-    return sorted(clusters, key=min)
+    """Decide which groups of ORGANIZATION texts are the same company."""
+    keys = [[key for key in (company_key(text) for text in texts) if key] for texts in groups]
+    return cluster_indexes_by_stem(keys, forms)
 
 
 def _merge_societe_clusters(merged_mapping: Dict, merged_reverse: Dict, merged_extracted: Dict,
@@ -1277,6 +1236,30 @@ def identifier_key(kind: str, text: str) -> Optional[str]:
     return None
 
 
+def _prepare_company_entities(consolidated_entities: Dict) -> None:
+    entities = consolidated_entities.setdefault("entities", {})
+    org_types = [
+        key for key in list(entities)
+        if key == "ORGANIZATION" or str(key).startswith("ORGANIZATION_")
+    ]
+    occurrences = []
+    for key in org_types:
+        occurrences.extend(entities.pop(key) or [])
+    if not occurrences:
+        return
+    corpora: Dict[str, str] = {}
+    for entity in occurrences:
+        path = entity.get("source_file") if isinstance(entity, dict) else None
+        if not path or path in corpora:
+            continue
+        try:
+            corpora[path] = Path(path).read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            corpora[path] = ""
+    for entity in resolve_company_occurrences(occurrences, corpora):
+        entities.setdefault(entity["entity_type"], []).append(entity)
+
+
 def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
     """Convert consolidated entities to anonymization mapping format.
 
@@ -1338,7 +1321,8 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
     seen_entities = {}  # text -> code
     seen_identifiers = {}  # (type, identifier_key) -> code
 
-    # Consolidate PERSON entities to remove duplicates
+    _prepare_company_entities(consolidated_entities)
+
     for entity_type in consolidated_entities.get("entities", {}).keys():
         if entity_type == "PERSON":
             consolidated_entities["entities"][entity_type] = consolidate_duplicate_entities(
@@ -1354,10 +1338,10 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
         for entity in entities:
             text = entity["text"]
             text_lower = text.lower()
+            seen_key = text_lower if category != "societes" else f"{entity.get('legalForm') or ''}\n{text_lower}"
 
-            # Skip if already processed
-            if text_lower in seen_entities:
-                mapping[text] = seen_entities[text_lower]
+            if seen_key in seen_entities:
+                mapping[text] = seen_entities[seen_key]
                 continue
 
             # Same identifier written another way: a variant of the code of the first spelling
@@ -1374,7 +1358,6 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
                 code = f"PERSONNE_PHYSIQUE_{counters[category]:02d}"
                 counters[category] += 1
             elif category == "societes":
-                # Sigle en préfixe (SA_1, SARL_1…) ou PERS_MORALE_1, compteur par sigle.
                 code = _next_societe_code(entity_type, societe_counters)
             elif category == "adresses":
                 code = f"ADRESSE_{counters[category]:02d}"
@@ -1391,10 +1374,13 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
 
             # Store mappings for all variants (no lowercase duplicates)
             for variant in variants:
+                previous = mapping.get(variant)
+                if previous and previous != code:
+                    continue
                 mapping[variant] = code
 
-            reverse_mapping[code] = [text]  # Principal value (array for consistency)
-            seen_entities[text_lower] = code
+            reverse_mapping[code] = [text]
+            seen_entities[seen_key] = code
             if identifier is not None:
                 seen_identifiers[(entity_type, identifier)] = code
 
@@ -1406,6 +1392,8 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
                 "score": entity.get("score", 1.0),
                 "recognizer": entity.get("recognizer", "unknown")
             }
+            if category == "societes" and entity.get("legalForm"):
+                extracted_data[category][code]["legalForm"] = entity["legalForm"]
 
             # Parse addresses for partial anonymization
             if category == "adresses":
@@ -1542,12 +1530,10 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
     # Sociétés : même société = même code (cf. cluster_company_groups). Un code de
     # forme (SA_n) l'emporte sur PERS_MORALE_n ; les codes écartés sont retirés.
     def next_societe_code(source_code: str) -> str:
-        # Le sigle du code d'origine est préservé : SA_3 → SA_<n>, legacy
-        # ORBEX SA → SA_<n>, sinon PERS_MORALE_<n>. Compteur par sigle.
         key = _societe_counter_key_of_code(source_code)
         n = societe_counters.get(key, 0) + 1
         societe_counters[key] = n
-        return f"{key}_{n}"
+        return f"{key}_{n:02d}"
 
     def mint_societe_code(source_code: str) -> str:
         new_code = next_societe_code(source_code)
@@ -1704,6 +1690,8 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
             "score": old_entry.get("score", 1.0),
             "recognizer": old_entry.get("recognizer", "unknown")
         }
+        if old_entry.get("legalForm"):
+            merged_extracted[category][new_code]["legalForm"] = old_entry["legalForm"]
 
         # Parse addresses for partial anonymization (same logic as convert_to_anonymization_format)
         if category == "adresses":

@@ -1,14 +1,21 @@
 import type { JsonData, KnowledgeMapping, KnowledgeNode, KnowledgeSnapshot, KnowledgeUpdateOperation, NodeKind } from './types.js';
 
 const LEGAL_FORM_TOKENS = new Set([
-  'SELARL', 'SELAS', 'SELCA', 'SELCS', 'SASU', 'SARL', 'EURL', 'EARL',
-  'SCOP', 'SCIC', 'GAEC', 'SAS', 'SCI', 'SCA', 'SCS', 'SCP', 'SCM', 'SNC',
-  'GIE', 'SLP', 'SEL', 'SEM', 'EEIG', 'CIC', 'CIO', 'CLG', 'RTM', 'PLC', 'LTD',
+  'SELARL', 'SELAS', 'SELASU', 'SELAFA', 'SELCA', 'SELCS', 'SEL',
+  'SASU', 'SARLU', 'SARL', 'EURL', 'EARL', 'SCOP', 'SCIC', 'GAEC', 'SPFPL',
+  'SAS', 'SICAV', 'SCCV', 'SCEA', 'SCPI', 'SPLA', 'SEMOP', 'SCI', 'SCA', 'SCS',
+  'SCP', 'SCM', 'SNC', 'GFA', 'GFR', 'GIE', 'SLP', 'SPL', 'SEM', 'SA',
+  'EEIG', 'CIC', 'CIO', 'CLG', 'RTM', 'PLC', 'LTD',
   'LLLP', 'PLLC', 'LLC', 'LLP', 'INC', 'CORP', 'LP', 'GP', 'PC', 'PA', 'CO',
-  'PARTG', 'GMBH', 'KGAA', 'OHG', 'GBR', 'KG', 'AG', 'UG', 'EG', 'EK',
-  'SE', 'SA', 'BV', 'NV', 'SPA', 'SRL', 'SL', 'LDA', 'AB', 'OY', 'APS', 'AS',
-  'PTYLTD', 'PVTLTD',
+  'PARTG', 'GMBH', 'GMBHCOKG', 'KGAA', 'OHG', 'GBR', 'KG', 'AG', 'UG', 'EG', 'EK',
+  'SCE', 'SE', 'SAU', 'SLU', 'BV', 'NV', 'SPA', 'SRL', 'SL', 'LDA', 'AB', 'OY',
+  'APS', 'AS', 'PTYLTD', 'PVTLTD',
 ]);
+
+export function isLegalFormCode(code: string): boolean {
+  const tokens = code.toUpperCase().replace(/_\d+$/, '').split('_').filter(Boolean);
+  return tokens.some((token) => LEGAL_FORM_TOKENS.has(token));
+}
 
 export const PROCEDURE_POSITIONS = [
   { value: 'demandeur', label: 'Demandeur' },

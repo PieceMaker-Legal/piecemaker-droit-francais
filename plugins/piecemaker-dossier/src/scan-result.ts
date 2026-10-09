@@ -12,6 +12,7 @@ import { EXCLUSIONS_NODE_ID } from './types.js';
 import { KnowledgeStore, splitDocumentDate } from './knowledge.js';
 import { isInstitutionalEntity } from './institutional-terms.js';
 import { sentenceContaining } from './excerpt.js';
+import { isLegalFormCode } from './party-codes.js';
 
 export type MarkdownReader = (document: GlinerDocument) => string | null;
 
@@ -29,7 +30,7 @@ function kindFromCode(code: string, principal: string, bucket: string): NodeKind
   const normalizedCode = code.replace(/\s+/g, '_').toUpperCase();
   const normalizedBucket = bucket.toLocaleLowerCase('fr');
   if (normalizedBucket.includes('personnes_physiques') || normalizedCode.includes('PERSONNE_PHYSIQUE') || normalizedCode.includes('DIRIGEANT') || normalizedCode.includes('AVOCAT')) return 'person';
-  if (normalizedBucket.includes('societ') || normalizedCode.includes('MORALE') || normalizedCode.includes('SOCIETE')) return 'company';
+  if (normalizedBucket.includes('societ') || normalizedCode.includes('MORALE') || normalizedCode.includes('SOCIETE') || isLegalFormCode(normalizedCode)) return 'company';
   if (normalizedBucket.includes('adresse') || normalizedCode.startsWith('ADRESSE_') || normalizedCode.startsWith('LOCATION_')) return 'address';
   if (normalizedBucket.includes('siren') || normalizedCode.startsWith('SIREN_')) return 'siren';
   if (normalizedCode.startsWith('SIRET_') || normalizedCode.startsWith('TVA_')) return 'other';
