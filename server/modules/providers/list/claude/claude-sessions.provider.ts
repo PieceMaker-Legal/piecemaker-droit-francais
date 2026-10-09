@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import readline from 'node:readline';
 
@@ -17,6 +18,7 @@ import { prepareTranscriptMessages } from '@/shared/message-unification.js';
 import {
   createNormalizedMessage,
   generateMessageId,
+  getApplicationDataRoot,
   readObjectRecord,
   sliceTailPage,
   truncateSubagentActivity,
@@ -24,7 +26,43 @@ import {
 import { sessionsDb } from '@/modules/database/index.js';
 import { summarizeClaudeTokenUsage } from '@/modules/providers/services/provider-token-usage.service.js';
 
+const require = createRequire(import.meta.url);
+const { deanonymize } = require('../../../../piecemaker/anonymizer/dictionary.cjs') as {
+  deanonymize(text: string, dictionary: { empty: boolean; reverse: Record<string, string[]> }): string;
+};
+const { createSqliteDictionaryLoader } = require('../../../../piecemaker/anonymizer/sqlite-dictionary.cjs') as {
+  createSqliteDictionaryLoader(options: { databasePath: string }): {
+    get(): { empty: boolean; reverse: Record<string, string[]> };
+  };
+};
+
 const PROVIDER = 'claude';
+const VISIBLE_CODE = /[A-Z][A-Z0-9]*_\d+/;
+
+type VisibleTextRestore = (text: string) => string;
+
+let visibleDictionary: ReturnType<typeof createSqliteDictionaryLoader> | null = null;
+
+function restoreVisiblePseudonyms(text: string): string {
+  try {
+    if (!visibleDictionary) {
+      const databasePath = process.env.DATABASE_PATH || path.join(getApplicationDataRoot(), 'auth.db');
+      visibleDictionary = createSqliteDictionaryLoader({ databasePath });
+    }
+    return deanonymize(text, visibleDictionary.get());
+  } catch {
+    return text;
+  }
+}
+
+function restoreTree(value: unknown, apply: (text: string) => string): unknown {
+  if (typeof value === 'string') return apply(value);
+  if (Array.isArray(value)) return value.map((entry) => restoreTree(entry, apply));
+  if (!value || typeof value !== 'object') return value;
+  const copy: AnyRecord = {};
+  for (const [key, entry] of Object.entries(value)) copy[key] = restoreTree(entry, apply);
+  return copy;
+}
 
 /**
  * Upper bound on how much of a subagent's timeline is sent to the client. A
@@ -647,6 +685,30 @@ function stripAnsiFormatting(text: string): string {
 }
 
 export class ClaudeSessionsProvider implements IProviderSessions {
+  private readonly restoreVisibleText: VisibleTextRestore;
+
+  constructor(options?: { restoreVisibleText?: VisibleTextRestore }) {
+    this.restoreVisibleText = options?.restoreVisibleText ?? restoreVisiblePseudonyms;
+  }
+
+  private restoreMessage(message: NormalizedMessage): void {
+    const apply = (value: string) => (VISIBLE_CODE.test(value) ? this.restoreVisibleText(value) : value);
+    if (typeof message.content === 'string') message.content = apply(message.content);
+    if (typeof message.displayText === 'string') message.displayText = apply(message.displayText);
+    if (typeof message.text === 'string') message.text = apply(message.text);
+    if (typeof message.commandMessage === 'string') message.commandMessage = apply(message.commandMessage);
+    if (typeof message.summary === 'string') message.summary = apply(message.summary);
+    if (typeof message.toolResult?.content === 'string') message.toolResult.content = apply(message.toolResult.content);
+    if (message.toolInput !== undefined) message.toolInput = restoreTree(message.toolInput, apply);
+    if (Array.isArray(message.subagentTools)) {
+      for (const activity of message.subagentTools) {
+        if (typeof activity.content === 'string') activity.content = apply(activity.content);
+        if (typeof activity.toolResult?.content === 'string') activity.toolResult.content = apply(activity.toolResult.content);
+        if (activity.toolInput !== undefined) activity.toolInput = restoreTree(activity.toolInput, apply);
+      }
+    }
+  }
+
   /**
    * Normalizes one Claude JSONL entry or live SDK stream event into the shared
    * message shape consumed by REST and WebSocket clients.
@@ -671,6 +733,7 @@ export class ClaudeSessionsProvider implements IProviderSessions {
       }
     }
 
+    for (const message of messages) this.restoreMessage(message);
     return messages;
   }
 
@@ -1082,6 +1145,7 @@ export class ClaudeSessionsProvider implements IProviderSessions {
         };
         msg.subagentTools = toolResult.subagentTools;
         msg.subagent = toolResult.subagent;
+        this.restoreMessage(msg);
       }
     }
 

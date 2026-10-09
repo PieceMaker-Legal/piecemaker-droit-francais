@@ -456,6 +456,32 @@ test('tout ce qui est surligné est codé par le moteur, quelle que soit la cass
   }
 });
 
+test('un nom dans un fuseau IANA revient à l\'humain', () => {
+  const dictionary = buildDictionary({
+    mapping: { Zetaville: 'ADRESSE_01' },
+    reverse_mapping: { ADRESSE_01: ['Zetaville'] },
+  }, 1);
+  const banner = "You've hit your weekly limit · resets 7am (Europe/ADRESSE_01)";
+
+  assert.equal(anonymize('Europe/Zetaville', dictionary), 'Europe/ADRESSE_01');
+  assert.equal(deanonymize(banner, dictionary), banner.replace('ADRESSE_01', 'Zetaville'));
+});
+
+test('Chat Completions restitue le texte d\'un refus', () => {
+  const rewriter = createSseRewriter((text) => text.replaceAll('ADRESSE_01', 'Zetaville'));
+  const output = rewriter.push(`data: ${JSON.stringify({
+    choices: [{ index: 0, delta: { refusal: 'Europe/ADRESSE_01' }, finish_reason: null }],
+  })}\n\n`) + rewriter.end();
+  const refusal = output
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .map((line) => JSON.parse(line.slice(6)).choices?.[0]?.delta?.refusal || '')
+    .join('');
+
+  assert.equal(output.includes('ADRESSE_01'), false);
+  assert.equal(refusal, 'Europe/Zetaville');
+});
+
 test('le retour à l\'humain ignore la casse du code et rend la forme principale', () => {
   const dictionary = variantsDictionary();
 
