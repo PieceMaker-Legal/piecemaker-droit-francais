@@ -250,6 +250,13 @@ export type PartyEditorDefaults = {
   partySide?: 'client' | 'adversaire' | 'tiers';
 };
 
+const profilePersonIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="7" r="4"></circle><path d="M5 20v-2a7 7 0 0 1 14 0v2a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1Z"></path></svg>';
+const profileCompanyIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V7l8-4 8 4v14H4ZM9 21v-5h6v5M8 9h1m6 0h1M8 12h1m6 0h1"></path></svg>';
+const profileRoleIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="2"></rect><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12a23 23 0 0 0 18 0M12 11v4"></path></svg>';
+const profileTagIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 12 9 9 9-9V3h-9L3 12Z"></path><circle cx="16" cy="8" r="1"></circle></svg>';
+const profileFileIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 0v6h6"></path></svg>';
+const profileSirenIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 4v6c0 4-8 8-8 8s-8-4-8-8V7l8-4Z"></path><circle cx="12" cy="10" r="2"></circle><path d="M12 12v3"></path></svg>';
+
 export function partyTypePicker(root: HTMLElement, side: 'client' | 'adversaire' | 'tiers', onSelect: (kind: 'person' | 'company') => void): HTMLElement {
   const sideLabel = side === 'client' ? 'cliente' : side === 'adversaire' ? 'adverse' : 'tierce';
   const layer = modal(root, `
@@ -289,23 +296,31 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const linkTargets = data.graph.nodes.filter((entry) => entry.id !== id && (entry.kind === 'person' || entry.kind === 'company'));
   const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
   const layer = modal(root, `
-    <div class="pmd-toolbar">${node && onBackToMapping ? '<button type="button" class="pmd-button pmd-back-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-back-mapping>← Retour</button>' : ''}<h2 class="pmd-title piecemaker-display">${node ? `Modifier ${escapeHtml(node.label)}` : 'Ajouter un élément'}</h2><span class="pmd-spacer"></span><button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="company-search" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public" ${selectedKind === 'company' ? '' : 'hidden'}>${companySearchIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div>
+    <div class="pmd-profile-editor" data-kind="${selectedKind}">
+    <div class="pmd-toolbar pmd-profile-toolbar">${node && onBackToMapping ? '<button type="button" class="pmd-button pmd-back-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-back-mapping>← Retour</button>' : ''}<h2 class="pmd-title piecemaker-display">${node ? `Modifier ${escapeHtml(node.label)}` : 'Ajouter un élément'}</h2><span class="pmd-spacer"></span><button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="company-search" aria-label="Rechercher cette personne morale" title="Rechercher dans Registre Public" ${selectedKind === 'company' ? '' : 'hidden'}>${companySearchIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close aria-label="Fermer">×</button></div>
     <div class="pmd-dialog-columns"><form class="pmd-form" data-node-form>
-      <section class="pmd-form-section"><h3>Identité</h3>
-      <label>Type<select class="pmd-select" name="kind">${kindOptions(node?.kind || defaults.kind || 'person')}</select></label>
-      <label>Nom principal<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></label>
+      <header class="pmd-profile-identity">
+        <span class="pmd-profile-avatar">${profilePersonIcon}</span>
+        <div class="pmd-profile-identity-copy"><span class="pmd-profile-eyebrow">Identité</span><strong data-profile-name>${escapeHtml(node?.label || 'Nouvel élément')}</strong><span class="pmd-profile-kind" data-profile-kind>${escapeHtml(kindLabels[selectedKind])}</span></div>
+        <span class="pmd-profile-watermark">${profileCompanyIcon}</span>
+      </header>
+      <section class="pmd-form-section pmd-profile-section"><h3>${profilePersonIcon}Informations principales</h3>
+      <div class="pmd-profile-info">
+      <label>Type<span class="pmd-profile-field">${profileCompanyIcon}<select class="pmd-select" name="kind">${kindOptions(selectedKind)}</select></span></label>
+      <label>Nom principal<span class="pmd-profile-field">${profileTagIcon}<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></span></label>
       <label>Autres écritures${aliasEditorMarkup(variants)}</label>
-      <label>Code anonymisé<input class="pmd-input" name="masked" value="${escapeHtml(mappings[0]?.masked || '')}"></label>
-      </section>
-      <section class="pmd-form-section"><h3>Rôle dans le dossier</h3>
-      <label>Partie<select class="pmd-select" name="partySide"><option value="client" ${(!node && defaults.partySide === 'client') || (node && node.data.partySide === 'client') || (!node && !defaults.partySide) ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${(node && node.data.partySide === 'adversaire') || (!node && defaults.partySide === 'adversaire') ? 'selected' : ''}>Partie adverse</option><option value="tiers" ${(node && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire') || (!node && defaults.partySide === 'tiers') ? 'selected' : ''}>Tiers</option></select></label>
-      <label data-position-field>Position<select class="pmd-select" name="position">${positionOptions(textValue(node?.data.position))}</select></label>
-      <div data-company-fields ${companyFieldsHidden ? 'hidden' : ''}>
-        <label>Forme sociale<input class="pmd-input" name="legalForm" value="${escapeHtml(textValue(node?.data.legalForm))}"></label>
-        <label>Numéro SIREN<input class="pmd-input" name="siren" inputmode="numeric" autocomplete="off" value="${escapeHtml(linkedSirenNode?.label || '')}" placeholder="9 chiffres"><div class="pmd-siren-suggestions" data-siren-suggestions></div></label>
+      <label>Code anonymisé<textarea class="pmd-input pmd-profile-code" name="masked" rows="2" spellcheck="false">${escapeHtml(mappings[0]?.masked || '')}</textarea></label>
       </div>
       </section>
-      <section class="pmd-form-section"><h3>Liens</h3>
+      <section class="pmd-form-section pmd-profile-section"><h3>${profileRoleIcon}Rôle dans le dossier</h3>
+      <label class="pmd-profile-role-row">${profilePersonIcon}<span>Rôle<select class="pmd-select" name="partySide"><option value="client" ${(!node && defaults.partySide === 'client') || (node && node.data.partySide === 'client') || (!node && !defaults.partySide) ? 'selected' : ''}>Partie cliente</option><option value="adversaire" ${(node && node.data.partySide === 'adversaire') || (!node && defaults.partySide === 'adversaire') ? 'selected' : ''}>Partie adverse</option><option value="tiers" ${(node && node.data.partySide !== 'client' && node.data.partySide !== 'adversaire') || (!node && defaults.partySide === 'tiers') ? 'selected' : ''}>Tiers</option></select></span></label>
+      <label class="pmd-profile-role-row" data-position-field>${profileFileIcon}<span>Position<select class="pmd-select" name="position">${positionOptions(textValue(node?.data.position))}</select></span></label>
+      <div data-company-fields ${companyFieldsHidden ? 'hidden' : ''}>
+        <label class="pmd-profile-role-row">${profileFileIcon}<span>Forme sociale<input class="pmd-input" name="legalForm" value="${escapeHtml(textValue(node?.data.legalForm))}" placeholder="—"></span></label>
+        <label class="pmd-profile-role-row">${profileSirenIcon}<span>Numéro SIREN<input class="pmd-input" name="siren" inputmode="numeric" autocomplete="off" value="${escapeHtml(linkedSirenNode?.label || '')}" placeholder="9 chiffres"><div class="pmd-siren-suggestions" data-siren-suggestions></div></span></label>
+      </div>
+      </section>
+      <section class="pmd-form-section pmd-profile-section"><h3>${profileTagIcon}Liens</h3>
       ${mentionCount ? `<p class="pmd-form-note">Cité dans ${mentionCount} pièce${mentionCount > 1 ? 's' : ''} — à corriger depuis la chronologie.</p>` : ''}
       ${entityCitations.length ? `<p class="pmd-form-note">Citations qui justifient ces mentions</p>${citationListMarkup(entityCitations.map((citation) => ({ texte: citation.texte, source: citationSource(citation, data.graph.nodes) })))}` : ''}
       <label>Lier à<select class="pmd-select" name="target"><option value="">Personne ou société…</option>${linkTargets.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join('')}</select></label>
@@ -318,7 +333,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       }).join('')}</div></div>` : '<p class="pmd-form-note">Aucun lien avec une autre personne.</p>'}
       </section>
       <div class="pmd-form-actions"><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm">Enregistrer</button></div>
-    </form><aside class="pmd-company-search" data-company-search hidden></aside></div>`);
+    </form><aside class="pmd-company-search" data-company-search hidden></aside></div></div>`);
   layer.querySelector<HTMLElement>('[data-back-mapping]')?.addEventListener('click', () => {
     layer.remove();
     onBackToMapping?.();
@@ -366,10 +381,20 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   renderSirenSuggestions();
   const sideSelect = layer.querySelector<HTMLSelectElement>('select[name="partySide"]');
   const positionSelect = layer.querySelector<HTMLSelectElement>('select[name="position"]');
-  const maskedInput = layer.querySelector<HTMLInputElement>('input[name="masked"]');
+  const maskedInput = layer.querySelector<HTMLTextAreaElement>('textarea[name="masked"]');
   const initialMasked = maskedInput?.value || '';
   const legalFormInput = layer.querySelector<HTMLInputElement>('input[name="legalForm"]');
   const labelInput = layer.querySelector<HTMLInputElement>('input[name="label"]');
+  const syncIdentity = () => {
+    const name = layer.querySelector<HTMLElement>('[data-profile-name]');
+    const kind = layer.querySelector<HTMLElement>('[data-profile-kind]');
+    const editor = layer.querySelector<HTMLElement>('.pmd-profile-editor');
+    if (name) name.textContent = labelInput?.value.trim() || 'Nouvel élément';
+    if (kind) kind.textContent = kindLabels[(kindSelect?.value || selectedKind) as NodeKind];
+    if (editor) editor.dataset.kind = kindSelect?.value || selectedKind;
+  };
+  labelInput?.addEventListener('input', syncIdentity);
+  kindSelect?.addEventListener('change', syncIdentity);
   const companySearchPanel = layer.querySelector<HTMLElement>('[data-company-search]');
   let companySearchResults: CompanySearchResult[] = [];
   let companySearchBusy = false;
