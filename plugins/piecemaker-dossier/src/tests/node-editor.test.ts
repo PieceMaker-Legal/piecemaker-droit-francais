@@ -157,4 +157,23 @@ describe('entity editor', () => {
     const savedLink = root.querySelector('[data-unlink]')!;
     expect(savedLink.compareDocumentPosition(input('target')) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it.each([false, true])('only unlinks through the cross (remove: %s)', async (remove) => {
+    const snapshot = graph();
+    const personId = 'entity:PERSONNE_PHYSIQUE_01';
+    snapshot.nodes.push({ ...company, id: personId, kind: 'person', label: 'Jean Dupont', aliases: [], data: {} });
+    snapshot.links.push({ projectId: company.projectId, fromNodeId: company.id, toNodeId: personId, relation: 'dirigeant', data: {} });
+    const save = vi.fn().mockResolvedValue(undefined);
+    nodeEditor(root, { graph: snapshot }, company, save);
+    root.querySelector<HTMLElement>('.pmd-relation-target')!.click();
+    expect(root.querySelector('.pmd-relation-row')).not.toBeNull();
+    if (remove) {
+      root.querySelector<HTMLButtonElement>('[data-unlink]')!.click();
+      expect(root.querySelector('.pmd-relation-row')).toBeNull();
+    }
+    submit();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    const unlinks = save.mock.calls[0][0].filter((operation: { op: string }) => operation.op === 'unlink');
+    expect(unlinks).toEqual(remove ? [{ op: 'unlink', link: { fromNodeId: company.id, toNodeId: personId, relation: 'dirigeant' } }] : []);
+  });
 });
