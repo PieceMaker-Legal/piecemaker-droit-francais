@@ -3,11 +3,12 @@ export type Flag = 'green' | 'yellow' | 'red' | 'grey';
 export type ColumnFormat = 'text' | 'list' | 'date' | 'amount' | 'yes_no' | 'tags';
 
 /** Colonne dont la réponse s'applique à la pièce : la renommer ou la ranger dans un sous-dossier. */
-export type ColumnAction = 'rename' | 'move';
+export type ColumnAction = 'rename' | 'move' | 'custom';
 
 export const COLUMN_ACTIONS: { value: ColumnAction; label: string }[] = [
   { value: 'rename', label: 'Renommer la pièce' },
   { value: 'move', label: 'Ranger la pièce' },
+  { value: 'custom', label: 'Action personnalisée' },
 ];
 
 export type TemplateColumn = {
@@ -16,6 +17,7 @@ export type TemplateColumn = {
   format: ColumnFormat;
   tags?: string[];
   action?: ColumnAction;
+  customAction?: string;
 };
 
 export type Template = {
@@ -101,7 +103,7 @@ export function reviewCategory(review: { category?: unknown }): ReviewCategory {
 }
 
 export function hasActions(columns: TemplateColumn[]): boolean {
-  return columns.some((column) => column.action);
+  return columns.some((column) => column.action === 'rename' || column.action === 'move');
 }
 
 export type ResearchUpdate = {

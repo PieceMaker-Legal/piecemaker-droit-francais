@@ -57,7 +57,7 @@ export function systemPrompt(mode: 'inline' | 'path'): string {
 
 export function columnsDescription(columns: ReviewColumn[]): string {
   return columns
-    .map((column) => `Colonne ${column.index} — "${column.name}" : ${column.prompt.trim()}${formatSuffix(column)} Si l’information est absente, indique "${NOT_FOUND}".`)
+    .map((column) => `Colonne ${column.index} — "${column.name}" : ${column.prompt.trim()}${column.action === 'custom' && column.customAction ? ` Action personnalisée : ${column.customAction.trim()}` : ''}${formatSuffix(column)} Si l’information est absente, indique "${NOT_FOUND}".`)
     .join('\n');
 }
 

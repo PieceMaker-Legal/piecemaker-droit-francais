@@ -58,8 +58,11 @@ describe('éditeur de modèles à deux panneaux', () => {
   it('affiche une seule question et conserve les champs lors des changements de sélection', async () => {
     await mount();
     expect(root.querySelectorAll('[role=option]')).toHaveLength(3);
-    expect(element('[aria-label="Types de réponse"]').textContent).toContain('JJ/MM/AAAA');
-    expect(element('[aria-label="Types de réponse"]').querySelectorAll('strong')).toHaveLength(6);
+    expect(root.querySelector('.ptr-template-legend')).toBeNull();
+    expect(root.querySelector('[data-question-editor] h3')).toBeNull();
+    expect(element<HTMLSelectElement>('[data-field=format]').options).toHaveLength(6);
+    expect(element('[data-field=format] option[value=date]').textContent).toContain('JJ/MM/AAAA');
+    expect(element('[data-field=format] option[value=tags]').textContent).toContain('Étiquettes séparées par des virgules');
     expect(root.querySelectorAll('[data-field=prompt]')).toHaveLength(1);
     input('[data-field=name]', 'Objet modifié');
     input('[data-field=prompt]', 'Consigne modifiée');
@@ -107,6 +110,25 @@ describe('éditeur de modèles à deux panneaux', () => {
     element('[data-modal-action=save]').click();
     await vi.waitFor(() => expect(rpc).toHaveBeenCalledOnce());
     expect(rpc.mock.calls[0][2].template.columns[2].tags).toEqual(['A', 'B', 'C']);
+  });
+
+  it('affiche l’action personnalisée et conserve son texte après sélection et enregistrement', async () => {
+    await mount();
+    expect(element('[data-field=action] option[value=custom]').textContent).toBe('Action personnalisée');
+    input('[data-field=action]', 'custom');
+    input('[data-field=customAction]', 'Rédige une synthèse des éléments <utiles>.');
+    element('[data-select-question="1"]').click();
+    element('[data-select-question="0"]').click();
+    expect(element<HTMLTextAreaElement>('[data-field=customAction]').value).toBe('Rédige une synthèse des éléments <utiles>.');
+    input('[data-field=action]', '');
+    expect(root.querySelector('[data-field=customAction]')).toBeNull();
+    input('[data-field=action]', 'custom');
+    expect(element<HTMLTextAreaElement>('[data-field=customAction]').value).toBe('Rédige une synthèse des éléments <utiles>.');
+    element('[data-modal-action=save]').click();
+    await vi.waitFor(() => expect(rpc).toHaveBeenCalledOnce());
+    expect(rpc.mock.calls[0][2].template.columns[0]).toMatchObject({
+      action: 'custom', customAction: 'Rédige une synthèse des éléments <utiles>.',
+    });
   });
 
   it('crée un modèle avec une question initiale et protège la dernière question', async () => {
