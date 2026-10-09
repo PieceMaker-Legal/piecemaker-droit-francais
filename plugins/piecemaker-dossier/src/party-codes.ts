@@ -69,6 +69,16 @@ export function nodeCode(node: Pick<KnowledgeNode, 'id' | 'data'>): string {
   return clean(node.data.code) || (node.id.startsWith('entity:') ? node.id.slice('entity:'.length) : '');
 }
 
+function positionInCode(code: string): string {
+  const match = /^(?:CLIENT|ADVERSAIRE)_(.+)$/.exec(codeToken(code, ''));
+  return match ? PROCEDURE_POSITIONS.find(({ value }) => match[1].startsWith(`${codeToken(value)}_`))?.value || '' : '';
+}
+
+export function nodePosition(node: Pick<KnowledgeNode, 'id' | 'data'>): string {
+  const position = clean(node.data.position);
+  return position ? PROCEDURE_POSITIONS.find(({ value }) => codeToken(value) === codeToken(position))?.value || position : positionInCode(nodeCode(node));
+}
+
 function numberedCode(prefix: string, used: Set<string>, current: string): string {
   if (current.startsWith(`${prefix}_`) && /^\d+$/.test(current.slice(prefix.length + 1))) return current;
   let number = 1;
@@ -111,7 +121,7 @@ export function partyCodeChange(
     ...node.data,
     code: code || undefined,
     partySide: side,
-    position: identity.side === 'client' || identity.side === 'adversaire' ? clean(identity.position) || null : null,
+    position: identity.side === 'client' || identity.side === 'adversaire' ? clean(identity.position) || positionInCode(code) || null : null,
     originalCode: originalCode || undefined,
   };
   const operations: KnowledgeUpdateOperation[] = nodeId === node.id

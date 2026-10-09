@@ -1,4 +1,5 @@
 import { NODE_KINDS } from './types.js';
+import { nodePosition } from './party-codes.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
 import type { CompanySearchResult, ScanJob } from './api.js';
 
@@ -85,7 +86,7 @@ function profileKind(node: KnowledgeNode): { label: string; icon: string; kind: 
 }
 
 function positionLabel(node: KnowledgeNode): string {
-  const position = textValue(node.data.position);
+  const position = nodePosition(node);
   const labelsByPosition: Record<string, string> = { demandeur: 'Demandeur', defendeur: 'Défendeur', appelant: 'Appelant', intime: 'Intimé', requerant: 'Requérant', mis_en_cause: 'Mis en cause', intervenant: 'Intervenant' };
   return labelsByPosition[position] || position || (node.data.partySide === 'client' ? 'Demandeur' : node.data.partySide === 'adversaire' ? 'Défendeur' : 'Aucune position procédurale');
 }

@@ -45,6 +45,12 @@ afterEach(() => {
 });
 
 describe('party code assignment', () => {
+  it.each([['client', 'demandeur'], ['adversaire', 'defendeur']] as const)('stores the default position encoded for a new %s', (side, position) => {
+    const change = partyCodeChange({ id: 'manual:person', kind: 'person', data: {} }, { kind: 'person', side }, [], []);
+    expect(change.data.position).toBe(position);
+    expect(change.code).toBe(`${side.toUpperCase()}_${position.toUpperCase()}_PERSONNE_PHYSIQUE_01`);
+  });
+
   it('derives the code from the side, the position and the legal form', () => {
     const change = partyCodeChange(
       { id: 'entity:SOCIETE_SA_06', kind: 'company', data: { code: 'SOCIETE_SA_06' } },

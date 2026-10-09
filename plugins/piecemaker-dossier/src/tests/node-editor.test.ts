@@ -28,6 +28,37 @@ beforeEach(() => {
 afterEach(() => { dom.window.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('entity editor', () => {
+  it.each(['demandeur', 'defendeur', 'appelant', 'intime', 'requerant', 'mis_en_cause', 'intervenant', 'autre'])('prefills a missing position from the anonymised code (%s)', (position) => {
+    const masked = `ADVERSAIRE_${position.toUpperCase()}_PERSONNE_PHYSIQUE_01`;
+    const person: KnowledgeNode = { ...company, id: `entity:${masked}`, kind: 'person', label: 'Jean Dupont', aliases: [], data: { code: masked, partySide: 'adversaire' } };
+    nodeEditor(root, { graph: { ...graph(), nodes: [person], mappings: [{ ...graph().mappings[0], nodeId: person.id, real: person.label, masked }] } }, person, vi.fn().mockResolvedValue(undefined));
+    expect(input('position').value).toBe(position);
+  });
+
+  it.each(['appelant', 'Appelant'])('preserves an explicit position over the position encoded in the anonymised code (%s)', (position) => {
+    const node = { ...company, data: { ...company.data, position } };
+    nodeEditor(root, { graph: graph() }, node, vi.fn().mockResolvedValue(undefined));
+    expect(input('position').value).toBe('appelant');
+  });
+
+  it('reads the position from a mapping when the node has no stored code', () => {
+    const masked = 'CLIENT_DEFENDEUR_PERSONNE_PHYSIQUE_01';
+    const person: KnowledgeNode = { ...company, id: 'manual:person', kind: 'person', label: 'Jean Dupont', aliases: [], data: { partySide: 'client' } };
+    nodeEditor(root, { graph: { ...graph(), nodes: [person], mappings: [{ ...graph().mappings[0], nodeId: person.id, real: person.label, masked }] } }, person, vi.fn().mockResolvedValue(undefined));
+    expect(input('position').value).toBe('defendeur');
+  });
+
+  it('saves the position recovered from the code without renaming the person', async () => {
+    const masked = 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01';
+    const person: KnowledgeNode = { ...company, id: `entity:${masked}`, kind: 'person', label: 'Jean Dupont', aliases: [], data: { code: masked, partySide: 'adversaire' } };
+    const save = vi.fn().mockResolvedValue(undefined);
+    nodeEditor(root, { graph: { ...graph(), nodes: [person], mappings: [{ ...graph().mappings[0], nodeId: person.id, real: person.label, masked }] } }, person, save);
+    submit();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0][0]).toEqual(expect.arrayContaining([expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ id: person.id, data: expect.objectContaining({ position: 'defendeur', code: masked }) }) })]));
+    expect(save.mock.calls[0][0].some((operation: { op: string }) => operation.op === 'renameNode')).toBe(false);
+  });
+
   it('offers identity search only for companies', () => {
     nodeEditor(root, { graph: graph() }, company, vi.fn().mockResolvedValue(undefined));
     const button = root.querySelector<HTMLButtonElement>('[data-search-identity]')!;
