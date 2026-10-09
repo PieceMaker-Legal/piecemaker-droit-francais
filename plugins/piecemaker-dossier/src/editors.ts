@@ -4,7 +4,7 @@ import type { CompanySearchResult } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { citableEntities, citationSource, citationsOfEntity, citationsOfMention, pieceMentionOperations } from './citations.js';
 import type { PendingCitation } from './citations.js';
-import { removedAliasOperations } from './exclusions.js';
+import { deleteEntityOperations, removedAliasOperations } from './exclusions.js';
 import type { DeleteScope } from './exclusions.js';
 import type { ViewData } from './views.js';
 import type { KnowledgeNode, KnowledgeUpdateOperation, NodeKind } from './types.js';
@@ -72,7 +72,7 @@ export function askDeleteEntity(root: HTMLElement, label: string): Promise<Delet
         <h2 class="pmd-title piecemaker-display">Supprimer cet élément et ses relations ?</h2>
         <div class="pmd-confirm-choices">
           <button type="button" class="pmd-confirm-choice" data-delete-scope="dossier"><strong>Exclure de ce dossier</strong><small>« ${escapeHtml(label)} » est supprimé et l’analyse ne le recréera plus dans ce dossier.</small></button>
-          <button type="button" class="pmd-confirm-choice" data-delete-scope="tous"><strong>Exclure de tous les dossiers</strong><small>« ${escapeHtml(label)} » n’est plus jamais pseudonymisé, dans aucun dossier.</small></button>
+          <button type="button" class="pmd-confirm-choice" data-delete-scope="tous"><strong>Ajouter à la liste des exclusions</strong><small>« ${escapeHtml(label)} » n’est plus jamais pseudonymisé, dans aucun dossier.</small></button>
         </div>
         <div class="pmd-form-actions">
           <button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button>
@@ -93,6 +93,17 @@ export function askDeleteEntity(root: HTMLElement, label: string): Promise<Delet
     layer.querySelector('[data-close]')?.addEventListener('click', () => finish(null));
     layer.querySelectorAll<HTMLElement>('[data-delete-scope]').forEach((button) => button.addEventListener('click', () => finish(button.dataset.deleteScope === 'tous' ? 'tous' : 'dossier')));
   });
+}
+
+export async function deleteEntity(root: HTMLElement, node: KnowledgeNode, variants: string[], save: (operations: KnowledgeUpdateOperation[]) => Promise<void>): Promise<boolean> {
+  const scope = await askDeleteEntity(root, node.label);
+  if (!scope) return false;
+  if (scope === 'tous') {
+    const { terms } = await knowledgeApi.institutionalTerms();
+    if (!terms.includes(node.label)) await knowledgeApi.saveInstitutionalTerms([...terms, node.label]);
+  }
+  await save(deleteEntityOperations(node.id, [node.label, ...variants], scope));
+  return true;
 }
 
 export function askEntity(root: HTMLElement, title: string, entries: Array<{ id: string; label: string; detail: string }>): Promise<string | null> {
@@ -387,8 +398,24 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       <label data-custom-relation hidden>Lien personnalisé<input class="pmd-input" name="customRelation" placeholder="Saisissez le type de lien"></label>
       ${mentionCount || entityCitations.length ? `<details class="pmd-profile-mentions"><summary>${mentionCount ? `Cité dans ${mentionCount} pièce${mentionCount > 1 ? 's' : ''}` : 'Citations des mentions'}</summary><p class="pmd-form-note">Mentions à corriger depuis la chronologie.</p>${citationListMarkup(entityCitations.map((citation) => ({ texte: citation.texte, source: citationSource(citation, data.graph.nodes) })))}</details>` : ''}
       </section>
-      <div class="pmd-form-actions"><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm">Enregistrer</button></div>
+      <p class="pmd-form-note pmd-button-danger" data-delete-error role="alert" hidden></p>
+      <div class="pmd-form-actions">${node ? '<button type="button" class="pmd-button pmd-button-danger piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-delete-entity>Supprimer</button><span class="pmd-spacer"></span>' : ''}<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm">Enregistrer</button></div>
     </form></div>`);
+  layer.querySelector<HTMLButtonElement>('[data-delete-entity]')?.addEventListener('click', async (event) => {
+    if (!node) return;
+    const button = event.currentTarget as HTMLButtonElement;
+    const errorSlot = layer.querySelector<HTMLElement>('[data-delete-error]')!;
+    button.disabled = true;
+    errorSlot.hidden = true;
+    try {
+      if (await deleteEntity(root, node, variants, save)) layer.remove();
+    } catch (error) {
+      errorSlot.textContent = error instanceof Error ? error.message : 'Suppression impossible.';
+      errorSlot.hidden = false;
+    } finally {
+      button.disabled = false;
+    }
+  });
   const removals = new Set<number>();
   bindAliasEditors(layer);
   bindCitationToggles(layer);

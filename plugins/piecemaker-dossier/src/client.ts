@@ -1,7 +1,7 @@
 import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
-import { askConfirm, askDeleteEntity, askPrompt, bindAliasEditors, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
-import { deleteEntityOperations, removedAliasOperations } from './exclusions.js';
+import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
+import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { chronologyView, escapeHtml, generalView, mappingView, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
@@ -209,14 +209,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const deleteNode = async (nodeId: string): Promise<boolean> => {
     const node = data?.graph.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) return false;
-    const scope = await askDeleteEntity(root, node.label);
-    if (!scope) return false;
-    if (scope === 'tous') {
-      const { terms } = await knowledgeApi.institutionalTerms();
-      if (!terms.includes(node.label)) await knowledgeApi.saveInstitutionalTerms([...terms, node.label]);
-    }
-    await save(deleteEntityOperations(nodeId, [node.label, ...nodeVariants(node, data?.graph.mappings || [])], scope));
-    return true;
+    return deleteEntity(root, node, nodeVariants(node, data?.graph.mappings || []), save);
   };
 
   const openMapping = () => {

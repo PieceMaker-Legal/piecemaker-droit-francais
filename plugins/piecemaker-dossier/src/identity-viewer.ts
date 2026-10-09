@@ -267,7 +267,10 @@ export function inject(): () => void {
       return;
     }
     body.replaceChildren();
-    nodeEditor(body, { graph }, node, (operations) => save(current.projectId, operations));
+    nodeEditor(body, { graph }, node, async (operations) => {
+      await save(current.projectId, operations);
+      if (error) throw new Error(error);
+    });
   };
 
   const renderAddForm = () => {
