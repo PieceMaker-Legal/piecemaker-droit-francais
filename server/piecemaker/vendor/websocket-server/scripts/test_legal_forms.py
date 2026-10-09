@@ -141,7 +141,7 @@ class LegalFormTests(unittest.TestCase):
     def test_gliner_labels_skip_names_and_secrets(self):
         source = Path(__file__).with_name("presidio-gliner").joinpath("scanner_worker.py").read_text(encoding="utf-8")
         for label in (
-            "date_of_birth", "sensitive_date", "document_date", "expiration_date", "transaction_date",
+            "date", "date_of_birth", "sensitive_date", "document_date", "expiration_date", "transaction_date",
             "email", "phone_number", "street_address", "state_or_region", "postal_code",
             "government_id", "national_id_number", "passport_number", "drivers_license_number",
             "license_number", "tax_id", "tax_number",
