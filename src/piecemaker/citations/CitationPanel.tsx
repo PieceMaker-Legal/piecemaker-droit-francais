@@ -101,7 +101,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
   const ranges = (source?.ranges ?? []).filter((range) => range.quoteIndex === quoteIndex).sort((a, b) => a.start - b.start);
 
   return (
-    <aside aria-label="Source de la citation" className="flex h-full min-w-0 flex-col border-l border-border bg-background text-foreground shadow-xl">
+    <aside aria-label="Source de la citation" className="flex h-full min-w-0 flex-col bg-background text-foreground">
       <header className="flex items-center gap-2 border-b border-border p-3">
         <h2 className="min-w-0 flex-1 break-words text-sm font-medium">{source?.title ?? 'Source de la citation'}</h2>
         <Button ref={closeButton} variant="ghost" size="icon" aria-label="Fermer la source" onClick={onClose}><X className="h-4 w-4" /></Button>

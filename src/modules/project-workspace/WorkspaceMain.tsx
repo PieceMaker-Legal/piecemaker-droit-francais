@@ -6,6 +6,7 @@ import { StandaloneShell } from '@/modules/standalone-shell';
 import { GitPanel } from '@/modules/git-panel';
 import { PluginTabContent, usePlugins } from '@/modules/plugins';
 import { useSelectedDossierRegistration } from '@/piecemaker/dossier';
+import { usePiecemakerEditorBridge } from '@/piecemaker/editor-tabs/usePiecemakerEditorBridge';
 import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { usePaletteOpsRegister } from '@/modules/command-palette';
 import { TaskMasterPanel, useTaskMasterProjectSync, useTasksSettings } from '@/modules/task-master';
@@ -91,6 +92,7 @@ function WorkspaceMain({
   // Resolves bare/partial file references (e.g. links inside chat messages) to
   // real project files before opening them in the in-app editor.
   const resolvedFileOpen = useFileOpenResolver(selectedProject, handleFileOpen);
+  usePiecemakerEditorBridge(handleFileOpen);
 
   useEffect(() => {
     if (!shouldShowTasksTab && activeTab === 'tasks') {

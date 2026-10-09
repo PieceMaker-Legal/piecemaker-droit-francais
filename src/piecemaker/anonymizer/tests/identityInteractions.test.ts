@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HIGHLIGHT_NAME } from '@/piecemaker/anonymizer/highlighter';
 import { startIdentityInteractions } from '@/piecemaker/anonymizer/identityInteractions';
+import { identityPath, OPEN_IN_EDITOR_EVENT } from '@/piecemaker/editor-tabs/editorPanels';
 
 let stop: () => void = () => {};
 let pane: HTMLDivElement;
 let word: Text;
-const received: Array<{ type: string; text: unknown }> = [];
-const record = (event: Event) => received.push({ type: event.type, text: (event as CustomEvent<{ text: unknown }>).detail.text });
+const received: unknown[] = [];
+const record = (event: Event) => received.push((event as CustomEvent<{ path: unknown }>).detail.path);
 
 beforeEach(() => {
   pane = document.createElement('div');
@@ -20,15 +21,13 @@ beforeEach(() => {
   range.setEnd(word, 11);
   range.getClientRects = () => [{ left: 10, right: 90, top: 10, bottom: 30 }] as unknown as DOMRectList;
   vi.stubGlobal('CSS', { highlights: { get: (name: string) => name === HIGHLIGHT_NAME ? [range] : undefined } });
-  window.addEventListener('piecemaker:identity-open', record);
-  window.addEventListener('piecemaker:identity-add', record);
+  window.addEventListener(OPEN_IN_EDITOR_EVENT, record);
   stop = startIdentityInteractions();
 });
 
 afterEach(() => {
   stop();
-  window.removeEventListener('piecemaker:identity-open', record);
-  window.removeEventListener('piecemaker:identity-add', record);
+  window.removeEventListener(OPEN_IN_EDITOR_EVENT, record);
   window.getSelection()?.removeAllRanges();
   pane.remove();
   received.length = 0;
@@ -36,9 +35,9 @@ afterEach(() => {
 });
 
 describe('startIdentityInteractions', () => {
-  it('ouvre la visionneuse quand on clique sur un mot surligné', () => {
+  it('ouvre la fiche dans un onglet de l’éditeur quand on clique sur un mot surligné', () => {
     pane.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 40, clientY: 20 }));
-    expect(received).toEqual([{ type: 'piecemaker:identity-open', text: 'Jean Dupont' }]);
+    expect(received).toEqual([identityPath('open', 'Jean Dupont')]);
   });
 
   it('ignore un clic hors du surlignage', () => {
@@ -57,7 +56,7 @@ describe('startIdentityInteractions', () => {
     const item = document.querySelector<HTMLButtonElement>('#piecemaker-identity-menu button');
     expect(item?.textContent).toBe('Ajouter au mapping');
     item?.click();
-    expect(received).toEqual([{ type: 'piecemaker:identity-add', text: 'signé' }]);
+    expect(received).toEqual([identityPath('add', 'signé')]);
     expect(document.getElementById('piecemaker-identity-menu')).toBeNull();
   });
 

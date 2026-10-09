@@ -15,14 +15,12 @@ type MappingRow = { projectId: string; node: KnowledgeNode; real: string; masked
 const OPEN_EVENT = 'piecemaker:identity-open';
 const ADD_EVENT = 'piecemaker:identity-add';
 const CHANGED_EVENT = 'piecemaker:identity-changed';
-const OPEN_CLASS = 'pmd-identity-open';
+const CLOSE_EVENT = 'piecemaker:identity-close';
 
 const moreIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>';
 
 const IDENTITY_STYLES = `
-.pmd-identity{position:fixed;inset:0 0 0 auto;width:min(44vw,720px);z-index:46;border-left:1px solid var(--pmd-border);box-shadow:-12px 0 32px rgb(15 23 42 / .08)}
-@media (min-width:1024px){.${OPEN_CLASS} #root{width:calc(100% - min(44vw,720px))}}
-@media (max-width:1023px){.pmd-identity{width:min(100vw,600px);z-index:70}}
+.pmd-identity{min-width:0}
 .pmd-identity-header{display:flex;flex-shrink:0;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--pmd-border)}
 .pmd-identity-context{display:flex;flex-shrink:0;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--pmd-border);color:var(--pmd-muted);font-size:12px}
 .pmd-identity-context strong{color:var(--pmd-ink);font-weight:600}
@@ -125,6 +123,7 @@ export function inject(): () => void {
   let sequence = 0;
   let rows: MappingRow[] = [];
   let editorObserver: MutationObserver | null = null;
+  let requestClose: (() => void) | null = null;
   const themeObserver = new MutationObserver(() => { if (panel) panel.dataset.theme = theme(); });
 
   const theme = () => document.documentElement.classList.contains('dark') ? 'dark' : 'light';
@@ -178,19 +177,21 @@ export function inject(): () => void {
     panel?.remove();
     panel = null;
     body = null;
-    document.documentElement.classList.remove(OPEN_CLASS);
+    requestClose = null;
   };
 
-  const ensurePanel = () => {
-    if (panel) return;
+  const dismiss = () => (requestClose ?? close)();
+
+  const ensurePanel = (container: HTMLElement) => {
+    if (panel?.parentElement === container) return;
+    close();
     panel = document.createElement('aside');
     panel.className = 'pmd-root piecemaker-ui pmd-identity';
     panel.setAttribute('aria-label', 'Pseudonymisation');
     panel.innerHTML = `<header class="pmd-identity-header"><div class="pmd-tabs" role="tablist"><button type="button" class="pmd-tab piecemaker-button piecemaker-button--sm" role="tab" data-identity-tab="fiche">Fiche</button><button type="button" class="pmd-tab piecemaker-button piecemaker-button--sm" role="tab" data-identity-tab="mapping">Mapping</button></div><span class="pmd-spacer"></span><button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-identity-close aria-label="Fermer la visionneuse">×</button></header><div class="pmd-identity-context" data-identity-context></div><div data-identity-error></div><div class="pmd-identity-body" data-identity-body></div>`;
-    document.body.appendChild(panel);
-    document.documentElement.classList.add(OPEN_CLASS);
+    container.replaceChildren(panel);
     body = panel.querySelector<HTMLElement>('[data-identity-body]');
-    panel.querySelector('[data-identity-close]')?.addEventListener('click', close);
+    panel.querySelector('[data-identity-close]')?.addEventListener('click', dismiss);
     panel.querySelectorAll<HTMLElement>('[data-identity-tab]').forEach((button) => button.addEventListener('click', () => {
       const next = button.dataset.identityTab as Tab;
       if (next === 'mapping' && tab !== 'mapping') {
@@ -310,7 +311,7 @@ export function inject(): () => void {
       if (newFields) newFields.hidden = variant;
       if (variantFields) variantFields.hidden = !variant;
     }));
-    form.querySelector('[data-identity-cancel]')?.addEventListener('click', close);
+    form.querySelector('[data-identity-cancel]')?.addEventListener('click', dismiss);
     void fillEntities();
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -429,8 +430,9 @@ export function inject(): () => void {
     else renderFiche();
   };
 
-  const open = async (text: string, add: boolean) => {
-    ensurePanel();
+  const open = async (text: string, add: boolean, container: HTMLElement, onClose: () => void) => {
+    ensurePanel(container);
+    requestClose = onClose;
     tab = 'fiche';
     focus = null;
     matches = [];
@@ -443,27 +445,28 @@ export function inject(): () => void {
     render();
   };
 
-  const onOpen = (event: Event) => {
-    const text = (event as CustomEvent<{ text?: unknown }>).detail?.text;
-    if (typeof text === 'string' && text.trim()) void open(text, false);
+  const openFrom = (event: Event, add: boolean) => {
+    const detail = (event as CustomEvent<{ text?: unknown; container?: unknown; onClose?: unknown }>).detail;
+    if (typeof detail?.text !== 'string' || !detail.text.trim() || !(detail.container instanceof HTMLElement) || typeof detail.onClose !== 'function') return;
+    void open(detail.text, add, detail.container, detail.onClose as () => void);
   };
-  const onAdd = (event: Event) => {
-    const text = (event as CustomEvent<{ text?: unknown }>).detail?.text;
-    if (typeof text === 'string' && text.trim()) void open(text, true);
-  };
+  const onOpen = (event: Event) => openFrom(event, false);
+  const onAdd = (event: Event) => openFrom(event, true);
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== 'Escape' || !panel || panel.querySelector('.pmd-dialog-compact')) return;
-    close();
+    dismiss();
   };
 
   window.addEventListener(OPEN_EVENT, onOpen);
   window.addEventListener(ADD_EVENT, onAdd);
+  window.addEventListener(CLOSE_EVENT, close);
   document.addEventListener('keydown', onKey);
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
   return () => {
     window.removeEventListener(OPEN_EVENT, onOpen);
     window.removeEventListener(ADD_EVENT, onAdd);
+    window.removeEventListener(CLOSE_EVENT, close);
     document.removeEventListener('keydown', onKey);
     themeObserver.disconnect();
     close();

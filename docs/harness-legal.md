@@ -45,11 +45,11 @@ Deux points de branchement distincts :
   ouvrir sa copie déjà présente dans `decisions/` : elle cherche mécaniquement
   le passage pour la consultation, sans modifier le `verified: false` initial.
   Cette provenance est affichée explicitement ; le snapshot reste inchangé.
-- `src/piecemaker/citations/` — liens Markdown natifs du chat, panneau de
-  lecture à droite, sélection d'extrait, surlignage des positions vérifiées,
-  avertissement des extraits introuvables. Réutilise l'API authentifiée et les
-  composants Button/ScrollArea de CloudCLI. L'entrée existante PieceMaker
-  monte ce panneau sans modifier le rendu React de l'hôte.
+- `src/piecemaker/citations/` — liens Markdown natifs du chat, source ouverte
+  dans un onglet de l'éditeur latéral de CloudCLI (`src/piecemaker/editor-tabs/`),
+  sélection d'extrait, surlignage des positions vérifiées, avertissement des
+  extraits introuvables. Réutilise l'API authentifiée et les composants
+  Button/ScrollArea de CloudCLI.
   Le lien « Ouvrir ce passage sur Légifrance » utilise les fragments de texte
   du navigateur et un nouvel onglet. L'intégration directe testée en iframe
   est refusée par Légifrance (HTTP 403, `X-Frame-Options: SAMEORIGIN`).
