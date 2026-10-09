@@ -92,6 +92,7 @@ ENTITY_MAPPING = {
     "address":      "LOCATION",
     "city":         "LOCATION",
     "country":      "LOCATION",
+    "date_of_birth": "DATE_OF_BIRTH",
 }
 
 ENTITY_DESCRIPTIONS = {
@@ -101,6 +102,7 @@ ENTITY_DESCRIPTIONS = {
     "address": "Street address with number, e.g. 12 rue des Lilas, Paris",
     "city": "Name of a specific city, e.g. Paris",
     "country": "Name of a country, e.g. France. Not a nationality",
+    "date_of_birth": None,
 }
 
 GLINER_THRESHOLD = 0.5
