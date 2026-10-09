@@ -263,7 +263,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     layer.querySelectorAll<HTMLElement>('[data-edit-node]').forEach((entry) => entry.addEventListener('click', () => {
       const node = mappingData.graph.nodes.find((candidate) => candidate.id === entry.dataset.editNode);
       layer.remove();
-      if (node) nodeEditor(root, mappingData, node, save, {}, openMapping);
+      if (node) nodeEditor(root, mappingData, node, save);
     }));
     layer.querySelectorAll<HTMLElement>('[data-row-menu]').forEach((trigger) => trigger.addEventListener('click', (event) => {
       event.stopPropagation();

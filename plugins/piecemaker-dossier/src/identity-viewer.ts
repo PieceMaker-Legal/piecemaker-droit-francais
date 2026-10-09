@@ -29,8 +29,7 @@ const IDENTITY_STYLES = `
 .pmd-identity-body{position:relative;flex:1;min-height:0;overflow:auto;padding:16px}
 .pmd-identity-body>.pmd-modal:not(:has(.pmd-dialog-compact)){position:static;display:block;padding:0;background:none}
 .pmd-identity-body>.pmd-modal>.pmd-dialog:not(.pmd-dialog-compact){width:auto;max-height:none;overflow:visible;border:0;border-radius:0;padding:0;box-shadow:none;background:transparent}
-.pmd-identity-body .pmd-dialog-columns{flex-direction:column}
-.pmd-identity-body .pmd-toolbar>[data-close]{display:none}
+.pmd-identity-body .pmd-toolbar>[data-close],.pmd-identity-body .pmd-profile-close{display:none}
 .pmd-identity-filters{display:flex;gap:8px;margin-bottom:10px}
 .pmd-identity-filters>*{flex:1;min-width:0}
 .pmd-identity-count{margin:0 0 10px;color:var(--pmd-muted);font-size:12px}
@@ -268,12 +267,7 @@ export function inject(): () => void {
       return;
     }
     body.replaceChildren();
-    nodeEditor(body, { graph }, node, (operations) => save(current.projectId, operations), {}, () => {
-      tab = 'mapping';
-      filterText = '';
-      filterCase = '';
-      render();
-    });
+    nodeEditor(body, { graph }, node, (operations) => save(current.projectId, operations));
   };
 
   const renderAddForm = () => {
