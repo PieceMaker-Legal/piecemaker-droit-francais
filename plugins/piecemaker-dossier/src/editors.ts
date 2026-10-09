@@ -275,6 +275,8 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const sirenNodes = data.graph.nodes.filter((entry) => entry.kind === 'siren');
   const linkedSiren = node ? relations.find((entry) => entry.relation.toLocaleLowerCase() === 'siren' && entry.fromNodeId === node.id && sirenNodes.some((candidate) => candidate.id === entry.toNodeId)) : undefined;
   const linkedSirenNode = linkedSiren ? sirenNodes.find((entry) => entry.id === linkedSiren.toNodeId) : undefined;
+  const linkedAddress = relations.find((entry) => entry.fromNodeId === id && entry.relation.toLocaleLowerCase() === 'adresse' && nodesById.get(entry.toNodeId)?.kind === 'address');
+  const linkedAddressNode = linkedAddress ? nodesById.get(linkedAddress.toNodeId) : undefined;
   const companyFieldsHidden = selectedKind !== 'company';
   const variants = node ? nodeVariants(node, data.graph.mappings) : [];
   const profileLinks = relations.map((relation, index) => {
@@ -297,9 +299,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       <section class="pmd-form-section pmd-profile-section"><h3>${profilePersonIcon}Informations principales</h3>
       <div class="pmd-profile-info">
       <label>Type<span class="pmd-profile-field"><span class="pmd-profile-type-icon" data-profile-type-icon>${selectedKind === 'company' ? profileCompanyIcon : profilePersonIcon}</span><select class="pmd-select" name="kind">${kindOptions(selectedKind)}</select></span></label>
-      <label>Nom principal<span class="pmd-profile-field">${profileTagIcon}<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></span></label>
-      <label>Variantes détectées${aliasEditorMarkup(variants)}</label>
-      <label>Code anonymisé<textarea class="pmd-input pmd-profile-code" name="masked" rows="2" spellcheck="false">${escapeHtml(mappings[0]?.masked || '')}</textarea></label>
+      <label>Adresse<span class="pmd-profile-field"><input class="pmd-input" name="address" value="${escapeHtml(linkedAddressNode?.label || '')}" placeholder="—"></span></label>
       <div class="pmd-profile-company-fields" data-company-fields ${companyFieldsHidden ? 'hidden' : ''}>
         <label>Forme sociale<span class="pmd-profile-field">${profileFileIcon}<input class="pmd-input" name="legalForm" value="${escapeHtml(textValue(node?.data.legalForm))}" placeholder="—"></span></label>
         <label>Numéro SIREN<span class="pmd-profile-field">${profileSirenIcon}<input class="pmd-input" name="siren" inputmode="numeric" autocomplete="off" value="${escapeHtml(linkedSirenNode?.label || '')}" placeholder="9 chiffres"></span><div class="pmd-siren-suggestions" data-siren-suggestions hidden></div></label>
@@ -308,6 +308,13 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       <div class="pmd-profile-role-fields">
       <label>Rôle<select class="pmd-select" name="partySide">${Object.entries(roleLabels).map(([side, label]) => `<option value="${side}" ${side === selectedSide ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
       <label data-position-field>Position<select class="pmd-select" name="position">${positionOptions(textValue(node?.data.position))}</select></label>
+      </div>
+      </section>
+      <section class="pmd-form-section pmd-profile-section"><h3>${profileTagIcon}Anonymisation</h3>
+      <label>Nom principal<span class="pmd-profile-field">${profileTagIcon}<input class="pmd-input" name="label" value="${escapeHtml(node?.label || '')}" required></span></label>
+      <div class="pmd-profile-info">
+      <label>Variantes détectées${aliasEditorMarkup(variants)}</label>
+      <label>Code anonymisé<textarea class="pmd-input pmd-profile-code" name="masked" rows="2" spellcheck="false">${escapeHtml(mappings[0]?.masked || '')}</textarea></label>
       </div>
       </section>
       <section class="pmd-form-section pmd-profile-section"><h3>${profileTagIcon}Liens</h3>
@@ -467,6 +474,24 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     if (selectedRelation === '__custom__' && customRelation) customRelationOptions.add(customRelation);
     if (target && relation) operations.push({ op: 'link', link: { fromNodeId: nodeId, toNodeId: target, relation } });
     if (sirenNode && !data.graph.links.some((link) => link.fromNodeId === id && link.toNodeId === sirenNode.id && link.relation.toLocaleLowerCase() === 'siren')) operations.push({ op: 'link', link: { fromNodeId: nodeId, toNodeId: sirenNode.id, relation: 'SIREN' } });
+    const address = cleanSelection(textValue(form.get('address')));
+    if (address !== cleanSelection(linkedAddressNode?.label || '')) {
+      if (linkedAddress) operations.push({ op: 'unlink', link: { fromNodeId: nodeId, toNodeId: linkedAddress.toNodeId, relation: linkedAddress.relation } });
+      if (address) {
+        const existingAddress = data.graph.nodes.find((entry) => entry.kind === 'address' && [entry.label, ...entry.aliases].some((value) => cleanSelection(value).toLocaleLowerCase('fr-FR') === address.toLocaleLowerCase('fr-FR')));
+        let addressId = existingAddress?.id;
+        if (!addressId) {
+          const usedCodes = new Set([code, ...data.graph.nodes.map(nodeCode), ...data.graph.mappings.map((entry) => entry.masked), ...(data.graph.reservedCodes || [])]);
+          let number = 1;
+          while (usedCodes.has(`ADRESSE_${String(number).padStart(2, '0')}`)) number += 1;
+          const addressCode = `ADRESSE_${String(number).padStart(2, '0')}`;
+          addressId = `entity:${addressCode}`;
+          operations.push({ op: 'upsertNode', node: { id: addressId, kind: 'address', label: address, aliases: [], data: { code: addressCode } } });
+          operations.push({ op: 'upsertMapping', mapping: { nodeId: addressId, real: address, masked: addressCode } });
+        }
+        operations.push({ op: 'link', link: { fromNodeId: nodeId, toNodeId: addressId, relation: 'adresse' } });
+      }
+    }
     await save(operations);
     layer.remove();
   });
