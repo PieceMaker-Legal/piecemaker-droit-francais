@@ -87,6 +87,7 @@ export function partyCodeChange(
   nodes: Array<Pick<KnowledgeNode, 'id' | 'data'>>,
   mappings: KnowledgeMapping[],
   reserved: Iterable<string> = [],
+  customCode?: string,
 ): PartyCodeChange {
   const current = nodeCode(node);
   const used = new Set(nodes.filter((entry) => entry.id !== node.id).map((entry) => nodeCode(entry)).filter(Boolean));
@@ -95,7 +96,8 @@ export function partyCodeChange(
     if (mapping.nodeId !== node.id && clean(mapping.masked)) used.add(clean(mapping.masked));
   }
   const originalCode = clean(node.data.originalCode) || (isPartyCode(current) ? '' : current);
-  const code = partyCode(identity, current, used, originalCode);
+  const code = clean(customCode) || partyCode(identity, current, used, originalCode);
+  if (clean(customCode) && code !== current && used.has(code)) throw new Error('Ce code anonymisé est déjà utilisé par une autre entité.');
   const nodeId = code ? entityId(code) : node.id;
   const side = identity.side === 'client' || identity.side === 'adversaire' ? identity.side : identity.side || null;
   const data: JsonData = {
