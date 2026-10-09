@@ -31,13 +31,14 @@ function kindFromCode(code: string, principal: string, bucket: string): NodeKind
   const normalizedBucket = bucket.toLocaleLowerCase('fr');
   if (normalizedBucket.includes('personnes_physiques') || normalizedCode.includes('PERSONNE_PHYSIQUE') || normalizedCode.includes('DIRIGEANT') || normalizedCode.includes('AVOCAT')) return 'person';
   if (normalizedBucket.includes('societ') || normalizedCode.includes('MORALE') || normalizedCode.includes('SOCIETE') || isLegalFormCode(normalizedCode)) return 'company';
+  if (normalizedCode.startsWith('ADRESSE_IP_') || normalizedCode.startsWith('ADRESSE_MAC_')) return 'other';
   if (normalizedBucket.includes('adresse') || normalizedCode.startsWith('ADRESSE_') || normalizedCode.startsWith('LOCATION_')) return 'address';
   if (normalizedBucket.includes('siren') || normalizedCode.startsWith('SIREN_')) return 'siren';
   if (normalizedCode.startsWith('SIRET_') || normalizedCode.startsWith('TVA_')) return 'other';
   if (normalizedCode.startsWith('IBAN_') || /^[A-Z]{2}\d{2}[A-Z0-9\s]{10,34}$/i.test(principal)) return 'iban';
   if (normalizedCode.startsWith('PHONE_') || normalizedCode.startsWith('TELEPHONE_')) return 'phone';
-  if (normalizedCode.startsWith('EMAIL_') || normalizedCode.startsWith('MAIL_')) return 'email';
-  if (normalizedCode.startsWith('URL_') || /^(?:https?:\/\/|www\.)/i.test(principal)) return 'url';
+  if (normalizedCode.startsWith('COURRIEL_') || normalizedCode.startsWith('EMAIL_') || normalizedCode.startsWith('MAIL_')) return 'email';
+  if (normalizedCode.startsWith('LIEN_') || normalizedCode.startsWith('URL_') || /^(?:https?:\/\/|www\.)/i.test(principal)) return 'url';
   return 'other';
 }
 

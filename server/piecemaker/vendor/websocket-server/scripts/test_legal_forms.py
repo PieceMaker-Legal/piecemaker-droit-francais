@@ -138,13 +138,23 @@ class LegalFormTests(unittest.TestCase):
             self.assertIn(f"'{token}'", cjs)
             self.assertIn(f"'{token}'", typescript)
 
-    def test_date_labels_are_the_gliner_ones(self):
+    def test_gliner_labels_skip_names_and_secrets(self):
         source = Path(__file__).with_name("presidio-gliner").joinpath("scanner_worker.py").read_text(encoding="utf-8")
         for label in (
-            "date_of_birth", "sensitive_date", "document_date",
-            "expiration_date", "transaction_date",
+            "date_of_birth", "sensitive_date", "document_date", "expiration_date", "transaction_date",
+            "email", "phone_number", "street_address", "state_or_region", "postal_code",
+            "government_id", "national_id_number", "passport_number", "drivers_license_number",
+            "license_number", "tax_id", "tax_number",
+            "bank_account", "account_number", "routing_number", "iban", "payment_card",
+            "card_number", "card_expiry", "card_cvv",
+            "username", "ip_address", "account_id", "sensitive_account_id",
         ):
             self.assertIn(f'"{label}"', source)
+        for label in (
+            "full_name", "first_name", "middle_name", "last_name",
+            "password", "secret", "api_key", "access_token", "recovery_code",
+        ):
+            self.assertNotIn(f'"{label}"', source)
         self.assertNotIn("date of birth", source)
         self.assertNotIn("NAISSANCE", source)
 
