@@ -245,7 +245,7 @@ function createSseRewriter(transform) {
       if (!choice || typeof choice !== 'object') continue;
       const index = Number.isInteger(choice.index) ? choice.index : 0;
       const keyPrefix = 'c:' + index + ':';
-      for (const field of ['content', 'reasoning_content', 'refADRESSE_20l']) {
+      for (const field of ['content', 'reasoning_content', 'refusal']) {
         if (typeof choice.delta?.[field] !== 'string') continue;
         const key = keyPrefix + field;
         const synth = (content) => JSON.stringify({

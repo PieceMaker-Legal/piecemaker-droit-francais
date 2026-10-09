@@ -58,6 +58,32 @@ test('claude history: image-only user turns still produce a bubble', () => {
   assert.deepEqual(messages[0].images, [{ data: 'data:image/png;base64,QUJD' }]);
 });
 
+test('claude history: a locally formatted limit banner restores the place name', () => {
+  const provider = new ClaudeSessionsProvider({
+    restoreVisibleText: (text) => text.replaceAll('ADRESSE_01', 'Zetaville'),
+  });
+  const entry = {
+    uuid: 'u-limit',
+    timestamp: '2026-10-09T13:35:52.388Z',
+    type: 'assistant',
+    isApiErrorMessage: true,
+    message: {
+      role: 'assistant',
+      model: '<synthetic>',
+      content: [{
+        type: 'text',
+        text: "You've hit your weekly limit · resets 7am (Europe/ADRESSE_01)",
+      }],
+    },
+  };
+
+  const messages = provider.normalizeMessage(entry, SESSION_ID);
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].role, 'assistant');
+  assert.equal(messages[0].content, "You've hit your weekly limit · resets 7am (Europe/Zetaville)");
+});
+
 test('claude history: plain text user turns carry no images field', () => {
   const provider = new ClaudeSessionsProvider();
   const entry = {
