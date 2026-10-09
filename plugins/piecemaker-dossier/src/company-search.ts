@@ -9,6 +9,8 @@ type CompanyValidationInput = {
   partySide: PartySide;
   position: string;
   legalForm: string;
+  capital?: string;
+  maskedCode?: string;
 };
 
 type ValueEntity = {
@@ -40,15 +42,17 @@ function unique(values: string[]): string[] {
 
 export function buildCompanyValidationOperations(result: CompanySearchResult, input: CompanyValidationInput, graph: KnowledgeSnapshot): KnowledgeUpdateOperation[] {
   const fields = result.fields;
+  const legalForm = clean(fields.legalForm) || /^([A-Z][A-Z0-9.-]{1,9})\s*·/.exec(result.summary)?.[1] || input.legalForm;
   const legalName = clean(fields.legalName) || clean(result.name);
   const currentLabel = clean(input.node?.label);
   const aliases = unique([...(input.node?.aliases || []), currentLabel, clean(result.name)]).filter((value) => value !== legalName);
   const companyChange = partyCodeChange(
     { id: input.nodeId, kind: 'company', data: input.node?.data || {} },
-    { kind: 'company', legalForm: fields.legalForm || input.legalForm, side: input.partySide, position: input.position },
+    { kind: 'company', legalForm, side: input.partySide, position: input.position },
     graph.nodes,
     graph.mappings,
     graph.reservedCodes,
+    input.maskedCode,
   );
   const usedCodes = new Set([
     ...graph.nodes.map((node) => nodeCode(node)),
@@ -103,7 +107,8 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
   const companyData: JsonData = {
     ...(input.node?.data || {}),
     ...companyChange.data,
-    legalForm: fields.legalForm || input.legalForm || null,
+    legalForm: legalForm || null,
+    capital: fields.capital || input.capital || input.node?.data.capital || null,
     registrePublic: {
       provider: 'registre-public.com',
       status: fields.status,
@@ -112,6 +117,7 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
       naf: fields.naf,
       creationDate: fields.creationDate,
       category: fields.category,
+      capital: fields.capital || null,
       siren: fieldReferences.get('SIREN')?.code || null,
       siret: fieldReferences.get('SIRET')?.code || null,
       vat: fieldReferences.get('TVA')?.code || null,
@@ -124,6 +130,9 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
   operations.push({ op: 'upsertNode', node: { id: companyChange.nodeId, kind: 'company', label: legalName, aliases, data: companyData } });
   for (const real of unique([legalName, ...aliases])) operations.push({ op: 'upsertMapping', mapping: { nodeId: companyChange.nodeId, real, masked: companyChange.code } });
   for (const { entity, reference } of fieldOperations) {
+    if (['SIREN', 'SIRET', 'TVA', 'adresse'].includes(entity.relation)) {
+      for (const link of graph.links.filter((entry) => entry.fromNodeId === input.nodeId && entry.relation.toLocaleLowerCase() === entity.relation.toLocaleLowerCase() && entry.toNodeId !== reference.nodeId)) operations.push({ op: 'unlink', link: { fromNodeId: companyChange.nodeId, toNodeId: link.toNodeId, relation: link.relation } });
+    }
     operations.push({ op: 'link', link: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: entity.relation, data: { source: 'registre-public' } } });
     operations.push({ op: 'cite', citation: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: entity.relation, texte: entity.value, source: PUBLIC_REGISTER_SOURCE } });
   }

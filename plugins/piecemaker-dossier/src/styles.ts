@@ -275,6 +275,9 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-profile-editor .pmd-profile-section{gap:8px;padding:12px 14px;border:1px solid var(--pmd-profile-line);border-radius:12px;background:var(--pmd-profile-surface)}
 .pmd-profile-section h3{display:flex;align-items:center;gap:9px;padding-bottom:9px;border-bottom:1px solid var(--pmd-border);color:var(--pmd-ink);font-size:14px;font-weight:600;letter-spacing:0;text-transform:none}
 .pmd-profile-section h3 svg,.pmd-profile-field>svg,.pmd-profile-type-icon svg{width:18px;height:18px;flex-shrink:0;color:var(--pmd-muted)}
+.pmd-profile-section-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:9px;border-bottom:1px solid var(--pmd-border)}
+.pmd-profile-section-heading h3{min-width:0;padding:0;border:0}
+.pmd-profile-section-heading .pmd-button{flex-shrink:0}
 .pmd-profile-type-icon{display:flex;flex-shrink:0}
 .pmd-profile-info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
 .pmd-profile-info label{min-width:0;gap:6px;padding:8px 0}
@@ -282,6 +285,7 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-profile-info label:nth-child(even){padding-left:12px}
 .pmd-profile-info>label:nth-child(n+3),.pmd-profile-company-fields>label{border-top:1px solid var(--pmd-border)}
 .pmd-profile-company-fields{display:contents}
+.pmd-profile-company-fields>label.pmd-profile-capital{grid-column:1/-1;padding-right:0;border-right:0}
 .pmd-profile-field{display:flex;min-width:0;align-items:center;gap:9px}
 .pmd-profile-field>.pmd-input,.pmd-profile-field>.pmd-select{min-width:0;border-color:transparent;border-radius:6px;background:transparent;padding:4px 2px;font-size:14px}
 .pmd-profile-editor .pmd-input:focus,.pmd-profile-editor .pmd-select:focus{border-color:var(--pmd-muted);outline:2px solid color-mix(in srgb,var(--pmd-muted) 25%,transparent)}
@@ -341,6 +345,15 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-mapping-actions .pmd-profile-menu-wrap{display:flex;margin-left:0}
 .pmd-mapping-actions .pmd-profile-menu[data-drop=up]{top:auto;bottom:34px}
 .pmd-company-search-results{min-height:0;overflow:auto;padding:10px}
+.pmd-modal:has(.pmd-company-search-dialog){position:fixed;z-index:10000}
+.pmd-dialog:has(.pmd-company-search-dialog){width:min(720px,100%);max-height:85vh}
+.pmd-company-query{display:flex;gap:8px;margin:12px 0}
+.pmd-company-query .pmd-input{min-width:0;flex:1}
+.pmd-company-search-dialog .pmd-company-search-results{padding:0}
+.pmd-company-search-dialog .pmd-input:focus{border-color:var(--pmd-muted);outline:2px solid color-mix(in srgb,var(--pmd-muted) 25%,transparent)}
+.pmd-company-search-dialog .pmd-button:focus-visible,.pmd-company-search-dialog .pmd-icon-button:focus-visible{box-shadow:0 0 0 2px var(--pmd-muted),0 0 0 4px var(--pmd-bg)}
+.pmd-company-search-dialog .pmd-company-result-link{color:var(--pmd-text)}
+.pmd-company-search-dialog .pmd-company-validate{color:#fff}
 .pmd-dialog:has(.pmd-document-dialog){display:flex;width:min(1152px,100%);height:min(85vh,900px);max-height:85vh;box-sizing:border-box;overflow:hidden;padding:0;background:transparent;border:0;box-shadow:none}
 .pmd-document-dialog{display:flex;height:100%;width:100%;box-sizing:border-box;max-height:100%;flex-direction:column;overflow:hidden;border:1px solid var(--pmd-border);border-radius:16px;background:var(--pmd-bg);color:var(--pmd-text);box-shadow:0 18px 50px rgb(15 23 42 / .16)}
 .pmd-sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;padding:0}
