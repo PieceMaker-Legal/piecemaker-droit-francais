@@ -103,9 +103,10 @@ describe('BODACC on designated parties', () => {
 });
 
 describe('party badges', () => {
-  it('uses the position encoded in the anonymised code when the stored position is missing', () => {
+  it('does not infer a missing position from the anonymised code or the party side', () => {
     const html = generalView({ graph: { ...snapshot, nodes: [{ ...snapshot.nodes[3], data: { partySide: 'adversaire', code: 'ADVERSAIRE_APPELANT_PERSONNE_PHYSIQUE_01' } }] } });
-    expect(html).toContain('Partie adverse · Appelant');
+    expect(html).toContain('Partie adverse · Non précisée');
+    expect(html).not.toContain('Partie adverse · Appelant');
     expect(html).not.toContain('Partie adverse · Défendeur');
   });
 

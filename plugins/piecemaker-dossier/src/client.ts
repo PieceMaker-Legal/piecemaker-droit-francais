@@ -385,9 +385,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
               position: typeof company.data.position === 'string' ? company.data.position : '',
               legalForm: typeof company.data.legalForm === 'string' ? company.data.legalForm : '',
             }, data.graph);
-            const renamed = operations.find((operation) => operation.op === 'renameNode');
-            const nextId = renamed?.op === 'renameNode' ? renamed.rename.toNodeId : companyId;
             await save(operations);
+            const nextId = data?.graph.mappings.find((mapping) => mapping.real === (result.fields.legalName || result.name))?.nodeId || companyId;
             const nextState = bodaccStates.get(companyId) || { status: 'idle' as const };
             nextState.companySearchStatus = 'idle';
             nextState.companySearchResults = [];

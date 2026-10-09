@@ -115,6 +115,7 @@ export type KnowledgeUpdateOperation =
   | { op: 'removePartyDesignation'; nodeId: string }
   | { op: 'deleteNode'; nodeId: string }
   | { op: 'renameNode'; rename: { fromNodeId: string; toNodeId: string } }
+  | { op: 'syncPartyCode'; nodeId: string; customCode?: string }
   | { op: 'excludeTerm'; term: string }
   | { op: 'excludeLink'; exclusion: { piece: string; entite: string; relation: string } }
   | { op: 'excludeAlias'; exclusion: { entite: string; alias: string } };

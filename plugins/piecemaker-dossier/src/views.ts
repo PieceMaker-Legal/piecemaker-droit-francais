@@ -88,7 +88,7 @@ function profileKind(node: KnowledgeNode): { label: string; icon: string; kind: 
 function positionLabel(node: KnowledgeNode): string {
   const position = nodePosition(node);
   const labelsByPosition: Record<string, string> = { demandeur: 'Demandeur', defendeur: 'Défendeur', appelant: 'Appelant', intime: 'Intimé', requerant: 'Requérant', mis_en_cause: 'Mis en cause', intervenant: 'Intervenant' };
-  return labelsByPosition[position] || position || (node.data.partySide === 'client' ? 'Demandeur' : node.data.partySide === 'adversaire' ? 'Défendeur' : 'Aucune position procédurale');
+  return labelsByPosition[position] || position || 'Non précisée';
 }
 
 function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot, state?: BodaccScanState): string {

@@ -5,6 +5,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import { isInstitutionalEntity } from './institutional-terms.js';
+import { nodePosition, partyCodeChange } from './party-codes.js';
 
 import { EXCLUSIONS_NODE_ID, NODE_KINDS } from './types.js';
 import type {
@@ -375,7 +376,7 @@ export class KnowledgeStore {
   }
 
   private validateOperation(operation: KnowledgeUpdateOperation): KnowledgeUpdateOperation {
-    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','cite','uncite','upsertMapping','deleteMapping','removePartyDesignation','deleteNode','renameNode','excludeTerm','excludeLink','excludeAlias'].includes(operation.op)) throw new TypeError('unsupported operation');
+    if (!operation || typeof operation !== 'object' || !['upsertNode','link','unlink','cite','uncite','upsertMapping','deleteMapping','removePartyDesignation','deleteNode','renameNode','syncPartyCode','excludeTerm','excludeLink','excludeAlias'].includes(operation.op)) throw new TypeError('unsupported operation');
     return operation;
   }
 
@@ -430,6 +431,22 @@ export class KnowledgeStore {
     }
     if (operation.op === 'removePartyDesignation') {
       this.removePartyDesignation.run({ projectId, nodeId: requiredText(operation.nodeId, 'nodeId'), at: timestamp });
+      counts.nodes += 1;
+      return;
+    }
+    if (operation.op === 'syncPartyCode') {
+      const nodeId = requiredText(operation.nodeId, 'nodeId');
+      const snapshot = this.snapshot(projectId);
+      const node = snapshot.nodes.find((entry) => entry.id === nodeId);
+      if (!node || (node.kind !== 'person' && node.kind !== 'company')) throw new TypeError('party must be a stored person or company');
+      const side = node.data.partySide === 'client' || node.data.partySide === 'adversaire' ? node.data.partySide : 'tiers';
+      const change = partyCodeChange(node, { kind: node.kind, side, legalForm: optionalText(node.data.legalForm), position: nodePosition(node) }, snapshot.nodes, snapshot.mappings, snapshot.reservedCodes, operation.customCode);
+      if (change.nodeId !== nodeId) this.renameNodeRows(projectId, nodeId, change.nodeId, timestamp);
+      this.database.prepare('UPDATE piecemaker_nodes SET data_json=?,updated_at=? WHERE project_id=? AND id=?').run(JSON.stringify(change.data), timestamp, projectId, change.nodeId);
+      for (const real of new Set([node.label, ...node.aliases, ...snapshot.mappings.filter((entry) => entry.nodeId === nodeId).map((entry) => entry.real)])) {
+        const mapping = snapshot.mappings.find((entry) => entry.nodeId === nodeId && entry.real === real);
+        if (real) this.upsertMapping.run({ projectId, nodeId: change.nodeId, real, masked: change.code, searchText: searchable([real, change.code]), data: JSON.stringify(mapping?.data || {}), at: timestamp });
+      }
       counts.nodes += 1;
       return;
     }

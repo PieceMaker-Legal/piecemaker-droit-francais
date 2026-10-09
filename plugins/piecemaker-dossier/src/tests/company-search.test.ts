@@ -61,7 +61,9 @@ describe('company search validation', () => {
     const director = operations.find((operation) => operation.op === 'upsertNode' && operation.node.label === 'Alice Martin');
     const directorLink = operations.find((operation) => operation.op === 'link' && operation.link.relation === 'dirigeant');
 
-    expect(company?.op === 'upsertNode' && company.node.data.code).toMatch(/^CLIENT_DEMANDEUR_SAS_01$/);
+    expect(company?.op === 'upsertNode' && company.node.id).toBe('manual:company');
+    expect(company?.op === 'upsertNode' && company.node.data.position).toBe('demandeur');
+    expect(operations.at(-1)).toEqual({ op: 'syncPartyCode', nodeId: 'manual:company', customCode: undefined });
     expect(sirenMapping?.op === 'upsertMapping' && sirenMapping.mapping.masked).toBe('SIREN_01');
     expect(director?.op === 'upsertNode' && director.node.data.code).toBe('PERSONNE_PHYSIQUE_01');
     expect(directorLink?.op === 'link' && directorLink.link.data?.source).toBe('registre-public');
