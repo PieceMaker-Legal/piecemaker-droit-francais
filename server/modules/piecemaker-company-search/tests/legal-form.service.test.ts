@@ -12,6 +12,14 @@ test('preserves an explicit form rather than losing details such as a sole share
   assert.equal(resolveCompanyLegalForm('5499', 'EURL'), 'EURL');
 });
 
+test('uses the registry category instead of names or conflicting forms', () => {
+  assert.equal(resolveCompanyLegalForm('1000', 'DUPONT'), 'Entrepreneur individuel');
+  assert.equal(resolveCompanyLegalForm('1000', 'SA'), 'Entrepreneur individuel');
+  assert.equal(resolveCompanyLegalForm('5710', 'SA'), 'SAS');
+  assert.equal(resolveCompanyLegalForm('', 'DUPONT'), '');
+  assert.equal(resolveCompanyLegalForm('', 'SASU'), 'SASU');
+});
+
 test('uses the official label for other categories and does not guess unknown codes', () => {
   assert.equal(resolveCompanyLegalForm('6317'), 'Société coopérative agricole');
   assert.equal(resolveCompanyLegalForm('9900'), 'Autre personne morale de droit privé');

@@ -100,9 +100,11 @@ function lineValue(text: string, label: string): string {
 }
 
 export function parseSearchLine(line: string): { name: string; siren: string; summary: string } | null {
-  const match = /^-\s+(.+?)(?:\s+\(([^)]+)\))?\s+\|\s+SIREN\s+(\d{9})\s+\|\s+(.+?)\s+\|\s+NAF\s+([^|]+)\s+\|\s+(.+)$/.exec(line.trim());
+  const match = /^-\s+(.+?)\s+\|\s+SIREN\s+(\d{9})\s+\|\s+(.+?)\s+\|\s+NAF\s+([^|]+)\s+\|\s+(.+)$/.exec(line.trim());
   if (!match) return null;
-  return { name: match[1].trim(), siren: match[3], summary: [match[2]?.trim(), match[4].trim(), `NAF ${match[5].trim()}`, match[6].trim()].filter(Boolean).join(' · ') };
+  const formSuffix = /^(.*)\s+\(([^()]*)\)$/.exec(match[1].trim());
+  const legalForm = resolveCompanyLegalForm('', formSuffix?.[2]);
+  return { name: legalForm ? formSuffix![1].trim() : match[1].trim(), siren: match[2], summary: [legalForm, match[3].trim(), `NAF ${match[4].trim()}`, match[5].trim()].filter(Boolean).join(' · ') };
 }
 
 function parseDirectors(text: string): CompanyDirector[] {
@@ -113,15 +115,19 @@ function parseDirectors(text: string): CompanyDirector[] {
 }
 
 function parseCompanyDetails(text: string, fallback: { name: string; siren: string; summary?: string }): CompanySearchFields {
-  const heading = /^#\s+(.+?)\s+\(([^)]+)\)\s+\(([^)]+)\)/m.exec(text);
+  const heading = /^#\s+(.+)\s+\(([^()]*)\)\s*$/m.exec(text);
   const formAndActivity = lineValue(text, 'Forme juridique (code) :');
   const [legalFormCode, nafPart] = formAndActivity.split('|').map((value) => value.trim());
+  const headingName = heading?.[1]?.trim() || fallback.name;
+  const formSuffix = /^(.*)\s+\(([^()]*)\)$/.exec(headingName);
+  const explicitForm = resolveCompanyLegalForm('', formSuffix?.[2]);
+  const legalForm = resolveCompanyLegalForm(legalFormCode || '', explicitForm || fallback.summary?.split(' · ')[0]);
   const creation = lineValue(text, 'Création :');
   const [creationDate, categoryPart] = creation.split('|').map((value) => value.trim());
   return {
-    legalName: heading?.[1]?.trim() || fallback.name,
-    legalForm: resolveCompanyLegalForm(legalFormCode || '', heading?.[2]?.trim() || /^([A-Z][A-Z0-9.-]{1,9})\s*·/.exec(fallback.summary || '')?.[1]),
-    status: heading?.[3]?.trim() || '',
+    legalName: explicitForm && explicitForm === legalForm ? formSuffix![1].trim() : headingName,
+    legalForm,
+    status: heading?.[2]?.trim() || '',
     siren: lineValue(text, 'SIREN :').split('|')[0].trim() || fallback.siren,
     siret: (lineValue(text, 'SIREN :').match(/SIRET siège\s*:\s*([^|]+)/)?.[1] || '').trim(),
     vat: lineValue(text, 'N° TVA intracommunautaire :'),
