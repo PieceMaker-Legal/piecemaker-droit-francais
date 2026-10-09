@@ -201,6 +201,8 @@ class PageEntitesTests(unittest.TestCase):
 
         self.assertNotIn("NAISSANCE", payload["entities"])
         self.assertNotIn("date of birth", json.dumps(payload))
+        birth_spans = [item["text"] for item in payload["entities"].get("DATE_OF_BIRTH", [])]
+        self.assertTrue(any(span == "14 mars 1984" for span in birth_spans), birth_spans)
         found = {
             entity_type: {item["text"] for item in items}
             for entity_type, items in payload["entities"].items()
@@ -214,7 +216,7 @@ class PageEntitesTests(unittest.TestCase):
                 item["source_file"] = payload["source_file"]
         coded = pipeline.convert_to_anonymization_format(entities)
         self.assertNotIn("NAISSANCE", coded["extracted_data"])
-        self.assertNotIn("14 mars 1984", coded["mapping"])
+        self.assertEqual(coded["mapping"].get("14 mars 1984"), "DATE_OF_BIRTH_01")
         for text, code in SCANNED_CODES.items():
             self.assertEqual(coded["mapping"].get(text), code, text)
         societes = coded["extracted_data"]["societes"]
