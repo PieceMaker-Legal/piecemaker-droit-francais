@@ -8,7 +8,7 @@ import { removedAliasOperations } from './exclusions.js';
 import type { DeleteScope } from './exclusions.js';
 import type { ViewData } from './views.js';
 import type { KnowledgeNode, KnowledgeUpdateOperation, NodeKind } from './types.js';
-import { PROCEDURE_POSITIONS, isPartyCode, nodeCode, partyCodeChange } from './party-codes.js';
+import { PROCEDURE_POSITIONS, isPartyCode, nodeCode, nodePosition, partyCodeChange } from './party-codes.js';
 import type { PartySide } from './party-codes.js';
 import { changeNodeSide, cleanSelection, createEntity, findEntityBySelection, parseSelectionDate } from './selection-categories.js';
 import type { SelectionChange, SelectionGraph } from './selection-categories.js';
@@ -325,6 +325,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const selectedSide = node ? (node.data.partySide === 'client' || node.data.partySide === 'adversaire' ? node.data.partySide : 'tiers') : defaults.partySide || 'client';
   const roleLabels = { client: 'Partie cliente', adversaire: 'Partie adverse', tiers: 'Tiers' };
   const mappings = node ? data.graph.mappings.filter((entry) => entry.nodeId === node.id) : [];
+  const selectedPosition = node ? nodePosition({ id: node.id, data: { ...node.data, code: nodeCode(node) || mappings[0]?.masked } }) : '';
   const relations = node ? data.graph.links.filter((entry) => entry.fromNodeId === node.id || entry.toNodeId === node.id) : [];
   const nodesById = new Map(data.graph.nodes.map((entry) => [entry.id, entry]));
   const sirenNodes = data.graph.nodes.filter((entry) => entry.kind === 'siren');
@@ -363,7 +364,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       </div>
       <div class="pmd-profile-role-fields">
       <label>Rôle<select class="pmd-select" name="partySide">${Object.entries(roleLabels).map(([side, label]) => `<option value="${side}" ${side === selectedSide ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
-      <label data-position-field>Position<select class="pmd-select" name="position">${positionOptions(textValue(node?.data.position))}</select></label>
+      <label data-position-field>Position<select class="pmd-select" name="position">${positionOptions(selectedPosition)}</select></label>
       </div>
       </section>
       <section class="pmd-form-section pmd-profile-section"><h3>${profileTagIcon}Anonymisation</h3>
