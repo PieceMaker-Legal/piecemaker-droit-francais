@@ -1,5 +1,7 @@
 import express, { type Request, type Response } from 'express';
 
+import { resolveCompanyLegalForm } from '../modules/piecemaker-company-search/index.js';
+
 const REGISTRE_PUBLIC_MCP_URL = 'https://registre-public.com/api/mcp';
 const MCP_PROTOCOL_VERSION = '2025-03-26';
 const MCP_TIMEOUT_MS = 20_000;
@@ -110,7 +112,7 @@ function parseDirectors(text: string): CompanyDirector[] {
   return block.split('\n').map((line) => /^-\s+(.+?)\s+\(([^)]+)\)$/.exec(line.trim())).filter((match): match is RegExpExecArray => Boolean(match)).map((match) => ({ name: match[1].trim(), role: match[2].trim() }));
 }
 
-function parseCompanyDetails(text: string, fallback: { name: string; siren: string }): CompanySearchFields {
+function parseCompanyDetails(text: string, fallback: { name: string; siren: string; summary?: string }): CompanySearchFields {
   const heading = /^#\s+(.+?)\s+\(([^)]+)\)\s+\(([^)]+)\)/m.exec(text);
   const formAndActivity = lineValue(text, 'Forme juridique (code) :');
   const [legalFormCode, nafPart] = formAndActivity.split('|').map((value) => value.trim());
@@ -118,7 +120,7 @@ function parseCompanyDetails(text: string, fallback: { name: string; siren: stri
   const [creationDate, categoryPart] = creation.split('|').map((value) => value.trim());
   return {
     legalName: heading?.[1]?.trim() || fallback.name,
-    legalForm: '',
+    legalForm: resolveCompanyLegalForm(legalFormCode || '', heading?.[2]?.trim() || /^([A-Z][A-Z0-9.-]{1,9})\s*·/.exec(fallback.summary || '')?.[1]),
     status: heading?.[3]?.trim() || '',
     siren: lineValue(text, 'SIREN :').split('|')[0].trim() || fallback.siren,
     siret: (lineValue(text, 'SIREN :').match(/SIRET siège\s*:\s*([^|]+)/)?.[1] || '').trim(),
