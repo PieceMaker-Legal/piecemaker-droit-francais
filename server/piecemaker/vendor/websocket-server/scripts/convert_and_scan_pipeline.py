@@ -1204,19 +1204,54 @@ def _merge_societe_clusters(merged_mapping: Dict, merged_reverse: Dict, merged_e
 # Même valeur écrite de plusieurs façons : un seul code
 # ---------------------------------------------------------------------------
 # Deux écritures d'un même identifiant, du même type, partagent un code ; la nouvelle
-# écriture devient une variante de l'entrée existante. Le type d'une entrée existante se
-# lit au préfixe de son code (le seed SQLite la range dans `autres` sans catégorie, et
-# merge_with_existing_mapping réécrit CREDIT_CARD_01 en CREDIT_01). Les autres types
-# (personnes, sociétés, adresses, e-mails, dates de naissance...) ne sont pas concernés.
+# écriture devient une variante de l'entrée existante. Le type se lit sur le radical
+# du code, numéro final ôté (CREDIT_01 reste reconnu). Les personnes, les sociétés
+# et les adresses ne sont pas concernées.
 
-IDENTIFIER_KINDS = ("TELEPHONE", "SIREN", "SIRET", "NIR", "TVA", "IBAN", "CREDIT_CARD", "IMMATRICULATION")
-_CODE_PREFIX_KIND = {"PHONE": "TELEPHONE", "CREDIT": "CREDIT_CARD", **{kind: kind for kind in IDENTIFIER_KINDS}}
+IDENTIFIER_KINDS = (
+    "TELEPHONE", "SIREN", "SIRET", "NIR", "TVA", "IBAN", "CREDIT_CARD", "IMMATRICULATION",
+    "COURRIEL", "ADRESSE_IP", "ADRESSE_MAC", "LIEN", "CRYPTO_ACTIF",
+)
+_CODE_PREFIX_KIND = {kind: kind for kind in IDENTIFIER_KINDS}
+_CODE_PREFIX_KIND.update({
+    "PHONE": "TELEPHONE",
+    "CREDIT": "CREDIT_CARD",
+    "CARTE": "CREDIT_CARD",
+    "EMAIL": "COURRIEL",
+    "EMAIL_ADDRESS": "COURRIEL",
+    "IP": "ADRESSE_IP",
+    "IP_ADDRESS": "ADRESSE_IP",
+    "MAC": "ADRESSE_MAC",
+    "MAC_ADDRESS": "ADRESSE_MAC",
+    "URL": "LIEN",
+    "CRYPTO": "CRYPTO_ACTIF",
+    "IBAN_CODE": "IBAN",
+})
+_PSEUDONYM = {
+    "DATE_OF_BIRTH": "DATE_NAISSANCE",
+    "SENSITIVE_DATE": "DATE_SENSIBLE",
+    "DOCUMENT_DATE": "DATE_PIECE",
+    "EXPIRATION_DATE": "DATE_ECHEANCE",
+    "TRANSACTION_DATE": "DATE_OPERATION",
+    "EMAIL_ADDRESS": "COURRIEL",
+    "CREDIT_CARD": "CARTE",
+    "IBAN_CODE": "IBAN",
+    "IP_ADDRESS": "ADRESSE_IP",
+    "MAC_ADDRESS": "ADRESSE_MAC",
+    "URL": "LIEN",
+    "CRYPTO": "CRYPTO_ACTIF",
+}
 _PHONE_INTERNATIONAL = re.compile(r"(?:\+|00)(?:33|262|590|594|596)(.*)", re.DOTALL)
 
 
+def _code_stem(code: str) -> str:
+    return re.sub(r"_\d+$", "", str(code)).upper()
+
+
 def identifier_kind(code: str) -> Optional[str]:
-    """Type d'identifiant d'un code (TELEPHONE_01, PHONE_02, CREDIT_CARD_01...), sinon None."""
-    return _CODE_PREFIX_KIND.get(str(code).split("_")[0].upper())
+    """Type d'identifiant d'un code (TELEPHONE_01, CARTE_02, COURRIEL_03...), sinon None."""
+    stem = _code_stem(code)
+    return _CODE_PREFIX_KIND.get(stem) or _CODE_PREFIX_KIND.get(stem.split("_")[0])
 
 
 def identifier_key(kind: str, text: str) -> Optional[str]:
@@ -1226,6 +1261,7 @@ def identifier_key(kind: str, text: str) -> Optional[str]:
     éventuel retiré). Autres identifiants : lettres et chiffres en majuscules. None pour un
     autre type, ou si rien ne reste.
     """
+    kind = _CODE_PREFIX_KIND.get(str(kind).upper(), kind)
     if kind == "TELEPHONE":
         compact = re.sub(r"\s", "", text)
         international = _PHONE_INTERNATIONAL.match(compact)
@@ -1366,7 +1402,7 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
                 code = f"SIREN_{counters[category]:02d}"
                 counters[category] += 1
             else:
-                code = f"{entity_type}_{counters[category]:02d}"
+                code = f"{_PSEUDONYM.get(entity_type, entity_type)}_{counters[category]:02d}"
                 counters[category] += 1
 
             # Get variants from entity (pre-consolidated for PERSON entities)
@@ -1657,7 +1693,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
                 "personnes_physiques": "PERSONNE_PHYSIQUE",
                 "adresses": "ADRESSE",
                 "siren": "SIREN",
-            }.get(category) or (code.split("_")[0] if "_" in code else "AUTRE")
+            }.get(category) or _code_stem(code) or "AUTRE"
             candidate = f"{prefix}_{code_counters[category]:02d}"
             code_counters[category] += 1
             return candidate

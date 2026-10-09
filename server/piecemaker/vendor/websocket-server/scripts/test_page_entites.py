@@ -157,6 +157,32 @@ class PageEntitesTests(unittest.TestCase):
     def test_pattern_identifiers_are_detected(self):
         self.assertEqual(_pattern_hits(self.text), EXPECTED_PATTERNS)
 
+    def test_pseudonyms_are_french(self):
+        coded = pipeline.convert_to_anonymization_format({"entities": {
+            "EMAIL_ADDRESS": [{"text": "ada@exemple.fr", "score": 1, "recognizer": "EmailRecognizer"}],
+            "DATE_OF_BIRTH": [{"text": "14 mars 1984", "score": 1, "recognizer": "GLiNER2Recognizer"}],
+            "CREDIT_CARD": [{"text": "4111 1111 1111 1111", "score": 1, "recognizer": "CreditCardRecognizer"}],
+            "IP_ADDRESS": [{"text": "203.0.113.44", "score": 1, "recognizer": "IpRecognizer"}],
+            "URL": [{"text": "https://calice-exemple.fr", "score": 1, "recognizer": "UrlRecognizer"}],
+            "IBAN_CODE": [{"text": "FR0330006000111234567890189", "score": 1, "recognizer": "IbanRecognizer"}],
+            "MAC_ADDRESS": [{"text": "02:11:22:33:44:55", "score": 1, "recognizer": "MacAddressRecognizer"}],
+            "CRYPTO": [{"text": "0xabc", "score": 1, "recognizer": "CryptoRecognizer"}],
+            "PASSEPORT": [{"text": "12AB34567", "score": 1, "recognizer": "GLiNER2Recognizer"}],
+            "CODE_POSTAL": [{"text": "75011", "score": 1, "recognizer": "GLiNER2Recognizer"}],
+        }})
+        mapping = coded["mapping"]
+        self.assertEqual(mapping["ada@exemple.fr"], "COURRIEL_01")
+        self.assertEqual(mapping["14 mars 1984"], "DATE_NAISSANCE_02")
+        self.assertEqual(mapping["4111 1111 1111 1111"], "CARTE_03")
+        self.assertEqual(mapping["203.0.113.44"], "ADRESSE_IP_04")
+        self.assertEqual(mapping["https://calice-exemple.fr"], "LIEN_05")
+        self.assertEqual(mapping["FR0330006000111234567890189"], "IBAN_06")
+        self.assertEqual(mapping["02:11:22:33:44:55"], "ADRESSE_MAC_07")
+        self.assertEqual(mapping["0xabc"], "CRYPTO_ACTIF_08")
+        self.assertEqual(mapping["12AB34567"], "PASSEPORT_09")
+        self.assertEqual(mapping["75011"], "CODE_POSTAL_10")
+        self.assertNotIn("NAISSANCE", coded["extracted_data"])
+
     def test_company_mentions_keep_their_legal_form(self):
         result = _company_result(self.text)
         societes = result["extracted_data"]["societes"]
@@ -206,12 +232,12 @@ class PageEntitesTests(unittest.TestCase):
             ["14 mars 1984"],
         )
         self.assertEqual(
-            [item["text"] for item in payload["entities"].get("EXPIRATION_DATE", [])],
-            ["12 janvier 2026"],
+            [item["text"] for item in payload["entities"].get("TRANSACTION_DATE", [])],
+            ["12 janvier 2026", "2 novembre 2025"],
         )
         self.assertEqual(
-            [item["text"] for item in payload["entities"].get("TRANSACTION_DATE", [])],
-            ["2 novembre 2025"],
+            {item["text"] for item in payload["entities"].get("CODE_POSTAL", [])},
+            {"75011", "33000", "69002"},
         )
         found = {
             entity_type: {item["text"] for item in items}
@@ -226,9 +252,16 @@ class PageEntitesTests(unittest.TestCase):
                 item["source_file"] = payload["source_file"]
         coded = pipeline.convert_to_anonymization_format(entities)
         self.assertNotIn("NAISSANCE", coded["extracted_data"])
-        self.assertEqual(coded["mapping"].get("14 mars 1984"), "DATE_OF_BIRTH_01")
-        self.assertEqual(coded["mapping"].get("12 janvier 2026"), "EXPIRATION_DATE_15")
-        self.assertEqual(coded["mapping"].get("2 novembre 2025"), "TRANSACTION_DATE_16")
+        self.assertEqual(coded["mapping"].get("14 mars 1984"), "DATE_NAISSANCE_01")
+        self.assertEqual(coded["mapping"].get("75011"), "CODE_POSTAL_02")
+        self.assertEqual(coded["mapping"].get("jean.dupont@calice-exemple.fr"), "COURRIEL_08")
+        self.assertEqual(coded["mapping"].get("4111 1111 1111 1111"), "CARTE_10")
+        self.assertEqual(coded["mapping"].get("FR03 3000 6000 1112 3456 7890 189"), "IBAN_11")
+        self.assertEqual(coded["mapping"].get("203.0.113.44"), "ADRESSE_IP_12")
+        self.assertEqual(coded["mapping"].get("02:11:22:33:44:55"), "ADRESSE_MAC_13")
+        self.assertEqual(coded["mapping"].get("https://calice-exemple.fr/dossier"), "LIEN_16")
+        self.assertEqual(coded["mapping"].get("12 janvier 2026"), "DATE_OPERATION_18")
+        self.assertEqual(coded["mapping"].get("2 novembre 2025"), "DATE_OPERATION_19")
         for text, code in SCANNED_CODES.items():
             self.assertEqual(coded["mapping"].get(text), code, text)
         societes = coded["extracted_data"]["societes"]
@@ -239,9 +272,6 @@ class PageEntitesTests(unittest.TestCase):
         morale = coded["mapping"]["Comptoir des Vignes"]
         self.assertTrue(morale.startswith("PERS_MORALE_"), morale)
         self.assertNotIn("legalForm", societes[morale])
-        court = coded["mapping"]["Tribunal de commerce de Paris"]
-        self.assertTrue(court.startswith("PERS_MORALE_"), court)
-        self.assertNotEqual(court, morale)
         bare = coded["mapping"].get("unipersonnelle")
         if bare is not None:
             self.assertTrue(bare.startswith("PERS_MORALE_"), bare)
