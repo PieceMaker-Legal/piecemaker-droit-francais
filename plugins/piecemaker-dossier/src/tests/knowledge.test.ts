@@ -178,6 +178,30 @@ describe('knowledge graph updates', () => {
 });
 
 describe('GLiNER result persistence', () => {
+  it('labels a sigle code as a company and keeps its legal form', () => {
+    const store = createStore();
+    store.mergeScan('project-1', scanResultOperations({
+      projectId: 'project-1',
+      mapping: {
+        mapping: { 'Calice SA': 'SA_01', 'Brumaire Conseil': 'PERS_MORALE_01', 'Lilas SARL': 'SARL_02' },
+        extracted_data: {
+          societes: {
+            SA_01: { original: 'Calice SA', legalForm: 'SA' },
+            PERS_MORALE_01: { original: 'Brumaire Conseil' },
+          },
+        },
+      },
+      documents: [],
+    }));
+    const snapshot = store.snapshot('project-1');
+    const calice = snapshot.nodes.find((node) => node.id === 'entity:SA_01');
+    const brumaire = snapshot.nodes.find((node) => node.id === 'entity:PERS_MORALE_01');
+    expect(calice?.kind).toBe('company');
+    expect(calice?.data.legalForm).toBe('SA');
+    expect(brumaire?.kind).toBe('company');
+    expect(snapshot.nodes.find((node) => node.id === 'entity:SARL_02')?.kind).toBe('company');
+  });
+
   it('turns detected entities, mappings and documents into graph operations', () => {
     const operations = scanResultOperations({
       projectId: 'project-1',

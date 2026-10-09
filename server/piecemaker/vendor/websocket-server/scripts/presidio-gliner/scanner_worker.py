@@ -51,8 +51,6 @@ from pattern_detectors import Detection  # noqa: E402
 from scan_utils import (  # noqa: E402
     build_output_payload,
     build_pattern_recognizers,
-    extract_legal_form,
-    normalize_entity_text,
     print_summary,
     resolve_overlapping_spans,
     run_pattern_recognizers,
@@ -94,9 +92,6 @@ ENTITY_MAPPING = {
     "address":      "LOCATION",
     "city":         "LOCATION",
     "country":      "LOCATION",
-    # One word on purpose: the pipeline codes an unknown type as <first segment>_NN,
-    # so NAISSANCE gives NAISSANCE_01 where DATE_NAISSANCE would give an ambiguous DATE_01.
-    "date of birth": "NAISSANCE",
 }
 
 ENTITY_DESCRIPTIONS = {
@@ -106,23 +101,9 @@ ENTITY_DESCRIPTIONS = {
     "address": "Street address with number, e.g. 12 rue des Lilas, Paris",
     "city": "Name of a specific city, e.g. Paris",
     "country": "Name of a country, e.g. France. Not a nationality",
-    "date of birth": (
-        "Date of birth of a specific person, only the text of the date, such as "
-        "12 mars 1980 in 'né le 12 mars 1980 à Lyon' or 03/04/1975 after 'date de "
-        "naissance :'. Never the words 'né le', never the place of birth, never "
-        "any other date such as a hearing, judgment, ruling, contract, signature, "
-        "filing, deadline, time limit, event or document date, never an age, never "
-        "a year alone without a birth context"
-    ),
 }
 
 GLINER_THRESHOLD = 0.5
-
-# The legal form of an organisation is read literally from the text by
-# scan_utils.extract_legal_form. The previous 221-label zero-shot schema and its
-# per-occurrence classify_text call are gone: measured at 2 890 ms per call on real
-# contexts (81 min for this document's 1 689 ORGANIZATION mentions) and answering
-# "Osakeyhtio", "EIRELI" or "No Liability" for French and American companies.
 
 # ---------------------------------------------------------------------------
 # Document-level metadata (nature / date / juridiction) — GLiNER2 schema tasks
@@ -340,21 +321,6 @@ class GLiNER2Recognizer:
                 else:
                     if match["confidence"] > unique_entities[entity_type][entity_key]["score"]:
                         unique_entities[entity_type][entity_key]["score"] = match["confidence"]
-
-        # Read each ORGANIZATION's legal form straight out of the text. Memoised by
-        # normalised name: the entity keys are per-occurrence, so the same company is
-        # otherwise resolved once per mention (1 689 mentions for 576 distinct names
-        # on ZETABIO_URD).
-        form_cache = {}
-        for entity_data in unique_entities.get("ORGANIZATION", {}).values():
-            name = normalize_entity_text(entity_data["text"])
-            if name not in form_cache:
-                trailing = text[entity_data["end"]:entity_data["end"] + 40]
-                form_cache[name] = extract_legal_form(name, trailing)
-            form, nationality = form_cache[name]
-
-            entity_data["entity_type"] = f"ORGANIZATION_{form}" if form else "ORGANIZATION"
-            entity_data["nationality"] = nationality
 
         for entity_type, entity_dict in unique_entities.items():
             for entity_data in entity_dict.values():
