@@ -91,6 +91,25 @@ describe('party code assignment', () => {
 });
 
 describe('node renaming in sqlite', () => {
+  it('keeps the entity links and citations when a custom code is saved', () => {
+    const store = createStore();
+    store.update({ projectId: 'project-1', operations: [
+      { op: 'upsertNode', node: { id: 'entity:PERSONNE_MORALE_01', kind: 'company', label: 'Société Exemple SAS', data: { code: 'PERSONNE_MORALE_01' } } },
+      { op: 'upsertNode', node: { id: 'document:exemple', kind: 'document', label: 'Document fictif' } },
+      { op: 'upsertMapping', mapping: { nodeId: 'entity:PERSONNE_MORALE_01', real: 'Société Exemple SAS', masked: 'PERSONNE_MORALE_01' } },
+      { op: 'link', link: { fromNodeId: 'document:exemple', toNodeId: 'entity:PERSONNE_MORALE_01', relation: 'mentions' } },
+      { op: 'cite', citation: { fromNodeId: 'document:exemple', toNodeId: 'entity:PERSONNE_MORALE_01', relation: 'mentions', texte: 'La Société Exemple SAS est mentionnée.', pieceId: 'document:exemple' } },
+    ] });
+    const snapshot = store.snapshot('project-1');
+    const change = partyCodeChange(nodeOf(store, 'entity:PERSONNE_MORALE_01')!, { kind: 'company', side: 'client' }, snapshot.nodes, snapshot.mappings, [], 'ENTITE_EXEMPLE_07');
+    store.update({ projectId: 'project-1', operations: [...change.operations, { op: 'upsertNode', node: { id: change.nodeId, kind: 'company', label: 'Société Exemple SAS', data: change.data } }] });
+    const saved = store.snapshot('project-1');
+    expect(saved.mappings[0].masked).toBe('ENTITE_EXEMPLE_07');
+    expect(saved.links[0].toNodeId).toBe('entity:ENTITE_EXEMPLE_07');
+    expect(saved.citations[0].toNodeId).toBe('entity:ENTITE_EXEMPLE_07');
+    expect(nodeOf(store, 'entity:ENTITE_EXEMPLE_07')?.data.code).toBe('ENTITE_EXEMPLE_07');
+  });
+
   it('moves mappings and links and rewrites the masked value', () => {
     const store = createStore();
     seedCompany(store);

@@ -23,6 +23,7 @@ const IDENTITY_STYLES = `
 .pmd-identity{min-width:0}
 .pmd-identity-header{display:flex;flex-shrink:0;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--pmd-border)}
 .pmd-identity-context{display:flex;flex-shrink:0;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--pmd-border);color:var(--pmd-muted);font-size:12px}
+.pmd-identity-context[hidden]{display:none}
 .pmd-identity-context strong{color:var(--pmd-ink);font-weight:600}
 .pmd-identity-context .pmd-select{width:auto;height:28px;padding:2px 8px;font-size:12px}
 .pmd-identity-body{position:relative;flex:1;min-height:0;overflow:auto;padding:16px}
@@ -236,6 +237,7 @@ export function inject(): () => void {
     });
     const context = panel.querySelector<HTMLElement>('[data-identity-context]');
     if (context) {
+      context.hidden = tab === 'fiche' && adding === null && Boolean(focus) && matches.length <= 1;
       if (adding !== null) context.innerHTML = '<span>Nouveau pseudonyme</span>';
       else if (focus) {
         const caseChoice = matches.length > 1
