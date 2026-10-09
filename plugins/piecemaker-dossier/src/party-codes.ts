@@ -69,14 +69,9 @@ export function nodeCode(node: Pick<KnowledgeNode, 'id' | 'data'>): string {
   return clean(node.data.code) || (node.id.startsWith('entity:') ? node.id.slice('entity:'.length) : '');
 }
 
-function positionInCode(code: string): string {
-  const match = /^(?:CLIENT|ADVERSAIRE)_(.+)$/.exec(codeToken(code, ''));
-  return match ? PROCEDURE_POSITIONS.find(({ value }) => match[1].startsWith(`${codeToken(value)}_`))?.value || '' : '';
-}
-
 export function nodePosition(node: Pick<KnowledgeNode, 'id' | 'data'>): string {
   const position = clean(node.data.position);
-  return position ? PROCEDURE_POSITIONS.find(({ value }) => codeToken(value) === codeToken(position))?.value || position : positionInCode(nodeCode(node));
+  return position ? PROCEDURE_POSITIONS.find(({ value }) => codeToken(value) === codeToken(position))?.value || position : '';
 }
 
 function numberedCode(prefix: string, used: Set<string>, current: string): string {
@@ -92,10 +87,9 @@ export function partyCode(identity: PartyIdentity, current: string, used: Set<st
     return numberedCode(identity.kind === 'company' ? companyFormToken(identity.legalForm) : 'PERSONNE_PHYSIQUE', used, current);
   }
   const sideToken = identity.side === 'client' ? 'CLIENT' : 'ADVERSAIRE';
-  const fallbackPosition = identity.side === 'client' ? 'DEMANDEUR' : 'DEFENDEUR';
-  const positionToken = codeToken(identity.position, fallbackPosition);
+  const positionToken = codeToken(identity.position, '');
   const formToken = identity.kind === 'company' ? companyFormToken(identity.legalForm) : 'PERSONNE_PHYSIQUE';
-  return numberedCode(`${sideToken}_${positionToken}_${formToken}`, used, current);
+  return numberedCode([sideToken, positionToken, formToken].filter(Boolean).join('_'), used, current);
 }
 
 export function partyCodeChange(
@@ -121,7 +115,7 @@ export function partyCodeChange(
     ...node.data,
     code: code || undefined,
     partySide: side,
-    position: identity.side === 'client' || identity.side === 'adversaire' ? clean(identity.position) || positionInCode(code) || null : null,
+    position: identity.side === 'client' || identity.side === 'adversaire' ? clean(identity.position) || null : null,
     originalCode: originalCode || undefined,
   };
   const operations: KnowledgeUpdateOperation[] = nodeId === node.id

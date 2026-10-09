@@ -1,5 +1,5 @@
 import type { CompanySearchResult } from './api.js';
-import { nodeCode, partyCodeChange } from './party-codes.js';
+import { nodeCode } from './party-codes.js';
 import type { PartySide } from './party-codes.js';
 import type { JsonData, KnowledgeNode, KnowledgeSnapshot, KnowledgeUpdateOperation, NodeKind } from './types.js';
 
@@ -46,21 +46,15 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
   const legalName = clean(fields.legalName) || clean(result.name);
   const currentLabel = clean(input.node?.label);
   const aliases = unique([...(input.node?.aliases || []), currentLabel, clean(result.name)]).filter((value) => value !== legalName);
-  const companyChange = partyCodeChange(
-    { id: input.nodeId, kind: 'company', data: input.node?.data || {} },
-    { kind: 'company', legalForm, side: input.partySide, position: input.position },
-    graph.nodes,
-    graph.mappings,
-    graph.reservedCodes,
-    input.maskedCode,
-  );
+  const companyId = input.nodeId;
+  const companyCode = input.node ? nodeCode(input.node) : '';
   const usedCodes = new Set([
     ...graph.nodes.map((node) => nodeCode(node)),
     ...graph.mappings.map((mapping) => clean(mapping.masked)),
     ...(graph.reservedCodes || []),
-    companyChange.code,
+    companyCode,
   ].filter(Boolean));
-  const operations: KnowledgeUpdateOperation[] = [...companyChange.operations];
+  const operations: KnowledgeUpdateOperation[] = [];
   const references = new Map<string, EntityReference>();
   const fieldOperations: Array<{ entity: ValueEntity; reference: EntityReference }> = [];
   const existingMapping = (value: string): EntityReference | null => {
@@ -106,7 +100,8 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
   })).filter((entry): entry is { director: { name: string; role: string }; reference: EntityReference } => Boolean(entry.reference));
   const companyData: JsonData = {
     ...(input.node?.data || {}),
-    ...companyChange.data,
+    partySide: input.partySide || null,
+    position: input.partySide === 'client' || input.partySide === 'adversaire' ? clean(input.position) || null : null,
     legalForm: legalForm || null,
     capital: fields.capital || input.capital || input.node?.data.capital || null,
     registrePublic: {
@@ -127,19 +122,20 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
       finances: fields.finances,
     },
   };
-  operations.push({ op: 'upsertNode', node: { id: companyChange.nodeId, kind: 'company', label: legalName, aliases, data: companyData } });
-  for (const real of unique([legalName, ...aliases])) operations.push({ op: 'upsertMapping', mapping: { nodeId: companyChange.nodeId, real, masked: companyChange.code } });
+  operations.push({ op: 'upsertNode', node: { id: companyId, kind: 'company', label: legalName, aliases, data: companyData } });
+  for (const real of unique([legalName, ...aliases])) if (companyCode) operations.push({ op: 'upsertMapping', mapping: { nodeId: companyId, real, masked: companyCode } });
   for (const { entity, reference } of fieldOperations) {
     if (['SIREN', 'SIRET', 'TVA', 'adresse'].includes(entity.relation)) {
-      for (const link of graph.links.filter((entry) => entry.fromNodeId === input.nodeId && entry.relation.toLocaleLowerCase() === entity.relation.toLocaleLowerCase() && entry.toNodeId !== reference.nodeId)) operations.push({ op: 'unlink', link: { fromNodeId: companyChange.nodeId, toNodeId: link.toNodeId, relation: link.relation } });
+      for (const link of graph.links.filter((entry) => entry.fromNodeId === input.nodeId && entry.relation.toLocaleLowerCase() === entity.relation.toLocaleLowerCase() && entry.toNodeId !== reference.nodeId)) operations.push({ op: 'unlink', link: { fromNodeId: companyId, toNodeId: link.toNodeId, relation: link.relation } });
     }
-    operations.push({ op: 'link', link: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: entity.relation, data: { source: 'registre-public' } } });
-    operations.push({ op: 'cite', citation: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: entity.relation, texte: entity.value, source: PUBLIC_REGISTER_SOURCE } });
+    operations.push({ op: 'link', link: { fromNodeId: companyId, toNodeId: reference.nodeId, relation: entity.relation, data: { source: 'registre-public' } } });
+    operations.push({ op: 'cite', citation: { fromNodeId: companyId, toNodeId: reference.nodeId, relation: entity.relation, texte: entity.value, source: PUBLIC_REGISTER_SOURCE } });
   }
   for (const { director, reference } of directorReferences) {
     operations.push({ op: 'upsertNode', node: { id: reference.nodeId, kind: 'person', label: director.name, aliases: [], data: { code: reference.code, role: director.role, source: 'registre-public' } } });
-    operations.push({ op: 'link', link: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: 'dirigeant', data: { role: director.role, source: 'registre-public' } } });
-    operations.push({ op: 'cite', citation: { fromNodeId: companyChange.nodeId, toNodeId: reference.nodeId, relation: 'dirigeant', texte: director.name, source: PUBLIC_REGISTER_SOURCE } });
+    operations.push({ op: 'link', link: { fromNodeId: companyId, toNodeId: reference.nodeId, relation: 'dirigeant', data: { role: director.role, source: 'registre-public' } } });
+    operations.push({ op: 'cite', citation: { fromNodeId: companyId, toNodeId: reference.nodeId, relation: 'dirigeant', texte: director.name, source: PUBLIC_REGISTER_SOURCE } });
   }
+  operations.push({ op: 'syncPartyCode', nodeId: companyId, customCode: input.maskedCode });
   return operations;
 }

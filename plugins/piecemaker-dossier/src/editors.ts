@@ -325,7 +325,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const selectedSide = node ? (node.data.partySide === 'client' || node.data.partySide === 'adversaire' ? node.data.partySide : 'tiers') : defaults.partySide || 'client';
   const roleLabels = { client: 'Partie cliente', adversaire: 'Partie adverse', tiers: 'Tiers' };
   const mappings = node ? data.graph.mappings.filter((entry) => entry.nodeId === node.id) : [];
-  const selectedPosition = node ? nodePosition({ id: node.id, data: { ...node.data, code: nodeCode(node) || mappings[0]?.masked } }) : '';
+  const selectedPosition = node ? nodePosition(node) : '';
   const relations = node ? data.graph.links.filter((entry) => entry.fromNodeId === node.id || entry.toNodeId === node.id) : [];
   const nodesById = new Map(data.graph.nodes.map((entry) => [entry.id, entry]));
   const sirenNodes = data.graph.nodes.filter((entry) => entry.kind === 'siren');
@@ -457,13 +457,6 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   kindSelect?.addEventListener('change', syncIdentity);
   sideSelect?.addEventListener('change', syncIdentity);
   const renameApplies = (side: string): boolean => side === 'client' || side === 'adversaire' || Boolean(textValue(node?.data.originalCode)) || Boolean(node && isPartyCode(nodeCode(node)));
-  const codeChangeFor = (side: string) => partyCodeChange(
-    { id, kind: (kindSelect?.value || selectedKind) as NodeKind, data: node?.data || {} },
-    { kind: (kindSelect?.value || selectedKind) as NodeKind, legalForm: legalFormInput?.value || '', side: side as PartySide, position: positionSelect?.value || '' },
-    data.graph.nodes,
-    data.graph.mappings,
-    data.graph.reservedCodes,
-  );
   const positionField = layer.querySelector<HTMLElement>('[data-position-field]');
   const syncPosition = () => {
     const isParty = sideSelect?.value === 'client' || sideSelect?.value === 'adversaire';
@@ -471,20 +464,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     if (!isParty && positionSelect) positionSelect.value = '';
   };
   syncPosition();
-  const syncMasked = () => {
-    const side = sideSelect?.value || '';
-    if (!maskedInput) return;
-    if (maskedEdited) return;
-    if (renameApplies(side)) maskedInput.value = codeChangeFor(side).code;
-    else if (isPartyCode(maskedInput.value)) maskedInput.value = initialMasked;
-  };
-  sideSelect?.addEventListener('change', () => {
-    syncPosition();
-    syncMasked();
-  });
-  positionSelect?.addEventListener('change', syncMasked);
-  kindSelect?.addEventListener('change', syncMasked);
-  legalFormInput?.addEventListener('input', syncMasked);
+  sideSelect?.addEventListener('change', syncPosition);
   identitySearchButton?.addEventListener('click', () => {
     const pseudonym = /^(?:CLIENT|ADVERSAIRE|PERSONNE_MORALE|PERSONNE_PHYSIQUE|PERS_MORALE|PERS_PHYSIQUE)(?:_|$)/;
     const name = labelInput?.value.trim() || '';
@@ -516,29 +496,26 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     const sirenValue = kind === 'company' ? normalizeSiren(textValue(form.get('siren'))) : '';
     const sirenNode = sirenValue ? sirenNodes.find((candidate) => [candidate.label, ...candidate.aliases].some((entry) => normalizeSiren(entry) === sirenValue)) : undefined;
     const position = textValue(form.get('position')).trim();
-    let change;
+    const syncCode = renameApplies(partySide) || maskedEdited && Boolean(masked);
+    const customCode = maskedEdited ? masked : node && (node.data.partySide === 'client' || node.data.partySide === 'adversaire') && !isPartyCode(initialMasked) ? initialMasked : undefined;
     try {
-      change = renameApplies(partySide) || maskedEdited && Boolean(masked)
-        ? partyCodeChange({ id, kind, data: node?.data || {} }, { kind, legalForm, side: partySide as PartySide, position }, data.graph.nodes, data.graph.mappings, data.graph.reservedCodes, masked)
-        : null;
+      if (customCode) partyCodeChange({ id, kind, data: node?.data || {} }, { kind, legalForm, side: partySide as PartySide, position }, data.graph.nodes, data.graph.mappings, data.graph.reservedCodes, customCode);
     } catch (error) {
       maskedInput?.setCustomValidity(error instanceof Error ? error.message : 'Code anonymisé invalide.');
       maskedInput?.reportValidity();
       return;
     }
-    const nodeId = change ? change.nodeId : id;
-    const code = change ? change.code : masked;
-    const nodeData = { ...(change ? change.data : { ...(node?.data || {}), partySide: partySide || null, position: (partySide === 'client' || partySide === 'adversaire') && position ? position : null }), legalForm: legalForm || null, capital: kind === 'company' ? textValue(form.get('capital')).trim() || null : null };
-    const rename = (value: string): string => value === id ? nodeId : value;
+    const nodeId = id;
+    const code = initialMasked;
+    const nodeData = { ...(node?.data || {}), partySide: partySide || null, position: (partySide === 'client' || partySide === 'adversaire') && position ? position : null, legalForm: legalForm || null, capital: kind === 'company' ? textValue(form.get('capital')).trim() || null : null };
     const operations: KnowledgeUpdateOperation[] = [];
-    if (change && node && nodeId !== id) operations.push(...change.operations);
     operations.push({ op: 'upsertNode', node: { id: nodeId, kind, label, aliases: savedAliases, data: nodeData } });
     for (const mapping of mappings) operations.push({ op: 'deleteMapping', mapping: { nodeId, real: mapping.real } });
     for (const real of [label, ...savedAliases]) if (code) operations.push({ op: 'upsertMapping', mapping: { nodeId, real, masked: code } });
     if (node) operations.push(...removedAliasOperations(nodeId, [node.label, ...variants], [label, ...savedAliases]));
     for (const index of removals) {
       const relation = relations[index];
-      operations.push({ op: 'unlink', link: { fromNodeId: rename(relation.fromNodeId), toNodeId: rename(relation.toNodeId), relation: relation.relation } });
+      operations.push({ op: 'unlink', link: { fromNodeId: relation.fromNodeId, toNodeId: relation.toNodeId, relation: relation.relation } });
     }
     const target = textValue(form.get('target'));
     const selectedRelation = textValue(form.get('relation')).trim();
@@ -565,6 +542,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
         operations.push({ op: 'link', link: { fromNodeId: nodeId, toNodeId: addressId, relation: 'adresse' } });
       }
     }
+    if (syncCode) operations.push({ op: 'syncPartyCode', nodeId, customCode });
     await save(operations);
     layer.remove();
   });

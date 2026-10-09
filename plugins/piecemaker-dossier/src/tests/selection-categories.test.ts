@@ -51,19 +51,19 @@ describe('findEntityBySelection', () => {
 describe('createEntity', () => {
   it('creates a node with a unique code and a mapping', () => {
     const first = createEntity('  Marie   Martin ', 'person', 'adversaire', graph());
-    expect(first.nodeId).toBe('entity:ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01');
+    expect(first.nodeId).toBe('entity:ADVERSAIRE_PERSONNE_PHYSIQUE_01');
     expect(first.operations).toEqual([
       { op: 'upsertNode', node: expect.objectContaining({ id: first.nodeId, kind: 'person', label: 'Marie Martin', aliases: [] }) },
-      { op: 'upsertMapping', mapping: { nodeId: first.nodeId, real: 'Marie Martin', masked: 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01' } },
+      { op: 'upsertMapping', mapping: { nodeId: first.nodeId, real: 'Marie Martin', masked: 'ADVERSAIRE_PERSONNE_PHYSIQUE_01' } },
     ]);
     const second = createEntity('Paul Durand', 'person', 'adversaire', first.graph);
-    expect(second.nodeId).toBe('entity:ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_02');
+    expect(second.nodeId).toBe('entity:ADVERSAIRE_PERSONNE_PHYSIQUE_02');
   });
 
   it('numbers third parties and companies by kind', () => {
     expect(createEntity('Paul Durand', 'person', 'tiers', graph()).nodeId).toBe('entity:PERSONNE_PHYSIQUE_01');
     expect(createEntity('Autre SARL', 'company', 'tiers', graph()).nodeId).toBe('entity:PERSONNE_MORALE_02');
-    expect(createEntity('Autre SARL', 'company', 'client', graph()).nodeId).toBe('entity:CLIENT_DEMANDEUR_PERSONNE_MORALE_01');
+    expect(createEntity('Autre SARL', 'company', 'client', graph()).nodeId).toBe('entity:CLIENT_PERSONNE_MORALE_01');
   });
 });
 
@@ -76,9 +76,9 @@ describe('changeNodeSide', () => {
   it('renames and remaps a node moved to the adverse side', () => {
     const base = graph();
     const change = changeNodeSide(base.nodes[0], 'adversaire', base);
-    expect(change.nodeId).toBe('entity:ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01');
+    expect(change.nodeId).toBe('entity:ADVERSAIRE_PERSONNE_PHYSIQUE_01');
     expect(change.operations[0]).toEqual({ op: 'renameNode', rename: { fromNodeId: base.nodes[0].id, toNodeId: change.nodeId } });
-    expect(change.operations).toContainEqual({ op: 'upsertMapping', mapping: { nodeId: change.nodeId, real: 'J. Dupont', masked: 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01' } });
+    expect(change.operations).toContainEqual({ op: 'upsertMapping', mapping: { nodeId: change.nodeId, real: 'J. Dupont', masked: 'ADVERSAIRE_PERSONNE_PHYSIQUE_01' } });
     expect(change.graph.nodes.find((entry) => entry.id === change.nodeId)?.data.partySide).toBe('adversaire');
   });
 
@@ -93,6 +93,6 @@ describe('changeNodeSide', () => {
   it('designates a third party as client with a code unique among existing ones', () => {
     const base = graph();
     const change = changeNodeSide(base.nodes[1], 'client', base);
-    expect(change.nodeId).toBe('entity:CLIENT_DEMANDEUR_PERSONNE_MORALE_01');
+    expect(change.nodeId).toBe('entity:CLIENT_PERSONNE_MORALE_01');
   });
 });

@@ -28,11 +28,11 @@ beforeEach(() => {
 afterEach(() => { dom.window.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('entity editor', () => {
-  it.each(['demandeur', 'defendeur', 'appelant', 'intime', 'requerant', 'mis_en_cause', 'intervenant', 'autre'])('prefills a missing position from the anonymised code (%s)', (position) => {
+  it.each(['demandeur', 'defendeur', 'appelant', 'intime', 'requerant', 'mis_en_cause', 'intervenant', 'autre'])('leaves the position empty when it is absent from the database (%s)', (position) => {
     const masked = `ADVERSAIRE_${position.toUpperCase()}_PERSONNE_PHYSIQUE_01`;
     const person: KnowledgeNode = { ...company, id: `entity:${masked}`, kind: 'person', label: 'Jean Dupont', aliases: [], data: { code: masked, partySide: 'adversaire' } };
     nodeEditor(root, { graph: { ...graph(), nodes: [person], mappings: [{ ...graph().mappings[0], nodeId: person.id, real: person.label, masked }] } }, person, vi.fn().mockResolvedValue(undefined));
-    expect(input('position').value).toBe(position);
+    expect(input('position').value).toBe('');
   });
 
   it.each(['appelant', 'Appelant'])('preserves an explicit position over the position encoded in the anonymised code (%s)', (position) => {
@@ -41,21 +41,24 @@ describe('entity editor', () => {
     expect(input('position').value).toBe('appelant');
   });
 
-  it('reads the position from a mapping when the node has no stored code', () => {
+  it('does not infer a position from a mapping', () => {
     const masked = 'CLIENT_DEFENDEUR_PERSONNE_PHYSIQUE_01';
     const person: KnowledgeNode = { ...company, id: 'manual:person', kind: 'person', label: 'Jean Dupont', aliases: [], data: { partySide: 'client' } };
     nodeEditor(root, { graph: { ...graph(), nodes: [person], mappings: [{ ...graph().mappings[0], nodeId: person.id, real: person.label, masked }] } }, person, vi.fn().mockResolvedValue(undefined));
-    expect(input('position').value).toBe('defendeur');
+    expect(input('position').value).toBe('');
   });
 
-  it('saves the position recovered from the code without renaming the person', async () => {
+  it('saves the selected position before asking the server to derive its code', async () => {
     const masked = 'ADVERSAIRE_DEFENDEUR_PERSONNE_PHYSIQUE_01';
     const person: KnowledgeNode = { ...company, id: `entity:${masked}`, kind: 'person', label: 'Jean Dupont', aliases: [], data: { code: masked, partySide: 'adversaire' } };
     const save = vi.fn().mockResolvedValue(undefined);
     nodeEditor(root, { graph: { ...graph(), nodes: [person], mappings: [{ ...graph().mappings[0], nodeId: person.id, real: person.label, masked }] } }, person, save);
+    select('position', 'demandeur');
+    expect(input('masked').value).toBe(masked);
     submit();
     await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
-    expect(save.mock.calls[0][0]).toEqual(expect.arrayContaining([expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ id: person.id, data: expect.objectContaining({ position: 'defendeur', code: masked }) }) })]));
+    expect(save.mock.calls[0][0][0]).toMatchObject({ op: 'upsertNode', node: { id: person.id, data: { position: 'demandeur', code: masked } } });
+    expect(save.mock.calls[0][0].at(-1)).toEqual({ op: 'syncPartyCode', nodeId: person.id, customCode: undefined });
     expect(save.mock.calls[0][0].some((operation: { op: string }) => operation.op === 'renameNode')).toBe(false);
   });
 
@@ -83,8 +86,9 @@ describe('entity editor', () => {
     root.querySelector<HTMLButtonElement>('[data-company-result="0"]')!.click();
     await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
     expect(save.mock.calls[0][0]).toEqual(expect.arrayContaining([
-      expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ kind: 'company', id: 'entity:ENTITE_EXEMPLE_07', data: expect.objectContaining({ capital: '10 000 EUR', legalForm: 'SAS' }) }) }),
-      { op: 'unlink', link: { fromNodeId: 'entity:ENTITE_EXEMPLE_07', toNodeId: address.id, relation: 'adresse' } },
+      expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ kind: 'company', id: company.id, data: expect.objectContaining({ capital: '10 000 EUR', legalForm: 'SAS' }) }) }),
+      { op: 'unlink', link: { fromNodeId: company.id, toNodeId: address.id, relation: 'adresse' } },
+      { op: 'syncPartyCode', nodeId: company.id, customCode: 'ENTITE_EXEMPLE_07' },
       expect.objectContaining({ op: 'link', link: expect.objectContaining({ relation: 'SIREN' }) }),
     ]));
     await vi.waitFor(() => expect(root.querySelector('.pmd-company-search-dialog')).toBeNull());
@@ -173,8 +177,9 @@ describe('entity editor', () => {
     submit();
     await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
     expect(save.mock.calls[0][0]).toEqual(expect.arrayContaining([
-      { op: 'unlink', link: { fromNodeId: 'entity:ENTITE_EXEMPLE_07', toNodeId: address.id, relation: 'adresse' } },
-      { op: 'link', link: { fromNodeId: 'entity:ENTITE_EXEMPLE_07', toNodeId: otherAddress.id, relation: 'adresse' } },
+      { op: 'unlink', link: { fromNodeId: company.id, toNodeId: address.id, relation: 'adresse' } },
+      { op: 'link', link: { fromNodeId: company.id, toNodeId: otherAddress.id, relation: 'adresse' } },
+      { op: 'syncPartyCode', nodeId: company.id, customCode: 'ENTITE_EXEMPLE_07' },
     ]));
     expect(save.mock.calls[0][0].filter((operation: { op: string }) => operation.op === 'upsertNode')).toHaveLength(1);
   });
@@ -213,9 +218,8 @@ describe('entity editor', () => {
     submit();
     await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
     expect(save.mock.calls[0][0]).toEqual(expect.arrayContaining([
-      { op: 'renameNode', rename: { fromNodeId: company.id, toNodeId: 'entity:ENTITE_EXEMPLE_07' } },
-      expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ id: 'entity:ENTITE_EXEMPLE_07', data: expect.objectContaining({ code: 'ENTITE_EXEMPLE_07', legalForm: 'SAS', partySide: 'adversaire', position: 'appelant' }) }) }),
-      { op: 'upsertMapping', mapping: { nodeId: 'entity:ENTITE_EXEMPLE_07', real: company.label, masked: 'ENTITE_EXEMPLE_07' } },
+      expect.objectContaining({ op: 'upsertNode', node: expect.objectContaining({ id: company.id, data: expect.objectContaining({ code, legalForm: 'SAS', partySide: 'adversaire', position: 'appelant' }) }) }),
+      { op: 'syncPartyCode', nodeId: company.id, customCode: 'ENTITE_EXEMPLE_07' },
     ]));
   });
 
