@@ -117,6 +117,8 @@ Ces points ont déjà été perdus ou ont failli l'être. Les contrôler un par 
 | `src/modules/chat/ChatInterface.tsx`, `hooks/useChatComposerState.ts`, `hooks/useSlashCommands.ts` | la transmission de `isActive` |
 | `src/shared/types.ts` | `'mistral'` dans l'union `LLMProvider` |
 | `server/modules/providers/list/codex/codex-runtime.provider.ts` | `codex = new Codex(options.libraryCodexOptions);` (au lieu de `new Codex()`) |
+| `src/modules/code-editor/EditorSidebar.tsx` | `import CodeEditor from '@/piecemaker/editor-tabs/TabbedCodeEditor';` (au lieu de `@/modules/code-editor/CodeEditor`) |
+| `src/modules/project-workspace/WorkspaceMain.tsx` | l'import et l'appel `usePiecemakerEditorBridge(handleFileOpen);` |
 
 ### `codex-runtime.provider.ts` — le masquage des skills par dossier dans Codex
 
@@ -134,6 +136,29 @@ réapparaissent dans Codex, sans erreur. Le garde-fou est
 démarre / reprend… ») : il échoue alors. Restaurer la ligne, ne jamais supprimer
 le test. Si upstream passe lui-même des options à `new Codex(...)`, les fusionner
 avec `options.libraryCodexOptions` plutôt que d'en écraser une.
+
+### `EditorSidebar.tsx` et `WorkspaceMain.tsx` — les onglets de l'éditeur latéral
+
+L'éditeur latéral de CloudCLI (le panneau qui partage la vue avec le chat)
+reçoit des onglets, et les visionneuses PieceMaker (source d'une citation,
+fiche d'une entité pseudonymisée) s'y ouvrent comme des fichiers. Tout vit dans
+`src/piecemaker/editor-tabs/` ; deux points d'accroche seulement :
+
+- `EditorSidebar.tsx` importe `TabbedCodeEditor` sous le nom `CodeEditor`. Le
+  composant reçoit exactement les props de `CodeEditor` et les lui transmet :
+  une nouvelle prop upstream passe sans changement. Il garde la liste des
+  onglets, n'en monte qu'un (les raccourcis Échap et Ctrl+S de `CodeEditor`
+  sont globaux) et rend lui-même les chemins `piecemaker://citation/…` et
+  `piecemaker://identity/…`.
+- `WorkspaceMain.tsx` appelle `usePiecemakerEditorBridge(handleFileOpen)`, qui
+  relaie l'événement `piecemaker:open-in-editor` vers `handleFileOpen`.
+
+Un merge résolu « vers CloudCLI » retire les onglets et les visionneuses
+n'ouvrent plus rien, sans erreur. Garde-fou :
+`src/piecemaker/editor-tabs/tests/TabbedCodeEditor.test.tsx` (« exceptions
+CloudCLI : le panneau latéral passe par les onglets PieceMaker »). Si upstream
+déplace l'import de `CodeEditor` ou renomme `handleFileOpen`, reporter la
+substitution sur le nouveau site plutôt que de la supprimer.
 
 ### `AuthContext.tsx` — le piège le plus coûteux
 
@@ -290,7 +315,7 @@ le code se comporte comme upstream si la configuration est absente.
 ### Une exception upstream se paie par un test
 
 Les exceptions assumées (amorçage d'authentification, `isActive` du chat,
-options du client Codex) ne sont pas des permissions : ce sont des dettes. Chacune doit porter un test
+options du client Codex, onglets de l'éditeur latéral) ne sont pas des permissions : ce sont des dettes. Chacune doit porter un test
 **à nous** qui échoue si un merge la révoque. Sans ce test, l'exception
 disparaîtra un jour sans que personne ne le voie.
 

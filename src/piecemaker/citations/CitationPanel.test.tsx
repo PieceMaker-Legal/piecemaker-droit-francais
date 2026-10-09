@@ -1,15 +1,15 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CitationPanel } from '@/piecemaker/citations/CitationPanel';
 import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 import { fetchCitationSource, fetchLegifranceBlocks } from '@/piecemaker/citations/api';
 import { legifranceQuoteUrl } from '@/piecemaker/citations/legifrance';
+import { citationPath, OPEN_IN_EDITOR_EVENT } from '@/piecemaker/editor-tabs/editorPanels';
 
 vi.mock('@/piecemaker/citations/api', () => ({ fetchCitationSource: vi.fn(), fetchLegifranceBlocks: vi.fn() }));
 
 const token = 'a'.repeat(64);
-const pushState = window.history.pushState;
 const snapshot = {
   title: 'Décision JURITEXT1',
   source: 'Premier extrait. Texte intermédiaire. Deuxième extrait.',
@@ -69,39 +69,19 @@ describe('visionneuse de citations', () => {
     expect(screen.getByLabelText('Texte source').textContent).toBe(snapshot.source);
   });
 
-  it('un lien du chat ouvre le panneau à droite et la fermeture rend le focus au lien', async () => {
+  it('un lien du chat ouvre la source dans un onglet de l’éditeur', () => {
     const stop = startCitationPanel();
+    const opened: unknown[] = [];
+    const record = (event: Event) => opened.push((event as CustomEvent<{ path: unknown }>).detail.path);
+    window.addEventListener(OPEN_IN_EDITOR_EVENT, record);
     const link = document.createElement('a');
     link.href = `#piecemaker-citation=${token}`;
     link.textContent = '[1]';
     document.body.appendChild(link);
     try {
-      fireEvent.click(link);
-      await screen.findByRole('complementary', { name: 'Source de la citation' });
-      expect(document.documentElement.classList.contains('piecemaker-citation-open')).toBe(true);
-      await screen.findByText('Décision JURITEXT1');
-      fireEvent.click(screen.getByRole('button', { name: 'Fermer la source' }));
-      expect(document.getElementById('piecemaker-citation-panel')).toBeNull();
-      expect(document.activeElement).toBe(link);
-    } finally { act(stop); link.remove(); }
-  });
-
-  it('changer de dossier ou de session referme le panneau resté au-dessus du chat', async () => {
-    window.history.pushState({}, '', '/session/abc');
-    const stop = startCitationPanel();
-    const link = document.createElement('a');
-    link.href = `#piecemaker-citation=${token}`;
-    document.body.appendChild(link);
-    try {
-      fireEvent.click(link);
-      await screen.findByRole('complementary', { name: 'Source de la citation' });
-      act(() => window.history.pushState({}, '', '/session/abc'));
-      expect(document.getElementById('piecemaker-citation-panel')).not.toBeNull();
-      act(() => window.history.pushState({}, '', '/'));
-      expect(document.getElementById('piecemaker-citation-panel')).toBeNull();
-      expect(document.documentElement.classList.contains('piecemaker-citation-open')).toBe(false);
-    } finally { act(stop); link.remove(); }
-    expect(window.history.pushState).toBe(pushState);
+      expect(fireEvent.click(link)).toBe(false);
+      expect(opened).toEqual([citationPath(token, 'Citation [1]')]);
+    } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
   });
 
   it('une source indisponible affiche un message sans détails internes', async () => {

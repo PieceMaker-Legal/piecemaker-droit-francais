@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { MouseEvent, MutableRefObject } from 'react';
 
 import type { CodeEditorFile } from '@/shared/types';
-import CodeEditor from '@/modules/code-editor/CodeEditor';
+import CodeEditor from '@/piecemaker/editor-tabs/TabbedCodeEditor';
 
 type EditorSidebarProps = {
   editingFile: CodeEditorFile | null;

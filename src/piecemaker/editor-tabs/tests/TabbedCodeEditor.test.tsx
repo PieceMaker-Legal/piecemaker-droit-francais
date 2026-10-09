@@ -1,0 +1,125 @@
+import { createRef } from 'react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { EditorSidebar } from '@/modules/code-editor';
+import TabbedCodeEditor from '@/piecemaker/editor-tabs/TabbedCodeEditor';
+import { citationPath, identityPath, openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
+import { usePiecemakerEditorBridge } from '@/piecemaker/editor-tabs/usePiecemakerEditorBridge';
+import workspaceMainSource from '@/modules/project-workspace/WorkspaceMain.tsx?raw';
+import type { CodeEditorFile } from '@/shared/types';
+
+vi.mock('@/modules/code-editor/CodeEditor', () => ({
+  default: ({ file, onClose }: { file: CodeEditorFile; onClose: () => void }) => (
+    <section data-testid="code-editor" data-path={file.path}><button onClick={onClose}>Fermer le fichier</button></section>
+  ),
+}));
+
+vi.mock('@/piecemaker/citations/CitationPanel', () => ({
+  CitationPanel: ({ token, onClose }: { token: string; onClose: () => void }) => (
+    <aside data-testid="citation" data-token={token}><button onClick={onClose}>Fermer la source</button></aside>
+  ),
+}));
+
+const token = 'b'.repeat(64);
+const file = (path: string): CodeEditorFile => ({ name: path.split('/').pop() ?? path, path, projectId: 'dossier-a' });
+const tabs = () => screen.queryAllByRole('tab').map((tab) => tab.textContent);
+const shown = () => screen.getByTestId('code-editor').dataset.path;
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('onglets de l’éditeur latéral', () => {
+  it('garde chaque fichier ouvert dans un onglet, bascule de l’un à l’autre et referme le panneau avec le dernier', () => {
+    const onClose = vi.fn();
+    const first = file('/dossier/notes.md');
+    const view = render(<TabbedCodeEditor file={first} onClose={onClose} isSidebar />);
+    expect(tabs()).toEqual([]);
+
+    view.rerender(<TabbedCodeEditor file={file('/dossier/plan.md')} onClose={onClose} isSidebar />);
+    expect(tabs()).toEqual(['notes.md', 'plan.md']);
+    expect(shown()).toBe('/dossier/plan.md');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'notes.md' }));
+    expect(shown()).toBe('/dossier/notes.md');
+
+    view.rerender(<TabbedCodeEditor file={file('/dossier/notes.md')} onClose={onClose} isSidebar />);
+    expect(tabs()).toEqual(['notes.md', 'plan.md']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer le fichier' }));
+    expect(tabs()).toEqual([]);
+    expect(shown()).toBe('/dossier/plan.md');
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer le fichier' }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('ouvre une citation dans un onglet nommé d’après sa référence', () => {
+    const view = render(<TabbedCodeEditor file={file('/dossier/notes.md')} onClose={vi.fn()} isSidebar />);
+    view.rerender(<TabbedCodeEditor file={file(citationPath(token, 'Citation [2]'))} onClose={vi.fn()} isSidebar />);
+    expect(tabs()).toEqual(['notes.md', 'Citation [2]']);
+    expect(screen.getByTestId('citation').dataset.token).toBe(token);
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer Citation [2]' }));
+    expect(shown()).toBe('/dossier/notes.md');
+  });
+
+  it('confie au plugin Dossier un conteneur pour la fiche et le libère à la fermeture', () => {
+    const opened: Array<{ text: string; container: HTMLElement; onClose: () => void }> = [];
+    const closed = vi.fn();
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<{ text: string; container: HTMLElement; onClose: () => void }>).detail;
+      detail.container.append(Object.assign(document.createElement('div'), { textContent: 'Fiche' }));
+      opened.push(detail);
+    };
+    window.addEventListener('piecemaker:identity-open', open);
+    window.addEventListener('piecemaker:identity-close', closed);
+    const onClose = vi.fn();
+    try {
+      const view = render(<TabbedCodeEditor file={file(identityPath('open', 'Jean Dupont'))} onClose={onClose} isSidebar />);
+      expect(opened.map((entry) => entry.text)).toEqual(['Jean Dupont']);
+      expect(screen.getByText('Fiche')).toBeTruthy();
+      expect(screen.queryByRole('status')).toBeNull();
+      act(() => opened[0].onClose());
+      expect(onClose).toHaveBeenCalledOnce();
+      view.unmount();
+      expect(closed).toHaveBeenCalledOnce();
+    } finally {
+      window.removeEventListener('piecemaker:identity-open', open);
+      window.removeEventListener('piecemaker:identity-close', closed);
+    }
+  });
+
+  it('signale une fiche indisponible quand le plugin Dossier ne répond pas', () => {
+    render(<TabbedCodeEditor file={file(identityPath('add', 'Société Exemple SAS'))} onClose={vi.fn()} isSidebar />);
+    expect(screen.getByRole('status').textContent).toContain('plugin Dossier');
+  });
+});
+
+describe('exceptions CloudCLI : le panneau latéral passe par les onglets PieceMaker', () => {
+  it('EditorSidebar rend ses fichiers à travers TabbedCodeEditor', () => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+    render(
+      <EditorSidebar
+        editingFile={file(citationPath(token, 'Citation [1]'))}
+        isMobile={false}
+        editorExpanded={false}
+        editorWidth={600}
+        hasManualWidth={false}
+        resizeHandleRef={createRef<HTMLDivElement>()}
+        onResizeStart={vi.fn()}
+        onCloseEditor={vi.fn()}
+        onToggleEditorExpand={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('citation').dataset.token).toBe(token);
+    vi.unstubAllGlobals();
+  });
+
+  it('WorkspaceMain relie les ouvertures PieceMaker à son éditeur latéral', () => {
+    expect(workspaceMainSource).toContain('usePiecemakerEditorBridge(handleFileOpen);');
+    const openFile = vi.fn();
+    renderHook(() => usePiecemakerEditorBridge(openFile));
+    openInEditor(citationPath(token, 'Citation [1]'));
+    expect(openFile).toHaveBeenCalledWith(citationPath(token, 'Citation [1]'));
+  });
+});

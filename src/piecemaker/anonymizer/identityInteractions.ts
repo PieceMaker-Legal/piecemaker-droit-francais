@@ -1,11 +1,10 @@
 import { HIGHLIGHT_NAME } from '@/piecemaker/anonymizer/highlighter';
+import { identityPath, openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 
 type HighlightLookup = {
   get(name: string): Iterable<AbstractRange> | undefined;
 };
 
-const IDENTITY_OPEN_EVENT = 'piecemaker:identity-open';
-const IDENTITY_ADD_EVENT = 'piecemaker:identity-add';
 export const IDENTITY_CHANGED_EVENT = 'piecemaker:identity-changed';
 
 const SCOPE_SELECTOR = '.chat-messages-pane, [data-piecemaker-identity-highlight="on"]';
@@ -51,7 +50,7 @@ function openMenu(x: number, y: number, text: string): void {
   item.textContent = 'Ajouter au mapping';
   item.addEventListener('click', () => {
     closeMenu();
-    window.dispatchEvent(new CustomEvent(IDENTITY_ADD_EVENT, { detail: { text } }));
+    openInEditor(identityPath('add', text));
   });
   menu.appendChild(item);
   document.body.appendChild(menu);
@@ -73,7 +72,7 @@ export function startIdentityInteractions(): () => void {
     const text = highlightedIdentityAt(event.clientX, event.clientY);
     if (!text) return;
     event.preventDefault();
-    window.dispatchEvent(new CustomEvent(IDENTITY_OPEN_EVENT, { detail: { text } }));
+    openInEditor(identityPath('open', text));
   };
 
   const contextMenu = (event: MouseEvent) => {
