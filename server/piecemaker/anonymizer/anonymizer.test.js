@@ -165,6 +165,14 @@ test('les entités courtes exigent des frontières et des majuscules', () => {
   assert.equal(apply('Dupont xduponty DUPONT.pdf'), 'LONG_1 xLONG_1y LONG_1.pdf');
 });
 
+test('une filiale au nom plus long garde son propre code', () => {
+  const dictionary = { empty: false, mapping: { Calice: 'SA_01', 'Calice International': 'PERS_MORALE_01' } };
+  assert.equal(
+    anonymize('Calice International, filiale de Calice, assigne Calice.', dictionary),
+    'PERS_MORALE_01, filiale de SA_01, assigne SA_01.',
+  );
+});
+
 test('les identifiants d’appel et de résultat restent appariés', () => {
   const toolUseId = 'toolu_01JeanDupont_X';
   const payload = {

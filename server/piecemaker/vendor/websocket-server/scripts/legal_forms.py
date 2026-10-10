@@ -45,11 +45,6 @@ _WORDS_AFTER = 6
 _LEGAL_FORM_LOOKAHEAD = 120
 _SEPARATOR_RE = re.compile(r"[\s,;:–—\-]*")
 _WORD_RE = re.compile(r"\S+")
-_GENERIC_STEMS = frozenset({
-    "societe", "company", "compagnie", "group", "groupe", "holding",
-    "international", "limited", "gesellschaft", "societa", "sociedad",
-    "entreprise", "empresa",
-})
 _ACCENT_FOLDS = {
     "à": "[àa]", "á": "[áa]", "â": "[âa]", "ä": "[äa]",
     "è": "[èe]", "é": "[ée]", "ê": "[êe]", "ë": "[ëe]",
@@ -419,22 +414,11 @@ def _occurrence_form(entity: dict, corpora: dict, cache: dict):
     return extract_legal_form(text)[0]
 
 
-def _stem_prefix(left: str, right: str) -> bool:
-    short, long = (left, right) if len(left) <= len(right) else (right, left)
-    return (
-        short != long
-        and len(short) >= 3
-        and short not in _GENERIC_STEMS
-        and long.startswith(short + " ")
-    )
-
-
 def cluster_indexes_by_stem(key_lists, forms):
     """Group indexes whose stems match, then split a group that carries two forms.
 
-    An exact stem always matches. A shorter stem also matches when it is a token
-    prefix of a longer one. Mentions with no form join the group only when the
-    group has a single form.
+    Only an exact stem matches: "Calice International" stays apart from "Calice".
+    Mentions with no form join the group only when the group has a single form.
     """
     count = len(key_lists)
     parent = list(range(count))
@@ -460,19 +444,6 @@ def cluster_indexes_by_stem(key_lists, forms):
                 owner[key] = index
             else:
                 union(index, previous)
-
-    indexed = [
-        (index, key)
-        for index, keys in enumerate(key_lists)
-        for key in keys
-        if key and len(key) >= 3 and key not in _GENERIC_STEMS
-    ]
-    for left in range(len(indexed)):
-        left_index, left_key = indexed[left]
-        for right in range(left + 1, len(indexed)):
-            right_index, right_key = indexed[right]
-            if left_index != right_index and _stem_prefix(left_key, right_key):
-                union(left_index, right_index)
 
     components = {}
     for index in range(count):
