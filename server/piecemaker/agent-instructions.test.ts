@@ -83,6 +83,20 @@ test('inverts an AGENTS.md that links to CLAUDE.md', () => withProject(async (ro
   assert.ok(await isLinkToAgents(root));
 }));
 
+test('replaces a CLAUDE.md that imports AGENTS.md with the link', () => withProject(async (root) => {
+  await writeFile(path.join(root, 'AGENTS.md'), 'consignes codex\n');
+  await writeFile(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
+  await mirrorAgentInstructionFiles(root);
+  assert.ok(await isLinkToAgents(root));
+  assert.equal(await read(root, 'AGENTS.md'), 'consignes codex\n');
+}));
+
+test('never copies an AGENTS.md import into AGENTS.md itself', () => withProject(async (root) => {
+  await writeFile(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.equal(await read(root, 'AGENTS.md'), agentInstructionsTemplate(SHARED));
+}));
+
 test('mirror does nothing silently when a file is missing', () => withProject(async (root) => {
   await mirrorAgentInstructionFiles(root);
   await writeFile(path.join(root, 'CLAUDE.md'), 'seul\n');
