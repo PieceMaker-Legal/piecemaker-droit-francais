@@ -16,6 +16,7 @@ const graph: KnowledgeSnapshot = {
 
 beforeEach(() => {
   dom = new JSDOM('<div id="root"></div>');
+  dom.window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   vi.stubGlobal('window', dom.window);
   vi.stubGlobal('document', dom.window.document);
   vi.stubGlobal('CustomEvent', dom.window.CustomEvent);
@@ -42,6 +43,13 @@ describe('Dossier edit action', () => {
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
     await vi.waitFor(() => expect(container.querySelector('.pmd-status-label')).not.toBeNull());
     container.querySelector<HTMLButtonElement>('.pmd-status-label')!.click();
+    expect(container.querySelector('.pmd-mapping-dialog')).not.toBeNull();
+  });
+
+  it('opens the mapping from the shield', async () => {
+    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
+    await vi.waitFor(() => expect(container.querySelector('.pmd-status-icon')).not.toBeNull());
+    container.querySelector<HTMLButtonElement>('.pmd-status-icon')!.click();
     expect(container.querySelector('.pmd-mapping-dialog')).not.toBeNull();
   });
 });

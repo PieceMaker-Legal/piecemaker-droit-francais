@@ -147,7 +147,7 @@ export function scanPercentLabel(job: ScanJob): string {
 export function scanStatusMarkup(mappingCount = 0, job: ScanJob | null = null, scanned = false): string {
   const scanning = Boolean(job && job.state === 'running');
   const ready = scanned || mappingCount > 0;
-  return `<span class="pmd-status-icon">${shieldCheckIcon}</span>
+  return `<button type="button" class="pmd-status-icon" data-action="mapping" aria-label="Ouvrir le mapping">${shieldCheckIcon}</button>
         ${scanning && job ? scanProgress(job) : `<button type="button" class="pmd-status-label" data-action="mapping">${mappingCount} anonymisé(s)</button>`}
         <button class="pmd-scan-button piecemaker-button piecemaker-button--black piecemaker-button--xs" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : ready ? 'Relancer' : 'Lancer'}</span></button>`;
 }
