@@ -680,6 +680,7 @@ function renderPieces(state: ViewState): HTMLElement {
 
 function render(state: ViewState): void {
   const { root } = state;
+  const listScrollPositions = Array.from(root.querySelectorAll<HTMLElement>('.pm-tampon__list'), (list) => list.scrollTop);
   root.replaceChildren();
   const toolbar = element('header', 'pm-tampon__toolbar');
   if (state.cases.length > 0) {
@@ -725,6 +726,9 @@ function render(state: ViewState): void {
     overlay.append(renderBuilder(state));
     root.append(overlay);
   }
+  root.querySelectorAll<HTMLElement>('.pm-tampon__list').forEach((list, index) => {
+    list.scrollTop = listScrollPositions[index] ?? 0;
+  });
 }
 
 export function mount(container: HTMLElement, api: PluginAPI): void {
