@@ -439,6 +439,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         openMapping();
         return;
       }
+      if (action === 'local-models') {
+        window.dispatchEvent(new CustomEvent('piecemaker:open-settings', { detail: { tab: 'localModels' } }));
+        return;
+      }
       if (action === 'agents') {
         if (!context.project) return;
         knowledgeApi.ensureAgentInstructions(context.project.name)
