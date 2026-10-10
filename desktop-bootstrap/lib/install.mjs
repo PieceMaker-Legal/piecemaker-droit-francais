@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import { buildDesktopApp } from './build.mjs';
 import { generateCertificates, isCaTrusted, signApplication, trustCertificateAuthority } from './certificates.mjs';
 import { createShortcuts, installApplication, launchApplication, quitRunningApplication } from './place.mjs';
-import { finishProgress, openProgressWindow } from './progress.mjs';
+import { finishProgress, openProgressWindow, settleProgressWindow } from './progress.mjs';
 import { ui } from './ui.mjs';
 import {
   IS_MAC,
@@ -31,7 +31,7 @@ async function main() {
   await fs.mkdir(bootstrapHome, { recursive: true });
   process.chdir(bootstrapHome);
 
-  if (!skipProgress) openProgressWindow({ version: releaseTag });
+  if (!skipProgress) await openProgressWindow({ version: releaseTag, offerPiste: !skipLaunch });
   console.log(`\n${PRODUCT_NAME} — installation de l'application de bureau (${releaseTag})`);
 
   ui.step("Autorité locale du proxy d'anonymisation");
@@ -110,3 +110,4 @@ try {
   finishProgress({ ok: false, error: error.message });
   process.exitCode = 1;
 }
+await settleProgressWindow();

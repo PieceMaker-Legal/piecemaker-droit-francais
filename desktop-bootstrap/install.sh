@@ -9,28 +9,6 @@ MIN_NODE_MAJOR=22
 say() { printf '\033[1;34m==\033[0m %s\n' "$1"; }
 fail() { printf '\033[1;31m!!\033[0m %s\n' "$1" >&2; exit 1; }
 
-progress_wanted() {
-  [ "${PIECEMAKER_NO_PROGRESS:-}" = "1" ] && return 1
-  for arg in "$@"; do
-    [ "$arg" = "--no-progress" ] && return 1
-  done
-  return 0
-}
-
-write_progress() {
-  command -v python3 >/dev/null 2>&1 || return 0
-  python3 -c 'import json,sys; json.dump({"state":"running","step":sys.argv[1],"detail":"","current":int(sys.argv[2]),"total":14,"pid":int(sys.argv[3]),"version":sys.argv[4]}, open(sys.argv[5],"w"), ensure_ascii=False)' \
-    "$1" "$2" "$$" "$TAG" "$BOOTSTRAP_HOME/progress.json" || return 0
-}
-
-launch_progress() {
-  progress_wanted "$@" || return 0
-  [ -f "$SRC_DIR/desktop-bootstrap/lib/progress-darwin.py" ] || return 0
-  write_progress "Préparation de l'installation…" 1
-  python3 "$SRC_DIR/desktop-bootstrap/lib/progress-darwin.py" "$BOOTSTRAP_HOME/progress.json" "$$" >/dev/null 2>&1 &
-  echo $! > "$BOOTSTRAP_HOME/progress.pid"
-}
-
 [ "$(uname -s)" = "Darwin" ] || fail "Ce script installe PieceMaker sur macOS. Sur Windows, utilisez install.ps1."
 
 case "$(uname -m)" in
@@ -71,8 +49,6 @@ if [ ! -d "$SRC_DIR" ]; then
   mv "$SRC_DIR.partial" "$SRC_DIR"
 fi
 
-launch_progress "$@"
-
 NODE_BIN=""
 if command -v node >/dev/null 2>&1; then
   CURRENT_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
@@ -82,7 +58,6 @@ if command -v node >/dev/null 2>&1; then
 fi
 
 if [ -z "$NODE_BIN" ]; then
-  write_progress "Installation d'un Node.js dédié…" 2
   say "Installation d'un Node.js dédié (aucune modification du système)…"
   NODE_FILE="$(curl -fsSL "https://nodejs.org/dist/$NODE_CHANNEL/SHASUMS256.txt" \
     | sed -n "s/.*\(node-v[0-9.]*-darwin-$NODE_ARCH\.tar\.gz\)$/\1/p" | head -n 1)"

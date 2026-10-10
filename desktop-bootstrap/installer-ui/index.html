@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Installation de PieceMaker</title>
+<style>
+  :root {
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --surface: #ffffff;
+    --page: #f5f6f8;
+    --accent: #2563eb;
+    --accent-soft: #eff4ff;
+    --success: #15803d;
+    --success-soft: #ecfdf3;
+    --danger: #b91c1c;
+    --danger-soft: #fef2f2;
+    --mark: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--page); color: var(--ink); }
+  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px 24px 28px; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  header img { width: 48px; height: 48px; }
+  header h1 { font-size: 19px; margin: 0; }
+  header p { margin: 0; color: var(--muted); font-size: 12.5px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; }
+  .step-title { font-size: 15px; font-weight: 600; margin: 0; }
+  .detail { color: var(--muted); font-size: 12.5px; min-height: 19px; margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 12px 0 8px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .4s ease; }
+  .note { color: var(--muted); font-size: 12.5px; margin: 0; }
+  #progress.done .bar > div { background: var(--success); }
+  #progress.failed .bar > div { background: var(--danger); }
+  #progress.failed .step-title { color: var(--danger); }
+  h2 { font-size: 16px; margin: 0 0 4px; }
+  .intro { color: var(--muted); margin: 0 0 14px; }
+  .stepper { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0 0 16px; }
+  .stepper li { flex: 1; font-size: 12px; color: var(--muted); border-top: 3px solid var(--line); padding-top: 6px; cursor: pointer; }
+  .stepper li.current { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .stepper li.past { color: var(--ink); border-color: #93b4f5; }
+  .panel h3 { font-size: 15px; margin: 0 0 8px; }
+  .panel ol, .panel ul { margin: 8px 0 12px; padding-left: 20px; }
+  .panel li { margin: 4px 0; }
+  .panel b { font-weight: 600; }
+  .link-button, button { font: inherit; border-radius: 8px; cursor: pointer; }
+  .link-button { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; border: 0; padding: 8px 14px; font-weight: 600; }
+  .link-button:hover { filter: brightness(1.08); }
+  .secondary { background: var(--surface); color: var(--ink); border: 1px solid var(--line); padding: 7px 12px; }
+  .ghost { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 4px; }
+  .hint { background: var(--accent-soft); border-radius: 8px; padding: 9px 12px; margin: 10px 0; font-size: 13px; }
+  .shot { position: relative; margin: 12px 0 4px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot.narrow { max-width: 380px; }
+  .shot.medium { max-width: 560px; }
+  .mark { position: absolute; border: 3px solid var(--mark); border-radius: 8px; box-shadow: 0 0 0 4px rgba(245, 158, 11, .25); }
+  .mark span { position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%); white-space: nowrap; background: var(--mark); color: #fff; font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 6px; }
+  .mark span.inside { left: auto; right: 8px; }
+  figcaption { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .nav { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .nav .right { display: flex; gap: 8px; }
+  .mock { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 12px 0 4px; font-size: 12.5px; background: #fff; }
+  .mock h4 { margin: 0 0 8px; font-size: 13px; }
+  .mock table { width: 100%; border-collapse: collapse; }
+  .mock th, .mock td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .mock th { color: var(--muted); font-weight: 500; }
+  .mock .hl { outline: 3px solid var(--mark); outline-offset: -2px; border-radius: 4px; }
+  .mock a { color: #1d4ed8; }
+  form { margin-top: 14px; display: grid; gap: 10px; }
+  label { font-weight: 600; font-size: 13px; }
+  .field { display: flex; gap: 8px; margin-top: 4px; }
+  input { flex: 1; font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 8px 10px; border: 1px solid #cbd2dc; border-radius: 8px; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+  .message { border-radius: 8px; padding: 9px 12px; font-size: 13px; }
+  .message.error { background: var(--danger-soft); color: var(--danger); }
+  .message.busy { background: var(--accent-soft); }
+  .success { display: flex; gap: 12px; align-items: flex-start; }
+  .success .check { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--success-soft); color: var(--success); display: grid; place-items: center; font-weight: 700; }
+  .success p { margin: 2px 0 0; color: var(--muted); }
+  code { font-size: 12px; background: #f1f3f5; padding: 1px 5px; border-radius: 4px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <img src="logo.png" alt="">
+  <div>
+    <h1>Installation de PieceMaker</h1>
+    <p id="version"></p>
+  </div>
+</header>
+
+<section id="progress" class="card" aria-live="polite">
+  <p class="step-title" id="step">Démarrage…</p>
+  <p class="detail" id="detail"></p>
+  <div class="bar"><div id="fill"></div></div>
+  <p class="note" id="note"></p>
+</section>
+
+<section id="piste-done" class="card" hidden>
+  <div class="success">
+    <div class="check">✓</div>
+    <div>
+      <h2>Accès Légifrance et Judilibre configuré</h2>
+      <p>Les identifiants PISTE de ce poste sont enregistrés dans <code id="env-file"></code>.</p>
+      <button class="ghost" type="button" id="replace">Remplacer les identifiants</button>
+    </div>
+  </div>
+</section>
+
+<section id="piste-skipped" class="card" hidden>
+  <h2>Accès Légifrance et Judilibre à configurer plus tard</h2>
+  <p class="intro">Sans identifiants PISTE, PieceMaker ne peut pas citer les textes ni la jurisprudence officiels. Relancez l'installation pour retrouver ce guide.</p>
+  <button class="secondary" type="button" id="resume">Reprendre le guide</button>
+</section>
+
+<section id="piste" class="card" hidden>
+  <h2>Accès Légifrance et Judilibre</h2>
+  <p class="intro">PieceMaker interroge directement les bases officielles Légifrance (textes) et Judilibre (jurisprudence de la Cour de cassation et des juridictions). L'État les ouvre gratuitement par le portail <b>PISTE</b>, avec des identifiants personnels. Comptez une dizaine de minutes ; chaque bouton ouvre la bonne page dans votre navigateur.</p>
+
+  <ol class="stepper" id="stepper">
+    <li data-goto="1">1. Compte PISTE</li>
+    <li data-goto="2">2. Conditions d'utilisation</li>
+    <li data-goto="3">3. Application</li>
+    <li data-goto="4">4. Identifiants</li>
+  </ol>
+
+  <div class="panel" data-step="1">
+    <h3>Créez votre compte PISTE</h3>
+    <p><button class="link-button" type="button" data-open="registration">Ouvrir la page d'inscription ↗</button></p>
+    <ol>
+      <li>Renseignez votre <b>nom</b> et votre <b>adresse e-mail</b> : elle deviendra votre identifiant PISTE.</li>
+      <li>Choisissez un <b>mot de passe d'au moins 12 caractères</b> avec une majuscule, une minuscule, un chiffre et un caractère spécial parmi <code>! @ # ^ + ( ) , ; . ? : { } | _ § ~</code>.</li>
+      <li>Laissez <b>« Code de l'organisation »</b> vide : vous serez rattaché à l'organisation « Universelle », qui donne accès à Légifrance et à JUDILIBRE.</li>
+      <li>Cochez <b>« J'accepte les termes des CGU »</b>, passez la vérification de sécurité, puis cliquez sur <b>« S'inscrire »</b>.</li>
+      <li>Ouvrez l'e-mail envoyé par PISTE et cliquez sur le lien d'activation, puis connectez-vous.</li>
+    </ol>
+    <figure class="shot narrow">
+      <img src="piste/inscription.png" alt="Bas du formulaire d'inscription PISTE">
+      <div class="mark" style="left:10.6%;top:5%;width:78.4%;height:7.2%"><span class="inside">Laisser vide</span></div>
+      <div class="mark" style="left:9.6%;top:34%;width:6.2%;height:4.8%"><span>À cocher</span></div>
+    </figure>
+    <figcaption>Bas du formulaire d'inscription sur piste.gouv.fr.</figcaption>
+    <p class="hint">Vous avez déjà un compte PISTE ? <button class="ghost" type="button" data-open="login">Connectez-vous</button> et passez à l'étape 2.</p>
+  </div>
+
+  <div class="panel" data-step="2" hidden>
+    <h3>Acceptez les conditions d'utilisation de Légifrance et JUDILIBRE</h3>
+    <p>Sans cette acceptation, PISTE grise les cases de ces deux API à l'étape suivante.</p>
+    <p><button class="link-button" type="button" data-open="cgu">Ouvrir « Consentement CGU API » ↗</button></p>
+    <ol>
+      <li>Dans le champ <b>« Recherche »</b>, tapez <code>Légifrance</code> et cochez la ligne dont l'environnement est <b>PROD</b>.</li>
+      <li>Recommencez avec <code>JUDILIBRE</code> et cochez sa ligne <b>PROD</b>.</li>
+      <li>Cliquez sur <b>« Valider mes choix CGU »</b>.</li>
+    </ol>
+    <figure class="shot medium"><img src="piste/cgu.png" alt="Page Consentement CGU avec Légifrance et JUDILIBRE cochés"></figure>
+    <figcaption>Les deux lignes PROD cochées. Une case grisée et déjà cochée signifie que les CGU sont déjà acceptées.</figcaption>
+  </div>
+
+  <div class="panel" data-step="3" hidden>
+    <h3>Créez l'application de production « PieceMaker »</h3>
+    <p><button class="link-button" type="button" data-open="applications">Ouvrir « Applications » ↗</button></p>
+    <ol>
+      <li>Cliquez sur <b>« Créer une application »</b>, laissez l'environnement <b>PRODUCTION</b>, puis cliquez sur <b>« Créer l'application »</b>.</li>
+      <li>Remplissez au minimum : <b>Nom de l'application</b> <code>PieceMaker</code>, votre <b>e-mail</b>, <b>Information sur la structure</b> (le nom de votre cabinet) et <b>Responsable d'application</b> (votre nom).</li>
+      <li>Dans <b>« Sélectionner les API »</b>, cochez la colonne <b>« Souscrite »</b> pour <b>JUDILIBRE</b> et pour <b>Légifrance</b>. Si une case est grisée, revenez à l'étape 2.</li>
+      <li>Enregistrez l'application.</li>
+    </ol>
+    <p class="hint">Ne prenez pas l'application « APP_SANDBOX_… » créée automatiquement : c'est un bac à sable, ses identifiants ne fonctionnent pas avec les vraies bases.</p>
+    <figure class="shot"><img src="piste/apps.png" alt="Liste des applications PISTE avec le bouton Créer une application"></figure>
+    <figure class="shot medium"><img src="piste/environnement.png" alt="Choix de l'environnement PRODUCTION"></figure>
+    <figure class="shot medium">
+      <img src="piste/api.png" alt="Sélection des API JUDILIBRE et Légifrance">
+      <div class="mark" style="left:61.9%;top:16.9%;width:6.5%;height:14.6%"></div>
+      <div class="mark" style="left:61.9%;top:37.2%;width:6.5%;height:14.6%"><span>Souscrite</span></div>
+    </figure>
+    <figcaption>Captures de piste.gouv.fr ; les adresses affichées sont fictives.</figcaption>
+  </div>
+
+  <div class="panel" data-step="4" hidden>
+    <h3>Copiez vos identifiants dans PieceMaker</h3>
+    <ol>
+      <li>Dans <button class="ghost" type="button" data-open="applications">Applications</button>, cliquez sur le nom de votre application <b>PieceMaker</b>.</li>
+      <li>Dans la section <b>« Identifiants Oauth »</b>, copiez le <b>Client ID</b> et collez-le ci-dessous.</li>
+      <li>Cliquez sur <b>« Consulter le secret »</b>, copiez le <b>Client Secret</b> et collez-le ci-dessous.</li>
+    </ol>
+    <div class="mock" aria-hidden="true">
+      <h4>Identifiants Oauth</h4>
+      <table>
+        <tr><th>Client ID</th><th>Type</th><th>Créé</th><th>Secret key</th></tr>
+        <tr><td><span class="hl">3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c</span></td><td>Confidentiel</td><td>10 oct. 2026</td><td><a class="hl">Consulter le secret</a></td></tr>
+      </table>
+    </div>
+    <figcaption>Illustration aux valeurs fictives de la fiche d'application PISTE.</figcaption>
+    <form id="credentials" autocomplete="off">
+      <div>
+        <label for="client-id">Client ID</label>
+        <div class="field">
+          <input id="client-id" spellcheck="false" placeholder="ex. 3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c">
+          <button class="secondary" type="button" data-paste="client-id">Coller</button>
+        </div>
+      </div>
+      <div>
+        <label for="client-secret">Client Secret</label>
+        <div class="field">
+          <input id="client-secret" type="password" spellcheck="false">
+          <button class="secondary" type="button" data-paste="client-secret">Coller</button>
+        </div>
+      </div>
+      <div class="message" id="message" hidden></div>
+      <div><button class="link-button" type="submit" id="submit">Vérifier et enregistrer</button></div>
+    </form>
+  </div>
+
+  <div class="nav">
+    <button class="ghost" type="button" id="skip">Je le ferai plus tard</button>
+    <div class="right">
+      <button class="secondary" type="button" id="previous">Précédent</button>
+      <button class="link-button" type="button" id="next">Étape suivante</button>
+    </div>
+  </div>
+</section>
+
+<script>
+  const elements = Object.fromEntries([...document.querySelectorAll('[id]')].map((node) => [node.id, node]));
+  const LAST_STEP = 4;
+  let currentStep = 1;
+  let replacing = false;
+  let lastState = 'running';
+
+  function post(path, body) {
+    return fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    }).then((response) => response.json());
+  }
+
+  function showStep(step, scroll = true) {
+    currentStep = Math.min(Math.max(step, 1), LAST_STEP);
+    document.querySelectorAll('.panel').forEach((panel) => {
+      panel.hidden = Number(panel.dataset.step) !== currentStep;
+    });
+    document.querySelectorAll('#stepper li').forEach((item) => {
+      const value = Number(item.dataset.goto);
+      item.classList.toggle('current', value === currentStep);
+      item.classList.toggle('past', value < currentStep);
+    });
+    elements.previous.hidden = currentStep === 1;
+    elements.next.hidden = currentStep === LAST_STEP;
+    if (scroll) elements.piste.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
+  function renderProgress(state) {
+    elements.version.textContent = state.version ? `Version ${state.version}` : '';
+    elements.step.textContent = state.step || '';
+    elements.detail.textContent = state.detail || '';
+    const ratio = state.state === 'running' ? Math.min(state.current / Math.max(state.total, 1), 0.97) : 1;
+    elements.fill.style.width = `${Math.max(ratio * 100, 2)}%`;
+    elements.progress.classList.toggle('done', state.state === 'done');
+    elements.progress.classList.toggle('failed', state.state === 'failed');
+    const pistePending = state.piste.offered && !state.piste.configured && !state.piste.skipped;
+    if (state.state === 'running') {
+      elements.note.textContent = pistePending
+        ? 'La construction prend plusieurs minutes. Profitez-en pour préparer l’accès à Légifrance ci-dessous.'
+        : 'La construction prend plusieurs minutes.';
+    } else if (state.state === 'done') {
+      elements.note.textContent = pistePending
+        ? 'PieceMaker est prêt. Il reste à terminer la configuration Légifrance ci-dessous.'
+        : 'Cette fenêtre va se fermer.';
+    } else {
+      elements.note.textContent = 'Le détail de l’erreur est affiché dans le terminal. Vous pouvez fermer cette fenêtre.';
+    }
+  }
+
+  function renderPiste(piste) {
+    const configured = piste.configured && !replacing;
+    elements['piste-done'].hidden = !piste.offered || !configured;
+    elements['piste-skipped'].hidden = !piste.offered || configured || !piste.skipped;
+    elements.piste.hidden = !piste.offered || configured || piste.skipped;
+    elements['env-file'].textContent = piste.envFile;
+  }
+
+  async function refresh() {
+    try {
+      const state = await fetch('state', { cache: 'no-store' }).then((response) => response.json());
+      lastState = state.state;
+      renderProgress(state);
+      renderPiste({ ...state.piste, offered: state.piste.offered && state.state !== 'failed' });
+    } catch {
+      if (lastState === 'done') elements.note.textContent = 'L’installateur est terminé. Vous pouvez fermer cette fenêtre.';
+      if (lastState !== 'running') return;
+    }
+    setTimeout(refresh, 700);
+  }
+
+  function showMessage(kind, text) {
+    elements.message.hidden = !text;
+    elements.message.className = `message ${kind}`;
+    elements.message.textContent = text;
+  }
+
+  document.querySelectorAll('[data-open]').forEach((button) => {
+    button.addEventListener('click', () => post('open', { link: button.dataset.open }));
+  });
+  document.querySelectorAll('[data-goto]').forEach((item) => {
+    item.addEventListener('click', () => showStep(Number(item.dataset.goto)));
+  });
+  document.querySelectorAll('[data-paste]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const { text } = await fetch('clipboard', { cache: 'no-store' }).then((response) => response.json());
+      elements[button.dataset.paste].value = text;
+    });
+  });
+  elements.previous.addEventListener('click', () => showStep(currentStep - 1));
+  elements.next.addEventListener('click', () => showStep(currentStep + 1));
+  elements.skip.addEventListener('click', () => post('piste/skip', { skipped: true }));
+  elements.resume.addEventListener('click', () => post('piste/skip', { skipped: false }));
+  elements.replace.addEventListener('click', () => {
+    replacing = true;
+    elements['piste-done'].hidden = true;
+    elements.piste.hidden = false;
+    showStep(LAST_STEP);
+  });
+
+  elements.credentials.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    elements.submit.disabled = true;
+    showMessage('busy', 'Vérification auprès de PISTE, de Légifrance et de Judilibre…');
+    try {
+      const result = await post('piste', {
+        clientId: elements['client-id'].value,
+        clientSecret: elements['client-secret'].value,
+      });
+      if (result.ok) {
+        replacing = false;
+        showMessage('', '');
+        elements['client-secret'].value = '';
+      } else {
+        showMessage('error', result.message);
+      }
+    } catch {
+      showMessage('error', 'L’installateur ne répond plus. Relancez l’installation pour réessayer.');
+    } finally {
+      elements.submit.disabled = false;
+    }
+  });
+
+  showStep(1, false);
+  refresh();
+</script>
+</body>
+</html>
