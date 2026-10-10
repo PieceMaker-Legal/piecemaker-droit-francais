@@ -93,7 +93,12 @@ export function LocalModelsSettingsTab() {
                 <p className="text-xs text-muted-foreground">{busy && activity.progress ? activity.progress : t(`localModels.${model}`)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {busy ? (
+                {models === null && !error ? (
+                  <span role="status" className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                    {t('localModels.checking')}
+                  </span>
+                ) : busy ? (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 ) : confirmingRemoval === model ? (
                   <>
