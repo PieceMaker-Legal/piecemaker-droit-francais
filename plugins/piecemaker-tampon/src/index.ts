@@ -70,6 +70,7 @@ const STYLE_TEXT = `
   .pm-tampon__stack > .pm-tampon__pieces { height: 100%; display: flex; flex-direction: column; }
   .pm-tampon__stack > .pm-tampon__pieces > .pm-tampon__body { flex: 1; min-height: 0; overflow: hidden; }
   .pm-tampon__toolbar { grid-row: 1; width: 100%; max-width: 56rem; margin: 0 auto 12px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+  .pm-tampon__toolbar select { flex: 1 1 auto; width: auto; min-width: 0; }
   .pm-tampon__card { min-width: 0; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: 1rem; background: hsl(var(--card, 0 0% 100%)); box-shadow: none; }
   .pm-tampon__header, .pm-tampon__footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; min-width: 0; }
   .pm-tampon__footer { align-items: center; flex-wrap: wrap; justify-content: flex-start; border-top: 1px solid hsl(var(--border, 220 13% 91%)); }
@@ -556,30 +557,6 @@ function renderBuilder(state: ViewState): HTMLElement {
 
 function renderPieces(state: ViewState): HTMLElement {
   const card = element('section', 'pm-tampon__pieces');
-  const header = element('div', 'pm-tampon__header');
-  header.append(element('h2', 'pm-tampon__title piecemaker-display', 'Pièces à tamponner'));
-  if (state.cases.length > 0) {
-    const select = element('select');
-    select.setAttribute('aria-label', 'Dossier à tamponner');
-    for (const entry of state.cases) {
-      const option = element('option');
-      option.value = entry.path;
-      option.textContent = entry.name;
-      option.selected = entry.path === state.selectedCaseId;
-      select.append(option);
-    }
-    select.addEventListener('change', () => {
-      state.selectedCaseId = select.value || null;
-      const projectPath = projectPathOf(state.api);
-      if (projectPath) casesCache.set(projectPath, { cases: state.cases, selectedCaseId: state.selectedCaseId });
-      state.selectedOrder = [];
-      state.runResult = null;
-      state.runError = null;
-      void loadOriginals(state);
-    });
-    header.append(select);
-  }
-  card.append(header);
   const body = element('div', 'pm-tampon__body');
   if (state.casesLoading) body.append(element('p', 'pm-tampon__muted', 'Chargement des dossiers…'));
   else if (state.casesError) body.append(element('p', 'pm-tampon__error', state.casesError));
@@ -704,6 +681,27 @@ function render(state: ViewState): void {
   const { root } = state;
   root.replaceChildren();
   const toolbar = element('header', 'pm-tampon__toolbar');
+  if (state.cases.length > 0) {
+    const select = element('select');
+    select.setAttribute('aria-label', 'Dossier à tamponner');
+    for (const entry of state.cases) {
+      const option = element('option');
+      option.value = entry.path;
+      option.textContent = entry.name;
+      option.selected = entry.path === state.selectedCaseId;
+      select.append(option);
+    }
+    select.addEventListener('change', () => {
+      state.selectedCaseId = select.value || null;
+      const projectPath = projectPathOf(state.api);
+      if (projectPath) casesCache.set(projectPath, { cases: state.cases, selectedCaseId: state.selectedCaseId });
+      state.selectedOrder = [];
+      state.runResult = null;
+      state.runError = null;
+      void loadOriginals(state);
+    });
+    toolbar.append(select);
+  }
   const stampButton = button('', () => {
     state.builderOpen = true;
     render(state);
