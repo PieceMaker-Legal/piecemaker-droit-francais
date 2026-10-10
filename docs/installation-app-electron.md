@@ -35,34 +35,41 @@ sh install.sh --no-launch
 Options : `--no-certificate` (ne déclare pas l'autorité locale au système et ne
 signe pas l'application ; l'autorité elle-même est toujours générée, le proxy
 d'anonymisation en a besoin),
-`--no-launch` (n'ouvre pas l'application à la fin).
+`--no-launch` (n'ouvre pas l'application à la fin),
+`--no-progress` (n'ouvre pas la fenêtre de progression).
 
 Variables d'environnement : `PIECEMAKER_TAG` (version à construire, par défaut
 la dernière *release* publiée), `PIECEMAKER_REPO`, `PIECEMAKER_BOOTSTRAP_HOME`
 (défaut `~/.piecemaker/bootstrap`), `PIECEMAKER_HOME` (défaut `~/.piecemaker`),
 `PIECEMAKER_NODE_CHANNEL`, `PIECEMAKER_COMPONENTS_HOME` (déplace l'interpréteur
-Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`).
+Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
+`PIECEMAKER_NO_PROGRESS=1` (même effet que `--no-progress`).
 
 ## Déroulé
 
 1. **Garde-fous** — macOS ou Windows 64 bits uniquement ; sur macOS, `curl`,
    `tar`, `openssl` et les *Command Line Tools* Xcode sont exigés.
-2. **Résolution de la version** — `releases/latest` de l'API GitHub. Les tags
+2. **Fenêtre de progression** — une fenêtre native suit les étapes (macOS :
+   Python/Tk ; Windows : WinForms). Elle s'ouvre dès que les sources sont
+   disponibles, reste au premier plan le temps d'être vue, puis se ferme toute
+   seule à la fin. `--no-progress` ou `PIECEMAKER_NO_PROGRESS=1` la désactive ;
+   un échec d'ouverture n'interrompt pas l'installation.
+3. **Résolution de la version** — `releases/latest` de l'API GitHub. Les tags
    `v1.37.x` hérités de CloudCLI amont ne sont donc jamais choisis par erreur.
-3. **Sources** — archive du tag décompressée dans
+4. **Sources** — archive du tag décompressée dans
    `~/.piecemaker/bootstrap/src/<tag>/`.
-4. **Node.js** — si le poste n'a pas Node ≥ 22, une version dédiée est
+5. **Node.js** — si le poste n'a pas Node ≥ 22, une version dédiée est
    téléchargée depuis nodejs.org dans `~/.piecemaker/bootstrap/toolchain/`.
    Rien n'est installé au niveau système, aucun gestionnaire de paquets requis.
-5. **Autorité locale** — générée (ou réutilisée si encore valide) avant la
+6. **Autorité locale** — générée (ou réutilisée si encore valide) avant la
    construction : le proxy d'anonymisation s'en sert pour intercepter les appels
    aux API d'IA, et le test ci-dessous la vérifie.
-6. **Proxy d'anonymisation** — compilé juste après `npm install` (`cargo build --release`), puis **testé en
+7. **Proxy d'anonymisation** — compilé juste après `npm install` (`cargo build --release`), puis **testé en
    bac à sable** par `server/piecemaker/anonymizer/hudsucker-smoke.cjs` avant
    toute autre étape. Un échec interrompt l'installation : l'application déjà
    installée n'est pas remplacée, les sessions existantes continuent de
    fonctionner. Détail plus bas (« Test du proxy en bac à sable »).
-7. **Construction** — `npm install`, `npm run build`, `npm run desktop:stage`,
+8. **Construction** — `npm install`, `npm run build`, `npm run desktop:stage`,
    puis `electron-builder --dir` avec `CSC_IDENTITY_AUTO_DISCOVERY=false` pour
    qu'electron-builder n'aille pas chercher une identité de signature du poste.
    Les trois étapes de `desktop:pack` sont appelées séparément afin d'insérer,
@@ -79,7 +86,7 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`).
    local compilé, les ressources PieceMaker non compilées, et la surcouche
    d'ouverture automatique. Le manifeste généré du *stage* est complété en
    conséquence (`files`, `main`, `build.extraMetadata.main`).
-8. **Installation** — `/Applications/PieceMaker.app` (repli sur
+9. **Installation** — `/Applications/PieceMaker.app` (repli sur
    `~/Applications` si le dossier n'est pas accessible en écriture), ou
    `%LOCALAPPDATA%\Programs\PieceMaker` avec raccourcis menu Démarrer et
    Bureau. Le remplacement est un échange, jamais « supprimer puis copier » :
@@ -92,20 +99,20 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`).
    proprement, puis arrêtés au bout de 15 s. Si le dossier reste verrouillé,
    l'installation s'arrête sur un message clair et l'application en place
    reste intacte.
-9. **Certificat** — déclaration de confiance et signature, voir ci-dessous.
-10. **Composants Python** — MarkItDown, la bibliothèque GLiNER2 et le reste de
+10. **Certificat** — déclaration de confiance et signature, voir ci-dessous.
+11. **Composants Python** — MarkItDown, la bibliothèque GLiNER2 et le reste de
    `requirements.txt`, dans un venv. Sans eux l'application s'ouvre, mais
    l'anonymisation et la conversion des pièces ne démarrent pas. Les modèles
    locaux (GLiNER2-PII, MinerU) ne sont plus téléchargés ici. Le détail est
    plus bas.
-11. **Lancement** de l'application.
+12. **Lancement** de l'application.
 
-Les étapes 3 à 7 et 10 sont idempotentes : sources, Node, venv et modèles déjà
+Les étapes 4 à 8 et 11 sont idempotentes : sources, Node, venv et modèles déjà
 présents sont réutilisés, et un certificat encore valide n'est pas régénéré.
 
 **Dossier courant.** L'installateur ne s'exécute jamais depuis le dossier qu'il
 hérite : lancé par la mise à jour intégrée, ce dossier est celui de
-l'application que l'étape 8 remplace. Sur macOS il disparaît et `pip` échoue
+l'application que l'étape 9 remplace. Sur macOS il disparaît et `pip` échoue
 ensuite sur `os.getcwd()` (constaté à l'installation de MinerU) ; sous Windows
 il verrouille le dossier et empêche son remplacement. Quatre verrous
 indépendants, chacun suffisant :
@@ -366,10 +373,13 @@ desktop-bootstrap/
     certificates-win32.mjs       New-SelfSignedCertificate, magasins, Authenticode
     panel-darwin.mjs             panneau d'autorisation macOS en session graphique
     consent.mjs                  texte d'autorisation et panneau Windows
+    progress.mjs                 état de progression et lancement de la fenêtre
+    progress-darwin.py           fenêtre de progression macOS (Tk)
+    progress-win32.ps1           fenêtre de progression Windows (WinForms)
     place.mjs                    installation, raccourcis, lancement
     paths.mjs                    emplacements et noms de produit
     shell.mjs                    exécution de processus
-    ui.mjs                       sortie console
+    ui.mjs                       sortie console et relais vers la fenêtre
 ```
 
 ## Rapport au reste du dépôt
