@@ -120,6 +120,7 @@ Ces points ont déjà été perdus ou ont failli l'être. Les contrôler un par 
 | `src/modules/code-editor/EditorSidebar.tsx` | `import CodeEditor from '@/piecemaker/editor-tabs/TabbedCodeEditor';` (au lieu de `@/modules/code-editor/CodeEditor`) |
 | `src/modules/project-workspace/WorkspaceMain.tsx` | l'import et l'appel `usePiecemakerEditorBridge(handleFileOpen);` |
 | `src/modules/project-workspace/WorkspaceHeader.tsx` | `import { WorkspaceIconTabs as WorkspaceTabs } from '@/modules/piecemaker-workspace-tabs';` |
+| `src/modules/project-workspace/WorkspaceMain.tsx` | `export default React.memo(withWorkspacePanels(WorkspaceMain));` et import de `withWorkspacePanels` |
 
 ### `codex-runtime.provider.ts` — le masquage des skills par dossier dans Codex
 
@@ -165,17 +166,27 @@ substitution sur le nouveau site plutôt que de la supprimer.
 
 Le module `src/modules/piecemaker-workspace-tabs/` affiche les icônes seules,
 les noms au survol et les onglets excédentaires dans un menu sans scroll.
-Le seul branchement CloudCLI remplace l'import de `WorkspaceTabs` dans
+Le branchement de la barre remplace l'import de `WorkspaceTabs` dans
 `WorkspaceHeader.tsx` par `WorkspaceIconTabs`.
+
+`WorkspaceMain.tsx` importe aussi `withWorkspacePanels` et enveloppe son export
+avec cette fonction. Le composant CloudCLI reste intact : Chat ou Terminal
+reste la vue principale, tandis que les autres outils et plugins occupent des
+cards à droite. Plusieurs cards peuvent rester ouvertes, être redimensionnées,
+agrandies dans l'espace de travail ou fermées indépendamment. L'agrandissement
+masque les autres vues sans démonter leur contenu. Les fichiers ouverts depuis
+les volets utilisent la visionneuse existante.
 
 La sauvegarde du code est dans `scripts/piecemaker/workspace-tabs/backup.json`.
 Le test `src/modules/piecemaker-workspace-tabs/tests/WorkspaceIconTabs.test.tsx`
 exécute automatiquement `node scripts/piecemaker/workspace-tabs/restore.mjs` :
-les fichiers supprimés sont restaurés et l'import upstream est réinjecté.
+les fichiers supprimés sont restaurés et les branchements upstream sont réinjectés.
 Les fichiers PieceMaker encore présents ne sont jamais écrasés. Si upstream
 déplace le branchement, le script échoue explicitement pour demander son report.
-On peut lancer ce script avant les tests si le module entier a été supprimé.
-Actualiser la sauvegarde lorsque le composant ou sa feuille de style évolue.
+Si le module entier a été supprimé, le test autonome
+`node --test scripts/piecemaker/workspace-tabs/restore.test.mjs` le rétablit
+avant les tests frontend. Le script peut aussi être exécuté directement.
+Actualiser la sauvegarde lorsque le module, ses tests ou ses feuilles de style évoluent.
 
 ### `AuthContext.tsx` — le piège le plus coûteux
 
