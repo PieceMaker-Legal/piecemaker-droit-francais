@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { lstat, mkdtemp, readFile, readlink, rm, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { agentInstructionsTemplate, ensureAgentInstructionFiles, mirrorAgentInstructionFiles, startAgentInstructionsMirror } from './agent-instructions.js';
+import { agentInstructionsTemplate, ensureAgentInstructionFiles, startAgentInstructionsMigration } from './agent-instructions.js';
 
 const SHARED = '/home/avocat/.piecemaker/CLAUDE.md';
 
@@ -19,96 +19,80 @@ async function withProject(run: (root: string) => Promise<void>) {
 
 const read = (root: string, name: string) => readFile(path.join(root, name), 'utf8');
 
-const isLinkToAgents = async (root: string) => (await lstat(path.join(root, 'CLAUDE.md'))).isSymbolicLink()
-  && (await readlink(path.join(root, 'CLAUDE.md'))) === 'AGENTS.md';
-
-test('creates AGENTS.md from the template and links CLAUDE.md to it', () => withProject(async (root) => {
+test('creates AGENTS.md from the template and a CLAUDE.md that imports it', () => withProject(async (root) => {
   assert.deepEqual(await ensureAgentInstructionFiles(root, SHARED), ['CLAUDE.md', 'AGENTS.md']);
   assert.equal(await read(root, 'AGENTS.md'), agentInstructionsTemplate(SHARED));
-  assert.ok(await isLinkToAgents(root));
-  assert.match(await read(root, 'CLAUDE.md'), /^@\/home\/avocat\/\.piecemaker\/CLAUDE\.md\n/);
+  assert.match(await read(root, 'AGENTS.md'), /^@\/home\/avocat\/\.piecemaker\/CLAUDE\.md\n/);
+  assert.equal(await read(root, 'CLAUDE.md'), '@AGENTS.md\n');
 }));
 
-test('moves a lone CLAUDE.md into AGENTS.md once mirrored', () => withProject(async (root) => {
+test('moves a lone CLAUDE.md into AGENTS.md', () => withProject(async (root) => {
   await writeFile(path.join(root, 'CLAUDE.md'), 'consignes du dossier\n');
   assert.deepEqual(await ensureAgentInstructionFiles(root, SHARED), ['AGENTS.md']);
-  await mirrorAgentInstructionFiles(root);
   assert.equal(await read(root, 'AGENTS.md'), 'consignes du dossier\n');
-  assert.ok(await isLinkToAgents(root));
+  assert.equal(await read(root, 'CLAUDE.md'), '@AGENTS.md\n');
 }));
 
-test('links a missing CLAUDE.md to an existing AGENTS.md', () => withProject(async (root) => {
+test('adds the import next to an existing AGENTS.md', () => withProject(async (root) => {
   await writeFile(path.join(root, 'AGENTS.md'), 'consignes codex\n');
   assert.deepEqual(await ensureAgentInstructionFiles(root, SHARED), ['CLAUDE.md']);
-  assert.ok(await isLinkToAgents(root));
-  assert.equal(await read(root, 'CLAUDE.md'), 'consignes codex\n');
+  assert.equal(await read(root, 'AGENTS.md'), 'consignes codex\n');
+  assert.equal(await read(root, 'CLAUDE.md'), '@AGENTS.md\n');
 }));
 
-test('AGENTS.md wins over a CLAUDE.md that already diverged', () => withProject(async (root) => {
+test('AGENTS.md wins over a CLAUDE.md that diverged', () => withProject(async (root) => {
   await writeFile(path.join(root, 'CLAUDE.md'), 'consignes Claude\n');
   await writeFile(path.join(root, 'AGENTS.md'), 'consignes Codex\n');
   assert.deepEqual(await ensureAgentInstructionFiles(root, SHARED), []);
-  await mirrorAgentInstructionFiles(root);
-  assert.ok(await isLinkToAgents(root));
-  assert.equal(await read(root, 'CLAUDE.md'), 'consignes Codex\n');
+  assert.equal(await read(root, 'AGENTS.md'), 'consignes Codex\n');
+  assert.equal(await read(root, 'CLAUDE.md'), '@AGENTS.md\n');
 }));
 
-test('an edit that replaced the CLAUDE.md link is kept in AGENTS.md', () => withProject(async (root) => {
-  await ensureAgentInstructionFiles(root, SHARED);
-  await mirrorAgentInstructionFiles(root);
-  await rm(path.join(root, 'CLAUDE.md'));
-  await writeFile(path.join(root, 'CLAUDE.md'), 'édité côté Claude\n');
-  await mirrorAgentInstructionFiles(root);
-  assert.equal(await read(root, 'AGENTS.md'), 'édité côté Claude\n');
-  assert.ok(await isLinkToAgents(root));
-}));
-
-test('AGENTS.md wins when both sides changed after the link broke', () => withProject(async (root) => {
-  await ensureAgentInstructionFiles(root, SHARED);
-  await mirrorAgentInstructionFiles(root);
-  await rm(path.join(root, 'CLAUDE.md'));
-  await writeFile(path.join(root, 'CLAUDE.md'), 'édité côté Claude\n');
-  await writeFile(path.join(root, 'AGENTS.md'), 'édité côté Codex\n');
-  await mirrorAgentInstructionFiles(root);
-  assert.equal(await read(root, 'CLAUDE.md'), 'édité côté Codex\n');
-  assert.ok(await isLinkToAgents(root));
-}));
-
-test('inverts an AGENTS.md that links to CLAUDE.md', () => withProject(async (root) => {
-  await writeFile(path.join(root, 'CLAUDE.md'), 'lien\n');
-  await symlink('CLAUDE.md', path.join(root, 'AGENTS.md'));
-  await mirrorAgentInstructionFiles(root);
-  assert.ok((await lstat(path.join(root, 'AGENTS.md'))).isFile());
-  assert.equal(await read(root, 'AGENTS.md'), 'lien\n');
-  assert.ok(await isLinkToAgents(root));
-}));
-
-test('replaces a CLAUDE.md that imports AGENTS.md with the link', () => withProject(async (root) => {
+test('keeps Claude-specific lines written below the import', () => withProject(async (root) => {
   await writeFile(path.join(root, 'AGENTS.md'), 'consignes codex\n');
-  await writeFile(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
-  await mirrorAgentInstructionFiles(root);
-  assert.ok(await isLinkToAgents(root));
-  assert.equal(await read(root, 'AGENTS.md'), 'consignes codex\n');
+  await writeFile(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n\nPropre à Claude\n');
+  assert.deepEqual(await ensureAgentInstructionFiles(root, SHARED), []);
+  assert.equal(await read(root, 'CLAUDE.md'), '@AGENTS.md\n\nPropre à Claude\n');
 }));
 
-test('never copies an AGENTS.md import into AGENTS.md itself', () => withProject(async (root) => {
+test('never copies the import into AGENTS.md itself', () => withProject(async (root) => {
   await writeFile(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
-  await ensureAgentInstructionFiles(root, SHARED);
+  assert.deepEqual(await ensureAgentInstructionFiles(root, SHARED), ['AGENTS.md']);
   assert.equal(await read(root, 'AGENTS.md'), agentInstructionsTemplate(SHARED));
 }));
 
-test('mirror does nothing silently when a file is missing', () => withProject(async (root) => {
-  await mirrorAgentInstructionFiles(root);
-  await writeFile(path.join(root, 'CLAUDE.md'), 'seul\n');
-  await mirrorAgentInstructionFiles(root);
-  await assert.rejects(read(root, 'AGENTS.md'));
+test('replaces a CLAUDE.md symlink with the import without touching AGENTS.md', () => withProject(async (root) => {
+  await writeFile(path.join(root, 'AGENTS.md'), 'consignes\n');
+  await symlink('AGENTS.md', path.join(root, 'CLAUDE.md'));
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.ok((await lstat(path.join(root, 'CLAUDE.md'))).isFile());
+  assert.equal(await read(root, 'CLAUDE.md'), '@AGENTS.md\n');
+  assert.equal(await read(root, 'AGENTS.md'), 'consignes\n');
 }));
 
-test('the watch loop hands each project to the callback once', () => withProject(async (root) => {
+test('leaves an AGENTS.md symlinked to CLAUDE.md untouched', () => withProject(async (root) => {
+  await writeFile(path.join(root, 'CLAUDE.md'), 'lien\n');
+  await symlink('CLAUDE.md', path.join(root, 'AGENTS.md'));
+  assert.deepEqual(await ensureAgentInstructionFiles(root, SHARED), []);
+  assert.equal(await read(root, 'CLAUDE.md'), 'lien\n');
+}));
+
+test('the migration converts existing CLAUDE.md files and hands each project to the callback once', () => withProject(async (root) => {
+  const withClaude = path.join(root, 'avec');
+  const without = path.join(root, 'sans');
+  await mkdir(withClaude);
+  await mkdir(without);
+  await writeFile(path.join(withClaude, 'CLAUDE.md'), 'consignes\n');
   const seen: string[] = [];
-  const stop = startAgentInstructionsMirror(() => [root], (projectRoot) => seen.push(projectRoot));
+  const stop = startAgentInstructionsMigration(() => [withClaude, without, path.join(root, 'absent')], SHARED, (projectRoot) => seen.push(projectRoot));
   try {
-    assert.deepEqual(seen, [path.resolve(root)]);
+    assert.deepEqual(seen, [withClaude, without]);
+    for (let attempt = 0; attempt < 100 && (await read(withClaude, 'CLAUDE.md')) !== '@AGENTS.md\n'; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(await read(withClaude, 'CLAUDE.md'), '@AGENTS.md\n');
+    assert.equal(await read(withClaude, 'AGENTS.md'), 'consignes\n');
+    await assert.rejects(read(without, 'CLAUDE.md'));
   } finally {
     stop();
   }

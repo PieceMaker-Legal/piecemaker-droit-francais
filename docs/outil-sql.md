@@ -137,7 +137,7 @@ erreur.
 
 Claude garde l'enregistrement `user` de l'installateur. Pour les autres agents,
 `declarePieceMakerServer` (`mcp-declaration.ts`), appelée pour chaque dossier
-surveillé par `startAgentInstructionsMirror`, déclare le serveur `piecemaker`
+repéré par `startAgentInstructionsMigration`, déclare le serveur `piecemaker`
 dans `.codex/config.toml`, `.vibe/config.toml`, `.cursor/mcp.json`, la
 configuration OpenCode et `.grok/config.toml` (sans doublon côté Claude, sans
 réécriture si l'entrée est déjà à jour).

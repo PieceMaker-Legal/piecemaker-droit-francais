@@ -17,7 +17,7 @@ skill sert de guide pour ranger un ajout personnel au bon endroit.
 | Instructions ou préférences globales (style, rappels, habitudes) | `~/.piecemaker/custom/perso.md` | Toutes les affaires — ce fichier est importé automatiquement dans chaque dossier via `~/.piecemaker/CLAUDE.md`. |
 | Skill personnelle réutilisable | Nouveau dossier `~/.claude/skills/<nom>/SKILL.md` | Toutes les sessions Claude Code — découverte automatique, jamais écrasée par PieceMaker (un fichier créé à la main n'est jamais remplacé par l'application). |
 | Gabarit personnel (acte, courrier type…) | `~/.piecemaker/templates/` | Disponible pour toute rédaction, indépendamment du dépôt de l'application. |
-| Élément propre à une seule affaire (parties, juridiction, échéances) | Section « Ce dossier » du `CLAUDE.md` / `AGENTS.md` de ce dossier | Uniquement ce dossier-là. |
+| Élément propre à une seule affaire (parties, juridiction, échéances) | Section « Ce dossier » de l'`AGENTS.md` de ce dossier (son `CLAUDE.md` ne contient que `@AGENTS.md`) | Uniquement ce dossier-là. |
 
 Ces emplacements sont hors du dépôt PieceMaker : une mise à jour de PieceMaker
 ne les touche jamais. Réciproquement, modifier l'un de
