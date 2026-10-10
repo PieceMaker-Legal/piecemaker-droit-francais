@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import crossSpawn from 'cross-spawn';
 
+import { recordVibeMessageTime } from '@/modules/providers/list/mistral/mistral-message-times.js';
 import { buildVibeModelsEnvironment } from '@/modules/providers/list/mistral/mistral-vibe-models.js';
 import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index.js';
 import type { IProviderRuntime } from '@/shared/interfaces.js';
@@ -302,6 +303,7 @@ async function spawnVibe(
         if (providerSessionId && isReplayedVibeHistoryEntry(response)) {
           return;
         }
+        recordVibeMessageTime(response);
         const normalized = context.normalizeMessage(response, capturedSessionId || sessionId || null);
         for (const msg of normalized) {
           ws.send(msg);
