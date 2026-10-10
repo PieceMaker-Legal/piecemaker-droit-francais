@@ -1,4 +1,7 @@
 {
+  "tabs": {
+    "git": "Suivi des modifications"
+  },
   "mainContent": {
     "loading": "Chargement de PieceMaker",
     "chooseProject": "Choisissez votre dossier",

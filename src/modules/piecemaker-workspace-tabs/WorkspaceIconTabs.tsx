@@ -1,4 +1,4 @@
-import { ClipboardCheck, Folder, Globe, MessageSquare, MoreVertical, Terminal } from 'lucide-react';
+import { ClipboardCheck, Folder, GitBranch, Globe, MessageSquare, MoreVertical, Terminal } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +26,7 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab, shouldShowTasksTab,
   const tabs = [
     { id: 'chat' as AppTab, label: t('tabs.chat'), icon: MessageSquare },
     { id: 'files' as AppTab, label: t('tabs.files'), icon: Folder },
+    { id: 'git' as AppTab, label: t('tabs.git'), icon: GitBranch },
     ...(shouldShowTasksTab ? [{ id: 'tasks' as AppTab, label: t('tabs.library'), icon: ClipboardCheck }] : []),
     ...(shouldShowBrowserTab ? [{ id: 'browser' as AppTab, label: t('tabs.browser'), icon: Globe }] : []),
     { id: 'shell' as AppTab, label: t('tabs.shell'), icon: Terminal },
