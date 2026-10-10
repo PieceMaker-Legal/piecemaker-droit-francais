@@ -9,7 +9,7 @@ import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 
-import { createAgentInstructionsRouter, startAgentInstructionsMirror } from './agent-instructions.js';
+import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
@@ -68,7 +68,7 @@ installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
 installModelDiscovery(providerRegistry);
 const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
-startAgentInstructionsMirror(() => projectsDb.getProjectPaths().map((row) => row.project_path), declarePieceMakerServer);
+startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => row.project_path), path.join(piecemakerHome(), 'CLAUDE.md'), declarePieceMakerServer);
 
 export function createPieceMakerLocalRouter() {
   return knowledge.localRouter;
