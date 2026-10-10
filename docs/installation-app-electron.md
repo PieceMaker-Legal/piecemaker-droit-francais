@@ -216,8 +216,9 @@ le serveur résout plusieurs chemins relatifs à la racine applicative
 *Cannot find module … verify-citations.cjs*. L'installateur recopie donc
 `server/piecemaker/` en excluant les `.ts` (déjà compilés), `node_modules`,
 `__pycache__`, `.env`, `.DS_Store`, et les skills et agents de
-`piecemaker-plugin/` — le MCP Légifrance vendu (`vendor/mcp/legifrance/`)
-est inclus. Un fichier témoin et le lanceur Légifrance sont vérifiés avant
+`piecemaker-plugin/` — le MCP Légifrance vendu (`vendor/mcp/legifrance/`) et
+le skill `docx-cli` (`vendor/skills/docx-cli/`) sont inclus. Un fichier
+témoin, le lanceur Légifrance et le `SKILL.md` docx-cli sont vérifiés avant
 de poursuivre.
 
 **3. Ouverture automatique.** `bootstrap()` d'amont n'ouvre jamais la cible
