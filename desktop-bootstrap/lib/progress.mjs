@@ -52,7 +52,18 @@ function pisteState() {
 }
 
 function snapshot() {
-  return { ...session.state, piste: pisteState() };
+  return {
+    ...session.state,
+    piste: pisteState(),
+    launch: { offered: Boolean(session.launch), launched: session.launched },
+  };
+}
+
+function launchOnce() {
+  if (!session.launch || session.launched) return false;
+  session.launched = true;
+  session.launch();
+  return true;
 }
 
 function sendJson(response, status, payload) {
@@ -133,6 +144,7 @@ async function route(request, response) {
     sendFile(response, path.join(uiDir, target));
   } else if (request.method === 'GET' && target === 'state') {
     session.lastSeen = Date.now();
+    session.windowSeen = true;
     sendJson(response, 200, snapshot());
   } else if (request.method === 'GET' && target === 'clipboard') {
     sendJson(response, 200, { text: readClipboard() });
@@ -142,6 +154,8 @@ async function route(request, response) {
     sendJson(response, link ? 200 : 400, { ok: Boolean(link) });
   } else if (request.method === 'POST' && target === 'piste') {
     await handlePiste(request, response);
+  } else if (request.method === 'POST' && target === 'launch') {
+    sendJson(response, 200, { ok: launchOnce() });
   } else if (request.method === 'POST' && target === 'piste/skip') {
     session.piste.skipped = (await readBody(request)).skipped !== false;
     sendJson(response, 200, { ok: true });
@@ -190,6 +204,7 @@ function launchWindow(url) {
   });
   child.unref();
   session.window = child;
+  session.windowSeen = true;
 }
 
 function windowAlive() {
@@ -211,6 +226,9 @@ export async function openProgressWindow({
     lastSeen: 0,
     window: null,
     windowClosed: false,
+    windowSeen: false,
+    launch: null,
+    launched: false,
     state: {
       title: `Installation de ${PRODUCT_NAME}`,
       version,
@@ -280,14 +298,27 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function settleProgressWindow({ pollMs = 500 } = {}) {
-  if (!session) return;
-  if (session.state.state === 'done' && pisteStillExpected() && windowAlive()) {
-    console.log("\nDernière étape : configurez l'accès Légifrance et Judilibre dans la fenêtre PieceMaker (ou fermez-la pour le faire plus tard).");
-    while (pisteStillExpected() && windowAlive()) await delay(pollMs);
+function waitingForUser() {
+  return pisteStillExpected() || Boolean(session.launch && !session.launched);
+}
+
+export async function settleProgressWindow({ pollMs = 500, launch = null } = {}) {
+  if (!session) {
+    launch?.();
+    return;
   }
-  if (windowAlive()) await delay(FINAL_STATE_DELAY_MS);
-  if (session.state.state === 'done') session.window?.kill();
+  const done = session.state.state === 'done';
+  session.launch = done ? launch : null;
+  if (done && waitingForUser() && windowAlive()) {
+    console.log(pisteStillExpected()
+      ? "\nDernière étape : configurez l'accès Légifrance et Judilibre dans la fenêtre d'installation (ou cliquez sur « Je le ferai plus tard »)."
+      : `\nOuvrez ${PRODUCT_NAME} depuis la fenêtre d'installation.`);
+    while (waitingForUser() && windowAlive()) await delay(pollMs);
+  }
+  if (!session.windowSeen) launchOnce();
+  else if (session.launch && !session.launched) console.log(`${PRODUCT_NAME} n'a pas été ouvert : lancez-le depuis vos applications.`);
+  if (windowAlive() && !session.launched) await delay(FINAL_STATE_DELAY_MS);
+  if (done) session.window?.kill();
   session.server.close();
   session.server.closeAllConnections();
   session = null;

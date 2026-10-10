@@ -58,13 +58,9 @@ async function main() {
     composants.installRuntimeComponents({ sourceDir, output: ui })
   ));
 
-  if (!skipLaunch) {
-    ui.step(`Démarrage de ${PRODUCT_NAME}…`);
-    launchApplication(installedPath);
-  }
-
   console.log(`\n${PRODUCT_NAME} est installé : ${installedPath}`);
   console.log(`Certificats locaux : ${certsDir}`);
+  return installedPath;
 }
 
 async function runCertificateStep(installedPath) {
@@ -102,12 +98,20 @@ async function runCertificateStep(installedPath) {
   }
 }
 
+let installedPath = null;
 try {
-  await main();
+  installedPath = await main();
   finishProgress({ ok: true, message: `${PRODUCT_NAME} est installé.` });
 } catch (error) {
   ui.fail(error.message);
   finishProgress({ ok: false, error: error.message });
   process.exitCode = 1;
 }
-await settleProgressWindow();
+await settleProgressWindow({
+  launch: installedPath && !skipLaunch
+    ? () => {
+      ui.step(`Démarrage de ${PRODUCT_NAME}…`);
+      launchApplication(installedPath);
+    }
+    : null,
+});

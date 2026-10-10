@@ -115,7 +115,8 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
    l'anonymisation et la conversion des pièces ne démarrent pas. Les modèles
    locaux (GLiNER2-PII, MinerU) ne sont plus téléchargés ici. Le détail est
    plus bas.
-12. **Lancement** de l'application.
+12. **Lancement** de l'application, au clic sur « Ouvrir PieceMaker » dans la
+    fenêtre d'installation (automatique sans fenêtre).
 
 Les étapes 4 à 8 et 11 sont idempotentes : sources, Node, venv et modèles déjà
 présents sont réutilisés, et un certificat encore valide n'est pas régénéré.
@@ -421,10 +422,15 @@ Légifrance, `healthcheck` Judilibre ; le message d'échec dit laquelle des troi
 Légifrance, la Tabular Review et le MCP Légifrance. Déjà présents, le guide est
 remplacé par une confirmation (« Remplacer les identifiants »).
 
-Si l'application est construite avant la fin du guide, l'installateur l'ouvre
-puis attend dans le terminal que l'utilisateur termine, clique « Je le ferai
-plus tard » ou ferme la fenêtre. Avec `--no-launch` (mise à jour intégrée), le
-guide n'est pas proposé et rien n'attend.
+Le guide ne bloque pas l'installation, qui se poursuit pendant que
+l'utilisateur le remplit. Une fois l'installation terminée, la fenêtre reste
+ouverte tant que les identifiants ne sont ni enregistrés ni reportés (« Je le
+ferai plus tard »), puis propose « Ouvrir PieceMaker » : l'application n'est
+lancée qu'à ce clic, après quoi la fenêtre se ferme. Fermer la fenêtre sans
+cliquer termine l'installateur sans ouvrir l'application. Sans fenêtre
+(`--no-progress`, CI, ou fenêtre jamais affichée), l'application est ouverte
+automatiquement. Avec `--no-launch` (mise à jour intégrée), ni le guide ni
+l'ouverture ne sont proposés et rien n'attend.
 
 ## Rapport au reste du dépôt
 
