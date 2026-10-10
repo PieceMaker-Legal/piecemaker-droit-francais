@@ -198,10 +198,6 @@ export function generalView(data: ViewData, tiersCollapsed = false, job: ScanJob
   const card = (node: KnowledgeNode) => nodeCard(node, data.graph, states.get(node.id));
   return `
     <div class="pmd-general">
-    <div class="pmd-general-actions">
-      <button class="pmd-button pmd-small-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="mapping">${tagIcon} Mapping</button>
-      <button class="pmd-button pmd-small-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="add-node">＋ Ajouter une partie</button>
-    </div>
     ${clients.length || adversaries.length || tiers.length ? `<div class="pmd-party-layout" data-tiers-collapsed="${tiersCollapsed}"><div class="pmd-party-columns">
       <section class="pmd-party-column"><h3 class="piecemaker-display" data-side="client">Parties clientes</h3>${clients.map(card).join('')}<button type="button" class="pmd-column-empty" data-party-picker="client" data-party-drop="client"><span>${clients.length ? 'Ajouter une autre partie cliente' : 'Aucune partie cliente désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
       <section class="pmd-party-column"><h3 class="piecemaker-display" data-side="adverse">Parties adverses</h3>${adversaries.map(card).join('')}<button type="button" class="pmd-column-empty" data-party-picker="adversaire" data-party-drop="adversaire"><span>${adversaries.length ? 'Ajouter une autre partie adverse' : 'Aucune partie adverse désignée.'}</span><small>Cliquer ou déposer un profil</small></button></section>
