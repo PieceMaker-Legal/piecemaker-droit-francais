@@ -1,5 +1,5 @@
 import { watch, type FSWatcher } from 'fs';
-import { copyFile, lstat, readFile, readlink, realpath, rename, rm, symlink, writeFile } from 'fs/promises';
+import { lstat, readFile, readlink, realpath, rename, rm, symlink, writeFile } from 'fs/promises';
 import path from 'path';
 
 import express, { type Request, type Response } from 'express';
@@ -51,21 +51,28 @@ async function replaceAtomically(targetPath: string, create: (temporaryPath: str
   await rename(temporaryPath, targetPath);
 }
 
+const AGENTS_IMPORT = `@${AGENTS_FILE}\n`;
+
+const importsAgents = (content: Buffer | null) => content !== null && /^@AGENTS\.md(\r?\n|$)/.test(content.toString('utf8'));
+
 let symlinksSupported = true;
+
+async function linkClaudeToAgents(claudePath: string): Promise<boolean> {
+  if (!symlinksSupported) return false;
+  try {
+    await replaceAtomically(claudePath, (temporaryPath) => symlink(AGENTS_FILE, temporaryPath, 'file'));
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
+    symlinksSupported = false;
+    return false;
+  }
+}
 
 async function pointClaudeAtAgents(projectRoot: string): Promise<void> {
   const claudePath = path.join(projectRoot, CLAUDE_FILE);
-  const agentsPath = path.join(projectRoot, AGENTS_FILE);
-  if (symlinksSupported) {
-    try {
-      await replaceAtomically(claudePath, (temporaryPath) => symlink(AGENTS_FILE, temporaryPath, 'file'));
-      return;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
-      symlinksSupported = false;
-    }
-  }
-  await replaceAtomically(claudePath, (temporaryPath) => copyFile(agentsPath, temporaryPath));
+  if (await linkClaudeToAgents(claudePath)) return;
+  await replaceAtomically(claudePath, (temporaryPath) => writeFile(temporaryPath, AGENTS_IMPORT));
 }
 
 export async function ensureAgentInstructionFiles(projectRoot: string, sharedInstructionsFile: string): Promise<string[]> {
@@ -74,7 +81,8 @@ export async function ensureAgentInstructionFiles(projectRoot: string, sharedIns
   const [hasClaude, hasAgents] = await Promise.all([isPresent(claudePath), isPresent(agentsPath)]);
   const created: string[] = [];
   if (!hasAgents) {
-    const content = hasClaude ? await readFile(claudePath) : agentInstructionsTemplate(sharedInstructionsFile);
+    const claudeContent = hasClaude ? await readFile(claudePath) : null;
+    const content = claudeContent && !importsAgents(claudeContent) ? claudeContent : agentInstructionsTemplate(sharedInstructionsFile);
     await writeFile(agentsPath, content, { flag: 'wx' });
   }
   if (!hasClaude) {
@@ -102,13 +110,14 @@ export async function mirrorAgentInstructionFiles(projectRoot: string): Promise<
     }
     let agentsContent: Buffer = await readFile(agentsPath);
     const claudeContent = await readIfRegularFile(claudePath);
+    if (importsAgents(claudeContent)) {
+      await linkClaudeToAgents(claudePath);
+      lastSyncedContents.set(projectRoot, agentsContent);
+      return;
+    }
     if (claudeContent && !claudeContent.equals(agentsContent) && lastSyncedContents.get(projectRoot)?.equals(agentsContent)) {
       await replaceAtomically(agentsPath, (temporaryPath) => writeFile(temporaryPath, claudeContent));
       agentsContent = claudeContent;
-    }
-    if (!symlinksSupported && claudeContent?.equals(agentsContent)) {
-      lastSyncedContents.set(projectRoot, agentsContent);
-      return;
     }
     await pointClaudeAtAgents(projectRoot);
     lastSyncedContents.set(projectRoot, agentsContent);
