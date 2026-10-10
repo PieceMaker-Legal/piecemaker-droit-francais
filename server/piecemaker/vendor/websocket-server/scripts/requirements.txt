@@ -4,5 +4,5 @@ pypdf>=6.6.2  # PDF text layer inspection (actively maintained fork of PyPDF2)
 
 # GLiNER2 entity extraction (GLiNER2-PII checkpoint). Since 2.0, local inference dependencies
 # (torch, transformers...) live behind the `local` extra.
-gliner2[local]>=2.0.0
+gliner2[local]>=2.1.0
 huggingface-hub>=0.20.0  # Required for model downloading with progress

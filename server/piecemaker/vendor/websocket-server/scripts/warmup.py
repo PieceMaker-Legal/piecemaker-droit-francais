@@ -11,7 +11,6 @@ Usage:
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -27,6 +26,7 @@ from model_config import (  # noqa: E402
     gliner2_runtime,
     is_model_cached,
 )
+from mineru_improved_1 import mineru_available  # noqa: E402
 
 
 # ============================================================================
@@ -163,22 +163,15 @@ def download_model(model_key: str, force: bool = False) -> bool:
 
 def check_mineru() -> bool:
     """Verify the mineru package is importable and runnable"""
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "mineru.cli.client", "--version"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+    if mineru_available():
         log_json("MinerU available", tool="mineru", available=True)
         log_plain("✅ MinerU available")
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        log_json(
-            "MinerU not installed", tool="mineru", available=False, level="warning"
-        )
-        log_plain("⚠️  MinerU not installed (pip install 'mineru[pipeline,vlm]==2.7.6')")
-        return False
+    log_json(
+        "MinerU not installed", tool="mineru", available=False, level="warning"
+    )
+    log_plain("⚠️  MinerU not installed (pip install 'mineru==4.0.11')")
+    return False
 
 
 def check_python_dependencies() -> Dict[str, bool]:
@@ -314,15 +307,7 @@ def get_status() -> Dict:
             status["dependencies"][pkg] = False
 
     # Check mineru
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "mineru.cli.client", "--version"],
-            capture_output=True,
-            check=True,
-        )
-        status["tools"]["mineru"] = True
-    except:
-        status["tools"]["mineru"] = False
+    status["tools"]["mineru"] = mineru_available()
 
     # Overall ready status: migration obligatoire, le cache historique ne rend
     # jamais l'anonymisation opérationnelle à lui seul.

@@ -14,7 +14,7 @@ Detection strategy:
 Usage:
     python3 smart_converter.py input.pdf -o output_dir [--engine auto|markitdown|mineru]
     python3 smart_converter.py input.docx -o output_dir
-    python3 smart_converter.py image.jpg -o output_dir --mode hybrid --lang latin
+    python3 smart_converter.py image.jpg -o output_dir
 """
 
 import os
@@ -285,14 +285,12 @@ def run_markitdown(file_path, output_dir):
         raise
 
 
-def run_mineru(file_path, output_dir, mode=None, lang=None):
+def run_mineru(file_path, output_dir):
     """Route to MinerU script.
 
     Args:
         file_path: Path to input file
         output_dir: Directory to save output
-        mode: MinerU mode (pipeline/hybrid/vlm)
-        lang: OCR language code
     """
     mineru_script = Path(__file__).parent / 'mineru_improved_1.py'
 
@@ -311,11 +309,7 @@ def run_mineru(file_path, output_dir, mode=None, lang=None):
     }
 
     # Build command
-    args = [sys.executable, str(mineru_script), file_path, '-o', output_dir]
-    if mode:
-        args.extend(['--mode', mode])
-    if lang:
-        args.extend(['--lang', lang])
+    args = [sys.executable, str(mineru_script), str(file_path), '-o', str(output_dir)]
 
     # Run MinerU (output streams directly to stderr)
     result = subprocess.run(args, check=False)
@@ -342,8 +336,6 @@ def main():
     parser.add_argument('-o', '--output', required=True, help='Output directory')
     parser.add_argument('--engine', choices=['auto', 'markitdown', 'mineru'],
                         default='auto', help='Conversion engine (default: auto)')
-    parser.add_argument('--mode', help='MinerU mode (pipeline/hybrid/vlm)')
-    parser.add_argument('--lang', help='OCR language code for MinerU')
 
     args = parser.parse_args()
 
@@ -373,7 +365,7 @@ def main():
         if engine == 'markitdown':
             run_markitdown(file_path, output_dir)
         else:  # mineru
-            run_mineru(file_path, output_dir, args.mode, args.lang)
+            run_mineru(file_path, output_dir)
     except Exception as e:
         print(f"❌ Conversion failed: {e}", file=sys.stderr)
         sys.exit(1)

@@ -12,8 +12,6 @@ Options:
     -o, --output DIR       Output directory for all generated files
     --database PATH        PieceMaker database; codes held by every case are reserved
     --engine ENGINE        Conversion engine: auto|markitdown|mineru (default: auto)
-    --mode MODE           MinerU mode: pipeline|hybrid|vlm (default: pipeline)
-    --lang CODE           OCR language code for MinerU (default: auto)
 
 Progress Format:
     PROGRESS:CONVERT:percentage:current:total    (Phase 1: Converting documents)
@@ -304,8 +302,6 @@ def convert_file(
     input_file: str,
     output_dir: str,
     engine: Optional[str] = None,
-    mode: Optional[str] = None,
-    lang: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """Run smart_converter.py subprocess to convert a file to Markdown with real-time output streaming.
 
@@ -313,8 +309,6 @@ def convert_file(
         input_file: Path to input document
         output_dir: Directory for output markdown
         engine: Conversion engine (auto/markitdown/mineru)
-        mode: MinerU mode (pipeline/hybrid/vlm)
-        lang: OCR language code
 
     Returns:
         (success, md_path): Tuple of success flag and path to generated .md file
@@ -331,10 +325,6 @@ def convert_file(
 
     if engine:
         cmd.extend(["--engine", engine])
-    if mode:
-        cmd.extend(["--mode", mode])
-    if lang:
-        cmd.extend(["--lang", lang])
 
     try:
         # Run converter with real-time output streaming
@@ -2073,12 +2063,6 @@ def run_pipeline(resources: PipelineResources):
         help="Conversion engine (default: auto)",
     )
     parser.add_argument(
-        "--mode",
-        choices=["pipeline", "hybrid", "vlm"],
-        help="MinerU processing mode (only used if engine=mineru)",
-    )
-    parser.add_argument("--lang", help="OCR language code (only used if engine=mineru)")
-    parser.add_argument(
         "--ocr-missing",
         choices=["ask", "continue"],
         default="continue",
@@ -2146,10 +2130,6 @@ def run_pipeline(resources: PipelineResources):
     print(f"   Files: {len(input_files)}")
     print(f"   Output: {args.output}")
     print(f"   Engine: {args.engine}")
-    if args.mode:
-        print(f"   Mode: {args.mode}")
-    if args.lang:
-        print(f"   Language: {args.lang}")
     print()
 
     # What is left to do, decided before anything runs: the scanner worker loads
@@ -2236,8 +2216,6 @@ def run_pipeline(resources: PipelineResources):
             input_file,
             args.output,
             engine="markitdown" if without_ocr else args.engine,
-            mode=args.mode,
-            lang=args.lang,
         )
 
         if success and md_path:
