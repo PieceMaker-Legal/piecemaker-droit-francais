@@ -61,7 +61,7 @@ EXPECTED_PATTERNS = {
 }
 
 EXPECTED_COMPANIES = {
-    "SA_01": ("SA", {"Calice", "Calice SA", "Calice International"}),
+    "SA_01": ("SA", {"Calice", "Calice SA"}),
     "SA_02": ("SA", {"Hortensia SA"}),
     "LTD_01": ("LTD", {"Hortensia International Ltd"}),
     "SARL_01": ("SARL", {"Lilas SARL"}),
@@ -81,22 +81,21 @@ EXPECTED_COMPANIES = {
     "GIE_01": ("GIE", {"Laurier"}),
     "INC_01": ("INC", {"Fuchsia Incorporated"}),
     "OHG_01": ("OHG", {"Oliva OHG"}),
-    "PERS_MORALE_01": (None, {"Comptoir des Vignes"}),
+    "PERS_MORALE_01": (None, {"Calice International"}),
+    "PERS_MORALE_02": (None, {"Comptoir des Vignes"}),
     "SELARL_01": ("SELARL", {"SELARL du Parc"}),
     "CORP_01": ("CORP", {"Nénuphar Corporation"}),
 }
 
 SPAN_TEXTS = {
-    "LOCATION": [
-        "Paris", "Lyon", "12 rue des Lilas", "Paris", "8 place du Marché",
-        "Bordeaux", "Bordeaux", "4 avenue des Tilleuls", "Lyon", "Lyon",
-    ],
+    "VILLE": ["Paris", "Lyon", "Paris", "Bordeaux", "Bordeaux", "Lyon", "Lyon"],
+    "DATE": ["3 mars 2026", "12 janvier 2026"],
     "PERSON": [
-        "Jean Dupont", "Camille Lefèvre", "Marie Martin", "Paul Durand",
-        "Jean Dupont", "Marie Martin",
+        "Jean Dupont", "Camille Lefèvre", "Marie Martin", "Paul Durand", "Jean Dupont",
+        "Marie Martin",
     ],
-    "DATE": ["3 mars 2026"],
     "DATE_OF_BIRTH": ["14 mars 1984"],
+    "LOCATION": ["12 rue des Lilas", "8 place du Marché", "4 avenue des Tilleuls"],
     "CODE_POSTAL": ["75011", "33000", "69002"],
     "NIR": ["1 84 03 99 990 042 36"],
     "TELEPHONE": ["+33 1 42 86 10 24", "06 12 34 56 78"],
@@ -105,28 +104,30 @@ SPAN_TEXTS = {
     "IBAN_CODE": ["FR03 3000 6000 1112 3456 7890 189"],
     "IP_ADDRESS": ["203.0.113.44"],
     "MAC_ADDRESS": ["02:11:22:33:44:55"],
+    "MOT_DE_PASSE": ["Lilas-2026!"],
     "ORGANIZATION": [
         "Calice", "Calice", "Calice", "Hortensia SA", "Hortensia International Ltd",
         "Lilas SARL", "Brumaire SAS", "Nimbus", "unipersonnelle", "Vieux Comptoir",
-        "Exemple GmbH", "Aster Aktiengesellschaft", "Pivoine Limited Liability Company",
-        "Pivoine LLC", "Muguet", "Muguet PLC", "Rose", "Rose SE", "unipersonnelle",
-        "Jasmin", "Dahlia GmbH & Co. KG", "Pensée BV", "Iris SNC", "Capucine",
-        "Laurier", "Fuchsia Incorporated", "Oliva OHG", "Comptoir des Vignes",
-        "SELARL du Parc", "Nénuphar Corporation",
+        "Exemple GmbH", "Aster Aktiengesellschaft",
+        "Pivoine Limited Liability Company", "Pivoine LLC", "Muguet", "Muguet PLC",
+        "Rose", "Rose SE", "unipersonnelle", "Jasmin", "Dahlia GmbH & Co. KG",
+        "Pensée BV", "Iris SNC", "Capucine", "Laurier", "Fuchsia Incorporated",
+        "Oliva OHG", "Comptoir des Vignes", "SELARL du Parc", "Nénuphar Corporation",
     ],
     "SIREN": ["847 221 306"],
     "SIRET": ["847 221 306 00016"],
     "TVA": ["FR 90 847 221 306"],
     "URL": ["https://calice-exemple.fr/dossier"],
     "IMMATRICULATION": ["AB-123-CD"],
-    "TRANSACTION_DATE": ["12 janvier 2026", "2 novembre 2025"],
+    "TRANSACTION_DATE": ["2 novembre 2025"],
 }
 
 SPAN_RECOGNIZER = {
-    "LOCATION": "GLiNER2Recognizer",
-    "PERSON": "GLiNER2Recognizer",
+    "VILLE": "GLiNER2Recognizer",
     "DATE": "GLiNER2Recognizer",
+    "PERSON": "GLiNER2Recognizer",
     "DATE_OF_BIRTH": "GLiNER2Recognizer",
+    "LOCATION": "GLiNER2Recognizer",
     "CODE_POSTAL": "GLiNER2Recognizer",
     "NIR": "FrNirRecognizer",
     "TELEPHONE": "FrPhoneRecognizer",
@@ -135,6 +136,7 @@ SPAN_RECOGNIZER = {
     "IBAN_CODE": "IbanRecognizer",
     "IP_ADDRESS": "GLiNER2Recognizer",
     "MAC_ADDRESS": "MacAddressRecognizer",
+    "MOT_DE_PASSE": "GLiNER2Recognizer",
     "ORGANIZATION": "GLiNER2Recognizer",
     "SIREN": "FrSirenRecognizer",
     "SIRET": "FrSiretRecognizer",
@@ -145,34 +147,38 @@ SPAN_RECOGNIZER = {
 }
 
 EXPECTED_MAPPING = {
-    "8 place du Marché": "ADRESSE_03",
-    "4 avenue des Tilleuls": "ADRESSE_04",
-    "12 rue des Lilas": "ADRESSE_05",
+    "Paris": "VILLE_01",
+    "Lyon": "VILLE_02",
+    "Bordeaux": "VILLE_03",
+    "3 mars 2026": "DATE_04",
+    "12 janvier 2026": "DATE_05",
     "Jean Dupont": "PERSONNE_PHYSIQUE_01",
     "Camille Lefèvre": "PERSONNE_PHYSIQUE_02",
     "Marie Martin": "PERSONNE_PHYSIQUE_03",
     "Paul Durand": "PERSONNE_PHYSIQUE_04",
-    "3 mars 2026": "DATE_01",
-    "14 mars 1984": "DATE_NAISSANCE_02",
-    "75011": "CODE_POSTAL_03",
-    "33000": "CODE_POSTAL_04",
-    "69002": "CODE_POSTAL_05",
-    "1 84 03 99 990 042 36": "NIR_06",
-    "+33 1 42 86 10 24": "TELEPHONE_07",
-    "06 12 34 56 78": "TELEPHONE_08",
-    "jean.dupont@calice-exemple.fr": "COURRIEL_09",
-    "contact@parc-exemple.fr": "COURRIEL_10",
-    "4111 1111 1111 1111": "CARTE_11",
-    "FR03 3000 6000 1112 3456 7890 189": "IBAN_12",
-    "203.0.113.44": "ADRESSE_IP_13",
-    "02:11:22:33:44:55": "ADRESSE_MAC_14",
+    "14 mars 1984": "DATE_NAISSANCE_06",
+    "12 rue des Lilas": "ADRESSE_01",
+    "8 place du Marché": "ADRESSE_02",
+    "4 avenue des Tilleuls": "ADRESSE_03",
+    "75011": "CODE_POSTAL_07",
+    "33000": "CODE_POSTAL_08",
+    "69002": "CODE_POSTAL_09",
+    "1 84 03 99 990 042 36": "NIR_10",
+    "+33 1 42 86 10 24": "TELEPHONE_11",
+    "06 12 34 56 78": "TELEPHONE_12",
+    "jean.dupont@calice-exemple.fr": "COURRIEL_13",
+    "contact@parc-exemple.fr": "COURRIEL_14",
+    "4111 1111 1111 1111": "CARTE_15",
+    "FR03 3000 6000 1112 3456 7890 189": "IBAN_16",
+    "203.0.113.44": "ADRESSE_IP_17",
+    "02:11:22:33:44:55": "ADRESSE_MAC_18",
+    "Lilas-2026!": "MOT_DE_PASSE_19",
     "847 221 306": "SIREN_01",
-    "847 221 306 00016": "SIRET_15",
-    "FR 90 847 221 306": "TVA_16",
-    "https://calice-exemple.fr/dossier": "LIEN_17",
-    "AB-123-CD": "IMMATRICULATION_18",
-    "12 janvier 2026": "DATE_OPERATION_19",
-    "2 novembre 2025": "DATE_OPERATION_20",
+    "847 221 306 00016": "SIRET_20",
+    "FR 90 847 221 306": "TVA_21",
+    "https://calice-exemple.fr/dossier": "LIEN_22",
+    "AB-123-CD": "IMMATRICULATION_23",
+    "2 novembre 2025": "DATE_OPERATION_24",
     "Calice": "SA_01",
     "Hortensia SA": "SA_02",
     "Hortensia International Ltd": "LTD_01",
@@ -237,35 +243,37 @@ EXPECTED_STORED = {
     },
     "adresses": {
         "ADRESSE_01": {"original": "12 rue des Lilas", "variants": ["12 rue des Lilas"], "recognizer": "GLiNER2Recognizer"},
-        "ADRESSE_02": {"original": "12 rue des Lilas", "variants": ["12 rue des Lilas"], "recognizer": "GLiNER2Recognizer"},
-        "ADRESSE_03": {"original": "8 place du Marché", "variants": ["8 place du Marché"], "recognizer": "GLiNER2Recognizer"},
-        "ADRESSE_04": {"original": "4 avenue des Tilleuls", "variants": ["4 avenue des Tilleuls"], "recognizer": "GLiNER2Recognizer"},
-        "ADRESSE_05": {"original": "12 rue des Lilas", "variants": ["12 rue des Lilas"], "recognizer": "GLiNER2Recognizer"},
+        "ADRESSE_02": {"original": "8 place du Marché", "variants": ["8 place du Marché"], "recognizer": "GLiNER2Recognizer"},
+        "ADRESSE_03": {"original": "4 avenue des Tilleuls", "variants": ["4 avenue des Tilleuls"], "recognizer": "GLiNER2Recognizer"},
     },
     "siren": {
         "SIREN_01": {"original": "847 221 306", "variants": ["847 221 306"], "recognizer": "FrSirenRecognizer"},
     },
     "autres": {
-        "DATE_01": {"original": "3 mars 2026", "variants": ["3 mars 2026"], "recognizer": "GLiNER2Recognizer"},
-        "DATE_NAISSANCE_02": {"original": "14 mars 1984", "variants": ["14 mars 1984"], "recognizer": "GLiNER2Recognizer"},
-        "CODE_POSTAL_03": {"original": "75011", "variants": ["75011"], "recognizer": "GLiNER2Recognizer"},
-        "CODE_POSTAL_04": {"original": "33000", "variants": ["33000"], "recognizer": "GLiNER2Recognizer"},
-        "CODE_POSTAL_05": {"original": "69002", "variants": ["69002"], "recognizer": "GLiNER2Recognizer"},
-        "NIR_06": {"original": "1 84 03 99 990 042 36", "variants": ["1 84 03 99 990 042 36"], "recognizer": "FrNirRecognizer"},
-        "TELEPHONE_07": {"original": "+33 1 42 86 10 24", "variants": ["+33 1 42 86 10 24"], "recognizer": "FrPhoneRecognizer"},
-        "TELEPHONE_08": {"original": "06 12 34 56 78", "variants": ["06 12 34 56 78"], "recognizer": "FrPhoneRecognizer"},
-        "COURRIEL_09": {"original": "jean.dupont@calice-exemple.fr", "variants": ["jean.dupont@calice-exemple.fr"], "recognizer": "EmailRecognizer"},
-        "COURRIEL_10": {"original": "contact@parc-exemple.fr", "variants": ["contact@parc-exemple.fr"], "recognizer": "EmailRecognizer"},
-        "CARTE_11": {"original": "4111 1111 1111 1111", "variants": ["4111 1111 1111 1111"], "recognizer": "CreditCardRecognizer"},
-        "IBAN_12": {"original": "FR03 3000 6000 1112 3456 7890 189", "variants": ["FR03 3000 6000 1112 3456 7890 189"], "recognizer": "IbanRecognizer"},
-        "ADRESSE_IP_13": {"original": "203.0.113.44", "variants": ["203.0.113.44"], "recognizer": "GLiNER2Recognizer"},
-        "ADRESSE_MAC_14": {"original": "02:11:22:33:44:55", "variants": ["02:11:22:33:44:55"], "recognizer": "MacAddressRecognizer"},
-        "SIRET_15": {"original": "847 221 306 00016", "variants": ["847 221 306 00016"], "recognizer": "FrSiretRecognizer"},
-        "TVA_16": {"original": "FR 90 847 221 306", "variants": ["FR 90 847 221 306"], "recognizer": "FrVatRecognizer"},
-        "LIEN_17": {"original": "https://calice-exemple.fr/dossier", "variants": ["https://calice-exemple.fr/dossier"], "recognizer": "UrlRecognizer"},
-        "IMMATRICULATION_18": {"original": "AB-123-CD", "variants": ["AB-123-CD"], "recognizer": "FrPlateRecognizer"},
-        "DATE_OPERATION_19": {"original": "12 janvier 2026", "variants": ["12 janvier 2026"], "recognizer": "GLiNER2Recognizer"},
-        "DATE_OPERATION_20": {"original": "2 novembre 2025", "variants": ["2 novembre 2025"], "recognizer": "GLiNER2Recognizer"},
+        "VILLE_01": {"original": "Paris", "variants": ["Paris"], "recognizer": "GLiNER2Recognizer"},
+        "VILLE_02": {"original": "Lyon", "variants": ["Lyon"], "recognizer": "GLiNER2Recognizer"},
+        "VILLE_03": {"original": "Bordeaux", "variants": ["Bordeaux"], "recognizer": "GLiNER2Recognizer"},
+        "DATE_04": {"original": "3 mars 2026", "variants": ["3 mars 2026"], "recognizer": "GLiNER2Recognizer"},
+        "DATE_05": {"original": "12 janvier 2026", "variants": ["12 janvier 2026"], "recognizer": "GLiNER2Recognizer"},
+        "DATE_NAISSANCE_06": {"original": "14 mars 1984", "variants": ["14 mars 1984"], "recognizer": "GLiNER2Recognizer"},
+        "CODE_POSTAL_07": {"original": "75011", "variants": ["75011"], "recognizer": "GLiNER2Recognizer"},
+        "CODE_POSTAL_08": {"original": "33000", "variants": ["33000"], "recognizer": "GLiNER2Recognizer"},
+        "CODE_POSTAL_09": {"original": "69002", "variants": ["69002"], "recognizer": "GLiNER2Recognizer"},
+        "NIR_10": {"original": "1 84 03 99 990 042 36", "variants": ["1 84 03 99 990 042 36"], "recognizer": "FrNirRecognizer"},
+        "TELEPHONE_11": {"original": "+33 1 42 86 10 24", "variants": ["+33 1 42 86 10 24"], "recognizer": "FrPhoneRecognizer"},
+        "TELEPHONE_12": {"original": "06 12 34 56 78", "variants": ["06 12 34 56 78"], "recognizer": "FrPhoneRecognizer"},
+        "COURRIEL_13": {"original": "jean.dupont@calice-exemple.fr", "variants": ["jean.dupont@calice-exemple.fr"], "recognizer": "EmailRecognizer"},
+        "COURRIEL_14": {"original": "contact@parc-exemple.fr", "variants": ["contact@parc-exemple.fr"], "recognizer": "EmailRecognizer"},
+        "CARTE_15": {"original": "4111 1111 1111 1111", "variants": ["4111 1111 1111 1111"], "recognizer": "CreditCardRecognizer"},
+        "IBAN_16": {"original": "FR03 3000 6000 1112 3456 7890 189", "variants": ["FR03 3000 6000 1112 3456 7890 189"], "recognizer": "IbanRecognizer"},
+        "ADRESSE_IP_17": {"original": "203.0.113.44", "variants": ["203.0.113.44"], "recognizer": "GLiNER2Recognizer"},
+        "ADRESSE_MAC_18": {"original": "02:11:22:33:44:55", "variants": ["02:11:22:33:44:55"], "recognizer": "MacAddressRecognizer"},
+        "MOT_DE_PASSE_19": {"original": "Lilas-2026!", "variants": ["Lilas-2026!"], "recognizer": "GLiNER2Recognizer"},
+        "SIRET_20": {"original": "847 221 306 00016", "variants": ["847 221 306 00016"], "recognizer": "FrSiretRecognizer"},
+        "TVA_21": {"original": "FR 90 847 221 306", "variants": ["FR 90 847 221 306"], "recognizer": "FrVatRecognizer"},
+        "LIEN_22": {"original": "https://calice-exemple.fr/dossier", "variants": ["https://calice-exemple.fr/dossier"], "recognizer": "UrlRecognizer"},
+        "IMMATRICULATION_23": {"original": "AB-123-CD", "variants": ["AB-123-CD"], "recognizer": "FrPlateRecognizer"},
+        "DATE_OPERATION_24": {"original": "2 novembre 2025", "variants": ["2 novembre 2025"], "recognizer": "GLiNER2Recognizer"},
     },
 }
 
@@ -397,6 +405,20 @@ class PageEntitesTests(unittest.TestCase):
         merged = pipeline.merge_with_existing_mapping(coded, None, frozenset())
         self.assertEqual(set(merged["extracted_data"]["adresses"]), {"ADRESSE_01", "ADRESSE_02"})
 
+    def test_document_date_comes_from_the_dating_formula_not_from_a_purchase(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "presidio-gliner"))
+        import scanner_worker
+        from pattern_detectors import Detection
+
+        self.assertEqual(scanner_worker._dating_formula_date("Paris, le 3 mars 2026\n\nObjet"), "3 mars 2026")
+        self.assertEqual(scanner_worker._dating_formula_date("Fait à Lyon le 1er avril 2024."), "1er avril 2024")
+        self.assertIsNone(scanner_worker._dating_formula_date("audience du 3 mars 2026"))
+        text = "Le bon de commande du 2 novembre 2025 fonde la saisine."
+        start = text.index("2 novembre 2025")
+        purchase = Detection("TRANSACTION_DATE", start, start + len("2 novembre 2025"), 0.98)
+        self.assertTrue(scanner_worker._typed_as_other_date("2 novembre 2025", text, [purchase]))
+        self.assertFalse(scanner_worker._typed_as_other_date("3 mars 2026", text, [purchase]))
+
     def test_company_mentions_keep_their_legal_form(self):
         result = _company_result(self.text)
         societes = result["extracted_data"]["societes"]
@@ -407,10 +429,10 @@ class PageEntitesTests(unittest.TestCase):
                 self.assertNotIn("legalForm", societes[code])
             else:
                 self.assertEqual(societes[code]["legalForm"], form, code)
-        self.assertEqual(result["mapping"]["Calice International"], "SA_01")
+        self.assertEqual(result["mapping"]["Calice International"], "PERS_MORALE_01")
         self.assertEqual(result["mapping"]["Hortensia SA"], "SA_02")
         self.assertEqual(result["mapping"]["Hortensia International Ltd"], "LTD_01")
-        self.assertEqual(result["mapping"]["Comptoir des Vignes"], "PERS_MORALE_01")
+        self.assertEqual(result["mapping"]["Comptoir des Vignes"], "PERS_MORALE_02")
         self.assertNotIn("NAISSANCE", result["extracted_data"])
         self.assertNotIn("14 mars 1984", result["mapping"])
 
@@ -432,15 +454,15 @@ class PageEntitesTests(unittest.TestCase):
 
         meta = payload["document_meta"]
         self.assertEqual(meta.get("nature"), "assignation")
-        self.assertEqual(meta.get("doc_date"), "2 novembre 2025")
-        self.assertEqual(meta.get("doc_date_iso"), "2025-11-02")
+        self.assertIsNone(meta.get("doc_date"))
+        self.assertIsNone(meta.get("doc_date_iso"))
         self.assertEqual(meta.get("juridiction"), "tribunal")
         self.assertIsInstance(meta.get("nature_confidence"), float)
 
         self.assertEqual(merged["mapping"], EXPECTED_MAPPING)
-        self.assertEqual(merged.get("ignored"), ["Paris", "Lyon", "Bordeaux"])
+        self.assertIsNone(merged.get("ignored"))
         for city in ("Paris", "Lyon", "Bordeaux"):
-            self.assertNotIn(city, merged["mapping"])
+            self.assertTrue(merged["mapping"][city].startswith("VILLE_"), city)
         self.assertEqual(_stored(merged["extracted_data"]), EXPECTED_STORED)
         self.assertNotIn("NAISSANCE", merged["extracted_data"])
         for bucket, entries in merged["extracted_data"].items():
@@ -450,6 +472,8 @@ class PageEntitesTests(unittest.TestCase):
                     expected_keys.add("parsed")
                 if "legalForm" in EXPECTED_STORED[bucket][code]:
                     expected_keys.add("legalForm")
+                if code.startswith(("DATE_0", "DATE_OPERATION_")):
+                    expected_keys.add("doc_date_iso")
                 self.assertEqual(set(entry), expected_keys, code)
                 self.assertEqual(entry["code"], code)
                 self.assertIsInstance(entry["score"], float)
