@@ -18,14 +18,14 @@ export function WorkspaceViewer(props: ComponentProps<typeof EditorSidebar>) {
 
   if (!viewer) return <EditorSidebar {...props} />;
   if (!props.editingFile || !viewer.target) return null;
-  return createPortal(<Card className="piecemaker-workspace-panel" style={{ flexGrow: 1 }}>
-    <TabbedCodeEditor
-      file={props.editingFile}
-      projectPath={props.projectPath}
-      onClose={props.onCloseEditor}
-      isSidebar
-      isExpanded={viewer.expanded}
-      onToggleExpand={viewer.toggleExpand}
-    />
-  </Card>, viewer.target);
+  const editor = <TabbedCodeEditor
+    file={props.editingFile}
+    projectPath={props.projectPath}
+    onClose={props.onCloseEditor}
+    isSidebar
+    isExpanded={viewer.expanded}
+    onToggleExpand={viewer.toggleExpand}
+    tabsTarget={viewer.tabsTarget}
+  />;
+  return createPortal(viewer.tabsTarget ? editor : <Card className="piecemaker-workspace-panel" style={{ flexGrow: 1 }}>{editor}</Card>, viewer.target);
 }

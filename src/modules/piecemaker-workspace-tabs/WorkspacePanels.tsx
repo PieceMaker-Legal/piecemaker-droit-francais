@@ -4,10 +4,11 @@ import type { ComponentType, Dispatch, PointerEvent, SetStateAction } from 'reac
 import { useTranslation } from 'react-i18next';
 
 import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
-import { FileTree } from '@/modules/file-tree';
 import { GitPanel } from '@/modules/git-panel';
 import { PluginTabContent, usePlugins } from '@/modules/plugins';
 import { WorkspaceColumnSeparator } from '@/modules/piecemaker-workspace-tabs/WorkspaceColumnSeparator';
+import { WorkspaceFilesPanel } from '@/modules/piecemaker-workspace-tabs/WorkspaceFilesPanel';
+import type { WorkspaceFilesSlots } from '@/modules/piecemaker-workspace-tabs/WorkspaceFilesPanel';
 import { WorkspacePanelsContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
 import { WorkspaceViewerContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspaceViewerContext';
 import { TaskMasterPanel, useTasksSettings } from '@/modules/task-master';
@@ -49,6 +50,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerTarget, setViewerTarget] = useState<HTMLElement | null>(null);
     const [viewerWidth, setViewerWidth] = useState<number | null>(null);
+    const [filesSlots, setFilesSlots] = useState<WorkspaceFilesSlots | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const dockRef = useRef<HTMLElement>(null);
     const dividerCoordinateRef = useRef(0);
@@ -57,13 +59,15 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       : tab === 'browser' ? browserEnabled
         : tab.startsWith('plugin:') ? plugins.some((plugin) => plugin.enabled && tab === `plugin:${plugin.name}`) : true) })).filter((column) => column.tabs.length > 0);
     const enabledPanels = enabledColumns.flatMap((column) => column.tabs);
-    const layoutColumns: WorkspaceColumn[] = [...enabledColumns, ...(viewerOpen ? [{ id: 'viewer' as const, tabs: [], width: viewerWidth ?? (enabledColumns.length ? enabledColumns.reduce((sum, column) => sum + column.width, 0) / enabledColumns.length : 1), split: 100 }] : [])];
+    const filesHost = enabledPanels.includes('files') ? filesSlots : null;
+    const layoutColumns: WorkspaceColumn[] = [...enabledColumns, ...(viewerOpen && !filesHost ? [{ id: 'viewer' as const, tabs: [], width: viewerWidth ?? (enabledColumns.length ? enabledColumns.reduce((sum, column) => sum + column.width, 0) / enabledColumns.length : 1), split: 100 }] : [])];
     const expandedTab = expanded === 'viewer' ? viewerOpen ? expanded : null : expanded && enabledPanels.includes(expanded) ? expanded : null;
     const registerViewer = useCallback((open: boolean) => {
       setViewerOpen(open);
       if (!open) setExpanded((current) => current === 'viewer' ? null : current);
     }, []);
     const toggleViewerExpand = useCallback(() => setExpanded((current) => current === 'viewer' ? null : 'viewer'), []);
+    const toggleFilesExpand = useCallback(() => setExpanded((current) => current === 'files' ? null : 'files'), []);
     const bindViewerColumn = useCallback((element: HTMLDivElement | null) => {
       if (element) columnRefs.current.set('viewer', element);
       else columnRefs.current.delete('viewer');
@@ -148,7 +152,8 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     };
 
     return (
-      <WorkspaceViewerContext.Provider value={{ target: viewerTarget, register: registerViewer, expanded: expandedTab === 'viewer', toggleExpand: toggleViewerExpand }}>
+      <WorkspaceViewerContext.Provider value={filesHost ? { target: filesHost.viewer, tabsTarget: filesHost.tabs, register: registerViewer, expanded: expandedTab === 'files', toggleExpand: toggleFilesExpand }
+        : { target: viewerTarget, tabsTarget: null, register: registerViewer, expanded: expandedTab === 'viewer', toggleExpand: toggleViewerExpand }}>
       <WorkspacePanelsContext.Provider value={enabledPanels}>
         <div ref={containerRef} className="piecemaker-workspace-panels">
           <div className="piecemaker-workspace-primary" hidden={Boolean(expandedTab)}>
@@ -175,22 +180,24 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                   {column.tabs.map((tab, rowIndex) => {
                     const plugin = plugins.find((item) => tab === `plugin:${item.name}`);
                     const label = plugin?.displayName ?? t(`tabs.${tab === 'tasks' ? 'library' : tab}`);
+                    const hidden = Boolean(expandedTab && expandedTab !== tab);
+                    const style = { flexGrow: expandedTab || column.tabs.length === 1 ? 1 : rowIndex === 0 ? column.split : 100 - column.split };
                     return <Fragment key={tab}>
                       {rowIndex > 0 && !expandedTab && <WorkspaceColumnSeparator orientation="horizontal" label={`Hauteur fenêtres colonne ${columnIndex + 1}`} value={column.split} onMove={(delta) => resizeRows(column, delta)} />}
-                      <Card className="piecemaker-workspace-panel" hidden={Boolean(expandedTab && expandedTab !== tab)} style={{ flexGrow: expandedTab || column.tabs.length === 1 ? 1 : rowIndex === 0 ? column.split : 100 - column.split }}>
+                      {tab === 'files' ? <WorkspaceFilesPanel label={label} selectedProject={props.selectedProject} documentOpen={viewerOpen} expanded={expandedTab === tab} hidden={hidden} style={style} onSlots={setFilesSlots} onToggleExpand={toggleFilesExpand} onClose={() => close(tab)} />
+                      : <Card className="piecemaker-workspace-panel" hidden={hidden} style={style}>
                         <header className="piecemaker-workspace-panel-header">
                           <span className="truncate text-sm font-medium">{label}</span>
                           <button type="button" aria-label={`${expandedTab === tab ? 'Réduire' : 'Agrandir'} ${label}`} onClick={() => setExpanded(expandedTab === tab ? null : tab)}>{expandedTab === tab ? <Minimize2 /> : <Maximize2 />}</button>
                           <button type="button" aria-label={`Fermer ${label}`} onClick={() => close(tab)}><X /></button>
                         </header>
                         <div className="piecemaker-workspace-panel-content">
-                          {tab === 'files' && <FileTree selectedProject={props.selectedProject} onFileOpen={openInEditor} />}
                           {tab === 'git' && <GitPanel selectedProject={props.selectedProject} isMobile={props.isMobile} onFileOpen={openInEditor} onProjectSelect={props.onProjectSelect} onProjectsRefresh={props.onProjectsRefresh} />}
                           {tab === 'tasks' && <TaskMasterPanel isVisible={!expandedTab || expandedTab === tab} />}
                           {tab === 'browser' && <BrowserUsePanel isVisible={!expandedTab || expandedTab === tab} onShowSettings={props.onShowSettings} />}
                           {plugin && <PluginTabContent pluginName={plugin.name} selectedProject={props.selectedProject} selectedSession={props.selectedSession} onOpenFileInEditor={openInEditor} />}
                         </div>
-                      </Card>
+                      </Card>}
                     </Fragment>;
                   })}
                 </div>
