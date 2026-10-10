@@ -36,7 +36,7 @@ Options : `--no-certificate` (ne déclare pas l'autorité locale au système et 
 signe pas l'application ; l'autorité elle-même est toujours générée, le proxy
 d'anonymisation en a besoin),
 `--no-launch` (n'ouvre pas l'application à la fin),
-`--no-progress` (n'ouvre pas la fenêtre de progression).
+`--no-progress` (n'ouvre pas la fenêtre d'installation).
 
 Variables d'environnement : `PIECEMAKER_TAG` (version à construire, par défaut
 la dernière *release* publiée), `PIECEMAKER_REPO`, `PIECEMAKER_BOOTSTRAP_HOME`
@@ -49,11 +49,21 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
 
 1. **Garde-fous** — macOS ou Windows 64 bits uniquement ; sur macOS, `curl`,
    `tar`, `openssl` et les *Command Line Tools* Xcode sont exigés.
-2. **Fenêtre de progression** — une fenêtre native suit les étapes (macOS :
-   Python/Tk ; Windows : WinForms). Elle s'ouvre dès que les sources sont
-   disponibles, reste au premier plan le temps d'être vue, puis se ferme toute
-   seule à la fin. `--no-progress` ou `PIECEMAKER_NO_PROGRESS=1` la désactive ;
-   un échec d'ouverture n'interrompt pas l'installation.
+2. **Fenêtre d'installation** — dès que Node est disponible, `lib/progress.mjs`
+   sert une page locale (`installer-ui/index.html`) sur `127.0.0.1`, derrière un
+   jeton aléatoire, et l'affiche dans une fenêtre sans barre de navigateur :
+   WebKit natif piloté en JXA sur macOS (`lib/window-darwin.js`, rien à
+   installer), Edge en mode `--app` sur Windows (profil dédié dans
+   `~/.piecemaker/bootstrap/fenetre-installation`) ; à défaut, le navigateur par
+   défaut. Elle suit les étapes, porte le logo PieceMaker
+   (`public/logo-256.png`) et guide la création des identifiants PISTE (voir
+   « Identifiants PISTE »). `--no-progress` ou `PIECEMAKER_NO_PROGRESS=1` la
+   désactive ; un échec d'ouverture n'interrompt pas l'installation.
+
+   Pourquoi pas Tk ni WinForms : le Python des *Command Line Tools* embarque
+   Tk 8.5, déprécié par Apple ; sur macOS 26 sa fenêtre reste vide et hors
+   écran. Une seule page HTML sert les deux systèmes, avec captures, liens et
+   champs de saisie.
 3. **Résolution de la version** — `releases/latest` de l'API GitHub. Les tags
    `v1.37.x` hérités de CloudCLI amont ne sont donc jamais choisis par erreur.
 4. **Sources** — archive du tag décompressée dans
@@ -365,6 +375,9 @@ desktop-bootstrap/
   install.ps1                    entrée Windows (irm | iex)
   composants/
     install.mjs                  venv, MarkItDown, bibliothèque GLiNER2
+  installer-ui/
+    index.html                   page de la fenêtre d'installation
+    piste/                       captures de piste.gouv.fr pour le guide
   overlay/
     electron-piecemaker/main.js  point d'entrée Electron, ouvre la cible locale
   lib/
@@ -375,14 +388,42 @@ desktop-bootstrap/
     certificates-win32.mjs       New-SelfSignedCertificate, magasins, Authenticode
     panel-darwin.mjs             panneau d'autorisation macOS en session graphique
     consent.mjs                  texte d'autorisation et panneau Windows
-    progress.mjs                 état de progression et lancement de la fenêtre
-    progress-darwin.py           fenêtre de progression macOS (Tk)
-    progress-win32.ps1           fenêtre de progression Windows (WinForms)
+    progress.mjs                 état, serveur local de la fenêtre, attente du guide PISTE
+    window-darwin.js             fenêtre WebKit macOS (JXA)
+    piste.mjs                    validation et enregistrement des identifiants PISTE
     place.mjs                    installation, raccourcis, lancement
     paths.mjs                    emplacements et noms de produit
     shell.mjs                    exécution de processus
     ui.mjs                       sortie console et relais vers la fenêtre
 ```
+
+## Identifiants PISTE
+
+Pendant la construction, la fenêtre propose un guide en quatre étapes, illustré
+de captures de piste.gouv.fr (`installer-ui/piste/`, adresses fictives) :
+
+1. création du compte (`/registration`, « Code de l'organisation » laissé vide) ;
+2. acceptation des CGU de Légifrance et JUDILIBRE en PROD
+   (`/apimgt/consentement-cgu-api`) — sans elle, les cases de ces API sont
+   grisées à l'étape suivante ;
+3. création d'une application **PRODUCTION** (`/apps`) avec Légifrance et
+   JUDILIBRE cochés dans « Souscrite » ;
+4. copie du Client ID et du Client Secret (« Identifiants Oauth » de la fiche
+   d'application), avec boutons « Coller » qui lisent le presse-papiers par
+   `pbpaste` ou `Get-Clipboard`.
+
+Les boutons n'ouvrent que les liens de `PISTE_LINKS`, dans le navigateur par
+défaut. Les identifiants sont vérifiés (`lib/piste.mjs`) : jeton OAuth, recherche
+Légifrance, `healthcheck` Judilibre ; le message d'échec dit laquelle des trois
+étapes bloque. Valides, ils sont fusionnés dans `~/.config/mcp-legifrance/.env`
+(0600, `LEGIFRANCE_ENV=production`), le fichier que lisent le harness
+Légifrance, la Tabular Review et le MCP Légifrance. Déjà présents, le guide est
+remplacé par une confirmation (« Remplacer les identifiants »).
+
+Si l'application est construite avant la fin du guide, l'installateur l'ouvre
+puis attend dans le terminal que l'utilisateur termine, clique « Je le ferai
+plus tard » ou ferme la fenêtre. Avec `--no-launch` (mise à jour intégrée), le
+guide n'est pas proposé et rien n'attend.
 
 ## Rapport au reste du dépôt
 
@@ -409,3 +450,7 @@ desktop-bootstrap/
 - Le certificat de signature est auto-signé : il supprime l'avertissement lié à
   un binaire non signé, mais ne vaut pas notarisation Apple ni réputation
   SmartScreen.
+- La fenêtre Windows (Edge `--app`) n'a pas été essayée sur un poste Windows ;
+  sans Edge, la page s'ouvre dans le navigateur par défaut.
+- Les captures PISTE vieilliront avec le portail : les refaire quand
+  piste.gouv.fr change de présentation.
