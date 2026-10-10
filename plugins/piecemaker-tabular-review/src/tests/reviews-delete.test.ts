@@ -31,7 +31,7 @@ afterEach(() => {
   for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true });
 });
 
-describe('suppression d’une tabular review', () => {
+describe('suppression d’une analyse tabulaire', () => {
   it('retire le JSON, ses exports et ses copies exclusives, mais garde les copies partagées', () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-'));
     directories.push(project);

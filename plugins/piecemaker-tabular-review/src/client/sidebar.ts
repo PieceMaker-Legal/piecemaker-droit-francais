@@ -67,7 +67,7 @@ export function inject(host: InjectionHost): () => void {
       button.type = 'button';
       button.className = sessionButton.className;
       button.title = 'Analyser les documents Markdown de ce dossier sous forme de tableau';
-      button.innerHTML = `${ICON}<span>Tabular review</span>`;
+      button.innerHTML = `${ICON}<span>Analyse Tabulaire</span>`;
       button.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();

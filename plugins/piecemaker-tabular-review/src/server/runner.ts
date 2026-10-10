@@ -145,7 +145,7 @@ async function worker(job: Job): Promise<void> {
     try {
       await runRow(job, task);
     } catch (error) {
-      process.stderr.write(`Tabular Review : ${error instanceof Error ? error.message : String(error)}\n`);
+      process.stderr.write(`Analyse Tabulaire : ${error instanceof Error ? error.message : String(error)}\n`);
     } finally {
       job.active.delete(task.rowId);
     }

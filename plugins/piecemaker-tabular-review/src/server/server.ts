@@ -215,7 +215,7 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
     const project = assertProject(body.project);
     const file = String(body.file ?? '');
     assertReviewFile(project, file);
-    if (isRunning(project, file)) throw new UserError('Annulez la tabular review en cours avant de la supprimer.');
+    if (isRunning(project, file)) throw new UserError('Annulez l’analyse tabulaire en cours avant de la supprimer.');
     deleteReview(project, file);
     return { deleted: true };
   }
@@ -251,7 +251,7 @@ const server = http.createServer(async (request, response) => {
     const result = await route(request.method ?? 'GET', new URL(request.url ?? '/', 'http://localhost'), body);
     response.end(JSON.stringify(result));
   } catch (error) {
-    if (!(error instanceof UserError)) process.stderr.write(`Tabular Review : ${error instanceof Error ? error.stack : String(error)}\n`);
+    if (!(error instanceof UserError)) process.stderr.write(`Analyse Tabulaire : ${error instanceof Error ? error.stack : String(error)}\n`);
     response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
   }
 });

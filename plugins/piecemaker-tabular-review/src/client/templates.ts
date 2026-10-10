@@ -169,7 +169,7 @@ async function editTemplate(app: App, template: Template | null, duplicate = fal
     });
     if (answer === 'duplicate' && template) return editTemplate(app, template, true);
     if (answer === 'delete' && template) {
-      const confirmed = await confirmDialog(app.root, 'Supprimer le modèle ?', `<p>Le modèle « ${escapeHtml(template.name)} » sera supprimé. Les tabular reviews déjà lancées ne sont pas affectées.</p>`, 'Supprimer', true);
+      const confirmed = await confirmDialog(app.root, 'Supprimer le modèle ?', `<p>Le modèle « ${escapeHtml(template.name)} » sera supprimé. Les analyses tabulaires déjà lancées ne sont pas affectées.</p>`, 'Supprimer', true);
       if (!confirmed) continue;
       try {
         const result = await app.rpc<{ templates: Template[] }>('DELETE', `/templates?id=${encodeURIComponent(template.id)}`);

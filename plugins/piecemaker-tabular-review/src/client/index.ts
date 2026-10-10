@@ -46,7 +46,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   root.dataset.theme = api.context.theme;
   root.innerHTML = `
     <header class="ptr-header">
-      <div class="ptr-tabs" role="tablist" aria-label="Tabular Review">
+      <div class="ptr-tabs" role="tablist" aria-label="Analyse Tabulaire">
         ${TABS.map((tab) => `<button type="button" class="ptr-tab" role="tab" data-tab="${tab.id}" aria-selected="false">${tab.label}</button>`).join('')}
       </div>
       <span class="ptr-spacer"></span>

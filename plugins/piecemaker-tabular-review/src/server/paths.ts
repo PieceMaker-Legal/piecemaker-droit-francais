@@ -61,10 +61,10 @@ export function docsDirectory(project: string): string {
 
 export function assertReviewFile(project: string, value: unknown): string {
   if (typeof value !== 'string' || !value.endsWith('.json') || value !== path.basename(value) || value.startsWith('.')) {
-    throw new UserError('Tabular review invalide.');
+    throw new UserError('Analyse tabulaire invalide.');
   }
   const file = path.join(reviewDirectory(project), value);
-  if (!fs.existsSync(file)) throw new UserError('Tabular review introuvable.');
+  if (!fs.existsSync(file)) throw new UserError('Analyse tabulaire introuvable.');
   return file;
 }
 

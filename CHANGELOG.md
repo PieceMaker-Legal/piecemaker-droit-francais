@@ -20,7 +20,7 @@ All notable changes to PieceMaker will be documented in this file.
 * **dossier:** exclusions par dossier et citations extraites par le scan ([476f830](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/476f8302ff75fafee782036ba4dec2fb340ba937))
 * **dossier:** ouvrir les annonces BODACC dans la visionneuse au lieu de l'accordéon ([aa97a32](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/aa97a3232e7f8436788b127bdac49c3a0e94687d))
 * **dossier:** proposer de ne plus jamais pseudonymiser une entité à sa suppression ([46397a4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/46397a4bce3f57523d32b655503d59fecab38e04))
-* **dossier:** renommer les pièces et trier le dossier depuis le Tabular Review ([efa9586](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/efa958607c06f19ea5758ffd5dab926c96ce91e4))
+* **dossier:** renommer les pièces et trier le dossier depuis l’Analyse Tabulaire ([efa9586](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/efa958607c06f19ea5758ffd5dab926c96ce91e4))
 * **dossier:** saisir directement un type de pièce personnalisé ([c681005](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c6810059344f50a7c72987f258b6ab9cf5c72124))
 * **dossier:** surlignage pastel des pièces selon le camp et le type ([fecf9e6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fecf9e60dc46afe3fcb0a5c4f675285e1f765ca6))
 * **dossier:** teintes pastel pour client, partie adverse et tiers ([11f6d1c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/11f6d1c99ba66aa2708466647d4bb3172392da9a))
