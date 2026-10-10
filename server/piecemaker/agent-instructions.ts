@@ -8,7 +8,7 @@ import { projectsDb } from '@/modules/database/index.js';
 
 const CLAUDE_FILE = 'CLAUDE.md';
 const AGENTS_FILE = 'AGENTS.md';
-const AGENTS_IMPORT = `@${AGENTS_FILE}\n`;
+const AGENTS_IMPORT = `@${AGENTS_FILE}`;
 const PROJECT_REFRESH_INTERVAL_MS = 5000;
 
 async function isPresent(filePath: string): Promise<boolean> {
@@ -20,12 +20,13 @@ async function isPresent(filePath: string): Promise<boolean> {
   }
 }
 
-const importsAgents = (content: Buffer) => /^@AGENTS\.md(\r?\n|$)/.test(content.toString('utf8'));
+const AGENTS_IMPORT_LINE = /^@AGENTS\.md(\r?\n|$)/;
+const importsAgents = (content: string) => AGENTS_IMPORT_LINE.test(content);
+const hasLine = (content: string, line: string) => content.split(/\r?\n/).includes(line);
+const withoutLine = (content: string, line: string) => content.split('\n').filter((current) => current.replace(/\r$/, '') !== line).join('\n');
 
-export function agentInstructionsTemplate(sharedInstructionsFile: string): string {
+export function agentInstructionsTemplate(): string {
   return [
-    `@${sharedInstructionsFile}`,
-    '',
     '# Ce dossier',
     '<!-- Éléments propres à ce dossier : parties, juridiction, échéances, particularités. À compléter. -->',
     '',
@@ -36,17 +37,22 @@ export async function ensureAgentInstructionFiles(projectRoot: string, sharedIns
   const claudePath = path.join(projectRoot, CLAUDE_FILE);
   const agentsPath = path.join(projectRoot, AGENTS_FILE);
   const [hasClaude, hasAgents] = await Promise.all([isPresent(claudePath), isPresent(agentsPath)]);
-  const claudeContent = hasClaude ? await readFile(claudePath) : null;
+  const sharedImport = `@${sharedInstructionsFile}`;
+  const claudeContent = hasClaude ? await readFile(claudePath, 'utf8') : null;
   const claudeImportsAgents = claudeContent !== null && importsAgents(claudeContent);
   if (!hasAgents) {
-    const content = claudeContent && !claudeImportsAgents ? claudeContent : agentInstructionsTemplate(sharedInstructionsFile);
+    const content = claudeContent !== null && !claudeImportsAgents ? withoutLine(claudeContent, sharedImport) : agentInstructionsTemplate();
     await writeFile(agentsPath, content, { flag: 'wx' });
   } else if (hasClaude && (await lstat(agentsPath)).isSymbolicLink() && (await realpath(claudePath)) === (await realpath(agentsPath))) {
     return [];
   }
-  if (!claudeImportsAgents) {
+  const claudeImports = `${AGENTS_IMPORT}\n${sharedImport}\n`;
+  const nextClaudeContent = claudeContent === null || !claudeImportsAgents
+    ? claudeImports
+    : hasLine(claudeContent, sharedImport) ? null : claudeContent.replace(AGENTS_IMPORT_LINE, claudeImports);
+  if (nextClaudeContent !== null) {
     const temporaryPath = `${claudePath}.piecemaker-${process.pid}.tmp`;
-    await writeFile(temporaryPath, AGENTS_IMPORT);
+    await writeFile(temporaryPath, nextClaudeContent);
     await rename(temporaryPath, claudePath);
   }
   return [...(hasClaude ? [] : [CLAUDE_FILE]), ...(hasAgents ? [] : [AGENTS_FILE])];
