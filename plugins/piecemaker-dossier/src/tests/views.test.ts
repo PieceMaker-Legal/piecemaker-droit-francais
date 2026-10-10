@@ -205,6 +205,7 @@ describe('scan status badge', () => {
     const html = shell('general', 12);
 
     expect(html).toContain('12 anonymisé(s)');
+    expect(html).toContain('class="pmd-status-icon" data-action="mapping" aria-label="Ouvrir le mapping"');
     expect(html).toContain('class="pmd-status-label" data-action="mapping"');
     expect(html).not.toContain('role="progressbar"');
     expect(html).toContain('data-tab="general"');
