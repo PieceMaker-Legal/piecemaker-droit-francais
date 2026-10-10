@@ -46,7 +46,7 @@ it('affiche uniquement les icônes et révèle leur nom au survol', async () => 
 it('place le surplus dans le menu et conserve l’onglet actif visible après redimensionnement', () => {
   const setActiveTab = vi.fn();
   render(<WorkspaceIconTabs activeTab="plugin:example" setActiveTab={setActiveTab} shouldShowTasksTab shouldShowBrowserTab />);
-  width = 132;
+  width = 114;
   act(() => resize());
   expect(screen.getAllByRole('tab')).toHaveLength(2);
   expect(screen.getByRole('tab', { name: 'Exemple' }).getAttribute('aria-selected')).toBe('true');
