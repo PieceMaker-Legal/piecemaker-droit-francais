@@ -14,7 +14,7 @@ export function mount(container, api) {
     .pm-library button:disabled{opacity:.4;cursor:not-allowed}
     .pm-library input[type=search]{font:inherit;color:inherit;background:transparent;border:1px solid var(--piecemaker-border,#e5e7eb);border-radius:.75rem;padding:9px 12px;flex:1;min-width:160px;box-shadow:none}
     .pm-library .row{display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--piecemaker-border,#e5e7eb);padding:16px 0}
-    .pm-library .title{display:inline-block;border:0;background:transparent;box-shadow:none;text-align:left;padding:0;font-weight:600;border-radius:0;height:auto;filter:none}.pm-library .details{flex:1;min-width:0}.pm-library .details p{white-space:pre-wrap;overflow-wrap:anywhere}
+    .pm-library .title{display:inline-block;border:0;background:transparent;box-shadow:none;text-align:left;padding:0;font-weight:600;border-radius:0;height:auto;filter:none}.pm-library .details{flex:1;min-width:0}.pm-library .details p{white-space:pre-wrap;overflow-wrap:anywhere}.pm-library .description{font-size:12px;line-height:1.4}.pm-library .row-title{display:flex;align-items:center;gap:8px}
     .pm-library .switch,.pm-library .piecemaker-toggle{display:inline-flex;align-items:center;gap:.625rem;width:fit-content;color:#4b5563;font-size:.875rem;white-space:nowrap}
     .pm-library input[role=switch]{appearance:none;width:2.25rem;height:1.25rem;border-radius:9999px;background:#d1d5db;position:relative;cursor:pointer;margin:0;flex:0 0 auto;border:0}
     .pm-library input[role=switch]:before{content:'';position:absolute;width:.75rem;height:.75rem;border-radius:50%;background:white;top:.25rem;left:.25rem;box-shadow:0 1px 2px rgb(0 0 0 / 12%);transition:transform 200ms ease}
@@ -62,6 +62,7 @@ export function mount(container, api) {
   let createError = '';
   let pinnedScrollTop = null;
   let openMenuId = '';
+  const expandedDescriptions = new Set();
   let pendingToggles = 0;
 
   function element(tag, text, className) {
@@ -284,9 +285,17 @@ export function mount(container, api) {
   function row(item, action) {
     const node = element('div', undefined, 'row');
     const details = element('div', undefined, 'details');
-    if (action) { const title = button(item.name, action, 'title piecemaker-button'); details.append(title); }
-    else details.append(element('strong', item.name));
-    details.append(element('p', item.description || 'Aucune description.'));
+    const titleRow = element('div', undefined, 'row-title');
+    const title = button(item.name, () => {
+      if (expandedDescriptions.has(item.id)) expandedDescriptions.delete(item.id);
+      else expandedDescriptions.add(item.id);
+      render();
+    }, 'title piecemaker-button');
+    title.setAttribute('aria-expanded', String(expandedDescriptions.has(item.id)));
+    titleRow.append(title);
+    if (action) titleRow.append(button('Modifier', action));
+    details.append(titleRow);
+    if (expandedDescriptions.has(item.id)) details.append(element('p', item.description || 'Aucune description.', 'description'));
     if (item.globalProviders?.length) details.append(element('p', `Actif partout · ${item.globalProviders.join(', ')}`, 'meta'));
     node.append(details);
     return node;
