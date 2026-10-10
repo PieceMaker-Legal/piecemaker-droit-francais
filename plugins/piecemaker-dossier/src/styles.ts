@@ -420,7 +420,10 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-document-dialog .pmd-input,.pmd-document-dialog .pmd-select{height:36px;padding:7px 9px;font-size:12px}
 @media(max-width:760px){
   .pmd-content{padding:14px}
-  .pmd-header{gap:8px;padding:8px 10px}
+  .pmd-header{display:grid;width:100%;min-width:0;box-sizing:border-box;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:8px 10px}
+  .pmd-tabs{grid-column:1 / -1;min-width:0;max-width:100%;overflow-x:auto}
+  .pmd-scan-status{grid-column:1;margin-left:0}
+  .pmd-header>.pmd-icon-button{grid-column:2;grid-row:2}
   .pmd-status-label{display:none}
   .pmd-scan-progress{min-width:80px}
   .pmd-party-layout{display:grid;grid-template-columns:minmax(0,1fr) 40px;overflow:visible}
