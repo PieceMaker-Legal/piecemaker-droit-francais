@@ -1,4 +1,9 @@
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+
+import { resolveVibeHome } from '@/modules/providers/list/mistral/mistral-runtime.provider.js';
 import type { IProviderSessions } from '@/shared/interfaces.js';
+import { prepareTranscriptMessages } from '@/shared/message-unification.js';
 import type { AnyRecord, FetchHistoryOptions, FetchHistoryResult, NormalizedMessage } from '@/shared/types.js';
 import {
   createNormalizedMessage,
@@ -6,6 +11,7 @@ import {
   normalizeProviderTimestamp,
   readObjectRecord,
   readOptionalString,
+  sliceTailPage,
 } from '@/shared/utils.js';
 
 const PROVIDER = 'mistral';
@@ -91,6 +97,93 @@ const formatToolContent = (value: unknown): string => {
   } catch {
     return String(value);
   }
+};
+
+type VibeSessionLog = { records: AnyRecord[]; startTime: unknown };
+
+const readVibeSessionLog = async (vibeSessionId: string): Promise<VibeSessionLog | null> => {
+  const root = path.join(resolveVibeHome(), 'logs', 'session');
+  let entries: string[];
+  try {
+    entries = await fsp.readdir(root);
+  } catch {
+    return null;
+  }
+  for (const entry of entries.filter((name) => name.endsWith(`_${vibeSessionId.slice(0, 8)}`))) {
+    try {
+      const meta = JSON.parse(await fsp.readFile(path.join(root, entry, 'meta.json'), 'utf8'));
+      if (meta?.session_id !== vibeSessionId) continue;
+      const lines = (await fsp.readFile(path.join(root, entry, 'messages.jsonl'), 'utf8')).split('\n');
+      const records = lines.flatMap((line) => {
+        try {
+          const record = readObjectRecord(JSON.parse(line));
+          return record ? [record] : [];
+        } catch {
+          return [];
+        }
+      });
+      return { records, startTime: meta.start_time };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+};
+
+const parseToolArguments = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value ?? {};
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
+const normalizeVibeLog = (records: AnyRecord[], sessionId: string, timestamp: string): NormalizedMessage[] => {
+  const messages: NormalizedMessage[] = [];
+  const toolUses = new Map<string, NormalizedMessage>();
+  records.forEach((record, index) => {
+    if (record.injected === true) return;
+    const role = readOptionalString(record.role);
+    const baseId = readOptionalString(record.message_id) ?? `mistral_history_${index}`;
+    const base = { sessionId, timestamp, provider: PROVIDER } as const;
+    if (role === 'user') {
+      const content = extractContentText(record.content);
+      if (content.trim()) messages.push(createNormalizedMessage({ ...base, id: baseId, kind: 'text', role: 'user', content }));
+      return;
+    }
+    if (role === 'assistant') {
+      const reasoning = readOptionalString(record.reasoning_content);
+      if (reasoning?.trim()) {
+        messages.push(createNormalizedMessage({ ...base, id: readOptionalString(record.reasoning_message_id) ?? `${baseId}_reasoning`, kind: 'thinking', content: reasoning }));
+      }
+      for (const call of Array.isArray(record.tool_calls) ? record.tool_calls : []) {
+        const callRecord = readObjectRecord(call);
+        const fn = readObjectRecord(callRecord?.function);
+        const toolId = readOptionalString(callRecord?.id) ?? `${baseId}_tool_${toolUses.size}`;
+        const toolUse = createNormalizedMessage({
+          ...base,
+          id: `${baseId}_${toolId}`,
+          kind: 'tool_use',
+          toolName: readOptionalString(fn?.name) ?? 'Tool',
+          toolInput: parseToolArguments(fn?.arguments),
+          toolId,
+        });
+        toolUses.set(toolId, toolUse);
+        messages.push(toolUse);
+      }
+      const content = extractContentText(record.content);
+      if (content.trim()) messages.push(createNormalizedMessage({ ...base, id: baseId, kind: 'text', role: 'assistant', content }));
+      return;
+    }
+    if (role === 'tool') {
+      const toolUse = toolUses.get(readOptionalString(record.tool_call_id) ?? '');
+      if (!toolUse) return;
+      const content = formatToolContent(record.content);
+      toolUse.toolResult = { content, isError: content.trimStart().startsWith('<tool_error>') };
+    }
+  });
+  return messages;
 };
 
 export class MistralSessionsProvider implements IProviderSessions {
@@ -190,18 +283,18 @@ export class MistralSessionsProvider implements IProviderSessions {
     return messages;
   }
 
-  /**
-   * Vibe does not expose a session-history database or file this adapter can
-   * read today (unlike Claude/Codex JSONL transcripts or OpenCode's SQLite
-   * store). History replay is therefore not yet available for Mistral
-   * sessions; the transcript that was streamed live to the client during the
-   * run remains the only record of the conversation.
-   */
   async fetchHistory(
-    _sessionId: string,
-    _options: FetchHistoryOptions = {},
+    sessionId: string,
+    options: FetchHistoryOptions = {},
   ): Promise<FetchHistoryResult> {
-    return { messages: [], total: 0, hasMore: false, offset: 0, limit: null };
+    const { limit = null, offset = 0 } = options;
+    const log = await readVibeSessionLog(options.providerSessionId ?? sessionId);
+    const normalized = log ? normalizeVibeLog(log.records, sessionId, normalizeProviderTimestamp(log.startTime)) : [];
+    const transcript = prepareTranscriptMessages(normalized);
+    const normalizedOffset = Math.max(0, offset);
+    const normalizedLimit = limit === null ? null : Math.max(0, limit);
+    const { page, hasMore } = sliceTailPage(transcript, normalizedLimit, normalizedOffset);
+    return { messages: page, total: transcript.length, hasMore, offset: normalizedOffset, limit: normalizedLimit };
   }
 
   getProviderId(): string {

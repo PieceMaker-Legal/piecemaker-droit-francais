@@ -37,11 +37,14 @@ const notifyRunFailedForProvider = notifyRunFailed as unknown as (input: RunNoti
 
 let enabledSkillsWarned = false;
 
+export function resolveVibeHome(): string {
+  const home = process.env.VIBE_HOME?.trim();
+  return home ? path.resolve(home.replace(/^~(?=$|[\\/])/, os.homedir())) : path.join(os.homedir(), '.vibe');
+}
+
 export function vibeUserConfigEnablesSkills(): boolean {
   try {
-    const home = process.env.VIBE_HOME?.trim();
-    const directory = home ? path.resolve(home.replace(/^~(?=$|[\\/])/, os.homedir())) : path.join(os.homedir(), '.vibe');
-    const enabled = TOML.parse(fs.readFileSync(path.join(directory, 'config.toml'), 'utf8')).enabled_skills;
+    const enabled = TOML.parse(fs.readFileSync(path.join(resolveVibeHome(), 'config.toml'), 'utf8')).enabled_skills;
     return Array.isArray(enabled) && enabled.length > 0;
   } catch {
     return false;
