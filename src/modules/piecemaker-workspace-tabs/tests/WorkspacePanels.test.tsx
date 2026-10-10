@@ -6,6 +6,8 @@ import { expect, it, vi } from 'vitest';
 import { withWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';
 import type { AppTab, Project } from '@/shared/types';
 
+vi.mock('@/modules/piecemaker-workspace-tabs/WorkspaceViewer', () => ({ WorkspaceViewer: vi.fn() }));
+
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@/modules/plugins', () => ({
   usePlugins: () => ({ plugins: [

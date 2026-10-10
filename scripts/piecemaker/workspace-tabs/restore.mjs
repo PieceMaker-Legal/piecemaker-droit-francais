@@ -11,6 +11,8 @@ const mainPath = 'src/modules/project-workspace/WorkspaceMain.tsx';
 const panelsImport = "import { withWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';";
 const upstreamExport = 'export default React.memo(WorkspaceMain);';
 const panelsExport = 'export default React.memo(withWorkspacePanels(WorkspaceMain));';
+const editorImport = "import { EditorSidebar, useEditorSidebar } from '@/modules/code-editor';";
+const viewerImport = "import { WorkspaceViewer as EditorSidebar } from '@/modules/piecemaker-workspace-tabs';";
 
 export function restoreWorkspaceTabs(root = repositoryRoot) {
   const backup = JSON.parse(readFileSync(backupPath, 'utf8'));
@@ -35,6 +37,12 @@ export function restoreWorkspaceTabs(root = repositoryRoot) {
     mainSource = mainSource.replace(upstreamExport, panelsExport);
   }
   if (!mainSource.includes(panelsImport)) mainSource = `${panelsImport}\n${mainSource}`;
+  if (!mainSource.includes(viewerImport)) {
+    if (mainSource.split(editorImport).length !== 2) {
+      throw new Error('Branchement de la visionneuse déplacé par upstream : reporter WorkspaceViewer au nouveau site.');
+    }
+    mainSource = mainSource.replace(editorImport, `import { useEditorSidebar } from '@/modules/code-editor';\n${viewerImport}`);
+  }
   writeFileSync(mainTarget, mainSource);
 }
 
