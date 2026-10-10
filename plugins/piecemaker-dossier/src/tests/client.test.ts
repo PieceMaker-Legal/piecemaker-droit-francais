@@ -37,4 +37,11 @@ describe('Dossier edit action', () => {
     expect(openFileInEditor).toHaveBeenCalledExactlyOnceWith('piecemaker://identity/open/Soci%C3%A9t%C3%A9%20Exemple%20SAS');
     expect(container.querySelector('.pmd-modal')).toBeNull();
   });
+
+  it('opens the mapping from the anonymized count', async () => {
+    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
+    await vi.waitFor(() => expect(container.querySelector('.pmd-status-label')).not.toBeNull());
+    container.querySelector<HTMLButtonElement>('.pmd-status-label')!.click();
+    expect(container.querySelector('.pmd-mapping-dialog')).not.toBeNull();
+  });
 });
