@@ -6,15 +6,17 @@ import express, { type Request, type Response } from 'express';
 
 import { projectsDb } from '@/modules/database/index.js';
 
+import { externalRegularFile } from './file-links.js';
+
 const MAX_DOCX_BYTES = '100mb';
 
-function resolveDocxPath(request: Request): string | null {
+async function resolveDocxPath(request: Request): Promise<string | null> {
   const projectId = typeof request.query.projectId === 'string' ? request.query.projectId : '';
   const filePath = typeof request.query.path === 'string' ? request.query.path : '';
   const projectRoot = projectId ? projectsDb.getProjectPathById(projectId) : null;
   if (!projectRoot || !filePath.toLowerCase().endsWith('.docx')) return null;
   const resolved = path.resolve(projectRoot, filePath);
-  return resolved.startsWith(path.resolve(projectRoot) + path.sep) ? resolved : null;
+  return resolved.startsWith(path.resolve(projectRoot) + path.sep) ? resolved : externalRegularFile(projectRoot, filePath);
 }
 
 async function readVersion(filePath: string): Promise<number> {
@@ -25,7 +27,7 @@ export function createDocxDocumentRouter() {
   const router = express.Router();
 
   router.get('/docx-document/version', async (request: Request, response: Response) => {
-    const filePath = resolveDocxPath(request);
+    const filePath = await resolveDocxPath(request);
     if (!filePath) return response.status(400).json({ error: 'Invalid docx path' });
     try {
       response.json({ version: await readVersion(filePath) });
@@ -35,7 +37,7 @@ export function createDocxDocumentRouter() {
   });
 
   router.put('/docx-document', express.raw({ type: () => true, limit: MAX_DOCX_BYTES }), async (request: Request, response: Response) => {
-    const filePath = resolveDocxPath(request);
+    const filePath = await resolveDocxPath(request);
     if (!filePath || !Buffer.isBuffer(request.body) || request.body.length === 0) {
       return response.status(400).json({ error: 'Invalid docx payload' });
     }

@@ -30,7 +30,7 @@ import { commandsRoutes } from './modules/commands/index.js';
 import { settingsRoutes } from './modules/settings/index.js';
 import { createSystemModule } from './modules/system/index.js';
 import { createAgentModule } from './modules/agent/index.js';
-import { createPieceMakerLocalRouter, createPieceMakerRouter, stopOriginalsJobs } from './piecemaker/index.js';
+import { createExternalFileRouter, createPieceMakerLocalRouter, createPieceMakerRouter, stopOriginalsJobs } from './piecemaker/index.js';
 import { createPieceMakerDesktopUpdateRouter } from './piecemaker/desktop-update/index.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
@@ -152,6 +152,7 @@ app.use('/api', validateApiKey);
 app.use('/api/auth', authRoutes);
 
 // File Tree API Routes (protected)
+app.use('/api/file-tree', authenticateToken, createExternalFileRouter());
 app.use('/api/file-tree', authenticateToken, fileTreeRoutes);
 
 // Projects API Routes (protected)

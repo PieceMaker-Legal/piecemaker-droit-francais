@@ -1,31 +1,24 @@
-const SHELL_TOKEN = /[^\s"'`|;&<>()]+/g;
-const NON_PATH = /[()<>{}[\]=;,"'`|*?!$&]|:\/\//;
-const FILE_EXTENSION = /[^.]\.(?=[a-z0-9]{1,10}$)[a-z0-9]*[a-z][a-z0-9]*$/i;
+// Un argument entre quotes, ou un mot dont les espaces sont échappés par `\`.
+const SHELL_WORD = /"([^"\n]+)"|'([^'\n]+)'|((?:\\ |[^\s"'`|;&<>()])+)/g;
+// Un chemin a un séparateur, une extension ou commence par `~` ; une adresse n'en est pas un.
+const PATH_LIKE = /[\\/.~]/;
+const NOT_A_PATH = /:\/\/|^-/;
 
 export type CommandFileRef = { start: number; end: number; path: string };
 
-const stripLineSuffix = (value: string) => value.replace(/:\d+(?::\d+)?$/, '');
-
-function looksLikeCommandFileRef(value: string): boolean {
-  const cleaned = stripLineSuffix(value.trim());
-  if (!cleaned || NON_PATH.test(cleaned)) return false;
-  const lastSegment = cleaned.split(/[\\/]/).pop() ?? '';
-  return FILE_EXTENSION.test(lastSegment);
-}
-
-/** Chemins cités dans une commande, au même critère qu'un nom de fichier entre backticks. */
+/**
+ * Candidats chemins d'une commande. Ce ne sont que des candidats : seul le
+ * serveur dit si le fichier existe, comme les liens fichier de VS Code.
+ */
 export function commandFileRefs(command: string): CommandFileRef[] {
   const refs: CommandFileRef[] = [];
-  SHELL_TOKEN.lastIndex = 0;
-  let match = SHELL_TOKEN.exec(command);
-  while (match) {
-    const raw = match[0];
-    const trimmed = raw.replace(/[.,]+$/, '');
-    const path = stripLineSuffix(trimmed);
-    if (looksLikeCommandFileRef(path)) {
-      refs.push({ start: match.index, end: match.index + path.length, path });
-    }
-    match = SHELL_TOKEN.exec(command);
+  for (const match of command.matchAll(SHELL_WORD)) {
+    const quoted = match[1] ?? match[2];
+    const word = quoted ?? match[3].replace(/[.,]+$/, '');
+    const path = quoted ?? word.replace(/\\ /g, ' ');
+    if (!PATH_LIKE.test(path) || NOT_A_PATH.test(path)) continue;
+    const start = match.index + (quoted === undefined ? 0 : 1);
+    refs.push({ start, end: start + word.length, path });
   }
   return refs;
 }

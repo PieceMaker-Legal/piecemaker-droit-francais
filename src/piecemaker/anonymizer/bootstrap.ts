@@ -10,7 +10,7 @@ import { startDocumentVerificationHighlighting } from '@/piecemaker/anonymizer/d
 import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 import { startLibraryDocumentViewer } from '@/piecemaker/library/bootstrap';
 import { startShellEnvironmentWarning } from '@/piecemaker/shell-environment/bootstrap';
-import { startCommandFileLinks } from '@/piecemaker/chat/commandFileLinks';
+import { startFileLinks } from '@/piecemaker/chat/fileLinks';
 import '@/piecemaker/sidebar-anonymization/bootstrap';
 import '@/piecemaker/plugin-injections/bootstrap';
 import '@/piecemaker/theme.css';
@@ -21,5 +21,5 @@ const stopCitationPanel = startCitationPanel();
 const stopLibraryDocumentViewer = startLibraryDocumentViewer();
 const stopPluginsReloadAfterLogin = startPluginsReloadAfterLogin();
 const stopShellEnvironmentWarning = startShellEnvironmentWarning();
-const stopCommandFileLinks = startCommandFileLinks();
-if (import.meta.hot) import.meta.hot.dispose(() => { stopDocumentVerificationHighlighting(); stopCitationPanel(); stopLibraryDocumentViewer(); stopPluginsReloadAfterLogin(); stopShellEnvironmentWarning(); stopCommandFileLinks(); });
+const stopFileLinks = startFileLinks();
+if (import.meta.hot) import.meta.hot.dispose(() => { stopDocumentVerificationHighlighting(); stopCitationPanel(); stopLibraryDocumentViewer(); stopPluginsReloadAfterLogin(); stopShellEnvironmentWarning(); stopFileLinks(); });

@@ -15,6 +15,12 @@ vi.mock('@/modules/code-editor/CodeEditor', () => ({
   ),
 }));
 
+const { resolveFileRef } = vi.hoisted(() => ({
+  resolveFileRef: vi.fn(async (path: string) => (path.includes('disparu') ? null : `/reel${path}`)),
+}));
+
+vi.mock('@/piecemaker/chat/fileRef', () => ({ resolveFileRef }));
+
 vi.mock('@/piecemaker/citations/CitationPanel', () => ({
   CitationPanel: ({ token, onClose }: { token: string; onClose: () => void }) => (
     <aside data-testid="citation" data-token={token}><button onClick={onClose}>Fermer la source</button></aside>
@@ -24,12 +30,12 @@ vi.mock('@/piecemaker/citations/CitationPanel', () => ({
 const token = 'b'.repeat(64);
 const file = (path: string): CodeEditorFile => ({ name: path.split('/').pop() ?? path, path, projectId: 'dossier-a' });
 const tabs = () => screen.queryAllByRole('tab').map((tab) => tab.textContent);
-const shown = () => screen.getByTestId('code-editor').dataset.path;
+const shown = async () => (await screen.findByTestId('code-editor')).dataset.path;
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); resolveFileRef.mockClear(); });
 
 describe('onglets de l’éditeur latéral', () => {
-  it('garde chaque fichier ouvert dans un onglet, bascule de l’un à l’autre et referme le panneau avec le dernier', () => {
+  it('garde chaque fichier ouvert dans un onglet, bascule de l’un à l’autre et referme le panneau avec le dernier', async () => {
     const onClose = vi.fn();
     const first = file('/dossier/notes.md');
     const view = render(<TabbedCodeEditor file={first} onClose={onClose} isSidebar />);
@@ -37,30 +43,40 @@ describe('onglets de l’éditeur latéral', () => {
 
     view.rerender(<TabbedCodeEditor file={file('/dossier/plan.md')} onClose={onClose} isSidebar />);
     expect(tabs()).toEqual(['notes.md', 'plan.md']);
-    expect(shown()).toBe('/dossier/plan.md');
+    expect(await shown()).toBe('/reel/dossier/plan.md');
 
     fireEvent.click(screen.getByRole('tab', { name: 'notes.md' }));
-    expect(shown()).toBe('/dossier/notes.md');
+    expect(await shown()).toBe('/reel/dossier/notes.md');
 
     view.rerender(<TabbedCodeEditor file={file('/dossier/notes.md')} onClose={onClose} isSidebar />);
     expect(tabs()).toEqual(['notes.md', 'plan.md']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Fermer le fichier' }));
     expect(tabs()).toEqual([]);
-    expect(shown()).toBe('/dossier/plan.md');
+    expect(await shown()).toBe('/reel/dossier/plan.md');
     expect(onClose).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fermer le fichier' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Fermer le fichier' }));
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('ouvre une citation dans un onglet nommé d’après sa référence', () => {
+  it('ouvre une citation dans un onglet nommé d’après sa référence', async () => {
     const view = render(<TabbedCodeEditor file={file('/dossier/notes.md')} onClose={vi.fn()} isSidebar />);
     view.rerender(<TabbedCodeEditor file={file(citationPath(token, 'Citation [2]'))} onClose={vi.fn()} isSidebar />);
     expect(tabs()).toEqual(['notes.md', 'Citation [2]']);
     expect(screen.getByTestId('citation').dataset.token).toBe(token);
     fireEvent.click(screen.getByRole('button', { name: 'Fermer Citation [2]' }));
-    expect(shown()).toBe('/dossier/notes.md');
+    expect(await shown()).toBe('/reel/dossier/notes.md');
+  });
+
+  it('vérifie le fichier avant d’ouvrir l’éditeur et signale un fichier disparu', async () => {
+    const onClose = vi.fn();
+    render(<TabbedCodeEditor file={file('/dossier/disparu.md')} onClose={onClose} isSidebar />);
+    expect((await screen.findByRole('status')).textContent).toContain('disparu.md');
+    expect(screen.queryByTestId('code-editor')).toBeNull();
+    expect(resolveFileRef).toHaveBeenCalledWith('/dossier/disparu.md', { fresh: true, projectId: 'dossier-a' });
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it('confie au plugin Dossier un conteneur pour la fiche et le libère à la fermeture', () => {
