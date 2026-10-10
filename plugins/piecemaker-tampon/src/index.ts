@@ -64,11 +64,12 @@ const STATUS_LABEL: Record<CaseOriginalPiece['status'], string> = {
 };
 
 const STYLE_TEXT = `
-  .pm-tampon { min-height: 100%; height: 100%; display: flex; flex-direction: column; overflow: auto; padding: clamp(12px, 3vw, 32px); box-sizing: border-box; color: hsl(var(--foreground, 222 47% 11%)); background: hsl(var(--background, 0 0% 100%)); font: 14px var(--piecemaker-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
+  .pm-tampon { position: absolute; inset: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: clamp(12px, 3vw, 32px); box-sizing: border-box; color: hsl(var(--foreground, 222 47% 11%)); background: hsl(var(--background, 0 0% 100%)); font: 14px var(--piecemaker-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
   .pm-tampon * { box-sizing: border-box; }
-  .pm-tampon__stack { flex: 1; min-height: 0; width: 100%; max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
-  .pm-tampon__toolbar { max-width: 56rem; margin: 0 auto 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .pm-tampon__page-title { margin: 0; font-family: var(--piecemaker-font-editorial, Georgia, serif); font-size: 1.5rem; font-weight: 500; }
+  .pm-tampon__stack { grid-row: 2; height: 100%; min-height: 0; width: 100%; max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+  .pm-tampon__stack > .pm-tampon__pieces { height: 100%; display: flex; flex-direction: column; }
+  .pm-tampon__stack > .pm-tampon__pieces > .pm-tampon__body { flex: 1; overflow: auto; }
+  .pm-tampon__toolbar { grid-row: 1; width: 100%; max-width: 56rem; margin: 0 auto 12px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
   .pm-tampon__card { min-width: 0; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: 1rem; background: hsl(var(--card, 0 0% 100%)); box-shadow: none; }
   .pm-tampon__header, .pm-tampon__footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; min-width: 0; }
   .pm-tampon__footer { align-items: center; flex-wrap: wrap; justify-content: flex-start; border-top: 1px solid hsl(var(--border, 220 13% 91%)); }
@@ -100,8 +101,8 @@ const STYLE_TEXT = `
   .pm-tampon__overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(0 0 0 / 55%); }
   .pm-tampon__dialog { width: min(900px, 100%); max-height: calc(100dvh - 32px); overflow: auto; outline: none; box-shadow: 0 24px 80px rgb(0 0 0 / 35%); }
   .pm-tampon__close { flex: 0 0 auto; }
-  .pm-tampon__stamp-trigger { width: 2.5rem; height: 2.5rem; color: hsl(var(--foreground, 222 47% 11%)); }
-  .pm-tampon__stamp-trigger svg { width: 20px; height: 20px; }
+  .pm-tampon__stamp-trigger { width: 1.75rem; height: 1.75rem; color: hsl(var(--foreground, 222 47% 11%)); }
+  .pm-tampon__stamp-trigger svg { width: 16px; height: 16px; }
   @media (max-width: 560px) {
     .pm-tampon__body { padding: 0 14px 14px; }
     .pm-tampon__header, .pm-tampon__footer { padding: 14px; }
@@ -552,7 +553,7 @@ function renderBuilder(state: ViewState): HTMLElement {
 }
 
 function renderPieces(state: ViewState): HTMLElement {
-  const card = element('section', 'pm-tampon__card');
+  const card = element('section', 'pm-tampon__pieces');
   const header = element('div', 'pm-tampon__header');
   header.append(element('h2', 'pm-tampon__title piecemaker-display', 'Pièces à tamponner'));
   if (state.cases.length > 0) {
@@ -607,7 +608,6 @@ function renderPieces(state: ViewState): HTMLElement {
       }
       available.append(availableList);
       const bordereau = element('div');
-      bordereau.append(element('p', 'pm-tampon__muted', `Bordereau (${state.selectedOrder.length} pièce${state.selectedOrder.length > 1 ? 's' : ''})`));
       const bordereauList = element('div', 'pm-tampon__list');
       if (state.selectedOrder.length === 0) bordereauList.append(element('p', 'pm-tampon__muted', 'Aucune pièce sélectionnée.'));
       state.selectedOrder.forEach((path, index) => {
@@ -702,7 +702,6 @@ function render(state: ViewState): void {
   const { root } = state;
   root.replaceChildren();
   const toolbar = element('header', 'pm-tampon__toolbar');
-  toolbar.append(element('h1', 'pm-tampon__page-title piecemaker-display', 'Bordereau'));
   const stampButton = button('', () => {
     state.builderOpen = true;
     render(state);
