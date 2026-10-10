@@ -9,21 +9,6 @@ const MARKER = 'piecemakerTabularReview';
 const POLL_INTERVAL = 15_000;
 const OPEN_ATTEMPTS = 30;
 
-const BUTTON_STYLE = [
-  'display:flex',
-  'align-items:center',
-  'gap:.5rem',
-  'width:100%',
-  'height:2rem',
-  'padding:0 .75rem',
-  'border:1px solid hsl(var(--border))',
-  'border-radius:calc(var(--radius, .5rem) - 2px)',
-  'background:hsl(var(--background))',
-  'color:hsl(var(--foreground))',
-  'font:500 12px/1 inherit',
-  'cursor:pointer',
-].join(';');
-
 const ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>';
 
 type PendingWindow = Window & { [PENDING_TARGET_KEY]?: unknown };
@@ -80,7 +65,7 @@ export function inject(host: InjectionHost): () => void {
       if (reference !== sessionButton) wrapper.className = reference.className;
       const button = document.createElement('button');
       button.type = 'button';
-      button.setAttribute('style', BUTTON_STYLE);
+      button.className = sessionButton.className;
       button.title = 'Analyser les documents Markdown de ce dossier sous forme de tableau';
       button.innerHTML = `${ICON}<span>Tabular review</span>`;
       button.addEventListener('click', (event) => {
