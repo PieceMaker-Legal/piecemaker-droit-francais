@@ -19,11 +19,26 @@
 }
 
 .piecemaker-workspace-divider {
+  position: relative;
+  z-index: 10;
   width: 6px;
   flex-shrink: 0;
   cursor: col-resize;
   touch-action: none;
   user-select: none;
+}
+
+.piecemaker-workspace-divider::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+}
+
+.piecemaker-workspace-divider.is-dock-edge::after {
+  top: 8px;
+  bottom: 8px;
+  left: 11px;
+  right: -11px;
 }
 
 .piecemaker-workspace-divider.is-horizontal {
@@ -32,7 +47,15 @@
   cursor: row-resize;
 }
 
+.piecemaker-workspace-divider.is-horizontal::after {
+  inset: -3px 0;
+}
+
 .piecemaker-workspace-divider:focus-visible {
+  outline: none;
+}
+
+.piecemaker-workspace-divider:focus-visible::after {
   outline: 1px solid hsl(var(--border));
 }
 
