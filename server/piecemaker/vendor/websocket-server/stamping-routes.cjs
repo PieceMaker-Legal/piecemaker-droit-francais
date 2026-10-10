@@ -26,6 +26,10 @@ function readFileStripBOM(filePath, encoding = 'utf8') {
   return stripBOM(fs.readFileSync(filePath, encoding));
 }
 
+function lastStampingPath(caseFolder) {
+  return path.join(caseFolder, '.piecemaker', 'last-stamping.json');
+}
+
 /**
  * Chemin réel de l'original d'une pièce. Les compilations écrites par la
  * version courante stockent le chemin complet, mais celles d'avant n'ont que
@@ -142,6 +146,46 @@ function createStampingRouter({ homeDir = path.join(os.homedir(), '.piecemaker')
       const tamponPath = getSystemDataPath('tampon.png');
       if (fs.existsSync(tamponPath)) fs.unlinkSync(tamponPath);
       res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/stamping/last', (req, res) => {
+    try {
+      const documentId = String(req.query.documentId || '');
+      const requestedFolder = String(req.query.folder || '').trim() || getDossierFolder(documentId);
+      if (!documentId || !requestedFolder) {
+        return res.status(400).json({ error: 'documentId et dossier de travail requis.' });
+      }
+
+      const workingFolder = rememberDossierFolder(documentId, requestedFolder);
+      const file = lastStampingPath(workingFolder);
+      if (!fs.existsSync(file)) {
+        const outputFolder = stampedPiecesDirectory(workingFolder);
+        const results = fs.existsSync(outputFolder)
+          ? fs.readdirSync(outputFolder)
+            .map((filename) => ({ filename, match: filename.match(/^Pièce n°(\d+)\.pdf$/u) }))
+            .filter((entry) => entry.match)
+            .map((entry) => ({
+              pieceNumber: Number(entry.match[1]),
+              id: '',
+              filename: entry.filename,
+              outputFileName: entry.filename,
+              success: true,
+            }))
+            .sort((left, right) => left.pieceNumber - right.pieceNumber)
+          : [];
+        if (results.length === 0) return res.status(404).json({ error: 'Aucun bordereau enregistré.' });
+        return res.json({
+          success: true,
+          legacy: true,
+          results,
+          message: 'Dernier bordereau présent dans le dossier.',
+        });
+      }
+
+      res.json(JSON.parse(readFileStripBOM(file, 'utf8')));
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -306,14 +350,21 @@ function createStampingRouter({ homeDir = path.join(os.homedir(), '.piecemaker')
       const successCount = results.filter((r) => r.success).length;
       const failureCount = results.filter((r) => !r.success).length;
 
-      res.json({
+      const response = {
         success: true,
         folder: workingFolder,
         tamponnedDir,
         results,
         summary: { total: pieces.length, success: successCount, failure: failureCount },
         message: `Tamponnage terminé : ${successCount} pièce(s) traitée(s), ${failureCount} erreur(s).`,
-      });
+      };
+      const lastStampingFile = lastStampingPath(workingFolder);
+      fs.mkdirSync(path.dirname(lastStampingFile), { recursive: true });
+      const temporaryFile = `${lastStampingFile}.${process.pid}.tmp`;
+      fs.writeFileSync(temporaryFile, JSON.stringify(response, null, 2), 'utf8');
+      fs.renameSync(temporaryFile, lastStampingFile);
+
+      res.json(response);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

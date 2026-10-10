@@ -35,6 +35,7 @@ type StampingPieceResult = {
 };
 type StampingResponse = {
   success: true;
+  legacy?: boolean;
   message: string;
   results: StampingPieceResult[];
 };
@@ -205,6 +206,7 @@ type ViewState = {
   originalsLoading: boolean;
   originalsError: string | null;
   selectedOrder: string[];
+  lastStampingLoading: boolean;
   running: boolean;
   runError: string | null;
   runResult: StampingResponse | null;
@@ -220,6 +222,39 @@ const selectedCase = (state: ViewState): DossierCase | null =>
   state.cases.find((entry) => entry.path === state.selectedCaseId) ?? null;
 
 const displayedImage = (state: ViewState): string | null => state.pendingImage ?? state.savedImage;
+
+async function loadLastStamping(state: ViewState): Promise<void> {
+  const current = selectedCase(state);
+  if (!current) {
+    state.lastStampingLoading = false;
+    state.runResult = null;
+    return;
+  }
+  const caseId = current.path;
+  state.lastStampingLoading = true;
+  state.runError = null;
+  render(state);
+  try {
+    const response = await request<StampingResponse>(
+      'GET',
+      `/stamping/last?documentId=${encodeURIComponent(caseId)}&folder=${encodeURIComponent(current.location)}`,
+    );
+    if (state.disposed || state.selectedCaseId !== caseId) return;
+    state.runResult = response;
+    state.selectedOrder = response.legacy ? [] : response.results.map((entry) => entry.id);
+  } catch (cause) {
+    if (state.disposed || state.selectedCaseId !== caseId) return;
+    const status = cause && typeof cause === 'object' && 'status' in cause ? Number(cause.status) : 0;
+    state.runResult = null;
+    state.selectedOrder = [];
+    if (status !== 404) state.runError = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    if (!state.disposed && state.selectedCaseId === caseId) {
+      state.lastStampingLoading = false;
+      render(state);
+    }
+  }
+}
 
 async function loadTampon(state: ViewState): Promise<void> {
   if (cachedTampon !== undefined) {
@@ -260,7 +295,10 @@ async function loadCases(state: ViewState): Promise<void> {
     state.cases = [];
     state.selectedCaseId = null;
     state.originals = null;
+    state.runResult = null;
+    state.selectedOrder = [];
     state.casesLoading = false;
+    state.lastStampingLoading = false;
     render(state);
     return;
   }
@@ -296,6 +334,7 @@ async function loadCases(state: ViewState): Promise<void> {
       state.casesLoading = false;
       render(state);
       void loadOriginals(state);
+      void loadLastStamping(state);
     }
   }
 }
@@ -618,6 +657,7 @@ function renderPieces(state: ViewState): HTMLElement {
       grid.append(available, bordereau);
       body.append(grid);
     }
+    if (state.lastStampingLoading) body.append(element('p', 'pm-tampon__muted', 'Chargement du dernier bordereau…'));
     if (state.runError) body.append(element('p', 'pm-tampon__error', state.runError));
     if (state.runResult) {
       const result = element('div');
@@ -700,7 +740,9 @@ function render(state: ViewState): void {
       state.selectedOrder = [];
       state.runResult = null;
       state.runError = null;
+      state.lastStampingLoading = false;
       void loadOriginals(state);
+      void loadLastStamping(state);
     });
     toolbar.append(select);
   }
@@ -760,6 +802,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     originalsLoading: false,
     originalsError: null,
     selectedOrder: [],
+    lastStampingLoading: false,
     running: false,
     runError: null,
     runResult: null,
@@ -786,6 +829,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     currentProjectPath = nextPath;
     state.selectedOrder = [];
     state.runResult = null;
+    state.runError = null;
     void loadCases(state);
   });
   render(state);
