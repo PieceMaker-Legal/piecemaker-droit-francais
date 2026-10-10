@@ -9,7 +9,7 @@ import { declarePieceMakerServer } from './mcp-declaration.js';
 
 const TOML = createRequire(import.meta.url)('@iarna/toml') as { parse(value: string): Record<string, any> };
 
-const TARGET_FILES = ['.codex/config.toml', '.vibe/config.toml', '.cursor/mcp.json', 'opencode.json', '.grok/config.toml'];
+const TARGET_FILES = ['.codex/config.toml', '.vibe/config.toml', '.cursor/mcp.json', 'opencode.json', '.grok/config.toml', '.mcp.json', '.claude/settings.local.json'];
 
 function temporaryFolder() {
   return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-mcp-declaration-')));
@@ -35,10 +35,14 @@ test('déclare piecemaker pour Codex et Vibe, conserve les entrées tierces', ()
   assert.equal(codex.mcp_servers.exemple.command, 'exemple-mcp');
   assert.equal(codex.mcp_servers.piecemaker.command, 'node');
   assert.match(codex.mcp_servers.piecemaker.args[0], /vendor[\\/]mcp[\\/]piecemaker[\\/]server\.mjs$/);
+  assert.match(codex.mcp_servers.legifrance.args[0], /vendor[\\/]mcp[\\/]legifrance[\\/]server\.mjs$/);
+  assert.equal(fs.existsSync(codex.mcp_servers.legifrance.args[0]), true);
+  assert.equal(fs.existsSync(path.join(path.dirname(codex.mcp_servers.legifrance.args[0]), 'mcp_stdio_server.py')), true);
   const vibe = TOML.parse(fs.readFileSync(path.join(folder, '.vibe', 'config.toml'), 'utf8'));
-  assert.deepEqual(vibe.mcp_servers.map((server: { name: string }) => server.name).sort(), ['exemple', 'piecemaker']);
-  assert.equal(fs.existsSync(path.join(folder, '.mcp.json')), false);
-  assert.equal(fs.existsSync(path.join(folder, '.claude', 'settings.local.json')), false);
+  assert.deepEqual(vibe.mcp_servers.map((server: { name: string }) => server.name).sort(), ['exemple', 'legifrance', 'piecemaker']);
+  const mcpJson = JSON.parse(fs.readFileSync(path.join(folder, '.mcp.json'), 'utf8'));
+  assert.equal(mcpJson.mcpServers.piecemaker, undefined);
+  assert.match(mcpJson.mcpServers.legifrance.args[0], /vendor[\\/]mcp[\\/]legifrance[\\/]server\.mjs$/);
 });
 
 test('un second passage ne réécrit aucun fichier', () => {

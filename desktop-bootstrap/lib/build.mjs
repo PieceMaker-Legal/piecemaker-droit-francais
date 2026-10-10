@@ -126,19 +126,27 @@ function isShippedFile(target) {
   return !EXCLUDED_RUNTIME_ASSETS.has(name) && !TEST_FILE_PATTERN.test(name);
 }
 
-function isRuntimeAsset(target) {
-  return isShippedFile(target) && !path.basename(target).endsWith('.ts');
+const SKIP_RELATIVE_PREFIXES = ['vendor/piecemaker-plugin/skills', 'vendor/piecemaker-plugin/agents'];
+
+function isRuntimeAsset(sourceRoot, target) {
+  if (!isShippedFile(target) || path.basename(target).endsWith('.ts')) return false;
+  const relative = path.relative(sourceRoot, target).split(path.sep).join('/');
+  return !SKIP_RELATIVE_PREFIXES.some((prefix) => relative === prefix || relative.startsWith(`${prefix}/`));
 }
 
 async function embedRuntimeAssets(sourceDir, stageDir) {
   const from = path.join(sourceDir, 'server', 'piecemaker');
   const to = path.join(stageDir, 'server', 'piecemaker');
   await fs.rm(to, { recursive: true, force: true });
-  await fs.cp(from, to, { recursive: true, filter: isRuntimeAsset });
+  await fs.cp(from, to, { recursive: true, filter: (target) => isRuntimeAsset(from, target) });
 
   const probe = path.join(to, 'vendor', 'piecemaker-plugin', 'scripts', 'lib', 'verify-citations.cjs');
+  const legifrance = path.join(to, 'vendor', 'mcp', 'legifrance', 'server.mjs');
   if (!(await exists(probe))) {
     throw new Error(`Ressources PieceMaker incomplètes — ${probe} est absent.`);
+  }
+  if (!(await exists(legifrance))) {
+    throw new Error(`Ressources PieceMaker incomplètes — ${legifrance} est absent.`);
   }
 
   ui.detail('Ressources PieceMaker non compilées embarquées.');

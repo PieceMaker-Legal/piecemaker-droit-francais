@@ -2,9 +2,9 @@
 
 Ce dossier regroupe les skills partagés avec Claude Code et Codex CLI, ainsi
 que les agents et hooks de garde-fou. Il n'est pas
-distribué par un manifest ou un marketplace PieceMaker. Le serveur MCP
-Légifrance est maintenu séparément dans
-[`PieceMaker-Legal/mcp-legifrance`](https://github.com/PieceMaker-Legal/mcp-legifrance).
+distribué par un manifest ou un marketplace PieceMaker, et la Bibliothèque
+n'importe plus ces skills et agents. Le serveur MCP Légifrance est embarqué
+dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier.
 
 ## Contenu
 
@@ -81,19 +81,9 @@ serveur et l'étape 06 réconcilient cet enregistrement.
 
 ## Serveur MCP Légifrance
 
-L'étape `07-legifrance` installe le plugin autonome depuis
-`PieceMaker-Legal/mcp-legifrance`. Son runtime, ses tests, son venv et sa
-configuration MCP ne vivent plus dans ce dépôt. Le plugin est identifié dans
-Claude par `piecemaker@mcp-legifrance`, avec le namespace
-`mcp__plugin_piecemaker_legifrance`.
-
-Les identifiants PISTE sont copiés avec des permissions 0600 dans
-`~/.config/mcp-legifrance/.env`. Le `.env` PieceMaker reste alimenté pour
-l'administration et la migration des installations antérieures.
-
-`Search_Jurisprudence` est le seul outil de recherche jurisprudentielle : il
-interroge Légifrance et Judilibre en un appel, avec les mêmes filtres et la même
-requête booléenne, et fusionne les doublons. `Build_Research_Corpus` utilise le
-même moteur pour figer une formulation, télécharger et scanner chaque texte
-intégral, puis préparer les lots de revue, sans embeddings, base vectorielle ni
-top-k. L'implémentation et ses tests appartiennent au dépôt MCP autonome.
+Le runtime est embarqué dans `server/piecemaker/vendor/mcp/legifrance/` et
+déclaré dans chaque dossier (`legifrance`, y compris `.mcp.json` pour Claude).
+Le venv isolé vit dans `~/.piecemaker/mcp-legifrance/`. Les identifiants PISTE
+sont lus dans `~/.config/mcp-legifrance/.env` (0600). L'étape `07-legifrance`
+configure encore ces clés ; le plugin marketplace Claude n'est plus requis
+pour l'application de bureau.

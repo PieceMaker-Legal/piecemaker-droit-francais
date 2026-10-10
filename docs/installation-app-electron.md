@@ -205,8 +205,10 @@ le serveur résout plusieurs chemins relatifs à la racine applicative
 `server/piecemaker/vendor/`. Sans eux, le serveur s'arrête au démarrage sur
 *Cannot find module … verify-citations.cjs*. L'installateur recopie donc
 `server/piecemaker/` en excluant les `.ts` (déjà compilés), `node_modules`,
-`__pycache__`, `.env` et `.DS_Store` — environ 2,4 Mo — et vérifie la présence
-d'un fichier témoin avant de poursuivre.
+`__pycache__`, `.env`, `.DS_Store`, et les skills et agents de
+`piecemaker-plugin/` — le MCP Légifrance vendu (`vendor/mcp/legifrance/`)
+est inclus. Un fichier témoin et le lanceur Légifrance sont vérifiés avant
+de poursuivre.
 
 **3. Ouverture automatique.** `bootstrap()` d'amont n'ouvre jamais la cible
 locale : le serveur ne démarre qu'au clic sur « Open Local CloudCLI ».
