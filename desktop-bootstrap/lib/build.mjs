@@ -142,11 +142,15 @@ async function embedRuntimeAssets(sourceDir, stageDir) {
 
   const probe = path.join(to, 'vendor', 'piecemaker-plugin', 'scripts', 'lib', 'verify-citations.cjs');
   const legifrance = path.join(to, 'vendor', 'mcp', 'legifrance', 'server.mjs');
+  const docxCli = path.join(to, 'vendor', 'skills', 'docx-cli', 'SKILL.md');
   if (!(await exists(probe))) {
     throw new Error(`Ressources PieceMaker incomplètes — ${probe} est absent.`);
   }
   if (!(await exists(legifrance))) {
     throw new Error(`Ressources PieceMaker incomplètes — ${legifrance} est absent.`);
+  }
+  if (!(await exists(docxCli))) {
+    throw new Error(`Ressources PieceMaker incomplètes — ${docxCli} est absent.`);
   }
 
   ui.detail('Ressources PieceMaker non compilées embarquées.');

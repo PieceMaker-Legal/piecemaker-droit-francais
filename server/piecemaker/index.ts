@@ -17,6 +17,7 @@ import { createCitationsRouter } from './harness/citations.routes.js';
 import { openLibrary, installLibraryRuntime, installLibrarySkillVisibility } from './library/index.js';
 import { createKnowledgeBackend } from './knowledge/index.js';
 import { declarePieceMakerServer } from './mcp-declaration.js';
+import { declareDocxCliSkill } from './skill-declaration.js';
 import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
@@ -74,7 +75,10 @@ installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
 installModelDiscovery(providerRegistry);
 const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
-startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => row.project_path), path.join(piecemakerHome(), 'CLAUDE.md'), declarePieceMakerServer);
+startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => row.project_path), path.join(piecemakerHome(), 'CLAUDE.md'), (workspace) => {
+  declarePieceMakerServer(workspace);
+  declareDocxCliSkill(workspace);
+});
 
 export function createPieceMakerLocalRouter() {
   return knowledge.localRouter;

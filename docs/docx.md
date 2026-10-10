@@ -8,7 +8,7 @@ fichier sur disque ; chacun voit les modifications de l'autre.
 
 | Quoi | Où |
 | --- | --- |
-| Installation (marketplace `kklimuk/docx-cli`, plugin `docx-cli@docx-cli`, activation) | `server/piecemaker/vendor/installer/steps/11-docx-cli.mjs` |
+| Installation (skill vendu, déclaré dans chaque dossier) | `server/piecemaker/vendor/skills/docx-cli/`, `server/piecemaker/skill-declaration.ts` |
 | Usage en rédaction (templates, placeholders, modifications suivies) | `server/piecemaker/vendor/piecemaker-plugin/skills/redaction-juridique/SKILL.md` |
 | Garde-fou Bash (`docx read pièce.docx` passe par le hook) | `server/piecemaker/vendor/piecemaker-plugin/scripts/protect-originals.mjs` |
 | Classement des `.docx` produits par l'IA | `server/piecemaker/vendor/piecemaker-plugin/scripts/classify-ai-documents.mjs` |
@@ -16,8 +16,9 @@ fichier sur disque ; chacun voit les modifications de l'autre.
 - Remplace `document-skills:docx` : le binaire `docx` mute l'OOXML **en place**
   (styles maison, thème et objets embarqués conservés), adresse le contenu par
   localisateurs stables, et expose `docx track-changes` pour les actes à relire.
-- Le binaire n'est pas installé par l'étape 11 : le skill le pose au premier
-  usage (`scripts/bootstrap.sh`, version épinglée, SHA-256 vérifié).
+- Le skill est copié dans `.agents/skills/docx-cli/` de chaque dossier (liens
+  Claude, Cursor, OpenCode, Grok). Le binaire `docx` est posé au premier usage
+  (`scripts/bootstrap.sh`, version épinglée, SHA-256 vérifié).
 - Travaillant entièrement par Bash, il est couvert par `protect-originals.mjs`,
   qui inspecte aussi les commandes shell. Par défaut seuls PDF et images sont
   protégés (`lib/protection.cjs`, `PROTECTED_EXTENSIONS`) : un `.docx` n'est
