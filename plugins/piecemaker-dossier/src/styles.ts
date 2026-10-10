@@ -97,11 +97,8 @@ export const PLUGIN_STYLES = `
 .pmd-card{background:var(--pmd-surface);border:1px solid var(--pmd-border);border-radius:var(--pmd-radius);padding:14px 16px}
 .pmd-card-head{display:flex;gap:10px;align-items:flex-start}
 .pmd-card-title{font-size:14px;font-weight:600;line-height:1.35;overflow-wrap:anywhere;color:var(--pmd-ink)}
-.pmd-agents-button,.pmd-small-button{display:inline-flex;align-items:center;gap:6px}
-.pmd-small-button{height:32px;padding:0 12px;font-size:12px}
-.pmd-small-button svg{width:14px;height:14px}
+.pmd-agents-button{display:inline-flex;align-items:center;gap:6px}
 .pmd-general{display:flex;min-height:0;height:100%;flex-direction:column;gap:18px}
-.pmd-general-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
 .pmd-party-layout{display:grid;min-height:0;grid-template-columns:minmax(0,1fr) minmax(220px,300px);flex:1;gap:22px}
 .pmd-party-layout[data-tiers-collapsed=true]{grid-template-columns:minmax(0,1fr) 40px}
 .pmd-party-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;min-height:0;overflow:auto;align-content:start}

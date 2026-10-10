@@ -103,6 +103,15 @@ describe('BODACC on designated parties', () => {
 });
 
 describe('party badges', () => {
+  it('omits the mapping and add-party toolbar buttons', () => {
+    const html = generalView({ graph: snapshot });
+
+    expect(html).not.toContain('pmd-general-actions');
+    expect(html).not.toContain('data-action="add-node"');
+    expect(html).not.toContain('> Mapping</button>');
+    expect(html).not.toContain('＋ Ajouter une partie</button>');
+  });
+
   it('does not infer a missing position from the anonymised code or the party side', () => {
     const html = generalView({ graph: { ...snapshot, nodes: [{ ...snapshot.nodes[3], data: { partySide: 'adversaire', code: 'ADVERSAIRE_APPELANT_PERSONNE_PHYSIQUE_01' } }] } });
     expect(html).toContain('Partie adverse · Non précisée');
