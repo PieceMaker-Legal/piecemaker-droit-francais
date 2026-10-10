@@ -71,7 +71,9 @@ export const PLUGIN_STYLES = `
 .pmd-scan-status{margin-left:auto;display:flex;height:32px;flex-shrink:0;align-items:center;gap:8px;border:1px solid var(--pmd-glass-border);border-radius:9999px;padding:0 6px 0 12px;background:var(--pmd-glass-bg);box-shadow:var(--pmd-glass-shadow);backdrop-filter:blur(20px);font-size:12px}
 .pmd-status-icon{display:inline-flex;color:var(--pmd-muted)}
 .pmd-status-icon svg{width:14px;height:14px}
-.pmd-status-label{white-space:nowrap;color:var(--pmd-muted);font-weight:500}
+.pmd-status-label{padding:0;border:0;background:transparent;white-space:nowrap;color:var(--pmd-muted);font:inherit;font-weight:500;cursor:pointer}
+.pmd-status-label:hover{color:var(--pmd-text)}
+.pmd-status-label:focus-visible{outline:2px solid rgb(0 136 255 / 40%);outline-offset:2px}
 .pmd-scan-button{height:1.5rem;gap:6px}
 .pmd-scan-button svg{width:12px;height:12px}
 .pmd-scan-progress{display:flex;min-width:128px;align-items:center;gap:8px}
