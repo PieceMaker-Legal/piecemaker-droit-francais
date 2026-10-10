@@ -26,6 +26,12 @@ export function exclusionNodeOperation(values: unknown): KnowledgeUpdateOperatio
   return { op: 'upsertNode', node: { id: EXCLUSIONS_NODE_ID, kind: 'other', label: 'Exclusions GLiNER', data: { systemRole: 'gliner-exclusions', values: exclusions } } };
 }
 
+const UNMASKED_CODE_STEMS = new Set(['DATE', 'DATE_PIECE', 'DATE_SENSIBLE', 'DATE_ECHEANCE', 'DATE_OPERATION']);
+
+function isUnmaskedCode(code: string): boolean {
+  return UNMASKED_CODE_STEMS.has(code.trim().toUpperCase().replace(/_\d+$/, ''));
+}
+
 function kindFromCode(code: string, principal: string, bucket: string): NodeKind {
   const normalizedCode = code.replace(/\s+/g, '_').toUpperCase();
   const normalizedBucket = bucket.toLocaleLowerCase('fr');
@@ -73,12 +79,14 @@ function entityNodes(mapping: GlinerMappingDocument): Map<string, KnowledgeNodeI
     if (isInstitutionalEntity(detected[0])) continue;
     const names = detected.filter((name) => !isInstitutionalEntity(name));
     const label = names[0] || code;
+    const { date, data } = splitDocumentDate(details?.data || {});
     nodes.set(code, {
       id: nodeId(code),
       kind: kindFromCode(code, label, details?.bucket || ''),
       label,
       aliases: names.slice(1),
-      data: { code, category: details?.bucket || null, ...details?.data },
+      data: { code, category: details?.bucket || null, ...data },
+      ...(date ? { date } : {}),
     });
   }
   return nodes;
@@ -117,6 +125,7 @@ export function scanResultOperations(result: GlinerScanResult, readMarkdown?: Ma
   operations.push(...[...nodes.values()].map((node): KnowledgeUpdateOperation => ({ op: 'upsertNode', node })));
   operations.push(exclusionNodeOperation(result.mapping.ignored));
   for (const [code, node] of nodes) {
+    if (isUnmaskedCode(code)) continue;
     for (const real of [node.label || '', ...(node.aliases || [])].filter(Boolean)) {
       operations.push({ op: 'upsertMapping', mapping: { nodeId: nodeId(code), real, masked: code, data: {} } });
     }
