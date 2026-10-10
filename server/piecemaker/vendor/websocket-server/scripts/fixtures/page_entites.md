@@ -2,7 +2,7 @@ Assignation en paiement
 
 Tribunal de commerce de Paris, audience du 3 mars 2026.
 
-Jean Dupont, né le 14 mars 1984 à Lyon, demeurant 12 rue des Lilas, 75011 Paris, numéro de sécurité sociale 1 84 03 99 990 042 36, téléphone +33 1 42 86 10 24, courriel jean.dupont@calice-exemple.fr, est demandeur. Son conseil est Camille Lefèvre. La carte de provision 4111 1111 1111 1111 et l'IBAN FR03 3000 6000 1112 3456 7890 189 sont versés aux débats. Le serveur de la pièce répond à l'adresse IP 203.0.113.44, adresse MAC 02:11:22:33:44:55.
+Jean Dupont, né le 14 mars 1984 à Lyon, demeurant 12 rue des Lilas, 75011 Paris, numéro de sécurité sociale 1 84 03 99 990 042 36, téléphone +33 1 42 86 10 24, courriel jean.dupont@calice-exemple.fr, est demandeur. Son conseil est Camille Lefèvre. La carte de provision 4111 1111 1111 1111 et l'IBAN FR03 3000 6000 1112 3456 7890 189 sont versés aux débats. Le serveur de la pièce répond à l'adresse IP 203.0.113.44, adresse MAC 02:11:22:33:44:55. Le mot de passe du portail client était Lilas-2026!
 
 Il agit pour la société anonyme Calice, dont le siège est 8 place du Marché, 33000 Bordeaux. Calice SA est immatriculée à Bordeaux sous le numéro 847 221 306, SIRET 847 221 306 00016, TVA FR 90 847 221 306. Le site https://calice-exemple.fr/dossier présente la filiale Calice International.
 

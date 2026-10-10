@@ -1,3 +1,4 @@
+import ast
 import json
 import tempfile
 import unittest
@@ -138,25 +139,28 @@ class LegalFormTests(unittest.TestCase):
             self.assertIn(f"'{token}'", cjs)
             self.assertIn(f"'{token}'", typescript)
 
-    def test_gliner_labels_skip_names_and_secrets(self):
+    def test_gliner_labels_mask_secrets_and_skip_names(self):
         source = Path(__file__).with_name("presidio-gliner").joinpath("scanner_worker.py").read_text(encoding="utf-8")
-        for label in (
-            "date", "date_of_birth", "sensitive_date", "document_date", "expiration_date", "transaction_date",
-            "email", "phone_number", "street_address", "state_or_region", "postal_code",
-            "government_id", "national_id_number", "passport_number", "drivers_license_number",
-            "license_number", "tax_id", "tax_number",
-            "bank_account", "account_number", "routing_number", "iban", "payment_card",
-            "card_number", "card_expiry", "card_cvv",
-            "username", "ip_address", "account_id", "sensitive_account_id",
-        ):
-            self.assertIn(f'"{label}"', source)
-        for label in (
-            "full_name", "first_name", "middle_name", "last_name",
-            "password", "secret", "api_key", "access_token", "recovery_code",
-        ):
-            self.assertNotIn(f'"{label}"', source)
-        self.assertNotIn("date of birth", source)
-        self.assertNotIn("NAISSANCE", source)
+        tables = {
+            node.targets[0].id: ast.literal_eval(node.value)
+            for node in ast.parse(source).body
+            if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id in ("ENTITY_MAPPING", "ENTITY_DESCRIPTIONS")
+        }
+        mapping, descriptions = tables["ENTITY_MAPPING"], tables["ENTITY_DESCRIPTIONS"]
+        self.assertEqual(set(mapping), set(descriptions))
+        for label in ("full_name", "first_name", "middle_name", "last_name"):
+            self.assertNotIn(label, mapping)
+        expected = {
+            "date_of_birth": "DATE_OF_BIRTH", "date": "DATE", "document_date": "DOCUMENT_DATE",
+            "transaction_date": "TRANSACTION_DATE", "city": "VILLE", "country": "PAYS",
+            "state_or_region": "REGION", "postal_code": "CODE_POSTAL",
+            "password": "MOT_DE_PASSE", "secret": "SECRET", "api_key": "CLE_API",
+            "access_token": "JETON_ACCES", "recovery_code": "CODE_RECUPERATION",
+        }
+        for label, entity_type in expected.items():
+            self.assertEqual(mapping[label], entity_type, label)
+        self.assertIsNone(descriptions["date_of_birth"])
 
     def test_source_file_is_kept_on_each_mention(self):
         with tempfile.TemporaryDirectory() as directory:
