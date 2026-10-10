@@ -9,7 +9,6 @@ import { providerSkillsService } from '@/modules/providers/index.js';
 import { createLibraryStore } from './store.js';
 import { createLibraryRouter } from './routes.js';
 import { createLibraryMarketplaceRouter, scanLibrarySources } from './marketplace.js';
-import { importLibraryDirectory } from './migrate.js';
 
 export { installLibraryRuntime } from './runtime.js';
 export { installLibrarySkillVisibility } from './skill-visibility.js';
@@ -22,10 +21,6 @@ export async function openLibrary(home: string, applicationRoot: string, listPro
   const errors = await scanLibrarySources(store, os.homedir(), listProjectPaths, reader);
   if (errors.length) console.warn(`Bibliothèque : ${errors.length} élément(s) non importé(s) (${errors.slice(0, 3).map((error) => error.source).join(', ')}${errors.length > 3 ? ', …' : ''})`);
   try { fs.unlinkSync(path.join(store.directory, 'connection.json')); } catch {}
-  const bundled = path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin');
-  for (const [folder, kind] of [['skills', 'skill'], ['agents', 'agent']] as const) {
-    try { importLibraryDirectory(store, path.join(bundled, folder), kind); } catch {}
-  }
   const router = express.Router();
   router.use((req, res, next) => {
     const length = Number(req.headers['content-length'] || 0);

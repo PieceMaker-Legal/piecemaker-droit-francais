@@ -93,7 +93,7 @@ Merge procedure and writing rules: `docs/upstream-cloudcli.md`. Upstream merges 
 - **Historique du dossier** — commit Git local automatique (jamais de remote) à chaque tour Claude/Codex et après les modifications de l'avocat (« Modifications hors IA »), en tâche de fond, un seul `git` à la fois ; skill `historique-dossier` pour le retour arrière, Git durci dans `protect-originals`. Détail : `docs/historique-dossier.md`.
 - **Anonymisation** — GLiNER scan & mapping, applied to AI traffic by the hudsucker proxy (`server/piecemaker/anonymizer/`).
 - **Documents Word (`.docx`)** — assistant via the `docx-cli` skill (installer step 11, `redaction-juridique`), lawyer via the in-app editor (`src/piecemaker/docx/`, route `docx-document.ts`, single hook line in `CodeEditor.tsx`). Operation and known defects from the audit: `docs/docx.md`.
-- **Research** — French legal research via LEGIFRANCE MCP: `/Users/tsardet/Sites/mcp-legifrance`.
+- **Research** — French legal research via the vendored Légifrance MCP: `server/piecemaker/vendor/mcp/legifrance/`. Identifiants PISTE dans `~/.config/mcp-legifrance/.env`.
 - **Surcharge i18n & Système de plugins** — i18n overrides rename existing UI (vocabulary/brand) without touching upstream locale files; the plugin system is the extension point for genuinely new screens/features (single `tab` slot, minimal host API). They don't overlap — full detail, comparison table and known upstream exceptions (auth bootstrap, chat tab visibility, Codex client options for per-folder skill masking): `docs/i18n-et-plugins.md`.
 
 ### Frontend code standards

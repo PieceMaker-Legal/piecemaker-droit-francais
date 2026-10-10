@@ -1,0 +1,380 @@
+##/tools/legifrance_client.py 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Client API Légifrance via PISTE."""
+
+import requests
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
+from config.settings import (
+    LEGIFRANCE_CLIENT_ID,
+    LEGIFRANCE_CLIENT_SECRET,
+    LEGIFRANCE_OAUTH_URL,
+    LEGIFRANCE_API_URL
+)
+
+# L'API Légifrance n'écrit jamais l'absence de date : elle utilise le
+# 1er janvier 2999 comme sentinelle, en chaîne ISO ou en millisecondes epoch
+# (cf. docs/api-legifrance-endpoints-et-schemas.md). Cette convention est
+# propre aux charges utiles de l'API ; elle est posée ici, à la frontière
+# avec l'API, pour que les modules consommateurs partagent une seule notion
+# d'« absence de date ».
+DATE_ABSENTE_ISO = "2999-01-01"
+DATE_ABSENTE_MS = 32472144000000
+
+
+def est_date_absente(valeur: Any) -> bool:
+    """Indique si `valeur` représente l'absence de date (sentinelle 2999-01-01),
+    plutôt qu'une date réelle. Ne rejette PAS les dates négatives (antérieures
+    à 1970) ni None/chaîne vide/0, qui sont traités comme une absence de
+    valeur — donc aussi une absence de date.
+    """
+    if isinstance(valeur, bool):
+        return False
+    if valeur is None:
+        return True
+    if isinstance(valeur, (int, float)):
+        if valeur == 0:
+            return True
+        return valeur >= DATE_ABSENTE_MS
+    texte = str(valeur).strip()
+    if not texte:
+        return True
+    annee = texte[:4]
+    if not annee.isdigit():
+        return False
+    return int(annee) >= 2999
+
+
+# Mesuré sur la facette DATE_DECISION du fonds JURI (API de production) : une
+# borne haute portant exactement la sentinelle 2999-01-01 rend 0 résultat, et
+# un intervalle entièrement compris dans la sentinelle fait abandonner
+# silencieusement le filtre (le total redevient celui du fonds sans filtre).
+# 2998-12-31 mesure au contraire comme une borne réelle (même total qu'une
+# borne haute lointaine) tout en restant hors de la sentinelle : c'est donc
+# le repli sûr pour une borne haute absente.
+DATE_FIN_REELLE_MAX = "2998-12-31"
+
+
+def borne_haute_reelle(date_fin: Any) -> Any:
+    """Rend `date_fin` inchangée si c'est une date réelle, sinon
+    `DATE_FIN_REELLE_MAX`. Ne traite que la borne haute (voir mesure
+    ci-dessus) ; la borne basse n'a pas été mesurée et n'est pas concernée.
+    """
+    if est_date_absente(date_fin):
+        return DATE_FIN_REELLE_MAX
+    return date_fin
+
+
+class LegifranceClient:
+    """Client pour l'API Légifrance"""
+    
+    def __init__(self):
+        self.client_id = LEGIFRANCE_CLIENT_ID
+        self.client_secret = LEGIFRANCE_CLIENT_SECRET
+        self.access_token = None
+        self.token_expires_at = None
+    
+    def _get_token(self) -> str:
+        """Obtient ou renouvelle le token OAuth2"""
+        # Ported behaviour (not present upstream): fail fast with a clear French
+        # message and NO network call when credentials are absent, instead of
+        # letting requests.post() attempt an OAuth call that will always 401.
+        # This lets the stdio server start and answer initialize/tools/list
+        # even without credentials configured; only tool calls are affected.
+        if not self.client_id or not self.client_secret:
+            raise Exception(
+                "Identifiants Légifrance manquants (LEGIFRANCE_CLIENT_ID / LEGIFRANCE_CLIENT_SECRET absents). "
+                "Créez une application PISTE, souscrivez à l'API Légifrance, puis fournissez ces variables "
+                "dans l'environnement du serveur ou dans son fichier .env local."
+            )
+
+        if self.access_token and self.token_expires_at:
+            if datetime.now() < self.token_expires_at - timedelta(minutes=5):
+                return self.access_token
+        
+        try:
+            response = requests.post(
+                LEGIFRANCE_OAUTH_URL,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "scope": "openid"
+                },
+                timeout=30
+            )
+            
+            response.raise_for_status()
+            
+            token_data = response.json()
+            self.access_token = token_data["access_token"]
+            self.token_expires_at = datetime.now() + timedelta(seconds=token_data.get("expires_in", 3600))
+            
+            return self.access_token
+            
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Erreur lors de l'obtention du token: {str(e)}")
+            
+    def _request(self, endpoint: str, payload: Dict) -> Dict:
+        """Effectue une requête à l'API"""
+        token = self._get_token()
+        url = f"{LEGIFRANCE_API_URL}{endpoint}"
+
+        try:
+            response = requests.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                json=payload,
+                timeout=30
+            )
+            
+            response.raise_for_status()
+            result = response.json()
+            return result
+        
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Erreur lors de la requête API: {str(e)}")
+
+    def search_with_criteres(self, fond: str, criteres: List[Dict[str, Any]],
+                             operateur: str = "ET", filtres: Optional[List[Dict]] = None,
+                             type_champ: str = "ALL", page_number: int = 1, page_size: int = 10,
+                             sort: str = "PERTINENCE", second_sort: str = "ID",
+                             type_pagination: str = "DEFAUT") -> Dict[str, Any]:
+        """
+        Recherche avec critères pré-parsés (depuis query_parser).
+
+        Args:
+            criteres: Liste de critères déjà formatés par le parser
+                     [{"valeur": "mot", "operateur": "ET", "typeRecherche": "...", "proximite": 10}, ...]
+        """
+        clauses = getattr(criteres, "clauses", None)
+        # RechercheSpecifiqueDTO (spécification PISTE) définit l'opérateur de
+        # recherche entre les champs, et l'opérateur de champ entre ses
+        # critères. La DNF est ainsi envoyée en un appel : chaque clause ET
+        # devient un champ, les champs sont reliés par OU. L'API conserve donc
+        # le tri, la pagination et totalResultNumber globaux.
+        if clauses is None:
+            # Compatibilité avec les appelants qui fournissent directement une
+            # liste historique de critères, sans plan DNF.
+            search_clauses = [list(criteres)]
+            fields_operator = operateur
+            criteria_operator = operateur
+        else:
+            search_clauses = clauses
+            if len(search_clauses) > 1:
+                # Une DNF comporte plusieurs clauses : PISTE les relie par
+                # OU, et chaque clause conserve impérativement son ET.
+                fields_operator = "OU"
+                criteria_operator = "ET"
+            else:
+                # Certains outils adaptent explicitement une requête sans
+                # opérateur (première instance : OU par défaut). Un seul
+                # champ reste alors une liste de critères à relier avec
+                # l'opérateur fourni par l'appelant.
+                fields_operator = operateur
+                criteria_operator = operateur
+        champs = [
+            {
+                "criteres": list(clause),
+                "operateur": criteria_operator,
+                "typeChamp": type_champ,
+            }
+            for clause in search_clauses
+        ]
+        payload = {
+            "fond": fond,
+            "sort": sort,
+            "secondSort": second_sort,
+            "typePagination": type_pagination,
+            "recherche": {
+                "pageNumber": page_number,
+                "pageSize": min(page_size, 100),
+                "operateur": fields_operator,
+                "fromAdvancedRecherche": False,
+                "champs": champs,
+            }
+        }
+
+        # Gestion des filtres
+        if filtres:
+            payload["recherche"]["filtres"] = filtres
+
+        return self._request("/search", payload)
+
+    def search(self, fond: str, query: str, filtres: Optional[List[Dict]] = None,
+            date_debut: Optional[str] = None, date_fin: Optional[str] = None,
+            page_number: int = 1, page_size: int = 10,
+            type_recherche: str = "UN_DES_MOTS",
+            type_champ: str = "ALL",
+            sort: str = "PERTINENCE",
+            second_sort: str = "ID",
+            type_pagination: str = "DEFAUT",
+            proximite: Optional[int] = 10,  # ✅ Optional
+            operateur: str = "OU") -> Dict[str, Any]:
+        """
+        Recherche dans Légifrance (ancienne méthode - maintenue pour compatibilité)
+
+        Args:
+            proximite: Distance max en mots. None = pas de contrainte
+        """
+
+        payload = {
+            "fond": fond,
+            "sort": sort,
+            "secondSort": second_sort,
+            "typePagination": type_pagination,
+            "recherche": {
+                "pageNumber": page_number,
+                "pageSize": min(page_size, 100),
+                "operateur": operateur,
+                "fromAdvancedRecherche": False
+            }
+        }
+
+        # Construction des champs de recherche
+        if query:
+            mots = query.strip().split()
+
+            criteres = []
+            for mot in mots:
+                critere = {
+                    "operateur": operateur,
+                    "typeRecherche": type_recherche,
+                    "valeur": mot
+                }
+                # ✅ N'ajouter proximite que si définie
+                if proximite is not None:
+                    critere["proximite"] = proximite
+
+                criteres.append(critere)
+
+            payload["recherche"]["champs"] = [
+                {
+                    "criteres": criteres,
+                    "operateur": operateur,
+                    "typeChamp": type_champ
+                }
+            ]
+
+        # Gestion des filtres
+        if filtres:
+            payload["recherche"]["filtres"] = filtres
+        elif date_debut or date_fin:
+            date_filter = {
+                "facette": "DATE_DECISION",
+                "dates": {}
+            }
+            if date_debut:
+                date_filter["dates"]["start"] = date_debut
+            if date_fin:
+                date_filter["dates"]["end"] = borne_haute_reelle(date_fin)
+            payload["recherche"]["filtres"] = [date_filter]
+
+        return self._request("/search", payload)
+
+    def search_code(self, query: str, filtres: Optional[List[Dict]] = None,
+                    type_champ: str = "ALL",
+                    type_recherche: str = "UN_DES_MOTS",
+                    operateur: str = "ET",
+                    page_number: int = 1,
+                    page_size: int = 10,
+                    sort: str = "PERTINENCE") -> Dict[str, Any]:
+        """
+        Recherche spécifique dans les codes juridiques (CODE_DATE)
+        
+        Args:
+            query: Texte à rechercher
+            filtres: Liste de filtres (facettes)
+            type_champ: ALL, NUM_ARTICLE, ARTICLE, TITLE, TABLE
+            type_recherche: UN_DES_MOTS, EXACTE, TOUS_LES_MOTS_DANS_UN_CHAMP
+            operateur: ET ou OU
+            page_number: Numéro de page
+            page_size: Nombre de résultats par page
+            sort: PERTINENCE, DATE_DESC, DATE_ASC
+        
+        Returns:
+            Dict contenant les résultats de la recherche
+        """
+        
+        # Construction du payload selon la doc API CODE_DATE
+        payload = {
+            "fond": "CODE_DATE",
+            "recherche": {
+                "pageNumber": page_number,
+                "pageSize": min(page_size, 100),
+                "operateur": operateur,  # ✅ Au niveau recherche
+                "sort": sort,
+                "typePagination": "ARTICLE",  # ✅ Obligatoire pour CODE_DATE
+                "champs": [],
+                "filtres": filtres or []
+            }
+        }
+        
+        # Construction des champs de recherche
+        if query:
+            mots = query.strip().split()
+            
+            # Un critère par mot
+            criteres = []
+            for mot in mots:
+                critere = {
+                    "typeRecherche": type_recherche,
+                    "valeur": mot,
+                    "operateur": operateur  # ✅ Dans chaque critère
+                }
+                criteres.append(critere)
+            
+            # Un seul champ contenant tous les critères
+            payload["recherche"]["champs"] = [{
+                "typeChamp": type_champ,
+                "operateur": operateur,  # ✅ Au niveau champ
+                "criteres": criteres
+            }]
+        
+        return self._request("/search", payload)
+    
+    def get_decision_text(self, text_id: str) -> Dict[str, Any]:
+        """
+        Récupère le texte intégral d'une décision de jurisprudence
+        
+        Args:
+            text_id: Identifiant de la décision (ex: "JURITEXT000006949246")
+        
+        Returns:
+            Dict contenant le texte complet de la décision
+        """
+        # Nettoyer l'ID si nécessaire (enlever espaces)
+        text_id = text_id.strip()
+        
+        payload = {
+            "textId": text_id
+        }
+        
+        return self._request("/consult/juri", payload)
+    
+    def get_article(self, article_id: str) -> Dict[str, Any]:
+        """
+        Récupère le contenu complet d'un article de code
+        
+        Args:
+            article_id: Identifiant de l'article (ex: "LEGIARTI000033219357")
+        
+        Returns:
+            Dict contenant le contenu complet de l'article
+        """
+        article_id = article_id.strip()
+        
+        payload = {
+            "id": article_id
+        }
+        
+        return self._request("/consult/getArticle", payload)
+    
+# Instance globale
+legifrance_client = LegifranceClient()
