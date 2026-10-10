@@ -124,6 +124,42 @@ test("sans fenêtre, la fin de l'installation n'attend pas la configuration PIST
   assert.ok(Date.now() - started < 1_000);
 });
 
+test('sans fenêtre, PieceMaker est ouvert automatiquement', async () => {
+  await open();
+  finishProgress({ ok: true });
+  let launches = 0;
+  await settleProgressWindow({ launch: () => { launches += 1; } });
+  assert.equal(launches, 1);
+});
+
+test("après un échec, PieceMaker n'est pas proposé", async () => {
+  const window = await open();
+  await window.state();
+  finishProgress({ ok: false, error: 'échec' });
+  let launches = 0;
+  await settleProgressWindow({ pollMs: 20, launch: () => { launches += 1; } });
+  assert.equal(launches, 0);
+});
+
+test("avec la fenêtre, l'ouverture de PieceMaker attend la configuration PISTE puis le clic", async () => {
+  const window = await open();
+  await window.state();
+  finishProgress({ ok: true });
+  let launches = 0;
+  let settled = false;
+  const settling = settleProgressWindow({ pollMs: 20, launch: () => { launches += 1; } }).then(() => { settled = true; });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal((await window.state()).launch.offered, true);
+  await window.post('piste/skip', { skipped: true });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(settled, false);
+  assert.equal(launches, 0);
+  assert.deepEqual(await window.post('launch'), { ok: true });
+  assert.deepEqual(await window.post('launch'), { ok: false });
+  await settling;
+  assert.equal(launches, 1);
+});
+
 test('la fin attend la configuration PISTE tant que la fenêtre interroge l’installateur', async () => {
   const window = await open();
   await window.state();

@@ -32,6 +32,7 @@
   .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 12px 0 8px; }
   .bar > div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .4s ease; }
   .note { color: var(--muted); font-size: 12.5px; margin: 0; }
+  .launch { margin: 14px 0 0; }
   #progress.done .bar > div { background: var(--success); }
   #progress.failed .bar > div { background: var(--danger); }
   #progress.failed .step-title { color: var(--danger); }
@@ -97,6 +98,7 @@
   <p class="detail" id="detail"></p>
   <div class="bar"><div id="fill"></div></div>
   <p class="note" id="note"></p>
+  <p class="launch" id="launch-row" hidden><button class="link-button" type="button" id="launch">Ouvrir PieceMaker</button></p>
 </section>
 
 <section id="piste-done" class="card" hidden>
@@ -266,10 +268,14 @@
       elements.note.textContent = pistePending
         ? 'La construction prend plusieurs minutes. Profitez-en pour préparer l’accès à Légifrance ci-dessous.'
         : 'La construction prend plusieurs minutes.';
+    } else if (state.state === 'done' && pistePending) {
+      elements.note.textContent = 'PieceMaker est prêt. Terminez la configuration Légifrance ci-dessous, ou cliquez sur « Je le ferai plus tard ».';
+    } else if (state.state === 'done' && state.launch.launched) {
+      elements.note.textContent = 'PieceMaker démarre. Cette fenêtre va se fermer.';
+    } else if (state.state === 'done' && state.launch.offered) {
+      elements.note.textContent = 'Tout est prêt.';
     } else if (state.state === 'done') {
-      elements.note.textContent = pistePending
-        ? 'PieceMaker est prêt. Il reste à terminer la configuration Légifrance ci-dessous.'
-        : 'Cette fenêtre va se fermer.';
+      elements.note.textContent = 'Cette fenêtre va se fermer.';
     } else {
       elements.note.textContent = 'Le détail de l’erreur est affiché dans le terminal. Vous pouvez fermer cette fenêtre.';
     }
@@ -288,6 +294,8 @@
       const state = await fetch('state', { cache: 'no-store' }).then((response) => response.json());
       lastState = state.state;
       renderProgress(state);
+      elements['launch-row'].hidden = !(state.state === 'done' && state.launch.offered && !state.launch.launched
+        && !(state.piste.offered && !state.piste.configured && !state.piste.skipped));
       renderPiste({ ...state.piste, offered: state.piste.offered && state.state !== 'failed' });
     } catch {
       if (lastState === 'done') elements.note.textContent = 'L’installateur est terminé. Vous pouvez fermer cette fenêtre.';
@@ -316,6 +324,10 @@
   });
   elements.previous.addEventListener('click', () => showStep(currentStep - 1));
   elements.next.addEventListener('click', () => showStep(currentStep + 1));
+  elements.launch.addEventListener('click', () => {
+    elements.launch.disabled = true;
+    post('launch');
+  });
   elements.skip.addEventListener('click', () => post('piste/skip', { skipped: true }));
   elements.resume.addEventListener('click', () => post('piste/skip', { skipped: false }));
   elements.replace.addEventListener('click', () => {
