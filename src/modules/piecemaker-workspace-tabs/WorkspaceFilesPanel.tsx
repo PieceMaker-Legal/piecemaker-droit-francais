@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 import { FileTree } from '@/modules/file-tree';
 import { openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 import type { Project } from '@/shared/types';
-import { Card } from '@/shared/ui';
+import { Card, Tooltip } from '@/shared/ui';
 
 export type WorkspaceFilesSlots = { viewer: HTMLElement; tabs: HTMLElement };
 
@@ -28,11 +28,23 @@ export function WorkspaceFilesPanel({ label, selectedProject, documentOpen, expa
   const [tabs, setTabs] = useState<HTMLElement | null>(null);
   const treeRef = useRef<HTMLDivElement>(null);
   const showTree = treeVisible || !documentOpen;
+  const treeToggleLabel = showTree ? 'Masquer l’arborescence de fichiers' : 'Afficher l’arborescence de fichiers';
 
   useEffect(() => {
     onSlots(viewer && tabs ? { viewer, tabs } : null);
     return () => onSlots(null);
   }, [viewer, tabs, onSlots]);
+
+  useEffect(() => {
+    if (hidden || !documentOpen) return undefined;
+    const toggleTree = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.key.toLowerCase() !== 'y') return;
+      event.preventDefault();
+      setTreeVisible((current) => !current);
+    };
+    document.addEventListener('keydown', toggleTree);
+    return () => document.removeEventListener('keydown', toggleTree);
+  }, [hidden, documentOpen]);
 
   const focusFilter = () => {
     setTreeVisible(true);
@@ -42,7 +54,9 @@ export function WorkspaceFilesPanel({ label, selectedProject, documentOpen, expa
   return (
     <Card className="piecemaker-workspace-panel piecemaker-files-panel" hidden={hidden} style={style}>
       <header className="piecemaker-workspace-panel-header">
-        <button type="button" aria-label="Afficher l’arborescence" aria-pressed={showTree} onClick={() => setTreeVisible(!showTree)}><List /></button>
+        <Tooltip position="bottom" content={<span className="flex items-center gap-3">{treeToggleLabel}<kbd className="opacity-60">⇧⌘Y</kbd></span>}>
+          <button type="button" aria-label={treeToggleLabel} aria-keyshortcuts="Shift+Meta+Y" aria-pressed={showTree} disabled={!documentOpen} onClick={() => setTreeVisible(!showTree)}><List /></button>
+        </Tooltip>
         <div ref={setTabs} className="piecemaker-files-tabs-slot" />
         {!documentOpen && <span className="truncate text-sm font-medium">{label}</span>}
         <button type="button" aria-label="Filtrer les fichiers" onClick={focusFilter}><Search /></button>
