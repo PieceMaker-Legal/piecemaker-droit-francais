@@ -60,7 +60,7 @@ class LegalFormTests(unittest.TestCase):
         for text, expected in cases.items():
             self.assertEqual(legal_forms.extract_legal_form(text)[0], expected, text)
 
-    def test_one_form_groups_prefix_variants(self):
+    def test_a_longer_name_is_another_company(self):
         text = "La société anonyme Calice a signé, puis Calice SA confirme, et Calice International aussi."
         first = text.index("Calice a")
         result = _convert(text, [
@@ -69,13 +69,11 @@ class LegalFormTests(unittest.TestCase):
             ("Calice International", 0),
         ])
         societes = result["extracted_data"]["societes"]
-        self.assertEqual(set(societes), {"SA_01"})
+        self.assertEqual(set(societes), {"SA_01", "PERS_MORALE_01"})
         self.assertEqual(societes["SA_01"]["legalForm"], "SA")
-        self.assertEqual(
-            set(societes["SA_01"]["variants"]),
-            {"Calice", "Calice SA", "Calice International"},
-        )
+        self.assertEqual(set(societes["SA_01"]["variants"]), {"Calice", "Calice SA"})
         self.assertEqual(result["mapping"]["Calice SA"], "SA_01")
+        self.assertEqual(result["mapping"]["Calice International"], "PERS_MORALE_01")
 
     def test_two_forms_split_one_stem(self):
         text = "Hortensia SA assigne Hortensia International Ltd."
@@ -100,11 +98,16 @@ class LegalFormTests(unittest.TestCase):
 
     def test_later_file_joins_the_same_company_or_stays_apart(self):
         sa = _convert("Calice SA signe.", [("Calice SA", 0)])
-        same = _convert("Calice International comparaît.", [("Calice International", 0)])
+        same = _convert("Calice comparaît.", [("Calice", 0)])
         joined = pipeline.merge_with_existing_mapping(same, sa)
         self.assertEqual(set(joined["extracted_data"]["societes"]), {"SA_01"})
-        self.assertEqual(joined["mapping"]["Calice International"], "SA_01")
+        self.assertEqual(joined["mapping"]["Calice"], "SA_01")
         self.assertEqual(joined["extracted_data"]["societes"]["SA_01"]["legalForm"], "SA")
+
+        subsidiary = _convert("Calice International comparaît.", [("Calice International", 0)])
+        apart = pipeline.merge_with_existing_mapping(subsidiary, sa)
+        self.assertEqual(set(apart["extracted_data"]["societes"]), {"SA_01", "PERS_MORALE_01"})
+        self.assertEqual(apart["mapping"]["Calice International"], "PERS_MORALE_01")
 
         other = _convert("Hortensia International Ltd comparaît.", [("Hortensia International", 0)])
         hortensia = _convert("Hortensia SA assigne.", [("Hortensia SA", 0)])
