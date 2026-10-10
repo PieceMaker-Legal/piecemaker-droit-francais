@@ -119,6 +119,7 @@ Ces points ont déjà été perdus ou ont failli l'être. Les contrôler un par 
 | `server/modules/providers/list/codex/codex-runtime.provider.ts` | `codex = new Codex(options.libraryCodexOptions);` (au lieu de `new Codex()`) |
 | `src/modules/code-editor/EditorSidebar.tsx` | `import CodeEditor from '@/piecemaker/editor-tabs/TabbedCodeEditor';` (au lieu de `@/modules/code-editor/CodeEditor`) |
 | `src/modules/project-workspace/WorkspaceMain.tsx` | l'import et l'appel `usePiecemakerEditorBridge(handleFileOpen);` |
+| `server/index.ts` | l'import de `createExternalFileRouter` et `app.use('/api/file-tree', authenticateToken, createExternalFileRouter());` **avant** `fileTreeRoutes` |
 | `src/modules/project-workspace/WorkspaceHeader.tsx` | `import { WorkspaceIconTabs as WorkspaceTabs } from '@/modules/piecemaker-workspace-tabs';` |
 | `src/modules/project-workspace/WorkspaceMain.tsx` | `export default React.memo(withWorkspacePanels(WorkspaceMain));` et import de `withWorkspacePanels` |
 
@@ -154,6 +155,17 @@ fiche d'une entité pseudonymisée) s'y ouvrent comme des fichiers. Tout vit dan
   `piecemaker://identity/…`.
 - `WorkspaceMain.tsx` appelle `usePiecemakerEditorBridge(handleFileOpen)`, qui
   relaie l'événement `piecemaker:open-in-editor` vers `handleFileOpen`.
+
+`TabbedCodeEditor` vérifie aussi chaque fichier auprès du serveur
+(`/api/piecemaker/file-links/resolve`) avant de monter `CodeEditor` : il lui
+passe le chemin réel et affiche « Ce fichier n'existe plus » au lieu d'une
+erreur. Un fichier situé hors du dossier s'ouvre dans la même visionneuse,
+en lecture et en édition, parce que `server/index.ts` monte
+`createExternalFileRouter()` (`server/piecemaker/file-links.ts`) devant
+`fileTreeRoutes` : il ne prend que les chemins absolus que file-tree
+refuserait et laisse passer le reste. Garde-fou :
+`server/piecemaker/file-links.test.ts`. Si un merge retire cette ligne, les
+liens vers un fichier hors du dossier renvoient de nouveau une erreur 403.
 
 Un merge résolu « vers CloudCLI » retire les onglets et les visionneuses
 n'ouvrent plus rien, sans erreur. Garde-fou :

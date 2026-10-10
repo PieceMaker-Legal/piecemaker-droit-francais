@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 import CodeEditor from '@/modules/code-editor/CodeEditor';
+import { resolveFileRef } from '@/piecemaker/chat/fileRef';
 import { CitationPanel } from '@/piecemaker/citations/CitationPanel';
 import { IdentityTab } from '@/piecemaker/editor-tabs/IdentityTab';
 import { parseEditorPanel } from '@/piecemaker/editor-tabs/editorPanels';
@@ -19,9 +20,41 @@ function tabLabel(file: CodeEditorFile) {
   return file.name;
 }
 
+/**
+ * Vérifie le fichier avant de monter `CodeEditor`, qui afficherait sinon une
+ * erreur de lecture : le chemin est remplacé par son chemin réel, et un
+ * fichier disparu est signalé sans ouvrir d'éditeur.
+ */
+function ResolvedCodeEditor({ props, file, onClose }: { props: CodeEditorProps; file: CodeEditorFile; onClose: () => void }) {
+  const [resolved, setResolved] = useState<{ ref: string; path: string | null } | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void resolveFileRef(file.path, { fresh: true, projectId: file.projectId }).then((path) => {
+      if (live) setResolved({ ref: file.path, path });
+    });
+    return () => { live = false; };
+  }, [file.path, file.projectId]);
+
+  const path = resolved?.ref === file.path ? resolved.path : undefined;
+  const resolvedFile = useMemo(() => (path ? { ...file, path } : null), [file, path]);
+
+  if (path === undefined) return null;
+  if (!resolvedFile) {
+    const missing = (
+      <div role="status" className="flex h-full flex-col items-center justify-center gap-3 bg-background p-6 text-center text-sm text-muted-foreground">
+        <p>Ce fichier n’existe plus : {file.name}</p>
+        <button type="button" className="rounded border border-border px-3 py-1 text-xs hover:bg-accent" onClick={onClose}>Fermer</button>
+      </div>
+    );
+    return props.isSidebar ? missing : <div className="fixed inset-0 z-[9999]">{missing}</div>;
+  }
+  return <CodeEditor {...props} file={resolvedFile} onClose={onClose} />;
+}
+
 function TabContent({ props, file, onClose }: { props: CodeEditorProps; file: CodeEditorFile; onClose: () => void }) {
   const panel = parseEditorPanel(file.path);
-  if (!panel) return <CodeEditor {...props} file={file} onClose={onClose} />;
+  if (!panel) return <ResolvedCodeEditor props={props} file={file} onClose={onClose} />;
   const content = panel.kind === 'citation'
     ? <CitationPanel token={panel.token} onClose={onClose} />
     : <IdentityTab mode={panel.mode} text={panel.text} onClose={onClose} />;

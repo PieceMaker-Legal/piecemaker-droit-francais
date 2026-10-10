@@ -21,6 +21,7 @@ import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
+import { createExternalFileRouter, createFileLinksRouter } from './file-links.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
 import { createInstitutionalTermsRouter, openInstitutionalTerms } from './institutional-terms.js';
 import { installModelDiscovery } from './model-discovery/index.js';
@@ -90,9 +91,11 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createCompanySearchRouter());
   router.use(createBodaccSearchRouter());
   router.use(createDocxDocumentRouter());
+  router.use(createFileLinksRouter());
   router.use(createInstitutionalTermsRouter(institutionalTerms));
   router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));
   router.use(createShellEnvironmentRouter(shellEnvironment));
   return router;
 }
 export type { PieceMakerRuntimeStatus };
+export { createExternalFileRouter };
