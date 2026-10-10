@@ -53,7 +53,7 @@ const BROWSER_TAB: BuiltInTab = {
 const TASKS_TAB: BuiltInTab = {
   kind: 'builtin',
   id: 'tasks',
-  labelKey: 'tabs.library',
+  labelKey: 'tabs.taskmasterAI',
   icon: ClipboardCheck,
 };
 
