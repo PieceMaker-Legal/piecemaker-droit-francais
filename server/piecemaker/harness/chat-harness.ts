@@ -2,6 +2,8 @@ import type { providerRuntimeService, sessionsService } from '@/modules/provider
 import type { NormalizedMessage, ProviderRuntimeWriter } from '@/shared/types.js';
 import { createNormalizedMessage } from '@/shared/utils.js';
 
+import type { FolderHistory } from '../folder-history/history.js';
+
 import { createCitationTurn } from './citation-turn.js';
 import type { createCitationStore } from './citation-store.js';
 import { withCitationInstructions, withoutCitationInstructions } from './citation-instructions.js';
@@ -11,6 +13,7 @@ export function installChatCitationHarness(options: {
   sessions: Pick<typeof sessionsService, 'fetchHistory' | 'getSessionDetailsById'>;
   store: ReturnType<typeof createCitationStore>;
   ensureProxy: () => void;
+  folderHistory?: Pick<FolderHistory, 'begin' | 'end'>;
 }) {
   const run = options.runtime.run.bind(options.runtime);
   const getRunner = options.runtime.getRunner.bind(options.runtime);
@@ -40,6 +43,7 @@ export function installChatCitationHarness(options: {
     const finish = () => {
       if (!completion) completion = (async () => {
         flush();
+        options.folderHistory?.end({ cwd, request: command, conclusion: lastText?.content ?? '', aborted: interrupted });
         const suffix = interrupted ? '' : await turn.finish();
         if (heldStreamEnd) {
           if (suffix && lastDelta) writer.send({ ...lastDelta, content: suffix });
@@ -90,6 +94,7 @@ export function installChatCitationHarness(options: {
         };
       },
     }) as ProviderRuntimeWriter;
+    options.folderHistory?.begin(cwd);
     try {
       return await run(provider, command.startsWith('/') ? command : withCitationInstructions(command), runtimeOptions, wrapped);
     } catch (error) {

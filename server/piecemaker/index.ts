@@ -25,6 +25,7 @@ import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './
 import { createInstitutionalTermsRouter, openInstitutionalTerms } from './institutional-terms.js';
 import { installModelDiscovery } from './model-discovery/index.js';
 import { startProjectRegistry } from './project-registry.js';
+import { createFolderHistory } from './folder-history/history.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -55,13 +56,17 @@ const shellEnvironment = await resolveDesktopShellEnvironment();
 const vendor = createRequire(import.meta.url)(routerPath) as PieceMakerVendorModule;
 
 export const { piecemakerHome, stopOriginalsJobs } = vendor;
-const publishProjects = startProjectRegistry(vendor.publishProjectSource);
+const folderHistory = createFolderHistory();
+const publishProjects = startProjectRegistry((sourceId, folders, anonymizedFolders) => {
+  vendor.publishProjectSource(sourceId, folders, anonymizedFolders);
+  folderHistory.syncFolders(projectsDb.getProjectPaths().map((row) => row.project_path));
+});
 const institutionalTerms = openInstitutionalTerms(getConnection(), applicationRoot);
 const { createAnonymizerService } = createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/anonymizer/service.cjs'));
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
-installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy });
+installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory });
 const library = await openLibrary(piecemakerHome(), applicationRoot, () => projectsDb.getProjectPaths().map((row) => row.project_path));
 installLibrarySkillVisibility(providerSkillsService, library.store);
 installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
