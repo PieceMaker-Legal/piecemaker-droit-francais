@@ -27,6 +27,7 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
   vi.mocked(api.readFileBlob).mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
 });
 

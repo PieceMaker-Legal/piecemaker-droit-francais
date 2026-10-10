@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import '@eigenpal/docx-editor-react/styles.css';
 import fr from '@eigenpal/docx-editor-i18n/fr';
+import './docxDocumentViewer.css';
 
 import { api, authenticatedFetch } from '@/shared/api';
 import { useTheme } from '@/shared/context/ThemeContext';
@@ -18,6 +19,16 @@ type DocxDocumentViewerProps = {
   onClose: () => void;
 };
 
+function fitPageWidth(container: HTMLElement, editor: DocxEditorRef | null, lastLayout: { current: string }) {
+  const scroller = container.querySelector<HTMLElement>('.docx-editor__scroll-container');
+  const page = container.querySelector<HTMLElement>('.layout-page');
+  if (!editor || !scroller || !page) return;
+  const layout = `${scroller.clientWidth}:${page.offsetWidth}`;
+  if (scroller.clientWidth <= 0 || layout === lastLayout.current) return;
+  lastLayout.current = layout;
+  editor.setZoom(scroller.clientWidth / page.offsetWidth);
+}
+
 function decodeDocumentPath(filePath: string): string {
   try {
     return decodeURIComponent(filePath);
@@ -29,6 +40,8 @@ function decodeDocumentPath(filePath: string): string {
 export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose }: DocxDocumentViewerProps) {
   const { isDarkMode } = useTheme();
   const editorRef = useRef<DocxEditorRef>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lastLayoutRef = useRef('');
   const versionRef = useRef<number | null>(null);
   const userEditingRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
@@ -112,10 +125,26 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     saveTimerRef.current = window.setTimeout(() => { void save(); }, SAVE_DEBOUNCE_MS);
   }, [save]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !loaded) return undefined;
+    lastLayoutRef.current = '';
+    const fit = () => fitPageWidth(container, editorRef.current, lastLayoutRef);
+    const resizeObserver = new ResizeObserver(fit);
+    const mutationObserver = new MutationObserver(fit);
+    resizeObserver.observe(container);
+    mutationObserver.observe(container, { childList: true, subtree: true });
+    fit();
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+    };
+  }, [loaded]);
+
   const markUserEditing = () => { userEditingRef.current = true; };
 
   return (
-    <div className={`flex flex-col bg-background ${isSidebar ? 'h-full w-full' : 'fixed inset-0 z-[9999]'}`} onKeyDownCapture={markUserEditing} onPointerDownCapture={markUserEditing}>
+    <div ref={containerRef} className={`piecemaker-docx-viewer flex flex-col bg-background ${isSidebar ? 'h-full w-full' : 'fixed inset-0 z-[9999]'}`} onKeyDownCapture={markUserEditing} onPointerDownCapture={markUserEditing}>
       {error && <p className="border-b border-border px-3 py-1.5 text-xs text-destructive">{error}</p>}
       {loaded ? (
         <DocxEditor
