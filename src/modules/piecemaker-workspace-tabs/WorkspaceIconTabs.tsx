@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { PluginIcon, usePlugins } from '@/modules/plugins';
 import type { AppTab } from '@/shared/types';
-import { ActionMenu, Tooltip } from '@/shared/ui';
+import { ActionMenu, Pill, PillBar, Tooltip } from '@/shared/ui';
 import '@/modules/piecemaker-workspace-tabs/workspaceIconTabs.css';
 
 type WorkspaceIconTabsProps = {
@@ -44,7 +44,7 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab, shouldShowTasksTab,
     return () => observer.disconnect();
   }, []);
 
-  const capacity = Math.max(0, Math.floor((availableWidth + 4) / 44));
+  const capacity = Math.max(0, Math.floor((availableWidth - 8 + 2) / 36));
   const visibleCount = capacity >= tabs.length ? tabs.length : Math.max(0, capacity - 1);
   const visibleTabs = tabs.slice(0, visibleCount);
   const active = tabs.find((tab) => tab.id === activeTab);
@@ -65,11 +65,11 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab, shouldShowTasksTab,
 
   return (
     <div ref={containerRef} className="piecemaker-workspace-icon-tabs">
-      <div role="tablist" aria-label={t('tabs.views', { defaultValue: 'Workspace views' })}>
+      <PillBar role="tablist" aria-label={t('tabs.views', { defaultValue: 'Workspace views' })} className="border border-border/40 bg-muted/50 shadow-inner shadow-black/[0.025] dark:shadow-black/10">
         {visibleTabs.map((tab) => (
           <Tooltip key={tab.id} content={tab.label} position="bottom">
-            <button
-              type="button"
+            <Pill
+              isActive={tab.id === activeTab}
               role="tab"
               aria-label={tab.label}
               aria-selected={tab.id === activeTab}
@@ -78,23 +78,23 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab, shouldShowTasksTab,
               onKeyDown={handleKeyDown}
               className="piecemaker-workspace-icon-tab"
             >
-              {tab.icon ? <tab.icon /> : 'plugin' in tab && <PluginIcon pluginName={tab.plugin.name} iconFile={tab.plugin.icon} className="h-6 w-6 [&>svg]:h-full [&>svg]:w-full" />}
-            </button>
+              {tab.icon ? <tab.icon strokeWidth={tab.id === activeTab ? 2.2 : 1.8} /> : 'plugin' in tab && <PluginIcon pluginName={tab.plugin.name} iconFile={tab.plugin.icon} className="h-3.5 w-3.5 [&>svg]:h-full [&>svg]:w-full" />}
+            </Pill>
           </Tooltip>
         ))}
-      </div>
-      {overflowTabs.length > 0 && (
-        <ActionMenu
-          label={t('tabs.more', { defaultValue: 'Autres onglets' })}
-          icon={MoreVertical}
-          iconOnly
-          portal
-          variant="ghost"
-          size="icon"
-          triggerClassName="piecemaker-workspace-icon-tab"
-          items={overflowTabs.map((tab) => ({ key: tab.id, label: tab.label, icon: tab.icon ?? undefined, onSelect: () => setActiveTab(tab.id) }))}
-        />
-      )}
+        {overflowTabs.length > 0 && (
+          <ActionMenu
+            label={t('tabs.more', { defaultValue: 'Autres onglets' })}
+            icon={MoreVertical}
+            iconOnly
+            portal
+            variant="ghost"
+            size="icon"
+            triggerClassName="piecemaker-workspace-icon-tab"
+            items={overflowTabs.map((tab) => ({ key: tab.id, label: tab.label, icon: tab.icon ?? undefined, onSelect: () => setActiveTab(tab.id) }))}
+          />
+        )}
+      </PillBar>
     </div>
   );
 }

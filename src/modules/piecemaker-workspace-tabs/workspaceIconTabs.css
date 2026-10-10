@@ -12,7 +12,7 @@ header.pwa-header-safe div:has(> .piecemaker-workspace-icon-tabs) {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -24,32 +24,14 @@ header.pwa-header-safe div:has(> .piecemaker-workspace-icon-tabs) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 32px;
   padding: 0;
-  border-radius: 10px;
-  color: hsl(var(--muted-foreground));
-  background: transparent;
+  border-radius: 6px;
 }
 
 .piecemaker-workspace-icon-tabs .piecemaker-workspace-icon-tab > svg {
-  width: 24px;
-  height: 24px;
-  stroke-width: 1.8;
-}
-
-.piecemaker-workspace-icon-tabs .piecemaker-workspace-icon-tab:hover {
-  background: hsl(var(--accent));
-  color: hsl(var(--foreground));
-}
-
-.piecemaker-workspace-icon-tabs .piecemaker-workspace-icon-tab[aria-selected="true"] {
-  background: hsl(var(--primary) / 0.16);
-  color: hsl(var(--primary));
-}
-
-.piecemaker-workspace-icon-tabs .piecemaker-workspace-icon-tab:focus-visible {
-  outline: 2px solid hsl(var(--primary));
-  outline-offset: -2px;
+  width: 14px;
+  height: 14px;
 }
