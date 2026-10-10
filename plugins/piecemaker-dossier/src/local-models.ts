@@ -4,8 +4,8 @@ import { escapeHtml } from './views.js';
 
 const LOCAL_MODEL_IDS: LocalModelId[] = ['gliner', 'mineru'];
 const LOCAL_MODEL_DETAILS: Record<LocalModelId, { label: string; detail: string }> = {
-  gliner: { label: 'GLiNER2-PII', detail: 'Repère les données personnelles pour l’anonymisation · 1,2 Go (modèle)' },
-  mineru: { label: 'MinerU', detail: 'Lit les PDF scannés et les images (OCR), une page à la fois et sans dépasser 35 % de la RAM · modèle MinerU2.5-Pro (1,24 Go) + modules de mise en page et d’OCR (0,86 Go)' },
+  gliner: { label: 'GLiNER2-PII', detail: 'Modèle spécialisé dans la détection d’entités sensibles (personnes physiques, personnes morales, adresses, dates, identifiants).' },
+  mineru: { label: 'MinerU', detail: 'Modèle spécialisé dans l’extraction de texte depuis des documents scannés, illisibles par un système classique.' },
 };
 const PROMPTED_KEY = 'piecemaker:local-models-offered';
 const INSTALL_POLL_INTERVAL_MS = 1500;
@@ -35,11 +35,11 @@ async function installLocalModel(component: LocalModelId, onProgress: (progress:
 }
 
 function offerMarkup(missing: LocalModelId[]): string {
-  const items = missing.map((id) => `<div class="pmd-confirm-choice" data-model="${id}"><strong>${escapeHtml(LOCAL_MODEL_DETAILS[id].label)}</strong><small data-model-status>${escapeHtml(LOCAL_MODEL_DETAILS[id].detail)}</small></div>`).join('');
+  const items = LOCAL_MODEL_IDS.map((id) => `<div class="pmd-confirm-choice" data-model="${id}"><strong>${escapeHtml(LOCAL_MODEL_DETAILS[id].label)}</strong><small data-model-status>${escapeHtml(missing.includes(id) ? LOCAL_MODEL_DETAILS[id].detail : 'Déjà installé')}</small></div>`).join('');
   return `
     <div class="pmd-confirm">
-      <h2 class="pmd-title piecemaker-display">Installer les modèles locaux ?</h2>
-      <p class="pmd-hint">Ces modèles tournent entièrement sur ce poste. Ils sont absents ; l’anonymisation et la lecture des pièces scannées en ont besoin. Vous pourrez aussi les gérer dans Paramètres › Modèles locaux.</p>
+      <h2 class="pmd-title piecemaker-display">Installer les modèles locaux</h2>
+      <p class="pmd-hint">Ces modèles IA de pointe tournent entièrement sur votre ordinateur afin de préserver l'intégrité de vos données. Ils sont nécessaires pour anonymiser votre dossier.</p>
       <div class="pmd-confirm-choices">${items}</div>
       <p class="pmd-hint" data-install-error hidden></p>
       <div class="pmd-form-actions">
