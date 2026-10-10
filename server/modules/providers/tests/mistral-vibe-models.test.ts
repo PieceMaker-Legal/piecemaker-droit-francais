@@ -6,7 +6,7 @@ import { buildVibeModelsEnvironment } from '@/modules/providers/list/mistral/mis
 
 test('Vibe receives the GLM models alongside Mistral Medium without overriding thinking by default', () => {
   const models = JSON.parse(buildVibeModelsEnvironment());
-  assert.deepEqual(Object.keys(models), ['mistral-medium-3.5', 'glm-5.3', 'glm-5.2']);
+  assert.deepEqual(Object.keys(models), ['mistral-medium-3.5', 'mistral-large-4', 'glm-5.3', 'glm-5.2']);
   assert.deepEqual(models['glm-5.3'], { name: 'zai-glm-5-3', provider: 'mistral', alias: 'glm-5.3', display_name: 'Z.ai GLM 5.3' });
   assert.equal(models['mistral-medium-3.5'].thinking, undefined);
 });
@@ -20,8 +20,15 @@ test('the selected effort becomes Vibe thinking only on models with adjustable r
 
 test('the curated Mistral catalog lists GLM 5.3 and 5.2 and offers effort on Medium 3.5 only', () => {
   const byValue = Object.fromEntries(MISTRAL_PREDEFINED_MODELS.OPTIONS.map((option) => [option.value, option]));
-  assert.deepEqual(Object.keys(byValue), ['mistral-medium-3.5', 'glm-5.3', 'glm-5.2', 'local']);
+  assert.deepEqual(Object.keys(byValue), ['mistral-medium-3.5', 'mistral-large-4', 'glm-5.3', 'glm-5.2', 'local']);
   assert.deepEqual(byValue['mistral-medium-3.5'].effort?.values.map((value) => value.value), ['none', 'high']);
   assert.equal(byValue['glm-5.3'].effort, undefined);
   assert.equal(MISTRAL_PREDEFINED_MODELS.DEFAULT, 'mistral-medium-3.5');
+});
+
+test('Mistral Large 4 is offered with adjustable effort', () => {
+  const option = MISTRAL_PREDEFINED_MODELS.OPTIONS.find((candidate) => candidate.value === 'mistral-large-4');
+  assert.equal(option?.label, 'Mistral Large 4');
+  assert.deepEqual(option?.effort?.values.map((value) => value.value), ['none', 'high']);
+  assert.equal(JSON.parse(buildVibeModelsEnvironment('mistral-large-4', 'high'))['mistral-large-4'].thinking, 'high');
 });

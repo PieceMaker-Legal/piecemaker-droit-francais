@@ -48,6 +48,10 @@ export function vibeUserConfigEnablesSkills(): boolean {
   }
 }
 
+export function isReplayedVibeHistoryEntry(record: unknown): boolean {
+  return typeof record === 'object' && record !== null && 'turnId' in record && (record as { turnId: unknown }).turnId === null;
+}
+
 function escapeVibeGlob(name: string): string {
   return name.replace(/[[*?]/g, (char) => `[${char}]`);
 }
@@ -292,6 +296,9 @@ async function spawnVibe(
       try {
         const record = response as { sessionId?: string } | null;
         registerSession(record?.sessionId ?? null);
+        if (providerSessionId && isReplayedVibeHistoryEntry(response)) {
+          return;
+        }
         const normalized = context.normalizeMessage(response, capturedSessionId || sessionId || null);
         for (const msg of normalized) {
           ws.send(msg);
