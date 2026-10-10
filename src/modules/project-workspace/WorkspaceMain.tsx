@@ -14,7 +14,8 @@ import { TaskMasterPanel, useTaskMasterProjectSync, useTasksSettings } from '@/m
 import type { AppTab, Project, ProjectSession, SessionEstablishedContext, SessionNavigationOptions, SettingsMainTab } from '@/shared/types';
 import { useUiPreferences } from '@/shared/context/UiPreferencesContext';
 import { useFileOpenResolver } from '@/modules/project-workspace/hooks/useFileOpenResolver';
-import { EditorSidebar, useEditorSidebar } from '@/modules/code-editor';
+import { useEditorSidebar } from '@/modules/code-editor';
+import { WorkspaceViewer as EditorSidebar } from '@/modules/piecemaker-workspace-tabs';
 import WorkspaceHeader from '@/modules/project-workspace/WorkspaceHeader';
 import WorkspaceStateView from '@/modules/project-workspace/WorkspaceStateView';
 import WorkspaceErrorBoundary from '@/modules/project-workspace/WorkspaceErrorBoundary';

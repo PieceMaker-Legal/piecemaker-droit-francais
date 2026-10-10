@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { WorkspaceIconTabs } from '@/modules/piecemaker-workspace-tabs';
 
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspacePanels', () => ({ withWorkspacePanels: vi.fn() }));
+vi.mock('@/modules/piecemaker-workspace-tabs/WorkspaceViewer', () => ({ WorkspaceViewer: vi.fn() }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@/modules/plugins', () => ({
@@ -34,6 +35,7 @@ it('conserve le branchement PieceMaker lors des merges upstream', () => {
   const headerSource = readFileSync('src/modules/project-workspace/WorkspaceHeader.tsx', 'utf8');
   expect(headerSource).toContain("import { WorkspaceIconTabs as WorkspaceTabs } from '@/modules/piecemaker-workspace-tabs';");
   expect(readFileSync('src/modules/project-workspace/WorkspaceMain.tsx', 'utf8')).toContain('React.memo(withWorkspacePanels(WorkspaceMain))');
+  expect(readFileSync('src/modules/project-workspace/WorkspaceMain.tsx', 'utf8')).toContain('WorkspaceViewer as EditorSidebar');
 });
 
 it('affiche uniquement les icônes et révèle leur nom au survol', async () => {

@@ -9,6 +9,7 @@ import { GitPanel } from '@/modules/git-panel';
 import { PluginTabContent, usePlugins } from '@/modules/plugins';
 import { WorkspaceColumnSeparator } from '@/modules/piecemaker-workspace-tabs/WorkspaceColumnSeparator';
 import { WorkspacePanelsContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
+import { WorkspaceViewerContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspaceViewerContext';
 import { TaskMasterPanel, useTasksSettings } from '@/modules/task-master';
 import { openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 import type { AppTab, Project, ProjectSession, SettingsMainTab } from '@/shared/types';
@@ -28,7 +29,7 @@ type WorkspaceProps = {
 };
 
 type WorkspaceColumn = {
-  id: AppTab;
+  id: AppTab | 'viewer';
   tabs: AppTab[];
   width: number;
   split: number;
@@ -43,17 +44,31 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const browserEnabled = useBrowserUseEnabled();
     const [mainTab, setMainTab] = useState<AppTab>(props.activeTab === 'shell' ? 'shell' : 'chat');
     const [columns, setColumns] = useState<WorkspaceColumn[]>([]);
-    const [expanded, setExpanded] = useState<AppTab | null>(null);
+    const [expanded, setExpanded] = useState<AppTab | 'viewer' | null>(null);
     const [dockWidth, setDockWidth] = useState(48);
+    const [viewerOpen, setViewerOpen] = useState(false);
+    const [viewerTarget, setViewerTarget] = useState<HTMLElement | null>(null);
+    const [viewerWidth, setViewerWidth] = useState<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const dockRef = useRef<HTMLElement>(null);
     const dividerCoordinateRef = useRef(0);
-    const columnRefs = useRef(new Map<AppTab, HTMLDivElement>());
+    const columnRefs = useRef(new Map<AppTab | 'viewer', HTMLDivElement>());
     const enabledColumns = columns.map((column) => ({ ...column, tabs: column.tabs.filter((tab) => tab === 'tasks' ? tasksEnabled && isTaskMasterInstalled
       : tab === 'browser' ? browserEnabled
         : tab.startsWith('plugin:') ? plugins.some((plugin) => plugin.enabled && tab === `plugin:${plugin.name}`) : true) })).filter((column) => column.tabs.length > 0);
     const enabledPanels = enabledColumns.flatMap((column) => column.tabs);
-    const expandedTab = expanded && enabledPanels.includes(expanded) ? expanded : null;
+    const layoutColumns: WorkspaceColumn[] = [...enabledColumns, ...(viewerOpen ? [{ id: 'viewer' as const, tabs: [], width: viewerWidth ?? (enabledColumns.length ? enabledColumns.reduce((sum, column) => sum + column.width, 0) / enabledColumns.length : 1), split: 100 }] : [])];
+    const expandedTab = expanded === 'viewer' ? viewerOpen ? expanded : null : expanded && enabledPanels.includes(expanded) ? expanded : null;
+    const registerViewer = useCallback((open: boolean) => {
+      setViewerOpen(open);
+      if (!open) setExpanded((current) => current === 'viewer' ? null : current);
+    }, []);
+    const toggleViewerExpand = useCallback(() => setExpanded((current) => current === 'viewer' ? null : 'viewer'), []);
+    const bindViewerColumn = useCallback((element: HTMLDivElement | null) => {
+      if (element) columnRefs.current.set('viewer', element);
+      else columnRefs.current.delete('viewer');
+      setViewerTarget(element);
+    }, []);
 
     const open = useCallback((tab: AppTab) => {
       if (tab === 'chat' || tab === 'shell') {
@@ -64,7 +79,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
           if (current.some((column) => column.tabs.includes(tab))) return current;
           const available = current.find((column) => column.tabs.length < 2);
           return available ? current.map((column) => column === available ? { ...column, tabs: [...column.tabs, tab] } : column)
-            : [...current, { id: tab, tabs: [tab], width: current.length ? current.reduce((sum, column) => sum + column.width, 0) / current.length : 1, split: 50 }];
+            : [...current, { id: tab, tabs: [tab], width: current.length ? current.reduce((sum, column) => sum + column.width, 0) / current.length : columnRefs.current.get('viewer')?.getBoundingClientRect().width || 1, split: 50 }];
         });
       }
     }, []);
@@ -72,6 +87,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     useEffect(() => {
       setColumns([]);
       setExpanded(null);
+      setViewerWidth(null);
     }, [props.selectedProject?.projectId]);
     useEffect(() => open(props.activeTab), [props.activeTab, props.selectedProject?.projectId, open]);
 
@@ -91,13 +107,14 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       let percent = Math.max(0, Math.min(100, requestedPercent));
       const availableWidth = containerRef.current?.getBoundingClientRect().width;
       const currentWidth = dockRef.current?.getBoundingClientRect().width;
-      const first = enabledColumns[0];
+      const first = layoutColumns[0];
       const firstWidth = first && columnRefs.current.get(first.id)?.getBoundingClientRect().width;
       if (availableWidth && currentWidth && firstWidth) {
         const nextWidth = Math.max(currentWidth - firstWidth + Math.min(32, firstWidth), Math.min(availableWidth - 6, availableWidth * percent / 100));
         const delta = nextWidth - currentWidth;
-        const widths = new Map(enabledColumns.map((column, index) => [column.id, (columnRefs.current.get(column.id)?.getBoundingClientRect().width ?? 0) + (index === 0 ? delta : 0)]));
+        const widths = new Map(layoutColumns.map((column, index) => [column.id, (columnRefs.current.get(column.id)?.getBoundingClientRect().width ?? 0) + (index === 0 ? delta : 0)]));
         setColumns((current) => current.map((column) => ({ ...column, width: widths.get(column.id) ?? column.width })));
+        if (widths.has('viewer')) setViewerWidth(widths.get('viewer')!);
         percent = nextWidth / availableWidth * 100;
       }
       setDockWidth(percent);
@@ -120,6 +137,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       const totalWeight = left.width + right.width;
       setColumns((current) => current.map((column) => column.id === left.id ? { ...column, width: totalWeight * nextLeft / total }
         : column.id === right.id ? { ...column, width: totalWeight * (total - nextLeft) / total } : column));
+      if (right.id === 'viewer') setViewerWidth(totalWeight * (total - nextLeft) / total);
     };
 
     const resizeRows = (column: WorkspaceColumn, delta: number) => {
@@ -130,12 +148,13 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     };
 
     return (
+      <WorkspaceViewerContext.Provider value={{ target: viewerTarget, register: registerViewer, expanded: expandedTab === 'viewer', toggleExpand: toggleViewerExpand }}>
       <WorkspacePanelsContext.Provider value={enabledPanels}>
         <div ref={containerRef} className="piecemaker-workspace-panels">
           <div className="piecemaker-workspace-primary" hidden={Boolean(expandedTab)}>
             <Workspace {...props} activeTab={mainTab} setActiveTab={select} />
           </div>
-          {!props.isLoading && props.selectedProject && enabledPanels.length > 0 && <>
+          {!props.isLoading && props.selectedProject && layoutColumns.length > 0 && <>
             {!expandedTab && !props.isMobile && <div
               role="separator" aria-label="Largeur des volets" aria-orientation="vertical"
               aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(dockWidth)} tabIndex={0}
@@ -150,9 +169,9 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
               }}
             />}
             <aside ref={dockRef} className={`piecemaker-workspace-dock ${expandedTab ? 'is-expanded' : ''}`} style={{ width: expandedTab || props.isMobile ? '100%' : `${dockWidth}%` }} aria-label="Volets des outils">
-              {enabledColumns.map((column, columnIndex) => <Fragment key={`${props.selectedProject!.projectId}:${column.id}`}>
-                {columnIndex > 0 && !expandedTab && <WorkspaceColumnSeparator orientation="vertical" label={`Largeur colonnes ${columnIndex} et ${columnIndex + 1}`} value={enabledColumns[columnIndex - 1].width / (enabledColumns[columnIndex - 1].width + column.width) * 100} onMove={(delta) => resizeColumns(enabledColumns[columnIndex - 1], column, delta)} />}
-                <div className="piecemaker-workspace-column" hidden={Boolean(expandedTab && !column.tabs.includes(expandedTab))} style={{ flexGrow: expandedTab ? 1 : column.width }} ref={(element) => { if (element) columnRefs.current.set(column.id, element); else columnRefs.current.delete(column.id); }}>
+              {layoutColumns.map((column, columnIndex) => <Fragment key={`${props.selectedProject!.projectId}:${column.id}`}>
+                {columnIndex > 0 && !expandedTab && <WorkspaceColumnSeparator orientation="vertical" label={`Largeur colonnes ${columnIndex} et ${columnIndex + 1}`} value={layoutColumns[columnIndex - 1].width / (layoutColumns[columnIndex - 1].width + column.width) * 100} onMove={(delta) => resizeColumns(layoutColumns[columnIndex - 1], column, delta)} />}
+                <div className="piecemaker-workspace-column" aria-label={column.id === 'viewer' ? 'Colonne visionneuse' : undefined} hidden={Boolean(expandedTab && (column.id === 'viewer' ? expandedTab !== 'viewer' : expandedTab === 'viewer' || !column.tabs.includes(expandedTab)))} style={{ flexGrow: expandedTab ? 1 : column.width }} ref={column.id === 'viewer' ? bindViewerColumn : (element) => { if (element) columnRefs.current.set(column.id, element); else columnRefs.current.delete(column.id); }}>
                   {column.tabs.map((tab, rowIndex) => {
                     const plugin = plugins.find((item) => tab === `plugin:${item.name}`);
                     const label = plugin?.displayName ?? t(`tabs.${tab === 'tasks' ? 'library' : tab}`);
@@ -180,6 +199,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
           </>}
         </div>
       </WorkspacePanelsContext.Provider>
+      </WorkspaceViewerContext.Provider>
     );
   };
 }
