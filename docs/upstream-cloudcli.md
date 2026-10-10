@@ -173,8 +173,11 @@ Le branchement de la barre remplace l'import de `WorkspaceTabs` dans
 avec cette fonction. Le composant CloudCLI reste intact : Chat ou Terminal
 reste la vue principale, tandis que les autres outils et plugins occupent des
 cards à droite. Plusieurs cards peuvent rester ouvertes, être redimensionnées,
-agrandies dans l'espace de travail ou fermées indépendamment. L'agrandissement
-masque les autres vues sans démonter leur contenu. Les fichiers ouverts depuis
+agrandies dans l'espace de travail ou fermées indépendamment.
+Chaque card possède des poignées sur ses bords gauche et droit pour régler sa
+largeur indépendamment. Le dock s'élargit si nécessaire, jusqu'à la largeur
+disponible de l'espace de travail ; sa séparation n'est plus limitée à 25–70 %.
+L'agrandissement masque les autres vues sans démonter leur contenu. Les fichiers ouverts depuis
 les volets utilisent la visionneuse existante.
 
 La sauvegarde du code est dans `scripts/piecemaker/workspace-tabs/backup.json`.

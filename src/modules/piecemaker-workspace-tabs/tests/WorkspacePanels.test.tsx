@@ -68,7 +68,7 @@ it('agrandit puis restaure une card sans perdre son contenu ni les autres volets
 it('permet de redimensionner le dock au clavier', () => {
   render(<Harness />);
   fireEvent.click(screen.getByRole('button', { name: 'files' }));
-  const divider = screen.getByRole('separator');
+  const divider = screen.getByRole('separator', { name: 'Largeur des volets' });
   fireEvent.keyDown(divider, { key: 'ArrowLeft' });
   expect(divider.getAttribute('aria-valuenow')).toBe('50');
   fireEvent.keyDown(divider, { key: 'ArrowRight' });
