@@ -46,7 +46,10 @@ par l'onglet Dossier › Configuration de l'application elle-même.
 besoin — par `server/piecemaker/vendor/installer/bin/piecemaker.mjs --step
 <id> --yes`, en mode non interactif — dans cet ordre : `01-prerequis`, `03-python-gliner`,
 `04-conversion-md`, `12-mcp-piecemaker`,
-`07-legifrance`. Explicitement exclues :
+`07-legifrance`. `03-python-gliner` y tourne avec `PIECEMAKER_SKIP_MODELS=1` :
+le venv et les bibliothèques sont installés, pas le modèle GLiNER2-PII ;
+`04-conversion-md` n'installe pas MinerU. Ces modèles locaux s'installent à
+la demande depuis l'onglet Dossier ou Paramètres › Modèles locaux. Explicitement exclues :
 les hooks et les skills (`06-hooks`, `09-claude-assets`, `09-codex-plugin`,
 `13-garde-secrets`), ainsi que `00`, `02`, `08`, `10-*`, `11`.
 Une étape déjà à `done` dans `~/.piecemaker/state.json` n'est pas rejouée ;

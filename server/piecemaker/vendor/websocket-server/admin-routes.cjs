@@ -47,6 +47,7 @@ const {
   unregisterClaudeAsset,
 } = require('./claude-assets.cjs');
 const { claudeHooksStatus } = require('./claude-hooks.cjs');
+const { removeLocalModel } = require('../../local-models.cjs');
 
 const MAX_MARKDOWN_BYTES = 1024 * 1024;
 const SECRET_KEYS = new Set([
@@ -1563,6 +1564,7 @@ function startInstallJob(repoRoot, component) {
     env: {
       ...process.env,
       PIECEMAKER_YES: '1',
+      PIECEMAKER_SKIP_MODELS: '',
       NO_COLOR: '1',
       ...(component === 'mineru' ? { PIECEMAKER_INSTALL_MINERU: '1' } : {}),
     },
@@ -1816,6 +1818,21 @@ function createAdminRouter({
       res.json({ ok: true, job: publicInstallJob(job) });
     } catch (error) {
       res.status(error.conflict ? 409 : 400).json({ error: error.message });
+    }
+  });
+
+  router.post('/configuration/uninstall', async (req, res) => {
+    const component = String(req.body?.component || '');
+    if (!INSTALL_STEP_IDS[component]) return res.status(400).json({ error: `Composant non supprimable : ${component}` });
+    if (activeInstallComponent) return res.status(409).json({ error: `Une installation est déjà en cours (${activeInstallComponent}).` });
+    activeInstallComponent = component;
+    try {
+      await removeLocalModel(component, { homeDir, userHome });
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    } finally {
+      activeInstallComponent = null;
     }
   });
 

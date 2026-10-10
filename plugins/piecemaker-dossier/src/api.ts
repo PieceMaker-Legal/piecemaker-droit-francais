@@ -56,6 +56,9 @@ export type BodaccSearchResult = {
   reportPath: string;
 };
 export type CaseSummary = { projectId: string; name: string; mappings: number };
+export type LocalModelId = 'gliner' | 'mineru';
+export type LocalModelStatus = { name: string; installed: boolean };
+export type LocalModelInstallJob = { id: string; state: 'running' | 'done' | 'failed'; progress: string; error: string };
 type RepositoryCase = { path: string; location: string };
 type RepositoryOverview = { folders?: RepositoryCase[] };
 type RegisteredCase = { folder: RepositoryCase };
@@ -121,6 +124,9 @@ export const knowledgeApi = {
   rename: (projectId: string, path: string, name: string) => request<{ previous: string; current: string; markdown: string | null }>(BASE, '/rename', { method: 'POST', body: JSON.stringify({ projectId, path, name }) }),
   update: (projectId: string, operations: KnowledgeUpdateOperation[]) => request(BASE, '/update', { method: 'POST', body: JSON.stringify({ projectId, operations }) }),
   ensureAgentInstructions: (projectId: string) => request<{ ok: true; created: string[] }>(PIECEMAKER_BASE, '/agent-instructions', { method: 'POST', body: JSON.stringify({ projectId }) }),
+  localModels: () => request<{ components: Record<LocalModelId, LocalModelStatus> }>(PIECEMAKER_BASE, '/configuration'),
+  installLocalModel: (component: LocalModelId) => request<{ job: LocalModelInstallJob }>(PIECEMAKER_BASE, '/configuration/install', { method: 'POST', body: JSON.stringify({ component }) }),
+  localModelInstall: (id: string) => request<{ job: LocalModelInstallJob }>(PIECEMAKER_BASE, `/configuration/install?id=${encodeURIComponent(id)}`),
   institutionalTerms: () => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms'),
   saveInstitutionalTerms: (terms: string[]) => request<InstitutionalTerms>(PIECEMAKER_BASE, '/institutional-terms', { method: 'PUT', body: JSON.stringify({ terms }) }),
 };

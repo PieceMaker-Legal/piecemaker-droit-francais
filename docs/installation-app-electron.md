@@ -93,10 +93,11 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`).
    l'installation s'arrête sur un message clair et l'application en place
    reste intacte.
 9. **Certificat** — déclaration de confiance et signature, voir ci-dessous.
-10. **Composants Python** — GLiNER, MarkItDown, MinerU et le reste de
+10. **Composants Python** — MarkItDown, la bibliothèque GLiNER2 et le reste de
    `requirements.txt`, dans un venv. Sans eux l'application s'ouvre, mais
-   l'anonymisation et la conversion des pièces ne démarrent pas. Le détail
-   est plus bas.
+   l'anonymisation et la conversion des pièces ne démarrent pas. Les modèles
+   locaux (GLiNER2-PII, MinerU) ne sont plus téléchargés ici. Le détail est
+   plus bas.
 11. **Lancement** de l'application.
 
 Les étapes 3 à 7 et 10 sont idempotentes : sources, Node, venv et modèles déjà
@@ -158,9 +159,14 @@ si tout passe, 1 sinon.
 - un Python 3.10 à 3.13 déjà présent sur le poste, sinon un CPython 3.12
   autonome (python-build-standalone) dans `<destination>/python` ;
 - le venv `<destination>/venv`, avec `requirements.txt` (MarkItDown, pypdf,
-  GLiNER2) puis `mineru[pipeline,vlm]==2.7.6` ;
-- les modèles MinerU du moteur *pipeline* (OCR des pièces scannées) et le
-  modèle GLiNER2-PII.
+  GLiNER2).
+
+Les modèles locaux — le modèle GLiNER2-PII et MinerU (`mineru[pipeline,vlm]`
+et ses modèles *pipeline*) — s'installent à la demande depuis l'application :
+l'onglet Dossier propose leur installation quand ils manquent, et
+Paramètres › Modèles locaux affiche leur état et permet de les supprimer ou de
+les réinstaller (routes `POST /api/piecemaker/configuration/install` et
+`/configuration/uninstall`).
 
 `<destination>` est `PIECEMAKER_COMPONENTS_HOME`, ou `PIECEMAKER_HOME` si cette
 variable est absente. Elle ne contient que l'interpréteur et le venv. Les
@@ -349,7 +355,7 @@ desktop-bootstrap/
   install.sh                     entrée macOS (curl | sh)
   install.ps1                    entrée Windows (irm | iex)
   composants/
-    install.mjs                  venv, GLiNER, MarkItDown, MinerU
+    install.mjs                  venv, MarkItDown, bibliothèque GLiNER2
   overlay/
     electron-piecemaker/main.js  point d'entrée Electron, ouvre la cible locale
   lib/

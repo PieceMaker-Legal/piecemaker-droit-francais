@@ -11,7 +11,7 @@ export const COMPONENTS = [
   { id: '01-prerequis', label: 'Prérequis système', timeout: 2 * 60_000 },
   { id: '06-hooks', label: 'Protection des pièces (hooks Claude Code)', timeout: 2 * 60_000 },
   { id: '09-codex-plugin', label: 'Protection des pièces (hooks Codex)', timeout: 2 * 60_000 },
-  { id: '03-python-gliner', label: 'Python, GLiNER & anonymisation', timeout: 45 * 60_000 },
+  { id: '03-python-gliner', label: 'Python & bibliothèques d’anonymisation', timeout: 45 * 60_000, env: { PIECEMAKER_SKIP_MODELS: '1' } },
   { id: '04-conversion-md', label: 'Conversion de documents en Markdown', timeout: 10 * 60_000 },
   { id: '12-mcp-piecemaker', label: 'Serveur MCP piecemaker', timeout: 2 * 60_000 },
   { id: '07-legifrance', label: 'Serveur MCP Légifrance (clés PISTE)', timeout: 5 * 60_000 },
@@ -45,7 +45,7 @@ export async function installComponents(runtime, report) {
     report.step(`${component.label} — installation`);
     const result = await runInherited(runtime.nodePath, [INSTALLER_ENTRY, '--step', component.id, '--yes'], {
       cwd: APP.directory,
-      env: runtimeEnv(runtime, { PIECEMAKER_NON_INTERACTIVE: '1', PIECEMAKER_YES: '1' }),
+      env: runtimeEnv(runtime, { PIECEMAKER_NON_INTERACTIVE: '1', PIECEMAKER_YES: '1', ...component.env }),
       timeout: component.timeout,
     });
 

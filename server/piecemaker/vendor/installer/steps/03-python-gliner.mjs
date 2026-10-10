@@ -144,6 +144,10 @@ export async function install(ctx) {
   updateConfig({ pythonPath: vp.python, venvPath: venvDir });
   writeEnv({ PYTHON_PATH: vp.python });
 
+  if (process.env.PIECEMAKER_SKIP_MODELS === '1') {
+    return { status: 'done', note: 'Modèle GLiNER2-PII installé à la demande depuis PieceMaker (Paramètres › Modèles locaux).' };
+  }
+
   // 4. GLiNER2-PII replaces the former checkpoints. Migration is mandatory: declining keeps the step incomplete
   // and the scanner deliberately has no fallback to the legacy checkpoint.
   const beforeWarmup = readWarmupStatus(vp.python);
