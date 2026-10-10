@@ -223,11 +223,53 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .piecemaker-files-body[data-document-open='true'] .piecemaker-files-tree {
   flex: 0 0 clamp(160px, 30%, 280px);
   border-right: 1px solid hsl(var(--border) / 0.6);
+}
+
+.piecemaker-files-tree .grid-cols-12 {
+  grid-template-columns: minmax(0, 1fr) 4.5rem 5.5rem 5.5rem;
+}
+
+.piecemaker-files-tree .grid-cols-12 > * {
+  grid-column: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@container (max-width: 34rem) {
+  .piecemaker-files-tree .grid-cols-12 {
+    grid-template-columns: minmax(0, 1fr) 4.5rem 5.5rem;
+  }
+
+  .piecemaker-files-tree .grid-cols-12 > :nth-child(4):not(button) {
+    display: none;
+  }
+}
+
+@container (max-width: 26rem) {
+  .piecemaker-files-tree .grid-cols-12 {
+    grid-template-columns: minmax(0, 1fr) 4.5rem;
+  }
+
+  .piecemaker-files-tree .grid-cols-12 > :nth-child(n+3):not(button) {
+    display: none;
+  }
+}
+
+@container (max-width: 20rem) {
+  .piecemaker-files-tree .grid-cols-12 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .piecemaker-files-tree .grid-cols-12 > :nth-child(n+2):not(button) {
+    display: none;
+  }
 }
 
 .piecemaker-files-body[data-document-open='true'] .piecemaker-files-tree .grid-cols-12 {
@@ -238,7 +280,7 @@
   flex: 1;
 }
 
-.piecemaker-files-body[data-document-open='true'] .piecemaker-files-tree .grid-cols-12 > :not(:first-child),
+.piecemaker-files-body[data-document-open='true'] .piecemaker-files-tree .grid-cols-12 > :not(:first-child, button),
 .piecemaker-files-body[data-document-open='true'] .piecemaker-files-tree .border-b:has(> .grid-cols-12.uppercase) {
   display: none;
 }
