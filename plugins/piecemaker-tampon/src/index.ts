@@ -68,7 +68,7 @@ const STYLE_TEXT = `
   .pm-tampon * { box-sizing: border-box; }
   .pm-tampon__stack { grid-row: 2; height: 100%; min-height: 0; width: 100%; max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
   .pm-tampon__stack > .pm-tampon__pieces { height: 100%; display: flex; flex-direction: column; }
-  .pm-tampon__stack > .pm-tampon__pieces > .pm-tampon__body { flex: 1; overflow: auto; }
+  .pm-tampon__stack > .pm-tampon__pieces > .pm-tampon__body { flex: 1; min-height: 0; overflow: hidden; }
   .pm-tampon__toolbar { grid-row: 1; width: 100%; max-width: 56rem; margin: 0 auto 12px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
   .pm-tampon__card { min-width: 0; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: 1rem; background: hsl(var(--card, 0 0% 100%)); box-shadow: none; }
   .pm-tampon__header, .pm-tampon__footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; min-width: 0; }
@@ -92,8 +92,9 @@ const STYLE_TEXT = `
   .pm-tampon .pm-tampon__primary { background: hsl(var(--primary, 208 100% 50%)); color: hsl(var(--primary-foreground, 0 0% 100%)); border-color: transparent; box-shadow: none; backdrop-filter: none; }
   .pm-tampon__error { color: hsl(var(--destructive, 0 72% 51%)); margin: 0; }
   .pm-tampon__muted { color: hsl(var(--muted-foreground, 220 9% 46%)); margin: 0; }
-  .pm-tampon__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; min-width: 0; }
-  .pm-tampon__list { max-height: 16rem; min-width: 0; overflow: auto; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: .75rem; padding: 6px; }
+  .pm-tampon__grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 12px; min-width: 0; }
+  .pm-tampon__list-column { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .pm-tampon__list { flex: 1; min-height: 0; min-width: 0; overflow: auto; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: .75rem; padding: 6px; }
   .pm-tampon__item { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; border: 1px solid transparent; border-radius: .5rem; padding: 6px 8px; background: transparent; height: auto; }
   .pm-tampon__item[aria-pressed=true] { border-color: hsl(var(--foreground, 222 47% 11%) / 26%); background: hsl(var(--muted, 0 0% 93%)); }
   .pm-tampon__item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -589,7 +590,7 @@ function renderPieces(state: ViewState): HTMLElement {
     else if (state.originals && state.originals.length === 0) body.append(element('p', 'pm-tampon__muted', 'Ce dossier ne contient aucune pièce originale.'));
     else if (state.originals) {
       const grid = element('div', 'pm-tampon__grid');
-      const available = element('div');
+      const available = element('div', 'pm-tampon__list-column');
       available.append(element('p', 'pm-tampon__muted', 'Pièces du dossier — cliquer pour ajouter au bordereau'));
       const availableList = element('div', 'pm-tampon__list');
       for (const piece of state.originals) {
@@ -607,7 +608,7 @@ function renderPieces(state: ViewState): HTMLElement {
         availableList.append(item);
       }
       available.append(availableList);
-      const bordereau = element('div');
+      const bordereau = element('div', 'pm-tampon__list-column');
       const bordereauList = element('div', 'pm-tampon__list');
       if (state.selectedOrder.length === 0) bordereauList.append(element('p', 'pm-tampon__muted', 'Aucune pièce sélectionnée.'));
       state.selectedOrder.forEach((path, index) => {
