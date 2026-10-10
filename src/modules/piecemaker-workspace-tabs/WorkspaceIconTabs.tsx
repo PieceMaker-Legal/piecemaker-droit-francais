@@ -4,6 +4,7 @@ import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PluginIcon, usePlugins } from '@/modules/plugins';
+import { useOpenWorkspacePanels } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
 import type { AppTab } from '@/shared/types';
 import { ActionMenu, Pill, PillBar, Tooltip } from '@/shared/ui';
 import '@/modules/piecemaker-workspace-tabs/workspaceIconTabs.css';
@@ -18,6 +19,8 @@ type WorkspaceIconTabsProps = {
 export function WorkspaceIconTabs({ activeTab, setActiveTab, shouldShowTasksTab, shouldShowBrowserTab }: WorkspaceIconTabsProps) {
   const { t } = useTranslation();
   const { plugins } = usePlugins();
+  const openPanels = useOpenWorkspacePanels();
+  const isSelected = (id: AppTab) => id === activeTab || Boolean(openPanels?.includes(id));
   const containerRef = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
   const tabs = [
@@ -65,14 +68,14 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab, shouldShowTasksTab,
 
   return (
     <div ref={containerRef} className="piecemaker-workspace-icon-tabs">
-      <PillBar role="tablist" aria-label={t('tabs.views', { defaultValue: 'Workspace views' })} className="border border-border/40 bg-muted/50 shadow-inner shadow-black/[0.025] dark:shadow-black/10">
+      <PillBar role="tablist" aria-multiselectable={Boolean(openPanels)} aria-label={t('tabs.views', { defaultValue: 'Workspace views' })} className="border border-border/40 bg-muted/50 shadow-inner shadow-black/[0.025] dark:shadow-black/10">
         {visibleTabs.map((tab) => (
           <Tooltip key={tab.id} content={tab.label} position="bottom">
             <Pill
-              isActive={tab.id === activeTab}
+              isActive={isSelected(tab.id)}
               role="tab"
               aria-label={tab.label}
-              aria-selected={tab.id === activeTab}
+              aria-selected={isSelected(tab.id)}
               tabIndex={tab.id === activeTab ? 0 : -1}
               onClick={() => setActiveTab(tab.id)}
               onKeyDown={handleKeyDown}

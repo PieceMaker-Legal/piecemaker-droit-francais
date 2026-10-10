@@ -18,6 +18,7 @@ import { EditorSidebar, useEditorSidebar } from '@/modules/code-editor';
 import WorkspaceHeader from '@/modules/project-workspace/WorkspaceHeader';
 import WorkspaceStateView from '@/modules/project-workspace/WorkspaceStateView';
 import WorkspaceErrorBoundary from '@/modules/project-workspace/WorkspaceErrorBoundary';
+import { withWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';
 
 type WorkspaceMainProps = {
   selectedProject: Project | null;
@@ -249,4 +250,4 @@ function WorkspaceMain({
   );
 }
 
-export default React.memo(WorkspaceMain);
+export default React.memo(withWorkspacePanels(WorkspaceMain));
