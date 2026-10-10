@@ -64,37 +64,52 @@ const STATUS_LABEL: Record<CaseOriginalPiece['status'], string> = {
 };
 
 const STYLE_TEXT = `
-  .pm-tampon { height: 100%; overflow: auto; padding: 24px; box-sizing: border-box; color: var(--piecemaker-text, #374151); background: hsl(var(--background, 0 0% 100%)); font: 14px var(--piecemaker-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
+  .pm-tampon { min-height: 100%; height: 100%; overflow: auto; padding: clamp(12px, 3vw, 32px); box-sizing: border-box; color: hsl(var(--foreground, 222 47% 11%)); background: hsl(var(--background, 0 0% 100%)); font: 14px var(--piecemaker-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
   .pm-tampon * { box-sizing: border-box; }
-  .pm-tampon__stack { max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
-  .pm-tampon__card { border: 1px solid var(--piecemaker-border, #e5e7eb); border-radius: 1rem; background: hsl(var(--card, 0 0% 100%)); box-shadow: none; }
-  .pm-tampon__header, .pm-tampon__footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; }
-  .pm-tampon__footer { align-items: center; flex-wrap: wrap; border-top: 1px solid var(--piecemaker-border, #e5e7eb); }
+  .pm-tampon__stack { max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+  .pm-tampon__toolbar { max-width: 56rem; margin: 0 auto 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .pm-tampon__page-title { margin: 0; font-family: var(--piecemaker-font-editorial, Georgia, serif); font-size: 1.5rem; font-weight: 500; }
+  .pm-tampon__card { min-width: 0; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: 1rem; background: hsl(var(--card, 0 0% 100%)); box-shadow: none; }
+  .pm-tampon__header, .pm-tampon__footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; min-width: 0; }
+  .pm-tampon__footer { align-items: center; flex-wrap: wrap; justify-content: flex-start; border-top: 1px solid hsl(var(--border, 220 13% 91%)); }
   .pm-tampon__title { margin: 0; font-family: var(--piecemaker-font-editorial, EB Garamond, Georgia, serif); font-size: 1.25rem; font-weight: 500; letter-spacing: -.02em; }
-  .pm-tampon__subtitle { margin: 6px 0 0; color: var(--piecemaker-muted, #6b7280); line-height: 1.5; }
-  .pm-tampon__body { padding: 0 20px 20px; display: flex; flex-direction: column; gap: 16px; }
-  .pm-tampon__badge { border: 1px solid var(--piecemaker-border, #e5e7eb); border-radius: 999px; padding: 3px 8px; font-size: 12px; }
-  .pm-tampon__row { display: flex; gap: 16px; flex-wrap: wrap; }
-  .pm-tampon__preview { width: 160px; height: 160px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--piecemaker-border, #e5e7eb); border-radius: .75rem; background: hsl(var(--muted, 0 0% 93%) / .3); overflow: hidden; }
+  .pm-tampon__subtitle { margin: 6px 0 0; color: hsl(var(--muted-foreground, 220 9% 46%)); line-height: 1.5; }
+  .pm-tampon__body { padding: 0 20px 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .pm-tampon__badge { flex: 0 0 auto; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: 999px; padding: 3px 8px; font-size: 12px; }
+  .pm-tampon__row { display: flex; align-items: flex-start; gap: 16px; min-width: 0; }
+  .pm-tampon__preview-wrap { flex: 0 0 160px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .pm-tampon__preview { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border: 1px dashed hsl(var(--border, 220 13% 91%)); border-radius: .75rem; background: hsl(var(--muted, 0 0% 93%)); overflow: hidden; }
   .pm-tampon__preview img { width: 100%; height: 100%; object-fit: contain; padding: 8px; }
-  .pm-tampon__form { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 12px; padding: 12px; border: 1px solid var(--piecemaker-border, #e5e7eb); border-radius: .75rem; background: hsl(var(--muted, 0 0% 93%) / .2); }
-  .pm-tampon label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--piecemaker-muted, #6b7280); }
-  .pm-tampon input[type=text], .pm-tampon input[type=color], .pm-tampon input[type=range], .pm-tampon select { font: inherit; color: inherit; background: transparent; border: 1px solid var(--piecemaker-border, #e5e7eb); border-radius: .75rem; padding: 7px 10px; box-shadow: none; }
+  .pm-tampon__form { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: .75rem; background: hsl(var(--muted, 0 0% 93%)); }
+  .pm-tampon label { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground, 220 9% 46%)); }
+  .pm-tampon input[type=text], .pm-tampon input[type=color], .pm-tampon input[type=range], .pm-tampon select { width: 100%; min-width: 0; font: inherit; color: hsl(var(--foreground, 222 47% 11%)); background: hsl(var(--card, 0 0% 100%)); border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: .75rem; padding: 7px 10px; box-shadow: none; }
   .pm-tampon input[type=color] { height: 36px; padding: 4px; cursor: pointer; }
   .pm-tampon__pills { display: flex; flex-wrap: wrap; gap: 6px; }
-  .pm-tampon button:not(.piecemaker-button) { font: inherit; cursor: pointer; color: inherit; background: var(--liquid-glass-background-subtle, transparent); border: 1px solid var(--liquid-glass-border-subtle, var(--piecemaker-border, #e5e7eb)); border-radius: 9999px; padding: 7px 12px; }
-  .pm-tampon button[aria-pressed=true] { box-shadow: inset 0 0 0 1px rgb(var(--piecemaker-ink-rgb, 17 24 39) / 26%); font-weight: 600; }
+  .pm-tampon button:not(.piecemaker-button) { min-width: 0; font: inherit; cursor: pointer; color: inherit; background: hsl(var(--card, 0 0% 100%)); border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: 9999px; padding: 7px 12px; }
+  .pm-tampon button[aria-pressed=true] { box-shadow: inset 0 0 0 1px hsl(var(--foreground, 222 47% 11%) / 26%); font-weight: 600; }
   .pm-tampon button:disabled { opacity: .4; cursor: not-allowed; }
-  .pm-tampon__primary { background: rgb(3 7 18 / 88%); color: #fff; border-color: transparent; box-shadow: none; backdrop-filter: none; }
-  .pm-tampon__error { color: #b91c1c; margin: 0; }
-  .pm-tampon__muted { color: var(--piecemaker-muted, #6b7280); margin: 0; }
-  .pm-tampon__grid { display: grid; gap: 16px; }
-  @media (min-width: 900px) { .pm-tampon__grid { grid-template-columns: 1fr 1fr; } }
-  .pm-tampon__list { max-height: 16rem; overflow: auto; border: 1px solid var(--piecemaker-border, #e5e7eb); border-radius: .75rem; padding: 6px; }
-  .pm-tampon__item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 1px solid transparent; border-radius: .5rem; padding: 6px 8px; background: transparent; height: auto; }
-  .pm-tampon__item[aria-pressed=true] { border-color: rgb(var(--piecemaker-ink-rgb, 17 24 39) / .26); background: hsl(var(--muted, 0 0% 93%) / .6); }
+  .pm-tampon .pm-tampon__primary { background: hsl(var(--primary, 208 100% 50%)); color: hsl(var(--primary-foreground, 0 0% 100%)); border-color: transparent; box-shadow: none; backdrop-filter: none; }
+  .pm-tampon__error { color: hsl(var(--destructive, 0 72% 51%)); margin: 0; }
+  .pm-tampon__muted { color: hsl(var(--muted-foreground, 220 9% 46%)); margin: 0; }
+  .pm-tampon__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; min-width: 0; }
+  .pm-tampon__list { max-height: 16rem; min-width: 0; overflow: auto; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: .75rem; padding: 6px; }
+  .pm-tampon__item { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; border: 1px solid transparent; border-radius: .5rem; padding: 6px 8px; background: transparent; height: auto; }
+  .pm-tampon__item[aria-pressed=true] { border-color: hsl(var(--foreground, 222 47% 11%) / 26%); background: hsl(var(--muted, 0 0% 93%)); }
   .pm-tampon__item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pm-tampon__hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+  .pm-tampon__overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(0 0 0 / 55%); }
+  .pm-tampon__dialog { width: min(900px, 100%); max-height: calc(100dvh - 32px); overflow: auto; outline: none; box-shadow: 0 24px 80px rgb(0 0 0 / 35%); }
+  .pm-tampon__close { flex: 0 0 auto; }
+  .pm-tampon__stamp-trigger { width: 2.5rem; height: 2.5rem; color: hsl(var(--foreground, 222 47% 11%)); }
+  .pm-tampon__stamp-trigger svg { width: 20px; height: 20px; }
+  @media (max-width: 560px) {
+    .pm-tampon__body { padding: 0 14px 14px; }
+    .pm-tampon__header, .pm-tampon__footer { padding: 14px; }
+    .pm-tampon__row { flex-direction: column; }
+    .pm-tampon__preview-wrap { width: min(160px, 100%); flex-basis: auto; }
+    .pm-tampon__dialog { max-height: calc(100dvh - 16px); }
+    .pm-tampon__overlay { padding: 8px; }
+  }
 `;
 
 type UnknownRecord = Record<string, unknown>;
@@ -170,6 +185,7 @@ type ViewState = {
   disposed: boolean;
   unsubscribe: (() => void) | null;
   config: StampConfig;
+  builderOpen: boolean;
   pendingImage: string | null;
   savedImage: string | null;
   loadingTampon: boolean;
@@ -321,6 +337,19 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: stri
   return node;
 }
 
+function stampIcon(): SVGSVGElement {
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('fill', 'none');
+  icon.setAttribute('stroke', 'currentColor');
+  icon.setAttribute('stroke-width', '1.8');
+  icon.setAttribute('stroke-linecap', 'round');
+  icon.setAttribute('stroke-linejoin', 'round');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = '<path d="M7 14V8a5 5 0 0 1 10 0v6"/><path d="M5 14h14l2 5H3l2-5Z"/><path d="M8 19v2h8v-2"/><path d="M9 9h6"/>';
+  return icon;
+}
+
 function button(label: string, action: () => void, className = '', disabled = false): HTMLButtonElement {
   const isItem = className.includes('pm-tampon__item');
   const isPrimary = className.includes('pm-tampon__primary');
@@ -344,21 +373,34 @@ function button(label: string, action: () => void, className = '', disabled = fa
 
 function renderBuilder(state: ViewState): HTMLElement {
   const card = element('section', 'pm-tampon__card');
+  card.classList.add('pm-tampon__dialog');
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-modal', 'true');
+  card.setAttribute('aria-labelledby', 'pm-tampon-dialog-title');
+  card.tabIndex = -1;
   const header = element('div', 'pm-tampon__header');
   const heading = element('div');
-  heading.append(element('h2', 'pm-tampon__title piecemaker-display', 'Tampon du cabinet'), element('p', 'pm-tampon__subtitle', 'Une seule image pour tout le cabinet, apposée sur chaque pièce tamponnée.'));
+  const title = element('h2', 'pm-tampon__title piecemaker-display', 'Tampon du cabinet');
+  title.id = 'pm-tampon-dialog-title';
+  heading.append(title, element('p', 'pm-tampon__subtitle', 'Une seule image pour tout le cabinet, apposée sur chaque pièce tamponnée.'));
   header.append(heading);
   if (!state.loadingTampon && !state.tamponError) {
     const badge = element('span', 'pm-tampon__badge', state.pendingImage ? 'Non enregistré' : displayedImage(state) ? 'Enregistré' : 'Aucun tampon');
     header.append(badge);
   }
+  const closeButton = button('×', () => {
+    state.builderOpen = false;
+    render(state);
+  }, 'piecemaker-button piecemaker-button--icon pm-tampon__close');
+  closeButton.setAttribute('aria-label', 'Fermer la configuration du tampon');
+  header.append(closeButton);
   card.append(header);
   const body = element('div', 'pm-tampon__body');
   if (state.loadingTampon) body.append(element('p', 'pm-tampon__muted', 'Chargement du tampon…'));
   else if (state.tamponError) body.append(element('p', 'pm-tampon__error', state.tamponError));
   else {
     const row = element('div', 'pm-tampon__row');
-    const previewWrap = element('div');
+    const previewWrap = element('div', 'pm-tampon__preview-wrap');
     const preview = element('div', 'pm-tampon__preview');
     const image = displayedImage(state);
     if (image) {
@@ -658,9 +700,30 @@ function renderPieces(state: ViewState): HTMLElement {
 function render(state: ViewState): void {
   const { root } = state;
   root.replaceChildren();
+  const toolbar = element('header', 'pm-tampon__toolbar');
+  toolbar.append(element('h1', 'pm-tampon__page-title piecemaker-display', 'Bordereau'));
+  const stampButton = button('', () => {
+    state.builderOpen = true;
+    render(state);
+    requestAnimationFrame(() => root.querySelector<HTMLElement>('.pm-tampon__dialog')?.focus());
+  }, 'piecemaker-button piecemaker-button--glass piecemaker-button--icon pm-tampon__stamp-trigger');
+  stampButton.setAttribute('aria-label', 'Configurer le tampon du cabinet');
+  stampButton.title = 'Configurer le tampon du cabinet';
+  stampButton.append(stampIcon());
+  toolbar.append(stampButton);
   const stack = element('div', 'pm-tampon__stack');
-  stack.append(renderBuilder(state), renderPieces(state));
-  root.append(stack);
+  stack.append(renderPieces(state));
+  root.append(toolbar, stack);
+  if (state.builderOpen) {
+    const overlay = element('div', 'pm-tampon__overlay');
+    overlay.addEventListener('click', (event) => {
+      if (event.target !== overlay) return;
+      state.builderOpen = false;
+      render(state);
+    });
+    overlay.append(renderBuilder(state));
+    root.append(overlay);
+  }
 }
 
 export function mount(container: HTMLElement, api: PluginAPI): void {
@@ -677,6 +740,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     disposed: false,
     unsubscribe: null,
     config: { ...DEFAULT_STAMP_CONFIG },
+    builderOpen: false,
     pendingImage: null,
     savedImage: cachedTampon ?? null,
     loadingTampon: cachedTampon === undefined,
@@ -704,6 +768,11 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     state.casesLoading = false;
   }
   mounted.set(container, state);
+  root.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !state.builderOpen) return;
+    state.builderOpen = false;
+    render(state);
+  });
   let currentProjectPath = projectPathOf(api);
   state.unsubscribe = api.onContextChange((context) => {
     if (state.disposed) return;
