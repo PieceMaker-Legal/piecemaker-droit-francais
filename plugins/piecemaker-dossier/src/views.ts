@@ -315,8 +315,7 @@ function chronologySection(title: string, hint: string, nodes: KnowledgeNode[], 
 function renderChronologySections(dated: KnowledgeNode[], undated: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[] = []): string {
   const total = dated.length + undated.length;
   if (!total) return '<div class="pmd-empty">Aucun document indexé.</div>';
-  const stats = `<div class="pmd-summary"><div class="pmd-metric"><strong>${total}</strong><span>pièce${total > 1 ? 's' : ''} indexée${total > 1 ? 's' : ''}</span></div><div class="pmd-metric"><strong>${dated.length}</strong><span>pièce${dated.length > 1 ? 's' : ''} datée${dated.length > 1 ? 's' : ''}</span></div><div class="pmd-metric"><strong>${undated.length}</strong><span>date${undated.length > 1 ? 's' : ''} à préciser</span></div></div>`;
-  return `${stats}${chronologySection('Documents datés', 'Classés du plus ancien au plus récent', dated, true, byId, links)}${chronologySection('Documents sans date', 'À compléter depuis la fiche de la pièce', undated, false, byId, links)}`;
+  return `${chronologySection('Documents datés', 'Classés du plus ancien au plus récent', dated, true, byId, links)}${chronologySection('Documents sans date', 'À compléter depuis la fiche de la pièce', undated, false, byId, links)}`;
 }
 
 export function chronologyView(data: ViewData): string {
