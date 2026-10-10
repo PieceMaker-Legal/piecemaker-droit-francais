@@ -5,7 +5,7 @@ import { escapeHtml } from './views.js';
 const LOCAL_MODEL_IDS: LocalModelId[] = ['gliner', 'mineru'];
 const LOCAL_MODEL_DETAILS: Record<LocalModelId, { label: string; detail: string }> = {
   gliner: { label: 'GLiNER2-PII', detail: 'Repère les données personnelles pour l’anonymisation · 1,2 Go (modèle)' },
-  mineru: { label: 'MinerU', detail: 'Lit les PDF scannés et les images (OCR) · 4,2 Go (0,9 Go de bibliothèques + 3,3 Go de modèles)' },
+  mineru: { label: 'MinerU', detail: 'Lit les PDF scannés et les images (OCR), une page à la fois et sans dépasser 35 % de la RAM · modèle MinerU2.5-Pro (1,24 Go) + modules de mise en page et d’OCR (0,86 Go)' },
 };
 const PROMPTED_KEY = 'piecemaker:local-models-offered';
 const INSTALL_POLL_INTERVAL_MS = 1500;

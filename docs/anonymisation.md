@@ -67,8 +67,20 @@ budget RAM, nice, timeout).
   (relance en `continue`). En `continue` (défaut, CLI compris), ces pièces
   passent par markitdown et leur entrée `converted` porte `"ocr": "missing"` ;
   dès que MinerU est disponible, elles sont reconverties puis réanalysées au
-  lancement suivant. MinerU est cherché dans le venv (`sysconfig` scripts),
-  jamais à côté de l'interpréteur système résolu.
+  lancement suivant. MinerU est détecté par ses paquets (`mineru`,
+  `mineru_llama_cpp`) dans le venv qui exécute le pipeline.
+- MinerU 4 (`mineru_improved_1.py`) : niveau `standard`, un seul modèle de
+  lecture, MinerU2.5-Pro (GGUF via llama.cpp), avec ses petits modules ONNX de
+  mise en page et d'OCR. Le PDF est découpé en PDF d'une page, et chaque page
+  est convertie dans son propre sous-processus, avec un moteur bridé :
+  1 requête à la fois, contexte de 8192, 4 threads, CPU seul, fenêtre d'une
+  page. Le superviseur mesure l'empreinte mémoire réelle du sous-processus
+  (`phys_footprint` sous macOS, qui compte aussi la mémoire compressée ;
+  la RSS ailleurs). Il le tue au-delà de 35 % de la RAM totale
+  (`PIECEMAKER_MINERU_RAM_BYTES`) ou si la mémoire libre du poste passe sous
+  5 % (`PIECEMAKER_MINERU_FREE_FLOOR_BYTES`). Le sous-processus d'une page
+  s'arrête de lui-même si son superviseur disparaît. Mesure sur une page
+  scannée fictive, Mac de 8 Go : pic de 2,0 Go, environ 60 s par page.
 - Phase SCAN : `scanner_worker.py` charge GLiNER2-PII (`fastino/gliner2-privacy-filter-PII-multi`) **une fois**,
   puis scanne chaque Markdown (protocole JSON-line). Les cartes brutes
   (`*_sensitive_map.json`) restent dans un répertoire temporaire et sont

@@ -150,6 +150,7 @@ export function removalPlan(appRoot, home = os.homedir(), env = process.env, pla
     ...macLibraryPaths(home, extra.appId, platform),
     ...componentModelPaths(home, env, platform, extra.mineru),
     paths.join(home, 'mineru.json'),
+    paths.join(home, '.mineru'),
     ...shortcuts,
   ], database, home, platform);
   const libraryHome = paths.resolve(dataHome);

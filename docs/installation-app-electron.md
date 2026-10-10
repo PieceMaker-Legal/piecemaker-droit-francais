@@ -161,8 +161,8 @@ si tout passe, 1 sinon.
 - le venv `<destination>/venv`, avec `requirements.txt` (MarkItDown, pypdf,
   GLiNER2).
 
-Les modèles locaux — le modèle GLiNER2-PII et MinerU (`mineru[pipeline,vlm]`
-et ses modèles *pipeline*) — s'installent à la demande depuis l'application :
+Les modèles locaux — le modèle GLiNER2-PII et MinerU 4 (`mineru==4.0.11`,
+modèle MinerU2.5-Pro en GGUF et modules ONNX de mise en page et d'OCR) — s'installent à la demande depuis l'application :
 l'onglet Dossier propose leur installation quand ils manquent, et
 Paramètres › Modèles locaux affiche leur état et permet de les supprimer ou de
 les réinstaller (routes `POST /api/piecemaker/configuration/install` et
@@ -170,7 +170,7 @@ les réinstaller (routes `POST /api/piecemaker/configuration/install` et
 
 `<destination>` est `PIECEMAKER_COMPONENTS_HOME`, ou `PIECEMAKER_HOME` si cette
 variable est absente. Elle ne contient que l'interpréteur et le venv. Les
-poids GLiNER restent dans le cache Hugging Face, et MinerU écrit `~/mineru.json`.
+poids GLiNER restent dans le cache Hugging Face, et ceux de MinerU dans `~/.mineru/models`.
 Le chemin du venv est enregistré dans `config.json` (`pythonPath`, `venvPath`) :
 c'est ce fichier que l'application lit. Déplacer le dossier de code ne demande
 que la ligne qui l'importe dans `desktop-bootstrap/lib/install.mjs` — il
@@ -305,7 +305,7 @@ Cet onglet retire tout ce que PieceMaker a installé ou écrit, sauf la base
   vidé de tout sauf `auth.db` : plugins, sauvegardes, journaux ;
 - les dossiers Electron (`userData`, `logs`, `crashDumps`) et, sur macOS, les
   préférences, caches, `HTTPStorages`, `WebKit` et `Saved Application State` de l'`appId` ;
-- les modèles GLiNER et MinerU et le fichier `mineru.json`.
+- les modèles GLiNER et MinerU (`~/.mineru`, et `mineru.json` d'une ancienne installation).
 
 Seuls les chemins situés sous le dossier personnel sont touchés ; un dossier
 qui contiendrait `auth.db` plus profondément (`DATABASE_PATH` personnalisé) est

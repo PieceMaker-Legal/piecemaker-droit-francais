@@ -8,7 +8,7 @@ const GLINER_MODEL_IDS = [
   'fastino/gliner2-multi-v1',
 ];
 const MINERU_MODEL_IDS = ['opendatalab/PDF-Extract-Kit-1.0'];
-const MINERU_PACKAGES = ['mineru'];
+const MINERU_PACKAGES = ['mineru', 'mineru-llama-cpp'];
 
 function huggingFaceHub(userHome, env = process.env) {
   const hfHome = env.HF_HOME || path.join(userHome, '.cache', 'huggingface');
@@ -54,6 +54,7 @@ function localModelRemovalTargets(component, { userHome, env = process.env, mine
       if (repo) targets.add(repo);
     }
     targets.add(path.join(userHome, 'mineru.json'));
+    targets.add(env.MINERU_HOME || path.join(userHome, '.mineru'));
   } else {
     throw new Error(`Modèle local inconnu : ${component}`);
   }

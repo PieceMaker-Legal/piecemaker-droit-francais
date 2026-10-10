@@ -29,6 +29,7 @@ test('la suppression de MinerU suit mineru.json sans sortir du dossier personnel
     path.join('/Users/ada', 'autre', 'models--opendatalab--PDF-Extract-Kit-1.0'),
     path.join('/Users/ada', 'hub', 'models--opendatalab--PDF-Extract-Kit-1.0'),
     path.join('/Users/ada', 'mineru.json'),
+    path.join('/Users/ada', '.mineru'),
   ].sort());
 });
 

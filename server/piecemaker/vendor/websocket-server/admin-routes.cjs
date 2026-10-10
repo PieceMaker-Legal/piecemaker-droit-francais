@@ -614,8 +614,9 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
   const glinerReady = fs.existsSync(path.join(glinerDir, 'scanner_worker.py'))
     && hasPackage('gliner2')
     && glinerModelReady;
-  const mineruReady = hasPackage('mineru') || hasPackage('magic_pdf')
-    || fs.existsSync(path.join(venvDir, 'bin', 'mineru'));
+  const mineruModels = path.join(process.env.MINERU_HOME || path.join(userHome, '.mineru'), 'models');
+  const mineruReady = hasPackage('mineru') && hasPackage('mineru_llama_cpp')
+    && ['MinerU-4_models_onnx', 'MinerU2.5-Pro-2605-1.2B-GGUF'].every((name) => fs.existsSync(path.join(mineruModels, name)));
   const folders = listProjectCases().map((entry) => ({
     id: entry.id,
     name: entry.name,
