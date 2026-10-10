@@ -139,7 +139,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
             {!expandedTab && !props.isMobile && <div
               role="separator" aria-label="Largeur des volets" aria-orientation="vertical"
               aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(dockWidth)} tabIndex={0}
-              className="piecemaker-workspace-divider"
+              className="piecemaker-workspace-divider is-dock-edge"
               onPointerDown={(event) => { event.preventDefault(); dividerCoordinateRef.current = event.clientX; event.currentTarget.setPointerCapture(event.pointerId); }}
               onPointerMove={moveDivider}
               onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
