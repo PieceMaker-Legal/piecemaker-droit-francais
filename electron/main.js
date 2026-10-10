@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, session, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -59,6 +59,12 @@ function getWindowIconPath() {
     return path.join(getAppRoot(), ...(product.windowIcon || 'electron/assets/logo-macos.png').split('/'));
   }
   return path.join(getAppRoot(), 'public', 'logo-512.png');
+}
+
+function updateDockIcon() {
+  if (process.platform !== 'darwin' || !app.dock) return;
+  const iconName = nativeTheme.shouldUseDarkColors ? 'logo-macos-dark.png' : 'logo-macos.png';
+  app.dock.setIcon(path.join(getAppRoot(), 'electron', 'assets', iconName));
 }
 
 function getStorePath() {
@@ -908,6 +914,8 @@ async function bootstrap() {
 
   await app.whenReady();
   app.setName(APP_NAME);
+  updateDockIcon();
+  nativeTheme.on('updated', updateDockIcon);
   app.setAboutPanelOptions({
     applicationName: APP_NAME,
     applicationVersion: app.getVersion(),
