@@ -64,9 +64,9 @@ const STATUS_LABEL: Record<CaseOriginalPiece['status'], string> = {
 };
 
 const STYLE_TEXT = `
-  .pm-tampon { min-height: 100%; height: 100%; overflow: auto; padding: clamp(12px, 3vw, 32px); box-sizing: border-box; color: hsl(var(--foreground, 222 47% 11%)); background: hsl(var(--background, 0 0% 100%)); font: 14px var(--piecemaker-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
+  .pm-tampon { min-height: 100%; height: 100%; display: flex; flex-direction: column; overflow: auto; padding: clamp(12px, 3vw, 32px); box-sizing: border-box; color: hsl(var(--foreground, 222 47% 11%)); background: hsl(var(--background, 0 0% 100%)); font: 14px var(--piecemaker-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
   .pm-tampon * { box-sizing: border-box; }
-  .pm-tampon__stack { max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+  .pm-tampon__stack { flex: 1; min-height: 0; width: 100%; max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
   .pm-tampon__toolbar { max-width: 56rem; margin: 0 auto 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .pm-tampon__page-title { margin: 0; font-family: var(--piecemaker-font-editorial, Georgia, serif); font-size: 1.5rem; font-weight: 500; }
   .pm-tampon__card { min-width: 0; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: 1rem; background: hsl(var(--card, 0 0% 100%)); box-shadow: none; }
@@ -339,14 +339,15 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: stri
 
 function stampIcon(): SVGSVGElement {
   const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   icon.setAttribute('viewBox', '0 0 24 24');
   icon.setAttribute('fill', 'none');
   icon.setAttribute('stroke', 'currentColor');
-  icon.setAttribute('stroke-width', '1.8');
+  icon.setAttribute('stroke-width', '2');
   icon.setAttribute('stroke-linecap', 'round');
   icon.setAttribute('stroke-linejoin', 'round');
   icon.setAttribute('aria-hidden', 'true');
-  icon.innerHTML = '<path d="M7 14V8a5 5 0 0 1 10 0v6"/><path d="M5 14h14l2 5H3l2-5Z"/><path d="M8 19v2h8v-2"/><path d="M9 9h6"/>';
+  icon.innerHTML = '<path d="M5 22h14"/><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"/><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-3-3c-1.66 0-3 1-3 3s1 2 1 3.5V13"/>';
   return icon;
 }
 
