@@ -56,6 +56,7 @@ from legal_forms import (
     extract_legal_form,
     resolve_company_occurrences,
 )
+from scan_utils import normalize_document_date
 
 
 EXIT_OCR_REQUIRED = 3
@@ -1231,6 +1232,7 @@ _PSEUDONYM = {
     "URL": "LIEN",
     "CRYPTO": "CRYPTO_ACTIF",
 }
+CHRONOLOGY_DATE_TYPES = ("DATE", "SENSITIVE_DATE", "DOCUMENT_DATE", "EXPIRATION_DATE", "TRANSACTION_DATE")
 _PHONE_INTERNATIONAL = re.compile(r"(?:\+|00)(?:33|262|590|594|596)(.*)", re.DOTALL)
 
 
@@ -1420,6 +1422,8 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
             }
             if category == "societes" and entity.get("legalForm"):
                 extracted_data[category][code]["legalForm"] = entity["legalForm"]
+            if entity_type in CHRONOLOGY_DATE_TYPES and normalize_document_date(text):
+                extracted_data[category][code]["doc_date_iso"] = normalize_document_date(text)
 
             # Parse addresses for partial anonymization
             if category == "adresses":
@@ -1718,6 +1722,8 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         }
         if old_entry.get("legalForm"):
             merged_extracted[category][new_code]["legalForm"] = old_entry["legalForm"]
+        if old_entry.get("doc_date_iso"):
+            merged_extracted[category][new_code]["doc_date_iso"] = old_entry["doc_date_iso"]
 
         # Parse addresses for partial anonymization (same logic as convert_to_anonymization_format)
         if category == "adresses":

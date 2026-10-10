@@ -202,6 +202,32 @@ describe('GLiNER result persistence', () => {
     expect(snapshot.nodes.find((node) => node.id === 'entity:SARL_02')?.kind).toBe('company');
   });
 
+  it('stores case dates for the chronology without masking them, and masks the birth date', () => {
+    const store = createStore();
+    store.mergeScan('project-1', scanResultOperations({
+      projectId: 'project-1',
+      mapping: {
+        mapping: { '2 novembre 2025': 'DATE_PIECE_01', '14 mars 1984': 'DATE_NAISSANCE_02', '3 mars 2026': 'DATE_03' },
+        extracted_data: {
+          autres: {
+            DATE_PIECE_01: { original: '2 novembre 2025', doc_date_iso: '2025-11-02' },
+            DATE_NAISSANCE_02: { original: '14 mars 1984' },
+            DATE_03: { original: '3 mars 2026', doc_date_iso: '2026-03-03' },
+          },
+        },
+      },
+      documents: [{ id: 'hash-1', name: 'Assignation.pdf', path: '/cases/one/Assignation.pdf', metadata: {}, entityCodes: ['DATE_PIECE_01'] }],
+    }));
+    const snapshot = store.snapshot('project-1');
+    const dateOf = (id: string) => snapshot.nodes.find((node) => node.id === id)?.date;
+    expect(dateOf('entity:DATE_PIECE_01')).toBe('2025-11-02');
+    expect(dateOf('entity:DATE_03')).toBe('2026-03-03');
+    expect(snapshot.nodes.find((node) => node.id === 'entity:DATE_NAISSANCE_02')).toBeDefined();
+    expect(snapshot.mappings.map((mapping) => [mapping.real, mapping.masked])).toEqual([['14 mars 1984', 'DATE_NAISSANCE_02']]);
+    const piece = store.query({ projectId: 'project-1', kind: 'document', query: 'assignation', depth: 1 }).matches[0];
+    expect(piece.links.some((link) => link.relation === 'mentions' && link.node?.id === 'entity:DATE_PIECE_01')).toBe(true);
+  });
+
   it('turns detected entities, mappings and documents into graph operations', () => {
     const operations = scanResultOperations({
       projectId: 'project-1',

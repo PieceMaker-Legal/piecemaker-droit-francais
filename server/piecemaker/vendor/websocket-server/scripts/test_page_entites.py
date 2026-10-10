@@ -377,6 +377,16 @@ class PageEntitesTests(unittest.TestCase):
         self.assertEqual(mapping["75011"], "CODE_POSTAL_10")
         self.assertNotIn("NAISSANCE", coded["extracted_data"])
 
+    def test_case_dates_carry_their_iso_date_and_the_birth_date_does_not(self):
+        coded = pipeline.convert_to_anonymization_format({"entities": {
+            "DOCUMENT_DATE": [{"text": "1er mars 2024", "score": 1, "recognizer": "GLiNER2Recognizer"}],
+            "DATE_OF_BIRTH": [{"text": "14 mars 1984", "score": 1, "recognizer": "GLiNER2Recognizer"}],
+        }})
+        merged = pipeline.merge_with_existing_mapping(coded, None, frozenset())
+        autres = merged["extracted_data"]["autres"]
+        self.assertEqual(autres["DATE_PIECE_01"]["doc_date_iso"], "2024-03-01")
+        self.assertNotIn("doc_date_iso", autres["DATE_NAISSANCE_02"])
+
     def test_company_mentions_keep_their_legal_form(self):
         result = _company_result(self.text)
         societes = result["extracted_data"]["societes"]

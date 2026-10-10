@@ -51,6 +51,7 @@ from pattern_detectors import Detection  # noqa: E402
 from scan_utils import (  # noqa: E402
     build_output_payload,
     build_pattern_recognizers,
+    normalize_document_date,
     print_summary,
     resolve_overlapping_spans,
     run_pattern_recognizers,
@@ -186,49 +187,6 @@ NATURE_LABELS = [
     "acte notarié", "bordereau de pièces", "autre",
 ]
 
-_FR_MONTHS = {
-    "janvier": 1, "février": 2, "fevrier": 2, "mars": 3, "avril": 4,
-    "mai": 5, "juin": 6, "juillet": 7, "août": 8, "aout": 8,
-    "septembre": 9, "octobre": 10, "novembre": 11,
-    "décembre": 12, "decembre": 12,
-}
-
-
-def normalize_document_date(raw: Optional[str]) -> Optional[str]:
-    """Return an ISO ``YYYY-MM-DD`` string for a French date, or None.
-
-    Handles the two forms a legal document uses — "14 mars 2023" and the numeric
-    "14/03/2023" / "14-03-2023" / "14.03.2023". A date that parses to ISO is what
-    lets the chronology sort documents; the raw span is kept alongside it for
-    display and for the (common) case where only a year or a partial date exists.
-    """
-    if not raw:
-        return None
-    text = str(raw).strip().lower()
-    # Already-ISO forms are the most common thing GLiNER returns ("2023-05-15",
-    # "2023/05/15"); test the unambiguous year-first shape before the day-first
-    # numeric one, which would otherwise never match it (\d{1,2} can't eat 2023).
-    iso = re.search(r"\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b", text)
-    if iso:
-        year, month, day = int(iso.group(1)), int(iso.group(2)), int(iso.group(3))
-        if 1 <= month <= 12 and 1 <= day <= 31:
-            return f"{year:04d}-{month:02d}-{day:02d}"
-    worded = re.search(r"(\d{1,2})\s+([a-zàâäéèêëîïôöûüç]+)\.?\s+(\d{4})", text)
-    if worded:
-        day, month_name, year = worded.group(1), worded.group(2), worded.group(3)
-        month = _FR_MONTHS.get(month_name)
-        if month and 1 <= int(day) <= 31:
-            return f"{int(year):04d}-{month:02d}-{int(day):02d}"
-    numeric = re.search(r"\b(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})\b", text)
-    if numeric:
-        day, month, year = int(numeric.group(1)), int(numeric.group(2)), int(numeric.group(3))
-        if year < 100:
-            year += 2000
-        if 1 <= month <= 12 and 1 <= day <= 31:
-            return f"{year:04d}-{month:02d}-{day:02d}"
-    return None
-
-
 def _document_header(text: str, max_words: int = DOC_META_HEADER_WORDS) -> str:
     words = text.split()
     if len(words) <= max_words:
@@ -291,8 +249,6 @@ def extract_document_meta(text: str) -> Dict:
     except Exception as exc:  # noqa: BLE001
         _log(f"document header record skipped: {exc}")
     return meta
-
-import re
 
 # ---------------------------------------------------------------------------
 # GLiNER2 Recognizer
