@@ -88,12 +88,19 @@ export async function commitAll(cwd: string, compose: (stagedChanges: string) =>
   return (await runGit(cwd, args)).code === 0;
 }
 
+// Dépôt vide (« Initialiser » de l'onglet Contrôle de source) : ni commit ni fichier indexé, rien à préserver.
+async function isEmptyRepo(cwd: string): Promise<boolean> {
+  if ((await runGit(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD'])).code === 0) return false;
+  const indexed = await runGit(cwd, ['ls-files']);
+  return indexed.code === 0 && !indexed.stdout.trim();
+}
+
 export async function ensureRepo(cwd: string): Promise<boolean> {
   const topLevel = await runGit(cwd, ['rev-parse', '--show-toplevel']);
   if (topLevel.code === -1) return false;
   if (topLevel.code === 0) {
     if (!(await samePath(topLevel.stdout.trim(), cwd))) return false;
-    if (!(await hasPieceMakerExclude(cwd))) return false;
+    if (!(await hasPieceMakerExclude(cwd)) && !(await isEmptyRepo(cwd))) return false;
   } else if ((await runGit(cwd, ['init', '--quiet'])).code !== 0) {
     return false;
   }

@@ -8,7 +8,13 @@ const MANUAL_SUBJECT = 'Modifications hors IA';
 const TURN_FALLBACK_SUBJECT = 'Tour IA';
 const INITIAL_SUBJECT = 'État initial du dossier';
 
-const truncate = (value: string, max: number) => (value.length > max ? `${value.slice(0, max - 1)}…` : value);
+// Coupe sur une frontière de mot : un nom tronqué (« Dupo… ») échapperait au mapping de hudsucker.
+function truncate(value: string, max: number): string {
+  if (value.length <= max) return value;
+  const head = value.slice(0, max);
+  const cut = head.search(/\s\S*$/u);
+  return `${(cut > 0 ? head.slice(0, cut) : head.slice(0, max - 1)).trimEnd()}…`;
+}
 
 const oneLine = (value: string) => value.replace(/\s+/g, ' ').trim();
 

@@ -19,11 +19,59 @@ export function installChatCitationHarness(options: {
   const getRunner = options.runtime.getRunner.bind(options.runtime);
   const fetchHistory = options.sessions.fetchHistory.bind(options.sessions);
 
+  // Providers sans harnais de citations (Cursor, OpenCode, Mistral) : seul l'historique du dossier.
+  const runWithFolderHistory = async (...[provider, command, runtimeOptions, writer, cwd]: [...Parameters<typeof run>, string]) => {
+    const history = options.folderHistory;
+    if (!history) return run(provider, command, runtimeOptions, writer);
+    let conclusion = '';
+    let streaming = false;
+    let interrupted = false;
+    let completionReceived = false;
+    let ended = false;
+    const end = () => {
+      if (ended) return;
+      ended = true;
+      history.end({ cwd, request: command, conclusion, aborted: interrupted || !completionReceived });
+    };
+    const wrapped = new Proxy(writer, {
+      get(target, key) {
+        if (key !== 'send') {
+          const value = Reflect.get(target, key, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        }
+        return (data: unknown) => {
+          const message = data as NormalizedMessage;
+          if (!message?.parentToolUseId) {
+            // Vibe, OpenCode et Cursor ne diffusent en direct que des deltas : on garde le dernier bloc de texte.
+            if (message?.kind === 'text' && message.role === 'assistant') conclusion = message.content ?? '';
+            else if (message?.kind === 'stream_delta') conclusion = streaming ? conclusion + (message.content ?? '') : message.content ?? '';
+            streaming = message?.kind === 'stream_delta' || (streaming && message?.kind !== 'tool_use' && message?.kind !== 'tool_result');
+          }
+          if (message?.kind === 'complete') {
+            completionReceived = true;
+            interrupted = message.aborted === true || (typeof message.exitCode === 'number' && message.exitCode !== 0);
+            end();
+          }
+          return target.send(data);
+        };
+      },
+    }) as ProviderRuntimeWriter;
+    history.begin(cwd);
+    try {
+      return await run(provider, command, runtimeOptions, wrapped);
+    } catch (error) {
+      interrupted = true;
+      throw error;
+    } finally {
+      end();
+    }
+  };
+
   options.runtime.run = async (provider, command, runtimeOptions, writer) => {
     options.ensureProxy();
-    if (provider !== 'claude' && provider !== 'codex') return run(provider, command, runtimeOptions, writer);
-    const sessionId = String(runtimeOptions.sessionId ?? '');
     const cwd = String(runtimeOptions.cwd ?? runtimeOptions.projectPath ?? '');
+    if (provider !== 'claude' && provider !== 'codex') return runWithFolderHistory(provider, command, runtimeOptions, writer, cwd);
+    const sessionId = String(runtimeOptions.sessionId ?? '');
     const turn = createCitationTurn({
       cwd, sessionId, store: options.store,
       emit: (citationEvent) => writer.send(createNormalizedMessage({

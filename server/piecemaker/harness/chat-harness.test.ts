@@ -156,3 +156,53 @@ test('historique du dossier : begin avant le tour, end avec la demande, la concl
     { begin: cwd }, 'run', { end: { cwd, request: 'Deuxième demande', conclusion: '', aborted: true } },
   ]);
 });
+
+test('historique du dossier : Cursor, OpenCode et Mistral aussi, sans instructions de citation', async (t) => {
+  const { store, sessions, cwd } = await setup(t, []);
+  const calls: unknown[] = [];
+  const runtime: Dependencies['runtime'] = {
+    run: async (provider, command, _options, writer) => {
+      calls.push({ run: provider, command });
+      if (provider === 'cursor') return;
+      writer.send(message({ kind: 'text', role: 'assistant', provider, content: 'Fait.' }));
+      writer.send(message({ kind: 'complete', provider, exitCode: provider === 'mistral' ? 1 : 0 }));
+    },
+    getRunner: () => async () => {},
+  };
+  installChatCitationHarness({
+    runtime, sessions, store, ensureProxy: () => {},
+    folderHistory: { begin: (folder) => calls.push({ begin: folder }), end: (turn) => calls.push({ end: turn }) },
+  });
+  const writer = { send: () => {} };
+  for (const provider of ['opencode', 'mistral', 'cursor'] as const) await runtime.run(provider, 'Demande', { cwd }, writer);
+  const end = (aborted: boolean, conclusion = 'Fait.') => ({ end: { cwd, request: 'Demande', conclusion, aborted } });
+  assert.deepEqual(calls, [
+    { begin: cwd }, { run: 'opencode', command: 'Demande' }, end(false),
+    { begin: cwd }, { run: 'mistral', command: 'Demande' }, end(true),
+    { begin: cwd }, { run: 'cursor', command: 'Demande' }, end(true, ''),
+  ]);
+});
+
+test('historique du dossier : conclusion reconstituée depuis les deltas, dernier bloc après les outils', async (t) => {
+  const { store, sessions, cwd } = await setup(t, []);
+  const ends: unknown[] = [];
+  const runtime: Dependencies['runtime'] = {
+    run: async (_provider, _command, _options, writer) => {
+      const delta = (content: string) => writer.send(message({ kind: 'stream_delta', provider: 'mistral', content }));
+      delta('Je crée ');
+      delta('le fichier.');
+      writer.send(message({ kind: 'tool_use', provider: 'mistral', toolName: 'write_file' }));
+      writer.send(message({ kind: 'tool_result', provider: 'mistral', content: 'ok' }));
+      delta('Fichier ');
+      delta('créé.');
+      writer.send(message({ kind: 'complete', provider: 'mistral', exitCode: 0 }));
+    },
+    getRunner: () => async () => {},
+  };
+  installChatCitationHarness({
+    runtime, sessions, store, ensureProxy: () => {},
+    folderHistory: { begin: () => {}, end: (turn) => ends.push(turn) },
+  });
+  await runtime.run('mistral', 'Demande', { cwd }, { send: () => {} });
+  assert.deepEqual(ends, [{ cwd, request: 'Demande', conclusion: 'Fichier créé.', aborted: false }]);
+});
