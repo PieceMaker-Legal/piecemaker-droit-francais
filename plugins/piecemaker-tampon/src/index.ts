@@ -96,7 +96,8 @@ const STYLE_TEXT = `
   .pm-tampon__list-column { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .pm-tampon__list { flex: 1; min-height: 0; min-width: 0; overflow: auto; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: .75rem; padding: 6px; }
   .pm-tampon__item { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; border: 1px solid transparent; border-radius: .5rem; padding: 6px 8px; background: transparent; height: auto; }
-  .pm-tampon__item[aria-pressed=true] { border-color: hsl(var(--foreground, 222 47% 11%) / 26%); background: hsl(var(--muted, 0 0% 93%)); }
+  .pm-tampon__item[aria-pressed=true] { border-color: #000; background: #000; color: #fff; }
+  .dark .pm-tampon__item[aria-pressed=true] { border-color: #fff; background: #fff; color: #000; }
   .pm-tampon__item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pm-tampon__hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
   .pm-tampon__overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(0 0 0 / 55%); }
