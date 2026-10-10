@@ -20,6 +20,7 @@ model loading overlaps with Phase 1 (document conversion).
 import contextlib
 import json
 import os
+import re
 import sys
 from collections import defaultdict
 from importlib.metadata import PackageNotFoundError, version as package_version
@@ -204,7 +205,29 @@ def _document_header(text: str, max_words: int = DOC_META_HEADER_WORDS) -> str:
     return " ".join(words[:max_words])
 
 
-def extract_document_meta(text: str) -> Dict:
+_DATING_FORMULA_RE = re.compile(
+    r"(?:(?i:fait)\s+(?i:à|a)\s+[^\n,]{1,40}?|\b[A-ZÀ-Ÿ][\w'’\-]+(?:[ \-][A-ZÀ-Ÿ][\w'’\-]+)*)"
+    r"\s*,?\s+(?i:le)\s+(\d{1,2}(?:er)?\s+[^\W\d_]+\.?\s+\d{4}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4})"
+)
+_NOT_DOCUMENT_DATES = ("TRANSACTION_DATE", "DATE_OF_BIRTH", "EXPIRATION_DATE")
+
+
+def _dating_formula_date(header: str) -> Optional[str]:
+    for match in _DATING_FORMULA_RE.finditer(header):
+        if normalize_document_date(match.group(1)):
+            return " ".join(match.group(1).split())
+    return None
+
+
+def _typed_as_other_date(raw_date: str, text: str, detections: List[Detection]) -> bool:
+    iso = normalize_document_date(raw_date)
+    return iso is not None and any(
+        d.entity_type in _NOT_DOCUMENT_DATES and normalize_document_date(text[d.start:d.end]) == iso
+        for d in detections
+    )
+
+
+def extract_document_meta(text: str, detections: List[Detection] = ()) -> Dict:
     """Classify the document's nature and pull its date + juridiction.
 
     One classify_text call (single-label nature) and one extract_json call (a
@@ -222,6 +245,10 @@ def extract_document_meta(text: str) -> Dict:
     header = _document_header(text)
     if not header.strip():
         return meta
+    dated = _dating_formula_date(header)
+    if dated:
+        meta["doc_date"] = dated
+        meta["doc_date_iso"] = normalize_document_date(dated)
     try:
         classified = _gliner_model.classify_text(
             header, {"nature_document": NATURE_LABELS},
@@ -250,10 +277,11 @@ def extract_document_meta(text: str) -> Dict:
         if items and isinstance(items[0], dict):
             dates = items[0].get("date_acte") or []
             courts = items[0].get("juridiction") or []
-            if dates:
+            if dates and not dated:
                 raw_date = str(dates[0]).strip().replace("\n", " ")
-                meta["doc_date"] = raw_date
-                meta["doc_date_iso"] = normalize_document_date(raw_date)
+                if not _typed_as_other_date(raw_date, text, list(detections)):
+                    meta["doc_date"] = raw_date
+                    meta["doc_date_iso"] = normalize_document_date(raw_date)
             if courts:
                 meta["juridiction"] = str(courts[0]).strip().replace("\n", " ")
     except Exception as exc:  # noqa: BLE001
@@ -448,7 +476,7 @@ def scan_file(md_file: str, output_dir: str) -> str:
     # pipeline reads it and persists only codes + non-PII fields. A failure here
     # must never lose a completed PII scan, hence the blanket guard.
     try:
-        payload["document_meta"] = extract_document_meta(text)
+        payload["document_meta"] = extract_document_meta(text, ner_results)
     except Exception as exc:  # noqa: BLE001
         _log(f"document_meta extraction skipped: {exc}")
         payload["document_meta"] = {}
