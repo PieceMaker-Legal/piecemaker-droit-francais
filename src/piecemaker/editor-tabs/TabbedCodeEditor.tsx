@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 import CodeEditor from '@/modules/code-editor/CodeEditor';
 import { resolveFileRef } from '@/piecemaker/chat/fileRef';
 import { CitationPanel } from '@/piecemaker/citations/CitationPanel';
+import { FileDocumentEditor } from '@/piecemaker/editor-tabs/FileDocumentEditor';
 import { IdentityTab } from '@/piecemaker/editor-tabs/IdentityTab';
 import { parseEditorPanel } from '@/piecemaker/editor-tabs/editorPanels';
 import type { CodeEditorFile } from '@/shared/types';
 
-type CodeEditorProps = ComponentProps<typeof CodeEditor>;
+type CodeEditorProps = ComponentProps<typeof CodeEditor> & { tabsTarget?: HTMLElement | null };
 
 const tabKey = (file: CodeEditorFile) => `${file.projectId ?? ''}\u0000${file.path}`;
 
@@ -49,7 +51,9 @@ function ResolvedCodeEditor({ props, file, onClose }: { props: CodeEditorProps; 
     );
     return props.isSidebar ? missing : <div className="fixed inset-0 z-[9999]">{missing}</div>;
   }
-  return <CodeEditor {...props} file={resolvedFile} onClose={onClose} />;
+  const { tabsTarget, ...editorProps } = props;
+  const Editor = tabsTarget ? FileDocumentEditor : CodeEditor;
+  return <Editor {...editorProps} file={resolvedFile} onClose={onClose} />;
 }
 
 function TabContent({ props, file, onClose }: { props: CodeEditorProps; file: CodeEditorFile; onClose: () => void }) {
@@ -62,7 +66,7 @@ function TabContent({ props, file, onClose }: { props: CodeEditorProps; file: Co
 }
 
 export default function TabbedCodeEditor(props: CodeEditorProps) {
-  const { file, onClose, isSidebar } = props;
+  const { file, onClose, isSidebar, tabsTarget } = props;
   const [openedFile, setOpenedFile] = useState(file);
   const [tabs, setTabs] = useState<CodeEditorFile[]>([file]);
   const [activeKey, setActiveKey] = useState(tabKey(file));
@@ -90,6 +94,31 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
 
   const content: ReactNode = <TabContent key={tabKey(active)} props={props} file={active} onClose={() => closeTab(tabKey(active))} />;
   if (!isSidebar) return content;
+
+  if (tabsTarget) {
+    return (
+      <>
+        {createPortal(<div role="tablist" aria-label="Documents ouverts" className="piecemaker-files-tabs">
+          {tabs.map((tab) => {
+            const key = tabKey(tab);
+            const selected = key === tabKey(active);
+            const label = tabLabel(tab);
+            return (
+              <div key={key} className="piecemaker-files-tab" data-selected={selected}>
+                <button type="button" role="tab" aria-selected={selected} title={label} onClick={() => setActiveKey(key)} onAuxClick={(event) => { if (event.button === 1) closeTab(key); }}>
+                  {label}
+                </button>
+                <button type="button" aria-label={`Fermer ${label}`} onClick={() => closeTab(key)}>
+                  <X />
+                </button>
+              </div>
+            );
+          })}
+        </div>, tabsTarget)}
+        {content}
+      </>
+    );
+  }
 
   return (
     <div className="flex h-full min-w-0 flex-col">
