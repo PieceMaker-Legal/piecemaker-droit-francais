@@ -13,6 +13,7 @@
 }
 
 .piecemaker-workspace-primary[hidden],
+.piecemaker-workspace-column[hidden],
 .piecemaker-workspace-panel[hidden] {
   display: none;
 }
@@ -25,74 +26,49 @@
   user-select: none;
 }
 
+.piecemaker-workspace-divider.is-horizontal {
+  width: 100%;
+  height: 6px;
+  cursor: row-resize;
+}
+
 .piecemaker-workspace-divider:focus-visible {
   outline: 1px solid hsl(var(--border));
 }
 
 .piecemaker-workspace-dock {
   display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 8px;
   padding: 8px;
   min-width: 0;
   min-height: 0;
   flex-shrink: 0;
   max-width: calc(100% - 6px);
-  overflow: auto;
+  overflow: hidden;
 }
 
 .piecemaker-workspace-dock.is-expanded {
   max-width: 100%;
 }
 
-.piecemaker-workspace-panel {
-  position: relative;
+.piecemaker-workspace-column {
   display: flex;
-  flex-shrink: 0;
   flex-direction: column;
-  width: 100%;
-  height: calc(50% - 4px);
-  min-width: min(96px, 100%);
-  max-width: 100%;
-  min-height: 160px;
-  max-height: 100%;
-  border-radius: 12px;
-  resize: vertical;
+  flex-basis: 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
-.piecemaker-workspace-panel-resize {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 14px;
-  width: 6px;
-  z-index: 10;
-  cursor: col-resize;
-  touch-action: none;
-  user-select: none;
-}
-
-.piecemaker-workspace-panel-resize:focus-visible {
-  outline: 1px solid hsl(var(--border));
-}
-
-.piecemaker-workspace-panel:only-child,
-.piecemaker-workspace-panel.is-expanded {
-  height: 100%;
-}
-
-.piecemaker-workspace-dock.has-columns:not(.is-expanded) > .piecemaker-workspace-panel {
-  width: calc(50% - 4px);
-}
-
-.piecemaker-workspace-panel.is-expanded {
-  width: 100% !important;
-  height: 100% !important;
-  resize: none;
+.piecemaker-workspace-panel {
+  display: flex;
+  flex-direction: column;
+  flex-basis: 0;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .piecemaker-workspace-panel-header {
@@ -133,9 +109,6 @@
 }
 
 @media (max-width: 640px) {
-  .piecemaker-workspace-dock.has-columns:not(.is-expanded) > .piecemaker-workspace-panel {
-    width: 100%;
-  }
   .piecemaker-workspace-dock:not(.is-expanded) {
     position: absolute;
     inset: 45% 0 0;
