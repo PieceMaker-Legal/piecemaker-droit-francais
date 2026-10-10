@@ -38,8 +38,9 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const [expanded, setExpanded] = useState<AppTab | null>(null);
     const [dockWidth, setDockWidth] = useState(48);
     const [panelWidths, setPanelWidths] = useState<Partial<Record<AppTab, number>>>({});
-    const panelResizeRef = useRef<{ tab: AppTab; x: number; width: number; direction: number } | null>(null);
+    const panelResizeRef = useRef<{ tab: AppTab; x: number; width: number } | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const dockRef = useRef<HTMLElement>(null);
     const enabledPanels = panels.filter((tab) => tab === 'tasks' ? tasksEnabled && isTaskMasterInstalled
       : tab === 'browser' ? browserEnabled
         : tab.startsWith('plugin:') ? plugins.some((plugin) => plugin.enabled && tab === `plugin:${plugin.name}`) : true);
@@ -74,12 +75,24 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     };
 
     const resizeDock = (event: PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
+    };
+    const setDockSize = (requestedPercent: number) => {
+      const percent = Math.max(0, Math.min(100, requestedPercent));
+      const availableWidth = containerRef.current?.getBoundingClientRect().width;
+      const currentWidth = dockRef.current?.getBoundingClientRect().width;
+      if (availableWidth && currentWidth && currentWidth > 16) {
+        const nextWidth = Math.min(availableWidth - 6, availableWidth * percent / 100);
+        const ratio = Math.max(0, nextWidth - 16) / (currentWidth - 16);
+        setPanelWidths((current) => Object.fromEntries(Object.entries(current).map(([tab, width]) => [tab, Math.max(96, width * ratio)])));
+      }
+      setDockWidth(percent);
     };
     const moveDivider = (event: PointerEvent<HTMLDivElement>) => {
       if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
       const rect = containerRef.current?.getBoundingClientRect();
-      if (rect?.width) setDockWidth(Math.max(0, Math.min(100, (rect.right - event.clientX) / rect.width * 100)));
+      if (rect?.width) setDockSize((rect.right - event.clientX) / rect.width * 100);
     };
 
     const resizePanel = (tab: AppTab, requestedWidth: number) => {
@@ -87,7 +100,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       if (!availableWidth) return;
       const width = Math.max(96, Math.min(availableWidth - 22, requestedWidth));
       setPanelWidths((current) => ({ ...current, [tab]: width }));
-      setDockWidth((current) => Math.max(current, (width + 22) / availableWidth * 100));
+      setDockWidth((current) => enabledPanels.length === 1 ? (width + 22) / availableWidth * 100 : Math.max(current, (width + 22) / availableWidth * 100));
     };
 
     return (
@@ -106,27 +119,27 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
                 event.preventDefault();
-                setDockWidth((width) => Math.max(0, Math.min(100, width + (event.key === 'ArrowLeft' ? 2 : -2))));
+                setDockSize(dockWidth + (event.key === 'ArrowLeft' ? 2 : -2));
               }}
             />}
-            <aside className={`piecemaker-workspace-dock ${expandedTab ? 'is-expanded' : ''} ${enabledPanels.length > 2 ? 'has-columns' : ''}`} style={{ width: expandedTab || props.isMobile ? '100%' : `${dockWidth}%` }} aria-label="Volets des outils">
+            <aside ref={dockRef} className={`piecemaker-workspace-dock ${expandedTab ? 'is-expanded' : ''} ${enabledPanels.length > 2 ? 'has-columns' : ''}`} style={{ width: expandedTab || props.isMobile ? '100%' : `${dockWidth}%` }} aria-label="Volets des outils">
               {enabledPanels.map((tab) => {
                 const plugin = plugins.find((item) => tab === `plugin:${item.name}`);
                 const label = plugin?.displayName ?? t(`tabs.${tab === 'tasks' ? 'library' : tab}`);
                 return <Card key={`${props.selectedProject!.projectId}:${tab}`} hidden={Boolean(expandedTab && expandedTab !== tab)} style={{ width: panelWidths[tab] }} className={`piecemaker-workspace-panel ${expandedTab === tab ? 'is-expanded' : ''}`}>
-                  {!expandedTab && [-1, 1].map((direction) => <div
-                    key={direction} role="separator" aria-orientation="vertical"
-                    aria-label={`Largeur ${label} ${direction === -1 ? 'bord gauche' : 'bord droit'}`}
-                    tabIndex={0} className={`piecemaker-workspace-panel-resize ${direction === -1 ? 'is-left' : 'is-right'}`}
+                  {!expandedTab && <div
+                    role="separator" aria-orientation="vertical"
+                    aria-label={`Largeur ${label} bord gauche`}
+                    tabIndex={0} className="piecemaker-workspace-panel-resize"
                     onPointerDown={(event) => {
                       event.preventDefault();
-                      panelResizeRef.current = { tab, x: event.clientX, width: event.currentTarget.parentElement!.getBoundingClientRect().width, direction };
+                      panelResizeRef.current = { tab, x: event.clientX, width: event.currentTarget.parentElement!.getBoundingClientRect().width };
                       event.currentTarget.setPointerCapture(event.pointerId);
                     }}
                     onPointerMove={(event) => {
                       const drag = panelResizeRef.current;
                       if (drag?.tab !== tab || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
-                      resizePanel(tab, drag.width + (event.clientX - drag.x) * drag.direction);
+                      resizePanel(tab, drag.width - (event.clientX - drag.x));
                     }}
                     onPointerUp={(event) => {
                       panelResizeRef.current = null;
@@ -136,9 +149,9 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                     onKeyDown={(event) => {
                       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
                       event.preventDefault();
-                      resizePanel(tab, event.currentTarget.parentElement!.getBoundingClientRect().width + (event.key === 'ArrowRight' ? 10 : -10));
+                      resizePanel(tab, event.currentTarget.parentElement!.getBoundingClientRect().width + (event.key === 'ArrowRight' ? -10 : 10));
                     }}
-                  />)}
+                  />}
                   <header className="piecemaker-workspace-panel-header">
                     <span className="truncate text-sm font-medium">{label}</span>
                     <button type="button" aria-label={`${expandedTab === tab ? 'Réduire' : 'Agrandir'} ${label}`} onClick={() => setExpanded(expandedTab === tab ? null : tab)}>{expandedTab === tab ? <Minimize2 /> : <Maximize2 />}</button>

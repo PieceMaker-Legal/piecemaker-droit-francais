@@ -174,8 +174,10 @@ avec cette fonction. Le composant CloudCLI reste intact : Chat ou Terminal
 reste la vue principale, tandis que les autres outils et plugins occupent des
 cards à droite. Plusieurs cards peuvent rester ouvertes, être redimensionnées,
 agrandies dans l'espace de travail ou fermées indépendamment.
-Chaque card possède des poignées sur ses bords gauche et droit pour régler sa
-largeur indépendamment. Le dock s'élargit si nécessaire, jusqu'à la largeur
+Chaque card possède une poignée sur son bord gauche pour régler sa largeur
+indépendamment, avec son bord droit ancré à droite. Un mouvement vers la droite
+réduit sa largeur. Le séparateur du dock adapte aussi les largeurs manuelles des
+cards, sans surlignage bleu. Le dock s'élargit si nécessaire, jusqu'à la largeur
 disponible de l'espace de travail ; sa séparation n'est plus limitée à 25–70 %.
 L'agrandissement masque les autres vues sans démonter leur contenu. Les fichiers ouverts depuis
 les volets utilisent la visionneuse existante.
