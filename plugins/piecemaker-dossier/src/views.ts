@@ -309,13 +309,14 @@ function chronologyEvent(node: KnowledgeNode, dated: boolean, byId: Map<string, 
 
 function chronologySection(title: string, hint: string, nodes: KnowledgeNode[], dated: boolean, byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
   if (!nodes.length) return '';
-  return `<section class="pmd-chronology-section"><div class="pmd-chronology-section-heading"><div><h3 class="piecemaker-display">${title}</h3><p>${hint}</p></div><span class="pmd-section-count">${nodes.length}</span></div><div class="pmd-timeline">${nodes.map((node) => chronologyEvent(node, dated, byId, links)).join('')}</div></section>`;
+  const heading = title ? `<div class="pmd-chronology-section-heading"><div><h3 class="piecemaker-display">${title}</h3><p>${hint}</p></div><span class="pmd-section-count">${nodes.length}</span></div>` : '';
+  return `<section class="pmd-chronology-section">${heading}<div class="pmd-timeline">${nodes.map((node) => chronologyEvent(node, dated, byId, links)).join('')}</div></section>`;
 }
 
 function renderChronologySections(dated: KnowledgeNode[], undated: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[] = []): string {
   const total = dated.length + undated.length;
   if (!total) return '<div class="pmd-empty">Aucun document indexé.</div>';
-  return `${chronologySection('Documents datés', 'Classés du plus ancien au plus récent', dated, true, byId, links)}${chronologySection('Documents sans date', 'À compléter depuis la fiche de la pièce', undated, false, byId, links)}`;
+  return `${chronologySection('', '', dated, true, byId, links)}${chronologySection('Documents sans date', 'À compléter depuis la fiche de la pièce', undated, false, byId, links)}`;
 }
 
 export function chronologyView(data: ViewData): string {
@@ -328,6 +329,6 @@ export function chronologyView(data: ViewData): string {
     .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
   return `
-    <div class="pmd-toolbar"><div><h2 class="pmd-title piecemaker-display">Chronologie</h2><div class="pmd-subtitle">Pièces du dossier, du plus ancien au plus récent</div></div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Rafraîchir</button></div>
+    <div class="pmd-toolbar"><div class="pmd-subtitle">Classés du plus ancien au plus récent</div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
     ${renderChronologySections(dated, undated, byId, data.graph.links)}`;
 }
