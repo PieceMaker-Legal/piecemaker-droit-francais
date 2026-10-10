@@ -37,6 +37,8 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const [panels, setPanels] = useState<AppTab[]>([]);
     const [expanded, setExpanded] = useState<AppTab | null>(null);
     const [dockWidth, setDockWidth] = useState(48);
+    const [panelWidths, setPanelWidths] = useState<Partial<Record<AppTab, number>>>({});
+    const panelResizeRef = useRef<{ tab: AppTab; x: number; width: number; direction: number } | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const enabledPanels = panels.filter((tab) => tab === 'tasks' ? tasksEnabled && isTaskMasterInstalled
       : tab === 'browser' ? browserEnabled
@@ -55,6 +57,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     useEffect(() => {
       setPanels([]);
       setExpanded(null);
+      setPanelWidths({});
     }, [props.selectedProject?.projectId]);
     useEffect(() => open(props.activeTab), [props.activeTab, props.selectedProject?.projectId, open]);
 
@@ -76,7 +79,15 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const moveDivider = (event: PointerEvent<HTMLDivElement>) => {
       if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
       const rect = containerRef.current?.getBoundingClientRect();
-      if (rect?.width) setDockWidth(Math.max(25, Math.min(70, (rect.right - event.clientX) / rect.width * 100)));
+      if (rect?.width) setDockWidth(Math.max(0, Math.min(100, (rect.right - event.clientX) / rect.width * 100)));
+    };
+
+    const resizePanel = (tab: AppTab, requestedWidth: number) => {
+      const availableWidth = containerRef.current?.getBoundingClientRect().width;
+      if (!availableWidth) return;
+      const width = Math.max(96, Math.min(availableWidth - 22, requestedWidth));
+      setPanelWidths((current) => ({ ...current, [tab]: width }));
+      setDockWidth((current) => Math.max(current, (width + 22) / availableWidth * 100));
     };
 
     return (
@@ -88,21 +99,46 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
           {!props.isLoading && props.selectedProject && enabledPanels.length > 0 && <>
             {!expandedTab && !props.isMobile && <div
               role="separator" aria-label="Largeur des volets" aria-orientation="vertical"
-              aria-valuemin={25} aria-valuemax={70} aria-valuenow={Math.round(dockWidth)} tabIndex={0}
+              aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(dockWidth)} tabIndex={0}
               className="piecemaker-workspace-divider"
               onPointerDown={resizeDock} onPointerMove={moveDivider}
               onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
                 event.preventDefault();
-                setDockWidth((width) => Math.max(25, Math.min(70, width + (event.key === 'ArrowLeft' ? 2 : -2))));
+                setDockWidth((width) => Math.max(0, Math.min(100, width + (event.key === 'ArrowLeft' ? 2 : -2))));
               }}
             />}
             <aside className={`piecemaker-workspace-dock ${expandedTab ? 'is-expanded' : ''} ${enabledPanels.length > 2 ? 'has-columns' : ''}`} style={{ width: expandedTab || props.isMobile ? '100%' : `${dockWidth}%` }} aria-label="Volets des outils">
               {enabledPanels.map((tab) => {
                 const plugin = plugins.find((item) => tab === `plugin:${item.name}`);
                 const label = plugin?.displayName ?? t(`tabs.${tab === 'tasks' ? 'library' : tab}`);
-                return <Card key={`${props.selectedProject!.projectId}:${tab}`} hidden={Boolean(expandedTab && expandedTab !== tab)} className={`piecemaker-workspace-panel ${expandedTab === tab ? 'is-expanded' : ''}`}>
+                return <Card key={`${props.selectedProject!.projectId}:${tab}`} hidden={Boolean(expandedTab && expandedTab !== tab)} style={{ width: panelWidths[tab] }} className={`piecemaker-workspace-panel ${expandedTab === tab ? 'is-expanded' : ''}`}>
+                  {!expandedTab && [-1, 1].map((direction) => <div
+                    key={direction} role="separator" aria-orientation="vertical"
+                    aria-label={`Largeur ${label} ${direction === -1 ? 'bord gauche' : 'bord droit'}`}
+                    tabIndex={0} className={`piecemaker-workspace-panel-resize ${direction === -1 ? 'is-left' : 'is-right'}`}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      panelResizeRef.current = { tab, x: event.clientX, width: event.currentTarget.parentElement!.getBoundingClientRect().width, direction };
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    }}
+                    onPointerMove={(event) => {
+                      const drag = panelResizeRef.current;
+                      if (drag?.tab !== tab || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                      resizePanel(tab, drag.width + (event.clientX - drag.x) * drag.direction);
+                    }}
+                    onPointerUp={(event) => {
+                      panelResizeRef.current = null;
+                      event.currentTarget.releasePointerCapture(event.pointerId);
+                    }}
+                    onPointerCancel={() => { panelResizeRef.current = null; }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                      event.preventDefault();
+                      resizePanel(tab, event.currentTarget.parentElement!.getBoundingClientRect().width + (event.key === 'ArrowRight' ? 10 : -10));
+                    }}
+                  />)}
                   <header className="piecemaker-workspace-panel-header">
                     <span className="truncate text-sm font-medium">{label}</span>
                     <button type="button" aria-label={`${expandedTab === tab ? 'Réduire' : 'Agrandir'} ${label}`} onClick={() => setExpanded(expandedTab === tab ? null : tab)}>{expandedTab === tab ? <Minimize2 /> : <Maximize2 />}</button>
