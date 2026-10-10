@@ -42,7 +42,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let scanJob: ScanJob | null = null;
   const bodaccStates = new Map<string, BodaccScanState>();
   let draggedNodeId = '';
-  let tiersCollapsed = false;
+  const compactWorkspace = window.matchMedia('(max-width: 1024px)');
+  let tiersCollapsed = compactWorkspace.matches;
 
   const showError = (error: unknown) => {
     const target = root.querySelector<HTMLElement>('[data-error]');
@@ -582,6 +583,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     paintContent();
   };
 
+  const syncTiersWithWorkspaceWidth = () => {
+    tiersCollapsed = compactWorkspace.matches;
+    render();
+  };
+  compactWorkspace.addEventListener('change', syncTiersWithWorkspaceWidth);
+
   let knownVersion: number | null = null;
   let refreshPending = false;
   let versionCheckRunning = false;
@@ -624,6 +631,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   });
   (container as HTMLElement & { pmdUnsubscribe?: () => void }).pmdUnsubscribe = () => {
     unsubscribe();
+    compactWorkspace.removeEventListener('change', syncTiersWithWorkspaceWidth);
     window.clearInterval(versionTimer);
   };
 }
