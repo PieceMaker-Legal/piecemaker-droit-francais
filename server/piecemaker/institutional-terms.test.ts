@@ -9,6 +9,7 @@ import Database from 'better-sqlite3';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { openInstitutionalTerms } from './institutional-terms.js';
+import { isInstitutionalEntity } from '../../plugins/piecemaker-dossier/src/institutional-terms.js';
 
 const applicationRoot = findApplicationRoot(getModuleDirectory(import.meta.url));
 
@@ -36,6 +37,18 @@ test('une base neuve sans liste reçoit la liste par défaut, recopiée dans le 
     assert.ok(terms.includes('Cour de cassation'));
     assert.ok(terms.includes('Code civil'));
     assert.deepEqual(mirroredTerms(file), terms);
+  });
+});
+
+test('la liste par défaut écarte les juridictions telles que la doctrine les cite, pas les parties', () => {
+  withTermsFile(() => {
+    openInstitutionalTerms(new Database(':memory:'), applicationRoot);
+    for (const court of ['Cass. civ. 1re', 'Cass. com.', 'Cons. const.', 'Civ. 3e', 'Crim.', 'CA Paris', 'CAA Lyon', 'TGI de Paris', 'Cour criminelle départementale de la Gironde', 'T. com. Lyon']) {
+      assert.ok(isInstitutionalEntity(court), court);
+    }
+    for (const party of ['Jean Dupont', 'Société Exemple SAS', 'Soc. Exemple', 'Calice SA', 'TJ Conseil', 'Lilas Com SARL', 'Premier président Paul Durand']) {
+      assert.ok(!isInstitutionalEntity(party), party);
+    }
   });
 });
 
