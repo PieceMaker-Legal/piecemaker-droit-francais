@@ -26,7 +26,7 @@ export function exclusionNodeOperation(values: unknown): KnowledgeUpdateOperatio
   return { op: 'upsertNode', node: { id: EXCLUSIONS_NODE_ID, kind: 'other', label: 'Exclusions GLiNER', data: { systemRole: 'gliner-exclusions', values: exclusions } } };
 }
 
-const UNMASKED_CODE_STEMS = new Set(['DATE', 'DATE_PIECE', 'DATE_SENSIBLE', 'DATE_ECHEANCE', 'DATE_OPERATION']);
+const UNMASKED_CODE_STEMS = new Set(['DATE', 'DATE_PIECE', 'DATE_SENSIBLE', 'DATE_ECHEANCE', 'DATE_OPERATION', 'VILLE', 'PAYS', 'REGION', 'CODE_POSTAL']);
 
 function isUnmaskedCode(code: string): boolean {
   return UNMASKED_CODE_STEMS.has(code.trim().toUpperCase().replace(/_\d+$/, ''));

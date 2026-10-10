@@ -744,26 +744,10 @@ def _merge_person_clusters(merged_mapping: Dict, merged_reverse: Dict, merged_ex
     return attached
 
 
-def is_known_city_or_country(text: str) -> bool:
-    """Check if text matches known city or country names.
-
-    Args:
-        text: Text to check
-
-    Returns:
-        True if text is a known city or country name
-    """
-    known_locations = {
-        'paris', 'lyon', 'marseille', 'toulouse', 'nice', 'nantes',
-        'bordeaux', 'lille', 'rennes', 'strasbourg', 'montpellier',
-        'reims', 'le havre', 'saint-étienne', 'toulon', 'grenoble',
-        'dijon', 'angers', 'nîmes', 'villeurbanne', 'clermont-ferrand',
-        'aix-en-provence', 'brest', 'limoges', 'tours', 'amiens',
-        'perpignan', 'metz', 'besançon', 'orléans', 'rouen',
-        'bruxelles', 'genève', 'lausanne', 'luxembourg',
-        'france', 'belgique', 'suisse', 'luxembourg'
-    }
-    return text.strip().lower() in known_locations
+_STREET_TYPE_RE = re.compile(
+    r"\b(?:rue|avenue|av|boulevard|bd|place|pl|chemin|allée|impasse|passage|quai|cours|route|voie|square)\b",
+    re.IGNORECASE,
+)
 
 
 def is_city_or_country_only(text: str) -> bool:
@@ -775,11 +759,7 @@ def is_city_or_country_only(text: str) -> bool:
     Returns:
         True if text appears to be only a city/country (no street address)
     """
-    # No digits = likely just city/country
-    if not re.search(r'\d', text):
-        # Check against known cities/countries
-        return is_known_city_or_country(text)
-    return False
+    return not re.search(r'\d', text) and not _STREET_TYPE_RE.search(text)
 
 
 def parse_address(address_text: str) -> Dict:
@@ -1437,6 +1417,7 @@ def convert_to_anonymization_format(consolidated_entities: Dict) -> Dict:
                         mapping.pop(variant, None)
                     left_visible.extend(variants)
                     reverse_mapping.pop(code, None)
+                    seen_entities.pop(seen_key, None)
                     del extracted_data[category][code]
                     counters[category] -= 1  # Revert counter
                 elif parsed_result.get("anonymization_strategy") == "partial":

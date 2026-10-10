@@ -387,6 +387,16 @@ class PageEntitesTests(unittest.TestCase):
         self.assertEqual(autres["DATE_PIECE_01"]["doc_date_iso"], "2024-03-01")
         self.assertNotIn("doc_date_iso", autres["DATE_NAISSANCE_02"])
 
+    def test_a_city_named_twice_stays_readable_and_takes_no_code(self):
+        places = ["Lyon", "12 rue des Lilas", "Vannes", "Lyon", "4 avenue des Tilleuls", "Vannes"]
+        coded = pipeline.convert_to_anonymization_format({"entities": {"LOCATION": [
+            {"text": place, "score": 1, "recognizer": "GLiNER2Recognizer"} for place in places
+        ]}})
+        self.assertEqual(coded["mapping"], {"12 rue des Lilas": "ADRESSE_01", "4 avenue des Tilleuls": "ADRESSE_02"})
+        self.assertEqual(coded["ignored"], ["Lyon", "Vannes"])
+        merged = pipeline.merge_with_existing_mapping(coded, None, frozenset())
+        self.assertEqual(set(merged["extracted_data"]["adresses"]), {"ADRESSE_01", "ADRESSE_02"})
+
     def test_company_mentions_keep_their_legal_form(self):
         result = _company_result(self.text)
         societes = result["extracted_data"]["societes"]
