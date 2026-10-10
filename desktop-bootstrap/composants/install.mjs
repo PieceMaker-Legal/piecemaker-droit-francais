@@ -14,7 +14,6 @@ const MIN_PYTHON_MINOR = 10;
 const MAX_PYTHON_MINOR = 13;
 const MAX_WINDOWS_PYTHON_MINOR = 12;
 const PROBE_TIMEOUT_MS = 15_000;
-const MINERU_SPEC = 'mineru[pipeline,vlm]==2.7.6';
 const REQUIRED_PACKAGES = ['gliner2', 'huggingface_hub', 'markitdown', 'pypdf'];
 
 const log = {
@@ -35,7 +34,6 @@ export function componentLayout(env = process.env, homeDir = os.homedir()) {
     pythonDir: path.join(root, 'python'),
     venvDir: path.join(root, 'venv'),
     configFile: path.join(dataHome, 'config.json'),
-    mineruConfig: path.join(homeDir, 'mineru.json'),
   };
 }
 
@@ -83,12 +81,6 @@ export function venvPythonPath(venvDir, platform) {
     : path.join(venvDir, 'bin', 'python');
 }
 
-export function venvScriptPath(venvDir, name, platform) {
-  return platform === 'win32'
-    ? path.join(venvDir, 'Scripts', `${name}.exe`)
-    : path.join(venvDir, 'bin', name);
-}
-
 export function selectPythonAsset(assets, platform, arch) {
   const triple = pythonTriple(platform, arch);
   if (!triple) return null;
@@ -121,28 +113,9 @@ export function dependenciesReady(status) {
   return REQUIRED_PACKAGES.every((name) => dependencies[name]);
 }
 
-export function glinerReady(status) {
-  return Boolean(status?.ready) && status?.gliner2_runtime?.boundary_capable !== false;
-}
-
-export function runtimeReady(status) {
-  return dependenciesReady(status) && glinerReady(status) && status?.tools?.mineru === true;
-}
-
 export function mergeRuntimeConfig(current, paths) {
   const base = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
   return { ...base, pythonPath: paths.pythonPath, venvPath: paths.venvPath };
-}
-
-export async function pipelineModelsReady(host, mineruConfig) {
-  if (!(await host.exists(mineruConfig))) return false;
-  try {
-    const config = JSON.parse(await host.readFile(mineruConfig));
-    const modelDir = config?.['models-dir']?.pipeline;
-    return Boolean(modelDir) && await host.exists(modelDir);
-  } catch {
-    return false;
-  }
 }
 
 export function createHost() {
@@ -328,7 +301,7 @@ export async function installRuntimeComponents({
     throw new Error(`Scripts Python introuvables dans ${scriptsDir}.`);
   }
 
-  output.step('Composants Python — GLiNER, MarkItDown, MinerU');
+  output.step('Composants Python — MarkItDown, GLiNER');
   let python = venvPythonPath(layout.venvDir, platform);
   const installedVersion = (await host.exists(python)) ? await readPythonVersion(host, python) : null;
   if (!pythonIsCompatible(installedVersion, platform)) {
@@ -340,44 +313,15 @@ export async function installRuntimeComponents({
     python = venvPythonPath(layout.venvDir, platform);
   }
 
-  let status = await readWarmupStatus(host, python, warmup, scriptsDir);
-  if (dependenciesReady(status)) {
+  if (dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
     output.ok('MarkItDown, GLiNER et les bibliothèques associées sont déjà installés.');
   } else {
     output.step('Installation des bibliothèques Python (MarkItDown, GLiNER)…');
     await required(host, python, ['-m', 'pip', 'install', '-U', 'pip']);
     await required(host, python, ['-m', 'pip', 'install', '--upgrade', '-r', requirements]);
-    status = null;
-  }
-
-  if (status?.tools?.mineru === true) {
-    output.ok('MinerU est déjà installé.');
-  } else {
-    output.step('Installation de MinerU…');
-    await required(host, python, ['-m', 'pip', 'install', MINERU_SPEC]);
-  }
-
-  if (await pipelineModelsReady(host, layout.mineruConfig)) {
-    output.ok('Modèles MinerU (pipeline) déjà présents.');
-  } else {
-    output.step('Téléchargement des modèles MinerU (pipeline)…');
-    const downloader = venvScriptPath(layout.venvDir, 'mineru-models-download', platform);
-    await required(host, downloader, ['-s', 'huggingface', '-m', 'pipeline'], {
-      env: { MINERU_MODEL_SOURCE: 'huggingface' },
-    });
-  }
-
-  status = await readWarmupStatus(host, python, warmup, scriptsDir);
-  if (glinerReady(status)) {
-    output.ok('Modèle GLiNER2-PII déjà présent.');
-  } else {
-    output.step('Téléchargement du modèle GLiNER2-PII…');
-    await required(host, python, [warmup], { cwd: scriptsDir });
-    status = await readWarmupStatus(host, python, warmup, scriptsDir);
-  }
-
-  if (!runtimeReady(status)) {
-    throw new Error('Les composants Python ne sont pas opérationnels après installation.');
+    if (!dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
+      throw new Error('Les composants Python ne sont pas opérationnels après installation.');
+    }
   }
 
   const next = mergeRuntimeConfig(await readConfig(host, layout.configFile), {

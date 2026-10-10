@@ -2,6 +2,7 @@ import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { removedAliasOperations } from './exclusions.js';
+import { offerLocalModels } from './local-models.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { chronologyView, escapeHtml, generalView, mappingView, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
@@ -602,6 +603,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   render();
   void load();
   void resumeScan();
+  void offerLocalModels(root);
   const unsubscribe = api.onContextChange((next) => {
     const changedProject = next.project?.name !== context.project?.name;
     const changedTheme = next.theme !== context.theme;

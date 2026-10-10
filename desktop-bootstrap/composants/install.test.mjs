@@ -10,20 +10,16 @@ import {
   componentLayout,
   createHost,
   dependenciesReady,
-  glinerReady,
   installRuntimeComponents,
   mergeRuntimeConfig,
   parsePythonVersion,
   parseStatus,
-  pipelineModelsReady,
   pythonIsCompatible,
   pythonTriple,
-  runtimeReady,
   scriptsDirectory,
   selectPythonAsset,
   systemPythonCandidates,
   venvPythonPath,
-  venvScriptPath,
 } from './install.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -38,7 +34,6 @@ function readyStatus() {
       markitdown: true,
       pypdf: true,
     },
-    tools: { mineru: true },
   };
 }
 
@@ -113,20 +108,16 @@ test('garde le venv déplaçable et la configuration au dossier de données', ()
   assert.equal(layout.venvDir, path.join('/opt/composants', 'venv'));
   assert.equal(layout.pythonDir, path.join('/opt/composants', 'python'));
   assert.equal(layout.configFile, path.join('/donnees', 'config.json'));
-  assert.equal(layout.mineruConfig, path.join('/Users/ada', 'mineru.json'));
   assert.equal(scriptsDirectory('/src'), path.join('/src', 'server', 'piecemaker', 'vendor', 'websocket-server', 'scripts'));
   assert.equal(venvPythonPath('/v', 'win32'), path.join('/v', 'Scripts', 'python.exe'));
   assert.equal(bundledPythonPath('/p', 'darwin'), path.join('/p', 'bin', 'python3'));
-  assert.equal(venvScriptPath('/v', 'mineru-models-download', 'darwin'), path.join('/v', 'bin', 'mineru-models-download'));
 });
 
 test('fusionne la configuration sans effacer les autres clés', () => {
   const merged = mergeRuntimeConfig({ theme: 'dark' }, { pythonPath: '/venv/bin/python', venvPath: '/venv' });
   assert.deepEqual(merged, { theme: 'dark', pythonPath: '/venv/bin/python', venvPath: '/venv' });
   assert.equal(dependenciesReady(readyStatus()), true);
-  assert.equal(glinerReady({ ready: true, gliner2_runtime: { boundary_capable: false } }), false);
-  assert.equal(runtimeReady(readyStatus()), true);
-  assert.equal(runtimeReady({ ...readyStatus(), tools: { mineru: false } }), false);
+  assert.equal(dependenciesReady({ ...readyStatus(), dependencies: { markitdown: true } }), false);
   assert.deepEqual(parseStatus('avertissement\n{"ready":true}'), { ready: true });
 });
 
@@ -144,14 +135,6 @@ test('lance les commandes hors d\'un dossier courant supprimé par l\'installati
   } finally {
     process.chdir(origin);
   }
-});
-
-test('installe la même version de MinerU que l\'installation à la demande depuis l\'application', () => {
-  const specOf = (file) => fs.readFileSync(file, 'utf8').match(/const MINERU_SPEC = '([^']+)'/)?.[1];
-  const desktop = specOf(path.join(root, 'install.mjs'));
-  const onDemand = specOf(path.join(root, '..', '..', 'server', 'piecemaker', 'vendor', 'installer', 'steps', '04-conversion-md.mjs'));
-  assert.ok(desktop);
-  assert.equal(onDemand, desktop);
 });
 
 test('l\'installeur Electron ne lance les composants que par une ligne', () => {
@@ -188,8 +171,6 @@ test('réutilise un environnement déjà complet et enregistre son interpréteur
     [python, ''],
     [`version:${python}`, 'Python 3.12.1'],
     ['warmup-status', JSON.stringify(readyStatus())],
-    [layout.mineruConfig, JSON.stringify({ 'models-dir': { pipeline: '/models/pipeline' } })],
-    ['/models/pipeline', ''],
     [layout.configFile, JSON.stringify({ theme: 'dark' })],
   ]);
   const host = memoryHost(files);
@@ -209,7 +190,7 @@ test('réutilise un environnement déjà complet et enregistre son interpréteur
   assert.equal(config.venvPath, layout.venvDir);
 });
 
-test('installe les bibliothèques, MinerU et le modèle quand l\'environnement est vide', async () => {
+test('installe les bibliothèques sans MinerU ni modèle quand l\'environnement est vide', async () => {
   const env = { PIECEMAKER_HOME: '/donnees' };
   const layout = componentLayout(env, '/Users/ada');
   const scripts = scriptsDirectory('/src');
@@ -225,7 +206,7 @@ test('installe les bibliothèques, MinerU et le modèle quand l\'environnement e
     const result = await baseRun(command, args, options);
     if (args.includes('--status')) {
       warmupCalls += 1;
-      if (warmupCalls < 3) return { code: 1, stdout: '', stderr: '' };
+      if (warmupCalls < 2) return { code: 1, stdout: '', stderr: '' };
       return { code: 0, stdout: JSON.stringify(readyStatus()), stderr: '' };
     }
     return result;
@@ -241,15 +222,7 @@ test('installe les bibliothèques, MinerU et le modèle quand l\'environnement e
   });
   const flat = host.commands.map((command) => command.join(' '));
   assert.ok(flat.some((line) => line.includes('pip install --upgrade -r')));
-  assert.ok(flat.some((line) => line.includes('mineru[pipeline,vlm]==2.7.6')));
-  assert.ok(flat.some((line) => line.includes('mineru-models-download -s huggingface -m pipeline')));
-  assert.ok(flat.some((line) => line.endsWith('warmup.py')));
+  assert.equal(flat.some((line) => line.includes('mineru')), false);
+  assert.equal(flat.some((line) => line.endsWith('warmup.py')), false);
   assert.equal(JSON.parse(files.get(layout.configFile)).pythonPath, venvPythonPath(layout.venvDir, 'darwin'));
-});
-
-test('ignore un dossier de modèles MinerU déclaré mais absent', async () => {
-  const host = memoryHost(new Map([
-    ['/Users/ada/mineru.json', JSON.stringify({ 'models-dir': { pipeline: '/absent' } })],
-  ]));
-  assert.equal(await pipelineModelsReady(host, '/Users/ada/mineru.json'), false);
 });

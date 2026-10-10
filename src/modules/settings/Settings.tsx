@@ -16,6 +16,7 @@ import TasksSettingsTab from '@/modules/settings/tabs/tasks-settings/TasksSettin
 import { PluginSettingsTab } from '@/modules/plugins';
 import AboutTab from '@/modules/settings/tabs/AboutTab';
 import { DesktopUninstallTab } from '@/piecemaker/desktop/DesktopUninstallTab';
+import { LocalModelsSettingsTab } from '@/piecemaker/local-models/LocalModelsSettingsTab';
 import { useSettingsController } from '@/modules/settings/hooks/useSettingsController';
 import { useWebPush } from '@/modules/settings/hooks/useWebPush';
 import type { AgentSettingsProject } from '@/shared/types';
@@ -225,6 +226,8 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
               {activeTab === 'voice' && <VoiceSettingsTab />}
 
               {activeTab === 'plugins' && <PluginSettingsTab />}
+
+              {activeTab === 'localModels' && <LocalModelsSettingsTab />}
 
               {activeTab === 'about' && <AboutTab />}
             </div>
