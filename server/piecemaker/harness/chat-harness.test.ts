@@ -149,11 +149,11 @@ test('historique du dossier : begin avant le tour, end avec la demande, la concl
     folderHistory: { begin: (folder) => calls.push({ begin: folder }), end: (turn) => calls.push({ end: turn }) },
   });
   const writer = { send: () => {} };
-  await runtime.run('claude', 'Mets à jour les notes', { cwd, sessionId: 'session' }, writer);
+  await runtime.run('claude', 'Mets à jour les notes', { cwd, sessionId: 'session', model: 'opus' }, writer);
   await runtime.run('claude', 'Deuxième demande', { cwd, sessionId: 'session' }, writer);
   assert.deepEqual(calls, [
-    { begin: cwd }, 'run', { end: { cwd, request: 'Mets à jour les notes', conclusion: 'J’ai mis à jour les notes.', aborted: false } },
-    { begin: cwd }, 'run', { end: { cwd, request: 'Deuxième demande', conclusion: '', aborted: true } },
+    { begin: cwd }, 'run', { end: { cwd, request: 'Mets à jour les notes', conclusion: 'J’ai mis à jour les notes.', aborted: false, author: { name: 'Claude opus', email: 'claude@localhost' } } },
+    { begin: cwd }, 'run', { end: { cwd, request: 'Deuxième demande', conclusion: '', aborted: true, author: { name: 'Claude', email: 'claude@localhost' } } },
   ]);
 });
 
@@ -174,12 +174,12 @@ test('historique du dossier : Cursor, OpenCode et Mistral aussi, sans instructio
     folderHistory: { begin: (folder) => calls.push({ begin: folder }), end: (turn) => calls.push({ end: turn }) },
   });
   const writer = { send: () => {} };
-  for (const provider of ['opencode', 'mistral', 'cursor'] as const) await runtime.run(provider, 'Demande', { cwd }, writer);
-  const end = (aborted: boolean, conclusion = 'Fait.') => ({ end: { cwd, request: 'Demande', conclusion, aborted } });
+  for (const provider of ['opencode', 'mistral', 'cursor'] as const) await runtime.run(provider, 'Demande', { cwd, model: provider === 'mistral' ? 'mistral-medium-latest' : undefined }, writer);
+  const end = (aborted: boolean, name: string, email: string, conclusion = 'Fait.') => ({ end: { cwd, request: 'Demande', conclusion, aborted, author: { name, email } } });
   assert.deepEqual(calls, [
-    { begin: cwd }, { run: 'opencode', command: 'Demande' }, end(false),
-    { begin: cwd }, { run: 'mistral', command: 'Demande' }, end(true),
-    { begin: cwd }, { run: 'cursor', command: 'Demande' }, end(true, ''),
+    { begin: cwd }, { run: 'opencode', command: 'Demande' }, end(false, 'OpenCode', 'opencode@localhost'),
+    { begin: cwd }, { run: 'mistral', command: 'Demande' }, end(true, 'Mistral mistral-medium-latest', 'mistral@localhost'),
+    { begin: cwd }, { run: 'cursor', command: 'Demande' }, end(true, 'Cursor', 'cursor@localhost', ''),
   ]);
 });
 
@@ -204,5 +204,5 @@ test('historique du dossier : conclusion reconstituée depuis les deltas, dernie
     folderHistory: { begin: () => {}, end: (turn) => ends.push(turn) },
   });
   await runtime.run('mistral', 'Demande', { cwd }, { send: () => {} });
-  assert.deepEqual(ends, [{ cwd, request: 'Demande', conclusion: 'Fichier créé.', aborted: false }]);
+  assert.deepEqual(ends, [{ cwd, request: 'Demande', conclusion: 'Fichier créé.', aborted: false, author: { name: 'Mistral', email: 'mistral@localhost' } }]);
 });

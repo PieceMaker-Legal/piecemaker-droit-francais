@@ -6,6 +6,9 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { createFolderHistory } from './history.js';
+import { agentIdentity } from './identity.js';
+
+const AGENT = agentIdentity('mistral', 'mistral-medium-latest');
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -44,11 +47,13 @@ test('premier tour : état initial, puis un commit de tour ne contenant que le f
   history.begin(folder);
   await history.idle();
   write(folder, 'notes.md', 'v2');
-  history.end({ cwd: folder, request: 'Mets à jour les notes', conclusion: 'J’ai mis à jour les notes.', aborted: false });
+  history.end({ cwd: folder, request: 'Mets à jour les notes', conclusion: 'J’ai mis à jour les notes.', aborted: false, author: AGENT });
   await history.idle();
   assert.deepEqual(subjects(folder), ['État initial du dossier', 'Mets à jour les notes']);
   assert.deepEqual(filesOf(folder), ['notes.md']);
-  assert.equal(git(folder, 'log', '-1', '--format=%an <%ae>|%b'), 'PieceMaker <commits@piecemaker.local>|J’ai mis à jour les notes.');
+  assert.equal(git(folder, 'log', '-1', '--format=%an <%ae>|%cn|%b'), 'Mistral mistral-medium-latest <mistral@localhost>|Mistral mistral-medium-latest|J’ai mis à jour les notes.');
+  const { username } = os.userInfo();
+  assert.equal(git(folder, 'log', '-1', '--format=%an <%ae>', 'HEAD~1'), `${username} <${username}@localhost>`);
   assert.equal(git(folder, 'remote'), '');
 });
 
@@ -56,13 +61,13 @@ test('fichier déjà modifié avant le tour puis modifié par le tour : commit h
   const folder = makeFolder(t, { 'notes.md': 'v1' });
   const history = makeHistory(t);
   history.begin(folder);
-  history.end({ cwd: folder, request: 'Rien', conclusion: '', aborted: false });
+  history.end({ cwd: folder, request: 'Rien', conclusion: '', aborted: false, author: AGENT });
   await history.idle();
   write(folder, 'notes.md', 'v2 avocat');
   history.begin(folder);
   await history.idle();
   write(folder, 'notes.md', 'v3 IA');
-  history.end({ cwd: folder, request: 'Complète les notes', conclusion: 'Fait.', aborted: false });
+  history.end({ cwd: folder, request: 'Complète les notes', conclusion: 'Fait.', aborted: false, author: AGENT });
   await history.idle();
   assert.deepEqual(subjects(folder), ['État initial du dossier', 'Modifications hors IA', 'Complète les notes']);
   assert.equal(git(folder, 'show', 'HEAD~1:notes.md'), 'v2 avocat');
@@ -80,7 +85,7 @@ test('mappings, état PieceMaker et verrous Word ne sont jamais versionnés', as
   });
   const history = makeHistory(t);
   history.begin(folder);
-  history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false });
+  history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false, author: AGENT });
   await history.idle();
   assert.equal(git(folder, 'ls-files'), 'notes.md');
 });
@@ -97,7 +102,7 @@ test('dossier dans un dépôt parent ou dépôt créé par l’utilisateur : rie
   for (const folder of [nested, own]) {
     history.begin(folder);
     write(folder, 'notes.md', 'modifié');
-    history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false });
+    history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false, author: AGENT });
   }
   await history.idle();
   for (const folder of [parent, own]) {
@@ -113,7 +118,7 @@ test('dépôt vide créé avant PieceMaker (« Initialiser ») : repris et versi
   history.begin(folder);
   await history.idle();
   write(folder, 'notes.md', 'v2');
-  history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false });
+  history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false, author: AGENT });
   await history.idle();
   assert.deepEqual(subjects(folder), ['État initial du dossier', 'Tour']);
 });
@@ -122,11 +127,11 @@ test('tour aborté ou sans écriture : aucun commit de tour', async (t) => {
   const folder = makeFolder(t, { 'notes.md': 'v1' });
   const history = makeHistory(t);
   history.begin(folder);
-  history.end({ cwd: folder, request: 'Sans écriture', conclusion: '', aborted: false });
+  history.end({ cwd: folder, request: 'Sans écriture', conclusion: '', aborted: false, author: AGENT });
   history.begin(folder);
   await history.idle();
   write(folder, 'notes.md', 'écrit avant l’abandon');
-  history.end({ cwd: folder, request: 'Aborté', conclusion: '', aborted: true });
+  history.end({ cwd: folder, request: 'Aborté', conclusion: '', aborted: true, author: AGENT });
   await history.idle();
   assert.deepEqual(subjects(folder), ['État initial du dossier']);
 });
@@ -139,7 +144,7 @@ test('performance : begin et end rendent la main immédiatement pendant un commi
   const history = makeHistory(t);
   const started = performance.now();
   history.begin(folder);
-  history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false });
+  history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false, author: AGENT });
   assert.ok(performance.now() - started < 5, `${performance.now() - started} ms`);
   await history.idle();
   assert.deepEqual(subjects(folder), ['État initial du dossier']);
@@ -149,7 +154,7 @@ test('surveillance : ajouts et modifications de l’avocat regroupés en un seul
   const folder = makeFolder(t, { 'notes.md': 'v1' });
   const history = makeHistory(t, { idleDelayMs: 300 });
   history.begin(folder);
-  history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false });
+  history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false, author: AGENT });
   await history.idle();
   history.syncFolders([folder]);
   await pause(100);
@@ -174,7 +179,7 @@ test('surveillance : une écriture pendant un tour actif va dans le commit du to
   await pause(100);
   write(folder, 'notes.md', 'v2 IA');
   await pause(600);
-  history.end({ cwd: folder, request: 'Tour IA fictif', conclusion: '', aborted: false });
+  history.end({ cwd: folder, request: 'Tour IA fictif', conclusion: '', aborted: false, author: AGENT });
   await history.idle();
   await pause(400);
   await history.idle();
@@ -186,7 +191,7 @@ test('rattrapage au démarrage : les modifications faites serveur arrêté sont 
   const untouched = makeFolder(t, { 'notes.md': 'jamais versionné' });
   const first = makeHistory(t);
   first.begin(folder);
-  first.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false });
+  first.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false, author: AGENT });
   await first.idle();
   first.close();
   write(folder, 'notes.md', 'modifié pendant l’arrêt');

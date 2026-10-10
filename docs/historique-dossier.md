@@ -14,7 +14,7 @@ Code : `server/piecemaker/folder-history/`. Branchement : une option `folderHist
 | Modification faite par l'avocat (Word, Finder, éditeur), après 2 min sans nouvelle écriture | `Modifications hors IA` | idem |
 | 30 s après le démarrage du serveur, pour les dossiers déjà versionnés | `Modifications hors IA` | idem (ce qui a été fait app fermée) |
 
-Auteur : `PieceMaker <commits@piecemaker.local>`. Cette identité est imposée par variables d'environnement, ce qui rend les réglages Git inutiles. Les options `commit.gpgsign=false` et `--no-verify` sont appliquées à chaque commit.
+Auteur, imposé par variables d'environnement (les réglages Git du dossier sont inutiles) : pour un tour IA, le provider et le modèle de la session (`Claude opus <claude@localhost>`, `Codex gpt-5.5 <codex@localhost>`, `Mistral mistral-medium-latest <mistral@localhost>`, sans modèle s'il n'est pas transmis) ; pour l'état initial et les « Modifications hors IA », l'utilisateur (`user.name` / `user.email` du Git global, à défaut le nom de session de l'ordinateur et `<nom>@localhost`). Le serveur fait tous les commits, l'IA n'en signe aucun. Les options `commit.gpgsign=false` et `--no-verify` sont appliquées à chaque commit.
 
 ## Performance
 
