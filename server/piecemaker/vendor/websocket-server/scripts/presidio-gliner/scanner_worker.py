@@ -123,6 +123,11 @@ ENTITY_MAPPING = {
     "ip_address": "IP_ADDRESS",
     "account_id": "IDENTIFIANT_COMPTE",
     "sensitive_account_id": "IDENTIFIANT_SENSIBLE",
+    "password": "MOT_DE_PASSE",
+    "secret": "SECRET",
+    "api_key": "CLE_API",
+    "access_token": "JETON_ACCES",
+    "recovery_code": "CODE_RECUPERATION",
 }
 
 ENTITY_DESCRIPTIONS = {
@@ -162,6 +167,11 @@ ENTITY_DESCRIPTIONS = {
     "ip_address": None,
     "account_id": None,
     "sensitive_account_id": None,
+    "password": None,
+    "secret": None,
+    "api_key": None,
+    "access_token": None,
+    "recovery_code": None,
 }
 
 GLINER_THRESHOLD = 0.5
