@@ -5,31 +5,21 @@ const size = 1024;
 const assetsDir = 'electron/assets';
 const iconPath = 'electron/assets/logo-macos.png';
 const icnsPath = 'electron/assets/logo-macos.icns';
+const lightLogoPath = 'public/logo-sources/logo-black.png';
+const darkLogoPath = 'public/logo-sources/logo-white.png';
+const darkIconPath = 'electron/assets/logo-macos-dark.png';
 
-function renderSvg(entrySize) {
-  const scale = entrySize / 32;
+async function renderPng(entrySize, logoPath, background) {
+  const logo = (await fs.readFile(logoPath)).toString('base64');
   return `
-<svg xmlns="http://www.w3.org/2000/svg" width="${entrySize}" height="${entrySize}" viewBox="0 0 ${entrySize} ${entrySize}">
-  <rect width="${entrySize}" height="${entrySize}" fill="#2563eb"/>
-  <path
-    d="M${8 * scale} ${9 * scale}C${8 * scale} ${8.44772 * scale} ${8.44772 * scale} ${8 * scale} ${9 * scale} ${8 * scale}H${23 * scale}C${23.5523 * scale} ${8 * scale} ${24 * scale} ${8.44772 * scale} ${24 * scale} ${9 * scale}V${18 * scale}C${24 * scale} ${18.5523 * scale} ${23.5523 * scale} ${19 * scale} ${23 * scale} ${19 * scale}H${12 * scale}L${8 * scale} ${23 * scale}V${9 * scale}Z"
-    stroke="white"
-    stroke-width="${2 * scale}"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    fill="none"
-  />
-</svg>`;
-}
-
-async function renderPng(entrySize) {
-  return sharp(Buffer.from(renderSvg(entrySize)))
-    .png()
-    .toBuffer();
+<svg xmlns="http://www.w3.org/2000/svg" width="${entrySize}" height="${entrySize}" viewBox="0 0 ${entrySize} ${entrySize}"><rect width="${entrySize}" height="${entrySize}" fill="${background}"/><image href="data:image/png;base64,${logo}" width="${entrySize}" height="${entrySize}" preserveAspectRatio="none"/></svg>`;
 }
 
 await fs.mkdir(assetsDir, { recursive: true });
-await fs.writeFile(iconPath, await renderPng(size));
+const lightIcon = await renderPng(size, lightLogoPath, '#ffffff');
+const darkIcon = await renderPng(size, darkLogoPath, '#111111');
+await fs.writeFile(iconPath, await sharp(Buffer.from(lightIcon)).png().toBuffer());
+await fs.writeFile(darkIconPath, await sharp(Buffer.from(darkIcon)).png().toBuffer());
 
 const icnsEntries = [
   ['icp4', 16],
@@ -46,7 +36,7 @@ const icnsEntries = [
 ];
 
 const blocks = await Promise.all(icnsEntries.map(async ([type, entrySize]) => {
-  const png = await renderPng(entrySize);
+  const png = await sharp(Buffer.from(await renderPng(entrySize, lightLogoPath, '#ffffff'))).png().toBuffer();
   const block = Buffer.alloc(8 + png.length);
   block.write(type, 0, 4, 'ascii');
   block.writeUInt32BE(block.length, 4);
