@@ -11,7 +11,7 @@ import BranchesView from '@/modules/git-panel/branches/BranchesView';
 import WorktreesView from '@/modules/git-panel/worktrees/WorktreesView';
 import GitPanelHeader from '@/modules/git-panel/GitPanelHeader';
 import GitRepositoryErrorState from '@/modules/git-panel/GitRepositoryErrorState';
-import GitViewTabs from '@/modules/git-panel/GitViewTabs';
+import { GitViewTabs, INITIAL_GIT_VIEW } from '@/modules/piecemaker-git-panel';
 import ConfirmActionModal from '@/modules/git-panel/modals/ConfirmActionModal';
 
 type GitPanelProps = {
@@ -33,7 +33,7 @@ export default function GitPanel({
   onProjectsRefresh,
 }: GitPanelProps) {
   const { t } = useTranslation();
-  const [activeView, setActiveView] = useState<GitPanelView>('changes');
+  const [activeView, setActiveView] = useState<GitPanelView>(INITIAL_GIT_VIEW);
   const [wrapText, setWrapText] = useState(true);
   const [hasExpandedFiles, setHasExpandedFiles] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmationRequest | null>(null);
