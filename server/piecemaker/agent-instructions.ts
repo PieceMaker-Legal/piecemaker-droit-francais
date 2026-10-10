@@ -1,5 +1,5 @@
-import { constants, watch, type FSWatcher } from 'fs';
-import { copyFile, lstat, readFile, realpath, rename, stat, writeFile } from 'fs/promises';
+import { watch, type FSWatcher } from 'fs';
+import { copyFile, lstat, readFile, readlink, realpath, rename, rm, symlink, writeFile } from 'fs/promises';
 import path from 'path';
 
 import express, { type Request, type Response } from 'express';
@@ -31,47 +31,87 @@ export function agentInstructionsTemplate(sharedInstructionsFile: string): strin
   ].join('\n');
 }
 
+async function readIfRegularFile(filePath: string): Promise<Buffer | null> {
+  return (await lstat(filePath)).isFile() ? readFile(filePath) : null;
+}
+
+async function isLinkTo(linkPath: string, targetPath: string): Promise<boolean> {
+  try {
+    if (!(await lstat(linkPath)).isSymbolicLink()) return false;
+    return path.resolve(path.dirname(linkPath), await readlink(linkPath)) === targetPath;
+  } catch {
+    return false;
+  }
+}
+
+async function replaceAtomically(targetPath: string, create: (temporaryPath: string) => Promise<void>): Promise<void> {
+  const temporaryPath = `${targetPath}.piecemaker-${process.pid}.tmp`;
+  await rm(temporaryPath, { force: true });
+  await create(temporaryPath);
+  await rename(temporaryPath, targetPath);
+}
+
+let symlinksSupported = true;
+
+async function pointClaudeAtAgents(projectRoot: string): Promise<void> {
+  const claudePath = path.join(projectRoot, CLAUDE_FILE);
+  const agentsPath = path.join(projectRoot, AGENTS_FILE);
+  if (symlinksSupported) {
+    try {
+      await replaceAtomically(claudePath, (temporaryPath) => symlink(AGENTS_FILE, temporaryPath, 'file'));
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
+      symlinksSupported = false;
+    }
+  }
+  await replaceAtomically(claudePath, (temporaryPath) => copyFile(agentsPath, temporaryPath));
+}
+
 export async function ensureAgentInstructionFiles(projectRoot: string, sharedInstructionsFile: string): Promise<string[]> {
   const claudePath = path.join(projectRoot, CLAUDE_FILE);
   const agentsPath = path.join(projectRoot, AGENTS_FILE);
   const [hasClaude, hasAgents] = await Promise.all([isPresent(claudePath), isPresent(agentsPath)]);
-  if (hasClaude && hasAgents) return [];
-  if (hasClaude) {
-    await copyFile(claudePath, agentsPath, constants.COPYFILE_EXCL);
-    return [AGENTS_FILE];
+  const created: string[] = [];
+  if (!hasAgents) {
+    const content = hasClaude ? await readFile(claudePath) : agentInstructionsTemplate(sharedInstructionsFile);
+    await writeFile(agentsPath, content, { flag: 'wx' });
   }
-  if (hasAgents) {
-    await copyFile(agentsPath, claudePath, constants.COPYFILE_EXCL);
-    return [CLAUDE_FILE];
+  if (!hasClaude) {
+    await pointClaudeAtAgents(projectRoot);
+    created.push(CLAUDE_FILE);
   }
-  const template = agentInstructionsTemplate(sharedInstructionsFile);
-  await writeFile(claudePath, template, { flag: 'wx' });
-  await writeFile(agentsPath, template, { flag: 'wx' });
-  return [CLAUDE_FILE, AGENTS_FILE];
+  if (!hasAgents) created.push(AGENTS_FILE);
+  return created;
 }
 
-const lastMirroredContents = new Map<string, Buffer>();
+const lastSyncedContents = new Map<string, Buffer>();
 
 export async function mirrorAgentInstructionFiles(projectRoot: string): Promise<void> {
   try {
     const claudePath = path.join(projectRoot, CLAUDE_FILE);
     const agentsPath = path.join(projectRoot, AGENTS_FILE);
-    await Promise.all([stat(claudePath), stat(agentsPath)]);
-    if ((await realpath(claudePath)) === (await realpath(agentsPath))) return;
-    const [claudeContent, agentsContent] = await Promise.all([readFile(claudePath), readFile(agentsPath)]);
-    if (claudeContent.equals(agentsContent)) {
-      lastMirroredContents.set(projectRoot, claudeContent);
+    if (await isLinkTo(claudePath, agentsPath)) {
+      lastSyncedContents.set(projectRoot, await readFile(agentsPath));
       return;
     }
-    const lastMirrored = lastMirroredContents.get(projectRoot);
-    if (!lastMirrored) return;
-    const claudeChanged = agentsContent.equals(lastMirrored);
-    if (!claudeChanged && !claudeContent.equals(lastMirrored)) return;
-    const [content, targetPath] = claudeChanged ? [claudeContent, agentsPath] : [agentsContent, claudePath];
-    const temporaryPath = `${targetPath}.piecemaker-${process.pid}.tmp`;
-    await writeFile(temporaryPath, content);
-    await rename(temporaryPath, targetPath);
-    lastMirroredContents.set(projectRoot, content);
+    const [agentsStats] = await Promise.all([lstat(agentsPath), lstat(claudePath)]);
+    if (agentsStats.isSymbolicLink() && (await realpath(agentsPath)) === (await realpath(claudePath))) {
+      const content = await readFile(claudePath);
+      await replaceAtomically(agentsPath, (temporaryPath) => writeFile(temporaryPath, content));
+    }
+    let agentsContent: Buffer = await readFile(agentsPath);
+    const claudeContent = await readIfRegularFile(claudePath);
+    if (claudeContent && !claudeContent.equals(agentsContent) && lastSyncedContents.get(projectRoot)?.equals(agentsContent)) {
+      await replaceAtomically(agentsPath, (temporaryPath) => writeFile(temporaryPath, claudeContent));
+      agentsContent = claudeContent;
+    }
+    if (!symlinksSupported && claudeContent?.equals(agentsContent)) {
+      lastSyncedContents.set(projectRoot, agentsContent);
+      return;
+    }
+    await pointClaudeAtAgents(projectRoot);
+    lastSyncedContents.set(projectRoot, agentsContent);
   } catch {
     return;
   }
