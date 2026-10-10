@@ -119,6 +119,7 @@ Ces points ont déjà été perdus ou ont failli l'être. Les contrôler un par 
 | `server/modules/providers/list/codex/codex-runtime.provider.ts` | `codex = new Codex(options.libraryCodexOptions);` (au lieu de `new Codex()`) |
 | `src/modules/code-editor/EditorSidebar.tsx` | `import CodeEditor from '@/piecemaker/editor-tabs/TabbedCodeEditor';` (au lieu de `@/modules/code-editor/CodeEditor`) |
 | `src/modules/project-workspace/WorkspaceMain.tsx` | l'import et l'appel `usePiecemakerEditorBridge(handleFileOpen);` |
+| `src/modules/project-workspace/WorkspaceHeader.tsx` | `import { WorkspaceIconTabs as WorkspaceTabs } from '@/modules/piecemaker-workspace-tabs';` |
 
 ### `codex-runtime.provider.ts` — le masquage des skills par dossier dans Codex
 
@@ -159,6 +160,22 @@ n'ouvrent plus rien, sans erreur. Garde-fou :
 CloudCLI : le panneau latéral passe par les onglets PieceMaker »). Si upstream
 déplace l'import de `CodeEditor` ou renomme `handleFileOpen`, reporter la
 substitution sur le nouveau site plutôt que de la supprimer.
+
+### `WorkspaceHeader.tsx` — les onglets compacts
+
+Le module `src/modules/piecemaker-workspace-tabs/` affiche les icônes seules,
+les noms au survol et les onglets excédentaires dans un menu sans scroll.
+Le seul branchement CloudCLI remplace l'import de `WorkspaceTabs` dans
+`WorkspaceHeader.tsx` par `WorkspaceIconTabs`.
+
+La sauvegarde du code est dans `scripts/piecemaker/workspace-tabs/backup.json`.
+Le test `src/modules/piecemaker-workspace-tabs/tests/WorkspaceIconTabs.test.tsx`
+exécute automatiquement `node scripts/piecemaker/workspace-tabs/restore.mjs` :
+les fichiers supprimés sont restaurés et l'import upstream est réinjecté.
+Les fichiers PieceMaker encore présents ne sont jamais écrasés. Si upstream
+déplace le branchement, le script échoue explicitement pour demander son report.
+On peut lancer ce script avant les tests si le module entier a été supprimé.
+Actualiser la sauvegarde lorsque le composant ou sa feuille de style évolue.
 
 ### `AuthContext.tsx` — le piège le plus coûteux
 
