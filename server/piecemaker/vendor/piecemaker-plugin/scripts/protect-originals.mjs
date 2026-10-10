@@ -162,6 +162,31 @@ function shieldActive(located) {
   return Boolean(located?.anonymized) && !isProtectionBypassed(located.caseRoot);
 }
 
+const GIT_EXPORT_COMMANDS = new Set(['cat-file', 'archive', 'bundle', 'fast-export', 'format-patch']);
+const GIT_CONTENT_FLAGS = new Set(['-a', '--text', '--binary', '--textconv', '--ext-diff']);
+
+function gitHistoryReason(command, cwd) {
+  const text = String(command || '');
+  if (!/\bgit\b/.test(text) || text.length > MAX_COMMAND_LENGTH) return null;
+  const tokens = (text.match(/"[^"]*"|'[^']*'|[^\s;|&<>()]+/g) || []).map((token) => token.replace(/^["']|["']$/g, ''));
+  if (!tokens.some((token) => token === 'git' || token.endsWith('/git'))) return null;
+  const located = [cwd, ...tokens.filter((token) => path.isAbsolute(token))]
+    .map((candidate) => locateProjectCase(candidate))
+    .find((candidate) => shieldActive(candidate));
+  if (!located) return null;
+  const reason = `[PieceMaker] Cette commande Git ferait sortir de l’historique du dossier « ${located.caseName} » le contenu d’une pièce protégée ou d’un mapping. Utilisez git log, git diff ou git restore --source <version> -- <fichier>, puis lisez le Markdown anonymisé.`;
+  for (const token of tokens) {
+    if (GIT_EXPORT_COMMANDS.has(token) || GIT_CONTENT_FLAGS.has(token)) return reason;
+    const separator = token.indexOf(':');
+    if (separator < 0 || token.includes('://')) continue;
+    const objectPath = token.slice(separator + 1);
+    if (!objectPath) continue;
+    const absolute = path.resolve(located.caseRoot, objectPath.replace(/^\.\//, ''));
+    if (isMappingFile(absolute) || isSecretFile(absolute) || isProtectedFile(absolute, located.caseRoot)) return reason;
+  }
+  return null;
+}
+
 async function main() {
   const payload = await readHookPayload(2000);
   if (!payload) return null;
@@ -170,6 +195,8 @@ async function main() {
   const cwd = payload.cwd || process.cwd();
 
   if (toolName === 'Bash') {
+    const gitReason = gitHistoryReason(payload.tool_input?.command, cwd);
+    if (gitReason) return deny(gitReason);
     for (const candidate of commandPaths(payload.tool_input?.command, cwd)) {
       const located = locateProjectCase(candidate);
       if (!shieldActive(located)) continue;

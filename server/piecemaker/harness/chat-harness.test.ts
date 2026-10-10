@@ -129,3 +129,30 @@ test('un runtime arrêté sans événement complete ne publie pas des annotation
   await runtime.run('codex', 'Question', { cwd, sessionId: 'session' }, { send: (data) => sent.push(data as NormalizedMessage) });
   assert.equal(sent.some((event) => (event.citationEvent as { status?: string })?.status === 'final'), false);
 });
+
+test('historique du dossier : begin avant le tour, end avec la demande, la conclusion et l’abandon', async (t) => {
+  const { store, sessions, cwd } = await setup(t, []);
+  const calls: unknown[] = [];
+  const turns = [
+    [message({ kind: 'text', role: 'assistant', provider: 'claude', id: 'reply', content: 'J’ai mis à jour les notes.' }), message({ kind: 'complete', provider: 'claude', exitCode: 0 })],
+    [message({ kind: 'complete', provider: 'claude', aborted: true })],
+  ];
+  const runtime: Dependencies['runtime'] = {
+    run: async (_provider, _command, _options, writer) => {
+      calls.push('run');
+      for (const event of turns.shift() ?? []) writer.send(event);
+    },
+    getRunner: () => async () => {},
+  };
+  installChatCitationHarness({
+    runtime, sessions, store, ensureProxy: () => {},
+    folderHistory: { begin: (folder) => calls.push({ begin: folder }), end: (turn) => calls.push({ end: turn }) },
+  });
+  const writer = { send: () => {} };
+  await runtime.run('claude', 'Mets à jour les notes', { cwd, sessionId: 'session' }, writer);
+  await runtime.run('claude', 'Deuxième demande', { cwd, sessionId: 'session' }, writer);
+  assert.deepEqual(calls, [
+    { begin: cwd }, 'run', { end: { cwd, request: 'Mets à jour les notes', conclusion: 'J’ai mis à jour les notes.', aborted: false } },
+    { begin: cwd }, 'run', { end: { cwd, request: 'Deuxième demande', conclusion: '', aborted: true } },
+  ]);
+});
