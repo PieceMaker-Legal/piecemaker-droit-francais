@@ -10,6 +10,42 @@ $minNodeMajor = 22
 function Say([string] $message) { Write-Host "== $message" -ForegroundColor Cyan }
 function Fail([string] $message) { Write-Host "!! $message" -ForegroundColor Red; exit 1 }
 
+$installerArgs = @($args)
+
+function Write-ProgressStatus([string] $step, [int] $current) {
+  if (-not $tag) { return }
+  try {
+    $payload = @{
+      state = 'running'
+      step = $step
+      detail = ''
+      current = $current
+      total = 14
+      pid = $PID
+      version = $tag
+    } | ConvertTo-Json
+    Set-Content -Encoding UTF8 -Path (Join-Path $bootstrapHome 'progress.json') -Value $payload
+  } catch {}
+}
+
+function Start-ProgressWindow {
+  if ($env:PIECEMAKER_NO_PROGRESS -eq '1' -or $installerArgs -contains '--no-progress') { return }
+  $script = Join-Path $srcDir 'desktop-bootstrap\lib\progress-win32.ps1'
+  if (-not (Test-Path -LiteralPath $script)) { return }
+  try {
+    Write-ProgressStatus "Preparation de l'installation..." 1
+    $copy = Join-Path $bootstrapHome 'progress.ps1'
+    $utf8 = New-Object System.Text.UTF8Encoding $true
+    [System.IO.File]::WriteAllText($copy, [System.IO.File]::ReadAllText($script), $utf8)
+    $status = Join-Path $bootstrapHome 'progress.json'
+    $proc = Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -PassThru -ArgumentList @(
+      '-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass',
+      '-File', $copy, '-StatusPath', $status, '-ParentPid', "$PID"
+    )
+    Set-Content -Encoding ASCII -Path (Join-Path $bootstrapHome 'progress.pid') -Value $proc.Id
+  } catch {}
+}
+
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
   Fail 'Ce script installe PieceMaker sur Windows. Sur macOS, utilisez install.sh.'
 }
@@ -44,6 +80,8 @@ if (-not (Test-Path $srcDir)) {
   Remove-Item -Recurse -Force $staging, $archive -ErrorAction SilentlyContinue
 }
 
+Start-ProgressWindow
+
 $nodeBin = $null
 $systemNode = Get-Command node -ErrorAction SilentlyContinue
 if ($systemNode) {
@@ -56,6 +94,7 @@ if ($systemNode) {
 }
 
 if (-not $nodeBin) {
+  Write-ProgressStatus 'Installation d''un Node.js dedie...' 2
   Say 'Installation d''un Node.js dedie (aucune modification du systeme)...'
   $shasums = (Invoke-WebRequest -UseBasicParsing -Uri "https://nodejs.org/dist/$nodeChannel/SHASUMS256.txt").Content
   $match = [regex]::Match($shasums, "node-v[0-9.]+-win-$nodeArch\.zip")

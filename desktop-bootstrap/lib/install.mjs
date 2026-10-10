@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { buildDesktopApp } from './build.mjs';
 import { generateCertificates, isCaTrusted, signApplication, trustCertificateAuthority } from './certificates.mjs';
 import { createShortcuts, installApplication, launchApplication, quitRunningApplication } from './place.mjs';
+import { finishProgress, openProgressWindow } from './progress.mjs';
 import { ui } from './ui.mjs';
 import {
   IS_MAC,
@@ -17,6 +18,7 @@ import {
 const options = new Set(process.argv.slice(2));
 const skipCertificates = options.has('--no-certificate');
 const skipLaunch = options.has('--no-launch');
+const skipProgress = options.has('--no-progress');
 
 async function main() {
   if (!IS_MAC && !IS_WINDOWS) {
@@ -29,6 +31,7 @@ async function main() {
   await fs.mkdir(bootstrapHome, { recursive: true });
   process.chdir(bootstrapHome);
 
+  if (!skipProgress) openProgressWindow({ version: releaseTag });
   console.log(`\n${PRODUCT_NAME} — installation de l'application de bureau (${releaseTag})`);
 
   ui.step("Autorité locale du proxy d'anonymisation");
@@ -51,7 +54,9 @@ async function main() {
 
   createShortcuts(installedPath);
 
-  await import('../composants/install.mjs').then((composants) => composants.installRuntimeComponents({ sourceDir }));
+  await import('../composants/install.mjs').then((composants) => (
+    composants.installRuntimeComponents({ sourceDir, output: ui })
+  ));
 
   if (!skipLaunch) {
     ui.step(`Démarrage de ${PRODUCT_NAME}…`);
@@ -99,7 +104,9 @@ async function runCertificateStep(installedPath) {
 
 try {
   await main();
+  finishProgress({ ok: true, message: `${PRODUCT_NAME} est installé.` });
 } catch (error) {
   ui.fail(error.message);
+  finishProgress({ ok: false, error: error.message });
   process.exitCode = 1;
 }
