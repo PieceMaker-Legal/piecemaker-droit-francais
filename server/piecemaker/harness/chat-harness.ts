@@ -3,6 +3,7 @@ import type { NormalizedMessage, ProviderRuntimeWriter } from '@/shared/types.js
 import { createNormalizedMessage } from '@/shared/utils.js';
 
 import type { FolderHistory } from '../folder-history/history.js';
+import { agentIdentity } from '../folder-history/identity.js';
 
 import { createCitationTurn } from './citation-turn.js';
 import type { createCitationStore } from './citation-store.js';
@@ -31,7 +32,7 @@ export function installChatCitationHarness(options: {
     const end = () => {
       if (ended) return;
       ended = true;
-      history.end({ cwd, request: command, conclusion, aborted: interrupted || !completionReceived });
+      history.end({ cwd, request: command, conclusion, aborted: interrupted || !completionReceived, author: agentIdentity(provider, runtimeOptions.model) });
     };
     const wrapped = new Proxy(writer, {
       get(target, key) {
@@ -91,7 +92,7 @@ export function installChatCitationHarness(options: {
     const finish = () => {
       if (!completion) completion = (async () => {
         flush();
-        options.folderHistory?.end({ cwd, request: command, conclusion: lastText?.content ?? '', aborted: interrupted });
+        options.folderHistory?.end({ cwd, request: command, conclusion: lastText?.content ?? '', aborted: interrupted, author: agentIdentity(provider, runtimeOptions.model) });
         const suffix = interrupted ? '' : await turn.finish();
         if (heldStreamEnd) {
           if (suffix && lastDelta) writer.send({ ...lastDelta, content: suffix });

@@ -3,10 +3,11 @@ import path from 'node:path';
 
 import { isIgnoredPath } from './exclude.js';
 import { commitAll, ensureRepo, hasPieceMakerExclude } from './git.js';
+import type { Identity } from './identity.js';
 import { manualMessage, turnMessage } from './message.js';
 import { createGitQueue } from './queue.js';
 
-export type FolderTurn = { cwd: string; request: string; conclusion: string; aborted: boolean };
+export type FolderTurn = { cwd: string; request: string; conclusion: string; aborted: boolean; author: Identity };
 
 export type FolderHistory = ReturnType<typeof createFolderHistory>;
 
@@ -90,7 +91,7 @@ export function createFolderHistory(options: { idleDelayMs?: number; catchUpDela
         return;
       }
       queue.push(`turn:${cwd}:${++turnSequence}`, async () => {
-        if (await prepare(cwd)) await commitAll(cwd, () => turnMessage(turn.request, turn.conclusion));
+        if (await prepare(cwd)) await commitAll(cwd, () => turnMessage(turn.request, turn.conclusion), turn.author);
       });
     },
     syncFolders(folders: string[]) {
