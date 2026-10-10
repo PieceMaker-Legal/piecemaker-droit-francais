@@ -1,4 +1,7 @@
 {
+  "tabs": {
+    "git": "Change Tracking"
+  },
   "mainContent": {
     "loading": "Loading PieceMaker",
     "chooseProject": "Choose Your Case",

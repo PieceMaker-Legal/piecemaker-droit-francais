@@ -44,12 +44,16 @@ const WORDING_EXCLUDED_NAMESPACES = new Set(['tasks']);
  */
 const RULES = {
   en: [
+    ['Source Control', 'Change Tracking'],
+    ['Source control', 'Change tracking'],
+    ['source control', 'change tracking'],
     ['Projects', 'Cases'],
     ['projects', 'cases'],
     ['Project', 'Case'],
     ['project', 'case'],
   ],
   fr: [
+    ['Contrôle de source', 'Suivi des modifications'],
     ['Projets', 'Dossiers'],
     ['projets', 'dossiers'],
     ['Projet', 'Dossier'],

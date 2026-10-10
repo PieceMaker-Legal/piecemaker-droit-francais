@@ -1,6 +1,6 @@
 # Historique Git du dossier
 
-Chaque dossier est versionné dans un dépôt Git **local** (`.git` à la racine du dossier). Aucun remote n'est ajouté, et rien n'est jamais poussé, récupéré ou publié. L'avocat n'a rien à configurer : les commits sont faits en arrière-plan par le serveur, et l'historique s'affiche dans l'onglet Contrôle de source.
+Chaque dossier est versionné dans un dépôt Git **local** (`.git` à la racine du dossier). Aucun remote n'est ajouté, et rien n'est jamais poussé, récupéré ou publié. L'avocat n'a rien à configurer : les commits sont faits en arrière-plan par le serveur, et l'historique s'affiche dans l'onglet Suivi des modifications.
 
 Code : `server/piecemaker/folder-history/`. Branchement : une option `folderHistory` du harnais de chat (`harness/chat-harness.ts`) et la publication des projets (`index.ts`). Aucun fichier CloudCLI n'est modifié.
 
@@ -34,7 +34,7 @@ Si un fichier sensible (mapping, `.env`, `.piecemaker/`) est déjà suivi, le do
 ## Dossiers laissés tranquilles
 
 - Dossier situé à l'intérieur d'un dépôt Git parent.
-- Dépôt Git déjà présent mais créé hors PieceMaker (pas de bloc PieceMaker dans `info/exclude`), par exemple un projet de code ouvert dans l'app. Exception : un dépôt vide, sans commit ni fichier indexé (bouton « Initialiser » de l'onglet Contrôle de source), est repris.
+- Dépôt Git déjà présent mais créé hors PieceMaker (pas de bloc PieceMaker dans `info/exclude`), par exemple un projet de code ouvert dans l'app. Exception : un dépôt vide, sans commit ni fichier indexé (bouton « Initialiser » de l'onglet Suivi des modifications), est repris.
 - `git` absent, ou `.git/index.lock` présent : la tâche est abandonnée, et la suivante rattrapera le retard.
 
 Toute erreur est loguée puis ignorée (fail-open).

@@ -1,9 +1,12 @@
 {
   "panel": {
-    "selectProject": "Select a case to view source control"
+    "selectProject": "Select a case to view change tracking"
+  },
+  "tabs": {
+    "ariaLabel": "Change tracking views"
   },
   "errorState": {
-    "noRepoDescription": "This case is not a git repository yet. Initialize one to start tracking changes and use source control features."
+    "noRepoDescription": "This case is not a git repository yet. Initialize one to start tracking changes and use change tracking features."
   },
   "remove": {
     "description": "Remove the worktree for {{branch}}? Its folder is deleted and the linked case is archived — chat sessions stay recoverable."
