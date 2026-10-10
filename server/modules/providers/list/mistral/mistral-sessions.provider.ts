@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
+import { readVibeMessageTimes } from '@/modules/providers/list/mistral/mistral-message-times.js';
 import { resolveVibeHome } from '@/modules/providers/list/mistral/mistral-runtime.provider.js';
 import type { IProviderSessions } from '@/shared/interfaces.js';
 import { prepareTranscriptMessages } from '@/shared/message-unification.js';
@@ -139,23 +140,29 @@ const parseToolArguments = (value: unknown): unknown => {
   }
 };
 
-const normalizeVibeLog = (records: AnyRecord[], sessionId: string, timestamp: string): NormalizedMessage[] => {
+const normalizeVibeLog = (records: AnyRecord[], sessionId: string, startTime: string, times: Record<string, string>): NormalizedMessage[] => {
   const messages: NormalizedMessage[] = [];
   const toolUses = new Map<string, NormalizedMessage>();
+  let lastKnownTime = startTime;
+  const timeOf = (id: string | undefined): string => {
+    if (id && times[id]) lastKnownTime = normalizeProviderTimestamp(times[id]);
+    return lastKnownTime;
+  };
   records.forEach((record, index) => {
     if (record.injected === true) return;
     const role = readOptionalString(record.role);
     const baseId = readOptionalString(record.message_id) ?? `mistral_history_${index}`;
-    const base = { sessionId, timestamp, provider: PROVIDER } as const;
+    const base = { sessionId, provider: PROVIDER } as const;
     if (role === 'user') {
       const content = extractContentText(record.content);
-      if (content.trim()) messages.push(createNormalizedMessage({ ...base, id: baseId, kind: 'text', role: 'user', content }));
+      if (content.trim()) messages.push(createNormalizedMessage({ ...base, timestamp: timeOf(baseId), id: baseId, kind: 'text', role: 'user', content }));
       return;
     }
     if (role === 'assistant') {
       const reasoning = readOptionalString(record.reasoning_content);
+      const reasoningId = readOptionalString(record.reasoning_message_id);
       if (reasoning?.trim()) {
-        messages.push(createNormalizedMessage({ ...base, id: readOptionalString(record.reasoning_message_id) ?? `${baseId}_reasoning`, kind: 'thinking', content: reasoning }));
+        messages.push(createNormalizedMessage({ ...base, timestamp: timeOf(reasoningId), id: reasoningId ?? `${baseId}_reasoning`, kind: 'thinking', content: reasoning }));
       }
       for (const call of Array.isArray(record.tool_calls) ? record.tool_calls : []) {
         const callRecord = readObjectRecord(call);
@@ -163,6 +170,7 @@ const normalizeVibeLog = (records: AnyRecord[], sessionId: string, timestamp: st
         const toolId = readOptionalString(callRecord?.id) ?? `${baseId}_tool_${toolUses.size}`;
         const toolUse = createNormalizedMessage({
           ...base,
+          timestamp: timeOf(toolId),
           id: `${baseId}_${toolId}`,
           kind: 'tool_use',
           toolName: readOptionalString(fn?.name) ?? 'Tool',
@@ -173,7 +181,7 @@ const normalizeVibeLog = (records: AnyRecord[], sessionId: string, timestamp: st
         messages.push(toolUse);
       }
       const content = extractContentText(record.content);
-      if (content.trim()) messages.push(createNormalizedMessage({ ...base, id: baseId, kind: 'text', role: 'assistant', content }));
+      if (content.trim()) messages.push(createNormalizedMessage({ ...base, timestamp: timeOf(baseId), id: baseId, kind: 'text', role: 'assistant', content }));
       return;
     }
     if (role === 'tool') {
@@ -288,8 +296,11 @@ export class MistralSessionsProvider implements IProviderSessions {
     options: FetchHistoryOptions = {},
   ): Promise<FetchHistoryResult> {
     const { limit = null, offset = 0 } = options;
-    const log = await readVibeSessionLog(options.providerSessionId ?? sessionId);
-    const normalized = log ? normalizeVibeLog(log.records, sessionId, normalizeProviderTimestamp(log.startTime)) : [];
+    const vibeSessionId = options.providerSessionId ?? sessionId;
+    const log = await readVibeSessionLog(vibeSessionId);
+    const normalized = log
+      ? normalizeVibeLog(log.records, sessionId, normalizeProviderTimestamp(log.startTime), readVibeMessageTimes(vibeSessionId))
+      : [];
     const transcript = prepareTranscriptMessages(normalized);
     const normalizedOffset = Math.max(0, offset);
     const normalizedLimit = limit === null ? null : Math.max(0, limit);

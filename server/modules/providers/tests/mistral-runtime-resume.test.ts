@@ -1,23 +1,34 @@
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
+import { readVibeMessageTimes } from '@/modules/providers/list/mistral/mistral-message-times.js';
 import { isReplayedVibeHistoryEntry, mistralRuntime } from '@/modules/providers/list/mistral/mistral-runtime.provider.js';
 import type { ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/index.js';
 
 const replayedTurn = [
-  { id: 'old-user', sessionId: 'vibe-1', turnId: null, type: 'message', role: 'user', content: [{ type: 'text', text: 'un' }] },
+  { id: 'old-user', sessionId: 'vibe-1', turnId: null, createdAt: Date.UTC(2026, 0, 2, 9, 0), type: 'message', role: 'user', content: [{ type: 'text', text: 'un' }] },
   { id: 'old-assistant', sessionId: 'vibe-1', turnId: null, type: 'message', role: 'assistant', content: [{ type: 'text', text: 'un' }] },
   { id: 'checkpoint:resume:x', sessionId: 'vibe-1', turnId: null, type: 'checkpoint' },
 ];
 const newTurn = [
-  { id: 'new-user', sessionId: 'vibe-1', turnId: 'turn-2', type: 'message', role: 'user', content: [{ type: 'text', text: 'deux' }] },
-  { id: 'new-assistant', sessionId: 'vibe-1', turnId: 'turn-2', type: 'message', role: 'assistant', content: [{ type: 'text', text: 'deux' }] },
+  { id: 'new-user', sessionId: 'vibe-1', turnId: 'turn-2', createdAt: Date.UTC(2026, 0, 1, 9, 0), type: 'message', role: 'user', content: [{ type: 'text', text: 'deux' }] },
+  { id: 'new-assistant', sessionId: 'vibe-1', turnId: 'turn-2', createdAt: Date.UTC(2026, 0, 1, 9, 1), type: 'message', role: 'assistant', content: [{ type: 'text', text: 'deux' }] },
 ];
 
 async function runVibe(t: test.TestContext, providerSessionId: string | null) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-home-'));
+  const previous = process.env.PIECEMAKER_HOME;
+  process.env.PIECEMAKER_HOME = home;
+  t.after(() => {
+    if (previous === undefined) delete process.env.PIECEMAKER_HOME;
+    else process.env.PIECEMAKER_HOME = previous;
+    fs.rmSync(home, { recursive: true, force: true });
+  });
   t.mock.method(childProcess, 'spawn', () => {
     const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => true });
     setImmediate(() => {
@@ -44,6 +55,14 @@ async function runVibe(t: test.TestContext, providerSessionId: string | null) {
 
 test('a resumed Vibe turn shows only its own entries, not the replayed history', async (t) => {
   assert.deepEqual(await runVibe(t, 'vibe-1'), ['new-user', 'new-assistant']);
+});
+
+test('a resumed Vibe turn records the real time of its own entries only', async (t) => {
+  await runVibe(t, 'vibe-1');
+  assert.deepEqual(readVibeMessageTimes('vibe-1'), {
+    'new-user': '2026-01-01T09:00:00.000Z',
+    'new-assistant': '2026-01-01T09:01:00.000Z',
+  });
 });
 
 test('a new Vibe session keeps every streamed entry', async (t) => {
