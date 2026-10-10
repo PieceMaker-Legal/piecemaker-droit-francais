@@ -45,7 +45,7 @@ export function createHistoryView(app: App): View {
     renderCategories();
     visible = categoryFilter.value ? reviews.filter((review) => review.category === categoryFilter.value) : reviews;
     if (!visible.length) {
-      list.innerHTML = '<div class="ptr-empty">Aucune tabular review pour ce filtre.</div>';
+      list.innerHTML = '<div class="ptr-empty">Aucune analyse tabulaire pour ce filtre.</div>';
       return;
     }
     list.innerHTML = `<div class="ptr-list">${visible.map((review, index) => `
@@ -57,7 +57,7 @@ export function createHistoryView(app: App): View {
         <span class="ptr-chip" title="${escapeHtml(review.project)}">${escapeHtml(app.projectName(review.project))}</span>
         <span class="ptr-small ptr-muted" style="flex-shrink:0">${review.doneCount}/${review.rowCount} ligne${review.rowCount > 1 ? 's' : ''}</span>
         <span class="ptr-chip ptr-chip-${review.status}">${review.status === 'running' ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(review.status))}</span>
-        ${review.status === 'running' ? '' : '<button type="button" class="ptr-icon-button" data-delete aria-label="Supprimer la tabular review" title="Supprimer la tabular review">🗑</button>'}
+        ${review.status === 'running' ? '' : '<button type="button" class="ptr-icon-button" data-delete aria-label="Supprimer l’analyse tabulaire" title="Supprimer l’analyse tabulaire">🗑</button>'}
       </div>`).join('')}</div>`;
   }
 
@@ -102,11 +102,11 @@ export function createHistoryView(app: App): View {
   const remove = async (target: HTMLElement) => {
     const review = visible[Number(target.closest<HTMLElement>('[data-index]')?.dataset.index)];
     if (!review) return;
-    const confirmed = await confirmDialog(app.root, 'Supprimer la tabular review', `<p>« ${escapeHtml(review.title)} » sera supprimée définitivement : son fichier JSON, ses exports Word/PDF et les copies de documents qu’elle est seule à utiliser.</p>`, 'Supprimer', true);
+    const confirmed = await confirmDialog(app.root, 'Supprimer l’analyse tabulaire', `<p>« ${escapeHtml(review.title)} » sera supprimée définitivement : son fichier JSON, ses exports Word/PDF et les copies de documents qu’elle est seule à utiliser.</p>`, 'Supprimer', true);
     if (!confirmed) return;
     try {
       await app.rpc('POST', '/reviews/delete', { project: review.project, file: review.file });
-      toast(app.root, 'Tabular review supprimée.');
+      toast(app.root, 'Analyse tabulaire supprimée.');
       await load();
     } catch (error) {
       toast(app.root, errorMessage(error), 'error');

@@ -417,7 +417,7 @@ function knownDecisions(review: Review): Set<string> {
 
 function researchReview(project: string, file: string): Review & { research: NonNullable<Review['research']> } {
   const review = readReview(project, file);
-  if (reviewCategory(review) !== 'recherche-juridique' || !review.research) throw new UserError('Cette tabular review ne provient pas d’une recherche juridique.');
+  if (reviewCategory(review) !== 'recherche-juridique' || !review.research) throw new UserError('Cette analyse tabulaire ne provient pas d’une recherche juridique.');
   return review as Review & { research: NonNullable<Review['research']> };
 }
 
@@ -568,10 +568,10 @@ function decisionMarkdown(decision: ResearchDecision, text: ResearchText): strin
 export function createResearchReview(project: string, id: string, title: unknown, columns: unknown, settings: ReviewSettings): { file: string; review: Review } {
   if (jobs.has(id)) throw new UserError('Recherche en cours : attendez la fin du téléchargement.');
   const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 120) : '';
-  if (!cleanTitle) throw new UserError('Donnez un nom à la tabular review.');
+  if (!cleanTitle) throw new UserError('Donnez un nom à l’analyse tabulaire.');
   const questions = Array.isArray(columns) ? columns.map(normalizeColumn) : [];
   if (!questions.length) throw new UserError('Annoncez au moins une question.');
-  if (questions.length > MAX_COLUMNS) throw new UserError(`Une tabular review contient au plus ${MAX_COLUMNS} questions.`);
+  if (questions.length > MAX_COLUMNS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_COLUMNS} questions.`);
   const index = loadIndex(id);
   if (index.state.phase !== 'done') throw new UserError('Aucun résultat à analyser pour cette recherche.');
   if (index.state.update) throw new UserError('Cette recherche met à jour une revue existante.');
@@ -638,7 +638,7 @@ export async function appendResearchUpdate(project: string, file: string, id: st
   if (jobs.has(id)) throw new UserError('Recherche en cours : attendez la fin du téléchargement.');
   const index = loadIndex(id);
   const target = index.state.update;
-  if (!target || target.project !== project || target.file !== file) throw new UserError('Cette recherche ne correspond pas à la tabular review.');
+  if (!target || target.project !== project || target.file !== file) throw new UserError('Cette recherche ne correspond pas à l’analyse tabulaire.');
   if (index.state.phase !== 'done') throw new UserError('Aucun résultat à ajouter pour cette mise à jour.');
   const known = knownDecisions(researchReview(project, file));
   const decisions = index.decisions.filter((decision) => decision.kept && !decision.error && !known.has(decision.id));

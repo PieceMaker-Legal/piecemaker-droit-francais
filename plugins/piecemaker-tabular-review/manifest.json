@@ -1,6 +1,6 @@
 {
   "name": "piecemaker-tabular-review",
-  "displayName": "Tabular Review",
+  "displayName": "Analyse Tabulaire",
   "version": "1.0.0",
   "description": "Analyse tabulaire de documents : une ligne par document, une colonne par question, une session IA par ligne.",
   "icon": "icon.svg",

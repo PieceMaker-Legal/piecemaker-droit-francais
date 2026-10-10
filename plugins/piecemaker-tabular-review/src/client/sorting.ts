@@ -57,7 +57,7 @@ export function targetPath(change: PlannedChange): string {
   return `${directory ? `${directory}/` : ''}${name}${extension}`;
 }
 
-/** Pièces du dossier absentes du tri, hors exports des tabular reviews. */
+/** Pièces du dossier absentes du tri, hors exports des analyses tabulaires. */
 export function newPieces(review: Review, pieces: CasePiece[]): CasePiece[] {
   const known = new Set(review.rows.map((row) => row.piece));
   return pieces.filter((piece) => !known.has(piece.path) && piece.path.split('/')[0] !== REVIEW_FOLDER);

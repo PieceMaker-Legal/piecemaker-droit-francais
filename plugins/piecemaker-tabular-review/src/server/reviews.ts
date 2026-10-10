@@ -33,7 +33,7 @@ export function sanitizeFilename(value: string): string {
 
 export function reviewBasename(date: Date, templateName: string, title: string): string {
   const stamp = [date.getFullYear() % 100, date.getMonth() + 1, date.getDate()].map((part) => String(part).padStart(2, '0')).join('-');
-  const template = /^tabular review/i.test(templateName) ? templateName : `Tabular Review ${templateName}`;
+  const template = /^analyse tabulaire/i.test(templateName) ? templateName : `Analyse Tabulaire ${templateName}`;
   return sanitizeFilename(`${stamp} - ${template} - ${title}`);
 }
 
@@ -111,9 +111,9 @@ function buildRows(project: string, rows: RowRequest[], sorting: boolean, copies
 
 export function createReview(project: string, template: Template, title: string, rows: RowRequest[], settings: ReviewSettings): { file: string; review: Review } {
   const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 120) : '';
-  if (!cleanTitle) throw new UserError('Donnez un nom à la tabular review.');
+  if (!cleanTitle) throw new UserError('Donnez un nom à l’analyse tabulaire.');
   if (!Array.isArray(rows) || !rows.length) throw new UserError('Sélectionnez au moins un document.');
-  if (rows.length > MAX_ROWS) throw new UserError(`Une tabular review contient au plus ${MAX_ROWS} lignes.`);
+  if (rows.length > MAX_ROWS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_ROWS} lignes.`);
   const sorting = hasActions(template.columns);
   const reviewRows = buildRows(project, rows, sorting);
 
@@ -141,7 +141,7 @@ export function readReview(project: string, file: string): Review {
   try {
     return JSON.parse(fs.readFileSync(target, 'utf8')) as Review;
   } catch {
-    throw new UserError(`Tabular review illisible : ${file}`);
+    throw new UserError(`Analyse tabulaire illisible : ${file}`);
   }
 }
 
@@ -170,7 +170,7 @@ export async function appendRows(project: string, file: string, rows: RowRequest
     if (reviewCategory(review) !== 'tri-pieces') throw new UserError('Seul un tri des pièces accueille de nouvelles pièces.');
     const known = new Set(review.rows.map((row) => row.piece));
     const fresh = buildRows(project, rows.filter((row) => !known.has(row.piece)), true);
-    if (review.rows.length + fresh.length > MAX_ROWS) throw new UserError(`Une tabular review contient au plus ${MAX_ROWS} lignes.`);
+    if (review.rows.length + fresh.length > MAX_ROWS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_ROWS} lignes.`);
     review.rows.push(...fresh);
     added = fresh.map((row) => row.id);
   });

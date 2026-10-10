@@ -27,7 +27,7 @@ function stripExtension(value: string): string {
 function filenamePreview(templateName: string, title: string): string {
   const now = new Date();
   const stamp = [now.getFullYear() % 100, now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, '0')).join('-');
-  const template = /^tabular review/i.test(templateName) ? templateName : `Tabular Review ${templateName}`;
+  const template = /^analyse tabulaire/i.test(templateName) ? templateName : `Analyse Tabulaire ${templateName}`;
   return `${stamp} - ${template} - ${title || '…'}`;
 }
 
@@ -41,8 +41,8 @@ export function createLaunchView(app: App): View {
   element.innerHTML = `
     <div class="ptr-grid">
       <label class="ptr-field"><span class="ptr-label">Dossier</span><select class="ptr-select" data-project></select></label>
-      <label class="ptr-field"><span class="ptr-label">Modèle de tabular review</span><select class="ptr-select" data-template></select></label>
-      <label class="ptr-field"><span class="ptr-label">Nom de la tabular review</span><input class="ptr-input" data-title maxlength="120" placeholder="ex. Notion de faute lourde"></label>
+      <label class="ptr-field"><span class="ptr-label">Modèle d’analyse tabulaire</span><select class="ptr-select" data-template></select></label>
+      <label class="ptr-field"><span class="ptr-label">Nom de l’analyse tabulaire</span><input class="ptr-input" data-title maxlength="120" placeholder="ex. Notion de faute lourde"></label>
     </div>
     <div data-notice></div>
     <div class="ptr-panels">
@@ -71,7 +71,7 @@ export function createLaunchView(app: App): View {
       <label class="ptr-field" style="width:150px"><span class="ptr-label">Sessions simultanées</span><select class="ptr-select" data-concurrency>${[1, 2, 3, 4, 5, 6, 8].map((value) => `<option value="${value}"${value === 3 ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
       <span class="ptr-spacer"></span>
       <span class="ptr-small ptr-muted" data-filename></span>
-      <button type="button" class="ptr-button ptr-button-primary" data-launch>Lancer la tabular review</button>
+      <button type="button" class="ptr-button ptr-button-primary" data-launch>Lancer l’analyse tabulaire</button>
     </div>
     <div data-model-warning></div>`;
 
@@ -184,7 +184,7 @@ export function createLaunchView(app: App): View {
     const template = selectedTemplate();
     $('[data-filename]').textContent = template ? `${REVIEW_FOLDER}/${filenamePreview(template.name, titleInput.value.trim())}` : '';
     $<HTMLButtonElement>('[data-launch]').disabled = launching || !project || !template || !rows.length || !titleInput.value.trim() || !modelSelect.value;
-    $<HTMLButtonElement>('[data-launch]').textContent = launching ? 'Lancement…' : 'Lancer la tabular review';
+    $<HTMLButtonElement>('[data-launch]').textContent = launching ? 'Lancement…' : 'Lancer l’analyse tabulaire';
     $<HTMLButtonElement>('[data-group]').disabled = isSorting() || rows.filter((row) => row.checked).length < 2;
     $<HTMLButtonElement>('[data-ungroup]').disabled = !rows.some((row) => row.checked && row.documents.length > 1);
     const costly = modelSelect.value && modelSelect.value !== models.cheapest;
@@ -290,7 +290,7 @@ export function createLaunchView(app: App): View {
     const sessions = rows.length;
     const confirmed = await confirmDialog(
       app.root,
-      'Lancer la tabular review ?',
+      'Lancer l’analyse tabulaire ?',
       `<p>Vous allez lancer <strong>${sessions} session${sessions > 1 ? 's' : ''} IA</strong> (une par ligne) avec <strong>${escapeHtml(provider)} — ${escapeHtml(modelSelect.selectedOptions[0]?.textContent ?? model)}</strong>, chacune pour ${template.columns.length} question${template.columns.length > 1 ? 's' : ''}.</p>
        <p class="ptr-muted">Les documents sont copiés dans « ${escapeHtml(REVIEW_FOLDER)}/docs » du dossier et le résultat est enregistré dans « ${escapeHtml(filenamePreview(template.name, title))} ». Les sessions passent par le proxy d’anonymisation et n’apparaissent pas dans l’historique des sessions.</p>
        ${costly ? '<div class="ptr-warning">Attention : ce modèle consomme beaucoup de tokens.</div>' : ''}`,

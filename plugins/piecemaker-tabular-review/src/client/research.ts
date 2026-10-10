@@ -115,7 +115,7 @@ function missingFilters(form: Form, query: string): string[] {
 function filenamePreview(title: string): string {
   const now = new Date();
   const stamp = [now.getFullYear() % 100, now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, '0')).join('-');
-  return `${stamp} - Tabular Review Recherche juridique - ${title || '…'}`;
+  return `${stamp} - Analyse Tabulaire Recherche juridique - ${title || '…'}`;
 }
 
 function countDetail(count: ResearchState['counts'][number]): string {
@@ -170,7 +170,7 @@ export function createResearchView(app: App): View {
     <section class="ptr-panel" data-update-panel hidden></section>
     <div class="ptr-grid" data-new-only>
       <label class="ptr-field"><span class="ptr-label">Dossier</span><select class="ptr-select" data-project></select></label>
-      <label class="ptr-field" style="grid-column:span 2"><span class="ptr-label">Nom de la tabular review</span><input class="ptr-input" data-title maxlength="120" placeholder="ex. Faute grave et dissimulation de documents"></label>
+      <label class="ptr-field" style="grid-column:span 2"><span class="ptr-label">Nom de l’analyse tabulaire</span><input class="ptr-input" data-title maxlength="120" placeholder="ex. Faute grave et dissimulation de documents"></label>
     </div>
     <div data-legifrance></div>
     <section class="ptr-panel" data-new-only>

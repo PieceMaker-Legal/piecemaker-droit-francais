@@ -97,7 +97,7 @@ describe('plan d’application', () => {
     expect(plannedChange(review, review.rows[0], [])).toBeNull();
   });
 
-  it('liste les pièces absentes du tri, hors exports des tabular reviews', () => {
+  it('liste les pièces absentes du tri, hors exports des analyses tabulaires', () => {
     const pieces = [
       { path: 'Pièces/jugement.pdf', status: 'ready', markdown: 'x.md' },
       { path: 'Pièces/contrat.pdf', status: 'not-converted', markdown: null },

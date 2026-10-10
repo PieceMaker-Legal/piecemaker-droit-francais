@@ -368,7 +368,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     }
     if (target.closest('[data-cancel]')) {
       void action(async () => {
-        if (!await confirmDialog(app.root, 'Annuler la tabular review ?', '<p>Les sessions IA en cours sont arrêtées ; les lignes déjà analysées sont conservées.</p>', 'Arrêter', true)) return;
+        if (!await confirmDialog(app.root, 'Annuler l’analyse tabulaire ?', '<p>Les sessions IA en cours sont arrêtées ; les lignes déjà analysées sont conservées.</p>', 'Arrêter', true)) return;
         applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/cancel', { project, file }));
       });
       return;
