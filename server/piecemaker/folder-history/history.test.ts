@@ -92,6 +92,7 @@ test('dossier dans un dépôt parent ou dépôt créé par l’utilisateur : rie
   write(parent, 'dossier/notes.md', 'notes');
   const own = makeFolder(t, { 'notes.md': 'notes' });
   git(own, 'init', '--quiet');
+  git(own, 'add', 'notes.md');
   const history = makeHistory(t);
   for (const folder of [nested, own]) {
     history.begin(folder);
@@ -103,6 +104,18 @@ test('dossier dans un dépôt parent ou dépôt créé par l’utilisateur : rie
     assert.throws(() => git(folder, 'rev-parse', '--verify', '--quiet', 'HEAD'));
   }
   assert.equal(git(nested, 'rev-parse', '--show-toplevel'), parent);
+});
+
+test('dépôt vide créé avant PieceMaker (« Initialiser ») : repris et versionné', async (t) => {
+  const folder = makeFolder(t, { 'notes.md': 'v1' });
+  git(folder, 'init', '--quiet');
+  const history = makeHistory(t);
+  history.begin(folder);
+  await history.idle();
+  write(folder, 'notes.md', 'v2');
+  history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false });
+  await history.idle();
+  assert.deepEqual(subjects(folder), ['État initial du dossier', 'Tour']);
 });
 
 test('tour aborté ou sans écriture : aucun commit de tour', async (t) => {

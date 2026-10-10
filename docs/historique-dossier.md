@@ -9,7 +9,7 @@ Code : `server/piecemaker/folder-history/`. Branchement : une option `folderHist
 | Déclencheur | Sujet | Corps |
 |---|---|---|
 | Premier passage sur un dossier sans `.git` | `État initial du dossier` | — |
-| Fin d'un tour Claude ou Codex non aborté qui a modifié des fichiers | demande de l'utilisateur (une ligne, 72 caractères au maximum) | conclusion de l'IA sans `<CITATIONS>` (4 000 caractères au maximum) |
+| Fin d'un tour non aborté qui a modifié des fichiers, quel que soit le provider (Claude, Codex, OpenCode, Mistral, Cursor) | demande de l'utilisateur (une ligne, 72 caractères au maximum, coupée entre deux mots) | conclusion de l'IA sans `<CITATIONS>` (4 000 caractères au maximum) |
 | Début d'un tour, si des modifications non commitées existent | `Modifications hors IA` | liste `A/M/D chemin` (200 lignes au maximum) |
 | Modification faite par l'avocat (Word, Finder, éditeur), après 2 min sans nouvelle écriture | `Modifications hors IA` | idem |
 | 30 s après le démarrage du serveur, pour les dossiers déjà versionnés | `Modifications hors IA` | idem (ce qui a été fait app fermée) |
@@ -34,7 +34,7 @@ Si un fichier sensible (mapping, `.env`, `.piecemaker/`) est déjà suivi, le do
 ## Dossiers laissés tranquilles
 
 - Dossier situé à l'intérieur d'un dépôt Git parent.
-- Dépôt Git déjà présent mais créé hors PieceMaker (pas de bloc PieceMaker dans `info/exclude`), par exemple un projet de code ouvert dans l'app.
+- Dépôt Git déjà présent mais créé hors PieceMaker (pas de bloc PieceMaker dans `info/exclude`), par exemple un projet de code ouvert dans l'app. Exception : un dépôt vide, sans commit ni fichier indexé (bouton « Initialiser » de l'onglet Contrôle de source), est repris.
 - `git` absent, ou `.git/index.lock` présent : la tâche est abandonnée, et la suivante rattrapera le retard.
 
 Toute erreur est loguée puis ignorée (fail-open).
@@ -52,6 +52,7 @@ Dans un dossier au bouclier vert, `protect-originals.mjs` refuse les commandes G
 
 - Une modification faite par l'avocat *pendant* un tour IA est rangée dans le commit de ce tour.
 - Si l'IA écrit dans les toutes premières millisecondes d'un tour, alors qu'un commit « hors IA » est en cours, ce fichier peut se retrouver dans ce commit.
-- Claude Code injecte en début de session les derniers sujets de commit (`gitStatus`). Ce contexte passe par hudsucker comme le reste du prompt.
+- Les sujets et corps de commit contiennent les vrais noms : le dépôt est local. Ils ne partent vers un modèle que par le prompt : `gitStatus` injecté par Claude Code en début de session, sortie de `git log` lue en shell par n'importe quel provider. hudsucker réécrit tout le corps JSON (prompt système, messages, sorties d'outils) pour Anthropic, OpenAI (Codex, OpenCode) et Mistral, donc ces sujets partent anonymisés. Cursor n'est pas interceptable et reste bloqué tant qu'un mapping existe.
+- La troncature du sujet (72 caractères) et du corps (4 000) coupe entre deux mots : un nom tronqué (« Dupo… ») ne serait plus reconnu par le mapping. Un nom composé peut perdre ses derniers mots ; le premier reste anonymisé s'il figure seul dans le mapping.
 - Restaurer une pièce protégée (PDF, image) par `git restore` reste refusé par le contrôle de chemins préexistant du hook. Seuls les fichiers lisibles par l'IA se restaurent.
 - Le dépôt grossit d'une copie complète à chaque version d'un `.docx` ou d'un PDF. Un `.git` placé dans un dossier synchronisé (iCloud, OneDrive) peut se corrompre.

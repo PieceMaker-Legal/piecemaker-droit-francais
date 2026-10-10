@@ -6,9 +6,15 @@ import { manualMessage, turnMessage } from './message.js';
 
 test('message de tour : sujet = demande sur une ligne, tronquée à 72 caractères', () => {
   const message = turnMessage(`Rédige les conclusions\npour Jean Dupont ${'x'.repeat(100)}`, 'J’ai mis à jour les notes.');
-  assert.equal(message.subject.length, 72);
-  assert.match(message.subject, /^Rédige les conclusions pour Jean Dupont x+…$/);
+  assert.equal(message.subject, 'Rédige les conclusions pour Jean Dupont…');
   assert.equal(message.body, 'J’ai mis à jour les notes.');
+});
+
+test('message de tour : la troncature ne coupe jamais un nom (hudsucker ne reconnaîtrait pas « Dupo… »)', () => {
+  const request = `${'a '.repeat(25)}contre Jean-Baptiste Dupont-Fictif`;
+  const { subject } = turnMessage(request, '');
+  assert.ok(subject.length <= 72);
+  assert.match(subject, /contre Jean-Baptiste…$/);
 });
 
 test('message de tour : bloc <CITATIONS> et liens de citation retirés du corps', () => {
