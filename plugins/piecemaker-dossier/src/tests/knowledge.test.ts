@@ -343,6 +343,43 @@ describe('GLiNER result persistence', () => {
     });
     expect(store.snapshot('project-1').nodes.map((node) => node.id)).toEqual(['document:1']);
   });
+
+  it('moves a code merged by the pipeline onto the surviving code', () => {
+    const store = createStore();
+    store.mergeScan('project-1', scanResultOperations({
+      projectId: 'project-1',
+      mapping: { mapping: { 'Jean Dupont': 'PERS_01' } },
+      documents: [{ id: '1', name: 'Contrat.pdf', entityCodes: ['PERS_01'] }],
+    }));
+    store.mergeScan('project-1', scanResultOperations({
+      projectId: 'project-1',
+      mapping: {
+        mapping: { 'Jean Dupont': 'PERS_02', 'M. Dupont': 'PERS_02' },
+        extracted_data: { personnes: { PERS_02: { codes_retires: ['PERS_01'] } } },
+      },
+      documents: [],
+    }));
+    const snapshot = store.snapshot('project-1');
+    expect(snapshot.nodes.map((node) => node.id).sort()).toEqual(['document:1', 'entity:PERS_02']);
+    expect(snapshot.mappings.every((mapping) => mapping.nodeId === 'entity:PERS_02' && mapping.masked === 'PERS_02')).toBe(true);
+    expect(snapshot.mappings.map((mapping) => mapping.real).sort()).toEqual(['Jean Dupont', 'M. Dupont']);
+    expect(snapshot.links.map((link) => [link.fromNodeId, link.toNodeId])).toEqual([['document:1', 'entity:PERS_02']]);
+  });
+
+  it('ignores a merged code absent from the graph on a first scan', () => {
+    const store = createStore();
+    store.mergeScan('project-1', scanResultOperations({
+      projectId: 'project-1',
+      mapping: {
+        mapping: { 'Société Exemple SAS': 'SAS_02' },
+        extracted_data: { organisations: { SAS_02: { codes_retires: ['SAS_01'] } } },
+      },
+      documents: [],
+    }));
+    const snapshot = store.snapshot('project-1');
+    expect(snapshot.nodes.map((node) => node.id)).toEqual(['entity:SAS_02']);
+    expect(snapshot.mappings.map((mapping) => mapping.real)).toEqual(['Société Exemple SAS']);
+  });
 });
 
 describe('codes shared by every case', () => {
