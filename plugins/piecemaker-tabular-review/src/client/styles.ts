@@ -94,8 +94,7 @@ export const PLUGIN_STYLES = `
 .ptr-table th:first-child,.ptr-table td:first-child{position:sticky;left:0;z-index:1;background:var(--ptr-surface);width:220px;min-width:180px}
 .ptr-table th:first-child{z-index:3;background:var(--ptr-soft)}
 .ptr-th{display:flex;align-items:flex-start;gap:4px}
-.ptr-th-text{flex:1;min-width:0}
-.ptr-th-question{margin-top:2px;font-size:11px;font-weight:400;color:var(--ptr-muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line;overflow-wrap:anywhere}
+.ptr-th-input{flex:1;min-width:0;min-height:2.5rem;font-size:12px;font-weight:600;padding:4px 6px}
 .ptr-th .ptr-icon-button{margin-left:auto;flex-shrink:0;width:1.25rem;height:1.25rem;font-size:10px}
 .ptr-table td.ptr-cell{cursor:pointer}
 .ptr-table td.ptr-cell:hover{background:var(--ptr-soft)}
@@ -126,7 +125,14 @@ blockquote.ptr-citation-quote{margin:8px 0;padding-left:8px;border-left:3px soli
 .ptr-review-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .ptr-review-title{font-size:15px;font-weight:600}
 .ptr-review-bar{flex-shrink:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 -14px -10px;padding:10px 14px;border-top:1px solid var(--ptr-glass-border);background:var(--ptr-glass-bg);box-shadow:var(--ptr-glass-shadow);backdrop-filter:blur(20px)}
+.ptr-review-bar{flex-direction:column;align-items:stretch}
+.ptr-review-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
 .ptr-review-bar .ptr-warning{flex-basis:100%}
+.ptr-search-summary{display:flex;align-items:center;gap:8px}
+.ptr-search-fields{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.ptr-review-bar input[type=date]{height:2rem;width:auto;padding:0 .75rem;border-radius:9999px;font-size:12px}
+.ptr-source-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ptr-source-chips label{display:inline-flex;align-items:center;gap:4px;height:2rem;padding:0 .75rem;border:1px solid var(--ptr-glass-border);border-radius:9999px;background:var(--ptr-glass-bg);font-size:12px;cursor:pointer}
 .ptr-review-bar .ptr-select{width:auto;height:2rem;padding:0 .75rem;border-radius:9999px;font-size:12px}
 .ptr-review-bar [data-choice-provider]{width:6.5rem}
 .ptr-review-bar [data-choice-model]{width:15rem}

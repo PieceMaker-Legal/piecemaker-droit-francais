@@ -1,5 +1,5 @@
-import type { Cell, CitationSource, ExportFormat, ExportResult, Provider, ReviewDetail, ReviewRow } from '../shared.js';
-import { CATEGORY_LABELS, citationIssue, lastSearchDate, emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, MAX_CITATION_CORRECTIONS, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
+import type { Cell, CitationSource, ExportFormat, ExportResult, Provider, Review, ResearchState, ReviewDetail, ReviewRow } from '../shared.js';
+import { CATEGORY_LABELS, citationIssue, defaultUpdateSince, emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, MAX_CITATION_CORRECTIONS, RESEARCH_SOURCES, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, openModal, renderMarkdown, toast } from './dom.js';
 import { anonymizationProxyOrigin, caseFiles, loadModels } from './host.js';
@@ -8,6 +8,9 @@ import { newPieces, plannedChange, targetPath } from './sorting.js';
 import type { PlannedChange } from './sorting.js';
 
 const POLL_INTERVAL = 2500;
+const RUNNING_PHASES: ResearchState['phase'][] = ['counting', 'listing', 'downloading'];
+
+const plural = (count: number, singular: string, pluralForm: string) => `${count} ${count > 1 ? pluralForm : singular}`;
 
 const MIME_TYPES: Record<ExportFormat, string> = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -87,6 +90,12 @@ export function createReviewView(app: App, project: string, file: string, onBack
   let scroll = { top: 0, left: 0 };
   let choice: { provider: Provider; model: string } | null = null;
   let models: { provider: Provider; options: ModelOption[]; cheapest: string } | null = null;
+  let barOpen = false;
+  let since: string | null = null;
+  let researchRun: ResearchState | null = null;
+  let researchTimer = 0;
+  let questionDrafts: Record<string, string> = {};
+  let newQuestion = false;
 
   async function loadChoiceModels(provider: Provider) {
     try {
@@ -115,6 +124,39 @@ export function createReviewView(app: App, project: string, file: string, onBack
 
   const choiceLabel = () => escapeHtml(choice ? `${choice.provider} — ${choice.model}` : '');
   const choiceBody = () => (choice?.model ? { provider: choice.provider, model: choice.model } : {});
+
+  function researchSection(review: Review, running: boolean): string {
+    const filters = review.research?.filters;
+    if (!filters) return '<div class="ptr-small ptr-muted">Critères non enregistrés : la période et les juridictions de cette recherche ne peuvent pas être modifiées.</div>';
+    const disabled = running ? ' disabled' : '';
+    const labels = RESEARCH_SOURCES.filter((source) => filters.sources.includes(source.value)).map((source) => source.label);
+    return `
+      <div class="ptr-search-summary">
+        <span class="ptr-small">Période : <strong>${escapeHtml(filters.dateDebut || '…')} → ${escapeHtml(filters.dateFin || '…')}</strong> · Juridictions : ${escapeHtml(labels.join(' · '))}</span>
+        <span class="ptr-spacer"></span>
+        <button type="button" class="ptr-icon-button" data-toggle-bar aria-expanded="${barOpen}" aria-label="${barOpen ? 'Réduire la période et les juridictions' : 'Modifier la période et les juridictions'}">${barOpen ? '▾' : '▴'}</button>
+      </div>
+      ${barOpen ? `<div class="ptr-search-fields">
+        <label class="ptr-bar-field"><span class="ptr-bar-label">Du</span><input class="ptr-input" type="date" data-filter-start value="${escapeHtml(filters.dateDebut)}"${disabled}></label>
+        <label class="ptr-bar-field"><span class="ptr-bar-label">Au</span><input class="ptr-input" type="date" data-filter-end value="${escapeHtml(filters.dateFin)}"${disabled}></label>
+        <div class="ptr-source-chips" role="group" aria-label="Juridictions">${RESEARCH_SOURCES.map((source) => `<label><input type="checkbox" data-filter-source value="${source.value}"${filters.sources.includes(source.value) ? ' checked' : ''}${disabled}> ${escapeHtml(source.label)}</label>`).join('')}</div>
+      </div>` : ''}`;
+  }
+
+  function updateControls(review: Review, running: boolean): string {
+    if (!review.research?.filters) return '';
+    const run = researchRun;
+    if (run && RUNNING_PHASES.includes(run.phase)) {
+      return `<span class="ptr-small ptr-muted"><span class="ptr-spinner"></span> Recherche en cours : ${plural(run.kept, 'décision retenue', 'décisions retenues')}</span><button type="button" class="ptr-button" data-cancel-update>Arrêter la recherche</button>`;
+    }
+    if (run) {
+      const outcome = run.phase === 'done'
+        ? plural(run.kept, 'décision retenue', 'décisions retenues')
+        : run.phase === 'cancelled' ? 'Recherche annulée.' : run.error ?? 'Recherche interrompue.';
+      return `<span class="ptr-small${run.phase === 'done' ? '' : ' ptr-status-error'}">${escapeHtml(outcome)}</span>${run.phase === 'done' ? `<button type="button" class="ptr-button ptr-button-primary" data-append-update${run.kept ? '' : ' disabled'}>Ajouter et analyser</button>` : ''}<button type="button" class="ptr-button" data-discard-update>${run.phase === 'done' ? 'Abandonner' : 'Fermer'}</button>`;
+    }
+    return `<label class="ptr-bar-field"><span class="ptr-bar-label">Décisions rendues depuis le</span><input class="ptr-input" type="date" data-update-since value="${escapeHtml(since ?? defaultUpdateSince(review))}"${running ? ' disabled' : ''}></label><button type="button" class="ptr-button" data-update-research${running ? ' disabled' : ''}>Mettre à jour la recherche</button>`;
+  }
 
   function renderDetail(): string {
     if (!detail || !selected) return '';
@@ -166,7 +208,6 @@ export function createReviewView(app: App, project: string, file: string, onBack
         ${running ? `<div class="ptr-progress" aria-hidden="true"><div style="width:${review.rows.length ? Math.round((done / review.rows.length) * 100) : 0}%"></div></div>` : ''}
         <span class="ptr-spacer"></span>
         ${running ? '<button type="button" class="ptr-button ptr-button-danger" data-cancel>Annuler</button>' : ''}
-        ${review.research ? `<button type="button" class="ptr-button" data-update-research${review.research.filters ? ` title="Chercher les décisions rendues depuis la dernière recherche (${escapeHtml(formatDate(lastSearchDate(review)))}) et les analyser"` : ' disabled title="Recherche lancée avant l’enregistrement de ses critères : relancez-la depuis l’onglet Recherche juridique"'}>Mettre à jour la recherche</button>` : ''}
         ${sorting ? `<button type="button" class="ptr-button" data-add-pieces title="Ajoute une ligne par pièce absente du tri (converties d’abord si besoin) et lance leur analyse">Ajouter les nouvelles pièces</button>
         <button type="button" class="ptr-button ptr-button-primary" data-apply-all title="Renomme et range toutes les pièces selon les colonnes d’action, après confirmation">Appliquer pour tous</button>` : ''}
         <details class="ptr-menu">
@@ -181,7 +222,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
       <div class="ptr-review-body">
         <div class="ptr-table-wrap">
           <table class="ptr-table">
-            <thead><tr><th scope="col">${review.category === 'recherche-juridique' ? 'Décision' : 'Document'}</th>${review.columns.map((column) => `<th scope="col" title="${escapeHtml(column.prompt)}"><div class="ptr-th"><div class="ptr-th-text"><div>${escapeHtml(column.name)}</div><div class="ptr-th-question">${escapeHtml(column.prompt)}</div></div><button type="button" class="ptr-icon-button" data-run-column="${column.index}" aria-label="Lancer les cellules vides de la colonne ${escapeHtml(column.name)}" title="Lancer les cellules vides de cette colonne">▶</button></div></th>`).join('')}</tr></thead>
+            <thead><tr><th scope="col">${review.category === 'recherche-juridique' ? 'Décision' : 'Document'}</th>${review.columns.map((column) => `<th scope="col"><div class="ptr-th"><textarea class="ptr-textarea ptr-th-input" rows="2" data-column-prompt="${column.index}" aria-label="Question de la colonne" placeholder="Question posée à l’IA">${escapeHtml(questionDrafts[column.index] ?? column.prompt)}</textarea><button type="button" class="ptr-icon-button" data-run-column="${column.index}" aria-label="Lancer les cellules vides de cette colonne" title="Lancer les cellules vides de cette colonne">▶</button></div></th>`).join('')}${newQuestion ? `<th scope="col"><div class="ptr-th"><textarea class="ptr-textarea ptr-th-input" rows="2" data-new-question aria-label="Question de la nouvelle colonne" placeholder="Question posée à l’IA" autofocus>${escapeHtml(questionDrafts.new ?? '')}</textarea></div></th>` : '<th scope="col"><button type="button" class="ptr-button" data-add-column>+ Ajouter une question</button></th>'}</tr></thead>
             <tbody>${review.rows.map((row) => `
               <tr>
                 <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${sorting && row.piece ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>
@@ -192,7 +233,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
                     ? `<div class="ptr-cell-content">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div>${cell.edited ? '<span class="ptr-small ptr-muted" title="Réponse modifiée à la main">✎</span>' : ''}</div>${citationLinks(cell)}`
                     : row.status === 'running' ? '<span class="ptr-muted"><span class="ptr-spinner"></span></span>' : '<span class="ptr-muted">—</span>';
                   return `<td class="ptr-cell" tabindex="0" data-row="${escapeHtml(row.id)}" data-column="${column.index}" aria-selected="${isSelected}">${content}</td>`;
-                }).join('')}
+                }).join('')}${newQuestion ? '<td></td>' : ''}
               </tr>`).join('')}
             </tbody>
           </table>
@@ -200,10 +241,14 @@ export function createReviewView(app: App, project: string, file: string, onBack
         ${renderDetail()}
       </div>
       <div class="ptr-review-bar">
-        ${modelSelector(running)}
-        ${costlyChoice()}
-        <span class="ptr-spacer"></span>
-        ${running ? '' : `<button type="button" class="ptr-button" data-retry${failed ? '' : ' disabled'} title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>`}
+        ${review.research ? researchSection(review, running) : ''}
+        <div class="ptr-review-controls">
+          ${modelSelector(running)}
+          ${costlyChoice()}
+          <span class="ptr-spacer"></span>
+          ${review.research ? updateControls(review, running) : ''}
+          ${running ? '' : `<button type="button" class="ptr-button" data-retry${failed ? '' : ' disabled'} title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>`}
+        </div>
       </div>`;
     const nextWrap = element.querySelector<HTMLElement>('.ptr-table-wrap');
     if (nextWrap) {
@@ -273,6 +318,64 @@ export function createReviewView(app: App, project: string, file: string, onBack
     detail = next;
     schedule();
   };
+
+  function watchResearch() {
+    window.clearTimeout(researchTimer);
+    if (!destroyed && researchRun && RUNNING_PHASES.includes(researchRun.phase)) researchTimer = window.setTimeout(() => void pollResearch(), POLL_INTERVAL);
+  }
+
+  async function pollResearch() {
+    const run = researchRun;
+    if (!run) return;
+    try {
+      const next = await app.rpc<ResearchState>('GET', `/research/state?id=${encodeURIComponent(run.id)}`);
+      if (destroyed || researchRun?.id !== run.id) return;
+      researchRun = next;
+    } catch (error) {
+      if (destroyed || researchRun?.id !== run.id) return;
+      researchRun = { ...run, phase: 'error', error: errorMessage(error) };
+    }
+    if (!destroyed) render();
+    watchResearch();
+  }
+
+  async function startResearchUpdate() {
+    if (!detail) return;
+    researchRun = await app.rpc<ResearchState>('POST', '/research', { update: { project, file, since: since ?? defaultUpdateSince(detail.review) } });
+    watchResearch();
+  }
+
+  async function cancelResearchUpdate() {
+    if (!researchRun) return;
+    researchRun = await app.rpc<ResearchState>('POST', '/research/cancel', { id: researchRun.id });
+    watchResearch();
+  }
+
+  async function discardResearchUpdate() {
+    const run = researchRun;
+    if (!run) return;
+    researchRun = null;
+    await app.rpc('POST', '/research/discard', { id: run.id }).catch(() => undefined);
+  }
+
+  async function appendResearchUpdate() {
+    const run = researchRun;
+    if (!run) return;
+    const confirmed = await confirmDialog(app.root, 'Ajouter les nouvelles décisions ?', `<p><strong>${plural(run.kept, 'décision retenue', 'décisions retenues')}</strong> seront ajoutées à la revue, puis analysées avec ses questions : <strong>${plural(run.kept, 'session', 'sessions')} IA</strong> (${choiceLabel()}). Les décisions déjà présentes sont ignorées.</p>${costlyChoice()}`, 'Ajouter et analyser');
+    if (!confirmed) return;
+    const proxyOrigin = await anonymizationProxyOrigin();
+    applyDetail(await app.rpc<ReviewDetail>('POST', '/research/append', { id: run.id, project, file, proxyOrigin }));
+    researchRun = null;
+  }
+
+  async function saveFilters() {
+    const start = element.querySelector<HTMLInputElement>('[data-filter-start]')?.value ?? '';
+    const end = element.querySelector<HTMLInputElement>('[data-filter-end]')?.value ?? '';
+    const sources = [...element.querySelectorAll<HTMLInputElement>('[data-filter-source]:checked')].map((input) => input.value);
+    await action(async () => {
+      applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/research', { project, file, filters: { dateDebut: start, dateFin: end, sources } }));
+    });
+  }
 
   async function projectId(): Promise<string> {
     const id = (await app.projects()).find((entry) => entry.fullPath === project)?.projectId;
@@ -346,6 +449,33 @@ export function createReviewView(app: App, project: string, file: string, onBack
 
   element.addEventListener('change', (event) => {
     const target = event.target as HTMLElement;
+    if (target.matches('[data-column-prompt]')) {
+      const index = target.dataset.columnPrompt ?? '';
+      const prompt = (target as HTMLTextAreaElement).value;
+      void action(async () => {
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/column', { project, file, column: Number(index), prompt }));
+        delete questionDrafts[index];
+      });
+      return;
+    }
+    if (target.matches('[data-new-question]')) {
+      const prompt = (target as HTMLTextAreaElement).value;
+      if (!prompt.trim()) return;
+      void action(async () => {
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/column', { project, file, prompt }));
+        newQuestion = false;
+        delete questionDrafts.new;
+      });
+      return;
+    }
+    if (target.matches('[data-filter-start],[data-filter-end],[data-filter-source]')) {
+      void saveFilters();
+      return;
+    }
+    if (target.matches('[data-update-since]')) {
+      since = (target as HTMLInputElement).value;
+      return;
+    }
     if (!choice) return;
     if (target.matches('[data-choice-provider]')) {
       choice = { provider: (target as HTMLSelectElement).value as Provider, model: '' };
@@ -373,6 +503,33 @@ export function createReviewView(app: App, project: string, file: string, onBack
     if (target.closest('[data-close-detail]')) {
       selected = null;
       render();
+      return;
+    }
+    if (target.closest('[data-toggle-bar]')) {
+      barOpen = !barOpen;
+      render();
+      return;
+    }
+    if (target.closest('[data-add-column]')) {
+      newQuestion = true;
+      render();
+      element.querySelector<HTMLTextAreaElement>('[data-new-question]')?.focus();
+      return;
+    }
+    if (target.closest('[data-update-research]')) {
+      void action(startResearchUpdate);
+      return;
+    }
+    if (target.closest('[data-cancel-update]')) {
+      void action(cancelResearchUpdate);
+      return;
+    }
+    if (target.closest('[data-append-update]')) {
+      void action(appendResearchUpdate);
+      return;
+    }
+    if (target.closest('[data-discard-update]')) {
+      void action(discardResearchUpdate);
       return;
     }
     if (target.closest('[data-cancel]')) {
@@ -434,10 +591,6 @@ export function createReviewView(app: App, project: string, file: string, onBack
       });
       return;
     }
-    if (target.closest('[data-update-research]')) {
-      app.updateResearch(project, file);
-      return;
-    }
     if (target.closest('[data-retry]')) {
       void action(async () => {
         const proxyOrigin = await anonymizationProxyOrigin();
@@ -463,8 +616,19 @@ export function createReviewView(app: App, project: string, file: string, onBack
     }
   });
 
+  element.addEventListener('focusout', (event) => {
+    const target = event.target as HTMLTextAreaElement;
+    if (target.matches('[data-new-question]') && !target.value.trim()) {
+      newQuestion = false;
+      delete questionDrafts.new;
+      render();
+    }
+  });
+
   element.addEventListener('input', (event) => {
     const target = event.target as HTMLElement;
+    if (target.matches('[data-column-prompt]')) questionDrafts[target.dataset.columnPrompt ?? ''] = (target as HTMLTextAreaElement).value;
+    else if (target.matches('[data-new-question]')) questionDrafts.new = (target as HTMLTextAreaElement).value;
     if (target.matches('[data-edit-summary]') && selected) draft = { key: `${selected.row}:${selected.column}`, value: (target as HTMLTextAreaElement).value };
   });
 
@@ -488,6 +652,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     destroy() {
       destroyed = true;
       window.clearTimeout(timer);
+      window.clearTimeout(researchTimer);
     },
   };
 }

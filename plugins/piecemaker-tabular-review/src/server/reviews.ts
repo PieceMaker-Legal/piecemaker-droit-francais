@@ -6,6 +6,7 @@ import type { Cell, Provider, Review, ReviewDetail, ReviewDocument, ReviewRow, R
 import { DOCS_FOLDER, emptyColumns, hasActions, lastSearchDate, reviewCategory } from '../shared.js';
 import { resolveMarkdownDocument } from './documents.js';
 import { assertReviewFile, docsDirectory, documentPath, isInside, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
+import { MAX_COLUMNS } from './templates.js';
 
 const MAX_ROWS = 500;
 const MAX_DOCUMENTS_PER_ROW = 50;
@@ -193,6 +194,24 @@ export function editCell(project: string, file: string, rowId: unknown, column: 
     const previous: Cell | undefined = cells[String(target.index)];
     cells[String(target.index)] = { summary: value, flag: previous?.flag ?? 'grey', reasoning: previous?.reasoning ?? '', ...(previous?.citations ? { citations: previous.citations } : {}), edited: true };
     if (!emptyColumns(review, row.id).length) Object.assign(row, { status: 'done', error: undefined });
+  });
+}
+
+/** Ajoute une question (colonne sans index) ou modifie celle d'une colonne ; son titre est tiré de la question. */
+export async function saveQuestion(project: string, file: string, column: unknown, prompt: unknown): Promise<Review> {
+  const text = typeof prompt === 'string' ? prompt.trim().slice(0, 4000) : '';
+  if (!text) throw new UserError('Écrivez la question à poser.');
+  const name = text.replace(/\s+/g, ' ').slice(0, 60);
+  return updateReview(project, file, (review) => {
+    if (column === undefined || column === null) {
+      if (review.columns.length >= MAX_COLUMNS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_COLUMNS} questions.`);
+      const index = Math.max(-1, ...review.columns.map((entry) => entry.index)) + 1;
+      review.columns.push({ index, name, prompt: text, format: 'text' });
+      return;
+    }
+    const target = review.columns.find((entry) => entry.index === Number(column));
+    if (!target) throw new UserError('Question introuvable.');
+    Object.assign(target, { name, prompt: text });
   });
 }
 

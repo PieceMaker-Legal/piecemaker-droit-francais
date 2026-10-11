@@ -7,8 +7,8 @@ import { listMarkdownDocuments } from './documents.js';
 import { citationSource } from './citations.js';
 import { exportReview } from './export.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
-import { appendResearchUpdate, cancelResearch, createResearchReview, discardResearch, legifranceConfigured, researchPage, researchState, researchText, startResearch, startResearchUpdate, stopAllResearch } from './research.js';
-import { appendRows, createReview, deleteReview, editCell, listReviews, markApplied, readReview, reviewDetail, updateReview } from './reviews.js';
+import { appendResearchUpdate, cancelResearch, createResearchReview, discardResearch, legifranceConfigured, researchPage, researchState, researchText, startResearch, startResearchUpdate, stopAllResearch, updateResearchFilters } from './research.js';
+import { appendRows, createReview, deleteReview, editCell, listReviews, markApplied, readReview, reviewDetail, saveQuestion, updateReview } from './reviews.js';
 import { cancelJob, isRunning, pendingTasks, queueTasks, stopAllJobs } from './runner.js';
 import type { RowTask } from './runner.js';
 import { assertModel, assertProvider, assertProxyOrigin, probeProxy, sessionEnvironment } from './sessions.js';
@@ -196,6 +196,16 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
   if (method === 'POST' && pathname === '/reviews/cell') {
     const { project, file } = reviewTarget(body);
     await editCell(project, file, body.rowId, body.column, body.summary);
+    return reviewDetail(project, file, isRunning(project, file));
+  }
+  if (method === 'POST' && pathname === '/reviews/column') {
+    const { project, file } = reviewTarget(body);
+    await saveQuestion(project, file, body.column, body.prompt);
+    return reviewDetail(project, file, isRunning(project, file));
+  }
+  if (method === 'POST' && pathname === '/reviews/research') {
+    const { project, file } = reviewTarget(body);
+    await updateResearchFilters(project, file, body.filters);
     return reviewDetail(project, file, isRunning(project, file));
   }
   if (method === 'POST' && pathname === '/reviews/applied') {
