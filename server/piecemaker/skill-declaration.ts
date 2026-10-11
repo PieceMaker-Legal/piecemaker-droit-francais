@@ -6,13 +6,19 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { prepareWorkspaceInstallation } from './library/workspace-installation.js';
 
-const SLUG = 'docx-cli';
 const VARIANT = { skipClaude: false, claudeOnly: false };
 const LINK_PROVIDERS = ['.claude', '.cursor', '.opencode', '.grok'];
 const MARKER = '.piecemaker/bundled-skills.json';
 
-function skillSource() {
-  return path.join(findApplicationRoot(getModuleDirectory(import.meta.url)), 'server', 'piecemaker', 'vendor', 'skills', SLUG);
+const BUNDLED_SKILLS = [
+  { slug: 'docx-cli', segments: ['vendor', 'skills', 'docx-cli'] },
+  { slug: 'redaction-juridique', segments: ['vendor', 'piecemaker-plugin', 'skills', 'redaction-juridique'] },
+] as const;
+
+type BundledSkill = (typeof BUNDLED_SKILLS)[number];
+
+function skillSource(skill: BundledSkill) {
+  return path.join(findApplicationRoot(getModuleDirectory(import.meta.url)), 'server', 'piecemaker', ...skill.segments);
 }
 
 function digest(bytes: Buffer) {
@@ -34,27 +40,27 @@ function walkFiles(root: string): Record<string, Buffer> {
   return files;
 }
 
-function workspaceHashes(files: Record<string, Buffer>) {
-  return Object.fromEntries(Object.entries(files).map(([name, bytes]) => [`.agents/skills/${SLUG}/${name}`, digest(bytes)]));
+function workspaceHashes(slug: string, files: Record<string, Buffer>) {
+  return Object.fromEntries(Object.entries(files).map(([name, bytes]) => [`.agents/skills/${slug}/${name}`, digest(bytes)]));
 }
 
-function readMarker(workspace: string) {
+function readMarker(workspace: string, slug: string) {
   try {
     const value = JSON.parse(fs.readFileSync(path.join(workspace, MARKER), 'utf8'));
-    const files = value?.[SLUG];
+    const files = value?.[slug];
     return files && typeof files === 'object' && !Array.isArray(files) ? files as Record<string, string> : null;
   } catch {
     return null;
   }
 }
 
-function writeMarker(workspace: string, files: Record<string, string>) {
+function writeMarker(workspace: string, slug: string, files: Record<string, string>) {
   const filename = path.join(workspace, MARKER);
   fs.mkdirSync(path.dirname(filename), { recursive: true, mode: 0o700 });
   const current = (() => {
     try { return JSON.parse(fs.readFileSync(filename, 'utf8')); } catch { return {}; }
   })();
-  const next = { ...(current && typeof current === 'object' ? current : {}), [SLUG]: files };
+  const next = { ...(current && typeof current === 'object' ? current : {}), [slug]: files };
   const temporary = `${filename}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(temporary, filename);
@@ -65,13 +71,13 @@ function hashesEqual(left: Record<string, string>, right: Record<string, string>
   return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
 }
 
-function linksReady(workspace: string) {
-  const root = path.join(workspace, '.agents', 'skills', SLUG);
+function linksReady(workspace: string, slug: string) {
+  const root = path.join(workspace, '.agents', 'skills', slug);
   try {
     if (!fs.statSync(root).isDirectory()) return false;
     const resolved = fs.realpathSync(root);
     return LINK_PROVIDERS.every((provider) => {
-      try { return fs.realpathSync(path.join(workspace, provider, 'skills', SLUG)) === resolved; }
+      try { return fs.realpathSync(path.join(workspace, provider, 'skills', slug)) === resolved; }
       catch { return false; }
     });
   } catch {
@@ -79,32 +85,38 @@ function linksReady(workspace: string) {
   }
 }
 
-export function declareDocxCliSkill(workspace: string): void {
-  try {
-    const source = skillSource();
-    if (!fs.existsSync(source)) return;
-    const files = walkFiles(source);
-    const hashes = workspaceHashes(files);
-    const dest = path.join(workspace, '.agents', 'skills', SLUG);
-    const destExists = fs.existsSync(dest);
-    const destHashes = destExists ? workspaceHashes(walkFiles(dest)) : null;
-    const destMatches = Boolean(destHashes && hashesEqual(hashes, destHashes));
-    if (destMatches && linksReady(workspace)) {
-      writeMarker(workspace, hashes);
-      return;
+function declareSkill(workspace: string, skill: BundledSkill): void {
+  const source = skillSource(skill);
+  if (!fs.existsSync(source)) return;
+  const files = walkFiles(source);
+  const hashes = workspaceHashes(skill.slug, files);
+  const dest = path.join(workspace, '.agents', 'skills', skill.slug);
+  const destExists = fs.existsSync(dest);
+  const destHashes = destExists ? workspaceHashes(skill.slug, walkFiles(dest)) : null;
+  const destMatches = Boolean(destHashes && hashesEqual(hashes, destHashes));
+  if (destMatches && linksReady(workspace, skill.slug)) {
+    writeMarker(workspace, skill.slug, hashes);
+    return;
+  }
+  const previousFiles = destMatches && destHashes ? destHashes : readMarker(workspace, skill.slug);
+  if (destExists && !previousFiles) return;
+  const previous = previousFiles
+    ? { id: `bundled:${skill.slug}`, kind: 'skill' as const, name: skill.slug, slug: skill.slug, files: previousFiles, skipClaude: false }
+    : undefined;
+  const installation = prepareWorkspaceInstallation(workspace, previous, {
+    component: { kind: 'skill', slug: skill.slug, files },
+    variant: VARIANT,
+  });
+  installation.commit();
+  writeMarker(workspace, skill.slug, hashes);
+}
+
+export function declareBundledSkills(workspace: string): void {
+  for (const skill of BUNDLED_SKILLS) {
+    try {
+      declareSkill(workspace, skill);
+    } catch (error) {
+      console.warn(`[piecemaker] déclaration du skill ${skill.slug} impossible dans ${workspace} : ${error instanceof Error ? error.message : String(error)}`);
     }
-    const previousFiles = destMatches && destHashes ? destHashes : readMarker(workspace);
-    if (destExists && !previousFiles) return;
-    const previous = previousFiles
-      ? { id: `bundled:${SLUG}`, kind: 'skill' as const, name: SLUG, slug: SLUG, files: previousFiles, skipClaude: false }
-      : undefined;
-    const installation = prepareWorkspaceInstallation(workspace, previous, {
-      component: { kind: 'skill', slug: SLUG, files },
-      variant: VARIANT,
-    });
-    installation.commit();
-    writeMarker(workspace, hashes);
-  } catch (error) {
-    console.warn(`[piecemaker] déclaration du skill docx-cli impossible dans ${workspace} : ${error instanceof Error ? error.message : String(error)}`);
   }
 }
