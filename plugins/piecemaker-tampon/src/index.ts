@@ -710,7 +710,7 @@ function renderPieces(state: ViewState): HTMLElement {
           if (!state.disposed) render(state);
         });
       },
-      'piecemaker-button piecemaker-button--normal piecemaker-button--blue',
+      'piecemaker-button piecemaker-button--normal piecemaker-button--black',
       count === 0 || state.running,
     ));
     card.append(footer);
