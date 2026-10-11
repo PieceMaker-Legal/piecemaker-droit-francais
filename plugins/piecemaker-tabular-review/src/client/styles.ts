@@ -94,6 +94,8 @@ export const PLUGIN_STYLES = `
 .ptr-table th:first-child,.ptr-table td:first-child{position:sticky;left:0;z-index:1;background:var(--ptr-surface);width:220px;min-width:180px}
 .ptr-table th:first-child{z-index:3;background:var(--ptr-soft)}
 .ptr-th{display:flex;align-items:flex-start;gap:4px}
+.ptr-th-text{flex:1;min-width:0}
+.ptr-th-question{margin-top:2px;font-size:11px;font-weight:400;color:var(--ptr-muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line;overflow-wrap:anywhere}
 .ptr-th .ptr-icon-button{margin-left:auto;flex-shrink:0;width:1.25rem;height:1.25rem;font-size:10px}
 .ptr-table td.ptr-cell{cursor:pointer}
 .ptr-table td.ptr-cell:hover{background:var(--ptr-soft)}
