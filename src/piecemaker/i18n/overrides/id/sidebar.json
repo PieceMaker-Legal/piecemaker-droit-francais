@@ -1,0 +1,49 @@
+{
+  "projects": {
+    "title": "Perkara",
+    "newProject": "Perkara Baru",
+    "deleteProject": "Hapus Perkara",
+    "renameProject": "Ganti Nama Perkara",
+    "noProjects": "Tidak ada perkara",
+    "loadingProjects": "Memuat perkara...",
+    "searchPlaceholder": "Cari perkara...",
+    "projectNamePlaceholder": "Nama perkara",
+    "fetchingProjects": "Mengambil perkara dan sesi Claude",
+    "projects": "perkara",
+    "noMatchingProjects": "Tidak ada perkara yang cocok",
+    "runClaudeCli": "Jalankan Claude CLI di direktori perkara untuk memulai"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "Buat perkara baru",
+    "refresh": "Segarkan perkara dan sesi (Ctrl+R)",
+    "renameProject": "Ganti nama perkara (F2)",
+    "deleteProject": "Hapus perkara dari sidebar (Delete)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "Hapus perkara ini dari sidebar? File perkara, memori, dan data sesi tidak akan dihapus.",
+    "enterProjectPath": "Masukkan path perkara",
+    "deleteProjectFailed": "Gagal menghapus perkara. Silakan coba lagi.",
+    "deleteProjectError": "Terjadi kesalahan saat menghapus perkara. Silakan coba lagi.",
+    "createProjectFailed": "Gagal membuat perkara. Silakan coba lagi.",
+    "createProjectError": "Terjadi kesalahan saat membuat perkara. Silakan coba lagi.",
+    "updateProjectError": "Terjadi kesalahan saat memperbarui perkara. Silakan coba lagi.",
+    "restoreProjectFailed": "Gagal memulihkan perkara. Silakan coba lagi.",
+    "restoreProjectError": "Terjadi kesalahan saat memulihkan perkara. Silakan coba lagi."
+  },
+  "search": {
+    "modeProjects": "Perkara",
+    "projectsScanned_one": "{{count}} perkara dipindai",
+    "projectsScanned_other": "{{count}} perkara dipindai"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "Hapus Perkara",
+    "sessionCount_one": "Perkara ini berisi {{count}} percakapan.",
+    "sessionCount_other": "Perkara ini berisi {{count}} percakapan.",
+    "archiveProject": "Arsipkan perkara",
+    "allConversationsDeleted": "Perkara akan dihapus dari sidebar. File, memori, dan data sesi tetap dipertahankan.",
+    "cannotUndo": "Perkara dapat ditambahkan kembali nanti."
+  }
+}

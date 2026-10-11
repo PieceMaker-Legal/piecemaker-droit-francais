@@ -1,0 +1,36 @@
+{
+  "mainContent": {
+    "loading": "טוען את PieceMaker",
+    "chooseProject": "בחירת תיק",
+    "selectProjectDescription": "יש לבחור תיק בסרגל הצד כדי להתחיל לכתוב קוד עם Claude. כל תיק מכיל את סשני הצ'אט ואת היסטוריית הקבצים שלו.",
+    "createProjectMobile": "אפשר לגשת לתיקים דרך כפתור התפריט למעלה",
+    "createProjectDesktop": "אפשר ליצור תיק חדש בלחיצה על סמל התיקייה בסרגל הצד",
+    "projectFiles": "קבצי התיק"
+  },
+  "fileTree": {
+    "checkProjectPath": "יש לבדוק שנתיב התיק נגיש"
+  },
+  "projectWizard": {
+    "title": "יצירת תיק חדש",
+    "step1": {
+      "existing": {
+        "description": "כבר יש לי סביבת עבודה בשרת ורק צריך להוסיף אותה לרשימת התיקים"
+      }
+    },
+    "step3": {
+      "existingInfo": "סביבת העבודה תתווסף לרשימת התיקים ותהיה זמינה לסשנים של Claude/Cursor.",
+      "newEmpty": "סביבת העבודה תתווסף לרשימת התיקים ותהיה זמינה לסשנים של Claude/Cursor."
+    },
+    "buttons": {
+      "createProject": "יצירת תיק"
+    }
+  },
+  "commandPalette": {
+    "selectProjectFirst": "יש לבחור תיק קודם"
+  },
+  "misc": {
+    "projectFallback": "תיק",
+    "noProjectSelected": "לא נבחר תיק",
+    "projectRequiredForShell": "צריך תיק כדי לפתוח shell"
+  }
+}

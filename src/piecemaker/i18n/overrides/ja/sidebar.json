@@ -33,6 +33,9 @@
     "restoreProjectFailed": "案件の復元に失敗しました。もう一度お試しください。",
     "restoreProjectError": "案件の復元でエラーが発生しました。もう一度お試しください。"
   },
+  "search": {
+    "modeProjects": "案件"
+  },
   "deleteConfirmation": {
     "deleteProject": "案件を除去",
     "confirmDelete": "この案件をどうしますか：",

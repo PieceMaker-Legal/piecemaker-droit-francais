@@ -1,0 +1,53 @@
+{
+  "projects": {
+    "title": "Spisy",
+    "newProject": "Nový spis",
+    "deleteProject": "Odstranit spis",
+    "renameProject": "Přejmenovat spis",
+    "noProjects": "Nenalezeny žádné spisy",
+    "loadingProjects": "Načítání spisů...",
+    "searchPlaceholder": "Hledat spisy...",
+    "projectNamePlaceholder": "Název spisu",
+    "fetchingProjects": "Načítání vašich spisů a relací Claude",
+    "projects": "spisů",
+    "noMatchingProjects": "Žádné odpovídající spisy",
+    "runClaudeCli": "Začněte spuštěním Claude CLI v adresáři spisu"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "Vytvořit nový spis",
+    "refresh": "Obnovit spisy a relace (Ctrl+R)",
+    "renameProject": "Přejmenovat spis (F2)",
+    "deleteProject": "Odstranit spis z postranního panelu (Delete)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "Odstranit tento spis z postranního panelu? Soubory spisu, paměť ani data relací se nesmažou.",
+    "enterProjectPath": "Zadejte cestu k spisu",
+    "deleteProjectFailed": "Nepodařilo se odstranit spis. Zkuste to prosím znovu.",
+    "deleteProjectError": "Při odstraňování spisu došlo k chybě. Zkuste to prosím znovu.",
+    "createProjectFailed": "Nepodařilo se vytvořit spis. Zkuste to prosím znovu.",
+    "createProjectError": "Při vytváření spisu došlo k chybě. Zkuste to prosím znovu.",
+    "updateProjectError": "Při aktualizaci spisu došlo k chybě. Zkuste to prosím znovu.",
+    "restoreProjectFailed": "Nepodařilo se obnovit spis. Zkuste to prosím znovu.",
+    "restoreProjectError": "Při obnovování spisu došlo k chybě. Zkuste to prosím znovu."
+  },
+  "search": {
+    "modeProjects": "Spisy",
+    "projectsScanned_one": "Prohledán {{count}} spis",
+    "projectsScanned_few": "Prohledány {{count}} spisy",
+    "projectsScanned_many": "Prohledáno {{count}} spisu",
+    "projectsScanned_other": "Prohledáno {{count}} spisů"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "Odstranit spis",
+    "sessionCount_one": "Tento spis obsahuje {{count}} konverzaci.",
+    "sessionCount_few": "Tento spis obsahuje {{count}} konverzace.",
+    "sessionCount_many": "Tento spis obsahuje {{count}} konverzace.",
+    "sessionCount_other": "Tento spis obsahuje {{count}} konverzací.",
+    "archiveProject": "Archivovat spis",
+    "allConversationsDeleted": "Spis bude odstraněn z postranního panelu. Vaše soubory, paměť a data relací zůstanou zachovány.",
+    "cannotUndo": "Spis můžete později znovu přidat."
+  }
+}

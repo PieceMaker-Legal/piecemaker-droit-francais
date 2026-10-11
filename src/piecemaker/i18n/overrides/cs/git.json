@@ -1,0 +1,11 @@
+{
+  "panel": {
+    "selectProject": "Vyberte spis pro zobrazení správy verzí"
+  },
+  "errorState": {
+    "noRepoDescription": "Tento spis zatím není git repozitář. Inicializujte ho, abyste mohli sledovat změny a používat funkce správy verzí."
+  },
+  "remove": {
+    "description": "Odstranit worktree pro {{branch}}? Jeho složka se smaže a propojený spis se archivuje – relace chatu zůstanou obnovitelné."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "panel": {
+    "selectProject": "Pilih perkara untuk melihat kontrol sumber"
+  },
+  "errorState": {
+    "noRepoDescription": "Perkara ini belum menjadi repositori Git. Inisialisasikan repositori untuk mulai melacak perubahan dan menggunakan fitur kontrol sumber."
+  },
+  "remove": {
+    "description": "Hapus worktree untuk {{branch}}? Folder-nya akan dihapus dan perkara tertaut akan diarsipkan — sesi chat tetap dapat dipulihkan."
+  }
+}

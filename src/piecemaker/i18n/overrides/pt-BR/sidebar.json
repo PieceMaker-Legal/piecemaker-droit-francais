@@ -1,0 +1,51 @@
+{
+  "projects": {
+    "title": "Processos",
+    "newProject": "Novo processo",
+    "deleteProject": "Remover processo",
+    "renameProject": "Renomear processo",
+    "noProjects": "Nenhum processo encontrado",
+    "loadingProjects": "Carregando processos...",
+    "searchPlaceholder": "Pesquisar processos...",
+    "projectNamePlaceholder": "Nome do processo",
+    "fetchingProjects": "Buscando seus processos e sessões do Claude",
+    "projects": "processos",
+    "noMatchingProjects": "Nenhum processo encontrado",
+    "runClaudeCli": "Execute o Claude CLI em um diretório de processo para começar"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "Criar novo processo",
+    "refresh": "Atualizar processos e sessões (Ctrl+R)",
+    "renameProject": "Renomear processo (F2)",
+    "deleteProject": "Remover processo da barra lateral (Delete)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "Remover este processo da barra lateral? Seus arquivos de processo, memórias e dados de sessão não serão excluídos.",
+    "enterProjectPath": "Informe um caminho de processo",
+    "deleteProjectFailed": "Falha ao remover processo. Tente novamente.",
+    "deleteProjectError": "Erro ao remover processo. Tente novamente.",
+    "createProjectFailed": "Falha ao criar processo. Tente novamente.",
+    "createProjectError": "Erro ao criar processo. Tente novamente.",
+    "updateProjectError": "Erro ao atualizar processo. Tente novamente.",
+    "restoreProjectFailed": "Falha ao restaurar processo. Tente novamente.",
+    "restoreProjectError": "Erro ao restaurar processo. Tente novamente."
+  },
+  "search": {
+    "modeProjects": "Processos",
+    "projectsScanned_one": "{{count}} processo verificado",
+    "projectsScanned_other": "{{count}} processos verificados",
+    "projectsScanned_many": "{{count}} de processos verificados"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "Remover processo",
+    "sessionCount_one": "Este processo contém {{count}} conversa.",
+    "sessionCount_other": "Este processo contém {{count}} conversas.",
+    "sessionCount_many": "Este processo contém {{count}} de conversas.",
+    "archiveProject": "Arquivar processo",
+    "allConversationsDeleted": "O processo será removido da barra lateral. Seus arquivos, memórias e dados de sessão serão preservados.",
+    "cannotUndo": "Você pode adicionar o processo novamente mais tarde."
+  }
+}

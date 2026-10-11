@@ -1,0 +1,36 @@
+{
+  "mainContent": {
+    "loading": "Carregando PieceMaker",
+    "chooseProject": "Escolha seu processo",
+    "selectProjectDescription": "Selecione um processo na barra lateral para começar a codar com o Claude. Cada processo contém suas sessões de chat e histórico de arquivos.",
+    "createProjectMobile": "Toque no botão de menu acima para acessar processos",
+    "createProjectDesktop": "Crie um novo processo clicando no ícone de pasta na barra lateral",
+    "projectFiles": "Arquivos do processo"
+  },
+  "fileTree": {
+    "checkProjectPath": "Verifique se o caminho do processo está acessível"
+  },
+  "projectWizard": {
+    "title": "Criar novo processo",
+    "step1": {
+      "existing": {
+        "description": "Já tenho um espaço de trabalho no meu servidor e só preciso adicioná-lo à lista de processos"
+      }
+    },
+    "step3": {
+      "existingInfo": "O espaço de trabalho será adicionado à sua lista de processos e ficará disponível para sessões Claude/Cursor.",
+      "newEmpty": "O espaço de trabalho será adicionado à sua lista de processos e ficará disponível para sessões Claude/Cursor."
+    },
+    "buttons": {
+      "createProject": "Criar processo"
+    }
+  },
+  "commandPalette": {
+    "selectProjectFirst": "Selecione um processo primeiro"
+  },
+  "misc": {
+    "projectFallback": "Processo",
+    "noProjectSelected": "Nenhum processo selecionado",
+    "projectRequiredForShell": "Um processo é necessário para abrir um shell"
+  }
+}

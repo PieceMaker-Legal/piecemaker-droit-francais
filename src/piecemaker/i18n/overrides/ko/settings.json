@@ -4,6 +4,12 @@
       "project": "사건"
     }
   },
+  "quickSettings": {
+    "commands": {
+      "noProject": "사건을 선택하면 명령어가 표시됩니다.",
+      "empty": "이 사건에서 사용할 수 있는 명령어가 없습니다."
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "사건 정렬",
@@ -28,6 +34,9 @@
     }
   },
   "permissions": {
+    "settingsFiles": {
+      "projectNote": "사건의 .claude/settings.json 및 .claude/settings.local.json도 해당 사건의 채팅에 적용됩니다. 단, 폴더를 신뢰하기 전까지 Claude CLI는 .claude/settings.json의 허용 규칙을 무시합니다. 해당 폴더에서 Claude Code를 대화형으로 한 번 실행하고 신뢰 대화상자를 수락하세요."
+    },
     "codex": {
       "technicalInfo": {
         "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. 사건 디렉토리 내에서 모든 명령어 자동 실행."

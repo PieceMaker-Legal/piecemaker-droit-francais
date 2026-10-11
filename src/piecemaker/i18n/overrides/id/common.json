@@ -1,0 +1,36 @@
+{
+  "mainContent": {
+    "loading": "Memuat PieceMaker",
+    "chooseProject": "Pilih Perkara",
+    "selectProjectDescription": "Pilih perkara dari sidebar untuk mulai coding dengan Claude. Setiap perkara berisi sesi chat dan riwayat file.",
+    "createProjectMobile": "Ketuk tombol menu di atas untuk mengakses perkara",
+    "createProjectDesktop": "Buat perkara baru dengan mengeklik ikon folder di sidebar",
+    "projectFiles": "File Perkara"
+  },
+  "fileTree": {
+    "checkProjectPath": "Periksa apakah path perkara dapat diakses"
+  },
+  "projectWizard": {
+    "title": "Buat Perkara Baru",
+    "step1": {
+      "existing": {
+        "description": "Saya sudah memiliki workspace di server dan hanya perlu menambahkannya ke daftar perkara"
+      }
+    },
+    "step3": {
+      "existingInfo": "Workspace akan ditambahkan ke daftar perkara dan tersedia untuk sesi Claude/Cursor.",
+      "newEmpty": "Workspace akan ditambahkan ke daftar perkara dan tersedia untuk sesi Claude/Cursor."
+    },
+    "buttons": {
+      "createProject": "Buat Perkara"
+    }
+  },
+  "commandPalette": {
+    "selectProjectFirst": "Pilih perkara terlebih dahulu"
+  },
+  "misc": {
+    "projectFallback": "Perkara",
+    "noProjectSelected": "Tidak Ada Perkara yang Dipilih",
+    "projectRequiredForShell": "Perkara diperlukan untuk membuka shell"
+  }
+}

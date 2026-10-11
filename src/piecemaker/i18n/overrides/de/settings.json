@@ -4,6 +4,12 @@
       "project": "Dossier"
     }
   },
+  "quickSettings": {
+    "commands": {
+      "noProject": "Wähle ein Dossier, um seine Befehle zu sehen.",
+      "empty": "Für dieses Dossier sind keine Befehle verfügbar."
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Dossiersortierung",
@@ -28,6 +34,9 @@
     }
   },
   "permissions": {
+    "settingsFiles": {
+      "projectNote": "Die eigene .claude/settings.json und .claude/settings.local.json eines Dossiers gelten zusätzlich für Chats in diesem Dossier. Erlaubnisregeln aus .claude/settings.json ignoriert die Claude CLI, bis du dem Ordner vertraust: Starte Claude Code dort einmal interaktiv und bestätige den Vertrauensdialog."
+    },
     "codex": {
       "technicalInfo": {
         "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Alle Befehle werden automatisch innerhalb des Dossierverzeichnisses ausgeführt."

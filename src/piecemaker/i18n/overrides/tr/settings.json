@@ -4,6 +4,12 @@
       "project": "Dava"
     }
   },
+  "quickSettings": {
+    "commands": {
+      "noProject": "Komutlarını görmek için bir dava seçin.",
+      "empty": "Bu dava için kullanılabilir komut yok."
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Dava Sıralama",
@@ -28,6 +34,9 @@
     }
   },
   "permissions": {
+    "settingsFiles": {
+      "projectNote": "Bir davanın kendi .claude/settings.json ve .claude/settings.local.json dosyaları da o davadaki sohbetlere uygulanır. Claude CLI, klasöre güvenilene kadar .claude/settings.json içindeki izin kurallarını yok sayar: Claude Code'u orada bir kez etkileşimli olarak çalıştırın ve güven iletişim kutusunu kabul edin."
+    },
     "codex": {
       "technicalInfo": {
         "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Tüm komutlar dava dizini içinde otomatik çalışır."
