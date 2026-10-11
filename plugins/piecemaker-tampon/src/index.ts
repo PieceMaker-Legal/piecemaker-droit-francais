@@ -609,7 +609,7 @@ function renderPieces(state: ViewState): HTMLElement {
     else if (state.originals) {
       const grid = element('div', 'pm-tampon__grid');
       const available = element('div', 'pm-tampon__list-column');
-      available.append(element('p', 'pm-tampon__muted', 'Pièces du dossier — cliquer pour ajouter au bordereau'));
+      available.append(element('p', 'pm-tampon__muted', 'Sélectionnez les pièces à tamponner'));
       const availableList = element('div', 'pm-tampon__list');
       for (const piece of state.originals) {
         const orderIndex = state.selectedOrder.indexOf(piece.path);
@@ -710,7 +710,7 @@ function renderPieces(state: ViewState): HTMLElement {
           if (!state.disposed) render(state);
         });
       },
-      'pm-tampon__primary',
+      'piecemaker-button piecemaker-button--normal piecemaker-button--blue',
       count === 0 || state.running,
     ));
     card.append(footer);
