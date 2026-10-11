@@ -18,7 +18,6 @@ vi.mock('@/modules/plugins', () => ({
 }));
 vi.mock('@/modules/file-tree', () => ({ FileTree: () => <div>Fichiers du dossier</div> }));
 vi.mock('@/modules/git-panel', () => ({ GitPanel: () => <div>Git</div> }));
-vi.mock('@/modules/task-master', () => ({ useTasksSettings: () => ({ tasksEnabled: true, isTaskMasterInstalled: true }), TaskMasterPanel: () => <div>Tâches</div> }));
 vi.mock('@/modules/browser-use', () => ({ useBrowserUseEnabled: () => true, BrowserUsePanel: () => <div>Navigateur</div> }));
 
 const Workspace = withWorkspacePanels((props) => <div>

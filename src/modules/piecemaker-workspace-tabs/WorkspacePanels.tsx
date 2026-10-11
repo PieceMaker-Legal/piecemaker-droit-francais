@@ -11,7 +11,6 @@ import { WorkspaceFilesPanel } from '@/modules/piecemaker-workspace-tabs/Workspa
 import type { WorkspaceFilesSlots } from '@/modules/piecemaker-workspace-tabs/WorkspaceFilesPanel';
 import { WorkspacePanelsContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
 import { WorkspaceViewerContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspaceViewerContext';
-import { TaskMasterPanel, useTasksSettings } from '@/modules/task-master';
 import { openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 import type { AppTab, Project, ProjectSession, SettingsMainTab } from '@/shared/types';
 import { Card } from '@/shared/ui';
@@ -41,7 +40,6 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const { activeTab, setActiveTab } = props;
     const { t } = useTranslation();
     const { plugins } = usePlugins();
-    const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
     const browserEnabled = useBrowserUseEnabled();
     const [mainTab, setMainTab] = useState<AppTab>(props.activeTab === 'shell' ? 'shell' : 'chat');
     const [columns, setColumns] = useState<WorkspaceColumn[]>([]);
@@ -55,7 +53,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const dockRef = useRef<HTMLElement>(null);
     const dividerCoordinateRef = useRef(0);
     const columnRefs = useRef(new Map<AppTab | 'viewer', HTMLDivElement>());
-    const enabledColumns = columns.map((column) => ({ ...column, tabs: column.tabs.filter((tab) => tab === 'tasks' ? tasksEnabled && isTaskMasterInstalled
+    const enabledColumns = columns.map((column) => ({ ...column, tabs: column.tabs.filter((tab) => tab === 'tasks' ? false
       : tab === 'browser' ? browserEnabled
         : tab.startsWith('plugin:') ? plugins.some((plugin) => plugin.enabled && tab === `plugin:${plugin.name}`) : true) })).filter((column) => column.tabs.length > 0);
     const enabledPanels = enabledColumns.flatMap((column) => column.tabs);
@@ -179,7 +177,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                 <div className="piecemaker-workspace-column" aria-label={column.id === 'viewer' ? 'Colonne visionneuse' : undefined} hidden={Boolean(expandedTab && (column.id === 'viewer' ? expandedTab !== 'viewer' : expandedTab === 'viewer' || !column.tabs.includes(expandedTab)))} style={{ flexGrow: expandedTab ? 1 : column.width }} ref={column.id === 'viewer' ? bindViewerColumn : (element) => { if (element) columnRefs.current.set(column.id, element); else columnRefs.current.delete(column.id); }}>
                   {column.tabs.map((tab, rowIndex) => {
                     const plugin = plugins.find((item) => tab === `plugin:${item.name}`);
-                    const label = plugin?.displayName ?? t(`tabs.${tab === 'tasks' ? 'library' : tab}`);
+                    const label = plugin?.displayName ?? t(`tabs.${tab}`);
                     const hidden = Boolean(expandedTab && expandedTab !== tab);
                     const style = { flexGrow: expandedTab || column.tabs.length === 1 ? 1 : rowIndex === 0 ? column.split : 100 - column.split };
                     return <Fragment key={tab}>
@@ -193,7 +191,6 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                         </header>
                         <div className="piecemaker-workspace-panel-content">
                           {tab === 'git' && <GitPanel selectedProject={props.selectedProject} isMobile={props.isMobile} onFileOpen={openInEditor} onProjectSelect={props.onProjectSelect} onProjectsRefresh={props.onProjectsRefresh} />}
-                          {tab === 'tasks' && <TaskMasterPanel isVisible={!expandedTab || expandedTab === tab} />}
                           {tab === 'browser' && <BrowserUsePanel isVisible={!expandedTab || expandedTab === tab} onShowSettings={props.onShowSettings} />}
                           {plugin && <PluginTabContent pluginName={plugin.name} selectedProject={props.selectedProject} selectedSession={props.selectedSession} onOpenFileInEditor={openInEditor} />}
                         </div>
