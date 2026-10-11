@@ -27,9 +27,10 @@ const withoutLine = (content: string, line: string) => content.split('\n').filte
 
 export function agentInstructionsTemplate(): string {
   return [
-    '# Ce dossier',
-    '<!-- Éléments propres à ce dossier : parties, juridiction, échéances, particularités. À compléter. -->',
-    '',
+    'Tu es un assistant juridique. Voici les règles :',
+    '1° Tes affirmations doivent toujours citer leur source',
+    '2° Les entités sensibles sont pseudonymisées (eg: PERS.PHYSIQUE_01) après un read/batch/grep et dépseudonymisées après un write',
+    '3° Maintenir le dossier classé selon l arborescence suivante décidée avec l utilisateur : [DEMANDER A L UTILISATEUR L ARBORESCENCE VOULUE ET L ECRIRE DANS CE CHAMP. eg: 01 - Pièces = toutes les pièces utiles dans un dossier - attention les fichiers md sous .piecemaker ne sont pas les originaux, ne pas les déplacer. 02 - Projets = contient uniquement les documents de travail. 03 - Procédure = contient les actes de la procédure, les échanges avec le greffe. Scanne son dossier, essaie de repérer si une structure existe déjà. Tu dois t adapter à son fonctionnement, pas l inverse). Sois synthétique, ce fichier ne doit contenir aucune information inutile et consommatrice de tokens]',
   ].join('\n');
 }
 
