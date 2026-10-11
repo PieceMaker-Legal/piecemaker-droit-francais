@@ -1,0 +1,16 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "בחירת תיק",
+      "description": "יש לבחור תיק כדי לפתוח shell אינטראקטיבי בתיקייה שלו"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "יש לבחור תיק כדי להתחיל צ'אט עם {{provider}}"
+  },
+  "misc": {
+    "fallbackCommands": {
+      "memory": "פתיחת קובץ הזיכרון CLAUDE.md של התיק."
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "panel": {
+    "selectProject": "Selecione um processo para ver o controle de origem"
+  },
+  "errorState": {
+    "noRepoDescription": "Este processo ainda não é um repositório git. Inicialize um para começar a rastrear alterações e usar recursos de controle de origem."
+  },
+  "remove": {
+    "description": "Remover o worktree para {{branch}}? Sua pasta será excluída e o processo vinculado será arquivado — sessões de chat continuam recuperáveis."
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "Pilih Perkara",
+      "description": "Pilih perkara untuk membuka shell interaktif di direktori tersebut"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "Pilih perkara untuk mulai chat dengan {{provider}}"
+  },
+  "misc": {
+    "fallbackCommands": {
+      "memory": "Buka file memori CLAUDE.md perkara."
+    }
+  }
+}

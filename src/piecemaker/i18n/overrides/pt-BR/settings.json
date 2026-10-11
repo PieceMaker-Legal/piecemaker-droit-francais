@@ -1,0 +1,95 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "Processo"
+    }
+  },
+  "quickSettings": {
+    "commands": {
+      "noProject": "Selecione um processo para ver seus comandos.",
+      "empty": "Nenhum comando disponível para este processo."
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "Ordenação de processos",
+      "description": "Como os processos são ordenados na barra lateral"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "Processo (Local)",
+      "userDescription": "Escopo usuário: Disponível em todos os processos na sua máquina",
+      "projectDescription": "Escopo local: Disponível apenas no processo selecionado"
+    },
+    "fields": {
+      "selectProject": "Selecionar um processo..."
+    },
+    "scopes": {
+      "project": "Processo",
+      "projectAllProviders": "Processo (Todos os provedores)",
+      "userGlobalDesc": "Disponível em todos os processos na sua máquina",
+      "userAllProvidersDesc": "Grava na configuração de usuário de cada provedor e fica disponível em todos os processos nesta máquina",
+      "localDesc": "Armazenado nas configurações do usuário do Claude para o processo selecionado",
+      "projectDesc": "Armazenado no espaço de trabalho do processo selecionado",
+      "projectAllProvidersDesc": "Grava no espaço de trabalho do processo selecionado para todos os provedores"
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "Use task-master init no diretório do seu processo"
+      }
+    }
+  },
+  "permissions": {
+    "settingsFiles": {
+      "projectNote": "O .claude/settings.json e .claude/settings.local.json de um processo também se aplicam a chats naquele processo. O CLI do Claude ignora regras allow em .claude/settings.json até que a pasta seja confiável: execute o Claude Code interativamente lá uma vez e aceite o diálogo de confiança."
+    },
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Todos os comandos executam automaticamente dentro do diretório do processo."
+      }
+    }
+  },
+  "mcpServers": {
+    "managed": {
+      "hint": "Gerenciado pelo PieceMaker."
+    }
+  },
+  "pluginSettings": {
+    "sections": {
+      "officialDescription": "Mantidos pela equipe do PieceMaker e prontos para instalação direta."
+    },
+    "starterPlugin": {
+      "name": "Estatísticas do processo",
+      "description": "Contagem de arquivos, linhas de código, detalhamento por tipo de arquivo e atividade recente do seu processo."
+    }
+  },
+  "skillsPage": {
+    "description": "Gerencie skills do {{provider}} a partir de arquivos locais, pastas completas e locais cientes de processo.",
+    "scanningProjectSkills": "Escaneando skills do processo...",
+    "emptyDescription": "Adicione uma skill global acima ou crie pastas de skills específicas do processo no seu espaço de trabalho.",
+    "noMatchDescription": "Tente um comando, nome, escopo, processo ou caminho de origem diferente.",
+    "projectBadge": "Processo: {{name}}",
+    "scopes": {
+      "project": "Processo"
+    }
+  },
+  "mcpServersAdd": {
+    "refreshingScopes": "Atualizando escopos do processo..."
+  },
+  "mcpTeamCard": {
+    "proLink": "Disponível com PieceMaker Pro"
+  },
+  "mcpServersAddErrors": {
+    "selectProjectRequired": "Selecione um processo para servidores MCP com escopo de processo",
+    "globalScopeUnsupported": "Adicionar servidor MCP suporta apenas escopo de usuário ou processo em todos os provedores."
+  },
+  "about": {
+    "hostedTitle": "Experimente o PieceMaker hospedado",
+    "proFeaturesTitle": "Recursos do PieceMaker Pro",
+    "teamManagementDescription": "Múltiplos usuários, acesso baseado em funções e processos compartilhados para sua equipe.",
+    "proCta": "Disponível com PieceMaker Pro"
+  }
+}

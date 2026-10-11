@@ -4,6 +4,12 @@
       "project": "案件"
     }
   },
+  "quickSettings": {
+    "commands": {
+      "noProject": "案件を選択するとコマンドが表示されます。",
+      "empty": "この案件で利用できるコマンドはありません。"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "案件の並び順",
@@ -28,6 +34,9 @@
     }
   },
   "permissions": {
+    "settingsFiles": {
+      "projectNote": "案件内の .claude/settings.json と .claude/settings.local.json も、その案件のチャットに適用されます。ただし、フォルダーが信頼されるまで Claude CLI は .claude/settings.json の許可ルールを無視します。そのフォルダーで Claude Code を一度対話モードで起動し、信頼ダイアログを承認してください。"
+    },
     "codex": {
       "technicalInfo": {
         "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never。すべてのコマンドが案件ディレクトリ内で自動実行。"
