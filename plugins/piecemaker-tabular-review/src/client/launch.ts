@@ -37,43 +37,47 @@ function normalize(value: string): string {
 
 export function createLaunchView(app: App): View {
   const element = document.createElement('div');
-  element.className = 'ptr-page';
+  element.className = 'ptr-launch';
   element.innerHTML = `
-    <div class="ptr-grid">
-      <label class="ptr-field"><span class="ptr-label">Dossier</span><select class="ptr-select" data-project></select></label>
-      <label class="ptr-field"><span class="ptr-label">Modèle d’analyse tabulaire</span><select class="ptr-select" data-template></select></label>
-      <label class="ptr-field"><span class="ptr-label">Nom de l’analyse tabulaire</span><input class="ptr-input" data-title maxlength="120" placeholder="ex. Notion de faute lourde"></label>
+    <div class="ptr-launch-body">
+      <div class="ptr-grid">
+        <label class="ptr-field"><span class="ptr-label">Dossier</span><select class="ptr-select" data-project></select></label>
+        <label class="ptr-field"><span class="ptr-label">Modèle d’analyse tabulaire</span><select class="ptr-select" data-template></select></label>
+        <label class="ptr-field"><span class="ptr-label">Nom de l’analyse tabulaire</span><input class="ptr-input" data-title maxlength="120" placeholder="ex. Notion de faute lourde"></label>
+      </div>
+      <div data-notice></div>
+      <div class="ptr-panels">
+        <section class="ptr-panel">
+          <div class="ptr-panel-header">
+            <span data-docs-count>Documents</span>
+            <input class="ptr-input" data-filter placeholder="Filtrer…" style="max-width:220px;height:1.6rem;margin-left:auto">
+            <button type="button" class="ptr-button" data-select-all>Tout</button>
+            <button type="button" class="ptr-button" data-select-none>Aucun</button>
+          </div>
+          <div class="ptr-panel-body" data-docs></div>
+        </section>
+        <section class="ptr-panel">
+          <div class="ptr-panel-header">
+            <span data-rows-count>Lignes</span>
+            <span class="ptr-spacer"></span>
+            <button type="button" class="ptr-button" data-group title="Fusionner les lignes cochées en une seule ligne">Regrouper</button>
+            <button type="button" class="ptr-button" data-ungroup title="Séparer les groupes cochés en une ligne par document">Dégrouper</button>
+          </div>
+          <div class="ptr-panel-body" data-rows></div>
+        </section>
+      </div>
     </div>
-    <div data-notice></div>
-    <div class="ptr-panels">
-      <section class="ptr-panel">
-        <div class="ptr-panel-header">
-          <span data-docs-count>Documents</span>
-          <input class="ptr-input" data-filter placeholder="Filtrer…" style="max-width:220px;height:1.6rem;margin-left:auto">
-          <button type="button" class="ptr-button" data-select-all>Tout</button>
-          <button type="button" class="ptr-button" data-select-none>Aucun</button>
-        </div>
-        <div class="ptr-panel-body" data-docs></div>
-      </section>
-      <section class="ptr-panel">
-        <div class="ptr-panel-header">
-          <span data-rows-count>Lignes</span>
-          <span class="ptr-spacer"></span>
-          <button type="button" class="ptr-button" data-group title="Fusionner les lignes cochées en une seule ligne">Regrouper</button>
-          <button type="button" class="ptr-button" data-ungroup title="Séparer les groupes cochés en une ligne par document">Dégrouper</button>
-        </div>
-        <div class="ptr-panel-body" data-rows></div>
-      </section>
-    </div>
-    <div class="ptr-footer-bar">
-      <label class="ptr-field" style="width:120px"><span class="ptr-label">IA</span><select class="ptr-select" data-provider>${PROVIDERS.map((provider) => `<option value="${provider.value}">${provider.label}</option>`).join('')}</select></label>
-      <label class="ptr-field" style="width:240px"><span class="ptr-label">Modèle IA</span><select class="ptr-select" data-model></select></label>
-      <label class="ptr-field" style="width:150px"><span class="ptr-label">Sessions simultanées</span><select class="ptr-select" data-concurrency>${[1, 2, 3, 4, 5, 6, 8].map((value) => `<option value="${value}"${value === 3 ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
-      <span class="ptr-spacer"></span>
-      <span class="ptr-small ptr-muted" data-filename></span>
-      <button type="button" class="ptr-button ptr-button-primary" data-launch>Lancer l’analyse tabulaire</button>
-    </div>
-    <div data-model-warning></div>`;
+    <div class="ptr-launch-bar">
+      <div data-model-warning></div>
+      <div class="ptr-launch-controls">
+        <label class="ptr-bar-field"><span class="ptr-bar-label">IA</span><select class="ptr-select" data-provider>${PROVIDERS.map((provider) => `<option value="${provider.value}">${provider.label}</option>`).join('')}</select></label>
+        <label class="ptr-bar-field"><span class="ptr-bar-label">Modèle IA</span><select class="ptr-select" data-model></select></label>
+        <label class="ptr-bar-field"><span class="ptr-bar-label">Sessions simultanées</span><select class="ptr-select" data-concurrency>${[1, 2, 3, 4, 5, 6, 8].map((value) => `<option value="${value}"${value === 3 ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
+        <span class="ptr-spacer"></span>
+        <span class="ptr-small ptr-muted ptr-filename" data-filename></span>
+        <button type="button" class="ptr-button ptr-button-primary" data-launch>Lancer l’analyse tabulaire</button>
+      </div>
+    </div>`;
 
   const $ = <T extends HTMLElement>(selector: string) => element.querySelector<T>(selector)!;
   const projectSelect = $<HTMLSelectElement>('[data-project]');
