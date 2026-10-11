@@ -103,8 +103,8 @@ export function createReviewView(app: App, project: string, file: string, onBack
     const options = models?.provider === choice.provider ? models.options : [];
     const listed = !choice.model || options.some((option) => option.value === choice!.model) ? options : [{ value: choice.model, label: choice.model }, ...options];
     return `
-        <label class="ptr-field" style="width:110px"><span class="ptr-label">IA</span><select class="ptr-select" data-choice-provider${running ? ' disabled' : ''}>${PROVIDERS.map((provider) => `<option value="${provider.value}"${provider.value === choice!.provider ? ' selected' : ''}>${provider.label}</option>`).join('')}</select></label>
-        <label class="ptr-field" style="width:200px"><span class="ptr-label">Modèle IA pour les relances</span><select class="ptr-select" data-choice-model${running ? ' disabled' : ''}>${listed.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === choice!.model ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`;
+        <label class="ptr-bar-field"><span class="ptr-bar-label">IA</span><select class="ptr-select" data-choice-provider${running ? ' disabled' : ''}>${PROVIDERS.map((provider) => `<option value="${provider.value}"${provider.value === choice!.provider ? ' selected' : ''}>${provider.label}</option>`).join('')}</select></label>
+        <label class="ptr-bar-field"><span class="ptr-bar-label">Modèle IA pour les relances</span><select class="ptr-select" data-choice-model${running ? ' disabled' : ''}>${listed.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === choice!.model ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`;
   }
 
   function costlyChoice(): string {
@@ -157,22 +157,25 @@ export function createReviewView(app: App, project: string, file: string, onBack
         <button type="button" class="ptr-button" data-back>← Retour</button>
         <div style="min-width:0">
           <div class="ptr-review-title">${escapeHtml(review.title)}</div>
-          <div class="ptr-small ptr-muted">${escapeHtml(review.templateName)} · ${escapeHtml(app.projectName(project))} · ${escapeHtml(formatDate(review.createdAt))}</div>
-          ${review.research ? `<div class="ptr-small ptr-muted" title="${escapeHtml(review.research.criteria.join('\n'))}">Requête : <code>${escapeHtml(review.research.query)}</code> · ${escapeHtml(review.research.criteria.join(' · '))} · dernière recherche le ${escapeHtml(formatDate(lastSearchDate(review)))}${review.research.updates?.length ? ` (${review.research.updates.length} mise${review.research.updates.length > 1 ? 's' : ''} à jour)` : ''}</div>` : ''}
+          ${review.research
+            ? `<div class="ptr-small ptr-muted">Effectuée le ${escapeHtml(formatDate(review.createdAt))} · Dossier ${escapeHtml(app.projectName(project))}</div><div class="ptr-small ptr-muted">Recherche : <code>${escapeHtml(review.research.query)}</code>. Juridictions : ${escapeHtml(review.research.criteria.join(' · '))}</div>`
+            : `<div class="ptr-small ptr-muted">${escapeHtml(review.templateName)} · ${escapeHtml(app.projectName(project))} · ${escapeHtml(formatDate(review.createdAt))}</div>`}
         </div>
         ${review.category === 'recherche-juridique' || sorting ? `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS[review.category!])}</span>` : ''}
         <span class="ptr-chip ptr-chip-${status}">${running ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(status))} · ${done}/${review.rows.length}</span>
         ${running ? `<div class="ptr-progress" aria-hidden="true"><div style="width:${review.rows.length ? Math.round((done / review.rows.length) * 100) : 0}%"></div></div>` : ''}
         <span class="ptr-spacer"></span>
-        ${modelSelector(running)}
         ${running ? '<button type="button" class="ptr-button ptr-button-danger" data-cancel>Annuler</button>' : ''}
         ${review.research ? `<button type="button" class="ptr-button" data-update-research${review.research.filters ? ` title="Chercher les décisions rendues depuis la dernière recherche (${escapeHtml(formatDate(lastSearchDate(review)))}) et les analyser"` : ' disabled title="Recherche lancée avant l’enregistrement de ses critères : relancez-la depuis l’onglet Recherche juridique"'}>Mettre à jour la recherche</button>` : ''}
-        ${!running && failed ? '<button type="button" class="ptr-button" data-retry title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>' : ''}
         ${sorting ? `<button type="button" class="ptr-button" data-add-pieces title="Ajoute une ligne par pièce absente du tri (converties d’abord si besoin) et lance leur analyse">Ajouter les nouvelles pièces</button>
         <button type="button" class="ptr-button ptr-button-primary" data-apply-all title="Renomme et range toutes les pièces selon les colonnes d’action, après confirmation">Appliquer pour tous</button>` : ''}
-        <button type="button" class="ptr-button" data-export="docx">Export Word</button>
-        <button type="button" class="ptr-button" data-export="pdf">Export PDF</button>
-        ${app.api.openFileInEditor ? '<button type="button" class="ptr-button" data-open-json>Ouvrir le JSON</button>' : ''}
+        <details class="ptr-menu">
+          <summary class="ptr-button">Exporter</summary>
+          <div class="ptr-menu-list">
+            <button type="button" class="ptr-menu-item" data-export="docx">Word (.docx)</button>
+            <button type="button" class="ptr-menu-item" data-export="pdf">PDF</button>
+          </div>
+        </details>
       </div>
       <div class="ptr-legend">${FLAGS.map((flag) => `<span>${flagDot(flag)}${escapeHtml(FLAG_LABELS[flag])}</span>`).join('')}</div>
       <div class="ptr-review-body">
@@ -195,6 +198,12 @@ export function createReviewView(app: App, project: string, file: string, onBack
           </table>
         </div>
         ${renderDetail()}
+      </div>
+      <div class="ptr-review-bar">
+        ${modelSelector(running)}
+        ${costlyChoice()}
+        <span class="ptr-spacer"></span>
+        ${!running && failed ? '<button type="button" class="ptr-button" data-retry title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>' : ''}
       </div>`;
     const nextWrap = element.querySelector<HTMLElement>('.ptr-table-wrap');
     if (nextWrap) {
@@ -228,7 +237,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
   async function action(run: () => Promise<void>) {
     if (busy) return;
     busy = true;
-    element.querySelectorAll<HTMLButtonElement>('.ptr-review-top .ptr-button').forEach((button) => { button.disabled = true; });
+    element.querySelectorAll<HTMLButtonElement>('.ptr-review-top .ptr-button, .ptr-review-bar .ptr-button').forEach((button) => { button.disabled = true; });
     try {
       await run();
     } catch (error) {
@@ -439,15 +448,12 @@ export function createReviewView(app: App, project: string, file: string, onBack
     const exportButton = target.closest<HTMLElement>('[data-export]');
     if (exportButton) {
       const format = exportButton.dataset.export as ExportFormat;
+      exportButton.closest('details')?.removeAttribute('open');
       void action(async () => {
         const result = await app.rpc<ExportResult>('POST', '/reviews/export', { project, file, format });
         downloadBase64(result.filename, result.base64, MIME_TYPES[format]);
         toast(app.root, `Export enregistré dans « ${REVIEW_FOLDER}/${result.filename} ».`);
       });
-      return;
-    }
-    if (target.closest('[data-open-json]')) {
-      app.api.openFileInEditor?.(`${project.replace(/[\\/]+$/, '')}/${REVIEW_FOLDER}/${file}`);
       return;
     }
     const cell = target.closest<HTMLElement>('td.ptr-cell');
