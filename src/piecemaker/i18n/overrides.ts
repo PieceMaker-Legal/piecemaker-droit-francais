@@ -13,8 +13,11 @@ import type { i18n as I18nInstance } from 'i18next';
 
 import { PIECEMAKER_I18N_ADDITIONS } from './additions';
 
-/** Language used when the user has never picked one; PieceMaker targets French practitioners. */
-export const PIECEMAKER_DEFAULT_LANGUAGE = 'fr';
+/**
+ * Language used when the user has never picked one; PieceMaker targets French practitioners.
+ * Under Vitest the upstream default is kept, so CloudCLI's tests assert on the wording they were written for.
+ */
+export const PIECEMAKER_DEFAULT_LANGUAGE = import.meta.env.MODE === 'test' ? 'en' : 'fr';
 
 const overrideBundles = import.meta.glob<{ default: Record<string, unknown> }>(
   './overrides/*/*.json',
