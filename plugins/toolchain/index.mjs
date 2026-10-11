@@ -13,24 +13,27 @@ export { buildPlugins, discoverPlugins, syncPlugins };
 /** Bundle local, hors Electron : `<app>/.piecemaker-plugins` (ignoré par git). */
 export const localBundleDir = (appRoot) => path.join(appRoot, '.piecemaker-plugins');
 
+function envValue(appRoot, key) {
+  if (process.env[key]) return process.env[key];
+  try {
+    return fs.readFileSync(path.join(appRoot, '.env'), 'utf8').split(/\r?\n/)
+      .map((line) => line.trim()).find((line) => line.startsWith(`${key}=`))?.slice(key.length + 1).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Même résolution que productDataRoot() côté serveur et que electron/main.js. */
 export function dataRootFor(appRoot) {
-  if (process.env.CLOUDCLI_HOME) return process.env.CLOUDCLI_HOME;
+  const configured = envValue(appRoot, 'CLOUDCLI_HOME');
+  if (configured) return configured;
   const product = JSON.parse(fs.readFileSync(path.join(appRoot, 'product.config.json'), 'utf8'));
   return path.join(os.homedir(), product.dataDirectoryName);
 }
 
 /** Base lue par le serveur lancé depuis le dépôt : DATABASE_PATH (env, puis .env), sinon <données>/auth.db. */
 export function databasePathFor(appRoot, dataRoot) {
-  let configured = process.env.DATABASE_PATH;
-  if (!configured) {
-    try {
-      configured = fs.readFileSync(path.join(appRoot, '.env'), 'utf8').split(/\r?\n/)
-        .map((line) => line.trim()).find((line) => line.startsWith('DATABASE_PATH='))?.slice('DATABASE_PATH='.length);
-    } catch {
-      configured = undefined;
-    }
-  }
+  const configured = envValue(appRoot, 'DATABASE_PATH');
   if (!configured) return path.join(dataRoot, 'auth.db');
   return path.isAbsolute(configured) ? configured : path.resolve(appRoot, configured);
 }
