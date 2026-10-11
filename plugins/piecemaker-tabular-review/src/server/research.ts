@@ -426,6 +426,19 @@ export function startResearch(input: unknown, api?: LegifranceApi): ResearchStat
   return launchResearch(filters, parsed, api, new Set());
 }
 
+/** Modifie la période et les juridictions d'une recherche enregistrée, sans toucher aux autres critères. */
+export function updateResearchFilters(project: string, file: string, input: unknown): Promise<Review> {
+  const changes = (input ?? {}) as Record<string, unknown>;
+  return updateReview(project, file, (review) => {
+    if (reviewCategory(review) !== 'recherche-juridique' || !review.research) throw new UserError('Cette analyse tabulaire ne provient pas d’une recherche juridique.');
+    const stored = review.research.filters;
+    if (!stored) throw new UserError('Cette recherche a été lancée avant l’enregistrement de ses critères : sa période et ses juridictions ne peuvent pas être modifiées.');
+    const { filters } = validateFilters({ ...stored, dateDebut: changes.dateDebut, dateFin: changes.dateFin, sources: changes.sources });
+    review.research.filters = filters;
+    review.research.criteria = researchCriteria(filters);
+  });
+}
+
 export function startResearchUpdate(project: string, file: string, since: unknown, api?: LegifranceApi): ResearchState {
   const review = researchReview(project, file);
   const stored = review.research.filters;
