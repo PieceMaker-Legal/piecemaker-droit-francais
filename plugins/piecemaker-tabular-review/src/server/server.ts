@@ -200,7 +200,7 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
   }
   if (method === 'POST' && pathname === '/reviews/column') {
     const { project, file } = reviewTarget(body);
-    await saveQuestion(project, file, body.column, body.prompt);
+    await saveQuestion(project, file, body.column, body.prompt, body.title);
     return reviewDetail(project, file, isRunning(project, file));
   }
   if (method === 'POST' && pathname === '/reviews/research') {

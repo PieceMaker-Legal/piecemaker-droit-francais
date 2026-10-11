@@ -44,21 +44,28 @@ afterEach(() => {
 describe('édition d’une analyse tabulaire dans la page', () => {
   it('ajoute une question dont le titre est tiré du texte', async () => {
     const project = writeReview({});
-    await saveQuestion(project, FILE, undefined, '  Quelle est la durée   du préavis ?  ');
+    await saveQuestion(project, FILE, undefined, '  Quelle est la durée   du préavis ?  ', '');
     const review = readReview(project, FILE);
     expect(review.columns).toEqual([{ index: 0, name: 'Quelle est la durée du préavis ?', prompt: 'Quelle est la durée   du préavis ?', format: 'text' }]);
   });
 
-  it('modifie la question d’une colonne existante sans changer son index', async () => {
+  it('modifie la question d’une colonne existante sans changer son index ni son titre', async () => {
     const project = writeReview({ columns: [{ index: 3, name: 'Ancien', prompt: 'Ancien', format: 'text' }] });
-    await saveQuestion(project, FILE, 3, 'Nouvelle question');
-    expect(readReview(project, FILE).columns).toEqual([{ index: 3, name: 'Nouvelle question', prompt: 'Nouvelle question', format: 'text' }]);
+    await saveQuestion(project, FILE, 3, 'Nouvelle question', '');
+    expect(readReview(project, FILE).columns).toEqual([{ index: 3, name: 'Ancien', prompt: 'Nouvelle question', format: 'text' }]);
+  });
+
+  it('enregistre un titre donné à la création comme à la modification', async () => {
+    const project = writeReview({ columns: [{ index: 0, name: 'A', prompt: 'A', format: 'text' }] });
+    await saveQuestion(project, FILE, undefined, 'Question longue', '  Préavis  ');
+    await saveQuestion(project, FILE, 0, 'A', 'Titre');
+    expect(readReview(project, FILE).columns.map((column) => column.name)).toEqual(['Titre', 'Préavis']);
   });
 
   it('refuse une question vide et une colonne inconnue', async () => {
     const project = writeReview({ columns: [{ index: 0, name: 'A', prompt: 'A', format: 'text' }] });
-    await expect(saveQuestion(project, FILE, undefined, '   ')).rejects.toThrow('Écrivez la question');
-    await expect(saveQuestion(project, FILE, 7, 'Question')).rejects.toThrow('Question introuvable');
+    await expect(saveQuestion(project, FILE, undefined, '   ', '')).rejects.toThrow('Écrivez la question');
+    await expect(saveQuestion(project, FILE, 7, 'Question', '')).rejects.toThrow('Question introuvable');
   });
 
   it('enregistre la période et les juridictions et recalcule les critères', async () => {

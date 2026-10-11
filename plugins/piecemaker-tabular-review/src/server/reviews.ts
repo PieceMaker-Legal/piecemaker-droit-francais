@@ -197,21 +197,21 @@ export function editCell(project: string, file: string, rowId: unknown, column: 
   });
 }
 
-/** Ajoute une question (colonne sans index) ou modifie celle d'une colonne ; son titre est tiré de la question. */
-export async function saveQuestion(project: string, file: string, column: unknown, prompt: unknown): Promise<Review> {
+/** Ajoute une question (colonne sans index) ou modifie celle d'une colonne. Sans titre, une question reçoit le début de son texte. */
+export async function saveQuestion(project: string, file: string, column: unknown, prompt: unknown, title: unknown): Promise<Review> {
   const text = typeof prompt === 'string' ? prompt.trim().slice(0, 4000) : '';
   if (!text) throw new UserError('Écrivez la question à poser.');
-  const name = text.replace(/\s+/g, ' ').slice(0, 60);
+  const given = typeof title === 'string' ? title.trim().replace(/\s+/g, ' ').slice(0, 120) : '';
   return updateReview(project, file, (review) => {
     if (column === undefined || column === null) {
       if (review.columns.length >= MAX_COLUMNS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_COLUMNS} questions.`);
       const index = Math.max(-1, ...review.columns.map((entry) => entry.index)) + 1;
-      review.columns.push({ index, name, prompt: text, format: 'text' });
+      review.columns.push({ index, name: given || text.replace(/\s+/g, ' ').slice(0, 60), prompt: text, format: 'text' });
       return;
     }
     const target = review.columns.find((entry) => entry.index === Number(column));
     if (!target) throw new UserError('Question introuvable.');
-    Object.assign(target, { name, prompt: text });
+    Object.assign(target, { name: given || target.name, prompt: text });
   });
 }
 
