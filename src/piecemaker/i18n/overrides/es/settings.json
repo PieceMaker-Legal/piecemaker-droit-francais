@@ -4,6 +4,12 @@
       "project": "Expediente"
     }
   },
+  "quickSettings": {
+    "commands": {
+      "noProject": "Selecciona un expediente para ver sus comandos.",
+      "empty": "No hay comandos disponibles para este expediente."
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Orden de expedientes",
@@ -28,6 +34,9 @@
     }
   },
   "permissions": {
+    "settingsFiles": {
+      "projectNote": "Los archivos .claude/settings.json y .claude/settings.local.json propios de un expediente también se aplican a los chats de ese expediente. La CLI de Claude ignora las reglas de permitir de .claude/settings.json hasta que confíes en la carpeta: ejecuta Claude Code allí una vez en modo interactivo y acepta el diálogo de confianza."
+    },
     "codex": {
       "technicalInfo": {
         "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Todos los comandos se autoejecutan dentro del directorio del expediente."

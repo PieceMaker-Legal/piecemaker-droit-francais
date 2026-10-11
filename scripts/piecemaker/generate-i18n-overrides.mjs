@@ -154,6 +154,39 @@ const RULES = {
   'zh-CN': [['项目', '案件']],
   // zh-TW uses 專案 for the workspace; 項目 there means "item" and is left alone.
   'zh-TW': [['專案', '案件']],
+  // "spis" is masculine inanimate like "projekt", so agreeing words stay correct.
+  cs: [
+    ['Projektech', 'Spisech'],
+    ['Projektům', 'Spisům'],
+    ['Projektem', 'Spisem'],
+    ['Projektů', 'Spisů'],
+    ['Projektu', 'Spisu'],
+    ['Projekty', 'Spisy'],
+    ['Projekt', 'Spis'],
+    ['projektech', 'spisech'],
+    ['projektům', 'spisům'],
+    ['projektem', 'spisem'],
+    ['projektů', 'spisů'],
+    ['projektu', 'spisu'],
+    ['projekty', 'spisy'],
+    ['projekt', 'spis'],
+  ],
+  // "תיק" is masculine like "פרויקט"; prefixed forms (ה, ל, ב…) are covered by substring.
+  he: [
+    ['פרויקטים', 'תיקים'],
+    ['פרויקט', 'תיק'],
+  ],
+  id: [
+    ['Proyek', 'Perkara'],
+    ['proyek', 'perkara'],
+  ],
+  // "processo" is masculine like "projeto".
+  'pt-BR': [
+    ['Projetos', 'Processos'],
+    ['projetos', 'processos'],
+    ['Projeto', 'Processo'],
+    ['projeto', 'processo'],
+  ],
 };
 
 /** Phrases repaired after the noun swap, where the substituted word needs a different frame. */

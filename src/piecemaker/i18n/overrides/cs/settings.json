@@ -1,0 +1,89 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "Spis"
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "Řazení spisů",
+      "description": "Pořadí spisů v postranním panelu"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "Spis (lokální)",
+      "userDescription": "Rozsah Uživatel: dostupné ve všech spisech na vašem počítači",
+      "projectDescription": "Lokální rozsah: dostupné pouze ve vybraném spisu"
+    },
+    "fields": {
+      "selectProject": "Vyberte spis..."
+    },
+    "scopes": {
+      "project": "Spis",
+      "projectAllProviders": "Spis (všechny providery)",
+      "userGlobalDesc": "Dostupné ve všech spisech na vašem počítači",
+      "userAllProvidersDesc": "Zapisuje do uživatelské konfigurace každého provideru a je dostupné ve všech spisech na tomto počítači",
+      "localDesc": "Uloženo v uživatelském nastavení Claude pro vybraný spis",
+      "projectDesc": "Uloženo v pracovním prostoru vybraného spisu",
+      "projectAllProvidersDesc": "Zapisuje do pracovního prostoru vybraného spisu pro každý provider"
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "V adresáři spisu spusťte task-master init"
+      }
+    }
+  },
+  "permissions": {
+    "settingsFiles": {
+      "projectNote": "Vlastní soubory spisu .claude/settings.json a .claude/settings.local.json platí také pro chaty v tomto spisu. Povolující pravidla z .claude/settings.json Claude CLI ignoruje, dokud složce nedůvěřujete: jednou v ní interaktivně spusťte Claude Code a potvrďte dialog důvěry."
+    },
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Všechny příkazy se spouštějí automaticky v adresáři spisu."
+      }
+    }
+  },
+  "mcpServers": {
+    "managed": {
+      "hint": "Spravuje PieceMaker."
+    }
+  },
+  "pluginSettings": {
+    "sections": {
+      "officialDescription": "Spravuje je tým PieceMaker a jsou připravené k přímé instalaci."
+    },
+    "starterPlugin": {
+      "name": "Statistiky spisu",
+      "description": "Počty souborů, řádky kódu, rozdělení podle typů souborů a nedávná aktivita vašeho spisu."
+    }
+  },
+  "skillsPage": {
+    "description": "Spravujte skilly pro {{provider}} z lokálních souborů, celých složek a umístění v spisech.",
+    "scanningProjectSkills": "Prohledávání skillů v spisech...",
+    "emptyDescription": "Přidejte výše globální skill, nebo v pracovním prostoru vytvořte složky se skilly pro konkrétní spisy.",
+    "noMatchDescription": "Zkuste jiný příkaz, název, rozsah, spis nebo zdrojovou cestu.",
+    "projectBadge": "Spis: {{name}}",
+    "scopes": {
+      "project": "Spis"
+    }
+  },
+  "mcpServersAdd": {
+    "refreshingScopes": "Obnovování rozsahů spisů..."
+  },
+  "mcpTeamCard": {
+    "proLink": "K dispozici v PieceMaker Pro"
+  },
+  "mcpServersAddErrors": {
+    "selectProjectRequired": "Pro MCP servery s rozsahem spisu vyberte spis",
+    "globalScopeUnsupported": "Přidání MCP serveru pro všechny providery podporuje pouze rozsah Uživatel nebo Spis."
+  },
+  "about": {
+    "hostedTitle": "Vyzkoušejte PieceMaker Hosted",
+    "proFeaturesTitle": "Funkce PieceMaker Pro",
+    "teamManagementDescription": "Více uživatelů, přístup podle rolí a sdílené spisy pro váš tým.",
+    "proCta": "K dispozici v PieceMaker Pro"
+  }
+}

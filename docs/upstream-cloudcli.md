@@ -84,6 +84,35 @@ git rev-list --left-right --count upstream/main...main   # gauche = à prendre
 git merge upstream/main --no-commit --no-ff
 ```
 
+### Upstream a réécrit son historique : vérifier la base avant de fusionner
+
+Entre v1.37.3 et v1.37.4, upstream a réécrit sa branche : le commit fusionné
+la fois précédente n'est plus un ancêtre de `upstream/main`, et
+`git merge-base` retombe sur un commit de 2025. Un merge lancé tel quel compare
+alors plus d'un an de code des deux côtés : des centaines de conflits, et le
+risque de résoudre « vers upstream » du code PieceMaker. Contrôler d'abord :
+
+```sh
+PREV=$(git log -1 --format=%P <dernier commit de merge upstream> | awk '{print $2}')
+git merge-base --is-ancestor $PREV upstream/main || echo "HISTORIQUE RÉÉCRIT"
+```
+
+Si l'historique a été réécrit, retrouver l'équivalent du commit précédemment
+fusionné (même arbre, nouveau SHA), puis greffer temporairement notre dernier
+merge sur lui pour que Git calcule la bonne base :
+
+```sh
+git log --format='%h %T' upstream/main | grep $(git log -1 --format=%T $PREV)
+git replace --graft <notre merge> <son 1er parent> <équivalent upstream>
+git merge-base main upstream/main          # doit donner l'équivalent
+git merge upstream/main --no-commit --no-ff
+# … résoudre, commiter le merge …
+git replace -d <notre merge>               # le merge commité suffit ensuite
+```
+
+Le merge commité a `upstream/main` pour parent réel : la greffe n'est plus
+nécessaire pour les remontées suivantes.
+
 ---
 
 ## 3. Connaître la surface de collision avant d'ouvrir un fichier
@@ -108,13 +137,16 @@ Ces points ont déjà été perdus ou ont failli l'être. Les contrôler un par 
 
 | Fichier | Ce qui doit survivre |
 | --- | --- |
-| `src/modules/auth/context/AuthContext.tsx` | `useRef`, `tokenRef`, l'effet `tokenRef.current = token`, et **`token` absent des deps de `checkAuthStatus`** |
+| `src/modules/auth/context/AuthContext.tsx` | **`token` absent des deps de `checkAuthStatus`** (depuis v1.37.4 upstream le garantit lui-même via `readStoredToken()` : le fichier est repris tel quel) |
 | `src/modules/i18n/config.ts` | l'import, `PIECEMAKER_DEFAULT_LANGUAGE`, `applyPieceMakerI18nOverrides(i18n)` |
 | `src/modules/settings/tabs/AboutTab.tsx` | `useProductVersionCheck`, `PRODUCT_REPOSITORY_URL`, `PRODUCT_SHORT_NAME` |
 | `.release-it.json` | `"releaseName": "PieceMaker v${version}"` et l'en-tête de changelog |
 | `.github/workflows/release.yml` | `NPM_TOKEN` et `NODE_AUTH_TOKEN` dans l'`env` du step Release |
 | `package.json` | nom `@piecemaker-legal/piecemaker`, version PieceMaker (**ne jamais prendre la version upstream**), `homepage`/`repository` PieceMaker |
-| `src/modules/chat/ChatInterface.tsx`, `hooks/useChatComposerState.ts`, `hooks/useSlashCommands.ts` | la transmission de `isActive` |
+| `src/modules/chat/ChatInterface.tsx`, `hooks/useChatComposerState.ts`, `hooks/useSlashCommands.ts` | la transmission de `isActive`, qui aboutit à `useProjectSlashCommands(selectedProject, provider, { enabled: isActive })` |
+| `server/modules/providers/services/provider-capabilities.service.ts` | l'entrée `mistral`, avec `effortLevels: ['none', 'high']` |
+| `server/modules/providers/list/claude/claude-sessions.provider.ts` | `restoreVisibleText` dans les options du constructeur et `this.restoreMessage(msg)` après le rattachement du résultat d'outil |
+| `server/modules/websocket/services/shell-websocket.service.ts` | `getApplicationDataRoot()` au lieu de `path.join(os.homedir(), '.cloudcli')` pour le thème du terminal |
 | `src/shared/types.ts` | `'mistral'` dans l'union `LLMProvider` |
 | `server/modules/providers/list/codex/codex-runtime.provider.ts` | `codex = new Codex(options.libraryCodexOptions);` (au lieu de `new Codex()`) |
 | `src/modules/code-editor/EditorSidebar.tsx` | `import CodeEditor from '@/piecemaker/editor-tabs/TabbedCodeEditor';` (au lieu de `@/modules/code-editor/CodeEditor`) |
@@ -236,14 +268,14 @@ réintroduit le bug **sans aucun signe visible**.
 
 Le garde-fou est `src/piecemaker/auth/tests/authSessionSurvivesTokenRotation.test.tsx`.
 Il échoue alors (l'amorçage part 3 fois au lieu d'une). **Ne jamais le
-supprimer pour faire passer un merge** : restaurer les cinq lignes.
+supprimer pour faire passer un merge.**
 
-Quand upstream ajoute une dépendance légitime à ce `useCallback` (par exemple
-`t` de `useTranslation`), la prendre — mais **retirer `token`** :
-
-```ts
-}, [checkOnboardingStatus, clearSession, t]);   // jamais `token`
-```
+Depuis v1.37.4, upstream a corrigé le même bug (#1408 : lecture de
+`readStoredToken()` et `t` passé par une ref) ainsi que l'affichage d'une
+enveloppe d'erreur structurée (#1425, `readApiErrorMessage`). Nos cinq lignes
+ont donc été abandonnées au profit de la version upstream : l'empreinte sur ce
+fichier est nulle. Le test reste, pour le cas où upstream reviendrait en
+arrière.
 
 ### `release.yml` — l'authentification npm n'est pas celle d'upstream
 
@@ -304,6 +336,13 @@ grep -ril cloudcli src/piecemaker/i18n/overrides/ || echo "aucune marque résidu
 Si une chaîne neuve reste en « CloudCLI », c'est une **règle manquante dans le
 script**, pas une correction à faire à la main dans `locales/**` — ce dossier ne
 se touche jamais.
+
+Quand upstream ajoute une langue, le script s'arrête sur
+`No PieceMaker wording rules for locale "xx"` **après avoir vidé**
+`src/piecemaker/i18n/overrides/` : restaurer le dossier
+(`git checkout -- src/piecemaker/i18n/overrides`), ajouter les règles de la
+langue dans `RULES` (un nom de même genre que « projet » pour garder les
+accords), puis relancer.
 
 ### b) Upstream déplace un symbole que nous avions étendu
 

@@ -4,6 +4,12 @@
       "project": "案件"
     }
   },
+  "quickSettings": {
+    "commands": {
+      "noProject": "選擇一個案件以檢視其指令。",
+      "empty": "此案件沒有可用的指令。"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "案件排序",
@@ -28,6 +34,9 @@
     }
   },
   "permissions": {
+    "settingsFiles": {
+      "projectNote": "案件本身的 .claude/settings.json 與 .claude/settings.local.json 也會套用於該案件中的聊天。在該資料夾受信任之前，Claude CLI 會忽略 .claude/settings.json 中的允許規則：請在該資料夾中以互動模式執行一次 Claude Code，並接受信任對話框。"
+    },
     "codex": {
       "technicalInfo": {
         "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never。所有指令在案件目錄內自動執行。"

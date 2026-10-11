@@ -4,6 +4,12 @@
       "project": "Досье"
     }
   },
+  "quickSettings": {
+    "commands": {
+      "noProject": "Выберите досье, чтобы увидеть его команды.",
+      "empty": "Для этого досье нет доступных команд."
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Сортировка досье",
@@ -28,6 +34,9 @@
     }
   },
   "permissions": {
+    "settingsFiles": {
+      "projectNote": "Собственные файлы досье .claude/settings.json и .claude/settings.local.json также применяются к чатам в этом досье. Разрешающие правила из .claude/settings.json Claude CLI игнорирует, пока папка не станет доверенной: один раз запустите в ней Claude Code в интерактивном режиме и подтвердите диалог доверия."
+    },
     "codex": {
       "technicalInfo": {
         "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Все команды автоматически выполняются в каталоге досье."

@@ -1,0 +1,92 @@
+{
+  "mcp": {
+    "scope": {
+      "project": "תיק"
+    }
+  },
+  "quickSettings": {
+    "commands": {
+      "noProject": "יש לבחור תיק כדי לראות את הפקודות שלו.",
+      "empty": "אין פקודות זמינות לתיק הזה."
+    }
+  },
+  "appearanceSettings": {
+    "projectSorting": {
+      "label": "מיון תיקים",
+      "description": "סדר התיקים בסרגל הצד"
+    }
+  },
+  "mcpForm": {
+    "scope": {
+      "projectLocal": "תיק (מקומי)",
+      "userDescription": "היקף משתמש: זמין בכל התיקים במחשב הזה",
+      "projectDescription": "היקף מקומי: זמין רק בתיק שנבחר"
+    },
+    "fields": {
+      "selectProject": "בחירת תיק…"
+    },
+    "scopes": {
+      "project": "תיק",
+      "projectAllProviders": "תיק (כל הספקים)",
+      "userGlobalDesc": "זמין בכל התיקים במחשב הזה",
+      "userAllProvidersDesc": "נכתב לתצורת המשתמש של כל ספק וזמין בכל התיקים במחשב הזה",
+      "localDesc": "נשמר בהגדרות המשתמש של Claude עבור התיק שנבחר",
+      "projectDesc": "נשמר בסביבת העבודה של התיק שנבחר",
+      "projectAllProvidersDesc": "נכתב לסביבת העבודה של התיק שנבחר עבור כל ספק"
+    }
+  },
+  "tasks": {
+    "notInstalled": {
+      "steps": {
+        "initCommand": "הרצת task-master init בתיקיית התיק"
+      }
+    }
+  },
+  "permissions": {
+    "codex": {
+      "technicalInfo": {
+        "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. כל הפקודות רצות אוטומטית בתוך תיקיית התיק."
+      }
+    }
+  },
+  "mcpServers": {
+    "managed": {
+      "hint": "מנוהל על ידי PieceMaker."
+    }
+  },
+  "pluginSettings": {
+    "sections": {
+      "officialDescription": "מתוחזקים על ידי צוות PieceMaker ומוכנים להתקנה ישירה."
+    },
+    "starterPlugin": {
+      "name": "סטטיסטיקות תיק",
+      "description": "מספר קבצים, שורות קוד, פילוח לפי סוג קובץ ופעילות אחרונה בתיק."
+    }
+  },
+  "skillsPage": {
+    "description": "ניהול skills של {{provider}} מקבצים מקומיים, תיקיות שלמות ומיקומים לפי תיק.",
+    "scanningProjectSkills": "סורק skills של התיק…",
+    "emptyDescription": "אפשר להוסיף skill גלובלי למעלה או ליצור תיקיות skills לתיק בסביבת העבודה.",
+    "noMatchDescription": "אפשר לנסות פקודה, שם, היקף, תיק או נתיב מקור אחרים.",
+    "projectBadge": "תיק: {{name}}",
+    "scopes": {
+      "project": "תיק"
+    }
+  },
+  "mcpServersAdd": {
+    "refreshingScopes": "מרענן את היקפי התיק…"
+  },
+  "mcpTeamCard": {
+    "proLink": "זמין ב-PieceMaker Pro"
+  },
+  "mcpServersAddErrors": {
+    "selectProjectRequired": "יש לבחור תיק עבור שרתי MCP בהיקף תיק",
+    "globalScopeUnsupported": "הוספת שרת MCP תומכת רק בהיקף משתמש או תיק בכל הספקים."
+  },
+  "about": {
+    "hostedTitle": "לנסות את PieceMaker Hosted",
+    "proFeaturesTitle": "יכולות PieceMaker Pro",
+    "teamManagementDescription": "משתמשים מרובים, גישה מבוססת תפקידים ותיקים משותפים לצוות.",
+    "proCta": "זמין ב-PieceMaker Pro"
+  }
+}

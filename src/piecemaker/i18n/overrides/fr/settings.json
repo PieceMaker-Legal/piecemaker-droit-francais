@@ -4,6 +4,12 @@
       "project": "Dossier"
     }
   },
+  "quickSettings": {
+    "commands": {
+      "noProject": "Sélectionnez un dossier pour voir ses commandes.",
+      "empty": "Aucune commande disponible pour ce dossier."
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Tri des dossiers",
@@ -28,6 +34,9 @@
     }
   },
   "permissions": {
+    "settingsFiles": {
+      "projectNote": "Les fichiers .claude/settings.json et .claude/settings.local.json d'un dossier s'appliquent aussi aux discussions de ce dossier. La CLI Claude ignore les règles d'autorisation de .claude/settings.json tant que le dossier n'est pas approuvé : lancez une fois Claude Code en mode interactif dans ce dossier et acceptez la boîte de dialogue de confiance."
+    },
     "codex": {
       "technicalInfo": {
         "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Toutes les commandes s'exécutent automatiquement dans le répertoire du dossier."
