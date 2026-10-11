@@ -143,6 +143,8 @@ async function embedRuntimeAssets(sourceDir, stageDir) {
   const probe = path.join(to, 'vendor', 'piecemaker-plugin', 'scripts', 'lib', 'verify-citations.cjs');
   const legifrance = path.join(to, 'vendor', 'mcp', 'legifrance', 'server.mjs');
   const docxCli = path.join(to, 'vendor', 'skills', 'docx-cli', 'SKILL.md');
+  const redactionFrom = path.join(from, 'vendor', 'piecemaker-plugin', 'skills', 'redaction-juridique');
+  const redactionTo = path.join(to, 'vendor', 'piecemaker-plugin', 'skills', 'redaction-juridique');
   if (!(await exists(probe))) {
     throw new Error(`Ressources PieceMaker incomplètes — ${probe} est absent.`);
   }
@@ -151,6 +153,14 @@ async function embedRuntimeAssets(sourceDir, stageDir) {
   }
   if (!(await exists(docxCli))) {
     throw new Error(`Ressources PieceMaker incomplètes — ${docxCli} est absent.`);
+  }
+  if (!(await exists(path.join(redactionFrom, 'SKILL.md')))) {
+    throw new Error(`Ressources PieceMaker incomplètes — ${path.join(redactionFrom, 'SKILL.md')} est absent.`);
+  }
+  await fs.mkdir(path.dirname(redactionTo), { recursive: true });
+  await fs.cp(redactionFrom, redactionTo, { recursive: true });
+  if (!(await exists(path.join(redactionTo, 'SKILL.md')))) {
+    throw new Error(`Ressources PieceMaker incomplètes — ${path.join(redactionTo, 'SKILL.md')} est absent.`);
   }
 
   ui.detail('Ressources PieceMaker non compilées embarquées.');
