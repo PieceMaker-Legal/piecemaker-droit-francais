@@ -203,7 +203,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
         ${modelSelector(running)}
         ${costlyChoice()}
         <span class="ptr-spacer"></span>
-        ${!running && failed ? '<button type="button" class="ptr-button" data-retry title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>' : ''}
+        ${running ? '' : `<button type="button" class="ptr-button" data-retry${failed ? '' : ' disabled'} title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>`}
       </div>`;
     const nextWrap = element.querySelector<HTMLElement>('.ptr-table-wrap');
     if (nextWrap) {
