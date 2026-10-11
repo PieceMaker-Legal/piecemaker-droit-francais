@@ -1,0 +1,36 @@
+{
+  "mainContent": {
+    "loading": "Načítání PieceMaker",
+    "chooseProject": "Vyberte spis",
+    "selectProjectDescription": "Vyberte spis v postranním panelu a začněte programovat s asistentem Claude. Každý spis obsahuje vaše relace chatu a historii souborů.",
+    "createProjectMobile": "Spisy otevřete klepnutím na tlačítko nabídky nahoře",
+    "createProjectDesktop": "Nový spis vytvoříte kliknutím na ikonu složky v postranním panelu",
+    "projectFiles": "Soubory spisu"
+  },
+  "fileTree": {
+    "checkProjectPath": "Zkontrolujte, zda je cesta k spisu dostupná"
+  },
+  "projectWizard": {
+    "title": "Vytvořit nový spis",
+    "step1": {
+      "existing": {
+        "description": "Pracovní prostor už na serveru mám a potřebuji ho jen přidat do seznamu spisů"
+      }
+    },
+    "step3": {
+      "existingInfo": "Pracovní prostor bude přidán do seznamu spisů a bude k dispozici pro relace Claude/Cursor.",
+      "newEmpty": "Pracovní prostor bude přidán do seznamu spisů a bude k dispozici pro relace Claude/Cursor."
+    },
+    "buttons": {
+      "createProject": "Vytvořit spis"
+    }
+  },
+  "commandPalette": {
+    "selectProjectFirst": "Nejdříve vyberte spis"
+  },
+  "misc": {
+    "projectFallback": "Spis",
+    "noProjectSelected": "Není vybrán žádný spis",
+    "projectRequiredForShell": "K otevření shellu je potřeba spis"
+  }
+}

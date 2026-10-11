@@ -1,0 +1,51 @@
+{
+  "projects": {
+    "title": "תיקים",
+    "newProject": "תיק חדש",
+    "deleteProject": "הסרת תיק",
+    "renameProject": "שינוי שם התיק",
+    "noProjects": "לא נמצאו תיקים",
+    "loadingProjects": "טוען תיקים...",
+    "searchPlaceholder": "חיפוש תיקים...",
+    "projectNamePlaceholder": "שם התיק",
+    "fetchingProjects": "טוען את התיקים והסשנים של Claude",
+    "projects": "תיקים",
+    "noMatchingProjects": "אין תיקים תואמים",
+    "runClaudeCli": "כדי להתחיל, יש להריץ את Claude CLI בתיקיית תיק"
+  },
+  "app": {
+    "title": "PieceMaker"
+  },
+  "tooltips": {
+    "createProject": "יצירת תיק חדש",
+    "refresh": "רענון תיקים וסשנים (Ctrl+R)",
+    "renameProject": "שינוי שם התיק (F2)",
+    "deleteProject": "הסרת התיק מסרגל הצד (Delete)"
+  },
+  "messages": {
+    "deleteProjectConfirm": "להסיר את התיק מסרגל הצד? קובצי התיק, הזיכרונות ונתוני הסשנים לא יימחקו.",
+    "enterProjectPath": "יש להזין נתיב לתיק",
+    "deleteProjectFailed": "הסרת התיק נכשלה. יש לנסות שוב.",
+    "deleteProjectError": "שגיאה בהסרת התיק. יש לנסות שוב.",
+    "createProjectFailed": "יצירת התיק נכשלה. יש לנסות שוב.",
+    "createProjectError": "שגיאה ביצירת התיק. יש לנסות שוב.",
+    "updateProjectError": "שגיאה בעדכון התיק. יש לנסות שוב.",
+    "restoreProjectFailed": "שחזור התיק נכשל. יש לנסות שוב.",
+    "restoreProjectError": "שגיאה בשחזור התיק. יש לנסות שוב."
+  },
+  "search": {
+    "modeProjects": "תיקים",
+    "projectsScanned_one": "נסרק תיק אחד",
+    "projectsScanned_two": "נסרקו שני תיקים",
+    "projectsScanned_other": "נסרקו {{count}} תיקים"
+  },
+  "deleteConfirmation": {
+    "deleteProject": "הסרת תיק",
+    "sessionCount_one": "התיק מכיל שיחה אחת.",
+    "sessionCount_two": "התיק מכיל שתי שיחות.",
+    "sessionCount_other": "התיק מכיל {{count}} שיחות.",
+    "archiveProject": "העברת התיק לארכיון",
+    "allConversationsDeleted": "התיק יוסר מסרגל הצד. הקבצים, הזיכרונות ונתוני הסשנים יישמרו.",
+    "cannotUndo": "אפשר להוסיף את התיק מחדש בהמשך."
+  }
+}

@@ -4,6 +4,12 @@
       "project": "Case"
     }
   },
+  "quickSettings": {
+    "commands": {
+      "noProject": "Select a case to see its commands.",
+      "empty": "No commands available for this case."
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Case Sorting",
@@ -37,6 +43,9 @@
     }
   },
   "permissions": {
+    "settingsFiles": {
+      "projectNote": "A case's own .claude/settings.json and .claude/settings.local.json also apply to chats in that case. The Claude CLI ignores allow rules in .claude/settings.json until the folder is trusted: run Claude Code interactively there once and accept the trust dialog."
+    },
     "codex": {
       "technicalInfo": {
         "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. All commands auto-execute within case directory."

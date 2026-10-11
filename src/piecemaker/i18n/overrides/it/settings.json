@@ -4,6 +4,12 @@
       "project": "Fascicolo"
     }
   },
+  "quickSettings": {
+    "commands": {
+      "noProject": "Seleziona un fascicolo per vedere i suoi comandi.",
+      "empty": "Nessun comando disponibile per questo fascicolo."
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Ordinamento fascicoli",
@@ -28,6 +34,9 @@
     }
   },
   "permissions": {
+    "settingsFiles": {
+      "projectNote": "I file .claude/settings.json e .claude/settings.local.json di un fascicolo si applicano anche alle chat di quel fascicolo. La CLI di Claude ignora le regole di consenso in .claude/settings.json finché la cartella non è considerata attendibile: avvia una volta Claude Code in modalità interattiva in quella cartella e accetta la finestra di dialogo sull'attendibilità."
+    },
     "codex": {
       "technicalInfo": {
         "acceptEdits": "sandboxMode=workspace-write, approvalPolicy=never. Tutti i comandi vengono auto-eseguiti nella directory del fascicolo."

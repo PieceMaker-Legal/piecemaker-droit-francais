@@ -1,0 +1,18 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "Vyberte spis",
+      "description": "Vyberte spis a otevřete v jeho adresáři interaktivní shell"
+    },
+    "runCommand": "Spustit {{command}} v spisu {{projectName}}",
+    "startCli": "Spouštění Claude CLI v spisu {{projectName}}"
+  },
+  "projectSelection": {
+    "startChatWithProvider": "Vyberte spis a zahajte konverzaci ({{provider}})"
+  },
+  "misc": {
+    "fallbackCommands": {
+      "memory": "Otevřít paměťový soubor spisu CLAUDE.md."
+    }
+  }
+}

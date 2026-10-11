@@ -1,0 +1,16 @@
+{
+  "shell": {
+    "selectProject": {
+      "title": "Selecionar um processo",
+      "description": "Escolha um processo para abrir um shell interativo naquele diretório"
+    }
+  },
+  "projectSelection": {
+    "startChatWithProvider": "Selecione um processo para começar a conversar com {{provider}}"
+  },
+  "misc": {
+    "fallbackCommands": {
+      "memory": "Abrir o arquivo CLAUDE.md de memória do processo."
+    }
+  }
+}
