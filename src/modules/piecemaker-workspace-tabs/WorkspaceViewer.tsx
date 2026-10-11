@@ -22,6 +22,7 @@ export function WorkspaceViewer(props: ComponentProps<typeof EditorSidebar>) {
     file={props.editingFile}
     projectPath={props.projectPath}
     onClose={props.onCloseEditor}
+    onUnsavedChangesChange={props.onUnsavedChangesChange}
     isSidebar
     isExpanded={viewer.expanded}
     onToggleExpand={viewer.toggleExpand}
