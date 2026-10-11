@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { ListTree, MessageSquare } from 'lucide-react';
 import '@eigenpal/docx-editor-react/styles.css';
 import fr from '@eigenpal/docx-editor-i18n/fr';
 import './docxDocumentViewer.css';
@@ -11,6 +12,7 @@ import type { CodeEditorFile } from '@/shared/types';
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const VERSION_POLL_MS = 1000;
 const SAVE_DEBOUNCE_MS = 800;
+const COMMENTS_SIDEBAR_RESERVED_PX = 352;
 
 type DocxDocumentViewerProps = {
   file: CodeEditorFile;
@@ -23,10 +25,12 @@ function fitPageWidth(container: HTMLElement, editor: DocxEditorRef | null, last
   const scroller = container.querySelector<HTMLElement>('.docx-editor__scroll-container');
   const page = container.querySelector<HTMLElement>('.layout-page');
   if (!editor || !scroller || !page) return;
-  const layout = `${scroller.clientWidth}:${page.offsetWidth}`;
-  if (scroller.clientWidth <= 0 || layout === lastLayout.current) return;
+  const reserved = container.querySelector('.docx-unified-sidebar') ? COMMENTS_SIDEBAR_RESERVED_PX : 0;
+  const availableWidth = scroller.clientWidth - reserved;
+  const layout = `${availableWidth}:${page.offsetWidth}`;
+  if (availableWidth <= 0 || layout === lastLayout.current) return;
   lastLayout.current = layout;
-  editor.setZoom(scroller.clientWidth / page.offsetWidth);
+  editor.setZoom(availableWidth / page.offsetWidth);
 }
 
 function decodeDocumentPath(filePath: string): string {
@@ -49,6 +53,8 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const resolvedPathRef = useRef(file.path);
   const [loaded, setLoaded] = useState<{ buffer: ArrayBuffer; version: number; filePath: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
 
   const fetchVersion = useCallback(async () => {
     const requestVersion = (filePath: string) => {
@@ -143,6 +149,8 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
 
   const markUserEditing = () => { userEditingRef.current = true; };
 
+  const panelButtonClass = (active: boolean) => `rounded-md p-1.5 hover:bg-muted ${active ? 'bg-muted text-foreground' : 'text-muted-foreground'}`;
+
   return (
     <div ref={containerRef} className={`piecemaker-docx-viewer flex flex-col bg-background ${isSidebar ? 'h-full w-full' : 'fixed inset-0 z-[9999]'}`} onKeyDownCapture={markUserEditing} onPointerDownCapture={markUserEditing}>
       {error && <p className="border-b border-border px-3 py-1.5 text-xs text-destructive">{error}</p>}
@@ -158,6 +166,16 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
           colorMode={isDarkMode ? 'dark' : 'light'}
           i18n={fr}
           onChange={scheduleSave}
+          showOutline={outlineOpen}
+          showOutlineButton={false}
+          commentsSidebarOpen={commentsOpen}
+          onCommentsSidebarOpenChange={setCommentsOpen}
+          renderLogo={() => (
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setOutlineOpen((open) => !open)} className={panelButtonClass(outlineOpen)} aria-pressed={outlineOpen} aria-label="Table des matières" title="Table des matières"><ListTree className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setCommentsOpen((open) => !open)} className={panelButtonClass(commentsOpen)} aria-pressed={commentsOpen} aria-label="Commentaires" title="Commentaires"><MessageSquare className="h-4 w-4" /></button>
+            </div>
+          )}
           renderTitleBarRight={() => (
             <button type="button" onClick={onClose} className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted" aria-label="Fermer">✕</button>
           )}
