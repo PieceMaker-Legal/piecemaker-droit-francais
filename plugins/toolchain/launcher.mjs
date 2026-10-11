@@ -15,10 +15,17 @@ if (typeof runtime.nodePath !== 'string' || !path.isAbsolute(runtime.nodePath)) 
 
 const plugin = path.basename(path.dirname(fileURLToPath(import.meta.url)));
 const server = fileURLToPath(new URL('./dist/server.mjs', import.meta.url));
+const hostPid = process.ppid;
+let child = null;
+setInterval(() => {
+  if (process.ppid === hostPid) return;
+  child?.kill('SIGTERM');
+  process.exit(0);
+}, 2000).unref();
 if (process.execPath === runtime.nodePath) {
   await import('./dist/server.mjs');
 } else {
-  const child = spawn(runtime.nodePath, [server], {
+  child = spawn(runtime.nodePath, [server], {
     cwd: process.cwd(),
     env: process.env,
     stdio: ['ignore', 'inherit', 'inherit'],

@@ -113,6 +113,8 @@ Installateur autonome, sans rapport avec la commande `piecemaker` ni avec `serve
 
 - Server always on port 3003: `SERVER_PORT=3003 PORT=3003 npm run dev`. Port 3002 is the installed desktop app — a fixed dev port avoids hunting for it.
 - Client (Vite) at http://localhost:5173 — open this URL. Proxy points at `SERVER_PORT`.
+- **Never look at the UI on port 3003 and never run `vite build` / `npm run build` to check a change.** 3003 serves the compiled `dist/` when it exists, i.e. an old version; Vite (5173) always serves the current code. A build eats several GB of RAM and freezes the 8 GB Mac on top of the running dev server. Keep `dist/` absent in the working copy (3003 then redirects to 5173).
+- **One dev server at a time.** Before `npm run dev`, check `lsof -iTCP:3003 -iTCP:5173 -sTCP:LISTEN` and reuse what runs. A server change needs a restart (tsx without watch): ask first, stop it with SIGTERM (never `kill -9`, it orphans plugins and hudsucker).
 - System Node is v16 (too old for Vite 7) — use nvm v24: prefix with `export PATH="$HOME/.nvm/versions/node/v24.11.1/bin:$PATH"`.
 - **Hudsucker = the anonymisation proxy**. Spawned by the server at startup on a dynamic port, killed with it; disabled by `anonymizer.enabled: false` in `~/.piecemaker/config.json`. Sessions launched by the server (chat, built-in terminal) inherit its `HTTPS_PROXY` at spawn: when the server stops they **fail closed** (ECONNREFUSED), never continue unfiltered — open a new session after relaunch. Sessions opened outside PieceMaker (Terminal, Claude desktop) never go through hudsucker and are unaffected by a server stop. Don't kill a server the user is running without asking.
 
