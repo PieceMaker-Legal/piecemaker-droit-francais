@@ -466,6 +466,7 @@ export const browserUseService = {
       env: {
         CLOUDCLI_BROWSER_USE_MCP_TOKEN: getOrCreateMcpToken(),
         CLOUDCLI_BROWSER_USE_API_URL: getMcpApiUrl(),
+        ...(process.env.ELECTRON_RUN_AS_NODE ? { ELECTRON_RUN_AS_NODE: process.env.ELECTRON_RUN_AS_NODE } : {}),
       },
     });
     return { name: MCP_SERVER_NAME, command, args, results };

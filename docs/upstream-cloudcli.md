@@ -122,6 +122,7 @@ Ces points ont déjà été perdus ou ont failli l'être. Les contrôler un par 
 | `server/index.ts` | l'import de `createExternalFileRouter` et `app.use('/api/file-tree', authenticateToken, createExternalFileRouter());` **avant** `fileTreeRoutes` |
 | `src/modules/project-workspace/WorkspaceHeader.tsx` | `import { WorkspaceIconTabs as WorkspaceTabs } from '@/modules/piecemaker-workspace-tabs';` |
 | `src/modules/project-workspace/WorkspaceMain.tsx` | `export default React.memo(withWorkspacePanels(WorkspaceMain));` et import de `withWorkspacePanels` |
+| `server/modules/browser-use/browser-use.service.ts` | dans `registerAgentMcp()`, la ligne `...(process.env.ELECTRON_RUN_AS_NODE ? { ELECTRON_RUN_AS_NODE: … } : {})` de l'`env` |
 
 ### `codex-runtime.provider.ts` — le masquage des skills par dossier dans Codex
 
@@ -139,6 +140,24 @@ réapparaissent dans Codex, sans erreur. Le garde-fou est
 démarre / reprend… ») : il échoue alors. Restaurer la ligne, ne jamais supprimer
 le test. Si upstream passe lui-même des options à `new Codex(...)`, les fusionner
 avec `options.libraryCodexOptions` plutôt que d'en écraser une.
+
+### `browser-use.service.ts` — le MCP navigateur de l'app de bureau
+
+Activer « Navigateur » écrit l'outil MCP `cloudcli-browser` dans la config de
+Claude, Codex, etc., avec `process.execPath` comme commande. Dans l'app de
+bureau, c'est le binaire PieceMaker : sans `ELECTRON_RUN_AS_NODE=1`, chaque
+session Claude ou Codex démarre l'app entière (serveur, plugins), que Claude
+tue après 30 s en laissant des plugins orphelins. Le serveur de l'app tourne
+déjà avec cette variable ; la seule ligne CloudCLI touchée la recopie dans
+l'`env` de l'outil. Hors app de bureau, rien ne change.
+
+Un merge résolu « vers CloudCLI » retire la ligne : l'app redémarre de nouveau à
+chaque session, sans erreur. Garde-fou :
+`server/piecemaker/browser-use-electron.test.ts` (« exception CloudCLI : le MCP
+navigateur de l'app de bureau… »). Restaurer la ligne, ne jamais supprimer le
+test. L'entrée déjà écrite chez l'utilisateur ne change qu'en désactivant puis
+réactivant « Navigateur » (upstream ne la réécrit pas au démarrage,
+siteboon/claudecodeui#1489).
 
 ### `EditorSidebar.tsx` et `WorkspaceMain.tsx` — les onglets de l'éditeur latéral
 
@@ -363,7 +382,7 @@ le code se comporte comme upstream si la configuration est absente.
 ### Une exception upstream se paie par un test
 
 Les exceptions assumées (amorçage d'authentification, `isActive` du chat,
-options du client Codex, onglets de l'éditeur latéral) ne sont pas des permissions : ce sont des dettes. Chacune doit porter un test
+options du client Codex, onglets de l'éditeur latéral, MCP navigateur de l'app de bureau) ne sont pas des permissions : ce sont des dettes. Chacune doit porter un test
 **à nous** qui échoue si un merge la révoque. Sans ce test, l'exception
 disparaîtra un jour sans que personne ne le voie.
 
