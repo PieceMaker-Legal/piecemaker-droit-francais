@@ -94,6 +94,8 @@ export const PLUGIN_STYLES = `
 .ptr-table th:first-child,.ptr-table td:first-child{position:sticky;left:0;z-index:1;background:var(--ptr-surface);width:220px;min-width:180px}
 .ptr-table th:first-child{z-index:3;background:var(--ptr-soft)}
 .ptr-th{display:flex;align-items:flex-start;gap:4px}
+.ptr-th-stack{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ptr-th-title{height:1.75rem;padding:0 6px;font-size:12px;font-weight:600}
 .ptr-th-input{flex:1;min-width:0;min-height:2.5rem;font-size:12px;font-weight:600;padding:4px 6px}
 .ptr-th .ptr-icon-button{margin-left:auto;flex-shrink:0;width:1.25rem;height:1.25rem;font-size:10px}
 .ptr-table td.ptr-cell{cursor:pointer}
