@@ -5,7 +5,7 @@ import path from 'node:path';
 import pty, { type IPty } from 'node-pty';
 import { WebSocket, type RawData } from 'ws';
 
-import { parseIncomingJsonObject, stripAnsiSequences } from '@/shared/utils.js';
+import { getApplicationDataRoot, parseIncomingJsonObject, stripAnsiSequences } from '@/shared/utils.js';
 
 type ShellIncomingMessage = {
   type?: string;
@@ -388,7 +388,7 @@ function ensureClaudeThemeSettingsFile(theme: string): string | null {
   const contents = `${JSON.stringify({ theme })}\n`;
   let tempPath: string | null = null;
   try {
-    const filePath = path.join(os.homedir(), '.cloudcli', `claude-shell-theme-${theme}.json`);
+    const filePath = path.join(getApplicationDataRoot(), `claude-shell-theme-${theme}.json`);
     // Anything but the expected regular file is replaced; the rename never
     // opens what it replaces.
     if (readRegularConfigFile(filePath) !== contents) {
