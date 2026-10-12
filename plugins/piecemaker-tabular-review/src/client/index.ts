@@ -13,11 +13,11 @@ import { createTemplatesView } from './templates.js';
 
 type TabId = 'history' | 'templates' | 'research';
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'history', label: 'Historique' },
-  { id: 'templates', label: 'Modèles' },
-  { id: 'research', label: 'Recherche juridique' },
-];
+const TITLES: Record<TabId, string> = {
+  history: 'Analyses tabulaires',
+  templates: 'Modèles',
+  research: 'Nouvelle recherche juridique',
+};
 
 const FACTORIES: Record<TabId, (app: App) => View> = {
   research: createResearchView,
@@ -54,11 +54,9 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   root.className = 'ptr-root';
   root.dataset.theme = api.context.theme;
   root.innerHTML = `
-    <header class="ptr-header">
-      <div class="ptr-tabs" role="tablist" aria-label="Analyse Tabulaire">
-        ${TABS.map((tab) => `<button type="button" class="ptr-tab" role="tab" data-tab="${tab.id}" aria-selected="false">${tab.label}</button>`).join('')}
-      </div>
-      <span class="ptr-spacer"></span>
+    <header class="ptr-header" data-subbar hidden>
+      <button type="button" class="ptr-icon-button" data-home aria-label="Retour à l’historique" title="Retour à l’historique">←</button>
+      <span class="ptr-review-title" data-subbar-title></span>
     </header>
     <div class="ptr-main" data-main></div>`;
   container.append(style, root);
@@ -69,7 +67,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let templatesCache: Promise<Template[]> | null = null;
   const templateListeners = new Set<(templates: Template[]) => void>();
   const views = new Map<TabId, View>();
-  let activeTab: TabId = 'history';
   let reviewView: View | null = null;
   let pendingUpdate: { project: string; file: string } | null = null;
   let pendingStart: { project: string; title: string } | null = null;
@@ -126,6 +123,9 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     },
     newTable(preferred = null) {
       void askNewTable(preferred);
+    },
+    showTemplates() {
+      showTab('templates');
     },
     newResearch(preferred = null) {
       void askNewResearch(preferred);
@@ -232,16 +232,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   }
 
   function setSelectedTab(tab: TabId | null) {
-    root.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => {
-      const selected = button.dataset.tab === tab;
-      button.setAttribute('aria-selected', String(selected));
-      button.tabIndex = selected || (!tab && button.dataset.tab === activeTab) ? 0 : -1;
-    });
+    root.querySelector<HTMLElement>('[data-subbar]')!.hidden = !tab || tab === 'history';
+    if (tab) root.querySelector<HTMLElement>('[data-subbar-title]')!.textContent = TITLES[tab];
   }
 
   function showTab(tab: TabId) {
     closeReview();
-    activeTab = tab;
     let view = views.get(tab);
     if (!view) {
       view = FACTORIES[tab](app);
@@ -255,19 +251,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     main.scrollTop = 0;
   }
 
-  root.querySelector('[role=tablist]')!.addEventListener('click', (event) => {
-    const button = (event.target as HTMLElement).closest<HTMLElement>('[data-tab]');
-    if (button) showTab(button.dataset.tab as TabId);
-  });
-
-  root.querySelector('[role=tablist]')!.addEventListener('keydown', (event) => {
-    const keyboard = event as KeyboardEvent;
-    if (keyboard.key !== 'ArrowRight' && keyboard.key !== 'ArrowLeft') return;
-    const index = TABS.findIndex((tab) => tab.id === activeTab);
-    const next = TABS[(index + (keyboard.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
-    showTab(next.id);
-    root.querySelector<HTMLElement>(`[data-tab="${next.id}"]`)?.focus();
-  });
+  root.querySelector('[data-home]')!.addEventListener('click', () => showTab('history'));
 
   const onOpen = () => {
     showTab('history');
