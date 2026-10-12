@@ -38,6 +38,13 @@ function fitPageWidth(container: HTMLElement, editor: DocxEditorRef | null, last
   window.setTimeout(() => { scroller.scrollTop = previousScrollTop * nextZoom / previousZoom; }, 300);
 }
 
+function alignNewCommentCard(container: HTMLElement, zoomAtClick: number) {
+  const card = container.querySelector('.docx-unified-sidebar textarea')?.closest<HTMLElement>('[style*="position: absolute"]');
+  if (!card || card.dataset.alignedTop === card.style.top) return;
+  card.style.top = `${parseFloat(card.style.top) / zoomAtClick}px`;
+  card.dataset.alignedTop = card.style.top;
+}
+
 function decodeDocumentPath(filePath: string): string {
   try {
     return decodeURIComponent(filePath);
@@ -52,6 +59,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastLayoutRef = useRef('');
+  const zoomAtClickRef = useRef(1);
   const versionRef = useRef<number | null>(null);
   const userEditingRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
@@ -143,9 +151,12 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     lastLayoutRef.current = '';
     const fit = () => fitPageWidth(container, editorRef.current, lastLayoutRef);
     const resizeObserver = new ResizeObserver(fit);
-    const mutationObserver = new MutationObserver(fit);
+    const mutationObserver = new MutationObserver(() => {
+      fit();
+      alignNewCommentCard(container, zoomAtClickRef.current);
+    });
     resizeObserver.observe(container);
-    mutationObserver.observe(container, { childList: true, subtree: true });
+    mutationObserver.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
     fit();
     return () => {
       resizeObserver.disconnect();
@@ -155,10 +166,15 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
 
   const markUserEditing = () => { userEditingRef.current = true; };
 
+  const handlePointerDown = () => {
+    markUserEditing();
+    zoomAtClickRef.current = editorRef.current?.getZoom() ?? 1;
+  };
+
   const panelButtonClass = (active: boolean) => `rounded-md p-1.5 hover:bg-muted ${active ? 'bg-muted text-foreground' : 'text-muted-foreground'}`;
 
   return (
-    <div ref={containerRef} className={`piecemaker-docx-viewer flex flex-col bg-background ${isSidebar ? 'h-full w-full' : 'fixed inset-0 z-[9999]'}`} onKeyDownCapture={markUserEditing} onPointerDownCapture={markUserEditing}>
+    <div ref={containerRef} className={`piecemaker-docx-viewer flex flex-col bg-background ${isSidebar ? 'h-full w-full' : 'fixed inset-0 z-[9999]'}`} onKeyDownCapture={markUserEditing} onPointerDownCapture={handlePointerDown}>
       {error && <p className="border-b border-border px-3 py-1.5 text-xs text-destructive">{error}</p>}
       {loaded ? (
         <DocxEditor
