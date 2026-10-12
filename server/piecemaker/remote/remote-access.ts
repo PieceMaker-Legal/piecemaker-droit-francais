@@ -71,8 +71,8 @@ export function createRemoteAccess(options: RemoteAccessOptions) {
     };
     if (!tailscale.running || !tailscale.dnsName) return base;
     const entry = await options.tailscale.serveEntry(tailscale.dnsName, httpsPort);
-    const target = readState().target;
-    const published = Boolean(gateway) && entry.proxy !== null && entry.proxy === target;
+    const { enabled, target } = readState();
+    const published = Boolean(gateway) && enabled && entry.proxy !== null && entry.proxy === target;
     return {
       ...base,
       published,
@@ -95,7 +95,10 @@ export function createRemoteAccess(options: RemoteAccessOptions) {
     gateway ??= await options.startGateway(() => targetPort, () => ownerLogin);
     const target = `http://127.0.0.1:${gateway.port}`;
     const { consentUrl } = await options.tailscale.serve(httpsPort, target);
-    if (consentUrl) return { consentUrl };
+    if (consentUrl) {
+      writeState({ enabled: false, target });
+      return { consentUrl };
+    }
     writeState({ enabled: true, target });
     options.keepAwake.start();
     return { consentUrl: null };
