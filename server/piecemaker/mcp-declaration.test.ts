@@ -38,6 +38,9 @@ test('déclare piecemaker pour Codex et Vibe, conserve les entrées tierces', ()
   assert.match(codex.mcp_servers.legifrance.args[0], /vendor[\\/]mcp[\\/]legifrance[\\/]server\.mjs$/);
   assert.equal(fs.existsSync(codex.mcp_servers.legifrance.args[0]), true);
   assert.equal(fs.existsSync(path.join(path.dirname(codex.mcp_servers.legifrance.args[0]), 'mcp_stdio_server.py')), true);
+  assert.equal(codex.mcp_servers.piecemaker.default_tools_approval_mode, 'approve');
+  assert.equal(codex.mcp_servers.legifrance.default_tools_approval_mode, 'approve');
+  assert.equal(codex.mcp_servers.exemple.default_tools_approval_mode, undefined);
   const vibe = TOML.parse(fs.readFileSync(path.join(folder, '.vibe', 'config.toml'), 'utf8'));
   assert.deepEqual(vibe.mcp_servers.map((server: { name: string }) => server.name).sort(), ['exemple', 'legifrance', 'piecemaker']);
   const mcpJson = JSON.parse(fs.readFileSync(path.join(folder, '.mcp.json'), 'utf8'));
@@ -66,6 +69,20 @@ test('une entrée piecemaker obsolète est remplacée', () => {
 
   const codex = TOML.parse(fs.readFileSync(path.join(folder, '.codex', 'config.toml'), 'utf8'));
   assert.match(codex.mcp_servers.piecemaker.args[0], /vendor[\\/]mcp[\\/]piecemaker[\\/]server\.mjs$/);
+  assert.equal(codex.mcp_servers.piecemaker.default_tools_approval_mode, 'approve');
+});
+
+test('une entrée Codex déjà déclarée sans autorisation des outils la reçoit', () => {
+  const folder = temporaryFolder();
+  declarePieceMakerServer(folder);
+  const codexPath = path.join(folder, '.codex', 'config.toml');
+  fs.writeFileSync(codexPath, fs.readFileSync(codexPath, 'utf8').replaceAll('default_tools_approval_mode = "approve"\n', ''));
+
+  declarePieceMakerServer(folder);
+
+  const codex = TOML.parse(fs.readFileSync(codexPath, 'utf8'));
+  assert.equal(codex.mcp_servers.piecemaker.default_tools_approval_mode, 'approve');
+  assert.equal(codex.mcp_servers.legifrance.default_tools_approval_mode, 'approve');
 });
 
 test('un dossier inexistant est journalisé sans lever d’erreur', (context) => {

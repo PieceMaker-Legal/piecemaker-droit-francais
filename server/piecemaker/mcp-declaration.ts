@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
@@ -13,6 +15,10 @@ function vendorMcpServer(name: string): LibraryConnectorConfig {
     args: [path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'mcp', name, 'server.mjs')],
   };
 }
+
+const TOML = createRequire(import.meta.url)('@iarna/toml') as { stringify(value: Record<string, unknown>): string };
+
+const CODEX_TOOLS_APPROVAL = 'approve';
 
 const BUNDLED_SERVERS = [
   { name: 'piecemaker', skipClaude: true },
@@ -43,6 +49,18 @@ function isDeclared(workspace: string, name: string, expected: LibraryConnectorC
   return found.every((raw) => matches(raw, expected));
 }
 
+function approveCodexTools(workspace: string): void {
+  const codexPath = path.join(workspace, '.codex', 'config.toml');
+  const config = record(readToml(codexPath));
+  const servers = record(config.mcp_servers);
+  const pending = BUNDLED_SERVERS
+    .map(({ name }) => name)
+    .filter((name) => name in servers && record(servers[name]).default_tools_approval_mode !== CODEX_TOOLS_APPROVAL);
+  if (pending.length === 0) return;
+  for (const name of pending) servers[name] = { ...record(servers[name]), default_tools_approval_mode: CODEX_TOOLS_APPROVAL };
+  fs.writeFileSync(codexPath, TOML.stringify({ ...config, mcp_servers: servers }), { mode: 0o600 });
+}
+
 export function declarePieceMakerServer(workspace: string): void {
   try {
     for (const server of BUNDLED_SERVERS) {
@@ -50,6 +68,7 @@ export function declarePieceMakerServer(workspace: string): void {
       if (isDeclared(workspace, server.name, config, server.skipClaude)) continue;
       prepareConnectorInstallation(workspace, server.name, config, true, server.skipClaude)();
     }
+    approveCodexTools(workspace);
   } catch (error) {
     console.warn(`[piecemaker] déclaration du serveur MCP impossible dans ${workspace} : ${error instanceof Error ? error.message : String(error)}`);
   }
