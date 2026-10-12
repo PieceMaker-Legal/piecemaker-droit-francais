@@ -6,6 +6,7 @@ import path from 'node:path';
 import crossSpawn from 'cross-spawn';
 
 import { recordVibeMessageTime } from '@/modules/providers/list/mistral/mistral-message-times.js';
+import { readPlanCommand } from '@/modules/providers/list/mistral/mistral-plan-command.js';
 import { buildVibeModelsEnvironment } from '@/modules/providers/list/mistral/mistral-vibe-models.js';
 import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index.js';
 import type { IProviderRuntime } from '@/shared/interfaces.js';
@@ -329,7 +330,8 @@ async function spawnVibe(
       }
 
       const resolvedEffort = resolveMistralEffort(resolvedModel, effort, effortModels);
-      const permissionOptions = resolveMistralPermissionOptions(permissionMode);
+      const planCommand = readPlanCommand(command?.trim() || '');
+      const permissionOptions = resolveMistralPermissionOptions(planCommand.plan ? 'plan' : permissionMode);
 
       const args: string[] = ['--output', 'streaming', '--trust'];
 
@@ -356,7 +358,7 @@ async function spawnVibe(
         args.push('--max-tokens', String(maxTokens));
       }
 
-      const promptText = flattenPromptForWindowsShell(command?.trim() || '');
+      const promptText = flattenPromptForWindowsShell(planCommand.prompt);
       // `-p` takes the prompt as its own value; Vibe also accepts it as a
       // trailing positional, but the explicit flag form is unambiguous.
       args.push('-p', promptText);
