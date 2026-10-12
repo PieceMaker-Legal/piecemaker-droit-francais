@@ -32,6 +32,7 @@ téléphone (Tailscale) ─HTTPS─▶ Tailscale Serve :443 (:8443 en dev)
 - `remote-access.ts` — état dans `<données CloudCLI>/acces-telephone.json` (séparé dev / bureau), routes `GET|POST /api/piecemaker/remote`, republication au démarrage (la passerelle change de port).
 - `src/piecemaker/remote/RemoteAccessSettingsTab.tsx` — onglet Réglages › Téléphone.
 - Vue téléphone : tous les onglets, le surplus dans le menu ⋮ ; barre de chat sur une ligne, envoi fixé à droite (`src/piecemaker/theme.css`) ; scan et Analyse Tabulaire repèrent les dossiers via `data-piecemaker-project-path`, posé par `sidebar-anonymization/bootstrap.tsx`.
+- Défilement du chat sur iPhone : Safari n'a pas l'ancrage de défilement (`overflow-anchor`), les messages montés au-dessus de l'écran faisaient sauter la vue en remontant ; `src/piecemaker/chat/scrollAnchoring.ts` compense le décalage, seulement là où le navigateur ne le fait pas.
 
 ## Invariants
 
