@@ -27,6 +27,8 @@ export function openDocumentsDrawer(app: App, options: DocumentsOptions): void {
   let rows: DraftRow[] = [];
   let sequence = 0;
   let saving = false;
+  let anchor: string | null = null;
+  let shift = false;
   const drawer = openDrawer(app.root, 'Ajouter des documents');
   drawer.element.classList.add('ptr-drawer-wide');
   drawer.body.innerHTML = `
@@ -49,7 +51,7 @@ export function openDocumentsDrawer(app: App, options: DocumentsOptions): void {
       </div>
       <div class="ptr-panel-body" data-rows></div>
     </section>
-    <div class="ptr-drawer-footer"><span class="ptr-spacer"></span><button type="button" class="ptr-button" data-drawer-close>Annuler</button><button type="button" class="ptr-button ptr-button-primary" data-documents-submit>Ajouter au tableau</button></div>`;
+    <div class="ptr-drawer-footer"><span class="ptr-spacer"></span><button type="button" class="ptr-button" data-drawer-close>Annuler</button><button type="button" class="ptr-button ptr-button-primary" data-documents-submit>Enregistrer</button></div>`;
   const $ = <T extends HTMLElement>(selector: string) => drawer.body.querySelector<T>(selector)!;
   const filterInput = $<HTMLInputElement>('[data-filter]');
   const rowOf = (path: string) => rows.find((row) => row.documents.includes(path));
@@ -139,7 +141,13 @@ export function openDocumentsDrawer(app: App, options: DocumentsOptions): void {
   drawer.body.addEventListener('change', (event) => {
     const target = event.target as HTMLInputElement;
     if (target.dataset.doc) {
-      toggle(target.dataset.doc, target.checked);
+      const paths = visible().map((document) => document.path);
+      const from = anchor ? paths.indexOf(anchor) : -1;
+      const to = paths.indexOf(target.dataset.doc);
+      const range = shift && from >= 0 && to >= 0 ? paths.slice(Math.min(from, to), Math.max(from, to) + 1) : [target.dataset.doc];
+      for (const path of range) toggle(path, target.checked);
+      anchor = target.dataset.doc;
+      if (range.length > 1) renderDocuments();
       renderRows();
     } else if (target.hasAttribute('data-row-check')) {
       const row = rows.find((entry) => entry.key === target.closest<HTMLElement>('[data-row]')?.dataset.row);
@@ -157,6 +165,7 @@ export function openDocumentsDrawer(app: App, options: DocumentsOptions): void {
   });
   drawer.body.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    shift = event.shiftKey;
     if (target.closest('[data-documents-submit]') && !saving) void submit();
     else if (target.closest('[data-select-all]')) {
       for (const document of visible()) toggle(document.path, true);

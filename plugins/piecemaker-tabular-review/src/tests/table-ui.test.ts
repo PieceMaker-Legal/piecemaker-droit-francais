@@ -63,7 +63,11 @@ describe('nouveau tableau', () => {
 
     $('[data-add-documents]').click();
     await vi.waitFor(() => expect(root.querySelectorAll('[data-doc]')).toHaveLength(3));
-    $('[data-select-all]').click();
+    const boxes = [...root.querySelectorAll<HTMLInputElement>('[data-doc]')];
+    boxes[0].click();
+    boxes[2].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+    expect([...root.querySelectorAll<HTMLInputElement>('[data-doc]')].map((box) => box.checked)).toEqual([true, true, true]);
+    expect(root.querySelectorAll('[data-row]')).toHaveLength(3);
     $('[data-documents-submit]').click();
     await vi.waitFor(() => expect(root.querySelector('.ptr-drawer')).toBeNull());
 

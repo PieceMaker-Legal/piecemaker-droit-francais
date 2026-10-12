@@ -15,7 +15,7 @@ export function openQuestionsDrawer(app: App, onSubmit: (result: QuestionsResult
   let templates: Template[] = [];
   let template: Template | null = null;
   let saving = false;
-  const drawer = openDrawer(app.root, 'Ajouter au tableau');
+  const drawer = openDrawer(app.root, 'Ajouter des questions');
   drawer.element.classList.add('ptr-drawer-wide');
   drawer.body.innerHTML = `
     <div class="ptr-drawer-toolbar">
@@ -27,7 +27,7 @@ export function openQuestionsDrawer(app: App, onSubmit: (result: QuestionsResult
       <div data-question-rows></div>
     </div>
     <div><button type="button" class="ptr-button" data-question-add>+ Ajouter une question</button></div>
-    <div class="ptr-drawer-footer"><span class="ptr-spacer"></span><button type="button" class="ptr-button" data-drawer-close>Annuler</button><button type="button" class="ptr-button ptr-button-primary" data-question-submit>Ajouter au tableau</button></div>`;
+    <div class="ptr-drawer-footer"><span class="ptr-spacer"></span><button type="button" class="ptr-button" data-drawer-close>Annuler</button><button type="button" class="ptr-button ptr-button-primary" data-question-submit>Enregistrer</button></div>`;
   const rows = drawer.body.querySelector<HTMLElement>('[data-question-rows]')!;
   const pick = drawer.body.querySelector<HTMLSelectElement>('[data-template-pick]')!;
 
