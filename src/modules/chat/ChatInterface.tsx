@@ -31,7 +31,7 @@ import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { useSlashCommandPills } from '@/piecemaker/chat/useSlashCommandPills';
 import { prepareCommandMenuCommands } from '@/piecemaker/chat/prepareCommandMenuCommands';
-import { ContextSuggestion } from '@/modules/piecemaker-context-suggestions';
+import { useContextSuggestion } from '@/modules/piecemaker-context-suggestions';
 
 type ChatInterfaceProps = {
   isActive: boolean;
@@ -457,6 +457,7 @@ function ChatInterface({
         : provider === 'opencode'
             ? t('messageTypes.opencode', { defaultValue: 'OpenCode' })
           : t('messageTypes.claude');
+  const contextSuggestion = useContextSuggestion({ projectPath: selectedProject?.fullPath ?? null, input: input.trim(), placeholder: t('input.placeholder', { provider: selectedProviderLabel }), onKeyDown: handleKeyDown });
 
   if (!selectedProject) {
     return (
@@ -553,7 +554,6 @@ function ChatInterface({
             </div>
           )}
 
-          <ContextSuggestion projectPath={selectedProject?.fullPath ?? null} hidden={Boolean(input.trim())} />
           <ChatComposer
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}
@@ -615,13 +615,13 @@ function ChatInterface({
           onVoiceTranscript={handleVoiceTranscript}
           onInputChange={handleInputChange}
           onTextareaClick={handleTextareaClick}
-          onTextareaKeyDown={handleKeyDown}
+          onTextareaKeyDown={contextSuggestion.onKeyDown}
           onTextareaPaste={handlePaste}
           onTextareaScrollSync={syncInputOverlayScroll}
           onTextareaInput={handleTextareaInput}
           isInputFocused={isInputFocused}
           onInputFocusChange={handleInputFocusChange}
-          placeholder={t('input.placeholder', { provider: selectedProviderLabel })}
+          placeholder={contextSuggestion.placeholder}
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
         />
