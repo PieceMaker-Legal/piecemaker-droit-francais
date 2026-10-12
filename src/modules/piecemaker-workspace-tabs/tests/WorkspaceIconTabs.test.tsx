@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { WorkspaceIconTabs } from '@/modules/piecemaker-workspace-tabs';
@@ -10,6 +10,9 @@ vi.mock('@/modules/piecemaker-workspace-tabs/WorkspacePanels', () => ({ withWork
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspaceViewer', () => ({ WorkspaceViewer: vi.fn() }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+const pmGet = vi.fn();
+const pmPost = vi.fn();
+vi.mock('@/piecemaker/dossier/api', () => ({ pmGet: (...args: unknown[]) => pmGet(...args), pmPost: (...args: unknown[]) => pmPost(...args) }));
 vi.mock('@/modules/plugins', () => ({
   usePlugins: () => ({ plugins: [{ name: 'example', displayName: 'Exemple', icon: 'icon.svg', enabled: true }] }),
   PluginIcon: () => <svg />,
@@ -20,6 +23,8 @@ let resize: () => void;
 
 beforeEach(() => {
   width = 400;
+  pmGet.mockResolvedValue({ active: false });
+  pmPost.mockImplementation((_path: string, body: { enabled: boolean }) => Promise.resolve({ active: body.enabled }));
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({ width, height: 40, top: 0, bottom: 40, left: 0, right: width, x: 0, y: 0, toJSON() {} }));
   vi.stubGlobal('ResizeObserver', class {
     constructor(callback: () => void) { resize = callback; }
@@ -61,7 +66,19 @@ it('place le surplus dans le menu et conserve l’onglet actif visible après re
   width = 400;
   act(() => resize());
   expect(screen.getAllByRole('tab')).toHaveLength(4);
-  expect(screen.queryByRole('button', { name: 'tabs.more' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'tabs.more' }));
+  expect(screen.queryAllByRole('menuitem')).toHaveLength(0);
+});
+
+it('propose toujours de maintenir l’ordinateur actif dans le menu', async () => {
+  render(<WorkspaceIconTabs activeTab="files" setActiveTab={vi.fn()} shouldShowTasksTab shouldShowBrowserTab />);
+  fireEvent.click(screen.getByRole('button', { name: 'tabs.more' }));
+  const toggle = screen.getByRole('menuitemcheckbox', { name: /tabs.keepAwake/ });
+  expect(pmGet).toHaveBeenCalledWith('/keep-awake');
+  expect(toggle.getAttribute('aria-checked')).toBe('false');
+  fireEvent.click(toggle);
+  expect(pmPost).toHaveBeenCalledWith('/keep-awake', { enabled: true });
+  await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
 });
 
 it('affiche l’icône du plugin dans le menu de débordement', () => {

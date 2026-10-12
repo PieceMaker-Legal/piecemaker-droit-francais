@@ -6,10 +6,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
+import express from 'express';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import { isOwner, startGateway } from './gateway.js';
 import { keepAwakeCommand } from './keep-awake.js';
+import { createKeepAwakeRouter } from './keep-awake-router.js';
 import { createRemoteAccess, REMOTE_STATE_FILE } from './remote-access.js';
 import { consentUrl, createTailscale, findTailscale, parseServeEntry, parseStatus, type CommandResult } from './tailscale.js';
 
@@ -98,6 +100,22 @@ test('keepAwakeCommand empêche la veille sur macOS et Windows tant que le serve
   assert.deepEqual(keepAwakeCommand('darwin', 123), ['caffeinate', ['-i', '-w', '123']]);
   assert.match(keepAwakeCommand('win32', 123)![1].join(' '), /SetThreadExecutionState/);
   assert.equal(keepAwakeCommand('linux', 123), null);
+});
+
+test('le menu des onglets active et désactive le maintien d’éveil', async () => {
+  const app = express().use(express.json()).use(createKeepAwakeRouter(fakeKeepAwake()));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/keep-awake`;
+  const post = (body: unknown) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    assert.deepEqual(await (await fetch(url)).json(), { active: false });
+    assert.deepEqual(await (await post({ enabled: true })).json(), { active: true });
+    assert.deepEqual(await (await post({ enabled: false })).json(), { active: false });
+    assert.equal((await post({})).status, 400);
+  } finally {
+    server.close();
+  }
 });
 
 test('isOwner n’accepte que le compte Tailscale de l’ordinateur', () => {
