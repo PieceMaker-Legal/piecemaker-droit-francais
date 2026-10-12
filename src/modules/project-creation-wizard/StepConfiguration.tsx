@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next';
 
-import { Input } from '@/shared/ui';
 import { shouldShowGithubAuthentication } from '@/modules/project-creation-wizard/utils/pathUtils';
 import type { GithubTokenCredential, TokenMode } from '@/shared/types';
 import GithubAuthenticationCard from '@/modules/project-creation-wizard/GithubAuthenticationCard';
@@ -17,7 +16,6 @@ type StepConfigurationProps = {
   tokenLoadError: string | null;
   isCreating: boolean;
   onWorkspacePathChange: (workspacePath: string) => void;
-  onGithubUrlChange: (githubUrl: string) => void;
   onTokenModeChange: (tokenMode: TokenMode) => void;
   onSelectedGithubTokenChange: (tokenId: string) => void;
   onNewGithubTokenChange: (tokenValue: string) => void;
@@ -36,7 +34,6 @@ export default function StepConfiguration({
   tokenLoadError,
   isCreating,
   onWorkspacePathChange,
-  onGithubUrlChange,
   onTokenModeChange,
   onSelectedGithubTokenChange,
   onNewGithubTokenChange,
@@ -61,23 +58,6 @@ export default function StepConfiguration({
 
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           {t('projectWizard.step2.newHelp')}
-        </p>
-      </div>
-
-      <div>
-        <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-          {t('projectWizard.step2.githubUrl')}
-        </label>
-        <Input
-          type="text"
-          value={githubUrl}
-          onChange={(event) => onGithubUrlChange(event.target.value)}
-          placeholder="https://github.com/username/repository"
-          className="w-full"
-          disabled={isCreating}
-        />
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {t('projectWizard.step2.githubHelp')}
         </p>
       </div>
 
