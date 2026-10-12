@@ -25,10 +25,10 @@ export function ContextSuggestion({ projectPath, hidden }: ContextSuggestionProp
         key={question}
         type="button"
         onClick={() => insertComposerText(question)}
-        className="flex min-w-0 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+        className="flex min-w-0 max-w-full items-center gap-1.5 rounded-2xl border border-border/60 bg-card px-3 py-1 text-left text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
       >
         <SparklesIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">{question.trim()}</span>
+        <span className="whitespace-normal break-words">{question.trim()}</span>
       </button>)}
     </div>
   );
