@@ -130,7 +130,7 @@ async function main() {
   else warn('commande absente du PATH — relancez node scripts/piecemaker/cli/install-command.mjs');
 
   // Les plugins sont posés AVANT le démarrage : l'hôte ne lance les serveurs de
-  // plugins (Telegram, Tabular Review) qu'à son boot, et l'interface ne lit la
+  // plugins (Tabular Review) qu'à son boot, et l'interface ne lit la
   // liste des plugins qu'au chargement. Installés après coup, ils restaient
   // invisibles ou inertes jusqu'au lancement suivant.
   if (!options.launchOnly) await synchroniseRepositories(runtime);

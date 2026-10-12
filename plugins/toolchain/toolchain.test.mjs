@@ -39,7 +39,7 @@ test('builds every plugin, installs them, repairs, removes and keeps user choice
 
     const configPath = path.join(dataRoot, 'plugins.json');
     const config = readJson(configPath);
-    for (const id of ['piecemaker-telegram', 'piecemaker-tabular-review']) {
+    for (const id of ['piecemaker-tabular-review']) {
       const runtime = readJson(path.join(dataRoot, 'plugins', id, 'runtime.json'));
       assert.equal(runtime.secret, config[id].secrets.access);
       assert.equal(runtime.secret.length, 64);
@@ -62,7 +62,7 @@ test('builds every plugin, installs them, repairs, removes and keeps user choice
     assert.ok(fs.existsSync(path.join(dataRoot, 'plugins', 'plugin-git-externe')));
     const after = readJson(configPath);
     assert.equal(after['piecemaker-timesheet'].enabled, false);
-    assert.equal(after['piecemaker-telegram'].secrets.access, config['piecemaker-telegram'].secrets.access);
+    assert.equal(after['piecemaker-tabular-review'].secrets.access, config['piecemaker-tabular-review'].secrets.access);
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
   }
