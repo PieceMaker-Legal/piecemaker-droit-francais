@@ -35,7 +35,7 @@ function fitPageWidth(container: HTMLElement, editor: DocxEditorRef | null, last
   const nextZoom = availableWidth / page.offsetWidth;
   const previousScrollTop = scroller.scrollTop;
   editor.setZoom(nextZoom);
-  requestAnimationFrame(() => { scroller.scrollTop = previousScrollTop * nextZoom / previousZoom; });
+  window.setTimeout(() => { scroller.scrollTop = previousScrollTop * nextZoom / previousZoom; }, 300);
 }
 
 function decodeDocumentPath(filePath: string): string {

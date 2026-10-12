@@ -51,3 +51,7 @@
   background-color: var(--doc-surface) !important;
   color: var(--doc-text, inherit) !important;
 }
+
+.piecemaker-docx-viewer div[style*="transform-origin: center top"] {
+  transition: none !important;
+}
