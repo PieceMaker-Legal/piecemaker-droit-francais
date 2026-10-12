@@ -81,7 +81,7 @@ export async function loadModels(provider: Provider): Promise<{ options: ModelOp
 
 const KNOWLEDGE = '/api/piecemaker/knowledge';
 
-type ConversionJob = { id: string; state: string; error?: string | null };
+type ConversionJob = { id: string; state: string; percent?: number; error?: string | null };
 
 /** Dossier juridique vu par PieceMaker : pièces, pseudonymes, renommage et conversion. */
 export const caseFiles = {
@@ -97,9 +97,10 @@ export const caseFiles = {
     return hostJson<{ previous: string; current: string; markdown: string | null }>(`${KNOWLEDGE}/rename`, { projectId, path: piece, name, directory });
   },
   /** Convertit les pièces indiquées et attend la fin de la conversion. */
-  async convert(projectId: string, files: string[]): Promise<void> {
+  async convert(projectId: string, files: string[], onProgress?: (percent: number) => void): Promise<void> {
     let { job } = await hostJson<{ job: ConversionJob }>(`${KNOWLEDGE}/scan`, { projectId, files });
     while (job.state === 'running') {
+      onProgress?.(job.percent ?? 0);
       await new Promise((resolve) => setTimeout(resolve, 1500));
       ({ job } = await hostJson<{ job: ConversionJob }>(`${KNOWLEDGE}/scan/job?id=${encodeURIComponent(job.id)}&projectId=${encodeURIComponent(projectId)}`));
     }
