@@ -31,13 +31,13 @@ effectivement disponibles, puis le format exact que le vérificateur accepte.
 ## Recherche large : l'analyse tabulaire en mode recherche
 
 Pour une question de droit qui mérite un balayage systématique plutôt qu'une
-requête isolée, proposer à l'avocat l'**analyse tabulaire en mode recherche**
-(volet Analyse tabulaire › « + Nouvelle recherche ») : une formulation
+requête isolée, l'**analyse tabulaire en mode recherche** : une formulation
 Légifrance et Judilibre, mêmes filtres et même syntaxe que les outils
 Légifrance, au plus 500 décisions, une ligne par décision et une colonne par
-question. L'IA ne la lance pas : l'avocat saisit la recherche, choisit les
-questions et confirme. Ouvrir le volet avec l'outil `afficher`
-(`volet` `tabular-review`) pour l'y amener.
+question. La préparer avec l'outil `tabular_review` (`preparer`, `mode`
+`recherche`) : nom, requête et filtres, questions ou `modele`, IA. Le
+formulaire rempli s'affiche à l'avocat, qui vérifie et lance. `lancer`
+seulement si l'avocat l'a demandé dans le chat.
 
 Une fois la revue faite, la lire avec l'outil `tabular_review` (`lister`, puis
 `ouvrir`) : le fichier `Tabular Review/<fichier>.json` donne, pour chaque
@@ -69,8 +69,8 @@ tabulaire en mode recherche).
 
 1. **Recherche large** avec `Search_Jurisprudence` sur les juridictions visées
    (ou, pour une question de droit qui mérite un balayage systématique plutôt
-   qu'une requête isolée, l'analyse tabulaire en mode recherche proposée à
-   l'avocat). Pour un texte de loi, `Search_Code`.
+   qu'une requête isolée, l'analyse tabulaire en mode recherche préparée
+   pour l'avocat). Pour un texte de loi, `Search_Code`.
 2. **Tri** des résultats sur les seuls éléments déjà renvoyés (titre, analyse,
    date, extraits) — sans lire chaque décision en entier.
 3. **Lecture** des seules décisions/articles retenus comme potentiellement

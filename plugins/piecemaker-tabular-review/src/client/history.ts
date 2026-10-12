@@ -14,7 +14,7 @@ type Entry = ReviewSummary & { draft?: Draft };
 const statusLabel = (entry: Entry) => entry.draft ? 'Projet' : reviewStatusLabel(entry.status);
 
 function draftEntry(draft: Draft): Entry {
-  return { project: draft.project, file: '', title: draft.title, templateName: draft.templateName || `${draft.columns.length} question${draft.columns.length > 1 ? 's' : ''}`, category: 'documents', createdAt: draft.updatedAt, status: 'done', rowCount: draft.rows.length, doneCount: 0, columnCount: draft.columns.length, provider: 'claude', model: '', draft } as Entry;
+  return { project: draft.project, file: '', title: draft.title, templateName: draft.templateName || `${draft.columns.length} question${draft.columns.length > 1 ? 's' : ''}`, category: draft.mode === 'recherche' ? 'recherche-juridique' : 'documents', createdAt: draft.updatedAt, status: 'done', rowCount: draft.rows.length, doneCount: 0, columnCount: draft.columns.length, provider: 'claude', model: '', draft } as Entry;
 }
 
 export function createHistoryView(app: App): View {

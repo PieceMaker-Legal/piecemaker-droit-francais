@@ -64,6 +64,7 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
   let protectedProject = true;
   let models: { options: ModelOption[]; cheapest: string } = { options: [], cheapest: '' };
   let launching = false;
+  let preferredModel = draft.model ?? '';
 
   const isSorting = () => hasActions(columns);
 
@@ -125,6 +126,8 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
     modelSelect.innerHTML = models.options.length
       ? models.options.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === models.cheapest ? ' selected' : ''}>${escapeHtml(option.label)}${option.value === models.cheapest ? ' (par défaut, économique)' : ''}</option>`).join('')
       : '<option value="">Aucun modèle disponible</option>';
+    if (models.options.some((option) => option.value === preferredModel)) modelSelect.value = preferredModel;
+    preferredModel = '';
     renderFooter();
   }
 
@@ -239,6 +242,7 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
   });
 
   renderAll();
+  if (draft.provider) providerSelect.value = draft.provider;
   void loadProviderModels();
   void app.rpc<{ projects: string[] }>('GET', '/protected-projects').then((result) => {
     protectedProject = result.projects.includes(project);

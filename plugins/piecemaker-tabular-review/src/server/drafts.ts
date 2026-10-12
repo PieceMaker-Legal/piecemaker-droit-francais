@@ -25,6 +25,22 @@ export function listDrafts(projects: string[], file = DRAFTS_FILE): Draft[] {
   return readDrafts(file).filter((draft) => wanted.has(draft.project));
 }
 
+function kept(input: Record<string, unknown>, previous: Draft | undefined): Partial<Draft> {
+  const value = <K extends 'mode' | 'research' | 'provider' | 'model' | 'error'>(key: K) => (key in input ? input[key] : previous?.[key]) as Draft[K];
+  const mode = value('mode') === 'recherche' ? 'recherche' as const : undefined;
+  const research = value('research');
+  const provider = value('provider');
+  const model = value('model');
+  const error = value('error');
+  return {
+    ...(mode ? { mode } : {}),
+    ...(research && typeof research === 'object' ? { research } : {}),
+    ...(provider === 'claude' || provider === 'codex' || provider === 'mistral' ? { provider } : {}),
+    ...(typeof model === 'string' && model ? { model: model.slice(0, 120) } : {}),
+    ...(typeof error === 'string' && error ? { error: error.slice(0, 500) } : {}),
+  };
+}
+
 export function upsertDraft(value: unknown, file = DRAFTS_FILE, project = assertProject): Draft {
   const input = (value ?? {}) as Record<string, unknown>;
   const title = typeof input.title === 'string' ? input.title.trim().slice(0, 120) : '';
@@ -40,6 +56,7 @@ export function upsertDraft(value: unknown, file = DRAFTS_FILE, project = assert
     templateName: typeof input.templateName === 'string' ? input.templateName.slice(0, 120) : '',
     columns: Array.isArray(input.columns) ? input.columns as TemplateColumn[] : [],
     rows: Array.isArray(input.rows) ? input.rows as RowRequest[] : [],
+    ...kept(input, previous),
     createdAt: previous?.createdAt ?? now,
     updatedAt: now,
   };

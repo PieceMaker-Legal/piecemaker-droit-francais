@@ -26,7 +26,7 @@ function hostname(host: string | undefined): string {
   }
 }
 
-function isLoopback(request: express.Request): boolean {
+export function isLoopback(request: express.Request): boolean {
   if (!LOOPBACK_ADDRESSES.has(request.socket.remoteAddress || '')) return false;
   if (!LOOPBACK_HOSTNAMES.has(hostname(request.headers.host))) return false;
   return !Object.keys(request.headers).some((name) => PROXY_HEADERS.includes(name) || name.startsWith('tailscale-'));

@@ -20,7 +20,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
-import { runSql } from '../../installer/lib/conversion-client.mjs';
+import fs from 'node:fs';
+import { runSql, runTabularReview } from '../../installer/lib/conversion-client.mjs';
+import { CASSATION_MATIERES, chronologieSql, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES, REVIEW_FOLDER, reviewFile, VOLETS } from './volets.mjs';
 import { describeOpenPanels } from './volets-ouverts.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -119,7 +121,7 @@ const SQL_DESCRIPTION = [
  * Construit le serveur MCP et y enregistre les outils. Séparé de
  * `main()` pour rester testable sans jamais brancher de transport stdio.
  */
-export function createServer({ execFn, sqlFn = runSql } = {}) {
+export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularReview } = {}) {
   const server = new McpServer({ name: 'piecemaker', version: '1.0.0' });
   const run = (args, dossier) => runPiecemakerCommand(args, { cwd: dossier, execFn });
 
@@ -163,6 +165,122 @@ export function createServer({ execFn, sqlFn = runSql } = {}) {
     try {
       const resultat = await sqlFn({ requete, cwd: process.cwd() });
       return { content: [{ type: 'text', text: resultat }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
+    }
+  });
+
+  server.registerTool('afficher', {
+    description: 'Affiche à l’avocat, dans un volet de PieceMaker à côté du chat, un fichier du dossier '
+      + '(fichier), la vue générale ou la chronologie du dossier, ou une tabular review. '
+      + 'Sans effet hors de l’application PieceMaker.',
+    inputSchema: {
+      fichier: z.string().optional().describe('Chemin du fichier, relatif au dossier ou absolu.'),
+      volet: z.enum(VOLETS).optional().describe('Volet à ouvrir quand aucun fichier n’est donné.'),
+      review: z.string().optional().describe('Avec volet tabular-review : fichier JSON de la review (tabular_review, action lister).'),
+    },
+    annotations: {
+      title: 'Afficher dans un volet PieceMaker',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  }, async ({ fichier, volet, review }) => {
+    if (fichier) {
+      const resolved = path.resolve(process.cwd(), fichier);
+      if (!fs.existsSync(resolved)) return { isError: true, content: [{ type: 'text', text: `Fichier introuvable : ${fichier}` }] };
+      return { content: [{ type: 'text', text: `Affiché dans le volet de lecture : ${fichier}` }] };
+    }
+    if (!volet) return { isError: true, content: [{ type: 'text', text: 'Indiquez un fichier ou un volet.' }] };
+    return { content: [{ type: 'text', text: `Volet affiché : ${volet}${review ? ` (${path.basename(review)})` : ''}` }] };
+  });
+
+  server.registerTool('chronologie', {
+    description: 'Chronologie des pièces du dossier, affichée à l’avocat dans le volet Dossier. '
+      + 'lister : id, date, libellé et nature de chaque pièce, par date. '
+      + 'modifier : change la date (AAAA-MM-JJ, vide pour l’effacer) ou le libellé d’une pièce ; '
+      + 'changer le libellé (AAAA-MM-JJ_titre) renomme aussi le fichier.',
+    inputSchema: {
+      action: z.enum(['lister', 'modifier']),
+      dossier: z.string().optional().describe('Nom ou début d’id d’un autre dossier. Par défaut, le dossier de la session.'),
+      piece: z.string().optional().describe('Id de la pièce à modifier (colonne id de lister).'),
+      date: z.string().optional(),
+      libelle: z.string().optional(),
+    },
+    annotations: {
+      title: 'Chronologie du dossier',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  }, async (input) => {
+    try {
+      const resultat = await sqlFn({ requete: chronologieSql(input), cwd: process.cwd() });
+      return { content: [{ type: 'text', text: resultat }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
+    }
+  });
+
+  server.registerTool('tabular_review', {
+    description: 'Tabular reviews du dossier, affichées à l’avocat dans le volet Tabular Review. '
+      + 'lister : analyses et projets non lancés. '
+      + `ouvrir : affiche une analyse (fichier ; contenu dans « ${REVIEW_FOLDER}/<fichier> ») ou un projet. `
+      + 'documents : documents analysables. modeles : liste, ou questions d’un modele. enregistrer_modele : crée, ou modifie modele. '
+      + 'preparer : crée ou complète (projet) un projet, que l’avocat vérifie et lance. '
+      + 'lancer : seulement sur accord explicite de l’avocat dans le chat.',
+    inputSchema: {
+      action: z.enum(['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer']),
+      dossier: DOSSIER_SCHEMA,
+      fichier: z.string().optional(),
+      projet: z.string().optional().describe('Id d’un projet non lancé.'),
+      mode: z.enum(['analyse', 'recherche']).optional().describe('analyse : documents du dossier ; recherche : décisions Légifrance et Judilibre.'),
+      nom: z.string().optional(),
+      modele: z.string().optional().describe('Id ou nom d’un modèle.'),
+      description: z.string().optional(),
+      questions: z.array(z.object({
+        nom: z.string().optional(),
+        consigne: z.string(),
+        format: z.enum(COLUMN_FORMATS).optional(),
+        etiquettes: z.array(z.string()).optional(),
+      })).optional().describe('Avec modele dans preparer : ajoutées à ses questions.'),
+      documents: z.array(z.string()).optional().describe('Chemins relatifs de documents ou de dossiers (tous leurs documents).'),
+      recherche: z.object({
+        query: z.string(),
+        sources: z.array(z.enum(RESEARCH_SOURCES)),
+        matieres: z.array(z.enum(CASSATION_MATIERES)).describe('Obligatoire pour cassation.'),
+        publicationBulletin: z.enum(['TOUS', 'PUBLIE', 'INEDIT']),
+        sieges: z.array(z.string()).describe('Cours d’appel : PARIS, VERSAILLES, AIX-PROVENCE…'),
+        publicationConseilEtat: z.enum(['TOUS', 'PUBLIE', 'NON_PUBLIE']),
+        villesCaa: z.array(z.string()),
+        publicationCaa: z.enum(['TOUS', 'PUBLIE', 'NON_PUBLIE']),
+        typesPremiereInstance: z.array(z.enum(PREMIERE_INSTANCE_TYPES)).describe('Obligatoire pour premiere_instance.'),
+        dateDebut: z.string().describe('AAAA-MM-JJ'),
+        dateFin: z.string().describe('AAAA-MM-JJ'),
+        dispositifOnly: z.boolean(),
+      }).partial().optional(),
+      ia: z.enum(['claude', 'codex', 'mistral']).optional(),
+      modele_ia: z.string().optional(),
+    },
+    annotations: {
+      title: 'Tabular Review',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  }, async ({ action, dossier, fichier, ...input }) => {
+    const resolved = path.resolve(resolveDossier(dossier));
+    try {
+      if (action === 'ouvrir') {
+        if (input.projet) return { content: [{ type: 'text', text: `Projet affiché dans le volet Tabular Review : ${input.projet}` }] };
+        const name = reviewFile(resolved, fichier);
+        return { content: [{ type: 'text', text: `Analyse affichée dans le volet Tabular Review. Contenu : « ${REVIEW_FOLDER}/${name} ».` }] };
+      }
+      const result = await tabularFn({ ...input, action, project: resolved });
+      return { content: [{ type: 'text', text: Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result) }] };
     } catch (error) {
       return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
     }

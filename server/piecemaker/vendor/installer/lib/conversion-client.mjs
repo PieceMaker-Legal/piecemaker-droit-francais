@@ -145,6 +145,12 @@ export async function runSql({ requete, cwd }) {
   return response.resultat;
 }
 
+export async function runTabularReview(body) {
+  await adoptRunningServerPort();
+  const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/tabular-review`, body });
+  return response.resultat;
+}
+
 export function readLocalScanJob({ folder, id }) {
   const query = new URLSearchParams({ folder, ...(id ? { id } : {}) });
   return requestJson({ method: 'GET', path: `${LOCAL_BASE}/scan/job?${query}` });
