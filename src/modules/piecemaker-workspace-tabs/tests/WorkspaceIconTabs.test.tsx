@@ -40,7 +40,7 @@ it('conserve le branchement PieceMaker lors des merges upstream', () => {
 
 it('affiche uniquement les icônes et révèle leur nom au survol', async () => {
   render(<WorkspaceIconTabs activeTab="files" setActiveTab={vi.fn()} shouldShowTasksTab shouldShowBrowserTab />);
-  expect(screen.getAllByRole('tab')).toHaveLength(6);
+  expect(screen.getAllByRole('tab')).toHaveLength(4);
   const files = screen.getByRole('tab', { name: 'tabs.files' });
   expect(files.textContent).toBe('');
   expect(files.getAttribute('aria-selected')).toBe('true');
@@ -60,7 +60,7 @@ it('place le surplus dans le menu et conserve l’onglet actif visible après re
   expect(setActiveTab).toHaveBeenCalledWith('files');
   width = 400;
   act(() => resize());
-  expect(screen.getAllByRole('tab')).toHaveLength(6);
+  expect(screen.getAllByRole('tab')).toHaveLength(4);
   expect(screen.queryByRole('button', { name: 'tabs.more' })).toBeNull();
 });
 
