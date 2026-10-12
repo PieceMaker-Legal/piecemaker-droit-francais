@@ -15,8 +15,21 @@ type ProjectPathLookup = {
 
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
+const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '[::1]']);
+const PROXY_HEADERS = ['forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-piecemaker-remote'];
+
+function hostname(host: string | undefined): string {
+  try {
+    return new URL(`http://${host || ''}`).hostname;
+  } catch {
+    return '';
+  }
+}
+
 function isLoopback(request: express.Request): boolean {
-  return LOOPBACK_ADDRESSES.has(request.socket.remoteAddress || '');
+  if (!LOOPBACK_ADDRESSES.has(request.socket.remoteAddress || '')) return false;
+  if (!LOOPBACK_HOSTNAMES.has(hostname(request.headers.host))) return false;
+  return !Object.keys(request.headers).some((name) => PROXY_HEADERS.includes(name) || name.startsWith('tailscale-'));
 }
 
 function statusFor(error: unknown): number {

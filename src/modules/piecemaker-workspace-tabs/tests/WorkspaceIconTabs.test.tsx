@@ -10,8 +10,9 @@ vi.mock('@/modules/piecemaker-workspace-tabs/WorkspacePanels', () => ({ withWork
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspaceViewer', () => ({ WorkspaceViewer: vi.fn() }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+const mockPlugins = [{ name: 'example', displayName: 'Exemple', icon: 'icon.svg', enabled: true }];
 vi.mock('@/modules/plugins', () => ({
-  usePlugins: () => ({ plugins: [{ name: 'example', displayName: 'Exemple', icon: 'icon.svg', enabled: true }] }),
+  usePlugins: () => ({ plugins: mockPlugins }),
   PluginIcon: () => <svg />,
 }));
 
@@ -77,4 +78,17 @@ it('permet de changer d’onglet au clavier', () => {
   render(<WorkspaceIconTabs activeTab="chat" setActiveTab={setActiveTab} shouldShowTasksTab={false} shouldShowBrowserTab={false} />);
   fireEvent.keyDown(screen.getByRole('tab', { name: 'tabs.chat' }), { key: 'ArrowRight' });
   expect(setActiveTab).toHaveBeenCalledWith('files');
+});
+
+it('sur téléphone, ne garde que le chat, les fichiers et le Dossier', () => {
+  const desktopWidth = window.innerWidth;
+  window.innerWidth = 375;
+  mockPlugins.push({ name: 'piecemaker-dossier', displayName: 'Dossier', icon: 'icon.svg', enabled: true });
+  try {
+    render(<WorkspaceIconTabs activeTab="chat" setActiveTab={vi.fn()} shouldShowTasksTab shouldShowBrowserTab />);
+    expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('aria-label'))).toEqual(['tabs.chat', 'tabs.files', 'Dossier']);
+  } finally {
+    mockPlugins.pop();
+    window.innerWidth = desktopWidth;
+  }
 });

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import http from 'node:http';
 import test from 'node:test';
 
 import express from 'express';
@@ -225,5 +226,31 @@ test('POST /sql est refusé hors boucle locale', async () => {
     });
     assert.equal(response.status, 403);
     assert.deepEqual(calls.sql, []);
+  });
+});
+
+function postRaw(base: string, headers: Record<string, string>): Promise<number> {
+  const url = new URL(`${base}/sql`);
+  return new Promise((resolve, reject) => {
+    const request = http.request({ hostname: url.hostname, port: url.port, path: url.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', ...headers } }, (response) => {
+      response.resume();
+      resolve(response.statusCode || 0);
+    });
+    request.on('error', reject);
+    request.end(JSON.stringify({ requete: 'SELECT 1' }));
+  });
+}
+
+test('POST /sql est refusé quand la requête loopback vient d’un proxy ou d’un hôte distant', async () => {
+  const { app, calls } = harness();
+  await withServer(app, async (base) => {
+    assert.equal(await postRaw(base, { 'X-Forwarded-For': '100.64.0.2' }), 403);
+    assert.equal(await postRaw(base, { 'Tailscale-User-Login': 'jean.dupont@example.com' }), 403);
+    assert.equal(await postRaw(base, { 'X-PieceMaker-Remote': '1' }), 403);
+    assert.equal(await postRaw(base, { Forwarded: 'for=100.64.0.2' }), 403);
+    assert.equal(await postRaw(base, { Host: 'machine.exemple.ts.net' }), 403);
+    assert.deepEqual(calls.sql, []);
+    assert.equal(await postRaw(base, { Host: `localhost:${new URL(base).port}` }), 200);
+    assert.equal(calls.sql.length, 1);
   });
 });

@@ -29,6 +29,7 @@ import { installModelDiscovery } from './model-discovery/index.js';
 import { startProjectRegistry } from './project-registry.js';
 import { createFolderHistory } from './folder-history/history.js';
 import { createOpenPanelsRouter } from './open-panels.js';
+import { startRemoteAccess } from './remote/index.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -76,6 +77,7 @@ installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
 installModelDiscovery(providerRegistry);
 const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
+const remoteRouter = startRemoteAccess(applicationRoot);
 startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => row.project_path), path.join(piecemakerHome(), 'CLAUDE.md'), (workspace) => {
   declarePieceMakerServer(workspace);
   declareBundledSkills(workspace);
@@ -101,6 +103,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));
   router.use(createShellEnvironmentRouter(shellEnvironment));
   router.use(createOpenPanelsRouter(piecemakerHome()));
+  router.use(remoteRouter);
   return router;
 }
 export type { PieceMakerRuntimeStatus };

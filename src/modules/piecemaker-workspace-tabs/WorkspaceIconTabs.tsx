@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { PluginIcon, usePlugins } from '@/modules/plugins';
 import { useOpenWorkspacePanels } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
+import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import type { AppTab } from '@/shared/types';
 import { ActionMenu, Pill, PillBar, Tooltip } from '@/shared/ui';
 import { cn } from '@/shared/utils';
@@ -16,6 +17,8 @@ type WorkspaceIconTabsProps = {
   shouldShowTasksTab: boolean;
   shouldShowBrowserTab: boolean;
 };
+
+const MOBILE_TABS = ['chat', 'files', 'plugin:piecemaker-dossier'];
 
 function pluginMenuIcon(plugin: { name: string; icon: string }) {
   const PluginMenuIcon = ({ className }: { className?: string }) => (
@@ -35,13 +38,15 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab }: WorkspaceIconTabs
   const isSelected = (id: AppTab) => id === activeTab || Boolean(openPanels?.includes(id));
   const containerRef = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
-  const tabs = [
+  const { isMobile } = useDeviceSettings({ trackPWA: false });
+  const allTabs = [
     { id: 'chat' as AppTab, label: t('tabs.chat'), icon: MessageSquare },
     { id: 'files' as AppTab, label: t('tabs.files'), icon: Folder },
     ...plugins.filter((plugin) => plugin.enabled && plugin.name !== 'piecemaker-library').map(pluginTab),
     { id: 'git' as AppTab, label: t('tabs.git'), icon: GitBranch },
     ...plugins.filter((plugin) => plugin.enabled && plugin.name === 'piecemaker-library').map(pluginTab),
   ];
+  const tabs = isMobile ? allTabs.filter((tab) => MOBILE_TABS.includes(tab.id)) : allTabs;
 
   useLayoutEffect(() => {
     const container = containerRef.current;
