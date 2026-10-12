@@ -557,3 +557,33 @@ aside.border-r.bg-muted\/30 button {
   width: 1.25rem;
   height: 1.25rem;
 }
+
+div[data-slot="prompt-input-footer"] {
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+}
+
+div[data-slot="prompt-input-footer"] > div[data-slot="prompt-input-tools"] {
+  flex: 1 1 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+div[data-slot="prompt-input-footer"] > div[data-slot="prompt-input-tools"]::-webkit-scrollbar {
+  display: none;
+}
+
+div[data-slot="prompt-input-footer"] > div:last-child {
+  flex-shrink: 0;
+}
+
+.md\:hidden [data-piecemaker-anonymization-slot] > button {
+  width: 2rem;
+  height: 2rem;
+  background: hsl(var(--muted) / 0.5);
+}
+
+.md\:hidden [data-piecemaker-anonymization-slot] > button svg {
+  width: 1rem;
+  height: 1rem;
+}

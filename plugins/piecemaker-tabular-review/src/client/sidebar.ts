@@ -21,7 +21,8 @@ function newSessionButtons(): HTMLButtonElement[] {
 
 function projectPath(button: HTMLButtonElement): string | null {
   const container = button.closest<HTMLElement>('div.ml-3.space-y-1.border-l');
-  const title = container?.parentElement?.querySelector<HTMLElement>('.min-w-0.flex-1.text-left[title]')?.title ?? '';
+  const item = container?.parentElement;
+  const title = item?.dataset.piecemakerProjectPath ?? item?.querySelector<HTMLElement>('.min-w-0.flex-1.text-left[title]')?.title ?? '';
   return /^([a-zA-Z]:[\\/]|\/)/.test(title) ? title : null;
 }
 

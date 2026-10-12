@@ -4,6 +4,8 @@ import type { Project } from '@/shared/types';
 import { AnonymizationLauncher } from '@/piecemaker/sidebar-anonymization/AnonymizationLauncher';
 
 const ROOT_ID = 'piecemaker-sidebar-anonymization';
+const SIDEBAR_SELECTOR = '.md\\:select-none';
+const PROJECT_ITEM_SELECTOR = '.md\\:space-y-1';
 
 const host = document.createElement('div');
 host.id = ROOT_ID;
@@ -17,9 +19,18 @@ function updateProjects(refreshedProjects: Project[]): void {
   scheduleRender();
 }
 
+function projectContent(project: Project): HTMLElement | null {
+  const desktop = [...document.querySelectorAll<HTMLElement>('.min-w-0.flex-1.text-left[title]')]
+    .find((element) => element.title === project.fullPath);
+  if (desktop) return desktop;
+  if (projects.filter((entry) => entry.displayName === project.displayName).length !== 1) return null;
+  return [...document.querySelectorAll<HTMLElement>(`${SIDEBAR_SELECTOR} ${PROJECT_ITEM_SELECTOR} h3`)]
+    .find((heading) => heading.textContent === project.displayName)?.parentElement ?? null;
+}
+
 function renderIntoSidebar(): void {
   const buttonSlots: HTMLElement[] = [];
-  document.querySelectorAll<HTMLElement>('.md\\:w-72.md\\:select-none').forEach((sidebar) => {
+  document.querySelectorAll<HTMLElement>(SIDEBAR_SELECTOR).forEach((sidebar) => {
     sidebar.querySelectorAll<HTMLElement>('button').forEach((button) => {
       if (!button.querySelector('.lucide-refresh-cw')) return;
       const parent = button.parentElement;
@@ -36,10 +47,9 @@ function renderIntoSidebar(): void {
 
   const progressSlots = new Map<string, HTMLElement>();
   for (const project of projects) {
-    const content = [...document.querySelectorAll<HTMLElement>('[title]')]
-      .find((element) => element.title === project.fullPath && element.closest('.min-w-0.flex-1.text-left'))
-      ?.closest<HTMLElement>('.min-w-0.flex-1.text-left');
+    const content = projectContent(project);
     if (!content) continue;
+    content.closest<HTMLElement>(PROJECT_ITEM_SELECTOR)?.setAttribute('data-piecemaker-project-path', project.fullPath);
     let slot = content.querySelector<HTMLElement>(':scope > [data-piecemaker-project-progress]');
     if (!slot) {
       slot = document.createElement('div');
@@ -69,5 +79,6 @@ if (import.meta.hot) {
     root.unmount();
     host.remove();
     document.querySelectorAll('[data-piecemaker-anonymization-slot], [data-piecemaker-project-progress]').forEach((element) => element.remove());
+    document.querySelectorAll('[data-piecemaker-project-path]').forEach((element) => element.removeAttribute('data-piecemaker-project-path'));
   });
 }

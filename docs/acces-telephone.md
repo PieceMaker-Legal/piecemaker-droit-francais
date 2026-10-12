@@ -31,7 +31,7 @@ téléphone (Tailscale) ─HTTPS─▶ Tailscale Serve :443 (:8443 en dev)
 - `keep-awake.ts` — `caffeinate -i -w <pid>` (macOS) ou `SetThreadExecutionState` via PowerShell (Windows) tant que l'accès est publié ; s'arrête avec le serveur.
 - `remote-access.ts` — état dans `<données CloudCLI>/acces-telephone.json` (séparé dev / bureau), routes `GET|POST /api/piecemaker/remote`, republication au démarrage (la passerelle change de port).
 - `src/piecemaker/remote/RemoteAccessSettingsTab.tsx` — onglet Réglages › Téléphone.
-- `WorkspaceIconTabs` — sous 768 px, seuls Chat, Fichiers et Dossier restent.
+- Vue téléphone : tous les onglets, le surplus dans le menu ⋮ ; barre de chat sur une ligne, envoi fixé à droite (`src/piecemaker/theme.css`) ; scan et Analyse Tabulaire repèrent les dossiers via `data-piecemaker-project-path`, posé par `sidebar-anonymization/bootstrap.tsx`.
 
 ## Invariants
 
