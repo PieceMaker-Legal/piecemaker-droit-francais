@@ -3,6 +3,8 @@ import { CATEGORY_LABELS, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, formatDate, toast } from './dom.js';
 import type { HostProject } from './host.js';
+import { nextSort, sortBy, sortButton } from './ordering.js';
+import type { SortState } from './ordering.js';
 
 const ALL = '';
 const REFRESH_INTERVAL = 5000;
@@ -11,7 +13,13 @@ export function createHistoryView(app: App): View {
   const element = document.createElement('div');
   element.className = 'ptr-page';
   element.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px">
+      <h1 class="ptr-page-title">Analyses tabulaires</h1>
+      <span class="ptr-spacer"></span>
+      <button type="button" class="ptr-button ptr-button-primary" data-new-table>+ Nouveau tableau</button>
+    </div>
     <div style="display:flex;align-items:flex-end;gap:8px">
+      <label class="ptr-field" style="width:280px"><span class="ptr-label">Rechercher</span><input class="ptr-input" data-search placeholder="Nom du tableau…"></label>
       <label class="ptr-field" style="width:280px"><span class="ptr-label">Dossier</span><select class="ptr-select" data-filter><option value="">Tous les dossiers</option></select></label>
       <label class="ptr-field" style="width:220px"><span class="ptr-label">Catégorie</span><select class="ptr-select" data-category><option value="">Toutes les catégories</option></select></label>
       <span class="ptr-spacer"></span>
@@ -24,6 +32,8 @@ export function createHistoryView(app: App): View {
   let projects: HostProject[] = [];
   let reviews: ReviewSummary[] = [];
   let visible: ReviewSummary[] = [];
+  let sort: SortState = { key: 'date', direction: -1 };
+  const search = element.querySelector<HTMLInputElement>('[data-search]')!;
   let timer = 0;
   let request = 0;
   let destroyed = false;
@@ -43,22 +53,25 @@ export function createHistoryView(app: App): View {
 
   function render() {
     renderCategories();
-    visible = categoryFilter.value ? reviews.filter((review) => review.category === categoryFilter.value) : reviews;
+    const query = search.value.trim().toLowerCase();
+    const filtered = reviews.filter((review) => (!categoryFilter.value || review.category === categoryFilter.value) && (!query || review.title.toLowerCase().includes(query)));
+    visible = sortBy(filtered, sort, (review, key) => key === 'title' ? review.title : key === 'status' ? reviewStatusLabel(review.status) : key === 'project' ? app.projectName(review.project) : key === 'rows' ? String(review.rowCount) : review.createdAt);
     if (!visible.length) {
       list.innerHTML = '<div class="ptr-empty">Aucune analyse tabulaire pour ce filtre.</div>';
       return;
     }
-    list.innerHTML = `<div class="ptr-list">${visible.map((review, index) => `
-      <div class="ptr-list-row" data-index="${index}" role="button" tabindex="0" title="${escapeHtml(review.file)}">
-        <span class="ptr-small ptr-muted" style="flex-shrink:0;width:92px;padding-left:6px">${escapeHtml(formatDate(review.createdAt))}</span>
-        <strong>${escapeHtml(review.title)}</strong>
-        ${review.category === 'documents' ? '' : `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS[review.category])}</span>`}
-        <span class="ptr-ellipsis ptr-muted">${escapeHtml(review.query ? `Requête : ${review.query}` : review.templateName)}</span>
-        <span class="ptr-chip" title="${escapeHtml(review.project)}">${escapeHtml(app.projectName(review.project))}</span>
-        <span class="ptr-small ptr-muted" style="flex-shrink:0">${review.doneCount}/${review.rowCount} ligne${review.rowCount > 1 ? 's' : ''}</span>
-        <span class="ptr-chip ptr-chip-${review.status}">${review.status === 'running' ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(review.status))}</span>
-        ${review.status === 'running' ? '' : '<button type="button" class="ptr-icon-button" data-delete aria-label="Supprimer l’analyse tabulaire" title="Supprimer l’analyse tabulaire">🗑</button>'}
-      </div>`).join('')}</div>`;
+    const header = (key: string, label: string) => `<th scope="col"><div class="ptr-th-sortable"><span>${label}</span>${sortButton(sort, key, label.toLowerCase())}</div></th>`;
+    list.innerHTML = `<div class="ptr-table-wrap ptr-history-wrap"><table class="ptr-table ptr-history-table">
+      <thead><tr>${header('title', 'Nom')}${header('status', 'Statut')}${header('project', 'Dossier')}${header('rows', 'Lignes')}${header('date', 'Date')}<th scope="col">Action</th></tr></thead>
+      <tbody>${visible.map((review, index) => `
+        <tr class="ptr-history-row" data-index="${index}" role="button" tabindex="0" title="${escapeHtml(review.file)}">
+          <td><strong class="ptr-link">${escapeHtml(review.title)}</strong>${review.category === 'documents' ? '' : ` <span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS[review.category])}</span>`}<div class="ptr-small ptr-muted ptr-ellipsis">${escapeHtml(review.query ? `Requête : ${review.query}` : review.templateName)}</div></td>
+          <td><span class="ptr-chip ptr-chip-${review.status}">${review.status === 'running' ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(review.status))}</span></td>
+          <td title="${escapeHtml(review.project)}">${escapeHtml(app.projectName(review.project))}</td>
+          <td>${review.doneCount}/${review.rowCount}</td>
+          <td>${escapeHtml(formatDate(review.createdAt))}</td>
+          <td>${review.status === 'running' ? '' : '<button type="button" class="ptr-icon-button" data-delete aria-label="Supprimer l’analyse tabulaire" title="Supprimer l’analyse tabulaire">🗑</button>'}</td>
+        </tr>`).join('')}</tbody></table></div>`;
   }
 
   function schedule() {
@@ -119,10 +132,16 @@ export function createHistoryView(app: App): View {
   });
   element.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    if (target.closest('[data-refresh]')) void load();
+    const sortKey = target.closest<HTMLElement>('[data-sort]')?.dataset.sort;
+    if (sortKey) {
+      sort = nextSort(sort, sortKey);
+      render();
+    } else if (target.closest('[data-new-table]')) app.newTable(filter.value || null);
+    else if (target.closest('[data-refresh]')) void load();
     else if (target.closest('[data-delete]')) void remove(target);
-    else open(target);
+    else if (target.closest('[data-index]')) open(target);
   });
+  search.addEventListener('input', render);
   element.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && (event.target as HTMLElement).matches('[data-index]')) open(event.target as HTMLElement);
   });

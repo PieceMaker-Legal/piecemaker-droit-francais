@@ -12,7 +12,7 @@ import { appendRows, createReview, deleteReview, editCell, listReviews, markAppl
 import { cancelJob, isRunning, pendingTasks, queueTasks, stopAllJobs } from './runner.js';
 import type { RowTask } from './runner.js';
 import { assertModel, assertProvider, assertProxyOrigin, probeProxy, sessionEnvironment } from './sessions.js';
-import { deleteTemplate, findTemplate, readTemplates, upsertTemplate } from './templates.js';
+import { deleteTemplate, findTemplate, normalizeTemplate, readTemplates, upsertTemplate } from './templates.js';
 
 const MAX_BODY = 2 * 1024 * 1024;
 const MAX_CONCURRENCY = 8;
@@ -42,7 +42,7 @@ async function launchEnvironment(proxyOrigin: unknown): Promise<NodeJS.ProcessEn
 async function createAndLaunch(body: Body) {
   const request = body as unknown as CreateReviewRequest;
   const project = assertProject(request.project);
-  const template = findTemplate(request.templateId);
+  const template = Array.isArray(request.columns) ? normalizeTemplate({ name: request.templateName || 'Questions personnalisées', columns: request.columns }) : findTemplate(request.templateId);
   const settings = { provider: assertProvider(request.provider), model: assertModel(request.model), concurrency: concurrency(request.concurrency) };
   const environment = await launchEnvironment(request.proxyOrigin);
   const { file, review } = createReview(project, template, request.title, request.rows, settings);
@@ -200,7 +200,7 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
   }
   if (method === 'POST' && pathname === '/reviews/column') {
     const { project, file } = reviewTarget(body);
-    await saveQuestion(project, file, body.column, body.prompt, body.title);
+    await saveQuestion(project, file, body.column, body.prompt, body.title, body.format, body.tags);
     return reviewDetail(project, file, isRunning(project, file));
   }
   if (method === 'POST' && pathname === '/reviews/research') {

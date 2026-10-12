@@ -1,7 +1,7 @@
 import type { Template } from '../shared.js';
-import { OPEN_EVENT, PENDING_TARGET_KEY } from '../shared.js';
+import { OPEN_EVENT, PENDING_SHOW_KEY, PENDING_TARGET_KEY, SHOW_EVENT } from '../shared.js';
 import type { App, View } from './app.js';
-import { basename } from './dom.js';
+import { basename, escapeHtml, openModal } from './dom.js';
 import { createHistoryView } from './history.js';
 import { createRpc, loadHostProjects } from './host.js';
 import type { HostProject, PluginApi } from './host.js';
@@ -11,17 +11,15 @@ import { createReviewView } from './review.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { createTemplatesView } from './templates.js';
 
-type TabId = 'launch' | 'research' | 'templates' | 'history';
+type TabId = 'history' | 'templates' | 'research';
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'launch', label: 'Lancer' },
-  { id: 'research', label: 'Recherche juridique' },
-  { id: 'templates', label: 'Modèles' },
   { id: 'history', label: 'Historique' },
+  { id: 'templates', label: 'Modèles' },
+  { id: 'research', label: 'Recherche juridique' },
 ];
 
 const FACTORIES: Record<TabId, (app: App) => View> = {
-  launch: createLaunchView,
   research: createResearchView,
   templates: createTemplatesView,
   history: createHistoryView,
@@ -35,7 +33,18 @@ type Mounted = {
 
 const mounted = new WeakMap<HTMLElement, Mounted>();
 
-type PendingWindow = Window & { [PENDING_TARGET_KEY]?: unknown };
+type PendingWindow = Window & { [PENDING_TARGET_KEY]?: unknown; [PENDING_SHOW_KEY]?: unknown };
+
+type ShowRequest = { project: string | null; review: string | null };
+
+function takeShowRequest(): ShowRequest | null {
+  const pending = window as PendingWindow;
+  const request = pending[PENDING_SHOW_KEY] as { project?: unknown; review?: unknown } | undefined;
+  delete pending[PENDING_SHOW_KEY];
+  if (!request || typeof request !== 'object') return null;
+  const text = (value: unknown) => typeof value === 'string' && value ? value : null;
+  return { project: text(request.project), review: text(request.review) };
+}
 
 export function mount(container: HTMLElement, api: PluginApi): void {
   unmount(container);
@@ -60,7 +69,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let templatesCache: Promise<Template[]> | null = null;
   const templateListeners = new Set<(templates: Template[]) => void>();
   const views = new Map<TabId, View>();
-  let activeTab: TabId = 'launch';
+  let activeTab: TabId = 'history';
   let reviewView: View | null = null;
   let pendingUpdate: { project: string; file: string } | null = null;
 
@@ -107,15 +116,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       return () => templateListeners.delete(callback);
     },
     openReview(project, file) {
-      closeReview();
-      reviewView = createReviewView(app, project, file, () => {
-        closeReview();
-        showTab('history');
-      });
-      for (const view of views.values()) view.element.hidden = true;
-      setSelectedTab(null);
-      main.appendChild(reviewView.element);
-      reviewView.show?.();
+      showPage(createReviewView(app, project, file, backToHistory));
+    },
+    newTable(preferred = null) {
+      void askNewTable(preferred);
     },
     updateResearch(project, file) {
       pendingUpdate = { project, file };
@@ -132,6 +136,56 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       return typeof target === 'string' && target ? target : null;
     },
   };
+
+  function backToHistory() {
+    closeReview();
+    showTab('history');
+  }
+
+  function showPage(view: View) {
+    closeReview();
+    reviewView = view;
+    for (const entry of views.values()) entry.element.hidden = true;
+    setSelectedTab(null);
+    main.appendChild(view.element);
+    view.show?.();
+  }
+
+  async function askNewTable(preferred: string | null) {
+    const projects = await app.projects().catch(() => [] as HostProject[]);
+    const initial = projects.find((entry) => entry.fullPath === preferred)?.fullPath ?? api.context.project?.path ?? projects[0]?.fullPath ?? '';
+    let name = '';
+    let project = initial;
+    const answer = await openModal(root, {
+      title: 'Nouveau tableau',
+      body: `
+        <label class="ptr-field"><span class="ptr-label-row"><span class="ptr-label">Nom du tableau</span><span class="ptr-small ptr-muted" data-remaining>120 caractères restants</span></span><input class="ptr-input" data-table-name maxlength="120" placeholder="ex. Notion de faute lourde"></label>
+        <label class="ptr-field"><span class="ptr-label">Dossier</span><select class="ptr-select" data-table-project>${projects.map((entry) => `<option value="${escapeHtml(entry.fullPath)}"${entry.fullPath === initial ? ' selected' : ''}>${escapeHtml(entry.displayName)}</option>`).join('') || '<option value="">Aucun dossier</option>'}</select></label>`,
+      actions: [{ label: 'Annuler', value: 'cancel' }, { label: 'Créer', value: 'create', kind: 'primary' }],
+      onMount(dialog, close) {
+        const create = dialog.querySelector<HTMLButtonElement>('[data-modal-action="create"]')!;
+        create.disabled = true;
+        dialog.addEventListener('input', (event) => {
+          const field = event.target as HTMLInputElement;
+          if (field.hasAttribute('data-table-name')) {
+            name = field.value;
+            dialog.querySelector('[data-remaining]')!.textContent = `${120 - name.length} caractères restants`;
+          }
+          create.disabled = !name.trim() || !project;
+        });
+        dialog.addEventListener('change', (event) => {
+          const field = event.target as HTMLSelectElement;
+          if (field.hasAttribute('data-table-project')) project = field.value;
+          create.disabled = !name.trim() || !project;
+        });
+        dialog.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' && (event.target as HTMLElement).hasAttribute('data-table-name') && name.trim() && project) close('create');
+        });
+      },
+    });
+    if (answer !== 'create' || !name.trim() || !project) return;
+    showPage(createLaunchView(app, project, name.trim(), backToHistory));
+  }
 
   function closeReview() {
     if (!reviewView) return;
@@ -178,19 +232,41 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     root.querySelector<HTMLElement>(`[data-tab="${next.id}"]`)?.focus();
   });
 
-  const onOpen = () => showTab('launch');
+  const onOpen = () => {
+    showTab('history');
+    app.newTable(app.takeTargetProject());
+  };
   window.addEventListener(OPEN_EVENT, onOpen);
+  const onShow = () => {
+    const request = takeShowRequest();
+    if (!request) return;
+    if (request.project && request.review) {
+      app.openReview(request.project, request.review);
+      return;
+    }
+    showTab('history');
+    app.newTable(request.project);
+  };
+  window.addEventListener(SHOW_EVENT, onShow);
+  const initialRequest = takeShowRequest();
   const stopContext = api.onContextChange((context) => {
     root.dataset.theme = context.theme;
   });
 
-  showTab('launch');
+  showTab('history');
+  if (initialRequest?.project && initialRequest.review) app.openReview(initialRequest.project, initialRequest.review);
+  else if (initialRequest?.project) app.newTable(initialRequest.project);
+  else {
+    const target = app.takeTargetProject();
+    if (target) app.newTable(target);
+  }
 
   mounted.set(container, {
     style,
     root,
     dispose() {
       window.removeEventListener(OPEN_EVENT, onOpen);
+      window.removeEventListener(SHOW_EVENT, onShow);
       stopContext();
       closeReview();
       for (const view of views.values()) view.destroy();

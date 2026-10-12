@@ -4,6 +4,10 @@ import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, openModal, renderMarkdown, toast } from './dom.js';
 import { anonymizationProxyOrigin, caseFiles, loadModels } from './host.js';
 import type { ModelOption } from './host.js';
+import { openDocumentsDrawer } from './documents-drawer.js';
+import { nextSort, sortBy, sortButton } from './ordering.js';
+import type { SortState } from './ordering.js';
+import { openQuestionsDrawer } from './questions-drawer.js';
 import { newPieces, plannedChange, targetPath } from './sorting.js';
 import type { PlannedChange } from './sorting.js';
 
@@ -95,7 +99,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
   let researchRun: ResearchState | null = null;
   let researchTimer = 0;
   let questionDrafts: Record<string, string> = {};
-  let newQuestion = false;
+  let sort: SortState = null;
 
   async function loadChoiceModels(provider: Provider) {
     try {
@@ -218,12 +222,16 @@ export function createReviewView(app: App, project: string, file: string, onBack
           </div>
         </details>
       </div>
+      <div class="ptr-review-actions">
+        <button type="button" class="ptr-button" data-add-questions>+ Ajouter des questions</button>
+        ${review.category === 'recherche-juridique' ? '' : '<button type="button" class="ptr-button" data-add-documents>+ Ajouter des documents</button>'}
+      </div>
       <div class="ptr-legend">${FLAGS.map((flag) => `<span>${flagDot(flag)}${escapeHtml(FLAG_LABELS[flag])}</span>`).join('')}</div>
       <div class="ptr-review-body">
         <div class="ptr-table-wrap">
           <table class="ptr-table">
-            <thead><tr><th scope="col">${review.category === 'recherche-juridique' ? 'Décision' : 'Document'}</th>${review.columns.map((column) => `<th scope="col"><div class="ptr-th-stack"><input class="ptr-input ptr-th-title" data-column-title="${column.index}" value="${escapeHtml(column.name)}" aria-label="Titre de la colonne" placeholder="Titre (facultatif)"><div class="ptr-th"><textarea class="ptr-textarea ptr-th-input" rows="2" data-column-prompt="${column.index}" aria-label="Question de la colonne" placeholder="Question posée à l’IA">${escapeHtml(questionDrafts[column.index] ?? column.prompt)}</textarea><button type="button" class="ptr-icon-button" data-run-column="${column.index}" aria-label="Lancer les cellules vides de cette colonne" title="Lancer les cellules vides de cette colonne">▶</button></div></div></th>`).join('')}${newQuestion ? `<th scope="col"><div class="ptr-th-stack"><input class="ptr-input ptr-th-title" data-new-title aria-label="Titre de la nouvelle colonne" placeholder="Titre (facultatif)"><div class="ptr-th"><textarea class="ptr-textarea ptr-th-input" rows="2" data-new-question aria-label="Question de la nouvelle colonne" placeholder="Question posée à l’IA" autofocus>${escapeHtml(questionDrafts.new ?? '')}</textarea></div></div></th>` : '<th scope="col"><button type="button" class="ptr-button" data-add-column>+ Ajouter une question</button></th>'}</tr></thead>
-            <tbody>${review.rows.map((row) => `
+            <thead><tr><th scope="col"><div class="ptr-th-sortable"><span>${review.category === 'recherche-juridique' ? 'Décision' : 'Document'}</span>${sortButton(sort, 'label', 'document')}</div></th>${review.columns.map((column) => `<th scope="col"><div class="ptr-th-stack"><div class="ptr-th-sortable"><input class="ptr-input ptr-th-title" data-column-title="${column.index}" value="${escapeHtml(column.name)}" aria-label="Titre de la colonne" placeholder="Titre (facultatif)">${sortButton(sort, `c${column.index}`, column.name)}</div><div class="ptr-th"><textarea class="ptr-textarea ptr-th-input" rows="2" data-column-prompt="${column.index}" aria-label="Question de la colonne" placeholder="Question posée à l’IA">${escapeHtml(questionDrafts[column.index] ?? column.prompt)}</textarea><button type="button" class="ptr-icon-button" data-run-column="${column.index}" aria-label="Lancer les cellules vides de cette colonne" title="Lancer les cellules vides de cette colonne">▶</button></div></div></th>`).join('')}</tr></thead>
+            <tbody>${sortBy(review.rows, sort, (row, key) => key === 'label' ? row.label : review.cells[row.id]?.[key.slice(1)]?.summary ?? '').map((row) => `
               <tr>
                 <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${sorting && row.piece ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>
                 ${review.columns.map((column) => {
@@ -233,7 +241,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
                     ? `<div class="ptr-cell-content">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div>${cell.edited ? '<span class="ptr-small ptr-muted" title="Réponse modifiée à la main">✎</span>' : ''}</div>${citationLinks(cell)}`
                     : row.status === 'running' ? '<span class="ptr-muted"><span class="ptr-spinner"></span></span>' : '<span class="ptr-muted">—</span>';
                   return `<td class="ptr-cell" tabindex="0" data-row="${escapeHtml(row.id)}" data-column="${column.index}" aria-selected="${isSelected}">${content}</td>`;
-                }).join('')}${newQuestion ? '<td></td>' : ''}
+                }).join('')}
               </tr>`).join('')}
             </tbody>
           </table>
@@ -447,6 +455,31 @@ export function createReviewView(app: App, project: string, file: string, onBack
     applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/append', { project, file, rows, proxyOrigin }));
   }
 
+  function addQuestions() {
+    openQuestionsDrawer(app, async ({ columns }) => {
+      let latest: ReviewDetail | null = null;
+      for (const column of columns) latest = await app.rpc<ReviewDetail>('POST', '/reviews/column', { project, file, prompt: column.prompt, title: column.name, format: column.format, tags: column.tags });
+      if (latest) applyDetail(latest);
+      toast(app.root, `${plural(columns.length, 'question ajoutée', 'questions ajoutées')} : lancez ${columns.length > 1 ? 'chaque colonne' : 'la colonne'} avec ▶.`);
+    });
+  }
+
+  function addDocuments() {
+    if (!detail) return;
+    const review = detail.review;
+    openDocumentsDrawer(app, {
+      project,
+      sorting: review.category === 'tri-pieces',
+      existing: new Set(review.rows.flatMap((row) => row.documents.map((document) => document.source))),
+      async onSubmit(rows) {
+        const confirmed = await confirmDialog(app.root, 'Ajouter des documents ?', `<p>${plural(rows.length, 'nouvelle ligne sera analysée', 'nouvelles lignes seront analysées')} par une session IA chacune (${choiceLabel()}).</p>${costlyChoice()}`, 'Ajouter et analyser');
+        if (!confirmed) return false;
+        const proxyOrigin = await anonymizationProxyOrigin();
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/append', { project, file, rows, proxyOrigin }));
+      },
+    });
+  }
+
   element.addEventListener('change', (event) => {
     const target = event.target as HTMLElement;
     if (target.matches('[data-column-prompt], [data-column-title]')) {
@@ -456,17 +489,6 @@ export function createReviewView(app: App, project: string, file: string, onBack
       void action(async () => {
         applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/column', { project, file, column: Number(index), prompt, title }));
         delete questionDrafts[index];
-      });
-      return;
-    }
-    if (target.matches('[data-new-question], [data-new-title]')) {
-      const prompt = element.querySelector<HTMLTextAreaElement>('[data-new-question]')?.value ?? '';
-      const title = element.querySelector<HTMLInputElement>('[data-new-title]')?.value ?? '';
-      if (!prompt.trim()) return;
-      void action(async () => {
-        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/column', { project, file, prompt, title }));
-        newQuestion = false;
-        delete questionDrafts.new;
       });
       return;
     }
@@ -512,10 +534,18 @@ export function createReviewView(app: App, project: string, file: string, onBack
       render();
       return;
     }
-    if (target.closest('[data-add-column]')) {
-      newQuestion = true;
+    const sortKey = target.closest<HTMLElement>('[data-sort]')?.dataset.sort;
+    if (sortKey) {
+      sort = nextSort(sort, sortKey);
       render();
-      element.querySelector<HTMLTextAreaElement>('[data-new-question]')?.focus();
+      return;
+    }
+    if (target.closest('[data-add-questions]')) {
+      addQuestions();
+      return;
+    }
+    if (target.closest('[data-add-documents]')) {
+      addDocuments();
       return;
     }
     if (target.closest('[data-update-research]')) {
@@ -618,21 +648,9 @@ export function createReviewView(app: App, project: string, file: string, onBack
     }
   });
 
-  element.addEventListener('focusout', (event) => {
-    const target = event.target as HTMLTextAreaElement;
-    const next = (event as FocusEvent).relatedTarget as HTMLElement | null;
-    if (next?.matches('[data-new-title]')) return;
-    if (target.matches('[data-new-question]') && !target.value.trim()) {
-      newQuestion = false;
-      delete questionDrafts.new;
-      render();
-    }
-  });
-
   element.addEventListener('input', (event) => {
     const target = event.target as HTMLElement;
     if (target.matches('[data-column-prompt]')) questionDrafts[target.dataset.columnPrompt ?? ''] = (target as HTMLTextAreaElement).value;
-    else if (target.matches('[data-new-question]')) questionDrafts.new = (target as HTMLTextAreaElement).value;
     if (target.matches('[data-edit-summary]') && selected) draft = { key: `${selected.row}:${selected.column}`, value: (target as HTMLTextAreaElement).value };
   });
 

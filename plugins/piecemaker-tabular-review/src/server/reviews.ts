@@ -6,7 +6,7 @@ import type { Cell, Provider, Review, ReviewDetail, ReviewDocument, ReviewRow, R
 import { DOCS_FOLDER, emptyColumns, hasActions, lastSearchDate, reviewCategory } from '../shared.js';
 import { resolveMarkdownDocument } from './documents.js';
 import { assertReviewFile, docsDirectory, documentPath, isInside, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
-import { MAX_COLUMNS } from './templates.js';
+import { MAX_COLUMNS, normalizeColumn } from './templates.js';
 
 const MAX_ROWS = 500;
 const MAX_DOCUMENTS_PER_ROW = 50;
@@ -168,9 +168,11 @@ export async function appendRows(project: string, file: string, rows: RowRequest
   if (!Array.isArray(rows) || !rows.length) return [];
   let added: string[] = [];
   await updateReview(project, file, (review) => {
-    if (reviewCategory(review) !== 'tri-pieces') throw new UserError('Seul un tri des pièces accueille de nouvelles pièces.');
+    const category = reviewCategory(review);
+    if (category === 'recherche-juridique') throw new UserError('Une recherche juridique ne reçoit pas de documents.');
+    const sorting = category === 'tri-pieces';
     const known = new Set(review.rows.map((row) => row.piece));
-    const fresh = buildRows(project, rows.filter((row) => !known.has(row.piece)), true);
+    const fresh = buildRows(project, sorting ? rows.filter((row) => !known.has(row.piece)) : rows, sorting);
     if (review.rows.length + fresh.length > MAX_ROWS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_ROWS} lignes.`);
     review.rows.push(...fresh);
     added = fresh.map((row) => row.id);
@@ -198,7 +200,7 @@ export function editCell(project: string, file: string, rowId: unknown, column: 
 }
 
 /** Ajoute une question (colonne sans index) ou modifie celle d'une colonne. Sans titre, une question reçoit le début de son texte. */
-export async function saveQuestion(project: string, file: string, column: unknown, prompt: unknown, title: unknown): Promise<Review> {
+export async function saveQuestion(project: string, file: string, column: unknown, prompt: unknown, title: unknown, format?: unknown, tags?: unknown): Promise<Review> {
   const text = typeof prompt === 'string' ? prompt.trim().slice(0, 4000) : '';
   if (!text) throw new UserError('Écrivez la question à poser.');
   const given = typeof title === 'string' ? title.trim().replace(/\s+/g, ' ').slice(0, 120) : '';
@@ -206,7 +208,7 @@ export async function saveQuestion(project: string, file: string, column: unknow
     if (column === undefined || column === null) {
       if (review.columns.length >= MAX_COLUMNS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_COLUMNS} questions.`);
       const index = Math.max(-1, ...review.columns.map((entry) => entry.index)) + 1;
-      review.columns.push({ index, name: given || text.replace(/\s+/g, ' ').slice(0, 60), prompt: text, format: 'text' });
+      review.columns.push({ index, ...normalizeColumn({ name: given || text.replace(/\s+/g, ' ').slice(0, 60), prompt: text, format, tags }) });
       return;
     }
     const target = review.columns.find((entry) => entry.index === Number(column));
