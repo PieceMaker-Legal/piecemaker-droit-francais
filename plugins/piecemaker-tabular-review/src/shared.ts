@@ -297,6 +297,7 @@ export const OPEN_EVENT = 'piecemaker:tabular-review-open';
 export const PENDING_TARGET_KEY = '__piecemakerTabularReviewTarget';
 export const SHOW_EVENT = 'piecemaker:tabular-review-show';
 export const PENDING_SHOW_KEY = '__piecemakerTabularReviewShow';
+export const PANEL_FOCUS_EVENT = 'piecemaker:panel-focus';
 
 export type ResearchSource = 'cassation' | 'appel' | 'conseil_etat' | 'caa' | 'premiere_instance';
 

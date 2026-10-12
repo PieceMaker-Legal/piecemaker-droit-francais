@@ -16,7 +16,7 @@ async function connect(options) {
 test('les outils exposés sont conversion et sql, sans renommage', async () => {
   const { client, close } = await connect({ sqlFn: async () => '' });
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['conversion', 'sql']);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['conversion', 'sql', 'volets_ouverts']);
   const sql = tools.find((tool) => tool.name === 'sql');
   assert.deepEqual(Object.keys(sql.inputSchema.properties), ['requete']);
   assert.deepEqual(sql.annotations, {
@@ -57,4 +57,26 @@ test('sql rend l’erreur du serveur comme erreur MCP', async () => {
   assert.equal(result.isError, true);
   assert.deepEqual(result.content, [{ type: 'text', text: 'pas de dossier courant' }]);
   await close();
+});
+
+test('volets_ouverts décrit les volets du dossier de la session', async () => {
+  const { describeOpenPanels } = await import('./volets-ouverts.mjs');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-volets-'));
+  const file = path.join(directory, 'volets-ouverts.json');
+  assert.equal(describeOpenPanels('/dossiers/Dupont', file), 'Aucun volet ouvert à côté du chat.');
+  fs.writeFileSync(file, JSON.stringify({
+    '/dossiers/Dupont': {
+      panels: ['plugin:piecemaker-dossier', 'plugin:piecemaker-tabular-review'],
+      document: null,
+      focus: { 'plugin:piecemaker-dossier': { view: 'chronology' }, 'plugin:piecemaker-tabular-review': { file: '/dossiers/Dupont/Tabular Review/baux.json' } },
+      last: { kind: 'panel', tab: 'plugin:piecemaker-tabular-review' },
+    },
+  }));
+  assert.equal(describeOpenPanels('/dossiers/Dupont/Actes', file), [
+    'Volets ouverts, dans l’ordre d’ouverture : Dossier (chronologie) ; Analyse tabulaire (fichier : Tabular Review/baux.json).',
+    'Document affiché : aucun.',
+    'Dernier ouvert, celui que l’avocat regarde : Analyse tabulaire (fichier : Tabular Review/baux.json).',
+  ].join('\n'));
+  assert.equal(describeOpenPanels('/dossiers/Martin', file), 'Aucun volet ouvert à côté du chat.');
+  fs.rmSync(directory, { recursive: true, force: true });
 });

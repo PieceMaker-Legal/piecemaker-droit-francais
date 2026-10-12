@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 import CodeEditor from '@/modules/code-editor/CodeEditor';
+import { setActiveDocument } from '@/modules/piecemaker-context-suggestions';
 import { resolveFileRef } from '@/piecemaker/chat/fileRef';
 import { CitationPanel } from '@/piecemaker/citations/CitationPanel';
 import { FileDocumentEditor } from '@/piecemaker/editor-tabs/FileDocumentEditor';
@@ -80,6 +81,12 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
   }
 
   const active = tabs.find((tab) => tabKey(tab) === activeKey) ?? tabs[tabs.length - 1];
+  const activeDocument = isSidebar && !parseEditorPanel(active.path) ? active.path : null;
+
+  useEffect(() => {
+    setActiveDocument(activeDocument);
+    return () => setActiveDocument(null);
+  }, [activeDocument]);
 
   const closeTab = (key: string) => {
     const index = tabs.findIndex((tab) => tabKey(tab) === key);

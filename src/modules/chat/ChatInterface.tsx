@@ -31,6 +31,7 @@ import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { useSlashCommandPills } from '@/piecemaker/chat/useSlashCommandPills';
 import { prepareCommandMenuCommands } from '@/piecemaker/chat/prepareCommandMenuCommands';
+import { ContextSuggestion } from '@/modules/piecemaker-context-suggestions';
 
 type ChatInterfaceProps = {
   isActive: boolean;
@@ -552,6 +553,7 @@ function ChatInterface({
             </div>
           )}
 
+          <ContextSuggestion projectPath={selectedProject?.fullPath ?? null} hidden={Boolean(input.trim())} />
           <ChatComposer
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}

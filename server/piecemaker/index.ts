@@ -28,6 +28,7 @@ import { createInstitutionalTermsRouter, openInstitutionalTerms } from './instit
 import { installModelDiscovery } from './model-discovery/index.js';
 import { startProjectRegistry } from './project-registry.js';
 import { createFolderHistory } from './folder-history/history.js';
+import { createOpenPanelsRouter } from './open-panels.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -99,6 +100,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createInstitutionalTermsRouter(institutionalTerms));
   router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));
   router.use(createShellEnvironmentRouter(shellEnvironment));
+  router.use(createOpenPanelsRouter(piecemakerHome()));
   return router;
 }
 export type { PieceMakerRuntimeStatus };
