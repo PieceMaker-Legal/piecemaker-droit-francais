@@ -241,7 +241,7 @@ blockquote.ptr-citation-quote{margin:8px 0;padding-left:8px;border-left:3px soli
 .ptr-decision-text .ptr-label{margin-bottom:6px}
 .ptr-page-title{margin:0;font-size:18px;font-weight:600}
 .ptr-label-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.ptr-link{color:var(--ptr-accent);text-decoration:underline;text-underline-offset:2px}
+.ptr-link{color:var(--ptr-text);font-weight:700;text-decoration:none}
 .ptr-history-wrap{flex:none}
 .ptr-history-table th,.ptr-history-table td{width:auto;min-width:0;max-width:none;vertical-align:middle}
 .ptr-history-table th:first-child,.ptr-history-table td:first-child{width:40%;min-width:220px}
