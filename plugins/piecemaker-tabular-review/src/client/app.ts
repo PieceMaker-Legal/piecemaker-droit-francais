@@ -22,7 +22,7 @@ export type App = {
   openDraft(draft: Draft): void;
   showTemplates(): void;
   newResearch(project?: string | null): void;
-  takeResearchStart(): { project: string; title: string } | null;
+  takeResearchStart(): { project: string; title: string; draft?: Draft } | null;
   updateResearch(project: string, file: string): void;
   takeResearchUpdate(): { project: string; file: string } | null;
   takeTargetProject(): string | null;

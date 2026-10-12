@@ -1,4 +1,5 @@
 import { createRequire } from 'module';
+import express from 'express';
 import path from 'path';
 
 import type { Router } from 'express';
@@ -31,6 +32,7 @@ import { startProjectRegistry } from './project-registry.js';
 import { createFolderHistory } from './folder-history/history.js';
 import { createOpenPanelsRouter } from './open-panels.js';
 import { startRemoteAccess } from './remote/index.js';
+import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -85,8 +87,17 @@ startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => 
   declareBundledSkills(workspace);
 });
 
+const localRouter = express.Router();
+localRouter.use(knowledge.localRouter);
+localRouter.use(createTabularReviewLocalRouter({
+  proxyOrigin: () => {
+    const status = anonymizer.status() as { enabled?: boolean; listening?: boolean; origin?: string | null };
+    return status.enabled && status.listening && status.origin ? status.origin : null;
+  },
+}));
+
 export function createPieceMakerLocalRouter() {
-  return knowledge.localRouter;
+  return localRouter;
 }
 
 export function createPieceMakerRouter(options: { getRuntimeStatus?: () => PieceMakerRuntimeStatus } = {}) {

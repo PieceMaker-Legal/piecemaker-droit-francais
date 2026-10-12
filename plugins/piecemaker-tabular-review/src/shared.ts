@@ -198,6 +198,11 @@ export type Draft = {
   templateName: string;
   columns: TemplateColumn[];
   rows: RowRequest[];
+  mode?: 'recherche';
+  research?: Partial<ResearchFilters>;
+  provider?: Provider;
+  model?: string;
+  error?: string;
   createdAt: string;
   updatedAt: string;
 };

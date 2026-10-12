@@ -3,6 +3,7 @@ import http from 'node:http';
 
 import type { CreateReviewRequest, RowRequest } from '../shared.js';
 import { emptyColumns } from '../shared.js';
+import { assistant } from './assistant.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, upsertDraft } from './drafts.js';
 import { citationSource } from './citations.js';
@@ -170,6 +171,7 @@ function researchRoute(method: string, pathname: string, url: URL, body: Body): 
 async function route(method: string, url: URL, body: Body): Promise<unknown> {
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
   if (pathname.startsWith('/research')) return researchRoute(method, pathname, url, body);
+  if (method === 'POST' && pathname === '/assistant') return assistant(body, { isRunning, launchAnalysis: createAndLaunch, launchResearch });
   if (method === 'GET' && pathname === '/templates') return { templates: readTemplates() };
   if (method === 'PUT' && pathname === '/templates') return { templates: upsertTemplate(body.template) };
   if (method === 'DELETE' && pathname === '/templates') return { templates: deleteTemplate(url.searchParams.get('id')) };

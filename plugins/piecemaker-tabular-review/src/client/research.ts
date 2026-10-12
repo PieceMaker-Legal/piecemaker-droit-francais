@@ -1,4 +1,4 @@
-import type { ColumnAction, ColumnFormat, Option, Provider, ResearchDecision, ResearchFilters, ResearchPage, ResearchSource, ResearchState, ResearchText, ResearchView, ReviewDetail, ReviewSummary, Template } from '../shared.js';
+import type { ColumnAction, ColumnFormat, Draft, Option, Provider, ResearchDecision, ResearchFilters, ResearchPage, ResearchSource, ResearchState, ResearchText, ResearchView, ReviewDetail, ReviewSummary, Template } from '../shared.js';
 import {
   APPEL_SIEGES,
   BULLETIN_PUBLICATIONS,
@@ -255,6 +255,8 @@ export function createResearchView(app: App): View {
   let searching = false;
   let launching = false;
   let destroyed = false;
+  let draftId: string | null = null;
+  let preferredModel = '';
   let timer = 0;
   let pageRequest = 0;
   const pages = new Map<string, Promise<ResearchPage>>();
@@ -542,7 +544,7 @@ export function createResearchView(app: App): View {
     $('[data-update-panel]').scrollIntoView({ block: 'start' });
   }
 
-  function startNew(project: string, title: string) {
+  function startNew(project: string, title: string, draft?: Draft) {
     if (searching || running()) {
       toast(app.root, 'Une recherche est en cours : annulez-la avant d’en commencer une nouvelle.', 'error');
       return;
@@ -551,7 +553,35 @@ export function createResearchView(app: App): View {
     update = null;
     projectSelect.value = project;
     titleInput.value = title;
-    queryInput.value = '';
+    const research = draft?.research ?? {};
+    queryInput.value = research.query ?? '';
+    startInput.value = research.dateDebut ?? '';
+    endInput.value = research.dateFin ?? '';
+    dispositifInput.checked = research.dispositifOnly !== false;
+    Object.assign(form, {
+      sources: research.sources ?? [],
+      matieres: research.matieres ?? [],
+      publicationBulletin: research.publicationBulletin ?? 'TOUS',
+      sieges: research.sieges ?? [],
+      publicationConseilEtat: research.publicationConseilEtat ?? 'TOUS',
+      villesCaa: research.villesCaa ?? [],
+      publicationCaa: research.publicationCaa ?? 'TOUS',
+      typesPremiereInstance: research.typesPremiereInstance ?? [],
+    });
+    element.querySelectorAll<HTMLInputElement>('[data-form="sources"]').forEach((input) => { input.checked = form.sources.includes(input.value as ResearchSource); });
+    renderSourceFilters();
+    questions = draftColumns(draft?.columns.length ? { columns: draft.columns } as Template : null);
+    renderQuestions();
+    draftId = draft?.id ?? null;
+    if (draft?.provider && draft.provider !== providerSelect.value) {
+      providerSelect.value = draft.provider;
+      preferredModel = draft.model ?? '';
+      void loadProviderModels();
+    } else if (draft?.model && models.options.some((option) => option.value === draft.model)) {
+      modelSelect.value = draft.model;
+    } else {
+      preferredModel = draft?.model ?? '';
+    }
     renderAll();
   }
 
@@ -744,6 +774,8 @@ export function createResearchView(app: App): View {
       const proxyOrigin = await anonymizationProxyOrigin();
       const detail = await app.rpc<ReviewDetail>('POST', '/research/review', { id: state.id, project, title, columns, provider, model, concurrency: Number(concurrencySelect.value), proxyOrigin });
       titleInput.value = '';
+      if (draftId) void app.rpc('POST', '/drafts/delete', { id: draftId }).catch(() => undefined);
+      draftId = null;
       app.openReview(detail.project, detail.file);
     } catch (error) {
       toast(app.root, errorMessage(error), 'error');
@@ -764,6 +796,8 @@ export function createResearchView(app: App): View {
     modelSelect.innerHTML = models.options.length
       ? models.options.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === models.cheapest ? ' selected' : ''}>${escapeHtml(option.label)}${option.value === models.cheapest ? ' (par défaut, économique)' : ''}</option>`).join('')
       : '<option value="">Aucun modèle disponible</option>';
+    if (models.options.some((option) => option.value === preferredModel)) modelSelect.value = preferredModel;
+    preferredModel = '';
     renderLaunch();
   }
 
@@ -970,7 +1004,7 @@ export function createResearchView(app: App): View {
       return;
     }
     const started = app.takeResearchStart();
-    if (started) startNew(started.project, started.title);
+    if (started) startNew(started.project, started.title, started.draft);
     await loadExisting();
   }
 

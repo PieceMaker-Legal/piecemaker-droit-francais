@@ -35,15 +35,15 @@ const mounted = new WeakMap<HTMLElement, Mounted>();
 
 type PendingWindow = Window & { [PENDING_TARGET_KEY]?: unknown; [PENDING_SHOW_KEY]?: unknown };
 
-type ShowRequest = { project: string | null; review: string | null };
+type ShowRequest = { project: string | null; review: string | null; draft: string | null };
 
 function takeShowRequest(): ShowRequest | null {
   const pending = window as PendingWindow;
-  const request = pending[PENDING_SHOW_KEY] as { project?: unknown; review?: unknown } | undefined;
+  const request = pending[PENDING_SHOW_KEY] as { project?: unknown; review?: unknown; draft?: unknown } | undefined;
   delete pending[PENDING_SHOW_KEY];
   if (!request || typeof request !== 'object') return null;
   const text = (value: unknown) => typeof value === 'string' && value ? value : null;
-  return { project: text(request.project), review: text(request.review) };
+  return { project: text(request.project), review: text(request.review), draft: text(request.draft) };
 }
 
 export function mount(container: HTMLElement, api: PluginApi): void {
@@ -69,7 +69,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const views = new Map<TabId, View>();
   let reviewView: View | null = null;
   let pendingUpdate: { project: string; file: string } | null = null;
-  let pendingStart: { project: string; title: string } | null = null;
+  let pendingStart: { project: string; title: string; draft?: Draft } | null = null;
 
   const app: App = {
     root,
@@ -118,6 +118,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       focusTable(`${project}/${REVIEW_FOLDER}/${file}`);
     },
     openDraft(draft) {
+      if (draft.mode === 'recherche') {
+        pendingStart = { project: draft.project, title: draft.title, draft };
+        showTab('research');
+        return;
+      }
       showPage(createLaunchView(app, draft, backToHistory));
       focusTable(null);
     },
@@ -258,9 +263,24 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     app.newTable(app.takeTargetProject());
   };
   window.addEventListener(OPEN_EVENT, onOpen);
+  async function openDraftById(project: string, id: string) {
+    try {
+      const { drafts } = await app.rpc<{ drafts: Draft[] }>('POST', '/drafts/list', { projects: [project] });
+      const draft = drafts.find((entry) => entry.id === id);
+      if (draft) app.openDraft(draft);
+      else showTab('history');
+    } catch (error) {
+      toast(root, errorMessage(error), 'error');
+    }
+  }
+
   const onShow = () => {
     const request = takeShowRequest();
     if (!request) return;
+    if (request.project && request.draft) {
+      void openDraftById(request.project, request.draft);
+      return;
+    }
     if (request.project && request.review) {
       app.openReview(request.project, request.review);
       return;
@@ -274,7 +294,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   });
 
   showTab('history');
-  if (initialRequest?.project && initialRequest.review) app.openReview(initialRequest.project, initialRequest.review);
+  if (initialRequest?.project && initialRequest.draft) void openDraftById(initialRequest.project, initialRequest.draft);
+  else if (initialRequest?.project && initialRequest.review) app.openReview(initialRequest.project, initialRequest.review);
   else if (!initialRequest?.project) {
     const target = app.takeTargetProject();
     if (target) app.newTable(target);
