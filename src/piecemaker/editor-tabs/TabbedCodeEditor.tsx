@@ -14,6 +14,8 @@ import type { CodeEditorFile } from '@/shared/types';
 
 type CodeEditorProps = ComponentProps<typeof CodeEditor> & { tabsTarget?: HTMLElement | null };
 
+const LIBRARY_PROJECT_PREFIX = 'piecemaker-library:';
+
 const tabKey = (file: CodeEditorFile) => `${file.projectId ?? ''}\u0000${file.path}`;
 
 function tabLabel(file: CodeEditorFile) {
@@ -33,6 +35,10 @@ function ResolvedCodeEditor({ props, file, onClose }: { props: CodeEditorProps; 
 
   useEffect(() => {
     let live = true;
+    if (file.projectId?.startsWith(LIBRARY_PROJECT_PREFIX)) {
+      setResolved({ ref: file.path, path: file.path });
+      return () => { live = false; };
+    }
     void resolveFileRef(file.path, { fresh: true, projectId: file.projectId }).then((path) => {
       if (live) setResolved({ ref: file.path, path });
     });
