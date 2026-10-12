@@ -31,7 +31,7 @@ export function createHistoryView(app: App): View {
     <div class="ptr-home-bar">
       <button type="button" class="ptr-button" data-templates>Modèles</button>
       <span class="ptr-spacer"></span>
-      <button type="button" class="ptr-button" data-new-research>+ Nouvelle recherche</button>
+      <button type="button" class="ptr-button ptr-button-primary" data-new-research>+ Nouvelle recherche</button>
       <button type="button" class="ptr-button ptr-button-primary" data-new-table>+ Nouvelle analyse</button>
     </div>`;
   const filter = element.querySelector<HTMLSelectElement>('[data-filter]')!;
