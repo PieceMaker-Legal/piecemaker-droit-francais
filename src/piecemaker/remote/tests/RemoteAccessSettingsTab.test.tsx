@@ -30,7 +30,7 @@ it('propose l’installation quand Tailscale est absent', async () => {
   pmGet.mockResolvedValue({ ...ready, tailscale: { installed: false, running: false, httpsEnabled: false, dnsName: null } });
   render(<RemoteAccessSettingsTab />);
   expect(await screen.findByText('remote.missing')).toBeTruthy();
-  expect(screen.getByRole('link', { name: 'remote.install' }).getAttribute('href')).toBe('https://tailscale.com/download');
+  expect(screen.getByRole('link', { name: 'remote.install' }).getAttribute('href')).toBe('https://pkgs.tailscale.com/stable/Tailscale-latest-macos.pkg');
   expect(screen.queryByRole('button', { name: 'remote.publish' })).toBeNull();
 });
 

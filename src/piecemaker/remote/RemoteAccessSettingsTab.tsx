@@ -16,7 +16,12 @@ export type RemoteStatus = {
   consentUrl?: string;
 };
 
-const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download';
+const TAILSCALE_WINDOWS_INSTALLER_URL = 'https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe';
+const TAILSCALE_MAC_INSTALLER_URL = 'https://pkgs.tailscale.com/stable/Tailscale-latest-macos.pkg';
+
+function tailscaleInstallerUrl() {
+  return /Windows/i.test(navigator.userAgent) ? TAILSCALE_WINDOWS_INSTALLER_URL : TAILSCALE_MAC_INSTALLER_URL;
+}
 
 const buttonClass = 'rounded-lg border border-border/60 px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50';
 
@@ -93,7 +98,7 @@ export function RemoteAccessSettingsTab() {
         {tailscale && !tailscale.installed ? (
           <>
             <StateLine ok={false}>{t('remote.missing')}</StateLine>
-            <a className={`${buttonClass} inline-flex items-center gap-2`} href={TAILSCALE_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+            <a className={`${buttonClass} inline-flex items-center gap-2`} href={tailscaleInstallerUrl()} target="_blank" rel="noreferrer">
               <ExternalLink className="h-4 w-4" />
               {t('remote.install')}
             </a>
@@ -150,7 +155,11 @@ export function RemoteAccessSettingsTab() {
       <div className="space-y-2">
         <h4 className="text-sm font-medium text-foreground">{t('remote.phoneTitle')}</h4>
         <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-          <li>{t('remote.step1')}</li>
+          <li>
+            {t('remote.step1')}{' '}
+            <a className="underline" href={tailscaleInstallerUrl()} target="_blank" rel="noreferrer">{t('remote.installLink')}</a>
+          </li>
+          <li>{t('remote.httpsStep')}</li>
           <li>{t('remote.step2')}</li>
           <li>{t('remote.step3')}</li>
           <li>{t('remote.step4')}</li>
