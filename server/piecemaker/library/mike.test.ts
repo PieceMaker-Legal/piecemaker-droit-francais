@@ -104,6 +104,9 @@ test('Mike workflows are cloned, listed as skills and tabular reviews, and added
     fs.writeFileSync(path.join(userHome, '.piecemaker', 'tabular-review', 'templates.json'), JSON.stringify({ templates: [{ id: 'perso', name: 'Analyse de contrat', columns: [{ name: 'Parties' }] }] }));
     const own = (await call('GET', '/tabular')).templates;
     assert.deepEqual(own.map((template: { id: string; own?: boolean }) => [template.id, template.own]), [['perso', true]]);
+    const edited = (await call('PUT', '/tabular/perso', { name: 'Analyse modifiée', columns: [{ name: 'Durée' }] })).templates;
+    assert.deepEqual([edited[0].name, edited[0].columns], ['Analyse modifiée', [{ name: 'Durée' }]]);
+    assert.equal((await call('PUT', '/tabular/perso', { columns: [] })).error, 'Le modèle doit avoir un nom et une liste « columns ».');
 
     assert.equal((await call('POST', '/plugin/marketplace/register', { scope: 'mike' })).ok, true);
     assert.deepEqual(calls.at(-1)?.slice(0, 4), ['git', '-C', path.join(store.directory, 'mike-workflows'), 'pull']);
