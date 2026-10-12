@@ -116,8 +116,8 @@ export function createReviewView(app: App, project: string, file: string, onBack
     const options = models?.provider === choice.provider ? models.options : [];
     const listed = !choice.model || options.some((option) => option.value === choice!.model) ? options : [{ value: choice.model, label: choice.model }, ...options];
     return `
-        <label class="ptr-bar-field"><span class="ptr-bar-label">IA</span><select class="ptr-select" data-choice-provider${running ? ' disabled' : ''}>${PROVIDERS.map((provider) => `<option value="${provider.value}"${provider.value === choice!.provider ? ' selected' : ''}>${provider.label}</option>`).join('')}</select></label>
-        <label class="ptr-bar-field" title="Modèle IA utilisé pour les relances"><span class="ptr-bar-label">Modèle</span><select class="ptr-select" data-choice-model${running ? ' disabled' : ''}>${listed.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === choice!.model ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`;
+        <label class="ptr-bar-field" title="IA utilisée pour les relances"><select class="ptr-select" aria-label="IA" data-choice-provider${running ? ' disabled' : ''}>${PROVIDERS.map((provider) => `<option value="${provider.value}"${provider.value === choice!.provider ? ' selected' : ''}>${provider.label}</option>`).join('')}</select></label>
+        <label class="ptr-bar-field" title="Modèle IA utilisé pour les relances"><select class="ptr-select" aria-label="Modèle" data-choice-model${running ? ' disabled' : ''}>${listed.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === choice!.model ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`;
   }
 
   function costlyChoice(): string {
@@ -159,7 +159,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
         : run.phase === 'cancelled' ? 'Recherche annulée.' : run.error ?? 'Recherche interrompue.';
       return `<span class="ptr-small${run.phase === 'done' ? '' : ' ptr-status-error'}">${escapeHtml(outcome)}</span>${run.phase === 'done' ? `<button type="button" class="ptr-button ptr-button-primary" data-append-update${run.kept ? '' : ' disabled'}>Ajouter et analyser</button>` : ''}<button type="button" class="ptr-button" data-discard-update>${run.phase === 'done' ? 'Abandonner' : 'Fermer'}</button>`;
     }
-    return `<label class="ptr-bar-field"><span class="ptr-bar-label">Depuis le</span><input class="ptr-input" type="date" data-update-since value="${escapeHtml(since ?? defaultUpdateSince(review))}"${running ? ' disabled' : ''}></label><button type="button" class="ptr-button" data-update-research${running ? ' disabled' : ''} title="Cherche les décisions rendues depuis cette date et absentes de la table">Mettre à jour</button>`;
+    return `<label class="ptr-bar-field" title="Décisions rendues depuis le"><span class="ptr-bar-label">Depuis</span><input class="ptr-input" type="date" data-update-since value="${escapeHtml(since ?? defaultUpdateSince(review))}"${running ? ' disabled' : ''}></label><button type="button" class="ptr-button" data-update-research${running ? ' disabled' : ''} title="Cherche les décisions rendues depuis cette date et absentes de la table">Mettre à jour</button>`;
   }
 
   function renderDetail(): string {
@@ -251,7 +251,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
           ${costlyChoice()}
           <span class="ptr-spacer"></span>
           ${review.research ? updateControls(review, running) : ''}
-          ${running ? '' : `<button type="button" class="ptr-button" data-retry${failed ? '' : ' disabled'} title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>`}
+          ${running || !failed ? '' : '<button type="button" class="ptr-button" data-retry title="Relance les lignes en échec et complète les cellules vides">Relancer les échecs</button>'}
         </div>
       </div>`;
     const nextWrap = element.querySelector<HTMLElement>('.ptr-table-wrap');

@@ -287,4 +287,10 @@ blockquote.ptr-citation-quote{margin:8px 0;padding-left:8px;border-left:3px soli
 .ptr-add:hover{color:var(--ptr-text);border-color:var(--ptr-accent)}
 .ptr-detail .ptr-ghost{flex:1;padding:2px 4px}
 .ptr-review-bar .ptr-review-controls{gap:6px 8px}
+.ptr-review-bar{padding:4px 10px}
+.ptr-review-bar .ptr-select,.ptr-review-bar input[type=date],.ptr-review-bar .ptr-button{height:1.6rem;font-size:12px}
+.ptr-review-bar [data-choice-provider]{width:5.5rem}
+.ptr-review-bar [data-choice-model]{width:9rem}
+.ptr-review-bar input[type=date]{padding:0 .5rem}
+.ptr-progress-mini{display:inline-block;width:70px;min-width:70px;height:4px}
 `;

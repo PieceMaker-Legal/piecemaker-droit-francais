@@ -7,6 +7,7 @@ import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, upsertDraft } from './drafts.js';
 import { citationSource } from './citations.js';
 import { exportReview } from './export.js';
+import { pickFiles } from './picker.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
 import { appendResearchUpdate, cancelResearch, createResearchReview, discardResearch, legifranceConfigured, researchPage, researchState, researchText, startResearch, startResearchUpdate, stopAllResearch, updateResearchFilters } from './research.js';
 import { appendRows, createReview, deleteReview, editCell, listReviews, markApplied, readReview, reviewDetail, saveQuestion, updateReview } from './reviews.js';
@@ -186,6 +187,7 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
     const project = assertProject(url.searchParams.get('project'));
     return { documents: listMarkdownDocuments(project) };
   }
+  if (method === 'POST' && pathname === '/documents/pick') return pickFiles(assertProject(body.project));
   if (method === 'POST' && pathname === '/reviews/list') {
     const registered = registeredProjects();
     const projects = (Array.isArray(body.projects) ? body.projects : []).filter((project): project is string => typeof project === 'string' && registered.has(project));
