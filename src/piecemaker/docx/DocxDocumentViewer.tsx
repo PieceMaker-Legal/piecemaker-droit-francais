@@ -5,6 +5,7 @@ import '@eigenpal/docx-editor-react/styles.css';
 import fr from '@eigenpal/docx-editor-i18n/fr';
 import './docxDocumentViewer.css';
 
+import { useAuth } from '@/modules/auth';
 import { api, authenticatedFetch } from '@/shared/api';
 import { useTheme } from '@/shared/context/ThemeContext';
 import type { CodeEditorFile } from '@/shared/types';
@@ -12,7 +13,7 @@ import type { CodeEditorFile } from '@/shared/types';
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const VERSION_POLL_MS = 1000;
 const SAVE_DEBOUNCE_MS = 800;
-const COMMENTS_SIDEBAR_RESERVED_PX = 352;
+const COMMENTS_SIDEBAR_RESERVED_PX = 248;
 
 type DocxDocumentViewerProps = {
   file: CodeEditorFile;
@@ -30,7 +31,11 @@ function fitPageWidth(container: HTMLElement, editor: DocxEditorRef | null, last
   const layout = `${availableWidth}:${page.offsetWidth}`;
   if (availableWidth <= 0 || layout === lastLayout.current) return;
   lastLayout.current = layout;
-  editor.setZoom(availableWidth / page.offsetWidth);
+  const previousZoom = editor.getZoom();
+  const nextZoom = availableWidth / page.offsetWidth;
+  const previousScrollTop = scroller.scrollTop;
+  editor.setZoom(nextZoom);
+  requestAnimationFrame(() => { scroller.scrollTop = previousScrollTop * nextZoom / previousZoom; });
 }
 
 function decodeDocumentPath(filePath: string): string {
@@ -43,6 +48,7 @@ function decodeDocumentPath(filePath: string): string {
 
 export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose }: DocxDocumentViewerProps) {
   const { isDarkMode } = useTheme();
+  const { user } = useAuth();
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastLayoutRef = useRef('');
@@ -165,6 +171,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
           mode="editing"
           colorMode={isDarkMode ? 'dark' : 'light'}
           i18n={fr}
+          author={user?.username}
           onChange={scheduleSave}
           showOutline={outlineOpen}
           showOutlineButton={false}

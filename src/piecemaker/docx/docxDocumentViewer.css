@@ -36,3 +36,18 @@
   left: auto !important;
   right: 4px;
 }
+
+.piecemaker-docx-viewer .docx-unified-sidebar {
+  left: auto !important;
+  right: 0;
+  width: 240px !important;
+}
+
+.piecemaker-docx-viewer:has(.docx-unified-sidebar) div[style*="translateX(-176px)"] {
+  translate: 52px 0;
+}
+
+.piecemaker-docx-viewer .docx-unified-sidebar textarea {
+  background-color: var(--doc-surface) !important;
+  color: var(--doc-text, inherit) !important;
+}
