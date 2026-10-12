@@ -526,6 +526,15 @@ Ces jetons de famille sont une taxinomie propre a ce serveur : ils ne sont jamai
 
 ]
 
+TOOLS_WRITING_FILES = {"Build_Research_Corpus"}
+
+for _tool in MCP_TOOLS:
+    _tool["annotations"] = {
+        "readOnlyHint": _tool["name"] not in TOOLS_WRITING_FILES,
+        "destructiveHint": False,
+        "openWorldHint": True,
+    }
+
 # ============================================================================
 # RESSOURCES MCP
 # ============================================================================
