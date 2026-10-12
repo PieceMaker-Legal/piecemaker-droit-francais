@@ -1,7 +1,7 @@
-import type { Template } from '../shared.js';
+import type { Draft, Template } from '../shared.js';
 import { OPEN_EVENT, PENDING_SHOW_KEY, PENDING_TARGET_KEY, SHOW_EVENT } from '../shared.js';
 import type { App, View } from './app.js';
-import { basename, escapeHtml, openModal } from './dom.js';
+import { basename, errorMessage, escapeHtml, openModal, toast } from './dom.js';
 import { createHistoryView } from './history.js';
 import { createRpc, loadHostProjects } from './host.js';
 import type { HostProject, PluginApi } from './host.js';
@@ -118,6 +118,9 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     openReview(project, file) {
       showPage(createReviewView(app, project, file, backToHistory));
     },
+    openDraft(draft) {
+      showPage(createLaunchView(app, draft, backToHistory));
+    },
     newTable(preferred = null) {
       void askNewTable(preferred);
     },
@@ -184,7 +187,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       },
     });
     if (answer !== 'create' || !name.trim() || !project) return;
-    showPage(createLaunchView(app, project, name.trim(), backToHistory));
+    try {
+      const { draft } = await app.rpc<{ draft: Draft }>('PUT', '/drafts', { draft: { project, title: name.trim(), columns: [], rows: [] } });
+      app.openDraft(draft);
+    } catch (error) {
+      toast(root, errorMessage(error), 'error');
+    }
   }
 
   function closeReview() {

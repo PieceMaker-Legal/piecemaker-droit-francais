@@ -35,6 +35,7 @@ beforeEach(() => {
   rpc = vi.fn(async (method: string, path: string) => {
     if (path.startsWith('/documents')) return { documents: [{ path: 'Pièces/b.md', size: 2048, modifiedAt: '' }, { path: 'Pièces/10 a.md', size: 1024, modifiedAt: '' }, { path: 'Pièces/2 c.md', size: 1024, modifiedAt: '' }] };
     if (path === '/protected-projects') return { projects: ['/dossier'] };
+    if (path.startsWith('/drafts')) return { draft: {} };
     if (method === 'POST' && path === '/reviews') return { project: '/dossier', file: 'revue.json' };
     throw new Error(path);
   });
@@ -42,7 +43,7 @@ beforeEach(() => {
     root, rpc, projects: async () => [{ fullPath: '/dossier', displayName: 'Dossier exemple', projectId: 'p1' }],
     projectName: () => 'Dossier exemple', templates: async () => [template], openReview: vi.fn(),
   } as unknown as App;
-  view = createLaunchView(app, '/dossier', 'Tableau exemple', vi.fn());
+  view = createLaunchView(app, { id: 'd1', project: '/dossier', title: 'Tableau exemple', templateName: '', columns: [], rows: [], createdAt: '', updatedAt: '' }, vi.fn());
   root.append(view.element);
 });
 
@@ -84,5 +85,9 @@ describe('nouveau tableau', () => {
     await vi.waitFor(() => expect(rpc).toHaveBeenCalledWith('POST', '/reviews', expect.objectContaining({ templateName: 'Modèle exemple', title: 'Tableau exemple', columns: template.columns })));
     const body = rpc.mock.calls.find((call) => call[1] === '/reviews')![2];
     expect(body.rows).toHaveLength(3);
+    const saved = rpc.mock.calls.filter((call) => call[0] === 'PUT' && call[1] === '/drafts').at(-1)![2];
+    expect(saved.draft).toMatchObject({ id: 'd1', title: 'Tableau exemple', templateName: 'Modèle exemple' });
+    expect(saved.draft.rows).toHaveLength(3);
+    await vi.waitFor(() => expect(rpc).toHaveBeenCalledWith('POST', '/drafts/delete', { id: 'd1' }));
   });
 });

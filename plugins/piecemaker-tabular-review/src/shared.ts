@@ -191,6 +191,17 @@ export type RowRequest = {
   piece?: string;
 };
 
+export type Draft = {
+  id: string;
+  project: string;
+  title: string;
+  templateName: string;
+  columns: TemplateColumn[];
+  rows: RowRequest[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CreateReviewRequest = {
   project: string;
   templateId?: string;
