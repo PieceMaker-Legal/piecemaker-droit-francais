@@ -1,5 +1,5 @@
 import type { Cell, CitationSource, ExportFormat, ExportResult, Provider, Review, ResearchState, ReviewDetail, ReviewRow } from '../shared.js';
-import { CATEGORY_LABELS, citationIssue, defaultUpdateSince, emptyColumns, FLAG_LABELS, FLAGS, isCellFilled, MAX_CITATION_CORRECTIONS, RESEARCH_SOURCES, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
+import { CATEGORY_LABELS, citationIssue, defaultUpdateSince, emptyColumns, FLAG_LABELS, isCellFilled, MAX_CITATION_CORRECTIONS, RESEARCH_SOURCES, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, openModal, renderMarkdown, toast } from './dom.js';
 import { anonymizationProxyOrigin, caseFiles, loadModels } from './host.js';
@@ -117,34 +117,34 @@ export function createReviewView(app: App, project: string, file: string, onBack
     const listed = !choice.model || options.some((option) => option.value === choice!.model) ? options : [{ value: choice.model, label: choice.model }, ...options];
     return `
         <label class="ptr-bar-field"><span class="ptr-bar-label">IA</span><select class="ptr-select" data-choice-provider${running ? ' disabled' : ''}>${PROVIDERS.map((provider) => `<option value="${provider.value}"${provider.value === choice!.provider ? ' selected' : ''}>${provider.label}</option>`).join('')}</select></label>
-        <label class="ptr-bar-field"><span class="ptr-bar-label">Modèle IA pour les relances</span><select class="ptr-select" data-choice-model${running ? ' disabled' : ''}>${listed.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === choice!.model ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`;
+        <label class="ptr-bar-field" title="Modèle IA utilisé pour les relances"><span class="ptr-bar-label">Modèle</span><select class="ptr-select" data-choice-model${running ? ' disabled' : ''}>${listed.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === choice!.model ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`;
   }
 
   function costlyChoice(): string {
     return choice && models?.provider === choice.provider && models.cheapest && choice.model !== models.cheapest
-      ? '<div class="ptr-warning">Attention : ce modèle consomme beaucoup de tokens.</div>'
+      ? '<span class="ptr-warning">Attention : ce modèle consomme beaucoup de tokens.</span>'
       : '';
   }
 
   const choiceLabel = () => escapeHtml(choice ? `${choice.provider} — ${choice.model}` : '');
   const choiceBody = () => (choice?.model ? { provider: choice.provider, model: choice.model } : {});
 
-  function researchSection(review: Review, running: boolean): string {
+  function researchSummary(review: Review): string {
     const filters = review.research?.filters;
-    if (!filters) return '<div class="ptr-small ptr-muted">Critères non enregistrés : la période et les juridictions de cette recherche ne peuvent pas être modifiées.</div>';
-    const disabled = running ? ' disabled' : '';
+    if (!filters) return '<span class="ptr-small ptr-muted" title="La période et les juridictions de cette recherche ne peuvent pas être modifiées.">Critères non enregistrés</span>';
     const labels = RESEARCH_SOURCES.filter((source) => filters.sources.includes(source.value)).map((source) => source.label);
-    return `
-      <div class="ptr-search-summary">
-        <span class="ptr-small">Période : <strong>${escapeHtml(filters.dateDebut || '…')} → ${escapeHtml(filters.dateFin || '…')}</strong> · Juridictions : ${escapeHtml(labels.join(' · '))}</span>
-        <span class="ptr-spacer"></span>
-        <button type="button" class="ptr-icon-button" data-toggle-bar aria-expanded="${barOpen}" aria-label="${barOpen ? 'Réduire la période et les juridictions' : 'Modifier la période et les juridictions'}">${barOpen ? '▾' : '▴'}</button>
-      </div>
-      ${barOpen ? `<div class="ptr-search-fields">
+    return `<button type="button" class="ptr-link-button ptr-ellipsis" data-toggle-bar aria-expanded="${barOpen}" title="${barOpen ? 'Réduire la période et les juridictions' : 'Modifier la période et les juridictions'}">${escapeHtml(filters.dateDebut || '…')} → ${escapeHtml(filters.dateFin || '…')} · ${escapeHtml(labels.join(' · '))} ${barOpen ? '▾' : '▴'}</button>`;
+  }
+
+  function researchFields(review: Review, running: boolean): string {
+    const filters = review.research?.filters;
+    if (!filters || !barOpen) return '';
+    const disabled = running ? ' disabled' : '';
+    return `<div class="ptr-search-fields">
         <label class="ptr-bar-field"><span class="ptr-bar-label">Du</span><input class="ptr-input" type="date" data-filter-start value="${escapeHtml(filters.dateDebut)}"${disabled}></label>
         <label class="ptr-bar-field"><span class="ptr-bar-label">Au</span><input class="ptr-input" type="date" data-filter-end value="${escapeHtml(filters.dateFin)}"${disabled}></label>
         <div class="ptr-source-chips" role="group" aria-label="Juridictions">${RESEARCH_SOURCES.map((source) => `<label><input type="checkbox" data-filter-source value="${source.value}"${filters.sources.includes(source.value) ? ' checked' : ''}${disabled}> ${escapeHtml(source.label)}</label>`).join('')}</div>
-      </div>` : ''}`;
+      </div>`;
   }
 
   function updateControls(review: Review, running: boolean): string {
@@ -159,7 +159,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
         : run.phase === 'cancelled' ? 'Recherche annulée.' : run.error ?? 'Recherche interrompue.';
       return `<span class="ptr-small${run.phase === 'done' ? '' : ' ptr-status-error'}">${escapeHtml(outcome)}</span>${run.phase === 'done' ? `<button type="button" class="ptr-button ptr-button-primary" data-append-update${run.kept ? '' : ' disabled'}>Ajouter et analyser</button>` : ''}<button type="button" class="ptr-button" data-discard-update>${run.phase === 'done' ? 'Abandonner' : 'Fermer'}</button>`;
     }
-    return `<label class="ptr-bar-field"><span class="ptr-bar-label">Décisions rendues depuis le</span><input class="ptr-input" type="date" data-update-since value="${escapeHtml(since ?? defaultUpdateSince(review))}"${running ? ' disabled' : ''}></label><button type="button" class="ptr-button" data-update-research${running ? ' disabled' : ''}>Mettre à jour la recherche</button>`;
+    return `<label class="ptr-bar-field"><span class="ptr-bar-label">Depuis le</span><input class="ptr-input" type="date" data-update-since value="${escapeHtml(since ?? defaultUpdateSince(review))}"${running ? ' disabled' : ''}></label><button type="button" class="ptr-button" data-update-research${running ? ' disabled' : ''} title="Cherche les décisions rendues depuis cette date et absentes de la table">Mettre à jour</button>`;
   }
 
   function renderDetail(): string {
@@ -173,14 +173,11 @@ export function createReviewView(app: App, project: string, file: string, onBack
       <aside class="ptr-detail" aria-label="Détail de la cellule">
         <div style="display:flex;align-items:flex-start;gap:6px"><h3 style="flex:1">${escapeHtml(column.name)}</h3><button type="button" class="ptr-icon-button" data-close-detail aria-label="Fermer le détail">×</button></div>
         <div class="ptr-small ptr-muted">${escapeHtml(row.label)}</div>
-        <div><div class="ptr-label">Question</div><div class="ptr-md">${renderMarkdown(column.prompt)}</div></div>
-        ${cell ? `
-          <div><div class="ptr-label">Réponse</div><div style="display:flex;gap:6px">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div></div><div class="ptr-small ptr-muted">${escapeHtml(FLAG_LABELS[cell.flag])}</div></div>
-          <div><div class="ptr-label">Justification</div><div class="ptr-md">${cell.reasoning ? renderMarkdown(cell.reasoning) : '<p class="ptr-muted">—</p>'}</div></div>
-          <div><div class="ptr-label">Citations</div>${citationList(cell)}${row.corrections ? `<div class="ptr-small ptr-muted">${row.corrections} demande${row.corrections > 1 ? 's' : ''} de correction envoyée${row.corrections > 1 ? 's' : ''} à la session.</div>` : ''}</div>`
-          : `<div class="ptr-muted">${row.status === 'done' ? 'Aucune réponse.' : 'Pas encore de réponse pour cette cellule.'}</div>${rowStatus(row)}`}
+        <div><div class="ptr-label">Réponse${cell?.edited ? ' · modifiée à la main' : ''}</div><div style="display:flex;gap:6px">${cell ? flagDot(cell.flag) : ''}<textarea class="ptr-textarea ptr-ghost" data-edit-summary rows="3" aria-label="Réponse de la cellule, modifiable" placeholder="${row.status === 'done' ? 'Aucune réponse' : 'Pas encore de réponse'} — saisissez-la ici"${row.status === 'running' ? ' disabled' : ''}>${escapeHtml(draft?.key === `${row.id}:${column.index}` ? draft.value : isCellFilled(cell) ? cell.summary : '')}</textarea></div>${cell ? `<div class="ptr-small ptr-muted">${escapeHtml(FLAG_LABELS[cell.flag])}</div>` : rowStatus(row)}</div>
         <div><button type="button" class="ptr-button" data-run-cell>${isCellFilled(cell) ? 'Relancer cette cellule' : 'Lancer la session pour cette cellule'}</button></div>
-        <div><div class="ptr-label">${cell?.edited ? 'Réponse modifiée à la main' : 'Modifier la réponse'}</div><textarea class="ptr-textarea" data-edit-summary rows="3" aria-label="Réponse de la cellule"${row.status === 'running' ? ' disabled' : ''}>${escapeHtml(draft?.key === `${row.id}:${column.index}` ? draft.value : isCellFilled(cell) ? cell.summary : '')}</textarea><button type="button" class="ptr-button" data-save-cell style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Enregistrer la modification</button></div>
+        ${cell ? `
+          <div><div class="ptr-label">Justification</div><div class="ptr-md">${cell.reasoning ? renderMarkdown(cell.reasoning) : '<p class="ptr-muted">—</p>'}</div></div>
+          <div><div class="ptr-label">Citations</div>${citationList(cell)}${row.corrections ? `<div class="ptr-small ptr-muted">${row.corrections} demande${row.corrections > 1 ? 's' : ''} de correction envoyée${row.corrections > 1 ? 's' : ''} à la session.</div>` : ''}</div>` : ''}
         <div><div class="ptr-label">Documents</div><ul class="ptr-summary-list">${row.documents.map((document) => `<li title="${escapeHtml(document.copy)}">${/^https:\/\//.test(document.source) ? `<a href="${escapeHtml(document.source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(document.source.replace(/^https:\/\/www\.legifrance\.gouv\.fr\/\w+\/id\//, 'Légifrance · ').replace(/^https:\/\/www\.courdecassation\.fr\/decision\//, 'Judilibre · '))}</a>` : escapeHtml(document.source)}</li>`).join('')}</ul></div>
       </aside>`;
   }
@@ -198,19 +195,20 @@ export function createReviewView(app: App, project: string, file: string, onBack
     const failed = review.rows.some((row) => row.status === 'error' || row.status === 'cancelled' || emptyColumns(review, row.id).length > 0) || status === 'interrupted';
     const running = status === 'running';
     const sorting = review.category === 'tri-pieces';
+    const meta = review.research
+      ? `Effectuée le ${formatDate(review.createdAt)} · Dossier ${app.projectName(project)} · Recherche : ${review.research.query} · Juridictions : ${review.research.criteria.join(' · ')}`
+      : `${review.templateName} · ${app.projectName(project)} · ${formatDate(review.createdAt)}`;
+    const research = review.category === 'recherche-juridique';
     element.innerHTML = `
       <div class="ptr-review-top">
-        <button type="button" class="ptr-button" data-back>← Retour</button>
-        <div style="min-width:0">
-          <div class="ptr-review-title">${escapeHtml(review.title)}</div>
-          ${review.research
-            ? `<div class="ptr-small ptr-muted">Effectuée le ${escapeHtml(formatDate(review.createdAt))} · Dossier ${escapeHtml(app.projectName(project))}</div><div class="ptr-small ptr-muted">Recherche : <code>${escapeHtml(review.research.query)}</code>. Juridictions : ${escapeHtml(review.research.criteria.join(' · '))}</div>`
-            : `<div class="ptr-small ptr-muted">${escapeHtml(review.templateName)} · ${escapeHtml(app.projectName(project))} · ${escapeHtml(formatDate(review.createdAt))}</div>`}
+        <button type="button" class="ptr-icon-button" data-back aria-label="Retour à l’historique" title="Retour à l’historique">←</button>
+        <div class="ptr-review-heading" title="${escapeHtml(meta)}">
+          <span class="ptr-review-title">${escapeHtml(review.title)}</span>
+          <span class="ptr-small ptr-muted ptr-ellipsis">${escapeHtml(meta)}</span>
         </div>
-        ${review.category === 'recherche-juridique' || sorting ? `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS[review.category!])}</span>` : ''}
+        ${research || sorting ? `<span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS[review.category!])}</span>` : ''}
         <span class="ptr-chip ptr-chip-${status}">${running ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(status))} · ${done}/${review.rows.length}</span>
         ${running ? `<div class="ptr-progress" aria-hidden="true"><div style="width:${review.rows.length ? Math.round((done / review.rows.length) * 100) : 0}%"></div></div>` : ''}
-        <span class="ptr-spacer"></span>
         ${running ? '<button type="button" class="ptr-button ptr-button-danger" data-cancel>Annuler</button>' : ''}
         ${sorting ? `<button type="button" class="ptr-button" data-add-pieces title="Ajoute une ligne par pièce absente du tri (converties d’abord si besoin) et lance leur analyse">Ajouter les nouvelles pièces</button>
         <button type="button" class="ptr-button ptr-button-primary" data-apply-all title="Renomme et range toutes les pièces selon les colonnes d’action, après confirmation">Appliquer pour tous</button>` : ''}
@@ -222,15 +220,10 @@ export function createReviewView(app: App, project: string, file: string, onBack
           </div>
         </details>
       </div>
-      <div class="ptr-review-actions">
-        <button type="button" class="ptr-button" data-add-questions>+ Ajouter des questions</button>
-        ${review.category === 'recherche-juridique' ? '' : '<button type="button" class="ptr-button" data-add-documents>+ Ajouter des documents</button>'}
-      </div>
-      <div class="ptr-legend">${FLAGS.map((flag) => `<span>${flagDot(flag)}${escapeHtml(FLAG_LABELS[flag])}</span>`).join('')}</div>
       <div class="ptr-review-body">
         <div class="ptr-table-wrap">
           <table class="ptr-table">
-            <thead><tr><th scope="col"><div class="ptr-th-sortable"><span>${review.category === 'recherche-juridique' ? 'Décision' : 'Document'}</span>${sortButton(sort, 'label', 'document')}</div></th>${review.columns.map((column) => `<th scope="col"><div class="ptr-th-stack"><div class="ptr-th-sortable"><input class="ptr-input ptr-th-title" data-column-title="${column.index}" value="${escapeHtml(column.name)}" aria-label="Titre de la colonne" placeholder="Titre (facultatif)">${sortButton(sort, `c${column.index}`, column.name)}</div><div class="ptr-th"><textarea class="ptr-textarea ptr-th-input" rows="2" data-column-prompt="${column.index}" aria-label="Question de la colonne" placeholder="Question posée à l’IA">${escapeHtml(questionDrafts[column.index] ?? column.prompt)}</textarea><button type="button" class="ptr-icon-button" data-run-column="${column.index}" aria-label="Lancer les cellules vides de cette colonne" title="Lancer les cellules vides de cette colonne">▶</button></div></div></th>`).join('')}</tr></thead>
+            <thead><tr><th scope="col"><div class="ptr-th-sortable"><span>${research ? 'Décision' : 'Document'}</span>${sortButton(sort, 'label', 'document')}</div></th>${review.columns.map((column) => `<th scope="col"><div class="ptr-th-stack"><div class="ptr-th-sortable"><input class="ptr-input ptr-ghost ptr-th-title" data-column-title="${column.index}" value="${escapeHtml(column.name)}" aria-label="Titre de la colonne" placeholder="Titre (facultatif)">${sortButton(sort, `c${column.index}`, column.name)}<button type="button" class="ptr-sort" data-run-column="${column.index}" aria-label="Lancer les cellules vides de cette colonne" title="Lancer les cellules vides de cette colonne">▶</button></div><textarea class="ptr-textarea ptr-ghost ptr-th-input" rows="2" data-column-prompt="${column.index}" aria-label="Question de la colonne" placeholder="Question posée à l’IA">${escapeHtml(questionDrafts[column.index] ?? column.prompt)}</textarea></div></th>`).join('')}<th scope="col" class="ptr-add-col"><button type="button" class="ptr-add" data-add-questions title="Ajouter des questions (colonnes)">+ Question</button></th></tr></thead>
             <tbody>${sortBy(review.rows, sort, (row, key) => key === 'label' ? row.label : review.cells[row.id]?.[key.slice(1)]?.summary ?? '').map((row) => `
               <tr>
                 <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${sorting && row.piece ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>
@@ -242,15 +235,18 @@ export function createReviewView(app: App, project: string, file: string, onBack
                     : row.status === 'running' ? '<span class="ptr-muted"><span class="ptr-spinner"></span></span>' : '<span class="ptr-muted">—</span>';
                   return `<td class="ptr-cell" tabindex="0" data-row="${escapeHtml(row.id)}" data-column="${column.index}" aria-selected="${isSelected}">${content}</td>`;
                 }).join('')}
+                <td class="ptr-add-col"></td>
               </tr>`).join('')}
+              ${research ? '' : `<tr><td><button type="button" class="ptr-add" data-add-documents title="Ajouter des documents (lignes)">+ Documents</button></td><td colspan="${review.columns.length + 1}"></td></tr>`}
             </tbody>
           </table>
         </div>
         ${renderDetail()}
       </div>
       <div class="ptr-review-bar">
-        ${review.research ? researchSection(review, running) : ''}
+        ${review.research ? researchFields(review, running) : ''}
         <div class="ptr-review-controls">
+          ${review.research ? researchSummary(review) : ''}
           ${modelSelector(running)}
           ${costlyChoice()}
           <span class="ptr-spacer"></span>
@@ -279,7 +275,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     } catch (error) {
       if (destroyed) return;
       if (!detail) {
-        element.innerHTML = `<div class="ptr-review-top"><button type="button" class="ptr-button" data-back>← Retour</button></div><div class="ptr-error-box">${escapeHtml(errorMessage(error))}</div>`;
+        element.innerHTML = `<div class="ptr-review-top"><button type="button" class="ptr-icon-button" data-back aria-label="Retour à l’historique" title="Retour à l’historique">←</button></div><div class="ptr-error-box">${escapeHtml(errorMessage(error))}</div>`;
         return;
       }
       toast(app.root, errorMessage(error), 'error');
@@ -496,6 +492,16 @@ export function createReviewView(app: App, project: string, file: string, onBack
       void saveFilters();
       return;
     }
+    if (target.matches('[data-edit-summary]') && selected) {
+      const summary = (target as HTMLTextAreaElement).value;
+      const { row: rowId, column } = selected;
+      void action(async () => {
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/cell', { project, file, rowId, column, summary }));
+        draft = null;
+        toast(app.root, summary.trim() ? 'Réponse modifiée.' : 'Réponse effacée.');
+      });
+      return;
+    }
     if (target.matches('[data-update-since]')) {
       since = (target as HTMLInputElement).value;
       return;
@@ -611,16 +617,6 @@ export function createReviewView(app: App, project: string, file: string, onBack
     }
     if (target.closest('[data-add-pieces]')) {
       void action(addNewPieces);
-      return;
-    }
-    if (target.closest('[data-save-cell]') && selected) {
-      const summary = element.querySelector<HTMLTextAreaElement>('[data-edit-summary]')?.value ?? '';
-      const { row: rowId, column } = selected;
-      void action(async () => {
-        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/cell', { project, file, rowId, column, summary }));
-        draft = null;
-        toast(app.root, summary.trim() ? 'Réponse modifiée.' : 'Réponse effacée.');
-      });
       return;
     }
     if (target.closest('[data-retry]')) {
