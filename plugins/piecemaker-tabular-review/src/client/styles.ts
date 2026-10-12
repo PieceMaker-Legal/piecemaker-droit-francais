@@ -290,4 +290,6 @@ blockquote.ptr-citation-quote{margin:8px 0;padding-left:8px;border-left:3px soli
 .ptr-review-bar input[type=date]{padding:0 .5rem}
 .ptr-progress-mini{display:inline-block;width:70px;min-width:70px;height:4px}
 .ptr-home-bar{position:sticky;bottom:0;margin:auto -14px -12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid var(--ptr-glass-border);background:var(--ptr-glass-bg);backdrop-filter:blur(20px)}
+.ptr-root{container-type:inline-size}
+@container (max-width:520px){.ptr-home-bar{flex-direction:column;align-items:stretch}.ptr-home-bar .ptr-spacer{display:none}}
 `;
