@@ -79,6 +79,12 @@ describe('onglets de l’éditeur latéral', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('ouvre un document de la Bibliothèque sans le chercher dans un dossier', async () => {
+    render(<TabbedCodeEditor file={{ ...file('disparu.md'), projectId: 'piecemaker-library:exemple' }} onClose={vi.fn()} isSidebar />);
+    expect((await screen.findByTestId('code-editor')).dataset.path).toBe('disparu.md');
+    expect(resolveFileRef).not.toHaveBeenCalled();
+  });
+
   it('confie au plugin Dossier un conteneur pour la fiche et le libère à la fermeture', () => {
     const opened: Array<{ text: string; container: HTMLElement; onClose: () => void }> = [];
     const closed = vi.fn();
