@@ -444,4 +444,7 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
   .pmd-tiers-column[data-collapsed=false]{position:absolute;z-index:5;top:0;right:0;bottom:0;left:0;width:auto;box-shadow:0 12px 32px rgb(0 0 0 / 18%)}
 }
 @container pmd-general (max-width:560px){.pmd-party-layout{grid-template-columns:minmax(0,1fr) 40px;gap:12px}.pmd-party-columns{grid-template-columns:1fr;gap:18px}}
+.pmd-root{min-width:0;overflow-x:hidden}
+.pmd-header{min-width:0;flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+.pmd-header>*{flex-shrink:0}
 `;
