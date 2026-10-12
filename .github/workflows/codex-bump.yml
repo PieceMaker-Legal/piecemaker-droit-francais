@@ -1,0 +1,64 @@
+name: Codex bump
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+
+      - name: Compare versions
+        id: versions
+        run: |
+          current=$(node -p "require('./package.json').dependencies['@openai/codex']")
+          latest=$(npm view @openai/codex version)
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "branch=chore/codex-$latest" >> "$GITHUB_OUTPUT"
+          if [ "$current" = "$latest" ] || git ls-remote --exit-code --heads origin "chore/codex-$latest" >/dev/null; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump Codex
+        if: steps.versions.outputs.needed == 'true'
+        env:
+          LATEST: ${{ steps.versions.outputs.latest }}
+        run: |
+          [[ "$LATEST" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          npm ci
+          npm install --save-exact "@openai/codex@$LATEST"
+          npm install "@openai/codex-sdk@^$LATEST"
+          npm ci
+          npm test
+
+      - name: Open pull request
+        if: steps.versions.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.versions.outputs.branch }}
+          CURRENT: ${{ steps.versions.outputs.current }}
+          LATEST: ${{ steps.versions.outputs.latest }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add package.json package-lock.json
+          git commit -m "chore(codex): Codex $CURRENT → $LATEST"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(codex): Codex $CURRENT → $LATEST" \
+            --body "Mise à jour de @openai/codex et @openai/codex-sdk en $LATEST. La liste des modèles Codex proposée par PieceMaker est lue depuis ce binaire : elle suit cette version après la prochaine release."
