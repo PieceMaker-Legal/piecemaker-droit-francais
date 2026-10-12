@@ -205,6 +205,25 @@ export function createMikeRouter(store: ReturnType<typeof createLibraryStore>, u
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
 
+  router.put('/tabular/:id', (req, res) => {
+    const id = String(req.params.id);
+    const { name, description, columns } = req.body ?? {};
+    if (!/^[\w-]{1,80}$/.test(id)) { res.status(400).json({ error: 'Modèle invalide.' }); return; }
+    if (typeof name !== 'string' || !name.trim() || !Array.isArray(columns)) { res.status(400).json({ error: 'Le modèle doit avoir un nom et une liste « columns ».' }); return; }
+    try {
+      const updated = { ...req.body, id, name, description: typeof description === 'string' ? description : '', columns, updatedAt: new Date().toISOString() };
+      const ownFile = JSON.parse(fs.existsSync(ownTabularFile) ? fs.readFileSync(ownTabularFile, 'utf8') : '{}');
+      const ownIndex = Array.isArray(ownFile.templates) ? ownFile.templates.findIndex((template: { id?: unknown }) => template?.id === id) : -1;
+      const [file, content] = ownIndex >= 0
+        ? [ownTabularFile, { ...ownFile, templates: ownFile.templates.map((template: unknown, index: number) => (index === ownIndex ? updated : template)) }]
+        : [path.join(tabularDirectory, `${id}.json`), updated];
+      if (ownIndex < 0 && !fs.existsSync(file)) { res.status(404).json({ error: 'Modèle introuvable.' }); return; }
+      fs.writeFileSync(`${file}.tmp`, `${JSON.stringify(content, null, 2)}\n`);
+      fs.renameSync(`${file}.tmp`, file);
+      res.json({ templates: allTabularTemplates() });
+    } catch (error) { res.status(400).json({ error: (error as Error).message }); }
+  });
+
   router.delete('/tabular/:id', (req, res) => {
     const id = String(req.params.id);
     if (!/^[\w-]{1,80}$/.test(id)) { res.status(400).json({ error: 'Modèle invalide.' }); return; }
