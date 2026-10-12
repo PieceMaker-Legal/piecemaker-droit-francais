@@ -180,9 +180,8 @@ export function offsetShiftsWhileScrolling(pane: HTMLElement): () => void {
 export function startScrollAnchoring(): () => void {
   if (typeof CSS === 'undefined') return () => undefined;
   if (typeof ResizeObserver === 'undefined') return () => undefined;
+  if (CSS.supports('overflow-anchor', 'auto')) return () => undefined;
   const touchWebKit = CSS.supports('-webkit-touch-callout', 'none');
-  const polyfill = !CSS.supports('overflow-anchor', 'auto');
-  if (!polyfill && !touchWebKit) return () => undefined;
   const anchored = new Map<HTMLElement, () => void>();
   let frame = 0;
 
