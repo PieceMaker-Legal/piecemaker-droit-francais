@@ -65,6 +65,9 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       if (!open) setExpanded((current) => current === 'viewer' ? null : current);
     }, []);
     const toggleViewerExpand = useCallback(() => setExpanded((current) => current === 'viewer' ? null : 'viewer'), []);
+    useEffect(() => {
+      if (viewerOpen && props.isMobile) setExpanded(filesHost ? 'files' : 'viewer');
+    }, [viewerOpen, props.isMobile, filesHost]);
     const toggleFilesExpand = useCallback(() => setExpanded((current) => current === 'files' ? null : 'files'), []);
     const bindViewerColumn = useCallback((element: HTMLDivElement | null) => {
       if (element) columnRefs.current.set('viewer', element);
