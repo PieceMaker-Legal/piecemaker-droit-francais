@@ -1,2 +1,2 @@
-export { ContextSuggestion } from '@/modules/piecemaker-context-suggestions/ContextSuggestion';
+export { useContextSuggestion } from '@/modules/piecemaker-context-suggestions/useContextSuggestion';
 export { setActiveDocument } from '@/modules/piecemaker-context-suggestions/contextStore';
