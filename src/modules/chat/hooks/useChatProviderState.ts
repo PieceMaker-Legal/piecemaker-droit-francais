@@ -52,7 +52,7 @@ const FALLBACK_PERMISSION_MODES: Record<LLMProvider, PermissionMode[]> = {
   claude: ['default', 'auto', 'acceptEdits', 'bypassPermissions', 'plan'],
   cursor: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
   codex: ['default', 'acceptEdits', 'bypassPermissions'],
-  mistral: ['default', 'acceptEdits', 'bypassPermissions'],
+  mistral: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
   opencode: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
 };
 
