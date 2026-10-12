@@ -1,9 +1,10 @@
 /**
  * Dialog for the Claude Code plugin marketplace (`GET /plugin/marketplace`,
  * `POST /plugin/marketplace/register`, `POST /plugin/marketplace/install`) —
- * two scopes, "legal" (claude-for-legal) and "official"
- * (claude-plugins-official). There is no remote search in the `claude` CLI:
- * filtering below is client-side over the fetched catalogue only.
+ * scopes Mike, Legal, Officiel Anthropic, plus any catalogue already
+ * registered on the machine or pasted as owner/repo / HTTPS URL. There is
+ * no remote search in the `claude` CLI: filtering below is client-side over
+ * the fetched catalogue only.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -15,10 +16,10 @@ import { pmGet, pmPost, PieceMakerApiError } from '../api';
 import type { MarketplacePlugin, MarketplaceScope } from './SkillsSection';
 
 type MarketplaceResponse = {
-  scope: string;
-  marketplaceName: string;
+  scope?: string;
+  marketplaceName?: string;
   marketplaces: Array<{ name: string; repo: string | null; source: string | null; official: boolean }>;
-  officialRegistered: boolean;
+  officialRegistered?: boolean;
   registered: boolean;
   plugins: MarketplacePlugin[];
   reason?: string;
@@ -33,6 +34,7 @@ type InstallResponse = {
 };
 
 const SCOPES: { id: MarketplaceScope; label: string }[] = [
+  { id: 'mike', label: 'Mike' },
   { id: 'legal', label: 'Legal (claude-for-legal)' },
   { id: 'official', label: 'Officiel Anthropic' },
 ];
@@ -43,7 +45,8 @@ type SkillsMarketplaceDialogProps = {
 };
 
 export default function SkillsMarketplaceDialog({ open, onOpenChange }: SkillsMarketplaceDialogProps) {
-  const [scope, setScope] = useState<MarketplaceScope>('legal');
+  const [scope, setScope] = useState<MarketplaceScope>('mike');
+  const [paste, setPaste] = useState('');
   const [data, setData] = useState<MarketplaceResponse | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
@@ -82,16 +85,19 @@ export default function SkillsMarketplaceDialog({ open, onOpenChange }: SkillsMa
     onOpenChange(false);
   };
 
-  const handleRegister = async () => {
+  const handleRegister = async (payload: { scope?: MarketplaceScope; source?: string } = { scope }) => {
     setIsRegistering(true);
     setSubmitError(null);
     try {
-      const response = await pmPost<{ ok: boolean; alreadyRegistered: boolean; reason?: string }>(
+      const response = await pmPost<{ ok: boolean; alreadyRegistered: boolean; name?: string | null; reason?: string }>(
         '/plugin/marketplace/register',
-        { scope },
+        payload,
       );
       if (!response.ok) setSubmitError(response.reason || 'Enregistrement du marketplace impossible.');
-      load(scope);
+      if (payload.source && response.ok) setPaste('');
+      const next = payload.source && response.name ? response.name : (payload.scope ?? scope);
+      if (next !== scope) setScope(next);
+      load(next);
     } catch (cause) {
       setSubmitError(cause instanceof PieceMakerApiError ? cause.message : 'Enregistrement du marketplace impossible.');
     } finally {
@@ -149,7 +155,12 @@ export default function SkillsMarketplaceDialog({ open, onOpenChange }: SkillsMa
 
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/50 px-4 py-2">
           <PillBar role="tablist" aria-label="Marketplace" className="border border-border/40 bg-muted/50">
-            {SCOPES.map((entry) => (
+            {[
+              ...SCOPES,
+              ...(data?.marketplaces ?? [])
+                .filter((entry) => entry.name && !['mcp-legifrance', 'mike-workflows', 'claude-for-legal', 'claude-plugins-official'].includes(entry.name))
+                .map((entry) => ({ id: entry.name, label: entry.name })),
+            ].map((entry) => (
               <Pill
                 key={entry.id}
                 role="tab"
@@ -187,7 +198,25 @@ export default function SkillsMarketplaceDialog({ open, onOpenChange }: SkillsMa
           </div>
         )}
 
-        <div className="shrink-0 px-4 pt-2">
+        <div className="shrink-0 space-y-2 px-4 pt-2">
+          <div className="flex gap-2">
+            <Input
+              value={paste}
+              onChange={(event) => setPaste(event.target.value)}
+              placeholder="owner/repo ou URL HTTPS…"
+              aria-label="Lien de marketplace"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              disabled={isRegistering || !paste.trim()}
+              onClick={() => void handleRegister({ source: paste.trim() })}
+            >
+              Ajouter le catalogue
+            </Button>
+          </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input

@@ -12,7 +12,7 @@ export function mount(container, api) {
     .pm-library nav[role=tablist] button,.pm-library .pills button{border:0;box-shadow:none;background:transparent}.pm-library nav[role=tablist] button:hover,.pm-library .pills button:hover{background:rgb(255 255 255 / 12%);filter:none}.pm-library nav[role=tablist] button[aria-selected=true],.pm-library .pills button[aria-selected=true]{background:transparent;box-shadow:inset 0 0 0 1px hsl(var(--foreground) / 26%);font-weight:600}
     .pm-library button:not(.piecemaker-button){font:inherit;cursor:pointer;color:inherit;background:var(--liquid-glass-background-subtle,transparent);border:1px solid var(--liquid-glass-border-subtle,hsl(var(--border)));border-radius:9999px;padding:6px 12px}
     .pm-library button:disabled{opacity:.4;cursor:not-allowed}
-    .pm-library input[type=search]{font:inherit;color:inherit;background:transparent;border:1px solid hsl(var(--border));border-radius:.75rem;padding:9px 12px;flex:1;min-width:160px;box-shadow:none}
+    .pm-library input[type=search],.pm-library .toolbar input[type=text]{font:inherit;color:inherit;background:transparent;border:1px solid hsl(var(--border));border-radius:.75rem;padding:9px 12px;flex:1;min-width:160px;box-shadow:none}
     .pm-library .row{display:flex;align-items:center;gap:20px;border-bottom:1px solid hsl(var(--border));padding:16px 0}
     .pm-library .title{display:inline-block;border:0;background:transparent;box-shadow:none;text-align:left;padding:0;font-weight:600;border-radius:0;height:auto;filter:none;color:inherit}.pm-library .piecemaker-button--glass{color:hsl(var(--foreground))}.pm-library .details{flex:1;min-width:0}.pm-library .details p{white-space:pre-wrap;overflow-wrap:anywhere}.pm-library .description{font-size:12px;line-height:1.4}.pm-library .row-title{display:flex;align-items:center;gap:8px}
     .pm-library .switch,.pm-library .piecemaker-toggle{display:inline-flex;align-items:center;gap:.625rem;width:fit-content;color:hsl(var(--foreground) / 80%);font-size:.875rem;white-space:nowrap}
@@ -45,10 +45,12 @@ export function mount(container, api) {
   let context = api.context;
   let tab = 'skill';
   let view = 'mine';
-  let scope = 'legal';
+  let scope = 'mike';
+  let paste = '';
   let search = '';
   let entries = [];
   let plugins = [];
+  let tabularTemplates = [];
   const pluginTrees = new Map();
   let pluginTreeBusy = '';
   let marketplace = null;
@@ -108,7 +110,7 @@ export function mount(container, api) {
 
   async function load(options = {}) {
     const version = ++revision;
-    const hadContent = Boolean(entries.length || plugins.length || marketplace);
+    const hadContent = Boolean(entries.length || plugins.length || tabularTemplates.length || marketplace);
     error = '';
     if (!hadContent) {
       loading = true;
@@ -126,6 +128,9 @@ export function mount(container, api) {
         const kind = tab === 'connectors' ? 'connector' : tab;
         const data = await request('GET', `/plugin/marketplace?scope=${scope}&kind=${kind}`);
         if (version === revision) marketplace = data;
+      } else if (tab === 'tabular') {
+        const tabularData = await request('GET', '/tabular');
+        if (version === revision) tabularTemplates = tabularData.templates || [];
       } else if (tab === 'plugin') {
         const collectionData = await request('GET', `/plugins${query}`);
         if (version === revision) plugins = collectionData.plugins || [];
@@ -143,7 +148,14 @@ export function mount(container, api) {
     error = '';
     pinnedScrollTop = root.scrollTop;
     render();
-    try { await request(method, path, body); await load(); }
+    try {
+      const result = await request(method, path, body);
+      if (path === '/plugin/marketplace/register' && body?.source && result?.name) {
+        scope = result.name;
+        paste = '';
+      }
+      await load();
+    }
     catch (cause) { error = cause.message; }
     finally { busy = false; pinnedScrollTop = null; if (!disposed) render(); }
   }
@@ -206,6 +218,18 @@ export function mount(container, api) {
       };
       window.dispatchEvent(new CustomEvent('piecemaker:library-document', { detail: { name: document.name, content: document.content, container: layout, save } }));
     } catch (cause) { error = cause.message; render(); }
+  }
+
+  function openTabularTemplate(template) {
+    const { id, own, ...editable } = template;
+    const save = async (content) => {
+      if (disposed) throw new Error('La Bibliothèque est fermée.');
+      let parsed;
+      try { parsed = JSON.parse(content); } catch { throw new Error('JSON invalide.'); }
+      await request('PUT', `/tabular/${encodeURIComponent(id)}`, parsed);
+      await load();
+    };
+    window.dispatchEvent(new CustomEvent('piecemaker:library-document', { detail: { name: template.name, editorPath: `${id}.json`, content: `${JSON.stringify(editable, null, 2)}\n`, container: layout, save } }));
   }
 
   async function openPluginFile(plugin, file) {
@@ -307,18 +331,18 @@ export function mount(container, api) {
   }
 
   function pluralName() {
-    return { connectors: 'connecteurs', skill: 'skills', plugin: 'plugins', agent: 'agents' }[tab];
+    return { connectors: 'connecteurs', skill: 'skills', plugin: 'plugins', agent: 'agents', tabular: 'analyses tabulaires' }[tab];
   }
 
   function render() {
     const scrollTop = pinnedScrollTop !== null ? pinnedScrollTop : root.scrollTop;
     content.replaceChildren();
-    content.append(element('p', 'Connecteurs, skills, plugins et agents activés pour les dossiers choisis.'));
+    content.append(element('p', 'Connecteurs, skills, plugins, agents et analyses tabulaires activés pour les dossiers choisis.'));
     const nav = element('nav');
     nav.setAttribute('role', 'tablist');
     nav.setAttribute('aria-label', 'Bibliothèque');
-    for (const [key, label] of [['connectors', 'Connecteurs'], ['skill', 'Skills'], ['plugin', 'Plugins'], ['agent', 'Agents']]) {
-      const item = button(label, () => { tab = key; view = 'mine'; scope = key === 'connectors' ? 'piecemaker' : 'legal'; search = ''; void load(); });
+    for (const [key, label] of [['connectors', 'Connecteurs'], ['skill', 'Skills'], ['plugin', 'Plugins'], ['agent', 'Agents'], ['tabular', 'Analyses tabulaires']]) {
+      const item = button(label, () => { tab = key; view = 'mine'; scope = key === 'connectors' ? 'piecemaker' : 'mike'; search = ''; void load(); });
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', String(tab === key));
       nav.append(item);
@@ -365,9 +389,16 @@ export function mount(container, api) {
       }
       if (view === 'discover') {
         const scopes = element('div', undefined, 'pills');
-        const availableScopes = tab === 'connectors'
-          ? [['piecemaker', 'PieceMaker'], ['legal', 'Legal'], ['official', 'Officiel Anthropic']]
-          : [['legal', 'Legal'], ['official', 'Officiel Anthropic']];
+        const knownScopes = tab === 'connectors'
+          ? [['piecemaker', 'PieceMaker'], ['mike', 'Mike'], ['legal', 'Legal'], ['official', 'Officiel Anthropic']]
+          : tab === 'tabular'
+            ? [['mike', 'Mike']]
+            : [['mike', 'Mike'], ['legal', 'Legal'], ['official', 'Officiel Anthropic']];
+        const knownNames = new Set(['mcp-legifrance', 'mike-workflows', 'claude-for-legal', 'claude-plugins-official']);
+        const extraScopes = tab === 'tabular' ? [] : (marketplace?.marketplaces || [])
+          .filter((entry) => entry?.name && !knownNames.has(entry.name))
+          .map((entry) => [entry.name, entry.name]);
+        const availableScopes = [...knownScopes, ...extraScopes];
         if (!availableScopes.some(([id]) => id === scope)) scope = availableScopes[0][0];
         for (const [id, title] of availableScopes) {
           const item = button(title, () => { scope = id; void load(); });
@@ -376,13 +407,29 @@ export function mount(container, api) {
         }
         scopes.append(button(marketplace?.registered ? 'Rafraîchir le catalogue' : 'Enregistrer le catalogue', () => void mutate('POST', '/plugin/marketplace/register', { scope })));
         body.append(scopes);
+        const pasteRow = element('div', undefined, 'toolbar');
+        const pasteInput = document.createElement('input');
+        pasteInput.type = 'text';
+        pasteInput.placeholder = 'owner/repo ou URL HTTPS…';
+        pasteInput.setAttribute('aria-label', 'Lien de marketplace');
+        pasteInput.value = paste;
+        pasteInput.oninput = () => { paste = pasteInput.value; };
+        pasteRow.append(
+          pasteInput,
+          button('Ajouter le catalogue', () => {
+            const source = paste.trim();
+            if (!source) return;
+            void mutate('POST', '/plugin/marketplace/register', { source });
+          }),
+        );
+        if (tab !== 'tabular') body.append(pasteRow);
         if (marketplace?.reason) body.append(element('p', marketplace.reason));
         if (!marketplace?.registered) body.append(element('p', 'Ce catalogue doit être enregistré avant de pouvoir installer ses éléments.'));
         const visible = (marketplace?.plugins || []).filter(matches);
         if (!visible.length) body.append(element('p', `Aucun ${pluralName()} dans ce catalogue.`));
         for (const entry of visible) {
           const item = row(entry);
-          item.append(button(entry.installed ? 'Installé' : 'Ajouter', () => void mutate('POST', '/plugin/marketplace/acquire', { id: entry.id, scope })));
+          item.append(button(entry.installed ? 'Installé' : 'Ajouter', () => void mutate('POST', '/plugin/marketplace/acquire', { id: entry.id, scope, ...(tab === 'tabular' ? { kind: 'tabular' } : {}) })));
           item.lastChild.disabled = busy || entry.installed;
           body.append(item);
         }
@@ -421,6 +468,17 @@ export function mount(container, api) {
           body.append(item);
         }
         body.append(element('p', 'Les changements s’appliquent aux prochains messages. Une désactivation ne retire pas les instructions déjà reçues dans une conversation.', 'meta'));
+      } else if (tab === 'tabular') {
+        body.append(element('p', 'Modèles proposés dans Analyse Tabulaire, pour tous les dossiers. Ajoutez-en depuis « Découvrir ».', 'meta'));
+        const visible = tabularTemplates.filter(matches);
+        if (!visible.length) body.append(element('p', 'Aucune analyse tabulaire dans la bibliothèque.'));
+        for (const template of visible) {
+          const item = row(template, () => openTabularTemplate(template));
+          item.firstChild.append(element('p', `${template.columns?.length || 0} question(s)`, 'meta'));
+          if (template.own) item.firstChild.append(element('p', 'Créé dans Analyse Tabulaire', 'meta'));
+          else item.append(button('Retirer', () => void mutate('DELETE', `/tabular/${encodeURIComponent(template.id)}`)));
+          body.append(item);
+        }
       } else if (tab === 'plugin') {
         body.append(element('p', context.project ? `Activation automatique dans ${context.project.path}` : 'Sélectionnez un dossier pour activer un plugin.', 'meta'));
 
@@ -507,7 +565,7 @@ export function mount(container, api) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = context.project?.path !== next.project?.path;
     context = next;
-    if (changed) { entries = []; plugins = []; scanErrors = []; pluginTrees.clear(); void load(); }
+    if (changed) { entries = []; plugins = []; tabularTemplates = []; scanErrors = []; pluginTrees.clear(); void load(); }
     else render();
   });
   mounts.set(container, () => { disposed = true; revision++; unsubscribe(); layout.remove(); style.remove(); });

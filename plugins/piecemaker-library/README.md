@@ -1,8 +1,15 @@
 # Bibliothèque PieceMaker
 
-Plugin CloudCLI autonome : une bibliothèque de skills et de plugins, une liste d’agents, les MCP du dossier et les marketplaces Legal / Anthropic existantes. Les titres et descriptions viennent du frontmatter YAML. Le contenu complet est demandé uniquement à l’ouverture du document.
+Plugin CloudCLI autonome : une bibliothèque de skills et de plugins, une liste d’agents, les MCP du dossier et les marketplaces Mike, Legal et Anthropic, plus tout catalogue collé (owner/repo ou URL HTTPS). Les titres et descriptions viennent du frontmatter YAML. Le contenu complet est demandé uniquement à l’ouverture du document.
 
 Les onglets Connecteurs, Skills, Plugins et Agents lisent le catalogue SQLite. Chaque plugin expose toute son arborescence importée ; les fichiers texte peuvent être ouverts et enregistrés dans l’éditeur natif. Un MCP, une skill ou un agent livré par un plugin reste dans cet onglet Plugins.
+
+## Mike
+
+Le dépôt [Open-Legal-Products/mike-workflows](https://github.com/Open-Legal-Products/mike-workflows) n’est pas un marketplace Claude : ce sont des dossiers `SKILL.md`. « Enregistrer le catalogue » sous Mike le clone (`git clone --depth 1`) dans `~/.piecemaker/library-backend/mike-workflows` ; « Rafraîchir » fait un `git pull`.
+
+- Skills › Découvrir › Mike liste les workflows d’assistant (`assistant-workflows/`, packs compris). « Ajouter » copie le skill dans la Bibliothèque : désactivé par défaut, à activer par dossier comme tout skill de la Bibliothèque. Une mise à jour du dépôt ne modifie pas un skill déjà ajouté.
+- Analyses tabulaires › Découvrir › Mike liste les revues tabulaires (`tabular-review-workflows/`). « Ajouter » convertit `table-columns.yaml` en modèle et l’écrit dans `~/.piecemaker/tabular-review/library/` : il apparaît aussitôt dans les Modèles d’Analyse Tabulaire, pour tous les dossiers. « Retirer » le supprime. Les consignes restent en anglais, comme dans le dépôt.
 
 ## Installation
 

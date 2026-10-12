@@ -78,7 +78,7 @@ export type PluginComponent = {
   note?: string;
 };
 
-export type MarketplaceScope = 'legal' | 'official';
+export type MarketplaceScope = 'legal' | 'official' | 'mike' | string;
 
 /** One row of `GET /plugin/marketplace` — an installable/installed connector. */
 export type MarketplacePlugin = {

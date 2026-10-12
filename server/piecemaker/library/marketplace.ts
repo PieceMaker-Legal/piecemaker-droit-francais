@@ -18,6 +18,50 @@ import { applyWorkspaceSkillVisibility } from './skill-visibility.js';
 
 type MarketplaceKind = 'connector' | 'skill' | 'plugin' | 'agent';
 
+const GITHUB_SHORTHAND = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:@[A-Za-z0-9._/-]+)?$/;
+const PLUGIN_ID = /^[a-zA-Z0-9_-]+@[a-zA-Z0-9_.-]+$/;
+
+export const KNOWN_MARKETPLACES: Record<string, { name: string; slug: string }> = {
+  piecemaker: { name: 'mcp-legifrance', slug: 'PieceMaker-Legal/mcp-legifrance' },
+  legal: { name: 'claude-for-legal', slug: 'anthropics/claude-for-legal' },
+  official: { name: 'claude-plugins-official', slug: 'anthropics/claude-plugins-official' },
+  mike: { name: 'mike-workflows', slug: 'Open-Legal-Products/mike-workflows' },
+};
+
+export function parseMarketplaceSource(raw: unknown): string {
+  if (typeof raw !== 'string' || !raw.trim()) throw new Error('Lien de marketplace manquant.');
+  const source = raw.trim();
+  if (/\s/.test(source) || source.startsWith('-')) throw new Error('Lien de marketplace invalide.');
+  if (GITHUB_SHORTHAND.test(source)) return source;
+  let url: URL;
+  try { url = new URL(source); } catch { throw new Error('Lien de marketplace invalide.'); }
+  if (url.protocol !== 'https:') throw new Error('Le lien doit être en HTTPS.');
+  if (url.username || url.password) throw new Error('Lien de marketplace invalide.');
+  const host = url.hostname.toLowerCase();
+  const pathname = url.pathname;
+  const isGit = pathname.endsWith('.git')
+    || host === 'github.com'
+    || host.endsWith('.github.com')
+    || host.includes('gitlab')
+    || host.includes('bitbucket');
+  const isManifest = pathname.endsWith('marketplace.json');
+  if (!isGit && !isManifest) {
+    throw new Error('Collez un dépôt GitHub (owner/repo), une URL git HTTPS ou un marketplace.json.');
+  }
+  return source;
+}
+
+function resolveMarketplace(
+  value: unknown,
+  listed: Array<{ name: string; repo: string | null; source: string | null }>,
+) {
+  const key = typeof value === 'string' ? value : '';
+  if (KNOWN_MARKETPLACES[key]) return KNOWN_MARKETPLACES[key];
+  const found = listed.find((entry) => entry.name === key);
+  if (found) return { name: found.name, slug: found.repo || found.source || found.name };
+  throw new Error('Marketplace inconnue.');
+}
+
 function marketplaceManifest(userHome: string, marketplaceName: string) {
   const root = path.join(userHome, '.claude', 'plugins', 'marketplaces', marketplaceName);
   try {
@@ -162,20 +206,16 @@ export async function scanLibrarySources(store: ReturnType<typeof createLibraryS
   return errors;
 }
 
-export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLibraryStore>, applicationRoot: string, userHome: string, listProjectPaths: () => string[] = () => [], reader: ProviderSkillsReader = providerSkillsService) {
+export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLibraryStore>, applicationRoot: string, userHome: string, listProjectPaths: () => string[] = () => [], reader: ProviderSkillsReader = providerSkillsService, runCommand?: (command: string, args: string[], timeout?: number) => { ok: boolean; output: string; status: number | null }) {
   const require = createRequire(import.meta.url);
-  const { listMarketplaceConnectors, registerOfficialMarketplace } = require(path.join(applicationRoot, 'server/piecemaker/vendor/websocket-server/admin-routes.cjs'));
+  const { listMarketplaceConnectors, listRegisteredMarketplaces, registerOfficialMarketplace } = require(path.join(applicationRoot, 'server/piecemaker/vendor/websocket-server/admin-routes.cjs'));
   const router = express.Router();
-  const run = (command: string, args: string[], timeout = 60000) => {
+  const run = runCommand ?? ((command: string, args: string[], timeout = 60000) => {
     const result = spawnSync(command, args, { encoding: 'utf8', timeout, maxBuffer: 8 * 1024 * 1024, windowsHide: true });
     return { ok: result.status === 0, output: `${result.stdout || ''}${result.stderr || ''}`, status: result.status };
-  };
-  const scope = (value: unknown) => {
-    if (value === 'piecemaker') return { name: 'mcp-legifrance', slug: 'PieceMaker-Legal/mcp-legifrance' };
-    if (value === 'legal') return { name: 'claude-for-legal', slug: 'anthropics/claude-for-legal' };
-    if (value === 'official') return { name: 'claude-plugins-official', slug: 'anthropics/claude-plugins-official' };
-    throw new Error('Marketplace inconnue.');
-  };
+  });
+  const listed = () => listRegisteredMarketplaces(run);
+  const scope = (value: unknown) => resolveMarketplace(value, listed());
   const installed = () => {
     const filename = path.join(userHome, '.claude/plugins/installed_plugins.json');
     return fs.existsSync(filename) ? JSON.parse(fs.readFileSync(filename, 'utf8')).plugins || {} : {};
@@ -267,14 +307,19 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.post('/plugin/marketplace/register', (req, res) => {
-    try { res.json(registerOfficialMarketplace(run, scope(req.body?.scope))); }
-    catch (error) { res.status(400).json({ error: (error as Error).message }); }
+    try {
+      if (req.body?.source) {
+        res.json(registerOfficialMarketplace(run, { name: null, slug: parseMarketplaceSource(req.body.source) }));
+        return;
+      }
+      res.json(registerOfficialMarketplace(run, scope(req.body?.scope)));
+    } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   router.post('/plugin/marketplace/acquire', (req, res) => {
     try {
       const marketplace = scope(req.body?.scope);
       const id = req.body?.id;
-      if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]+@[a-zA-Z0-9_-]+$/.test(id) || !id.endsWith(`@${marketplace.name}`)) throw new Error('Élément invalide.');
+      if (typeof id !== 'string' || !PLUGIN_ID.test(id) || !id.endsWith(`@${marketplace.name}`)) throw new Error('Élément invalide.');
       if (installed()[id]) throw new Error('Déjà installé. Son activation se règle par dossier.');
       const catalog = listMarketplaceConnectors(run, { marketplaceName: marketplace.name });
       if (!catalog.plugins.some((plugin: { id: string }) => plugin.id === id)) throw new Error('Élément absent du catalogue.');

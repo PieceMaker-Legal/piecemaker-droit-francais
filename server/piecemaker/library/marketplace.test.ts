@@ -7,7 +7,7 @@ import { once } from 'node:events';
 
 import express from 'express';
 
-import { createLibraryMarketplaceRouter, scanInstalledLibraryCollections } from './marketplace.js';
+import { createLibraryMarketplaceRouter, parseMarketplaceSource, scanInstalledLibraryCollections } from './marketplace.js';
 import { createLibraryRouter } from './routes.js';
 import { createLibraryStore } from './store.js';
 
@@ -124,4 +124,64 @@ test('the catalogue names the providers that load an entry everywhere', async (t
     const after = await call('GET', '/catalog');
     assert.deepEqual(after.entries.find((entry: { name: string }) => entry.name === 'review').globalProviders, []);
   });
+});
+
+test('parseMarketplaceSource accepts GitHub shorthand and HTTPS git URLs', () => {
+  assert.equal(parseMarketplaceSource('acme/plugins'), 'acme/plugins');
+  assert.equal(parseMarketplaceSource('acme/plugins@v2'), 'acme/plugins@v2');
+  assert.equal(
+    parseMarketplaceSource('https://github.com/acme/plugins.git'),
+    'https://github.com/acme/plugins.git',
+  );
+  assert.equal(
+    parseMarketplaceSource('https://example.com/.claude-plugin/marketplace.json'),
+    'https://example.com/.claude-plugin/marketplace.json',
+  );
+  assert.throws(() => parseMarketplaceSource('file:///tmp/marketplace'), /HTTPS|invalide/);
+  assert.throws(() => parseMarketplaceSource('http://example.com/marketplace.json'), /HTTPS/);
+  assert.throws(() => parseMarketplaceSource('--help'), /invalide/);
+  assert.throws(() => parseMarketplaceSource(''), /manquant/);
+});
+
+function fakeClaude(calls: string[]) {
+  return (command: string, args: string[]) => {
+    calls.push([command, ...args].join(' '));
+    if (args.includes('list')) return { ok: true, output: '[]', status: 0 };
+    return { ok: true, output: '', status: 0 };
+  };
+}
+
+test('registering mike adds the Open-Legal-Products marketplace', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-library-mike-'));
+  const userHome = path.join(root, 'home');
+  const store = createLibraryStore(path.join(root, '.piecemaker'));
+  t.after(() => { store.close(); fs.rmSync(root, { recursive: true, force: true }); });
+  const calls: string[] = [];
+  await served(
+    createLibraryMarketplaceRouter(store, process.cwd(), userHome, () => [], undefined, fakeClaude(calls)),
+    async (call) => {
+      const result = await call('POST', '/plugin/marketplace/register', { scope: 'mike' });
+      assert.equal(result.ok, true);
+    },
+  );
+  assert.ok(calls.some((entry) => entry.includes('marketplace add Open-Legal-Products/mike-workflows')));
+});
+
+test('a pasted marketplace link is added and a local path is rejected', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-library-paste-'));
+  const userHome = path.join(root, 'home');
+  const store = createLibraryStore(path.join(root, '.piecemaker'));
+  t.after(() => { store.close(); fs.rmSync(root, { recursive: true, force: true }); });
+  const calls: string[] = [];
+  await served(
+    createLibraryMarketplaceRouter(store, process.cwd(), userHome, () => [], undefined, fakeClaude(calls)),
+    async (call) => {
+      const result = await call('POST', '/plugin/marketplace/register', { source: 'acme/plugins' });
+      assert.equal(result.ok, true);
+      const rejected = await call('POST', '/plugin/marketplace/register', { source: 'file:///tmp/x' });
+      assert.match(String(rejected.error), /HTTPS|invalide/);
+    },
+  );
+  assert.ok(calls.some((entry) => entry.includes('marketplace add acme/plugins')));
+  assert.equal(calls.some((entry) => entry.includes('file:')), false);
 });
