@@ -13,10 +13,11 @@ Piloter depuis un téléphone les sessions qui tournent sur l'ordinateur : le t�
 
 ## Parcours utilisateur
 
-1. Réglages › Téléphone. Si Tailscale manque : lien d'installation. S'il est déconnecté : le dire.
-2. « Publier sur mon téléphone ». La première fois, Tailscale peut exiger d'autoriser HTTPS/Serve sur le tailnet : la commande affiche un lien de consentement, l'onglet le transforme en bouton, puis on republie.
-3. « Copier le lien » (`https://<machine>.<tailnet>.ts.net`). Sur Mac, le presse-papiers universel le colle sur l'iPhone.
-4. Téléphone : Tailscale connecté au même compte → lien dans Safari → « Sur l'écran d'accueil » → ouvrir l'icône → login PieceMaker (l'icône a un stockage distinct de Safari).
+1. Réglages › Téléphone. Si Tailscale manque : lien vers l'installeur officiel (`.pkg` sur Mac, `.exe` sur Windows). S'il est déconnecté : le dire.
+2. Console d'administration Tailscale, une seule fois : onglet DNS, tout en bas, section « HTTPS Certificates » › « Enable HTTPS » (MagicDNS activé).
+3. « Publier sur mon téléphone ». La première fois, Tailscale peut exiger d'autoriser HTTPS/Serve sur le tailnet : la commande affiche un lien de consentement, l'onglet le transforme en bouton, puis on republie.
+4. « Copier le lien » (`https://<machine>.<tailnet>.ts.net`).
+5. Téléphone : Tailscale connecté au même compte → lien dans Safari → « Sur l'écran d'accueil » → ouvrir l'icône → login PieceMaker (l'icône a un stockage distinct de Safari).
 
 ## Architecture
 
