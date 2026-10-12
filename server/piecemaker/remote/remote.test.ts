@@ -151,7 +151,32 @@ test('Serve non autorisé sur le tailnet : le lien de consentement est renvoyé'
   const cli = fakeCli({}, { stdout: 'To enable, visit:\n https://login.tailscale.com/f/serve?node=xyz\n', timedOut: true });
   await withRemote(cli, async (remote, dataRoot) => {
     assert.deepEqual(await remote.enable(), { consentUrl: 'https://login.tailscale.com/f/serve?node=xyz' });
-    await assert.rejects(readFile(path.join(dataRoot, REMOTE_STATE_FILE), 'utf8'));
+    assert.equal(JSON.parse(await readFile(path.join(dataRoot, REMOTE_STATE_FILE), 'utf8')).enabled, false);
+    assert.equal((await remote.status()).published, false);
+  });
+});
+
+test('après consentement, la publication restée en attente n’est pas prise pour un autre service', async () => {
+  let consentGiven = false;
+  let pendingTarget = '';
+  const run = async (_binary: string, args: string[]): Promise<CommandResult> => {
+    if (args[0] === 'status') return { code: 0, stdout: STATUS_JSON, stderr: '', timedOut: false };
+    if (args[1] === 'status') {
+      const config = consentGiven ? { Web: { [`${DNS}:443`]: { Handlers: { '/': { Proxy: pendingTarget } } } } } : {};
+      return { code: 0, stdout: JSON.stringify(config), stderr: '', timedOut: false };
+    }
+    pendingTarget = args[args.length - 1];
+    if (!consentGiven) return { code: -1, stdout: 'To enable, visit:\n https://login.tailscale.com/f/serve?node=xyz\n', stderr: '', timedOut: true };
+    return { code: 0, stdout: '', stderr: '', timedOut: false };
+  };
+  await withRemote({ tailscale: createTailscale('tailscale', run), calls: [] }, async (remote) => {
+    assert.ok((await remote.enable()).consentUrl);
+    consentGiven = true;
+    const pending = await remote.status();
+    assert.equal(pending.conflict, false);
+    assert.equal(pending.published, false);
+    assert.deepEqual(await remote.enable(), { consentUrl: null });
+    assert.equal((await remote.status()).published, true);
   });
 });
 
