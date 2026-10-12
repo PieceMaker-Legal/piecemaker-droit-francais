@@ -31,9 +31,9 @@ const MAX_OUTPUT = 5 * 1024 * 1024;
 const PATH_TOOLS = 'Read,Grep,Glob';
 const VIBE_PATH_TOOLS = ['read_file', 'grep'];
 const VIBE_MODELS = JSON.stringify({
-  'mistral-medium-3.5': { name: 'mistral-vibe-cli-latest', provider: 'mistral', alias: 'mistral-medium-3.5', display_name: 'Mistral Medium 3.5' },
-  'glm-5.3': { name: 'zai-glm-5-3', provider: 'mistral', alias: 'glm-5.3', display_name: 'Z.ai GLM 5.3' },
-  'glm-5.2': { name: 'zai-glm-5-2', provider: 'mistral', alias: 'glm-5.2', display_name: 'Z.ai GLM 5.2' },
+  'mistral-medium-3.5': { name: 'mistral-vibe-cli-latest', provider: 'mistral', alias: 'mistral-medium-3.5', display_name: 'Mistral Medium 3.5', thinking: 'medium' },
+  'glm-5.3': { name: 'zai-glm-5-3', provider: 'mistral', alias: 'glm-5.3', display_name: 'Z.ai GLM 5.3', thinking: 'medium' },
+  'glm-5.2': { name: 'zai-glm-5-2', provider: 'mistral', alias: 'glm-5.2', display_name: 'Z.ai GLM 5.2', thinking: 'medium' },
 });
 
 let runtimeCache: Runtime | null = null;
