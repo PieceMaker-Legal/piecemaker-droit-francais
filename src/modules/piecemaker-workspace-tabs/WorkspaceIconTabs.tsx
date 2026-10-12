@@ -1,4 +1,4 @@
-import { Folder, GitBranch, Globe, MessageSquare, MoreVertical, Terminal, type LucideIcon } from 'lucide-react';
+import { Folder, GitBranch, MessageSquare, MoreVertical, type LucideIcon } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +24,11 @@ function pluginMenuIcon(plugin: { name: string; icon: string }) {
   return PluginMenuIcon as unknown as LucideIcon;
 }
 
-export function WorkspaceIconTabs({ activeTab, setActiveTab, shouldShowBrowserTab }: WorkspaceIconTabsProps) {
+function pluginTab<Plugin extends { name: string; displayName: string }>(plugin: Plugin) {
+  return { id: `plugin:${plugin.name}` as AppTab, label: plugin.displayName, icon: null, plugin };
+}
+
+export function WorkspaceIconTabs({ activeTab, setActiveTab }: WorkspaceIconTabsProps) {
   const { t } = useTranslation();
   const { plugins } = usePlugins();
   const openPanels = useOpenWorkspacePanels();
@@ -34,15 +38,9 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab, shouldShowBrowserTa
   const tabs = [
     { id: 'chat' as AppTab, label: t('tabs.chat'), icon: MessageSquare },
     { id: 'files' as AppTab, label: t('tabs.files'), icon: Folder },
+    ...plugins.filter((plugin) => plugin.enabled && plugin.name !== 'piecemaker-library').map(pluginTab),
     { id: 'git' as AppTab, label: t('tabs.git'), icon: GitBranch },
-    ...(shouldShowBrowserTab ? [{ id: 'browser' as AppTab, label: t('tabs.browser'), icon: Globe }] : []),
-    { id: 'shell' as AppTab, label: t('tabs.shell'), icon: Terminal },
-    ...plugins.filter((plugin) => plugin.enabled).map((plugin) => ({
-      id: `plugin:${plugin.name}` as AppTab,
-      label: plugin.displayName,
-      icon: null,
-      plugin,
-    })),
+    ...plugins.filter((plugin) => plugin.enabled && plugin.name === 'piecemaker-library').map(pluginTab),
   ];
 
   useLayoutEffect(() => {
