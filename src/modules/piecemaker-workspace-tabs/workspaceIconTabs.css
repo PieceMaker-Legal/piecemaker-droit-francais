@@ -35,3 +35,22 @@ header.pwa-header-safe div:has(> .piecemaker-workspace-icon-tabs) {
   width: 14px;
   height: 14px;
 }
+
+@media (max-width: 639.98px) {
+  header.pwa-header-safe > div:first-child {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  header.pwa-header-safe > div:first-child > div:first-child {
+    flex: 0 1 auto;
+    max-width: 50%;
+  }
+
+  header.pwa-header-safe > div:first-child > div:has(.piecemaker-workspace-icon-tabs) {
+    flex: 1 1 0;
+    min-width: 4.5rem;
+    margin-inline: 0;
+  }
+}
