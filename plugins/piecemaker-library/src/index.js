@@ -26,6 +26,7 @@ export function mount(container, api) {
     .pm-library .modal-backdrop{position:fixed;inset:0;background:rgb(17 24 39 / .18);display:flex;align-items:center;justify-content:center;z-index:50}
     .pm-library .modal{background:hsl(var(--background, 0 0% 100%));border:1px solid hsl(var(--border));border-radius:1rem;padding:20px;width:min(420px,90vw);display:flex;flex-direction:column;gap:10px;box-shadow:0 18px 50px rgb(15 23 42 / .12)}
     .pm-library .modal h2{margin:0 0 4px;font-size:1.25rem}
+    .pm-library .spinner{display:inline-block;width:14px;height:14px;border:2px solid hsl(var(--border));border-top-color:hsl(var(--foreground));border-radius:50%;animation:pm-spin 800ms linear infinite;vertical-align:-2px}@keyframes pm-spin{to{transform:rotate(360deg)}}
     .pm-library .modal label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
     .pm-library .modal input[type=text],.pm-library .modal textarea{font:inherit;color:inherit;background:transparent;border:1px solid hsl(var(--border));border-radius:.75rem;padding:8px 10px;box-shadow:none}
     .pm-library .modal textarea{min-height:80px;resize:vertical}
@@ -327,7 +328,7 @@ export function mount(container, api) {
     views.setAttribute('role', 'tablist');
     views.setAttribute('aria-label', `Vue des ${pluralName()}`);
     for (const [key, label] of [['mine', `Mes ${pluralName()}`], ['discover', 'Découvrir']]) {
-      const item = button(label, () => { view = key; search = ''; void load(); });
+      const item = button(label, () => { view = key; search = ''; loading = true; render(); void load(); });
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', String(view === key));
       views.append(item);
@@ -356,7 +357,12 @@ export function mount(container, api) {
     content.append(body);
     function renderRows() {
       body.replaceChildren();
-      if (loading) { body.append(element('p', 'Chargement…')); return; }
+      if (loading) {
+        const wait = element('p', undefined, 'meta');
+        wait.append(element('span', undefined, 'spinner'), ' Chargement…');
+        body.append(wait);
+        return;
+      }
       if (view === 'discover') {
         const scopes = element('div', undefined, 'pills');
         const availableScopes = tab === 'connectors'
