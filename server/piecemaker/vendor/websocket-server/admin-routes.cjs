@@ -244,11 +244,10 @@ async function ensureClaudePluginActive({
 // description, marketplace, popularité `installCount`) à côté de la liste
 // des plugins installés (`claude plugin list --json`, avec leur état
 // enabled/disabled). Rien n'est donc inventé ici : la recherche du pop-up
-// filtre côté client cette même liste (voir admin/app.js). Le seul
-// marketplace enregistrable en un clic depuis ce pop-up est le marketplace
-// premier-parti d'Anthropic (`claude-plugins-official`, dépôt
-// anthropics/claude-plugins-official). Tout autre marketplace se déclare via
-// `claude plugin marketplace add` en dehors de ce pop-up.
+// filtre côté client cette même liste (voir admin/app.js). Les
+// marketplaces enregistrables depuis le pop-up et la Bibliothèque sont
+// PieceMaker (Légifrance), Legal, Officiel Anthropic, Mike, plus tout
+// catalogue collé (`owner/repo` ou URL HTTPS) via `claude plugin marketplace add`.
 // -----------------------------------------------------------------------
 const OFFICIAL_MARKETPLACE_NAME = 'claude-plugins-official';
 const OFFICIAL_MARKETPLACE_SLUG = 'anthropics/claude-plugins-official';
@@ -260,16 +259,46 @@ const OFFICIAL_MARKETPLACE_SLUG = 'anthropics/claude-plugins-official';
 // install / enable / disable, scoping par nom de marketplace.
 const LEGAL_MARKETPLACE_NAME = 'claude-for-legal';
 const LEGAL_MARKETPLACE_SLUG = 'anthropics/claude-for-legal';
+const MIKE_MARKETPLACE_NAME = 'mike-workflows';
+const MIKE_MARKETPLACE_SLUG = 'Open-Legal-Products/mike-workflows';
+const GITHUB_MARKETPLACE_SHORTHAND = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:@[A-Za-z0-9._/-]+)?$/;
 
-// Les deux catalogues énumérables depuis le pop-up, indexés par le `scope`
-// que le frontend passe (onglet legal vs officiel). Tout scope inconnu retombe
-// sur l'officiel — le comportement historique.
+// Catalogues énumérables depuis le pop-up / la Bibliothèque, indexés par le
+// `scope` que le frontend passe. Un nom déjà enregistré sur le poste est
+// aussi un scope (catalogue collé).
 const MARKETPLACE_SCOPES = {
   legal: { name: LEGAL_MARKETPLACE_NAME, slug: LEGAL_MARKETPLACE_SLUG },
   official: { name: OFFICIAL_MARKETPLACE_NAME, slug: OFFICIAL_MARKETPLACE_SLUG },
+  piecemaker: { name: 'mcp-legifrance', slug: 'PieceMaker-Legal/mcp-legifrance' },
+  mike: { name: MIKE_MARKETPLACE_NAME, slug: MIKE_MARKETPLACE_SLUG },
 };
-function marketplaceForScope(scope) {
-  return MARKETPLACE_SCOPES[scope] || MARKETPLACE_SCOPES.official;
+function parseMarketplaceSource(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) throw new Error('Lien de marketplace manquant.');
+  const source = raw.trim();
+  if (/\s/.test(source) || source.startsWith('-')) throw new Error('Lien de marketplace invalide.');
+  if (GITHUB_MARKETPLACE_SHORTHAND.test(source)) return source;
+  let url;
+  try { url = new URL(source); } catch { throw new Error('Lien de marketplace invalide.'); }
+  if (url.protocol !== 'https:') throw new Error('Le lien doit être en HTTPS.');
+  if (url.username || url.password) throw new Error('Lien de marketplace invalide.');
+  const host = url.hostname.toLowerCase();
+  const pathname = url.pathname;
+  const isGit = pathname.endsWith('.git')
+    || host === 'github.com'
+    || host.endsWith('.github.com')
+    || host.includes('gitlab')
+    || host.includes('bitbucket');
+  const isManifest = pathname.endsWith('marketplace.json');
+  if (!isGit && !isManifest) {
+    throw new Error('Collez un dépôt GitHub (owner/repo), une URL git HTTPS ou un marketplace.json.');
+  }
+  return source;
+}
+function marketplaceForScope(scope, listed) {
+  if (MARKETPLACE_SCOPES[scope]) return MARKETPLACE_SCOPES[scope];
+  const found = (listed || listRegisteredMarketplaces()).find((entry) => entry.name === scope);
+  if (found) return { name: found.name, slug: found.repo || found.source || found.name };
+  throw new Error('Marketplace inconnue.');
 }
 
 /** Marketplaces Claude Code enregistrées sur ce poste, hors la nôtre. */
@@ -398,24 +427,39 @@ function listMarketplaceConnectors(runCommand = captureCommand, options = {}) {
 }
 
 /**
- * Enregistre (ou rafraîchit s'il l'est déjà) un marketplace Anthropic —
- * bouton « Découvrir le marketplace… » des onglets du pop-up. `marketplace`
- * ({ name, slug }) désigne le catalogue voulu : par défaut le marketplace
- * officiel généraliste, ou celui du scope (legal → claude-for-legal), pour un
- * poste qui n'a encore que le marketplace piecemaker.
+ * Enregistre (ou rafraîchit s'il l'est déjà) un marketplace Claude Code —
+ * bouton « Découvrir… » / « Enregistrer le catalogue », ou un lien collé
+ * (`slug` = owner/repo ou URL HTTPS, `name` alors null). `marketplace`
+ * ({ name, slug }) désigne le catalogue voulu.
  */
 function registerOfficialMarketplace(runCommand = captureCommand, marketplace = MARKETPLACE_SCOPES.official) {
-  const alreadyRegistered = listRegisteredMarketplaces(runCommand)
-    .some((entry) => entry.name === marketplace.name);
-  const action = alreadyRegistered
-    ? runCommand('claude', ['plugin', 'marketplace', 'update', marketplace.name], 8000)
+  const listed = listRegisteredMarketplaces(runCommand);
+  const already = listed.find((entry) =>
+    (marketplace.name && entry.name === marketplace.name)
+    || (marketplace.slug && (entry.repo === marketplace.slug || entry.source === marketplace.slug)),
+  );
+  const action = already
+    ? runCommand('claude', ['plugin', 'marketplace', 'update', already.name], 8000)
     : runCommand('claude', ['plugin', 'marketplace', 'add', marketplace.slug], 15000);
   if (!action.ok) {
-    return { ok: false, alreadyRegistered, reason: action.output || `Échec de l’enregistrement du marketplace « ${marketplace.name} ».` };
+    const label = already?.name || marketplace.name || marketplace.slug;
+    return {
+      ok: false,
+      alreadyRegistered: Boolean(already),
+      name: already?.name || marketplace.name || null,
+      reason: action.output || `Échec de l’enregistrement du marketplace « ${label} ».`,
+    };
   }
-  // Un nouveau marketplace change le catalogue « available » : purger le cache.
   invalidateMarketplaceCache();
-  return { ok: true, alreadyRegistered };
+  const after = already ? listed : listRegisteredMarketplaces(runCommand);
+  const added = already || after.find((entry) =>
+    entry.repo === marketplace.slug || entry.source === marketplace.slug || entry.name === marketplace.name,
+  );
+  return {
+    ok: true,
+    alreadyRegistered: Boolean(already),
+    name: added?.name || marketplace.name || null,
+  };
 }
 
 /**
@@ -1940,10 +1984,10 @@ function createAdminRouter({
     }
   });
 
-  // Onglets marketplace du pop-up : liste les plugins-connecteurs d'un
-  // marketplace Anthropic. `scope=legal` cible claude-for-legal (onglet
-  // « Plugin legal Claude »), `scope=official` (défaut) claude-plugins-official
-  // (onglet « Marketplace officiel »). Voir le commentaire de
+  // Onglets marketplace du pop-up : liste les plugins d'un catalogue.
+  // `scope=mike` cible mike-workflows, `scope=legal` claude-for-legal,
+  // `scope=official` (défaut) claude-plugins-official. Un nom déjà
+  // enregistré sur le poste est aussi un scope. Voir le commentaire de
   // listMarketplaceConnectors pour ce que la CLI expose (aucune recherche
   // distante).
   router.get('/plugin/marketplace', (req, res) => {
@@ -1951,15 +1995,17 @@ function createAdminRouter({
       const marketplace = marketplaceForScope(String(req.query?.scope || 'official'));
       res.json({ scope: req.query?.scope || 'official', marketplaceName: marketplace.name, ...listMarketplaceConnectors(captureCommand, { marketplaceName: marketplace.name }) });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(400).json({ error: error.message });
     }
   });
 
-  // Enregistre (ou rafraîchit) le marketplace du scope quand le poste ne
-  // l'a pas encore — bouton « Découvrir… » dédié dans chaque onglet.
+  // Enregistre (ou rafraîchit) le marketplace du scope, ou un catalogue
+  // collé (`source` = owner/repo ou URL HTTPS).
   router.post('/plugin/marketplace/register', (req, res) => {
     try {
-      const marketplace = marketplaceForScope(String(req.body?.scope || 'official'));
+      const marketplace = req.body?.source
+        ? { name: null, slug: parseMarketplaceSource(req.body.source) }
+        : marketplaceForScope(String(req.body?.scope || 'official'));
       const result = registerOfficialMarketplace(captureCommand, marketplace);
       res.json({ ok: result.ok, ...result });
     } catch (error) {
@@ -2411,6 +2457,7 @@ module.exports = {
   listMarketplaceConnectors,
   listPluginComponents,
   listRegisteredMarketplaces,
+  parseMarketplaceSource,
   listSkillAssets,
   managedFileKind,
   normalizeAgentModel,

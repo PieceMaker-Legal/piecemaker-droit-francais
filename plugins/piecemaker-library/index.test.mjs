@@ -86,7 +86,7 @@ test('connectors, skills, plugins and agents have separate tabs', async (t) => {
   });
   await settle();
   const libraryTabs = container.querySelector('[role=tablist][aria-label="Bibliothèque"]');
-  assert.deepEqual([...libraryTabs.querySelectorAll('[role=tab]')].map((button) => button.textContent), ['Connecteurs', 'Skills', 'Plugins', 'Agents']);
+  assert.deepEqual([...libraryTabs.querySelectorAll('[role=tab]')].map((button) => button.textContent), ['Connecteurs', 'Skills', 'Plugins', 'Agents', 'Analyses tabulaires']);
   [...libraryTabs.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Connecteurs').click();
   await settle();
   assert.match(container.textContent, /registre-public/);
@@ -181,6 +181,62 @@ test('each section switches between personal items and its filtered marketplace'
   await settle();
   assert.match(container.textContent, /MCP Légifrance/);
   assert.equal(calls.some(([, path]) => path.includes('scope=piecemaker&kind=connector')), true);
+});
+
+test('Découvrir lists Mike and accepts a pasted marketplace link', async (t) => {
+  const calls = [];
+  const { container } = fixture(t, async (method, path, body) => {
+    calls.push([method, path, body]);
+    if (path.startsWith('/catalog?')) return { entries: [] };
+    if (path.startsWith('/plugin/marketplace/register')) return { ok: true, name: 'acme-plugins' };
+    if (path.startsWith('/plugin/marketplace?')) {
+      return { registered: true, plugins: [], marketplaces: path.includes('scope=acme-plugins') ? [{ name: 'acme-plugins', repo: 'acme/plugins', source: null, official: false }] : [] };
+    }
+    return { plugins: [] };
+  });
+  await settle();
+  const views = container.querySelector('[role=tablist][aria-label="Vue des skills"]');
+  views.querySelector('[role=tab]:last-child').click();
+  await settle();
+  const scopeLabels = [...container.querySelectorAll('[role=tablist]')[1] ? [] : [], ...container.querySelectorAll('button')].map((button) => button.textContent);
+  assert.equal(scopeLabels.includes('Mike'), true);
+  const paste = container.querySelector('input[aria-label="Lien de marketplace"]');
+  assert.ok(paste);
+  paste.value = 'acme/plugins';
+  paste.dispatchEvent(new window.Event('input', { bubbles: true }));
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Ajouter le catalogue').click();
+  await settle();
+  await settle();
+  assert.ok(calls.some((entry) => entry[0] === 'POST' && entry[1] === '/plugin/marketplace/register' && entry[2]?.source === 'acme/plugins'));
+  assert.equal([...container.querySelectorAll('button')].some((button) => button.textContent === 'acme-plugins'), true);
+});
+
+test('Analyses tabulaires lists library templates and adds Mike tabular reviews', async (t) => {
+  const calls = [];
+  let templates = [];
+  const { container } = fixture(t, async (method, path, body) => {
+    calls.push([method, path, body]);
+    if (path.startsWith('/catalog?')) return { entries: [] };
+    if (path === '/tabular') return { templates };
+    if (path.startsWith('/plugin/marketplace?')) return { registered: true, plugins: [{ id: 'bail-exemple@mike-workflows', name: 'Revue de bail exemple', description: 'Bail', installed: false }] };
+    if (path === '/plugin/marketplace/acquire') { templates = [{ id: 'mike-bail-exemple', name: 'Revue de bail exemple', description: 'Bail', columns: [{}, {}] }]; return { ok: true }; }
+    return { ok: true };
+  });
+  await settle();
+  [...container.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Analyses tabulaires').click();
+  await settle();
+  assert.match(container.textContent, /Aucune analyse tabulaire/);
+  [...container.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Découvrir').click();
+  await settle();
+  assert.ok(calls.some((entry) => entry[1] === '/plugin/marketplace?scope=mike&kind=tabular'));
+  assert.equal(container.querySelector('input[aria-label="Lien de marketplace"]'), null);
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Ajouter').click();
+  await settle();
+  assert.deepEqual(calls.find((entry) => entry[1] === '/plugin/marketplace/acquire')[2], { id: 'bail-exemple@mike-workflows', scope: 'mike', kind: 'tabular' });
+  [...container.querySelectorAll('[role=tab]')].find((button) => button.textContent === 'Mes analyses tabulaires').click();
+  await settle();
+  assert.match(container.textContent, /Revue de bail exemple/);
+  assert.match(container.textContent, /2 question\(s\)/);
 });
 
 test('Découvrir opens at once with a spinner while the marketplace loads', async (t) => {
