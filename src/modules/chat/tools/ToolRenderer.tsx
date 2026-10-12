@@ -17,6 +17,8 @@ import { PlanDisplay } from '@/modules/chat/tools/PlanDisplay';
 import { ToolStatusBadge } from '@/modules/chat/tools/ToolStatusBadge';
 import { DiffStatsBadge } from '@/modules/chat/tools/DiffStatsBadge';
 import { parseToolPayload, summarizeDiff } from '@/modules/chat/utils/messageTransforms';
+import { PlanCard } from '@/piecemaker/chat/PlanCard';
+import { planCall } from '@/piecemaker/editor-tabs/planCalls';
 
 type ToolRendererProps = {
   toolName: string;
@@ -112,6 +114,9 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
       onFileOpen(value);
     }
   }, [displayConfig, parsedData, onFileOpen]);
+
+  const plan = planCall(toolName, toolInput);
+  if (plan) return mode === 'input' ? <PlanCard plan={plan} toolId={toolId} /> : null;
 
   if (!displayConfig) return null;
 

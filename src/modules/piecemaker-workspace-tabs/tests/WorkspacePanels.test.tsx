@@ -1,18 +1,29 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import type { ComponentProps } from 'react';
 import { expect, it, vi } from 'vitest';
 
 import { withWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';
-import type { AppTab, Project } from '@/shared/types';
+import type { AppTab, Project, ServerEvent } from '@/shared/types';
+
+const socket = vi.hoisted(() => ({ listeners: new Set<(event: ServerEvent) => void>() }));
 
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspaceViewer', () => ({ WorkspaceViewer: vi.fn() }));
+vi.mock('@/shared/context/WebSocketContext', () => ({
+  useWebSocket: () => ({
+    subscribe: (listener: (event: ServerEvent) => void) => {
+      socket.listeners.add(listener);
+      return () => socket.listeners.delete(listener);
+    },
+  }),
+}));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@/modules/plugins', () => ({
   usePlugins: () => ({ plugins: [
     { name: 'example', displayName: 'Exemple', enabled: true },
     { name: 'other', displayName: 'Autre', enabled: true },
+    { name: 'piecemaker-dossier', displayName: 'Dossier', enabled: true },
   ] }),
   PluginTabContent: ({ pluginName }: { pluginName: string }) => <input aria-label={`Contenu ${pluginName}`} />,
 }));
@@ -64,6 +75,20 @@ it('agrandit puis restaure une card sans perdre son contenu ni les autres volets
   expect(screen.getByTestId('main').closest('[hidden]')).toBeNull();
   expect((screen.getByLabelText('Contenu example') as HTMLInputElement).value).toBe('Brouillon fictif');
   expect(screen.getByText('Fichiers du dossier').closest('[hidden]')).toBeNull();
+});
+
+it('ouvre le volet Dossier sur la chronologie quand le LLM appelle l’outil chronologie', () => {
+  render(<Harness />);
+  const viewRequests: unknown[] = [];
+  const recordView = () => viewRequests.push((window as unknown as Record<string, unknown>).__piecemakerDossierView);
+  window.addEventListener('piecemaker:dossier-view', recordView);
+  act(() => {
+    for (const listener of socket.listeners) listener({ kind: 'tool_use', toolId: 'outil-1', toolName: 'mcp__piecemaker__chronologie', toolInput: { action: 'lister' } });
+  });
+  window.removeEventListener('piecemaker:dossier-view', recordView);
+  expect(screen.getByLabelText('Contenu piecemaker-dossier')).toBeTruthy();
+  expect(screen.getByTestId('main').textContent).toBe('chat');
+  expect(viewRequests).toEqual(['chronology']);
 });
 
 it('permet de redimensionner le dock au clavier', () => {

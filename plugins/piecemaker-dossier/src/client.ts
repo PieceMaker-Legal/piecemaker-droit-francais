@@ -25,9 +25,18 @@ type PluginApi = {
 
 const PANEL_FOCUS_EVENT = 'piecemaker:panel-focus';
 const KNOWLEDGE_SCAN_EVENT = 'piecemaker:knowledge-scan-job';
+const VIEW_EVENT = 'piecemaker:dossier-view';
+const VIEW_KEY = '__piecemakerDossierView';
 const SCAN_POLL_INTERVAL_MS = 1000;
 const VERSION_POLL_INTERVAL_MS = 5000;
 const viewCache = new Map<string, ViewData>();
+
+function takeRequestedView(): Tab | null {
+  const pending = window as Window & { [VIEW_KEY]?: unknown };
+  const view = pending[VIEW_KEY];
+  delete pending[VIEW_KEY];
+  return view === 'general' || view === 'chronology' ? view : null;
+}
 
 export function mount(container: HTMLElement, api: PluginApi): void {
   const style = document.createElement('style');
@@ -37,7 +46,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   root.style.position = 'relative';
   container.replaceChildren(style, root);
   let context = api.context;
-  let active: Tab = 'general';
+  let active: Tab = takeRequestedView() ?? 'general';
   let data: ViewData | null = null;
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
@@ -612,6 +621,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     void load();
   };
   const versionTimer = window.setInterval(() => void refreshWhenChanged(), VERSION_POLL_INTERVAL_MS);
+  const showRequestedView = () => {
+    const view = takeRequestedView();
+    if (!view) return;
+    active = view;
+    render();
+  };
+  window.addEventListener(VIEW_EVENT, showRequestedView);
 
   render();
   void load();
@@ -635,6 +651,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     unsubscribe();
     compactWorkspace.removeEventListener('change', syncTiersWithWorkspaceWidth);
     window.clearInterval(versionTimer);
+    window.removeEventListener(VIEW_EVENT, showRequestedView);
   };
 }
 
