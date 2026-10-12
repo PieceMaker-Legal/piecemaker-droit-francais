@@ -21,6 +21,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import { runSql } from '../../installer/lib/conversion-client.mjs';
+import { describeOpenPanels } from './volets-ouverts.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
@@ -166,6 +167,20 @@ export function createServer({ execFn, sqlFn = runSql } = {}) {
       return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
     }
   });
+
+  server.registerTool('volets_ouverts', {
+    description: 'Volets de PieceMaker ouverts par l’avocat à côté du chat : outils (Fichiers, Dossier et sa chronologie, '
+      + 'Analyse tabulaire et le tableau affiché, Bibliothèque, Bordereau…), document affiché et dernier volet ouvert. '
+      + 'À appeler quand l’avocat parle de « ce tableau », « ce document », « ici » sans préciser.',
+    inputSchema: {},
+    annotations: {
+      title: 'Volets ouverts',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  }, async () => ({ content: [{ type: 'text', text: describeOpenPanels() }] }));
 
   return server;
 }

@@ -23,6 +23,7 @@ type PluginApi = {
   openFileInEditor(filePath: string): void;
 };
 
+const PANEL_FOCUS_EVENT = 'piecemaker:panel-focus';
 const KNOWLEDGE_SCAN_EVENT = 'piecemaker:knowledge-scan-job';
 const SCAN_POLL_INTERVAL_MS = 1000;
 const VERSION_POLL_INTERVAL_MS = 5000;
@@ -321,6 +322,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   };
 
   const paintContent = () => {
+    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', view: active } }));
     const content = root.querySelector<HTMLElement>('[data-content]');
     if (!content) return;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';

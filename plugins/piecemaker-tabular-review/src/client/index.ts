@@ -1,5 +1,5 @@
 import type { Draft, Template } from '../shared.js';
-import { OPEN_EVENT, PENDING_SHOW_KEY, PENDING_TARGET_KEY, SHOW_EVENT } from '../shared.js';
+import { OPEN_EVENT, PANEL_FOCUS_EVENT, PENDING_SHOW_KEY, PENDING_TARGET_KEY, REVIEW_FOLDER, SHOW_EVENT } from '../shared.js';
 import type { App, View } from './app.js';
 import { basename, errorMessage, escapeHtml, openModal, toast } from './dom.js';
 import { createHistoryView } from './history.js';
@@ -117,9 +117,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     },
     openReview(project, file) {
       showPage(createReviewView(app, project, file, backToHistory));
+      focusTable(`${project}/${REVIEW_FOLDER}/${file}`);
     },
     openDraft(draft) {
       showPage(createLaunchView(app, draft, backToHistory));
+      focusTable(null);
     },
     newTable(preferred = null) {
       void askNewTable(preferred);
@@ -143,6 +145,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   function backToHistory() {
     closeReview();
     showTab('history');
+    focusTable(null);
+  }
+
+  function focusTable(file: string | null) {
+    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-tabular-review', file } }));
   }
 
   function showPage(view: View) {
