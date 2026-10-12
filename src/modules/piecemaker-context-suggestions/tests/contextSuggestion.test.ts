@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { PANEL_FOCUS_EVENT, readWorkspaceContext, setActiveDocument, syncPanels } from '@/modules/piecemaker-context-suggestions/contextStore';
-import { suggestQuestion } from '@/modules/piecemaker-context-suggestions/suggestion';
+import { suggestQuestions } from '@/modules/piecemaker-context-suggestions/suggestion';
 
 const PROJECT = '/dossiers/Dupont';
 let reset = 0;
-const question = () => suggestQuestion(readWorkspaceContext());
+const question = () => suggestQuestions(readWorkspaceContext())[0] ?? null;
 const focus = (detail: Record<string, unknown>) => window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail }));
 
 function start() {
@@ -30,7 +30,7 @@ describe('question proposée selon le dernier volet ouvert', () => {
     syncPanels(PROJECT, ['files']);
     expect(question()).toBeNull();
     syncPanels(PROJECT, ['files', 'plugin:piecemaker-library']);
-    expect(question()).toBe('Écris une nouvelle skill pour ');
+    expect(suggestQuestions(readWorkspaceContext())).toEqual(['Écris une nouvelle skill pour ', 'Analyse les sessions passées et liste les skills qui pourraient être rédigés.']);
   });
 
   it('cible le document ouvert avec @', () => {
