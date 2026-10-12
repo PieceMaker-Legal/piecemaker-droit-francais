@@ -101,6 +101,10 @@ test('Mike workflows are cloned, listed as skills and tabular reviews, and added
 
     assert.deepEqual((await call('DELETE', '/tabular/mike-bail-exemple-tabular-review')).templates, []);
 
+    fs.writeFileSync(path.join(userHome, '.piecemaker', 'tabular-review', 'templates.json'), JSON.stringify({ templates: [{ id: 'perso', name: 'Analyse de contrat', columns: [{ name: 'Parties' }] }] }));
+    const own = (await call('GET', '/tabular')).templates;
+    assert.deepEqual(own.map((template: { id: string; own?: boolean }) => [template.id, template.own]), [['perso', true]]);
+
     assert.equal((await call('POST', '/plugin/marketplace/register', { scope: 'mike' })).ok, true);
     assert.deepEqual(calls.at(-1)?.slice(0, 4), ['git', '-C', path.join(store.directory, 'mike-workflows'), 'pull']);
   });
