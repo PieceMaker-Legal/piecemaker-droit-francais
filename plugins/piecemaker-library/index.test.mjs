@@ -183,6 +183,25 @@ test('each section switches between personal items and its filtered marketplace'
   assert.equal(calls.some(([, path]) => path.includes('scope=piecemaker&kind=connector')), true);
 });
 
+test('Découvrir opens at once with a spinner while the marketplace loads', async (t) => {
+  let release;
+  const { container } = fixture(t, async (method, path) => {
+    if (path.startsWith('/catalog?')) return { entries: [{ id: 'abc', name: 'Relire', description: '', kind: 'skill', enabled: false }] };
+    if (path.startsWith('/plugin/marketplace?')) await new Promise((resolve) => { release = resolve; });
+    return { registered: true, plugins: [], marketplaces: [] };
+  });
+  await settle();
+  container.querySelector('[role=tablist][aria-label="Vue des skills"] [role=tab]:last-child').click();
+  assert.equal(container.querySelector('[role=tablist][aria-label="Vue des skills"] [role=tab]:last-child').getAttribute('aria-selected'), 'true');
+  assert.ok(container.querySelector('.spinner'));
+  assert.match(container.textContent, /Chargement…/);
+  assert.doesNotMatch(container.textContent, /Relire/);
+  release();
+  await settle();
+  assert.equal(container.querySelector('.spinner'), null);
+  assert.match(container.textContent, /Aucun skills dans ce catalogue/);
+});
+
 test('a skill action menu permanently deletes it from the library', async (t) => {
   const calls = [];
   let deleted = false;
