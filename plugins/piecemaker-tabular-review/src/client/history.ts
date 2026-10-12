@@ -26,11 +26,14 @@ export function createHistoryView(app: App): View {
       <select class="ptr-select ptr-toolbar-select" data-filter aria-label="Dossier"><option value="">Tous les dossiers</option></select>
       <select class="ptr-select ptr-toolbar-select" data-category aria-label="Catégorie"><option value="">Toutes les catégories</option></select>
       <button type="button" class="ptr-icon-button" data-refresh aria-label="Actualiser" title="Actualiser">↻</button>
+    </div>
+    <div data-list><div class="ptr-empty"><span class="ptr-spinner"></span> Chargement…</div></div>
+    <div class="ptr-home-bar">
+      <button type="button" class="ptr-button" data-templates>Modèles</button>
       <span class="ptr-spacer"></span>
       <button type="button" class="ptr-button" data-new-research>+ Nouvelle recherche</button>
       <button type="button" class="ptr-button ptr-button-primary" data-new-table>+ Nouvelle analyse</button>
-    </div>
-    <div data-list><div class="ptr-empty"><span class="ptr-spinner"></span> Chargement…</div></div>`;
+    </div>`;
   const filter = element.querySelector<HTMLSelectElement>('[data-filter]')!;
   const categoryFilter = element.querySelector<HTMLSelectElement>('[data-category]')!;
   const list = element.querySelector<HTMLElement>('[data-list]')!;
@@ -152,6 +155,7 @@ export function createHistoryView(app: App): View {
       sort = nextSort(sort, sortKey);
       render();
     } else if (target.closest('[data-new-table]')) app.newTable(filter.value || null);
+    else if (target.closest('[data-templates]')) app.showTemplates();
     else if (target.closest('[data-new-research]')) app.newResearch(filter.value || null);
     else if (target.closest('[data-refresh]')) void load();
     else if (target.closest('[data-delete]')) void remove(target);
