@@ -115,9 +115,30 @@ export function readLibraryTabularTemplates(directory: string) {
   return templates.sort((left, right) => String(left.name).localeCompare(String(right.name)));
 }
 
+export function readOwnTabularTemplates(file: string) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return (Array.isArray(parsed?.templates) ? parsed.templates : [])
+      .filter((template: { id?: unknown }) => typeof template?.id === 'string')
+      .map((template: { id: string; name?: unknown; description?: unknown; columns?: unknown }) => ({
+        id: template.id,
+        name: String(template.name ?? template.id),
+        description: String(template.description ?? ''),
+        columns: Array.isArray(template.columns) ? template.columns : [],
+        own: true,
+      }));
+  } catch { return []; }
+}
+
 export function createMikeRouter(store: ReturnType<typeof createLibraryStore>, userHome: string, run: RunCommand = defaultRun) {
   const repository = path.join(store.directory, MIKE_MARKETPLACE);
   const tabularDirectory = path.join(userHome, '.piecemaker', 'tabular-review', 'library');
+  const ownTabularFile = path.join(userHome, '.piecemaker', 'tabular-review', 'templates.json');
+  const allTabularTemplates = () => {
+    const own = readOwnTabularTemplates(ownTabularFile);
+    const ids = new Set(own.map((template: { id: string }) => template.id));
+    return [...own, ...readLibraryTabularTemplates(tabularDirectory).filter((template) => !ids.has(template.id))];
+  };
   const router = express.Router();
   const registered = () => isDirectory(path.join(repository, '.git'));
   const importedSkillSources = () => new Set(store.list().flatMap((entry) => entry.sources));
@@ -180,7 +201,7 @@ export function createMikeRouter(store: ReturnType<typeof createLibraryStore>, u
   });
 
   router.get('/tabular', (_req, res) => {
-    try { res.json({ templates: readLibraryTabularTemplates(tabularDirectory) }); }
+    try { res.json({ templates: allTabularTemplates() }); }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
 
@@ -189,7 +210,7 @@ export function createMikeRouter(store: ReturnType<typeof createLibraryStore>, u
     if (!/^[\w-]{1,80}$/.test(id)) { res.status(400).json({ error: 'Modèle invalide.' }); return; }
     try {
       fs.rmSync(path.join(tabularDirectory, `${id}.json`), { force: true });
-      res.json({ templates: readLibraryTabularTemplates(tabularDirectory) });
+      res.json({ templates: allTabularTemplates() });
     } catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
 
