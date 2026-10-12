@@ -234,6 +234,11 @@ function mapPermissionModeToCodexOptions(permissionMode: string): Pick<ThreadOpt
         sandboxMode: 'workspace-write',
         approvalPolicy: 'never'
       };
+    case 'plan':
+      return {
+        sandboxMode: 'read-only',
+        approvalPolicy: 'never'
+      };
     case 'bypassPermissions':
       return {
         sandboxMode: 'danger-full-access',

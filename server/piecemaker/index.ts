@@ -11,6 +11,7 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
+import { installCodexPlanRuntime } from './codex-plan.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
@@ -70,6 +71,7 @@ const { createAnonymizerService } = createRequire(import.meta.url)(path.join(app
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
+installCodexPlanRuntime(providerRuntimeService);
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory });
 const library = await openLibrary(piecemakerHome(), applicationRoot, () => projectsDb.getProjectPaths().map((row) => row.project_path));
 installLibrarySkillVisibility(providerSkillsService, library.store);
