@@ -9,6 +9,7 @@ import { resolveFileRef } from '@/piecemaker/chat/fileRef';
 import { CitationPanel } from '@/piecemaker/citations/CitationPanel';
 import { FileDocumentEditor } from '@/piecemaker/editor-tabs/FileDocumentEditor';
 import { IdentityTab } from '@/piecemaker/editor-tabs/IdentityTab';
+import { PlanTab } from '@/piecemaker/editor-tabs/PlanTab';
 import { parseEditorPanel } from '@/piecemaker/editor-tabs/editorPanels';
 import type { CodeEditorFile } from '@/shared/types';
 
@@ -16,12 +17,13 @@ type CodeEditorProps = ComponentProps<typeof CodeEditor> & { tabsTarget?: HTMLEl
 
 const LIBRARY_PROJECT_PREFIX = 'piecemaker-library:';
 
-const tabKey = (file: CodeEditorFile) => `${file.projectId ?? ''}\u0000${file.path}`;
+const tabKey =(file: CodeEditorFile) => `${file.projectId ?? ''}\u0000${file.path}`;
 
 function tabLabel(file: CodeEditorFile) {
   const panel = parseEditorPanel(file.path);
   if (panel?.kind === 'citation') return panel.label || 'Citation';
   if (panel?.kind === 'identity') return panel.text;
+  if (panel?.kind === 'plan') return 'Plan';
   return file.name;
 }
 
@@ -68,7 +70,9 @@ function TabContent({ props, file, onClose }: { props: CodeEditorProps; file: Co
   if (!panel) return <ResolvedCodeEditor props={props} file={file} onClose={onClose} />;
   const content = panel.kind === 'citation'
     ? <CitationPanel token={panel.token} onClose={onClose} />
-    : <IdentityTab mode={panel.mode} text={panel.text} onClose={onClose} />;
+    : panel.kind === 'plan'
+      ? <PlanTab id={panel.id} />
+      : <IdentityTab mode={panel.mode} text={panel.text} onClose={onClose} />;
   return props.isSidebar ? content : <div className="fixed inset-0 z-[9999] bg-background">{content}</div>;
 }
 

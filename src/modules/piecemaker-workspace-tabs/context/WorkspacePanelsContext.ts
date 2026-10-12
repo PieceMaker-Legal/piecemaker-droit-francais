@@ -7,3 +7,9 @@ export const WorkspacePanelsContext = createContext<readonly AppTab[] | null>(nu
 export function useOpenWorkspacePanels() {
   return useContext(WorkspacePanelsContext);
 }
+
+export const CloseWorkspacePanelContext = createContext<((tab: AppTab) => void) | null>(null);
+
+export function useCloseWorkspacePanel() {
+  return useContext(CloseWorkspacePanelContext);
+}

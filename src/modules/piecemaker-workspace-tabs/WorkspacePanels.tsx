@@ -9,8 +9,9 @@ import { PluginTabContent, usePlugins } from '@/modules/plugins';
 import { WorkspaceColumnSeparator } from '@/modules/piecemaker-workspace-tabs/WorkspaceColumnSeparator';
 import { WorkspaceFilesPanel } from '@/modules/piecemaker-workspace-tabs/WorkspaceFilesPanel';
 import type { WorkspaceFilesSlots } from '@/modules/piecemaker-workspace-tabs/WorkspaceFilesPanel';
-import { WorkspacePanelsContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
+import { CloseWorkspacePanelContext, WorkspacePanelsContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
 import { WorkspaceViewerContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspaceViewerContext';
+import { useAutoPanel } from '@/modules/piecemaker-workspace-tabs/useAutoPanel';
 import { openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 import type { AppTab, Project, ProjectSession, SettingsMainTab } from '@/shared/types';
 import { Card } from '@/shared/ui';
@@ -64,10 +65,10 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       setViewerOpen(open);
       if (!open) setExpanded((current) => current === 'viewer' ? null : current);
     }, []);
-    const toggleViewerExpand = useCallback(() => setExpanded((current) => current === 'viewer' ? null : 'viewer'), []);
     useEffect(() => {
       if (viewerOpen && props.isMobile) setExpanded(filesHost ? 'files' : 'viewer');
     }, [viewerOpen, props.isMobile, filesHost]);
+    const toggleViewerExpand = useCallback(() => setExpanded((current) => current === 'viewer' ? null : 'viewer'), []);
     const toggleFilesExpand = useCallback(() => setExpanded((current) => current === 'files' ? null : 'files'), []);
     const bindViewerColumn = useCallback((element: HTMLDivElement | null) => {
       if (element) columnRefs.current.set('viewer', element);
@@ -88,6 +89,8 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
         });
       }
     }, []);
+
+    useAutoPanel(props.selectedSession?.id ?? null, props.selectedProject?.fullPath ?? null, open);
 
     useEffect(() => {
       setColumns([]);
@@ -156,6 +159,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       <WorkspaceViewerContext.Provider value={filesHost ? { target: filesHost.viewer, tabsTarget: filesHost.tabs, register: registerViewer, expanded: expandedTab === 'files', toggleExpand: toggleFilesExpand }
         : { target: viewerTarget, tabsTarget: null, register: registerViewer, expanded: expandedTab === 'viewer', toggleExpand: toggleViewerExpand }}>
       <WorkspacePanelsContext.Provider value={enabledPanels}>
+      <CloseWorkspacePanelContext.Provider value={close}>
         <div ref={containerRef} className="piecemaker-workspace-panels">
           <div className="piecemaker-workspace-primary" hidden={Boolean(expandedTab)}>
             <Workspace {...props} activeTab={mainTab} setActiveTab={select} />
@@ -205,6 +209,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
             </aside>
           </>}
         </div>
+      </CloseWorkspacePanelContext.Provider>
       </WorkspacePanelsContext.Provider>
       </WorkspaceViewerContext.Provider>
     );

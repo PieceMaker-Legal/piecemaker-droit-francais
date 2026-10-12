@@ -20,6 +20,7 @@ vi.mock('@/shared/api', async (importOriginal) => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+  initReactI18next: { type: '3rdParty', init: () => undefined },
 }));
 
 const settle = () => act(async () => {
