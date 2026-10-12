@@ -9,10 +9,10 @@ type VibeModelPreset = {
 };
 
 export const VIBE_MODEL_PRESETS: readonly VibeModelPreset[] = [
-  { name: 'mistral-vibe-cli-latest', provider: 'mistral', alias: 'mistral-medium-3.5', display_name: 'Mistral Medium 3.5', adjustableReasoning: true },
   { name: 'mistral-large-4', provider: 'mistral', alias: 'mistral-large-4', display_name: 'Mistral Large 4', adjustableReasoning: true },
   { name: 'zai-glm-5-3', provider: 'mistral', alias: 'glm-5.3', display_name: 'Z.ai GLM 5.3', adjustableReasoning: false },
   { name: 'zai-glm-5-2', provider: 'mistral', alias: 'glm-5.2', display_name: 'Z.ai GLM 5.2', adjustableReasoning: false },
+  { name: 'mistral-vibe-cli-latest', provider: 'mistral', alias: 'mistral-medium-3.5', display_name: 'Mistral Medium 3.5', adjustableReasoning: true },
 ];
 
 export const VIBE_REASONING_EFFORT: NonNullable<ProviderModelOption['effort']> = {
