@@ -1,12 +1,13 @@
-import { Folder, GitBranch, MessageSquare, MoreVertical, type LucideIcon } from 'lucide-react';
+import { Folder, GitBranch, MessageSquare, type LucideIcon } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PluginIcon, usePlugins } from '@/modules/plugins';
 import { useOpenWorkspacePanels } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
+import { WorkspaceMoreMenu } from '@/modules/piecemaker-workspace-tabs/WorkspaceMoreMenu';
 import type { AppTab } from '@/shared/types';
-import { ActionMenu, Pill, PillBar, Tooltip } from '@/shared/ui';
+import { Pill, PillBar, Tooltip } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 import '@/modules/piecemaker-workspace-tabs/workspaceIconTabs.css';
 
@@ -54,7 +55,7 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab }: WorkspaceIconTabs
   }, []);
 
   const capacity = Math.max(0, Math.floor((availableWidth - 8 + 2) / 36));
-  const visibleCount = capacity >= tabs.length ? tabs.length : Math.max(0, capacity - 1);
+  const visibleCount = Math.min(tabs.length, Math.max(0, capacity - 1));
   const visibleTabs = tabs.slice(0, visibleCount);
   const active = tabs.find((tab) => tab.id === activeTab);
   if (active && visibleCount > 0 && !visibleTabs.includes(active)) visibleTabs[visibleCount - 1] = active;
@@ -91,18 +92,10 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab }: WorkspaceIconTabs
             </Pill>
           </Tooltip>
         ))}
-        {overflowTabs.length > 0 && (
-          <ActionMenu
-            label={t('tabs.more', { defaultValue: 'Autres onglets' })}
-            icon={MoreVertical}
-            iconOnly
-            portal
-            variant="ghost"
-            size="icon"
-            triggerClassName="piecemaker-workspace-icon-tab"
-            items={overflowTabs.map((tab) => ({ key: tab.id, label: tab.label, icon: 'plugin' in tab ? pluginMenuIcon(tab.plugin) : tab.icon ?? undefined, onSelect: () => setActiveTab(tab.id) }))}
-          />
-        )}
+        <WorkspaceMoreMenu
+          triggerClassName="piecemaker-workspace-icon-tab"
+          items={overflowTabs.map((tab) => ({ key: tab.id, label: tab.label, icon: 'plugin' in tab ? pluginMenuIcon(tab.plugin) : tab.icon ?? undefined, onSelect: () => setActiveTab(tab.id) }))}
+        />
       </PillBar>
     </div>
   );

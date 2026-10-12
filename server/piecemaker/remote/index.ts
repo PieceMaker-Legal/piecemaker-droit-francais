@@ -5,6 +5,7 @@ import { getApplicationDataRoot } from '@/shared/utils.js';
 
 import { startGateway } from './gateway.js';
 import { createKeepAwake } from './keep-awake.js';
+import { createKeepAwakeRouter } from './keep-awake-router.js';
 import { createRemoteAccess, createRemoteRouter } from './remote-access.js';
 import { createTailscale } from './tailscale.js';
 
@@ -19,5 +20,7 @@ export function startRemoteAccess(applicationRoot: string) {
     startGateway,
   });
   void remote.resume();
-  return createRemoteRouter(remote);
+  const router = createRemoteRouter(remote);
+  router.use(createKeepAwakeRouter(createKeepAwake()));
+  return router;
 }
