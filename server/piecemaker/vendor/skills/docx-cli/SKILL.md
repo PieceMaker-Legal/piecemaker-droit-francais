@@ -62,6 +62,17 @@ Then `docx <command> --help` for any verb before you use it.
 
 ## 3. Golden workflows
 
+### Default: write in tracked changes
+When you modify an **existing** `.docx` (fill, replace, edit, delete, restyle a
+clause), write in tracked changes unless the user explicitly asks otherwise.
+Turn tracking on first so every edit is visible to the reviewer:
+```sh
+docx track-changes contract.docx on
+```
+Only skip tracking when the user explicitly requests a clean, untracked result
+(for example "version propre", "sans suivi des modifications"). Newly created
+documents (`docx create`) have nothing to track and are not affected.
+
 ### Fill out a form or contract (keeps formatting)
 `docx replace` swaps only the text and preserves the run's bold/font and any tab
 stops — so it fills bold, tabbed template lines without rebuilding runs.
