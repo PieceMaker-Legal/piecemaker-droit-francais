@@ -20,6 +20,8 @@
   width: 240px !important;
   background-color: var(--doc-bg) !important;
   border-right: 1px solid hsl(var(--border));
+  transform: none !important;
+  transition: none !important;
 }
 
 .piecemaker-docx-viewer .docx-outline-nav > div:first-child > button {
