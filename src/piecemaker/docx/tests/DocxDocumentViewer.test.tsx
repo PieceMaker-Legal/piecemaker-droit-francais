@@ -15,12 +15,25 @@ vi.mock('@/shared/context/ThemeContext', () => ({
   useTheme: () => ({ isDarkMode: false }),
 }));
 
+vi.mock('@/modules/auth', () => ({
+  useAuth: () => ({ user: { username: 'Jean Dupont' } }),
+}));
+
 vi.mock('@eigenpal/docx-editor-react', async () => {
   const React = await import('react');
   return {
-    DocxEditor: React.forwardRef<{ save: () => Promise<ArrayBuffer> }, { documentName: string; onChange: () => void }>((props, ref) => {
+    DocxEditor: React.forwardRef<
+      { save: () => Promise<ArrayBuffer> },
+      { documentName: string; onChange: () => void; onCommentsChange: (comments: { id: number; parentId?: number }[]) => void; renderLogo: () => React.ReactNode }
+    >((props, ref) => {
       React.useImperativeHandle(ref, () => ({ save: async () => new Uint8Array([1, 2, 3]).buffer }));
-      return <button type="button" onClick={props.onChange}>{props.documentName}</button>;
+      return (
+        <>
+          {props.renderLogo()}
+          <button type="button" onClick={props.onChange}>{props.documentName}</button>
+          <button type="button" onClick={() => props.onCommentsChange([{ id: 1 }, { id: 2 }, { id: 3, parentId: 1 }])}>emit-comments</button>
+        </>
+      );
     }),
   };
 });
@@ -72,4 +85,16 @@ test('keeps a literal percent sequence when that file exists', async () => {
   await screen.findByRole('button', { name: 'report%20draft.docx' });
   assert.equal(vi.mocked(authenticatedFetch).mock.calls.length, 1);
   assert.deepEqual(vi.mocked(api.readFileBlob).mock.calls[0], ['project-1', filePath]);
+});
+
+test('shows the number of comment threads on the closed comments button', async () => {
+  vi.mocked(authenticatedFetch).mockResolvedValue(new Response(JSON.stringify({ version: 1 }), { status: 200 }));
+
+  render(<DocxDocumentViewer file={{ name: 'note.docx', path: '/case/note.docx' }} projectId="project-1" isSidebar onClose={() => undefined} />);
+
+  const commentsButton = await screen.findByRole('button', { name: 'Commentaires' });
+  fireEvent.click(screen.getByRole('button', { name: 'emit-comments' }));
+
+  assert.equal(commentsButton.textContent, '2');
+  assert.equal(commentsButton.getAttribute('aria-pressed'), 'false');
 });

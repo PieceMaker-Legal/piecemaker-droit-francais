@@ -45,6 +45,10 @@ function alignNewCommentCard(container: HTMLElement, zoomAtClick: number) {
   card.dataset.alignedTop = card.style.top;
 }
 
+function countThreads(comments: { parentId?: number | null }[]) {
+  return comments.filter((comment) => comment.parentId == null).length;
+}
+
 function decodeDocumentPath(filePath: string): string {
   try {
     return decodeURIComponent(filePath);
@@ -69,6 +73,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const [error, setError] = useState<string | null>(null);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
 
   const fetchVersion = useCallback(async () => {
     const requestVersion = (filePath: string) => {
@@ -153,6 +158,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     const resizeObserver = new ResizeObserver(fit);
     const mutationObserver = new MutationObserver(() => {
       fit();
+      setCommentCount(countThreads(editorRef.current?.getComments() ?? []));
       alignNewCommentCard(container, zoomAtClickRef.current);
     });
     resizeObserver.observe(container);
@@ -171,7 +177,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     zoomAtClickRef.current = editorRef.current?.getZoom() ?? 1;
   };
 
-  const panelButtonClass = (active: boolean) => `rounded-md p-1.5 hover:bg-muted ${active ? 'bg-muted text-foreground' : 'text-muted-foreground'}`;
+  const panelButtonClass = (active: boolean) => `relative rounded-md p-1.5 hover:bg-muted ${active ? 'bg-muted text-foreground' : 'text-muted-foreground'}`;
 
   return (
     <div ref={containerRef} className={`piecemaker-docx-viewer flex flex-col bg-background ${isSidebar ? 'h-full w-full' : 'fixed inset-0 z-[9999]'}`} onKeyDownCapture={markUserEditing} onPointerDownCapture={handlePointerDown}>
@@ -192,11 +198,12 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
           showOutline={outlineOpen}
           showOutlineButton={false}
           commentsSidebarOpen={commentsOpen}
-          onCommentsSidebarOpenChange={setCommentsOpen}
+          onCommentsSidebarOpenChange={(open) => { if (!open || userEditingRef.current) setCommentsOpen(open); }}
+          onCommentsChange={(comments) => setCommentCount(countThreads(comments))}
           renderLogo={() => (
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => setOutlineOpen((open) => !open)} className={panelButtonClass(outlineOpen)} aria-pressed={outlineOpen} aria-label="Table des matières" title="Table des matières"><ListTree className="h-4 w-4" /></button>
-              <button type="button" onClick={() => setCommentsOpen((open) => !open)} className={panelButtonClass(commentsOpen)} aria-pressed={commentsOpen} aria-label="Commentaires" title="Commentaires"><MessageSquare className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setCommentsOpen((open) => !open)} className={panelButtonClass(commentsOpen)} aria-pressed={commentsOpen} aria-label="Commentaires" title="Commentaires"><MessageSquare className="h-4 w-4" />{commentCount > 0 && <span className="absolute -right-1 -top-1 min-w-[16px] rounded-full bg-primary px-1 text-center text-[10px] font-medium leading-4 text-primary-foreground">{commentCount}</span>}</button>
             </div>
           )}
           renderTitleBarRight={() => (
