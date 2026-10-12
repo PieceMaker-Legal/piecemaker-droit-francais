@@ -21,17 +21,14 @@ export function createHistoryView(app: App): View {
   const element = document.createElement('div');
   element.className = 'ptr-page';
   element.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px">
-      <h1 class="ptr-page-title">Analyses tabulaires</h1>
+    <div class="ptr-toolbar">
+      <input class="ptr-input ptr-toolbar-search" data-search placeholder="Rechercher une analyse…" aria-label="Rechercher">
+      <select class="ptr-select ptr-toolbar-select" data-filter aria-label="Dossier"><option value="">Tous les dossiers</option></select>
+      <select class="ptr-select ptr-toolbar-select" data-category aria-label="Catégorie"><option value="">Toutes les catégories</option></select>
+      <button type="button" class="ptr-icon-button" data-refresh aria-label="Actualiser" title="Actualiser">↻</button>
       <span class="ptr-spacer"></span>
+      <button type="button" class="ptr-button" data-new-research>+ Nouvelle recherche</button>
       <button type="button" class="ptr-button ptr-button-primary" data-new-table>+ Nouvelle analyse</button>
-    </div>
-    <div style="display:flex;align-items:flex-end;gap:8px">
-      <label class="ptr-field" style="width:280px"><span class="ptr-label">Rechercher</span><input class="ptr-input" data-search placeholder="Nom du tableau…"></label>
-      <label class="ptr-field" style="width:280px"><span class="ptr-label">Dossier</span><select class="ptr-select" data-filter><option value="">Tous les dossiers</option></select></label>
-      <label class="ptr-field" style="width:220px"><span class="ptr-label">Catégorie</span><select class="ptr-select" data-category><option value="">Toutes les catégories</option></select></label>
-      <span class="ptr-spacer"></span>
-      <button type="button" class="ptr-button" data-refresh>Actualiser</button>
     </div>
     <div data-list><div class="ptr-empty"><span class="ptr-spinner"></span> Chargement…</div></div>`;
   const filter = element.querySelector<HTMLSelectElement>('[data-filter]')!;
@@ -155,6 +152,7 @@ export function createHistoryView(app: App): View {
       sort = nextSort(sort, sortKey);
       render();
     } else if (target.closest('[data-new-table]')) app.newTable(filter.value || null);
+    else if (target.closest('[data-new-research]')) app.newResearch(filter.value || null);
     else if (target.closest('[data-refresh]')) void load();
     else if (target.closest('[data-delete]')) void remove(target);
     else if (target.closest('[data-index]')) open(target);

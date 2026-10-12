@@ -20,6 +20,8 @@ export type App = {
   openReview(project: string, file: string): void;
   newTable(project?: string | null): void;
   openDraft(draft: Draft): void;
+  newResearch(project?: string | null): void;
+  takeResearchStart(): { project: string; title: string } | null;
   updateResearch(project: string, file: string): void;
   takeResearchUpdate(): { project: string; file: string } | null;
   takeTargetProject(): string | null;

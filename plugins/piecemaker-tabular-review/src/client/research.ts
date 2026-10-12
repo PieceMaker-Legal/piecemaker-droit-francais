@@ -176,16 +176,15 @@ export function createResearchView(app: App): View {
     <section class="ptr-panel" data-new-only>
       <div class="ptr-panel-header">Recherche Légifrance et Judilibre</div>
       <div class="ptr-search-body">
-        <label class="ptr-field"><span class="ptr-label">Requête</span>
+        <label class="ptr-field"><span class="ptr-label" title="Guillemets : expression exacte · ET prioritaire sur OU · parenthèses pour regrouper · mots sans opérateur reliés par ET · références normalisées (L. 1235-3).">Requête ⓘ</span>
           <textarea class="ptr-textarea" data-query rows="2" maxlength="2000" placeholder="(&quot;faute grave&quot; OU &quot;faute lourde&quot;) ET licenciement"></textarea>
-          <span class="ptr-small ptr-muted">Guillemets : expression exacte · ET prioritaire sur OU · parenthèses pour regrouper · mots sans opérateur reliés par ET · références normalisées (L. 1235-3).</span>
         </label>
         <div class="ptr-field"><span class="ptr-label">Juridictions</span><div class="ptr-choice-row">${RESEARCH_SOURCES.map((source) => `<label class="ptr-pill"><input type="checkbox" data-form="sources" value="${source.value}"> ${escapeHtml(source.label)}</label>`).join('')}</div></div>
         <div class="ptr-source-filters" data-source-filters></div>
         <div class="ptr-search-row">
           <label class="ptr-field" style="width:150px"><span class="ptr-label">Décisions du</span><input class="ptr-input" type="date" data-date-start></label>
           <label class="ptr-field" style="width:150px"><span class="ptr-label">Au</span><input class="ptr-input" type="date" data-date-end></label>
-          <label class="ptr-check ptr-dispositif"><input type="checkbox" data-dispositif checked><span><strong>Chercher dans le dispositif uniquement</strong><br><span class="ptr-small ptr-muted">Seule la partie où le juge statue est lue et transmise à l’IA : motifs de la juridiction (« Sur ce », « Mais attendu que », « Réponse de la Cour », « Considérant »…) et dispositif (« Par ces motifs », « Décide »). Faits, procédure, moyens et prétentions des parties sont écartés. Pour les juridictions judiciaires, le découpage officiel de Judilibre est utilisé quand il existe ; sinon, repérage par formules.</span></span></label>
+          <label class="ptr-check" title="Seule la partie où le juge statue est lue et transmise à l’IA : motifs de la juridiction (« Sur ce », « Mais attendu que », « Réponse de la Cour », « Considérant »…) et dispositif (« Par ces motifs », « Décide »). Faits, procédure, moyens et prétentions des parties sont écartés. Pour les juridictions judiciaires, le découpage officiel de Judilibre est utilisé quand il existe ; sinon, repérage par formules."><input type="checkbox" data-dispositif checked><span>Chercher dans le dispositif uniquement ⓘ</span></label>
           <span class="ptr-spacer"></span>
           <button type="button" class="ptr-button ptr-button-primary" data-search>Rechercher</button>
         </div>
@@ -541,6 +540,19 @@ export function createResearchView(app: App): View {
     };
     renderAll();
     $('[data-update-panel]').scrollIntoView({ block: 'start' });
+  }
+
+  function startNew(project: string, title: string) {
+    if (searching || running()) {
+      toast(app.root, 'Une recherche est en cours : annulez-la avant d’en commencer une nouvelle.', 'error');
+      return;
+    }
+    dropState();
+    update = null;
+    projectSelect.value = project;
+    titleInput.value = title;
+    queryInput.value = '';
+    renderAll();
   }
 
   function leaveUpdate() {
@@ -953,8 +965,13 @@ export function createResearchView(app: App): View {
 
   async function consumeUpdate() {
     const requested = app.takeResearchUpdate();
-    if (requested) await enterUpdate(requested.project, requested.file);
-    else await loadExisting();
+    if (requested) {
+      await enterUpdate(requested.project, requested.file);
+      return;
+    }
+    const started = app.takeResearchStart();
+    if (started) startNew(started.project, started.title);
+    await loadExisting();
   }
 
   void initialize();

@@ -72,6 +72,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let activeTab: TabId = 'history';
   let reviewView: View | null = null;
   let pendingUpdate: { project: string; file: string } | null = null;
+  let pendingStart: { project: string; title: string } | null = null;
 
   const app: App = {
     root,
@@ -126,6 +127,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     newTable(preferred = null) {
       void askNewTable(preferred);
     },
+    newResearch(preferred = null) {
+      void askNewResearch(preferred);
+    },
+    takeResearchStart() {
+      const start = pendingStart;
+      pendingStart = null;
+      return start;
+    },
     updateResearch(project, file) {
       pendingUpdate = { project, file };
       showTab('research');
@@ -161,13 +170,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     view.show?.();
   }
 
-  async function askNewTable(preferred: string | null) {
+  async function askName(heading: string, preferred: string | null): Promise<{ project: string; name: string } | null> {
     const projects = await app.projects().catch(() => [] as HostProject[]);
     const initial = projects.find((entry) => entry.fullPath === preferred)?.fullPath ?? api.context.project?.path ?? projects[0]?.fullPath ?? '';
     let name = '';
     let project = initial;
     const answer = await openModal(root, {
-      title: 'Nouveau tableau',
+      title: heading,
       body: `
         <label class="ptr-field"><span class="ptr-label-row"><span class="ptr-label">Nom du tableau</span><span class="ptr-small ptr-muted" data-remaining>120 caractères restants</span></span><input class="ptr-input" data-table-name maxlength="120" placeholder="ex. Notion de faute lourde"></label>
         <label class="ptr-field"><span class="ptr-label">Dossier</span><select class="ptr-select" data-table-project>${projects.map((entry) => `<option value="${escapeHtml(entry.fullPath)}"${entry.fullPath === initial ? ' selected' : ''}>${escapeHtml(entry.displayName)}</option>`).join('') || '<option value="">Aucun dossier</option>'}</select></label>`,
@@ -193,13 +202,26 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         });
       },
     });
-    if (answer !== 'create' || !name.trim() || !project) return;
+    if (answer !== 'create' || !name.trim() || !project) return null;
+    return { project, name: name.trim() };
+  }
+
+  async function askNewTable(preferred: string | null) {
+    const answer = await askName('Nouveau tableau', preferred);
+    if (!answer) return;
     try {
-      const { draft } = await app.rpc<{ draft: Draft }>('PUT', '/drafts', { draft: { project, title: name.trim(), columns: [], rows: [] } });
+      const { draft } = await app.rpc<{ draft: Draft }>('PUT', '/drafts', { draft: { project: answer.project, title: answer.name, columns: [], rows: [] } });
       app.openDraft(draft);
     } catch (error) {
       toast(root, errorMessage(error), 'error');
     }
+  }
+
+  async function askNewResearch(preferred: string | null) {
+    const answer = await askName('Nouvelle recherche', preferred);
+    if (!answer) return;
+    pendingStart = { project: answer.project, title: answer.name };
+    showTab('research');
   }
 
   function closeReview() {

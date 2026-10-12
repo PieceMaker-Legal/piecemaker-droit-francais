@@ -31,25 +31,21 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
   element.innerHTML = `
     <div class="ptr-launch-body">
       <div class="ptr-review-top">
-        <button type="button" class="ptr-button" data-back>← Retour</button>
-        <div style="min-width:0">
-          <div class="ptr-review-title">${escapeHtml(title)}</div>
-          <div class="ptr-small ptr-muted">Nouveau tableau · ${escapeHtml(app.projectName(project))}</div>
+        <button type="button" class="ptr-icon-button" data-back aria-label="Retour à l’historique" title="Retour à l’historique">←</button>
+        <div class="ptr-review-heading">
+          <span class="ptr-review-title">${escapeHtml(title)}</span>
+          <span class="ptr-small ptr-muted ptr-ellipsis">Nouveau tableau · ${escapeHtml(app.projectName(project))}</span>
         </div>
-      </div>
-      <div class="ptr-review-actions">
-        <button type="button" class="ptr-button" data-add-questions>+ Ajouter des questions</button>
-        <button type="button" class="ptr-button" data-add-documents>+ Ajouter des documents</button>
       </div>
       <div data-notice></div>
       <div class="ptr-table-wrap" data-table></div>
     </div>
     <div class="ptr-launch-bar">
-      <div data-model-warning></div>
       <div class="ptr-launch-controls">
         <label class="ptr-bar-field"><span class="ptr-bar-label">IA</span><select class="ptr-select" data-provider>${PROVIDERS.map((provider) => `<option value="${provider.value}">${provider.label}</option>`).join('')}</select></label>
-        <label class="ptr-bar-field"><span class="ptr-bar-label">Modèle IA</span><select class="ptr-select" data-model></select></label>
-        <label class="ptr-bar-field"><span class="ptr-bar-label">Sessions simultanées</span><select class="ptr-select" data-concurrency>${[1, 2, 3, 4, 5, 6, 8].map((value) => `<option value="${value}"${value === 3 ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
+        <label class="ptr-bar-field"><span class="ptr-bar-label">Modèle</span><select class="ptr-select" data-model></select></label>
+        <label class="ptr-bar-field"><span class="ptr-bar-label" title="Sessions simultanées">En parallèle</span><select class="ptr-select" data-concurrency>${[1, 2, 3, 4, 5, 6, 8].map((value) => `<option value="${value}"${value === 3 ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
+        <span data-model-warning></span>
         <span class="ptr-spacer"></span>
         <span class="ptr-small ptr-muted ptr-filename" data-filename></span>
         <button type="button" class="ptr-button ptr-button-primary" data-launch>Lancer l’analyse tabulaire</button>
@@ -83,15 +79,16 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
       <table class="ptr-table">
         <thead><tr>
           <th scope="col"><div class="ptr-th-sortable"><span>Document</span>${sortButton(sort, 'label', 'document')}</div></th>
-          ${columns.map((column, index) => `<th scope="col"><div class="ptr-th-sortable"><div style="min-width:0"><div>${escapeHtml(column.name)}</div><div class="ptr-small ptr-muted">${escapeHtml(COLUMN_FORMATS.find((format) => format.value === column.format)?.label)} · ${escapeHtml(column.prompt)}</div></div><button type="button" class="ptr-icon-button" data-remove-column="${index}" aria-label="Retirer la question">×</button></div></th>`).join('')}
-          ${columns.length ? '' : '<th scope="col"><span class="ptr-muted">Aucune question</span></th>'}
+          ${columns.map((column, index) => `<th scope="col"><div class="ptr-th-stack"><div class="ptr-th-sortable"><input class="ptr-input ptr-ghost ptr-th-title" data-column-title="${index}" value="${escapeHtml(column.name)}" maxlength="120" aria-label="Titre de la colonne" placeholder="Titre (facultatif)"><span class="ptr-chip" title="Type de réponse">${escapeHtml(COLUMN_FORMATS.find((format) => format.value === column.format)?.label)}</span><button type="button" class="ptr-sort" data-remove-column="${index}" aria-label="Retirer la question" title="Retirer la question">×</button></div><textarea class="ptr-textarea ptr-ghost ptr-th-input" rows="2" maxlength="4000" data-column-prompt="${index}" aria-label="Question de la colonne" placeholder="Question posée à l’IA">${escapeHtml(column.prompt)}</textarea></div></th>`).join('')}
+          <th scope="col" class="ptr-add-col"><button type="button" class="ptr-add" data-add-questions title="Ajouter des questions (colonnes)">+ Question</button></th>
         </tr></thead>
         <tbody>${ordered.map(({ row, index }) => `
           <tr>
             <td><div class="ptr-th-sortable"><div style="min-width:0"><div class="ptr-row-label">${escapeHtml(row.label)}</div><div class="ptr-row-docs" title="${escapeHtml(row.documents.join('\n'))}">${escapeHtml(row.documents.map(basename).join(' · '))}</div></div><button type="button" class="ptr-icon-button" data-remove-row="${index}" aria-label="Retirer la ligne">×</button></div></td>
-            ${(columns.length ? columns : [null]).map(() => '<td><span class="ptr-muted">—</span></td>').join('')}
+            ${columns.map(() => '<td><span class="ptr-muted">—</span></td>').join('')}
+            <td class="ptr-add-col"></td>
           </tr>`).join('')}
-          ${rows.length ? '' : `<tr><td><span class="ptr-muted">Aucun document</span></td>${(columns.length ? columns : [null]).map(() => '<td></td>').join('')}</tr>`}
+          <tr><td><button type="button" class="ptr-add" data-add-documents title="Ajouter des documents (lignes)">+ Documents</button></td><td colspan="${columns.length + 1}"></td></tr>
         </tbody>
       </table>`;
   }
@@ -102,7 +99,7 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
     $<HTMLButtonElement>('[data-launch]').textContent = launching ? 'Lancement…' : 'Lancer l’analyse tabulaire';
     const costly = modelSelect.value && modelSelect.value !== models.cheapest;
     $('[data-model-warning]').innerHTML = costly
-      ? `<div class="ptr-warning">Modèle plus puissant que le modèle par défaut : chaque ligne lance une session IA complète (${rows.length} session${rows.length > 1 ? 's' : ''}), la consommation de tokens peut être très élevée.</div>`
+      ? `<span class="ptr-warning" title="Chaque ligne lance une session IA complète (${rows.length} session${rows.length > 1 ? 's' : ''}).">Modèle coûteux en tokens</span>`
       : '';
   }
 
@@ -202,6 +199,19 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
 
   element.addEventListener('change', (event) => {
     const target = event.target as HTMLElement;
+    const columnIndex = target.dataset.columnTitle ?? target.dataset.columnPrompt;
+    if (columnIndex !== undefined && columns[Number(columnIndex)]) {
+      const column = columns[Number(columnIndex)];
+      const value = (target as HTMLInputElement).value.trim();
+      if (target.dataset.columnPrompt !== undefined && !value) {
+        (target as HTMLTextAreaElement).value = column.prompt;
+        return;
+      }
+      columns[Number(columnIndex)] = target.dataset.columnTitle !== undefined ? { ...column, name: value || column.prompt.replace(/\s+/g, ' ').slice(0, 60) } : { ...column, prompt: value };
+      if (target.dataset.columnPrompt !== undefined) templateName = CUSTOM_TEMPLATE;
+      persist();
+      return;
+    }
     if (target === providerSelect) void loadProviderModels();
     else if (target === modelSelect) renderFooter();
   });
