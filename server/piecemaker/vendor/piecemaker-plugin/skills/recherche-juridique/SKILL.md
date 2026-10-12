@@ -26,36 +26,57 @@ effectivement disponibles, puis le format exact que le vérificateur accepte.
 | `Search_Code` | Recherche dans les codes juridiques français (Code civil, Code du travail…) — référence d'article exacte (`L. 1235-3`), mots-clés ou expression exacte. Renvoie les identifiants `LEGIARTI…` des articles trouvés. |
 | `consulter_article` | Texte intégral et vigueur d'une version précise d'article, à partir de son identifiant `LEGIARTI…` rendu par `Search_Code`. |
 | `consulter_decision` | Rapatrie le texte intégral d'une décision à partir de son identifiant Légifrance (`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux). **Rapatrie le texte intégral et le met en cache** (voir plus bas) — c'est le moyen normal de lire une décision avant de la citer. |
-| `Build_Research_Corpus` | Construit un corpus exhaustif et reproductible sur une question de droit : une formulation, recherchée par le même moteur et avec les mêmes filtres que `Search_Jurisprudence`, déduplication, téléchargement et scan du texte intégral de chaque décision. **Rapatrie le texte intégral.** À utiliser pour une recherche large et systématique plutôt qu'une suite de pages de `Search_Jurisprudence`. |
 | `Tracking_BODACC` | Situation d'une entreprise (procédures collectives) via son SIREN — hors jurisprudence, utile pour qualifier une partie. |
+
+## Recherche large : l'analyse tabulaire en mode recherche
+
+Pour une question de droit qui mérite un balayage systématique plutôt qu'une
+requête isolée, proposer à l'avocat l'**analyse tabulaire en mode recherche**
+(volet Analyse tabulaire › « + Nouvelle recherche ») : une formulation
+Légifrance et Judilibre, mêmes filtres et même syntaxe que les outils
+Légifrance, au plus 500 décisions, une ligne par décision et une colonne par
+question. L'IA ne la lance pas : l'avocat saisit la recherche, choisit les
+questions et confirme. Ouvrir le volet avec l'outil `afficher`
+(`volet` `tabular-review`) pour l'y amener.
+
+Une fois la revue faite, la lire avec l'outil `tabular_review` (`lister`, puis
+`ouvrir`) : le fichier `Tabular Review/<fichier>.json` donne, pour chaque
+ligne, l'identifiant de la décision (`decision`, et `aliases` quand elle
+existe dans les deux bases), la copie lue par l'IA (`documents[0].copy`, sous
+`Tabular Review/docs/`) et les réponses par question
+(`cells[ligne][colonne].summary`, `.citations`).
 
 ### Le fait décisif : seuls deux chemins rendent une citation vérifiable
 
-Le vérificateur ne peut confirmer une citation que si le texte intégral de sa
-source est quelque part sur disque :
+Le vérificateur ne peut confirmer une citation que si le texte de sa source
+est quelque part sur disque :
 
-- **`Build_Research_Corpus`** écrit `decisions.jsonl` (une décision par ligne,
-  champ `texte` = texte intégral réel) — vérifiable.
+- **Analyse tabulaire en mode recherche** : la copie Markdown de chaque
+  décision (`Tabular Review/docs/`) est indexée sous son identifiant —
+  vérifiable. Cette copie ne contient que la **partie retenue** (motifs et
+  dispositif quand « Dispositif uniquement » est coché) : un extrait pris
+  ailleurs dans la décision exige `consulter_decision`.
 - **`consulter_decision`** renvoie le texte intégral dans sa réponse d'outil ;
   le hook `decision-cache.mjs` le capte au passage et l'écrit dans
   `~/.piecemaker/decisions/<id>.json` — vérifiable.
 
 **Conséquence pratique** : les résultats de `Search_Jurisprudence` (titre,
 analyse, extraits) servent à trier. Dès qu'une décision doit être citée, il
-faut d'abord la lire avec `consulter_decision` (ou l'avoir dans un corpus
-`Build_Research_Corpus`).
+faut d'abord la lire avec `consulter_decision` (ou dans la copie d'une analyse
+tabulaire en mode recherche).
 
 ## Déroulé de recherche
 
 1. **Recherche large** avec `Search_Jurisprudence` sur les juridictions visées
-   (ou `Build_Research_Corpus` pour une question de droit qui mérite un
-   balayage systématique plutôt qu'une requête isolée). Pour un texte de loi,
-   `Search_Code`.
+   (ou, pour une question de droit qui mérite un balayage systématique plutôt
+   qu'une requête isolée, l'analyse tabulaire en mode recherche proposée à
+   l'avocat). Pour un texte de loi, `Search_Code`.
 2. **Tri** des résultats sur les seuls éléments déjà renvoyés (titre, analyse,
    date, extraits) — sans lire chaque décision en entier.
 3. **Lecture** des seules décisions/articles retenus comme potentiellement
    cite-worthy : `consulter_decision` (jurisprudence) ou `consulter_article`
-   (texte de loi), ou relecture du `decisions.jsonl` d'un corpus déjà construit.
+   (texte de loi), ou relecture de la copie d'une analyse tabulaire en mode
+   recherche déjà faite (`Tabular Review/docs/`).
    Ne lire que ce qui sera effectivement cité ou a de bonnes chances de l'être
    — pas systématiquement tout ce qui est remonté par la recherche large.
 4. **Citation** : une fois la décision ou l'article lu dans ce tour, en extraire
@@ -101,8 +122,9 @@ prend l'une des trois formes suivantes.
 
 Identifie la décision par `decision_id` — l'identifiant Légifrance
 (`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux) tel que
-rendu par `Search_Jurisprudence`/`Build_Research_Corpus`, et lu avec
-`consulter_decision` (ou présent dans un `decisions.jsonl`).
+rendu par `Search_Jurisprudence` ou par une analyse tabulaire en mode recherche
+(champ `decision` de la ligne), et lu avec `consulter_decision` (ou dans la
+copie `Tabular Review/docs/` de cette analyse).
 
 ```json
 {
@@ -215,7 +237,8 @@ retombe sur un tableau `quotes` d'un seul élément :
 
 1. Parse le bloc `<CITATIONS>` du dernier message.
 2. Pour chaque citation, résout sa source réelle — texte intégral de la
-   décision (corpus `Build_Research_Corpus` ou cache `consulter_decision`) ou
+   décision (analyse tabulaire en mode recherche ou cache
+   `consulter_decision`) ou
    pièce Markdown du dossier.
 3. Localise mécaniquement chaque extrait dans ce texte. Un extrait qui a
    légèrement dérivé (espace, casse, ponctuation) est **corrigé

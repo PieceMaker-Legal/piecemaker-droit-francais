@@ -8,9 +8,9 @@
  * cache le texte des opinions lues pendant le tour de chat pour que la
  * vérification porte exactement sur ce que le modèle a réellement lu.
  *
- * Chez PieceMaker il n'y a pas de boucle de chat : le texte intégral est déjà
- * sur le disque, déposé soit par le MCP Légifrance (décisions), soit par le
- * pipeline de conversion du dossier (pièces). Ce module ne fait donc que
+ * Chez PieceMaker il n'y a pas de boucle de chat : le texte est déjà sur le
+ * disque, déposé par le MCP Légifrance ou l'analyse tabulaire en mode
+ * recherche (décisions), ou par le pipeline de conversion du dossier (pièces). Ce module ne fait donc que
  * résoudre un identifiant vers son texte de référence — AUCUN LLM, AUCUNE
  * ANALYSE, c'est purement mécanique, à l'image de `legifrance-reads.cjs`.
  *
@@ -21,42 +21,33 @@
  * « pas de source » (`verified: false`) — jamais un faux positif.
  *
  * ---------------------------------------------------------------------------
- * Décisions Légifrance — `createDecisionTextResolver(roots)`
+ * Décisions — `createDecisionTextResolver(roots)`
  * ---------------------------------------------------------------------------
- * Cherche, sous les racines fournies, les dossiers marqués
- * `.legifrance-results.json` produits par le MCP `mcp-legifrance`
- * (dépôt de référence : `tools/research_corpus.py` et `tools/bulk_download.py`)
- * et y indexe `decisionId -> texte`.
+ * Trois sources, indexées `decisionId -> texte` :
+ *   - Analyses tabulaires en mode recherche (catégorie `recherche-juridique`)
+ *     de chaque racine : `Tabular Review/*.json`, une ligne par décision
+ *     (`decision`, `aliases`), dont le texte est la copie Markdown de
+ *     `documents[0].copy` sous `Tabular Review/` — la partie retenue de la
+ *     décision (motifs et dispositif, ou texte intégral), telle que lue par
+ *     l'IA de l'analyse.
+ *   - Le cache `~/.piecemaker/decisions/<id>.json` tenu à jour par le hook
+ *     `decision-cache.mjs` à chaque appel de l'outil `consulter_decision`
+ *     (texte intégral réel, capturé au coup par coup).
+ *   - Les dossiers marqués `.legifrance-results.json` de forme
+ *     `legifrance-results` (Download_Query_Results) : `results.json`, un
+ *     tableau d'entrées. ÉCART AU MODÈLE ORIGINAL : ces entrées n'ont PAS de
+ *     champ `texte` — l'outil ne télécharge jamais le texte intégral pour
+ *     cette forme (voir `_extract_entry` dans `bulk_download.py` : seuls `id`,
+ *     `titre`, `lien`, `date`, `analyse` — un sommaire — `articles`, et
+ *     optionnellement `solution.dispositif` — un extrait du dispositif seul,
+ *     jamais les motifs — sont écrits). Le texte de référence reconstitué ici
+ *     est donc `titre + dispositif éventuel + analyse/sommaire` — une
+ *     vérification qui échoue par manque de matière est le sens de la marche
+ *     sûr (`verified: false`), jamais un faux positif.
  *
- * Deux formes de dossier, distinguées par `kind` dans le marqueur :
- *   - `legifrance-research` (Build_Research_Corpus) : `decisions.jsonl`, une
- *     décision par ligne, champ `texte` = texte intégral réel.
- *   - `legifrance-results` (Download_Query_Results) : `results.json`, un
- *     tableau d'entrées. ÉCART AU MODÈLE ORIGINAL : contrairement à ce qu'on
- *     pourrait attendre, ces entrées n'ont PAS de champ `texte` — l'outil ne
- *     télécharge jamais le texte intégral pour cette forme (voir
- *     `_extract_entry` dans `bulk_download.py` : seuls `id`, `titre`, `lien`,
- *     `date`, `analyse` — un sommaire — `articles`, et optionnellement
- *     `solution.dispositif` — un extrait du dispositif seul, jamais les
- *     motifs — sont écrits). Le texte de référence reconstitué ici pour cette
- *     forme est donc `titre + dispositif éventuel + analyse/sommaire`, PAS le
- *     texte intégral de la décision. C'est strictement moins que ce que la
- *     forme corpus fournit, mais reste la meilleure source mécaniquement
- *     disponible sur disque pour cette forme — et une vérification qui échoue
- *     par manque de matière est le sens de la marche sûr (`verified: false`),
- *     jamais un faux positif.
- *
- * S'y ajoute une troisième source : le cache `~/.piecemaker/decisions/<id>.json`
- * tenu à jour par le hook `decision-cache.mjs` à chaque appel de l'outil
- * `consulter_decision` — seule des trois façons dont le MCP restitue une
- * décision à écrire son texte intégral au fil de l'eau plutôt que par lot (le
- * texte de `consulter_decision` n'atterrit sinon que dans le résultat
- * d'outil, jamais sur disque). Priorité entre les trois sources pour un même
- * identifiant : corpus (texte intégral réel) > cache `consulter_decision`
- * (texte intégral réel aussi, mais capturé au coup par coup) > téléchargement
- * (matière réduite, en dernier recours). En pratique cet ordre coïncide avec
- * la longueur : le texte le plus long disponible pour l'identifiant l'emporte,
- * l'ordre des sources ne servant qu'à départager une égalité de longueur.
+ * Pour un même identifiant, le texte le plus long disponible l'emporte ; à
+ * longueur égale, la priorité va à l'analyse tabulaire, puis au cache
+ * `consulter_decision`, puis au téléchargement.
  *
  * La découverte des dossiers marqués réutilise `MARKER_NAME` et
  * `findResultsRoot` de `legifrance-reads.cjs` (stratégie ascendante depuis un
@@ -91,6 +82,8 @@ const { structuredMarkdownCounterpart } = require('./case-folder-structure.cjs')
 
 const IGNORED_DIR_NAMES = new Set(['node_modules', '.git', '__pycache__']);
 const DEFAULT_MAX_DEPTH = 6;
+const REVIEW_FOLDER = 'Tabular Review';
+const RESEARCH_CATEGORY = 'recherche-juridique';
 
 // ---------------------------------------------------------------------------
 // Découverte des dossiers marqués (descente bornée + ascendant existant)
@@ -181,30 +174,6 @@ function findMarkedFolders(roots, options = {}) {
 // Index decisionId -> texte pour un dossier marqué donné
 // ---------------------------------------------------------------------------
 
-function loadCorpusIndex(folder, index) {
-  let raw;
-  try {
-    raw = fs.readFileSync(path.join(folder, 'decisions.jsonl'), 'utf8');
-  } catch {
-    return;
-  }
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let record;
-    try {
-      record = JSON.parse(trimmed);
-    } catch {
-      continue; // ligne JSONL corrompue : ignorée silencieusement.
-    }
-    if (!record || typeof record !== 'object') continue;
-    const id = typeof record.id === 'string' ? record.id.trim() : '';
-    if (!id) continue;
-    const texte = typeof record.texte === 'string' ? record.texte : '';
-    index.set(id, texte);
-  }
-}
-
 /**
  * Reconstitue le meilleur texte de référence disponible pour une entrée
  * `results.json` (forme Download_Query_Results), qui ne contient pas le
@@ -244,8 +213,8 @@ function loadDownloadIndex(folder, index) {
 }
 
 /**
- * Charge l'index `decisionId -> texte` d'UN dossier marqué, en distinguant
- * les deux formes via `kind` dans le marqueur. Renvoie toujours une Map
+ * Charge l'index `decisionId -> texte` d'UN dossier marqué de forme
+ * `legifrance-results` (`kind` dans le marqueur). Renvoie toujours une Map
  * (vide en cas d'échec ou de forme inconnue) : ne lève jamais.
  */
 function loadDecisionIndex(folder) {
@@ -260,9 +229,7 @@ function loadDecisionIndex(folder) {
   }
   const kind = marker && typeof marker === 'object' ? marker.kind : null;
 
-  if (kind === 'legifrance-research') {
-    loadCorpusIndex(folder, index);
-  } else if (kind === 'legifrance-results') {
+  if (kind === 'legifrance-results') {
     loadDownloadIndex(folder, index);
   }
   // Forme de marqueur inconnue : index vide, silencieusement.
@@ -310,8 +277,7 @@ function markerKind(folder) {
 }
 
 /**
- * Index `decisionId -> texte` d'UNE forme de dossier marqué (corpus ou
- * téléchargement) à travers plusieurs dossiers : en cas de doublon
+ * Index `decisionId -> texte` d'UNE forme de dossier marqué à travers plusieurs dossiers : en cas de doublon
  * d'identifiant entre deux dossiers de même forme, le plus récent gagne
  * (`folders` est déjà trié du plus récent au plus ancien).
  */
@@ -324,6 +290,50 @@ function mergeFoldersOfKind(folders, kind) {
     }
   }
   return merged;
+}
+
+function readJsonFile(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function addResearchReview(reviewDir, review, index) {
+  if (!review || typeof review !== 'object' || review.category !== RESEARCH_CATEGORY) return;
+  for (const row of Array.isArray(review.rows) ? review.rows : []) {
+    if (!row || typeof row.decision !== 'string' || !row.decision.trim()) continue;
+    const copy = Array.isArray(row.documents) ? row.documents[0]?.copy : null;
+    if (typeof copy !== 'string' || !copy) continue;
+    const file = path.resolve(reviewDir, ...copy.split('/'));
+    if (!withinRoot(reviewDir, file)) continue;
+    const texte = readMarkdownFile(file);
+    if (!texte) continue;
+    const aliases = Array.isArray(row.aliases) ? row.aliases.filter((alias) => typeof alias === 'string') : [];
+    for (const id of [row.decision, ...aliases].map((value) => value.trim()).filter(Boolean)) {
+      if ((index.get(id) ?? '').length < texte.length) index.set(id, texte);
+    }
+  }
+}
+
+function loadResearchReviewIndex(roots) {
+  const index = new Map();
+  for (const root of Array.isArray(roots) ? roots : [roots]) {
+    if (typeof root !== 'string' || !root) continue;
+    const reviewDir = path.resolve(root, REVIEW_FOLDER);
+    let entries;
+    try {
+      entries = fs.readdirSync(reviewDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.startsWith('.')) continue;
+      addResearchReview(reviewDir, readJsonFile(path.join(reviewDir, entry.name)), index);
+    }
+  }
+  return index;
 }
 
 /** Dossier du cache `consulter_decision` tenu par `decision-cache.mjs`. */
@@ -366,10 +376,11 @@ function loadDecisionCacheIndex() {
 }
 
 /**
- * Fusionne les trois sources pour un jeu de racines donné : dossiers corpus,
- * cache `consulter_decision`, dossiers de téléchargement. Pour un même
- * identifiant, le texte le plus long disponible l'emporte ; à longueur égale,
- * la priorité va au corpus, puis au cache, puis au téléchargement.
+ * Fusionne les trois sources pour un jeu de racines donné : analyses
+ * tabulaires en mode recherche, cache `consulter_decision`, dossiers de
+ * téléchargement. Pour un même identifiant, le texte le plus long disponible
+ * l'emporte ; à longueur égale, la priorité va à l'analyse tabulaire, puis au
+ * cache, puis au téléchargement.
  */
 function buildDecisionIndex(roots) {
   const folders = findMarkedFolders(roots)
@@ -378,15 +389,15 @@ function buildDecisionIndex(roots) {
     // même forme retienne le dossier le plus récent.
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
 
-  const corpusIndex = mergeFoldersOfKind(folders, 'legifrance-research');
+  const researchIndex = loadResearchReviewIndex(roots);
   const cacheIndex = loadDecisionCacheIndex();
   const downloadIndex = mergeFoldersOfKind(folders, 'legifrance-results');
 
-  const ids = new Set([...corpusIndex.keys(), ...cacheIndex.keys(), ...downloadIndex.keys()]);
+  const ids = new Set([...researchIndex.keys(), ...cacheIndex.keys(), ...downloadIndex.keys()]);
   const merged = new Map();
   for (const id of ids) {
     const candidates = [
-      { texte: corpusIndex.get(id), priority: 0 },
+      { texte: researchIndex.get(id), priority: 0 },
       { texte: cacheIndex.get(id), priority: 1 },
       { texte: downloadIndex.get(id), priority: 2 },
     ].filter((c) => typeof c.texte === 'string' && c.texte.length > 0);
