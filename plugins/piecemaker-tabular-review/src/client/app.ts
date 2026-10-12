@@ -1,4 +1,4 @@
-import type { Template } from '../shared.js';
+import type { Draft, Template } from '../shared.js';
 import type { HostProject, PluginApi, PluginContext, Rpc } from './host.js';
 
 export type View = {
@@ -19,6 +19,7 @@ export type App = {
   onTemplatesChange(callback: (templates: Template[]) => void): () => void;
   openReview(project: string, file: string): void;
   newTable(project?: string | null): void;
+  openDraft(draft: Draft): void;
   updateResearch(project: string, file: string): void;
   takeResearchUpdate(): { project: string; file: string } | null;
   takeTargetProject(): string | null;

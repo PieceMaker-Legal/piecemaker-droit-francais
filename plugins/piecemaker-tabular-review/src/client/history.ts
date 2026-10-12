@@ -1,4 +1,4 @@
-import type { ReviewCategory, ReviewSummary } from '../shared.js';
+import type { Draft, ReviewCategory, ReviewSummary } from '../shared.js';
 import { CATEGORY_LABELS, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, formatDate, toast } from './dom.js';
@@ -8,6 +8,14 @@ import type { SortState } from './ordering.js';
 
 const ALL = '';
 const REFRESH_INTERVAL = 5000;
+
+type Entry = ReviewSummary & { draft?: Draft };
+
+const statusLabel = (entry: Entry) => entry.draft ? 'Projet' : reviewStatusLabel(entry.status);
+
+function draftEntry(draft: Draft): Entry {
+  return { project: draft.project, file: '', title: draft.title, templateName: draft.templateName || `${draft.columns.length} question${draft.columns.length > 1 ? 's' : ''}`, category: 'documents', createdAt: draft.updatedAt, status: 'done', rowCount: draft.rows.length, doneCount: 0, columnCount: draft.columns.length, provider: 'claude', model: '', draft } as Entry;
+}
 
 export function createHistoryView(app: App): View {
   const element = document.createElement('div');
@@ -30,8 +38,8 @@ export function createHistoryView(app: App): View {
   const categoryFilter = element.querySelector<HTMLSelectElement>('[data-category]')!;
   const list = element.querySelector<HTMLElement>('[data-list]')!;
   let projects: HostProject[] = [];
-  let reviews: ReviewSummary[] = [];
-  let visible: ReviewSummary[] = [];
+  let reviews: Entry[] = [];
+  let visible: Entry[] = [];
   let sort: SortState = { key: 'date', direction: -1 };
   const search = element.querySelector<HTMLInputElement>('[data-search]')!;
   let timer = 0;
@@ -55,7 +63,7 @@ export function createHistoryView(app: App): View {
     renderCategories();
     const query = search.value.trim().toLowerCase();
     const filtered = reviews.filter((review) => (!categoryFilter.value || review.category === categoryFilter.value) && (!query || review.title.toLowerCase().includes(query)));
-    visible = sortBy(filtered, sort, (review, key) => key === 'title' ? review.title : key === 'status' ? reviewStatusLabel(review.status) : key === 'project' ? app.projectName(review.project) : key === 'rows' ? String(review.rowCount) : review.createdAt);
+    visible = sortBy(filtered, sort, (review, key) => key === 'title' ? review.title : key === 'status' ? statusLabel(review) : key === 'project' ? app.projectName(review.project) : key === 'rows' ? String(review.rowCount) : review.createdAt);
     if (!visible.length) {
       list.innerHTML = '<div class="ptr-empty">Aucune analyse tabulaire pour ce filtre.</div>';
       return;
@@ -64,19 +72,19 @@ export function createHistoryView(app: App): View {
     list.innerHTML = `<div class="ptr-table-wrap ptr-history-wrap"><table class="ptr-table ptr-history-table">
       <thead><tr>${header('title', 'Nom')}${header('status', 'Statut')}${header('project', 'Dossier')}${header('rows', 'Lignes')}${header('date', 'Date')}<th scope="col">Action</th></tr></thead>
       <tbody>${visible.map((review, index) => `
-        <tr class="ptr-history-row" data-index="${index}" role="button" tabindex="0" title="${escapeHtml(review.file)}">
+        <tr class="ptr-history-row" data-index="${index}" role="button" tabindex="0" title="${escapeHtml(review.draft ? 'Projet non lancé' : review.file)}">
           <td><strong class="ptr-link">${escapeHtml(review.title)}</strong>${review.category === 'documents' ? '' : ` <span class="ptr-chip ptr-chip-category">${escapeHtml(CATEGORY_LABELS[review.category])}</span>`}<div class="ptr-small ptr-muted ptr-ellipsis">${escapeHtml(review.query ? `Requête : ${review.query}` : review.templateName)}</div></td>
-          <td><span class="ptr-chip ptr-chip-${review.status}">${review.status === 'running' ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(review.status))}</span></td>
+          <td><span class="ptr-chip ptr-chip-${review.draft ? 'draft' : review.status}">${!review.draft && review.status === 'running' ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(statusLabel(review))}</span></td>
           <td title="${escapeHtml(review.project)}">${escapeHtml(app.projectName(review.project))}</td>
-          <td>${review.doneCount}/${review.rowCount}</td>
+          <td>${review.draft ? review.rowCount : `${review.doneCount}/${review.rowCount}`}</td>
           <td>${escapeHtml(formatDate(review.createdAt))}</td>
-          <td>${review.status === 'running' ? '' : '<button type="button" class="ptr-icon-button" data-delete aria-label="Supprimer l’analyse tabulaire" title="Supprimer l’analyse tabulaire">🗑</button>'}</td>
+          <td>${!review.draft && review.status === 'running' ? '' : '<button type="button" class="ptr-icon-button" data-delete aria-label="Supprimer l’analyse tabulaire" title="Supprimer l’analyse tabulaire">🗑</button>'}</td>
         </tr>`).join('')}</tbody></table></div>`;
   }
 
   function schedule() {
     window.clearTimeout(timer);
-    if (!destroyed && !element.hidden && reviews.some((review) => review.status === 'running')) {
+    if (!destroyed && !element.hidden && reviews.some((review) => !review.draft && review.status === 'running')) {
       timer = window.setTimeout(() => void load(), REFRESH_INTERVAL);
     }
   }
@@ -85,9 +93,12 @@ export function createHistoryView(app: App): View {
     const current = ++request;
     try {
       const selected = filter.value ? [filter.value] : projects.map((project) => project.fullPath);
-      const result = await app.rpc<{ reviews: ReviewSummary[] }>('POST', '/reviews/list', { projects: selected });
+      const [result, drafts] = await Promise.all([
+        app.rpc<{ reviews: ReviewSummary[] }>('POST', '/reviews/list', { projects: selected }),
+        app.rpc<{ drafts: Draft[] }>('POST', '/drafts/list', { projects: selected }).catch(() => ({ drafts: [] })),
+      ]);
       if (current !== request || destroyed) return;
-      reviews = result.reviews;
+      reviews = [...drafts.drafts.map(draftEntry), ...result.reviews];
       render();
     } catch (error) {
       if (current !== request || destroyed) return;
@@ -109,12 +120,19 @@ export function createHistoryView(app: App): View {
 
   const open = (target: HTMLElement) => {
     const review = visible[Number(target.closest<HTMLElement>('[data-index]')?.dataset.index)];
-    if (review) app.openReview(review.project, review.file);
+    if (review?.draft) app.openDraft(review.draft);
+    else if (review) app.openReview(review.project, review.file);
   };
 
   const remove = async (target: HTMLElement) => {
     const review = visible[Number(target.closest<HTMLElement>('[data-index]')?.dataset.index)];
     if (!review) return;
+    if (review.draft) {
+      if (!await confirmDialog(app.root, 'Supprimer le projet', `<p>Le projet « ${escapeHtml(review.title)} », jamais lancé, sera supprimé.</p>`, 'Supprimer', true)) return;
+      await app.rpc('POST', '/drafts/delete', { id: review.draft.id }).catch((error) => toast(app.root, errorMessage(error), 'error'));
+      await load();
+      return;
+    }
     const confirmed = await confirmDialog(app.root, 'Supprimer l’analyse tabulaire', `<p>« ${escapeHtml(review.title)} » sera supprimée définitivement : son fichier JSON, ses exports Word/PDF et les copies de documents qu’elle est seule à utiliser.</p>`, 'Supprimer', true);
     if (!confirmed) return;
     try {

@@ -1,4 +1,4 @@
-import type { Provider, ReviewDetail, RowRequest, TemplateColumn } from '../shared.js';
+import type { Draft, Provider, ReviewDetail, RowRequest, TemplateColumn } from '../shared.js';
 import { COLUMN_FORMATS, hasActions, REVIEW_FOLDER } from '../shared.js';
 import type { App, View } from './app.js';
 import { basename, confirmDialog, errorMessage, escapeHtml, toast } from './dom.js';
@@ -24,7 +24,8 @@ function filenamePreview(templateName: string, title: string): string {
   return `${stamp} - ${template} - ${title || '…'}`;
 }
 
-export function createLaunchView(app: App, project: string, title: string, onBack: () => void): View {
+export function createLaunchView(app: App, draft: Draft, onBack: () => void): View {
+  const { project, title } = draft;
   const element = document.createElement('div');
   element.className = 'ptr-launch';
   element.innerHTML = `
@@ -60,9 +61,9 @@ export function createLaunchView(app: App, project: string, title: string, onBac
   const modelSelect = $<HTMLSelectElement>('[data-model]');
   const concurrencySelect = $<HTMLSelectElement>('[data-concurrency]');
 
-  let columns: TemplateColumn[] = [];
-  let templateName = CUSTOM_TEMPLATE;
-  let rows: RowRequest[] = [];
+  let columns: TemplateColumn[] = [...draft.columns];
+  let templateName = draft.templateName || CUSTOM_TEMPLATE;
+  let rows: RowRequest[] = [...draft.rows];
   let sort: SortState = null;
   let protectedProject = true;
   let models: { options: ModelOption[]; cheapest: string } = { options: [], cheapest: '' };
@@ -105,6 +106,11 @@ export function createLaunchView(app: App, project: string, title: string, onBac
       : '';
   }
 
+  let saving = Promise.resolve();
+  function persist() {
+    saving = saving.then(() => app.rpc('PUT', '/drafts', { draft: { id: draft.id, project, title, templateName, columns, rows } })).then(() => undefined, (error) => toast(app.root, `Projet non enregistré : ${errorMessage(error)}`, 'error'));
+  }
+
   function renderAll() {
     renderNotice();
     renderTable();
@@ -135,6 +141,7 @@ export function createLaunchView(app: App, project: string, title: string, onBac
         rows = [];
         toast(app.root, 'Les questions de tri portent sur les pièces du dossier : ajoutez de nouveau les documents.');
       }
+      persist();
       renderAll();
     });
   }
@@ -146,6 +153,7 @@ export function createLaunchView(app: App, project: string, title: string, onBac
       existing: new Set(rows.flatMap((row) => row.documents)),
       onSubmit(added) {
         rows = [...rows, ...added];
+        persist();
         renderAll();
       },
     });
@@ -181,6 +189,8 @@ export function createLaunchView(app: App, project: string, title: string, onBac
         concurrency: Number(concurrencySelect.value),
         proxyOrigin,
       });
+      await saving;
+      await app.rpc('POST', '/drafts/delete', { id: draft.id }).catch(() => undefined);
       app.openReview(detail.project, detail.file);
     } catch (error) {
       toast(app.root, errorMessage(error), 'error');
@@ -209,9 +219,11 @@ export function createLaunchView(app: App, project: string, title: string, onBac
     } else if (target.closest('[data-remove-column]')) {
       columns.splice(Number(target.closest<HTMLElement>('[data-remove-column]')!.dataset.removeColumn), 1);
       if (!columns.length) templateName = CUSTOM_TEMPLATE;
+      persist();
       renderAll();
     } else if (target.closest('[data-remove-row]')) {
       rows.splice(Number(target.closest<HTMLElement>('[data-remove-row]')!.dataset.removeRow), 1);
+      persist();
       renderAll();
     }
   });

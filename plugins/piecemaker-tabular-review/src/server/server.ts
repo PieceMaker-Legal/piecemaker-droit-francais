@@ -4,6 +4,7 @@ import http from 'node:http';
 import type { CreateReviewRequest, RowRequest } from '../shared.js';
 import { emptyColumns } from '../shared.js';
 import { listMarkdownDocuments } from './documents.js';
+import { deleteDraft, listDrafts, upsertDraft } from './drafts.js';
 import { citationSource } from './citations.js';
 import { exportReview } from './export.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
@@ -171,6 +172,15 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
   if (method === 'GET' && pathname === '/templates') return { templates: readTemplates() };
   if (method === 'PUT' && pathname === '/templates') return { templates: upsertTemplate(body.template) };
   if (method === 'DELETE' && pathname === '/templates') return { templates: deleteTemplate(url.searchParams.get('id')) };
+  if (method === 'POST' && pathname === '/drafts/list') {
+    const registered = new Set(registeredProjects());
+    return { drafts: listDrafts((Array.isArray(body.projects) ? body.projects : []).filter((entry): entry is string => typeof entry === 'string' && registered.has(entry))) };
+  }
+  if (method === 'PUT' && pathname === '/drafts') return { draft: upsertDraft(body.draft) };
+  if (method === 'POST' && pathname === '/drafts/delete') {
+    deleteDraft(body.id);
+    return { ok: true };
+  }
   if (method === 'GET' && pathname === '/protected-projects') return { projects: protectedProjects() };
   if (method === 'GET' && pathname === '/documents') {
     const project = assertProject(url.searchParams.get('project'));

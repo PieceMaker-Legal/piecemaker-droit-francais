@@ -267,4 +267,5 @@ blockquote.ptr-citation-quote{margin:8px 0;padding-left:8px;border-left:3px soli
 .ptr-question-head{background:var(--ptr-soft);font-size:12px;font-weight:600;color:var(--ptr-muted)}
 .ptr-question-line{border-top:1px solid var(--ptr-border)}
 .ptr-question-texts{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ptr-chip-draft{background:rgb(0 136 255 / 12%);color:var(--ptr-accent)}
 `;
