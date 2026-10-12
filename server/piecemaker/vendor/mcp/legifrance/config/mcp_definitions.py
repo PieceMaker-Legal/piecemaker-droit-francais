@@ -455,82 +455,12 @@ Ces jetons de famille sont une taxinomie propre a ce serveur : ils ne sont jamai
             "additionalProperties": False
         }
     },
-    {
-        "name": "Build_Research_Corpus",
-        "description": (
-            "Constitue un corpus jurisprudentiel à partir d'une question de droit et d'une seule "
-            "formulation Légifrance précise. Avant tout téléchargement, le total officiel cumulé des "
-            "juridictions est contrôlé et l'appel est refusé au-delà de 500 résultats ; tout corpus "
-            "créé contient donc au plus 500 décisions dédupliquées et prépare leur revue par lots."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "question": {
-                    "type": "string",
-                    "description": "Question de droit complète posée par le LLM. Elle sert aussi de titre lisible au dossier du corpus et au rapport Markdown final."
-                },
-                "query": {
-                    "type": "string",
-                    "description": (
-                        "Unique formulation Légifrance, distincte de la question de droit. Ne fournis pas "
-                        "plusieurs formulations."
-                    )
-                },
-                "juridictions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "enum": ["cassation", "appel", "premiere_instance", "administratif"]
-                    },
-                    "default": ["cassation"],
-                    "description": "Corpus interrogés pour l'unique formulation. Le totalResultNumber cumulé de toutes les juridictions doit être au plus 500 avant tout téléchargement."
-                },
-                "date_debut": {
-                    "type": "string",
-                    "description": "Date minimale AAAA-MM-JJ. Sans valeur, aucune borne ancienne n'est ajoutée : les arrêts de principe historiques restent couverts."
-                },
-                "date_fin": {
-                    "type": "string",
-                    "description": "Date maximale AAAA-MM-JJ. Sans valeur, aucune borne n'est ajoutée."
-                },
-                "batch_target_tokens": {
-                    "type": "integer",
-                    "minimum": 5000,
-                    "maximum": 150000,
-                    "default": 60000,
-                    "description": "Volume estimé visé par lot de cartographie. Une décision plus longue reste entière dans son propre lot."
-                },
-                "batch_max_decisions": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 100,
-                    "default": 1,
-                    "description": "Nombre maximal de décisions par lot. Par défaut, chaque tâche de revue reçoit une seule décision."
-                },
-                "fetch_workers": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 8,
-                    "default": 4,
-                    "description": "Téléchargements de textes intégraux simultanés."
-                },
-                "output_dir": {
-                    "type": "string",
-                    "description": "Dossier racine de sortie choisi par l'appelant. Défaut : le dossier Downloads de l'utilisateur. Le corpus y est créé dans un sous-dossier 'AAAA-MM-JJ - Question', à côté du rapport Markdown homonyme."
-                }
-            },
-            "required": ["question", "query"]
-        }
-    },
 
 ]
 
-TOOLS_WRITING_FILES = {"Build_Research_Corpus"}
-
 for _tool in MCP_TOOLS:
     _tool["annotations"] = {
-        "readOnlyHint": _tool["name"] not in TOOLS_WRITING_FILES,
+        "readOnlyHint": True,
         "destructiveHint": False,
         "openWorldHint": True,
     }
