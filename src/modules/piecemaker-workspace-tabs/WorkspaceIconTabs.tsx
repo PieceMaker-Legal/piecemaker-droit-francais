@@ -1,4 +1,4 @@
-import { Folder, GitBranch, Globe, MessageSquare, MoreVertical, Terminal } from 'lucide-react';
+import { Folder, GitBranch, Globe, MessageSquare, MoreVertical, Terminal, type LucideIcon } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,7 @@ import { PluginIcon, usePlugins } from '@/modules/plugins';
 import { useOpenWorkspacePanels } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
 import type { AppTab } from '@/shared/types';
 import { ActionMenu, Pill, PillBar, Tooltip } from '@/shared/ui';
+import { cn } from '@/shared/utils';
 import '@/modules/piecemaker-workspace-tabs/workspaceIconTabs.css';
 
 type WorkspaceIconTabsProps = {
@@ -15,6 +16,13 @@ type WorkspaceIconTabsProps = {
   shouldShowTasksTab: boolean;
   shouldShowBrowserTab: boolean;
 };
+
+function pluginMenuIcon(plugin: { name: string; icon: string }) {
+  const PluginMenuIcon = ({ className }: { className?: string }) => (
+    <PluginIcon pluginName={plugin.name} iconFile={plugin.icon} className={cn(className, 'flex items-center justify-center [&>svg]:h-full [&>svg]:w-full')} />
+  );
+  return PluginMenuIcon as unknown as LucideIcon;
+}
 
 export function WorkspaceIconTabs({ activeTab, setActiveTab, shouldShowBrowserTab }: WorkspaceIconTabsProps) {
   const { t } = useTranslation();
@@ -94,7 +102,7 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab, shouldShowBrowserTa
             variant="ghost"
             size="icon"
             triggerClassName="piecemaker-workspace-icon-tab"
-            items={overflowTabs.map((tab) => ({ key: tab.id, label: tab.label, icon: tab.icon ?? undefined, onSelect: () => setActiveTab(tab.id) }))}
+            items={overflowTabs.map((tab) => ({ key: tab.id, label: tab.label, icon: 'plugin' in tab ? pluginMenuIcon(tab.plugin) : tab.icon ?? undefined, onSelect: () => setActiveTab(tab.id) }))}
           />
         )}
       </PillBar>

@@ -64,6 +64,14 @@ it('place le surplus dans le menu et conserve l’onglet actif visible après re
   expect(screen.queryByRole('button', { name: 'tabs.more' })).toBeNull();
 });
 
+it('affiche l’icône du plugin dans le menu de débordement', () => {
+  width = 114;
+  render(<WorkspaceIconTabs activeTab="files" setActiveTab={vi.fn()} shouldShowTasksTab shouldShowBrowserTab />);
+  act(() => resize());
+  fireEvent.click(screen.getByRole('button', { name: 'tabs.more' }));
+  expect(screen.getByRole('menuitem', { name: 'Exemple' }).querySelector('svg')).not.toBeNull();
+});
+
 it('permet de changer d’onglet au clavier', () => {
   const setActiveTab = vi.fn();
   render(<WorkspaceIconTabs activeTab="chat" setActiveTab={setActiveTab} shouldShowTasksTab={false} shouldShowBrowserTab={false} />);
