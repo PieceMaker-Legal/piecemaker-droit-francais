@@ -148,6 +148,7 @@ function claudeCommand(request: SessionRequest): Command {
       '-p',
       '--no-session-persistence',
       '--model', request.model,
+      '--effort', 'low',
       '--input-format', 'stream-json',
       '--output-format', 'stream-json',
       '--verbose',
@@ -162,7 +163,7 @@ function claudeCommand(request: SessionRequest): Command {
 
 function codexCommand(request: SessionRequest, directory: string): Command {
   const outputFile = path.join(directory, `codex-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
-  const args = ['exec', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--color', 'never', '-C', directory, '-m', request.model, '-o', outputFile, '-'];
+  const args = ['exec', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--color', 'never', '-C', directory, '-m', request.model, '-c', 'model_reasoning_effort="low"', '-o', outputFile, '-'];
   const { nodePath, codexLauncher, codexPath } = runtime();
   if (nodePath && codexLauncher && fs.existsSync(codexLauncher)) return { command: nodePath, args: [codexLauncher, ...args], outputFile };
   return { command: codexPath || 'codex', args, outputFile };
