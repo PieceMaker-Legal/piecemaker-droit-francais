@@ -24,7 +24,7 @@ export function createHistoryView(app: App): View {
     <div style="display:flex;align-items:center;gap:8px">
       <h1 class="ptr-page-title">Analyses tabulaires</h1>
       <span class="ptr-spacer"></span>
-      <button type="button" class="ptr-button ptr-button-primary" data-new-table>+ Nouveau tableau</button>
+      <button type="button" class="ptr-button ptr-button-primary" data-new-table>+ Nouvelle analyse</button>
     </div>
     <div style="display:flex;align-items:flex-end;gap:8px">
       <label class="ptr-field" style="width:280px"><span class="ptr-label">Rechercher</span><input class="ptr-input" data-search placeholder="Nom du tableau…"></label>
