@@ -169,7 +169,6 @@ export default function ProjectCreationWizard({
               tokenLoadError={tokenLoadError}
               isCreating={isCreating}
               onWorkspacePathChange={(workspacePath) => updateField('workspacePath', workspacePath)}
-              onGithubUrlChange={(githubUrl) => updateField('githubUrl', githubUrl)}
               onTokenModeChange={updateTokenMode}
               onSelectedGithubTokenChange={(selectedGithubToken) =>
                 updateField('selectedGithubToken', selectedGithubToken)
