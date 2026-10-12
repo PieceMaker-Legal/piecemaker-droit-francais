@@ -193,7 +193,9 @@ export type RowRequest = {
 
 export type CreateReviewRequest = {
   project: string;
-  templateId: string;
+  templateId?: string;
+  templateName?: string;
+  columns?: TemplateColumn[];
   title: string;
   rows: RowRequest[];
   provider: Provider;
@@ -282,6 +284,8 @@ export type RunRequest = {
 
 export const OPEN_EVENT = 'piecemaker:tabular-review-open';
 export const PENDING_TARGET_KEY = '__piecemakerTabularReviewTarget';
+export const SHOW_EVENT = 'piecemaker:tabular-review-show';
+export const PENDING_SHOW_KEY = '__piecemakerTabularReviewShow';
 
 export type ResearchSource = 'cassation' | 'appel' | 'conseil_etat' | 'caa' | 'premiere_instance';
 

@@ -18,6 +18,7 @@ export type App = {
   setTemplates(templates: Template[]): void;
   onTemplatesChange(callback: (templates: Template[]) => void): () => void;
   openReview(project: string, file: string): void;
+  newTable(project?: string | null): void;
   updateResearch(project: string, file: string): void;
   takeResearchUpdate(): { project: string; file: string } | null;
   takeTargetProject(): string | null;
