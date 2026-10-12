@@ -266,7 +266,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       return;
     }
     showTab('history');
-    app.newTable(request.project);
   };
   window.addEventListener(SHOW_EVENT, onShow);
   const initialRequest = takeShowRequest();
@@ -276,8 +275,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
 
   showTab('history');
   if (initialRequest?.project && initialRequest.review) app.openReview(initialRequest.project, initialRequest.review);
-  else if (initialRequest?.project) app.newTable(initialRequest.project);
-  else {
+  else if (!initialRequest?.project) {
     const target = app.takeTargetProject();
     if (target) app.newTable(target);
   }
