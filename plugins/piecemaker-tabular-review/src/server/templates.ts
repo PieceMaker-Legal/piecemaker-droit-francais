@@ -7,6 +7,7 @@ import { COLUMN_ACTIONS, COLUMN_FORMATS } from '../shared.js';
 import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 
 const TEMPLATES_FILE = path.join(PLUGIN_HOME, 'templates.json');
+const LIBRARY_TEMPLATES_DIR = path.join(PLUGIN_HOME, 'library');
 export const MAX_COLUMNS = 40;
 
 type TemplateSeed = Omit<Template, 'id' | 'updatedAt'>;
@@ -78,7 +79,25 @@ function seeded(seeds: TemplateSeed[]): Template[] {
   return seeds.map((template) => ({ ...template, id: randomUUID(), updatedAt: now }));
 }
 
+function libraryTemplates(own: Template[]): Template[] {
+  if (!fs.existsSync(LIBRARY_TEMPLATES_DIR)) return [];
+  const ids = new Set(own.map((template) => template.id));
+  const found: Template[] = [];
+  for (const file of fs.readdirSync(LIBRARY_TEMPLATES_DIR).filter((name) => name.endsWith('.json')).sort()) {
+    try {
+      const template = normalizeTemplate(JSON.parse(fs.readFileSync(path.join(LIBRARY_TEMPLATES_DIR, file), 'utf8')));
+      if (`${template.id}.json` === file && !ids.has(template.id)) found.push(template);
+    } catch {}
+  }
+  return found;
+}
+
 export function readTemplates(): Template[] {
+  const own = readOwnTemplates();
+  return [...own, ...libraryTemplates(own)];
+}
+
+function readOwnTemplates(): Template[] {
   if (!fs.existsSync(TEMPLATES_FILE)) {
     const templates = seeded([...DEFAULT_TEMPLATES, ...Object.values(LATER_SEEDS)]);
     saveTemplates(templates, Object.keys(LATER_SEEDS));
@@ -145,18 +164,18 @@ export function normalizeTemplate(value: unknown): Template {
 
 export function upsertTemplate(value: unknown): Template[] {
   const template = { ...normalizeTemplate(value), updatedAt: new Date().toISOString() };
-  const templates = readTemplates();
+  const templates = readOwnTemplates();
   const index = templates.findIndex((entry) => entry.id === template.id);
   if (index >= 0) templates[index] = template;
   else templates.push(template);
   saveTemplates(templates);
-  return templates;
+  return readTemplates();
 }
 
 export function deleteTemplate(id: unknown): Template[] {
-  const templates = readTemplates().filter((entry) => entry.id !== id);
-  saveTemplates(templates);
-  return templates;
+  saveTemplates(readOwnTemplates().filter((entry) => entry.id !== id));
+  if (typeof id === 'string' && /^[\w-]{1,80}$/.test(id)) fs.rmSync(path.join(LIBRARY_TEMPLATES_DIR, `${id}.json`), { force: true });
+  return readTemplates();
 }
 
 export function findTemplate(id: unknown): Template {

@@ -9,6 +9,7 @@ import { providerSkillsService } from '@/modules/providers/index.js';
 import { createLibraryStore } from './store.js';
 import { createLibraryRouter } from './routes.js';
 import { createLibraryMarketplaceRouter, scanLibrarySources } from './marketplace.js';
+import { createMikeRouter } from './mike.js';
 
 export { installLibraryRuntime } from './runtime.js';
 export { installLibrarySkillVisibility } from './skill-visibility.js';
@@ -32,6 +33,7 @@ export async function openLibrary(home: string, applicationRoot: string, listPro
     next();
   });
   router.use(createLibraryRouter(store));
+  router.use(createMikeRouter(store, os.homedir()));
   router.use(createLibraryMarketplaceRouter(store, applicationRoot, os.homedir(), listProjectPaths, reader));
   return { store, router };
 }

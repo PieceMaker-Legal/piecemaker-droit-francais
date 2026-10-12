@@ -186,4 +186,26 @@ describe('modèles', () => {
 
     expect(templates.readTemplates().map((template) => template.name)).toEqual(['Ancien']);
   });
+
+  it('propose les analyses tabulaires de la Bibliothèque, remplacées par leur version modifiée et retirées à la suppression', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-home-'));
+    directories.push(home);
+    vi.stubEnv('HOME', home);
+    vi.resetModules();
+    const templates = await import('../server/templates.js');
+    const root = path.join(home, '.piecemaker', 'tabular-review');
+    fs.mkdirSync(path.join(root, 'library'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'templates.json'), JSON.stringify({ version: 1, seeds: ['tri-pieces'], templates: [{ id: 'a', name: 'Ancien', description: '', columns: [{ name: 'Q', prompt: 'Q ?', format: 'text' }] }] }));
+    const library = { id: 'mike-bail-exemple', name: 'Revue de bail exemple', description: '', columns: [{ name: 'Loyer', prompt: 'Quel est le loyer ?', format: 'amount' }] };
+    fs.writeFileSync(path.join(root, 'library', 'mike-bail-exemple.json'), JSON.stringify(library));
+    fs.writeFileSync(path.join(root, 'library', 'illisible.json'), '{');
+
+    expect(templates.readTemplates().map((template) => template.name)).toEqual(['Ancien', 'Revue de bail exemple']);
+    templates.upsertTemplate({ ...library, name: 'Revue de bail modifiée' });
+    expect(templates.readTemplates().map((template) => template.name)).toEqual(['Ancien', 'Revue de bail modifiée']);
+    templates.deleteTemplate('mike-bail-exemple');
+
+    expect(templates.readTemplates().map((template) => template.name)).toEqual(['Ancien']);
+    expect(fs.existsSync(path.join(root, 'library', 'mike-bail-exemple.json'))).toBe(false);
+  });
 });
