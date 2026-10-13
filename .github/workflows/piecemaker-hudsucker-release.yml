@@ -37,13 +37,17 @@ jobs:
       - name: Build better-sqlite3 for Electron
         shell: bash
         run: |
-          SQLITE_VERSION="$(node -p "require('./package-lock.json').packages['node_modules/better-sqlite3'].version")"
           ELECTRON_VERSION="$(node -p "require('./package-lock.json').packages['node_modules/electron'].version")"
-          mkdir -p "$RUNNER_TEMP/sqlite" && cd "$RUNNER_TEMP/sqlite"
-          npm init -y >/dev/null
-          npm install "better-sqlite3@$SQLITE_VERSION" --ignore-scripts --no-audit --no-fund
-          cd node_modules/better-sqlite3
-          npx --yes node-gyp@11 rebuild --release --arch=x64 --target="$ELECTRON_VERSION" --dist-url=https://electronjs.org/headers
+          {
+            npm ci --ignore-scripts --no-audit --no-fund &&
+            npx electron-rebuild --version "$ELECTRON_VERSION" --arch x64 --only better-sqlite3 --force
+          } > "$RUNNER_TEMP/sqlite.log" 2>&1 || {
+            cat "$RUNNER_TEMP/sqlite.log"
+            echo "::error::$(tail -c 3500 "$RUNNER_TEMP/sqlite.log" | tr '\r\n' '  ')"
+            exit 1
+          }
+          mkdir -p "$RUNNER_TEMP/sqlite/node_modules/better-sqlite3/build/Release"
+          cp node_modules/better-sqlite3/build/Release/better_sqlite3.node "$RUNNER_TEMP/sqlite/node_modules/better-sqlite3/build/Release/"
 
       - name: Stage assets
         shell: bash
