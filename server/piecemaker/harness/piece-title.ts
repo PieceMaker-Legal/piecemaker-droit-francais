@@ -1,7 +1,9 @@
 import path from 'node:path';
 
+import type BetterSqlite3 from 'better-sqlite3';
+
 type PieceRow = { label: string | null; doc_date: string | null; nature: string | null; path: string | null };
-type Database = { prepare: (sql: string) => { get: (...values: unknown[]) => unknown; all: (...values: unknown[]) => unknown[] } };
+type Database = Pick<BetterSqlite3.Database, 'prepare'>;
 
 const stem = (file: string) => path.basename(file, path.extname(file)).toLowerCase();
 const frenchDate = (date: string) => date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1');
