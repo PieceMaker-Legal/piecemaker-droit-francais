@@ -107,7 +107,7 @@ Single user-facing entry point (ports, clone/update, deps, socle components, app
 
 ## Installation de l'app de bureau (`desktop-bootstrap/`)
 
-Installateur autonome, sans rapport avec la commande `piecemaker` ni avec `server/piecemaker/vendor/installer/` : une commande `curl` (mac) / `irm` (Windows) construit l'app Electron sur le poste via la chaîne CloudCLI existante (`npm run desktop:pack`), puis demande en **une fenêtre à un clic** l'autorisation d'enregistrer un certificat auto-signé (CA TLS locale + signature de code). Aucun fichier CloudCLI modifié. Détail, certificats, désinstallation et limites : `docs/installation-app-electron.md`.
+Installateur autonome, sans rapport avec la commande `piecemaker` ni avec `server/piecemaker/vendor/installer/` : une commande `curl` (mac) / `irm` (Windows) construit l'app Electron sur le poste via la chaîne CloudCLI existante (`npm run desktop:pack`) — sous Windows elle télécharge l'app précompilée que `.github/workflows/piecemaker-windows-release.yml` attache à chaque release (construction locale en repli) —, puis demande en **une fenêtre à un clic** l'autorisation d'enregistrer un certificat auto-signé (CA TLS locale + signature de code). Aucun fichier CloudCLI modifié. Détail, certificats, désinstallation et limites : `docs/installation-app-electron.md`.
 
 ## Développement local
 

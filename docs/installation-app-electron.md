@@ -140,6 +140,30 @@ indépendants, chacun suffisant :
 `composants/install.test.mjs` vérifie qu'une commande aboutit alors que le
 dossier courant a été supprimé ; `lib/place.test.mjs` vérifie l'échange.
 
+## Windows : application précompilée à chaque release
+
+Sous Windows, l'installateur ne compile plus rien sur le poste dans le cas
+nominal. À chaque release publiée, le workflow
+`.github/workflows/piecemaker-windows-release.yml` (déclenché par
+`release: published`, relançable à la main avec un `tag`) construit sur
+`windows-latest` et attache à la release :
+
+| Fichier | Contenu |
+|---|---|
+| `piecemaker-hudsucker-win32-x64.exe` | proxy d'anonymisation (Rust) |
+| `better-sqlite3-electron-win32-x64.node` | module natif compilé pour l'Electron du `package-lock.json` |
+| `piecemaker-desktop-win32-x64.tar.gz` | application complète (`win-unpacked`), construite par `desktop-bootstrap/lib/build-release.mjs`, soit le même `buildDesktopApp` que l'installateur |
+
+Chaque fichier a son `.sha256`. L'installateur télécharge l'archive de
+l'application, vérifie l'empreinte, la décompresse avec le `tar.exe` de
+Windows dans `~/.piecemaker/bootstrap/prebuilt/<tag>/` et contrôle son contenu,
+puis enchaîne l'installation, le certificat, la signature, les raccourcis et
+les composants Python. Si l'archive est absente ou invalide (par exemple
+pendant les quelques minutes qui suivent la publication, le temps que le
+workflow se termine), il retombe sur la construction locale. Celle-ci
+télécharge alors le proxy et better-sqlite3 précompilés : Visual Studio et
+Rust ne sont jamais nécessaires.
+
 ## Test du proxy en bac à sable
 
 Si le binaire `piecemaker-hudsucker` ne démarre pas ou n'anonymise pas, le
@@ -385,7 +409,9 @@ desktop-bootstrap/
     electron-piecemaker/main.js  point d'entrée Electron, ouvre la cible locale
   lib/
     install.mjs                  orchestrateur des étapes
-    build.mjs                    build, stage, serveur embarqué, surcouche, empaquetage
+    build.mjs                    build, stage, serveur embarqué, surcouche, empaquetage ; téléchargements précompilés (Windows)
+    build-release.mjs            construction de l'archive Windows par la CI (piecemaker-windows-release.yml)
+    windows-npm-shim.mjs         préchargement : npm/npx lancés via npm-cli.js sous Windows
     certificates.mjs             aiguillage de plateforme
     certificates-darwin.mjs      openssl, confiance utilisateur, codesign
     certificates-win32.mjs       New-SelfSignedCertificate, magasins, Authenticode
@@ -449,12 +475,12 @@ l'ouverture ne sont proposés et rien n'attend.
 - La commande `curl` pointe sur `main`, mais construit la dernière *release*
   publiée : tant qu'une release ne contient pas `desktop-bootstrap/`, utiliser
   `PIECEMAKER_TAG` pour viser un tag qui l'embarque.
-- La construction compile les dépendances natives (`better-sqlite3`, `bcrypt`,
-  `node-pty`). Sur macOS, les *Command Line Tools* sont vérifiés en amont ; sur
-  Windows, en l'absence de binaire pré-compilé, les *Visual Studio Build Tools*
-  (charge de travail C++) sont nécessaires.
-- Première installation longue (dépendances + build), quelques minutes ; les
-  suivantes réutilisent le cache npm et les sources déjà téléchargées.
+- Sur macOS, la construction compile les dépendances natives (`better-sqlite3`,
+  `bcrypt`, `node-pty`) ; les *Command Line Tools* sont vérifiés en amont. Sur
+  Windows, voir « Windows : application précompilée à chaque release ».
+- Sur macOS, première installation longue (dépendances + build), quelques
+  minutes. Sur Windows, quelques minutes seulement grâce à l'archive
+  précompilée, sauf repli sur la construction locale.
 - Le certificat de signature est auto-signé : il supprime l'avertissement lié à
   un binaire non signé, mais ne vaut pas notarisation Apple ni réputation
   SmartScreen.

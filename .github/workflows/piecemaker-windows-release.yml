@@ -1,4 +1,4 @@
-name: PieceMaker Hudsucker Release
+name: PieceMaker Windows Release
 
 on:
   release:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing release tag to attach the prebuilt anonymisation proxy to"
+        description: "Existing release tag to attach the prebuilt Windows assets to"
         required: true
         type: string
 
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build-windows:
-    name: Build piecemaker-hudsucker (win32-x64)
+    name: Build Windows assets (win32-x64)
     runs-on: windows-latest
     env:
       TAG: ${{ inputs.tag || github.event.release.tag_name }}
@@ -65,3 +65,29 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Build desktop app
+        shell: bash
+        env:
+          CI: "true"
+          PIECEMAKER_NO_PROGRESS: "1"
+          PIECEMAKER_HOME: ${{ runner.temp }}/piecemaker-home
+          PIECEMAKER_REPO: ${{ github.repository }}
+        run: |
+          git clean -ffdxq
+          export PIECEMAKER_SRC_DIR="$(cygpath -w "$GITHUB_WORKSPACE")" PIECEMAKER_TAG="$TAG"
+          node desktop-bootstrap/lib/build-release.mjs "$(cygpath -w "$RUNNER_TEMP/app/piecemaker-desktop-win32-x64.tar.gz")" > "$RUNNER_TEMP/app.log" 2>&1 || {
+            tail -c 20000 "$RUNNER_TEMP/app.log"
+            echo "::error::$(tail -c 3500 "$RUNNER_TEMP/app.log" | tr '\r\n' '  ')"
+            exit 1
+          }
+          tail -n 20 "$RUNNER_TEMP/app.log"
+          cd "$RUNNER_TEMP/app"
+          sha256sum piecemaker-desktop-win32-x64.tar.gz | cut -d' ' -f1 > piecemaker-desktop-win32-x64.tar.gz.sha256
+          ls -la
+
+      - name: Attach desktop app to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$RUNNER_TEMP"/app/* --clobber --repo "$GITHUB_REPOSITORY"

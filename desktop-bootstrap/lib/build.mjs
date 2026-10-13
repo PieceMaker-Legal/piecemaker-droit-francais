@@ -294,6 +294,32 @@ async function downloadPrebuiltSqlite(stageDir) {
   return downloadReleaseAsset('better-sqlite3-electron-win32-x64.node', destination, 'better-sqlite3 pour Electron');
 }
 
+export function windowsTar() {
+  return path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+}
+
+export async function downloadPrebuiltApp(workDir) {
+  if (process.platform !== 'win32') return null;
+  ui.step("Téléchargement de l'application précompilée…");
+  const archive = path.join(workDir, 'piecemaker-desktop-win32-x64.tar.gz');
+  if (!(await downloadReleaseAsset('piecemaker-desktop-win32-x64.tar.gz', archive, "Paquet de l'application"))) return null;
+  const destination = path.join(workDir, 'prebuilt', releaseTag);
+  try {
+    await fs.rm(destination, { recursive: true, force: true });
+    await fs.mkdir(destination, { recursive: true });
+    await run(windowsTar(), ['-xzf', archive, '-C', destination]);
+    if (!(await exists(path.join(destination, `${PRODUCT_NAME}.exe`)))) throw new Error(`${PRODUCT_NAME}.exe absent de l'archive`);
+    await verifyBuiltApp(destination);
+    ui.ok(`Application précompilée prête : ${destination}`);
+    return destination;
+  } catch (error) {
+    ui.warn(`Application précompilée inutilisable (${error.message}) — construction locale.`);
+    return null;
+  } finally {
+    await fs.rm(archive, { force: true });
+  }
+}
+
 async function buildAnonymizerProxy(sourceDir) {
   const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
   const destinationDir = path.join(sourceDir, 'server', 'piecemaker', 'anonymizer', 'bin');
