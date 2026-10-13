@@ -338,6 +338,20 @@ rejette (*MAC verification failed*).
 
 ### Désinstaller
 
+Sous Windows, la voie standard est **Paramètres › Applications › Applications
+installées › PieceMaker › Désinstaller**. L'installateur y enregistre
+PieceMaker sous `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\PieceMaker`
+(par utilisateur, sans droits administrateur). Le bouton lance
+`PieceMaker.exe --piecemaker-uninstall`, qui demande confirmation puis exécute
+la même désinstallation que l'onglet de l'application.
+
+Avant de supprimer quoi que ce soit, le script Windows attend 15 s puis arrête
+les processus qui verrouillent encore des fichiers : serveur local, workers
+Python du venv, fenêtre Edge de l'installateur (dont le profil est dans
+`bootstrap`). Les certificats sont retirés un par un (personnel, éditeurs
+approuvés, puis racine, qui demande une confirmation Windows), et l'entrée
+« Applications installées » est retirée en dernier.
+
 Dans l'application installée, les réglages ont un onglet **Désinstaller** sous Notifications.
 Cet onglet retire tout ce que PieceMaker a installé ou écrit, sauf la base
 `auth.db` (et ses fichiers `-wal`/`-shm`) et la Bibliothèque

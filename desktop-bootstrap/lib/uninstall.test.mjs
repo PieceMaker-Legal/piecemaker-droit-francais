@@ -6,6 +6,7 @@ import {
   packagedApplicationRoot,
   removalPlan,
   windowsUninstallScript,
+  WINDOWS_UNINSTALL_KEY,
 } from '../../electron/uninstallPlan.js';
 
 test('repère le bundle macOS et refuse un dossier qui n’est pas l’application', () => {
@@ -104,4 +105,13 @@ test('le script Windows retire les raccourcis et le certificat local', () => {
   assert.match(script, /PieceMaker'/);
   assert.match(script, /models--fastino--gliner2\.5-multi-v1/);
   assert.match(script, /mineru\.json/);
+});
+
+test('le script Windows attend et arrête les processus qui verrouillent les fichiers, puis retire l’entrée « Applications installées »', () => {
+  const plan = removalPlan('C:\Programs\PieceMaker', 'C:\Users\me', {}, 'win32', { productDataRoot: 'C:\Users\me\.piecemaker-droit-francais' });
+  const script = windowsUninstallScript(plan);
+  assert.match(script, /function Holders/);
+  assert.match(script, /Stop-Process -Id \$process\.ProcessId -Force/);
+  assert.match(script, /foreach \(\$store in 'My', 'TrustedPublisher', 'Root'\)/);
+  assert.ok(script.includes(`Remove-Item -LiteralPath '${WINDOWS_UNINSTALL_KEY}' -Recurse -Force`));
 });
