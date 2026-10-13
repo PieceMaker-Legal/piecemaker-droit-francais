@@ -3,6 +3,18 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.25](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.24...v2.0.25) (2026-10-13)
+
+### New Features
+
+* **desktop-bootstrap:** proxy d'anonymisation précompilé pour Windows ([40e4ea6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/40e4ea63815fdff355a3750501c89cbc1d697d38))
+
+### Bug Fixes
+
+* **ci:** compiler better-sqlite3 pour Electron via @electron/rebuild du dépôt ([d6bca58](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d6bca58bfae4cf558c7b6c54cdbfd19abf6130ad))
+* **desktop-bootstrap:** build Electron Windows sans Visual Studio ([d0494fa](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d0494fa41cd527276171b76eedece6af8822444c))
+* **desktop-bootstrap:** installation Windows bloquée (spawn EINVAL, rustup, détection de Node) ([e848230](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e848230818f5f96b8e9a29dcdda14cb1b08be9c2))
+
 ## [2.0.24](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.23...v2.0.24) (2026-10-13)
 
 ### ⚠ BREAKING CHANGES
