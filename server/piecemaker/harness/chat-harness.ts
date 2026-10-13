@@ -81,26 +81,15 @@ export function installChatCitationHarness(options: {
       })),
     });
     let lastText: NormalizedMessage | undefined;
-    let lastDelta: NormalizedMessage | undefined;
-    let heldStreamEnd: NormalizedMessage | undefined;
     let heldText = false;
     let interrupted = false;
     let completionReceived = false;
     let completion: Promise<void> | undefined;
-    const flush = () => {
-      const content = turn.flush();
-      if (content && lastDelta) writer.send({ ...lastDelta, content });
-    };
     const finish = () => {
       if (!completion) completion = (async () => {
-        flush();
         options.folderHistory?.end({ cwd, request: command, conclusion: lastText?.content ?? '', aborted: interrupted, author: agentIdentity(provider, runtimeOptions.model) });
         const suffix = interrupted ? '' : await turn.finish();
-        if (heldStreamEnd) {
-          if (suffix && lastDelta) writer.send({ ...lastDelta, content: suffix });
-          writer.send(heldStreamEnd);
-        }
-        if (lastText && (suffix || heldStreamEnd || heldText)) writer.send({ ...lastText, content: `${lastText.content ?? ''}${suffix}` });
+        if (lastText && heldText) writer.send({ ...lastText, content: `${lastText.content ?? ''}${suffix}` });
       })();
       return completion;
     };
@@ -120,20 +109,18 @@ export function installChatCitationHarness(options: {
           }
           turn.observe(message);
           if (message.kind === 'stream_delta') {
-            lastDelta = message;
-            const content = turn.delta(message.content ?? '');
-            if (content) target.send({ ...message, content });
+            turn.delta(message.content ?? '');
             return;
           }
           if (message.kind === 'stream_end') {
-            flush();
-            if (turn.hasCitations) { heldStreamEnd = message; return; }
+            turn.flush();
+            return;
           }
           if (message.kind === 'text' && message.role === 'assistant') {
-            flush();
+            turn.flush();
             lastText = { ...message, content: turn.text(message.content ?? '') };
-            heldText = !heldStreamEnd && turn.hasCitations;
-            if (!heldStreamEnd && !heldText) target.send(lastText);
+            heldText = turn.hasCitations;
+            if (!heldText) target.send(lastText);
             return;
           }
           if (message.kind === 'complete') {
