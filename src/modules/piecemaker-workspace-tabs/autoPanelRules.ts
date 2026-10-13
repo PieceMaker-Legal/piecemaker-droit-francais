@@ -65,9 +65,60 @@ function pieceMakerTarget(tool: string, input: Input): AutoPanelTarget | null {
   return null;
 }
 
+function tokens(command: string): string[] {
+  const out: string[] = [];
+  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  for (const match of command.matchAll(pattern)) {
+    out.push(match[1] ?? match[2] ?? match[3] ?? '');
+  }
+  return out;
+}
+
+function flagMap(argv: string[]): { flags: Input; rest: string[] } {
+  const flags: Input = {};
+  const rest: string[] = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === '--') {
+      rest.push(...argv.slice(index + 1));
+      break;
+    }
+    if (!token.startsWith('--')) {
+      rest.push(token);
+      continue;
+    }
+    const eq = token.indexOf('=');
+    const key = (eq === -1 ? token.slice(2) : token.slice(2, eq)).replace(/-/g, '_');
+    if (eq !== -1) flags[key] = token.slice(eq + 1);
+    else if (argv[index + 1] !== undefined && !argv[index + 1].startsWith('-')) {
+      index += 1;
+      flags[key] = argv[index];
+    } else flags[key] = true;
+  }
+  return { flags, rest };
+}
+
+function pieceMakerCliTarget(command: string): AutoPanelTarget | null {
+  const argv = tokens(command);
+  const script = argv.findIndex((token) => /(?:^|[/\\])pm\.mjs$/.test(token));
+  if (script < 0) return null;
+  const { flags, rest } = flagMap(argv.slice(script + 1));
+  const tool = rest[0];
+  if (tool === 'afficher') return showTarget(flags);
+  if (tool === 'chronologie') return { kind: 'dossier', view: 'chronology' };
+  if (tool === 'tabular_review') return tabularReviewTarget({ ...flags, action: rest[1] });
+  if (tool === 'sql') return sqlTarget(text(flags.requete) || rest.slice(1).join(' '));
+  return null;
+}
+
 export function autoPanelTarget(toolName: string, toolInput: unknown): AutoPanelTarget | null {
   const input = toolInput && typeof toolInput === 'object' ? toolInput as Input : {};
-  if (toolName === 'Bash') return docxTarget(text(input.command));
+  const command = text(input.command);
+  if (command) {
+    const cli = pieceMakerCliTarget(command);
+    if (cli) return cli;
+  }
+  if (toolName === 'Bash') return docxTarget(command);
   const plan = planCall(toolName, toolInput);
   if (plan) return { kind: 'plan', plan };
   const pieceMakerTool = PIECEMAKER_TOOL.exec(toolName)?.[1]?.toLowerCase();
