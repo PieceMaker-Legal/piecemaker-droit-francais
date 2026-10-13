@@ -48,7 +48,7 @@ $nodeBin = $null
 $systemNode = Get-Command node -ErrorAction SilentlyContinue
 if ($systemNode) {
   try {
-    $major = [int](& $systemNode.Source -p 'process.versions.node.split(".")[0]')
+    $major = [int](((& $systemNode.Source -v) -replace '^v', '') -split '\.')[0]
     if ($major -ge $minNodeMajor) { $nodeBin = $systemNode.Source }
   } catch {
     $nodeBin = $null

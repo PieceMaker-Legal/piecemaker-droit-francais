@@ -8,7 +8,17 @@ import { BUNDLE_DIR, embedBundledPlugins } from './plugins.mjs';
 import { ui } from './ui.mjs';
 import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath } from './paths.mjs';
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+function npmTool(tool) {
+  if (process.platform !== 'win32') return (args, options) => run(tool, args, options);
+  const cli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', `${tool}-cli.js`);
+  return async (args, options = {}) => {
+    if (await exists(cli)) return run(process.execPath, [cli, ...args], options);
+    return run(`${tool}.cmd`, args.map((arg) => `"${arg}"`), { ...options, shell: true });
+  };
+}
+
+const npm = npmTool('npm');
+const npx = npmTool('npx');
 const bootstrapRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 async function exists(target) {
@@ -111,7 +121,7 @@ async function repairStagedTree(stageDir) {
     const missing = await findMissingDependencies(stageDir);
     if (missing.length === 0) return;
     ui.detail(`Dépendances manquantes complétées : ${missing.join(', ')}`);
-    await run(npmCommand, ['install', '--no-save', '--omit=dev', '--no-audit', '--no-fund', ...missing], {
+    await npm(['install', '--no-save', '--omit=dev', '--no-audit', '--no-fund', ...missing], {
       cwd: stageDir,
     });
   }
@@ -234,7 +244,9 @@ async function ensureCargo() {
 
   ui.step("Installation de Rust pour le proxy d'anonymisation…");
   if (process.platform === 'win32') {
-    const installer = path.join(os.tmpdir(), 'piecemaker-rustup-init.exe');
+    const installerDir = path.join(os.tmpdir(), 'piecemaker-rustup');
+    await fs.mkdir(installerDir, { recursive: true });
+    const installer = path.join(installerDir, 'rustup-init.exe');
     await run('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-Command',
       `Invoke-WebRequest -UseBasicParsing -Uri https://win.rustup.rs/x86_64 -OutFile '${installer}'`,
@@ -284,15 +296,15 @@ async function smokeTestAnonymizerProxy(sourceDir, binary) {
 
 export async function buildDesktopApp(sourceDir) {
   ui.step('Installation des dépendances du projet (plusieurs minutes)…');
-  await run(npmCommand, ['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
-  await run(npmCommand, ['rebuild', 'better-sqlite3', '--no-audit', '--no-fund'], { cwd: sourceDir });
+  await npm(['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
+  await npm(['rebuild', 'better-sqlite3', '--no-audit', '--no-fund'], { cwd: sourceDir });
   await smokeTestAnonymizerProxy(sourceDir, await buildAnonymizerProxy(sourceDir));
 
   ui.step('Compilation du client et du serveur…');
-  await run(npmCommand, ['run', 'build'], { cwd: sourceDir });
+  await npm(['run', 'build'], { cwd: sourceDir });
 
   ui.step("Préparation de l'application de bureau…");
-  await run(npmCommand, ['run', 'desktop:stage'], { cwd: sourceDir });
+  await npm(['run', 'desktop:stage'], { cwd: sourceDir });
   const stageDir = path.join(sourceDir, '.desktop-build', 'desktop-app');
   await embedLocalServer(sourceDir, stageDir);
   await embedDesktopOverlay(stageDir);
@@ -301,7 +313,7 @@ export async function buildDesktopApp(sourceDir) {
   await repairStagedTree(stageDir);
 
   ui.step("Construction de l'application Electron…");
-  await run('npx', ['electron-builder', '--projectDir', '.desktop-build/desktop-app', '--dir'], {
+  await npx(['electron-builder', '--projectDir', '.desktop-build/desktop-app', '--dir'], {
     cwd: sourceDir,
     env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
   });
