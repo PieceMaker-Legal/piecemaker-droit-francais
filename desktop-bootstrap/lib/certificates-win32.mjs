@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { capture, powershell } from './shell.mjs';
+import { capture, mustCapture, powershell } from './shell.mjs';
 import { askCertificateConsent } from './consent.mjs';
 import { ui } from './ui.mjs';
 import {
@@ -145,13 +145,16 @@ export async function trustCertificateAuthority() {
     previous?.ca && `Remove-Item -ErrorAction SilentlyContinue ${quote(`Cert:\\CurrentUser\\Root\\${previous.ca}`)}`,
     previous?.signing && `Remove-Item -ErrorAction SilentlyContinue ${quote(`Cert:\\CurrentUser\\TrustedPublisher\\${previous.signing}`)}`,
   ].filter(Boolean);
-  powershell([
-    '$ErrorActionPreference = "Stop"',
-    ...retired,
-    `Import-Certificate -FilePath ${quote(caCertPath)} -CertStoreLocation Cert:\\CurrentUser\\Root | Out-Null`,
-    `Import-Certificate -FilePath ${quote(signingCertPath)} -CertStoreLocation Cert:\\CurrentUser\\TrustedPublisher | Out-Null`,
-    `if (-not (Test-Path "Cert:\\CurrentUser\\My\\${signing}")) { throw "Certificat de signature introuvable." }`,
-  ].join('; '));
+  mustCapture('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass',
+    '-Command', [
+      '$ErrorActionPreference = "Stop"',
+      ...retired,
+      `Import-Certificate -FilePath ${quote(caCertPath)} -CertStoreLocation Cert:\\CurrentUser\\Root | Out-Null`,
+      `Import-Certificate -FilePath ${quote(signingCertPath)} -CertStoreLocation Cert:\\CurrentUser\\TrustedPublisher | Out-Null`,
+      `if (-not (Test-Path "Cert:\\CurrentUser\\My\\${signing}")) { throw "Certificat de signature introuvable." }`,
+    ].join('; '),
+  ]);
   return true;
 }
 
