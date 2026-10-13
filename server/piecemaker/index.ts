@@ -11,6 +11,7 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
+import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installCodexPlanRuntime } from './codex-plan.js';
 import { createCitationStore } from './harness/citation-store.js';
@@ -83,6 +84,7 @@ installModelDiscovery(providerRegistry);
 const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
 const remoteRouter = startRemoteAccess(applicationRoot);
+installCustomFiles(applicationRoot, piecemakerHome()).catch(() => undefined);
 startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => row.project_path), path.join(piecemakerHome(), 'CLAUDE.md'), (workspace) => {
   declarePieceMakerServer(workspace);
   declareBundledSkills(workspace);
