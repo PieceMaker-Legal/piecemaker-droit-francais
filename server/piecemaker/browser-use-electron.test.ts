@@ -18,7 +18,7 @@ async function registeredMcpEnv() {
   mock.method(providerMcpService, 'removeMcpServerFromAllProviders', async () => []);
   const add = mock.method(providerMcpService, 'addMcpServerToAllProviders', async () => []);
   await browserUseService.registerAgentMcp();
-  return add.mock.calls[0].arguments[0].env;
+  return add.mock.calls[0]!.arguments[0]!.env!;
 }
 
 test('exception CloudCLI : le MCP navigateur de l\'app de bureau tourne en Node, sans relancer l\'app', async () => {
