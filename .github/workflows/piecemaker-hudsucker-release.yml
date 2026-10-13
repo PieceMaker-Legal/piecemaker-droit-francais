@@ -1,0 +1,44 @@
+name: PieceMaker Hudsucker Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to attach the prebuilt anonymisation proxy to"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build piecemaker-hudsucker (win32-x64)
+    runs-on: windows-latest
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+
+      - name: Build
+        run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
+
+      - name: Stage asset
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp server/piecemaker/anonymizer/hudsucker-proxy/target/release/piecemaker-hudsucker.exe dist/piecemaker-hudsucker-win32-x64.exe
+          cd dist
+          sha256sum piecemaker-hudsucker-win32-x64.exe | cut -d' ' -f1 > piecemaker-hudsucker-win32-x64.exe.sha256
+
+      - name: Attach to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
