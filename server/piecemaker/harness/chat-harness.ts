@@ -83,6 +83,7 @@ export function installChatCitationHarness(options: {
     let lastText: NormalizedMessage | undefined;
     let lastDelta: NormalizedMessage | undefined;
     let heldStreamEnd: NormalizedMessage | undefined;
+    let heldText = false;
     let interrupted = false;
     let completionReceived = false;
     let completion: Promise<void> | undefined;
@@ -99,7 +100,7 @@ export function installChatCitationHarness(options: {
           if (suffix && lastDelta) writer.send({ ...lastDelta, content: suffix });
           writer.send(heldStreamEnd);
         }
-        if (lastText && (suffix || heldStreamEnd)) writer.send({ ...lastText, content: `${lastText.content ?? ''}${suffix}` });
+        if (lastText && (suffix || heldStreamEnd || heldText)) writer.send({ ...lastText, content: `${lastText.content ?? ''}${suffix}` });
       })();
       return completion;
     };
@@ -131,7 +132,8 @@ export function installChatCitationHarness(options: {
           if (message.kind === 'text' && message.role === 'assistant') {
             flush();
             lastText = { ...message, content: turn.text(message.content ?? '') };
-            if (!heldStreamEnd) target.send(lastText);
+            heldText = !heldStreamEnd && turn.hasCitations;
+            if (!heldStreamEnd && !heldText) target.send(lastText);
             return;
           }
           if (message.kind === 'complete') {

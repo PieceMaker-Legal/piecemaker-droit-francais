@@ -188,6 +188,12 @@ export function createCitationTurn(options: {
     finish() {
       if (finished) return finished;
       finished = (async () => {
+        const block = overflow || !fullText.includes(OPEN) ? '' : fullText.slice(fullText.indexOf(OPEN));
+        const replay = options.recordVerification === false;
+        if (replay && block) {
+          const saved = await options.store.readTurnSources(options.sessionId, block);
+          if (saved !== null) return saved;
+        }
         const parsed = overflow ? [] : parseCitationsWithDiagnostics(fullText).citations as Citation[];
         const citations = await verifyCitations(parsed, documentText, async (id: string) => decisions.get(id) ?? '') as Citation[];
         if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
@@ -212,8 +218,9 @@ export function createCitationTurn(options: {
           }
         }
         options.emit({ type: 'citations', status: 'final', citations });
-        if (!lines.length) return '';
-        return `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}`;
+        const sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
+        if (!replay && block) await options.store.saveTurnSources(options.sessionId, block, sources).catch(() => {});
+        return sources;
       })();
       return finished;
     },
