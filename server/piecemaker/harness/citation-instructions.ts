@@ -2,6 +2,7 @@ const OPEN = '<CITATION_INSTRUCTION>';
 const CLOSE = '</CITATION_INSTRUCTION>';
 const INSTRUCTIONS = `${OPEN}
 Chaque affirmation doit être justifiée par une citation mot pour mot d'une pièce, d'un texte de loi ou d'une décision lue.
+Aucun message avant la réponse finale : tout le résultat en une seule réponse.
 Marqueurs [1], [2]. Finir par <CITATIONS>[…]</CITATIONS> (JSON strict) :
 Décision : {"ref":1,"kind":"case","decision_id":"text_id passé à consulter_decision","quotes":[{"quote":"extrait exact"}]}.
 Article : {"ref":2,"kind":"article","article_id":"LEGIARTI… passé à consulter_article","quotes":[{"quote":"extrait exact"}]}.
