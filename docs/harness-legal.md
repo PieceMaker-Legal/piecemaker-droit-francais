@@ -73,6 +73,12 @@ Deux points de branchement distincts :
   extrait non vérifié porte « 🔴 [à vérifier – introuvable] », suivi du passage
   le plus proche de la source quand `nearestPassage` (`source-passages.ts`) en
   trouve un — aide à la relecture, jamais réinjectée dans la citation.
+  La liste calculée en direct est conservée (`citation-sources/turns/`, clé :
+  session + bloc `<CITATIONS>`) et reprise telle quelle par l'historique : le
+  texte rechargé est identique au texte diffusé, le client les fusionne, et
+  les sources lues dans un `exec` Codex (invisibles à la relecture) restent
+  vérifiées. Une réponse Codex non diffusée en deltas est retenue jusqu'à la
+  fin du tour pour n'être envoyée qu'une fois, avec sa liste.
 - Dans un `.docx`, l'instruction demande une note de bas de page au lieu de
   `[n]`, et le même bloc `<CITATIONS>` dans le chat (ref = numéro de note) :
   les notes sont donc vérifiées comme le chat. Rien ne contrôle encore que le

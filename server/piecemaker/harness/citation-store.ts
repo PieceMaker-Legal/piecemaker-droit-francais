@@ -27,6 +27,8 @@ type CitationSnapshot = {
 
 export function createCitationStore(homeDir: string) {
   const directory = path.join(homeDir, 'citation-sources');
+  const turnSourcesFile = (sessionId: string, block: string) =>
+    path.join(directory, 'turns', `${createHash('sha256').update(`${sessionId}\0${block}`).digest('hex')}.md`);
   return {
     async recordVerification(sessionId: string, citations: Array<{ ref: number; kind: string; doc_id?: string; decision_id?: string; article_id?: string; verified?: boolean }>) {
       try {
@@ -40,6 +42,20 @@ export function createCitationStore(homeDir: string) {
           })),
         })}\n`, { mode: 0o600 });
       } catch {}
+    },
+    async saveTurnSources(sessionId: string, block: string, sources: string) {
+      const file = turnSourcesFile(sessionId, block);
+      await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+      const temporary = `${file}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporary, sources, { mode: 0o600 });
+        await rename(temporary, file);
+      } finally {
+        await unlink(temporary).catch(() => {});
+      }
+    },
+    async readTurnSources(sessionId: string, block: string) {
+      try { return await readFile(turnSourcesFile(sessionId, block), 'utf8'); } catch { return null; }
     },
     async save(snapshot: CitationSnapshot) {
       const serialized = JSON.stringify(snapshot);

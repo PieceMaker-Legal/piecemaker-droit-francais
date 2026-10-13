@@ -206,3 +206,22 @@ test('historique du dossier : conclusion reconstituée depuis les deltas, dernie
   await runtime.run('mistral', 'Demande', { cwd }, { send: () => {} });
   assert.deepEqual(ends, [{ cwd, request: 'Demande', conclusion: 'Fichier créé.', aborted: false, author: { name: 'Mistral', email: 'mistral@localhost' } }]);
 });
+
+test('Codex : réponse finale envoyée une seule fois, et l’historique reprend les sources vérifiées en direct', async (t) => {
+  const citation = 'Réponse [1].\n<CITATIONS>[{"ref":1,"kind":"case","decision_id":"JURITEXT1","quote":"Passage lu."}]</CITATIONS>';
+  const messages = [
+    message({ kind: 'text', role: 'user', provider: 'codex', id: 'user', content: withCitationInstructions('Question') }),
+    message({ kind: 'tool_use', provider: 'codex', toolId: 'call', toolName: 'mcp__legifrance__consulter_decision', toolInput: { text_id: 'JURITEXT1' } }),
+    message({ kind: 'tool_result', provider: 'codex', toolId: 'call', content: 'Passage lu.' }),
+    message({ kind: 'text', role: 'assistant', provider: 'codex', id: 'reply', content: citation }),
+    message({ kind: 'complete', provider: 'codex', exitCode: 0 }),
+  ];
+  const { runtime, sessions, sent, cwd } = await setup(t, messages);
+  await runtime.run('codex', 'Question', { cwd, sessionId: 'session' }, { send: (data) => sent.push(data as NormalizedMessage) });
+  const replies = sent.filter((event) => event.kind === 'text' && event.role === 'assistant');
+  assert.equal(replies.length, 1);
+  assert.match(replies[0].content ?? '', /« Passage lu\. »/);
+  messages.splice(1, 2);
+  const history = await sessions.fetchHistory('session');
+  assert.equal(history.messages.find((event) => event.role === 'assistant')?.content, replies[0].content);
+});
