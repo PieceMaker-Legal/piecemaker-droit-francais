@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { buildDesktopApp } from './build.mjs';
+import { buildDesktopApp, downloadPrebuiltApp } from './build.mjs';
 import { generateCertificates, isCaTrusted, signApplication, trustCertificateAuthority } from './certificates.mjs';
 import { createShortcuts, installApplication, launchApplication, quitRunningApplication } from './place.mjs';
 import { finishProgress, openProgressWindow, settleProgressWindow } from './progress.mjs';
@@ -37,7 +37,7 @@ async function main() {
   ui.step("Autorité locale du proxy d'anonymisation");
   await generateCertificates();
 
-  const builtArtifact = await buildDesktopApp(sourceDir);
+  const builtArtifact = (await downloadPrebuiltApp(bootstrapHome)) || await buildDesktopApp(sourceDir);
   // Une instance encore ouverte garderait son serveur, donc ses plugins, et
   // `open` ou `start` ne ferait que la ramener au premier plan. Avec
   // --no-launch (mise à jour lancée depuis l'application, sous-processus de son
