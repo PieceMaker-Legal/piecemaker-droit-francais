@@ -110,10 +110,10 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
    l'installation s'arrête sur un message clair et l'application en place
    reste intacte.
 10. **Certificat** — déclaration de confiance et signature, voir ci-dessous.
-11. **Composants Python** — MarkItDown, la bibliothèque GLiNER2 et le reste de
-   `requirements.txt`, dans un venv. Sans eux l'application s'ouvre, mais
-   l'anonymisation et la conversion des pièces ne démarrent pas. Les modèles
-   locaux (GLiNER2-PII, MinerU) ne sont plus téléchargés ici. Le détail est
+11. **Composants Python** — MarkItDown et pypdf (`requirements.txt` sans
+   GLiNER2 ni huggingface-hub), dans un venv. Sans eux l'application s'ouvre,
+   mais la conversion des pièces ne démarre pas. GLiNER2 et MinerU ne sont pas
+   installés ici : ils s'installent depuis l'application, après l'installation. Le détail est
    plus bas.
 12. **Lancement** de l'application, au clic sur « Ouvrir PieceMaker » dans la
     fenêtre d'installation (automatique sans fenêtre).
@@ -176,8 +176,8 @@ si tout passe, 1 sinon.
 
 - un Python 3.10 à 3.13 déjà présent sur le poste, sinon un CPython 3.12
   autonome (python-build-standalone) dans `<destination>/python` ;
-- le venv `<destination>/venv`, avec `requirements.txt` (MarkItDown, pypdf,
-  GLiNER2).
+- le venv `<destination>/venv`, avec `requirements.txt` privé de GLiNER2 et
+  huggingface-hub (MarkItDown, pypdf).
 
 Les modèles locaux — le modèle GLiNER2-PII et MinerU 4 (`mineru==4.0.11`,
 modèle MinerU2.5-Pro en GGUF et modules ONNX de mise en page et d'OCR) — s'installent à la demande depuis l'application :
@@ -377,7 +377,7 @@ desktop-bootstrap/
   install.sh                     entrée macOS (curl | sh)
   install.ps1                    entrée Windows (irm | iex)
   composants/
-    install.mjs                  venv, MarkItDown, bibliothèque GLiNER2
+    install.mjs                  venv, MarkItDown, pypdf
   installer-ui/
     index.html                   page de la fenêtre d'installation
     piste/                       captures de piste.gouv.fr pour le guide
