@@ -7,6 +7,8 @@ import {
   installerCommand,
   installerEnvironment,
   relaunchCommand,
+  windowsInstallerCommand,
+  windowsInstallPath,
   type DesktopUpdateDependencies,
 } from './service.js';
 
@@ -105,4 +107,42 @@ test('non-desktop installs are left to the upstream updater', async () => {
   assert.equal(fromSources.isDesktopInstall(), false);
   assert.equal(withoutRepository.isDesktopInstall(), false);
   assert.equal((await fromSources.update()).success, false);
+});
+
+const WINDOWS_APP_ROOT = 'C:\\Users\\x\\AppData\\Local\\Programs\\PieceMaker\\resources\\app';
+
+test('windowsInstallPath extracts the Windows install folder from the packaged app root', () => {
+  assert.equal(windowsInstallPath(WINDOWS_APP_ROOT, 'win32'), 'C:\\Users\\x\\AppData\\Local\\Programs\\PieceMaker');
+  assert.equal(windowsInstallPath('C:\\code\\piecemaker', 'win32'), null);
+  assert.equal(windowsInstallPath(WINDOWS_APP_ROOT, 'darwin'), null);
+});
+
+test('windowsInstallerCommand starts install.ps1 in a separate PowerShell process', () => {
+  const command = windowsInstallerCommand('PieceMaker-Legal/piecemaker-droit-francais');
+  assert.match(command, /^Start-Process powershell\.exe /);
+  const encoded = /'-EncodedCommand','([^']+)'/.exec(command)?.[1] ?? '';
+  assert.equal(
+    Buffer.from(encoded, 'base64').toString('utf16le'),
+    "& ([scriptblock]::Create((Invoke-RestMethod -UseBasicParsing 'https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/desktop-bootstrap/install.ps1')))",
+  );
+});
+
+test('update on Windows launches the installer detached without the server variables', async () => {
+  const launched: { command: string; environment?: NodeJS.ProcessEnv }[] = [];
+  const { dependencies, calls } = makeDependencies({
+    appRoot: WINDOWS_APP_ROOT,
+    platform: 'win32',
+    launchDetached(command, environment) {
+      launched.push({ command, environment });
+    },
+  });
+  const service = createDesktopUpdateService(dependencies);
+  assert.equal(service.isDesktopInstall(), true);
+  const result = await service.update();
+  assert.equal(result.success, true);
+  assert.equal(calls.installer.length, 0);
+  assert.equal(launched.length, 1);
+  assert.match(launched[0].command, /^Start-Process powershell\.exe /);
+  assert.equal(launched[0].environment?.ELECTRON_RUN_AS_NODE, undefined);
+  assert.equal(launched[0].environment?.SERVER_PORT, undefined);
 });
