@@ -389,10 +389,20 @@ relance cet installateur au lieu de la commande npm de CloudCLI : la route
 `*.app/Contents/Resources/app`. Elle exécute
 `curl …/main/desktop-bootstrap/install.sh | sh -s -- --no-launch` (dernière
 release publiée du dépôt de `product.config.json`), renvoie la sortie à la
-fenêtre, puis quitte l'application et rouvre le bundle réinstallé. Les autres
-installations (sources git, npm, Windows) retombent sur le comportement
-CloudCLI d'origine. Les versions antérieures à ce mécanisme doivent être mises
-à jour une fois à la main avec la commande d'installation.
+fenêtre, puis quitte l'application et rouvre le bundle réinstallé.
+
+Sous Windows, la même route est interceptée lorsque le serveur tourne depuis
+`…\PieceMaker\resources\app`. Elle lance `install.ps1` (sans `--no-launch`)
+dans un PowerShell détaché via `Start-Process`, et répond aussitôt. Le
+détachement est nécessaire : l'installateur ferme PieceMaker avec
+`taskkill /T`, ce qui tuerait un installateur resté enfant de l'application.
+La fenêtre d'installation suit la mise à jour et propose de rouvrir
+l'application.
+
+Les autres installations (sources git, npm) retombent sur le comportement
+CloudCLI d'origine. Les versions antérieures à ce mécanisme (Windows : avant
+v2.0.29) doivent être mises à jour une fois à la main avec la commande
+d'installation.
 
 ## Carte des fichiers
 
