@@ -4,7 +4,7 @@ import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PluginIcon, usePlugins } from '@/modules/plugins';
-import { useOpenWorkspacePanels } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
+import { useCloseWorkspacePanel, useOpenWorkspacePanels } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
 import { WorkspaceMoreMenu } from '@/modules/piecemaker-workspace-tabs/WorkspaceMoreMenu';
 import type { AppTab } from '@/shared/types';
 import { Pill, PillBar, Tooltip } from '@/shared/ui';
@@ -33,6 +33,7 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab }: WorkspaceIconTabs
   const { t } = useTranslation();
   const { plugins } = usePlugins();
   const openPanels = useOpenWorkspacePanels();
+  const closePanel = useCloseWorkspacePanel();
   const isSelected = (id: AppTab) => id === activeTab || Boolean(openPanels?.includes(id));
   const containerRef = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
@@ -84,7 +85,7 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab }: WorkspaceIconTabs
               aria-label={tab.label}
               aria-selected={isSelected(tab.id)}
               tabIndex={tab.id === activeTab ? 0 : -1}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => closePanel && openPanels?.includes(tab.id) ? closePanel(tab.id) : setActiveTab(tab.id)}
               onKeyDown={handleKeyDown}
               className="piecemaker-workspace-icon-tab"
             >

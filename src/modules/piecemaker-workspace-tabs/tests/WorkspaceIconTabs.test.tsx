@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { WorkspaceIconTabs } from '@/modules/piecemaker-workspace-tabs';
+import { CloseWorkspacePanelContext, WorkspacePanelsContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
 
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspacePanels', () => ({ withWorkspacePanels: vi.fn() }));
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspaceViewer', () => ({ WorkspaceViewer: vi.fn() }));
@@ -94,4 +95,18 @@ it('permet de changer d’onglet au clavier', () => {
   render(<WorkspaceIconTabs activeTab="chat" setActiveTab={setActiveTab} shouldShowTasksTab={false} shouldShowBrowserTab={false} />);
   fireEvent.keyDown(screen.getByRole('tab', { name: 'tabs.chat' }), { key: 'ArrowRight' });
   expect(setActiveTab).toHaveBeenCalledWith('files');
+});
+
+it('ferme un volet ouvert quand on clique à nouveau sur son icône', () => {
+  width = 1200;
+  const setActiveTab = vi.fn();
+  const close = vi.fn();
+  render(<WorkspacePanelsContext.Provider value={['files']}><CloseWorkspacePanelContext.Provider value={close}>
+    <WorkspaceIconTabs activeTab="chat" setActiveTab={setActiveTab} shouldShowTasksTab shouldShowBrowserTab />
+  </CloseWorkspacePanelContext.Provider></WorkspacePanelsContext.Provider>);
+  fireEvent.click(screen.getByRole('tab', { name: 'tabs.files' }));
+  expect(close).toHaveBeenCalledWith('files');
+  expect(setActiveTab).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('tab', { name: 'tabs.git' }));
+  expect(setActiveTab).toHaveBeenCalledWith('git');
 });
