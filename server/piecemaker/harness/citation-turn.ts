@@ -6,7 +6,8 @@ import type { NormalizedMessage } from '@/shared/types.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import type { createCitationStore } from './citation-store.js';
-import { locateSourcePassages } from './source-passages.js';
+import { formatPieceTitle } from './piece-title.js';
+import { locateSourcePassages, nearestPassage } from './source-passages.js';
 
 const root = findApplicationRoot(getModuleDirectory(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -46,6 +47,26 @@ function withinRoot(rootPath: string, file: string) {
   return Boolean(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
+const inline = (text: string) => text.replace(/\[\[PAGE_BREAK\]\]/g, ' … ').replace(/\s+/g, ' ').trim();
+const linkLabel = (text: string) => text.replace(/\[/g, '(').replace(/\]/g, ')');
+
+function locator(citation: Citation) {
+  const quote = citation.quotes[0];
+  if (citation.kind !== 'document' || !quote) return '';
+  if (quote.sheet) return `, ${quote.sheet}${quote.cell ? `!${quote.cell}` : ''}`;
+  return quote.page ? `, p. ${quote.page}` : '';
+}
+
+function sourceLine(citation: Citation, title: string, source: string) {
+  const checked = citation.verified !== false;
+  const quotes = citation.quotes.map((quote) => {
+    if (quote.verification?.verified ?? checked) return `« ${inline(quote.quote)} »`;
+    const nearest = source ? nearestPassage(source, quote.quote) : null;
+    return `[à vérifier – introuvable]${nearest ? ` — passage le plus proche : « ${inline(nearest)} »` : ''}`;
+  });
+  return `- [${citation.ref}] ${checked ? '' : '🔴 '}[${linkLabel(title + locator(citation))}][${citation.ref}] — ${quotes.join(' · ')}`;
+}
+
 function visibleText(text: string) {
   const index = text.indexOf(OPEN);
   return index < 0 ? text : text.slice(0, index);
@@ -56,6 +77,7 @@ export function createCitationTurn(options: {
   sessionId: string;
   store: ReturnType<typeof createCitationStore>;
   recordVerification?: boolean;
+  pieceTitle?: (cwd: string, docId: string) => string;
   emit: (event: { type: 'citations'; status: 'started' | 'partial' | 'final'; citations: Citation[] }) => void;
 }) {
   const calls = new Map<string, string>();
@@ -171,27 +193,27 @@ export function createCitationTurn(options: {
         if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
         const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];
-        const labels: string[] = [];
+        const lines: string[] = [];
         for (const citation of citations) {
           const lawId = citation.decision_id ?? citation.article_id;
           const source = citation.kind === 'case' || citation.kind === 'article'
             ? decisions.get(lawId ?? '') ?? '' : await documentText(citation.doc_id ?? '');
           const ranges = locateSourcePassages(source, citation.quotes);
+          const docId = citation.doc_id ?? '';
+          const title = citation.kind === 'document'
+            ? options.pieceTitle?.(options.cwd, docId) ?? formatPieceTitle(undefined, docId)
+            : decisionTitle(lawId) ?? lawId ?? 'Source';
           try {
-            const token = await options.store.save({
-              sessionId: options.sessionId,
-              title: decisionTitle(lawId) ?? lawId ?? citation.doc_id ?? 'Source',
-              source, citation, ranges,
-            });
+            const token = await options.store.save({ sessionId: options.sessionId, title, source, citation, ranges });
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
-            labels.push(`[${citation.ref}]${citation.verified === false ? ' — extrait non retrouvé dans la source' : ''}`);
+            lines.push(sourceLine(citation, title, source));
           } catch {
-            labels.push(`Citation ${citation.ref} — source indisponible`);
+            lines.push(`- [${citation.ref}] 🔴 ${linkLabel(title)} — source indisponible`);
           }
         }
         options.emit({ type: 'citations', status: 'final', citations });
-        if (!links.length && !labels.length) return '';
-        return `\n\nSources : ${labels.join(' · ')}\n\n${links.join('\n')}`;
+        if (!lines.length) return '';
+        return `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}`;
       })();
       return finished;
     },

@@ -8,6 +8,7 @@ import { createNormalizedMessage } from '@/shared/utils.js';
 
 import { createCitationStore } from './citation-store.js';
 import { createCitationTurn } from './citation-turn.js';
+import { formatPieceTitle } from './piece-title.js';
 
 const block = (citations: unknown[]) => `<CITATIONS>${JSON.stringify(citations)}</CITATIONS>`;
 
@@ -48,7 +49,7 @@ test('Mike : citation introuvable annotée false, sans suppression de la répons
   const { cwd, events, turn } = await fixture(t);
   await writeFile(path.join(cwd, 'piece.md'), 'Texte source réel.');
   assert.equal(turn.text(`Réponse [1].${block([{ ref: 1, doc_id: 'piece.md', quote: 'Texte inventé.' }])}`), 'Réponse [1].');
-  assert.match(await turn.finish(), /extrait non retrouvé/);
+  assert.match(await turn.finish(), /- \[1\] 🔴 \[piece, p\. 1\]\[1\] — \[à vérifier – introuvable\]$/m);
   assert.equal(events.at(-1)?.citations[0].verified, false);
 });
 
@@ -164,4 +165,45 @@ test('la visionneuse porte le titre lisible de la décision, pas son identifiant
   const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
   assert.ok(token);
   assert.equal((await store.read(token))?.title, titre);
+});
+
+test('la liste des sources donne le titre Légifrance et l’extrait vérifié', async (t) => {
+  const { turn } = await fixture(t);
+  const titre = 'Cour de cassation, civile, Chambre commerciale, 23 janvier 2016, 14-11.111';
+  turn.observe(createNormalizedMessage({ provider: 'claude', sessionId: 'session', kind: 'tool_use', toolId: 'call-1', toolName: 'mcp__legifrance__consulter_decision', toolInput: { text_id: 'JURITEXT1' } }));
+  turn.observe(createNormalizedMessage({ provider: 'claude', sessionId: 'session', kind: 'tool_result', toolId: 'call-1', content: `DÉCISION: ${titre}\n\n=====\nTEXTE INTÉGRAL:\n=====\nLe juge doit rechercher si l'inexécution est suffisamment grave.` }));
+  turn.text(block([{ ref: 1, decision_id: 'JURITEXT1', quote: 'le juge doit rechercher si l’inexécution est suffisamment grave' }]));
+  assert.match(await turn.finish(), new RegExp(`^\\*\\*Sources\\*\\*\\n\\n- \\[1\\] \\[${titre.replace(/[.]/g, '\\.')}\\]\\[1\\] — « Le juge doit rechercher si l'inexécution est suffisamment grave »$`, 'm'));
+});
+
+test('un extrait non vérifié est à vérifier, avec le passage le plus proche quand il existe', async (t) => {
+  const { cwd, turn, events } = await fixture(t);
+  await writeFile(path.join(cwd, 'bail.md'), 'Préambule. Le preneur occupera les lieux paisiblement pendant toute la durée du bail. Fin.');
+  turn.text(block([
+    { ref: 1, doc_id: 'bail.md', quotes: [{ page: 2, quote: 'le preneur occupe les lieux paisiblement pendant la durée du bail' }] },
+    { ref: 2, doc_id: 'bail.md', quote: 'clause pénale de dix mille euros' },
+    { ref: 3, decision_id: 'JURITEXT9', quote: 'motif jamais lu dans ce tour' },
+  ]));
+  const suffix = await turn.finish();
+  assert.match(suffix, /^- \[1\] 🔴 \[bail, p\. 2\]\[1\] — \[à vérifier – introuvable\] — passage le plus proche : « Le preneur occupera les lieux paisiblement pendant toute la durée du bail »$/m);
+  assert.match(suffix, /^- \[2\] 🔴 \[bail, p\. 1\]\[2\] — \[à vérifier – introuvable\]$/m);
+  assert.match(suffix, /^- \[3\] 🔴 \[JURITEXT9\]\[3\] — \[à vérifier – introuvable\]$/m);
+  assert.deepEqual(events.at(-1)?.citations.map((citation) => citation.verified), [false, false, false]);
+});
+
+test('le titre d’une pièce vient de la base : label daté, sinon nature et date, sinon nom', async (t) => {
+  const { cwd, store } = await fixture(t);
+  await writeFile(path.join(cwd, 'courrier.md'), 'Je vous mets en demeure de payer.');
+  const seen: string[] = [];
+  const turn = createCitationTurn({ cwd, sessionId: 'session', store, emit: () => {}, pieceTitle: (folder, docId) => { seen.push(`${folder}|${docId}`); return 'Mise en demeure (12/03/2024)'; } });
+  turn.text(block([{ ref: 1, doc_id: 'courrier.md', quotes: [{ page: 1, quote: 'Je vous mets en demeure de payer.' }] }]));
+  const suffix = await turn.finish();
+  assert.deepEqual(seen, [`${cwd}|courrier.md`]);
+  assert.match(suffix, /- \[1\] \[Mise en demeure \(12\/03\/2024\), p\. 1\]\[1\] — « Je vous mets en demeure de payer\. »/);
+  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.equal((await store.read(token ?? ''))?.title, 'Mise en demeure (12/03/2024)');
+  assert.equal(formatPieceTitle({ label: '2024-03-12_Contrat_de_bail.pdf' }, 'x.md'), 'Contrat de bail (12/03/2024)');
+  assert.equal(formatPieceTitle({ label: 'scan 4.pdf', nature: 'contrat', doc_date: '2024-03-12' }, 'x.md'), 'Contrat du 12/03/2024');
+  assert.equal(formatPieceTitle({ label: 'scan 4.pdf', nature: 'contrat' }, 'x.md'), 'scan 4');
+  assert.equal(formatPieceTitle(undefined, 'conversions/scan 4.md'), 'scan 4');
 });
