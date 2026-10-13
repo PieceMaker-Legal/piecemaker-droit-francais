@@ -41,7 +41,7 @@ async function setup(t: test.TestContext, messages: NormalizedMessage[]) {
 const content = 'Réponse [1].\n<CITATIONS>[{"ref":1,"doc_id":"piece.md","quote":"un préavis de trois mois"}]</CITATIONS>';
 const message = (fields: Parameters<typeof createNormalizedMessage>[0]) => createNormalizedMessage({ sessionId: 'session', ...fields });
 
-test('Claude : annotations avant complete, pas de bloc JSON visible ni de doublon de texte', async (t) => {
+test('Claude : réponse retenue, vérifiée puis délivrée une seule fois avant complete', async (t) => {
   const messages = [
     message({ kind: 'stream_delta', provider: 'claude', content: content.slice(0, 19) }),
     message({ kind: 'stream_delta', provider: 'claude', content: content.slice(19) }),
@@ -62,7 +62,8 @@ test('Claude : annotations avant complete, pas de bloc JSON visible ni de doublo
   assert.equal(assistant.length, 1);
   assert.doesNotMatch(assistant[0].content ?? '', /<CITATIONS>|doc_id/);
   assert.match(assistant[0].content ?? '', /#piecemaker-citation=/);
-  assert.equal(sent.filter((event) => event.kind === 'stream_delta').map((event) => event.content).join(''), assistant[0].content);
+  assert.equal(sent.some((event) => event.kind === 'stream_delta' || event.kind === 'stream_end'), false);
+  assert.ok(sent.indexOf(assistant[0]) > finalIndex);
   const log = await readFile(path.join(cwd, 'citations-verifiees.jsonl'), 'utf8');
   assert.doesNotMatch(log, /préavis|La clause/);
   assert.equal(JSON.parse(log).session_id, 'session');

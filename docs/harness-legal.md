@@ -27,8 +27,7 @@ Deux points de branchement distincts :
   intégral dans `~/.piecemaker/decisions/<id>.json`. Nécessaire parce que
   `consulter_decision` ne rend le texte intégral que dans son résultat, jamais
   sur le disque, et que `Download_Query_Results` ne le rend jamais du tout.
-- `server/piecemaker/harness/citation-turn.ts` — comportement de Mike : texte
-  diffusé progressivement, bloc `<CITATIONS>` masqué même découpé, événements
+- `server/piecemaker/harness/citation-turn.ts` — comportement de Mike : bloc `<CITATIONS>` masqué même découpé, événements
   `citations` started/partial/final, vérification mécanique puis fin du tour.
   Les décisions viennent seulement des résultats `consulter_decision` de ce
   tour, appariés par `toolId` ; aucun cache global ne les rend vérifiables.
@@ -77,8 +76,11 @@ Deux points de branchement distincts :
   session + bloc `<CITATIONS>`) et reprise telle quelle par l'historique : le
   texte rechargé est identique au texte diffusé, le client les fusionne, et
   les sources lues dans un `exec` Codex (invisibles à la relecture) restent
-  vérifiées. Une réponse Codex non diffusée en deltas est retenue jusqu'à la
-  fin du tour pour n'être envoyée qu'une fois, avec sa liste.
+  vérifiées.
+- Pas de diffusion progressive pour Claude et Codex : les deltas ne sont pas
+  transmis. Les messages intermédiaires partent entiers ; celui qui porte le
+  bloc `<CITATIONS>` est retenu, vérifié, puis délivré une seule fois avec sa
+  liste, juste avant `complete`.
 - Dans un `.docx`, l'instruction demande une note de bas de page au lieu de
   `[n]`, et le même bloc `<CITATIONS>` dans le chat (ref = numéro de note) :
   les notes sont donc vérifiées comme le chat. Rien ne contrôle encore que le
@@ -97,7 +99,8 @@ Invariants tenus par les tests (`harness.test.js`, `proxy-harness.test.js`) :
 - `harness` est absent par défaut de `createAnonymizerProxy` : sans lui, le
   proxy se comporte exactement comme avant.
 
-**Comme Mike, ce harnais annote, il ne bloque pas la prose déjà diffusée.** Un
+**La réponse citée n'est délivrée qu'après vérification ; ce harnais annote, il
+ne réécrit pas la prose.** Un
 extrait corrigé reçoit le texte exact ; un extrait introuvable reste visible
 avec un avertissement, jamais avec un faux surlignage. Un tour interrompu ne
 publie pas d'annotations finales. Le hook Stop de PieceMaker-Installer est un
