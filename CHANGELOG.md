@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.28](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.27...v2.0.28) (2026-10-13)
+
+### New Features
+
+* **desktop-bootstrap:** application Windows précompilée à chaque release ([b18990f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b18990fa03ea51e18140774ed4ba7c3c3872122b))
+
 ## [2.0.27](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.26...v2.0.27) (2026-10-13)
 
 ### Bug Fixes
