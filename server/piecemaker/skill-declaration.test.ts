@@ -9,6 +9,7 @@ import { declareBundledSkills } from './skill-declaration.js';
 
 const DOCX_LINKS = ['.claude/skills/docx-cli', '.cursor/skills/docx-cli', '.opencode/skills/docx-cli', '.grok/skills/docx-cli'];
 const REDACTION_LINKS = ['.claude/skills/redaction-juridique', '.cursor/skills/redaction-juridique', '.opencode/skills/redaction-juridique', '.grok/skills/redaction-juridique'];
+const PIECEMAKER_LINKS = ['.claude/skills/Skill-PieceMaker', '.cursor/skills/Skill-PieceMaker', '.opencode/skills/Skill-PieceMaker', '.grok/skills/Skill-PieceMaker'];
 
 function temporaryFolder() {
   return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-bundled-skills-')));
@@ -32,8 +33,11 @@ test('installe docx-cli et redaction-juridique dans .agents/skills et les relie 
   assert.match(fs.readFileSync(skillPath(folder, 'docx-cli'), 'utf8'), /^---\nname: docx-cli\n/);
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'docx-cli', 'scripts', 'bootstrap.sh')), true);
   assert.match(fs.readFileSync(skillPath(folder, 'redaction-juridique'), 'utf8'), /^---\nname: redaction-juridique\n/);
+  assert.match(fs.readFileSync(skillPath(folder, 'Skill-PieceMaker'), 'utf8'), /^---\nname: piecemaker\n/);
+  assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')), true);
   assertLinked(folder, 'docx-cli', DOCX_LINKS);
   assertLinked(folder, 'redaction-juridique', REDACTION_LINKS);
+  assertLinked(folder, 'Skill-PieceMaker', PIECEMAKER_LINKS);
 });
 
 test('un second passage ne réécrit aucun fichier', () => {
@@ -80,5 +84,5 @@ test('une copie encore identique au dernier bundle est mise à jour', () => {
 test('un dossier inexistant est journalisé sans lever d’erreur', (context) => {
   const warn = context.mock.method(console, 'warn', () => undefined);
   declareBundledSkills(path.join(temporaryFolder(), 'absent'));
-  assert.equal(warn.mock.callCount(), 2);
+  assert.equal(warn.mock.callCount(), 3);
 });

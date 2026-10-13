@@ -59,6 +59,15 @@ describe('autoPanelTarget', () => {
     expect(autoPanelTarget('mcp__piecemaker__afficher', {})).toBeNull();
   });
 
+  it('ouvre les volets depuis le script Skill-PieceMaker', () => {
+    expect(autoPanelTarget('Bash', { command: 'node .agents/skills/Skill-PieceMaker/scripts/pm.mjs afficher --fichier Pièces/contrat.pdf' })).toEqual({ kind: 'file', path: 'Pièces/contrat.pdf' });
+    expect(autoPanelTarget('run_terminal_command', { command: "node scripts/pm.mjs afficher --volet chronologie" })).toEqual({ kind: 'dossier', view: 'chronology' });
+    expect(autoPanelTarget('Bash', { command: 'node scripts/pm.mjs chronologie lister' })).toEqual({ kind: 'dossier', view: 'chronology' });
+    expect(autoPanelTarget('Bash', { command: 'node scripts/pm.mjs tabular_review ouvrir --fichier "Tabular Review/26-10-11 - Analyse.json"' })).toEqual({ kind: 'tabular-review', review: '26-10-11 - Analyse.json' });
+    expect(autoPanelTarget('Bash', { command: "node scripts/pm.mjs sql --requete \"UPDATE piecemaker_nodes SET doc_date='2024-03-01' WHERE id='doc:1'\"" })).toEqual({ kind: 'dossier', view: 'chronology' });
+    expect(autoPanelTarget('Bash', { command: 'node scripts/pm.mjs conversion --force' })).toBeNull();
+  });
+
   it('ignore les autres outils', () => {
     expect(autoPanelTarget('Read', { file_path: 'acte.docx' })).toBeNull();
     expect(autoPanelTarget('mcp__piecemaker__conversion', {})).toBeNull();
