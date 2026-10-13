@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
@@ -6,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { capture, run } from './shell.mjs';
 import { BUNDLE_DIR, embedBundledPlugins } from './plugins.mjs';
 import { ui } from './ui.mjs';
-import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath } from './paths.mjs';
+import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath, releaseRepo, releaseTag } from './paths.mjs';
 
 function npmTool(tool) {
   if (process.platform !== 'win32') return (args, options) => run(tool, args, options);
@@ -259,7 +260,34 @@ async function ensureCargo() {
   return env;
 }
 
+async function downloadPrebuiltProxy(destination) {
+  if (process.platform !== 'win32') return false;
+  const asset = 'piecemaker-hudsucker-win32-x64.exe';
+  const base = `https://github.com/${releaseRepo}/releases/download/${releaseTag}/${asset}`;
+  ui.step("Téléchargement du proxy d'anonymisation précompilé…");
+  try {
+    const [binary, checksum] = await Promise.all([fetch(base), fetch(`${base}.sha256`)]);
+    if (!binary.ok || !checksum.ok) throw new Error(`HTTP ${binary.status}/${checksum.status}`);
+    const bytes = Buffer.from(await binary.arrayBuffer());
+    const expected = (await checksum.text()).trim().split(/\s+/)[0].toLowerCase();
+    const actual = crypto.createHash('sha256').update(bytes).digest('hex');
+    if (actual !== expected) throw new Error('empreinte SHA-256 invalide');
+    await fs.writeFile(destination, bytes);
+    ui.ok(`Proxy d'anonymisation précompilé vérifié (${releaseTag}).`);
+    return true;
+  } catch (error) {
+    ui.warn(`Proxy précompilé indisponible (${error.message}) — compilation locale.`);
+    return false;
+  }
+}
+
 async function buildAnonymizerProxy(sourceDir) {
+  const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
+  const destinationDir = path.join(sourceDir, 'server', 'piecemaker', 'anonymizer', 'bin');
+  await fs.mkdir(destinationDir, { recursive: true });
+  const destination = path.join(destinationDir, binaryName);
+  if (await downloadPrebuiltProxy(destination)) return destination;
+
   const env = await ensureCargo();
   const project = path.join(sourceDir, 'server', 'piecemaker', 'anonymizer', 'hudsucker-proxy');
   ui.step("Compilation du proxy d'anonymisation…");
@@ -267,11 +295,7 @@ async function buildAnonymizerProxy(sourceDir) {
     cwd: sourceDir,
     env,
   });
-  const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
   const built = path.join(project, 'target', 'release', binaryName);
-  const destinationDir = path.join(sourceDir, 'server', 'piecemaker', 'anonymizer', 'bin');
-  await fs.mkdir(destinationDir, { recursive: true });
-  const destination = path.join(destinationDir, binaryName);
   await fs.copyFile(built, destination);
   if (process.platform !== 'win32') await fs.chmod(destination, 0o755);
   ui.detail('Proxy d\'anonymisation embarqué.');

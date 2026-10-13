@@ -76,6 +76,7 @@ Say "Node.js utilise : $nodeBin ($(& $nodeBin -v))"
 $env:PATH = "$(Split-Path $nodeBin);$env:PATH"
 $env:PIECEMAKER_SRC_DIR = $srcDir
 $env:PIECEMAKER_TAG = $tag
+$env:PIECEMAKER_REPO = $repo
 $env:PIECEMAKER_BOOTSTRAP_HOME = $bootstrapHome
 
 & $nodeBin (Join-Path $srcDir 'desktop-bootstrap\lib\install.mjs') @args
