@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.27](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.26...v2.0.27) (2026-10-13)
+
+### Bug Fixes
+
+* **desktop-bootstrap:** fenêtre PowerShell fermée en fin d'installation, signature Windows invalide ([2cb54ac](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2cb54ac07cfa832e06a49ce2d7157e1d97345aa8))
+
 ## [2.0.26](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.25...v2.0.26) (2026-10-13)
 
 ### New Features
