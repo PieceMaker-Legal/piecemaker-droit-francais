@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.30](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.29...v2.0.30) (2026-10-13)
+
+### Bug Fixes
+
+* **desktop:** désinstallation Windows complète, depuis les Paramètres Windows ([91aefc8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/91aefc8676ac7cc7881483a76e43e66a50865fb1))
+
 ## [2.0.29](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.28...v2.0.29) (2026-10-13)
 
 ### Bug Fixes
