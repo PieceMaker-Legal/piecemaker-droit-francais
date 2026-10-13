@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { buildDesktopApp, downloadPrebuiltApp } from './build.mjs';
 import { generateCertificates, isCaTrusted, signApplication, trustCertificateAuthority } from './certificates.mjs';
-import { createShortcuts, installApplication, launchApplication, quitRunningApplication } from './place.mjs';
+import { createShortcuts, installApplication, launchApplication, quitRunningApplication, registerWindowsUninstall } from './place.mjs';
 import { finishProgress, openProgressWindow, settleProgressWindow } from './progress.mjs';
 import { ui } from './ui.mjs';
 import {
@@ -53,6 +53,7 @@ async function main() {
   }
 
   createShortcuts(installedPath);
+  registerWindowsUninstall(installedPath, releaseTag);
 
   await import('../composants/install.mjs').then((composants) => (
     composants.installRuntimeComponents({ sourceDir, output: ui })
