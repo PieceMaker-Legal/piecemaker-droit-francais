@@ -1,6 +1,5 @@
 import type { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
 import type { NormalizedMessage, ProviderRuntimeWriter } from '@/shared/types.js';
-import { createNormalizedMessage } from '@/shared/utils.js';
 
 import type { FolderHistory } from '../folder-history/history.js';
 import { agentIdentity } from '../folder-history/identity.js';
@@ -8,6 +7,8 @@ import { agentIdentity } from '../folder-history/identity.js';
 import { createCitationTurn } from './citation-turn.js';
 import type { createCitationStore } from './citation-store.js';
 import { withCitationInstructions, withoutCitationInstructions } from './citation-instructions.js';
+
+const CITED_PROVIDERS = new Set(['claude', 'codex', 'mistral']);
 
 export function installChatCitationHarness(options: {
   runtime: Pick<typeof providerRuntimeService, 'run' | 'getRunner'>;
@@ -21,7 +22,7 @@ export function installChatCitationHarness(options: {
   const getRunner = options.runtime.getRunner.bind(options.runtime);
   const fetchHistory = options.sessions.fetchHistory.bind(options.sessions);
 
-  // Providers sans harnais de citations (Cursor, OpenCode, Mistral) : seul l'historique du dossier.
+  // Providers sans harnais de citations (Cursor, OpenCode) : seul l'historique du dossier.
   const runWithFolderHistory = async (...[provider, command, runtimeOptions, writer, cwd]: [...Parameters<typeof run>, string]) => {
     const history = options.folderHistory;
     if (!history) return run(provider, command, runtimeOptions, writer);
@@ -44,7 +45,7 @@ export function installChatCitationHarness(options: {
         return (data: unknown) => {
           const message = data as NormalizedMessage;
           if (!message?.parentToolUseId) {
-            // Vibe, OpenCode et Cursor ne diffusent en direct que des deltas : on garde le dernier bloc de texte.
+            // OpenCode et Cursor ne diffusent en direct que des deltas : on garde le dernier bloc de texte.
             if (message?.kind === 'text' && message.role === 'assistant') conclusion = message.content ?? '';
             else if (message?.kind === 'stream_delta') conclusion = streaming ? conclusion + (message.content ?? '') : message.content ?? '';
             streaming = message?.kind === 'stream_delta' || (streaming && message?.kind !== 'tool_use' && message?.kind !== 'tool_result');
@@ -72,24 +73,30 @@ export function installChatCitationHarness(options: {
   options.runtime.run = async (provider, command, runtimeOptions, writer) => {
     options.ensureProxy();
     const cwd = String(runtimeOptions.cwd ?? runtimeOptions.projectPath ?? '');
-    if (provider !== 'claude' && provider !== 'codex') return runWithFolderHistory(provider, command, runtimeOptions, writer, cwd);
+    if (!CITED_PROVIDERS.has(provider)) return runWithFolderHistory(provider, command, runtimeOptions, writer, cwd);
     const sessionId = String(runtimeOptions.sessionId ?? '');
-    const turn = createCitationTurn({
-      cwd, sessionId, store: options.store, pieceTitle: options.pieceTitle,
-      emit: (citationEvent) => writer.send(createNormalizedMessage({
-        kind: 'status', provider, sessionId, citationEvent,
-      })),
-    });
+    const turn = createCitationTurn({ cwd, sessionId, store: options.store, pieceTitle: options.pieceTitle });
     let lastText: NormalizedMessage | undefined;
+    let lastDelta: NormalizedMessage | undefined;
+    let heldStreamEnd: NormalizedMessage | undefined;
     let heldText = false;
+    let streamed = '';
+    let streaming = false;
     let interrupted = false;
     let completionReceived = false;
     let completion: Promise<void> | undefined;
+    const flush = () => {
+      const content = turn.flush();
+      if (content && lastDelta) writer.send({ ...lastDelta, content });
+    };
     const finish = () => {
       if (!completion) completion = (async () => {
-        options.folderHistory?.end({ cwd, request: command, conclusion: lastText?.content ?? '', aborted: interrupted, author: agentIdentity(provider, runtimeOptions.model) });
+        flush();
+        options.folderHistory?.end({ cwd, request: command, conclusion: lastText?.content ?? streamed.split('<CITATIONS>')[0], aborted: interrupted, author: agentIdentity(provider, runtimeOptions.model) });
         const suffix = interrupted ? '' : await turn.finish();
-        if (lastText && heldText) writer.send({ ...lastText, content: `${lastText.content ?? ''}${suffix}` });
+        if (suffix && lastDelta && (heldStreamEnd || !lastText)) writer.send({ ...lastDelta, content: suffix });
+        if (heldStreamEnd) writer.send(heldStreamEnd);
+        if (lastText && (suffix || heldStreamEnd || heldText)) writer.send({ ...lastText, content: `${lastText.content ?? ''}${suffix}` });
       })();
       return completion;
     };
@@ -109,18 +116,23 @@ export function installChatCitationHarness(options: {
           }
           turn.observe(message);
           if (message.kind === 'stream_delta') {
-            turn.delta(message.content ?? '');
+            lastDelta = message;
+            const content = turn.delta(message.content ?? '');
+            streamed = `${streaming ? streamed : ''}${message.content ?? ''}`;
+            streaming = true;
+            if (content) target.send({ ...message, content });
             return;
           }
+          if (message.kind === 'tool_use' || message.kind === 'tool_result') streaming = false;
           if (message.kind === 'stream_end') {
-            turn.flush();
-            return;
+            flush();
+            if (turn.hasCitations) { heldStreamEnd = message; return; }
           }
           if (message.kind === 'text' && message.role === 'assistant') {
-            turn.flush();
+            flush();
             lastText = { ...message, content: turn.text(message.content ?? '') };
-            heldText = turn.hasCitations;
-            if (!heldText) target.send(lastText);
+            heldText = !heldStreamEnd && turn.hasCitations;
+            if (!heldStreamEnd && !heldText) target.send(lastText);
             return;
           }
           if (message.kind === 'complete') {
@@ -149,7 +161,7 @@ export function installChatCitationHarness(options: {
 
   options.sessions.fetchHistory = async (sessionId, pageOptions = {}) => {
     const details = options.sessions.getSessionDetailsById(sessionId);
-    if (details.provider !== 'claude' && details.provider !== 'codex') return fetchHistory(sessionId, pageOptions);
+    if (!CITED_PROVIDERS.has(details.provider)) return fetchHistory(sessionId, pageOptions);
     const debugStartedAt = performance.now();
     const history = await fetchHistory(sessionId, { limit: null, offset: 0 });
     const debugLoadedAt = performance.now();
@@ -158,7 +170,7 @@ export function installChatCitationHarness(options: {
     const messages: NormalizedMessage[] = [];
     let lastTextIndex = -1;
     const makeTurn = () => createCitationTurn({
-      cwd: details.project?.fullPath ?? '', sessionId, store: options.store, emit: () => {},
+      cwd: details.project?.fullPath ?? '', sessionId, store: options.store,
       recordVerification: false, pieceTitle: options.pieceTitle,
     });
     let turn = makeTurn();

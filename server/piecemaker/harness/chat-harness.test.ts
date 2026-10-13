@@ -41,7 +41,7 @@ async function setup(t: test.TestContext, messages: NormalizedMessage[]) {
 const content = 'Réponse [1].\n<CITATIONS>[{"ref":1,"doc_id":"piece.md","quote":"un préavis de trois mois"}]</CITATIONS>';
 const message = (fields: Parameters<typeof createNormalizedMessage>[0]) => createNormalizedMessage({ sessionId: 'session', ...fields });
 
-test('Claude : réponse retenue, vérifiée puis délivrée une seule fois avant complete', async (t) => {
+test('Claude : annotations avant complete, pas de bloc JSON visible ni de doublon de texte', async (t) => {
   const messages = [
     message({ kind: 'stream_delta', provider: 'claude', content: content.slice(0, 19) }),
     message({ kind: 'stream_delta', provider: 'claude', content: content.slice(19) }),
@@ -55,15 +55,12 @@ test('Claude : réponse retenue, vérifiée puis délivrée une seule fois avant
   await runtime.run('claude', 'Question', { cwd, sessionId: 'session' }, { send: (data) => sent.push(data as NormalizedMessage), setSessionId: (id) => { native = id; } });
   assert.equal(native, 'native-session');
   assert.equal(sent.at(-1)?.kind, 'complete');
-  const finalIndex = sent.findIndex((event) => (event.citationEvent as { status?: string })?.status === 'final');
-  assert.ok(finalIndex >= 0 && finalIndex < sent.length - 1);
   assert.ok(sent.find((event) => event.kind === 'permission_request'));
   const assistant = sent.filter((event) => event.kind === 'text' && event.role === 'assistant');
   assert.equal(assistant.length, 1);
   assert.doesNotMatch(assistant[0].content ?? '', /<CITATIONS>|doc_id/);
   assert.match(assistant[0].content ?? '', /#piecemaker-citation=/);
-  assert.equal(sent.some((event) => event.kind === 'stream_delta' || event.kind === 'stream_end'), false);
-  assert.ok(sent.indexOf(assistant[0]) > finalIndex);
+  assert.equal(sent.filter((event) => event.kind === 'stream_delta').map((event) => event.content).join(''), assistant[0].content);
   const log = await readFile(path.join(cwd, 'citations-verifiees.jsonl'), 'utf8');
   assert.doesNotMatch(log, /préavis|La clause/);
   assert.equal(JSON.parse(log).session_id, 'session');
@@ -116,7 +113,7 @@ test('un tour interrompu ne publie pas des annotations finales', async (t) => {
   const { runtime, sent, cwd } = await setup(t, messages);
   await runtime.run('claude', 'Question', { cwd, sessionId: 'session' }, { send: (data) => sent.push(data as NormalizedMessage) });
   assert.equal(sent.at(-1)?.aborted, true);
-  assert.equal(sent.some((event) => (event.citationEvent as { status?: string })?.status === 'final'), false);
+  assert.equal(sent.some((event) => /#piecemaker-citation=/.test(event.content ?? '')), false);
 });
 
 test('les instructions ajoutées au lancement sont retirées sans modifier le texte utilisateur', () => {
@@ -128,7 +125,7 @@ test('les instructions ajoutées au lancement sont retirées sans modifier le te
 test('un runtime arrêté sans événement complete ne publie pas des annotations finales', async (t) => {
   const { runtime, sent, cwd } = await setup(t, [message({ kind: 'text', role: 'assistant', provider: 'codex', content })]);
   await runtime.run('codex', 'Question', { cwd, sessionId: 'session' }, { send: (data) => sent.push(data as NormalizedMessage) });
-  assert.equal(sent.some((event) => (event.citationEvent as { status?: string })?.status === 'final'), false);
+  assert.equal(sent.some((event) => /#piecemaker-citation=/.test(event.content ?? '')), false);
 });
 
 test('historique du dossier : begin avant le tour, end avec la demande, la conclusion et l’abandon', async (t) => {
@@ -158,7 +155,7 @@ test('historique du dossier : begin avant le tour, end avec la demande, la concl
   ]);
 });
 
-test('historique du dossier : Cursor, OpenCode et Mistral aussi, sans instructions de citation', async (t) => {
+test('historique du dossier : Cursor et OpenCode aussi, sans instructions de citation', async (t) => {
   const { store, sessions, cwd } = await setup(t, []);
   const calls: unknown[] = [];
   const runtime: Dependencies['runtime'] = {
@@ -166,7 +163,7 @@ test('historique du dossier : Cursor, OpenCode et Mistral aussi, sans instructio
       calls.push({ run: provider, command });
       if (provider === 'cursor') return;
       writer.send(message({ kind: 'text', role: 'assistant', provider, content: 'Fait.' }));
-      writer.send(message({ kind: 'complete', provider, exitCode: provider === 'mistral' ? 1 : 0 }));
+      writer.send(message({ kind: 'complete', provider, exitCode: 0 }));
     },
     getRunner: () => async () => {},
   };
@@ -175,11 +172,10 @@ test('historique du dossier : Cursor, OpenCode et Mistral aussi, sans instructio
     folderHistory: { begin: (folder) => calls.push({ begin: folder }), end: (turn) => calls.push({ end: turn }) },
   });
   const writer = { send: () => {} };
-  for (const provider of ['opencode', 'mistral', 'cursor'] as const) await runtime.run(provider, 'Demande', { cwd, model: provider === 'mistral' ? 'mistral-medium-latest' : undefined }, writer);
+  for (const provider of ['opencode', 'cursor'] as const) await runtime.run(provider, 'Demande', { cwd }, writer);
   const end = (aborted: boolean, name: string, email: string, conclusion = 'Fait.') => ({ end: { cwd, request: 'Demande', conclusion, aborted, author: { name, email } } });
   assert.deepEqual(calls, [
     { begin: cwd }, { run: 'opencode', command: 'Demande' }, end(false, 'OpenCode', 'opencode@localhost'),
-    { begin: cwd }, { run: 'mistral', command: 'Demande' }, end(true, 'Mistral mistral-medium-latest', 'mistral@localhost'),
     { begin: cwd }, { run: 'cursor', command: 'Demande' }, end(true, 'Cursor', 'cursor@localhost', ''),
   ]);
 });
@@ -225,4 +221,18 @@ test('Codex : réponse finale envoyée une seule fois, et l’historique reprend
   messages.splice(1, 2);
   const history = await sessions.fetchHistory('session');
   assert.equal(history.messages.find((event) => event.role === 'assistant')?.content, replies[0].content);
+});
+
+test('Mistral : réponse diffusée en deltas, bloc masqué et sources ajoutées avant complete', async (t) => {
+  const messages = [
+    message({ kind: 'stream_delta', provider: 'mistral', content: content.slice(0, 19) }),
+    message({ kind: 'stream_delta', provider: 'mistral', content: content.slice(19) }),
+    message({ kind: 'complete', provider: 'mistral', exitCode: 0 }),
+  ];
+  const { runtime, sent, cwd } = await setup(t, messages);
+  await runtime.run('mistral', 'Question', { cwd, sessionId: 'session' }, { send: (data) => sent.push(data as NormalizedMessage) });
+  assert.equal(sent.at(-1)?.kind, 'complete');
+  const streamed = sent.filter((event) => event.kind === 'stream_delta').map((event) => event.content).join('');
+  assert.doesNotMatch(streamed, /<CITATIONS>|doc_id/);
+  assert.match(streamed, /^Réponse \[1\]\.\n\n\n\*\*Sources\*\*\n\n- \[1\] \[piece, p\. 1\]\[1\] — « un préavis de trois mois »/);
 });
