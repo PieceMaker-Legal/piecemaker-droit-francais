@@ -101,8 +101,8 @@ test('historique : la lecture d’une décision dans le premier tour ne valide p
   ];
   const { sessions } = await setup(t, messages);
   const history = await sessions.fetchHistory('session');
-  assert.doesNotMatch(history.messages[3].content ?? '', /non retrouvé/);
-  assert.match(history.messages[5].content ?? '', /non retrouvé/);
+  assert.doesNotMatch(history.messages[3].content ?? '', /à vérifier/);
+  assert.match(history.messages[5].content ?? '', /à vérifier/);
 });
 
 test('un tour interrompu ne publie pas des annotations finales', async (t) => {

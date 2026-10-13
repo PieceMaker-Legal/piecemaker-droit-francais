@@ -64,6 +64,19 @@ Deux points de branchement distincts :
   et le journal appartiennent désormais au harnais de chat, qui connaît le
   tour et le dossier. `PIECEMAKER_CITATIONS=off` concerne ces observateurs
   historiques, pas le harnais de chat.
+- Liste **Sources** en fin de réponse (`finish` de `citation-turn.ts`), une
+  ligne par citation, dérivée de la seule sortie du vérifieur (inchangé) :
+  `[n]`, titre lié au panneau, extraits vérifiés entre guillemets. Titre d'une
+  décision ou d'un article : le titre Légifrance tel quel. Titre d'une pièce :
+  lu en base par `harness/piece-title.ts` (label `AAAA-MM-JJ_titre`, sinon
+  nature + date, sinon nom du fichier) ; l'IA ne donne que `doc_id`. Tout
+  extrait non vérifié porte « 🔴 [à vérifier – introuvable] », suivi du passage
+  le plus proche de la source quand `nearestPassage` (`source-passages.ts`) en
+  trouve un — aide à la relecture, jamais réinjectée dans la citation.
+- Dans un `.docx`, l'instruction demande une note de bas de page au lieu de
+  `[n]`, et le même bloc `<CITATIONS>` dans le chat (ref = numéro de note) :
+  les notes sont donc vérifiées comme le chat. Rien ne contrôle encore que le
+  texte de la note égale l'extrait vérifié.
 
 Invariants tenus par les tests (`harness.test.js`, `proxy-harness.test.js`) :
 

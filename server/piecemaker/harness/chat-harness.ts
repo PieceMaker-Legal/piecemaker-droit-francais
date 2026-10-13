@@ -15,6 +15,7 @@ export function installChatCitationHarness(options: {
   store: ReturnType<typeof createCitationStore>;
   ensureProxy: () => void;
   folderHistory?: Pick<FolderHistory, 'begin' | 'end'>;
+  pieceTitle?: (cwd: string, docId: string) => string;
 }) {
   const run = options.runtime.run.bind(options.runtime);
   const getRunner = options.runtime.getRunner.bind(options.runtime);
@@ -74,7 +75,7 @@ export function installChatCitationHarness(options: {
     if (provider !== 'claude' && provider !== 'codex') return runWithFolderHistory(provider, command, runtimeOptions, writer, cwd);
     const sessionId = String(runtimeOptions.sessionId ?? '');
     const turn = createCitationTurn({
-      cwd, sessionId, store: options.store,
+      cwd, sessionId, store: options.store, pieceTitle: options.pieceTitle,
       emit: (citationEvent) => writer.send(createNormalizedMessage({
         kind: 'status', provider, sessionId, citationEvent,
       })),
@@ -169,7 +170,7 @@ export function installChatCitationHarness(options: {
     let lastTextIndex = -1;
     const makeTurn = () => createCitationTurn({
       cwd: details.project?.fullPath ?? '', sessionId, store: options.store, emit: () => {},
-      recordVerification: false,
+      recordVerification: false, pieceTitle: options.pieceTitle,
     });
     let turn = makeTurn();
     const finish = async () => {
