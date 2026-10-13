@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { capture, run } from './shell.mjs';
 import { BUNDLE_DIR, embedBundledPlugins } from './plugins.mjs';
 import { ui } from './ui.mjs';
@@ -12,9 +12,12 @@ import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath, releaseRepo, releaseTag } 
 function npmTool(tool) {
   if (process.platform !== 'win32') return (args, options) => run(tool, args, options);
   const cli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', `${tool}-cli.js`);
+  const shim = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'windows-npm-shim.mjs')).href;
   return async (args, options = {}) => {
-    if (await exists(cli)) return run(process.execPath, [cli, ...args], options);
-    return run(`${tool}.cmd`, args.map((arg) => `"${arg}"`), { ...options, shell: true });
+    const baseEnv = options.env || process.env;
+    const env = { ...baseEnv, NODE_OPTIONS: `${baseEnv.NODE_OPTIONS || ''} --import=${shim}`.trim() };
+    if (await exists(cli)) return run(process.execPath, [cli, ...args], { ...options, env });
+    return run(`${tool}.cmd`, args.map((arg) => `"${arg}"`), { ...options, env, shell: true });
   };
 }
 
@@ -260,11 +263,9 @@ async function ensureCargo() {
   return env;
 }
 
-async function downloadPrebuiltProxy(destination) {
+async function downloadReleaseAsset(asset, destination, label) {
   if (process.platform !== 'win32') return false;
-  const asset = 'piecemaker-hudsucker-win32-x64.exe';
   const base = `https://github.com/${releaseRepo}/releases/download/${releaseTag}/${asset}`;
-  ui.step("Téléchargement du proxy d'anonymisation précompilé…");
   try {
     const [binary, checksum] = await Promise.all([fetch(base), fetch(`${base}.sha256`)]);
     if (!binary.ok || !checksum.ok) throw new Error(`HTTP ${binary.status}/${checksum.status}`);
@@ -272,13 +273,25 @@ async function downloadPrebuiltProxy(destination) {
     const expected = (await checksum.text()).trim().split(/\s+/)[0].toLowerCase();
     const actual = crypto.createHash('sha256').update(bytes).digest('hex');
     if (actual !== expected) throw new Error('empreinte SHA-256 invalide');
+    await fs.mkdir(path.dirname(destination), { recursive: true });
     await fs.writeFile(destination, bytes);
-    ui.ok(`Proxy d'anonymisation précompilé vérifié (${releaseTag}).`);
+    ui.ok(`${label} précompilé vérifié (${releaseTag}).`);
     return true;
   } catch (error) {
-    ui.warn(`Proxy précompilé indisponible (${error.message}) — compilation locale.`);
+    ui.warn(`${label} précompilé indisponible (${error.message}) — compilation locale.`);
     return false;
   }
+}
+
+async function downloadPrebuiltProxy(destination) {
+  if (process.platform !== 'win32') return false;
+  ui.step("Téléchargement du proxy d'anonymisation précompilé…");
+  return downloadReleaseAsset('piecemaker-hudsucker-win32-x64.exe', destination, "Proxy d'anonymisation");
+}
+
+async function downloadPrebuiltSqlite(stageDir) {
+  const destination = path.join(stageDir, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
+  return downloadReleaseAsset('better-sqlite3-electron-win32-x64.node', destination, 'better-sqlite3 pour Electron');
 }
 
 async function buildAnonymizerProxy(sourceDir) {
@@ -335,9 +348,12 @@ export async function buildDesktopApp(sourceDir) {
   await embedBundledPlugins(sourceDir, stageDir);
   await patchStagedManifest(stageDir);
   await repairStagedTree(stageDir);
+  const prebuiltSqlite = await downloadPrebuiltSqlite(stageDir);
 
   ui.step("Construction de l'application Electron…");
-  await npx(['electron-builder', '--projectDir', '.desktop-build/desktop-app', '--dir'], {
+  const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', '--dir'];
+  if (prebuiltSqlite) builderArgs.push('-c.npmRebuild=false');
+  await npx(builderArgs, {
     cwd: sourceDir,
     env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
   });
