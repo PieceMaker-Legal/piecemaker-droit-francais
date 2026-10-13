@@ -12,10 +12,10 @@ import { locateSourcePassages, nearestPassage } from './source-passages.js';
 const root = findApplicationRoot(getModuleDirectory(import.meta.url));
 const require = createRequire(import.meta.url);
 const vendor = path.join(root, 'server/piecemaker/vendor/piecemaker-plugin/scripts/lib');
-const { parseCitationsWithDiagnostics, parsePartialCitationObjects } = require(path.join(vendor, 'citations.cjs'));
+const { parseCitationsWithDiagnostics } = require(path.join(vendor, 'citations.cjs'));
 const { verifyCitations } = require(path.join(vendor, 'verify-citations.cjs'));
 const { extractFullText, extractSourceTitle } = require(path.join(root, 'server/piecemaker/harness/decisions.cjs'));
-const SOURCE_TOOLS = ['__consulter_decision', '__consulter_article'];
+const SOURCE_TOOL = /(?:^|_)consulter_(?:decision|article)$/;
 const { structuredMarkdownCounterpart } = require(path.join(vendor, 'case-folder-structure.cjs'));
 const OPEN = '<CITATIONS>';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
@@ -78,7 +78,6 @@ export function createCitationTurn(options: {
   store: ReturnType<typeof createCitationStore>;
   recordVerification?: boolean;
   pieceTitle?: (cwd: string, docId: string) => string;
-  emit: (event: { type: 'citations'; status: 'started' | 'partial' | 'final'; citations: Citation[] }) => void;
 }) {
   const calls = new Map<string, string>();
   const decisions = new Map<string, string>();
@@ -88,7 +87,6 @@ export function createCitationTurn(options: {
   let fullText = '';
   let visibleTail = '';
   let hidden = false;
-  let partialCount = 0;
   let overflow = false;
   let finished: Promise<string> | undefined;
 
@@ -116,19 +114,11 @@ export function createCitationTurn(options: {
     return pending;
   };
 
-  const partial = () => {
-    const citations = parsePartialCitationObjects(fullText.slice(fullText.indexOf(OPEN) + OPEN.length)) as Citation[];
-    if (citations.length > partialCount) {
-      partialCount = citations.length;
-      options.emit({ type: 'citations', status: 'partial', citations });
-    }
-  };
-
   return {
     get hasCitations() { return hidden; },
     observe(message: NormalizedMessage) {
       if (message.parentToolUseId) return;
-      if (message.kind === 'tool_use' && message.toolId && SOURCE_TOOLS.some((tool) => message.toolName?.endsWith(tool))) {
+      if (message.kind === 'tool_use' && message.toolId && SOURCE_TOOL.test(message.toolName ?? '')) {
         let input = record(message.toolInput);
         if (typeof message.toolInput === 'string') {
           try { input = record(JSON.parse(message.toolInput)); } catch { return; }
@@ -136,7 +126,7 @@ export function createCitationTurn(options: {
         const id = input.text_id ?? input.article_id ?? input.id;
         if (typeof id === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(id)) calls.set(message.toolId, id);
       }
-      if (message.kind === 'tool_result' && message.toolId && !message.isError && !message.toolResult?.isError) {
+      if ((message.kind === 'tool_result' || message.toolResult) && message.toolId && !message.isError && !message.toolResult?.isError) {
         const id = calls.get(message.toolId);
         if (!id) return;
         const raw = toolText(message.content ?? message.toolResult?.content);
@@ -156,14 +146,12 @@ export function createCitationTurn(options: {
         fullText = '';
       }
       if (!overflow) fullText += delta;
-      if (hidden) { if (!overflow) partial(); return ''; }
+      if (hidden) return '';
       const combined = visibleTail + delta;
       const marker = combined.indexOf(OPEN);
       if (marker >= 0) {
         hidden = true;
         visibleTail = '';
-        options.emit({ type: 'citations', status: 'started', citations: [] });
-        if (!overflow) partial();
         return combined.slice(0, marker);
       }
       const keep = Math.min(OPEN.length - 1, combined.length);
@@ -179,9 +167,7 @@ export function createCitationTurn(options: {
       if (text.includes(OPEN)) {
         if (text.length <= MAX_TURN_CHARACTERS) fullText = text;
         else overflow = true;
-        if (!hidden) options.emit({ type: 'citations', status: 'started', citations: [] });
         hidden = true;
-        if (!overflow) partial();
       }
       return visibleText(text);
     },
@@ -217,7 +203,6 @@ export function createCitationTurn(options: {
             lines.push(`- [${citation.ref}] 🔴 ${linkLabel(title)} — source indisponible`);
           }
         }
-        options.emit({ type: 'citations', status: 'final', citations });
         const sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
         if (!replay && block) await options.store.saveTurnSources(options.sessionId, block, sources).catch(() => {});
         return sources;

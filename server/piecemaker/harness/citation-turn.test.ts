@@ -16,13 +16,12 @@ async function fixture(t: test.TestContext) {
   const cwd = await mkdtemp(path.join(os.tmpdir(), 'pm-citations-'));
   t.after(() => rm(cwd, { recursive: true, force: true }));
   const store = createCitationStore(path.join(cwd, '.store'));
-  const events: Parameters<Parameters<typeof createCitationTurn>[0]['emit']>[0][] = [];
-  const turn = createCitationTurn({ cwd, sessionId: 'session', store, emit: (event) => events.push(event) });
-  return { cwd, store, events, turn };
+  const turn = createCitationTurn({ cwd, sessionId: 'session', store });
+  return { cwd, store, turn };
 }
 
 test('Mike : texte diffusé, bloc masqué même découpé, annotations finales corrigées et source navigable', async (t) => {
-  const { cwd, store, events, turn } = await fixture(t);
+  const { cwd, store, turn } = await fixture(t);
   const source = 'Avant. La CLAUSE   prévoit une durée de deux ans. Après.';
   await writeFile(path.join(cwd, 'piece.md'), source);
   const text = `Analyse [1].\n${block([{ ref: 1, doc_id: 'piece.md', quote: 'la clause prévoit une durée de deux ans' }])}`;
@@ -30,14 +29,12 @@ test('Mike : texte diffusé, bloc masqué même découpé, annotations finales c
   for (const character of text) visible += turn.delta(character);
   visible += turn.flush();
   assert.equal(visible, 'Analyse [1].\n');
-  assert.deepEqual(events.map((event) => event.status), ['started', 'partial']);
   const suffix = await turn.finish();
-  assert.equal(events.at(-1)?.status, 'final');
-  assert.equal(events.at(-1)?.citations[0].verified, true);
-  assert.equal(events.at(-1)?.citations[0].quotes[0].quote, 'La CLAUSE   prévoit une durée de deux ans');
   const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
   assert.ok(token);
   const snapshot = await store.read(token);
+  assert.equal(snapshot?.citation.verified, true);
+  assert.equal(snapshot?.citation.quotes[0].quote, 'La CLAUSE   prévoit une durée de deux ans');
   assert.equal(snapshot?.source, source);
   assert.equal(snapshot?.source.slice(snapshot.ranges[0].start, snapshot.ranges[0].end), snapshot?.citation.quotes[0].quote);
   await writeFile(path.join(cwd, 'piece.md'), 'Document modifié ensuite.');
@@ -46,55 +43,50 @@ test('Mike : texte diffusé, bloc masqué même découpé, annotations finales c
 });
 
 test('Mike : citation introuvable annotée false, sans suppression de la réponse', async (t) => {
-  const { cwd, events, turn } = await fixture(t);
+  const { cwd, turn } = await fixture(t);
   await writeFile(path.join(cwd, 'piece.md'), 'Texte source réel.');
   assert.equal(turn.text(`Réponse [1].${block([{ ref: 1, doc_id: 'piece.md', quote: 'Texte inventé.' }])}`), 'Réponse [1].');
   assert.match(await turn.finish(), /- \[1\] 🔴 \[piece, p\. 1\]\[1\] — \[à vérifier – introuvable\]$/m);
-  assert.equal(events.at(-1)?.citations[0].verified, false);
 });
 
 test('les résultats consulter_decision Claude et Codex sont appariés et restent propres au tour', async (t) => {
   for (const provider of ['claude', 'codex'] as const) {
-    const { turn, events, store, cwd } = await fixture(t);
+    const { turn, store, cwd } = await fixture(t);
     const message = (fields: Omit<Parameters<typeof createNormalizedMessage>[0], 'provider'> & { kind: 'tool_use' | 'tool_result' }) => createNormalizedMessage({ ...fields, provider, sessionId: 'session' });
     turn.observe(message({ kind: 'tool_use', toolId: 'call-1', toolName: 'mcp__legifrance__consulter_decision', toolInput: { text_id: 'JURITEXT1' } }));
     turn.observe(message({ kind: 'tool_result', toolId: 'unrelated', content: 'Extrait intrus.' }));
     turn.observe(message({ kind: 'tool_result', toolId: 'call-1', content: JSON.stringify({ content: [{ type: 'text', text: 'TEXTE INTÉGRAL:\n=====\nExtrait lu dans ce tour.\nLien: https://example.org' }] }) }));
     const text = block([{ ref: 1, decision_id: 'JURITEXT1', quote: 'Extrait lu dans ce tour.' }]);
     turn.text(text);
-    await turn.finish();
-    assert.equal(events.at(-1)?.citations[0].verified, true);
-    const other = createCitationTurn({ cwd, sessionId: 'other', store, emit: (event) => events.push(event) });
+    assert.doesNotMatch(await turn.finish(), /🔴/);
+    const other = createCitationTurn({ cwd, sessionId: 'other', store });
     other.text(text);
-    await other.finish();
-    assert.equal(events.at(-1)?.citations[0].verified, false);
+    assert.match(await other.finish(), /🔴/);
   }
 });
 
 test('une décision Judilibre lue par consulter_decision est vérifiée sous son identifiant hexadécimal', async (t) => {
-  const { turn, events } = await fixture(t);
+  const { turn } = await fixture(t);
   const id = '0123456789abcdef01234567';
   const result = ['DÉCISION: Cour de cassation, Chambre sociale, 12 janvier 2024, 22-10.000', '', 'Solution: Cassation', '', '='.repeat(80), 'TEXTE INTÉGRAL:', '='.repeat(80), '', 'Le salarié Jean Dupont a été licencié sans cause réelle et sérieuse.', '', `Lien: https://www.courdecassation.fr/decision/${id}`].join('\n');
   turn.observe(createNormalizedMessage({ provider: 'claude', sessionId: 'session', kind: 'tool_use', toolId: 'call-1', toolName: 'mcp__legifrance__consulter_decision', toolInput: { text_id: id } }));
   turn.observe(createNormalizedMessage({ provider: 'claude', sessionId: 'session', kind: 'tool_result', toolId: 'call-1', content: [{ type: 'text', text: result }] }));
   turn.text(block([{ ref: 1, kind: 'case', decision_id: id, quotes: [{ quote: 'licencié sans cause réelle et sérieuse' }] }]));
-  await turn.finish();
-  assert.equal(events.at(-1)?.citations[0].verified, true);
+  assert.doesNotMatch(await turn.finish(), /🔴/);
 });
 
 test('une réponse MCP en erreur et un résultat de sous-agent ne constituent pas une lecture du tour', async (t) => {
-  const { turn, events } = await fixture(t);
+  const { turn } = await fixture(t);
   const base = { provider: 'codex' as const, sessionId: 'session', toolId: 'call' };
   turn.observe(createNormalizedMessage({ ...base, kind: 'tool_use', toolName: 'mcp__legifrance__consulter_decision', toolInput: { text_id: 'JURITEXT1' } }));
   turn.observe(createNormalizedMessage({ ...base, kind: 'tool_result', content: 'Extrait.', isError: true }));
   turn.observe(createNormalizedMessage({ ...base, kind: 'tool_result', content: 'Extrait.', parentToolUseId: 'agent' }));
   turn.text(block([{ ref: 1, decision_id: 'JURITEXT1', quote: 'Extrait.' }]));
-  await turn.finish();
-  assert.equal(events.at(-1)?.citations[0].verified, false);
+  assert.match(await turn.finish(), /🔴/);
 });
 
 test('pas de lecture hors dossier, y compris par lien symbolique', async (t) => {
-  const { cwd, turn, events } = await fixture(t);
+  const { cwd, turn } = await fixture(t);
   const outside = await mkdtemp(path.join(os.tmpdir(), 'pm-source-outside-'));
   t.after(() => rm(outside, { recursive: true, force: true }));
   await writeFile(path.join(outside, 'source.md'), 'Texte hors dossier.');
@@ -103,22 +95,21 @@ test('pas de lecture hors dossier, y compris par lien symbolique', async (t) => 
     { ref: 1, doc_id: path.join(outside, 'source.md'), quote: 'Texte hors dossier.' },
     { ref: 2, doc_id: 'link.md', quote: 'Texte hors dossier.' },
   ]));
-  await turn.finish();
-  assert.deepEqual(events.at(-1)?.citations.map((citation) => citation.verified), [false, false]);
+  const suffix = await turn.finish();
+  assert.match(suffix, /^- \[1\] 🔴/m);
+  assert.match(suffix, /^- \[2\] 🔴/m);
   assert.equal(await readFile(path.join(outside, 'source.md'), 'utf8'), 'Texte hors dossier.');
 });
 
 test('sans citations et avec JSON malformé : pas de faux succès ni de bloc technique visible', async (t) => {
-  const { turn, events } = await fixture(t);
+  const { turn } = await fixture(t);
   let visible = turn.delta('Bonjour <CI');
   visible += turn.flush();
   assert.equal(visible, 'Bonjour <CI');
   assert.equal(await turn.finish(), '');
-  assert.deepEqual(events.at(-1)?.citations, []);
   const other = await fixture(t);
   assert.equal(other.turn.text('Bonjour<CITATIONS>{incorrect}</CITATIONS>'), 'Bonjour');
   assert.equal(await other.turn.finish(), '');
-  assert.deepEqual(other.events.at(-1)?.citations, []);
 });
 
 test('extraits multiples, ellipses et sauts de page conservent leurs plages source', async (t) => {
@@ -137,7 +128,7 @@ test('extraits multiples, ellipses et sauts de page conservent leurs plages sour
 });
 
 test('un article lu avec consulter_article est vérifiable et titré par son code', async (t) => {
-  const { turn, store, events } = await fixture(t);
+  const { turn, store } = await fixture(t);
   const resultat = [
     '**1103**', '', 'Code: Code civil', 'Section: Chapitre Ier : Dispositions liminaires',
     'Validité: 2016-10-01 → 2999-01-01', 'Identifiant: LEGIARTI000032040777',
@@ -149,8 +140,7 @@ test('un article lu avec consulter_article est vérifiable et titré par son cod
   turn.observe(message({ kind: 'tool_result', toolId: 'call-1', content: resultat }));
   turn.text(block([{ ref: 1, kind: 'article', article_id: 'LEGIARTI000032040777', quote: 'tiennent lieu de loi à ceux qui les ont faits' }]));
   const suffix = await turn.finish();
-  assert.equal(events.at(-1)?.citations[0].kind, 'article');
-  assert.equal(events.at(-1)?.citations[0].verified, true);
+  assert.doesNotMatch(suffix, /🔴/);
   const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
   assert.ok(token);
   assert.equal((await store.read(token))?.title, 'Code civil, article 1103');
@@ -177,7 +167,7 @@ test('la liste des sources donne le titre Légifrance et l’extrait vérifié',
 });
 
 test('un extrait non vérifié est à vérifier, avec le passage le plus proche quand il existe', async (t) => {
-  const { cwd, turn, events } = await fixture(t);
+  const { cwd, turn } = await fixture(t);
   await writeFile(path.join(cwd, 'bail.md'), 'Préambule. Le preneur occupera les lieux paisiblement pendant toute la durée du bail. Fin.');
   turn.text(block([
     { ref: 1, doc_id: 'bail.md', quotes: [{ page: 2, quote: 'le preneur occupe les lieux paisiblement pendant la durée du bail' }] },
@@ -188,14 +178,13 @@ test('un extrait non vérifié est à vérifier, avec le passage le plus proche 
   assert.match(suffix, /^- \[1\] 🔴 \[bail, p\. 2\]\[1\] — \[à vérifier – introuvable\] — passage le plus proche : « Le preneur occupera les lieux paisiblement pendant toute la durée du bail »$/m);
   assert.match(suffix, /^- \[2\] 🔴 \[bail, p\. 1\]\[2\] — \[à vérifier – introuvable\]$/m);
   assert.match(suffix, /^- \[3\] 🔴 \[JURITEXT9\]\[3\] — \[à vérifier – introuvable\]$/m);
-  assert.deepEqual(events.at(-1)?.citations.map((citation) => citation.verified), [false, false, false]);
 });
 
 test('le titre d’une pièce vient de la base : label daté, sinon nature et date, sinon nom', async (t) => {
   const { cwd, store } = await fixture(t);
   await writeFile(path.join(cwd, 'courrier.md'), 'Je vous mets en demeure de payer.');
   const seen: string[] = [];
-  const turn = createCitationTurn({ cwd, sessionId: 'session', store, emit: () => {}, pieceTitle: (folder, docId) => { seen.push(`${folder}|${docId}`); return 'Mise en demeure (12/03/2024)'; } });
+  const turn = createCitationTurn({ cwd, sessionId: 'session', store, pieceTitle: (folder, docId) => { seen.push(`${folder}|${docId}`); return 'Mise en demeure (12/03/2024)'; } });
   turn.text(block([{ ref: 1, doc_id: 'courrier.md', quotes: [{ page: 1, quote: 'Je vous mets en demeure de payer.' }] }]));
   const suffix = await turn.finish();
   assert.deepEqual(seen, [`${cwd}|courrier.md`]);
@@ -206,4 +195,13 @@ test('le titre d’une pièce vient de la base : label daté, sinon nature et da
   assert.equal(formatPieceTitle({ label: 'scan 4.pdf', nature: 'contrat', doc_date: '2024-03-12' }, 'x.md'), 'Contrat du 12/03/2024');
   assert.equal(formatPieceTitle({ label: 'scan 4.pdf', nature: 'contrat' }, 'x.md'), 'scan 4');
   assert.equal(formatPieceTitle(undefined, 'conversions/scan 4.md'), 'scan 4');
+});
+
+test('Mistral : outil Vibe legifrance_consulter_decision, résultat porté par le tool_use', async (t) => {
+  const { turn } = await fixture(t);
+  const base = { provider: 'mistral' as const, sessionId: 'session', kind: 'tool_use' as const, toolId: 'call-1', toolName: 'legifrance_consulter_decision' };
+  turn.observe(createNormalizedMessage({ ...base, toolInput: { text_id: 'JURITEXT1' } }));
+  turn.observe(createNormalizedMessage({ ...base, toolInput: {}, toolResult: { content: 'TEXTE INTÉGRAL:\n=====\nExtrait lu par Vibe.', isError: false } }));
+  turn.text(block([{ ref: 1, decision_id: 'JURITEXT1', quote: 'Extrait lu par Vibe.' }]));
+  assert.match(await turn.finish(), /^- \[1\] \[JURITEXT1\]\[1\] — « Extrait lu par Vibe\. »$/m);
 });
