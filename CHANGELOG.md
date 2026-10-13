@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.29](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.28...v2.0.29) (2026-10-13)
+
+### Bug Fixes
+
+* **desktop-update:** mise à jour intégrée sous Windows (ENOENT) ([8d12494](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8d1249417a1cf289d87eb2387e7a0adfbdf81f6a))
+
 ## [2.0.28](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.27...v2.0.28) (2026-10-13)
 
 ### New Features
