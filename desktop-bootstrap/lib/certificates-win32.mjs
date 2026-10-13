@@ -63,7 +63,7 @@ async function authorityIsUsable() {
   try {
     const x509 = new crypto.X509Certificate(await fs.readFile(caCertPath, 'utf8'));
     const key = crypto.createPrivateKey(await fs.readFile(caKeyPath, 'utf8'));
-    return x509.checkPrivateKey(key) && Boolean(await readJson(thumbprintsPath));
+    return x509.checkPrivateKey(key) && !x509.keyUsage?.length && Boolean(await readJson(thumbprintsPath));
   } catch {
     return false;
   }
@@ -94,7 +94,7 @@ export async function generateCertificates() {
     '$ErrorActionPreference = "Stop"',
     `$password = ConvertTo-SecureString -String ${quote(passphrase)} -Force -AsPlainText`,
     '$expiry = (Get-Date).AddDays(825)',
-    `$ca = New-SelfSignedCertificate -Subject ${quote(`CN=${CA_COMMON_NAME}, O=${PRODUCT_NAME}`)} -Provider ${quote(AUTHORITY_PROVIDER)} -KeySpec Signature -KeyUsage CertSign,CRLSign,DigitalSignature -KeyExportPolicy Exportable -KeyLength 4096 -HashAlgorithm SHA256 -NotAfter $expiry -CertStoreLocation Cert:\\CurrentUser\\My -TextExtension @("2.5.29.19={text}CA=true&pathlength=0")`,
+    `$ca = New-SelfSignedCertificate -Subject ${quote(`CN=${CA_COMMON_NAME}, O=${PRODUCT_NAME}`)} -Type Custom -Provider ${quote(AUTHORITY_PROVIDER)} -KeySpec Signature -KeyUsage CertSign,CRLSign,DigitalSignature -KeyExportPolicy Exportable -KeyLength 4096 -HashAlgorithm SHA256 -NotAfter $expiry -CertStoreLocation Cert:\\CurrentUser\\My -TextExtension @("2.5.29.19={text}CA=true&pathlength=0")`,
     `$tls = New-SelfSignedCertificate -Subject ${quote('CN=localhost')} -DnsName "localhost","127.0.0.1" -Signer $ca -KeyExportPolicy Exportable -HashAlgorithm SHA256 -NotAfter $expiry -CertStoreLocation Cert:\\CurrentUser\\My -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1")`,
     `$signing = New-SelfSignedCertificate -Subject ${quote(`CN=${SIGNING_COMMON_NAME}, O=${PRODUCT_NAME}`)} -Type CodeSigningCert -Signer $ca -KeyExportPolicy Exportable -HashAlgorithm SHA256 -NotAfter $expiry -CertStoreLocation Cert:\\CurrentUser\\My`,
     `Export-Certificate -Cert $tls -FilePath ${quote(tlsCertPath)} -Type CERT | Out-Null`,

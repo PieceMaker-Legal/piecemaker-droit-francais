@@ -8,7 +8,7 @@ $nodeChannel = if ($env:PIECEMAKER_NODE_CHANNEL) { $env:PIECEMAKER_NODE_CHANNEL 
 $minNodeMajor = 22
 
 function Say([string] $message) { Write-Host "== $message" -ForegroundColor Cyan }
-function Fail([string] $message) { Write-Host "!! $message" -ForegroundColor Red; exit 1 }
+function Fail([string] $message) { Write-Host "!! $message" -ForegroundColor Red; throw $message }
 
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
   Fail 'Ce script installe PieceMaker sur Windows. Sur macOS, utilisez install.sh.'
@@ -80,4 +80,4 @@ $env:PIECEMAKER_REPO = $repo
 $env:PIECEMAKER_BOOTSTRAP_HOME = $bootstrapHome
 
 & $nodeBin (Join-Path $srcDir 'desktop-bootstrap\lib\install.mjs') @args
-exit $LASTEXITCODE
+if ($LASTEXITCODE -ne 0) { throw "Installation interrompue (code $LASTEXITCODE)." }
