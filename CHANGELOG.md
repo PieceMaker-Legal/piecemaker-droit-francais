@@ -3,6 +3,16 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.26](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.25...v2.0.26) (2026-10-13)
+
+### New Features
+
+* **desktop-bootstrap:** ne plus installer GLiNER2 pendant l'installation Electron ([cd30935](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/cd3093504302dd9f646643884174d3e45cbd67c9))
+
+### Bug Fixes
+
+* **desktop-bootstrap:** certificat Windows refusé en mode non interactif ([0e1111a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0e1111a6342afb543ef645b19e7c273f6a35a5a5))
+
 ## [2.0.25](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.24...v2.0.25) (2026-10-13)
 
 ### New Features
