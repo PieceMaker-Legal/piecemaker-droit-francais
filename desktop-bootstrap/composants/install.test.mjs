@@ -11,6 +11,7 @@ import {
   createHost,
   dependenciesReady,
   installRuntimeComponents,
+  installerRequirements,
   mergeRuntimeConfig,
   parsePythonVersion,
   parseStatus,
@@ -225,4 +226,14 @@ test('installe les bibliothèques sans MinerU ni modèle quand l\'environnement 
   assert.equal(flat.some((line) => line.includes('mineru')), false);
   assert.equal(flat.some((line) => line.endsWith('warmup.py')), false);
   assert.equal(JSON.parse(files.get(layout.configFile)).pythonPath, venvPythonPath(layout.venvDir, 'darwin'));
+});
+
+test('n’installe ni GLiNER ni huggingface-hub pendant l’installation', () => {
+  const requirements = [
+    'markitdown[all]>=0.1.4  # conversion',
+    'pypdf>=6.6.2',
+    'gliner2[local]>=2.1.0',
+    'huggingface-hub>=0.20.0',
+  ].join('\r\n');
+  assert.equal(installerRequirements(requirements), 'markitdown[all]>=0.1.4  # conversion\npypdf>=6.6.2');
 });
