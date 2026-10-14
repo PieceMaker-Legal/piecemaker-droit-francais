@@ -58,6 +58,15 @@ export async function pollWorkspacePanel(project: string) {
   return response.json() as Promise<{ request: { id: string; tab: string; view?: string; review?: string; draft?: string; document?: string } | null }>;
 }
 
+export async function acknowledgeWorkspacePanel(project: string, id: string) {
+  const response = await authenticatedFetch('/api/piecemaker/local/open-panel/ack', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project, id }),
+  });
+  if (!response.ok) throw new Error('Panel acknowledgement failed');
+}
+
 // ─── Request helpers ────────────────────────────────────────────────────────
 // Every endpoint below goes through these so verb, JSON encoding and query
 // serialization stay consistent across the whole frontend.
