@@ -3,6 +3,13 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.31](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.30...v2.0.31) (2026-10-14)
+
+### Bug Fixes
+
+* **desktop:** restore CloudCLI title bar on Windows ([a260d82](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a260d828b7e1e131bd52d6268f7e966997c4659b))
+* **piecemaker:** delegate scan formats to the converter ([4ca35c1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4ca35c1343bcff67932413b4b71d7309470c52b2))
+
 ## [2.0.30](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.29...v2.0.30) (2026-10-13)
 
 ### Bug Fixes
