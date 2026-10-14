@@ -98,13 +98,33 @@ async function openPanelAndWait(request, timeoutMs, panelsPath) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      if (await panelRequestReceived({ project, id })) return true;
+      const received = await panelRequestReceived({ project, id });
+      if (await waitForOpenPanel({ cwd: project, ...target }, panelsPath, 0)) return true;
+      if (received) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        continue;
+      }
     } catch {
       return false;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  return false;
+  return waitForOpenPanel({ cwd: project, ...target }, panelsPath, 0);
+}
+
+function afficherResult(code, message, nextAction) {
+  const failed = code !== 'opened';
+  return {
+    ...(failed ? { isError: true } : {}),
+    content: [{ type: 'text', text: message }],
+    structuredContent: {
+      status: failed ? 'failed' : 'opened',
+      code,
+      message,
+      retryable: false,
+      next_action: nextAction,
+    },
+  };
 }
 
 // --- Construction des arguments, un constructeur pur par outil -----------
@@ -194,7 +214,15 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
   server.registerTool('afficher', {
     description: 'Affiche à l’avocat, dans un volet de PieceMaker à côté du chat, un fichier du dossier '
       + '(fichier), la vue générale ou la chronologie du dossier, ou une tabular review. '
-      + 'Sans effet hors de l’application PieceMaker.',
+      + 'Sans effet hors de l’application PieceMaker. Après un échec, ne répétez pas la même demande : '
+      + 'appelez volets_ouverts une fois pour vérifier l’état actuel.',
+    outputSchema: {
+      status: z.enum(['opened', 'failed']),
+      code: z.string(),
+      message: z.string(),
+      retryable: z.boolean(),
+      next_action: z.string(),
+    },
     inputSchema: {
       fichier: z.string().optional().describe('Chemin du fichier, relatif au dossier ou absolu.'),
       volet: z.enum(VOLETS).optional().describe('Volet à ouvrir quand aucun fichier n’est donné.'),
@@ -210,18 +238,18 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
   }, async ({ fichier, volet, review }) => {
     if (fichier) {
       const resolved = path.resolve(process.cwd(), fichier);
-      if (!fs.existsSync(resolved)) return { isError: true, content: [{ type: 'text', text: `Fichier introuvable : ${fichier}` }] };
+      if (!fs.existsSync(resolved)) return afficherResult('file_not_found', `Fichier introuvable : ${fichier}`, 'Vérifiez le chemin du fichier.');
       const opened = await openPanelAndWait({ project: process.cwd(), tab: 'files', document: resolved }, openPanelsTimeoutMs, openPanelsPath);
-      if (!opened) return { isError: true, content: [{ type: 'text', text: 'Le fichier n’a pas été ouvert dans PieceMaker.' }] };
-      return { content: [{ type: 'text', text: `Affiché dans le volet de lecture : ${fichier}` }] };
+      if (!opened) return afficherResult('open_not_confirmed', 'L’ouverture du fichier n’a pas été confirmée dans PieceMaker.', 'Appelez volets_ouverts une fois ; ne répétez pas afficher avec la même cible.');
+      return afficherResult('opened', `Affiché dans le volet de lecture : ${fichier}`, 'Aucune action requise.');
     }
-    if (!volet) return { isError: true, content: [{ type: 'text', text: 'Indiquez un fichier ou un volet.' }] };
+    if (!volet) return afficherResult('target_required', 'Indiquez un fichier ou un volet.', 'Précisez un fichier ou un volet.');
     const target = volet === 'tabular-review'
       ? { tab: 'plugin:piecemaker-tabular-review', review: review ? path.basename(review) : undefined }
       : { tab: 'plugin:piecemaker-dossier', view: volet === 'chronologie' ? 'chronology' : 'general' };
     const opened = await openPanelAndWait({ project: process.cwd(), ...target }, openPanelsTimeoutMs, openPanelsPath);
-    if (!opened) return { isError: true, content: [{ type: 'text', text: `Le volet ${volet} n’a pas été ouvert dans PieceMaker.` }] };
-    return { content: [{ type: 'text', text: `Volet affiché : ${volet}${review ? ` (${path.basename(review)})` : ''}` }] };
+    if (!opened) return afficherResult('open_not_confirmed', `L’ouverture du volet ${volet} n’a pas été confirmée dans PieceMaker.`, 'Appelez volets_ouverts une fois ; ne répétez pas afficher avec la même cible.');
+    return afficherResult('opened', `Volet affiché : ${volet}${review ? ` (${path.basename(review)})` : ''}`, 'Aucune action requise.');
   });
 
   server.registerTool('chronologie', {
