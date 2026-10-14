@@ -91,7 +91,7 @@ function normalizeCitation(raw) {
     });
   }
   return {
-    kind: 'document',
+    kind: c.kind === 'code' ? 'code' : 'document',
     ref,
     doc_id: c.doc_id,
     page: quotes[0].page,

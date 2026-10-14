@@ -20,9 +20,11 @@ const { structuredMarkdownCounterpart } = require(path.join(vendor, 'case-folder
 const OPEN = '<CITATIONS>';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_CHARACTERS = 32 * 1024 * 1024;
+const CODE_EXTENSIONS = new Set(['.cjs', '.css', '.go', '.html', '.js', '.json', '.jsonc', '.jsx', '.mjs', '.py', '.rs', '.sh', '.sql', '.toml', '.ts', '.tsx', '.xml', '.yaml', '.yml']);
+const CODE_EXTENSIONLESS_PATHS = new Set(['.husky/commit-msg', '.husky/pre-commit', '.husky/pre-push', '.oxlintrc']);
 
 type Citation = Parameters<ReturnType<typeof createCitationStore>['save']>[0]['citation'] & {
-  kind: 'case' | 'article' | 'document';
+  kind: 'case' | 'article' | 'document' | 'code';
   decision_id?: string;
   article_id?: string;
   doc_id?: string;
@@ -50,21 +52,25 @@ function withinRoot(rootPath: string, file: string) {
 const inline = (text: string) => text.replace(/\[\[PAGE_BREAK\]\]/g, ' … ').replace(/\s+/g, ' ').trim();
 const linkLabel = (text: string) => text.replace(/\[/g, '(').replace(/\]/g, ')');
 
-function locator(citation: Citation) {
+function locator(citation: Citation, ranges: Array<{ start: number; end: number; quoteIndex: number }>, source: string) {
   const quote = citation.quotes[0];
+  if (citation.kind === 'code') {
+    const range = ranges.find((entry) => entry.quoteIndex === 0);
+    return range ? `, l. ${source.slice(0, range.start).split('\n').length}` : '';
+  }
   if (citation.kind !== 'document' || !quote) return '';
   if (quote.sheet) return `, ${quote.sheet}${quote.cell ? `!${quote.cell}` : ''}`;
   return quote.page ? `, p. ${quote.page}` : '';
 }
 
-function sourceLine(citation: Citation, title: string, source: string) {
+function sourceLine(citation: Citation, title: string, source: string, ranges: Array<{ start: number; end: number; quoteIndex: number }>) {
   const checked = citation.verified !== false;
   const quotes = citation.quotes.map((quote) => {
     if (quote.verification?.verified ?? checked) return `« ${inline(quote.quote)} »`;
     const nearest = source ? nearestPassage(source, quote.quote) : null;
     return `[à vérifier – introuvable]${nearest ? ` — passage le plus proche : « ${inline(nearest)} »` : ''}`;
   });
-  return `- [${citation.ref}] ${checked ? '' : '🔴 '}[${linkLabel(title + locator(citation))}][${citation.ref}] — ${quotes.join(' · ')}`;
+  return `- [${citation.ref}] ${checked ? '' : '🔴 '}[${linkLabel(title + locator(citation, ranges, source))}][${citation.ref}] — ${quotes.join(' · ')}`;
 }
 
 function visibleText(text: string) {
@@ -76,6 +82,7 @@ export function createCitationTurn(options: {
   cwd: string;
   sessionId: string;
   store: ReturnType<typeof createCitationStore>;
+  codeRoot?: string;
   recordVerification?: boolean;
   pieceTitle?: (cwd: string, docId: string) => string;
 }) {
@@ -83,6 +90,8 @@ export function createCitationTurn(options: {
   const decisions = new Map<string, string>();
   const decisionTitles = new Map<string, string>();
   const documents = new Map<string, Promise<string>>();
+  const codeFiles = new Map<string, Promise<string>>();
+  const codeRoot = path.resolve(options.codeRoot ?? root);
   let sourceCharacters = 0;
   let fullText = '';
   let visibleTail = '';
@@ -110,6 +119,30 @@ export function createCitationTurn(options: {
         } catch { return ''; }
       })();
       documents.set(id, pending);
+    }
+    return pending;
+  };
+
+  const codeText = (id: string) => {
+    let pending = codeFiles.get(id);
+    if (!pending) {
+      pending = (async () => {
+        try {
+          if (path.resolve(options.cwd) !== codeRoot) return '';
+          const requested = path.resolve(codeRoot, id);
+          if (!withinRoot(codeRoot, requested)) return '';
+          const relative = path.relative(codeRoot, requested).split(path.sep).join('/');
+          if (!CODE_EXTENSIONS.has(path.extname(requested).toLowerCase()) && !CODE_EXTENSIONLESS_PATHS.has(relative)) return '';
+          const canonical = await realpath(requested);
+          const canonicalRoot = await realpath(codeRoot);
+          if (!withinRoot(canonicalRoot, canonical)) return '';
+          if ((await stat(canonical)).size > MAX_SOURCE_BYTES) return '';
+          const text = await readFile(canonical, 'utf8');
+          sourceCharacters += text.length;
+          return sourceCharacters <= MAX_TURN_CHARACTERS ? text : '';
+        } catch { return ''; }
+      })();
+      codeFiles.set(id, pending);
     }
     return pending;
   };
@@ -181,7 +214,7 @@ export function createCitationTurn(options: {
           if (saved !== null) return saved;
         }
         const parsed = overflow ? [] : parseCitationsWithDiagnostics(fullText).citations as Citation[];
-        const citations = await verifyCitations(parsed, documentText, async (id: string) => decisions.get(id) ?? '') as Citation[];
+        const citations = await verifyCitations(parsed, (id: string, kind: string) => kind === 'code' ? codeText(id) : documentText(id), async (id: string) => decisions.get(id) ?? '') as Citation[];
         if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
         const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];
@@ -189,16 +222,17 @@ export function createCitationTurn(options: {
         for (const citation of citations) {
           const lawId = citation.decision_id ?? citation.article_id;
           const source = citation.kind === 'case' || citation.kind === 'article'
-            ? decisions.get(lawId ?? '') ?? '' : await documentText(citation.doc_id ?? '');
+            ? decisions.get(lawId ?? '') ?? ''
+            : citation.kind === 'code' ? await codeText(citation.doc_id ?? '') : await documentText(citation.doc_id ?? '');
           const ranges = locateSourcePassages(source, citation.quotes);
           const docId = citation.doc_id ?? '';
-          const title = citation.kind === 'document'
+          const title = citation.kind === 'code' ? docId : citation.kind === 'document'
             ? options.pieceTitle?.(options.cwd, docId) ?? formatPieceTitle(undefined, docId)
             : decisionTitle(lawId) ?? lawId ?? 'Source';
           try {
             const token = await options.store.save({ sessionId: options.sessionId, title, source, citation, ranges });
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
-            lines.push(sourceLine(citation, title, source));
+            lines.push(sourceLine(citation, title, source, ranges));
           } catch {
             lines.push(`- [${citation.ref}] 🔴 ${linkLabel(title)} — source indisponible`);
           }

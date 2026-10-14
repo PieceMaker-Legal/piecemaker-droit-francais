@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -47,6 +47,28 @@ test('Mike : citation introuvable annotée false, sans suppression de la répons
   await writeFile(path.join(cwd, 'piece.md'), 'Texte source réel.');
   assert.equal(turn.text(`Réponse [1].${block([{ ref: 1, doc_id: 'piece.md', quote: 'Texte inventé.' }])}`), 'Réponse [1].');
   assert.match(await turn.finish(), /- \[1\] 🔴 \[piece, p\. 1\]\[1\] — \[à vérifier – introuvable\]$/m);
+});
+
+test('un fichier de code du dépôt est vérifié depuis son original et affiche sa ligne', async (t) => {
+  const codeRoot = await mkdtemp(path.join(os.tmpdir(), 'pm-code-citations-'));
+  t.after(() => rm(codeRoot, { recursive: true, force: true }));
+  await mkdir(path.join(codeRoot, '.husky'));
+  const code = 'git status --short\nnpx lint-staged\n';
+  await writeFile(path.join(codeRoot, '.husky', 'pre-commit'), code);
+  await writeFile(path.join(codeRoot, '.oxlintrc'), '{"rules":{}}\n');
+  const store = createCitationStore(path.join(codeRoot, '.store'));
+  const turn = createCitationTurn({ cwd: codeRoot, codeRoot, sessionId: 'session', store });
+  turn.text(block([{ ref: 1, kind: 'code', doc_id: '.husky/pre-commit', quote: 'npx lint-staged' }]));
+  const suffix = await turn.finish();
+  assert.match(suffix, /^- \[1\] \[\.husky\/pre-commit, l\. 2\]\[1\] — « npx lint-staged »$/m);
+  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.ok(token);
+  const snapshot = await store.read(token);
+  assert.equal(snapshot?.citation.kind, 'code');
+  assert.equal(snapshot?.source, code);
+  const configTurn = createCitationTurn({ cwd: codeRoot, codeRoot, sessionId: 'config-session', store });
+  configTurn.text(block([{ ref: 1, kind: 'code', doc_id: '.oxlintrc', quote: '"rules"' }]));
+  assert.doesNotMatch(await configTurn.finish(), /🔴/);
 });
 
 test('les résultats consulter_decision Claude et Codex sont appariés et restent propres au tour', async (t) => {
