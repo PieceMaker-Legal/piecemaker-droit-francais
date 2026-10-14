@@ -3,6 +3,76 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.32](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.31...v2.0.32) (2026-10-14)
+
+### New Features
+
+* **piecemaker:** skill Skill-PieceMaker pour les outils MCP du dossier ([9c65636](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9c65636f7d459b81e3fe0166a141edd6a6c4e3de))
+
+### Bug Fixes
+
+* **chat:** keep composer counters visible ([3deb45b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3deb45b9ca6ff64b6c260176e839f56b6bdc21e3))
+* **chat:** scope compact composer layout to mobile ([06f6622](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/06f662243d2399ca944445e10f606aed6796f48d))
+* **config:** supprimer le MCP navigateur du projet ([85be4a1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/85be4a197e13ca613ffd4f46adb2904c28ade976))
+* **desktop:** restore CloudCLI title bar on Windows ([6de2544](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6de2544029444966dc3bb04ec819165d4c7459e8))
+* **piecemaker-dossier:** remove drag and drop hint ([4d9a4c1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4d9a4c11e896ebf5ea49e62042152ecd7b52092b))
+* **piecemaker:** adjust citation viewer source link and footer ([31d942e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/31d942eccbcbae5d09d4c482b3961fffdaa4179b))
+* **piecemaker:** confirmer ouverture des volets avant succes ([c66e985](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c66e985154cecce7e21278d545f6a3f7bf86cc98))
+* **piecemaker:** delegate scan formats to the converter ([2aaa2ef](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2aaa2ef32a1fbd85248315218bb6e01d416fec38))
+
+## [2.0.31](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.30...v2.0.31) (2026-10-14)
+
+### Bug Fixes
+
+* **desktop:** restore CloudCLI title bar on Windows ([a260d82](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a260d828b7e1e131bd52d6268f7e966997c4659b))
+* **piecemaker:** delegate scan formats to the converter ([4ca35c1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4ca35c1343bcff67932413b4b71d7309470c52b2))
+
+## [2.0.30](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.29...v2.0.30) (2026-10-13)
+
+### Bug Fixes
+
+* **desktop:** désinstallation Windows complète, depuis les Paramètres Windows ([91aefc8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/91aefc8676ac7cc7881483a76e43e66a50865fb1))
+
+## [2.0.29](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.28...v2.0.29) (2026-10-13)
+
+### Bug Fixes
+
+* **desktop-update:** mise à jour intégrée sous Windows (ENOENT) ([8d12494](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8d1249417a1cf289d87eb2387e7a0adfbdf81f6a))
+
+## [2.0.28](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.27...v2.0.28) (2026-10-13)
+
+### New Features
+
+* **desktop-bootstrap:** application Windows précompilée à chaque release ([b18990f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b18990fa03ea51e18140774ed4ba7c3c3872122b))
+
+## [2.0.27](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.26...v2.0.27) (2026-10-13)
+
+### Bug Fixes
+
+* **desktop-bootstrap:** fenêtre PowerShell fermée en fin d'installation, signature Windows invalide ([2cb54ac](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2cb54ac07cfa832e06a49ce2d7157e1d97345aa8))
+
+## [2.0.26](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.25...v2.0.26) (2026-10-13)
+
+### New Features
+
+* **desktop-bootstrap:** ne plus installer GLiNER2 pendant l'installation Electron ([cd30935](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/cd3093504302dd9f646643884174d3e45cbd67c9))
+
+### Bug Fixes
+
+* **desktop-bootstrap:** certificat Windows refusé en mode non interactif ([0e1111a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0e1111a6342afb543ef645b19e7c273f6a35a5a5))
+
+## [2.0.25](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.24...v2.0.25) (2026-10-13)
+
+### New Features
+
+* **desktop-bootstrap:** proxy d'anonymisation précompilé pour Windows ([40e4ea6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/40e4ea63815fdff355a3750501c89cbc1d697d38))
+
+### Bug Fixes
+
+* **ci:** compiler better-sqlite3 pour Electron via @electron/rebuild du dépôt ([d6bca58](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d6bca58bfae4cf558c7b6c54cdbfd19abf6130ad))
+* **desktop-bootstrap:** build Electron Windows sans Visual Studio ([d0494fa](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d0494fa41cd527276171b76eedece6af8822444c))
+* **desktop-bootstrap:** installation Windows bloquée (spawn EINVAL, rustup, détection de Node) ([e848230](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e848230818f5f96b8e9a29dcdda14cb1b08be9c2))
+
 ## [2.0.24](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.23...v2.0.24) (2026-10-13)
 
 ### ⚠ BREAKING CHANGES
