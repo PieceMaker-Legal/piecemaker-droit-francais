@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { capture, run } from './shell.mjs';
 import { BUNDLE_DIR, embedBundledPlugins } from './plugins.mjs';
 import { ui } from './ui.mjs';
+import { configureWindowsUpdates } from './windows-update-config.mjs';
 import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath, releaseRepo, releaseTag } from './paths.mjs';
 
 function npmTool(tool) {
@@ -203,6 +204,7 @@ async function patchStagedManifest(stageDir) {
 
   manifest.main = OVERLAY_ENTRY;
   manifest.build.extraMetadata = { ...manifest.build.extraMetadata, main: OVERLAY_ENTRY };
+  if (process.platform === 'win32') configureWindowsUpdates(manifest, releaseRepo, Boolean(process.env.CSC_LINK));
   for (const pattern of ['server/**', `${OVERLAY_DIR}/**`, `${BUNDLE_DIR}/**`]) {
     if (!manifest.build.files.includes(pattern)) manifest.build.files.push(pattern);
   }
@@ -361,7 +363,7 @@ async function smokeTestAnonymizerProxy(sourceDir, binary) {
   ui.ok(`Proxy d'anonymisation validé${result.sandboxed ? ' (sandbox-exec : réseau local seul, écriture confinée)' : ' (dossier et ports isolés)'}.`);
 }
 
-export async function buildDesktopApp(sourceDir) {
+export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = {}) {
   ui.step('Installation des dépendances du projet (plusieurs minutes)…');
   await npm(['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
   await npm(['rebuild', 'better-sqlite3', '--no-audit', '--no-fund'], { cwd: sourceDir });
@@ -377,11 +379,14 @@ export async function buildDesktopApp(sourceDir) {
   await embedDesktopOverlay(stageDir);
   await embedBundledPlugins(sourceDir, stageDir);
   await patchStagedManifest(stageDir);
+  if (process.platform === 'win32') {
+    await npm(['install', '--save-exact', '--omit=dev', '--no-audit', '--no-fund', 'electron-updater@6.8.9'], { cwd: stageDir });
+  }
   await repairStagedTree(stageDir);
   const prebuiltSqlite = await downloadPrebuiltSqlite(stageDir);
 
   ui.step("Construction de l'application Electron…");
-  const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', '--dir'];
+  const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', ...(windowsInstaller ? ['--win', 'nsis', '--x64', '--publish', 'never'] : ['--dir'])];
   if (prebuiltSqlite) builderArgs.push('-c.npmRebuild=false');
   await npx(builderArgs, {
     cwd: sourceDir,

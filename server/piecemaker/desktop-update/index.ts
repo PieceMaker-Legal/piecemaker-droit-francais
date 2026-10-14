@@ -5,7 +5,7 @@ import path from 'node:path';
 import { loadProductConfig } from '../../../shared/product-config.mjs';
 
 import { createDesktopUpdateRouter } from './routes.js';
-import { createDesktopUpdateService } from './service.js';
+import { createDesktopUpdateService, type DesktopUpdateResult } from './service.js';
 
 function runInstaller(command: string, environment: NodeJS.ProcessEnv) {
   return new Promise<{ exitCode: number | null; output: string; errorOutput: string }>((resolve, reject) => {
@@ -52,6 +52,12 @@ export function createPieceMakerDesktopUpdateRouter(appRoot: string) {
     environment: process.env,
     runInstaller,
     launchDetached,
+    runWindowsUpdate: process.env.PIECEMAKER_DESKTOP_UPDATE_URL ? async () => {
+      const endpoint = new URL(process.env.PIECEMAKER_DESKTOP_UPDATE_URL!);
+      if (endpoint.protocol !== 'http:' || endpoint.hostname !== '127.0.0.1') throw new Error('Adresse de mise à jour locale invalide.');
+      const response = await fetch(endpoint, { method: 'POST' });
+      return await response.json() as DesktopUpdateResult;
+    } : undefined,
     logInfo: (message) => console.log('[desktop-update]', message),
   }));
 }

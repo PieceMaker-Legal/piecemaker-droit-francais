@@ -10,7 +10,7 @@ if (!process.argv[2]) throw new Error('Usage : node build-release.mjs <archive.t
 if (!sourceDir) throw new Error('PIECEMAKER_SRC_DIR est absent.');
 
 await generateCertificates();
-const built = await buildDesktopApp(sourceDir);
+const built = await buildDesktopApp(sourceDir, { windowsInstaller: true });
 await fs.mkdir(path.dirname(archive), { recursive: true });
 await run(windowsTar(), ['-czf', archive, '-C', built, '.']);
 console.log(`Archive : ${archive}`);

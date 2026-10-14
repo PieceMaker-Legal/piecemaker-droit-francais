@@ -50,8 +50,34 @@ test('installerCommand runs the product desktop bootstrap without launching it',
 });
 
 test('installerEnvironment drops the variables that only concern the running server', () => {
-  const environment = installerEnvironment({ PATH: '/usr/bin', ELECTRON_RUN_AS_NODE: '1', CLOUDCLI_HOME: '/h', DATABASE_PATH: '/d', HOST: '0', SERVER_PORT: '1', PORT: '2' });
+  const environment = installerEnvironment({ PATH: '/usr/bin', ELECTRON_RUN_AS_NODE: '1', CLOUDCLI_HOME: '/h', DATABASE_PATH: '/d', HOST: '0', SERVER_PORT: '1', PORT: '2', PIECEMAKER_TAG: 'v0.0.1' });
   assert.deepEqual(environment, { PATH: '/usr/bin' });
+});
+
+test('Windows desktop delegates updates to Electron instead of starting the bootstrap', async () => {
+  const { dependencies, calls } = makeDependencies({
+    appRoot: 'C:\\Programs\\PieceMaker\\resources\\app',
+    platform: 'win32',
+    async runWindowsUpdate() {
+      return { success: true, output: 'Téléchargement terminé.', message: 'Installation différée.' };
+    },
+  });
+  assert.deepEqual(await createDesktopUpdateService(dependencies).update(), {
+    success: true, output: 'Téléchargement terminé.', message: 'Installation différée.',
+  });
+  assert.equal(calls.installer.length, 0);
+  assert.equal(calls.detached.length, 0);
+});
+
+test('Windows desktop propagates a native update failure', async () => {
+  const { dependencies } = makeDependencies({
+    appRoot: 'C:\\Programs\\PieceMaker\\resources\\app',
+    platform: 'win32',
+    async runWindowsUpdate() { return { success: false, error: 'Téléchargement interrompu.' }; },
+  });
+  assert.deepEqual(await createDesktopUpdateService(dependencies).update(), {
+    success: false, error: 'Téléchargement interrompu.',
+  });
 });
 
 test('relaunchCommand quits the running app, waits for it, then reopens the bundle', () => {

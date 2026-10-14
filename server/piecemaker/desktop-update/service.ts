@@ -12,6 +12,7 @@ export type DesktopUpdateDependencies = {
   environment: NodeJS.ProcessEnv;
   runInstaller(command: string, environment: NodeJS.ProcessEnv): Promise<ShellResult>;
   launchDetached(command: string, environment?: NodeJS.ProcessEnv): void;
+  runWindowsUpdate?(): Promise<DesktopUpdateResult>;
   logInfo(message: string): void;
 };
 
@@ -21,7 +22,7 @@ export type DesktopUpdateResult =
 
 const MAC_BUNDLE_APP_ROOT = /^(.+\.app)\/Contents\/Resources\/app\/?$/;
 const WINDOWS_APP_ROOT = /^(.+)[\\/]resources[\\/]app[\\/]?$/i;
-const SERVER_ONLY_VARIABLES = ['ELECTRON_RUN_AS_NODE', 'HOST', 'SERVER_PORT', 'PORT', 'CLOUDCLI_HOME', 'DATABASE_PATH'];
+const SERVER_ONLY_VARIABLES = ['ELECTRON_RUN_AS_NODE', 'HOST', 'SERVER_PORT', 'PORT', 'CLOUDCLI_HOME', 'DATABASE_PATH', 'PIECEMAKER_TAG'];
 const RELAUNCH_DELAY_SECONDS = 3;
 const QUIT_GRACE_SECONDS = 30;
 const ANSI_ESCAPE = /\u001b\[[0-9;]*m/g;
@@ -86,6 +87,7 @@ export function createDesktopUpdateService(dependencies: DesktopUpdateDependenci
 
     async update(): Promise<DesktopUpdateResult> {
       if (windowsPath && repository) {
+        if (dependencies.runWindowsUpdate) return dependencies.runWindowsUpdate();
         dependencies.logInfo(`Mise à jour de ${windowsPath} depuis ${repository}`);
         dependencies.launchDetached(windowsInstallerCommand(repository), installerEnvironment(dependencies.environment));
         return {

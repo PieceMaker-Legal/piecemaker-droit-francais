@@ -117,9 +117,13 @@ prérequis pour une installation distribuée normalement. De même, un `.exe`
 Windows non signé peut être téléchargé mais déclenche généralement un
 avertissement SmartScreen et affiche un éditeur inconnu.
 
-Ni le paquet npm ni le workflow Desktop ne mettent automatiquement à jour une
-installation déjà installée : la mise à jour npm ou la réinstallation du
-nouvel artefact Desktop reste à déclencher par le distributeur.
+Le paquet npm et le workflow Desktop CloudCLI gardent leur parcours existant.
+À partir de v2.0.33, le workflow PieceMaker Windows publie aussi l'installateur
+NSIS et les métadonnées `electron-updater` ; le bouton de mise à jour de l'app
+Windows utilise ces assets. Le numéro de version reste incrémenté par
+`release.yml`, puis le workflow Windows construit les assets depuis le tag.
+Ne pas annoncer la version testable avant que ce second workflow ait terminé
+et que `.exe`, `.blockmap` et `latest.yml` soient présents dans la release.
 
 Le commit `72d347e` (`fix(piecemaker): suivre les releases du produit`) a
 redirigé la détection de version de la Sidebar et de l'onglet À propos vers le
