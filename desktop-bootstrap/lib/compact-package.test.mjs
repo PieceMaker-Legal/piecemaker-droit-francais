@@ -20,6 +20,8 @@ test('native and external script dependency closures stay physical even with exp
   }
   const manifest = await configureCompactPackage(root);
   assert.equal(manifest.build.asar, true);
+  assert.ok(manifest.build.asarUnpack.includes('dist/**'));
+  assert.ok(manifest.build.asarUnpack.includes('public/**'));
   assert.ok(manifest.build.asarUnpack.includes('node_modules/export-only/**'));
   assert.ok(manifest.build.asarUnpack.includes('node_modules/child/**'));
   assert.equal(manifest.build.nsis.differentialPackage, true);

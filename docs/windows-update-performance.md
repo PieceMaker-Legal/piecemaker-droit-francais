@@ -18,7 +18,7 @@ La vérification du registre utilise une requête non mise en cache et contrôle
 
 ## Mesures locales
 
-Test isolé avec Electron 44.4.1 et electron-builder 26.16.1, assets compilés de 2.0.34 et nouvelles surcharges, sous un nom de produit fictif :
+Test isolé avec Electron 44.4.1 et electron-builder 26.16.1, assets compilés de 2.0.34 et nouvelles surcharges, sous un nom de produit fictif. Ces premières mesures portaient sur un paquet dont l'interface restait dans l'ASAR ; il ne satisfaisait pas encore les contrôles serveur/interface ajoutés ci-dessous :
 
 | Mesure | Ancien paquet installé | Paquet optimisé de test |
 | --- | ---: | ---: |
@@ -31,3 +31,15 @@ Test isolé avec Electron 44.4.1 et electron-builder 26.16.1, assets compilés d
 La réinstallation de test réutilise la même version. Elle ne mesure pas le téléchargement, le premier téléchargement des composants IA, la suppression de l'ancien arbre de 35 328 fichiers, ni une mise à jour entre deux releases publiées. Le temps total de 2–3 minutes reste à confirmer sur une mise à jour réelle. Le serveur de test répond à `/health` en environ 1,6 seconde, avec l'anonymiseur désactivé dans cet environnement isolé ; ce test ne valide pas le proxy PII ni l'interface complète.
 
 NSIS écrit les horodatages de début et de fin dans `%LOCALAPPDATA%/PieceMaker/update-timings.log`. `differentialPackage` reste booléen : la version 26.16.1 utilisée ne supporte pas la valeur `store-asar` annoncée dans des documentations plus récentes.
+
+## Vérification du serveur et de l'interface empaquetés
+
+`mime@1.6.0`, nécessaire à Express 4 via `send`, est déclaré directement, conservé lors de la sélection des dépendances et explicitement décompressé dans `app.asar.unpacked/node_modules`. Les fichiers `dist/` et `public/` restent également physiques : le serveur exécuté depuis `app.asar.unpacked/dist-server/server/index.js` les cherche dans cette racine. Leur présence dans l'ASAR seul faisait répondre `/health` tout en redirigeant la page d'accueil vers le serveur Vite de développement.
+
+La vérification du paquet lance maintenant le serveur réel sur un port libre, avec une base et des dossiers utilisateur temporaires. Elle exige un `/health` valide, une page d'accueil HTTP 200 sans redirection et un point d'entrée JavaScript servi avec son type MIME. Les contrôles des modules natifs, des SDK IA et de la réutilisation du cache restent exécutés avant publication. L'anonymiseur est désactivé uniquement dans ce test isolé ; son test dédié reste effectué durant la construction.
+
+Une reconstruction locale avec Electron 44.4.1, electron-builder 26.16.1 et les ressources compilées du précédent test reproduit la redirection de l'ancien paquet, puis valide le paquet corrigé avec le serveur et l'interface disponibles en environ 1,9 seconde. Ce contrôle ne remplace pas un test de mise à jour entre deux versions publiques.
+
+Le nouvel installateur isolé pèse 157 229 497 octets. Son installation prend 185,99 secondes et sa réinstallation 148,58 secondes. Après chaque opération, les contrôles des modules, du serveur et de l'interface réussissent. Ces durées sont mesurées autour du processus NSIS, sans téléchargement ni suppression de l'ancien paquet public ; elles ne garantissent pas encore une mise à jour complète en 2–3 minutes.
+
+Le journal NSIS positionne explicitement le curseur en fin de fichier avant chaque écriture : même en mode `a`, [FileOpen initialise le curseur au début](https://nsis.sourceforge.io/Reference/FileOpen). Sans ce déplacement, le marqueur de fin écrasait le début et les installations suivantes écrasaient les traces précédentes. Un exécutable NSIS isolé, compilé avec les macros corrigées puis exécuté deux fois, conserve les quatre événements dans leur ordre.

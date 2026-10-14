@@ -55,3 +55,10 @@ test('keeps optional dependencies when source roots are absent', () => {
   });
   assert.deepEqual(result, { dependencies: {}, optionalDependencies: { optional: '^1.2.3' } });
 });
+
+test('keeps the pinned Express MIME dependency through desktop pruning', () => {
+  const result = selectRuntimeDependencies(os.tmpdir(), {
+    dependencies: { mime: '1.6.0', unused: '1.0.0' },
+  });
+  assert.deepEqual(result.dependencies, { mime: '1.6.0' });
+});

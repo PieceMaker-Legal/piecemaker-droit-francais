@@ -4,7 +4,7 @@ import path from 'node:path';
 const SOURCE_EXTENSIONS = new Set(['.ts', '.js', '.mjs', '.cjs']);
 const EXCLUDED_DIRECTORIES = new Set(['test', 'tests', '__tests__']);
 const EXCLUDED_FILE_PATTERN = /\.(?:test|spec)\.[^.]+$/i;
-const EXPLICIT_DEPENDENCIES = ['@openai/codex', '@vscode/ripgrep'];
+const EXPLICIT_DEPENDENCIES = ['@openai/codex', '@vscode/ripgrep', 'mime'];
 
 function sourceFiles(root) {
   let entries;

@@ -40,6 +40,9 @@ jobs:
       - name: Test Windows startup
         run: node --experimental-vm-modules --test desktop-bootstrap/overlay/electron-piecemaker/main.test.js
 
+      - name: Test desktop dependency selection
+        run: node --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs
+
       - name: Build better-sqlite3 for Electron
         shell: bash
         run: |
