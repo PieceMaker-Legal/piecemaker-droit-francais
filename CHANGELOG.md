@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.35](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.34...v2.0.35) (2026-10-14)
+
+### Performance
+
+* **windows:** reuse runtime components and publish only ready installers ([ad12222](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ad122227eeabc811d9f6276e3384f3b25d4cd660))
+
 ## [2.0.34](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.33...v2.0.34) (2026-10-14)
 
 ### Bug Fixes
