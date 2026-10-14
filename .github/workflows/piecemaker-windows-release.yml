@@ -34,6 +34,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Test Windows startup
+        run: node --experimental-vm-modules --test desktop-bootstrap/overlay/electron-piecemaker/main.test.js
+
       - name: Build better-sqlite3 for Electron
         shell: bash
         run: |
