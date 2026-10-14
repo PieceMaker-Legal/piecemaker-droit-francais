@@ -55,7 +55,7 @@ export async function configureCompactPackage(stageDir) {
   const physicalPackages = await physicalPackageDirectories(stageDir, [...EXTERNAL_PACKAGES, ...Object.keys(externalAssets.dependencies)]);
   manifest.build.asar = true;
   manifest.build.asarUnpack = [
-    'package.json', 'product.config.json', 'shared/**', 'dist-server/**',
+    'package.json', 'product.config.json', 'shared/**', 'dist-server/**', 'dist/**', 'public/**',
     'server/**', 'piecemaker-plugins/**', 'runtime-components.json',
     'electron-piecemaker/asar-runtime.mjs', '**/*.node', '**/*.exe', '**/*.dll',
     ...physicalPackages,
