@@ -83,28 +83,39 @@ async function readPackageJson(target) {
 
 async function listInstalledPackages(modulesDir) {
   const packages = [];
-  let entries;
-  try {
-    entries = await fs.readdir(modulesDir, { withFileTypes: true });
-  } catch {
-    return packages;
-  }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === '.bin') continue;
-    if (entry.name.startsWith('@')) {
-      const scoped = await fs.readdir(path.join(modulesDir, entry.name), { withFileTypes: true });
-      for (const child of scoped.filter((item) => item.isDirectory())) {
-        packages.push(path.join(modulesDir, entry.name, child.name));
-      }
-      continue;
+  const visited = new Set();
+  async function visit(modules) {
+    if (visited.has(modules)) return;
+    visited.add(modules);
+    let entries;
+    try {
+      entries = await fs.readdir(modules, { withFileTypes: true });
+    } catch {
+      return;
     }
-    packages.push(path.join(modulesDir, entry.name));
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === '.bin') continue;
+      if (entry.name.startsWith('@')) {
+        const scope = path.join(modules, entry.name);
+        for (const child of await fs.readdir(scope, { withFileTypes: true })) {
+          if (child.isDirectory()) {
+            const packageDir = path.join(scope, child.name);
+            packages.push(packageDir);
+            await visit(path.join(packageDir, 'node_modules'));
+          }
+        }
+        continue;
+      }
+      const packageDir = path.join(modules, entry.name);
+      packages.push(packageDir);
+      await visit(path.join(packageDir, 'node_modules'));
+    }
   }
+  await visit(modulesDir);
   return packages;
 }
 
-async function findMissingDependencies(stageDir) {
+export async function findMissingDependencies(stageDir) {
   const modulesDir = path.join(stageDir, 'node_modules');
   const missing = new Map();
 
@@ -115,9 +126,19 @@ async function findMissingDependencies(stageDir) {
     const optional = new Set(Object.keys(manifest.optionalDependencies || {}));
     for (const [name, range] of Object.entries(manifest.dependencies)) {
       if (optional.has(name) || missing.has(name)) continue;
-      const nested = path.join(packageDir, 'node_modules', name);
-      const hoisted = path.join(modulesDir, name);
-      if ((await exists(nested)) || (await exists(hoisted))) continue;
+      const require = createRequire(path.join(packageDir, 'package.json'));
+      const locations = require.resolve.paths(name) || [];
+      const dependency = name.split('/');
+      let installed = false;
+      for (const location of locations) {
+        const relative = path.relative(modulesDir, location);
+        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue;
+        if (await exists(path.join(location, ...dependency))) {
+          installed = true;
+          break;
+        }
+      }
+      if (installed) continue;
       missing.set(name, range);
     }
   }
@@ -414,6 +435,7 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
     }
     await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     await npm(['prune', '--omit=dev', '--no-audit', '--no-fund'], { cwd: stageDir });
+    await repairStagedTree(stageDir);
     await configureCompactPackage(stageDir);
   }
 
