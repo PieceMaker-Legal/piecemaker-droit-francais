@@ -182,3 +182,5 @@ CLAUDE.md
 .agents/skills/docx-cli/references/commands.md
 .agents/skills/docx-cli/LICENSE
 .codex/config.toml
+.codex/config.toml
+/.codex
