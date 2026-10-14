@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, autoUpdater, BrowserWindow, dialog } from 'electron';
+import { execFile } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -6,7 +7,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadProductConfig } from '../shared/product-config.mjs';
 import { UNINSTALL_ARGUMENT } from '../electron/uninstallPlan.js';
 import { DesktopWindowManager } from '../electron/desktopWindow.js';
+import { LocalServerController } from '../electron/localServer.js';
 import { installWindowsTitleBar } from './windowsTitleBar.js';
+import { installWindowsUpdater } from './windowsUpdater.js';
 
 installWindowsTitleBar({ app, DesktopWindowManager });
 
@@ -36,6 +39,24 @@ function adoptWindow(window) {
 app.on('browser-window-created', (_event, window) => adoptWindow(window));
 
 async function startApplication() {
+  if (process.platform === 'win32') {
+    await app.whenReady();
+    await installWindowsUpdater({ app, dialog });
+    autoUpdater.once('before-quit-for-update', () => {
+      const getSettings = LocalServerController.prototype.getSettings;
+      const shutdownOwnedServer = LocalServerController.prototype.shutdownOwnedServer;
+      LocalServerController.prototype.getSettings = function () {
+        return { ...getSettings.call(this), keepLocalServerRunning: false };
+      };
+      LocalServerController.prototype.shutdownOwnedServer = async function () {
+        const pid = this.ownedServerProcess?.pid;
+        if (pid) {
+          await new Promise((resolve) => execFile('taskkill', ['/PID', String(pid), '/T', '/F'], resolve));
+        }
+        return shutdownOwnedServer.call(this);
+      };
+    });
+  }
   // Avant electron/main.js : le serveur local lit les plugins (et lance leurs
   // sous-processus) une seule fois, à son démarrage. Le bundle et son sync.mjs
   // sont produits par plugins/toolchain (voir docs/plugins.md).

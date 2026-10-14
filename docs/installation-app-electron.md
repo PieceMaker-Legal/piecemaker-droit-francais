@@ -412,7 +412,26 @@ relance cet installateur au lieu de la commande npm de CloudCLI : la route
 release publiée du dépôt de `product.config.json`), renvoie la sortie à la
 fenêtre, puis quitte l'application et rouvre le bundle réinstallé.
 
-Sous Windows, la même route est interceptée lorsque le serveur tourne depuis
+À partir de v2.0.33, les bundles Windows utilisent `electron-updater` et
+l'installateur NSIS produit par le workflow `piecemaker-windows-release.yml`.
+La release contient l'installateur `.exe`, son `.blockmap` et `latest.yml`,
+en plus de l'archive conservée pour l'installation initiale et la transition.
+La route `POST /api/system/update` transmet la demande au processus Electron
+par une passerelle loopback à adresse aléatoire, héritée par le serveur local.
+L'updater attend la fin du téléchargement avant de proposer « Redémarrer et
+installer » ou « Plus tard ». Un échec de téléchargement remonte au bouton ;
+« Plus tard » n'installe rien à la fermeture de l'application.
+Le remplacement est confié à NSIS dans le dossier de l'application en cours,
+et le serveur local est arrêté à la fermeture même si son maintien est activé.
+Le message de l'interface indique la fin de la préparation, pas une installation
+réussie avant le redémarrage. Après relance, vérifier la version dans À propos.
+Les builds signés vérifient la signature des mises à jour ; sans les secrets
+Windows, le workflow conserve la distribution non signée existante et vérifie
+l'intégrité des fichiers selon les métadonnées `electron-updater`.
+Le test complet nécessite deux versions installées sur Windows et des assets
+de release disponibles ; les tests locaux du raccord ne remplacent pas ce test.
+
+Avant v2.0.33, la même route est interceptée lorsque le serveur tourne depuis
 `…\PieceMaker\resources\app`. Elle lance `install.ps1` (sans `--no-launch`)
 dans un PowerShell détaché via `Start-Process`, et répond aussitôt. Le
 détachement est nécessaire : l'installateur ferme PieceMaker avec

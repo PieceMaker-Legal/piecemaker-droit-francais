@@ -73,6 +73,8 @@ jobs:
           PIECEMAKER_NO_PROGRESS: "1"
           PIECEMAKER_HOME: ${{ runner.temp }}/piecemaker-home
           PIECEMAKER_REPO: ${{ github.repository }}
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: |
           git clean -ffdxq
           export PIECEMAKER_SRC_DIR="$(cygpath -w "$GITHUB_WORKSPACE")" PIECEMAKER_TAG="$TAG"
@@ -82,6 +84,7 @@ jobs:
             exit 1
           }
           tail -n 20 "$RUNNER_TEMP/app.log"
+          cp release/desktop/*.exe release/desktop/*.blockmap release/desktop/latest.yml "$RUNNER_TEMP/app/"
           cd "$RUNNER_TEMP/app"
           sha256sum piecemaker-desktop-win32-x64.tar.gz | cut -d' ' -f1 > piecemaker-desktop-win32-x64.tar.gz.sha256
           ls -la

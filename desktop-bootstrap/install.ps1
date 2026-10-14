@@ -24,7 +24,7 @@ Set-Location -LiteralPath $bootstrapHome
 [Environment]::CurrentDirectory = $bootstrapHome
 
 Say 'Recherche de la derniere version publiee de PieceMaker...'
-$tag = if ($env:PIECEMAKER_TAG) { $env:PIECEMAKER_TAG } else {
+$tag = if ($env:PIECEMAKER_TAG -and $env:ELECTRON_FORCE_OWN_SERVER -ne '1') { $env:PIECEMAKER_TAG } else {
   (Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/$repo/releases/latest").tag_name
 }
 if (-not $tag) { Fail "Impossible de determiner la derniere version publiee de $repo." }

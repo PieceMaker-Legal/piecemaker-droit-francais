@@ -11,7 +11,7 @@
 
 import type { i18n as I18nInstance } from 'i18next';
 
-import { PIECEMAKER_I18N_ADDITIONS } from './additions';
+import { PIECEMAKER_I18N_ADDITIONS } from '@/piecemaker/i18n/additions';
 
 /**
  * Language used when the user has never picked one; PieceMaker targets French practitioners.
@@ -39,5 +39,13 @@ export function applyPieceMakerI18nOverrides(i18n: I18nInstance): void {
     for (const [namespace, bundle] of Object.entries(namespaces)) {
       i18n.addResourceBundle(language, namespace, bundle, true, true);
     }
+  }
+  if (/Windows/i.test(navigator.userAgent) && /Electron\//.test(navigator.userAgent)) {
+    i18n.addResourceBundle('fr', 'common', {
+      versionUpdate: {
+        updateCompleted: 'Préparation de la mise à jour terminée.',
+        restartServer: 'Suivez les indications de la fenêtre de mise à jour PieceMaker.',
+      },
+    }, true, true);
   }
 }
