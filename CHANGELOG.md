@@ -3,6 +3,22 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.33](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.32...v2.0.33) (2026-10-14)
+
+### New Features
+
+* **piecemaker:** centralise l’affichage des volets ([5e935cc](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5e935cc0110d5cda49f76fd4fd6b521e66fe5b6d))
+* **piecemaker:** open panels from MCP requests ([b4b8746](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b4b8746700717d408977b706d73610fd22b60093))
+
+### Bug Fixes
+
+* **piecemaker:** citations design ([d136b98](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d136b98ffc5127c4f9180cc3679ded4130a051e2))
+* **piecemaker:** citations design ([2c7c00e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2c7c00ed7391184b2b9f463c7a3942c9d787d57b))
+* **piecemaker:** clarifie le retour afficher ([4d08c17](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4d08c17b782c8e4bb11e9fee8235c4ea40882e80))
+* **piecemaker:** gitignore ([a77531f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a77531fb920c6f484dd42717855de82d084fdcde))
+* **piecemaker:** gitignore ([fe68d25](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fe68d25aab2a0693041b97d1c0778252b055d7b3))
+* **piecemaker:** raccorder les mises à jour Windows à NSIS ([98e130c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/98e130c57e868addc3be194fb34755665c0f5869))
+
 ## [2.0.32](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.31...v2.0.32) (2026-10-14)
 
 ### New Features
