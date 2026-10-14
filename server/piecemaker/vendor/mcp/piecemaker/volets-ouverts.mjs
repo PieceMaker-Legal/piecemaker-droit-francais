@@ -30,6 +30,23 @@ function readEntry(file, cwd) {
   return project ? { project, entry: store[project] } : null;
 }
 
+export async function waitForOpenPanel({ cwd, tab, document, view, review }, file = openPanelsFile(), timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const found = readEntry(file, cwd);
+    const entry = found?.entry;
+    const opened = Array.isArray(entry?.panels) && entry.panels.includes(tab);
+    const documentMatches = !document || entry?.document === document;
+    const focus = entry?.focus?.[tab] ?? {};
+    const viewMatches = !view || focus.view === view;
+    const reviewMatches = !review || (typeof focus.file === 'string' && path.basename(focus.file) === review);
+    if (opened && documentMatches && viewMatches && reviewMatches) return true;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return false;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(100, remaining)));
+  }
+}
+
 function panelLabel(tab, focus, project) {
   const label = LABELS[tab] ?? (tab.startsWith('plugin:') ? tab.slice('plugin:'.length) : tab);
   const details = [focus?.view && (VIEWS[focus.view] ?? focus.view), focus?.file && `fichier : ${relative(focus.file, project)}`].filter(Boolean);
