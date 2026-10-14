@@ -14,7 +14,8 @@ const MIN_PYTHON_MINOR = 10;
 const MAX_PYTHON_MINOR = 13;
 const MAX_WINDOWS_PYTHON_MINOR = 12;
 const PROBE_TIMEOUT_MS = 15_000;
-const REQUIRED_PACKAGES = ['gliner2', 'huggingface_hub', 'markitdown', 'pypdf'];
+const REQUIRED_PACKAGES = ['markitdown', 'pypdf'];
+const DEFERRED_REQUIREMENT = /^\s*(gliner2|huggingface[-_]hub)\b/i;
 
 const log = {
   step(message) {
@@ -111,6 +112,10 @@ export function dependenciesReady(status) {
   const dependencies = status?.dependencies;
   if (!dependencies) return false;
   return REQUIRED_PACKAGES.every((name) => dependencies[name]);
+}
+
+export function installerRequirements(text) {
+  return String(text || '').split(/\r?\n/).filter((line) => !DEFERRED_REQUIREMENT.test(line)).join('\n');
 }
 
 export function mergeRuntimeConfig(current, paths) {
@@ -301,7 +306,7 @@ export async function installRuntimeComponents({
     throw new Error(`Scripts Python introuvables dans ${scriptsDir}.`);
   }
 
-  output.step('Composants Python — MarkItDown, GLiNER');
+  output.step('Composants Python — MarkItDown');
   let python = venvPythonPath(layout.venvDir, platform);
   const installedVersion = (await host.exists(python)) ? await readPythonVersion(host, python) : null;
   if (!pythonIsCompatible(installedVersion, platform)) {
@@ -314,11 +319,13 @@ export async function installRuntimeComponents({
   }
 
   if (dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
-    output.ok('MarkItDown, GLiNER et les bibliothèques associées sont déjà installés.');
+    output.ok('MarkItDown et les bibliothèques associées sont déjà installés.');
   } else {
-    output.step('Installation des bibliothèques Python (MarkItDown, GLiNER)…');
+    output.step('Installation des bibliothèques Python (MarkItDown)…');
+    const installationRequirements = path.join(layout.root, 'requirements-installation.txt');
+    await host.writeFile(installationRequirements, installerRequirements(await host.readFile(requirements)));
     await required(host, python, ['-m', 'pip', 'install', '-U', 'pip']);
-    await required(host, python, ['-m', 'pip', 'install', '--upgrade', '-r', requirements]);
+    await required(host, python, ['-m', 'pip', 'install', '--upgrade', '-r', installationRequirements]);
     if (!dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
       throw new Error('Les composants Python ne sont pas opérationnels après installation.');
     }

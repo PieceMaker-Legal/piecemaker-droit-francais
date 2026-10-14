@@ -1,0 +1,93 @@
+name: PieceMaker Windows Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to attach the prebuilt Windows assets to"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows assets (win32-x64)
+    runs-on: windows-latest
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+
+      - name: Build
+        run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+
+      - name: Build better-sqlite3 for Electron
+        shell: bash
+        run: |
+          ELECTRON_VERSION="$(node -p "require('./package-lock.json').packages['node_modules/electron'].version")"
+          {
+            npm ci --ignore-scripts --no-audit --no-fund &&
+            npx electron-rebuild --version "$ELECTRON_VERSION" --arch x64 --only better-sqlite3 --force
+          } > "$RUNNER_TEMP/sqlite.log" 2>&1 || {
+            cat "$RUNNER_TEMP/sqlite.log"
+            echo "::error::$(tail -c 3500 "$RUNNER_TEMP/sqlite.log" | tr '\r\n' '  ')"
+            exit 1
+          }
+          mkdir -p "$RUNNER_TEMP/sqlite/node_modules/better-sqlite3/build/Release"
+          cp node_modules/better-sqlite3/build/Release/better_sqlite3.node "$RUNNER_TEMP/sqlite/node_modules/better-sqlite3/build/Release/"
+
+      - name: Stage assets
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp server/piecemaker/anonymizer/hudsucker-proxy/target/release/piecemaker-hudsucker.exe dist/piecemaker-hudsucker-win32-x64.exe
+          cp "$RUNNER_TEMP/sqlite/node_modules/better-sqlite3/build/Release/better_sqlite3.node" dist/better-sqlite3-electron-win32-x64.node
+          cd dist
+          for asset in piecemaker-hudsucker-win32-x64.exe better-sqlite3-electron-win32-x64.node; do
+            sha256sum "$asset" | cut -d' ' -f1 > "$asset.sha256"
+          done
+
+      - name: Attach to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Build desktop app
+        shell: bash
+        env:
+          CI: "true"
+          PIECEMAKER_NO_PROGRESS: "1"
+          PIECEMAKER_HOME: ${{ runner.temp }}/piecemaker-home
+          PIECEMAKER_REPO: ${{ github.repository }}
+        run: |
+          git clean -ffdxq
+          export PIECEMAKER_SRC_DIR="$(cygpath -w "$GITHUB_WORKSPACE")" PIECEMAKER_TAG="$TAG"
+          node desktop-bootstrap/lib/build-release.mjs "$(cygpath -w "$RUNNER_TEMP/app/piecemaker-desktop-win32-x64.tar.gz")" > "$RUNNER_TEMP/app.log" 2>&1 || {
+            tail -c 20000 "$RUNNER_TEMP/app.log"
+            echo "::error::$(tail -c 3500 "$RUNNER_TEMP/app.log" | tr '\r\n' '  ')"
+            exit 1
+          }
+          tail -n 20 "$RUNNER_TEMP/app.log"
+          cd "$RUNNER_TEMP/app"
+          sha256sum piecemaker-desktop-win32-x64.tar.gz | cut -d' ' -f1 > piecemaker-desktop-win32-x64.tar.gz.sha256
+          ls -la
+
+      - name: Attach desktop app to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$RUNNER_TEMP"/app/* --clobber --repo "$GITHUB_REPOSITORY"
