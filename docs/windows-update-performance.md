@@ -1,6 +1,6 @@
 # Accélération des mises à jour Windows
 
-Le paquet Windows regroupe les modules JavaScript dans ASAR, conserve sur disque les modules natifs et les scripts exécutés séparément, et retire les dépendances de construction déjà intégrées aux bundles. La sélection examine le serveur, Electron, les surcharges et les sources serveur des plugins ; npm conserve leurs dépendances transitives et optionnelles.
+Le paquet Windows regroupe les modules JavaScript dans ASAR, conserve sur disque les modules natifs et les scripts exécutés séparément, et retire les dépendances de construction déjà intégrées aux bundles. La sélection examine le serveur, Electron, les surcharges et les sources serveur des plugins. Après chaque `npm prune`, le build rescane tout l'arbre, y compris les dépendances imbriquées, et réinstalle les dépendances requises qu'npm a retirées.
 
 Le relevé `windows-update-dependencies.json` recense 51 dépendances directes retirées du paquet de bureau. Elles restent dans le manifeste source pour construire l'interface. `node-fetch` et `react-scan` n'ont aucune référence dans les sources examinées ; ils sont également exclus du paquet. Le relevé statique ne prouve pas l'absence de toutes les utilisations indirectes : les vérifications du paquet complètent cette sélection.
 
