@@ -257,6 +257,13 @@ utilisateur, via le pont `contextBridge` déjà exposé par `electron/preload.cj
 L'application s'ouvre donc directement sur l'interface PieceMaker et ses
 plugins.
 
+Sur Windows uniquement, `windowsTitleBar.js` rétablit la barre CloudCLI avec
+ses onglets et réserve 44 px au-dessus de la vue de contenu. La barre conserve
+sa zone de déplacement et la marge Windows de 150 px pour les boutons système.
+La surcouche est installée avant le démarrage Electron ; ses styles sont
+réappliqués à chaque chargement du lanceur. Les fenêtres de réglages, macOS
+et Linux conservent leur comportement existant.
+
 **4. Port propre au produit.** `electron/localServer.js` sondait le port 3001
 d'amont ; tout autre service déjà à l'écoute sur ce port (un serveur MCP local,
 par exemple) répond à la sonde `/health`, échoue le contrôle
