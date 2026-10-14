@@ -17,6 +17,40 @@ function writeFile(root: string, relative: string, contents = 'x') {
   fs.writeFileSync(target, contents);
 }
 
+test('scan delegates every file format to the converter and still rejects unsafe paths', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-formats-')));
+  const database = new Database(':memory:');
+  database.exec('CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT NOT NULL UNIQUE)');
+  database.prepare('INSERT INTO projects (project_id, project_path) VALUES (?, ?)').run('project-1', root);
+  const store = new KnowledgeStore(database);
+  try {
+    const relativeFiles = ['piece.pdf', 'tableau.xlsx', 'presentation.pptx', 'image.gif', 'photo.jpg', 'image.png', 'table.csv', 'page.html', 'message.eml', 'piece.format-inconnu'];
+    for (const file of relativeFiles) writeFile(root, file);
+    const applicationRoot = path.join(root, '.converter');
+    const argumentsFile = path.join(applicationRoot, 'arguments.json');
+    writeFile(applicationRoot, 'server/piecemaker/vendor/websocket-server/scripts/convert_and_scan_pipeline.py',
+      `require('node:fs').writeFileSync(${JSON.stringify(argumentsFile)}, JSON.stringify(process.argv.slice(2)));`);
+    const pipeline = createKnowledgePipeline({
+      applicationRoot,
+      projects: { getProjectById: () => ({ project_id: 'project-1', project_path: root }) },
+      store,
+      pythonPath: process.execPath,
+    });
+    for (const requested of [undefined, relativeFiles]) {
+      const result = await pipeline.scan('project-1', requested);
+      const args = JSON.parse(fs.readFileSync(argumentsFile, 'utf8')) as string[];
+      assert.deepEqual(args.slice(0, args.indexOf('-o')).sort(), relativeFiles.map(file => path.join(root, file)).sort());
+      assert.equal(result.documents, relativeFiles.length);
+      assert.equal(args.includes('--skip-existing'), requested === undefined);
+    }
+    await assert.rejects(pipeline.scan('project-1', [root]), /Not a file/);
+    await assert.rejects(pipeline.scan('project-1', [path.dirname(root)]), /File outside project/);
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('defaultScanFiles lists nested originals and ignores generated markdown', async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-scan-')));
   try {
