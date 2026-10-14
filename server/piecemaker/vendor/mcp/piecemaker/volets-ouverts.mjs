@@ -53,6 +53,13 @@ function panelLabel(tab, focus, project) {
   return details.length ? `${label} (${details.join(', ')})` : label;
 }
 
+export function listOpenPanels(cwd = process.cwd(), file = openPanelsFile()) {
+  const found = readEntry(file, cwd);
+  if (!found || !Array.isArray(found.entry?.panels)) return [];
+  const focus = found.entry.focus ?? {};
+  return found.entry.panels.map((tab) => panelLabel(tab, focus[tab], found.project));
+}
+
 export function describeOpenPanels(cwd = process.cwd(), file = openPanelsFile()) {
   const found = readEntry(file, cwd);
   const panels = Array.isArray(found?.entry?.panels) ? found.entry.panels : [];

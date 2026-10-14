@@ -13,7 +13,7 @@ const defaultKnownProjects: KnownProjects = () => projectsDb.getProjectPaths().m
 
 const MAX_BODY_LENGTH = 20_000;
 const pendingPanelRequests = new Map<string, Array<{ id: string; tab: string; view?: string; review?: string; draft?: string; document?: string; expiresAt?: number }>>();
-const deliveredPanelRequests = new Map<string, { project: string; receivedAt: number }>();
+const deliveredPanelRequests = new Map<string, { project: string; receivedAt: number; completedAt?: number }>();
 
 function resolveKnownProject(project: string, knownProjects: KnownProjects) {
   return knownProjects().filter((known) => project === known || project.startsWith(`${known}${path.sep}`)).sort((left, right) => right.length - left.length)[0];
@@ -63,6 +63,10 @@ export function createOpenPanelRequestsRouter(knownProjects: KnownProjects = def
     }
     const knownProject = resolveKnownProject(project, knownProjects);
     if (!knownProject) return response.status(404).json({ error: 'Unknown project' });
+    const now = Date.now();
+    for (const [id, delivery] of deliveredPanelRequests) {
+      if (now - delivery.receivedAt > 30_000) deliveredPanelRequests.delete(id);
+    }
     const pending = pendingPanelRequests.get(knownProject) ?? [];
     if (pending.length >= 20) return response.status(429).json({ error: 'Too many pending panel requests' });
     const panelRequest = {
@@ -72,7 +76,7 @@ export function createOpenPanelRequestsRouter(knownProjects: KnownProjects = def
       ...(typeof review === 'string' ? { review } : {}),
       ...(typeof draft === 'string' ? { draft } : {}),
       ...(typeof document === 'string' ? { document } : {}),
-      expiresAt: Date.now() + 30_000,
+      expiresAt: now + 30_000,
     };
     pending.push(panelRequest);
     pendingPanelRequests.set(knownProject, pending);
@@ -86,8 +90,9 @@ export function createOpenPanelRequestsRouter(knownProjects: KnownProjects = def
     if (!knownProject) return response.status(404).json({ error: 'Unknown project' });
     if (typeof request.query.id === 'string') {
       const delivery = deliveredPanelRequests.get(request.query.id);
-      deliveredPanelRequests.delete(request.query.id);
-      return response.json({ received: delivery?.project === knownProject && Date.now() - delivery.receivedAt <= 30_000 });
+      const fresh = delivery?.project === knownProject && Date.now() - delivery.receivedAt <= 30_000;
+      if (delivery && !fresh) deliveredPanelRequests.delete(request.query.id);
+      return response.json({ completed: fresh && delivery.completedAt !== undefined });
     }
     const pending = pendingPanelRequests.get(knownProject) ?? [];
     const now = Date.now();
@@ -103,6 +108,19 @@ export function createOpenPanelRequestsRouter(knownProjects: KnownProjects = def
     if (fresh.length) pendingPanelRequests.set(knownProject, fresh);
     else pendingPanelRequests.delete(knownProject);
     response.json({ request: null });
+  });
+
+  router.post('/open-panel/ack', (request: Request, response: Response) => {
+    const { project, id } = request.body ?? {};
+    if (typeof project !== 'string' || typeof id !== 'string') return response.status(400).json({ error: 'Invalid panel acknowledgement' });
+    const knownProject = resolveKnownProject(project, knownProjects);
+    if (!knownProject) return response.status(404).json({ error: 'Unknown project' });
+    const delivery = deliveredPanelRequests.get(id);
+    if (!delivery || delivery.project !== knownProject || Date.now() - delivery.receivedAt > 30_000) {
+      return response.json({ acknowledged: false });
+    }
+    delivery.completedAt = Date.now();
+    return response.json({ acknowledged: true });
   });
 
   return router;

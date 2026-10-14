@@ -1,6 +1,6 @@
 ---
 name: piecemaker
-description: Outils du dossier PieceMaker — conversion Markdown+PII, SQL (pièces, personnes, mentions), chronologie, tabular review, afficher un volet, volets ouverts. À utiliser à la place des outils MCP piecemaker. Use when the user runs /piecemaker or asks to query the case database, convert pieces, show chronology, open a panel, or run a tabular review.
+description: Outils du dossier PieceMaker — conversion Markdown+PII, SQL (pièces, personnes, mentions), chronologie, tabular review et affichage des volets. À utiliser à la place des outils MCP piecemaker. Use when the user runs /piecemaker or asks to query the case database, convert pieces, show chronology, open a panel, or run a tabular review.
 ---
 
 # PieceMaker
@@ -17,9 +17,8 @@ node <cette-skill>/scripts/pm.mjs --help
 | `sql` | Lire ou corriger la base (pièces, personnes, mentions, citations). |
 | `conversion` | Convertir **et** scanner les pièces (GLiNER). Long. Un scan à la fois. |
 | `chronologie` | Lister / dater / renommer les pièces. |
-| `afficher` | Montrer un fichier ou un volet à l’avocat. |
+| `afficher` | Montrer un fichier ou un volet; sans cible, lister les volets ouverts. |
 | `tabular_review` | Analyses tabulaires. `lancer` seulement si l’avocat l’a demandé. |
-| `volets_ouverts` | L’avocat dit « ce tableau », « ce document », « ici ». |
 
 ## sql
 
@@ -50,13 +49,13 @@ node …/pm.mjs conversion
 node …/pm.mjs conversion --force contrat.pdf
 ```
 
-## chronologie / afficher / tabular_review / volets_ouverts
+## chronologie / afficher / tabular_review
 
 ```
 node …/pm.mjs chronologie lister
 node …/pm.mjs chronologie modifier --piece doc:1 --date 2024-03-01 --libelle 2024-03-01_Lettre
 node …/pm.mjs afficher --fichier Actes/conclusions.docx
 node …/pm.mjs afficher --volet chronologie
+node …/pm.mjs afficher
 node …/pm.mjs tabular_review lister
-node …/pm.mjs volets_ouverts
 ```

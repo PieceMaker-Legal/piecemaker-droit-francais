@@ -156,11 +156,21 @@ export async function requestPanelOpen(body) {
   return requestJson({ method: 'POST', path: `${LOCAL_BASE}/open-panel`, body });
 }
 
-export async function panelRequestReceived({ project, id }) {
+export async function panelRequestCompleted({ project, id }) {
   await adoptRunningServerPort();
   const query = new URLSearchParams({ project, id });
   const response = await requestJson({ method: 'GET', path: `${LOCAL_BASE}/open-panel?${query}` });
-  return response.received === true;
+  return response.completed === true;
+}
+
+export async function acknowledgePanelRequest({ project, id }) {
+  await adoptRunningServerPort();
+  const response = await requestJson({
+    method: 'POST',
+    path: `${LOCAL_BASE}/open-panel/ack`,
+    body: { project, id },
+  });
+  return response.acknowledged === true;
 }
 
 export function readLocalScanJob({ folder, id }) {

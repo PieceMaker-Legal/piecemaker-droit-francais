@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'volets_ouverts'];
+const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
@@ -17,14 +17,13 @@ export const HELP = `Usage: pm.mjs <outil> [options]
   conversion [--dossier PATH] [--force] [pièce…]
   sql [--dossier PATH] [--requete SQL]
   afficher [--fichier PATH] [--volet ${VOLETS.join('|')}] [--review FILE]
+      sans cible : liste les volets ouverts
   chronologie lister [--dossier NOM]
   chronologie modifier --piece ID [--date AAAA-MM-JJ] [--libelle TEXT] [--dossier NOM]
   tabular_review ${REVIEW_ACTIONS.join('|')}
       [--dossier PATH] [--fichier FILE] [--projet ID] [--mode analyse|recherche]
       [--nom TEXT] [--modele ID] [--description TEXT] [--questions JSON]
       [--documents a,b] [--recherche JSON] [--ia claude|codex|mistral] [--modele-ia TEXT]
-  volets_ouverts
-
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {
@@ -204,12 +203,12 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   }
 
   if (tool === 'afficher') {
+    if ((!flags.fichier || flags.fichier === true) && (!flags.volet || flags.volet === true)) return api.describePanels(resolved);
     if (flags.fichier && flags.fichier !== true) {
       const file = path.resolve(cwd, String(flags.fichier));
       if (!api.exists(file)) fail(`Fichier introuvable : ${flags.fichier}`);
       return `Affiché dans le volet de lecture : ${flags.fichier}`;
     }
-    if (!flags.volet || flags.volet === true) usage('Indiquez un fichier ou un volet.');
     if (!VOLETS.includes(flags.volet)) usage(`Volet inconnu : ${flags.volet}`);
     const review = flags.review && flags.review !== true ? path.basename(String(flags.review)) : '';
     return `Volet affiché : ${flags.volet}${review ? ` (${review})` : ''}`;
@@ -260,7 +259,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     return Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result);
   }
 
-  return api.describePanels(cwd);
+  usage(`Outil inconnu : ${tool}`);
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;

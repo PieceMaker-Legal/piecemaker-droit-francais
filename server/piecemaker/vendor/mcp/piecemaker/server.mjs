@@ -21,9 +21,9 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import fs from 'node:fs';
-import { panelRequestReceived, requestPanelOpen, runSql, runTabularReview } from '../../installer/lib/conversion-client.mjs';
+import { panelRequestCompleted, requestPanelOpen, runSql, runTabularReview } from '../../installer/lib/conversion-client.mjs';
 import { CASSATION_MATIERES, chronologieSql, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES, REVIEW_FOLDER, reviewFile, VOLETS } from './volets.mjs';
-import { describeOpenPanels, openPanelsFile, waitForOpenPanel } from './volets-ouverts.mjs';
+import { describeOpenPanels, listOpenPanels, openPanelsFile, waitForOpenPanel } from './volets-ouverts.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
@@ -93,36 +93,34 @@ async function openPanelAndWait(request, timeoutMs, panelsPath) {
   try {
     ({ id } = await requestPanelOpen(request));
   } catch {
-    return false;
+    return waitForOpenPanel({ cwd: project, ...target }, panelsPath, timeoutMs);
   }
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    let completed = false;
     try {
-      const received = await panelRequestReceived({ project, id });
-      if (await waitForOpenPanel({ cwd: project, ...target }, panelsPath, 0)) return true;
-      if (received) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        continue;
-      }
-    } catch {
-      return false;
+      completed = await panelRequestCompleted({ project, id });
+    } catch {}
+    if (await waitForOpenPanel({ cwd: project, ...target }, panelsPath, 0)) return true;
+    if (completed) {
+      await waitForOpenPanel({ cwd: project, ...target }, panelsPath, Math.min(500, deadline - Date.now()));
+      return true;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   return waitForOpenPanel({ cwd: project, ...target }, panelsPath, 0);
 }
 
-function afficherResult(code, message, nextAction) {
-  const failed = code !== 'opened';
+function afficherResult({ success, alreadyOpen = null, code, message, panels }) {
   return {
-    ...(failed ? { isError: true } : {}),
+    ...(!success ? { isError: true } : {}),
     content: [{ type: 'text', text: message }],
     structuredContent: {
-      status: failed ? 'failed' : 'opened',
+      success,
+      already_open: alreadyOpen,
       code,
       message,
-      retryable: false,
-      next_action: nextAction,
+      panels,
     },
   };
 }
@@ -214,14 +212,13 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
   server.registerTool('afficher', {
     description: 'Affiche à l’avocat, dans un volet de PieceMaker à côté du chat, un fichier du dossier '
       + '(fichier), la vue générale ou la chronologie du dossier, ou une tabular review. '
-      + 'Sans effet hors de l’application PieceMaker. Après un échec, ne répétez pas la même demande : '
-      + 'appelez volets_ouverts une fois pour vérifier l’état actuel.',
+      + 'Sans cible, liste les volets ouverts. Une cible déjà affichée est un succès et est signalée comme telle.',
     outputSchema: {
-      status: z.enum(['opened', 'failed']),
+      success: z.boolean(),
+      already_open: z.boolean().nullable(),
       code: z.string(),
       message: z.string(),
-      retryable: z.boolean(),
-      next_action: z.string(),
+      panels: z.array(z.string()),
     },
     inputSchema: {
       fichier: z.string().optional().describe('Chemin du fichier, relatif au dossier ou absolu.'),
@@ -236,20 +233,31 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
       openWorldHint: false,
     },
   }, async ({ fichier, volet, review }) => {
+    if (!fichier && !volet) {
+      return afficherResult({
+        success: true,
+        code: 'listed',
+        message: describeOpenPanels(),
+        panels: listOpenPanels(),
+      });
+    }
     if (fichier) {
       const resolved = path.resolve(process.cwd(), fichier);
-      if (!fs.existsSync(resolved)) return afficherResult('file_not_found', `Fichier introuvable : ${fichier}`, 'Vérifiez le chemin du fichier.');
-      const opened = await openPanelAndWait({ project: process.cwd(), tab: 'files', document: resolved }, openPanelsTimeoutMs, openPanelsPath);
-      if (!opened) return afficherResult('open_not_confirmed', 'L’ouverture du fichier n’a pas été confirmée dans PieceMaker.', 'Appelez volets_ouverts une fois ; ne répétez pas afficher avec la même cible.');
-      return afficherResult('opened', `Affiché dans le volet de lecture : ${fichier}`, 'Aucune action requise.');
+      if (!fs.existsSync(resolved)) return afficherResult({ success: false, code: 'file_not_found', message: `Fichier introuvable : ${fichier}`, panels: listOpenPanels() });
+      const target = { cwd: process.cwd(), tab: 'files', document: resolved };
+      const alreadyOpen = await waitForOpenPanel(target, openPanelsPath, 0);
+      const opened = alreadyOpen || await openPanelAndWait({ project: process.cwd(), tab: 'files', document: resolved }, openPanelsTimeoutMs, openPanelsPath);
+      if (!opened) return afficherResult({ success: false, code: 'open_not_confirmed', message: 'L’ouverture du fichier n’a pas été confirmée dans PieceMaker.', panels: listOpenPanels() });
+      return afficherResult({ success: true, alreadyOpen, code: alreadyOpen ? 'already_open' : 'opened', message: alreadyOpen ? `Déjà affiché dans le volet de lecture : ${fichier}` : `Affiché dans le volet de lecture : ${fichier}`, panels: listOpenPanels() });
     }
-    if (!volet) return afficherResult('target_required', 'Indiquez un fichier ou un volet.', 'Précisez un fichier ou un volet.');
     const target = volet === 'tabular-review'
       ? { tab: 'plugin:piecemaker-tabular-review', review: review ? path.basename(review) : undefined }
       : { tab: 'plugin:piecemaker-dossier', view: volet === 'chronologie' ? 'chronology' : 'general' };
-    const opened = await openPanelAndWait({ project: process.cwd(), ...target }, openPanelsTimeoutMs, openPanelsPath);
-    if (!opened) return afficherResult('open_not_confirmed', `L’ouverture du volet ${volet} n’a pas été confirmée dans PieceMaker.`, 'Appelez volets_ouverts une fois ; ne répétez pas afficher avec la même cible.');
-    return afficherResult('opened', `Volet affiché : ${volet}${review ? ` (${path.basename(review)})` : ''}`, 'Aucune action requise.');
+    const requestTarget = { cwd: process.cwd(), ...target };
+    const alreadyOpen = await waitForOpenPanel(requestTarget, openPanelsPath, 0);
+    const opened = alreadyOpen || await openPanelAndWait({ project: process.cwd(), ...target }, openPanelsTimeoutMs, openPanelsPath);
+    if (!opened) return afficherResult({ success: false, code: 'open_not_confirmed', message: `L’ouverture du volet ${volet} n’a pas été confirmée dans PieceMaker.`, panels: listOpenPanels() });
+    return afficherResult({ success: true, alreadyOpen, code: alreadyOpen ? 'already_open' : 'opened', message: `${alreadyOpen ? 'Déjà affiché' : 'Volet affiché'} : ${volet}${review ? ` (${path.basename(review)})` : ''}`, panels: listOpenPanels() });
   });
 
   server.registerTool('chronologie', {
@@ -348,20 +356,6 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
       return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
     }
   });
-
-  server.registerTool('volets_ouverts', {
-    description: 'Volets de PieceMaker ouverts par l’avocat à côté du chat : outils (Fichiers, Dossier et sa chronologie, '
-      + 'Analyse tabulaire et le tableau affiché, Bibliothèque, Bordereau…), document affiché et dernier volet ouvert. '
-      + 'À appeler quand l’avocat parle de « ce tableau », « ce document », « ici » sans préciser.',
-    inputSchema: {},
-    annotations: {
-      title: 'Volets ouverts',
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  }, async () => ({ content: [{ type: 'text', text: describeOpenPanels() }] }));
 
   return server;
 }
