@@ -76,7 +76,7 @@ jobs:
         run: |
           VERSION="$(node -p "require('./package.json').version")"
           for ATTEMPT in $(seq 1 30); do
-            if npm view "@piecemaker-legal/piecemaker@$VERSION" version >/dev/null 2>&1; then
+            if node scripts/release/verify-registry-version.mjs "$VERSION" >/dev/null 2>&1; then
               echo "Registry serves $VERSION."
               exit 0
             fi

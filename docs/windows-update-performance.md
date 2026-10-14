@@ -14,6 +14,8 @@ Lancer `release.yml` avec la version explicitement choisie. La release GitHub re
 
 Une compilation de secours sur le poste Windows nécessite désormais l'option explicite `--build-from-source`. Un artefact absent ne déclenche plus silencieusement une longue compilation. La publication npm intervient toujours avant le paquet Windows ; la notification de l'application utilise GitHub, pas npm.
 
+La vérification du registre utilise une requête non mise en cache et contrôle le nom, la version et l'intégrité de l'artefact. Un 404 anciennement mis en cache ne doit pas bloquer pendant dix minutes une version déjà publiée.
+
 ## Mesures locales
 
 Test isolé avec Electron 44.4.1 et electron-builder 26.16.1, assets compilés de 2.0.34 et nouvelles surcharges, sous un nom de produit fictif :
