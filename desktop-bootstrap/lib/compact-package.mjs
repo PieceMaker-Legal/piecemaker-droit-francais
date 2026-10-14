@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { selectRuntimeDependencies } from './runtime-dependencies.mjs';
 
 const EXTERNAL_PACKAGES = [
-  'better-sqlite3', 'bcrypt', 'node-pty', '@nut-tree-fork/nut-js',
+  'better-sqlite3', 'bcrypt', 'express', 'node-pty', '@nut-tree-fork/nut-js',
   'screenshot-desktop', '@vscode/ripgrep', '@modelcontextprotocol/sdk',
 ];
 
