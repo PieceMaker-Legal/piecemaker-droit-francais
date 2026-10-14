@@ -3,6 +3,23 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.32](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.31...v2.0.32) (2026-10-14)
+
+### New Features
+
+* **piecemaker:** skill Skill-PieceMaker pour les outils MCP du dossier ([9c65636](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9c65636f7d459b81e3fe0166a141edd6a6c4e3de))
+
+### Bug Fixes
+
+* **chat:** keep composer counters visible ([3deb45b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3deb45b9ca6ff64b6c260176e839f56b6bdc21e3))
+* **chat:** scope compact composer layout to mobile ([06f6622](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/06f662243d2399ca944445e10f606aed6796f48d))
+* **config:** supprimer le MCP navigateur du projet ([85be4a1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/85be4a197e13ca613ffd4f46adb2904c28ade976))
+* **desktop:** restore CloudCLI title bar on Windows ([6de2544](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6de2544029444966dc3bb04ec819165d4c7459e8))
+* **piecemaker-dossier:** remove drag and drop hint ([4d9a4c1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4d9a4c11e896ebf5ea49e62042152ecd7b52092b))
+* **piecemaker:** adjust citation viewer source link and footer ([31d942e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/31d942eccbcbae5d09d4c482b3961fffdaa4179b))
+* **piecemaker:** confirmer ouverture des volets avant succes ([c66e985](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c66e985154cecce7e21278d545f6a3f7bf86cc98))
+* **piecemaker:** delegate scan formats to the converter ([2aaa2ef](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2aaa2ef32a1fbd85248315218bb6e01d416fec38))
+
 ## [2.0.31](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.30...v2.0.31) (2026-10-14)
 
 ### Bug Fixes
