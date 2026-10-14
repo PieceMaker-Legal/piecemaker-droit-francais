@@ -37,7 +37,13 @@ async function main() {
   ui.step("Autorité locale du proxy d'anonymisation");
   await generateCertificates();
 
-  const builtArtifact = (await downloadPrebuiltApp(bootstrapHome)) || await buildDesktopApp(sourceDir);
+  let builtArtifact = await downloadPrebuiltApp(bootstrapHome);
+  if (!builtArtifact) {
+    if (IS_WINDOWS && !options.has('--build-from-source')) {
+      throw new Error("Le paquet Windows précompilé est indisponible. L'application actuelle est conservée. Réessayez lorsque la release est prête.");
+    }
+    builtArtifact = await buildDesktopApp(sourceDir);
+  }
   // Une instance encore ouverte garderait son serveur, donc ses plugins, et
   // `open` ou `start` ne ferait que la ramener au premier plan. Avec
   // --no-launch (mise à jour lancée depuis l'application, sous-processus de son

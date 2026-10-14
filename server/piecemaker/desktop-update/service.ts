@@ -21,7 +21,7 @@ export type DesktopUpdateResult =
   | { success: false; error: string; output?: string; errorOutput?: string };
 
 const MAC_BUNDLE_APP_ROOT = /^(.+\.app)\/Contents\/Resources\/app\/?$/;
-const WINDOWS_APP_ROOT = /^(.+)[\\/]resources[\\/]app[\\/]?$/i;
+const WINDOWS_APP_ROOT = /^(.+)[\\/]resources[\\/]app(?:\.asar(?:\.unpacked)?)?[\\/]?$/i;
 const SERVER_ONLY_VARIABLES = ['ELECTRON_RUN_AS_NODE', 'HOST', 'SERVER_PORT', 'PORT', 'CLOUDCLI_HOME', 'DATABASE_PATH', 'PIECEMAKER_TAG'];
 const RELAUNCH_DELAY_SECONDS = 3;
 const QUIT_GRACE_SECONDS = 30;

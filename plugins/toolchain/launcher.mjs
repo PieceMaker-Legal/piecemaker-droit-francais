@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runtimeEnvironment } from './runtime.mjs';
 
 const runtime = JSON.parse(fs.readFileSync(new URL('./runtime.json', import.meta.url), 'utf8'));
 if (typeof runtime.nodePath !== 'string' || !path.isAbsolute(runtime.nodePath)) {
@@ -27,7 +28,7 @@ if (process.execPath === runtime.nodePath) {
 } else {
   child = spawn(runtime.nodePath, [server], {
     cwd: process.cwd(),
-    env: process.env,
+    env: runtimeEnvironment(runtime),
     stdio: ['ignore', 'inherit', 'inherit'],
   });
   child.on('error', (error) => {

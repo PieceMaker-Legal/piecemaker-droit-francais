@@ -149,6 +149,7 @@ export function removalPlan(appRoot, home = os.homedir(), env = process.env, pla
     safeNamedDirectory(extra.config?.venvPath, home, platform, fallbackVenv, 'venv'),
     env.PIECEMAKER_BOOTSTRAP_HOME || paths.join(dataHome, 'bootstrap'),
     ...(extra.electronPaths || []),
+    ...(platform === 'win32' ? [paths.join(env.LOCALAPPDATA || paths.join(home, 'AppData', 'Local'), 'PieceMaker', 'runtime-components')] : []),
     ...macLibraryPaths(home, extra.appId, platform),
     ...componentModelPaths(home, env, platform, extra.mineru),
     paths.join(home, 'mineru.json'),

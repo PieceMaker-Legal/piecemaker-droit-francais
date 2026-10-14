@@ -33,6 +33,10 @@ async function loadEntry(startupError) {
     '../electron/desktopWindow.js': { DesktopWindowManager: class {} },
     '../electron/localServer.js': { LocalServerController: class {} },
     './windowsTitleBar.js': { installWindowsTitleBar: () => {} },
+    './compact-runtime.mjs': {
+      initializeCompactRuntime: async ({ applicationRoot }) => ({ applicationRoot, moduleRoots: [] }),
+      portablePluginRuntime: () => ({}),
+    },
     './windowsUpdater.js': { installWindowsUpdater: async () => {
       calls.push('updater');
       if (startupError) throw startupError;

@@ -170,3 +170,6 @@ Commande : `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 22 && rm -
 Testé via `release.yml` (increment=patch, 1.0.3 → 1.0.4) : la Release créée s'appelle bien "PieceMaker v1.0.4". Les releases antérieures ("CloudCLI UI vX.Y.Z") restent inchangées dans l'historique, seules les nouvelles suivent le nouveau nom.
 
 Si un autre nom de release custom est voulu ponctuellement, utiliser l'option `-f release_name="..."` de `gh workflow run release.yml` plutôt que de modifier `.release-it.json`.
+# Préparation Windows avant annonce
+
+Le workflow `release.yml` conserve maintenant la release en brouillon jusqu'à la construction et la vérification des artefacts Windows. Le workflow PieceMaker appelé publie ensuite la release complète. Les changements de packaging, le cache des composants et les mesures sont documentés dans [windows-update-performance.md](windows-update-performance.md).

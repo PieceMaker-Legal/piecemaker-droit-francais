@@ -10,6 +10,7 @@ export async function embedBundledPlugins(sourceDir, stageDir) {
   ui.step('Compilation des plugins PieceMaker…');
   const plugins = await buildPlugins({
     appRoot: sourceDir,
+    portableRuntime: true,
     outDir: path.join(stageDir, BUNDLE_DIR),
     log: (plugin) => ui.detail(`Plugin ${plugin.label} embarqué.`),
   });
