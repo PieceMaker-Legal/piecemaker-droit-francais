@@ -21,7 +21,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import fs from 'node:fs';
-import { runSql, runTabularReview } from '../../installer/lib/conversion-client.mjs';
+import { panelRequestReceived, requestPanelOpen, runSql, runTabularReview } from '../../installer/lib/conversion-client.mjs';
 import { CASSATION_MATIERES, chronologieSql, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES, REVIEW_FOLDER, reviewFile, VOLETS } from './volets.mjs';
 import { describeOpenPanels, openPanelsFile, waitForOpenPanel } from './volets-ouverts.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -84,6 +84,27 @@ export function toToolResult(result) {
     return { isError: true, content: [{ type: 'text', text: message }] };
   }
   return { content: [{ type: 'text', text: result.stdout }] };
+}
+
+async function openPanelAndWait(request, timeoutMs, panelsPath) {
+  const { project, ...target } = request;
+  if (await waitForOpenPanel({ cwd: project, ...target }, panelsPath, 0)) return true;
+  let id;
+  try {
+    ({ id } = await requestPanelOpen(request));
+  } catch {
+    return false;
+  }
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      if (await panelRequestReceived({ project, id })) return true;
+    } catch {
+      return false;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return false;
 }
 
 // --- Construction des arguments, un constructeur pur par outil -----------
@@ -190,7 +211,7 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
     if (fichier) {
       const resolved = path.resolve(process.cwd(), fichier);
       if (!fs.existsSync(resolved)) return { isError: true, content: [{ type: 'text', text: `Fichier introuvable : ${fichier}` }] };
-      const opened = await waitForOpenPanel({ cwd: process.cwd(), tab: 'files', document: resolved }, openPanelsPath, openPanelsTimeoutMs);
+      const opened = await openPanelAndWait({ project: process.cwd(), tab: 'files', document: resolved }, openPanelsTimeoutMs, openPanelsPath);
       if (!opened) return { isError: true, content: [{ type: 'text', text: 'Le fichier n’a pas été ouvert dans PieceMaker.' }] };
       return { content: [{ type: 'text', text: `Affiché dans le volet de lecture : ${fichier}` }] };
     }
@@ -198,7 +219,7 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
     const target = volet === 'tabular-review'
       ? { tab: 'plugin:piecemaker-tabular-review', review: review ? path.basename(review) : undefined }
       : { tab: 'plugin:piecemaker-dossier', view: volet === 'chronologie' ? 'chronology' : 'general' };
-    const opened = await waitForOpenPanel({ cwd: process.cwd(), ...target }, openPanelsPath, openPanelsTimeoutMs);
+    const opened = await openPanelAndWait({ project: process.cwd(), ...target }, openPanelsTimeoutMs, openPanelsPath);
     if (!opened) return { isError: true, content: [{ type: 'text', text: `Le volet ${volet} n’a pas été ouvert dans PieceMaker.` }] };
     return { content: [{ type: 'text', text: `Volet affiché : ${volet}${review ? ` (${path.basename(review)})` : ''}` }] };
   });
@@ -283,11 +304,12 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
     try {
       if (action === 'ouvrir') {
         const name = input.projet ? undefined : reviewFile(resolved, fichier);
-        const opened = await waitForOpenPanel({
-          cwd: resolved,
+        const opened = await openPanelAndWait({
+          project: resolved,
           tab: 'plugin:piecemaker-tabular-review',
           review: name,
-        }, openPanelsPath, openPanelsTimeoutMs);
+          draft: input.projet,
+        }, openPanelsTimeoutMs, openPanelsPath);
         if (!opened) return { isError: true, content: [{ type: 'text', text: 'Le volet Tabular Review n’a pas été ouvert dans PieceMaker.' }] };
         if (input.projet) return { content: [{ type: 'text', text: `Projet affiché dans le volet Tabular Review : ${input.projet}` }] };
         return { content: [{ type: 'text', text: `Analyse affichée dans le volet Tabular Review. Contenu : « ${REVIEW_FOLDER}/${name} ».` }] };
