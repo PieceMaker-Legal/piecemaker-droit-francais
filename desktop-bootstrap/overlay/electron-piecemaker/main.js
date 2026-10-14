@@ -79,5 +79,8 @@ if (process.argv.includes(UNINSTALL_ARGUMENT)) {
   const { runUninstallFromCommandLine } = await import('../electron/piecemakerUninstall.js');
   await runUninstallFromCommandLine({ app, dialog });
 } else {
-  await startApplication();
+  void startApplication().catch((error) => {
+    console.error('[PieceMaker] Startup failed:', error);
+    app.quit();
+  });
 }
