@@ -32,7 +32,7 @@ import { createInstitutionalTermsRouter, openInstitutionalTerms } from './instit
 import { installModelDiscovery } from './model-discovery/index.js';
 import { startProjectRegistry } from './project-registry.js';
 import { createFolderHistory } from './folder-history/history.js';
-import { createOpenPanelsRouter } from './open-panels.js';
+import { createOpenPanelRequestsRouter, createOpenPanelsRouter } from './open-panels.js';
 import { startRemoteAccess } from './remote/index.js';
 import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
 
@@ -92,6 +92,7 @@ startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => 
 
 const localRouter = express.Router();
 localRouter.use(knowledge.localRouter);
+localRouter.use(createOpenPanelRequestsRouter());
 localRouter.use(createTabularReviewLocalRouter({
   proxyOrigin: () => {
     const status = anonymizer.status() as { enabled?: boolean; listening?: boolean; origin?: string | null };

@@ -4,6 +4,7 @@ import { autoPanelTarget, draftFromResult } from '@/modules/piecemaker-workspace
 import type { AutoPanelTarget } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 import { openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 import { showPlan } from '@/piecemaker/editor-tabs/planCalls';
+import { pollWorkspacePanel } from '@/shared/api';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
 import type { AppTab } from '@/shared/types';
 
@@ -70,4 +71,37 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
       if (target) show(target, current, toolId);
     });
   }, [subscribe]);
+
+  useEffect(() => {
+    if (!projectPath) return;
+    let active = true;
+    let inFlight = false;
+    const poll = async () => {
+      if (!active || inFlight) return;
+      inFlight = true;
+      try {
+        const result = await pollWorkspacePanel(projectPath);
+        const request = result.request;
+        if (!active || !request) return;
+        if (request.tab === 'files' && request.document) {
+          state.current.openTab('files');
+          openInEditor(request.document);
+        } else if (request.tab === DOSSIER_TAB) {
+          show({ kind: 'dossier', view: request.view === 'chronology' ? 'chronology' : 'general' }, state.current, request.id);
+        } else if (request.tab === TABULAR_REVIEW_TAB) {
+          show({ kind: 'tabular-review', review: request.review ?? null, ...(request.draft ? { draft: request.draft } : {}) }, state.current, request.id);
+        }
+      } catch {
+        return;
+      } finally {
+        inFlight = false;
+      }
+    };
+    const interval = window.setInterval(() => void poll(), 350);
+    void poll();
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [projectPath]);
 }

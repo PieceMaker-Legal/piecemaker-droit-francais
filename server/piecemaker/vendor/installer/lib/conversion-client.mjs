@@ -151,6 +151,18 @@ export async function runTabularReview(body) {
   return response.resultat;
 }
 
+export async function requestPanelOpen(body) {
+  await adoptRunningServerPort();
+  return requestJson({ method: 'POST', path: `${LOCAL_BASE}/open-panel`, body });
+}
+
+export async function panelRequestReceived({ project, id }) {
+  await adoptRunningServerPort();
+  const query = new URLSearchParams({ project, id });
+  const response = await requestJson({ method: 'GET', path: `${LOCAL_BASE}/open-panel?${query}` });
+  return response.received === true;
+}
+
 export function readLocalScanJob({ folder, id }) {
   const query = new URLSearchParams({ folder, ...(id ? { id } : {}) });
   return requestJson({ method: 'GET', path: `${LOCAL_BASE}/scan/job?${query}` });
