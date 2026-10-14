@@ -14,6 +14,7 @@ export const certsDir = path.join(dataHome, 'certs');
 export const bootstrapHome = process.env.PIECEMAKER_BOOTSTRAP_HOME || path.join(dataHome, 'bootstrap');
 export const sourceDir = process.env.PIECEMAKER_SRC_DIR || '';
 export const releaseTag = process.env.PIECEMAKER_TAG || 'inconnu';
+export const releaseRepo = process.env.PIECEMAKER_REPO || 'PieceMaker-Legal/piecemaker-droit-francais';
 
 export const caCertPath = path.join(certsDir, 'piecemaker-ca.crt');
 export const caKeyPath = path.join(certsDir, 'piecemaker-ca.key');

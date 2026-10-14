@@ -1,14 +1,28 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { capture, run } from './shell.mjs';
 import { BUNDLE_DIR, embedBundledPlugins } from './plugins.mjs';
 import { ui } from './ui.mjs';
-import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath } from './paths.mjs';
+import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath, releaseRepo, releaseTag } from './paths.mjs';
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+function npmTool(tool) {
+  if (process.platform !== 'win32') return (args, options) => run(tool, args, options);
+  const cli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', `${tool}-cli.js`);
+  const shim = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'windows-npm-shim.mjs')).href;
+  return async (args, options = {}) => {
+    const baseEnv = options.env || process.env;
+    const env = { ...baseEnv, NODE_OPTIONS: `${baseEnv.NODE_OPTIONS || ''} --import=${shim}`.trim() };
+    if (await exists(cli)) return run(process.execPath, [cli, ...args], { ...options, env });
+    return run(`${tool}.cmd`, args.map((arg) => `"${arg}"`), { ...options, env, shell: true });
+  };
+}
+
+const npm = npmTool('npm');
+const npx = npmTool('npx');
 const bootstrapRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 async function exists(target) {
@@ -111,7 +125,7 @@ async function repairStagedTree(stageDir) {
     const missing = await findMissingDependencies(stageDir);
     if (missing.length === 0) return;
     ui.detail(`Dépendances manquantes complétées : ${missing.join(', ')}`);
-    await run(npmCommand, ['install', '--no-save', '--omit=dev', '--no-audit', '--no-fund', ...missing], {
+    await npm(['install', '--no-save', '--omit=dev', '--no-audit', '--no-fund', ...missing], {
       cwd: stageDir,
     });
   }
@@ -238,7 +252,9 @@ async function ensureCargo() {
 
   ui.step("Installation de Rust pour le proxy d'anonymisation…");
   if (process.platform === 'win32') {
-    const installer = path.join(os.tmpdir(), 'piecemaker-rustup-init.exe');
+    const installerDir = path.join(os.tmpdir(), 'piecemaker-rustup');
+    await fs.mkdir(installerDir, { recursive: true });
+    const installer = path.join(installerDir, 'rustup-init.exe');
     await run('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-Command',
       `Invoke-WebRequest -UseBasicParsing -Uri https://win.rustup.rs/x86_64 -OutFile '${installer}'`,
@@ -251,7 +267,70 @@ async function ensureCargo() {
   return env;
 }
 
+async function downloadReleaseAsset(asset, destination, label) {
+  if (process.platform !== 'win32') return false;
+  const base = `https://github.com/${releaseRepo}/releases/download/${releaseTag}/${asset}`;
+  try {
+    const [binary, checksum] = await Promise.all([fetch(base), fetch(`${base}.sha256`)]);
+    if (!binary.ok || !checksum.ok) throw new Error(`HTTP ${binary.status}/${checksum.status}`);
+    const bytes = Buffer.from(await binary.arrayBuffer());
+    const expected = (await checksum.text()).trim().split(/\s+/)[0].toLowerCase();
+    const actual = crypto.createHash('sha256').update(bytes).digest('hex');
+    if (actual !== expected) throw new Error('empreinte SHA-256 invalide');
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.writeFile(destination, bytes);
+    ui.ok(`${label} précompilé vérifié (${releaseTag}).`);
+    return true;
+  } catch (error) {
+    ui.warn(`${label} précompilé indisponible (${error.message}) — compilation locale.`);
+    return false;
+  }
+}
+
+async function downloadPrebuiltProxy(destination) {
+  if (process.platform !== 'win32') return false;
+  ui.step("Téléchargement du proxy d'anonymisation précompilé…");
+  return downloadReleaseAsset('piecemaker-hudsucker-win32-x64.exe', destination, "Proxy d'anonymisation");
+}
+
+async function downloadPrebuiltSqlite(stageDir) {
+  const destination = path.join(stageDir, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
+  return downloadReleaseAsset('better-sqlite3-electron-win32-x64.node', destination, 'better-sqlite3 pour Electron');
+}
+
+export function windowsTar() {
+  return path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+}
+
+export async function downloadPrebuiltApp(workDir) {
+  if (process.platform !== 'win32') return null;
+  ui.step("Téléchargement de l'application précompilée…");
+  const archive = path.join(workDir, 'piecemaker-desktop-win32-x64.tar.gz');
+  if (!(await downloadReleaseAsset('piecemaker-desktop-win32-x64.tar.gz', archive, "Paquet de l'application"))) return null;
+  const destination = path.join(workDir, 'prebuilt', releaseTag);
+  try {
+    await fs.rm(destination, { recursive: true, force: true });
+    await fs.mkdir(destination, { recursive: true });
+    await run(windowsTar(), ['-xzf', archive, '-C', destination]);
+    if (!(await exists(path.join(destination, `${PRODUCT_NAME}.exe`)))) throw new Error(`${PRODUCT_NAME}.exe absent de l'archive`);
+    await verifyBuiltApp(destination);
+    ui.ok(`Application précompilée prête : ${destination}`);
+    return destination;
+  } catch (error) {
+    ui.warn(`Application précompilée inutilisable (${error.message}) — construction locale.`);
+    return null;
+  } finally {
+    await fs.rm(archive, { force: true });
+  }
+}
+
 async function buildAnonymizerProxy(sourceDir) {
+  const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
+  const destinationDir = path.join(sourceDir, 'server', 'piecemaker', 'anonymizer', 'bin');
+  await fs.mkdir(destinationDir, { recursive: true });
+  const destination = path.join(destinationDir, binaryName);
+  if (await downloadPrebuiltProxy(destination)) return destination;
+
   const env = await ensureCargo();
   const project = path.join(sourceDir, 'server', 'piecemaker', 'anonymizer', 'hudsucker-proxy');
   ui.step("Compilation du proxy d'anonymisation…");
@@ -259,11 +338,7 @@ async function buildAnonymizerProxy(sourceDir) {
     cwd: sourceDir,
     env,
   });
-  const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
   const built = path.join(project, 'target', 'release', binaryName);
-  const destinationDir = path.join(sourceDir, 'server', 'piecemaker', 'anonymizer', 'bin');
-  await fs.mkdir(destinationDir, { recursive: true });
-  const destination = path.join(destinationDir, binaryName);
   await fs.copyFile(built, destination);
   if (process.platform !== 'win32') await fs.chmod(destination, 0o755);
   ui.detail('Proxy d\'anonymisation embarqué.');
@@ -288,24 +363,27 @@ async function smokeTestAnonymizerProxy(sourceDir, binary) {
 
 export async function buildDesktopApp(sourceDir) {
   ui.step('Installation des dépendances du projet (plusieurs minutes)…');
-  await run(npmCommand, ['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
-  await run(npmCommand, ['rebuild', 'better-sqlite3', '--no-audit', '--no-fund'], { cwd: sourceDir });
+  await npm(['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
+  await npm(['rebuild', 'better-sqlite3', '--no-audit', '--no-fund'], { cwd: sourceDir });
   await smokeTestAnonymizerProxy(sourceDir, await buildAnonymizerProxy(sourceDir));
 
   ui.step('Compilation du client et du serveur…');
-  await run(npmCommand, ['run', 'build'], { cwd: sourceDir });
+  await npm(['run', 'build'], { cwd: sourceDir });
 
   ui.step("Préparation de l'application de bureau…");
-  await run(npmCommand, ['run', 'desktop:stage'], { cwd: sourceDir });
+  await npm(['run', 'desktop:stage'], { cwd: sourceDir });
   const stageDir = path.join(sourceDir, '.desktop-build', 'desktop-app');
   await embedLocalServer(sourceDir, stageDir);
   await embedDesktopOverlay(stageDir);
   await embedBundledPlugins(sourceDir, stageDir);
   await patchStagedManifest(stageDir);
   await repairStagedTree(stageDir);
+  const prebuiltSqlite = await downloadPrebuiltSqlite(stageDir);
 
   ui.step("Construction de l'application Electron…");
-  await run('npx', ['electron-builder', '--projectDir', '.desktop-build/desktop-app', '--dir'], {
+  const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', '--dir'];
+  if (prebuiltSqlite) builderArgs.push('-c.npmRebuild=false');
+  await npx(builderArgs, {
     cwd: sourceDir,
     env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
   });

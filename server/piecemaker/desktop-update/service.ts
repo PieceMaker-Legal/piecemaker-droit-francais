@@ -11,7 +11,7 @@ export type DesktopUpdateDependencies = {
   applicationPid: number;
   environment: NodeJS.ProcessEnv;
   runInstaller(command: string, environment: NodeJS.ProcessEnv): Promise<ShellResult>;
-  launchDetached(command: string): void;
+  launchDetached(command: string, environment?: NodeJS.ProcessEnv): void;
   logInfo(message: string): void;
 };
 
@@ -20,6 +20,7 @@ export type DesktopUpdateResult =
   | { success: false; error: string; output?: string; errorOutput?: string };
 
 const MAC_BUNDLE_APP_ROOT = /^(.+\.app)\/Contents\/Resources\/app\/?$/;
+const WINDOWS_APP_ROOT = /^(.+)[\\/]resources[\\/]app[\\/]?$/i;
 const SERVER_ONLY_VARIABLES = ['ELECTRON_RUN_AS_NODE', 'HOST', 'SERVER_PORT', 'PORT', 'CLOUDCLI_HOME', 'DATABASE_PATH'];
 const RELAUNCH_DELAY_SECONDS = 3;
 const QUIT_GRACE_SECONDS = 30;
@@ -36,6 +37,18 @@ function shellQuote(value: string): string {
 export function desktopBundlePath(appRoot: string, platform: NodeJS.Platform): string | null {
   if (platform !== 'darwin') return null;
   return MAC_BUNDLE_APP_ROOT.exec(appRoot)?.[1] ?? null;
+}
+
+export function windowsInstallPath(appRoot: string, platform: NodeJS.Platform): string | null {
+  if (platform !== 'win32') return null;
+  return WINDOWS_APP_ROOT.exec(appRoot)?.[1] ?? null;
+}
+
+export function windowsInstallerCommand(repository: string): string {
+  const scriptUrl = `https://raw.githubusercontent.com/${repository}/main/desktop-bootstrap/install.ps1`;
+  const script = `& ([scriptblock]::Create((Invoke-RestMethod -UseBasicParsing '${scriptUrl.replace(/'/g, "''")}')))`;
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  return `Start-Process powershell.exe -WindowStyle Minimized -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'`;
 }
 
 export function installerCommand(repository: string): string {
@@ -64,13 +77,24 @@ export function installerEnvironment(environment: NodeJS.ProcessEnv): NodeJS.Pro
 export function createDesktopUpdateService(dependencies: DesktopUpdateDependencies) {
   const { repository } = dependencies;
   const bundlePath = repository ? desktopBundlePath(dependencies.appRoot, dependencies.platform) : null;
+  const windowsPath = repository ? windowsInstallPath(dependencies.appRoot, dependencies.platform) : null;
 
   return {
     isDesktopInstall(): boolean {
-      return bundlePath !== null;
+      return bundlePath !== null || windowsPath !== null;
     },
 
     async update(): Promise<DesktopUpdateResult> {
+      if (windowsPath && repository) {
+        dependencies.logInfo(`Mise à jour de ${windowsPath} depuis ${repository}`);
+        dependencies.launchDetached(windowsInstallerCommand(repository), installerEnvironment(dependencies.environment));
+        return {
+          success: true,
+          output: "L'installateur de la nouvelle version s'ouvre dans une fenêtre dédiée. Il ferme PieceMaker, installe la mise à jour, puis propose de rouvrir l'application.\n",
+          message: "Installateur de la mise à jour lancé.",
+        };
+      }
+
       if (!bundlePath || !repository) {
         return { success: false, error: "Mise à jour intégrée disponible uniquement dans l'application de bureau macOS." };
       }

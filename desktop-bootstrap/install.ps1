@@ -8,7 +8,7 @@ $nodeChannel = if ($env:PIECEMAKER_NODE_CHANNEL) { $env:PIECEMAKER_NODE_CHANNEL 
 $minNodeMajor = 22
 
 function Say([string] $message) { Write-Host "== $message" -ForegroundColor Cyan }
-function Fail([string] $message) { Write-Host "!! $message" -ForegroundColor Red; exit 1 }
+function Fail([string] $message) { Write-Host "!! $message" -ForegroundColor Red; throw $message }
 
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
   Fail 'Ce script installe PieceMaker sur Windows. Sur macOS, utilisez install.sh.'
@@ -48,7 +48,7 @@ $nodeBin = $null
 $systemNode = Get-Command node -ErrorAction SilentlyContinue
 if ($systemNode) {
   try {
-    $major = [int](& $systemNode.Source -p 'process.versions.node.split(".")[0]')
+    $major = [int](((& $systemNode.Source -v) -replace '^v', '') -split '\.')[0]
     if ($major -ge $minNodeMajor) { $nodeBin = $systemNode.Source }
   } catch {
     $nodeBin = $null
@@ -76,7 +76,8 @@ Say "Node.js utilise : $nodeBin ($(& $nodeBin -v))"
 $env:PATH = "$(Split-Path $nodeBin);$env:PATH"
 $env:PIECEMAKER_SRC_DIR = $srcDir
 $env:PIECEMAKER_TAG = $tag
+$env:PIECEMAKER_REPO = $repo
 $env:PIECEMAKER_BOOTSTRAP_HOME = $bootstrapHome
 
 & $nodeBin (Join-Path $srcDir 'desktop-bootstrap\lib\install.mjs') @args
-exit $LASTEXITCODE
+if ($LASTEXITCODE -ne 0) { throw "Installation interrompue (code $LASTEXITCODE)." }
