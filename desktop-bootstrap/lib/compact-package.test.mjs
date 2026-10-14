@@ -24,3 +24,24 @@ test('native and external script dependency closures stay physical even with exp
   assert.ok(manifest.build.asarUnpack.includes('node_modules/child/**'));
   assert.equal(manifest.build.nsis.differentialPackage, true);
 });
+
+test('Express keeps its CommonJS dependency closure physical', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pm-express-compact-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, 'server'), { recursive: true });
+  await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({ dependencies: {}, build: { files: [], nsis: {} } }));
+  const packages = [
+    ['express', path.join(root, 'node_modules', 'express'), { send: '0.19.2' }],
+    ['send', path.join(root, 'node_modules', 'express', 'node_modules', 'send'), { mime: '1.6.0' }],
+    ['mime', path.join(root, 'node_modules', 'mime'), {}],
+  ];
+  for (const [name, directory, dependencies] of packages) {
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(path.join(directory, 'package.json'), JSON.stringify({ name, dependencies }));
+  }
+
+  const manifest = await configureCompactPackage(root);
+  assert.ok(manifest.build.asarUnpack.includes('node_modules/express/**'));
+  assert.ok(manifest.build.asarUnpack.includes('node_modules/express/node_modules/send/**'));
+  assert.ok(manifest.build.asarUnpack.includes('node_modules/mime/**'));
+});
