@@ -4,6 +4,7 @@ import path from 'node:path';
 import { capture, mustCapture, osascript, powershell } from './shell.mjs';
 import { ui } from './ui.mjs';
 import { IS_MAC, PRODUCT_NAME, installTargetCandidates } from './paths.mjs';
+import { UNINSTALL_ARGUMENT, WINDOWS_UNINSTALL_KEY } from '../../electron/uninstallPlan.js';
 
 function quote(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
@@ -181,6 +182,33 @@ export function createShortcuts(installedPath) {
   ].join('; '));
 
   ui.ok('Raccourcis créés (menu Démarrer et Bureau).');
+}
+
+export function windowsUninstallEntryScript(installedPath, version) {
+  const executable = path.join(installedPath, `${PRODUCT_NAME}.exe`);
+  const values = {
+    DisplayName: PRODUCT_NAME,
+    DisplayVersion: String(version || '').replace(/^v/, ''),
+    Publisher: PRODUCT_NAME,
+    DisplayIcon: executable,
+    InstallLocation: installedPath,
+    UninstallString: `"${executable}" ${UNINSTALL_ARGUMENT}`,
+  };
+  return [
+    '$ErrorActionPreference = "Stop"',
+    `$key = ${quote(WINDOWS_UNINSTALL_KEY)}`,
+    'New-Item -Path $key -Force | Out-Null',
+    ...Object.entries(values).map(([name, value]) => `New-ItemProperty -Path $key -Name ${quote(name)} -Value ${quote(value)} -PropertyType String -Force | Out-Null`),
+    ...['NoModify', 'NoRepair'].map((name) => `New-ItemProperty -Path $key -Name ${quote(name)} -Value 1 -PropertyType DWord -Force | Out-Null`),
+    `$size = (Get-ChildItem -LiteralPath ${quote(installedPath)} -Recurse -File | Measure-Object -Property Length -Sum).Sum`,
+    "New-ItemProperty -Path $key -Name 'EstimatedSize' -Value ([int]($size / 1KB)) -PropertyType DWord -Force | Out-Null",
+  ].join('; ');
+}
+
+export function registerWindowsUninstall(installedPath, version) {
+  if (IS_MAC) return;
+  powershell(windowsUninstallEntryScript(installedPath, version));
+  ui.ok('PieceMaker apparaît dans Paramètres › Applications › Applications installées.');
 }
 
 export function launchApplication(installedPath) {

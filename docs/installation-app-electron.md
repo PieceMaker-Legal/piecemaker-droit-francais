@@ -110,10 +110,10 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
    l'installation s'arrête sur un message clair et l'application en place
    reste intacte.
 10. **Certificat** — déclaration de confiance et signature, voir ci-dessous.
-11. **Composants Python** — MarkItDown, la bibliothèque GLiNER2 et le reste de
-   `requirements.txt`, dans un venv. Sans eux l'application s'ouvre, mais
-   l'anonymisation et la conversion des pièces ne démarrent pas. Les modèles
-   locaux (GLiNER2-PII, MinerU) ne sont plus téléchargés ici. Le détail est
+11. **Composants Python** — MarkItDown et pypdf (`requirements.txt` sans
+   GLiNER2 ni huggingface-hub), dans un venv. Sans eux l'application s'ouvre,
+   mais la conversion des pièces ne démarre pas. GLiNER2 et MinerU ne sont pas
+   installés ici : ils s'installent depuis l'application, après l'installation. Le détail est
    plus bas.
 12. **Lancement** de l'application, au clic sur « Ouvrir PieceMaker » dans la
     fenêtre d'installation (automatique sans fenêtre).
@@ -139,6 +139,30 @@ indépendants, chacun suffisant :
 
 `composants/install.test.mjs` vérifie qu'une commande aboutit alors que le
 dossier courant a été supprimé ; `lib/place.test.mjs` vérifie l'échange.
+
+## Windows : application précompilée à chaque release
+
+Sous Windows, l'installateur ne compile plus rien sur le poste dans le cas
+nominal. À chaque release publiée, le workflow
+`.github/workflows/piecemaker-windows-release.yml` (déclenché par
+`release: published`, relançable à la main avec un `tag`) construit sur
+`windows-latest` et attache à la release :
+
+| Fichier | Contenu |
+|---|---|
+| `piecemaker-hudsucker-win32-x64.exe` | proxy d'anonymisation (Rust) |
+| `better-sqlite3-electron-win32-x64.node` | module natif compilé pour l'Electron du `package-lock.json` |
+| `piecemaker-desktop-win32-x64.tar.gz` | application complète (`win-unpacked`), construite par `desktop-bootstrap/lib/build-release.mjs`, soit le même `buildDesktopApp` que l'installateur |
+
+Chaque fichier a son `.sha256`. L'installateur télécharge l'archive de
+l'application, vérifie l'empreinte, la décompresse avec le `tar.exe` de
+Windows dans `~/.piecemaker/bootstrap/prebuilt/<tag>/` et contrôle son contenu,
+puis enchaîne l'installation, le certificat, la signature, les raccourcis et
+les composants Python. Si l'archive est absente ou invalide (par exemple
+pendant les quelques minutes qui suivent la publication, le temps que le
+workflow se termine), il retombe sur la construction locale. Celle-ci
+télécharge alors le proxy et better-sqlite3 précompilés : Visual Studio et
+Rust ne sont jamais nécessaires.
 
 ## Test du proxy en bac à sable
 
@@ -176,8 +200,8 @@ si tout passe, 1 sinon.
 
 - un Python 3.10 à 3.13 déjà présent sur le poste, sinon un CPython 3.12
   autonome (python-build-standalone) dans `<destination>/python` ;
-- le venv `<destination>/venv`, avec `requirements.txt` (MarkItDown, pypdf,
-  GLiNER2).
+- le venv `<destination>/venv`, avec `requirements.txt` privé de GLiNER2 et
+  huggingface-hub (MarkItDown, pypdf).
 
 Les modèles locaux — le modèle GLiNER2-PII et MinerU 4 (`mineru==4.0.11`,
 modèle MinerU2.5-Pro en GGUF et modules ONNX de mise en page et d'OCR) — s'installent à la demande depuis l'application :
@@ -321,6 +345,20 @@ rejette (*MAC verification failed*).
 
 ### Désinstaller
 
+Sous Windows, la voie standard est **Paramètres › Applications › Applications
+installées › PieceMaker › Désinstaller**. L'installateur y enregistre
+PieceMaker sous `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\PieceMaker`
+(par utilisateur, sans droits administrateur). Le bouton lance
+`PieceMaker.exe --piecemaker-uninstall`, qui demande confirmation puis exécute
+la même désinstallation que l'onglet de l'application.
+
+Avant de supprimer quoi que ce soit, le script Windows attend 15 s puis arrête
+les processus qui verrouillent encore des fichiers : serveur local, workers
+Python du venv, fenêtre Edge de l'installateur (dont le profil est dans
+`bootstrap`). Les certificats sont retirés un par un (personnel, éditeurs
+approuvés, puis racine, qui demande une confirmation Windows), et l'entrée
+« Applications installées » est retirée en dernier.
+
 Dans l'application installée, les réglages ont un onglet **Désinstaller** sous Notifications.
 Cet onglet retire tout ce que PieceMaker a installé ou écrit, sauf la base
 `auth.db` (et ses fichiers `-wal`/`-shm`) et la Bibliothèque
@@ -372,10 +410,20 @@ relance cet installateur au lieu de la commande npm de CloudCLI : la route
 `*.app/Contents/Resources/app`. Elle exécute
 `curl …/main/desktop-bootstrap/install.sh | sh -s -- --no-launch` (dernière
 release publiée du dépôt de `product.config.json`), renvoie la sortie à la
-fenêtre, puis quitte l'application et rouvre le bundle réinstallé. Les autres
-installations (sources git, npm, Windows) retombent sur le comportement
-CloudCLI d'origine. Les versions antérieures à ce mécanisme doivent être mises
-à jour une fois à la main avec la commande d'installation.
+fenêtre, puis quitte l'application et rouvre le bundle réinstallé.
+
+Sous Windows, la même route est interceptée lorsque le serveur tourne depuis
+`…\PieceMaker\resources\app`. Elle lance `install.ps1` (sans `--no-launch`)
+dans un PowerShell détaché via `Start-Process`, et répond aussitôt. Le
+détachement est nécessaire : l'installateur ferme PieceMaker avec
+`taskkill /T`, ce qui tuerait un installateur resté enfant de l'application.
+La fenêtre d'installation suit la mise à jour et propose de rouvrir
+l'application.
+
+Les autres installations (sources git, npm) retombent sur le comportement
+CloudCLI d'origine. Les versions antérieures à ce mécanisme (Windows : avant
+v2.0.29) doivent être mises à jour une fois à la main avec la commande
+d'installation.
 
 ## Carte des fichiers
 
@@ -384,7 +432,7 @@ desktop-bootstrap/
   install.sh                     entrée macOS (curl | sh)
   install.ps1                    entrée Windows (irm | iex)
   composants/
-    install.mjs                  venv, MarkItDown, bibliothèque GLiNER2
+    install.mjs                  venv, MarkItDown, pypdf
   installer-ui/
     index.html                   page de la fenêtre d'installation
     piste/                       captures de piste.gouv.fr pour le guide
@@ -392,7 +440,9 @@ desktop-bootstrap/
     electron-piecemaker/main.js  point d'entrée Electron, ouvre la cible locale
   lib/
     install.mjs                  orchestrateur des étapes
-    build.mjs                    build, stage, serveur embarqué, surcouche, empaquetage
+    build.mjs                    build, stage, serveur embarqué, surcouche, empaquetage ; téléchargements précompilés (Windows)
+    build-release.mjs            construction de l'archive Windows par la CI (piecemaker-windows-release.yml)
+    windows-npm-shim.mjs         préchargement : npm/npx lancés via npm-cli.js sous Windows
     certificates.mjs             aiguillage de plateforme
     certificates-darwin.mjs      openssl, confiance utilisateur, codesign
     certificates-win32.mjs       New-SelfSignedCertificate, magasins, Authenticode
@@ -456,12 +506,12 @@ l'ouverture ne sont proposés et rien n'attend.
 - La commande `curl` pointe sur `main`, mais construit la dernière *release*
   publiée : tant qu'une release ne contient pas `desktop-bootstrap/`, utiliser
   `PIECEMAKER_TAG` pour viser un tag qui l'embarque.
-- La construction compile les dépendances natives (`better-sqlite3`, `bcrypt`,
-  `node-pty`). Sur macOS, les *Command Line Tools* sont vérifiés en amont ; sur
-  Windows, en l'absence de binaire pré-compilé, les *Visual Studio Build Tools*
-  (charge de travail C++) sont nécessaires.
-- Première installation longue (dépendances + build), quelques minutes ; les
-  suivantes réutilisent le cache npm et les sources déjà téléchargées.
+- Sur macOS, la construction compile les dépendances natives (`better-sqlite3`,
+  `bcrypt`, `node-pty`) ; les *Command Line Tools* sont vérifiés en amont. Sur
+  Windows, voir « Windows : application précompilée à chaque release ».
+- Sur macOS, première installation longue (dépendances + build), quelques
+  minutes. Sur Windows, quelques minutes seulement grâce à l'archive
+  précompilée, sauf repli sur la construction locale.
 - Le certificat de signature est auto-signé : il supprime l'avertissement lié à
   un binaire non signé, mais ne vaut pas notarisation Apple ni réputation
   SmartScreen.

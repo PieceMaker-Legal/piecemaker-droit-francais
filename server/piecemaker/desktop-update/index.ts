@@ -33,8 +33,14 @@ function productRepository(appRoot: string): string | null {
   }
 }
 
-function launchDetached(command: string) {
-  spawn('sh', ['-c', command], { cwd: os.homedir(), detached: true, stdio: 'ignore' }).unref();
+function launchDetached(command: string, environment: NodeJS.ProcessEnv = process.env) {
+  if (process.platform === 'win32') {
+    spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      cwd: os.homedir(), env: environment, detached: true, stdio: 'ignore', windowsHide: true,
+    }).unref();
+    return;
+  }
+  spawn('sh', ['-c', command], { cwd: os.homedir(), env: environment, detached: true, stdio: 'ignore' }).unref();
 }
 
 export function createPieceMakerDesktopUpdateRouter(appRoot: string) {

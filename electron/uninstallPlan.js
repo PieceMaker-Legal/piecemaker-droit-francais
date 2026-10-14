@@ -3,6 +3,8 @@ import path from 'node:path';
 
 const PRODUCT_NAME = 'PieceMaker';
 const LIBRARY_DIRECTORY = 'library-backend';
+export const UNINSTALL_ARGUMENT = '--piecemaker-uninstall';
+export const WINDOWS_UNINSTALL_KEY = `HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${PRODUCT_NAME}`;
 const COMPONENT_MODEL_IDS = [
   'fastino/gliner2-privacy-filter-PII-multi',
   'fastino/gliner2.5-multi-v1',
@@ -196,17 +198,41 @@ ${plan.remove.length ? `rm -rf ${plan.remove.map(shellQuote).join(' ')}\n` : ''}
 }
 
 export function windowsUninstallScript(plan) {
-  const removals = [...plan.remove, plan.appRoot].map((target) => `Remove-Item -LiteralPath ${powershellQuote(target)} -Recurse -Force -ErrorAction SilentlyContinue`).join('\n');
+  const targets = [...plan.remove, plan.appRoot];
+  const removals = targets.map((target) => `Remove-Target ${powershellQuote(target)}`).join('\n');
   const purges = plan.purge.map(({ directory, keep }) => (
-    `Get-ChildItem -LiteralPath ${powershellQuote(directory)} -Force -ErrorAction SilentlyContinue | Where-Object { @(${keep.map(powershellQuote).join(', ')}) -notcontains $_.Name } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue`
+    `Get-ChildItem -LiteralPath ${powershellQuote(directory)} -Force -ErrorAction SilentlyContinue | Where-Object { @(${keep.map(powershellQuote).join(', ')}) -notcontains $_.Name } | ForEach-Object { Remove-Target $_.FullName }`
   )).join('\n');
   return `param([int]$ProcessId)
-while (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 300 }
+$ErrorActionPreference = 'SilentlyContinue'
+$targets = @(${targets.map(powershellQuote).join(', ')})
+function Holders {
+  @(Get-CimInstance Win32_Process | Where-Object {
+    $process = $_
+    $process.ProcessId -ne $PID -and @($targets | Where-Object {
+      ($process.ExecutablePath -and $process.ExecutablePath.StartsWith("$_\\", [StringComparison]::OrdinalIgnoreCase)) -or
+      ($process.CommandLine -and $process.CommandLine.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0)
+    }).Count -gt 0
+  })
+}
+function Remove-Target([string]$Target) {
+  for ($attempt = 0; $attempt -lt 5 -and (Test-Path -LiteralPath $Target); $attempt++) {
+    Remove-Item -LiteralPath $Target -Recurse -Force
+    if (Test-Path -LiteralPath $Target) { Start-Sleep -Seconds 1 }
+  }
+}
+while (Get-Process -Id $ProcessId) { Start-Sleep -Milliseconds 300 }
+$deadline = (Get-Date).AddSeconds(15)
+while ((Holders).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+foreach ($process in Holders) { Stop-Process -Id $process.ProcessId -Force }
 Start-Sleep -Milliseconds 500
-Get-ChildItem Cert:\\CurrentUser\\Root, Cert:\\CurrentUser\\TrustedPublisher, Cert:\\CurrentUser\\My |
-  Where-Object { $_.Subject -match 'PieceMaker Local' } |
-  Remove-Item -ErrorAction SilentlyContinue
+foreach ($store in 'My', 'TrustedPublisher', 'Root') {
+  foreach ($certificate in @(Get-ChildItem "Cert:\\CurrentUser\\$store" | Where-Object { $_.Subject -match 'PieceMaker Local' })) {
+    try { Remove-Item -LiteralPath $certificate.PSPath -ErrorAction Stop } catch {}
+  }
+}
 ${removals}
 ${purges}
+Remove-Item -LiteralPath ${powershellQuote(WINDOWS_UNINSTALL_KEY)} -Recurse -Force
 `;
 }
