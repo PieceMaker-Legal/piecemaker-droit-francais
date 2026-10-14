@@ -45,3 +45,14 @@ test('Express keeps its CommonJS dependency closure physical', async (t) => {
   assert.ok(manifest.build.asarUnpack.includes('node_modules/express/node_modules/send/**'));
   assert.ok(manifest.build.asarUnpack.includes('node_modules/mime/**'));
 });
+
+test('MIME stays physical when installed as a direct dependency', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pm-mime-compact-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, 'node_modules', 'mime'), { recursive: true });
+  await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({ dependencies: { mime: '1.6.0' }, build: { files: [], nsis: {} } }));
+  await fs.writeFile(path.join(root, 'node_modules', 'mime', 'package.json'), JSON.stringify({ name: 'mime', version: '1.6.0' }));
+
+  const manifest = await configureCompactPackage(root);
+  assert.ok(manifest.build.asarUnpack.includes('node_modules/mime/**'));
+});
