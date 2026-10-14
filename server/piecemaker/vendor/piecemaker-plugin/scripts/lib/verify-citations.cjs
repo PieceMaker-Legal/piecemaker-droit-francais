@@ -261,7 +261,7 @@ async function verifyDocumentCitationAnnotation(annotation, getSourceText) {
 
   let source;
   try {
-    source = await getSourceText(docId);
+    source = await getSourceText(docId, a.kind);
   } catch {
     source = '';
   }

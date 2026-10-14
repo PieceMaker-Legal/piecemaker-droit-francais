@@ -6,6 +6,7 @@ type CitationSource = {
   sourceOrigin?: 'decision-cache';
   citation: {
     ref: number;
+    kind?: 'case' | 'article' | 'document' | 'code';
     decision_id?: string;
     article_id?: string;
     verified?: boolean;
