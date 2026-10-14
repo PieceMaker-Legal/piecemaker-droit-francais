@@ -22,6 +22,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
     permissions:
       contents: write
       id-token: write
@@ -56,11 +58,12 @@ jobs:
         id: release
         run: |
           # Stream subprocess output so publishing errors are visible immediately.
-          ARGS=(--ci --verbose --verbose "--increment=$RELEASE_INCREMENT")
+          ARGS=(--ci --verbose --verbose --github.draft "--increment=$RELEASE_INCREMENT")
           if [ -n "$RELEASE_NAME" ]; then
             ARGS+=("--github.releaseName=$RELEASE_NAME")
           fi
           npx release-it "${ARGS[@]}"
+          echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
         env:
           RELEASE_INCREMENT: ${{ inputs.increment }}
           RELEASE_NAME: ${{ inputs.release_name }}
@@ -98,3 +101,12 @@ jobs:
             echo "npm diagnostics: $(basename "$LOG")"
             grep -E '^[0-9]+ (error|verbose (stack|exit|code))([[:space:]]|$)' "$LOG" || true
           done
+
+  windows-desktop:
+    needs: release
+    uses: ./.github/workflows/piecemaker-windows-release.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit
+    permissions:
+      contents: write

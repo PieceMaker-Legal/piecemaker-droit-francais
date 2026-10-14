@@ -8,6 +8,8 @@ import { capture, run } from './shell.mjs';
 import { BUNDLE_DIR, embedBundledPlugins } from './plugins.mjs';
 import { ui } from './ui.mjs';
 import { configureWindowsUpdates } from './windows-update-config.mjs';
+import { pruneDesktopDependencies, configureCompactPackage } from './compact-package.mjs';
+import { packageRuntimeComponents } from './components-package.mjs';
 import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath, releaseRepo, releaseTag } from './paths.mjs';
 
 function npmTool(tool) {
@@ -55,7 +57,9 @@ async function findBuiltApp(sourceDir) {
 }
 
 async function verifyBuiltApp(builtApp) {
-  const appRoot = IS_MAC ? path.join(builtApp, 'Contents', 'Resources', 'app') : path.join(builtApp, 'resources', 'app');
+  const legacyRoot = IS_MAC ? path.join(builtApp, 'Contents', 'Resources', 'app') : path.join(builtApp, 'resources', 'app');
+  const compactRoot = `${legacyRoot}.asar.unpacked`;
+  const appRoot = await exists(path.join(compactRoot, 'package.json')) ? compactRoot : legacyRoot;
   const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
   const required = [
     'dist-server/server/index.js',
@@ -271,6 +275,17 @@ async function ensureCargo() {
 
 async function downloadReleaseAsset(asset, destination, label) {
   if (process.platform !== 'win32') return false;
+  if (process.env.PIECEMAKER_PREBUILT_ASSET_DIR) {
+    const input = path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, asset);
+    if (await exists(input)) {
+      const expected = (await fs.readFile(`${input}.sha256`, 'utf8')).trim().split(/\s+/)[0];
+      const actual = crypto.createHash('sha256').update(await fs.readFile(input)).digest('hex');
+      if (actual !== expected) throw new Error(`Artefact CI invalide : ${asset}`);
+      await fs.mkdir(path.dirname(destination), { recursive: true });
+      await fs.copyFile(input, destination);
+      return true;
+    }
+  }
   const base = `https://github.com/${releaseRepo}/releases/download/${releaseTag}/${asset}`;
   try {
     const [binary, checksum] = await Promise.all([fetch(base), fetch(`${base}.sha256`)]);
@@ -381,13 +396,30 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
   await patchStagedManifest(stageDir);
   if (process.platform === 'win32') {
     await npm(['install', '--save-exact', '--omit=dev', '--no-audit', '--no-fund', 'electron-updater@6.8.9'], { cwd: stageDir });
+    const removed = await pruneDesktopDependencies(sourceDir, stageDir, npm);
+    ui.detail(`Dépendances de construction retirées du paquet : ${removed.join(', ')}`);
   }
   await repairStagedTree(stageDir);
   const prebuiltSqlite = await downloadPrebuiltSqlite(stageDir);
+  if (process.platform === 'win32') {
+    await packageRuntimeComponents(stageDir, {
+      repository: releaseRepo,
+      releaseTag,
+      outputDir: path.join(sourceDir, 'release', 'desktop'),
+    });
+    const manifestPath = path.join(stageDir, 'package.json');
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+    for (const name of Object.keys(manifest.dependencies)) {
+      if (name.startsWith('@openai/') || name.startsWith('@anthropic-ai/')) delete manifest.dependencies[name];
+    }
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await npm(['prune', '--omit=dev', '--no-audit', '--no-fund'], { cwd: stageDir });
+    await configureCompactPackage(stageDir);
+  }
 
   ui.step("Construction de l'application Electron…");
   const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', ...(windowsInstaller ? ['--win', 'nsis', '--x64', '--publish', 'never'] : ['--dir'])];
-  if (prebuiltSqlite) builderArgs.push('-c.npmRebuild=false');
+  if (prebuiltSqlite && process.platform !== 'win32') builderArgs.push('-c.npmRebuild=false');
   await npx(builderArgs, {
     cwd: sourceDir,
     env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },

@@ -1,8 +1,11 @@
 name: PieceMaker Windows Release
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -18,7 +21,7 @@ jobs:
     name: Build Windows assets (win32-x64)
     runs-on: windows-latest
     env:
-      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      TAG: ${{ inputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -62,6 +65,8 @@ jobs:
           for asset in piecemaker-hudsucker-win32-x64.exe better-sqlite3-electron-win32-x64.node; do
             sha256sum "$asset" | cut -d' ' -f1 > "$asset.sha256"
           done
+          mkdir -p "$RUNNER_TEMP/native-assets"
+          cp * "$RUNNER_TEMP/native-assets/"
 
       - name: Attach to release
         shell: bash
@@ -81,13 +86,15 @@ jobs:
         run: |
           git clean -ffdxq
           export PIECEMAKER_SRC_DIR="$(cygpath -w "$GITHUB_WORKSPACE")" PIECEMAKER_TAG="$TAG"
+          export PIECEMAKER_PREBUILT_ASSET_DIR="$(cygpath -w "$RUNNER_TEMP/native-assets")"
           node desktop-bootstrap/lib/build-release.mjs "$(cygpath -w "$RUNNER_TEMP/app/piecemaker-desktop-win32-x64.tar.gz")" > "$RUNNER_TEMP/app.log" 2>&1 || {
             tail -c 20000 "$RUNNER_TEMP/app.log"
             echo "::error::$(tail -c 3500 "$RUNNER_TEMP/app.log" | tr '\r\n' '  ')"
             exit 1
           }
           tail -n 20 "$RUNNER_TEMP/app.log"
-          cp release/desktop/*.exe release/desktop/*.blockmap release/desktop/latest.yml "$RUNNER_TEMP/app/"
+          node desktop-bootstrap/lib/verify-packaged-runtime.mjs release/desktop/win-unpacked release/desktop
+          cp release/desktop/*.exe release/desktop/*.blockmap release/desktop/latest.yml release/desktop/piecemaker-runtime-components-*.tar.gz "$RUNNER_TEMP/app/"
           cd "$RUNNER_TEMP/app"
           sha256sum piecemaker-desktop-win32-x64.tar.gz | cut -d' ' -f1 > piecemaker-desktop-win32-x64.tar.gz.sha256
           ls -la
@@ -97,3 +104,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" "$RUNNER_TEMP"/app/* --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Publish the complete release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -f "$RUNNER_TEMP/app/latest.yml"
+          test -n "$(find "$RUNNER_TEMP/app" -name '*.blockmap' -print -quit)"
+          test -n "$(find "$RUNNER_TEMP/app" -name 'piecemaker-runtime-components-*.tar.gz' -print -quit)"
+          if [ "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = "true" ]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          fi
