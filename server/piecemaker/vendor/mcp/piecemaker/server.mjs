@@ -23,7 +23,7 @@ import { z } from 'zod';
 import fs from 'node:fs';
 import { runSql, runTabularReview } from '../../installer/lib/conversion-client.mjs';
 import { CASSATION_MATIERES, chronologieSql, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES, REVIEW_FOLDER, reviewFile, VOLETS } from './volets.mjs';
-import { describeOpenPanels } from './volets-ouverts.mjs';
+import { describeOpenPanels, openPanelsFile, waitForOpenPanel } from './volets-ouverts.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
@@ -121,7 +121,7 @@ const SQL_DESCRIPTION = [
  * Construit le serveur MCP et y enregistre les outils. Séparé de
  * `main()` pour rester testable sans jamais brancher de transport stdio.
  */
-export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularReview } = {}) {
+export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularReview, openPanelsPath = openPanelsFile(), openPanelsTimeoutMs = 8000 } = {}) {
   const server = new McpServer({ name: 'piecemaker', version: '1.0.0' });
   const run = (args, dossier) => runPiecemakerCommand(args, { cwd: dossier, execFn });
 
@@ -190,9 +190,16 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
     if (fichier) {
       const resolved = path.resolve(process.cwd(), fichier);
       if (!fs.existsSync(resolved)) return { isError: true, content: [{ type: 'text', text: `Fichier introuvable : ${fichier}` }] };
+      const opened = await waitForOpenPanel({ cwd: process.cwd(), tab: 'files', document: resolved }, openPanelsPath, openPanelsTimeoutMs);
+      if (!opened) return { isError: true, content: [{ type: 'text', text: 'Le fichier n’a pas été ouvert dans PieceMaker.' }] };
       return { content: [{ type: 'text', text: `Affiché dans le volet de lecture : ${fichier}` }] };
     }
     if (!volet) return { isError: true, content: [{ type: 'text', text: 'Indiquez un fichier ou un volet.' }] };
+    const target = volet === 'tabular-review'
+      ? { tab: 'plugin:piecemaker-tabular-review', review: review ? path.basename(review) : undefined }
+      : { tab: 'plugin:piecemaker-dossier', view: volet === 'chronologie' ? 'chronology' : 'general' };
+    const opened = await waitForOpenPanel({ cwd: process.cwd(), ...target }, openPanelsPath, openPanelsTimeoutMs);
+    if (!opened) return { isError: true, content: [{ type: 'text', text: `Le volet ${volet} n’a pas été ouvert dans PieceMaker.` }] };
     return { content: [{ type: 'text', text: `Volet affiché : ${volet}${review ? ` (${path.basename(review)})` : ''}` }] };
   });
 
@@ -275,8 +282,14 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
     const resolved = path.resolve(resolveDossier(dossier));
     try {
       if (action === 'ouvrir') {
+        const name = input.projet ? undefined : reviewFile(resolved, fichier);
+        const opened = await waitForOpenPanel({
+          cwd: resolved,
+          tab: 'plugin:piecemaker-tabular-review',
+          review: name,
+        }, openPanelsPath, openPanelsTimeoutMs);
+        if (!opened) return { isError: true, content: [{ type: 'text', text: 'Le volet Tabular Review n’a pas été ouvert dans PieceMaker.' }] };
         if (input.projet) return { content: [{ type: 'text', text: `Projet affiché dans le volet Tabular Review : ${input.projet}` }] };
-        const name = reviewFile(resolved, fichier);
         return { content: [{ type: 'text', text: `Analyse affichée dans le volet Tabular Review. Contenu : « ${REVIEW_FOLDER}/${name} ».` }] };
       }
       const result = await tabularFn({ ...input, action, project: resolved });

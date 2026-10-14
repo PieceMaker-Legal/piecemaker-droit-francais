@@ -16,6 +16,12 @@ async function connect(options) {
   return { client, close: () => Promise.all([client.close(), server.close()]) };
 }
 
+function publishOpenPanels(file, project, entry) {
+  setTimeout(() => {
+    fs.writeFileSync(file, JSON.stringify({ [project]: entry }));
+  }, 20);
+}
+
 test('les outils exposés sont afficher, chronologie, conversion, sql et tabular_review, sans renommage', async () => {
   const { client, close } = await connect({ sqlFn: async () => '' });
   const { tools } = await client.listTools();
@@ -96,17 +102,36 @@ test('chronologie refuse une modification incomplète ou une date mal formée sa
 
 test('tabular_review ouvre localement et confie le reste au serveur PieceMaker', async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-tr-'));
+  const openPanelsPath = path.join(dossier, 'volets-ouverts.json');
   fs.mkdirSync(path.join(dossier, 'Tabular Review'));
-  fs.writeFileSync(path.join(dossier, 'Tabular Review', '26-10-11 - Analyse Tabulaire Baux - Exemple.json'), '{}');
+  const reviewPath = path.join(dossier, 'Tabular Review', 'analyse-exemple.json');
+  fs.writeFileSync(reviewPath, '{}');
   const calls = [];
   const tabularFn = async (input) => {
     calls.push(input);
     if (input.action === 'lancer') throw new Error('À compléter avant de lancer : documents.');
     return input.action === 'documents' ? ['Pièces/bail.md', 'Pièces/avenant.md'] : { projet: 'p-1' };
   };
-  const { client, close } = await connect({ sqlFn: async () => '', tabularFn });
-  const opened = await client.callTool({ name: 'tabular_review', arguments: { action: 'ouvrir', dossier, fichier: 'Tabular Review/26-10-11 - Analyse Tabulaire Baux - Exemple.json' } });
+  const { client, close } = await connect({ sqlFn: async () => '', tabularFn, openPanelsPath, openPanelsTimeoutMs: 80 });
+  const notOpened = await client.callTool({ name: 'tabular_review', arguments: { action: 'ouvrir', dossier, fichier: 'Tabular Review/analyse-exemple.json' } });
+  assert.equal(notOpened.isError, true);
+  publishOpenPanels(openPanelsPath, dossier, {
+    panels: ['plugin:piecemaker-tabular-review'],
+    document: null,
+    focus: { 'plugin:piecemaker-tabular-review': { file: reviewPath } },
+    last: { kind: 'panel', tab: 'plugin:piecemaker-tabular-review' },
+  });
+  const opened = await client.callTool({ name: 'tabular_review', arguments: { action: 'ouvrir', dossier, fichier: 'Tabular Review/analyse-exemple.json' } });
   assert.equal(opened.isError, undefined);
+  fs.rmSync(openPanelsPath);
+  publishOpenPanels(openPanelsPath, dossier, {
+    panels: ['plugin:piecemaker-tabular-review'],
+    document: null,
+    focus: { 'plugin:piecemaker-tabular-review': { file: null } },
+    last: { kind: 'panel', tab: 'plugin:piecemaker-tabular-review' },
+  });
+  const openedProject = await client.callTool({ name: 'tabular_review', arguments: { action: 'ouvrir', dossier, projet: 'p-1' } });
+  assert.equal(openedProject.isError, undefined);
   const missing = await client.callTool({ name: 'tabular_review', arguments: { action: 'ouvrir', dossier, fichier: 'absente.json' } });
   assert.equal(missing.isError, true);
   const prepared = await client.callTool({ name: 'tabular_review', arguments: { action: 'preparer', dossier, mode: 'recherche', nom: 'Faute grave', recherche: { query: 'faute', sources: ['cassation'] } } });
@@ -122,16 +147,31 @@ test('tabular_review ouvre localement et confie le reste au serveur PieceMaker',
 });
 
 test('afficher vérifie le fichier et exige une cible', async () => {
-  const { client, close } = await connect({ sqlFn: async () => '' });
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-open-'));
+  const openPanelsPath = path.join(temporaryDirectory, 'volets-ouverts.json');
+  const { client, close } = await connect({ sqlFn: async () => '', openPanelsPath, openPanelsTimeoutMs: 80 });
+  publishOpenPanels(openPanelsPath, process.cwd(), {
+    panels: ['files'],
+    document: __filename,
+    focus: {},
+    last: { kind: 'document', path: __filename },
+  });
   const shown = await client.callTool({ name: 'afficher', arguments: { fichier: __filename } });
   assert.equal(shown.isError, undefined);
   const missing = await client.callTool({ name: 'afficher', arguments: { fichier: 'absent.docx' } });
   assert.equal(missing.isError, true);
+  publishOpenPanels(openPanelsPath, process.cwd(), {
+    panels: ['plugin:piecemaker-dossier'],
+    document: null,
+    focus: { 'plugin:piecemaker-dossier': { view: 'chronology' } },
+    last: { kind: 'panel', tab: 'plugin:piecemaker-dossier' },
+  });
   const panel = await client.callTool({ name: 'afficher', arguments: { volet: 'chronologie' } });
   assert.deepEqual(panel.content, [{ type: 'text', text: 'Volet affiché : chronologie' }]);
   const nothing = await client.callTool({ name: 'afficher', arguments: {} });
   assert.equal(nothing.isError, true);
   await close();
+  fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 });
 
 test('volets_ouverts décrit les volets du dossier de la session', async () => {
