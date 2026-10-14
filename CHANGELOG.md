@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.34](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.33...v2.0.34) (2026-10-14)
+
+### Bug Fixes
+
+* **desktop:** unblock Windows startup before Electron ready ([70024e2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/70024e2558c9efc1f1ab8556086243984e98e777))
+
 ## [2.0.33](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.32...v2.0.33) (2026-10-14)
 
 ### New Features
