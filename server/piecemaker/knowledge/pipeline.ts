@@ -81,8 +81,6 @@ const { markdownCounterpart } = require(path.join(
   'protection.cjs',
 )) as { markdownCounterpart(filePath: string, caseRoot: string): { path: string; exists: boolean } };
 
-const SUPPORTED_EXTENSIONS = new Set(['.pdf', '.docx', '.doc', '.odt', '.rtf', '.txt', '.md', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']);
-
 function relativeKey(projectPath: string, filePath: string): string {
   const relative = path.relative(projectPath, filePath).split(path.sep).join('/').normalize('NFC');
   return crypto.createHash('sha256').update(relative).digest('hex');
@@ -105,7 +103,7 @@ async function safeFiles(projectPath: string, requested: unknown): Promise<strin
     const resolved = path.resolve(root, raw);
     const real = fs.realpathSync(resolved);
     if (real !== root && !real.startsWith(`${root}${path.sep}`)) throw new Error('File outside project.');
-    if (!fs.statSync(real).isFile() || !SUPPORTED_EXTENSIONS.has(path.extname(real).toLowerCase())) throw new Error('Unsupported file.');
+    if (!fs.statSync(real).isFile()) throw new Error('Not a file.');
     return real;
   }))];
 }
@@ -211,7 +209,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const projectPath = fs.realpathSync(project.project_path);
       const explicitFiles = Array.isArray(requestedFiles) && requestedFiles.length > 0;
       const files = await safeFiles(projectPath, requestedFiles);
-      if (!files.length) throw new Error('No supported file to scan.');
+      if (!files.length) throw new Error('No file to scan.');
       const stateFile = path.join(projectPath, '.piecemaker', 'anonymization-state.json');
       const outputDirectory = path.join(projectPath, 'Fichiers convertis PieceMaker');
       fs.mkdirSync(path.dirname(stateFile), { recursive: true });
