@@ -4,6 +4,10 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { loadProductConfig } from '../shared/product-config.mjs';
+import { DesktopWindowManager } from '../electron/desktopWindow.js';
+import { installWindowsTitleBar } from './windowsTitleBar.js';
+
+installWindowsTitleBar({ app, DesktopWindowManager });
 
 process.env.ELECTRON_FORCE_OWN_SERVER = '1';
 
