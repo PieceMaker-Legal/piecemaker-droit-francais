@@ -559,18 +559,26 @@ aside.border-r.bg-muted\/30 button {
 }
 
 div[data-slot="prompt-input-footer"] {
-  flex-wrap: wrap;
   gap: 0.25rem;
 }
 
 div[data-slot="prompt-input-footer"] > div[data-slot="prompt-input-tools"] {
   flex: 1 1 0;
-  flex-wrap: wrap;
-  overflow-x: visible;
   scrollbar-width: none;
   padding-block: 0.375rem;
   margin-block: -0.375rem;
   padding-right: 0.375rem;
+}
+
+@media (max-width: 767px) {
+  div[data-slot="prompt-input-footer"] {
+    flex-wrap: nowrap;
+  }
+
+  div[data-slot="prompt-input-footer"] > div[data-slot="prompt-input-tools"] {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
 }
 
 div[data-slot="prompt-input-footer"] > div[data-slot="prompt-input-tools"]::-webkit-scrollbar {
