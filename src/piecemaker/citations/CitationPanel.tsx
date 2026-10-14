@@ -35,9 +35,9 @@ function highlightedPassage(source: string, start: number, end: number, ranges: 
   return parts;
 }
 
-function CitationText({ source, ranges, passage, blocks, quote }: { source: string; ranges: PassageRange[]; passage: RefObject<HTMLElement>; blocks: string[] | null; quote: string | undefined }) {
+function CitationText({ source, ranges, passage, blocks, quote, code }: { source: string; ranges: PassageRange[]; passage: RefObject<HTMLElement>; blocks: string[] | null; quote: string | undefined; code: boolean }) {
   if (!blocks) {
-    return <div className="whitespace-pre-wrap break-words p-4 font-serif text-sm leading-relaxed" aria-label="Texte source">{highlightedPassage(source, 0, source.length, ranges, passage)}</div>;
+    return <div className={`whitespace-pre-wrap break-words p-4 leading-relaxed ${code ? 'font-mono text-xs' : 'font-serif text-sm'}`} aria-label="Texte source">{highlightedPassage(source, 0, source.length, ranges, passage)}</div>;
   }
   const firstMarked = blocks.findIndex((block) => quoteRanges(block, quote).length > 0);
   return (
@@ -108,7 +108,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
       </header>
       {error && <p role="alert" className="p-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
       {!error && !source && <p role="status" className="p-4 text-sm text-muted-foreground">Chargement de la source…</p>}
-      {source && <ScrollArea className="min-h-0 flex-1">{source.source || blocks ? <CitationText source={source.source} ranges={ranges} passage={passage} blocks={blocks} quote={quote?.quote} /> : <div className="p-4 text-sm" aria-label="Texte source">Le texte de cette source n’a pas été lu dans ce tour ou est indisponible.</div>}</ScrollArea>}
+      {source && <ScrollArea className="min-h-0 flex-1">{source.source || blocks ? <CitationText source={source.source} ranges={ranges} passage={passage} blocks={blocks} quote={quote?.quote} code={source.citation.kind === 'code'} /> : <div className="p-4 text-sm" aria-label="Texte source">Le texte de cette source n’a pas été lu dans ce tour ou est indisponible.</div>}</ScrollArea>}
       {source && quote && <section aria-label="Extrait cité" className="border-t border-border px-4 py-3 text-sm"><span className="whitespace-nowrap">Citation 1/{source.citation.quotes.length}</span></section>}
     </aside>
   );
