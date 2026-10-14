@@ -3,6 +3,8 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.37](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.36...v2.0.37) (2026-10-14)
+
 ## [2.0.36](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.35...v2.0.36) (2026-10-14)
 
 ### Bug Fixes
