@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.36](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.35...v2.0.36) (2026-10-14)
+
+### Bug Fixes
+
+* **release:** verify registry visibility without stale responses ([fda1976](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fda1976715b5fe5c18b0ef0b3f63943df7a59df9))
+
 ## [2.0.35](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.34...v2.0.35) (2026-10-14)
 
 ### Performance
