@@ -165,3 +165,20 @@ __pycache__/
 # Test fixtures created beside the tests (cleaned up by the tests; kept out of the tree if a run is killed)
 server/**/tests/read-only-roots-fixture-*/
 server/**/tests/file-tree-outside-*/
+opencode.json
+CLAUDE.md
+.vibe/config.toml
+.vibe/agents/jurisprudence-scanner.toml
+.vibe/agents/analyste-pieces.toml
+.codex/config.toml
+.codex/agents/jurisprudence-scanner.toml
+.codex/agents/analyste-pieces.toml
+.agents/skills/Skill-PieceMaker
+.agents/skills/recherche-juridique/SKILL.md
+.agents/skills/docx-cli/SKILL.md
+.agents/skills/docx-cli/scripts/install.sh
+.agents/skills/docx-cli/scripts/bootstrap.sh
+.agents/skills/docx-cli/references/troubleshooting.md
+.agents/skills/docx-cli/references/commands.md
+.agents/skills/docx-cli/LICENSE
+.codex/config.toml
