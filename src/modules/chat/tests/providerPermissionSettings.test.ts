@@ -42,6 +42,7 @@ test('an explicit session mode wins over Réglages (CloudCLI #1417)', () => {
   for (const sessionSavedMode of MODES) {
     assert.equal(resolveComposerPermissionMode({
       sessionSavedMode,
+      newChatMode: 'plan',
       settingsMode: 'bypassPermissions',
       providerSavedMode: 'default',
       validModes: MODES,
@@ -50,9 +51,21 @@ test('an explicit session mode wins over Réglages (CloudCLI #1417)', () => {
   }
 });
 
+test('a pre-send pick wins over Réglages when the session has no override', () => {
+  assert.equal(resolveComposerPermissionMode({
+    sessionSavedMode: null,
+    newChatMode: 'acceptEdits',
+    settingsMode: 'bypassPermissions',
+    providerSavedMode: 'default',
+    validModes: MODES,
+    fallback: 'default',
+  }), 'acceptEdits');
+});
+
 test('Réglages wins over the last provider pick when the session has no override', () => {
   assert.equal(resolveComposerPermissionMode({
     sessionSavedMode: null,
+    newChatMode: null,
     settingsMode: 'acceptEdits',
     providerSavedMode: 'bypassPermissions',
     validModes: MODES,
@@ -63,6 +76,7 @@ test('Réglages wins over the last provider pick when the session has no overrid
 test('session bypass is kept when Réglages is unset', () => {
   assert.equal(resolveComposerPermissionMode({
     sessionSavedMode: 'bypassPermissions',
+    newChatMode: null,
     settingsMode: null,
     providerSavedMode: 'acceptEdits',
     validModes: MODES,

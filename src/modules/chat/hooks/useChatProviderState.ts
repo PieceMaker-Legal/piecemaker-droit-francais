@@ -9,7 +9,11 @@ import type { PendingPermissionRequest, PermissionMode,
   ProviderModelActions,
   ProviderModelOption,
   ProviderModelsDefinition } from '@/shared/types';
-import { permissionModeFromSettings, resolveComposerPermissionMode } from '@/modules/chat/hooks/providerPermissionSettings';
+import {
+  newChatPermissionModeKey,
+  permissionModeFromSettings,
+  resolveComposerPermissionMode,
+} from '@/modules/chat/hooks/providerPermissionSettings';
 import { DEFAULT_EFFORT_VALUE } from '@/shared/constants';
 import { readSelectedProvider, writeSelectedProvider } from '@/shared/selectedProvider';
 import { USER_PREFERENCES_CHANGED_EVENT } from '@/shared/userSettings';
@@ -417,10 +421,19 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       const sessionSavedMode = selectedSession?.id
         ? (localStorage.getItem(`permissionMode-${selectedSession.id}`) as PermissionMode | null)
         : null;
+      let newChatMode: PermissionMode | null = null;
+      if (selectedSession?.id) {
+        for (const targetProvider of PROVIDERS) {
+          sessionStorage.removeItem(newChatPermissionModeKey(targetProvider));
+        }
+      } else {
+        newChatMode = sessionStorage.getItem(newChatPermissionModeKey(provider)) as PermissionMode | null;
+      }
       const settingsMode = permissionModeFromSettings(provider);
       const providerSavedMode = localStorage.getItem(`permissionMode-last-${provider}`) as PermissionMode | null;
       setPermissionMode(resolveComposerPermissionMode({
         sessionSavedMode,
+        newChatMode,
         settingsMode,
         providerSavedMode,
         validModes,
@@ -452,14 +465,26 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   const selectPermissionMode = useCallback((nextMode: PermissionMode) => {
     setPermissionMode(nextMode);
 
-    // Persist per provider as well as per session: a brand-new chat has no
-    // session id yet, and the per-provider key keeps the choice sticky when
-    // the real id arrives (and for future sessions of this provider).
     localStorage.setItem(`permissionMode-last-${provider}`, nextMode);
     if (selectedSession?.id) {
       localStorage.setItem(`permissionMode-${selectedSession.id}`, nextMode);
+    } else {
+      sessionStorage.setItem(newChatPermissionModeKey(provider), nextMode);
     }
   }, [provider, selectedSession?.id]);
+
+  /**
+   * Binds a mode picked before a brand-new chat's first send to the session id
+   * the composer just allocated, so it outranks Réglages from then on.
+   */
+  const bindNewChatPermissionMode = useCallback((sessionId: string) => {
+    const pendingKey = newChatPermissionModeKey(provider);
+    const pendingNewChatMode = sessionStorage.getItem(pendingKey);
+    sessionStorage.removeItem(pendingKey);
+    if (pendingNewChatMode) {
+      localStorage.setItem(`permissionMode-${sessionId}`, pendingNewChatMode);
+    }
+  }, [provider]);
 
   const cyclePermissionMode = useCallback(() => {
     const modes = getPermissionModesForProvider(provider);
@@ -831,6 +856,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     setPendingPermissionRequests,
     availablePermissionModes,
     selectPermissionMode,
+    bindNewChatPermissionMode,
     cyclePermissionMode,
     providerModelCatalog,
     providerModelsLoading,

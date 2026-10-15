@@ -48,24 +48,23 @@ async function capturedSdkOptions(runOptions: Record<string, unknown>): Promise<
   return captured;
 }
 
-for (const mode of ['auto', 'acceptEdits', 'bypassPermissions', 'plan']) {
+for (const mode of ['default', 'auto', 'acceptEdits', 'bypassPermissions', 'plan']) {
   test(`Claude ${mode} passe permissionMode au SDK`, async () => {
     const options = await capturedSdkOptions({ permissionMode: mode });
     assert.equal(options.permissionMode, mode);
   });
 }
 
-test('Claude default omet permissionMode (repli SDK CloudCLI)', async () => {
-  const options = await capturedSdkOptions({ permissionMode: 'default' });
-  assert.equal(options.permissionMode, undefined);
-});
-
-test('Réglages Claude skipPermissions force bypassPermissions sauf en plan', async () => {
-  const bypass = await capturedSdkOptions({
+test('Réglages Claude skipPermissions ne remplacent pas un mode explicite', async () => {
+  const omitted = await capturedSdkOptions({
+    toolsSettings: { skipPermissions: true, allowedTools: [], disallowedTools: [] },
+  });
+  assert.equal(omitted.permissionMode, 'bypassPermissions');
+  const def = await capturedSdkOptions({
     permissionMode: 'default',
     toolsSettings: { skipPermissions: true, allowedTools: [], disallowedTools: [] },
   });
-  assert.equal(bypass.permissionMode, 'bypassPermissions');
+  assert.equal(def.permissionMode, 'default');
   const plan = await capturedSdkOptions({
     permissionMode: 'plan',
     toolsSettings: { skipPermissions: true, allowedTools: [], disallowedTools: [] },
@@ -75,5 +74,10 @@ test('Réglages Claude skipPermissions force bypassPermissions sauf en plan', as
     permissionMode: 'acceptEdits',
     toolsSettings: { skipPermissions: true, allowedTools: [], disallowedTools: [] },
   });
-  assert.equal(accept.permissionMode, 'bypassPermissions');
+  assert.equal(accept.permissionMode, 'acceptEdits');
+  const auto = await capturedSdkOptions({
+    permissionMode: 'auto',
+    toolsSettings: { skipPermissions: true, allowedTools: [], disallowedTools: [] },
+  });
+  assert.equal(auto.permissionMode, 'auto');
 });
