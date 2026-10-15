@@ -70,9 +70,10 @@ Deux points de branchement distincts :
   décision ou d'un article : le titre Légifrance tel quel. Titre d'une pièce :
   lu en base par `harness/piece-title.ts` (label `AAAA-MM-JJ_titre`, sinon
   nature + date, sinon nom du fichier) ; l'IA ne donne que `doc_id`. Tout
-  extrait non vérifié porte « 🔴 [à vérifier – introuvable] », suivi du passage
-  le plus proche de la source quand `nearestPassage` (`source-passages.ts`) en
-  trouve un — aide à la relecture, jamais réinjectée dans la citation.
+  extrait non vérifié porte « citation non retrouvée, à vérifier ». Quand
+  `nearestPassage` (`source-passages.ts`) trouve un passage proche, la citation
+  est validée : pas de pastille, l'extrait source remplace la paraphrase du
+  modèle dans le snapshot, la liste Sources, et le surlignage du document.
   La liste calculée en direct est conservée (`citation-sources/turns/`, clé :
   session + bloc `<CITATIONS>`) et reprise telle quelle par l'historique : le
   texte rechargé est identique au texte diffusé, le client les fusionne, et
