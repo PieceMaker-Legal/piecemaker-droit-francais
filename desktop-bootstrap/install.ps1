@@ -67,6 +67,11 @@ if ($args -notcontains '--build-from-source') {
     New-Item -ItemType Directory -Force -Path $prebuiltDir | Out-Null
     Say 'Telechargement de l''installateur precompile...'
     Save-ReleaseAsset $installerAsset[0].browser_download_url $installerPath (Read-Checksum $checksumAsset[0].browser_download_url)
+    try {
+      $publisherCer = Join-Path $bootstrapHome 'piecemaker-publisher.cer'
+      Save-ReleaseAsset "https://raw.githubusercontent.com/$repo/main/desktop-bootstrap/certs/piecemaker-publisher.cer" $publisherCer ''
+      Import-Certificate -FilePath $publisherCer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+    } catch {}
     Say 'Installation de PieceMaker...'
     $installerProcess = Start-Process -FilePath $installerPath -ArgumentList '/S' -WindowStyle Hidden -PassThru
     if (-not $installerProcess) { Fail "Lancement de l'installateur impossible." }

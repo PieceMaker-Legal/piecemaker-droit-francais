@@ -1,0 +1,5 @@
+*.p12
+*.pfx
+*.key
+csc-*.txt
+csc-*.b64

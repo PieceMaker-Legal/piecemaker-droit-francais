@@ -163,6 +163,7 @@ const TEST_FILE_PATTERN = /\.test\.[cm]?[jt]sx?(\.map)?$/;
 
 function isShippedFile(target) {
   const name = path.basename(target);
+  if (/\.(p12|pfx|key)$/i.test(name)) return false;
   return !EXCLUDED_RUNTIME_ASSETS.has(name) && !TEST_FILE_PATTERN.test(name);
 }
 
@@ -418,6 +419,7 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
   if (process.platform === 'win32') {
     await fs.cp(path.join(bootstrapRoot, 'lib'), path.join(stageDir, 'desktop-bootstrap', 'lib'), { recursive: true, filter: isShippedFile });
     await fs.cp(path.join(bootstrapRoot, 'composants'), path.join(stageDir, 'desktop-bootstrap', 'composants'), { recursive: true, filter: isShippedFile });
+    await fs.cp(path.join(bootstrapRoot, 'certs'), path.join(stageDir, 'desktop-bootstrap', 'certs'), { recursive: true, filter: isShippedFile });
     if (windowsInstaller) {
       await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));
       const manifestPath = path.join(stageDir, 'package.json');

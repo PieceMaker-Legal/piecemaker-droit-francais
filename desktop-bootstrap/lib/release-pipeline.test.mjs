@@ -19,6 +19,7 @@ test('the release stays draft until the Windows package, components and runtime 
   assert.match(windows, /cp release\/desktop\/.*piecemaker-runtime-components-/);
   assert.ok(windows.indexOf('name: Prebuild portable Python components') < windows.indexOf('name: Build desktop app'));
   assert.match(windows, /WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD are required/);
+  assert.match(windows, /piecemaker-publisher\.p12/);
   assert.match(windows, /Get-AuthenticodeSignature/);
   assert.match(windows, /test -f .*piecemaker-python-win32-x64\.tar\.gz\.sha256/);
   assert.match(windows, /test -n .*\.exe\.sha256/);

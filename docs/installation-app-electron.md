@@ -5,11 +5,11 @@ Installateur autonome de l'application Electron PieceMaker sur **macOS** et
 entièrement dans `desktop-bootstrap/`.
 
 Sur Windows, les nouvelles releases fournissent un **installateur NSIS précompilé**
-signé Authenticode éditeur, et son SHA-256. Le bootstrap lance NSIS et, pendant
-cette extraction, télécharge Python et les SDK IA. Le Node embarqué dans Electron
-prépare ensuite les certificats **locaux** (CA du proxy, TLS localhost) et
-installe les archives déjà présentes. La signature éditeur de `PieceMaker.exe`
-n'est pas remplacée. Aucun téléchargement des sources ou installation de
+signé Authenticode `CN=PieceMaker` (certificat auto-signé du projet, sans
+nom de personne), et son SHA-256. Le bootstrap importe le certificat public
+dans `TrustedPublisher`, lance NSIS et, pendant cette extraction, télécharge
+Python et les SDK IA. Le Node embarqué prépare ensuite la CA **locale** du
+proxy et le TLS localhost. L'utilisateur ne signe pas l'application. Aucun téléchargement des sources ou installation de
 Node/npm n'est nécessaire dans ce parcours. Les anciennes releases sans checksum
 d'installateur conservent le parcours archive. Une construction locale Windows
 exige `--build-from-source`. Détails et mesures :

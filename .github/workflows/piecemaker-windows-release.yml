@@ -102,16 +102,21 @@ jobs:
           }
           tail -n 5 "$RUNNER_TEMP/python.log"
 
-      - name: Require Windows publisher certificate
+      - name: Load Windows publisher certificate
         shell: bash
         env:
-          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_LINK_B64: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: |
-          if [ -z "$CSC_LINK" ] || [ -z "$CSC_KEY_PASSWORD" ]; then
+          if [ -z "$CSC_LINK_B64" ] || [ -z "$CSC_KEY_PASSWORD" ]; then
             echo "::error::WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD are required to Authenticode-sign the installer."
             exit 1
           fi
+          echo "$CSC_LINK_B64" | base64 -d > "$RUNNER_TEMP/piecemaker-publisher.p12"
+          echo "CSC_LINK=$RUNNER_TEMP/piecemaker-publisher.p12" >> "$GITHUB_ENV"
+          echo "WIN_CSC_LINK=$RUNNER_TEMP/piecemaker-publisher.p12" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "WIN_CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Build desktop app
         shell: bash
@@ -120,10 +125,6 @@ jobs:
           PIECEMAKER_NO_PROGRESS: "1"
           PIECEMAKER_HOME: ${{ runner.temp }}/piecemaker-home
           PIECEMAKER_REPO: ${{ github.repository }}
-          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
-          WIN_CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: |
           git clean -ffdxq
           if [ "$TAG" = "v2.0.38" ]; then
