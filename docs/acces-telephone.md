@@ -29,8 +29,8 @@ téléphone (Tailscale) ─HTTPS─▶ Tailscale Serve :443 (:8443 en dev)
 
 - `server/piecemaker/remote/tailscale.ts` — binaire résolu hors PATH (`/Applications/Tailscale.app/...`, `C:\Program Files\Tailscale\tailscale.exe`), `status --json`, `serve status --json`, `serve --bg --yes --https=<port> <cible>`, `serve --https=<port> off`.
 - `gateway.ts` — proxy HTTP + WebSocket en boucle locale. N'accepte que `Tailscale-User-Login` égal au compte de l'ordinateur ; ajoute `X-Forwarded-*` et `X-PieceMaker-Remote`, réécrit `Host` en `localhost:<port>` (Vite l'accepte).
-- `keep-awake.ts` — `caffeinate -i -w <pid>` (macOS) ou `SetThreadExecutionState` via PowerShell (Windows) tant que l'accès est publié ; s'arrête avec le serveur.
-- `keep-awake-router.ts` — `GET/POST /api/piecemaker/keep-awake` : interrupteur « Maintenir l’ordinateur actif » du menu ⋮ à droite des onglets (`WorkspaceMoreMenu.tsx`), instance distincte de celle de l’accès téléphone, non persistée (le temps de vie du serveur).
+- `keep-awake.ts` — dans l'app de bureau, `powerSaveBlocker` Electron (`prevent-app-suspension`) via `PIECEMAKER_DESKTOP_KEEP_AWAKE_URL` (`desktop-bootstrap/overlay/electron-piecemaker/keepAwake.js`) ; hors bureau, `caffeinate -i -w <pid>` (macOS) ou PowerShell `-EncodedCommand` + `PowerCreateRequest` (Windows). Même verrou pour l'accès téléphone et le menu des onglets ; s'arrête avec le serveur.
+- `keep-awake-router.ts` — `GET/POST /api/piecemaker/keep-awake` : interrupteur « Maintenir l’ordinateur actif » du menu ⋮ à droite des onglets (`WorkspaceMoreMenu.tsx`), non persisté (le temps de vie du serveur).
 - `remote-access.ts` — état dans `<données CloudCLI>/acces-telephone.json` (séparé dev / bureau), routes `GET|POST /api/piecemaker/remote`, republication au démarrage (la passerelle change de port).
 - `src/piecemaker/remote/RemoteAccessSettingsTab.tsx` — onglet Réglages › Téléphone.
 - Vue téléphone : tous les onglets, le surplus dans le menu ⋮ ; barre de chat sur une ligne, envoi fixé à droite (`src/piecemaker/theme.css`) ; scan et Analyse Tabulaire repèrent les dossiers via `data-piecemaker-project-path`, posé par `sidebar-anonymization/bootstrap.tsx`.
