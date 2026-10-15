@@ -85,6 +85,7 @@ jobs:
           PIECEMAKER_REPO: ${{ github.repository }}
           PIECEMAKER_TAG: ${{ env.TAG }}
         run: |
+          export PATH="$(cygpath -u "$(node -p process.env.SystemRoot)")/System32:$PATH"
           node desktop-bootstrap/composants/build-release.mjs "$(cygpath -w "$RUNNER_TEMP/native-assets")" > "$RUNNER_TEMP/python.log" 2>&1 || {
             tail -c 12000 "$RUNNER_TEMP/python.log"
             exit 1
