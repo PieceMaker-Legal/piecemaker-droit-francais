@@ -132,6 +132,31 @@ test('le runtime Codex autorise le réseau du bac à sable sans skill masqué', 
   assert.deepEqual(received, [{ config: { sandbox_workspace_write: { network_access: true } } }]);
 });
 
+test('Contourner les permissions Codex force danger-full-access', async (t) => {
+  const { workspace, store } = fixture(t);
+  const received: Array<Record<string, unknown>> = [];
+  const run = async (_provider: string, _command: string, options: Record<string, unknown>, _writer?: unknown) => { received.push(options); };
+  const runtime = { run, getRunner: (provider: string) => (command: string, options: Record<string, unknown>) => run(provider, command, options) };
+  installLibraryRuntime(runtime as never, { fetchHistory: async () => ({ messages: [] }) } as never, store);
+  await runtime.run('codex', 'Relire', { cwd: workspace, permissionMode: 'bypassPermissions' }, { send() {} } as never);
+  assert.equal(received[0].permissionMode, 'bypassPermissions');
+  assert.deepEqual(received[0].libraryCodexOptions, {
+    config: {
+      sandbox_workspace_write: { network_access: true },
+      sandbox_mode: 'danger-full-access',
+      approval_policy: 'never',
+    },
+  });
+  received.length = 0;
+  await runtime.run('codex', 'Relire', {
+    cwd: workspace,
+    permissionMode: 'acceptEdits',
+    toolsSettings: { permissionMode: 'bypassPermissions' },
+  }, { send() {} } as never);
+  assert.equal(received[0].permissionMode, 'bypassPermissions');
+  assert.equal((received[0].libraryCodexOptions as { config: { sandbox_mode: string } }).config.sandbox_mode, 'danger-full-access');
+});
+
 test('une erreur de bibliothèque ne bloque pas l’envoi du message', async (t) => {
   const { store, workspace } = fixture(t);
   t.mock.method(store, 'disabledEntries', () => { throw new Error('base indisponible'); });

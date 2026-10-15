@@ -139,6 +139,43 @@ test('skipPermissions follows the sending provider, not Claude', async () => {
   assert.equal(opencodeOptions.skipPermissions, false);
 });
 
+test.each<LLMProvider>(['codex', 'claude', 'mistral'])('%s chat.send keeps bypassPermissions', async (provider) => {
+  const sent: SentMessage[] = [];
+  const view = renderHook(() =>
+    useChatComposerState({
+      selectedProject: PROJECT,
+      selectedSession: SESSION,
+      currentSessionId: SESSION.id,
+      provider,
+      permissionMode: 'bypassPermissions',
+      cyclePermissionMode: () => undefined,
+      resolvePermissionModeForProvider: (_target, requested) => requested as PermissionMode,
+      currentProviderModel: 'test-model',
+      currentProviderEffort: 'medium',
+      isLoading: false,
+      canAbortSession: false,
+      tokenBudget: null,
+      sendMessage: (message) => {
+        sent.push(message as SentMessage);
+      },
+      scrollToBottom: () => undefined,
+      addMessage: () => undefined,
+      setIsUserScrolledUp: () => undefined,
+      setPendingPermissionRequests: () => undefined,
+    }),
+  );
+
+  await act(async () => {
+    view.result.current.setInput('hello');
+  });
+  await act(async () => {
+    await view.result.current.handleSubmit({ preventDefault: () => undefined } as never);
+  });
+
+  const send = sent.find((message) => message.type === 'chat.send');
+  assert.equal((send?.options as { permissionMode?: string } | undefined)?.permissionMode, 'bypassPermissions');
+});
+
 test('a provider with nothing stored sends empty tool settings, not Claude settings', async () => {
   writeUserPreference('claudePermissions', {
     allowedTools: ['claude-tool'],
