@@ -49,6 +49,20 @@ test('Mike : citation introuvable annotée false, sans suppression de la répons
   assert.match(await turn.finish(), /- \[1\] 🔴 \[piece, p\. 1\]\[1\] — \[à vérifier – introuvable\]$/m);
 });
 
+test('un Markdown du dossier cité comme code est lu hors du dépôt applicatif', async (t) => {
+  const { cwd, turn, store } = await fixture(t);
+  await mkdir(path.join(cwd, '.agents', 'skills', 'docx-cli'), { recursive: true });
+  const source = '`docx` is a command-line tool for reading, editing, redlining, and commenting on Microsoft Word `.docx` files.\n';
+  await writeFile(path.join(cwd, '.agents', 'skills', 'docx-cli', 'SKILL.md'), source);
+  turn.text(block([{ ref: 1, kind: 'code', doc_id: '.agents/skills/docx-cli/SKILL.md', quotes: [{ quote: '`docx` is a command-line tool for reading, editing, redlining, and commenting on Microsoft Word `.docx` files.' }] }]));
+  const suffix = await turn.finish();
+  assert.doesNotMatch(suffix, /🔴/);
+  assert.match(suffix, /SKILL\.md, l\. 1/);
+  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.ok(token);
+  assert.equal((await store.read(token))?.source, source);
+});
+
 test('un fichier de code du dépôt est vérifié depuis son original et affiche sa ligne', async (t) => {
   const codeRoot = await mkdtemp(path.join(os.tmpdir(), 'pm-code-citations-'));
   t.after(() => rm(codeRoot, { recursive: true, force: true }));

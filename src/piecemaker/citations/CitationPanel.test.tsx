@@ -69,7 +69,7 @@ describe('visionneuse de citations', () => {
     expect(screen.getByLabelText('Texte source').textContent).toBe(snapshot.source);
   });
 
-  it('un lien du chat ouvre la source dans un onglet de l’éditeur', () => {
+  it('un lien du chat ouvre la source dans un onglet de l’éditeur', async () => {
     const stop = startCitationPanel();
     const opened: unknown[] = [];
     const record = (event: Event) => opened.push((event as CustomEvent<{ path: unknown }>).detail.path);
@@ -80,7 +80,34 @@ describe('visionneuse de citations', () => {
     document.body.appendChild(link);
     try {
       expect(fireEvent.click(link)).toBe(false);
-      expect(opened).toEqual([citationPath(token, 'Citation [1]')]);
+      await waitFor(() => expect(opened).toEqual([citationPath(token, 'Citation [1]')]));
+    } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
+  });
+
+  it('une citation de fichier ouvre la visionneuse classique même si l’extrait est introuvable', async () => {
+    vi.mocked(fetchCitationSource).mockResolvedValue({
+      title: '.agents/skills/docx-cli/SKILL.md',
+      source: '',
+      citation: {
+        ref: 1,
+        kind: 'code',
+        doc_id: '.agents/skills/docx-cli/SKILL.md',
+        verified: false,
+        quotes: [{ quote: 'extrait', verification: { verified: false } }],
+      },
+      ranges: [],
+    });
+    const stop = startCitationPanel();
+    const opened: unknown[] = [];
+    const record = (event: Event) => opened.push((event as CustomEvent<{ path: unknown }>).detail.path);
+    window.addEventListener(OPEN_IN_EDITOR_EVENT, record);
+    const link = document.createElement('a');
+    link.href = `#piecemaker-citation=${token}`;
+    link.textContent = '[1]';
+    document.body.appendChild(link);
+    try {
+      fireEvent.click(link);
+      await waitFor(() => expect(opened).toEqual(['.agents/skills/docx-cli/SKILL.md']));
     } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
   });
 

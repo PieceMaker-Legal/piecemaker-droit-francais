@@ -20,7 +20,7 @@ const { structuredMarkdownCounterpart } = require(path.join(vendor, 'case-folder
 const OPEN = '<CITATIONS>';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_CHARACTERS = 32 * 1024 * 1024;
-const CODE_EXTENSIONS = new Set(['.cjs', '.css', '.go', '.html', '.js', '.json', '.jsonc', '.jsx', '.mjs', '.py', '.rs', '.sh', '.sql', '.toml', '.ts', '.tsx', '.xml', '.yaml', '.yml']);
+const CODE_EXTENSIONS = new Set(['.cjs', '.css', '.go', '.html', '.js', '.json', '.jsonc', '.jsx', '.md', '.mjs', '.py', '.rs', '.sh', '.sql', '.toml', '.ts', '.tsx', '.xml', '.yaml', '.yml']);
 const CODE_EXTENSIONLESS_PATHS = new Set(['.husky/commit-msg', '.husky/pre-commit', '.husky/pre-push', '.oxlintrc']);
 
 type Citation = Parameters<ReturnType<typeof createCitationStore>['save']>[0]['citation'] & {
@@ -91,7 +91,7 @@ export function createCitationTurn(options: {
   const decisionTitles = new Map<string, string>();
   const documents = new Map<string, Promise<string>>();
   const codeFiles = new Map<string, Promise<string>>();
-  const codeRoot = path.resolve(options.codeRoot ?? root);
+  const codeRoot = path.resolve(options.codeRoot ?? options.cwd);
   let sourceCharacters = 0;
   let fullText = '';
   let visibleTail = '';
