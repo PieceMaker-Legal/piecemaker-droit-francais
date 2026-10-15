@@ -6,70 +6,87 @@
 <title>Installation de PieceMaker</title>
 <style>
   :root {
-    --ink: #1f2937;
-    --muted: #6b7280;
-    --line: #e5e7eb;
+    --ink: #1a2332;
+    --muted: #5b6573;
+    --line: #e6e9ee;
     --surface: #ffffff;
-    --page: #f5f6f8;
-    --accent: #2563eb;
-    --accent-soft: #eff4ff;
+    --page: #eef1f6;
+    --accent: #1d4ed8;
+    --accent-soft: #e8f0ff;
     --success: #15803d;
     --success-soft: #ecfdf3;
     --danger: #b91c1c;
     --danger-soft: #fef2f2;
-    --mark: #f59e0b;
+    --mark: #d97706;
+    --rail: #f7f8fb;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--page); color: var(--ink); }
-  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px 24px 28px; }
-  header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
-  header img { width: 48px; height: 48px; }
-  header h1 { font-size: 19px; margin: 0; }
-  header p { margin: 0; color: var(--muted); font-size: 12.5px; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; }
-  .step-title { font-size: 15px; font-weight: 600; margin: 0; }
-  .detail { color: var(--muted); font-size: 12.5px; min-height: 19px; margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 12px 0 8px; }
+  html, body { margin: 0; height: 100%; background: var(--page); color: var(--ink); }
+  body { font: 14px/1.45 "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px 12px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  header img { width: 40px; height: 40px; }
+  header h1 { font-size: 17px; margin: 0; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+  #progress { padding: 12px 20px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .step-title { font-size: 14px; font-weight: 600; margin: 0; }
+  .detail { color: var(--muted); font-size: 12px; min-height: 16px; margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 8px 0 6px; }
   .bar > div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .4s ease; }
-  .note { color: var(--muted); font-size: 12.5px; margin: 0; }
-  .launch { margin: 14px 0 0; }
+  .note { color: var(--muted); font-size: 12px; margin: 0; }
+  .launch { margin: 10px 0 0; }
   #progress.done .bar > div { background: var(--success); }
   #progress.failed .bar > div { background: var(--danger); }
   #progress.failed .step-title { color: var(--danger); }
+  main { flex: 1; min-height: 0; padding: 16px 20px 20px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  .status-card { padding: 16px 18px; }
   h2 { font-size: 16px; margin: 0 0 4px; }
-  .intro { color: var(--muted); margin: 0 0 14px; }
-  .stepper { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0 0 16px; }
-  .stepper li { flex: 1; font-size: 12px; color: var(--muted); border-top: 3px solid var(--line); padding-top: 6px; cursor: pointer; }
-  .stepper li.current { color: var(--accent); border-color: var(--accent); font-weight: 600; }
-  .stepper li.past { color: var(--ink); border-color: #93b4f5; }
-  .panel h3 { font-size: 15px; margin: 0 0 8px; }
-  .panel ol, .panel ul { margin: 8px 0 12px; padding-left: 20px; }
-  .panel li { margin: 4px 0; }
+  .guide { display: grid; grid-template-columns: 220px 1fr; min-height: 100%; overflow: hidden; }
+  .rail { background: var(--rail); border-right: 1px solid var(--line); padding: 18px 14px; }
+  .rail h2 { font-size: 13px; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+  .rail p { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; }
+  .stepper { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .stepper li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 13px; }
+  .stepper li .num { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 11px; font-weight: 700; background: #fff; }
+  .stepper li.current { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); }
+  .stepper li.current .num { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .stepper li.past { color: var(--ink); }
+  .stepper li.past .num { background: var(--success-soft); color: var(--success); border-color: #bbf7d0; }
+  .pane { padding: 18px 20px 16px; overflow: auto; min-height: 0; }
+  .pane h3 { font-size: 18px; margin: 0 0 6px; }
+  .why { margin: 0 0 14px; color: var(--muted); }
+  .panel ol { margin: 0 0 14px; padding-left: 20px; }
+  .panel li { margin: 7px 0; }
   .panel b { font-weight: 600; }
+  .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; }
   .link-button, button { font: inherit; border-radius: 8px; cursor: pointer; }
-  .link-button { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; border: 0; padding: 8px 14px; font-weight: 600; }
-  .link-button:hover { filter: brightness(1.08); }
-  .secondary { background: var(--surface); color: var(--ink); border: 1px solid var(--line); padding: 7px 12px; }
+  .link-button { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; border: 0; padding: 10px 16px; font-weight: 600; }
+  .link-button:hover { filter: brightness(1.06); }
+  .link-button:disabled { opacity: .6; cursor: default; }
+  .secondary { background: var(--surface); color: var(--ink); border: 1px solid var(--line); padding: 9px 13px; }
   .ghost { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 4px; }
-  .hint { background: var(--accent-soft); border-radius: 8px; padding: 9px 12px; margin: 10px 0; font-size: 13px; }
-  .shot { position: relative; margin: 12px 0 4px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+  .hint { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; margin: 0 0 14px; font-size: 13px; }
+  .warn { background: #fff7ed; color: #9a3412; }
+  details.example, details.rules { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; background: #fff; }
+  details summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+  .shot { position: relative; margin: 10px 0 4px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
   .shot img { display: block; width: 100%; height: auto; }
   .shot.narrow { max-width: 380px; }
   .shot.medium { max-width: 560px; }
-  .mark { position: absolute; border: 3px solid var(--mark); border-radius: 8px; box-shadow: 0 0 0 4px rgba(245, 158, 11, .25); }
+  .mark { position: absolute; border: 3px solid var(--mark); border-radius: 8px; box-shadow: 0 0 0 4px rgba(217, 119, 6, .22); }
   .mark span { position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%); white-space: nowrap; background: var(--mark); color: #fff; font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 6px; }
   .mark span.inside { left: auto; right: 8px; }
-  figcaption { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
-  .nav { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+  figcaption { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+  .nav { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
   .nav .right { display: flex; gap: 8px; }
-  .mock { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 12px 0 4px; font-size: 12.5px; background: #fff; }
+  .mock { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 8px 0; font-size: 12.5px; background: #fff; }
   .mock h4 { margin: 0 0 8px; font-size: 13px; }
   .mock table { width: 100%; border-collapse: collapse; }
   .mock th, .mock td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
   .mock th { color: var(--muted); font-weight: 500; }
   .mock .hl { outline: 3px solid var(--mark); outline-offset: -2px; border-radius: 4px; }
   .mock a { color: #1d4ed8; }
-  form { margin-top: 14px; display: grid; gap: 10px; }
+  form { margin-top: 8px; display: grid; gap: 10px; }
   label { font-weight: 600; font-size: 13px; }
   .field { display: flex; gap: 8px; margin-top: 4px; }
   input { flex: 1; font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 8px 10px; border: 1px solid #cbd2dc; border-radius: 8px; }
@@ -82,6 +99,11 @@
   .success p { margin: 2px 0 0; color: var(--muted); }
   code { font-size: 12px; background: #f1f3f5; padding: 1px 5px; border-radius: 4px; }
   [hidden] { display: none !important; }
+  @media (max-width: 760px) {
+    .guide { grid-template-columns: 1fr; }
+    .rail { border-right: 0; border-bottom: 1px solid var(--line); }
+    .stepper { grid-template-columns: 1fr 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -93,7 +115,7 @@
   </div>
 </header>
 
-<section id="progress" class="card" aria-live="polite">
+<section id="progress" aria-live="polite">
   <p class="step-title" id="step">Démarrage…</p>
   <p class="detail" id="detail"></p>
   <div class="bar"><div id="fill"></div></div>
@@ -101,7 +123,8 @@
   <p class="launch" id="launch-row" hidden><button class="link-button" type="button" id="launch">Ouvrir PieceMaker</button></p>
 </section>
 
-<section id="piste-done" class="card" hidden>
+<main>
+<section id="piste-done" class="card status-card" hidden>
   <div class="success">
     <div class="check">✓</div>
     <div>
@@ -112,122 +135,166 @@
   </div>
 </section>
 
-<section id="piste-skipped" class="card" hidden>
+<section id="piste-skipped" class="card status-card" hidden>
   <h2>Accès Légifrance et Judilibre à configurer plus tard</h2>
-  <p class="intro">Sans identifiants PISTE, PieceMaker ne peut pas citer les textes ni la jurisprudence officiels. Relancez l'installation pour retrouver ce guide.</p>
+  <p class="why">Sans identifiants PISTE, PieceMaker ne peut pas citer les textes ni la jurisprudence officiels. Vous pourrez relancer l'installation pour retrouver ce guide.</p>
   <button class="secondary" type="button" id="resume">Reprendre le guide</button>
 </section>
 
-<section id="piste" class="card" hidden>
-  <h2>Accès Légifrance et Judilibre</h2>
-  <p class="intro">PieceMaker interroge directement les bases officielles Légifrance (textes) et Judilibre (jurisprudence de la Cour de cassation et des juridictions). L'État les ouvre gratuitement par le portail <b>PISTE</b>, avec des identifiants personnels. Comptez une dizaine de minutes ; chaque bouton ouvre la bonne page dans votre navigateur.</p>
-
-  <ol class="stepper" id="stepper">
-    <li data-goto="1">1. Compte PISTE</li>
-    <li data-goto="2">2. Conditions d'utilisation</li>
-    <li data-goto="3">3. Application</li>
-    <li data-goto="4">4. Identifiants</li>
-  </ol>
-
-  <div class="panel" data-step="1">
-    <h3>Créez votre compte PISTE</h3>
-    <p><button class="link-button" type="button" data-open="registration">Ouvrir la page d'inscription ↗</button></p>
-    <ol>
-      <li>Renseignez votre <b>nom</b> et votre <b>adresse e-mail</b> : elle deviendra votre identifiant PISTE.</li>
-      <li>Choisissez un <b>mot de passe d'au moins 12 caractères</b> avec une majuscule, une minuscule, un chiffre et un caractère spécial parmi <code>! @ # ^ + ( ) , ; . ? : { } | _ § ~</code>.</li>
-      <li>Laissez <b>« Code de l'organisation »</b> vide : vous serez rattaché à l'organisation « Universelle », qui donne accès à Légifrance et à JUDILIBRE.</li>
-      <li>Cochez <b>« J'accepte les termes des CGU »</b>, passez la vérification de sécurité, puis cliquez sur <b>« S'inscrire »</b>.</li>
-      <li>Ouvrez l'e-mail envoyé par PISTE et cliquez sur le lien d'activation, puis connectez-vous.</li>
+<section id="piste" class="card guide" hidden>
+  <aside class="rail">
+    <h2>Accès Légifrance</h2>
+    <p>4 étapes, environ 10 minutes. Une seule chose à faire à la fois.</p>
+    <ol class="stepper" id="stepper">
+      <li data-goto="1"><span class="num">1</span>Compte</li>
+      <li data-goto="2"><span class="num">2</span>Conditions</li>
+      <li data-goto="3"><span class="num">3</span>Application</li>
+      <li data-goto="4"><span class="num">4</span>Identifiants</li>
     </ol>
-    <figure class="shot narrow">
-      <img src="piste/inscription.png" alt="Bas du formulaire d'inscription PISTE">
-      <div class="mark" style="left:10.6%;top:5%;width:78.4%;height:7.2%"><span class="inside">Laisser vide</span></div>
-      <div class="mark" style="left:9.6%;top:34%;width:6.2%;height:4.8%"><span>À cocher</span></div>
-    </figure>
-    <figcaption>Bas du formulaire d'inscription sur piste.gouv.fr.</figcaption>
-    <p class="hint">Vous avez déjà un compte PISTE ? <button class="ghost" type="button" data-open="login">Connectez-vous</button> et passez à l'étape 2.</p>
-  </div>
+  </aside>
 
-  <div class="panel" data-step="2" hidden>
-    <h3>Acceptez les conditions d'utilisation de Légifrance et JUDILIBRE</h3>
-    <p>Sans cette acceptation, PISTE grise les cases de ces deux API à l'étape suivante.</p>
-    <p><button class="link-button" type="button" data-open="cgu">Ouvrir « Consentement CGU API » ↗</button></p>
-    <ol>
-      <li>Dans le champ <b>« Recherche »</b>, tapez <code>Légifrance</code> et cochez la ligne dont l'environnement est <b>PROD</b>.</li>
-      <li>Recommencez avec <code>JUDILIBRE</code> et cochez sa ligne <b>PROD</b>.</li>
-      <li>Cliquez sur <b>« Valider mes choix CGU »</b>.</li>
-    </ol>
-    <figure class="shot medium"><img src="piste/cgu.png" alt="Page Consentement CGU avec Légifrance et JUDILIBRE cochés"></figure>
-    <figcaption>Les deux lignes PROD cochées. Une case grisée et déjà cochée signifie que les CGU sont déjà acceptées.</figcaption>
-  </div>
-
-  <div class="panel" data-step="3" hidden>
-    <h3>Créez l'application de production « PieceMaker »</h3>
-    <p><button class="link-button" type="button" data-open="applications">Ouvrir « Applications » ↗</button></p>
-    <ol>
-      <li>Cliquez sur <b>« Créer une application »</b>, laissez l'environnement <b>PRODUCTION</b>, puis cliquez sur <b>« Créer l'application »</b>.</li>
-      <li>Remplissez au minimum : <b>Nom de l'application</b> <code>PieceMaker</code>, votre <b>e-mail</b>, <b>Information sur la structure</b> (le nom de votre cabinet) et <b>Responsable d'application</b> (votre nom).</li>
-      <li>Dans <b>« Sélectionner les API »</b>, cochez la colonne <b>« Souscrite »</b> pour <b>JUDILIBRE</b> et pour <b>Légifrance</b>. Si une case est grisée, revenez à l'étape 2.</li>
-      <li>Enregistrez l'application.</li>
-    </ol>
-    <p class="hint">Ne prenez pas l'application « APP_SANDBOX_… » créée automatiquement : c'est un bac à sable, ses identifiants ne fonctionnent pas avec les vraies bases.</p>
-    <figure class="shot"><img src="piste/apps.png" alt="Liste des applications PISTE avec le bouton Créer une application"></figure>
-    <figure class="shot medium"><img src="piste/environnement.png" alt="Choix de l'environnement PRODUCTION"></figure>
-    <figure class="shot medium">
-      <img src="piste/api.png" alt="Sélection des API JUDILIBRE et Légifrance">
-      <div class="mark" style="left:61.9%;top:16.9%;width:6.5%;height:14.6%"></div>
-      <div class="mark" style="left:61.9%;top:37.2%;width:6.5%;height:14.6%"><span>Souscrite</span></div>
-    </figure>
-    <figcaption>Captures de piste.gouv.fr ; les adresses affichées sont fictives.</figcaption>
-  </div>
-
-  <div class="panel" data-step="4" hidden>
-    <h3>Copiez vos identifiants dans PieceMaker</h3>
-    <ol>
-      <li>Dans <button class="ghost" type="button" data-open="applications">Applications</button>, cliquez sur le nom de votre application <b>PieceMaker</b>.</li>
-      <li>Dans la section <b>« Identifiants Oauth »</b>, copiez le <b>Client ID</b> et collez-le ci-dessous.</li>
-      <li>Cliquez sur <b>« Consulter le secret »</b>, copiez le <b>Client Secret</b> et collez-le ci-dessous.</li>
-    </ol>
-    <div class="mock" aria-hidden="true">
-      <h4>Identifiants Oauth</h4>
-      <table>
-        <tr><th>Client ID</th><th>Type</th><th>Créé</th><th>Secret key</th></tr>
-        <tr><td><span class="hl">3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c</span></td><td>Confidentiel</td><td>10 oct. 2026</td><td><a class="hl">Consulter le secret</a></td></tr>
-      </table>
+  <div class="pane">
+    <div class="panel" data-step="1">
+      <h3>Créez votre compte PISTE</h3>
+      <p class="why">L'État ouvre Légifrance et Judilibre par le portail PISTE, gratuitement, avec un compte personnel.</p>
+      <div class="cta">
+        <button class="link-button" type="button" data-open="registration">Ouvrir l'inscription PISTE</button>
+        <button class="ghost" type="button" data-open="login" id="existing-account">J'ai déjà un compte</button>
+      </div>
+      <p class="hint">Le site de l'État s'ouvre dans votre navigateur. Revenez ensuite à cette fenêtre.</p>
+      <p>Sur la page d'inscription :</p>
+      <ol>
+        <li>Indiquez votre <b>nom</b> et votre <b>e-mail</b> : cet e-mail sera votre identifiant.</li>
+        <li>Choisissez un mot de passe (voir les règles ci-dessous).</li>
+        <li>Laissez <b>Code de l'organisation</b> vide : vous serez rattaché à « Universelle », qui donne accès à Légifrance et JUDILIBRE.</li>
+        <li>Cochez <b>J'accepte les termes des CGU</b>, passez la vérification, puis cliquez sur <b>S'inscrire</b>.</li>
+        <li>Ouvrez l'e-mail PISTE, activez le compte, puis connectez-vous.</li>
+      </ol>
+      <details class="rules">
+        <summary>Règles du mot de passe</summary>
+        <p>Au moins 12 caractères, avec une majuscule, une minuscule, un chiffre et un caractère parmi <code>! @ # ^ + ( ) , ; . ? : { } | _ § ~</code>.</p>
+      </details>
+      <details class="example">
+        <summary>Voir un exemple de l'écran</summary>
+        <figure class="shot narrow">
+          <img src="piste/inscription.png" alt="Bas du formulaire d'inscription PISTE">
+          <div class="mark" style="left:10.6%;top:5%;width:78.4%;height:7.2%"><span class="inside">Laisser vide</span></div>
+          <div class="mark" style="left:9.6%;top:34%;width:6.2%;height:4.8%"><span>À cocher</span></div>
+        </figure>
+        <figcaption>Bas du formulaire d'inscription sur piste.gouv.fr.</figcaption>
+      </details>
     </div>
-    <figcaption>Illustration aux valeurs fictives de la fiche d'application PISTE.</figcaption>
-    <form id="credentials" autocomplete="off">
-      <div>
-        <label for="client-id">Client ID</label>
-        <div class="field">
-          <input id="client-id" spellcheck="false" placeholder="ex. 3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c">
-          <button class="secondary" type="button" data-paste="client-id">Coller</button>
-        </div>
-      </div>
-      <div>
-        <label for="client-secret">Client Secret</label>
-        <div class="field">
-          <input id="client-secret" type="password" spellcheck="false">
-          <button class="secondary" type="button" data-paste="client-secret">Coller</button>
-        </div>
-      </div>
-      <div class="message" id="message" hidden></div>
-      <div><button class="link-button" type="submit" id="submit">Vérifier et enregistrer</button></div>
-    </form>
-  </div>
 
-  <div class="nav">
-    <button class="ghost" type="button" id="skip">Je le ferai plus tard</button>
-    <div class="right">
-      <button class="secondary" type="button" id="previous">Précédent</button>
-      <button class="link-button" type="button" id="next">Étape suivante</button>
+    <div class="panel" data-step="2" hidden>
+      <h3>Acceptez les conditions d'utilisation</h3>
+      <p class="why">Sans cette étape, PISTE grise Légifrance et JUDILIBRE quand vous créerez l'application.</p>
+      <div class="cta">
+        <button class="link-button" type="button" data-open="cgu">Ouvrir les conditions d'API</button>
+      </div>
+      <p class="hint">Le site de l'État s'ouvre dans votre navigateur. Revenez ensuite à cette fenêtre.</p>
+      <p>Sur la page « Consentement CGU API » :</p>
+      <ol>
+        <li>Dans <b>Recherche</b>, tapez <code>Légifrance</code> et cochez la ligne <b>PROD</b>.</li>
+        <li>Recommencez avec <code>JUDILIBRE</code> et cochez sa ligne <b>PROD</b>.</li>
+        <li>Cliquez sur <b>Valider mes choix CGU</b>.</li>
+      </ol>
+      <details class="example">
+        <summary>Voir un exemple de l'écran</summary>
+        <figure class="shot medium"><img src="piste/cgu.png" alt="Page Consentement CGU avec Légifrance et JUDILIBRE cochés"></figure>
+        <figcaption>Les deux lignes PROD cochées. Une case grisée déjà cochée signifie que les conditions sont déjà acceptées.</figcaption>
+      </details>
+    </div>
+
+    <div class="panel" data-step="3" hidden>
+      <h3>Créez l'application « PieceMaker »</h3>
+      <p class="why">Cette application de production fournit les identifiants que PieceMaker utilisera.</p>
+      <div class="cta">
+        <button class="link-button" type="button" data-open="applications">Ouvrir les applications PISTE</button>
+      </div>
+      <p class="hint">Le site de l'État s'ouvre dans votre navigateur. Revenez ensuite à cette fenêtre.</p>
+      <p>Sur la page Applications :</p>
+      <ol>
+        <li>Cliquez sur <b>Créer une application</b>, laissez l'environnement <b>PRODUCTION</b>, puis validez.</li>
+        <li>Renseignez au minimum : nom <code>PieceMaker</code>, votre e-mail, le nom du cabinet, et votre nom comme responsable.</li>
+        <li>Dans <b>Sélectionner les API</b>, cochez la colonne <b>Souscrite</b> pour <b>JUDILIBRE</b> et <b>Légifrance</b>. Si une case est grisée, revenez à l'étape Conditions.</li>
+        <li>Enregistrez l'application.</li>
+      </ol>
+      <p class="hint warn">Ignorez l'application <b>APP_SANDBOX_…</b> créée automatiquement : ses identifiants ne fonctionnent pas avec les vraies bases.</p>
+      <details class="example">
+        <summary>Voir des exemples d'écran</summary>
+        <figure class="shot"><img src="piste/apps.png" alt="Liste des applications PISTE avec le bouton Créer une application"></figure>
+        <figure class="shot medium"><img src="piste/environnement.png" alt="Choix de l'environnement PRODUCTION"></figure>
+        <figure class="shot medium">
+          <img src="piste/api.png" alt="Sélection des API JUDILIBRE et Légifrance">
+          <div class="mark" style="left:61.9%;top:16.9%;width:6.5%;height:14.6%"></div>
+          <div class="mark" style="left:61.9%;top:37.2%;width:6.5%;height:14.6%"><span>Souscrite</span></div>
+        </figure>
+        <figcaption>Captures de piste.gouv.fr ; les adresses affichées sont fictives.</figcaption>
+      </details>
+    </div>
+
+    <div class="panel" data-step="4" hidden>
+      <h3>Collez vos identifiants ici</h3>
+      <p class="why">PieceMaker les vérifie auprès de PISTE, Légifrance et Judilibre, puis les enregistre sur ce poste.</p>
+      <div class="cta">
+        <button class="link-button" type="button" data-open="applications">Ouvrir l'application PieceMaker</button>
+      </div>
+      <p class="hint">Le site de l'État s'ouvre dans votre navigateur. Revenez ensuite coller les valeurs ici.</p>
+      <ol>
+        <li>Cliquez sur le nom de l'application <b>PieceMaker</b>.</li>
+        <li>Dans <b>Identifiants Oauth</b>, copiez le <b>Client ID</b> puis collez-le ci-dessous.</li>
+        <li>Cliquez sur <b>Consulter le secret</b>, copiez le <b>Client Secret</b> puis collez-le ci-dessous.</li>
+      </ol>
+      <details class="example">
+        <summary>Où se trouvent les identifiants</summary>
+        <div class="mock" aria-hidden="true">
+          <h4>Identifiants Oauth</h4>
+          <table>
+            <tr><th>Client ID</th><th>Type</th><th>Créé</th><th>Secret key</th></tr>
+            <tr><td><span class="hl">3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c</span></td><td>Confidentiel</td><td>10 oct. 2026</td><td><a class="hl">Consulter le secret</a></td></tr>
+          </table>
+        </div>
+        <figcaption>Illustration aux valeurs fictives de la fiche d'application PISTE.</figcaption>
+      </details>
+      <form id="credentials" autocomplete="off">
+        <div>
+          <label for="client-id">Client ID</label>
+          <div class="field">
+            <input id="client-id" spellcheck="false" placeholder="ex. 3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c">
+            <button class="secondary" type="button" data-paste="client-id">Coller</button>
+          </div>
+        </div>
+        <div>
+          <label for="client-secret">Client Secret</label>
+          <div class="field">
+            <input id="client-secret" type="password" spellcheck="false">
+            <button class="secondary" type="button" data-paste="client-secret">Coller</button>
+          </div>
+        </div>
+        <div class="message" id="message" hidden></div>
+        <div><button class="link-button" type="submit" id="submit">Vérifier et enregistrer</button></div>
+      </form>
+    </div>
+
+    <div class="nav">
+      <button class="ghost" type="button" id="skip">Je le ferai plus tard</button>
+      <div class="right">
+        <button class="secondary" type="button" id="previous">Précédent</button>
+        <button class="link-button" type="button" id="next">J'ai créé mon compte</button>
+      </div>
     </div>
   </div>
 </section>
+</main>
 
 <script>
   const elements = Object.fromEntries([...document.querySelectorAll('[id]')].map((node) => [node.id, node]));
   const LAST_STEP = 4;
+  const NEXT_LABELS = {
+    1: "J'ai créé mon compte",
+    2: "J'ai accepté les conditions",
+    3: "J'ai créé l'application",
+  };
   let currentStep = 1;
   let replacing = false;
   let lastState = 'running';
@@ -252,6 +319,7 @@
     });
     elements.previous.hidden = currentStep === 1;
     elements.next.hidden = currentStep === LAST_STEP;
+    elements.next.textContent = NEXT_LABELS[currentStep] || 'Étape suivante';
     if (scroll) elements.piste.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
@@ -266,10 +334,10 @@
     const pistePending = state.piste.offered && !state.piste.configured && !state.piste.skipped;
     if (state.state === 'running') {
       elements.note.textContent = pistePending
-        ? 'La construction prend plusieurs minutes. Profitez-en pour préparer l’accès à Légifrance ci-dessous.'
-        : 'La construction prend plusieurs minutes.';
+        ? 'L’installation continue. Vous pouvez configurer Légifrance en même temps.'
+        : 'L’installation est en cours.';
     } else if (state.state === 'done' && pistePending) {
-      elements.note.textContent = 'PieceMaker est prêt. Terminez la configuration Légifrance ci-dessous, ou cliquez sur « Je le ferai plus tard ».';
+      elements.note.textContent = 'PieceMaker est prêt. Terminez les 4 étapes ci-dessous, ou choisissez « Je le ferai plus tard ».';
     } else if (state.state === 'done' && state.launch.launched) {
       elements.note.textContent = 'PieceMaker démarre. Cette fenêtre va se fermer.';
     } else if (state.state === 'done' && state.launch.offered) {
@@ -311,7 +379,10 @@
   }
 
   document.querySelectorAll('[data-open]').forEach((button) => {
-    button.addEventListener('click', () => post('open', { link: button.dataset.open }));
+    button.addEventListener('click', () => {
+      post('open', { link: button.dataset.open });
+      if (button.id === 'existing-account') showStep(2);
+    });
   });
   document.querySelectorAll('[data-goto]').forEach((item) => {
     item.addEventListener('click', () => showStep(Number(item.dataset.goto)));
