@@ -7,10 +7,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review'];
-const VOLETS = ['dossier', 'chronologie', 'tabular-review'];
+const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
-const BOOLEAN_FLAGS = new Set(['force']);
+const BOOLEAN_FLAGS = new Set(['force', 'fermer']);
+const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
+const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 
 export const HELP = `Usage: pm <outil> [options]
 
@@ -18,6 +20,7 @@ export const HELP = `Usage: pm <outil> [options]
   sql [--dossier PATH] [--requete SQL]
   afficher [--fichier PATH] [--volet ${VOLETS.join('|')}] [--review FILE]
       sans cible : liste les volets ouverts
+      --fermer : ferme le fichier ou le volet
   chronologie lister [--dossier NOM]
   chronologie modifier --piece ID [--date AAAA-MM-JJ] [--libelle TEXT] [--dossier NOM]
   tabular_review ${REVIEW_ACTIONS.join('|')}
@@ -173,7 +176,10 @@ async function defaultDeps(cwd) {
     exists: (file) => fs.existsSync(file),
     openPanel: (body) => client.requestPanelOpen(body),
     panelCompleted: (args) => client.panelRequestCompleted(args),
+    closePanel: (body) => client.requestPanelClose(body),
+    panelCloseCompleted: (args) => client.panelCloseCompleted(args),
     waitPanel: (target, timeoutMs) => panels.waitForOpenPanel(target, panelsPath, timeoutMs),
+    waitClosed: (target, timeoutMs) => panels.waitForClosedPanel(target, panelsPath, timeoutMs),
     openPanelsTimeoutMs: 8000,
   };
 }
@@ -205,6 +211,74 @@ async function confirmPanel(api, request, target) {
   return { opened: api.waitPanel ? await api.waitPanel(target, 0) : false, alreadyOpen: false };
 }
 
+async function confirmClose(api, request, target) {
+  const timeoutMs = api.openPanelsTimeoutMs ?? 8000;
+  if (api.waitClosed && await api.waitClosed(target, 0)) return { closed: true, alreadyClosed: true };
+  let id;
+  try {
+    if (api.closePanel) ({ id } = await api.closePanel(request));
+  } catch {
+    const closed = api.waitClosed ? await api.waitClosed(target, timeoutMs) : false;
+    return { closed, alreadyClosed: false };
+  }
+  if (!api.waitClosed && !api.panelCloseCompleted) return { closed: true, alreadyClosed: false };
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    let completed = false;
+    try {
+      if (id && api.panelCloseCompleted) completed = await api.panelCloseCompleted({ project: request.project, id });
+    } catch {}
+    if (await api.waitClosed(target, 0)) return { closed: true, alreadyClosed: false };
+    if (completed) {
+      await api.waitClosed(target, Math.min(500, deadline - Date.now()));
+      return { closed: true, alreadyClosed: false };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return { closed: api.waitClosed ? await api.waitClosed(target, 0) : false, alreadyClosed: false };
+}
+
+function voletTarget(cwd, volet, review) {
+  if (volet === 'tampon') return { cwd, tab: 'plugin:piecemaker-tampon' };
+  if (volet === 'tabular-review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
+  return { cwd, tab: 'plugin:piecemaker-dossier', view: volet === 'chronologie' ? 'chronology' : 'general' };
+}
+
+function panelNoticeLabel(target) {
+  if (target.tab === 'files') return `Fichiers (${path.basename(target.document || '')})`;
+  if (target.tab === 'plugin:piecemaker-tampon') return 'Bordereau';
+  if (target.tab === 'plugin:piecemaker-tabular-review') {
+    if (target.draft) return `Analyse tabulaire (projet ${target.draft})`;
+    if (target.review) return `Analyse tabulaire (${target.review})`;
+    return 'Analyse tabulaire';
+  }
+  return target.view === 'chronology' ? 'Dossier (chronologie)' : 'Dossier (vue générale)';
+}
+
+function sqlPanelTarget(query, cwd) {
+  if (!NODE_WRITE.test(query)) return null;
+  return {
+    cwd,
+    tab: 'plugin:piecemaker-dossier',
+    view: DOCUMENT_COLUMNS.test(query) ? 'chronology' : 'general',
+  };
+}
+
+function asText(result) {
+  return typeof result === 'string' ? result : JSON.stringify(result);
+}
+
+function withNotice(result, notice) {
+  return `${asText(result).replace(/\n$/, '')}\n${notice}`;
+}
+
+async function followPanel(api, request, target) {
+  const label = panelNoticeLabel(target);
+  const { opened, alreadyOpen } = await confirmPanel(api, request, target);
+  if (!opened) return 'Le volet n’a pas suivi (PieceMaker n’a pas confirmé l’ouverture).';
+  return alreadyOpen ? `Déjà visible : ${label}.` : `Visible : ${label}.`;
+}
+
 export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   const { flags, positional } = parseArgv(argv);
   if (flags.help && !positional.length) return HELP;
@@ -231,18 +305,30 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   if (tool === 'sql') {
     const requete = flags.requete && flags.requete !== true ? String(flags.requete) : positional.slice(1).join(' ').trim();
     if (!requete) usage('Indiquez une requête SQL (--requete ou arguments).');
-    return api.sqlFn({ requete, cwd: resolved });
+    const result = await api.sqlFn({ requete, cwd: resolved });
+    const target = sqlPanelTarget(requete, resolved);
+    if (!target) return result;
+    const request = { project: resolved, tab: target.tab, view: target.view };
+    return withNotice(result, await followPanel(api, request, target));
   }
 
   if (tool === 'afficher') {
+    const closing = flags.fermer === true;
     if ((!flags.fichier || flags.fichier === true) && (!flags.volet || flags.volet === true)) {
+      if (closing) usage('Indiquez --fichier ou --volet avec --fermer.');
       return api.describePanels ? api.describePanels(resolved) : 'Aucun volet ouvert à côté du chat.';
     }
     if (flags.fichier && flags.fichier !== true) {
       const file = path.resolve(cwd, String(flags.fichier));
-      if (!api.exists(file)) fail(`Fichier introuvable : ${flags.fichier}`);
+      if (!closing && !api.exists(file)) fail(`Fichier introuvable : ${flags.fichier}`);
       const target = { cwd: resolved, tab: 'files', document: file };
-      const { opened, alreadyOpen } = await confirmPanel(api, { project: resolved, tab: 'files', document: file }, target);
+      const request = { project: resolved, tab: 'files', document: file };
+      if (closing) {
+        const { closed, alreadyClosed } = await confirmClose(api, request, target);
+        if (!closed) fail('La fermeture du fichier n’a pas été confirmée dans PieceMaker.');
+        return alreadyClosed ? `Déjà fermé : ${flags.fichier}` : `Fermé : ${flags.fichier}`;
+      }
+      const { opened, alreadyOpen } = await confirmPanel(api, request, target);
       if (!opened) fail('L’ouverture du fichier n’a pas été confirmée dans PieceMaker.');
       return alreadyOpen
         ? `Déjà affiché dans le volet de lecture : ${flags.fichier}`
@@ -250,11 +336,15 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     }
     if (!VOLETS.includes(flags.volet)) usage(`Volet inconnu : ${flags.volet}`);
     const review = flags.review && flags.review !== true ? path.basename(String(flags.review)) : '';
-    const target = flags.volet === 'tabular-review'
-      ? { cwd: resolved, tab: 'plugin:piecemaker-tabular-review', review: review || undefined }
-      : { cwd: resolved, tab: 'plugin:piecemaker-dossier', view: flags.volet === 'chronologie' ? 'chronology' : 'general' };
+    const target = voletTarget(resolved, flags.volet, review);
     const request = { project: resolved, ...target };
     delete request.cwd;
+    if (closing) {
+      const { closed, alreadyClosed } = await confirmClose(api, request, target);
+      if (!closed) fail(`La fermeture du volet ${flags.volet} n’a pas été confirmée dans PieceMaker.`);
+      const label = `${flags.volet}${review ? ` (${review})` : ''}`;
+      return alreadyClosed ? `Déjà fermé : ${label}` : `Fermé : ${label}`;
+    }
     const { opened, alreadyOpen } = await confirmPanel(api, request, target);
     if (!opened) fail(`L’ouverture du volet ${flags.volet} n’a pas été confirmée dans PieceMaker.`);
     const label = `${flags.volet}${review ? ` (${review})` : ''}`;
@@ -264,7 +354,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   if (tool === 'chronologie') {
     const action = positional[1];
     if (action !== 'lister' && action !== 'modifier') usage('chronologie attend lister ou modifier.');
-    return api.sqlFn({
+    const result = await api.sqlFn({
       requete: api.chronologieSql({
         action,
         dossier: flags.dossier && flags.dossier !== true ? flags.dossier : undefined,
@@ -274,6 +364,8 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       }),
       cwd,
     });
+    const target = { cwd: resolved, tab: 'plugin:piecemaker-dossier', view: 'chronology' };
+    return withNotice(result, await followPanel(api, { project: resolved, tab: target.tab, view: target.view }, target));
   }
 
   if (tool === 'tabular_review') {
@@ -285,10 +377,9 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       const name = draft ? undefined : api.reviewFile(project, flags.fichier);
       const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review: name, draft: draft || undefined };
       const request = { project, tab: 'plugin:piecemaker-tabular-review', review: name, draft: draft || undefined };
-      const { opened } = await confirmPanel(api, request, target);
-      if (!opened) fail('Le volet Tabular Review n’a pas été ouvert dans PieceMaker.');
-      if (draft) return `Projet affiché dans le volet Tabular Review : ${draft}`;
-      return `Analyse affichée dans le volet Tabular Review. Contenu : « Tabular Review/${name} ».`;
+      const notice = await followPanel(api, request, target);
+      if (draft) return notice;
+      return withNotice(`Analyse affichée dans le volet Tabular Review. Contenu : « Tabular Review/${name} ».`, notice);
     }
     const documents = flags.documents && flags.documents !== true
       ? String(flags.documents).split(',').map((item) => item.trim()).filter(Boolean)
@@ -308,7 +399,13 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       ia: flags.ia !== true ? flags.ia : undefined,
       modele_ia: flags.modele_ia !== true ? flags.modele_ia : undefined,
     });
-    return Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result);
+    const text = Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result);
+    if (action === 'lister' || action === 'preparer' || action === 'lancer') {
+      const draft = result && typeof result === 'object' && result.projet ? String(result.projet) : '';
+      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', draft: draft || undefined };
+      return withNotice(text, await followPanel(api, { project, tab: target.tab, draft: target.draft }, target));
+    }
+    return text;
   }
 
   usage(`Outil inconnu : ${tool}`);

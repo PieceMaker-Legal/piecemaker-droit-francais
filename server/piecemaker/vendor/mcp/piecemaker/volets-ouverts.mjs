@@ -47,6 +47,21 @@ export async function waitForOpenPanel({ cwd, tab, document, view, review }, fil
   }
 }
 
+export async function waitForClosedPanel({ cwd, tab, document }, file = openPanelsFile(), timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const found = readEntry(file, cwd);
+    const entry = found?.entry;
+    const panels = Array.isArray(entry?.panels) ? entry.panels : [];
+    const tabGone = !tab || !panels.includes(tab);
+    const documentGone = !document || entry?.document !== document;
+    if (document ? documentGone : tabGone) return true;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return false;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(100, remaining)));
+  }
+}
+
 function panelLabel(tab, focus, project) {
   const label = LABELS[tab] ?? (tab.startsWith('plugin:') ? tab.slice('plugin:'.length) : tab);
   const details = [focus?.view && (VIEWS[focus.view] ?? focus.view), focus?.file && `fichier : ${relative(focus.file, project)}`].filter(Boolean);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { autoPanelTarget, draftFromResult } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
+import { autoPanelTarget, draftFromResult, panelShowDecision } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 
 describe('autoPanelTarget', () => {
   it('ouvre le .docx traité par docx-cli', () => {
@@ -26,6 +26,13 @@ describe('autoPanelTarget', () => {
   it('ne prend pas pour un plan un fichier ordinaire', () => {
     expect(autoPanelTarget('Write', { file_path: 'Dossier/plans/plan.md', content: '# Plan' })).toBeNull();
     expect(autoPanelTarget('write_file', { path: '/Users/jean/.vibe/plans/notes.txt', content: 'x' })).toBeNull();
+  });
+
+  it('ouvre le .docx écrit ou édité par l’agent', () => {
+    expect(autoPanelTarget('Write', { file_path: 'Actes/Assignation.docx', content: 'x' })).toEqual({ kind: 'file', path: 'Actes/Assignation.docx' });
+    expect(autoPanelTarget('write_file', JSON.stringify({ path: 'Actes/conclusions.docx', content: 'x' }))).toEqual({ kind: 'file', path: 'Actes/conclusions.docx' });
+    expect(autoPanelTarget('Edit', { file_path: 'Actes/Assignation.docx', old_string: 'a', new_string: 'b' })).toEqual({ kind: 'file', path: 'Actes/Assignation.docx' });
+    expect(autoPanelTarget('Write', { file_path: 'notes.md', content: 'x' })).toBeNull();
   });
 
   it('ouvre la chronologie quand le SQL modifie les pièces', () => {
@@ -56,6 +63,8 @@ describe('autoPanelTarget', () => {
     expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'chronologie' })).toEqual({ kind: 'dossier', view: 'chronology' });
     expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'dossier' })).toEqual({ kind: 'dossier', view: 'general' });
     expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'tabular-review', review: 'revue.json' })).toEqual({ kind: 'tabular-review', review: 'revue.json' });
+    expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'tampon' })).toEqual({ kind: 'tampon' });
+    expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'chronologie', fermer: true })).toBeNull();
     expect(autoPanelTarget('mcp__piecemaker__afficher', {})).toBeNull();
   });
 
@@ -68,10 +77,36 @@ describe('autoPanelTarget', () => {
     expect(autoPanelTarget('Bash', { command: "scripts/pm sql --requete \"UPDATE piecemaker_nodes SET doc_date='2024-03-01' WHERE id='doc:1'\"" })).toEqual({ kind: 'dossier', view: 'chronology' });
     expect(autoPanelTarget('Bash', { command: 'node .agents/skills/Skill-PieceMaker/scripts/pm.mjs afficher --fichier Pièces/contrat.pdf' })).toEqual({ kind: 'file', path: 'Pièces/contrat.pdf' });
     expect(autoPanelTarget('Bash', { command: 'scripts/pm conversion --force' })).toBeNull();
+    expect(autoPanelTarget('Bash', { command: 'scripts/pm afficher --volet tampon' })).toEqual({ kind: 'tampon' });
+    expect(autoPanelTarget('Bash', { command: 'scripts/pm afficher --fermer --volet chronologie' })).toBeNull();
   });
 
   it('ignore les autres outils', () => {
     expect(autoPanelTarget('Read', { file_path: 'acte.docx' })).toBeNull();
     expect(autoPanelTarget('mcp__piecemaker__conversion', {})).toBeNull();
+  });
+});
+
+describe('panelShowDecision', () => {
+  const empty = { panels: [], document: null, focus: {} };
+
+  it('n’écrase pas une analyse tabulaire plus précise', () => {
+    const open = {
+      panels: ['plugin:piecemaker-tabular-review'],
+      document: null,
+      focus: { 'plugin:piecemaker-tabular-review': { file: '/dossier/Tabular Review/analyse.json' } },
+    };
+    expect(panelShowDecision({ kind: 'tabular-review', review: null }, open)).toBe('skip');
+    expect(panelShowDecision({ kind: 'tabular-review', review: 'analyse.json' }, open)).toBe('skip');
+    expect(panelShowDecision({ kind: 'tabular-review', review: 'autre.json' }, open)).toBe('apply');
+    expect(panelShowDecision({ kind: 'tabular-review', review: null, draft: 'p-1' }, open)).toBe('apply');
+    expect(panelShowDecision({ kind: 'tabular-review', review: null }, empty)).toBe('apply');
+  });
+
+  it('laisse un fichier déjà visible et ouvre un autre', () => {
+    const open = { panels: ['files'], document: '/dossier/Actes/lettre.docx', focus: {} };
+    expect(panelShowDecision({ kind: 'file', path: '/dossier/Actes/lettre.docx' }, open)).toBe('skip');
+    expect(panelShowDecision({ kind: 'file', path: 'Actes/lettre.docx' }, open)).toBe('skip');
+    expect(panelShowDecision({ kind: 'file', path: '/dossier/Actes/autre.docx' }, open)).toBe('apply');
   });
 });

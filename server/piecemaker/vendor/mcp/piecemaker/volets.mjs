@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const VOLETS = ['dossier', 'chronologie', 'tabular-review'];
+export const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
 export const REVIEW_FOLDER = 'Tabular Review';
 export const COLUMN_FORMATS = ['text', 'list', 'date', 'amount', 'yes_no', 'tags'];
 export const RESEARCH_SOURCES = ['cassation', 'appel', 'conseil_etat', 'caa', 'premiere_instance'];

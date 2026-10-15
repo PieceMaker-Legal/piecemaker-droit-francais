@@ -41,11 +41,15 @@ test('sql et chronologie passent par sqlFn', async () => {
       return 'ok';
     },
     chronologieSql: (input) => `SQL:${input.action}:${input.piece}:${input.date}`,
+    waitPanel: async () => true,
   };
   assert.equal(await run(['sql', '--requete', 'SELECT label FROM piecemaker_nodes'], { deps }), 'ok');
   assert.deepEqual(calls[0], { requete: 'SELECT label FROM piecemaker_nodes', cwd: process.cwd() });
-  await run(['chronologie', 'modifier', '--piece', 'doc:1', '--date', '2024-03-01'], { deps });
-  assert.equal(calls[1].requete, 'SQL:modifier:doc:1:2024-03-01');
+  const written = await run(['sql', '--requete', "UPDATE piecemaker_nodes SET label='x' WHERE id='p:1'"], { deps });
+  assert.match(written, /^ok\nDéjà visible : Dossier \(vue générale\)\.\n?$/);
+  const chrono = await run(['chronologie', 'modifier', '--piece', 'doc:1', '--date', '2024-03-01'], { deps });
+  assert.equal(calls[2].requete, 'SQL:modifier:doc:1:2024-03-01');
+  assert.match(chrono, /visible : Dossier \(chronologie\)\./i);
 });
 
 test('afficher vérifie le fichier, liste les volets et ouvre une cible', async () => {
@@ -68,6 +72,28 @@ test('afficher vérifie le fichier, liste les volets et ouvre une cible', async 
   await assert.rejects(() => run(['afficher', '--fichier', 'absent.docx'], { deps }), /introuvable/);
   assert.equal(await run(['afficher', '--volet', 'chronologie'], { deps }), 'Volet affiché : chronologie');
   assert.equal(opened[1].view, 'chronology');
+  assert.equal(await run(['afficher', '--volet', 'tampon'], { deps }), 'Volet affiché : tampon');
+  assert.equal(opened[2].tab, 'plugin:piecemaker-tampon');
+});
+
+test('afficher --fermer ferme le volet sans le rouvrir', async () => {
+  const closed = [];
+  const open = new Set(['plugin:piecemaker-dossier']);
+  const deps = {
+    waitPanel: async () => false,
+    waitClosed: async (target) => !open.has(target.tab),
+    closePanel: async (body) => {
+      closed.push(body);
+      open.delete(body.tab);
+      return { id: 'c1' };
+    },
+    openPanel: async () => {
+      throw new Error('ne doit pas ouvrir');
+    },
+  };
+  assert.equal(await run(['afficher', '--fermer', '--volet', 'chronologie'], { deps }), 'Fermé : chronologie');
+  assert.equal(closed[0].tab, 'plugin:piecemaker-dossier');
+  assert.equal(await run(['afficher', '--fermer', '--volet', 'chronologie'], { deps }), 'Déjà fermé : chronologie');
 });
 
 test('tabular_review ouvre localement et transmet le reste', async () => {
@@ -95,12 +121,14 @@ test('tabular_review ouvre localement et transmet le reste', async () => {
   };
   const shown = await run(['tabular_review', 'ouvrir', '--fichier', 'analyse-exemple.json', '--dossier', dossier], { deps });
   assert.match(shown, /analyse-exemple\.json/);
+  assert.match(shown, /Visible : Analyse tabulaire \(analyse-exemple\.json\)\./);
   await assert.rejects(() => run(['tabular_review', 'ouvrir', '--fichier', 'absente.json', '--dossier', dossier], { deps }), /introuvable/);
   const prepared = await run([
     'tabular_review', 'preparer', '--dossier', dossier, '--mode', 'recherche', '--nom', 'Faute grave',
     '--recherche', '{"query":"faute","sources":["cassation"]}',
   ], { deps });
-  assert.equal(prepared, '{"projet":"p-1"}');
+  assert.match(prepared, /"projet":"p-1"/);
+  assert.match(prepared, /visible : Analyse tabulaire/i);
   assert.deepEqual(calls[0].recherche, { query: 'faute', sources: ['cassation'] });
   assert.equal(await run(['tabular_review', 'documents', '--dossier', dossier], { deps }), 'Pièces/bail.md');
   fs.rmSync(dossier, { recursive: true, force: true });
@@ -110,7 +138,8 @@ test('SKILL.md documente toute la surface d’interface', () => {
   const skill = fs.readFileSync(path.join(HERE, '..', 'SKILL.md'), 'utf8');
   const required = [
     'conversion', 'sql', 'afficher', 'chronologie', 'tabular_review',
-    '--fichier', '--volet', '--review', '--force', '--requete', '--dossier',
+    '--fichier', '--volet', '--review', '--fermer', '--force', '--requete', '--dossier',
+    'Visible',
     'lister', 'modifier', '--piece', '--date', '--libelle',
     'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer',
     '--projet', '--mode', '--nom', '--modele', '--description', '--questions',

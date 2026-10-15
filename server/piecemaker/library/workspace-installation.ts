@@ -176,7 +176,8 @@ export function prepareWorkspaceInstallation(
         throw error;
       }
       const target = path.join(workspace, shape!.root!);
-      if (!existing.isSymbolicLink() || path.resolve(path.dirname(absolute), fs.readlinkSync(absolute)) !== target) {
+      const matches = existing.isSymbolicLink() && path.resolve(path.dirname(absolute), fs.readlinkSync(absolute)) === target;
+      if (!matches && !Object.keys(owned).length) {
         throw new Error(`Composant personnel préservé : ${absolute}`);
       }
       existingLinks.set(link, target);
@@ -189,8 +190,8 @@ export function prepareWorkspaceInstallation(
     else fs.symlinkSync(path.relative(path.dirname(absolute), target), absolute, 'dir');
   };
   const clear = (links: Iterable<string>, files: Iterable<string>, root: string | null | undefined) => {
-    for (const relative of links) fs.rmSync(path.join(workspace, relative), { force: true });
-    for (const relative of files) fs.rmSync(path.join(workspace, relative), { force: true });
+    for (const relative of links) fs.rmSync(path.join(workspace, relative), { recursive: true, force: true });
+    for (const relative of files) fs.rmSync(path.join(workspace, relative), { recursive: true, force: true });
     if (root) fs.rmSync(path.join(workspace, root), { recursive: true, force: true });
   };
 

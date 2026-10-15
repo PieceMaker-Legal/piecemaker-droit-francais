@@ -1,4 +1,5 @@
 export const OPEN_IN_EDITOR_EVENT = 'piecemaker:open-in-editor';
+export const CLOSE_IN_EDITOR_EVENT = 'piecemaker:close-in-editor';
 
 const SCHEME = 'piecemaker://';
 
@@ -49,4 +50,8 @@ export function parseEditorPanel(path: string): EditorPanel | null {
 
 export function openInEditor(path: string) {
   window.dispatchEvent(new CustomEvent(OPEN_IN_EDITOR_EVENT, { detail: { path } }));
+}
+
+export function closeInEditor(path: string) {
+  window.dispatchEvent(new CustomEvent(CLOSE_IN_EDITOR_EVENT, { detail: { path } }));
 }

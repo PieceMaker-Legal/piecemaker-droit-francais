@@ -1,6 +1,6 @@
 ---
 name: piecemaker
-description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, volets (lecture, dossier, analyse tabulaire), tabular review. Use when the user asks about case documents, the chronology, SQL on the dossier, converting pieces, opening a panel, or a tabular review.
+description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, volets (lire, pointer, fermer), tabular review. Use when the user asks about case documents, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
 ---
 
 # PieceMaker
@@ -14,16 +14,23 @@ L’application PieceMaker doit tourner. Depuis le dossier de l’affaire (`--do
 
 ## Volets (interface à côté du chat)
 
-| Commande | Volet |
-| --- | --- |
-| `pm afficher` | liste les volets déjà ouverts (aucun n’est ouvert) |
-| `pm afficher --fichier PATH` | lecture du fichier |
-| `pm afficher --volet dossier` | Dossier, vue générale |
-| `pm afficher --volet chronologie` | Dossier, chronologie des pièces |
-| `pm afficher --volet tabular-review` | Analyse tabulaire |
-| `pm afficher --volet tabular-review --review FICHIER.json` | cette analyse |
+Le geste ouvre le volet tout seul : `sql` (écriture), `chronologie`, `tabular_review` (lister, preparer, lancer, ouvrir), un `.docx` écrit ou édité, un tamponnage. Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
 
-`chronologie` et `tabular_review` ouvrent aussi leur volet.
+`afficher` sert à lire, pointer ou fermer.
+
+| Commande | Rôle |
+| --- | --- |
+| `pm afficher` | lire les volets déjà ouverts |
+| `pm afficher --fichier PATH` | pointer ce fichier |
+| `pm afficher --volet dossier` | pointer Dossier, vue générale |
+| `pm afficher --volet chronologie` | pointer Dossier, chronologie des pièces |
+| `pm afficher --volet tabular-review` | pointer Analyse tabulaire (sans reset) |
+| `pm afficher --volet tabular-review --review FICHIER.json` | pointer cette analyse |
+| `pm afficher --volet tampon` | pointer Bordereau |
+| `pm afficher --fermer --fichier PATH` | fermer ce fichier |
+| `pm afficher --fermer --volet dossier\|chronologie\|tabular-review\|tampon` | fermer ce volet |
+
+Un `.docx` s’ouvre dans la visionneuse tout seul. Conversion n’ouvre aucun volet.
 
 ## sql
 

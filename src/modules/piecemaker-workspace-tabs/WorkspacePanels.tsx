@@ -90,7 +90,13 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       }
     }, []);
 
-    useAutoPanel(props.selectedSession?.id ?? null, props.selectedProject?.fullPath ?? null, open);
+    const close = useCallback((tab: AppTab) => {
+      setColumns((current) => current.map((column) => ({ ...column, tabs: column.tabs.filter((item) => item !== tab) })).filter((column) => column.tabs.length > 0));
+      setExpanded((current) => current === tab ? null : current);
+      if (props.activeTab === tab) props.setActiveTab(mainTab);
+    }, [mainTab, props]);
+
+    useAutoPanel(props.selectedSession?.id ?? null, props.selectedProject?.fullPath ?? null, open, close);
 
     useEffect(() => {
       setColumns([]);
@@ -104,12 +110,6 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       open(tab);
       setActiveTab(tab);
     }, [activeTab, setActiveTab, open]);
-
-    const close = (tab: AppTab) => {
-      setColumns((current) => current.map((column) => ({ ...column, tabs: column.tabs.filter((item) => item !== tab) })).filter((column) => column.tabs.length > 0));
-      if (expanded === tab) setExpanded(null);
-      if (props.activeTab === tab) props.setActiveTab(mainTab);
-    };
 
     const setDockSize = (requestedPercent: number) => {
       let percent = Math.max(0, Math.min(100, requestedPercent));

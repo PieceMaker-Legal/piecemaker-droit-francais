@@ -67,6 +67,25 @@ export async function acknowledgeWorkspacePanel(project: string, id: string) {
   if (!response.ok) throw new Error('Panel acknowledgement failed');
 }
 
+export async function pollWorkspacePanelClose(project: string) {
+  const query = new URLSearchParams({ project });
+  const response = await authenticatedFetch(`/api/piecemaker/local/close-panel?${query}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) throw new Error('Panel close request failed');
+  return response.json() as Promise<{ request: { id: string; tab: string; document?: string } | null }>;
+}
+
+export async function acknowledgeWorkspacePanelClose(project: string, id: string) {
+  const response = await authenticatedFetch('/api/piecemaker/local/close-panel/ack', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project, id }),
+  });
+  if (!response.ok) throw new Error('Panel close acknowledgement failed');
+}
+
 // ─── Request helpers ────────────────────────────────────────────────────────
 // Every endpoint below goes through these so verb, JSON encoding and query
 // serialization stay consistent across the whole frontend.

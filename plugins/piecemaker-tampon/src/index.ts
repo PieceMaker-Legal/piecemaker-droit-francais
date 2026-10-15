@@ -40,6 +40,8 @@ type StampingResponse = {
 
 const AUTH_TOKEN_KEY = 'auth-token';
 const PIECEMAKER_BASE = '/api/piecemaker';
+const SHOW_EVENT = 'piecemaker:tampon-show';
+const PENDING_SHOW_KEY = '__piecemakerTamponShow';
 const TOKEN_EXPIRY_SKEW_MS = 60_000;
 const SHAPE_OPTIONS: Array<{ id: StampShape; label: string }> = [
   { id: 'circle', label: 'Rond' },
@@ -177,6 +179,7 @@ type ViewState = {
   style: HTMLStyleElement;
   disposed: boolean;
   unsubscribe: (() => void) | null;
+  unsubscribeShow: (() => void) | null;
   config: StampConfig;
   editorOpen: boolean;
   pendingImage: string | null;
@@ -594,6 +597,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     style,
     disposed: false,
     unsubscribe: null,
+    unsubscribeShow: null,
     config: { ...DEFAULT_STAMP_CONFIG },
     editorOpen: false,
     pendingImage: null,
@@ -624,6 +628,13 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     currentProjectPath = nextPath;
     void loadCase(state);
   });
+  const onShow = () => {
+    delete (window as Window & Record<string, unknown>)[PENDING_SHOW_KEY];
+    void loadCase(state);
+  };
+  window.addEventListener(SHOW_EVENT, onShow);
+  state.unsubscribeShow = () => window.removeEventListener(SHOW_EVENT, onShow);
+  if ((window as Window & Record<string, unknown>)[PENDING_SHOW_KEY]) onShow();
   void loadTampon(state);
   void loadCase(state);
 }
@@ -633,6 +644,7 @@ export function unmount(container: HTMLElement): void {
   if (!state) return;
   state.disposed = true;
   state.unsubscribe?.();
+  state.unsubscribeShow?.();
   state.style.remove();
   state.root.remove();
   mounted.delete(container);
