@@ -29,8 +29,8 @@ export function permissionModeFromSettings(provider: LLMProvider): PermissionMod
 }
 
 /**
- * Used by chat provider state. Réglages « Contourner » wins over a stale
- * session acceptEdits/default; an explicit session plan still wins.
+ * Used by chat provider state. Same order as CloudCLI #1417: the session
+ * override, then Réglages, then the last pick for this provider.
  */
 export function resolveComposerPermissionMode({
   sessionSavedMode,
@@ -41,12 +41,6 @@ export function resolveComposerPermissionMode({
 }: ComposerPermissionSources): PermissionMode {
   const allowed = (mode: PermissionMode | null): mode is PermissionMode =>
     Boolean(mode && validModes.includes(mode));
-  if (allowed(sessionSavedMode) && sessionSavedMode === 'plan') {
-    return sessionSavedMode;
-  }
-  if (allowed(settingsMode) && settingsMode === 'bypassPermissions') {
-    return settingsMode;
-  }
   const savedMode = [sessionSavedMode, settingsMode, providerSavedMode].find(allowed);
   return savedMode ?? fallback;
 }

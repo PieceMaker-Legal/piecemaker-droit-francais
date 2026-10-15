@@ -17,6 +17,13 @@ test('buildCodexClientOptions autorise le réseau du bac à sable et masque les 
   assert.deepEqual(buildCodexClientOptions([], 'bypassPermissions'), {
     config: { ...sandbox, sandbox_mode: 'danger-full-access', approval_policy: 'never' },
   });
+  assert.deepEqual(buildCodexClientOptions([], 'plan'), {
+    config: { ...sandbox, sandbox_mode: 'read-only', approval_policy: 'never' },
+  });
+  assert.deepEqual(buildCodexClientOptions([], 'acceptEdits'), {
+    config: { ...sandbox, sandbox_mode: 'workspace-write', approval_policy: 'never' },
+  });
+  assert.deepEqual(buildCodexClientOptions([], 'default'), { config: sandbox });
   assert.deepEqual(buildCodexClientOptions([
     { name: 'a', path: '/home/u/.agents/skills/a/SKILL.md' },
     { name: 'a', path: '/home/u/.agents/skills/a/SKILL.md' },
@@ -27,38 +34,68 @@ test('buildCodexClientOptions autorise le réseau du bac à sable et masque les 
   ] } } });
 });
 
-test('Contourner les permissions Codex passe danger-full-access au thread et au --config', async (t) => {
-  let threadOptions: ThreadOptions | undefined;
-  let config: unknown;
-  const thread = {
-    id: 'native-thread',
-    async runStreamed() { return { events: (async function* () { yield { type: 'thread.started', thread_id: 'native-thread' }; })() }; },
-  } as unknown as Thread;
-  t.mock.method(Codex.prototype, 'startThread', function (this: { exec: { configOverrides: unknown } }, options?: ThreadOptions) {
-    threadOptions = options;
-    config = this.exec.configOverrides;
-    return thread;
-  });
-  const context: ProviderRuntimeContext = {
-    resolveProviderSessionId: () => null,
-    resolveResumeModel: async () => 'test-model',
-    getProviderModels: async () => ({ OPTIONS: [], DEFAULT: 'test-model' }),
-    normalizeMessage: () => [],
-    isProviderInstalled: async () => true,
-  };
-  await codexRuntime.run('salut', {
-    cwd: process.cwd(),
+const CODEX_MODES: Array<{
+  permissionMode: string;
+  sandboxMode: ThreadOptions['sandboxMode'];
+  approvalPolicy: ThreadOptions['approvalPolicy'];
+  config: Record<string, unknown>;
+}> = [
+  {
+    permissionMode: 'default',
+    sandboxMode: 'workspace-write',
+    approvalPolicy: 'on-request',
+    config: { sandbox_workspace_write: { network_access: true } },
+  },
+  {
+    permissionMode: 'acceptEdits',
+    sandboxMode: 'workspace-write',
+    approvalPolicy: 'never',
+    config: { sandbox_workspace_write: { network_access: true }, sandbox_mode: 'workspace-write', approval_policy: 'never' },
+  },
+  {
+    permissionMode: 'plan',
+    sandboxMode: 'read-only',
+    approvalPolicy: 'never',
+    config: { sandbox_workspace_write: { network_access: true }, sandbox_mode: 'read-only', approval_policy: 'never' },
+  },
+  {
     permissionMode: 'bypassPermissions',
-    libraryCodexOptions: buildCodexClientOptions([], 'bypassPermissions'),
-  }, { isWebSocketWriter: true, send: () => {} }, context);
-  assert.equal(threadOptions?.sandboxMode, 'danger-full-access');
-  assert.equal(threadOptions?.approvalPolicy, 'never');
-  assert.deepEqual(config, {
-    sandbox_workspace_write: { network_access: true },
-    sandbox_mode: 'danger-full-access',
-    approval_policy: 'never',
+    sandboxMode: 'danger-full-access',
+    approvalPolicy: 'never',
+    config: { sandbox_workspace_write: { network_access: true }, sandbox_mode: 'danger-full-access', approval_policy: 'never' },
+  },
+];
+
+for (const mode of CODEX_MODES) {
+  test(`Codex ${mode.permissionMode} passe sandbox ${mode.sandboxMode} au thread et au --config`, async (t) => {
+    let threadOptions: ThreadOptions | undefined;
+    let config: unknown;
+    const thread = {
+      id: 'native-thread',
+      async runStreamed() { return { events: (async function* () { yield { type: 'thread.started', thread_id: 'native-thread' }; })() }; },
+    } as unknown as Thread;
+    t.mock.method(Codex.prototype, 'startThread', function (this: { exec: { configOverrides: unknown } }, options?: ThreadOptions) {
+      threadOptions = options;
+      config = this.exec.configOverrides;
+      return thread;
+    });
+    const context: ProviderRuntimeContext = {
+      resolveProviderSessionId: () => null,
+      resolveResumeModel: async () => 'test-model',
+      getProviderModels: async () => ({ OPTIONS: [], DEFAULT: 'test-model' }),
+      normalizeMessage: () => [],
+      isProviderInstalled: async () => true,
+    };
+    await codexRuntime.run('salut', {
+      cwd: process.cwd(),
+      permissionMode: mode.permissionMode,
+      libraryCodexOptions: buildCodexClientOptions([], mode.permissionMode),
+    }, { isWebSocketWriter: true, send: () => {} }, context);
+    assert.equal(threadOptions?.sandboxMode, mode.sandboxMode);
+    assert.equal(threadOptions?.approvalPolicy, mode.approvalPolicy);
+    assert.deepEqual(config, mode.config);
   });
-});
+}
 
 for (const resumed of [false, true]) {
   test(`exception CloudCLI : Codex ${resumed ? 'reprend' : 'démarre'} avec les skills désactivés du dossier en --config`, async (t) => {

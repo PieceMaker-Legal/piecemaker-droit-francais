@@ -38,24 +38,26 @@ test('unset provider settings do not invent a mode', () => {
 
 const MODES: PermissionMode[] = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
 
-test('Réglages Contourner wins over a stale session acceptEdits', () => {
-  assert.equal(resolveComposerPermissionMode({
-    sessionSavedMode: 'acceptEdits',
-    settingsMode: 'bypassPermissions',
-    providerSavedMode: 'default',
-    validModes: MODES,
-    fallback: 'default',
-  }), 'bypassPermissions');
+test('an explicit session mode wins over Réglages (CloudCLI #1417)', () => {
+  for (const sessionSavedMode of MODES) {
+    assert.equal(resolveComposerPermissionMode({
+      sessionSavedMode,
+      settingsMode: 'bypassPermissions',
+      providerSavedMode: 'default',
+      validModes: MODES,
+      fallback: 'default',
+    }), sessionSavedMode);
+  }
 });
 
-test('an explicit session plan still wins over Réglages Contourner', () => {
+test('Réglages wins over the last provider pick when the session has no override', () => {
   assert.equal(resolveComposerPermissionMode({
-    sessionSavedMode: 'plan',
-    settingsMode: 'bypassPermissions',
-    providerSavedMode: 'acceptEdits',
+    sessionSavedMode: null,
+    settingsMode: 'acceptEdits',
+    providerSavedMode: 'bypassPermissions',
     validModes: MODES,
     fallback: 'default',
-  }), 'plan');
+  }), 'acceptEdits');
 });
 
 test('session bypass is kept when Réglages is unset', () => {

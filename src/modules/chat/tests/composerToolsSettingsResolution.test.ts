@@ -139,7 +139,21 @@ test('skipPermissions follows the sending provider, not Claude', async () => {
   assert.equal(opencodeOptions.skipPermissions, false);
 });
 
-test.each<LLMProvider>(['codex', 'claude', 'mistral'])('%s chat.send keeps bypassPermissions', async (provider) => {
+test.each<[LLMProvider, PermissionMode]>([
+  ['codex', 'default'],
+  ['codex', 'acceptEdits'],
+  ['codex', 'bypassPermissions'],
+  ['codex', 'plan'],
+  ['claude', 'default'],
+  ['claude', 'auto'],
+  ['claude', 'acceptEdits'],
+  ['claude', 'bypassPermissions'],
+  ['claude', 'plan'],
+  ['mistral', 'default'],
+  ['mistral', 'acceptEdits'],
+  ['mistral', 'bypassPermissions'],
+  ['mistral', 'plan'],
+])('%s chat.send keeps %s', async (provider, permissionMode) => {
   const sent: SentMessage[] = [];
   const view = renderHook(() =>
     useChatComposerState({
@@ -147,7 +161,7 @@ test.each<LLMProvider>(['codex', 'claude', 'mistral'])('%s chat.send keeps bypas
       selectedSession: SESSION,
       currentSessionId: SESSION.id,
       provider,
-      permissionMode: 'bypassPermissions',
+      permissionMode,
       cyclePermissionMode: () => undefined,
       resolvePermissionModeForProvider: (_target, requested) => requested as PermissionMode,
       currentProviderModel: 'test-model',
@@ -173,7 +187,7 @@ test.each<LLMProvider>(['codex', 'claude', 'mistral'])('%s chat.send keeps bypas
   });
 
   const send = sent.find((message) => message.type === 'chat.send');
-  assert.equal((send?.options as { permissionMode?: string } | undefined)?.permissionMode, 'bypassPermissions');
+  assert.equal((send?.options as { permissionMode?: string } | undefined)?.permissionMode, permissionMode);
 });
 
 test('a provider with nothing stored sends empty tool settings, not Claude settings', async () => {
