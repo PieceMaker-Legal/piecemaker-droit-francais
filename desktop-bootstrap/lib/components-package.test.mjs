@@ -62,6 +62,18 @@ test('packages runtime scopes and installs them once from a verified release arc
   const third = await ensureRuntimeComponents({ manifest: newerRelease, cacheRoot, fetchImpl: async () => { throw new Error('same content should reuse cache'); } });
   assert.deepEqual(third, first);
   assert.equal(fs.readdirSync(cacheRoot).some((name) => name.endsWith('.partial')), false);
+
+  const prefetchRoot = path.join(work, 'prefetch-cache');
+  const prefetchDir = path.join(work, 'prefetch');
+  fs.mkdirSync(prefetchDir);
+  fs.copyFileSync(path.join(output, manifest.components[0].assetName), path.join(prefetchDir, manifest.components[0].assetName));
+  const prefetched = await ensureRuntimeComponents({
+    manifest,
+    cacheRoot: prefetchRoot,
+    assetDir: prefetchDir,
+    fetchImpl: async () => { throw new Error('prefetched archive must not be downloaded'); },
+  });
+  assert.deepEqual(prefetched.moduleRoots, [path.join(prefetchRoot, manifest.components[0].id, 'node_modules')]);
 });
 
 test('failed archive checksum publishes no component cache', async (t) => {

@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const IS_MAC = process.platform === 'darwin';
 export const IS_WINDOWS = process.platform === 'win32';
@@ -25,6 +26,7 @@ export const signingKeyPath = path.join(certsDir, 'piecemaker-signing.key');
 export const signingBundlePath = path.join(certsDir, 'piecemaker-signing.p12');
 export const signingSecretPath = path.join(certsDir, 'signing-keychain.secret');
 export const trustMarkerPath = path.join(certsDir, 'trusted.json');
+export const publisherCertPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'certs', 'piecemaker-publisher.cer');
 
 export function installTargetCandidates() {
   if (IS_MAC) {

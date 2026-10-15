@@ -63,7 +63,7 @@ La verification du paquet charge aussi le module natif ConPTY et genere un PDF, 
 | Priorite | Action | Validation attendue |
 | --- | --- | --- |
 | 1 | Mesurer le parcours complet depuis une release construite, sur un compte Windows vierge, avec plusieurs debits reseau | Temps du clic jusqu'a l'interface et a la premiere conversion ; chronometrage separe du transfert, de NSIS, des SDK, de Python et des certificats |
-| 1 | Prefetcher les archives Python et IA pendant le telechargement ou l'execution de NSIS | Demarrage sans second transfert sequentiel ; aucun telechargement si le cache est deja valide |
+| 1 | Prefetcher les archives Python et IA pendant le telechargement ou l'execution de NSIS | Fait : `install.ps1` telecharge Python et les SDK pendant NSIS, puis `prepare-installed` lit `PIECEMAKER_PREBUILT_ASSET_DIR` |
 | 1 | Mesurer l'impact antivirus avant de choisir une nouvelle compression ou un nouveau format | Trace Defender montrant quels fichiers et processus absorbent le temps |
 | 2 | Auditer les extras MarkItDown : Azure, YouTube, audio et gros paquets de tests | Matrice des formats reellement exposes et conversions representatives avant tout retrait |
 | 2 | Regrouper davantage le serveur JavaScript et ses dependances dans des bundles | Moins de fichiers physiques ; routes, plugins, imports dynamiques, fournisseurs et terminal valides dans Electron |

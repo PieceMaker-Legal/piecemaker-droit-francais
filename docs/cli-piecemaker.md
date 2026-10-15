@@ -20,6 +20,11 @@ Les plugins sont installés **avant** le démarrage, jamais après, par la chaî
 commune `plugins/toolchain` (recompilation complète, ou réinstallation depuis le
 dernier bundle avec `--launch-only`) : voir `docs/plugins.md`.
 
+Pour l'application de bureau destinée aux utilisateurs, voir
+[installation-app-electron.md](installation-app-electron.md)
+(`desktop-bootstrap/install.sh` / `install.ps1`). La commande `piecemaker`
+ci-dessous est la voie développeur / PWA.
+
 Sur une machine nue, sans dépôt ni commande, chaque amorce clone le dépôt puis
 lance ce premier passage :
 

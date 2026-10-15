@@ -311,17 +311,18 @@ async function installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir,
   if (!(await host.exists(python)) || !dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
     await host.mkdir(path.dirname(root));
     const staging = `${root}.${crypto.randomBytes(6).toString('hex')}`;
-    const archive = `${staging}.tar.gz`;
+    const downloaded = `${staging}.tar.gz`;
+    let archive = downloaded;
     try {
       output.step('Telechargement des composants Python precompiles...');
       const local = env.PIECEMAKER_PREBUILT_ASSET_DIR && path.join(env.PIECEMAKER_PREBUILT_ASSET_DIR, metadata.assetName);
       if (local && await host.exists(local)) {
-        await fs.copyFile(local, archive);
         const hash = crypto.createHash('sha256');
-        for await (const chunk of createReadStream(archive)) hash.update(chunk);
+        for await (const chunk of createReadStream(local)) hash.update(chunk);
         if (hash.digest('hex') !== metadata.sha256) throw new Error('Archive Python locale invalide.');
+        archive = local;
       } else {
-        await downloadVerified(host, `https://github.com/${metadata.repository}/releases/download/${metadata.releaseTag}/${metadata.assetName}`, archive, metadata.sha256);
+        await downloadVerified(host, `https://github.com/${metadata.repository}/releases/download/${metadata.releaseTag}/${metadata.assetName}`, downloaded, metadata.sha256);
       }
       const tar = path.join(env.SystemRoot || process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
       const entries = await required(host, tar, ['-tzf', archive], { capture: true });
@@ -337,7 +338,7 @@ async function installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir,
       await host.rm(root);
       await fs.rename(staging, root);
     } finally {
-      await host.rm(archive);
+      if (archive === downloaded) await host.rm(downloaded);
       await host.rm(staging);
     }
   }
