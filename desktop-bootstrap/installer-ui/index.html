@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Installation de PieceMaker</title>
+<link rel="icon" href="favicon.ico">
 <style>
   :root {
     --ink: #1a2332;
@@ -53,8 +54,7 @@
   .stepper li.past { color: var(--ink); }
   .stepper li.past .num { background: var(--success-soft); color: var(--success); border-color: #bbf7d0; }
   .pane { padding: 18px 20px 16px; overflow: auto; min-height: 0; }
-  .pane h3 { font-size: 18px; margin: 0 0 6px; }
-  .why { margin: 0 0 14px; color: var(--muted); }
+  .pane h3 { font-size: 18px; margin: 0 0 14px; }
   .panel ol { margin: 0 0 14px; padding-left: 20px; }
   .panel li { margin: 7px 0; }
   .panel b { font-weight: 600; }
@@ -67,7 +67,7 @@
   .ghost { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 4px; }
   .hint { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; margin: 0 0 14px; font-size: 13px; }
   .warn { background: #fff7ed; color: #9a3412; }
-  details.example, details.rules { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; background: #fff; }
+  details.example { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; background: #fff; }
   details summary { cursor: pointer; font-weight: 600; color: var(--accent); }
   .shot { position: relative; margin: 10px 0 4px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
   .shot img { display: block; width: 100%; height: auto; }
@@ -108,7 +108,7 @@
 </head>
 <body>
 <header>
-  <img src="logo.png" alt="">
+  <img src="favicon.ico" alt="">
   <div>
     <h1>Installation de PieceMaker</h1>
     <p id="version"></p>
@@ -137,7 +137,7 @@
 
 <section id="piste-skipped" class="card status-card" hidden>
   <h2>Accès Légifrance et Judilibre à configurer plus tard</h2>
-  <p class="why">Sans identifiants PISTE, PieceMaker ne peut pas citer les textes ni la jurisprudence officiels. Vous pourrez relancer l'installation pour retrouver ce guide.</p>
+  <p>Sans identifiants PISTE, PieceMaker ne peut pas citer les textes ni la jurisprudence officiels. Vous pourrez relancer l'installation pour retrouver ce guide.</p>
   <button class="secondary" type="button" id="resume">Reprendre le guide</button>
 </section>
 
@@ -156,24 +156,18 @@
   <div class="pane">
     <div class="panel" data-step="1">
       <h3>Créez votre compte PISTE</h3>
-      <p class="why">L'État ouvre Légifrance et Judilibre par le portail PISTE, gratuitement, avec un compte personnel.</p>
       <div class="cta">
         <button class="link-button" type="button" data-open="registration">Ouvrir l'inscription PISTE</button>
         <button class="ghost" type="button" data-open="login" id="existing-account">J'ai déjà un compte</button>
       </div>
-      <p class="hint">Le site de l'État s'ouvre dans votre navigateur. Revenez ensuite à cette fenêtre.</p>
       <p>Sur la page d'inscription :</p>
       <ol>
         <li>Indiquez votre <b>nom</b> et votre <b>e-mail</b> : cet e-mail sera votre identifiant.</li>
-        <li>Choisissez un mot de passe (voir les règles ci-dessous).</li>
+        <li>Choisissez un mot de passe.</li>
         <li>Laissez <b>Code de l'organisation</b> vide : vous serez rattaché à « Universelle », qui donne accès à Légifrance et JUDILIBRE.</li>
         <li>Cochez <b>J'accepte les termes des CGU</b>, passez la vérification, puis cliquez sur <b>S'inscrire</b>.</li>
         <li>Ouvrez l'e-mail PISTE, activez le compte, puis connectez-vous.</li>
       </ol>
-      <details class="rules">
-        <summary>Règles du mot de passe</summary>
-        <p>Au moins 12 caractères, avec une majuscule, une minuscule, un chiffre et un caractère parmi <code>! @ # ^ + ( ) , ; . ? : { } | _ § ~</code>.</p>
-      </details>
       <details class="example">
         <summary>Voir un exemple de l'écran</summary>
         <figure class="shot narrow">
@@ -187,11 +181,9 @@
 
     <div class="panel" data-step="2" hidden>
       <h3>Acceptez les conditions d'utilisation</h3>
-      <p class="why">Sans cette étape, PISTE grise Légifrance et JUDILIBRE quand vous créerez l'application.</p>
       <div class="cta">
         <button class="link-button" type="button" data-open="cgu">Ouvrir les conditions d'API</button>
       </div>
-      <p class="hint">Le site de l'État s'ouvre dans votre navigateur. Revenez ensuite à cette fenêtre.</p>
       <p>Sur la page « Consentement CGU API » :</p>
       <ol>
         <li>Dans <b>Recherche</b>, tapez <code>Légifrance</code> et cochez la ligne <b>PROD</b>.</li>
@@ -207,11 +199,9 @@
 
     <div class="panel" data-step="3" hidden>
       <h3>Créez l'application « PieceMaker »</h3>
-      <p class="why">Cette application de production fournit les identifiants que PieceMaker utilisera.</p>
       <div class="cta">
         <button class="link-button" type="button" data-open="applications">Ouvrir les applications PISTE</button>
       </div>
-      <p class="hint">Le site de l'État s'ouvre dans votre navigateur. Revenez ensuite à cette fenêtre.</p>
       <p>Sur la page Applications :</p>
       <ol>
         <li>Cliquez sur <b>Créer une application</b>, laissez l'environnement <b>PRODUCTION</b>, puis validez.</li>
@@ -235,11 +225,9 @@
 
     <div class="panel" data-step="4" hidden>
       <h3>Collez vos identifiants ici</h3>
-      <p class="why">PieceMaker les vérifie auprès de PISTE, Légifrance et Judilibre, puis les enregistre sur ce poste.</p>
       <div class="cta">
         <button class="link-button" type="button" data-open="applications">Ouvrir l'application PieceMaker</button>
       </div>
-      <p class="hint">Le site de l'État s'ouvre dans votre navigateur. Revenez ensuite coller les valeurs ici.</p>
       <ol>
         <li>Cliquez sur le nom de l'application <b>PieceMaker</b>.</li>
         <li>Dans <b>Identifiants Oauth</b>, copiez le <b>Client ID</b> puis collez-le ci-dessous.</li>
