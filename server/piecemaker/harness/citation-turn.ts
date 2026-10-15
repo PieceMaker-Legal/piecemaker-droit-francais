@@ -9,7 +9,7 @@ import { resolvePieceRef } from '../file-links.js';
 
 import type { createCitationStore } from './citation-store.js';
 import { formatPieceTitle } from './piece-title.js';
-import { locateSourcePassages, nearestPassage } from './source-passages.js';
+import { locateSourcePassages } from './source-passages.js';
 
 const root = findApplicationRoot(getModuleDirectory(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -108,9 +108,9 @@ function locator(citation: Citation, ranges: Array<{ start: number; end: number;
 
 function sourceLine(citation: Citation, title: string, source: string, ranges: Array<{ start: number; end: number; quoteIndex: number }>) {
   const quotes = citation.quotes.map((quote) => {
-    if (quote.verification?.verified ?? citation.verified !== false) return `« ${inline(quote.quote)} »`;
-    const nearest = source ? nearestPassage(source, quote.quote) : null;
-    return `[à vérifier – introuvable](${MISS})${nearest ? ` — passage le plus proche : « ${inline(nearest)} »` : ''}`;
+    const excerpt = `« ${inline(quote.quote)} »`;
+    if (quote.verification?.verified ?? citation.verified !== false) return excerpt;
+    return `${excerpt} — [citation non retrouvée, à vérifier](${MISS})`;
   });
   return `- [${citation.ref}] [${linkLabel(title + locator(citation, ranges, source))}][${citation.ref}] — ${quotes.join(' · ')}`;
 }
