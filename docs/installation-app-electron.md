@@ -1,15 +1,21 @@
-# Installation de l'application de bureau (build local)
+# Installation de l'application de bureau
 
 Installateur autonome de l'application Electron PieceMaker sur **macOS** et
 **Windows**. Il ne dépend d'aucun autre installateur du dépôt et vit
 entièrement dans `desktop-bootstrap/`.
 
-Principe : rien n'est téléchargé sous forme de binaire prêt à l'emploi.
-L'application est **construite sur le poste de l'utilisateur** à partir des
-sources de la dernière version publiée, avec la chaîne Electron déjà présente
-dans CloudCLI (`electron/`, `scripts/release/prepare-desktop-app.js`,
-`npm run desktop:pack`). Un binaire construit localement n'est pas mis en
-quarantaine par le système : il n'y a donc pas de signature éditeur à acheter.
+Sur Windows, les nouvelles releases fournissent un **installateur NSIS précompilé**
+et son SHA-256. Le bootstrap utilise directement cet installateur, puis le Node
+embarqué dans Electron pour préparer les certificats et les composants précompilés
+Python/IA. Aucun téléchargement des sources ou installation de Node/npm n'est
+nécessaire dans ce parcours. Les anciennes releases sans checksum d'installateur
+conservent le parcours archive. Une construction locale Windows exige
+`--build-from-source`. Détails et mesures :
+[windows-initial-install-performance.md](windows-initial-install-performance.md).
+
+Sur macOS, la construction locale utilise encore les sources et la chaîne Electron
+existante (`electron/`, `scripts/release/prepare-desktop-app.js`, `npm run desktop:pack`).
+Le déroulé historique ci-dessous décrit ce parcours et les anciennes releases Windows.
 
 ## Commande d'installation
 

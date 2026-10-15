@@ -12,7 +12,7 @@ test('selects quoted runtime imports from owned and plugin server sources', (t) 
   for (const directory of ['server/modules', 'electron', 'shared', 'desktop-bootstrap/overlay', 'plugins/piecemaker-fixture/src/server', 'server/tests']) {
     fs.mkdirSync(path.join(root, directory), { recursive: true });
   }
-  fs.writeFileSync(path.join(root, 'server/modules/main.ts'), "import express from 'express';\nimport type { Options } from 'pkg/subpath';\nconst optional = import('dynamic-package');\n");
+  fs.writeFileSync(path.join(root, 'server/modules/main.ts'), "import express from 'express';\nimport type { Options } from 'pkg/subpath';\nconst optional = import('dynamic-package');\nconst screenshot = require('optionalOne');\nconst type = 'react';\nconst obsolete = 'unused-package';\n");
   fs.writeFileSync(path.join(root, 'electron/main.js'), "const codex = require('@openai/codex/bin/codex.js');\n");
   fs.writeFileSync(path.join(root, 'shared/util.mjs'), "export { run } from \"shared-runtime\";\n");
   fs.writeFileSync(path.join(root, 'desktop-bootstrap/overlay/main.cjs'), "const shell = require('overlay-runtime');\n");
@@ -27,7 +27,7 @@ test('selects quoted runtime imports from owned and plugin server sources', (t) 
   const manifest = {
     dependencies: Object.fromEntries([
       'express', 'pkg', 'dynamic-package', '@openai/codex', 'shared-runtime', 'overlay-runtime',
-      'plugin-runtime', 'helper-runtime', 'test-only-package', 'test-directory-package', '@vscode/ripgrep', 'unused-package',
+      'plugin-runtime', 'helper-runtime', 'test-only-package', 'test-directory-package', '@vscode/ripgrep', 'unused-package', 'react',
     ].map((name) => [name, '1.0.0'])),
     optionalDependencies: { optionalOne: '^1.0.0', optionalTwo: '^2.0.0' },
   };
@@ -44,16 +44,16 @@ test('selects quoted runtime imports from owned and plugin server sources', (t) 
       pkg: '1.0.0',
       'shared-runtime': '1.0.0',
     },
-    optionalDependencies: { optionalOne: '^1.0.0', optionalTwo: '^2.0.0' },
+    optionalDependencies: { optionalOne: '^1.0.0' },
   });
 });
 
-test('keeps optional dependencies when source roots are absent', () => {
+test('removes unreferenced optional dependencies when source roots are absent', () => {
   const result = selectRuntimeDependencies(os.tmpdir(), {
     dependencies: { unused: '1.0.0' },
     optionalDependencies: { optional: '^1.2.3' },
   });
-  assert.deepEqual(result, { dependencies: {}, optionalDependencies: { optional: '^1.2.3' } });
+  assert.deepEqual(result, { dependencies: {}, optionalDependencies: {} });
 });
 
 test('keeps the pinned Express MIME dependency through desktop pruning', () => {

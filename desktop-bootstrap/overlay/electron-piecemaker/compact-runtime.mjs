@@ -1,8 +1,19 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { configureRuntimeEnvironment, registerRuntimeModules } from './asar-runtime.mjs';
 import { ensureRuntimeComponents } from './runtime-components.mjs';
+
+function initialPreparationNeeded() {
+  const home = process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8'));
+    return !config.pythonPath || !fs.existsSync(config.pythonPath) || !fs.existsSync(path.join(home, 'certs', 'piecemaker-ca.crt')) || !fs.existsSync(path.join(home, 'certs', 'piecemaker-ca.key'));
+  } catch {
+    return true;
+  }
+}
 
 export async function initializeCompactRuntime({ app, LocalServerController, applicationRoot, createProgress }) {
   let moduleRoots = [];
@@ -14,10 +25,15 @@ export async function initializeCompactRuntime({ app, LocalServerController, app
   let progress;
   let runtime;
   try {
-    runtime = await ensureRuntimeComponents({ manifest, cacheRoot, log: (message) => {
+    const preparingInitial = initialPreparationNeeded() && fs.existsSync(path.join(physicalRoot, 'desktop-bootstrap/lib/prepare-installed.mjs'));
+    if (preparingInitial) progress ||= createProgress?.();
+    const preparation = preparingInitial
+      ? import(pathToFileURL(path.join(physicalRoot, 'desktop-bootstrap/lib/prepare-installed.mjs')).href).then(({ prepareInstalledDesktop }) => prepareInstalledDesktop({ applicationRoot: physicalRoot, includeProviders: false }))
+      : Promise.resolve();
+    [runtime] = await Promise.all([ensureRuntimeComponents({ manifest, cacheRoot, log: (message) => {
       console.log(`[PieceMaker] ${message}`);
       if (message.toLowerCase().includes('download')) progress ||= createProgress?.();
-    } });
+    } }), preparation]);
   } finally {
     progress?.destroy();
   }

@@ -12,4 +12,7 @@ test('the release stays draft until the Windows package, components and runtime 
   assert.ok(windows.indexOf('verify-packaged-runtime.mjs') < windows.indexOf('name: Attach desktop app to release'));
   assert.ok(windows.indexOf('name: Attach desktop app to release') < windows.indexOf('--draft=false'));
   assert.match(windows, /cp release\/desktop\/.*piecemaker-runtime-components-/);
+  assert.ok(windows.indexOf('name: Prebuild portable Python components') < windows.indexOf('name: Build desktop app'));
+  assert.match(windows, /test -f .*piecemaker-python-win32-x64\.tar\.gz\.sha256/);
+  assert.match(windows, /test -n .*\.exe\.sha256/);
 });
