@@ -40,7 +40,11 @@ export function installLibraryRuntime(runtime: Pick<typeof providerRuntimeServic
     if (cwd) {
       try {
         const disabled = libraryDisabledSkills(store, cwd, String(provider));
-        if (disabled.length) options = { ...options, libraryDisabledSkills: disabled, libraryCodexOptions: buildCodexClientOptions(disabled) };
+        options = {
+          ...options,
+          ...(disabled.length ? { libraryDisabledSkills: disabled } : {}),
+          libraryCodexOptions: buildCodexClientOptions(disabled),
+        };
       } catch (error) {
         console.warn(`[bibliothèque] ${cwd} : ${error instanceof Error ? error.message : String(error)}`);
       }

@@ -28,6 +28,14 @@ const EDIT_TOOLS = new Set(['Edit', 'edit']);
 
 const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 
+function commandText(input: Input): string {
+  const value = input.command ?? input.cmd;
+  if (Array.isArray(value)) {
+    return value.map((part) => typeof part === 'string' ? part : '').filter(Boolean).join(' ');
+  }
+  return text(value);
+}
+
 const baseName = (value: string): string => value.split(/[\\/]/).pop() ?? value;
 
 function samePanelPath(left: string, right: string): boolean {
@@ -147,7 +155,10 @@ function flagMap(argv: string[]): { flags: Input; rest: string[] } {
 function pieceMakerCliTarget(command: string): AutoPanelTarget | null {
   const argv = tokens(command);
   const script = argv.findIndex((token) => /(?:^|[/\\])pm(?:\.mjs)?$/.test(token));
-  if (script < 0) return null;
+  if (script < 0) {
+    const nested = argv.find((token) => token !== command && /(?:^|[/\\])pm(?:\.mjs)?(?:\s|$)/.test(token));
+    return nested ? pieceMakerCliTarget(nested) : null;
+  }
   const { flags, rest } = flagMap(argv.slice(script + 1));
   const tool = rest[0];
   if (tool === 'afficher') return showTarget(flags);
@@ -160,7 +171,7 @@ function pieceMakerCliTarget(command: string): AutoPanelTarget | null {
 export function autoPanelTarget(toolName: string, toolInput: unknown): AutoPanelTarget | null {
   const parsed = typeof toolInput === 'string' ? (() => { try { return JSON.parse(toolInput) as unknown; } catch { return {}; } })() : toolInput;
   const input = parsed && typeof parsed === 'object' ? parsed as Input : {};
-  const command = text(input.command);
+  const command = commandText(input);
   if (command) {
     const cli = pieceMakerCliTarget(command);
     if (cli) return cli;

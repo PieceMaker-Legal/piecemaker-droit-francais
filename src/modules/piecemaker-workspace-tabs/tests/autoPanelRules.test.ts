@@ -79,6 +79,9 @@ describe('autoPanelTarget', () => {
     expect(autoPanelTarget('Bash', { command: 'scripts/pm conversion --force' })).toBeNull();
     expect(autoPanelTarget('Bash', { command: 'scripts/pm afficher --volet tampon' })).toEqual({ kind: 'tampon' });
     expect(autoPanelTarget('Bash', { command: 'scripts/pm afficher --fermer --volet chronologie' })).toBeNull();
+    expect(autoPanelTarget('Bash', { command: ['/bin/zsh', '-lc', '.agents/skills/Skill-PieceMaker/scripts/pm tabular_review lister'] })).toEqual({ kind: 'tabular-review', review: null });
+    expect(autoPanelTarget('Bash', { command: "/bin/zsh -lc '.agents/skills/Skill-PieceMaker/scripts/pm tabular_review lister'" })).toEqual({ kind: 'tabular-review', review: null });
+    expect(autoPanelTarget('exec', { cmd: 'scripts/pm afficher --volet tampon' })).toEqual({ kind: 'tampon' });
   });
 
   it('ignore les autres outils', () => {

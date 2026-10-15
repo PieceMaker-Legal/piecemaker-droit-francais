@@ -119,7 +119,17 @@ test('le popup et le runtime masquent les skills désactivés dans le dossier', 
   installLibraryRuntime(runtime as never, { fetchHistory: async () => ({ messages: [] }) } as never, store);
   await runtime.run('codex', 'Relire', { cwd: workspace }, { send() {} } as never);
   const disabled = [{ name: 'bordereau', path: fs.realpathSync(file) }];
-  assert.deepEqual(received, [[disabled, { config: { skills: { config: [{ path: disabled[0].path, enabled: false }] } } }]]);
+  assert.deepEqual(received, [[disabled, { config: { sandbox_workspace_write: { network_access: true }, skills: { config: [{ path: disabled[0].path, enabled: false }] } } }]]);
+});
+
+test('le runtime Codex autorise le réseau du bac à sable sans skill masqué', async (t) => {
+  const { workspace, store } = fixture(t);
+  const received: unknown[] = [];
+  const run = async (_provider: string, _command: string, options: Record<string, unknown>, _writer?: unknown) => { received.push(options.libraryCodexOptions); };
+  const runtime = { run, getRunner: (provider: string) => (command: string, options: Record<string, unknown>) => run(provider, command, options) };
+  installLibraryRuntime(runtime as never, { fetchHistory: async () => ({ messages: [] }) } as never, store);
+  await runtime.run('codex', 'Relire', { cwd: workspace }, { send() {} } as never);
+  assert.deepEqual(received, [{ config: { sandbox_workspace_write: { network_access: true } } }]);
 });
 
 test('une erreur de bibliothèque ne bloque pas l’envoi du message', async (t) => {
