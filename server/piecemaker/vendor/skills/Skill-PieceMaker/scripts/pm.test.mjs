@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { CASSATION_MATIERES, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES, VOLETS } from '../../../mcp/piecemaker/volets.mjs';
 import { findVendor, parseArgv, run } from './pm.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -47,15 +48,26 @@ test('sql et chronologie passent par sqlFn', async () => {
   assert.equal(calls[1].requete, 'SQL:modifier:doc:1:2024-03-01');
 });
 
-test('afficher vérifie le fichier et refuse une cible vide', async () => {
-  const deps = { exists: (file) => file === path.resolve(process.cwd(), 'Actes/lettre.docx') };
+test('afficher vérifie le fichier, liste les volets et ouvre une cible', async () => {
+  const opened = [];
+  const deps = {
+    exists: (file) => file === path.resolve(process.cwd(), 'Actes/lettre.docx'),
+    describePanels: () => 'Aucun volet ouvert à côté du chat.',
+    waitPanel: async (target) => opened.some((body) => body.tab === target.tab && body.view === target.view && body.document === target.document),
+    openPanel: async (body) => {
+      opened.push(body);
+      return { id: '1' };
+    },
+  };
+  assert.equal(await run(['afficher'], { deps }), 'Aucun volet ouvert à côté du chat.');
   assert.equal(
     await run(['afficher', '--fichier', 'Actes/lettre.docx'], { deps }),
     'Affiché dans le volet de lecture : Actes/lettre.docx',
   );
+  assert.equal(opened[0].tab, 'files');
   await assert.rejects(() => run(['afficher', '--fichier', 'absent.docx'], { deps }), /introuvable/);
   assert.equal(await run(['afficher', '--volet', 'chronologie'], { deps }), 'Volet affiché : chronologie');
-  await assert.rejects(() => run(['afficher'], { deps }), /fichier ou un volet/);
+  assert.equal(opened[1].view, 'chronology');
 });
 
 test('tabular_review ouvre localement et transmet le reste', async () => {
@@ -63,11 +75,17 @@ test('tabular_review ouvre localement et transmet le reste', async () => {
   fs.mkdirSync(path.join(dossier, 'Tabular Review'));
   fs.writeFileSync(path.join(dossier, 'Tabular Review', 'analyse-exemple.json'), '{}');
   const calls = [];
+  const opened = [];
   const deps = {
     reviewFile: (root, fichier) => {
       const name = path.basename(String(fichier ?? ''));
       if (!fs.existsSync(path.join(root, 'Tabular Review', name))) throw new Error(`introuvable : ${name}`);
       return name;
+    },
+    waitPanel: async () => opened.length > 0,
+    openPanel: async () => {
+      opened.push(true);
+      return { id: '1' };
     },
     tabularFn: async (input) => {
       calls.push(input);
@@ -75,8 +93,8 @@ test('tabular_review ouvre localement et transmet le reste', async () => {
       return { projet: 'p-1' };
     },
   };
-  const opened = await run(['tabular_review', 'ouvrir', '--fichier', 'analyse-exemple.json', '--dossier', dossier], { deps });
-  assert.match(opened, /analyse-exemple\.json/);
+  const shown = await run(['tabular_review', 'ouvrir', '--fichier', 'analyse-exemple.json', '--dossier', dossier], { deps });
+  assert.match(shown, /analyse-exemple\.json/);
   await assert.rejects(() => run(['tabular_review', 'ouvrir', '--fichier', 'absente.json', '--dossier', dossier], { deps }), /introuvable/);
   const prepared = await run([
     'tabular_review', 'preparer', '--dossier', dossier, '--mode', 'recherche', '--nom', 'Faute grave',
@@ -86,6 +104,26 @@ test('tabular_review ouvre localement et transmet le reste', async () => {
   assert.deepEqual(calls[0].recherche, { query: 'faute', sources: ['cassation'] });
   assert.equal(await run(['tabular_review', 'documents', '--dossier', dossier], { deps }), 'Pièces/bail.md');
   fs.rmSync(dossier, { recursive: true, force: true });
+});
+
+test('SKILL.md documente toute la surface d’interface', () => {
+  const skill = fs.readFileSync(path.join(HERE, '..', 'SKILL.md'), 'utf8');
+  const required = [
+    'conversion', 'sql', 'afficher', 'chronologie', 'tabular_review',
+    '--fichier', '--volet', '--review', '--force', '--requete', '--dossier',
+    'lister', 'modifier', '--piece', '--date', '--libelle',
+    'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer',
+    '--projet', '--mode', '--nom', '--modele', '--description', '--questions',
+    '--documents', '--recherche', '--ia', '--modele-ia',
+    'analyse', 'recherche', 'claude', 'codex', 'mistral',
+    'publicationBulletin', 'publicationConseilEtat', 'publicationCaa',
+    'typesPremiereInstance', 'dateDebut', 'dateFin', 'dispositifOnly',
+    'TOUS', 'PUBLIE', 'INEDIT', 'NON_PUBLIE',
+    ...VOLETS, ...COLUMN_FORMATS, ...RESEARCH_SOURCES, ...CASSATION_MATIERES, ...PREMIERE_INSTANCE_TYPES,
+  ];
+  for (const token of required) {
+    assert.equal(skill.includes(token), true, `SKILL.md omet ${token}`);
+  }
 });
 
 test('conversion lance le CLI piecemaker', async () => {

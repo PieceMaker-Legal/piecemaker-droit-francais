@@ -100,7 +100,7 @@ function flagMap(argv: string[]): { flags: Input; rest: string[] } {
 
 function pieceMakerCliTarget(command: string): AutoPanelTarget | null {
   const argv = tokens(command);
-  const script = argv.findIndex((token) => /(?:^|[/\\])pm\.mjs$/.test(token));
+  const script = argv.findIndex((token) => /(?:^|[/\\])pm(?:\.mjs)?$/.test(token));
   if (script < 0) return null;
   const { flags, rest } = flagMap(argv.slice(script + 1));
   const tool = rest[0];

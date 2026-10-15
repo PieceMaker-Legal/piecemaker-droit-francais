@@ -13,7 +13,7 @@ export const COMPONENTS = [
   { id: '09-codex-plugin', label: 'Protection des pièces (hooks Codex)', timeout: 2 * 60_000 },
   { id: '03-python-gliner', label: 'Python & bibliothèques d’anonymisation', timeout: 45 * 60_000, env: { PIECEMAKER_SKIP_MODELS: '1' } },
   { id: '04-conversion-md', label: 'Conversion de documents en Markdown', timeout: 10 * 60_000 },
-  { id: '12-mcp-piecemaker', label: 'Serveur MCP piecemaker', timeout: 2 * 60_000 },
+  { id: '12-mcp-piecemaker', label: 'Retrait MCP piecemaker', timeout: 2 * 60_000 },
   { id: '07-legifrance', label: 'Serveur MCP Légifrance (clés PISTE)', timeout: 5 * 60_000 },
 ];
 

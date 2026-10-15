@@ -86,6 +86,11 @@ function linksReady(workspace: string, slug: string) {
   }
 }
 
+function ensureExecutableCli(dest: string) {
+  const script = path.join(dest, 'scripts', 'pm');
+  if (fs.existsSync(script)) fs.chmodSync(script, 0o755);
+}
+
 function declareSkill(workspace: string, skill: BundledSkill): void {
   const source = skillSource(skill);
   if (!fs.existsSync(source)) return;
@@ -97,6 +102,7 @@ function declareSkill(workspace: string, skill: BundledSkill): void {
   const destMatches = Boolean(destHashes && hashesEqual(hashes, destHashes));
   if (destMatches && linksReady(workspace, skill.slug)) {
     writeMarker(workspace, skill.slug, hashes);
+    ensureExecutableCli(dest);
     return;
   }
   const previousFiles = destMatches && destHashes ? destHashes : readMarker(workspace, skill.slug);
@@ -110,6 +116,7 @@ function declareSkill(workspace: string, skill: BundledSkill): void {
   });
   installation.commit();
   writeMarker(workspace, skill.slug, hashes);
+  ensureExecutableCli(dest);
 }
 
 export function declareBundledSkills(workspace: string): void {
