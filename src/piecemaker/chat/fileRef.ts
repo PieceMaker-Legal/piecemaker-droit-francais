@@ -25,12 +25,12 @@ export function cachedFileRef(ref: string, projectId = activeProjectId): string 
   return entry.path;
 }
 
-async function send(projectId: string, refs: string[]): Promise<Array<string | null>> {
+async function send(projectId: string, refs: string[], piece = false): Promise<Array<string | null>> {
   try {
     const response = await authenticatedFetch('/api/piecemaker/file-links/resolve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, refs }),
+      body: JSON.stringify({ projectId, refs, ...(piece ? { piece: true } : {}) }),
     });
     const data = response.ok ? await response.json() : null;
     return Array.isArray(data?.paths) ? data.paths : refs.map(() => null);
@@ -83,4 +83,9 @@ export function resolveFileRef(ref: string, options: { fresh?: boolean; projectI
   });
   inflight.set(key, request);
   return request;
+}
+
+export async function resolvePieceRef(ref: string, projectId = activeProjectId): Promise<string | null> {
+  const paths = await send(projectId, [ref], true);
+  return typeof paths[0] === 'string' ? paths[0] : null;
 }

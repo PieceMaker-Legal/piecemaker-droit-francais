@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 
 import express from 'express';
 
-import { createExternalFileRouter, createFileLinksRouter, normalizeFileRef, resolveFileRef } from './file-links.js';
+import { createExternalFileRouter, createFileLinksRouter, normalizeFileRef, resolveFileRef, resolvePieceRef } from './file-links.js';
 
 let base = '';
 let project = '';
@@ -61,6 +61,27 @@ test('vérifie un chemin relatif, absolu, ~ ou file://', async () => {
   assert.equal(await resolve(path.join(outside, 'piece.txt')), path.join(outside, 'piece.txt'));
 });
 
+test('une pièce citée par son Markdown converti, même mal nommé, ouvre l’original', async () => {
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'pm-piece-ref-')));
+  const original = path.join(root, '02_DATA_ROOM', '12_Contrat_exemple.pdf');
+  const converted = path.join(root, 'Fichiers convertis PieceMaker', '12_Contrat_exemple.md');
+  await mkdir(path.dirname(original), { recursive: true });
+  await mkdir(path.dirname(converted), { recursive: true });
+  await writeFile(original, 'pdf');
+  await writeFile(converted, 'markdown');
+  const skill = path.join(root, '.agents', 'skills', 'outil', 'SKILL.md');
+  await mkdir(path.dirname(skill), { recursive: true });
+  await writeFile(skill, '# skill');
+  try {
+    assert.equal(await resolvePieceRef(root, 'Fichiers convertis PieceMaker/12_Contrat_exemple.md'), original);
+    assert.equal(await resolvePieceRef(root, 'Fichiers convertis PieceMaker/12_Contrat_SA_10ux_exemple.md'), original);
+    assert.equal(await resolveFileRef(root, 'Fichiers convertis PieceMaker/12_Contrat_exemple.md'), converted);
+    assert.equal(await resolvePieceRef(root, '.agents/skills/outil/SKILL.md'), path.join(root, '.agents', 'skills', 'outil', 'SKILL.md'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('un nom seul doit être unique dans le dossier', async () => {
   assert.equal(await resolve('unique.docx'), path.join(project, 'a', 'unique.docx'));
   assert.equal(await resolve('double.md'), null);
@@ -97,6 +118,12 @@ test('la résolution par lot renvoie un chemin réel ou null', async () => {
       body: JSON.stringify({ projectId: '1', refs: ['src/note.md', 'invente.md'] }),
     });
     assert.deepEqual(await response.json(), { paths: [path.join(project, 'src', 'note.md'), null] });
+    const piece = await fetch(`${app.url}/file-links/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: '1', refs: ['src/note.md'], piece: true }),
+    });
+    assert.deepEqual(await piece.json(), { paths: [path.join(project, 'src', 'note.md')] });
   } finally {
     await app.close();
   }

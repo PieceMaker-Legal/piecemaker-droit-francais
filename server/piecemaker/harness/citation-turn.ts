@@ -5,6 +5,8 @@ import path from 'node:path';
 import type { NormalizedMessage } from '@/shared/types.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
+import { resolvePieceRef } from '../file-links.js';
+
 import type { createCitationStore } from './citation-store.js';
 import { formatPieceTitle } from './piece-title.js';
 import { locateSourcePassages, nearestPassage } from './source-passages.js';
@@ -280,11 +282,25 @@ export function createCitationTurn(options: {
             : citation.kind === 'code' ? await codeText(citation.doc_id ?? '') : await documentText(citation.doc_id ?? '');
           const ranges = locateSourcePassages(source, citation.quotes);
           const docId = citation.doc_id ?? '';
+          let openId = docId;
+          if (citation.kind === 'document') {
+            const original = await resolvePieceRef(options.cwd, docId);
+            if (original) {
+              const relative = path.relative(await realpath(options.cwd), original).split(path.sep).join('/');
+              if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) openId = relative;
+            }
+          }
           const title = citation.kind === 'code' ? docId : citation.kind === 'document'
-            ? options.pieceTitle?.(options.cwd, docId) ?? formatPieceTitle(undefined, docId)
+            ? options.pieceTitle?.(options.cwd, openId) ?? formatPieceTitle(undefined, openId)
             : decisionTitle(lawId) ?? lawId ?? 'Source';
           try {
-            const token = await options.store.save({ sessionId: options.sessionId, title, source, citation, ranges });
+            const token = await options.store.save({
+              sessionId: options.sessionId,
+              title,
+              source,
+              citation: citation.kind === 'document' ? { ...citation, doc_id: openId } : citation,
+              ranges,
+            });
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
             lines.push(sourceLine(citation, title, source, ranges));
           } catch {

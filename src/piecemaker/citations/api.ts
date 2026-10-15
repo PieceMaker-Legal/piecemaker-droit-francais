@@ -9,6 +9,7 @@ type CitationSource = {
     kind?: 'case' | 'article' | 'document' | 'code';
     decision_id?: string;
     article_id?: string;
+    doc_id?: string;
     verified?: boolean;
     quotes: Array<{
       quote: string;
