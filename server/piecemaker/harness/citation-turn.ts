@@ -17,9 +17,11 @@ const { verifyCitations } = require(path.join(vendor, 'verify-citations.cjs'));
 const { extractFullText, extractSourceTitle } = require(path.join(root, 'server/piecemaker/harness/decisions.cjs'));
 const SOURCE_TOOL = /(?:^|_)consulter_(?:decision|article)$/;
 const { structuredMarkdownCounterpart } = require(path.join(vendor, 'case-folder-structure.cjs'));
+const JSZip = require('jszip');
 const OPEN = '<CITATIONS>';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_CHARACTERS = 32 * 1024 * 1024;
+const DOCX_PART = /^(word\/document\.xml|word\/(?:header\d*|footer\d*|footnotes|endnotes)\.xml)$/i;
 const CODE_EXTENSIONS = new Set(['.cjs', '.css', '.go', '.html', '.js', '.json', '.jsonc', '.jsx', '.md', '.mjs', '.py', '.rs', '.sh', '.sql', '.toml', '.ts', '.tsx', '.xml', '.yaml', '.yml']);
 const CODE_EXTENSIONLESS_PATHS = new Set(['.husky/commit-msg', '.husky/pre-commit', '.husky/pre-push', '.oxlintrc']);
 
@@ -47,6 +49,44 @@ function toolText(value: unknown): string {
 function withinRoot(rootPath: string, file: string) {
   const relative = path.relative(rootPath, file);
   return Boolean(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function decodeXmlText(value: string) {
+  return value.replace(/&(?:#(\d+)|#x([0-9a-f]+)|amp|lt|gt|quot|apos);/gi, (entity, decimal, hexadecimal) => {
+    const codePoint = decimal ? Number(decimal) : Number.parseInt(hexadecimal, 16);
+    if ((decimal || hexadecimal) && Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff) {
+      return String.fromCodePoint(codePoint);
+    }
+    if (decimal || hexadecimal) return entity;
+    return { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'" }[entity.toLowerCase()] ?? entity;
+  });
+}
+
+function wordXmlToText(xml: string) {
+  const source = xml.replace(/<w:(?:del|moveFrom)\b[^>]*>[\s\S]*?<\/w:(?:del|moveFrom)>/gi, '');
+  const tokens = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>|<w:tab\b[^>]*\/?\s*>|<w:br\b[^>]*\/?\s*>|<\/w:p\s*>|<\/w:tc\s*>/gi;
+  let text = '';
+  let match: RegExpExecArray | null;
+  while ((match = tokens.exec(source))) {
+    if (match[1] !== undefined) text += decodeXmlText(match[1].replace(/<[^>]+>/g, ''));
+    else if (/^<\/w:p/i.test(match[0])) text += '\n';
+    else if (/^<\/w:tc/i.test(match[0]) || /^<w:tab/i.test(match[0])) text += '\t';
+    else text += '\n';
+  }
+  return text.replace(/\r/g, '').split('\n').map((line) => line.replace(/[ \t]+$/g, '')).filter((line, index, lines) => line || (index > 0 && lines[index - 1])).join('\n').trim();
+}
+
+async function extractDocxSource(file: string) {
+  const zip = await JSZip.loadAsync(await readFile(file));
+  const parts: string[] = [];
+  for (const name of Object.keys(zip.files)) {
+    if (!DOCX_PART.test(name)) continue;
+    const xml = await zip.file(name)?.async('string');
+    if (!xml) continue;
+    const text = wordXmlToText(xml);
+    if (text) parts.push(text);
+  }
+  return parts.join('\n');
 }
 
 const inline = (text: string) => text.replace(/\[\[PAGE_BREAK\]\]/g, ' … ').replace(/\s+/g, ' ').trim();
@@ -99,6 +139,18 @@ export function createCitationTurn(options: {
   let overflow = false;
   let finished: Promise<string> | undefined;
 
+  const takeSource = async (text: string) => {
+    sourceCharacters += text.length;
+    return sourceCharacters <= MAX_TURN_CHARACTERS ? text : '';
+  };
+
+  const markdownSource = async (caseRoot: string, file: string) => {
+    const canonical = await realpath(file);
+    if (!withinRoot(caseRoot, canonical) || path.extname(canonical).toLowerCase() !== '.md') return '';
+    if ((await stat(canonical)).size > MAX_SOURCE_BYTES) return '';
+    return takeSource(await readFile(canonical, 'utf8'));
+  };
+
   const documentText = (id: string) => {
     let pending = documents.get(id);
     if (!pending) {
@@ -107,15 +159,17 @@ export function createCitationTurn(options: {
           const caseRoot = await realpath(options.cwd);
           const requested = path.resolve(options.cwd, id);
           if (!withinRoot(path.resolve(options.cwd), requested)) return '';
-          const candidate = path.extname(requested).toLowerCase() === '.md'
-            ? requested : structuredMarkdownCounterpart(requested, options.cwd, {})?.path;
-          if (typeof candidate !== 'string') return '';
-          const canonical = await realpath(candidate);
-          if (!withinRoot(caseRoot, canonical) || path.extname(canonical).toLowerCase() !== '.md') return '';
+          const ext = path.extname(requested).toLowerCase();
+          const counterpart = ext === '.md' ? { path: requested, exists: true } : structuredMarkdownCounterpart(requested, options.cwd, {});
+          if (counterpart?.exists && typeof counterpart.path === 'string') {
+            const markdown = await markdownSource(caseRoot, counterpart.path).catch(() => '');
+            if (markdown) return markdown;
+          }
+          if (ext !== '.docx') return '';
+          const canonical = await realpath(requested);
+          if (!withinRoot(caseRoot, canonical)) return '';
           if ((await stat(canonical)).size > MAX_SOURCE_BYTES) return '';
-          const text = await readFile(canonical, 'utf8');
-          sourceCharacters += text.length;
-          return sourceCharacters <= MAX_TURN_CHARACTERS ? text : '';
+          return takeSource(await extractDocxSource(canonical));
         } catch { return ''; }
       })();
       documents.set(id, pending);
