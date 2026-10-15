@@ -5,12 +5,14 @@ Installateur autonome de l'application Electron PieceMaker sur **macOS** et
 entièrement dans `desktop-bootstrap/`.
 
 Sur Windows, les nouvelles releases fournissent un **installateur NSIS précompilé**
-et son SHA-256. Le bootstrap utilise directement cet installateur, puis le Node
-embarqué dans Electron pour préparer les certificats et les composants précompilés
-Python/IA. Aucun téléchargement des sources ou installation de Node/npm n'est
-nécessaire dans ce parcours. Les anciennes releases sans checksum d'installateur
-conservent le parcours archive. Une construction locale Windows exige
-`--build-from-source`. Détails et mesures :
+signé Authenticode éditeur, et son SHA-256. Le bootstrap lance NSIS et, pendant
+cette extraction, télécharge Python et les SDK IA. Le Node embarqué dans Electron
+prépare ensuite les certificats **locaux** (CA du proxy, TLS localhost) et
+installe les archives déjà présentes. La signature éditeur de `PieceMaker.exe`
+n'est pas remplacée. Aucun téléchargement des sources ou installation de
+Node/npm n'est nécessaire dans ce parcours. Les anciennes releases sans checksum
+d'installateur conservent le parcours archive. Une construction locale Windows
+exige `--build-from-source`. Détails et mesures :
 [windows-initial-install-performance.md](windows-initial-install-performance.md).
 
 Sur macOS, la construction locale utilise encore les sources et la chaîne Electron
@@ -149,26 +151,24 @@ dossier courant a été supprimé ; `lib/place.test.mjs` vérifie l'échange.
 ## Windows : application précompilée à chaque release
 
 Sous Windows, l'installateur ne compile plus rien sur le poste dans le cas
-nominal. À chaque release publiée, le workflow
-`.github/workflows/piecemaker-windows-release.yml` (déclenché par
-`release: published`, relançable à la main avec un `tag`) construit sur
-`windows-latest` et attache à la release :
+nominal. À chaque release, le workflow
+`.github/workflows/piecemaker-windows-release.yml` (appelé par `release.yml`,
+relançable à la main avec un `tag`) construit sur `windows-latest`, signe
+l'installeur, et attache à la release :
 
 | Fichier | Contenu |
 |---|---|
+| `piecemaker-droit-francais-desktop-*-win-x64.exe` | installateur NSIS signé Authenticode éditeur |
+| `piecemaker-python-win32-x64.tar.gz` | Python 3.12 + MarkItDown, hors GLiNER |
+| `piecemaker-runtime-components-win32-x64-*.tar.gz` | SDK OpenAI/Anthropic, cache persisté |
 | `piecemaker-hudsucker-win32-x64.exe` | proxy d'anonymisation (Rust) |
 | `better-sqlite3-electron-win32-x64.node` | module natif compilé pour l'Electron du `package-lock.json` |
-| `piecemaker-desktop-win32-x64.tar.gz` | application complète (`win-unpacked`), construite par `desktop-bootstrap/lib/build-release.mjs`, soit le même `buildDesktopApp` que l'installateur |
+| `piecemaker-desktop-win32-x64.tar.gz` | archive héritée, conservée pour les anciennes releases |
 
-Chaque fichier a son `.sha256`. L'installateur télécharge l'archive de
-l'application, vérifie l'empreinte, la décompresse avec le `tar.exe` de
-Windows dans `~/.piecemaker/bootstrap/prebuilt/<tag>/` et contrôle son contenu,
-puis enchaîne l'installation, le certificat, la signature, les raccourcis et
-les composants Python. Si l'archive est absente ou invalide (par exemple
-pendant les quelques minutes qui suivent la publication, le temps que le
-workflow se termine), il retombe sur la construction locale. Celle-ci
-télécharge alors le proxy et better-sqlite3 précompilés : Visual Studio et
-Rust ne sont jamais nécessaires.
+Chaque fichier a son `.sha256`. `install.ps1` lance NSIS et télécharge Python
+et les SDK pendant l'extraction, dans `~/.piecemaker/bootstrap/prebuilt/<tag>/`.
+Un artefact absent n'entraîne plus de compilation locale : il faut
+`--build-from-source`. Visual Studio et Rust ne sont jamais nécessaires.
 
 ## Test du proxy en bac à sable
 

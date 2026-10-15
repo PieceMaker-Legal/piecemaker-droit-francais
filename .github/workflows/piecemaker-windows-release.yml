@@ -6,12 +6,22 @@ on:
       tag:
         required: true
         type: string
+      finalize:
+        description: "Publish the GitHub release after assets are attached"
+        required: false
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       tag:
         description: "Existing release tag to attach the prebuilt Windows assets to"
         required: true
         type: string
+      finalize:
+        description: "Publish the GitHub release after assets are attached"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -92,6 +102,17 @@ jobs:
           }
           tail -n 5 "$RUNNER_TEMP/python.log"
 
+      - name: Require Windows publisher certificate
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: |
+          if [ -z "$CSC_LINK" ] || [ -z "$CSC_KEY_PASSWORD" ]; then
+            echo "::error::WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD are required to Authenticode-sign the installer."
+            exit 1
+          fi
+
       - name: Build desktop app
         shell: bash
         env:
@@ -101,6 +122,8 @@ jobs:
           PIECEMAKER_REPO: ${{ github.repository }}
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          WIN_CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: |
           git clean -ffdxq
           if [ "$TAG" = "v2.0.38" ]; then
@@ -115,11 +138,23 @@ jobs:
           }
           tail -n 20 "$RUNNER_TEMP/app.log"
           node desktop-bootstrap/lib/verify-packaged-runtime.mjs release/desktop/win-unpacked release/desktop
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
+            $exe = Get-ChildItem -Path release/desktop -Filter *-win-x64.exe | Select-Object -First 1
+            if (-not $exe) { throw "Installer exe missing" }
+            $sig = Get-AuthenticodeSignature -FilePath $exe.FullName
+            if (-not $sig.SignerCertificate -or $sig.Status -eq "NotSigned") {
+              throw "Installer is not Authenticode-signed: $($sig.Status)"
+            }
+            Write-Host "Signed by $($sig.SignerCertificate.Subject) status $($sig.Status)"
+          '
           cp release/desktop/*.exe release/desktop/*.blockmap release/desktop/latest.yml release/desktop/piecemaker-runtime-components-*.tar.gz "$RUNNER_TEMP/app/"
           cp "$RUNNER_TEMP/native-assets"/piecemaker-python-* "$RUNNER_TEMP/native-assets/python-runtime.json" "$RUNNER_TEMP/app/"
           cd "$RUNNER_TEMP/app"
           for installer in *.exe; do
             sha256sum "$installer" | cut -d' ' -f1 > "$installer.sha256"
+          done
+          for component in piecemaker-runtime-components-*.tar.gz; do
+            sha256sum "$component" | cut -d' ' -f1 > "$component.sha256"
           done
           sha256sum piecemaker-desktop-win32-x64.tar.gz | cut -d' ' -f1 > piecemaker-desktop-win32-x64.tar.gz.sha256
           ls -la
@@ -130,10 +165,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" "$RUNNER_TEMP"/app/* --clobber --repo "$GITHUB_REPOSITORY"
 
-      - name: Publish the complete release
+      - name: Verify release assets
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           test -f "$RUNNER_TEMP/app/latest.yml"
           test -f "$RUNNER_TEMP/app/piecemaker-python-win32-x64.tar.gz.sha256"
@@ -141,6 +174,14 @@ jobs:
           test -n "$(find "$RUNNER_TEMP/app" -name '*.exe.sha256' -print -quit)"
           test -n "$(find "$RUNNER_TEMP/app" -name '*.blockmap' -print -quit)"
           test -n "$(find "$RUNNER_TEMP/app" -name 'piecemaker-runtime-components-*.tar.gz' -print -quit)"
+          test -n "$(find "$RUNNER_TEMP/app" -name 'piecemaker-runtime-components-*.tar.gz.sha256' -print -quit)"
+
+      - name: Publish the complete release
+        if: ${{ inputs.finalize == true || inputs.finalize == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           if [ "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = "true" ]; then
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
           fi

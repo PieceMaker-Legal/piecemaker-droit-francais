@@ -455,9 +455,12 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
   ui.step("Construction de l'application Electron…");
   const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', ...(windowsInstaller ? ['--win', 'nsis', '--x64', '--publish', 'never'] : ['--dir'])];
   if (prebuiltSqlite && process.platform !== 'win32') builderArgs.push('-c.npmRebuild=false');
+  const signingEnv = { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' };
+  if (process.env.CSC_LINK && !process.env.WIN_CSC_LINK) signingEnv.WIN_CSC_LINK = process.env.CSC_LINK;
+  if (process.env.CSC_KEY_PASSWORD && !process.env.WIN_CSC_KEY_PASSWORD) signingEnv.WIN_CSC_KEY_PASSWORD = process.env.CSC_KEY_PASSWORD;
   await npx(builderArgs, {
     cwd: sourceDir,
-    env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
+    env: signingEnv,
   });
 
   const built = await findBuiltApp(sourceDir);

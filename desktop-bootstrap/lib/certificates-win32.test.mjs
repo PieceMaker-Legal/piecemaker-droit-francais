@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { authorityPemFromWindowsExport } from './certificates-win32.mjs';
+import { authorityPemFromWindowsExport, keepExistingAuthenticode } from './certificates-win32.mjs';
 
 const JWK_FIELDS = { Modulus: 'n', Exponent: 'e', D: 'd', P: 'p', Q: 'q', DP: 'dp', DQ: 'dq', InverseQ: 'qi' };
 
@@ -47,6 +47,14 @@ test("une clé qui n'appartient pas à l'autorité est refusée", () => {
   const exported = dotnetExport(authority);
   exported.key = dotnetExport(stranger).key;
   assert.throws(() => authorityPemFromWindowsExport(exported), /ne correspond pas/);
+});
+
+test("une signature éditeur déjà présente n'est pas remplacée", () => {
+  assert.equal(keepExistingAuthenticode('Valid'), true);
+  assert.equal(keepExistingAuthenticode('NotTrusted'), true);
+  assert.equal(keepExistingAuthenticode('NotSigned'), false);
+  assert.equal(keepExistingAuthenticode('HashMismatch'), false);
+  assert.equal(keepExistingAuthenticode('UnknownError'), false);
 });
 
 test('un paramètre RSA manquant est signalé', () => {
