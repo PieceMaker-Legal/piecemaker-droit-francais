@@ -12,7 +12,7 @@ Les plugins sont compilés en CI avec des chemins portables, puis associés à l
 
 Lancer `release.yml` avec la version explicitement choisie. La release GitHub reste en brouillon. Le workflow appelle `piecemaker-windows-release.yml`, qui compile le proxy, les modules natifs et l'application, vérifie les imports natifs et les fournisseurs dans Electron, puis téléverse l'installeur, son blockmap, `latest.yml` et les composants. La publication intervient uniquement après ces étapes. La notification de l'application consulte `/releases/latest`, qui ignore les brouillons : elle ne voit donc pas une version dont l'installeur est encore en préparation.
 
-Une compilation de secours sur le poste Windows nécessite désormais l'option explicite `--build-from-source`. Un artefact absent ne déclenche plus silencieusement une longue compilation. La publication npm intervient toujours avant le paquet Windows ; la notification de l'application utilise GitHub, pas npm.
+Une compilation de secours sur le poste Windows nécessite désormais l'option explicite `--build-from-source`. Un artefact absent ne déclenche plus silencieusement une longue compilation. La publication npm intervient après le paquet Windows vérifié ; la notification de l'application utilise GitHub, pas npm. La release GitHub reste en brouillon jusqu'à npm.
 
 La vérification du registre utilise une requête non mise en cache et contrôle le nom, la version et l'intégrité de l'artefact. Un 404 anciennement mis en cache ne doit pas bloquer pendant dix minutes une version déjà publiée.
 

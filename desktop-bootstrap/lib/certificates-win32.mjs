@@ -158,9 +158,19 @@ export async function trustCertificateAuthority() {
   return true;
 }
 
+export function keepExistingAuthenticode(status) {
+  return status === 'Valid' || status === 'NotTrusted';
+}
+
 export async function signApplication(appDir) {
-  const { signing } = await readThumbprints();
   const executable = path.join(appDir, `${PRODUCT_NAME}.exe`);
+  const status = powershell([
+    `$sig = Get-AuthenticodeSignature -FilePath ${quote(executable)}`,
+    'if (-not $sig.SignerCertificate) { "NotSigned" } else { [string]$sig.Status }',
+  ].join('; '));
+  if (keepExistingAuthenticode(status)) return '';
+
+  const { signing } = await readThumbprints();
   powershell([
     '$ErrorActionPreference = "Stop"',
     `$certificate = Get-Item "Cert:\\CurrentUser\\My\\${signing}"`,

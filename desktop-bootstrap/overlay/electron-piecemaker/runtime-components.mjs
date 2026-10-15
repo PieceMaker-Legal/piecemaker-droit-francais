@@ -114,7 +114,14 @@ function cacheReady(directory, component) {
   }
 }
 
-export async function ensureRuntimeComponents({ manifest, cacheRoot, fetchImpl = fetch, tarCommand = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar', log = () => {} }) {
+export async function ensureRuntimeComponents({
+  manifest,
+  cacheRoot,
+  fetchImpl = fetch,
+  tarCommand = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar',
+  log = () => {},
+  assetDir = process.env.PIECEMAKER_PREBUILT_ASSET_DIR,
+}) {
   validateManifest(manifest);
   fs.mkdirSync(cacheRoot, { recursive: true });
   const moduleRoots = [];
@@ -129,16 +136,23 @@ export async function ensureRuntimeComponents({ manifest, cacheRoot, fetchImpl =
       const backup = path.join(cacheRoot, `.${component.id}.${nonce}.previous`);
       const url = `https://github.com/${manifest.repository}/releases/download/${encodeURIComponent(manifest.releaseTag)}/${encodeURIComponent(component.assetName)}`;
       try {
-        log(`Downloading runtime component: ${component.id}`);
-        const response = await fetchImpl(url);
-        await writeResponse(response, partial);
-        if (await digestFile(partial) !== component.sha256) throw new Error('Runtime component checksum mismatch.');
+        const prefetched = assetDir ? path.join(assetDir, component.assetName) : '';
+        let archive = partial;
+        if (prefetched && fs.existsSync(prefetched)) {
+          log(`Using prefetched runtime component: ${component.assetName}`);
+          archive = prefetched;
+        } else {
+          log(`Downloading runtime component: ${component.id}`);
+          const response = await fetchImpl(url);
+          await writeResponse(response, partial);
+        }
+        if (await digestFile(archive) !== component.sha256) throw new Error('Runtime component checksum mismatch.');
         log(`Extracting runtime component: ${component.id}`);
-        const entries = runTar(tarCommand, ['-tzf', partial], cacheRoot);
-        const details = runTar(tarCommand, ['-tvzf', partial], cacheRoot);
+        const entries = runTar(tarCommand, ['-tzf', archive], cacheRoot);
+        const details = runTar(tarCommand, ['-tvzf', archive], cacheRoot);
         assertSafeTarEntries(entries, details, component.packageNames);
         fs.mkdirSync(staging, { recursive: false });
-        runTar(tarCommand, ['-xzf', partial, '-C', staging], cacheRoot);
+        runTar(tarCommand, ['-xzf', archive, '-C', staging], cacheRoot);
         const modules = path.join(staging, 'node_modules');
         for (const packageName of component.packageNames) {
           const packageDir = path.join(modules, ...packageName.split('/'));

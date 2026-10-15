@@ -99,7 +99,8 @@ async function runCertificateStep(installedPath) {
 
   try {
     const identity = await signApplication(installedPath);
-    ui.ok(`Application signée avec l'identité locale « ${identity} ».`);
+    if (identity) ui.ok(`Application signée avec l'identité locale « ${identity} ».`);
+    else ui.ok("Signature éditeur de l'application conservée.");
   } catch (error) {
     ui.warn(`Signature locale impossible (${error.message}) — l'application reste utilisable.`);
   }
