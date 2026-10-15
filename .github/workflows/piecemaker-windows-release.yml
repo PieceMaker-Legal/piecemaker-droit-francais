@@ -103,6 +103,9 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: |
           git clean -ffdxq
+          if [ "$TAG" = "v2.0.38" ]; then
+            node --input-type=module -e 'import fs from "node:fs"; const file = "package.json"; const manifest = JSON.parse(fs.readFileSync(file, "utf8")); const icon = "server/piecemaker/vendor/installer/assets/piecemaker.ico"; manifest.build.nsis.installerIcon = icon; manifest.build.nsis.uninstallerIcon = icon; fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + "\n");'
+          fi
           export PIECEMAKER_SRC_DIR="$(cygpath -w "$GITHUB_WORKSPACE")" PIECEMAKER_TAG="$TAG"
           export PIECEMAKER_PREBUILT_ASSET_DIR="$(cygpath -w "$RUNNER_TEMP/native-assets")"
           node desktop-bootstrap/lib/build-release.mjs "$(cygpath -w "$RUNNER_TEMP/app/piecemaker-desktop-win32-x64.tar.gz")" > "$RUNNER_TEMP/app.log" 2>&1 || {

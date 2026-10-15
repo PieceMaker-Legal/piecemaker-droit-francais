@@ -229,7 +229,7 @@ async function patchStagedManifest(stageDir) {
 
   manifest.main = OVERLAY_ENTRY;
   manifest.build.extraMetadata = { ...manifest.build.extraMetadata, main: OVERLAY_ENTRY };
-  if (process.platform === 'win32') configureWindowsUpdates(manifest, releaseRepo, Boolean(process.env.CSC_LINK));
+  if (process.platform === 'win32') configureWindowsUpdates(manifest, releaseRepo, Boolean(process.env.CSC_LINK), PRODUCT_ICONS.win);
   for (const pattern of ['server/**', `${OVERLAY_DIR}/**`, `${BUNDLE_DIR}/**`]) {
     if (!manifest.build.files.includes(pattern)) manifest.build.files.push(pattern);
   }
