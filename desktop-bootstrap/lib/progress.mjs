@@ -21,7 +21,7 @@ const FINAL_STATE_DELAY_MS = 3_000;
 const WINDOW_WIDTH = 960;
 const WINDOW_HEIGHT = 760;
 const WINDOWS_CSC = path.join(process.env.WINDIR || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
-const WINDOW_ICON = path.join(here, '..', '..', 'electron', 'assets', 'logo-windows.ico');
+const WINDOW_ICON = path.join(here, '..', '..', 'server', 'piecemaker', 'vendor', 'installer', 'assets', 'piecemaker.ico');
 const WEBVIEW2_DIR = path.join(here, 'webview2');
 const WINDOW_SOURCE = path.join(here, 'window-win32.cs');
 const WEBVIEW2_FILES = [
@@ -40,6 +40,7 @@ export const PISTE_LINKS = {
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.png': 'image/png',
+  '.ico': 'image/x-icon',
 };
 
 let session = null;
@@ -149,6 +150,8 @@ async function route(request, response) {
     sendFile(response, path.join(uiDir, 'index.html'));
   } else if (request.method === 'GET' && target === 'logo.png') {
     sendFile(response, logoPath);
+  } else if (request.method === 'GET' && target === 'favicon.ico') {
+    sendFile(response, WINDOW_ICON);
   } else if (request.method === 'GET' && /^piste\/[a-z-]+\.png$/.test(target)) {
     sendFile(response, path.join(uiDir, target));
   } else if (request.method === 'GET' && target === 'state') {
@@ -177,14 +180,26 @@ function windowUserData() {
   return path.join(bootstrapHome, 'fenetre-installation');
 }
 
+function copyHostFile(from, to) {
+  try {
+    const source = fs.statSync(from);
+    const current = fs.existsSync(to) ? fs.statSync(to) : null;
+    if (current && current.size === source.size && current.mtimeMs >= source.mtimeMs) return;
+    fs.copyFileSync(from, to);
+  } catch (error) {
+    if (error.code === 'EBUSY' && fs.existsSync(to)) return;
+    throw error;
+  }
+}
+
 function prepareWindowsInstallerHost() {
   const userData = windowUserData();
   const exe = path.join(userData, 'installer-window.exe');
   fs.mkdirSync(userData, { recursive: true });
   for (const name of WEBVIEW2_FILES) {
-    fs.copyFileSync(path.join(WEBVIEW2_DIR, name), path.join(userData, name));
+    copyHostFile(path.join(WEBVIEW2_DIR, name), path.join(userData, name));
   }
-  fs.copyFileSync(WINDOW_SOURCE, path.join(userData, 'window-win32.cs'));
+  copyHostFile(WINDOW_SOURCE, path.join(userData, 'window-win32.cs'));
   const stale = !fs.existsSync(exe) || fs.statSync(WINDOW_SOURCE).mtimeMs > fs.statSync(exe).mtimeMs;
   if (!stale) return exe;
   if (!fs.existsSync(WINDOWS_CSC)) {

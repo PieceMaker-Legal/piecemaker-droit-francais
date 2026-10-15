@@ -68,11 +68,17 @@ test('la page, le logo et les captures PISTE sont servis', async () => {
   assert.match(html, /Une seule chose à faire à la fois/);
   assert.match(html, /J'ai créé mon compte/);
   assert.match(html, /Voir un exemple de l'écran/);
+  assert.equal(html.includes("Le site de l'État s'ouvre"), false);
+  assert.equal(html.includes('Règles du mot de passe'), false);
+  assert.equal(html.includes('L\'État ouvre Légifrance et Judilibre par le portail PISTE'), false);
   for (const asset of ['logo.png', 'piste/inscription.png', 'piste/cgu.png', 'piste/apps.png', 'piste/environnement.png', 'piste/api.png']) {
     const response = await fetch(`${window.url}${asset}`);
     assert.equal(response.status, 200, asset);
     assert.equal(response.headers.get('content-type'), 'image/png');
   }
+  const favicon = await fetch(`${window.url}favicon.ico`);
+  assert.equal(favicon.status, 200);
+  assert.equal(favicon.headers.get('content-type'), 'image/x-icon');
   assert.equal((await fetch(`${window.url}piste/..%2F..%2Fpiste.mjs`)).status, 404);
   await settleProgressWindow();
 });
@@ -175,7 +181,9 @@ test("Windows ouvre une fenêtre native, pas Edge", { skip: process.platform !==
   const command = installerWindowCommand('http://127.0.0.1:1/token/');
   assert.equal(path.basename(command[0]), 'installer-window.exe');
   assert.equal(fs.existsSync(command[0]), true);
+  assert.ok(command[1].some((argument) => String(argument).endsWith('piecemaker.ico')));
   assert.ok(!JSON.stringify(command).toLowerCase().includes('msedge'));
+  assert.ok(!JSON.stringify(command).includes('logo-windows.ico'));
 });
 
 test('la fin attend la configuration PISTE tant que la fenêtre interroge l’installateur', async () => {
