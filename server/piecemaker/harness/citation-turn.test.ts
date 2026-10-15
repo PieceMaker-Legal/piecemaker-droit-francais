@@ -94,6 +94,29 @@ test('une pièce citée par son Markdown converti enregistre le chemin de l’or
   assert.equal((await store.read(token))?.citation.doc_id, '02_DATA_ROOM/12_Contrat_exemple.pdf');
 });
 
+test('une pièce citée sous un nom déformé est vérifiée et ouvre l’original', async (t) => {
+  const { cwd, turn, store } = await fixture(t);
+  const original = path.join(cwd, '02_DATA_ROOM', '12_Contrat_exemple.pdf');
+  const converted = path.join(cwd, 'Fichiers convertis PieceMaker', '12_Contrat_exemple.md');
+  await mkdir(path.dirname(original), { recursive: true });
+  await mkdir(path.dirname(converted), { recursive: true });
+  await writeFile(original, 'pdf');
+  await writeFile(converted, 'Contrat de partenariat signé le 2 février 2023.');
+  turn.text(block([{
+    ref: 1,
+    kind: 'document',
+    doc_id: 'Fichiers convertis PieceMaker/12_Contrat_SA_10ux_exemple.md',
+    quotes: [{ page: 1, quote: 'Contrat de partenariat signé le 2 février 2023.' }],
+  }]));
+  const suffix = await turn.finish();
+  assert.doesNotMatch(suffix, /🔴/);
+  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.ok(token);
+  const snapshot = await store.read(token);
+  assert.equal(snapshot?.citation.doc_id, '02_DATA_ROOM/12_Contrat_exemple.pdf');
+  assert.equal(snapshot?.citation.verified, true);
+});
+
 test('un .docx du dossier est vérifié sur son texte, sans Markdown converti', async (t) => {
   const { cwd, turn, store } = await fixture(t);
   await writeDocx(path.join(cwd, 'bonjour.docx'), 'Bonjour, Gaston !');

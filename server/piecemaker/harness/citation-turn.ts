@@ -18,7 +18,7 @@ const { parseCitationsWithDiagnostics } = require(path.join(vendor, 'citations.c
 const { verifyCitations } = require(path.join(vendor, 'verify-citations.cjs'));
 const { extractFullText, extractSourceTitle } = require(path.join(root, 'server/piecemaker/harness/decisions.cjs'));
 const SOURCE_TOOL = /(?:^|_)consulter_(?:decision|article)$/;
-const { structuredMarkdownCounterpart } = require(path.join(vendor, 'case-folder-structure.cjs'));
+const { markdownCounterpart } = require(path.join(vendor, 'protection.cjs'));
 const JSZip = require('jszip');
 const OPEN = '<CITATIONS>';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
@@ -159,16 +159,15 @@ export function createCitationTurn(options: {
       pending = (async () => {
         try {
           const caseRoot = await realpath(options.cwd);
-          const requested = path.resolve(options.cwd, id);
-          if (!withinRoot(path.resolve(options.cwd), requested)) return '';
-          const ext = path.extname(requested).toLowerCase();
-          const counterpart = ext === '.md' ? { path: requested, exists: true } : structuredMarkdownCounterpart(requested, options.cwd, {});
+          const piece = await resolvePieceRef(options.cwd, id) ?? path.resolve(options.cwd, id);
+          if (!withinRoot(caseRoot, await realpath(piece).catch(() => piece))) return '';
+          const counterpart = markdownCounterpart(piece, options.cwd);
           if (counterpart?.exists && typeof counterpart.path === 'string') {
             const markdown = await markdownSource(caseRoot, counterpart.path).catch(() => '');
             if (markdown) return markdown;
           }
-          if (ext !== '.docx') return '';
-          const canonical = await realpath(requested);
+          if (path.extname(piece).toLowerCase() !== '.docx') return '';
+          const canonical = await realpath(piece);
           if (!withinRoot(caseRoot, canonical)) return '';
           if ((await stat(canonical)).size > MAX_SOURCE_BYTES) return '';
           return takeSource(await extractDocxSource(canonical));
