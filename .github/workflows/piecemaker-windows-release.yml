@@ -41,7 +41,9 @@ jobs:
         run: node --experimental-vm-modules --test desktop-bootstrap/overlay/electron-piecemaker/main.test.js
 
       - name: Test desktop dependency selection
-        run: node --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs desktop-bootstrap/lib/initial-install.test.mjs desktop-bootstrap/composants/install.test.mjs
+        run: |
+          $env:PSModulePath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\Modules'
+          node --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs desktop-bootstrap/lib/initial-install.test.mjs desktop-bootstrap/composants/install.test.mjs
 
       - name: Build better-sqlite3 for Electron
         shell: bash
