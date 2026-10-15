@@ -268,16 +268,30 @@ test('la liste des sources donne le titre Légifrance et l’extrait vérifié',
   assert.match(await turn.finish(), new RegExp(`^\\*\\*Sources\\*\\*\\n\\n- \\[1\\] \\[${titre.replace(/[.]/g, '\\.')}\\]\\[1\\] — « Le juge doit rechercher si l'inexécution est suffisamment grave »$`, 'm'));
 });
 
+test('un extrait paraphrasé est validé par le passage proche et substitue le texte source', async (t) => {
+  const { cwd, turn, store } = await fixture(t);
+  const source = 'Préambule. Le preneur occupera les lieux paisiblement pendant toute la durée du bail. Fin.';
+  await writeFile(path.join(cwd, 'bail.md'), source);
+  turn.text(block([{ ref: 1, doc_id: 'bail.md', quotes: [{ page: 2, quote: 'le preneur occupe les lieux paisiblement pendant la durée du bail' }] }]));
+  const suffix = await turn.finish();
+  assert.doesNotMatch(suffix, /piecemaker-cite-miss|🔴/);
+  assert.match(suffix, /^- \[1\] \[bail, p\. 2\]\[1\] — « Le preneur occupera les lieux paisiblement pendant toute la durée du bail »$/m);
+  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.ok(token);
+  const snapshot = await store.read(token);
+  assert.equal(snapshot?.citation.verified, true);
+  assert.equal(snapshot?.citation.quotes[0].quote, 'Le preneur occupera les lieux paisiblement pendant toute la durée du bail');
+  assert.equal(snapshot?.source.slice(snapshot.ranges[0].start, snapshot.ranges[0].end), snapshot?.citation.quotes[0].quote);
+});
+
 test('un extrait non vérifié affiche la citation du modèle, à vérifier', async (t) => {
   const { cwd, turn } = await fixture(t);
   await writeFile(path.join(cwd, 'bail.md'), 'Préambule. Le preneur occupera les lieux paisiblement pendant toute la durée du bail. Fin.');
   turn.text(block([
-    { ref: 1, doc_id: 'bail.md', quotes: [{ page: 2, quote: 'le preneur occupe les lieux paisiblement pendant la durée du bail' }] },
     { ref: 2, doc_id: 'bail.md', quote: 'clause pénale de dix mille euros' },
     { ref: 3, decision_id: 'JURITEXT9', quote: 'motif jamais lu dans ce tour' },
   ]));
   const suffix = await turn.finish();
-  assert.match(suffix, /^- \[1\] \[bail, p\. 2\]\[1\] — « le preneur occupe les lieux paisiblement pendant la durée du bail » — \[citation non retrouvée, à vérifier\]\(#piecemaker-cite-miss\)$/m);
   assert.match(suffix, /^- \[2\] \[bail, p\. 1\]\[2\] — « clause pénale de dix mille euros » — \[citation non retrouvée, à vérifier\]\(#piecemaker-cite-miss\)$/m);
   assert.match(suffix, /^- \[3\] \[JURITEXT9\]\[3\] — « motif jamais lu dans ce tour » — \[citation non retrouvée, à vérifier\]\(#piecemaker-cite-miss\)$/m);
 });

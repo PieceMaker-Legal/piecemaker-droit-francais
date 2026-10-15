@@ -8,6 +8,11 @@ const { locateQuote, verifyQuoteAgainstSource } = createRequire(import.meta.url)
   path.join(root, 'server/piecemaker/vendor/piecemaker-plugin/scripts/lib/verify-citations.cjs'),
 );
 
+type Quoted = {
+  quote: string;
+  verification?: { verified: boolean; start_char?: number; end_char?: number; source_excerpt?: string };
+};
+
 export function locateSourcePassages(source: string, quotes: Array<{ quote: string }>) {
   const ranges: Array<{ start: number; end: number; quoteIndex: number }> = [];
   quotes.forEach((quote, quoteIndex) => {
@@ -18,6 +23,24 @@ export function locateSourcePassages(source: string, quotes: Array<{ quote: stri
     }
   });
   return ranges;
+}
+
+export function applyNearestPassages<T extends Quoted>(source: string, quotes: T[]): T[] {
+  return quotes.map((quote) => {
+    if (quote.verification?.verified) return quote;
+    const nearby = nearestPassage(source, quote.quote);
+    if (!nearby) return quote;
+    const location = locateQuote(source, nearby);
+    return {
+      ...quote,
+      quote: nearby,
+      verification: {
+        verified: true,
+        source_excerpt: nearby,
+        ...(location ? { start_char: location.start, end_char: location.end } : {}),
+      },
+    };
+  });
 }
 
 const WORD = /[\p{L}\p{N}]+/gu;

@@ -9,7 +9,7 @@ import { resolvePieceRef } from '../file-links.js';
 
 import type { createCitationStore } from './citation-store.js';
 import { formatPieceTitle } from './piece-title.js';
-import { locateSourcePassages } from './source-passages.js';
+import { applyNearestPassages, locateSourcePassages } from './source-passages.js';
 
 const root = findApplicationRoot(getModuleDirectory(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -270,7 +270,6 @@ export function createCitationTurn(options: {
         }
         const parsed = overflow ? [] : parseCitationsWithDiagnostics(fullText).citations as Citation[];
         const citations = await verifyCitations(parsed, (id: string, kind: string) => kind === 'code' ? codeText(id) : documentText(id), async (id: string) => decisions.get(id) ?? '') as Citation[];
-        if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
         const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];
         const lines: string[] = [];
@@ -279,6 +278,8 @@ export function createCitationTurn(options: {
           const source = citation.kind === 'case' || citation.kind === 'article'
             ? decisions.get(lawId ?? '') ?? ''
             : citation.kind === 'code' ? await codeText(citation.doc_id ?? '') : await documentText(citation.doc_id ?? '');
+          citation.quotes = applyNearestPassages(source, citation.quotes ?? []);
+          citation.verified = citation.quotes.every((quote) => quote.verification?.verified === true);
           const ranges = locateSourcePassages(source, citation.quotes);
           const docId = citation.doc_id ?? '';
           let openId = docId;
@@ -306,6 +307,7 @@ export function createCitationTurn(options: {
             lines.push(`- [${citation.ref}] ${linkLabel(title)} — [source indisponible](${MISS})`);
           }
         }
+        if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
         const sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
         if (!replay && block) await options.store.saveTurnSources(options.sessionId, block, sources).catch(() => {});
         return sources;
