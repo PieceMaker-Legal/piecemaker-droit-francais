@@ -136,10 +136,16 @@ export function importPublisherCertificate(certFile = publisherCertPath) {
     '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
     '-Command', [
       '$ErrorActionPreference = "Stop"',
-      `if (-not (Test-Path ${quote(certFile)})) { "missing" ; exit 0 }`,
-      `Import-Certificate -FilePath ${quote(certFile)} -CertStoreLocation Cert:\\CurrentUser\\TrustedPublisher | Out-Null`,
+      `if (-not (Test-Path ${quote(certFile)})) { "missing"; exit 0 }`,
+      `$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(${quote(certFile)})`,
+      'foreach ($name in @("TrustedPublisher", "Root")) {',
+      '  $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($name, "CurrentUser")',
+      '  $store.Open("ReadWrite")',
+      '  $store.Add($cert)',
+      '  $store.Close()',
+      '}',
       '"ok"',
-    ].join('; '),
+    ].join("\n"),
   ]);
   return result.stdout.trim() === 'ok';
 }

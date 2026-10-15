@@ -100,7 +100,9 @@ test('le script Windows retire les raccourcis et le certificat local', () => {
   assert.match(script, /Get-ChildItem -LiteralPath 'C:\\Users\\me\\\.piecemaker' [^\n]*'library-backend'/);
   assert.match(script, /-notcontains \$_\.Name/);
   assert.match(script, /'auth\.db', 'auth\.db-wal', 'auth\.db-shm'/);
-  assert.match(script, /PieceMaker Local/);
+  assert.match(script, /PieceMaker/);
+  assert.match(script, /TrustedPublisher/);
+  assert.match(script, /SystemCertificates/);
   assert.match(script, /PieceMaker\.lnk/);
   assert.match(script, /PieceMaker'/);
   assert.match(script, /models--fastino--gliner2\.5-multi-v1/);
@@ -112,6 +114,9 @@ test('le script Windows attend et arrête les processus qui verrouillent les fic
   const script = windowsUninstallScript(plan);
   assert.match(script, /function Holders/);
   assert.match(script, /Stop-Process -Id \$process\.ProcessId -Force/);
-  assert.match(script, /foreach \(\$store in 'My', 'TrustedPublisher', 'Root'\)/);
+  assert.match(script, /foreach \(\$location in @\('CurrentUser', 'LocalMachine'\)\)/);
+  assert.match(script, /foreach \(\$name in @\('My', 'TrustedPublisher', 'Root', 'CA'\)\)/);
+  assert.match(script, /Issuer -match 'PieceMaker'/);
+  assert.match(script, /SystemCertificates/);
   assert.ok(script.includes(`Remove-Item -LiteralPath '${WINDOWS_UNINSTALL_KEY}' -Recurse -Force`));
 });

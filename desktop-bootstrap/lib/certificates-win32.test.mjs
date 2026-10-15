@@ -56,6 +56,15 @@ test("le consentement TLS ne demande pas de signer l'application", () => {
   assert.match(CONSENT_EXPLANATION, /pas à signer l'application/);
 });
 
+test("l'import éditeur vise Root et TrustedPublisher", () => {
+  const source = fs.readFileSync(new URL('./certificates-win32.mjs', import.meta.url), 'utf8');
+  const installer = fs.readFileSync(new URL('../install.ps1', import.meta.url), 'utf8');
+  assert.match(source, /TrustedPublisher/);
+  assert.match(source, /"Root"/);
+  assert.match(installer, /TrustedPublisher/);
+  assert.match(installer, /'Root'/);
+});
+
 test('le certificat éditeur PieceMaker est public et sans nom de personne', () => {
   assert.equal(fs.existsSync(publisherCertPath), true);
   const subject = new crypto.X509Certificate(fs.readFileSync(publisherCertPath)).subject;
