@@ -122,7 +122,24 @@ if ($args -notcontains '--build-from-source') {
         Fail "Preparation initiale interrompue (code $($prepareProcess.ExitCode))."
       }
     } finally { $env:ELECTRON_RUN_AS_NODE = $previousRunAsNode }
-    if ($args -notcontains '--no-launch') { Start-Process -FilePath $executable }
+    if ($args -notcontains '--no-launch') {
+      if ($args -contains '--no-progress' -or $env:PIECEMAKER_NO_PROGRESS -eq '1') {
+        Start-Process -FilePath $executable
+      } else {
+        $finishScript = Join-Path $appRoot 'desktop-bootstrap\lib\finish-install.mjs'
+        $finishArguments = @('"' + $finishScript + '"', '"' + $appDir + '"')
+        $finishLog = Join-Path $bootstrapHome 'finish-install.log'
+        $finishErrors = Join-Path $bootstrapHome 'finish-install-errors.log'
+        $previousRunAsNode = $env:ELECTRON_RUN_AS_NODE
+        try {
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          $finishProcess = Start-Process -FilePath $executable -ArgumentList $finishArguments -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $finishLog -RedirectStandardError $finishErrors
+          if ($finishProcess.ExitCode -ne 0) { Start-Process -FilePath $executable }
+        } catch {
+          Start-Process -FilePath $executable
+        } finally { $env:ELECTRON_RUN_AS_NODE = $previousRunAsNode }
+      }
+    }
     Say 'PieceMaker est installe.'
     return
   }

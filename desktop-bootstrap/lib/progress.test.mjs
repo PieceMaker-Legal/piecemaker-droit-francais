@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   PISTE_LINKS,
   finishProgress,
+  installerWindowCommand,
   noteProgress,
   openProgressWindow,
   progressWindowEnabled,
@@ -62,13 +63,23 @@ test("l'état initial est servi sur 127.0.0.1 derrière un jeton", async () => {
 test('la page, le logo et les captures PISTE sont servis', async () => {
   const window = await open();
   const page = await fetch(window.url);
-  assert.match(await page.text(), /Accès Légifrance et Judilibre/);
+  const html = await page.text();
+  assert.match(html, /Accès Légifrance/);
+  assert.match(html, /Une seule chose à faire à la fois/);
+  assert.match(html, /J'ai créé mon compte/);
+  assert.match(html, /Voir un exemple de l'écran/);
   for (const asset of ['logo.png', 'piste/inscription.png', 'piste/cgu.png', 'piste/apps.png', 'piste/environnement.png', 'piste/api.png']) {
     const response = await fetch(`${window.url}${asset}`);
     assert.equal(response.status, 200, asset);
     assert.equal(response.headers.get('content-type'), 'image/png');
   }
   assert.equal((await fetch(`${window.url}piste/..%2F..%2Fpiste.mjs`)).status, 404);
+  await settleProgressWindow();
+});
+
+test("une mise à jour ne propose pas le guide PISTE", async () => {
+  const window = await open({ offerPiste: false });
+  assert.equal((await window.state()).piste.offered, false);
   await settleProgressWindow();
 });
 
@@ -158,6 +169,13 @@ test("avec la fenêtre, l'ouverture de PieceMaker attend la configuration PISTE 
   assert.deepEqual(await window.post('launch'), { ok: false });
   await settling;
   assert.equal(launches, 1);
+});
+
+test("Windows ouvre une fenêtre native, pas Edge", { skip: process.platform !== 'win32' }, () => {
+  const command = installerWindowCommand('http://127.0.0.1:1/token/');
+  assert.equal(path.basename(command[0]), 'installer-window.exe');
+  assert.equal(fs.existsSync(command[0]), true);
+  assert.ok(!JSON.stringify(command).toLowerCase().includes('msedge'));
 });
 
 test('la fin attend la configuration PISTE tant que la fenêtre interroge l’installateur', async () => {

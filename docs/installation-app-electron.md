@@ -60,14 +60,16 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
    `tar`, `openssl` et les *Command Line Tools* Xcode sont exigés.
 2. **Fenêtre d'installation** — dès que Node est disponible, `lib/progress.mjs`
    sert une page locale (`installer-ui/index.html`) sur `127.0.0.1`, derrière un
-   jeton aléatoire, et l'affiche dans une fenêtre sans barre de navigateur :
-   WebKit natif piloté en JXA sur macOS (`lib/window-darwin.js`, rien à
-   installer), Edge en mode `--app` sur Windows (profil dédié dans
-   `~/.piecemaker/bootstrap/fenetre-installation`) ; à défaut, le navigateur par
-   défaut. Elle suit les étapes, porte le logo PieceMaker
-   (`public/logo-256.png`) et guide la création des identifiants PISTE (voir
-   « Identifiants PISTE »). `--no-progress` ou `PIECEMAKER_NO_PROGRESS=1` la
-   désactive ; un échec d'ouverture n'interrompt pas l'installation.
+   jeton aléatoire, et l'affiche dans une fenêtre native sans navigateur :
+   WebKit piloté en JXA sur macOS (`lib/window-darwin.js`), WebView2 dans une
+   fenêtre WinForms sur Windows (`lib/window-win32.cs`, profil dédié dans
+   `~/.piecemaker/bootstrap/fenetre-installation`). Elle suit les étapes, porte
+   le logo PieceMaker (`public/logo-256.png`) et, **à la première installation
+   seulement**, guide la création des identifiants PISTE (voir « Identifiants
+   PISTE »). Une mise à jour (`--no-launch`) n'ouvre pas ce guide. Sur Windows,
+   le bootstrap NSIS l'affiche après l'extraction (`lib/finish-install.mjs`).
+   `--no-progress` ou `PIECEMAKER_NO_PROGRESS=1` désactive la fenêtre ; un échec
+   d'ouverture n'interrompt pas l'installation.
 
    Pourquoi pas Tk ni WinForms : le Python des *Command Line Tools* embarque
    Tk 8.5, déprécié par Apple ; sur macOS 26 sa fenêtre reste vide et hors
@@ -476,6 +478,9 @@ desktop-bootstrap/
     consent.mjs                  texte d'autorisation et panneau Windows
     progress.mjs                 état, serveur local de la fenêtre, attente du guide PISTE
     window-darwin.js             fenêtre WebKit macOS (JXA)
+    window-win32.cs              fenêtre WebView2 Windows
+    webview2/                    SDK WebView2 redistribué (x64)
+    finish-install.mjs           guide PISTE après l'installeur NSIS
     piste.mjs                    validation et enregistrement des identifiants PISTE
     place.mjs                    installation, raccourcis, lancement
     paths.mjs                    emplacements et noms de produit
@@ -485,8 +490,9 @@ desktop-bootstrap/
 
 ## Identifiants PISTE
 
-Pendant la construction, la fenêtre propose un guide en quatre étapes, illustré
-de captures de piste.gouv.fr (`installer-ui/piste/`, adresses fictives) :
+À la première installation, la fenêtre propose un guide en quatre étapes, une
+action à la fois, illustré de captures repliées de piste.gouv.fr
+(`installer-ui/piste/`, adresses fictives) :
 
 1. création du compte (`/registration`, « Code de l'organisation » laissé vide) ;
 2. acceptation des CGU de Légifrance et JUDILIBRE en PROD
@@ -541,7 +547,7 @@ l'ouverture ne sont proposés et rien n'attend.
 - Le certificat de signature est auto-signé : il supprime l'avertissement lié à
   un binaire non signé, mais ne vaut pas notarisation Apple ni réputation
   SmartScreen.
-- La fenêtre Windows (Edge `--app`) n'a pas été essayée sur un poste Windows ;
-  sans Edge, la page s'ouvre dans le navigateur par défaut.
+- La fenêtre Windows s'appuie sur le runtime WebView2 (fourni avec Edge) ;
+  sans ce runtime, l'installation continue sans fenêtre.
 - Les captures PISTE vieilliront avec le portail : les refaire quand
   piste.gouv.fr change de présentation.

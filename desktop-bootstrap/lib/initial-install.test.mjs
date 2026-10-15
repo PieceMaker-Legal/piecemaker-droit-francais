@@ -91,3 +91,9 @@ if ($env:ELECTRON_RUN_AS_NODE -ne 'original') { throw 'RunAsNode environment was
   assert.match(invalid.stderr, /integrite/);
   assert.equal(fs.existsSync(report), false);
 });
+
+test('the Windows bootstrap shows the Légifrance guide after the first install only', () => {
+  const script = fs.readFileSync(new URL('../install.ps1', import.meta.url), 'utf8');
+  assert.match(script, /finish-install\.mjs/);
+  assert.match(script, /if \(\$args -notcontains '--no-launch'\)/);
+});
