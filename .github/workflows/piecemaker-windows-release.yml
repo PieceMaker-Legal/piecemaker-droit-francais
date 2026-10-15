@@ -29,9 +29,6 @@ jobs:
           ref: ${{ env.TAG }}
           persist-credentials: false
 
-      - name: Build
-        run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
-
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -44,6 +41,9 @@ jobs:
         run: |
           $env:PSModulePath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\Modules'
           node --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs desktop-bootstrap/lib/initial-install.test.mjs desktop-bootstrap/composants/install.test.mjs
+
+      - name: Build
+        run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
 
       - name: Build better-sqlite3 for Electron
         shell: bash
