@@ -1,4 +1,4 @@
-import { app, autoUpdater, BrowserWindow, dialog } from 'electron';
+import { app, autoUpdater, BrowserWindow, dialog, powerSaveBlocker } from 'electron';
 import { execFile } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +8,7 @@ import { loadProductConfig } from '../shared/product-config.mjs';
 import { UNINSTALL_ARGUMENT } from '../electron/uninstallPlan.js';
 import { DesktopWindowManager } from '../electron/desktopWindow.js';
 import { LocalServerController } from '../electron/localServer.js';
+import { installDesktopKeepAwake } from './keepAwake.js';
 import { installWindowsTitleBar } from './windowsTitleBar.js';
 import { installWindowsUpdater } from './windowsUpdater.js';
 import { initializeCompactRuntime, portablePluginRuntime } from './compact-runtime.mjs';
@@ -58,7 +59,10 @@ async function startApplication() {
         return shutdownOwnedServer.call(this);
       };
     });
+  } else {
+    await app.whenReady();
   }
+  await installDesktopKeepAwake({ app, powerSaveBlocker });
   const appRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const holdOpen = () => {};
   app.on('window-all-closed', holdOpen);

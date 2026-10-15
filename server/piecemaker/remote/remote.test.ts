@@ -116,6 +116,27 @@ test('keepAwakeCommand empêche la veille sur macOS et Windows tant que le serve
   assert.equal(keepAwakeCommand('linux', 123), null);
 });
 
+test('createKeepAwake délègue à l’app de bureau quand l’URL est posée', async () => {
+  const previous = process.env.PIECEMAKER_DESKTOP_KEEP_AWAKE_URL;
+  const app = express().use(express.json()).use((request, response) => {
+    response.json({ active: request.body?.enabled === true });
+  });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  const keep = createKeepAwake();
+  try {
+    process.env.PIECEMAKER_DESKTOP_KEEP_AWAKE_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+    await keep.start();
+    assert.equal(keep.active(), true);
+    await keep.stop();
+    assert.equal(keep.active(), false);
+  } finally {
+    if (previous === undefined) delete process.env.PIECEMAKER_DESKTOP_KEEP_AWAKE_URL;
+    else process.env.PIECEMAKER_DESKTOP_KEEP_AWAKE_URL = previous;
+    server.close();
+  }
+});
+
 test('createKeepAwake pose une requête d’exécution Windows', async () => {
   if (process.platform !== 'win32') return;
   const keep = createKeepAwake();
