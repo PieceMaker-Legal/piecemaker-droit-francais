@@ -9,11 +9,17 @@ type StoredPermissions = {
 
 type ComposerPermissionSources = {
   sessionSavedMode: PermissionMode | null;
+  newChatMode: PermissionMode | null;
   settingsMode: PermissionMode | null;
   providerSavedMode: PermissionMode | null;
   validModes: PermissionMode[];
   fallback: PermissionMode;
 };
+
+/** sessionStorage key for a mode picked in a brand-new chat before its first send. */
+export const newChatPermissionModeKey = (provider: LLMProvider): string => (
+  `permissionMode-new-${provider}`
+);
 
 /** Used by chat provider state to seed the composer from Réglages when a session has no override. */
 export function permissionModeFromSettings(provider: LLMProvider): PermissionMode | null {
@@ -30,10 +36,12 @@ export function permissionModeFromSettings(provider: LLMProvider): PermissionMod
 
 /**
  * Used by chat provider state. Same order as CloudCLI #1417: the session
- * override, then Réglages, then the last pick for this provider.
+ * override, then a pre-send pick, then Réglages, then the last pick for this
+ * provider.
  */
 export function resolveComposerPermissionMode({
   sessionSavedMode,
+  newChatMode,
   settingsMode,
   providerSavedMode,
   validModes,
@@ -41,6 +49,6 @@ export function resolveComposerPermissionMode({
 }: ComposerPermissionSources): PermissionMode {
   const allowed = (mode: PermissionMode | null): mode is PermissionMode =>
     Boolean(mode && validModes.includes(mode));
-  const savedMode = [sessionSavedMode, settingsMode, providerSavedMode].find(allowed);
+  const savedMode = [sessionSavedMode, newChatMode, settingsMode, providerSavedMode].find(allowed);
   return savedMode ?? fallback;
 }

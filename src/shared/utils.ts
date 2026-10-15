@@ -228,6 +228,24 @@ export const getPageTitle = (
 
 // ---------------------------
 
+//----------------- SESSION PERMISSION MODE ------------
+
+/**
+ * Gives a forked session the permission mode its source session was explicitly
+ * set to in the chat composer (`permissionMode-<sessionId>`). Call it right
+ * after a fork is created, before opening it. Nothing is copied when the
+ * source has no choice of its own; the fork then follows Réglages as its
+ * source did. Used by the chat and sidebar fork actions.
+ */
+export const inheritSessionPermissionMode = (sourceSessionId: string, forkedSessionId: string): void => {
+  const sourceMode = localStorage.getItem(`permissionMode-${sourceSessionId}`);
+  if (sourceMode) {
+    localStorage.setItem(`permissionMode-${forkedSessionId}`, sourceMode);
+  }
+};
+
+// ---------------------------
+
 //----------------- SLASH COMMANDS ------------
 
 /**
