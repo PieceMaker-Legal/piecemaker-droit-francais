@@ -137,6 +137,11 @@ test('non-desktop installs are left to the upstream updater', async () => {
 
 const WINDOWS_APP_ROOT = 'C:\\Users\\x\\AppData\\Local\\Programs\\PieceMaker\\resources\\app';
 
+test('compact Windows application roots keep desktop updates available', () => {
+  assert.equal(windowsInstallPath(`${WINDOWS_APP_ROOT}.asar.unpacked`, 'win32'), 'C:\\Users\\x\\AppData\\Local\\Programs\\PieceMaker');
+  assert.equal(windowsInstallPath(`${WINDOWS_APP_ROOT}.asar`, 'win32'), 'C:\\Users\\x\\AppData\\Local\\Programs\\PieceMaker');
+});
+
 test('windowsInstallPath extracts the Windows install folder from the packaged app root', () => {
   assert.equal(windowsInstallPath(WINDOWS_APP_ROOT, 'win32'), 'C:\\Users\\x\\AppData\\Local\\Programs\\PieceMaker');
   assert.equal(windowsInstallPath('C:\\code\\piecemaker', 'win32'), null);

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
-import { createRequire } from 'node:module';
+import { createRequire, isBuiltin } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -8,6 +8,8 @@ import { capture, run } from './shell.mjs';
 import { BUNDLE_DIR, embedBundledPlugins } from './plugins.mjs';
 import { ui } from './ui.mjs';
 import { configureWindowsUpdates } from './windows-update-config.mjs';
+import { pruneDesktopDependencies, configureCompactPackage } from './compact-package.mjs';
+import { packageRuntimeComponents } from './components-package.mjs';
 import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath, releaseRepo, releaseTag } from './paths.mjs';
 
 function npmTool(tool) {
@@ -55,7 +57,9 @@ async function findBuiltApp(sourceDir) {
 }
 
 async function verifyBuiltApp(builtApp) {
-  const appRoot = IS_MAC ? path.join(builtApp, 'Contents', 'Resources', 'app') : path.join(builtApp, 'resources', 'app');
+  const legacyRoot = IS_MAC ? path.join(builtApp, 'Contents', 'Resources', 'app') : path.join(builtApp, 'resources', 'app');
+  const compactRoot = `${legacyRoot}.asar.unpacked`;
+  const appRoot = await exists(path.join(compactRoot, 'package.json')) ? compactRoot : legacyRoot;
   const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
   const required = [
     'dist-server/server/index.js',
@@ -79,28 +83,39 @@ async function readPackageJson(target) {
 
 async function listInstalledPackages(modulesDir) {
   const packages = [];
-  let entries;
-  try {
-    entries = await fs.readdir(modulesDir, { withFileTypes: true });
-  } catch {
-    return packages;
-  }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === '.bin') continue;
-    if (entry.name.startsWith('@')) {
-      const scoped = await fs.readdir(path.join(modulesDir, entry.name), { withFileTypes: true });
-      for (const child of scoped.filter((item) => item.isDirectory())) {
-        packages.push(path.join(modulesDir, entry.name, child.name));
-      }
-      continue;
+  const visited = new Set();
+  async function visit(modules) {
+    if (visited.has(modules)) return;
+    visited.add(modules);
+    let entries;
+    try {
+      entries = await fs.readdir(modules, { withFileTypes: true });
+    } catch {
+      return;
     }
-    packages.push(path.join(modulesDir, entry.name));
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === '.bin') continue;
+      if (entry.name.startsWith('@')) {
+        const scope = path.join(modules, entry.name);
+        for (const child of await fs.readdir(scope, { withFileTypes: true })) {
+          if (child.isDirectory()) {
+            const packageDir = path.join(scope, child.name);
+            packages.push(packageDir);
+            await visit(path.join(packageDir, 'node_modules'));
+          }
+        }
+        continue;
+      }
+      const packageDir = path.join(modules, entry.name);
+      packages.push(packageDir);
+      await visit(path.join(packageDir, 'node_modules'));
+    }
   }
+  await visit(modulesDir);
   return packages;
 }
 
-async function findMissingDependencies(stageDir) {
+export async function findMissingDependencies(stageDir) {
   const modulesDir = path.join(stageDir, 'node_modules');
   const missing = new Map();
 
@@ -110,10 +125,20 @@ async function findMissingDependencies(stageDir) {
 
     const optional = new Set(Object.keys(manifest.optionalDependencies || {}));
     for (const [name, range] of Object.entries(manifest.dependencies)) {
-      if (optional.has(name) || missing.has(name)) continue;
-      const nested = path.join(packageDir, 'node_modules', name);
-      const hoisted = path.join(modulesDir, name);
-      if ((await exists(nested)) || (await exists(hoisted))) continue;
+      if (optional.has(name) || missing.has(name) || isBuiltin(name)) continue;
+      const require = createRequire(path.join(packageDir, 'package.json'));
+      const locations = require.resolve.paths(name) || [];
+      const dependency = name.split('/');
+      let installed = false;
+      for (const location of locations) {
+        const relative = path.relative(modulesDir, location);
+        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue;
+        if (await exists(path.join(location, ...dependency))) {
+          installed = true;
+          break;
+        }
+      }
+      if (installed) continue;
       missing.set(name, range);
     }
   }
@@ -138,6 +163,7 @@ const TEST_FILE_PATTERN = /\.test\.[cm]?[jt]sx?(\.map)?$/;
 
 function isShippedFile(target) {
   const name = path.basename(target);
+  if (/\.(p12|pfx|key)$/i.test(name)) return false;
   return !EXCLUDED_RUNTIME_ASSETS.has(name) && !TEST_FILE_PATTERN.test(name);
 }
 
@@ -204,10 +230,12 @@ async function patchStagedManifest(stageDir) {
 
   manifest.main = OVERLAY_ENTRY;
   manifest.build.extraMetadata = { ...manifest.build.extraMetadata, main: OVERLAY_ENTRY };
-  if (process.platform === 'win32') configureWindowsUpdates(manifest, releaseRepo, Boolean(process.env.CSC_LINK));
+  if (process.platform === 'win32') configureWindowsUpdates(manifest, releaseRepo, Boolean(process.env.CSC_LINK), PRODUCT_ICONS.win);
   for (const pattern of ['server/**', `${OVERLAY_DIR}/**`, `${BUNDLE_DIR}/**`]) {
     if (!manifest.build.files.includes(pattern)) manifest.build.files.push(pattern);
   }
+
+  if (process.platform === 'win32') manifest.build.files.push('desktop-bootstrap/**');
 
   for (const [platform, icon] of Object.entries(PRODUCT_ICONS)) {
     if (!(await exists(path.join(stageDir, icon)))) {
@@ -271,6 +299,17 @@ async function ensureCargo() {
 
 async function downloadReleaseAsset(asset, destination, label) {
   if (process.platform !== 'win32') return false;
+  if (process.env.PIECEMAKER_PREBUILT_ASSET_DIR) {
+    const input = path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, asset);
+    if (await exists(input)) {
+      const expected = (await fs.readFile(`${input}.sha256`, 'utf8')).trim().split(/\s+/)[0];
+      const actual = crypto.createHash('sha256').update(await fs.readFile(input)).digest('hex');
+      if (actual !== expected) throw new Error(`Artefact CI invalide : ${asset}`);
+      await fs.mkdir(path.dirname(destination), { recursive: true });
+      await fs.copyFile(input, destination);
+      return true;
+    }
+  }
   const base = `https://github.com/${releaseRepo}/releases/download/${releaseTag}/${asset}`;
   try {
     const [binary, checksum] = await Promise.all([fetch(base), fetch(`${base}.sha256`)]);
@@ -377,20 +416,53 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
   const stageDir = path.join(sourceDir, '.desktop-build', 'desktop-app');
   await embedLocalServer(sourceDir, stageDir);
   await embedDesktopOverlay(stageDir);
+  if (process.platform === 'win32') {
+    await fs.cp(path.join(bootstrapRoot, 'lib'), path.join(stageDir, 'desktop-bootstrap', 'lib'), { recursive: true, filter: isShippedFile });
+    await fs.cp(path.join(bootstrapRoot, 'composants'), path.join(stageDir, 'desktop-bootstrap', 'composants'), { recursive: true, filter: isShippedFile });
+    await fs.cp(path.join(bootstrapRoot, 'certs'), path.join(stageDir, 'desktop-bootstrap', 'certs'), { recursive: true, filter: isShippedFile });
+    if (windowsInstaller) {
+      await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));
+      const manifestPath = path.join(stageDir, 'package.json');
+      const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+      manifest.build.files.push('python-runtime.json');
+      await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    }
+  }
   await embedBundledPlugins(sourceDir, stageDir);
   await patchStagedManifest(stageDir);
   if (process.platform === 'win32') {
     await npm(['install', '--save-exact', '--omit=dev', '--no-audit', '--no-fund', 'electron-updater@6.8.9'], { cwd: stageDir });
+    const removed = await pruneDesktopDependencies(sourceDir, stageDir, npm);
+    ui.detail(`Dépendances de construction retirées du paquet : ${removed.join(', ')}`);
   }
   await repairStagedTree(stageDir);
   const prebuiltSqlite = await downloadPrebuiltSqlite(stageDir);
+  if (process.platform === 'win32') {
+    await packageRuntimeComponents(stageDir, {
+      repository: releaseRepo,
+      releaseTag,
+      outputDir: path.join(sourceDir, 'release', 'desktop'),
+    });
+    const manifestPath = path.join(stageDir, 'package.json');
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+    for (const name of Object.keys(manifest.dependencies)) {
+      if (name.startsWith('@openai/') || name.startsWith('@anthropic-ai/')) delete manifest.dependencies[name];
+    }
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await npm(['prune', '--omit=dev', '--no-audit', '--no-fund'], { cwd: stageDir });
+    await repairStagedTree(stageDir);
+    await configureCompactPackage(stageDir);
+  }
 
   ui.step("Construction de l'application Electron…");
   const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', ...(windowsInstaller ? ['--win', 'nsis', '--x64', '--publish', 'never'] : ['--dir'])];
-  if (prebuiltSqlite) builderArgs.push('-c.npmRebuild=false');
+  if (prebuiltSqlite && process.platform !== 'win32') builderArgs.push('-c.npmRebuild=false');
+  const signingEnv = { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' };
+  if (process.env.CSC_LINK && !process.env.WIN_CSC_LINK) signingEnv.WIN_CSC_LINK = process.env.CSC_LINK;
+  if (process.env.CSC_KEY_PASSWORD && !process.env.WIN_CSC_KEY_PASSWORD) signingEnv.WIN_CSC_KEY_PASSWORD = process.env.CSC_KEY_PASSWORD;
   await npx(builderArgs, {
     cwd: sourceDir,
-    env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
+    env: signingEnv,
   });
 
   const built = await findBuiltApp(sourceDir);

@@ -37,7 +37,13 @@ async function main() {
   ui.step("Autorité locale du proxy d'anonymisation");
   await generateCertificates();
 
-  const builtArtifact = (await downloadPrebuiltApp(bootstrapHome)) || await buildDesktopApp(sourceDir);
+  let builtArtifact = await downloadPrebuiltApp(bootstrapHome);
+  if (!builtArtifact) {
+    if (IS_WINDOWS && !options.has('--build-from-source')) {
+      throw new Error("Le paquet Windows précompilé est indisponible. L'application actuelle est conservée. Réessayez lorsque la release est prête.");
+    }
+    builtArtifact = await buildDesktopApp(sourceDir);
+  }
   // Une instance encore ouverte garderait son serveur, donc ses plugins, et
   // `open` ou `start` ne ferait que la ramener au premier plan. Avec
   // --no-launch (mise à jour lancée depuis l'application, sous-processus de son
@@ -93,7 +99,8 @@ async function runCertificateStep(installedPath) {
 
   try {
     const identity = await signApplication(installedPath);
-    ui.ok(`Application signée avec l'identité locale « ${identity} ».`);
+    if (identity) ui.ok(`Application signée avec l'identité locale « ${identity} ».`);
+    else ui.ok('Signature PieceMaker de l\'application conservée.');
   } catch (error) {
     ui.warn(`Signature locale impossible (${error.message}) — l'application reste utilisable.`);
   }

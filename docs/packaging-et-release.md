@@ -99,31 +99,31 @@ Application et accès à la notarisation Apple. Les triplets de credentials
 Apple API key sont acceptés par electron-builder, mais ne satisfont pas les
 tests actuels de ce workflow, qui imposent la variante Apple ID.
 
-Sur Windows, le workflow choisit le build signé si
-`WINDOWS_CSC_LINK` et `WINDOWS_CSC_KEY_PASSWORD` sont présents ; sinon il
-force `CSC_IDENTITY_AUTO_DISCOVERY=false` et publie un `.exe` non signé. Un
-certificat autosigné n'est pertinent que pour un parc interne dont le
-certificat a été installé comme autorité de confiance. Pour une distribution
-publique, il reste non approuvé et ne supprime pas l'avertissement Microsoft
-Defender SmartScreen ; il faut un certificat de signature reconnu par
-Microsoft et une réputation de publication suffisante.
+Sur Windows, le workflow PieceMaker **exige** `WINDOWS_CSC_LINK` (PFX
+auto-signé PieceMaker, en base64) et `WINDOWS_CSC_KEY_PASSWORD`. L'installeur
+NSIS et `PieceMaker.exe` sont signés avec l'identité `CN=PieceMaker` (Paris),
+sans certificat commercial ni nom de personne. L'installateur importe le
+certificat public dans `TrustedPublisher` (silencieux). La CA locale et le TLS
+`localhost` restent générés sur le poste, uniquement pour le proxy
+d'anonymisation, après consentement. L'utilisateur ne signe pas l'application.
 
 Un binaire macOS non signé ou seulement autosigné n'est pas une distribution
 publique équivalente : Gatekeeper peut bloquer son ouverture ou afficher un
 développeur non identifié. Un utilisateur peut l'autoriser manuellement dans
 les réglages de sécurité, mais cette procédure ne doit pas être la promesse
 de la release. La signature Developer ID et la notarisation Apple sont les
-prérequis pour une installation distribuée normalement. De même, un `.exe`
-Windows non signé peut être téléchargé mais déclenche généralement un
-avertissement SmartScreen et affiche un éditeur inconnu.
+prérequis pour une installation distribuée normalement. L'installeur Windows
+PieceMaker est signé Authenticode éditeur ; SmartScreen s'appuie sur cette
+réputation, distincte de la CA locale du proxy.
 
 Le paquet npm et le workflow Desktop CloudCLI gardent leur parcours existant.
 À partir de v2.0.33, le workflow PieceMaker Windows publie aussi l'installateur
 NSIS et les métadonnées `electron-updater` ; le bouton de mise à jour de l'app
-Windows utilise ces assets. Le numéro de version reste incrémenté par
-`release.yml`, puis le workflow Windows construit les assets depuis le tag.
-Ne pas annoncer la version testable avant que ce second workflow ait terminé
-et que `.exe`, `.blockmap` et `latest.yml` soient présents dans la release.
+Windows utilise ces assets. `release.yml` incrémente la version et crée une
+release GitHub en brouillon **sans** publier npm. Le workflow Windows attache
+les artefacts, puis npm est publié, puis la release GitHub est rendue
+publique. Ne pas annoncer la version testable avant `.exe`, `.blockmap`,
+`latest.yml`, Python, composants IA et npm.
 
 Le commit `72d347e` (`fix(piecemaker): suivre les releases du produit`) a
 redirigé la détection de version de la Sidebar et de l'onglet À propos vers le
@@ -136,7 +136,7 @@ CloudCLI upstream ne déclenche pas la détection PieceMaker.
 
 **Pipeline recommandé : `release.yml` (release-it), pas `publish-npm-package.yml` seul.**
 
-`publish-npm-package.yml` ne fait que publier sur npm — il ne crée ni tag ni Release GitHub. Or la pastille "mise à jour disponible" dans l'app (sidebar/About, hook `useVersionCheck`) interroge l'API GitHub Releases, pas npm. Publier avec `publish-npm-package.yml` seul rend donc la nouvelle version disponible sur npm sans jamais notifier les utilisateurs dans l'app. `release.yml` fait les deux en une fois : bump de version, tag git, Release GitHub, publish npm.
+`publish-npm-package.yml` ne fait que publier sur npm — il ne crée ni tag ni Release GitHub. Or la pastille "mise à jour disponible" dans l'app (sidebar/About, hook `useVersionCheck`) interroge l'API GitHub Releases, pas npm. Publier avec `publish-npm-package.yml` seul rend donc la nouvelle version disponible sur npm sans jamais notifier les utilisateurs dans l'app. `release.yml` fait les deux, dans cet ordre : bump et tag, artefacts Windows, npm, publication GitHub.
 
 **Commande** :
 1. Demander à l'utilisateur le numéro de version ou l'incrément (`patch` / `minor` / `major` / version explicite `X.Y.Z`) — ne jamais déduire ou incrémenter automatiquement.
@@ -149,13 +149,15 @@ CloudCLI upstream ne déclenche pas la détection PieceMaker.
 
 ## Installation utilisateur (README)
 
-Voie principale, sans prérequis (bootstrap Node via nvm si absent) :
+Voie principale, application de bureau précompilée :
+- macOS : `curl -fsSL https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/desktop-bootstrap/install.sh | sh`
+- Windows : `irm https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/desktop-bootstrap/install.ps1 | iex`
+
+Voie développeur / PWA (Node + git) :
 - macOS/Linux : `curl -fsSL https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/scripts/piecemaker/cli/piecemaker.sh | sh && piecemaker`
 - Windows : `irm https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/scripts/piecemaker/cli/piecemaker.ps1 | iex; piecemaker`
 
-Le `&& piecemaker` final est volontaire : la commande doit se terminer par le lancement effectif de l'app PWA, pas seulement par l'installation.
-
-L'ancienne commande `npm install -g @piecemaker-legal/piecemaker` (voie npm classique, suppose Node déjà présent) a été retirée du README au profit de cette voie universelle. La section GitHub Packages (registre distinct) reste inchangée.
+La section GitHub Packages (registre distinct) reste inchangée.
 
 ## Régénérer package-lock.json
 
@@ -170,3 +172,6 @@ Commande : `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 22 && rm -
 Testé via `release.yml` (increment=patch, 1.0.3 → 1.0.4) : la Release créée s'appelle bien "PieceMaker v1.0.4". Les releases antérieures ("CloudCLI UI vX.Y.Z") restent inchangées dans l'historique, seules les nouvelles suivent le nouveau nom.
 
 Si un autre nom de release custom est voulu ponctuellement, utiliser l'option `-f release_name="..."` de `gh workflow run release.yml` plutôt que de modifier `.release-it.json`.
+# Préparation Windows avant annonce
+
+Le workflow `release.yml` conserve la release en brouillon jusqu'à la construction Windows, la publication npm et la vérification du registre. Les changements de packaging, le cache des composants et les mesures sont documentés dans [windows-update-performance.md](windows-update-performance.md).

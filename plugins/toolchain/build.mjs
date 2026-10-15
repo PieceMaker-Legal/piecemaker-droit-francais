@@ -92,7 +92,10 @@ async function compilePlugin(esbuild, appRoot, plugin, output) {
   }
   fs.copyFileSync(path.join(directory, 'manifest.json'), path.join(output, 'manifest.json'));
   if (manifest.icon) fs.copyFileSync(path.join(directory, manifest.icon), path.join(output, manifest.icon));
-  if (manifest.server) fs.copyFileSync(path.join(TOOLCHAIN, 'launcher.mjs'), path.join(output, SERVER_ENTRY));
+  if (manifest.server) {
+    fs.copyFileSync(path.join(TOOLCHAIN, 'launcher.mjs'), path.join(output, SERVER_ENTRY));
+    fs.copyFileSync(path.join(TOOLCHAIN, 'runtime.mjs'), path.join(output, 'runtime.mjs'));
+  }
 }
 
 function listFiles(directory, prefix = '') {
@@ -119,7 +122,10 @@ function locate(command) {
  * le Node courant (celui qui a installé les modules natifs de l'application),
  * la racine de l'application et les CLI des fournisseurs IA.
  */
-function serverRuntime(appRoot) {
+function serverRuntime(appRoot, portableRuntime) {
+  if (portableRuntime) {
+    return { nodePath: null, applicationRoot: null, claudePath: null, codexPath: null, codexLauncher: null, vibePath: null };
+  }
   const codexLauncher = path.join(appRoot, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
   return {
     nodePath: process.execPath,
@@ -136,7 +142,7 @@ function serverRuntime(appRoot) {
  * plugin, bundle.json (empreintes + runtime) et sync.mjs. Tout échec est
  * bloquant : un bundle n'est jamais produit avec un plugin en moins.
  */
-export async function buildPlugins({ appRoot, outDir, log = () => {} }) {
+export async function buildPlugins({ appRoot, outDir, log = () => {}, portableRuntime = false }) {
   const plugins = discoverPlugins(appRoot);
   if (!plugins.length) throw new Error(`Aucun plugin trouvé sous ${path.join(appRoot, 'plugins')}.`);
   for (const plugin of plugins) validatePlugin(plugin);
@@ -151,7 +157,7 @@ export async function buildPlugins({ appRoot, outDir, log = () => {} }) {
 
   const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-plugins-'));
   try {
-    const bundle = { runtime: serverRuntime(appRoot), plugins: {} };
+    const bundle = { runtime: serverRuntime(appRoot, portableRuntime), plugins: {} };
     for (const plugin of plugins) {
       const output = path.join(staging, plugin.id);
       fs.mkdirSync(path.join(output, 'dist'), { recursive: true });

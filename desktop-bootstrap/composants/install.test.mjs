@@ -6,6 +6,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  assertSafePythonEntries,
   bundledPythonPath,
   componentLayout,
   createHost,
@@ -24,6 +25,14 @@ import {
 } from './install.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+
+test('rejects traversal and links in portable Python archives', () => {
+  assert.doesNotThrow(() => assertSafePythonEntries('python/\npython/python.exe\npython/Lib/site-packages/sample.py\n', '-rw-r--r-- file\n'));
+  for (const entry of ['python/../outside', 'python/./outside', '/python/python.exe', 'C:/outside', 'python\\outside', 'other/file', 'python//outside']) {
+    assert.throws(() => assertSafePythonEntries(entry, ''), /invalide/);
+  }
+  assert.throws(() => assertSafePythonEntries('python/link', 'lrwxr-xr-x link'), /lien/);
+});
 
 function readyStatus() {
   return {

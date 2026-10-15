@@ -149,6 +149,7 @@ export function removalPlan(appRoot, home = os.homedir(), env = process.env, pla
     safeNamedDirectory(extra.config?.venvPath, home, platform, fallbackVenv, 'venv'),
     env.PIECEMAKER_BOOTSTRAP_HOME || paths.join(dataHome, 'bootstrap'),
     ...(extra.electronPaths || []),
+    ...(platform === 'win32' ? [paths.join(env.LOCALAPPDATA || paths.join(home, 'AppData', 'Local'), 'PieceMaker', 'runtime-components')] : []),
     ...macLibraryPaths(home, extra.appId, platform),
     ...componentModelPaths(home, env, platform, extra.mineru),
     paths.join(home, 'mineru.json'),
@@ -226,9 +227,19 @@ $deadline = (Get-Date).AddSeconds(15)
 while ((Holders).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
 foreach ($process in Holders) { Stop-Process -Id $process.ProcessId -Force }
 Start-Sleep -Milliseconds 500
-foreach ($store in 'My', 'TrustedPublisher', 'Root') {
-  foreach ($certificate in @(Get-ChildItem "Cert:\\CurrentUser\\$store" | Where-Object { $_.Subject -match 'PieceMaker Local' })) {
-    try { Remove-Item -LiteralPath $certificate.PSPath -ErrorAction Stop } catch {}
+foreach ($location in @('CurrentUser', 'LocalMachine')) {
+  foreach ($name in @('My', 'TrustedPublisher', 'Root', 'CA')) {
+    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($name, $location)
+    try {
+      $store.Open('ReadWrite')
+      foreach ($certificate in @($store.Certificates | Where-Object { $_.Subject -match 'PieceMaker' -or $_.Issuer -match 'PieceMaker' })) {
+        try { $store.Remove($certificate) } catch {
+          $hive = if ($location -eq 'LocalMachine') { 'HKLM:' } else { 'HKCU:' }
+          Remove-Item -LiteralPath ("$hive\\Software\\Microsoft\\SystemCertificates\\$name\\Certificates\\$($certificate.Thumbprint)") -Recurse -Force -ErrorAction SilentlyContinue
+        }
+      }
+    } catch {}
+    finally { $store.Close() }
   }
 }
 ${removals}
