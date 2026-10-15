@@ -70,7 +70,13 @@ if ($args -notcontains '--build-from-source') {
     try {
       $publisherCer = Join-Path $bootstrapHome 'piecemaker-publisher.cer'
       Save-ReleaseAsset "https://raw.githubusercontent.com/$repo/main/desktop-bootstrap/certs/piecemaker-publisher.cer" $publisherCer ''
-      Import-Certificate -FilePath $publisherCer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+      $publisher = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($publisherCer)
+      foreach ($storeName in @('TrustedPublisher', 'Root')) {
+        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($storeName, 'CurrentUser')
+        $store.Open('ReadWrite')
+        $store.Add($publisher)
+        $store.Close()
+      }
     } catch {}
     Say 'Installation de PieceMaker...'
     $installerProcess = Start-Process -FilePath $installerPath -ArgumentList '/S' -WindowStyle Hidden -PassThru
