@@ -3,6 +3,22 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.38](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.37...v2.0.38) (2026-10-15)
+
+### Bug Fixes
+
+* keep mime unpacked for Windows runtime ([e3a5531](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e3a55310dc07b4de35b99869de3e957794302525))
+* verify the packaged Windows interface and preserve runtime dependencies ([6f8d953](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6f8d953b62d418484bb8dc5bcf11dff8eb40bcc2))
+
+### Performance
+
+* prebuild Windows first-install components and remove unused dependencies ([029012c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/029012ccc83887c7a6350047183d8d4b6162103b))
+
+### Documentation
+
+* keep GLiNER installation in the user interface ([42beb80](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/42beb80be5ae79a8f9c1d2162ba426bb2b0ebc31))
+* record the successful local Windows installation ([2e4e303](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2e4e30302f381de6d1867de424af6cf264b556e6))
+
 ## [2.0.37](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.36...v2.0.37) (2026-10-14)
 
 ## [2.0.36](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.35...v2.0.36) (2026-10-14)
