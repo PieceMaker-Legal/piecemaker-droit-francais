@@ -6,8 +6,6 @@ const assetsDir = 'electron/assets';
 const iconPath = 'electron/assets/logo-macos.png';
 const icnsPath = 'electron/assets/logo-macos.icns';
 const lightLogoPath = 'public/logo-sources/logo-black.png';
-const darkLogoPath = 'public/logo-sources/logo-white.png';
-const darkIconPath = 'electron/assets/logo-macos-dark.png';
 
 async function renderPng(entrySize, logoPath, background) {
   const logo = (await fs.readFile(logoPath)).toString('base64');
@@ -17,9 +15,7 @@ async function renderPng(entrySize, logoPath, background) {
 
 await fs.mkdir(assetsDir, { recursive: true });
 const lightIcon = await renderPng(size, lightLogoPath, '#ffffff');
-const darkIcon = await renderPng(size, darkLogoPath, '#111111');
 await fs.writeFile(iconPath, await sharp(Buffer.from(lightIcon)).png().toBuffer());
-await fs.writeFile(darkIconPath, await sharp(Buffer.from(darkIcon)).png().toBuffer());
 
 const icnsEntries = [
   ['icp4', 16],
