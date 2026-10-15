@@ -73,3 +73,17 @@ test('Contourner les permissions Vibe passe --auto-approve', async (t) => {
   assert.equal(args.includes('--agent'), false);
   assert.equal(promptOf(args), 'trie les pièces');
 });
+
+test('Vibe par défaut passe --agent ask --auto-approve', async (t) => {
+  const args = await vibeArgs(t, 'trie les pièces', 'default');
+  assert.equal(agentOf(args), 'ask');
+  assert.equal(args.includes('--auto-approve'), true);
+  assert.equal(promptOf(args), 'trie les pièces');
+});
+
+test('Vibe plan passe --agent plan', async (t) => {
+  const args = await vibeArgs(t, 'trie les pièces', 'plan');
+  assert.equal(agentOf(args), 'plan');
+  assert.equal(args.includes('--auto-approve'), false);
+  assert.equal(promptOf(args), 'trie les pièces');
+});

@@ -10,7 +10,7 @@ function storedPermissions(value: unknown): { skipPermissions?: unknown; permiss
 
 export function resolveRunPermissionMode(provider: string, options: RunOptions): string {
   const requested = typeof options.permissionMode === 'string' ? options.permissionMode : '';
-  if (requested === 'plan' || requested === 'bypassPermissions') return requested;
+  if (requested && requested !== 'default') return requested;
   const stored = storedPermissions(options.toolsSettings);
   const skip = options.skipPermissions === true || stored.skipPermissions === true;
   if ((provider === 'claude' || provider === 'cursor') && skip) return 'bypassPermissions';

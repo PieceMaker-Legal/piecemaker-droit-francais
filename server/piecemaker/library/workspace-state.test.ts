@@ -148,13 +148,17 @@ test('Contourner les permissions Codex force danger-full-access', async (t) => {
     },
   });
   received.length = 0;
+  await runtime.run('codex', 'Relire', { cwd: workspace, permissionMode: 'plan' }, { send() {} } as never);
+  assert.equal(received[0].permissionMode, 'plan');
+  assert.equal((received[0].libraryCodexOptions as { config: { sandbox_mode: string } }).config.sandbox_mode, 'read-only');
+  received.length = 0;
   await runtime.run('codex', 'Relire', {
     cwd: workspace,
     permissionMode: 'acceptEdits',
     toolsSettings: { permissionMode: 'bypassPermissions' },
   }, { send() {} } as never);
-  assert.equal(received[0].permissionMode, 'bypassPermissions');
-  assert.equal((received[0].libraryCodexOptions as { config: { sandbox_mode: string } }).config.sandbox_mode, 'danger-full-access');
+  assert.equal(received[0].permissionMode, 'acceptEdits');
+  assert.equal((received[0].libraryCodexOptions as { config: { sandbox_mode: string } }).config.sandbox_mode, 'workspace-write');
 });
 
 test('une erreur de bibliothèque ne bloque pas l’envoi du message', async (t) => {

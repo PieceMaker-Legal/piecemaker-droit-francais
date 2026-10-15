@@ -9,8 +9,12 @@ export function buildCodexClientOptions(libraryDisabledSkills: unknown, permissi
   const skills = paths.length
     ? { skills: { config: [...new Set(paths)].map((file) => ({ path: file, enabled: false })) } }
     : {};
-  const bypass = permissionMode === 'bypassPermissions'
+  const modeConfig = permissionMode === 'bypassPermissions'
     ? { sandbox_mode: 'danger-full-access', approval_policy: 'never' }
-    : {};
-  return { config: { sandbox_workspace_write: { network_access: true }, ...bypass, ...skills } };
+    : permissionMode === 'plan'
+      ? { sandbox_mode: 'read-only', approval_policy: 'never' }
+      : permissionMode === 'acceptEdits'
+        ? { sandbox_mode: 'workspace-write', approval_policy: 'never' }
+        : {};
+  return { config: { sandbox_workspace_write: { network_access: true }, ...modeConfig, ...skills } };
 }

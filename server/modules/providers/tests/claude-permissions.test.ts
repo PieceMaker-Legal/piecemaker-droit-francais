@@ -48,9 +48,16 @@ async function capturedSdkOptions(runOptions: Record<string, unknown>): Promise<
   return captured;
 }
 
-test('Contourner les permissions Claude passe permissionMode au SDK', async () => {
-  const options = await capturedSdkOptions({ permissionMode: 'bypassPermissions' });
-  assert.equal(options.permissionMode, 'bypassPermissions');
+for (const mode of ['auto', 'acceptEdits', 'bypassPermissions', 'plan']) {
+  test(`Claude ${mode} passe permissionMode au SDK`, async () => {
+    const options = await capturedSdkOptions({ permissionMode: mode });
+    assert.equal(options.permissionMode, mode);
+  });
+}
+
+test('Claude default omet permissionMode (repli SDK CloudCLI)', async () => {
+  const options = await capturedSdkOptions({ permissionMode: 'default' });
+  assert.equal(options.permissionMode, undefined);
 });
 
 test('Réglages Claude skipPermissions force bypassPermissions sauf en plan', async () => {
@@ -64,4 +71,9 @@ test('Réglages Claude skipPermissions force bypassPermissions sauf en plan', as
     toolsSettings: { skipPermissions: true, allowedTools: [], disallowedTools: [] },
   });
   assert.equal(plan.permissionMode, 'plan');
+  const accept = await capturedSdkOptions({
+    permissionMode: 'acceptEdits',
+    toolsSettings: { skipPermissions: true, allowedTools: [], disallowedTools: [] },
+  });
+  assert.equal(accept.permissionMode, 'bypassPermissions');
 });
