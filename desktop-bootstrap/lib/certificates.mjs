@@ -5,3 +5,4 @@ const implementation = IS_MAC
   : await import('./certificates-win32.mjs');
 
 export const { generateCertificates, isCaTrusted, trustCertificateAuthority, signApplication } = implementation;
+export const importPublisherCertificate = implementation.importPublisherCertificate || (() => false);

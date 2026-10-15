@@ -67,7 +67,7 @@ function writeRuntime(target, runtime) {
  * porte le marqueur, donc s'il a été posé par cet outil), runtime.json des
  * plugins à serveur réécrit.
  */
-export function syncPlugins({ bundleDir, dataRoot, databasePath, log = console }) {
+export function syncPlugins({ bundleDir, dataRoot, databasePath, runtime = {}, log = console }) {
   const bundle = readJson(path.join(bundleDir, BUNDLE_MANIFEST), null);
   if (!bundle?.plugins) return { installed: [], removed: [], failed: [] };
 
@@ -89,7 +89,7 @@ export function syncPlugins({ bundleDir, dataRoot, databasePath, log = console }
       }
       config[id] = pluginConfig(config[id], server);
       if (server) {
-        writeRuntime(target, { ...bundle.runtime, databasePath, secret: config[id].secrets.access });
+        writeRuntime(target, { ...bundle.runtime, ...runtime, databasePath, secret: config[id].secrets.access });
       }
     } catch (error) {
       failed.push(id);

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -288,6 +288,79 @@ async function resolveBasePython(host, layout, env, platform, arch, output) {
   return bundled;
 }
 
+export function assertSafePythonEntries(entries, details) {
+  if (details.split(/\r?\n/).some(line => /^[lh]/.test(line))) throw new Error('Archive Python contenant un lien.');
+  for (const raw of entries.split(/\r?\n/).filter(Boolean)) {
+    const entry = raw.replace(/\/$/, '');
+    if (entry.includes('\\') || entry.split('/').some(part => !part || part === '.' || part === '..') || (entry !== 'python' && !entry.startsWith('python/'))) {
+      throw new Error(`Entree Python invalide : ${raw}`);
+    }
+  }
+}
+
+async function installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir, output }) {
+  const metadataFile = path.join(sourceDir, 'python-runtime.json');
+  if (!(await host.exists(metadataFile))) throw new Error('Paquet Python precompile absent de cette release.');
+  const metadata = JSON.parse(await host.readFile(metadataFile));
+  if (!/^[a-f0-9]{64}$/.test(metadata.sha256) || metadata.assetName !== 'piecemaker-python-win32-x64.tar.gz' || !/^[\w.-]+\/[\w.-]+$/.test(metadata.repository) || !/^[\w.-]+$/.test(metadata.releaseTag)) {
+    throw new Error('Metadonnees Python invalides.');
+  }
+  const root = path.join(layout.root, 'runtime-python', metadata.sha256.slice(0, 24));
+  const python = bundledPythonPath(path.join(root, 'python'), 'win32');
+  const warmup = path.join(scriptsDir, 'warmup.py');
+  if (!(await host.exists(python)) || !dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
+    await host.mkdir(path.dirname(root));
+    const staging = `${root}.${crypto.randomBytes(6).toString('hex')}`;
+    const downloaded = `${staging}.tar.gz`;
+    let archive = downloaded;
+    try {
+      output.step('Telechargement des composants Python precompiles...');
+      const local = env.PIECEMAKER_PREBUILT_ASSET_DIR && path.join(env.PIECEMAKER_PREBUILT_ASSET_DIR, metadata.assetName);
+      if (local && await host.exists(local)) {
+        const hash = crypto.createHash('sha256');
+        for await (const chunk of createReadStream(local)) hash.update(chunk);
+        if (hash.digest('hex') !== metadata.sha256) throw new Error('Archive Python locale invalide.');
+        archive = local;
+      } else {
+        await downloadVerified(host, `https://github.com/${metadata.repository}/releases/download/${metadata.releaseTag}/${metadata.assetName}`, downloaded, metadata.sha256);
+      }
+      const tar = path.join(env.SystemRoot || process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+      const entries = await required(host, tar, ['-tzf', archive], { capture: true });
+      const details = await required(host, tar, ['-tvzf', archive], { capture: true });
+      assertSafePythonEntries(entries.stdout, details.stdout);
+      await host.mkdir(staging);
+      await required(host, tar, ['-xzf', archive, '-C', staging]);
+      const stagedPython = bundledPythonPath(path.join(staging, 'python'), 'win32');
+      if (!dependenciesReady(await readWarmupStatus(host, stagedPython, warmup, scriptsDir))) {
+        const diagnostic = await host.run(stagedPython, [warmup, '--status'], { cwd: scriptsDir, capture: true });
+        throw new Error(`Paquet Python precompile non operationnel : ${diagnostic.stderr}\n${diagnostic.stdout}`);
+      }
+      await host.rm(root);
+      await fs.rename(staging, root);
+    } finally {
+      if (archive === downloaded) await host.rm(downloaded);
+      await host.rm(staging);
+    }
+  }
+  return { pythonPath: python, venvPath: path.join(root, 'python') };
+}
+
+export async function buildPortableWindowsPython({ sourceDir, root, archive, host = createHost(), output = log }) {
+  const layout = componentLayout({ PIECEMAKER_COMPONENTS_HOME: root }, root);
+  await host.mkdir(root);
+  await installBundledPython(host, layout, 'win32', 'x64', output);
+  const python = bundledPythonPath(layout.pythonDir, 'win32');
+  const scripts = scriptsDirectory(sourceDir);
+  const requirements = path.join(root, 'requirements-installation.txt');
+  await host.writeFile(requirements, installerRequirements(await host.readFile(path.join(scripts, 'requirements.txt'))));
+  await required(host, python, ['-m', 'pip', 'install', '--only-binary=:all:', '-r', requirements]);
+  if (!dependenciesReady(await readWarmupStatus(host, python, path.join(scripts, 'warmup.py'), scripts))) throw new Error('Python compile non operationnel.');
+  await required(host, 'tar', ['-czf', archive, '-C', root, 'python']);
+  const hash = crypto.createHash('sha256');
+  for await (const chunk of createReadStream(archive)) hash.update(chunk);
+  return hash.digest('hex');
+}
+
 export async function installRuntimeComponents({
   sourceDir,
   env = process.env,
@@ -296,6 +369,7 @@ export async function installRuntimeComponents({
   arch = process.arch,
   host = createHost(),
   output = log,
+  requirePrebuilt = false,
 } = {}) {
   if (!sourceDir) throw new Error('PIECEMAKER_SRC_DIR est absent — lancez install.sh ou install.ps1.');
   const layout = componentLayout(env, homeDir);
@@ -307,6 +381,18 @@ export async function installRuntimeComponents({
   }
 
   output.step('Composants Python — MarkItDown');
+  const configured = await readConfig(host, layout.configFile);
+  if (platform === 'win32' && requirePrebuilt) {
+    if (configured.pythonPath && await host.exists(configured.pythonPath) && dependenciesReady(await readWarmupStatus(host, configured.pythonPath, warmup, scriptsDir))) {
+      output.ok('Composants Python existants reutilises.');
+      return;
+    }
+    if (arch !== 'x64') throw new Error('Le paquet Python Windows est disponible pour x64 uniquement.');
+    const paths = await installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir, output });
+    await host.writeFile(layout.configFile, `${JSON.stringify(mergeRuntimeConfig(configured, paths), null, 2)}\n`);
+    output.ok('Composants Python precompiles installes.');
+    return;
+  }
   let python = venvPythonPath(layout.venvDir, platform);
   const installedVersion = (await host.exists(python)) ? await readPythonVersion(host, python) : null;
   if (!pythonIsCompatible(installedVersion, platform)) {

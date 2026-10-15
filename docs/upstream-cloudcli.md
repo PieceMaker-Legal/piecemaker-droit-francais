@@ -420,6 +420,8 @@ le code se comporte comme upstream si la configuration est absente.
 
 ### Une exception upstream se paie par un test
 
+La séquence de `release.yml` conserve désormais la release GitHub en brouillon et appelle le workflow PieceMaker Windows avant publication. Cette modification est explicitement demandée pour empêcher toute annonce avant la disponibilité de l'installeur. Le test `desktop-bootstrap/lib/release-pipeline.test.mjs` protège l'ordre brouillon, vérification, téléversement, publication ; voir `docs/windows-update-performance.md`.
+
 Les exceptions assumées (amorçage d'authentification, `isActive` du chat,
 options du client Codex, onglets de l'éditeur latéral, MCP navigateur de l'app de bureau) ne sont pas des permissions : ce sont des dettes. Chacune doit porter un test
 **à nous** qui échoue si un merge la révoque. Sans ce test, l'exception

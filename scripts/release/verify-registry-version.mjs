@@ -1,0 +1,10 @@
+const version = process.argv[2];
+if (!/^\d+\.\d+\.\d+$/.test(version || '')) throw new Error('Expected a release version.');
+const packageName = '@piecemaker-legal/piecemaker';
+const url = new URL(`https://registry.npmjs.org/${encodeURIComponent(packageName)}/${version}`);
+url.searchParams.set('releaseCheck', String(Date.now()));
+const response = await fetch(url, { headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(15000) });
+if (!response.ok) throw new Error(`Registry HTTP ${response.status}.`);
+const manifest = await response.json();
+if (manifest.name !== packageName || manifest.version !== version || !manifest.dist?.integrity) throw new Error('Registry returned an incomplete release.');
+console.log(`Registry serves ${version}.`);

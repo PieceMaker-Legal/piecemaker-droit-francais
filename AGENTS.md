@@ -104,11 +104,11 @@ Merge procedure and writing rules: `docs/upstream-cloudcli.md`. Upstream merges 
 
 ## Commande `piecemaker`
 
-Single user-facing entry point (ports, clone/update, deps, socle components, app start w/ hudsucker anonymisation proxy, PWA install, open). No questions asked; skippable with `--launch-only`. Bootstrap one-liners for a bare machine and full step/CLI reference: `docs/cli-piecemaker.md`.
+Developer / PWA entry point (ports, clone/update, deps, socle components, app start w/ hudsucker anonymisation proxy, PWA install, open). No questions asked; skippable with `--launch-only`. Bootstrap one-liners: `docs/cli-piecemaker.md`. End-user desktop install is `desktop-bootstrap/`.
 
 ## Installation de l'app de bureau (`desktop-bootstrap/`)
 
-Installateur autonome, sans rapport avec la commande `piecemaker` ni avec `server/piecemaker/vendor/installer/` : une commande `curl` (mac) / `irm` (Windows) construit l'app Electron sur le poste via la chaîne CloudCLI existante (`npm run desktop:pack`), puis demande en **une fenêtre à un clic** l'autorisation d'enregistrer un certificat auto-signé (CA TLS locale + signature de code). Aucun fichier CloudCLI modifié. Détail, certificats, désinstallation et limites : `docs/installation-app-electron.md`.
+Installateur autonome, sans rapport avec la commande `piecemaker` ni avec `server/piecemaker/vendor/installer/` : `curl` (mac) / `irm` (Windows) installe l'app Electron. Windows utilise l'installeur NSIS précompilé signé Authenticode éditeur ; la CA TLS locale du proxy reste générée sur le poste. Détail : `docs/installation-app-electron.md`.
 
 ## Développement local
 
@@ -122,7 +122,7 @@ Installateur autonome, sans rapport avec la commande `piecemaker` ni avec `serve
 
 ## Packaging, release, distribution
 
-npm package, GitHub Packages, unsigned Desktop builds (mac/Windows caveats), version-check/release-name mechanics, `package-lock.json` regeneration under the CI's exact Node/npm version, and the recommended `release.yml` release pipeline are all documented in `docs/packaging-et-release.md`. Key rule: always release via `release.yml` (not `publish-npm-package.yml` alone), and always ask the user for the version increment — never infer it.
+npm package, GitHub Packages, Windows Authenticode (`WINDOWS_CSC_LINK`), version-check/release-name mechanics, `package-lock.json` regeneration under the CI's exact Node/npm version, and the recommended `release.yml` pipeline are documented in `docs/packaging-et-release.md`. Key rule: always release via `release.yml` (Windows assets, then npm, then GitHub publish — never `publish-npm-package.yml` alone), and always ask the user for the version increment — never infer it.
 
 ## About CloudCLI
 

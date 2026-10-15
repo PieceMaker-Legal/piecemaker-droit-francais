@@ -3,6 +3,90 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.41](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.40...v2.0.41) (2026-10-15)
+
+### Bug Fixes
+
+* **desktop:** powerSaveBlocker Electron pour le maintien d'éveil ([88c4b9b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/88c4b9b5ee7ca7844c7558a9db89d12ee78e29f5))
+* **remote:** maintien d'éveil Windows via PowerCreateRequest ([f481a76](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f481a76d318d1ff4ecd5942f748bc19f7e827de9))
+* **remote:** typer la reponse keep-awake du bureau ([7b8c8bd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7b8c8bda0f95870134e229b8d2b71de4dd965d5a))
+
+## [2.0.40](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.39...v2.0.40) (2026-10-15)
+
+### Bug Fixes
+
+* **desktop:** trust the PieceMaker publisher cert as Root on Windows ([f13304a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f13304acd24f0de69c35943c7574f167c55fac21))
+
+## [2.0.39](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.38...v2.0.39) (2026-10-15)
+
+### New Features
+
+* **desktop:** sign the Windows installer and prefetch first-install assets ([301d252](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/301d252f41de8c54d54ecb54932bb8cd0409acec))
+* **desktop:** sign Windows builds with a PieceMaker self-signed cert ([34630bd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/34630bd0596823a6941dd9605567887b3b478867))
+
+### Bug Fixes
+
+* brand the Windows installer with the PieceMaker icon ([d797b4d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d797b4d3364d3619a18ab9ec00eaacf5c008f956))
+* **desktop:** read GitHub checksum files as bytes on Windows PowerShell ([ddb4579](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ddb45799daa8dae08ad628f0d51ce3f9f8a65aa8))
+
+### CI/CD
+
+* check the installer before native compilation ([cc1f7db](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/cc1f7db900337517d23edb8442d42e817e6419c7))
+* use Windows PowerShell modules for installer tests ([36effee](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/36effee8a7e3155948477f02d6cce80a34802942))
+* use Windows tar for portable Python builds ([52f91d7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/52f91d7d35f86653f0805c7e78114794159b30b2))
+
+## [2.0.38](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.37...v2.0.38) (2026-10-15)
+
+### Bug Fixes
+
+* keep mime unpacked for Windows runtime ([e3a5531](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e3a55310dc07b4de35b99869de3e957794302525))
+* verify the packaged Windows interface and preserve runtime dependencies ([6f8d953](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6f8d953b62d418484bb8dc5bcf11dff8eb40bcc2))
+
+### Performance
+
+* prebuild Windows first-install components and remove unused dependencies ([029012c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/029012ccc83887c7a6350047183d8d4b6162103b))
+
+### Documentation
+
+* keep GLiNER installation in the user interface ([42beb80](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/42beb80be5ae79a8f9c1d2162ba426bb2b0ebc31))
+* record the successful local Windows installation ([2e4e303](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2e4e30302f381de6d1867de424af6cf264b556e6))
+
+## [2.0.37](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.36...v2.0.37) (2026-10-14)
+
+## [2.0.36](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.35...v2.0.36) (2026-10-14)
+
+### Bug Fixes
+
+* **release:** verify registry visibility without stale responses ([fda1976](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fda1976715b5fe5c18b0ef0b3f63943df7a59df9))
+
+## [2.0.35](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.34...v2.0.35) (2026-10-14)
+
+### Performance
+
+* **windows:** reuse runtime components and publish only ready installers ([ad12222](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ad122227eeabc811d9f6276e3384f3b25d4cd660))
+
+## [2.0.34](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.33...v2.0.34) (2026-10-14)
+
+### Bug Fixes
+
+* **desktop:** unblock Windows startup before Electron ready ([70024e2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/70024e2558c9efc1f1ab8556086243984e98e777))
+
+## [2.0.33](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.32...v2.0.33) (2026-10-14)
+
+### New Features
+
+* **piecemaker:** centralise l’affichage des volets ([5e935cc](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5e935cc0110d5cda49f76fd4fd6b521e66fe5b6d))
+* **piecemaker:** open panels from MCP requests ([b4b8746](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b4b8746700717d408977b706d73610fd22b60093))
+
+### Bug Fixes
+
+* **piecemaker:** citations design ([d136b98](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d136b98ffc5127c4f9180cc3679ded4130a051e2))
+* **piecemaker:** citations design ([2c7c00e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2c7c00ed7391184b2b9f463c7a3942c9d787d57b))
+* **piecemaker:** clarifie le retour afficher ([4d08c17](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4d08c17b782c8e4bb11e9fee8235c4ea40882e80))
+* **piecemaker:** gitignore ([a77531f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a77531fb920c6f484dd42717855de82d084fdcde))
+* **piecemaker:** gitignore ([fe68d25](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fe68d25aab2a0693041b97d1c0778252b055d7b3))
+* **piecemaker:** raccorder les mises à jour Windows à NSIS ([98e130c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/98e130c57e868addc3be194fb34755665c0f5869))
+
 ## [2.0.32](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.31...v2.0.32) (2026-10-14)
 
 ### New Features
