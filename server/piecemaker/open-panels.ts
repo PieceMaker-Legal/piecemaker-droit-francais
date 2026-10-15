@@ -12,8 +12,14 @@ type KnownProjects = () => string[];
 const defaultKnownProjects: KnownProjects = () => projectsDb.getProjectPaths().map((row) => row.project_path);
 
 const MAX_BODY_LENGTH = 20_000;
-const pendingPanelRequests = new Map<string, Array<{ id: string; tab: string; view?: string; review?: string; draft?: string; document?: string; expiresAt?: number }>>();
-const deliveredPanelRequests = new Map<string, { project: string; receivedAt: number; completedAt?: number }>();
+const ALLOWED_TABS = ['files', 'plugin:piecemaker-dossier', 'plugin:piecemaker-tabular-review', 'plugin:piecemaker-tampon'];
+type PanelRequest = { id: string; tab: string; view?: string; review?: string; draft?: string; document?: string; expiresAt?: number };
+type Delivery = { project: string; receivedAt: number; completedAt?: number };
+
+const pendingPanelRequests = new Map<string, PanelRequest[]>();
+const deliveredPanelRequests = new Map<string, Delivery>();
+const pendingCloseRequests = new Map<string, PanelRequest[]>();
+const deliveredCloseRequests = new Map<string, Delivery>();
 
 function resolveKnownProject(project: string, knownProjects: KnownProjects) {
   return knownProjects().filter((known) => project === known || project.startsWith(`${known}${path.sep}`)).sort((left, right) => right.length - left.length)[0];
@@ -53,33 +59,86 @@ export function createOpenPanelsRouter(home: string, knownProjects: KnownProject
   return router;
 }
 
+function pruneDelivered(store: Map<string, Delivery>, now: number) {
+  for (const [id, delivery] of store) {
+    if (now - delivery.receivedAt > 30_000) store.delete(id);
+  }
+}
+
+function enqueueRequest(
+  pendingStore: Map<string, PanelRequest[]>,
+  deliveredStore: Map<string, Delivery>,
+  knownProject: string,
+  fields: { tab: string; view?: string; review?: string; draft?: string; document?: string },
+) {
+  const now = Date.now();
+  pruneDelivered(deliveredStore, now);
+  const pending = pendingStore.get(knownProject) ?? [];
+  if (pending.length >= 20) return null;
+  const panelRequest: PanelRequest = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    tab: fields.tab,
+    ...(typeof fields.view === 'string' ? { view: fields.view } : {}),
+    ...(typeof fields.review === 'string' ? { review: fields.review } : {}),
+    ...(typeof fields.draft === 'string' ? { draft: fields.draft } : {}),
+    ...(typeof fields.document === 'string' ? { document: fields.document } : {}),
+    expiresAt: now + 30_000,
+  };
+  pending.push(panelRequest);
+  pendingStore.set(knownProject, pending);
+  return panelRequest;
+}
+
+function takeRequest(
+  pendingStore: Map<string, PanelRequest[]>,
+  deliveredStore: Map<string, Delivery>,
+  knownProject: string,
+) {
+  const pending = pendingStore.get(knownProject) ?? [];
+  const now = Date.now();
+  const fresh = pending.filter((item) => item.expiresAt !== undefined && item.expiresAt > now);
+  const panelRequest = fresh.shift() ?? null;
+  if (panelRequest) {
+    deliveredStore.set(panelRequest.id, { project: knownProject, receivedAt: now });
+    delete panelRequest.expiresAt;
+  }
+  if (fresh.length) pendingStore.set(knownProject, fresh);
+  else pendingStore.delete(knownProject);
+  return panelRequest;
+}
+
+function acknowledgeRequest(deliveredStore: Map<string, Delivery>, knownProject: string, id: string) {
+  const delivery = deliveredStore.get(id);
+  if (!delivery || delivery.project !== knownProject || Date.now() - delivery.receivedAt > 30_000) return false;
+  delivery.completedAt = Date.now();
+  return true;
+}
+
+function completedRequest(deliveredStore: Map<string, Delivery>, knownProject: string, id: string) {
+  const delivery = deliveredStore.get(id);
+  const fresh = delivery?.project === knownProject && Date.now() - delivery.receivedAt <= 30_000;
+  if (delivery && !fresh) deliveredStore.delete(id);
+  return Boolean(fresh && delivery.completedAt !== undefined);
+}
+
 export function createOpenPanelRequestsRouter(knownProjects: KnownProjects = defaultKnownProjects) {
   const router = express.Router();
 
   router.post('/open-panel', (request: Request, response: Response) => {
     const { project, tab, view, review, draft, document } = request.body ?? {};
-    if (typeof project !== 'string' || typeof tab !== 'string' || !['files', 'plugin:piecemaker-dossier', 'plugin:piecemaker-tabular-review'].includes(tab)) {
+    if (typeof project !== 'string' || typeof tab !== 'string' || !ALLOWED_TABS.includes(tab)) {
       return response.status(400).json({ error: 'Invalid panel request' });
     }
     const knownProject = resolveKnownProject(project, knownProjects);
     if (!knownProject) return response.status(404).json({ error: 'Unknown project' });
-    const now = Date.now();
-    for (const [id, delivery] of deliveredPanelRequests) {
-      if (now - delivery.receivedAt > 30_000) deliveredPanelRequests.delete(id);
-    }
-    const pending = pendingPanelRequests.get(knownProject) ?? [];
-    if (pending.length >= 20) return response.status(429).json({ error: 'Too many pending panel requests' });
-    const panelRequest = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    const panelRequest = enqueueRequest(pendingPanelRequests, deliveredPanelRequests, knownProject, {
       tab,
       ...(typeof view === 'string' ? { view } : {}),
       ...(typeof review === 'string' ? { review } : {}),
       ...(typeof draft === 'string' ? { draft } : {}),
       ...(typeof document === 'string' ? { document } : {}),
-      expiresAt: now + 30_000,
-    };
-    pending.push(panelRequest);
-    pendingPanelRequests.set(knownProject, pending);
+    });
+    if (!panelRequest) return response.status(429).json({ error: 'Too many pending panel requests' });
     response.json({ id: panelRequest.id });
   });
 
@@ -89,25 +148,9 @@ export function createOpenPanelRequestsRouter(knownProjects: KnownProjects = def
     const knownProject = resolveKnownProject(project, knownProjects);
     if (!knownProject) return response.status(404).json({ error: 'Unknown project' });
     if (typeof request.query.id === 'string') {
-      const delivery = deliveredPanelRequests.get(request.query.id);
-      const fresh = delivery?.project === knownProject && Date.now() - delivery.receivedAt <= 30_000;
-      if (delivery && !fresh) deliveredPanelRequests.delete(request.query.id);
-      return response.json({ completed: fresh && delivery.completedAt !== undefined });
+      return response.json({ completed: completedRequest(deliveredPanelRequests, knownProject, request.query.id) });
     }
-    const pending = pendingPanelRequests.get(knownProject) ?? [];
-    const now = Date.now();
-    const fresh = pending.filter((item) => item.expiresAt !== undefined && item.expiresAt > now);
-    const panelRequest = fresh.shift() ?? null;
-    if (panelRequest) {
-      deliveredPanelRequests.set(panelRequest.id, { project: knownProject, receivedAt: now });
-      delete panelRequest.expiresAt;
-      if (fresh.length) pendingPanelRequests.set(knownProject, fresh);
-      else pendingPanelRequests.delete(knownProject);
-      return response.json({ request: panelRequest });
-    }
-    if (fresh.length) pendingPanelRequests.set(knownProject, fresh);
-    else pendingPanelRequests.delete(knownProject);
-    response.json({ request: null });
+    response.json({ request: takeRequest(pendingPanelRequests, deliveredPanelRequests, knownProject) });
   });
 
   router.post('/open-panel/ack', (request: Request, response: Response) => {
@@ -115,12 +158,41 @@ export function createOpenPanelRequestsRouter(knownProjects: KnownProjects = def
     if (typeof project !== 'string' || typeof id !== 'string') return response.status(400).json({ error: 'Invalid panel acknowledgement' });
     const knownProject = resolveKnownProject(project, knownProjects);
     if (!knownProject) return response.status(404).json({ error: 'Unknown project' });
-    const delivery = deliveredPanelRequests.get(id);
-    if (!delivery || delivery.project !== knownProject || Date.now() - delivery.receivedAt > 30_000) {
-      return response.json({ acknowledged: false });
+    return response.json({ acknowledged: acknowledgeRequest(deliveredPanelRequests, knownProject, id) });
+  });
+
+  router.post('/close-panel', (request: Request, response: Response) => {
+    const { project, tab, document } = request.body ?? {};
+    if (typeof project !== 'string' || typeof tab !== 'string' || !ALLOWED_TABS.includes(tab)) {
+      return response.status(400).json({ error: 'Invalid panel close request' });
     }
-    delivery.completedAt = Date.now();
-    return response.json({ acknowledged: true });
+    const knownProject = resolveKnownProject(project, knownProjects);
+    if (!knownProject) return response.status(404).json({ error: 'Unknown project' });
+    const panelRequest = enqueueRequest(pendingCloseRequests, deliveredCloseRequests, knownProject, {
+      tab,
+      ...(typeof document === 'string' ? { document } : {}),
+    });
+    if (!panelRequest) return response.status(429).json({ error: 'Too many pending panel requests' });
+    response.json({ id: panelRequest.id });
+  });
+
+  router.get('/close-panel', (request: Request, response: Response) => {
+    const project = request.query.project;
+    if (typeof project !== 'string') return response.status(404).json({ error: 'Unknown project' });
+    const knownProject = resolveKnownProject(project, knownProjects);
+    if (!knownProject) return response.status(404).json({ error: 'Unknown project' });
+    if (typeof request.query.id === 'string') {
+      return response.json({ completed: completedRequest(deliveredCloseRequests, knownProject, request.query.id) });
+    }
+    response.json({ request: takeRequest(pendingCloseRequests, deliveredCloseRequests, knownProject) });
+  });
+
+  router.post('/close-panel/ack', (request: Request, response: Response) => {
+    const { project, id } = request.body ?? {};
+    if (typeof project !== 'string' || typeof id !== 'string') return response.status(400).json({ error: 'Invalid panel acknowledgement' });
+    const knownProject = resolveKnownProject(project, knownProjects);
+    if (!knownProject) return response.status(404).json({ error: 'Unknown project' });
+    return response.json({ acknowledged: acknowledgeRequest(deliveredCloseRequests, knownProject, id) });
   });
 
   return router;

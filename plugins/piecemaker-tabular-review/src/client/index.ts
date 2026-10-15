@@ -236,7 +236,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     reviewView = null;
   }
 
+  let selectedTab: TabId | null = 'history';
+
   function setSelectedTab(tab: TabId | null) {
+    selectedTab = tab;
     root.querySelector<HTMLElement>('[data-subbar]')!.hidden = !tab || tab === 'history';
     if (tab) root.querySelector<HTMLElement>('[data-subbar-title]')!.textContent = TITLES[tab];
   }
@@ -285,6 +288,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       app.openReview(request.project, request.review);
       return;
     }
+    if (reviewView || selectedTab === 'research') return;
     showTab('history');
   };
   window.addEventListener(SHOW_EVENT, onShow);

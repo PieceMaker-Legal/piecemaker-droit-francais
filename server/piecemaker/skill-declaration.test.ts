@@ -84,6 +84,20 @@ test('une copie encore identique au dernier bundle est mise à jour', () => {
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'docx-cli', 'scripts', 'bootstrap.sh')), true);
 });
 
+test('un répertoire à la place d’un lien provider est remplacé', () => {
+  const folder = temporaryFolder();
+  declareBundledSkills(folder);
+  const link = path.join(folder, '.claude', 'skills', 'Skill-PieceMaker');
+  const dest = fs.realpathSync(link);
+  fs.unlinkSync(link);
+  fs.cpSync(dest, link, { recursive: true });
+  assert.equal(fs.lstatSync(link).isDirectory(), true);
+  declareBundledSkills(folder);
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true);
+  assert.equal(fs.realpathSync(link), dest);
+  assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm')), true);
+});
+
 test('un dossier inexistant est journalisé sans lever d’erreur', (context) => {
   const warn = context.mock.method(console, 'warn', () => undefined);
   declareBundledSkills(path.join(temporaryFolder(), 'absent'));

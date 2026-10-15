@@ -4,6 +4,7 @@
 // les dépendances au module `server.cjs` (PIECEMAKER_HOME,
 // readFileStripBOM) sont devenues des paramètres ou des fonctions locales.
 const fs = require('fs');
+const http = require('http');
 const os = require('os');
 const path = require('path');
 
@@ -28,6 +29,29 @@ function readFileStripBOM(filePath, encoding = 'utf8') {
 
 function lastStampingPath(caseFolder) {
   return path.join(caseFolder, '.piecemaker', 'last-stamping.json');
+}
+
+function loopbackPort() {
+  for (const name of ['PIECEMAKER_APP_PORT', 'SERVER_PORT', 'PORT']) {
+    const parsed = Number.parseInt(process.env[name] || '', 10);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  }
+  return 3003;
+}
+
+function enqueueTamponPanel(folder) {
+  const body = JSON.stringify({ project: folder, tab: 'plugin:piecemaker-tampon' });
+  const req = http.request({
+    hostname: '127.0.0.1',
+    port: loopbackPort(),
+    path: '/api/piecemaker/local/open-panel',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    timeout: 2000,
+  }, (res) => { res.resume(); });
+  req.on('error', () => {});
+  req.on('timeout', () => req.destroy());
+  req.end(body);
 }
 
 /**
@@ -219,6 +243,7 @@ function createStampingRouter({ homeDir = path.join(os.homedir(), '.piecemaker')
       } catch (error) {
         return res.status(400).json({ error: error.message });
       }
+      enqueueTamponPanel(workingFolder);
 
       const tamponPath = getSystemDataPath('tampon.png');
       if (!fs.existsSync(tamponPath)) {

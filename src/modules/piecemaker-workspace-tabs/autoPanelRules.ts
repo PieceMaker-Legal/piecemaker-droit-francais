@@ -7,7 +7,14 @@ export type AutoPanelTarget =
   | { kind: 'file'; path: string }
   | { kind: 'plan'; plan: PlanCall }
   | { kind: 'dossier'; view: DossierView }
-  | { kind: 'tabular-review'; review: string | null; draft?: string; awaitDraft?: true };
+  | { kind: 'tabular-review'; review: string | null; draft?: string; awaitDraft?: true }
+  | { kind: 'tampon' };
+
+export type PanelSnapshot = {
+  panels: readonly string[];
+  document: string | null;
+  focus: Readonly<Record<string, { view?: string; file?: string | null }>>;
+};
 
 type Input = Record<string, unknown>;
 
@@ -16,10 +23,41 @@ const DOCX_CALL = /(?:^|[\s;&|(/])docx\s/;
 const DOCX_PATH = /"([^"]+\.docx)"|'([^']+\.docx)'|((?:\\ |[^\s;&|<>"'])+\.docx)(?![\w.])/i;
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
+const WRITE_TOOLS = new Set(['Write', 'write_file']);
+const EDIT_TOOLS = new Set(['Edit', 'edit']);
 
 const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 
 const baseName = (value: string): string => value.split(/[\\/]/).pop() ?? value;
+
+function samePanelPath(left: string, right: string): boolean {
+  const a = left.replace(/\\/g, '/');
+  const b = right.replace(/\\/g, '/');
+  return a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
+
+export function panelShowDecision(target: AutoPanelTarget, snapshot: PanelSnapshot): 'apply' | 'skip' {
+  if (target.kind === 'file') {
+    return snapshot.document && samePanelPath(snapshot.document, target.path) ? 'skip' : 'apply';
+  }
+  if (target.kind === 'plan') return 'apply';
+  if (target.kind === 'tampon') {
+    return snapshot.panels.includes('plugin:piecemaker-tampon') ? 'skip' : 'apply';
+  }
+  if (target.kind === 'dossier') {
+    if (!snapshot.panels.includes('plugin:piecemaker-dossier')) return 'apply';
+    return snapshot.focus['plugin:piecemaker-dossier']?.view === target.view ? 'skip' : 'apply';
+  }
+  const tab = 'plugin:piecemaker-tabular-review';
+  const open = snapshot.panels.includes(tab);
+  const current = snapshot.focus[tab]?.file;
+  const wanted = target.review || target.draft || '';
+  if (wanted) {
+    if (open && current && (samePanelPath(current, wanted) || baseName(current) === baseName(wanted))) return 'skip';
+    return 'apply';
+  }
+  return open ? 'skip' : 'apply';
+}
 
 function docxTarget(command: string): AutoPanelTarget | null {
   if (!DOCX_CALL.test(command)) return null;
@@ -34,12 +72,20 @@ function sqlTarget(query: string): AutoPanelTarget | null {
 }
 
 function showTarget(input: Input): AutoPanelTarget | null {
+  if (input.fermer === true || input.fermer === 'true') return null;
   const file = text(input.fichier);
   if (file) return { kind: 'file', path: file };
   if (input.volet === 'chronologie') return { kind: 'dossier', view: 'chronology' };
   if (input.volet === 'dossier') return { kind: 'dossier', view: 'general' };
+  if (input.volet === 'tampon') return { kind: 'tampon' };
   if (input.volet === 'tabular-review') return { kind: 'tabular-review', review: text(input.review) ? baseName(text(input.review)) : null };
   return null;
+}
+
+function writeDocxTarget(toolName: string, input: Input): AutoPanelTarget | null {
+  if (!WRITE_TOOLS.has(toolName) && !EDIT_TOOLS.has(toolName)) return null;
+  const file = text(input.file_path) || text(input.path);
+  return /\.docx$/i.test(file) ? { kind: 'file', path: file } : null;
 }
 
 const DRAFT_ID = /"projet":"([\w-]{1,80})"/;
@@ -112,7 +158,8 @@ function pieceMakerCliTarget(command: string): AutoPanelTarget | null {
 }
 
 export function autoPanelTarget(toolName: string, toolInput: unknown): AutoPanelTarget | null {
-  const input = toolInput && typeof toolInput === 'object' ? toolInput as Input : {};
+  const parsed = typeof toolInput === 'string' ? (() => { try { return JSON.parse(toolInput) as unknown; } catch { return {}; } })() : toolInput;
+  const input = parsed && typeof parsed === 'object' ? parsed as Input : {};
   const command = text(input.command);
   if (command) {
     const cli = pieceMakerCliTarget(command);
@@ -121,6 +168,8 @@ export function autoPanelTarget(toolName: string, toolInput: unknown): AutoPanel
   if (toolName === 'Bash') return docxTarget(command);
   const plan = planCall(toolName, toolInput);
   if (plan) return { kind: 'plan', plan };
+  const written = writeDocxTarget(toolName, input);
+  if (written) return written;
   const pieceMakerTool = PIECEMAKER_TOOL.exec(toolName)?.[1]?.toLowerCase();
   return pieceMakerTool ? pieceMakerTarget(pieceMakerTool, input) : null;
 }

@@ -173,6 +173,18 @@ export async function acknowledgePanelRequest({ project, id }) {
   return response.acknowledged === true;
 }
 
+export async function requestPanelClose(body) {
+  await adoptRunningServerPort();
+  return requestJson({ method: 'POST', path: `${LOCAL_BASE}/close-panel`, body });
+}
+
+export async function panelCloseCompleted({ project, id }) {
+  await adoptRunningServerPort();
+  const query = new URLSearchParams({ project, id });
+  const response = await requestJson({ method: 'GET', path: `${LOCAL_BASE}/close-panel?${query}` });
+  return response.completed === true;
+}
+
 export function readLocalScanJob({ folder, id }) {
   const query = new URLSearchParams({ folder, ...(id ? { id } : {}) });
   return requestJson({ method: 'GET', path: `${LOCAL_BASE}/scan/job?${query}` });

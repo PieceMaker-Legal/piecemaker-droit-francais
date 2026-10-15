@@ -10,7 +10,7 @@ import { CitationPanel } from '@/piecemaker/citations/CitationPanel';
 import { FileDocumentEditor } from '@/piecemaker/editor-tabs/FileDocumentEditor';
 import { IdentityTab } from '@/piecemaker/editor-tabs/IdentityTab';
 import { PlanTab } from '@/piecemaker/editor-tabs/PlanTab';
-import { parseEditorPanel } from '@/piecemaker/editor-tabs/editorPanels';
+import { CLOSE_IN_EDITOR_EVENT, parseEditorPanel } from '@/piecemaker/editor-tabs/editorPanels';
 import type { CodeEditorFile } from '@/shared/types';
 
 type CodeEditorProps = ComponentProps<typeof CodeEditor> & { tabsTarget?: HTMLElement | null };
@@ -18,6 +18,12 @@ type CodeEditorProps = ComponentProps<typeof CodeEditor> & { tabsTarget?: HTMLEl
 const LIBRARY_PROJECT_PREFIX = 'piecemaker-library:';
 
 const tabKey =(file: CodeEditorFile) => `${file.projectId ?? ''}\u0000${file.path}`;
+
+function sameEditorPath(left: string, right: string) {
+  const a = left.replace(/\\/g, '/');
+  const b = right.replace(/\\/g, '/');
+  return a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
 
 function tabLabel(file: CodeEditorFile) {
   const panel = parseEditorPanel(file.path);
@@ -108,6 +114,17 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
     setTabs(remaining);
     if (key === tabKey(active)) setActiveKey(tabKey(remaining[Math.max(0, index - 1)]));
   };
+
+  useEffect(() => {
+    const closeRequested = (event: Event) => {
+      const path = (event as CustomEvent<{ path?: unknown }>).detail?.path;
+      if (typeof path !== 'string' || !path) return;
+      const match = tabs.find((tab) => sameEditorPath(tab.path, path) || tab.name === path.split(/[\\/]/).pop());
+      if (match) closeTab(tabKey(match));
+    };
+    window.addEventListener(CLOSE_IN_EDITOR_EVENT, closeRequested);
+    return () => window.removeEventListener(CLOSE_IN_EDITOR_EVENT, closeRequested);
+  });
 
   const content: ReactNode = <TabContent key={tabKey(active)} props={props} file={active} onClose={() => closeTab(tabKey(active))} />;
   if (!isSidebar) return content;

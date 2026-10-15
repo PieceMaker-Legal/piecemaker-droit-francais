@@ -1,30 +1,41 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
-import { autoPanelTarget, draftFromResult } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
+import { readWorkspaceContext } from '@/modules/piecemaker-context-suggestions';
+import { autoPanelTarget, draftFromResult, panelShowDecision } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 import type { AutoPanelTarget } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
-import { openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
+import { closeInEditor, openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 import { showPlan } from '@/piecemaker/editor-tabs/planCalls';
-import { acknowledgeWorkspacePanel, pollWorkspacePanel } from '@/shared/api';
+import {
+  acknowledgeWorkspacePanel,
+  acknowledgeWorkspacePanelClose,
+  pollWorkspacePanel,
+  pollWorkspacePanelClose,
+} from '@/shared/api';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
 import type { AppTab } from '@/shared/types';
 
 const MAX_AGE_MS = 120_000;
 const DOSSIER_TAB: AppTab = 'plugin:piecemaker-dossier';
 const TABULAR_REVIEW_TAB: AppTab = 'plugin:piecemaker-tabular-review';
+const TAMPON_TAB: AppTab = 'plugin:piecemaker-tampon';
 const DOSSIER_VIEW_EVENT = 'piecemaker:dossier-view';
 const DOSSIER_VIEW_KEY = '__piecemakerDossierView';
 const TABULAR_REVIEW_SHOW_EVENT = 'piecemaker:tabular-review-show';
 const TABULAR_REVIEW_SHOW_KEY = '__piecemakerTabularReviewShow';
+const TAMPON_SHOW_EVENT = 'piecemaker:tampon-show';
+const TAMPON_SHOW_KEY = '__piecemakerTamponShow';
 
 type AutoPanelState = {
   sessionId: string | null;
   projectPath: string | null;
   openTab: (tab: AppTab) => void;
+  closeTab: (tab: AppTab) => void;
 };
 
 type PendingWindow = Window & Record<string, unknown>;
 
 function show(target: AutoPanelTarget, state: AutoPanelState, toolId: string) {
+  if (panelShowDecision(target, readWorkspaceContext()) === 'skip') return;
   const pending = window as unknown as PendingWindow;
   if (target.kind === 'file') {
     openInEditor(target.path);
@@ -34,6 +45,10 @@ function show(target: AutoPanelTarget, state: AutoPanelState, toolId: string) {
     pending[DOSSIER_VIEW_KEY] = target.view;
     state.openTab(DOSSIER_TAB);
     window.dispatchEvent(new Event(DOSSIER_VIEW_EVENT));
+  } else if (target.kind === 'tampon') {
+    pending[TAMPON_SHOW_KEY] = { project: state.projectPath };
+    state.openTab(TAMPON_TAB);
+    window.dispatchEvent(new Event(TAMPON_SHOW_EVENT));
   } else {
     pending[TABULAR_REVIEW_SHOW_KEY] = { project: state.projectPath, review: target.review, draft: target.draft ?? null };
     state.openTab(TABULAR_REVIEW_TAB);
@@ -41,12 +56,12 @@ function show(target: AutoPanelTarget, state: AutoPanelState, toolId: string) {
   }
 }
 
-export function useAutoPanel(sessionId: string | null, projectPath: string | null, openTab: (tab: AppTab) => void) {
+export function useAutoPanel(sessionId: string | null, projectPath: string | null, openTab: (tab: AppTab) => void, closeTab: (tab: AppTab) => void) {
   const { subscribe } = useWebSocket();
-  const state = useRef<AutoPanelState>({ sessionId, projectPath, openTab });
+  const state = useRef<AutoPanelState>({ sessionId, projectPath, openTab, closeTab });
 
   useLayoutEffect(() => {
-    state.current = { sessionId, projectPath, openTab };
+    state.current = { sessionId, projectPath, openTab, closeTab };
   });
 
   useEffect(() => {
@@ -82,20 +97,31 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
       try {
         const result = await pollWorkspacePanel(projectPath);
         const request = result.request;
-        if (!active || !request) return;
-        let handled = false;
-        if (request.tab === 'files' && request.document) {
-          state.current.openTab('files');
-          openInEditor(request.document);
-          handled = true;
-        } else if (request.tab === DOSSIER_TAB) {
-          show({ kind: 'dossier', view: request.view === 'chronology' ? 'chronology' : 'general' }, state.current, request.id);
-          handled = true;
-        } else if (request.tab === TABULAR_REVIEW_TAB) {
-          show({ kind: 'tabular-review', review: request.review ?? null, ...(request.draft ? { draft: request.draft } : {}) }, state.current, request.id);
-          handled = true;
+        if (active && request) {
+          let handled = false;
+          if (request.tab === 'files' && request.document) {
+            state.current.openTab('files');
+            openInEditor(request.document);
+            handled = true;
+          } else if (request.tab === DOSSIER_TAB) {
+            show({ kind: 'dossier', view: request.view === 'chronology' ? 'chronology' : 'general' }, state.current, request.id);
+            handled = true;
+          } else if (request.tab === TABULAR_REVIEW_TAB) {
+            show({ kind: 'tabular-review', review: request.review ?? null, ...(request.draft ? { draft: request.draft } : {}) }, state.current, request.id);
+            handled = true;
+          } else if (request.tab === TAMPON_TAB) {
+            show({ kind: 'tampon' }, state.current, request.id);
+            handled = true;
+          }
+          if (handled) await acknowledgeWorkspacePanel(projectPath, request.id);
         }
-        if (handled) await acknowledgeWorkspacePanel(projectPath, request.id);
+        if (!active) return;
+        const closing = await pollWorkspacePanelClose(projectPath);
+        const closeRequest = closing.request;
+        if (!active || !closeRequest) return;
+        if (closeRequest.tab === 'files' && closeRequest.document) closeInEditor(closeRequest.document);
+        else state.current.closeTab(closeRequest.tab as AppTab);
+        await acknowledgeWorkspacePanelClose(projectPath, closeRequest.id);
       } catch {
         return;
       } finally {
