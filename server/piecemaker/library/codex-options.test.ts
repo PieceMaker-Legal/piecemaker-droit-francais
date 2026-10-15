@@ -9,15 +9,16 @@ import type { ProviderRuntimeContext } from '@/shared/index.js';
 
 import { buildCodexClientOptions } from './codex-options.js';
 
-test('buildCodexClientOptions masque les skills de la bibliothèque par chemin', () => {
-  assert.equal(buildCodexClientOptions(undefined), undefined);
-  assert.equal(buildCodexClientOptions([]), undefined);
-  assert.equal(buildCodexClientOptions([{ path: 'relatif/SKILL.md' }, { path: '' }, { name: 'x' }, null, 'x']), undefined);
+test('buildCodexClientOptions autorise le réseau du bac à sable et masque les skills par chemin', () => {
+  const sandbox = { sandbox_workspace_write: { network_access: true } };
+  assert.deepEqual(buildCodexClientOptions(undefined), { config: sandbox });
+  assert.deepEqual(buildCodexClientOptions([]), { config: sandbox });
+  assert.deepEqual(buildCodexClientOptions([{ path: 'relatif/SKILL.md' }, { path: '' }, { name: 'x' }, null, 'x']), { config: sandbox });
   assert.deepEqual(buildCodexClientOptions([
     { name: 'a', path: '/home/u/.agents/skills/a/SKILL.md' },
     { name: 'a', path: '/home/u/.agents/skills/a/SKILL.md' },
     { name: 'b', path: '/home/u/.agents/skills/b b/SKILL.md' },
-  ]), { config: { skills: { config: [
+  ]), { config: { ...sandbox, skills: { config: [
     { path: '/home/u/.agents/skills/a/SKILL.md', enabled: false },
     { path: '/home/u/.agents/skills/b b/SKILL.md', enabled: false },
   ] } } });
@@ -44,6 +45,6 @@ for (const resumed of [false, true]) {
     const disabled = [{ name: 'beta', path: '/home/u/.agents/skills/beta/SKILL.md' }];
     await codexRuntime.run('salut', { sessionId: resumed ? 'app-session' : undefined, cwd: process.cwd(), libraryCodexOptions: buildCodexClientOptions(disabled) }, writer, context);
     await codexRuntime.run('salut', { sessionId: resumed ? 'app-session' : undefined, cwd: process.cwd() }, writer, context);
-    assert.deepEqual(seen, [{ skills: { config: [{ path: disabled[0].path, enabled: false }] } }, undefined]);
+    assert.deepEqual(seen, [{ sandbox_workspace_write: { network_access: true }, skills: { config: [{ path: disabled[0].path, enabled: false }] } }, undefined]);
   });
 }
