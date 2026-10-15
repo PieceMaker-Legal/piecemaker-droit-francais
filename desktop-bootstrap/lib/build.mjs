@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
-import { createRequire } from 'node:module';
+import { createRequire, isBuiltin } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -125,7 +125,7 @@ export async function findMissingDependencies(stageDir) {
 
     const optional = new Set(Object.keys(manifest.optionalDependencies || {}));
     for (const [name, range] of Object.entries(manifest.dependencies)) {
-      if (optional.has(name) || missing.has(name)) continue;
+      if (optional.has(name) || missing.has(name) || isBuiltin(name)) continue;
       const require = createRequire(path.join(packageDir, 'package.json'));
       const locations = require.resolve.paths(name) || [];
       const dependency = name.split('/');
@@ -233,6 +233,8 @@ async function patchStagedManifest(stageDir) {
   for (const pattern of ['server/**', `${OVERLAY_DIR}/**`, `${BUNDLE_DIR}/**`]) {
     if (!manifest.build.files.includes(pattern)) manifest.build.files.push(pattern);
   }
+
+  if (process.platform === 'win32') manifest.build.files.push('desktop-bootstrap/**');
 
   for (const [platform, icon] of Object.entries(PRODUCT_ICONS)) {
     if (!(await exists(path.join(stageDir, icon)))) {
@@ -413,6 +415,17 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
   const stageDir = path.join(sourceDir, '.desktop-build', 'desktop-app');
   await embedLocalServer(sourceDir, stageDir);
   await embedDesktopOverlay(stageDir);
+  if (process.platform === 'win32') {
+    await fs.cp(path.join(bootstrapRoot, 'lib'), path.join(stageDir, 'desktop-bootstrap', 'lib'), { recursive: true, filter: isShippedFile });
+    await fs.cp(path.join(bootstrapRoot, 'composants'), path.join(stageDir, 'desktop-bootstrap', 'composants'), { recursive: true, filter: isShippedFile });
+    if (windowsInstaller) {
+      await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));
+      const manifestPath = path.join(stageDir, 'package.json');
+      const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+      manifest.build.files.push('python-runtime.json');
+      await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    }
+  }
   await embedBundledPlugins(sourceDir, stageDir);
   await patchStagedManifest(stageDir);
   if (process.platform === 'win32') {

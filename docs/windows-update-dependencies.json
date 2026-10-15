@@ -1,5 +1,5 @@
 {
-  "scope": "Windows desktop runtime; frontend and build dependencies remain in the source manifest",
+  "scope": "Windows desktop runtime; frontend dependencies remain in the source manifest for client compilation",
   "kept": [
     "@anthropic-ai/claude-agent-sdk",
     "@iarna/toml",
@@ -19,13 +19,20 @@
     "ignore",
     "jsonwebtoken",
     "jszip",
+    "mime",
     "mime-types",
     "multer",
     "node-pty",
     "pdf-lib",
-    "react",
     "web-push",
     "ws"
+  ],
+  "removedFromSource": [
+    "@nut-tree-fork/nut-js",
+    "fuse.js",
+    "node-fetch",
+    "rehype-raw",
+    "screenshot-desktop"
   ],
   "removedFromDesktop": [
     "@codemirror/lang-css",
@@ -38,6 +45,7 @@
     "@codemirror/theme-one-dark",
     "@eigenpal/docx-editor-i18n",
     "@eigenpal/docx-editor-react",
+    "@nut-tree-fork/nut-js",
     "@replit/codemirror-minimap",
     "@tailwindcss/typography",
     "@uiw/react-codemirror",
@@ -65,6 +73,7 @@
     "prosemirror-tables",
     "prosemirror-transform",
     "prosemirror-view",
+    "react",
     "react-dom",
     "react-dropzone",
     "react-error-boundary",
@@ -78,6 +87,15 @@
     "remark-breaks",
     "remark-gfm",
     "remark-math",
+    "screenshot-desktop",
     "tailwind-merge"
-  ]
+  ],
+  "frontendDevelopmentOnly": [
+    "react-scan"
+  ],
+  "evidence": {
+    "unusedOptionalPackages": "No imports or require calls in server, Electron, shared modules, overlays or plugin servers.",
+    "nodeFetch": "No application reference; Node >=22 provides global fetch. Transitive dependencies retain their own node-fetch if required.",
+    "react": "The server literal react describes a plugin type; frontend React is compiled into dist."
+  }
 }

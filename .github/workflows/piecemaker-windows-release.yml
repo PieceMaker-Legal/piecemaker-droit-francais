@@ -41,7 +41,7 @@ jobs:
         run: node --experimental-vm-modules --test desktop-bootstrap/overlay/electron-piecemaker/main.test.js
 
       - name: Test desktop dependency selection
-        run: node --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs
+        run: node --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs desktop-bootstrap/lib/initial-install.test.mjs desktop-bootstrap/composants/install.test.mjs
 
       - name: Build better-sqlite3 for Electron
         shell: bash
@@ -77,6 +77,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
 
+      - name: Prebuild portable Python components
+        shell: bash
+        env:
+          PIECEMAKER_REPO: ${{ github.repository }}
+          PIECEMAKER_TAG: ${{ env.TAG }}
+        run: |
+          node desktop-bootstrap/composants/build-release.mjs "$(cygpath -w "$RUNNER_TEMP/native-assets")" > "$RUNNER_TEMP/python.log" 2>&1 || {
+            tail -c 12000 "$RUNNER_TEMP/python.log"
+            exit 1
+          }
+          tail -n 5 "$RUNNER_TEMP/python.log"
+
       - name: Build desktop app
         shell: bash
         env:
@@ -98,7 +110,11 @@ jobs:
           tail -n 20 "$RUNNER_TEMP/app.log"
           node desktop-bootstrap/lib/verify-packaged-runtime.mjs release/desktop/win-unpacked release/desktop
           cp release/desktop/*.exe release/desktop/*.blockmap release/desktop/latest.yml release/desktop/piecemaker-runtime-components-*.tar.gz "$RUNNER_TEMP/app/"
+          cp "$RUNNER_TEMP/native-assets"/piecemaker-python-* "$RUNNER_TEMP/native-assets/python-runtime.json" "$RUNNER_TEMP/app/"
           cd "$RUNNER_TEMP/app"
+          for installer in *.exe; do
+            sha256sum "$installer" | cut -d' ' -f1 > "$installer.sha256"
+          done
           sha256sum piecemaker-desktop-win32-x64.tar.gz | cut -d' ' -f1 > piecemaker-desktop-win32-x64.tar.gz.sha256
           ls -la
 
@@ -114,6 +130,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           test -f "$RUNNER_TEMP/app/latest.yml"
+          test -f "$RUNNER_TEMP/app/piecemaker-python-win32-x64.tar.gz.sha256"
+          test -f "$RUNNER_TEMP/app/python-runtime.json"
+          test -n "$(find "$RUNNER_TEMP/app" -name '*.exe.sha256' -print -quit)"
           test -n "$(find "$RUNNER_TEMP/app" -name '*.blockmap' -print -quit)"
           test -n "$(find "$RUNNER_TEMP/app" -name 'piecemaker-runtime-components-*.tar.gz' -print -quit)"
           if [ "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = "true" ]; then

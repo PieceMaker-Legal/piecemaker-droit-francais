@@ -22,6 +22,7 @@ test('native and external script dependency closures stay physical even with exp
   assert.equal(manifest.build.asar, true);
   assert.ok(manifest.build.asarUnpack.includes('dist/**'));
   assert.ok(manifest.build.asarUnpack.includes('public/**'));
+  assert.ok(manifest.build.asarUnpack.includes('electron-piecemaker/runtime-components.mjs'));
   assert.ok(manifest.build.asarUnpack.includes('node_modules/export-only/**'));
   assert.ok(manifest.build.asarUnpack.includes('node_modules/child/**'));
   assert.equal(manifest.build.nsis.differentialPackage, true);
@@ -45,6 +46,7 @@ test('Express keeps its CommonJS dependency closure physical', async (t) => {
   const manifest = await configureCompactPackage(root);
   assert.ok(manifest.build.asarUnpack.includes('node_modules/express/**'));
   assert.ok(manifest.build.asarUnpack.includes('node_modules/express/node_modules/send/**'));
+  assert.ok(manifest.build.asarUnpack.includes('node_modules/send/**'));
   assert.ok(manifest.build.asarUnpack.includes('node_modules/mime/**'));
 });
 

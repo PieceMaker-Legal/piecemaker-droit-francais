@@ -24,11 +24,62 @@ Set-Location -LiteralPath $bootstrapHome
 [Environment]::CurrentDirectory = $bootstrapHome
 
 Say 'Recherche de la derniere version publiee de PieceMaker...'
-$tag = if ($env:PIECEMAKER_TAG -and $env:ELECTRON_FORCE_OWN_SERVER -ne '1') { $env:PIECEMAKER_TAG } else {
-  (Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/$repo/releases/latest").tag_name
-}
+$releaseUrl = if ($env:PIECEMAKER_TAG -and $env:ELECTRON_FORCE_OWN_SERVER -ne '1') {
+  "https://api.github.com/repos/$repo/releases/tags/$($env:PIECEMAKER_TAG)"
+} else { "https://api.github.com/repos/$repo/releases/latest" }
+$release = Invoke-RestMethod -UseBasicParsing -Uri $releaseUrl
+$tag = $release.tag_name
 if (-not $tag) { Fail "Impossible de determiner la derniere version publiee de $repo." }
+if ($tag -notmatch '^v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') { Fail 'Version de release invalide.' }
 Say "Version retenue : $tag"
+
+if ($args -notcontains '--build-from-source') {
+  if ($nodeArch -ne 'x64') { Fail 'Le paquet Windows precompile est disponible pour x64 uniquement.' }
+  $installerName = "piecemaker-droit-francais-desktop-$($tag -replace '^v', '')-win-x64.exe"
+  $installerAsset = @($release.assets | Where-Object { $_.name -eq $installerName })
+  $checksumAsset = @($release.assets | Where-Object { $_.name -eq "$installerName.sha256" })
+  if ($installerAsset.Count -eq 1 -and $checksumAsset.Count -eq 1) {
+    $installerPath = Join-Path $bootstrapHome $installerName
+    $previousProgress = $ProgressPreference
+    try {
+      $ProgressPreference = 'SilentlyContinue'
+      Say 'Telechargement de l''installateur precompile...'
+      Invoke-WebRequest -UseBasicParsing -Uri $installerAsset[0].browser_download_url -OutFile $installerPath
+      $expectedHash = (Invoke-WebRequest -UseBasicParsing -Uri $checksumAsset[0].browser_download_url).Content.Trim()
+    } finally { $ProgressPreference = $previousProgress }
+    if ($expectedHash -notmatch '^[a-fA-F0-9]{64}$' -or (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash -ne $expectedHash) {
+      Fail 'Le controle d''integrite de l''installateur a echoue.'
+    }
+    Say 'Installation de PieceMaker...'
+    $installerProcess = Start-Process -FilePath $installerPath -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
+    if ($installerProcess.ExitCode -ne 0) { Fail "Installation interrompue (code $($installerProcess.ExitCode))." }
+    $appDir = Join-Path $env:LOCALAPPDATA 'Programs\PieceMaker'
+    $executable = Join-Path $appDir 'PieceMaker.exe'
+    $appRoot = Join-Path $appDir 'resources\app.asar.unpacked'
+    $prepareScript = Join-Path $appRoot 'desktop-bootstrap\lib\prepare-installed.mjs'
+    if (-not (Test-Path -LiteralPath $prepareScript)) { Fail 'Le paquet installe ne contient pas la preparation initiale.' }
+    $env:PIECEMAKER_SRC_DIR = $appRoot
+    $env:PIECEMAKER_TAG = $tag
+    $env:PIECEMAKER_REPO = $repo
+    $previousRunAsNode = $env:ELECTRON_RUN_AS_NODE
+    try {
+      $env:ELECTRON_RUN_AS_NODE = '1'
+      Say 'Preparation des certificats et des composants precompiles...'
+      $prepareArguments = @('"' + $prepareScript + '"') + $args
+      $prepareLog = Join-Path $bootstrapHome 'preparation.log'
+      $prepareErrors = Join-Path $bootstrapHome 'preparation-errors.log'
+      $prepareProcess = Start-Process -FilePath $executable -ArgumentList $prepareArguments -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $prepareLog -RedirectStandardError $prepareErrors
+      if ($prepareProcess.ExitCode -ne 0) {
+        if (Test-Path -LiteralPath $prepareErrors) { Get-Content -LiteralPath $prepareErrors -Encoding UTF8 | Write-Host }
+        Fail "Preparation initiale interrompue (code $($prepareProcess.ExitCode))."
+      }
+    } finally { $env:ELECTRON_RUN_AS_NODE = $previousRunAsNode }
+    if ($args -notcontains '--no-launch') { Start-Process -FilePath $executable }
+    Say 'PieceMaker est installe.'
+    return
+  }
+  Say 'Cette ancienne release utilise encore le paquet archive.'
+}
 
 $srcDir = Join-Path $bootstrapHome "src\$tag"
 if (-not (Test-Path $srcDir)) {

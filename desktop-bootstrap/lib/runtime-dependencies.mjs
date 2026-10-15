@@ -45,7 +45,7 @@ function pluginServerSources(sourceDir) {
 
 function packageLiteralPattern(name) {
   const escaped = Array.from(name, (character) => '\\^$.*+?()[]{}|'.includes(character) ? `\\${character}` : character).join('');
-  return new RegExp(`['"]${escaped}(?:/[^'"]*)?['"]`);
+  return new RegExp(`(?:\\bfrom\\s*|\\bimport\\s*(?:\\(\\s*)?|\\brequire(?:\\.resolve)?\\s*\\(\\s*)['"]${escaped}(?:/[^'"]*)?['"]`);
 }
 
 export function selectRuntimeDependencies(sourceDir, manifest, { sourceRoots = ['server', 'electron', 'shared', 'desktop-bootstrap/overlay'], includePluginServers = true } = {}) {
@@ -60,6 +60,6 @@ export function selectRuntimeDependencies(sourceDir, manifest, { sourceRoots = [
   const dependencies = Object.fromEntries([...runtimeNames].sort().map((name) => [name, manifest.dependencies[name]]));
   return {
     dependencies,
-    optionalDependencies: { ...(manifest.optionalDependencies || {}) },
+    optionalDependencies: Object.fromEntries(Object.entries(manifest.optionalDependencies || {}).filter(([name]) => packageLiteralPattern(name).test(source))),
   };
 }
