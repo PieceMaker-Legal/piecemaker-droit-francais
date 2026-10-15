@@ -27,7 +27,9 @@ function Read-Checksum([string] $Url) {
   $previousProgress = $ProgressPreference
   try {
     $ProgressPreference = 'SilentlyContinue'
-    return (Invoke-WebRequest -UseBasicParsing -Uri $Url).Content.Trim()
+    $content = (Invoke-WebRequest -UseBasicParsing -Uri $Url).Content
+    if ($content -is [byte[]]) { $content = [Text.Encoding]::ASCII.GetString($content) }
+    return ([string]$content).Trim()
   } finally { $ProgressPreference = $previousProgress }
 }
 
