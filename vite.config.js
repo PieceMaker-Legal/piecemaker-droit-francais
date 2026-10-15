@@ -5,6 +5,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { getConnectableHost, normalizeLoopbackHost } from './shared/networkHosts.js'
 import { createWebManifest, loadProductConfig } from './shared/product-config.mjs'
+import { withPieceMakerOfflinePage } from './scripts/piecemaker/pwa/service-worker.mjs'
 
 // The client shows the installed package version so it can be compared against the
 // version the server process is actually running. Reading package.json here and
@@ -19,9 +20,9 @@ function escapeTemplateValue(value) {
 function createProductPwaPlugin() {
   const manifestSource = `${JSON.stringify(createWebManifest(product), null, 2)}\n`
   const serviceWorkerTemplate = readFileSync(new URL('./pwa/service-worker.js', import.meta.url), 'utf8')
-  const serviceWorkerSource = serviceWorkerTemplate
+  const serviceWorkerSource = withPieceMakerOfflinePage(serviceWorkerTemplate
     .replaceAll('__PWA_CACHE_NAME__', `${product.slug}-pwa-v${pkg.version}`)
-    .replaceAll('__PRODUCT_NAME__', escapeTemplateValue(product.name))
+    .replaceAll('__PRODUCT_NAME__', escapeTemplateValue(product.name)))
 
   return {
     name: 'product-pwa-assets',

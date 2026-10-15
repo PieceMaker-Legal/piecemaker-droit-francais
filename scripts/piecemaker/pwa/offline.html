@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3">
+  <title>Retrouver PieceMaker</title>
+  <style>
+    :root { color-scheme: light; --background: 44 22% 96%; --foreground: 36 25% 4%; --card: 0 0% 100%; --primary: 221.2 83.2% 53.3%; --button-text: 210 40% 98%; --muted: 40 5% 44%; --border: 44 14% 87%; }
+    :root.dark { color-scheme: dark; --background: 0 0% 8%; --foreground: 40 8% 93%; --card: 0 0% 12%; --primary: 217.2 91.2% 59.8%; --button-text: 0 0% 8%; --muted: 0 0% 60%; --border: 0 0% 17%; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: "Encode Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+    .backdrop { position: fixed; inset: 0; pointer-events: none; background-image: radial-gradient(hsl(var(--foreground) / .024) 1px, transparent 1px); background-size: 22px 22px; }
+    .glow { position: fixed; width: 36rem; height: 36rem; top: -10rem; left: 50%; transform: translateX(-50%); border-radius: 50%; background: hsl(var(--primary) / .1); filter: blur(64px); pointer-events: none; }
+    .glow.bottom { width: 26rem; height: 26rem; inset: auto auto -8rem -6rem; transform: none; background: hsl(var(--primary) / .05); }
+    main { position: relative; min-height: 100vh; min-height: 100svh; max-width: 448px; margin: auto; display: flex; align-items: center; padding: 32px 16px; }
+    .card { width: 100%; padding: 40px; text-align: center; border: 1px solid hsl(var(--border) / .7); border-radius: 16px; background: hsl(var(--card) / .9); box-shadow: 0 24px 60px -20px hsl(var(--foreground) / .18), 0 0 0 1px hsl(var(--foreground) / .05); backdrop-filter: blur(24px); }
+    .logo { width: 64px; height: 64px; display: block; margin: 0 auto 20px; }
+    .dark .logo { filter: invert(1); }
+    h1 { margin: 0; font-family: Merriweather, Georgia, Cambria, "Times New Roman", serif; font-size: 30px; line-height: 1.2; font-weight: 700; letter-spacing: -.025em; }
+    .description { max-width: 320px; margin: 8px auto 0; font-size: 14px; line-height: 1.625; color: hsl(var(--muted)); }
+    .actions { margin-top: 32px; }
+    button { display: flex; width: 100%; justify-content: center; align-items: center; gap: 8px; border: 0; border-radius: 12px; padding: 12px 16px; background: hsl(var(--primary)); color: hsl(var(--button-text)); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 10px 15px -3px hsl(var(--primary) / .25); transition: filter .2s, transform .2s; }
+    button:hover { filter: brightness(1.1); }
+    button:active { transform: scale(.99); }
+    button:disabled { opacity: .6; cursor: wait; }
+    button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 4px; }
+    .status { display: flex; justify-content: center; align-items: center; gap: 8px; margin: 18px 0 0; font-size: 12px; line-height: 1.6; color: hsl(var(--muted)); }
+    .dot { width: 6px; height: 6px; flex-shrink: 0; background: hsl(var(--primary)); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+    footer { margin-top: 24px; padding-top: 20px; border-top: 1px solid hsl(var(--border) / .6); font-size: 12px; line-height: 1.625; color: hsl(var(--muted)); }
+    footer p { margin: 0; }
+    @keyframes pulse { 50% { opacity: .3; } }
+    @media (max-width: 639px) { .card { padding: 32px; } }
+    @media (prefers-reduced-motion: reduce) { .dot { animation: none; } button { transition: none; } }
+  </style>
+  <script>
+    try {
+      const theme = JSON.parse(localStorage.getItem('user-preferences') || '{}').theme || localStorage.getItem('theme');
+      document.documentElement.classList.toggle('dark', theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches));
+    } catch {}
+  </script>
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true"></div>
+  <div class="glow" aria-hidden="true"></div>
+  <div class="glow bottom" aria-hidden="true"></div>
+  <main>
+    <section class="card" aria-labelledby="title">
+      <img class="logo" src="__LOGO__" alt="PieceMaker">
+      <h1 id="title">Retrouver PieceMaker</h1>
+      <p class="description" id="description">Votre espace vous attend. Relancez PieceMaker pour reprendre votre travail.</p>
+      <div class="actions">
+        <button id="relaunch" type="button">Relancer PieceMaker</button>
+        <p class="status" role="status"><span class="dot" aria-hidden="true"></span><span id="status">En attente de PieceMaker…</span></p>
+      </div>
+      <footer><p id="hint">Votre espace s’ouvrira automatiquement dès que PieceMaker sera prêt.</p></footer>
+    </section>
+  </main>
+  <script>
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+    const canRelaunch = local && location.port === '__LAUNCHER_PORT__' && /Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2;
+    const button = document.getElementById('relaunch');
+    const status = document.getElementById('status');
+    if (!canRelaunch) {
+      button.textContent = 'Réessayer';
+      document.getElementById('description').textContent = local
+        ? 'Ouvrez PieceMaker sur cet ordinateur pour retrouver votre espace.'
+        : 'Votre espace vous attend sur votre ordinateur. Gardez-le allumé pour y accéder.';
+      document.getElementById('hint').textContent = local
+        ? 'Votre espace s’ouvrira automatiquement dès que PieceMaker sera prêt.'
+        : 'Si votre ordinateur est éteint, rallumez-le et ouvrez PieceMaker. Cette page se reconnectera automatiquement.';
+    }
+    let checking = false;
+    async function reconnect() {
+      if (checking) return;
+      checking = true;
+      try {
+        const options = { cache: 'no-store', signal: AbortSignal.timeout(4000) };
+        const [response, application] = await Promise.all([fetch('/api/auth/status', options), fetch('/', options)]);
+        if (application.ok && application.headers.get('content-type')?.includes('text/html') && response.ok && typeof (await response.json()).needsSetup === 'boolean') location.reload();
+      } catch {} finally { checking = false; }
+    }
+    button.addEventListener('click', () => {
+      if (canRelaunch) {
+        if (button.disabled) return;
+        button.disabled = true;
+        location.href = 'piecemaker-relaunch://start';
+        status.textContent = 'PieceMaker démarre…';
+        button.textContent = 'Démarrage…';
+        setTimeout(() => { button.disabled = false; button.textContent = 'Relancer PieceMaker'; }, 10000);
+      } else {
+        reconnect();
+      }
+    });
+    window.addEventListener('online', reconnect);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reconnect(); });
+    setInterval(reconnect, 2500);
+    reconnect();
+  </script>
+</body>
+</html>

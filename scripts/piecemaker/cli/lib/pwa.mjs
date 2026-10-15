@@ -6,6 +6,7 @@ import path from 'node:path';
 import { piecemakerExecutable } from '../install-command.mjs';
 import { APP, APP_URL, PIECEMAKER_HOME } from './config.mjs';
 import { runCapture } from './exec.mjs';
+import { installMacRelaunchHandler } from './relaunch-macos.mjs';
 
 const APPLICATION_NAME = 'PieceMaker';
 
@@ -105,6 +106,7 @@ function installMacApplication() {
   const browser = macChromiumBrowser();
   const launcherPath = path.join(macosDir, APPLICATION_NAME);
   const command = piecemakerExecutable();
+  registerMacBundle(installMacRelaunchHandler(command, path.join(PIECEMAKER_HOME, 'applications')));
   const launchCommand = browser
     ? `exec ${shellQuote(command)} --window >/dev/null 2>&1`
     : `open "${APP_URL}"`;

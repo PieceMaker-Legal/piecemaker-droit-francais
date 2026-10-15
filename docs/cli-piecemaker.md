@@ -77,6 +77,43 @@ Code dans `scripts/piecemaker/cli/` :
   macOS/Windows/Linux et vérification de sa présence réelle), `node-runtime`,
   `config`, `exec`, `ui`.
 
+## Relancer depuis la PWA sur macOS
+
+La page de secours reprend la carte de connexion, son logo et le thème choisi
+dans l'interface. Elle embarque son HTML, son CSS, son JavaScript et son logo :
+elle reste affichable quand le serveur est arrêté. Une navigation qui échoue,
+ou reçoit une réponse serveur 5xx, affiche cette page.
+
+Sur le Mac qui héberge la PWA du CLI (`localhost:5173`, ou son port configuré),
+le bouton **Relancer PieceMaker** ouvre `piecemaker-relaunch://start`.
+L'installation PWA du CLI enregistre un relais AppleScript signé localement
+dans `~/.piecemaker/applications/PieceMaker Relance.app` (sous `PIECEMAKER_HOME`
+si défini). Il ne reconnaît que cette URL exacte et lance la commande
+`piecemaker --launch-only` en arrière-plan, sans ouvrir une seconde fenêtre.
+Le navigateur peut demander l'autorisation d'ouvrir PieceMaker au premier clic.
+
+La page interroge `/api/auth/status` et `/` sans cache toutes les 2,5 secondes et
+recharge l'URL courante dès que le serveur et l'interface répondent.
+Sur téléphone ou depuis une autre machine, le bouton devient **Réessayer** :
+il ne lance aucun programme sur l'appareil qui affiche la page. Le texte
+indique de rallumer l'ordinateur et d'ouvrir PieceMaker si celui-ci est éteint,
+puis la reconnexion se fait automatiquement. Les autres installations locales
+sont invitées à ouvrir leur application PieceMaker.
+
+Le service worker CloudCLI `pwa/service-worker.js` reste intact. Le module
+`scripts/piecemaker/pwa/service-worker.mjs` lui préfixe un gestionnaire de
+navigation, avant ses gestionnaires existants. L'exception ciblée dans
+`vite.config.js` importe ce module et enveloppe la source générée, aussi bien
+en développement que lors du packaging. Le test
+`scripts/piecemaker/pwa/service-worker.test.mjs` protège ce branchement et le
+maintien des gestionnaires de notifications upstream. Le test macOS
+`scripts/piecemaker/cli/lib/relaunch-macos.test.mjs` compile et signe un relais
+temporaire, vérifie le schéma déclaré et exécute un faux lanceur.
+
+Après mise à jour, un lancement du CLI installe le relais. Il faut ouvrir la
+PWA une fois avec le serveur actif pour qu'elle récupère le nouveau worker ;
+une ancienne page Offline déjà ouverte ne peut pas se mettre à jour sans lui.
+
 ## Sous-commande `conversion`
 
 `piecemaker conversion [--case <chemin>] [--force] [--json] [pièce…]` convertit
