@@ -1,12 +1,13 @@
 # MCP PieceMaker
 
-Deux serveurs stdio embarqués, déclarés dans chaque dossier par
-`server/piecemaker/mcp-declaration.ts` :
+Deux serveurs stdio embarqués. `mcp-declaration.ts` déclare `legifrance`
+dans chaque dossier et **retire** `piecemaker` (remplacé par le skill
+`Skill-PieceMaker` / `scripts/pm`). L’étape `12-mcp-piecemaker` retire
+l’enregistrement Claude en portée utilisateur.
 
-- `piecemaker` (`piecemaker/server.mjs`) — `conversion` (Markdown + scan PII,
-  via `installer/bin/piecemaker.mjs`) et `sql` (base du dossier, via
-  `POST /api/piecemaker/local/sql`). Enregistré aussi en portée utilisateur
-  Claude par l'étape `12-mcp-piecemaker`.
+- `piecemaker` (`piecemaker/server.mjs`) — conservé pour un client MCP
+  sans shell ; plus déclaré par défaut. `conversion`, `sql`, `afficher`,
+  `chronologie`, `tabular_review`.
 - `legifrance` (`legifrance/server.mjs`) — runtime Python vendu
   (`mcp_stdio_server.py`), venv isolé dans `~/.piecemaker/mcp-legifrance/`.
   Identifiants PISTE : `~/.config/mcp-legifrance/.env`. Déclaré aussi dans

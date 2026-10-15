@@ -35,6 +35,9 @@ test('installe docx-cli et redaction-juridique dans .agents/skills et les relie 
   assert.match(fs.readFileSync(skillPath(folder, 'redaction-juridique'), 'utf8'), /^---\nname: redaction-juridique\n/);
   assert.match(fs.readFileSync(skillPath(folder, 'Skill-PieceMaker'), 'utf8'), /^---\nname: piecemaker\n/);
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')), true);
+  const pmCli = path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm');
+  assert.equal(fs.existsSync(pmCli), true);
+  assert.equal((fs.statSync(pmCli).mode & 0o111) !== 0, true);
   assertLinked(folder, 'docx-cli', DOCX_LINKS);
   assertLinked(folder, 'redaction-juridique', REDACTION_LINKS);
   assertLinked(folder, 'Skill-PieceMaker', PIECEMAKER_LINKS);

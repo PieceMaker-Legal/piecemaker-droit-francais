@@ -22,27 +22,25 @@ function snapshot(folder: string) {
   }));
 }
 
-test('déclare piecemaker pour Codex et Vibe, conserve les entrées tierces', () => {
+test('déclare Légifrance, retire piecemaker, conserve les entrées tierces', () => {
   const folder = temporaryFolder();
   fs.mkdirSync(path.join(folder, '.codex'));
-  fs.writeFileSync(path.join(folder, '.codex', 'config.toml'), '[mcp_servers.exemple]\ncommand = "exemple-mcp"\nargs = ["--demo"]\nenabled = true\n');
+  fs.writeFileSync(path.join(folder, '.codex', 'config.toml'), '[mcp_servers.exemple]\ncommand = "exemple-mcp"\nargs = ["--demo"]\nenabled = true\n\n[mcp_servers.piecemaker]\ncommand = "node"\nargs = ["/ancien/server.mjs"]\nenabled = true\n');
   fs.mkdirSync(path.join(folder, '.vibe'));
-  fs.writeFileSync(path.join(folder, '.vibe', 'config.toml'), '[[mcp_servers]]\nname = "exemple"\ntransport = "stdio"\ncommand = "exemple-mcp"\nargs = []\n');
+  fs.writeFileSync(path.join(folder, '.vibe', 'config.toml'), '[[mcp_servers]]\nname = "exemple"\ntransport = "stdio"\ncommand = "exemple-mcp"\nargs = []\n\n[[mcp_servers]]\nname = "piecemaker"\ntransport = "stdio"\ncommand = "node"\nargs = []\n');
 
   declarePieceMakerServer(folder);
 
   const codex = TOML.parse(fs.readFileSync(path.join(folder, '.codex', 'config.toml'), 'utf8'));
   assert.equal(codex.mcp_servers.exemple.command, 'exemple-mcp');
-  assert.equal(codex.mcp_servers.piecemaker.command, 'node');
-  assert.match(codex.mcp_servers.piecemaker.args[0], /vendor[\\/]mcp[\\/]piecemaker[\\/]server\.mjs$/);
+  assert.equal(codex.mcp_servers.piecemaker, undefined);
   assert.match(codex.mcp_servers.legifrance.args[0], /vendor[\\/]mcp[\\/]legifrance[\\/]server\.mjs$/);
   assert.equal(fs.existsSync(codex.mcp_servers.legifrance.args[0]), true);
   assert.equal(fs.existsSync(path.join(path.dirname(codex.mcp_servers.legifrance.args[0]), 'mcp_stdio_server.py')), true);
-  assert.equal(codex.mcp_servers.piecemaker.default_tools_approval_mode, 'approve');
   assert.equal(codex.mcp_servers.legifrance.default_tools_approval_mode, 'approve');
   assert.equal(codex.mcp_servers.exemple.default_tools_approval_mode, undefined);
   const vibe = TOML.parse(fs.readFileSync(path.join(folder, '.vibe', 'config.toml'), 'utf8'));
-  assert.deepEqual(vibe.mcp_servers.map((server: { name: string }) => server.name).sort(), ['exemple', 'legifrance', 'piecemaker']);
+  assert.deepEqual(vibe.mcp_servers.map((server: { name: string }) => server.name).sort(), ['exemple', 'legifrance']);
   const mcpJson = JSON.parse(fs.readFileSync(path.join(folder, '.mcp.json'), 'utf8'));
   assert.equal(mcpJson.mcpServers.piecemaker, undefined);
   assert.match(mcpJson.mcpServers.legifrance.args[0], /vendor[\\/]mcp[\\/]legifrance[\\/]server\.mjs$/);
@@ -60,7 +58,7 @@ test('un second passage ne réécrit aucun fichier', () => {
   assert.deepEqual(snapshot(folder), before);
 });
 
-test('une entrée piecemaker obsolète est remplacée', () => {
+test('une entrée piecemaker est retirée', () => {
   const folder = temporaryFolder();
   fs.mkdirSync(path.join(folder, '.codex'));
   fs.writeFileSync(path.join(folder, '.codex', 'config.toml'), '[mcp_servers.piecemaker]\ncommand = "node"\nargs = ["/ancien/server.mjs"]\nenabled = true\n');
@@ -68,8 +66,8 @@ test('une entrée piecemaker obsolète est remplacée', () => {
   declarePieceMakerServer(folder);
 
   const codex = TOML.parse(fs.readFileSync(path.join(folder, '.codex', 'config.toml'), 'utf8'));
-  assert.match(codex.mcp_servers.piecemaker.args[0], /vendor[\\/]mcp[\\/]piecemaker[\\/]server\.mjs$/);
-  assert.equal(codex.mcp_servers.piecemaker.default_tools_approval_mode, 'approve');
+  assert.equal(codex.mcp_servers.piecemaker, undefined);
+  assert.equal(codex.mcp_servers.legifrance.default_tools_approval_mode, 'approve');
 });
 
 test('une entrée Codex déjà déclarée sans autorisation des outils la reçoit', () => {
@@ -81,7 +79,7 @@ test('une entrée Codex déjà déclarée sans autorisation des outils la reçoi
   declarePieceMakerServer(folder);
 
   const codex = TOML.parse(fs.readFileSync(codexPath, 'utf8'));
-  assert.equal(codex.mcp_servers.piecemaker.default_tools_approval_mode, 'approve');
+  assert.equal(codex.mcp_servers.piecemaker, undefined);
   assert.equal(codex.mcp_servers.legifrance.default_tools_approval_mode, 'approve');
 });
 

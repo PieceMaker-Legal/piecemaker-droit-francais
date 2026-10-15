@@ -12,7 +12,7 @@ const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
 const BOOLEAN_FLAGS = new Set(['force']);
 
-export const HELP = `Usage: pm.mjs <outil> [options]
+export const HELP = `Usage: pm <outil> [options]
 
   conversion [--dossier PATH] [--force] [pièce…]
   sql [--dossier PATH] [--requete SQL]
@@ -162,15 +162,47 @@ async function defaultDeps(cwd) {
   const volets = await import(pathToFileURL(path.join(vendor, 'mcp', 'piecemaker', 'volets.mjs')).href);
   const panels = await import(pathToFileURL(path.join(vendor, 'mcp', 'piecemaker', 'volets-ouverts.mjs')).href);
   const cliPath = path.join(vendor, 'installer', 'bin', 'piecemaker.mjs');
+  const panelsPath = panels.openPanelsFile();
   return {
     sqlFn: client.runSql,
     tabularFn: client.runTabularReview,
     execFn: (args, dir) => spawnPiecemaker(cliPath, args, dir),
     chronologieSql: volets.chronologieSql,
     reviewFile: volets.reviewFile,
-    describePanels: (dir) => panels.describeOpenPanels(dir),
+    describePanels: (dir) => panels.describeOpenPanels(dir, panelsPath),
     exists: (file) => fs.existsSync(file),
+    openPanel: (body) => client.requestPanelOpen(body),
+    panelCompleted: (args) => client.panelRequestCompleted(args),
+    waitPanel: (target, timeoutMs) => panels.waitForOpenPanel(target, panelsPath, timeoutMs),
+    openPanelsTimeoutMs: 8000,
   };
+}
+
+async function confirmPanel(api, request, target) {
+  const timeoutMs = api.openPanelsTimeoutMs ?? 8000;
+  if (api.waitPanel && await api.waitPanel(target, 0)) return { opened: true, alreadyOpen: true };
+  let id;
+  try {
+    if (api.openPanel) ({ id } = await api.openPanel(request));
+  } catch {
+    const opened = api.waitPanel ? await api.waitPanel(target, timeoutMs) : false;
+    return { opened, alreadyOpen: false };
+  }
+  if (!api.waitPanel && !api.panelCompleted) return { opened: true, alreadyOpen: false };
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    let completed = false;
+    try {
+      if (id && api.panelCompleted) completed = await api.panelCompleted({ project: request.project, id });
+    } catch {}
+    if (await api.waitPanel(target, 0)) return { opened: true, alreadyOpen: false };
+    if (completed) {
+      await api.waitPanel(target, Math.min(500, deadline - Date.now()));
+      return { opened: true, alreadyOpen: false };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return { opened: api.waitPanel ? await api.waitPanel(target, 0) : false, alreadyOpen: false };
 }
 
 export async function run(argv, { cwd = process.cwd(), deps } = {}) {
@@ -203,15 +235,30 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   }
 
   if (tool === 'afficher') {
-    if ((!flags.fichier || flags.fichier === true) && (!flags.volet || flags.volet === true)) return api.describePanels(resolved);
+    if ((!flags.fichier || flags.fichier === true) && (!flags.volet || flags.volet === true)) {
+      return api.describePanels ? api.describePanels(resolved) : 'Aucun volet ouvert à côté du chat.';
+    }
     if (flags.fichier && flags.fichier !== true) {
       const file = path.resolve(cwd, String(flags.fichier));
       if (!api.exists(file)) fail(`Fichier introuvable : ${flags.fichier}`);
-      return `Affiché dans le volet de lecture : ${flags.fichier}`;
+      const target = { cwd: resolved, tab: 'files', document: file };
+      const { opened, alreadyOpen } = await confirmPanel(api, { project: resolved, tab: 'files', document: file }, target);
+      if (!opened) fail('L’ouverture du fichier n’a pas été confirmée dans PieceMaker.');
+      return alreadyOpen
+        ? `Déjà affiché dans le volet de lecture : ${flags.fichier}`
+        : `Affiché dans le volet de lecture : ${flags.fichier}`;
     }
     if (!VOLETS.includes(flags.volet)) usage(`Volet inconnu : ${flags.volet}`);
     const review = flags.review && flags.review !== true ? path.basename(String(flags.review)) : '';
-    return `Volet affiché : ${flags.volet}${review ? ` (${review})` : ''}`;
+    const target = flags.volet === 'tabular-review'
+      ? { cwd: resolved, tab: 'plugin:piecemaker-tabular-review', review: review || undefined }
+      : { cwd: resolved, tab: 'plugin:piecemaker-dossier', view: flags.volet === 'chronologie' ? 'chronology' : 'general' };
+    const request = { project: resolved, ...target };
+    delete request.cwd;
+    const { opened, alreadyOpen } = await confirmPanel(api, request, target);
+    if (!opened) fail(`L’ouverture du volet ${flags.volet} n’a pas été confirmée dans PieceMaker.`);
+    const label = `${flags.volet}${review ? ` (${review})` : ''}`;
+    return alreadyOpen ? `Déjà affiché : ${label}` : `Volet affiché : ${label}`;
   }
 
   if (tool === 'chronologie') {
@@ -234,8 +281,13 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     if (!REVIEW_ACTIONS.includes(action)) usage('tabular_review attend une action connue.');
     const project = path.resolve(resolved);
     if (action === 'ouvrir') {
-      if (flags.projet && flags.projet !== true) return `Projet affiché dans le volet Tabular Review : ${flags.projet}`;
-      const name = api.reviewFile(project, flags.fichier);
+      const draft = flags.projet && flags.projet !== true ? String(flags.projet) : '';
+      const name = draft ? undefined : api.reviewFile(project, flags.fichier);
+      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review: name, draft: draft || undefined };
+      const request = { project, tab: 'plugin:piecemaker-tabular-review', review: name, draft: draft || undefined };
+      const { opened } = await confirmPanel(api, request, target);
+      if (!opened) fail('Le volet Tabular Review n’a pas été ouvert dans PieceMaker.');
+      if (draft) return `Projet affiché dans le volet Tabular Review : ${draft}`;
       return `Analyse affichée dans le volet Tabular Review. Contenu : « Tabular Review/${name} ».`;
     }
     const documents = flags.documents && flags.documents !== true

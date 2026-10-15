@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+SCRIPT = HERE / 'pm.mjs'
+HOMES = ('.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker')
+
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError as error:
+        return getattr(error, 'errno', None) == 1
+
+
+def homes():
+    seen = []
+    for key in ('CLOUDCLI_HOME', 'PIECEMAKER_HOME'):
+        value = os.environ.get(key)
+        if value and value not in seen:
+            seen.append(value)
+            yield value
+    home = Path.home()
+    for name in HOMES:
+        path = str(home / name)
+        if path not in seen:
+            seen.append(path)
+            yield path
+
+
+def electron_bin(app_root):
+    root = Path(app_root)
+    mac = root.parent.parent / 'MacOS' / 'PieceMaker'
+    if mac.is_file():
+        return str(mac)
+    windows = root.parent.parent / 'PieceMaker.exe'
+    if windows.is_file():
+        return str(windows)
+    return None
+
+
+def live_server():
+    for home in homes():
+        marker = Path(home) / 'local-server.json'
+        try:
+            data = json.loads(marker.read_text())
+        except (OSError, json.JSONDecodeError, TypeError):
+            continue
+        try:
+            pid = int(data.get('pid') or 0)
+            port = int(data.get('port') or 0)
+        except (TypeError, ValueError):
+            continue
+        if pid <= 0 or port <= 0 or not alive(pid):
+            continue
+        app_root = data.get('appRoot') if isinstance(data.get('appRoot'), str) else ''
+        return electron_bin(app_root) if app_root else None, port, home
+    return None, None, None
+
+
+def main():
+    electron, port, home = live_server()
+    node = electron or shutil.which('node')
+    if not node:
+        sys.stderr.write('Démarrez PieceMaker (aucun runtime Node : ni l’application, ni `node` sur le PATH).\n')
+        return 1
+    if not SCRIPT.is_file():
+        sys.stderr.write(f'CLI introuvable : {SCRIPT}\n')
+        return 1
+    env = os.environ.copy()
+    if electron:
+        env['ELECTRON_RUN_AS_NODE'] = '1'
+    if port:
+        env['PIECEMAKER_APP_PORT'] = str(port)
+    if home:
+        env['PIECEMAKER_HOME'] = home
+    os.execve(node, [node, str(SCRIPT), *sys.argv[1:]], env)
+
+
+if __name__ == '__main__':
+    sys.exit(main())
