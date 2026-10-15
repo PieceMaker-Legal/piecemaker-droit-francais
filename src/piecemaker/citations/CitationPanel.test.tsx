@@ -5,6 +5,7 @@ import { resolvePieceRef } from '@/piecemaker/chat/fileRef';
 import { CitationPanel } from '@/piecemaker/citations/CitationPanel';
 import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 import { fetchCitationSource, fetchLegifranceBlocks } from '@/piecemaker/citations/api';
+import { citationPassage, clearCitationPassage } from '@/piecemaker/citations/citationPassage';
 import { legifranceQuoteUrl } from '@/piecemaker/citations/legifrance';
 import { citationPath, OPEN_IN_EDITOR_EVENT } from '@/piecemaker/editor-tabs/editorPanels';
 
@@ -27,7 +28,10 @@ beforeEach(() => {
   vi.mocked(fetchLegifranceBlocks).mockResolvedValue(null);
   Element.prototype.scrollIntoView = vi.fn();
 });
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  clearCitationPassage();
+});
 
 describe('visionneuse de citations', () => {
   it('ouvre la source, surligne le passage et permet de passer au deuxième extrait', async () => {
@@ -110,6 +114,7 @@ describe('visionneuse de citations', () => {
     try {
       fireEvent.click(link);
       await waitFor(() => expect(opened).toEqual(['.agents/skills/docx-cli/SKILL.md']));
+      expect(citationPassage('.agents/skills/docx-cli/SKILL.md')?.quote).toBe('extrait');
     } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
   });
 
@@ -138,6 +143,8 @@ describe('visionneuse de citations', () => {
     try {
       fireEvent.click(link);
       await waitFor(() => expect(opened).toEqual(['02_DATA_ROOM/12_Contrat_exemple.pdf']));
+      expect(citationPassage('02_DATA_ROOM/12_Contrat_exemple.pdf')?.quote).toBe('Contrat de partenariat');
+      expect(citationPassage('02_DATA_ROOM/12_Contrat_exemple.pdf')?.page).toBe(1);
     } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
   });
 

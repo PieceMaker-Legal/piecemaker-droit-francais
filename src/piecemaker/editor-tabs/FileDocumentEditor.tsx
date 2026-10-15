@@ -11,6 +11,10 @@ import MarkdownPreview from '@/modules/code-editor/markdown/MarkdownPreview';
 import { isBinaryFile } from '@/modules/code-editor/utils/binaryFile';
 import { getLanguageExtensions } from '@/modules/code-editor/utils/editorExtensions';
 import { getPreviewKind } from '@/modules/code-editor/utils/previewableFile';
+import { useCitationPassage } from '@/piecemaker/citations/citationPassage';
+import { lineAt, locateQuotes } from '@/piecemaker/citations/locateQuote';
+import { PdfPassageViewer } from '@/piecemaker/citations/PdfPassageViewer';
+import { quoteHighlightExtension } from '@/piecemaker/citations/quoteHighlight';
 import { isDocxDocument } from '@/piecemaker/docx';
 import { useTheme } from '@/shared/context/ThemeContext';
 import type { CodeEditorFile } from '@/shared/types';
@@ -24,8 +28,16 @@ function TextDocument({ file, projectPath }: { file: CodeEditorFile; projectPath
   const { showLineNumbers, fontSize } = useCodeEditorSettings();
   const { content, setContent, loading, saveError, handleSave } = useCodeEditorDocument({ file, projectPath });
   const markdown = isMarkdown(file.name);
-  const [source, setSource] = useState(!markdown);
+  // Quoted passage to mark in the source when a citation opened this file.
+  const passage = useCitationPassage(file.path);
+  const [source, setSource] = useState(true);
+  // Last citation nonce applied so a new click forces the source view again.
+  const [appliedNonce, setAppliedNonce] = useState(passage?.nonce);
   const [dirty, setDirty] = useState(false);
+  if (passage?.nonce !== appliedNonce) {
+    setAppliedNonce(passage?.nonce);
+    setSource(true);
+  }
   const save = useRef(handleSave);
   const pending = useRef(false);
 
@@ -51,7 +63,20 @@ function TextDocument({ file, projectPath }: { file: CodeEditorFile; projectPath
     return () => document.removeEventListener('keydown', saveNow);
   }, []);
 
-  const extensions = useMemo(() => [...getLanguageExtensions(file.name), EditorView.lineWrapping], [file.name]);
+  const located = useMemo(
+    () => (passage?.quote ? locateQuotes(content, passage.quote) : []),
+    [content, passage],
+  );
+
+  const extensions = useMemo(
+    () => [...getLanguageExtensions(file.name), EditorView.lineWrapping, quoteHighlightExtension(content, passage?.quote)],
+    [content, file.name, passage],
+  );
+
+  const gotoTarget = useMemo(() => {
+    const hit = located[0];
+    return hit ? { line: lineAt(content, hit.start) } : null;
+  }, [content, located]);
 
   if (loading) return null;
 
@@ -83,6 +108,7 @@ function TextDocument({ file, projectPath }: { file: CodeEditorFile; projectPath
             fontSize={fontSize}
             showLineNumbers={showLineNumbers}
             extensions={extensions}
+            gotoTarget={gotoTarget}
           />
         ) : (
           <div className="piecemaker-file-document-preview prose max-w-none dark:prose-invert">
@@ -96,6 +122,19 @@ function TextDocument({ file, projectPath }: { file: CodeEditorFile; projectPath
 
 export function FileDocumentEditor(props: ComponentProps<typeof CodeEditor>) {
   const { file } = props;
+  // Quoted passage that swaps the native PDF iframe for the highlighting viewer.
+  const passage = useCitationPassage(file.path);
+  if (!file.diffInfo && getPreviewKind(file.name) === 'pdf' && passage?.quote) {
+    return (
+      <PdfPassageViewer
+        file={file}
+        projectId={file.projectId ?? props.projectPath}
+        passage={passage}
+        isSidebar={props.isSidebar ?? false}
+        onClose={props.onClose}
+      />
+    );
+  }
   if (file.diffInfo || getPreviewKind(file.name) || isDocxDocument(file.name) || isBinaryFile(file.name)) return <CodeEditor {...props} />;
   return <TextDocument file={file} projectPath={props.projectPath} />;
 }

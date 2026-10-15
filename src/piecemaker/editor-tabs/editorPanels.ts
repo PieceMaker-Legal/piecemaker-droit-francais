@@ -1,3 +1,5 @@
+import { clearCitationPassage, setCitationPassage } from '@/piecemaker/citations/citationPassage';
+
 export const OPEN_IN_EDITOR_EVENT = 'piecemaker:open-in-editor';
 export const CLOSE_IN_EDITOR_EVENT = 'piecemaker:close-in-editor';
 
@@ -48,7 +50,9 @@ export function parseEditorPanel(path: string): EditorPanel | null {
   return null;
 }
 
-export function openInEditor(path: string) {
+export function openInEditor(path: string, passage?: { quote: string; page?: number }) {
+  if (passage?.quote) setCitationPassage(path, passage.quote, passage.page);
+  else clearCitationPassage();
   window.dispatchEvent(new CustomEvent(OPEN_IN_EDITOR_EVENT, { detail: { path } }));
 }
 
