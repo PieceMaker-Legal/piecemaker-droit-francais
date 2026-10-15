@@ -7,7 +7,8 @@ async function desktopKeepAwake(enabled: boolean): Promise<boolean | null> {
   if (!url) return null;
   const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled }) });
   if (!response.ok) throw new Error('maintien d’éveil bureau indisponible');
-  return Boolean((await response.json()).active);
+  const body = await response.json() as { active?: boolean };
+  return Boolean(body.active);
 }
 
 function windowsPowerShell(): string {
