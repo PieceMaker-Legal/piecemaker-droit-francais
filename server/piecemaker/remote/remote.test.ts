@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -10,7 +11,7 @@ import express from 'express';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import { isOwner, startGateway } from './gateway.js';
-import { keepAwakeCommand } from './keep-awake.js';
+import { createKeepAwake, keepAwakeCommand } from './keep-awake.js';
 import { createKeepAwakeRouter } from './keep-awake-router.js';
 import { createRemoteAccess, REMOTE_STATE_FILE } from './remote-access.js';
 import { consentUrl, createTailscale, findTailscale, parseServeEntry, parseStatus, type CommandResult } from './tailscale.js';
@@ -96,10 +97,37 @@ test('consentUrl extrait le lien d’autorisation affiché par Tailscale', () =>
   assert.equal(consentUrl('ok'), null);
 });
 
+function windowsKeepAwakeScript(pid: number): string {
+  const args = keepAwakeCommand('win32', pid)![1];
+  return Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+}
+
 test('keepAwakeCommand empêche la veille sur macOS et Windows tant que le serveur vit', () => {
   assert.deepEqual(keepAwakeCommand('darwin', 123), ['caffeinate', ['-i', '-w', '123']]);
-  assert.match(keepAwakeCommand('win32', 123)![1].join(' '), /SetThreadExecutionState/);
+  const win = keepAwakeCommand('win32', 123)!;
+  assert.match(win[0], /powershell\.exe$/i);
+  assert.ok(win[1].includes('-EncodedCommand'));
+  const script = windowsKeepAwakeScript(123);
+  assert.match(script, /DllImport\("kernel32\.dll"\)/);
+  assert.match(script, /SetThreadExecutionState/);
+  assert.match(script, /PowerCreateRequest/);
+  assert.match(script, /PowerSetRequest/);
+  assert.match(script, /\$watch = 123\b/);
   assert.equal(keepAwakeCommand('linux', 123), null);
+});
+
+test('createKeepAwake pose une requête d’exécution Windows', async () => {
+  if (process.platform !== 'win32') return;
+  const keep = createKeepAwake();
+  keep.start();
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    assert.equal(keep.active(), true);
+    const requests = execFileSync('powercfg', ['/requests']);
+    assert.ok(requests.includes(Buffer.from('PieceMaker')), requests.toString());
+  } finally {
+    keep.stop();
+  }
 });
 
 test('le menu des onglets active et désactive le maintien d’éveil', async () => {
