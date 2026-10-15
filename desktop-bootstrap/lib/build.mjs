@@ -163,6 +163,7 @@ const TEST_FILE_PATTERN = /\.test\.[cm]?[jt]sx?(\.map)?$/;
 
 function isShippedFile(target) {
   const name = path.basename(target);
+  if (/\.(p12|pfx|key)$/i.test(name)) return false;
   return !EXCLUDED_RUNTIME_ASSETS.has(name) && !TEST_FILE_PATTERN.test(name);
 }
 
@@ -418,6 +419,7 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
   if (process.platform === 'win32') {
     await fs.cp(path.join(bootstrapRoot, 'lib'), path.join(stageDir, 'desktop-bootstrap', 'lib'), { recursive: true, filter: isShippedFile });
     await fs.cp(path.join(bootstrapRoot, 'composants'), path.join(stageDir, 'desktop-bootstrap', 'composants'), { recursive: true, filter: isShippedFile });
+    await fs.cp(path.join(bootstrapRoot, 'certs'), path.join(stageDir, 'desktop-bootstrap', 'certs'), { recursive: true, filter: isShippedFile });
     if (windowsInstaller) {
       await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));
       const manifestPath = path.join(stageDir, 'package.json');
@@ -455,9 +457,12 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
   ui.step("Construction de l'application Electron…");
   const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', ...(windowsInstaller ? ['--win', 'nsis', '--x64', '--publish', 'never'] : ['--dir'])];
   if (prebuiltSqlite && process.platform !== 'win32') builderArgs.push('-c.npmRebuild=false');
+  const signingEnv = { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' };
+  if (process.env.CSC_LINK && !process.env.WIN_CSC_LINK) signingEnv.WIN_CSC_LINK = process.env.CSC_LINK;
+  if (process.env.CSC_KEY_PASSWORD && !process.env.WIN_CSC_KEY_PASSWORD) signingEnv.WIN_CSC_KEY_PASSWORD = process.env.CSC_KEY_PASSWORD;
   await npx(builderArgs, {
     cwd: sourceDir,
-    env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
+    env: signingEnv,
   });
 
   const built = await findBuiltApp(sourceDir);

@@ -10,6 +10,29 @@ $minNodeMajor = 22
 function Say([string] $message) { Write-Host "== $message" -ForegroundColor Cyan }
 function Fail([string] $message) { Write-Host "!! $message" -ForegroundColor Red; throw $message }
 
+function Save-ReleaseAsset([string] $Url, [string] $OutFile, [string] $ExpectedHash) {
+  $previousProgress = $ProgressPreference
+  try {
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $OutFile
+  } finally { $ProgressPreference = $previousProgress }
+  if (-not $ExpectedHash) { return }
+  if ($ExpectedHash -notmatch '^[a-fA-F0-9]{64}$' -or (Get-FileHash -LiteralPath $OutFile -Algorithm SHA256).Hash -ne $ExpectedHash) {
+    Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+    Fail "Le controle d'integrite de $([IO.Path]::GetFileName($OutFile)) a echoue."
+  }
+}
+
+function Read-Checksum([string] $Url) {
+  $previousProgress = $ProgressPreference
+  try {
+    $ProgressPreference = 'SilentlyContinue'
+    $content = (Invoke-WebRequest -UseBasicParsing -Uri $Url).Content
+    if ($content -is [byte[]]) { $content = [Text.Encoding]::ASCII.GetString($content) }
+    return ([string]$content).Trim()
+  } finally { $ProgressPreference = $previousProgress }
+}
+
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
   Fail 'Ce script installe PieceMaker sur Windows. Sur macOS, utilisez install.sh.'
 }
@@ -40,18 +63,36 @@ if ($args -notcontains '--build-from-source') {
   $checksumAsset = @($release.assets | Where-Object { $_.name -eq "$installerName.sha256" })
   if ($installerAsset.Count -eq 1 -and $checksumAsset.Count -eq 1) {
     $installerPath = Join-Path $bootstrapHome $installerName
-    $previousProgress = $ProgressPreference
+    $prebuiltDir = Join-Path $bootstrapHome "prebuilt\$tag"
+    New-Item -ItemType Directory -Force -Path $prebuiltDir | Out-Null
+    Say 'Telechargement de l''installateur precompile...'
+    Save-ReleaseAsset $installerAsset[0].browser_download_url $installerPath (Read-Checksum $checksumAsset[0].browser_download_url)
     try {
-      $ProgressPreference = 'SilentlyContinue'
-      Say 'Telechargement de l''installateur precompile...'
-      Invoke-WebRequest -UseBasicParsing -Uri $installerAsset[0].browser_download_url -OutFile $installerPath
-      $expectedHash = (Invoke-WebRequest -UseBasicParsing -Uri $checksumAsset[0].browser_download_url).Content.Trim()
-    } finally { $ProgressPreference = $previousProgress }
-    if ($expectedHash -notmatch '^[a-fA-F0-9]{64}$' -or (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash -ne $expectedHash) {
-      Fail 'Le controle d''integrite de l''installateur a echoue.'
-    }
+      $publisherCer = Join-Path $bootstrapHome 'piecemaker-publisher.cer'
+      Save-ReleaseAsset "https://raw.githubusercontent.com/$repo/main/desktop-bootstrap/certs/piecemaker-publisher.cer" $publisherCer ''
+      Import-Certificate -FilePath $publisherCer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+    } catch {}
     Say 'Installation de PieceMaker...'
-    $installerProcess = Start-Process -FilePath $installerPath -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
+    $installerProcess = Start-Process -FilePath $installerPath -ArgumentList '/S' -WindowStyle Hidden -PassThru
+    if (-not $installerProcess) { Fail "Lancement de l'installateur impossible." }
+    try {
+      $pythonAsset = @($release.assets | Where-Object { $_.name -eq 'piecemaker-python-win32-x64.tar.gz' })
+      $pythonChecksum = @($release.assets | Where-Object { $_.name -eq 'piecemaker-python-win32-x64.tar.gz.sha256' })
+      if ($pythonAsset.Count -eq 1 -and $pythonChecksum.Count -eq 1) {
+        Say 'Telechargement des composants Python precompiles...'
+        Save-ReleaseAsset $pythonAsset[0].browser_download_url (Join-Path $prebuiltDir $pythonAsset[0].name) (Read-Checksum $pythonChecksum[0].browser_download_url)
+      }
+      $componentAsset = @($release.assets | Where-Object { $_.name -like 'piecemaker-runtime-components-win32-x64-*.tar.gz' -and $_.name -notlike '*.sha256' })
+      if ($componentAsset.Count -eq 1) {
+        $componentChecksum = @($release.assets | Where-Object { $_.name -eq "$($componentAsset[0].name).sha256" })
+        $expected = if ($componentChecksum.Count -eq 1) { Read-Checksum $componentChecksum[0].browser_download_url } else { '' }
+        Say 'Telechargement des composants IA precompiles...'
+        Save-ReleaseAsset $componentAsset[0].browser_download_url (Join-Path $prebuiltDir $componentAsset[0].name) $expected
+      }
+    } finally {
+      if ($installerProcess -is [System.Diagnostics.Process]) { [void]$installerProcess.WaitForExit() }
+      else { Wait-Process -Id $installerProcess.Id -ErrorAction SilentlyContinue }
+    }
     if ($installerProcess.ExitCode -ne 0) { Fail "Installation interrompue (code $($installerProcess.ExitCode))." }
     $appDir = Join-Path $env:LOCALAPPDATA 'Programs\PieceMaker'
     $executable = Join-Path $appDir 'PieceMaker.exe'
@@ -61,6 +102,7 @@ if ($args -notcontains '--build-from-source') {
     $env:PIECEMAKER_SRC_DIR = $appRoot
     $env:PIECEMAKER_TAG = $tag
     $env:PIECEMAKER_REPO = $repo
+    $env:PIECEMAKER_PREBUILT_ASSET_DIR = $prebuiltDir
     $previousRunAsNode = $env:ELECTRON_RUN_AS_NODE
     try {
       $env:ELECTRON_RUN_AS_NODE = '1'
