@@ -35,3 +35,70 @@ a[href="#piecemaker-cite-miss"]::before {
   border-radius: 9999px;
   background: hsl(var(--destructive));
 }
+
+.piecemaker-citation-mark {
+  background-color: #fef08a;
+  color: #030712;
+  border-radius: 2px;
+}
+
+.dark .piecemaker-citation-mark {
+  background-color: #a16207;
+  color: #fff;
+}
+
+::highlight(piecemaker-citation) {
+  background-color: #fef08a;
+  color: #030712;
+}
+
+.dark ::highlight(piecemaker-citation) {
+  background-color: #a16207;
+  color: #fff;
+}
+
+.piecemaker-pdf-passage-pager {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.piecemaker-pdf-passage-pager button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.piecemaker-pdf-passage-pager button:hover:not(:disabled) {
+  background: hsl(var(--muted));
+}
+
+.piecemaker-pdf-passage-pager button:disabled {
+  opacity: 0.4;
+}
+
+.piecemaker-pdf-passage-frame {
+  overflow: auto;
+}
+
+.piecemaker-pdf-passage-status {
+  padding: 16px;
+  color: hsl(var(--muted-foreground));
+}
+
+.piecemaker-pdf-passage-page {
+  position: relative;
+  width: max-content;
+  margin: 0 auto;
+}
+
+.piecemaker-pdf-passage-mark {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}

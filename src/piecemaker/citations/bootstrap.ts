@@ -9,17 +9,30 @@ function fileCitationPath(source: Awaited<ReturnType<typeof fetchCitationSource>
   return docId;
 }
 
+function citationQuote(source: Awaited<ReturnType<typeof fetchCitationSource>>) {
+  const quotes = source.citation.quotes;
+  const chosen = quotes.find((quote) => quote.verification?.verified) ?? quotes[0];
+  if (!chosen?.quote) return undefined;
+  const page = typeof chosen.page === 'number' ? chosen.page : Number(chosen.page);
+  return {
+    quote: chosen.quote,
+    page: Number.isFinite(page) && page >= 1 ? Math.floor(page) : undefined,
+  };
+}
+
 async function openCitation(source: Awaited<ReturnType<typeof fetchCitationSource>>, token: string, label: string) {
   const filePath = fileCitationPath(source);
+  const passage = citationQuote(source);
   if (!filePath) {
     openInEditor(citationPath(token, label));
     return;
   }
   if (source.citation.kind === 'document') {
-    openInEditor(await resolvePieceRef(filePath) ?? citationPath(token, label));
+    const path = await resolvePieceRef(filePath) ?? citationPath(token, label);
+    openInEditor(path, path.startsWith('piecemaker://') ? undefined : passage);
     return;
   }
-  openInEditor(filePath);
+  openInEditor(filePath, passage);
 }
 
 export function startCitationPanel() {

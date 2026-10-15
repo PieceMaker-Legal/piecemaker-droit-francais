@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import { ListTree, MessageSquare } from 'lucide-react';
+import type { EditorView } from 'prosemirror-view';
 import '@eigenpal/docx-editor-react/styles.css';
 import fr from '@eigenpal/docx-editor-i18n/fr';
 import './docxDocumentViewer.css';
 
 import { useAuth } from '@/modules/auth';
+import { useCitationPassage } from '@/piecemaker/citations/citationPassage';
+import { clearDocxCitationHighlight, highlightCitationInDocx } from '@/piecemaker/citations/docxPassage';
 import { api, authenticatedFetch } from '@/shared/api';
 import { useTheme } from '@/shared/context/ThemeContext';
 import type { CodeEditorFile } from '@/shared/types';
@@ -21,6 +24,19 @@ type DocxDocumentViewerProps = {
   isSidebar: boolean;
   onClose: () => void;
 };
+
+function pagedEditorViews(editor: NonNullable<ReturnType<DocxEditorRef['getEditorRef']>> | null): EditorView[] {
+  if (!editor) return [];
+  const views: EditorView[] = [];
+  const body = editor.getView();
+  if (body) views.push(body);
+  const headersAndFooters = editor.getHfPmViews?.();
+  if (!headersAndFooters) return views;
+  for (const view of headersAndFooters.values()) {
+    if (view) views.push(view);
+  }
+  return views;
+}
 
 function fitPageWidth(container: HTMLElement, editor: DocxEditorRef | null, lastLayout: { current: string }) {
   const scroller = container.querySelector<HTMLElement>('.docx-editor__scroll-container');
@@ -74,6 +90,8 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
+  // Quoted passage to mark once the Word document has finished loading.
+  const passage = useCitationPassage(file.path);
 
   const fetchVersion = useCallback(async () => {
     const requestVersion = (filePath: string) => {
@@ -169,6 +187,27 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       mutationObserver.disconnect();
     };
   }, [loaded]);
+
+  useEffect(() => {
+    if (!loaded || !passage?.quote) return undefined;
+    let cancelled = false;
+    let timer = 0;
+    const tryHighlight = () => {
+      if (cancelled) return;
+      const views = pagedEditorViews(editorRef.current?.getEditorRef() ?? null);
+      if (views.length === 0) {
+        timer = window.setTimeout(tryHighlight, 80);
+        return;
+      }
+      highlightCitationInDocx(views, passage.quote);
+    };
+    timer = window.setTimeout(tryHighlight, 80);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      clearDocxCitationHighlight();
+    };
+  }, [loaded, passage?.nonce, passage?.quote]);
 
   const markUserEditing = () => { userEditingRef.current = true; };
 
