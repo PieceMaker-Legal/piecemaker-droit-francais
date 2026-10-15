@@ -3,6 +3,14 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.41](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.40...v2.0.41) (2026-10-15)
+
+### Bug Fixes
+
+* **desktop:** powerSaveBlocker Electron pour le maintien d'éveil ([88c4b9b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/88c4b9b5ee7ca7844c7558a9db89d12ee78e29f5))
+* **remote:** maintien d'éveil Windows via PowerCreateRequest ([f481a76](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f481a76d318d1ff4ecd5942f748bc19f7e827de9))
+* **remote:** typer la reponse keep-awake du bureau ([7b8c8bd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7b8c8bda0f95870134e229b8d2b71de4dd965d5a))
+
 ## [2.0.40](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.39...v2.0.40) (2026-10-15)
 
 ### Bug Fixes
