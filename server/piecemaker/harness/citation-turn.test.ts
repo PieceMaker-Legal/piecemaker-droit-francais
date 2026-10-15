@@ -56,7 +56,7 @@ test('Mike : citation introuvable annotée false, sans suppression de la répons
   const { cwd, turn } = await fixture(t);
   await writeFile(path.join(cwd, 'piece.md'), 'Texte source réel.');
   assert.equal(turn.text(`Réponse [1].${block([{ ref: 1, doc_id: 'piece.md', quote: 'Texte inventé.' }])}`), 'Réponse [1].');
-  assert.match(await turn.finish(), /- \[1\] \[piece, p\. 1\]\[1\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\)$/m);
+  assert.match(await turn.finish(), /- \[1\] \[piece, p\. 1\]\[1\] — « Texte inventé\. » — \[citation non retrouvée, à vérifier\]\(#piecemaker-cite-miss\)$/m);
 });
 
 test('un Markdown du dossier cité comme code est lu hors du dépôt applicatif', async (t) => {
@@ -198,8 +198,8 @@ test('pas de lecture hors dossier, y compris par lien symbolique', async (t) => 
     { ref: 2, doc_id: 'link.md', quote: 'Texte hors dossier.' },
   ]));
   const suffix = await turn.finish();
-  assert.match(suffix, /^- \[1\] \[source, p\. 1\]\[1\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\)$/m);
-  assert.match(suffix, /^- \[2\] \[link, p\. 1\]\[2\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\)$/m);
+  assert.match(suffix, /^- \[1\] \[source, p\. 1\]\[1\] — « Texte hors dossier\. » — \[citation non retrouvée, à vérifier\]\(#piecemaker-cite-miss\)$/m);
+  assert.match(suffix, /^- \[2\] \[link, p\. 1\]\[2\] — « Texte hors dossier\. » — \[citation non retrouvée, à vérifier\]\(#piecemaker-cite-miss\)$/m);
   assert.equal(await readFile(path.join(outside, 'source.md'), 'utf8'), 'Texte hors dossier.');
 });
 
@@ -268,7 +268,7 @@ test('la liste des sources donne le titre Légifrance et l’extrait vérifié',
   assert.match(await turn.finish(), new RegExp(`^\\*\\*Sources\\*\\*\\n\\n- \\[1\\] \\[${titre.replace(/[.]/g, '\\.')}\\]\\[1\\] — « Le juge doit rechercher si l'inexécution est suffisamment grave »$`, 'm'));
 });
 
-test('un extrait non vérifié est à vérifier, avec le passage le plus proche quand il existe', async (t) => {
+test('un extrait non vérifié affiche la citation du modèle, à vérifier', async (t) => {
   const { cwd, turn } = await fixture(t);
   await writeFile(path.join(cwd, 'bail.md'), 'Préambule. Le preneur occupera les lieux paisiblement pendant toute la durée du bail. Fin.');
   turn.text(block([
@@ -277,9 +277,9 @@ test('un extrait non vérifié est à vérifier, avec le passage le plus proche 
     { ref: 3, decision_id: 'JURITEXT9', quote: 'motif jamais lu dans ce tour' },
   ]));
   const suffix = await turn.finish();
-  assert.match(suffix, /^- \[1\] \[bail, p\. 2\]\[1\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\) — passage le plus proche : « Le preneur occupera les lieux paisiblement pendant toute la durée du bail »$/m);
-  assert.match(suffix, /^- \[2\] \[bail, p\. 1\]\[2\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\)$/m);
-  assert.match(suffix, /^- \[3\] \[JURITEXT9\]\[3\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\)$/m);
+  assert.match(suffix, /^- \[1\] \[bail, p\. 2\]\[1\] — « le preneur occupe les lieux paisiblement pendant la durée du bail » — \[citation non retrouvée, à vérifier\]\(#piecemaker-cite-miss\)$/m);
+  assert.match(suffix, /^- \[2\] \[bail, p\. 1\]\[2\] — « clause pénale de dix mille euros » — \[citation non retrouvée, à vérifier\]\(#piecemaker-cite-miss\)$/m);
+  assert.match(suffix, /^- \[3\] \[JURITEXT9\]\[3\] — « motif jamais lu dans ce tour » — \[citation non retrouvée, à vérifier\]\(#piecemaker-cite-miss\)$/m);
 });
 
 test('le titre d’une pièce vient de la base : label daté, sinon nature et date, sinon nom', async (t) => {
