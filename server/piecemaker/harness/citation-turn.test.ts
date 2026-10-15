@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import JSZip from 'jszip';
+
 import { createNormalizedMessage } from '@/shared/utils.js';
 
 import { createCitationStore } from './citation-store.js';
@@ -18,6 +20,14 @@ async function fixture(t: test.TestContext) {
   const store = createCitationStore(path.join(cwd, '.store'));
   const turn = createCitationTurn({ cwd, sessionId: 'session', store });
   return { cwd, store, turn };
+}
+
+async function writeDocx(file: string, text: string) {
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  zip.file('word/document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</w:t></w:r></w:p></w:body></w:document>`);
+  await writeFile(file, await zip.generateAsync({ type: 'nodebuffer' }));
 }
 
 test('Mike : texte diffusé, bloc masqué même découpé, annotations finales corrigées et source navigable', async (t) => {
@@ -61,6 +71,18 @@ test('un Markdown du dossier cité comme code est lu hors du dépôt applicatif'
   const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
   assert.ok(token);
   assert.equal((await store.read(token))?.source, source);
+});
+
+test('un .docx du dossier est vérifié sur son texte, sans Markdown converti', async (t) => {
+  const { cwd, turn, store } = await fixture(t);
+  await writeDocx(path.join(cwd, 'bonjour.docx'), 'Bonjour, Gaston !');
+  turn.text(block([{ ref: 3, kind: 'document', doc_id: 'bonjour.docx', quotes: [{ page: 1, quote: 'Bonjour, Gaston !' }] }]));
+  const suffix = await turn.finish();
+  assert.doesNotMatch(suffix, /🔴/);
+  assert.match(suffix, /bonjour, p\. 1/);
+  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.ok(token);
+  assert.match((await store.read(token))?.source ?? '', /Bonjour, Gaston !/);
 });
 
 test('un fichier de code du dépôt est vérifié depuis son original et affiche sa ligne', async (t) => {

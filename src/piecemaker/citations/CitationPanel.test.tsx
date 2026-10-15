@@ -111,6 +111,33 @@ describe('visionneuse de citations', () => {
     } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
   });
 
+  it('une citation de .docx ouvre le fichier Word, pas le panneau Légifrance', async () => {
+    vi.mocked(fetchCitationSource).mockResolvedValue({
+      title: 'bonjour',
+      source: '',
+      citation: {
+        ref: 3,
+        kind: 'document',
+        doc_id: 'bonjour.docx',
+        verified: false,
+        quotes: [{ page: 1, quote: 'Bonjour, Gaston !', verification: { verified: false } }],
+      },
+      ranges: [],
+    });
+    const stop = startCitationPanel();
+    const opened: unknown[] = [];
+    const record = (event: Event) => opened.push((event as CustomEvent<{ path: unknown }>).detail.path);
+    window.addEventListener(OPEN_IN_EDITOR_EVENT, record);
+    const link = document.createElement('a');
+    link.href = `#piecemaker-citation=${token}`;
+    link.textContent = '[3]';
+    document.body.appendChild(link);
+    try {
+      fireEvent.click(link);
+      await waitFor(() => expect(opened).toEqual(['bonjour.docx']));
+    } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
+  });
+
   it('une source indisponible affiche un message sans détails internes', async () => {
     vi.mocked(fetchCitationSource).mockRejectedValue(new Error('internal path secret'));
     render(<CitationPanel token={token} onClose={() => {}} />);
