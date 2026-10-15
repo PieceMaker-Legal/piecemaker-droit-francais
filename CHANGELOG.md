@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.40](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.39...v2.0.40) (2026-10-15)
+
+### Bug Fixes
+
+* **desktop:** trust the PieceMaker publisher cert as Root on Windows ([f13304a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f13304acd24f0de69c35943c7574f167c55fac21))
+
 ## [2.0.39](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.38...v2.0.39) (2026-10-15)
 
 ### New Features
