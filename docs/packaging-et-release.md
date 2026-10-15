@@ -99,12 +99,13 @@ Application et accès à la notarisation Apple. Les triplets de credentials
 Apple API key sont acceptés par electron-builder, mais ne satisfont pas les
 tests actuels de ce workflow, qui imposent la variante Apple ID.
 
-Sur Windows, le workflow PieceMaker **exige** `WINDOWS_CSC_LINK` et
-`WINDOWS_CSC_KEY_PASSWORD` : l'installeur NSIS et `PieceMaker.exe` sont
-signés Authenticode éditeur. La CA locale, le TLS `localhost` et le
-certificat de signature du poste restent générés après installation, pour le
-proxy d'anonymisation. Si l'exécutable livré porte déjà une signature
-éditeur, elle n'est pas écrasée par la signature locale.
+Sur Windows, le workflow PieceMaker **exige** `WINDOWS_CSC_LINK` (PFX
+auto-signé PieceMaker, en base64) et `WINDOWS_CSC_KEY_PASSWORD`. L'installeur
+NSIS et `PieceMaker.exe` sont signés avec l'identité `CN=PieceMaker` (Paris),
+sans certificat commercial ni nom de personne. L'installateur importe le
+certificat public dans `TrustedPublisher` (silencieux). La CA locale et le TLS
+`localhost` restent générés sur le poste, uniquement pour le proxy
+d'anonymisation, après consentement. L'utilisateur ne signe pas l'application.
 
 Un binaire macOS non signé ou seulement autosigné n'est pas une distribution
 publique équivalente : Gatekeeper peut bloquer son ouverture ou afficher un

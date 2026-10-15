@@ -1,13 +1,14 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateCertificates, isCaTrusted, trustCertificateAuthority } from './certificates.mjs';
+import { generateCertificates, importPublisherCertificate, isCaTrusted, trustCertificateAuthority } from './certificates.mjs';
 import { installRuntimeComponents } from '../composants/install.mjs';
 import { ensureRuntimeComponents } from '../../electron-piecemaker/runtime-components.mjs';
 import { sourceDir, trustMarkerPath, releaseTag } from './paths.mjs';
 
 export async function prepareInstalledDesktop({ applicationRoot = sourceDir, skipCertificateTrust = false, includeProviders = true } = {}) {
   await generateCertificates();
+  importPublisherCertificate();
   if (!skipCertificateTrust && !isCaTrusted() && await trustCertificateAuthority()) {
     await fs.writeFile(trustMarkerPath, `${JSON.stringify({ trustedAt: new Date().toISOString(), release: releaseTag })}\n`);
   }
