@@ -66,3 +66,10 @@ test('sans /plan, Vibe garde le mode choisi', async (t) => {
   assert.equal(agentOf(args), 'accept-edits');
   assert.equal(promptOf(args), 'trie les pièces');
 });
+
+test('Contourner les permissions Vibe passe --auto-approve', async (t) => {
+  const args = await vibeArgs(t, 'trie les pièces', 'bypassPermissions');
+  assert.equal(args.includes('--auto-approve'), true);
+  assert.equal(args.includes('--agent'), false);
+  assert.equal(promptOf(args), 'trie les pièces');
+});

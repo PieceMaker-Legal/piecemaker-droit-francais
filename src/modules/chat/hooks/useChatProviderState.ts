@@ -9,8 +9,10 @@ import type { PendingPermissionRequest, PermissionMode,
   ProviderModelActions,
   ProviderModelOption,
   ProviderModelsDefinition } from '@/shared/types';
+import { permissionModeFromSettings, resolveComposerPermissionMode } from '@/modules/chat/hooks/providerPermissionSettings';
 import { DEFAULT_EFFORT_VALUE } from '@/shared/constants';
 import { readSelectedProvider, writeSelectedProvider } from '@/shared/selectedProvider';
+import { USER_PREFERENCES_CHANGED_EVENT } from '@/shared/userSettings';
 
 const FALLBACK_PROVIDER_EFFORT_VALUES: Partial<Record<LLMProvider, readonly string[]>> = {
   // Superset used only before the model catalog loads; `ultracode` belongs to the
@@ -410,19 +412,24 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   }, [providerEfforts, providerModels, reconcileStoredEffort]);
 
   useEffect(() => {
-    const validModes = getPermissionModesForProvider(provider);
-    const sessionSavedMode = selectedSession?.id
-      ? (localStorage.getItem(`permissionMode-${selectedSession.id}`) as PermissionMode | null)
-      : null;
-    // Fall back to the last mode picked for this provider: a brand-new chat
-    // only receives its session id after the first send, so without this the
-    // mode chosen beforehand would snap back to the default as soon as the
-    // session id appears.
-    const providerSavedMode = localStorage.getItem(`permissionMode-last-${provider}`) as PermissionMode | null;
-    const savedMode = [sessionSavedMode, providerSavedMode].find(
-      (mode): mode is PermissionMode => Boolean(mode && validModes.includes(mode)),
-    );
-    setPermissionMode(savedMode ?? getDefaultPermissionModeForProvider(provider));
+    const apply = () => {
+      const validModes = getPermissionModesForProvider(provider);
+      const sessionSavedMode = selectedSession?.id
+        ? (localStorage.getItem(`permissionMode-${selectedSession.id}`) as PermissionMode | null)
+        : null;
+      const settingsMode = permissionModeFromSettings(provider);
+      const providerSavedMode = localStorage.getItem(`permissionMode-last-${provider}`) as PermissionMode | null;
+      setPermissionMode(resolveComposerPermissionMode({
+        sessionSavedMode,
+        settingsMode,
+        providerSavedMode,
+        validModes,
+        fallback: getDefaultPermissionModeForProvider(provider),
+      }));
+    };
+    apply();
+    window.addEventListener(USER_PREFERENCES_CHANGED_EVENT, apply);
+    return () => window.removeEventListener(USER_PREFERENCES_CHANGED_EVENT, apply);
   }, [selectedSession?.id, provider, getDefaultPermissionModeForProvider, getPermissionModesForProvider]);
 
   useEffect(() => {

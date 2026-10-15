@@ -1,6 +1,7 @@
 import type { providerRuntimeService, sessionsService } from '@/modules/providers/index.js';
 
 import { buildCodexClientOptions } from './codex-options.js';
+import { resolveRunPermissionMode } from './permissions.js';
 import { applyWorkspaceSkillVisibility, disabledSkillName, installedNames } from './skill-visibility.js';
 import type { createLibraryStore } from './store.js';
 
@@ -36,6 +37,8 @@ export function installLibraryRuntime(runtime: Pick<typeof providerRuntimeServic
   const run = runtime.run.bind(runtime);
   const history = sessions.fetchHistory.bind(sessions);
   runtime.run = async (provider, command, options, writer) => {
+    const mode = resolveRunPermissionMode(String(provider), options);
+    options = { ...options, permissionMode: mode };
     const cwd = String(options.cwd ?? options.projectPath ?? '');
     if (cwd) {
       try {
@@ -43,11 +46,13 @@ export function installLibraryRuntime(runtime: Pick<typeof providerRuntimeServic
         options = {
           ...options,
           ...(disabled.length ? { libraryDisabledSkills: disabled } : {}),
-          libraryCodexOptions: buildCodexClientOptions(disabled),
+          libraryCodexOptions: buildCodexClientOptions(disabled, mode),
         };
       } catch (error) {
         console.warn(`[bibliothèque] ${cwd} : ${error instanceof Error ? error.message : String(error)}`);
       }
+    } else if (String(provider) === 'codex') {
+      options = { ...options, libraryCodexOptions: buildCodexClientOptions([], mode) };
     }
     return run(provider, command, options, writer);
   };
