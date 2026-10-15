@@ -17,3 +17,21 @@
 .dark .piecemaker-decision {
   color: hsl(var(--foreground));
 }
+
+a[href="#piecemaker-cite-miss"] {
+  color: inherit !important;
+  text-decoration: none !important;
+  pointer-events: none;
+  cursor: default;
+}
+
+a[href="#piecemaker-cite-miss"]::before {
+  content: "";
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-right: 0.35em;
+  vertical-align: 0.12em;
+  border-radius: 9999px;
+  background: hsl(var(--destructive));
+}

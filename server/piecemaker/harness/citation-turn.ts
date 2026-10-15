@@ -21,6 +21,7 @@ const SOURCE_TOOL = /(?:^|_)consulter_(?:decision|article)$/;
 const { markdownCounterpart } = require(path.join(vendor, 'protection.cjs'));
 const JSZip = require('jszip');
 const OPEN = '<CITATIONS>';
+const MISS = '#piecemaker-cite-miss';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_CHARACTERS = 32 * 1024 * 1024;
 const DOCX_PART = /^(word\/document\.xml|word\/(?:header\d*|footer\d*|footnotes|endnotes)\.xml)$/i;
@@ -106,13 +107,12 @@ function locator(citation: Citation, ranges: Array<{ start: number; end: number;
 }
 
 function sourceLine(citation: Citation, title: string, source: string, ranges: Array<{ start: number; end: number; quoteIndex: number }>) {
-  const checked = citation.verified !== false;
   const quotes = citation.quotes.map((quote) => {
-    if (quote.verification?.verified ?? checked) return `« ${inline(quote.quote)} »`;
+    if (quote.verification?.verified ?? citation.verified !== false) return `« ${inline(quote.quote)} »`;
     const nearest = source ? nearestPassage(source, quote.quote) : null;
-    return `[à vérifier – introuvable]${nearest ? ` — passage le plus proche : « ${inline(nearest)} »` : ''}`;
+    return `[à vérifier – introuvable](${MISS})${nearest ? ` — passage le plus proche : « ${inline(nearest)} »` : ''}`;
   });
-  return `- [${citation.ref}] ${checked ? '' : '🔴 '}[${linkLabel(title + locator(citation, ranges, source))}][${citation.ref}] — ${quotes.join(' · ')}`;
+  return `- [${citation.ref}] [${linkLabel(title + locator(citation, ranges, source))}][${citation.ref}] — ${quotes.join(' · ')}`;
 }
 
 function visibleText(text: string) {
@@ -303,7 +303,7 @@ export function createCitationTurn(options: {
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
             lines.push(sourceLine(citation, title, source, ranges));
           } catch {
-            lines.push(`- [${citation.ref}] 🔴 ${linkLabel(title)} — source indisponible`);
+            lines.push(`- [${citation.ref}] ${linkLabel(title)} — [source indisponible](${MISS})`);
           }
         }
         const sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
