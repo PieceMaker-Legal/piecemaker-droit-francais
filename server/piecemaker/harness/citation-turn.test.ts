@@ -56,7 +56,7 @@ test('Mike : citation introuvable annotée false, sans suppression de la répons
   const { cwd, turn } = await fixture(t);
   await writeFile(path.join(cwd, 'piece.md'), 'Texte source réel.');
   assert.equal(turn.text(`Réponse [1].${block([{ ref: 1, doc_id: 'piece.md', quote: 'Texte inventé.' }])}`), 'Réponse [1].');
-  assert.match(await turn.finish(), /- \[1\] 🔴 \[piece, p\. 1\]\[1\] — \[à vérifier – introuvable\]$/m);
+  assert.match(await turn.finish(), /- \[1\] \[piece, p\. 1\]\[1\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\)$/m);
 });
 
 test('un Markdown du dossier cité comme code est lu hors du dépôt applicatif', async (t) => {
@@ -163,7 +163,7 @@ test('les résultats consulter_decision Claude et Codex sont appariés et resten
     assert.doesNotMatch(await turn.finish(), /🔴/);
     const other = createCitationTurn({ cwd, sessionId: 'other', store });
     other.text(text);
-    assert.match(await other.finish(), /🔴/);
+    assert.match(await other.finish(), /#piecemaker-cite-miss/);
   }
 });
 
@@ -184,7 +184,7 @@ test('une réponse MCP en erreur et un résultat de sous-agent ne constituent pa
   turn.observe(createNormalizedMessage({ ...base, kind: 'tool_result', content: 'Extrait.', isError: true }));
   turn.observe(createNormalizedMessage({ ...base, kind: 'tool_result', content: 'Extrait.', parentToolUseId: 'agent' }));
   turn.text(block([{ ref: 1, decision_id: 'JURITEXT1', quote: 'Extrait.' }]));
-  assert.match(await turn.finish(), /🔴/);
+  assert.match(await turn.finish(), /#piecemaker-cite-miss/);
 });
 
 test('pas de lecture hors dossier, y compris par lien symbolique', async (t) => {
@@ -198,8 +198,8 @@ test('pas de lecture hors dossier, y compris par lien symbolique', async (t) => 
     { ref: 2, doc_id: 'link.md', quote: 'Texte hors dossier.' },
   ]));
   const suffix = await turn.finish();
-  assert.match(suffix, /^- \[1\] 🔴/m);
-  assert.match(suffix, /^- \[2\] 🔴/m);
+  assert.match(suffix, /^- \[1\] \[source, p\. 1\]\[1\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\)$/m);
+  assert.match(suffix, /^- \[2\] \[link, p\. 1\]\[2\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\)$/m);
   assert.equal(await readFile(path.join(outside, 'source.md'), 'utf8'), 'Texte hors dossier.');
 });
 
@@ -277,9 +277,9 @@ test('un extrait non vérifié est à vérifier, avec le passage le plus proche 
     { ref: 3, decision_id: 'JURITEXT9', quote: 'motif jamais lu dans ce tour' },
   ]));
   const suffix = await turn.finish();
-  assert.match(suffix, /^- \[1\] 🔴 \[bail, p\. 2\]\[1\] — \[à vérifier – introuvable\] — passage le plus proche : « Le preneur occupera les lieux paisiblement pendant toute la durée du bail »$/m);
-  assert.match(suffix, /^- \[2\] 🔴 \[bail, p\. 1\]\[2\] — \[à vérifier – introuvable\]$/m);
-  assert.match(suffix, /^- \[3\] 🔴 \[JURITEXT9\]\[3\] — \[à vérifier – introuvable\]$/m);
+  assert.match(suffix, /^- \[1\] \[bail, p\. 2\]\[1\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\) — passage le plus proche : « Le preneur occupera les lieux paisiblement pendant toute la durée du bail »$/m);
+  assert.match(suffix, /^- \[2\] \[bail, p\. 1\]\[2\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\)$/m);
+  assert.match(suffix, /^- \[3\] \[JURITEXT9\]\[3\] — \[à vérifier – introuvable\]\(#piecemaker-cite-miss\)$/m);
 });
 
 test('le titre d’une pièce vient de la base : label daté, sinon nature et date, sinon nom', async (t) => {
