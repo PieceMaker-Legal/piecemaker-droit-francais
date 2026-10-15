@@ -1,6 +1,14 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 
-export type KeepAwake = { start(): void; stop(): void; active(): boolean };
+export type KeepAwake = { start(): void | Promise<void>; stop(): void | Promise<void>; active(): boolean };
+
+async function desktopKeepAwake(enabled: boolean): Promise<boolean | null> {
+  const url = process.env.PIECEMAKER_DESKTOP_KEEP_AWAKE_URL;
+  if (!url) return null;
+  const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled }) });
+  if (!response.ok) throw new Error('maintien d’éveil bureau indisponible');
+  return Boolean((await response.json()).active);
+}
 
 function windowsPowerShell(): string {
   return `${process.env.SystemRoot || 'C:\\Windows'}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`;
@@ -45,8 +53,14 @@ export function keepAwakeCommand(platform: NodeJS.Platform = process.platform, p
 
 export function createKeepAwake(): KeepAwake {
   let child: ChildProcess | null = null;
+  let desktopActive = false;
   return {
-    start() {
+    async start() {
+      const desktop = await desktopKeepAwake(true);
+      if (desktop !== null) {
+        desktopActive = desktop;
+        return;
+      }
       if (child) return;
       const command = keepAwakeCommand();
       if (!command) return;
@@ -54,10 +68,15 @@ export function createKeepAwake(): KeepAwake {
       child.on('error', () => { child = null; });
       child.on('exit', () => { child = null; });
     },
-    stop() {
+    async stop() {
+      const desktop = await desktopKeepAwake(false);
+      if (desktop !== null) {
+        desktopActive = desktop;
+        return;
+      }
       child?.kill();
       child = null;
     },
-    active: () => Boolean(child),
+    active: () => desktopActive || Boolean(child),
   };
 }

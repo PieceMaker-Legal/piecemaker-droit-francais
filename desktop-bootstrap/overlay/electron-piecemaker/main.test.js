@@ -23,7 +23,7 @@ async function loadEntry(startupError) {
     setTimeout,
   });
   const mocks = {
-    electron: { app, autoUpdater: new EventEmitter(), BrowserWindow: { getAllWindows: () => [] }, dialog: {} },
+    electron: { app, autoUpdater: new EventEmitter(), BrowserWindow: { getAllWindows: () => [] }, dialog: {}, powerSaveBlocker: {} },
     'node:child_process': { execFile: () => {} },
     'node:os': { default: os },
     'node:path': { default: path },
@@ -41,6 +41,7 @@ async function loadEntry(startupError) {
       calls.push('updater');
       if (startupError) throw startupError;
     } },
+    './keepAwake.js': { installDesktopKeepAwake: async () => { calls.push('keep-awake'); } },
   };
   function mockModule(exports) {
     return new SyntheticModule(Object.keys(exports), function () {
@@ -84,7 +85,7 @@ async function loadEntry(startupError) {
 }
 
 test('Windows entry finishes loading before ready, then starts updater, plugins and desktop', async () => {
-  assert.deepEqual(await loadEntry(), ['waiting-ready', 'updater', 'plugins', 'desktop']);
+  assert.deepEqual(await loadEntry(), ['waiting-ready', 'updater', 'keep-awake', 'plugins', 'desktop']);
 });
 
 test('startup failure is reported and quits the app without an unhandled rejection', async () => {
