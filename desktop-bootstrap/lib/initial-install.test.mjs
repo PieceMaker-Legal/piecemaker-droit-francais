@@ -37,11 +37,11 @@ function Invoke-RestMethod {
 function Invoke-WebRequest {
   param($Uri, $OutFile, [switch]$UseBasicParsing)
   if ($Uri -eq 'https://example.test/setup') { [IO.File]::WriteAllText($OutFile, 'fixture-installer'); return }
-  if ($Uri -eq 'https://example.test/checksum') { return @{ Content = $env:FIXTURE_CHECKSUM } }
+  if ($Uri -eq 'https://example.test/checksum') { return @{ Content = [Text.Encoding]::ASCII.GetBytes($env:FIXTURE_CHECKSUM) } }
   if ($Uri -eq 'https://example.test/python') { [IO.File]::WriteAllText($OutFile, 'fixture-python'); return }
-  if ($Uri -eq 'https://example.test/python-checksum') { return @{ Content = $env:FIXTURE_PYTHON_CHECKSUM } }
+  if ($Uri -eq 'https://example.test/python-checksum') { return @{ Content = [Text.Encoding]::ASCII.GetBytes($env:FIXTURE_PYTHON_CHECKSUM) } }
   if ($Uri -eq 'https://example.test/components') { [IO.File]::WriteAllText($OutFile, 'fixture-components'); return }
-  if ($Uri -eq 'https://example.test/components-checksum') { return @{ Content = $env:FIXTURE_COMPONENT_CHECKSUM } }
+  if ($Uri -eq 'https://example.test/components-checksum') { return @{ Content = [Text.Encoding]::ASCII.GetBytes($env:FIXTURE_COMPONENT_CHECKSUM) } }
   throw "Unexpected network: $Uri"
 }
 function Wait-Process { param($Id) }
