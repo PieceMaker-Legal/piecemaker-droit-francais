@@ -3,6 +3,24 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.39](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.38...v2.0.39) (2026-10-15)
+
+### New Features
+
+* **desktop:** sign the Windows installer and prefetch first-install assets ([301d252](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/301d252f41de8c54d54ecb54932bb8cd0409acec))
+* **desktop:** sign Windows builds with a PieceMaker self-signed cert ([34630bd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/34630bd0596823a6941dd9605567887b3b478867))
+
+### Bug Fixes
+
+* brand the Windows installer with the PieceMaker icon ([d797b4d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d797b4d3364d3619a18ab9ec00eaacf5c008f956))
+* **desktop:** read GitHub checksum files as bytes on Windows PowerShell ([ddb4579](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ddb45799daa8dae08ad628f0d51ce3f9f8a65aa8))
+
+### CI/CD
+
+* check the installer before native compilation ([cc1f7db](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/cc1f7db900337517d23edb8442d42e817e6419c7))
+* use Windows PowerShell modules for installer tests ([36effee](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/36effee8a7e3155948477f02d6cce80a34802942))
+* use Windows tar for portable Python builds ([52f91d7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/52f91d7d35f86653f0805c7e78114794159b30b2))
+
 ## [2.0.38](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.37...v2.0.38) (2026-10-15)
 
 ### Bug Fixes
