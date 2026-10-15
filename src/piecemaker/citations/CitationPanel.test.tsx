@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolvePieceRef } from '@/piecemaker/chat/fileRef';
 import { CitationPanel } from '@/piecemaker/citations/CitationPanel';
 import { startCitationPanel } from '@/piecemaker/citations/bootstrap';
 import { fetchCitationSource, fetchLegifranceBlocks } from '@/piecemaker/citations/api';
@@ -8,6 +9,7 @@ import { legifranceQuoteUrl } from '@/piecemaker/citations/legifrance';
 import { citationPath, OPEN_IN_EDITOR_EVENT } from '@/piecemaker/editor-tabs/editorPanels';
 
 vi.mock('@/piecemaker/citations/api', () => ({ fetchCitationSource: vi.fn(), fetchLegifranceBlocks: vi.fn() }));
+vi.mock('@/piecemaker/chat/fileRef', () => ({ resolvePieceRef: vi.fn(async (ref: string) => ref) }));
 
 const token = 'a'.repeat(64);
 const snapshot = {
@@ -111,6 +113,34 @@ describe('visionneuse de citations', () => {
     } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
   });
 
+  it('une citation de Markdown converti ouvre la pièce originale', async () => {
+    vi.mocked(resolvePieceRef).mockResolvedValueOnce('02_DATA_ROOM/12_Contrat_exemple.pdf');
+    vi.mocked(fetchCitationSource).mockResolvedValue({
+      title: 'contrat',
+      source: 'Contrat de partenariat',
+      citation: {
+        ref: 1,
+        kind: 'document',
+        doc_id: 'Fichiers convertis PieceMaker/12_Contrat_exemple.md',
+        verified: true,
+        quotes: [{ page: 1, quote: 'Contrat de partenariat', verification: { verified: true } }],
+      },
+      ranges: [],
+    });
+    const stop = startCitationPanel();
+    const opened: unknown[] = [];
+    const record = (event: Event) => opened.push((event as CustomEvent<{ path: unknown }>).detail.path);
+    window.addEventListener(OPEN_IN_EDITOR_EVENT, record);
+    const link = document.createElement('a');
+    link.href = `#piecemaker-citation=${token}`;
+    link.textContent = '[1]';
+    document.body.appendChild(link);
+    try {
+      fireEvent.click(link);
+      await waitFor(() => expect(opened).toEqual(['02_DATA_ROOM/12_Contrat_exemple.pdf']));
+    } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
+  });
+
   it('une citation de .docx ouvre le fichier Word, pas le panneau Légifrance', async () => {
     vi.mocked(fetchCitationSource).mockResolvedValue({
       title: 'bonjour',
@@ -135,6 +165,52 @@ describe('visionneuse de citations', () => {
     try {
       fireEvent.click(link);
       await waitFor(() => expect(opened).toEqual(['bonjour.docx']));
+    } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
+  });
+
+  it.each([
+    ['document', 'notes.txt'],
+    ['code', 'main.ts'],
+    ['document', 'piece.pdf'],
+  ] as const)('une citation %s %s ouvre le fichier, pas Légifrance', async (kind, doc_id) => {
+    vi.mocked(fetchCitationSource).mockResolvedValue({
+      title: doc_id,
+      source: 'Bonjour, Gaston !',
+      citation: { ref: 1, kind, doc_id, verified: true, quotes: [{ quote: 'Bonjour, Gaston !', verification: { verified: true } }] },
+      ranges: [],
+    });
+    const stop = startCitationPanel();
+    const opened: unknown[] = [];
+    const record = (event: Event) => opened.push((event as CustomEvent<{ path: unknown }>).detail.path);
+    window.addEventListener(OPEN_IN_EDITOR_EVENT, record);
+    const link = document.createElement('a');
+    link.href = `#piecemaker-citation=${token}`;
+    link.textContent = '[1]';
+    document.body.appendChild(link);
+    try {
+      fireEvent.click(link);
+      await waitFor(() => expect(opened).toEqual([doc_id]));
+    } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
+  });
+
+  it('une citation d’article Légifrance reste dans le panneau source', async () => {
+    vi.mocked(fetchCitationSource).mockResolvedValue({
+      title: 'Article 1240',
+      source: 'Tout fait quelconque de l\'homme',
+      citation: { ref: 2, kind: 'article', article_id: 'LEGIARTI000006437041', doc_id: 'code_civil.md', verified: true, quotes: [{ quote: 'Tout fait', verification: { verified: true } }] },
+      ranges: [],
+    });
+    const stop = startCitationPanel();
+    const opened: unknown[] = [];
+    const record = (event: Event) => opened.push((event as CustomEvent<{ path: unknown }>).detail.path);
+    window.addEventListener(OPEN_IN_EDITOR_EVENT, record);
+    const link = document.createElement('a');
+    link.href = `#piecemaker-citation=${token}`;
+    link.textContent = '[2]';
+    document.body.appendChild(link);
+    try {
+      fireEvent.click(link);
+      await waitFor(() => expect(opened).toEqual([citationPath(token, 'Citation [2]')]));
     } finally { stop(); window.removeEventListener(OPEN_IN_EDITOR_EVENT, record); link.remove(); }
   });
 

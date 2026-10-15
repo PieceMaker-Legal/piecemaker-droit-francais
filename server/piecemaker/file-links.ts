@@ -1,4 +1,5 @@
 import { createReadStream } from 'fs';
+import { createRequire } from 'module';
 import { readdir, readFile, realpath, stat, writeFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -8,6 +9,12 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import mime from 'mime-types';
 
 import { projectsDb } from '@/modules/database/index.js';
+
+const { documentKey, WORKSPACE_SUBDIR } = createRequire(import.meta.url)(
+  './vendor/piecemaker-plugin/scripts/lib/protection.cjs',
+) as { documentKey: (filePath: string) => string; WORKSPACE_SUBDIR: string };
+const GENERATED_DIRECTORIES = new Set([WORKSPACE_SUBDIR, 'Tabular Review']);
+const DERIVED_EXTENSIONS = new Set(['.md', '.json']);
 
 type ProjectRoot = (projectId: string) => string | null;
 
@@ -50,16 +57,31 @@ async function regularFile(candidate: string): Promise<string | null> {
   }
 }
 
-type NameIndex = { complete: boolean; byName: Map<string, string[]> };
+type NameIndex = { complete: boolean; byName: Map<string, string[]>; originalsByKey: Map<string, string[]> };
 
 const nameIndexes = new Map<string, { builtAt: number; index: Promise<NameIndex> }>();
 
+function pushKeyed(map: Map<string, string[]>, key: string, value: string) {
+  const paths = map.get(key) ?? [];
+  paths.push(value);
+  map.set(key, paths);
+}
+
+function commonKeyPrefix(left: string, right: string) {
+  const a = left.split('-');
+  const b = right.split('-');
+  let count = 0;
+  while (count < a.length && count < b.length && a[count] === b[count]) count += 1;
+  return count;
+}
+
 async function buildNameIndex(root: string): Promise<NameIndex> {
   const byName = new Map<string, string[]>();
-  const pending = [root];
+  const originalsByKey = new Map<string, string[]>();
+  const pending = [{ directory: root, generated: false }];
   let entries = 0;
   while (pending.length) {
-    const directory = pending.pop()!;
+    const { directory, generated } = pending.pop()!;
     let children;
     try {
       children = await readdir(directory, { withFileTypes: true });
@@ -67,18 +89,22 @@ async function buildNameIndex(root: string): Promise<NameIndex> {
       continue;
     }
     for (const child of children) {
-      if (++entries > MAX_INDEXED_ENTRIES) return { complete: false, byName };
+      if (++entries > MAX_INDEXED_ENTRIES) return { complete: false, byName, originalsByKey };
       const childPath = path.join(directory, child.name);
       if (child.isDirectory()) {
-        if (!SKIPPED_DIRECTORIES.has(child.name)) pending.push(childPath);
+        if (!SKIPPED_DIRECTORIES.has(child.name) && !child.name.startsWith('.')) {
+          pending.push({ directory: childPath, generated: generated || GENERATED_DIRECTORIES.has(child.name) });
+        }
         continue;
       }
-      const paths = byName.get(child.name) ?? [];
-      paths.push(childPath);
-      byName.set(child.name, paths);
+      pushKeyed(byName, child.name, childPath);
+      const extension = path.extname(child.name).toLowerCase();
+      if (!generated && !DERIVED_EXTENSIONS.has(extension) && !child.name.startsWith('~$')) {
+        pushKeyed(originalsByKey, documentKey(child.name), childPath);
+      }
     }
   }
-  return { complete: true, byName };
+  return { complete: true, byName, originalsByKey };
 }
 
 function nameIndex(root: string): Promise<NameIndex> {
@@ -111,6 +137,43 @@ export async function resolveFileRef(projectRoot: string | null, raw: string, ho
   return uniqueByName(projectRoot, ref);
 }
 
+function uniqueOriginal(index: NameIndex, key: string): string | null {
+  if (!index.complete || !key) return null;
+  const exact = index.originalsByKey.get(key) ?? [];
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return null;
+  let best = 0;
+  let match: string[] = [];
+  for (const [candidate, paths] of index.originalsByKey) {
+    const score = commonKeyPrefix(key, candidate);
+    if (score < 2) continue;
+    if (score > best) {
+      best = score;
+      match = [...paths];
+    } else if (score === best) match.push(...paths);
+  }
+  return match.length === 1 ? match[0] : null;
+}
+
+async function originalIfConverted(index: NameIndex, file: string): Promise<string | null> {
+  if (path.extname(file).toLowerCase() !== '.md') return file;
+  const originals = index.originalsByKey.get(documentKey(file)) ?? [];
+  return originals.length === 1 ? regularFile(originals[0]) : file;
+}
+
+export async function resolvePieceRef(projectRoot: string | null, raw: string, home = os.homedir()): Promise<string | null> {
+  const ref = normalizeFileRef(raw, home);
+  if (!ref || ref.includes('\0') || !projectRoot) return resolveFileRef(projectRoot, raw, home);
+  const index = await nameIndex(projectRoot);
+  let hit = await resolveFileRef(projectRoot, raw, home);
+  if (!hit) hit = await uniqueByName(projectRoot, path.basename(ref));
+  if (!hit) {
+    const original = uniqueOriginal(index, documentKey(path.basename(ref)));
+    hit = original ? await regularFile(original) : null;
+  }
+  return hit ? originalIfConverted(index, hit) : null;
+}
+
 export function createFileLinksRouter(projectRoot: ProjectRoot = defaultProjectRoot) {
   const router = express.Router();
 
@@ -120,7 +183,8 @@ export function createFileLinksRouter(projectRoot: ProjectRoot = defaultProjectR
       return response.status(400).json({ error: 'Invalid refs' });
     }
     const root = typeof projectId === 'string' && projectId ? projectRoot(projectId) : null;
-    response.json({ paths: await Promise.all(refs.map((ref: string) => resolveFileRef(root, ref))) });
+    const resolve = request.body?.piece === true ? resolvePieceRef : resolveFileRef;
+    response.json({ paths: await Promise.all(refs.map((ref: string) => resolve(root, ref))) });
   });
 
   return router;
