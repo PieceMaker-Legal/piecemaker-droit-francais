@@ -318,6 +318,7 @@ export function createSqlTool(options: SqlToolOptions) {
   };
 
   const write = async (statement: Statement | null, sql: string): Promise<string> => {
+    if (/\bpm_reasoning_(?:programs|results|turns)\b/i.test(sql)) throw new Error('Programme géré par CITATIONS : lecture SQL uniquement.');
     await backupBeforeFirstWrite();
     database.exec(TEMP_SCHEMA);
     database.exec(CLEAR_TEMP_TABLES);

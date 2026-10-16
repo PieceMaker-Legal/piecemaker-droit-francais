@@ -5,6 +5,7 @@ import path from 'path';
 import type { Router } from 'express';
 
 import { getConnection, projectsDb } from '@/modules/database/index.js';
+import { createReasoningRouter, createReasoningService } from '@/modules/piecemaker-reasoning/index.js';
 import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
@@ -75,8 +76,9 @@ const { createAnonymizerService } = createRequire(import.meta.url)(path.join(app
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
+const reasoning = createReasoningService(getConnection);
 installCodexPlanRuntime(providerRuntimeService);
-installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection) });
+installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection), onVerifiedTurn: reasoning.ingest, programContext: reasoning.context });
 const library = await openLibrary(piecemakerHome(), applicationRoot, () => projectsDb.getProjectPaths().map((row) => row.project_path));
 installLibrarySkillVisibility(providerSkillsService, library.store);
 installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
@@ -110,6 +112,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));
   router.use(timesheet);
+  router.use('/reasoning', createReasoningRouter(reasoning));
   router.use('/library', library.router);
   router.use(knowledge.router);
   router.use(createCompanySearchRouter());
