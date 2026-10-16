@@ -1601,6 +1601,8 @@ function startInstallJob(repoRoot, component) {
   const stepId = INSTALL_STEP_IDS[component];
   if (!stepId) throw new Error(`Composant non installable : ${component}`);
   if (activeInstallComponent) {
+    const running = [...installJobs.values()].find((job) => job.component === component && job.state === 'running');
+    if (running) return running;
     throw Object.assign(new Error(`Une installation est déjà en cours (${activeInstallComponent}).`), { conflict: true });
   }
   const installer = path.join(repoRoot, 'installer', 'bin', 'piecemaker.mjs');
@@ -1891,6 +1893,7 @@ function createAdminRouter({
   });
 
   router.get('/configuration/install', (req, res) => {
+    if (!req.query?.id) return res.json({ jobs: [...installJobs.values()].map(publicInstallJob), busy: Boolean(activeInstallComponent) });
     const job = installJobs.get(String(req.query?.id || ''));
     if (!job) return res.status(404).json({ error: 'Installation inconnue ou expirée.' });
     res.json({ ok: true, job: publicInstallJob(job) });
