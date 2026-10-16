@@ -50,7 +50,7 @@ jobs:
       - name: Test desktop dependency selection
         run: |
           $env:PSModulePath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\Modules'
-          node --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs desktop-bootstrap/lib/initial-install.test.mjs desktop-bootstrap/composants/install.test.mjs
+          node --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs desktop-bootstrap/lib/initial-install.test.mjs desktop-bootstrap/composants/install.test.mjs desktop-bootstrap/composants/gliner-cache.test.mjs
 
       - name: Build
         run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml

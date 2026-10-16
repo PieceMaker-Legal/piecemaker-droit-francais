@@ -2,11 +2,12 @@ import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import Database from 'better-sqlite3';
 import spawn from 'cross-spawn';
 
 import type { IProviderAuth } from '@/shared/interfaces.js';
 import type { ProviderAuthStatus } from '@/shared/types.js';
-import { readObjectRecord, readOptionalString } from '@/shared/utils.js';
+import { getOpenCodeDatabasePath, readObjectRecord, readOptionalString } from '@/shared/utils.js';
 
 type OpenCodeCredentialsStatus = {
   authenticated: boolean;
@@ -57,6 +58,24 @@ export class OpenCodeProviderAuth implements IProviderAuth {
    * Reads OpenCode's auth store or falls back to provider API key environment variables.
    */
   private async checkCredentials(): Promise<OpenCodeCredentialsStatus> {
+    try {
+      const db = new Database(getOpenCodeDatabasePath(), { readonly: true, fileMustExist: true });
+      try {
+        const row = db.prepare(
+          'SELECT integration_id FROM credential WHERE active = 1 LIMIT 1',
+        ).get() as { integration_id?: string } | undefined;
+        if (row?.integration_id) {
+          return {
+            authenticated: true,
+            email: `${row.integration_id} credentials`,
+            method: 'credentials_file',
+          };
+        }
+      } finally {
+        db.close();
+      }
+    } catch {}
+
     try {
       const authPath = path.join(os.homedir(), '.local', 'share', 'opencode', 'auth.json');
       const content = await readFile(authPath, 'utf8');

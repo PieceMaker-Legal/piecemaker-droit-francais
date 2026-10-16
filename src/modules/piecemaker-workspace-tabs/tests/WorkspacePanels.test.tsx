@@ -77,6 +77,26 @@ it('agrandit puis restaure une card sans perdre son contenu ni les autres volets
   expect(screen.getByText('Fichiers du dossier').closest('[hidden]')).toBeNull();
 });
 
+it('ouvre le .docx dès que l’agent l’écrit, sans attendre un afficher', () => {
+  const opened: string[] = [];
+  const record = (event: Event) => opened.push((event as CustomEvent<{ path: string }>).detail.path);
+  window.addEventListener('piecemaker:open-in-editor', record);
+  render(<Harness />);
+  act(() => {
+    for (const listener of socket.listeners) {
+      listener({ kind: 'tool_use', toolId: 'exec-1', toolName: 'Bash', toolInput: { command: 'docx create bonjour.docx --text bonjour' } });
+    }
+  });
+  expect(opened).toEqual(['bonjour.docx']);
+  act(() => {
+    for (const listener of socket.listeners) {
+      listener({ kind: 'tool_use', toolId: 'exec-2', toolName: 'Bash', toolInput: { command: 'docx read bonjour.docx' } });
+    }
+  });
+  window.removeEventListener('piecemaker:open-in-editor', record);
+  expect(opened).toEqual(['bonjour.docx']);
+});
+
 it('ouvre le volet Dossier sur la chronologie quand le LLM appelle l’outil chronologie', () => {
   render(<Harness />);
   const viewRequests: unknown[] = [];

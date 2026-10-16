@@ -19,8 +19,11 @@ export type PanelSnapshot = {
 type Input = Record<string, unknown>;
 
 const PIECEMAKER_TOOL = /(?:^|[_.:])piecemaker(?:__|[.:/])([a-z_]+)$/i;
-const DOCX_CALL = /(?:^|[\s;&|(/])docx\s/;
 const DOCX_PATH = /"([^"]+\.docx)"|'([^']+\.docx)'|((?:\\ |[^\s;&|<>"'])+\.docx)(?![\w.])/i;
+const DOCX_READ = new Set(['read', 'find', 'wc', 'outline', 'render', 'validate', 'info']);
+const DOCX_WRITE = new Set(['create', 'edit', 'insert', 'delete', 'replace', 'sections', 'raw']);
+const DOCX_FAMILY = new Set(['comments', 'footnotes', 'endnotes', 'headers', 'footers', 'images', 'hyperlinks', 'tables', 'lists', 'styles', 'track-changes']);
+const DOCX_FAMILY_READ = new Set(['list', 'extract', 'get']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 const WRITE_TOOLS = new Set(['Write', 'write_file']);
@@ -67,8 +70,21 @@ export function panelShowDecision(target: AutoPanelTarget, snapshot: PanelSnapsh
   return open ? 'skip' : 'apply';
 }
 
+function docxWrite(command: string): boolean {
+  const argv = tokens(command);
+  const index = argv.findIndex((token) => /(?:^|[/\\])docx$/.test(token));
+  if (index < 0) return false;
+  const verb = argv[index + 1];
+  if (!verb || verb.startsWith('-') || DOCX_READ.has(verb)) return false;
+  if (DOCX_FAMILY.has(verb)) {
+    const sub = argv[index + 2];
+    return Boolean(sub) && !sub.startsWith('-') && !/\.docx$/i.test(sub) && !DOCX_FAMILY_READ.has(sub);
+  }
+  return DOCX_WRITE.has(verb);
+}
+
 function docxTarget(command: string): AutoPanelTarget | null {
-  if (!DOCX_CALL.test(command)) return null;
+  if (!docxWrite(command)) return null;
   const match = DOCX_PATH.exec(command);
   const path = match?.[1] ?? match?.[2] ?? match?.[3]?.replace(/\\ /g, ' ');
   return path ? { kind: 'file', path } : null;
@@ -175,8 +191,9 @@ export function autoPanelTarget(toolName: string, toolInput: unknown): AutoPanel
   if (command) {
     const cli = pieceMakerCliTarget(command);
     if (cli) return cli;
+    const fromDocx = docxTarget(command);
+    if (fromDocx) return fromDocx;
   }
-  if (toolName === 'Bash') return docxTarget(command);
   const plan = planCall(toolName, toolInput);
   if (plan) return { kind: 'plan', plan };
   const written = writeDocxTarget(toolName, input);

@@ -1,0 +1,7 @@
+[mcp_servers.legifrance]
+command = "node"
+args = [
+  "/Users/tsardet/Documents/GitHub/piecemaker-droit-francais/server/piecemaker/vendor/mcp/legifrance/server.mjs"
+]
+enabled = true
+default_tools_approval_mode = "approve"

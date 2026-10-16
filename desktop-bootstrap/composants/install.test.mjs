@@ -11,6 +11,7 @@ import {
   componentLayout,
   createHost,
   dependenciesReady,
+  glinerPipPackages,
   installRuntimeComponents,
   installerRequirements,
   mergeRuntimeConfig,
@@ -23,8 +24,21 @@ import {
   systemPythonCandidates,
   venvPythonPath,
 } from './install.mjs';
+import { huggingFaceHub, snapshotDirectory } from './gliner-cache.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+const checkpoint = JSON.parse(fs.readFileSync(path.join(root, '../../server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/gliner-checkpoint.json'), 'utf8'));
+
+function completeGlinerCache(files, homeDir, sourceDir = '/src') {
+  files.set(
+    path.join(sourceDir, 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/gliner-checkpoint.json'),
+    `${JSON.stringify(checkpoint)}\n`,
+  );
+  const hub = huggingFaceHub({}, homeDir);
+  for (const file of checkpoint.files) {
+    files.set(path.join(snapshotDirectory(hub, checkpoint), file.path), '');
+  }
+}
 
 test('rejects traversal and links in portable Python archives', () => {
   assert.doesNotThrow(() => assertSafePythonEntries('python/\npython/python.exe\npython/Lib/site-packages/sample.py\n', '-rw-r--r-- file\n'));
@@ -183,6 +197,7 @@ test('réutilise un environnement déjà complet et enregistre son interpréteur
     ['warmup-status', JSON.stringify(readyStatus())],
     [layout.configFile, JSON.stringify({ theme: 'dark' })],
   ]);
+  completeGlinerCache(files, '/Users/ada');
   const host = memoryHost(files);
   await installRuntimeComponents({
     sourceDir: '/src',
@@ -209,6 +224,7 @@ test('installe les bibliothèques sans MinerU ni modèle quand l\'environnement 
     [path.join(scripts, 'warmup.py'), ''],
     ['version:python3', 'Python 3.12.4'],
   ]);
+  completeGlinerCache(files, '/Users/ada');
   let warmupCalls = 0;
   const host = memoryHost(files);
   const baseRun = host.run.bind(host);
@@ -233,11 +249,11 @@ test('installe les bibliothèques sans MinerU ni modèle quand l\'environnement 
   const flat = host.commands.map((command) => command.join(' '));
   assert.ok(flat.some((line) => line.includes('pip install --upgrade -r')));
   assert.equal(flat.some((line) => line.includes('mineru')), false);
-  assert.equal(flat.some((line) => line.endsWith('warmup.py')), false);
+  assert.equal(flat.some((line) => line.includes('--models')), false);
   assert.equal(JSON.parse(files.get(layout.configFile)).pythonPath, venvPythonPath(layout.venvDir, 'darwin'));
 });
 
-test('n’installe ni GLiNER ni huggingface-hub pendant l’installation', () => {
+test('l’archive Python Windows reste sans GLiNER', () => {
   const requirements = [
     'markitdown[all]>=0.1.4  # conversion',
     'pypdf>=6.6.2',
@@ -245,4 +261,44 @@ test('n’installe ni GLiNER ni huggingface-hub pendant l’installation', () =>
     'huggingface-hub>=0.20.0',
   ].join('\r\n');
   assert.equal(installerRequirements(requirements), 'markitdown[all]>=0.1.4  # conversion\npypdf>=6.6.2');
+  assert.deepEqual(glinerPipPackages(), ['gliner2[local]>=2.1.0', 'huggingface-hub>=0.20.0']);
+});
+
+test('installe GLiNER2 dans le venv quand le snapshot est déjà là', async () => {
+  const env = { PIECEMAKER_HOME: '/donnees' };
+  const layout = componentLayout(env, '/Users/ada');
+  const scripts = scriptsDirectory('/src');
+  const files = new Map([
+    [path.join(scripts, 'requirements.txt'), 'markitdown\ngliner2[local]>=2.1.0\nhuggingface-hub>=0.20.0\n'],
+    [path.join(scripts, 'warmup.py'), ''],
+    ['version:python3', 'Python 3.12.4'],
+  ]);
+  completeGlinerCache(files, '/Users/ada');
+  let warmupCalls = 0;
+  const host = memoryHost(files);
+  const baseRun = host.run.bind(host);
+  host.run = async (command, args, options) => {
+    const result = await baseRun(command, args, options);
+    if (args.includes('--status')) {
+      warmupCalls += 1;
+      if (warmupCalls === 1) {
+        return { code: 1, stdout: JSON.stringify({ dependencies: { markitdown: false, pypdf: false, gliner2: false, huggingface_hub: false } }), stderr: '' };
+      }
+      return { code: 0, stdout: JSON.stringify(readyStatus()), stderr: '' };
+    }
+    return result;
+  };
+  await installRuntimeComponents({
+    sourceDir: '/src',
+    env,
+    homeDir: '/Users/ada',
+    platform: 'darwin',
+    arch: 'arm64',
+    host,
+    output: { step() {}, ok() {} },
+  });
+  const flat = host.commands.map((command) => command.join(' '));
+  assert.ok(flat.some((line) => line.includes('pip install --upgrade -r')));
+  assert.equal(flat.some((line) => line.includes('--models')), false);
+  assert.equal(flat.some((line) => line.includes('mineru')), false);
 });

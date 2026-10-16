@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { acceptChange, acceptChangeById, rejectChange, rejectChangeById } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 import { ListTree, MessageSquare } from 'lucide-react';
 import type { EditorView } from 'prosemirror-view';
 import '@eigenpal/docx-editor-react/styles.css';
@@ -15,17 +17,56 @@ import type { CodeEditorFile } from '@/shared/types';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const VERSION_POLL_MS = 1000;
+const MISSING_FILE_MS = 10_000;
 const SAVE_DEBOUNCE_MS = 800;
 const COMMENTS_SIDEBAR_RESERVED_PX = 248;
+const REVISION_MARK_SELECTOR = '.docx-insertion, .docx-deletion, [data-revision-id]';
+const MARKUP_MARK_SELECTOR = `${REVISION_MARK_SELECTOR}, [data-comment-id]`;
 
-type DocxDocumentViewerProps = {
-  file: CodeEditorFile;
-  projectId?: string;
-  isSidebar: boolean;
-  onClose: () => void;
-};
+function isMacPlatform() {
+  return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+}
 
-function pagedEditorViews(editor: NonNullable<ReturnType<DocxEditorRef['getEditorRef']>> | null): EditorView[] {
+function commentOpenShortcutLabel() {
+  return isMacPlatform() ? '⌘-clic pour ouvrir le commentaire' : 'Ctrl-clic pour ouvrir le commentaire';
+}
+
+function isCommentOpenModifier(event: { metaKey: boolean; ctrlKey: boolean }) {
+  return isMacPlatform() ? event.metaKey : event.ctrlKey;
+}
+
+function isSelectorTarget(target: EventTarget | null, selector: string) {
+  return target instanceof Element && Boolean(target.closest(selector));
+}
+
+type TrackedChangeEntry = ReturnType<typeof extractTrackedChanges>['entries'][number];
+type PagedEditorHandle = NonNullable<ReturnType<DocxEditorRef['getEditorRef']>>;
+type TrackedChangeRange = { from: number; to: number };
+
+function addRevisionId(raw: unknown, into: Set<number | string>) {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    into.add(raw);
+    into.add(String(raw));
+    return;
+  }
+  if (typeof raw === 'string' && raw !== '') {
+    into.add(raw);
+    const asNumber = Number(raw);
+    if (Number.isFinite(asNumber)) into.add(asNumber);
+  }
+}
+
+function trackedChangeActionFromButton(button: HTMLElement, card: Element) {
+  const title = button.getAttribute('title') ?? '';
+  if (/^(Accepter|Accept)$/i.test(title)) return 'accept' as const;
+  if (/^(Refuser|Reject)$/i.test(title)) return 'reject' as const;
+  const index = [...card.querySelectorAll<HTMLElement>('button')].indexOf(button);
+  if (index === 0) return 'accept' as const;
+  if (index === 1) return 'reject' as const;
+  return null;
+}
+
+function pagedEditorViews(editor: PagedEditorHandle | null): EditorView[] {
   if (!editor) return [];
   const views: EditorView[] = [];
   const body = editor.getView();
@@ -37,6 +78,83 @@ function pagedEditorViews(editor: NonNullable<ReturnType<DocxEditorRef['getEdito
   }
   return views;
 }
+
+function collectEntryTargets(entry: TrackedChangeEntry, ids: Set<number | string>, ranges: TrackedChangeRange[]) {
+  addRevisionId(entry.revisionId, ids);
+  addRevisionId(entry.insertionRevisionId, ids);
+  for (const id of entry.coalescedRevisionIds ?? []) addRevisionId(id, ids);
+  if (entry.to > entry.from) ranges.push({ from: entry.from, to: entry.to });
+}
+
+function collectRevisionIdsFromSelection(view: EditorView, into: Set<number | string>) {
+  const { $from } = view.state.selection;
+  const marks = [
+    ...(view.state.storedMarks ?? []),
+    ...$from.marks(),
+    ...($from.nodeAfter?.marks ?? []),
+    ...($from.nodeBefore?.marks ?? []),
+  ];
+  for (const mark of marks) {
+    if (mark.type.name === 'insertion' || mark.type.name === 'deletion') addRevisionId(mark.attrs.revisionId, into);
+  }
+}
+
+function collectRevisionTargetsFromCard(card: Element, container: HTMLElement, ids: Set<number | string>, ranges: TrackedChangeRange[]) {
+  const cardRect = card.getBoundingClientRect();
+  for (const mark of container.querySelectorAll<HTMLElement>('[data-revision-id]')) {
+    const rect = mark.getBoundingClientRect();
+    if (rect.bottom < cardRect.top - 24 || rect.top > cardRect.bottom + 24) continue;
+    addRevisionId(mark.getAttribute('data-revision-id'), ids);
+    const from = Number(mark.dataset.pmStart);
+    const to = Number(mark.dataset.pmEnd);
+    if (Number.isFinite(from) && Number.isFinite(to) && to > from) ranges.push({ from, to });
+  }
+}
+
+function quotedCardSnippets(card: Element) {
+  return [...card.querySelectorAll('span')]
+    .map((element) => (element.textContent ?? '').replace(/^["«]|["»]$/g, '').trim())
+    .filter(Boolean);
+}
+
+function matchTrackedChangeEntry(card: Element, container: HTMLElement, entries: TrackedChangeEntry[]) {
+  if (entries.length === 1) return entries[0];
+  const cards = [...container.querySelectorAll('.docx-tracked-change-card')];
+  const index = cards.indexOf(card);
+  if (index >= 0 && index < entries.length) return entries[index];
+  const snippets = quotedCardSnippets(card);
+  const haystack = card.textContent ?? '';
+  const matches = entries.filter((entry) => {
+    const parts = [entry.text, entry.deletedText].filter((part): part is string => Boolean(part));
+    return parts.some((part) => haystack.includes(part) || snippets.some((snippet) => part.includes(snippet) || snippet.includes(part)));
+  });
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function applyTrackedChangeCommand(views: EditorView[], action: 'accept' | 'reject', ids: Set<number | string>, ranges: TrackedChangeRange[]) {
+  let applied = false;
+  for (const view of views) {
+    for (const id of ids) {
+      const command = action === 'accept' ? acceptChangeById(id as number) : rejectChangeById(id as number);
+      if (command(view.state, view.dispatch)) applied = true;
+    }
+  }
+  if (applied) return true;
+  for (const view of views) {
+    for (const range of ranges) {
+      const command = action === 'accept' ? acceptChange(range.from, range.to) : rejectChange(range.from, range.to);
+      if (command(view.state, view.dispatch)) applied = true;
+    }
+  }
+  return applied;
+}
+
+type DocxDocumentViewerProps = {
+  file: CodeEditorFile;
+  projectId?: string;
+  isSidebar: boolean;
+  onClose: () => void;
+};
 
 function fitPageWidth(container: HTMLElement, editor: DocxEditorRef | null, lastLayout: { current: string }) {
   const scroller = container.querySelector<HTMLElement>('.docx-editor__scroll-container');
@@ -90,8 +208,9 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
-  // Quoted passage to mark once the Word document has finished loading.
   const passage = useCitationPassage(file.path);
+  const commentsOpenFromClickRef = useRef(false);
+  const [revisionHint, setRevisionHint] = useState<{ x: number; y: number } | null>(null);
 
   const fetchVersion = useCallback(async () => {
     const requestVersion = (filePath: string) => {
@@ -128,12 +247,21 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
 
   useEffect(() => {
     resolvedPathRef.current = file.path;
-    load().catch((loadError: unknown) => setError(String(loadError)));
+    versionRef.current = null;
+    const openedAt = Date.now();
+    const missing = (error: unknown) => error instanceof Error && /HTTP 404/.test(error.message);
+    load().catch((loadError: unknown) => {
+      if (missing(loadError)) return;
+      setError(String(loadError));
+    });
     const poll = window.setInterval(() => {
       if (savingRef.current) return;
       fetchVersion()
         .then(({ version }) => { if (!savingRef.current && version !== versionRef.current) return load(); })
-        .catch(() => undefined);
+        .catch(() => {
+          if (versionRef.current !== null || Date.now() - openedAt < MISSING_FILE_MS) return;
+          setError(`Fichier introuvable : ${file.path}`);
+        });
     }, VERSION_POLL_MS);
     return () => {
       window.clearInterval(poll);
@@ -209,17 +337,106 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     };
   }, [loaded, passage?.nonce, passage?.quote]);
 
+  const applyTrackedChangeButton = useCallback((event: MouseEvent) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const button = target.closest<HTMLButtonElement>('button');
+    const card = button?.closest('.docx-tracked-change-card');
+    if (!button || !card) return;
+    const action = trackedChangeActionFromButton(button, card);
+    if (!action) return;
+    const editor = editorRef.current?.getEditorRef() ?? null;
+    const views = pagedEditorViews(editor);
+    if (views.length === 0) return;
+    const container = event.currentTarget as HTMLElement;
+    const ids = new Set<number | string>();
+    const ranges: TrackedChangeRange[] = [];
+    for (const view of views) {
+      collectRevisionIdsFromSelection(view, ids);
+      const { entries } = extractTrackedChanges(view.state);
+      const entry = matchTrackedChangeEntry(card, container, entries);
+      if (entry) collectEntryTargets(entry, ids, ranges);
+    }
+    collectRevisionTargetsFromCard(card, container, ids, ranges);
+    if (!applyTrackedChangeCommand(views, action, ids, ranges)) return;
+    userEditingRef.current = true;
+    editor?.relayout();
+    scheduleSave();
+  }, [scheduleSave]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !loaded) return undefined;
+    const onClick = (event: MouseEvent) => applyTrackedChangeButton(event);
+    container.addEventListener('click', onClick, true);
+    return () => container.removeEventListener('click', onClick, true);
+  }, [applyTrackedChangeButton, loaded]);
+
   const markUserEditing = () => { userEditingRef.current = true; };
 
-  const handlePointerDown = () => {
+  const markCommentOpenGesture = (event: { target: EventTarget | null; metaKey: boolean; ctrlKey: boolean }) => {
+    commentsOpenFromClickRef.current = isSelectorTarget(event.target, MARKUP_MARK_SELECTOR) && isCommentOpenModifier(event);
+  };
+
+  const revisionHintPosition = (event: { clientX: number; clientY: number }) => {
+    const container = containerRef.current;
+    if (!container) return null;
+    const rect = container.getBoundingClientRect();
+    const x = (Number.isFinite(event.clientX) ? event.clientX : 0) - rect.left + 12;
+    const y = (Number.isFinite(event.clientY) ? event.clientY : 0) - rect.top + 18;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 12, y: 18 };
+    return { x, y };
+  };
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     markUserEditing();
     zoomAtClickRef.current = editorRef.current?.getZoom() ?? 1;
+    markCommentOpenGesture(event);
+  };
+
+  const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
+    markCommentOpenGesture(event);
+  };
+
+  const handlePointerOver = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isSelectorTarget(event.target, REVISION_MARK_SELECTOR)) return;
+    const nextHint = revisionHintPosition(event);
+    if (nextHint) setRevisionHint(nextHint);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!revisionHint || !isSelectorTarget(event.target, REVISION_MARK_SELECTOR)) return;
+    const nextHint = revisionHintPosition(event);
+    if (nextHint) setRevisionHint(nextHint);
+  };
+
+  const handlePointerOut = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (isSelectorTarget(event.relatedTarget, REVISION_MARK_SELECTOR)) return;
+    if (isSelectorTarget(event.target, REVISION_MARK_SELECTOR)) setRevisionHint(null);
+  };
+
+  const handleCommentsSidebarOpenChange = (open: boolean) => {
+    if (!open) {
+      setCommentsOpen(false);
+      return;
+    }
+    if (commentsOpenFromClickRef.current) setCommentsOpen(true);
   };
 
   const panelButtonClass = (active: boolean) => `relative rounded-md p-1.5 hover:bg-muted ${active ? 'bg-muted text-foreground' : 'text-muted-foreground'}`;
+  const revisionShortcut = commentOpenShortcutLabel();
 
   return (
-    <div ref={containerRef} className={`piecemaker-docx-viewer flex flex-col bg-background ${isSidebar ? 'h-full w-full' : 'fixed inset-0 z-[9999]'}`} onKeyDownCapture={markUserEditing} onPointerDownCapture={handlePointerDown}>
+    <div
+      ref={containerRef}
+      className={`piecemaker-docx-viewer relative flex flex-col bg-background ${isSidebar ? 'h-full w-full' : 'fixed inset-0 z-[9999]'}`}
+      onKeyDownCapture={markUserEditing}
+      onPointerDownCapture={handlePointerDown}
+      onMouseDownCapture={handleMouseDown}
+      onPointerOverCapture={handlePointerOver}
+      onPointerMoveCapture={handlePointerMove}
+      onPointerOutCapture={handlePointerOut}
+    >
       {error && <p className="border-b border-border px-3 py-1.5 text-xs text-destructive">{error}</p>}
       {loaded ? (
         <DocxEditor
@@ -237,7 +454,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
           showOutline={outlineOpen}
           showOutlineButton={false}
           commentsSidebarOpen={commentsOpen}
-          onCommentsSidebarOpenChange={(open) => { if (!open || userEditingRef.current) setCommentsOpen(open); }}
+          onCommentsSidebarOpenChange={handleCommentsSidebarOpenChange}
           onCommentsChange={(comments) => setCommentCount(countThreads(comments))}
           renderLogo={() => (
             <div className="flex items-center gap-1">
@@ -252,6 +469,11 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">{error ? file.path : 'Chargement…'}</div>
+      )}
+      {revisionHint && (
+        <div className="docx-revision-shortcut-hint" style={{ left: revisionHint.x, top: revisionHint.y }} role="tooltip">
+          {revisionShortcut}
+        </div>
       )}
     </div>
   );

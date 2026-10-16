@@ -31,7 +31,7 @@ Les neuf paquets ProseMirror restent declares : `@eigenpal/docx-editor-core` et 
 
 ## Python prepare avant la release
 
-La CI construit une distribution autonome Python 3.12 Windows x64. Elle installe les requirements de conversion avec `--only-binary=:all:` ; une dependance sans wheel fait echouer la construction au lieu de lancer une compilation sur le poste utilisateur. GLiNER, ses modeles et MinerU restent hors de ce socle initial. Le telechargement de GLiNER est declenche par l'utilisateur dans l'interface et ne fait pas partie de l'installation initiale.
+La CI construit une distribution autonome Python 3.12 Windows x64. Elle installe les requirements de conversion avec `--only-binary=:all:` ; une dependance sans wheel fait echouer la construction au lieu de lancer une compilation sur le poste utilisateur. GLiNER2 (`gliner2[local]`) et l'arbre Hub du checkpoint epinglé (`piecemaker-gliner-<revision>.tar.gz` : `blobs`, `refs/main` de 40 octets, `snapshots`) sont installes pendant la preparation initiale, en parallele du telechargement NSIS. MinerU reste hors de ce socle et s'installe depuis l'interface.
 
 La release fournit l'archive Python, son SHA-256 et les metadonnees embarquees dans l'application. Le poste verifie l'archive, refuse les liens et chemins de traversee, extrait dans un dossier temporaire, execute le controle reel des imports, puis publie le dossier et sa configuration. Les noms des dossiers de preparation sont courts pour limiter les erreurs de chargement de DLL liees aux chemins Windows. Une configuration Python deja operationnelle est reutilisee.
 

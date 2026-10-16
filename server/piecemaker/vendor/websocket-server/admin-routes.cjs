@@ -641,20 +641,29 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
   const hasPackage = (name) => Boolean(sitePackages) && fs.existsSync(path.join(sitePackages, name));
   const glinerDir = path.join(repoRoot, 'websocket-server', 'scripts', 'presidio-gliner');
   const glinerModelId = 'fastino/gliner2-privacy-filter-PII-multi';
-  const huggingFaceHubCache = process.env.HF_HUB_CACHE
+  const huggingFaceHubCache = process.env.HUGGINGFACE_HUB_CACHE
+    || process.env.HF_HUB_CACHE
     || path.join(process.env.HF_HOME || path.join(userHome, '.cache', 'huggingface'), 'hub');
-  const glinerModelCache = path.join(
-    huggingFaceHubCache,
-    `models--${glinerModelId.replace('/', '--')}`,
-    'snapshots',
-  );
-  const glinerModelReady = (() => {
+  const glinerCheckpoint = (() => {
     try {
-      return fs.readdirSync(glinerModelCache)
-        .some((revision) => ['config.json', 'model.safetensors']
-          .every((name) => fs.existsSync(path.join(glinerModelCache, revision, name))));
-    } catch { return false; }
+      return JSON.parse(fs.readFileSync(path.join(glinerDir, 'gliner-checkpoint.json'), 'utf8'));
+    } catch { return null; }
   })();
+  const glinerRevision = glinerCheckpoint?.revision || '';
+  const glinerSnapshotFiles = Array.isArray(glinerCheckpoint?.files)
+    ? glinerCheckpoint.files.map((file) => file.path).filter(Boolean)
+    : [];
+  const glinerSnapshot = path.join(
+    huggingFaceHubCache,
+    `models--${(glinerCheckpoint?.modelId || glinerModelId).replace('/', '--')}`,
+    'snapshots',
+    glinerRevision,
+  );
+  const glinerModelReady = Boolean(
+    glinerRevision
+    && glinerSnapshotFiles.length > 0
+    && glinerSnapshotFiles.every((relative) => fs.existsSync(path.join(glinerSnapshot, relative))),
+  );
   const glinerReady = fs.existsSync(path.join(glinerDir, 'scanner_worker.py'))
     && hasPackage('gliner2')
     && glinerModelReady;

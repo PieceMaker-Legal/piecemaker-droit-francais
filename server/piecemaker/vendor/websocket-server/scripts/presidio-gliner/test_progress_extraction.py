@@ -3,7 +3,7 @@ import unittest
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 
-from model_config import PREFERRED_GLINER_MODEL, is_model_cached
+from model_config import PREFERRED_GLINER_MODEL, gliner_snapshot_directory, is_model_cached
 from scanner_worker import ENTITY_DESCRIPTIONS
 
 SAMPLE = " ".join(
@@ -19,7 +19,7 @@ class ProgressExtractionTest(unittest.TestCase):
         from gliner2 import GLiNER2
         from progress_extraction import extract_entities_with_progress
 
-        model = GLiNER2.from_pretrained(PREFERRED_GLINER_MODEL, local_files_only=True, map_location="cpu")
+        model = GLiNER2.from_pretrained(gliner_snapshot_directory(), local_files_only=True, map_location="cpu")
         reference = model.extract_entities_long(
             SAMPLE, ENTITY_DESCRIPTIONS, threshold=0.5, include_confidence=True, include_spans=True
         )

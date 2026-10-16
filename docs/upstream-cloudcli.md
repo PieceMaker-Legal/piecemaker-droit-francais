@@ -175,21 +175,15 @@ avec `options.libraryCodexOptions` plutôt que d'en écraser une.
 
 ### `browser-use.service.ts` — le MCP navigateur de l'app de bureau
 
-Activer « Navigateur » écrit l'outil MCP `cloudcli-browser` dans la config de
-Claude, Codex, etc., avec `process.execPath` comme commande. Dans l'app de
-bureau, c'est le binaire PieceMaker : sans `ELECTRON_RUN_AS_NODE=1`, chaque
-session Claude ou Codex démarre l'app entière (serveur, plugins), que Claude
-tue après 30 s en laissant des plugins orphelins. Le serveur de l'app tourne
-déjà avec cette variable ; la seule ligne CloudCLI touchée la recopie dans
-l'`env` de l'outil. Hors app de bureau, rien ne change.
-
-Un merge résolu « vers CloudCLI » retire la ligne : l'app redémarre de nouveau à
-chaque session, sans erreur. Garde-fou :
-`server/piecemaker/browser-use-electron.test.ts` (« exception CloudCLI : le MCP
-navigateur de l'app de bureau… »). Restaurer la ligne, ne jamais supprimer le
-test. L'entrée déjà écrite chez l'utilisateur ne change qu'en désactivant puis
-réactivant « Navigateur » (upstream ne la réécrit pas au démarrage,
-siteboon/claudecodeui#1489).
+Activer « Navigateur » écrit, chez CloudCLI, l'outil MCP `cloudcli-browser` dans
+la config de Claude, Codex, Cursor, OpenCode, avec `process.execPath` comme
+commande. Dans l'app de bureau, c'est le binaire PieceMaker : chaque session
+d'un CLI IA lance l'app et lui vole le focus. `registerAgentMcp()` se contente
+donc de `unregisterAgentMcp()` : le navigateur in-app reste, l'entrée MCP n'est
+jamais écrite. Un merge résolu « vers CloudCLI » rétablit l'écriture : l'app
+redémarre à chaque session. Garde-fou :
+`server/piecemaker/browser-use-electron.test.ts` (« exception CloudCLI :
+PieceMaker n'installe pas cloudcli-browser… »). Ne jamais supprimer le test.
 
 ### `EditorSidebar.tsx` et `WorkspaceMain.tsx` — les onglets de l'éditeur latéral
 

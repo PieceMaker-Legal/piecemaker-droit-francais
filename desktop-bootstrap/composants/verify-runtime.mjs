@@ -23,14 +23,14 @@ export async function verifyPythonRuntime(sourceDir, assetsDir) {
     return run(command, args, { ...options, env: { ...env, ...options.env } });
   };
   const started = performance.now();
-  await installRuntimeComponents({ sourceDir: source, env, host, requirePrebuilt: true });
+  await installRuntimeComponents({ sourceDir: source, env, host, requirePrebuilt: true, includeGliner: false });
   const installMs = Math.round(performance.now() - started);
   const config = JSON.parse(await fs.readFile(path.join(env.PIECEMAKER_HOME, 'config.json'), 'utf8'));
   const probe = await host.run(config.pythonPath, ['-c', "import io,zipfile,numpy,pandas,pypdf; from markitdown import MarkItDown; data=io.BytesIO(); z=zipfile.ZipFile(data,'w'); z.writestr('[Content_Types].xml','<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/></Types>'); z.writestr('_rels/.rels','<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/></Relationships>'); z.writestr('word/document.xml','<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body><w:p><w:r><w:t>PieceMaker sample</w:t></w:r></w:p></w:body></w:document>'); z.close(); data.seek(0); assert 'PieceMaker sample' in MarkItDown().convert_stream(data,file_extension='.docx').text_content; print('python-runtime-ok')"], { capture: true });
   if (probe.code !== 0 || !probe.stdout.includes('python-runtime-ok')) throw new Error(`Relocated Python failed: ${probe.stderr}`);
   const reused = performance.now();
   host.fetch = () => { throw new Error('Python cache reuse downloaded an asset.'); };
-  await installRuntimeComponents({ sourceDir: source, env, host, requirePrebuilt: true });
+  await installRuntimeComponents({ sourceDir: source, env, host, requirePrebuilt: true, includeGliner: false });
   return { root, installMs, cacheReuseMs: Math.round(performance.now() - reused), docxConversion: true, nativePythonImports: true };
 }
 

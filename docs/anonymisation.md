@@ -81,7 +81,7 @@ budget RAM, nice, timeout).
   5 % (`PIECEMAKER_MINERU_FREE_FLOOR_BYTES`). Le sous-processus d'une page
   s'arrête de lui-même si son superviseur disparaît. Mesure sur une page
   scannée fictive, Mac de 8 Go : pic de 2,0 Go, environ 60 s par page.
-- Phase SCAN : `scanner_worker.py` charge GLiNER2-PII (`fastino/gliner2-privacy-filter-PII-multi`) **une fois**,
+- Phase SCAN : `scanner_worker.py` charge GLiNER2-PII (`fastino/gliner2-privacy-filter-PII-multi`, commit `59894c087cb2923b01f337d4ee72f6ff84d5bdd6`) **une fois** depuis le dossier snapshot du cache Hub,
   puis scanne chaque Markdown (protocole JSON-line). Les cartes brutes
   (`*_sensitive_map.json`) restent dans un répertoire temporaire et sont
   détruites après fusion.

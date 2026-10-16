@@ -308,11 +308,9 @@ def _scan_before_database():
     gliner_dir = Path(__file__).resolve().parent / "presidio-gliner"
     sys.path.insert(0, str(gliner_dir))
     os.environ["HF_HUB_OFFLINE"] = "1"
-    from huggingface_hub import try_to_load_from_cache
-    from model_config import PREFERRED_GLINER_MODEL
+    from model_config import PREFERRED_GLINER_MODEL, gliner_snapshot_directory, is_model_cached
 
-    weights = try_to_load_from_cache(repo_id=PREFERRED_GLINER_MODEL, filename="model.safetensors")
-    if not isinstance(weights, str) or not os.path.isfile(weights):
+    if not is_model_cached(PREFERRED_GLINER_MODEL):
         raise unittest.SkipTest("modèle GLiNER2-PII absent du cache")
     import scanner_worker
     from gliner2 import GLiNER2
@@ -320,7 +318,7 @@ def _scan_before_database():
 
     if scanner_worker._gliner_model is None:
         scanner_worker._gliner_model = GLiNER2.from_pretrained(
-            str(Path(weights).parent),
+            gliner_snapshot_directory(),
             local_files_only=True,
             map_location="cpu",
         )

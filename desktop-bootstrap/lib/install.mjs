@@ -4,12 +4,14 @@ import { generateCertificates, isCaTrusted, signApplication, trustCertificateAut
 import { createShortcuts, installApplication, launchApplication, quitRunningApplication, registerWindowsUninstall } from './place.mjs';
 import { finishProgress, openProgressWindow, settleProgressWindow } from './progress.mjs';
 import { ui } from './ui.mjs';
+import { ensureGlinerArchive } from '../composants/gliner-cache.mjs';
 import {
   IS_MAC,
   IS_WINDOWS,
   PRODUCT_NAME,
   bootstrapHome,
   certsDir,
+  releaseRepo,
   releaseTag,
   sourceDir,
   trustMarkerPath,
@@ -30,6 +32,14 @@ async function main() {
 
   await fs.mkdir(bootstrapHome, { recursive: true });
   process.chdir(bootstrapHome);
+
+  const glinerPrefetch = ensureGlinerArchive({
+    sourceDir,
+    env: process.env,
+    bootstrapHome,
+    tag: releaseTag,
+    repo: releaseRepo,
+  }).catch(() => '');
 
   if (!skipProgress) await openProgressWindow({ version: releaseTag, offerPiste: !skipLaunch });
   console.log(`\n${PRODUCT_NAME} — installation de l'application de bureau (${releaseTag})`);
@@ -61,6 +71,7 @@ async function main() {
   createShortcuts(installedPath);
   registerWindowsUninstall(installedPath, releaseTag);
 
+  await glinerPrefetch;
   await import('../composants/install.mjs').then((composants) => (
     composants.installRuntimeComponents({ sourceDir, output: ui })
   ));
