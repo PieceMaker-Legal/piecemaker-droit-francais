@@ -1,112 +1,122 @@
-# Programme exécutable du dossier
+# Raisonnement cumulatif du dossier
 
-Le plugin **Raisonnement** ouvre un graphe dans le volet droit, à côté du chat. Le programme est proposé par le modèle dans `CITATIONS` en fin de tour, après les citations ordinaires. Le serveur ancre les extraits, applique la proposition puis calcule le dossier de base, les scénarios et les tests. Le tour suivant reçoit son état dans les instructions ; le SQL permet de récupérer les définitions et tous les résultats.
+Le volet droit **Raisonnement** représente un modèle qui s’enrichit à chaque tour : les sources lues, les règles de droit, les faits et relations entre entités, puis les théories juridiques proposées. Le modèle est interrogeable par l’outil SQL existant. Le serveur compile les annotations finales et exécute les expressions ; le modèle récupère l’état et les diagnostics au tour suivant.
 
-## Essayer en développement
+Le moteur est un interpréteur déclaratif natif. Il ne compile pas Catala et ne possède pas toutes ses fonctionnalités. La traduction d’un texte en règle, le soutien d’une proposition par un extrait et la valeur probatoire des documents restent des interprétations à examiner. La vérification des citations établit une correspondance textuelle, pas la validité de ces interprétations.
 
-Ouvrir `http://localhost:5173`, sélectionner un dossier puis l'onglet **Raisonnement** (éventuellement dans « Autres onglets »). L'hôte le place à droite. **Exemple fictif** charge un exemple calculé par le serveur, sans l'enregistrer dans le dossier. **Revenir au dossier** retrouve le programme réel.
+## Trois couches
 
-Dans l'exemple, une facture fictive de 12 000 € et un versement contesté de 4 000 € produisent un solde indéterminé dans le dossier de base, 8 000 € sous l'hypothèse du versement et 12 000 € sous l'hypothèse d'aucun versement. Les valeurs du programme sont des centimes. L'onglet Scénarios compare ces résultats ; Tests affiche trois attentes explicites.
+- **Droit** : règles réutilisables, paramètres, conditions, conséquences et exceptions, avec justification, sources et période de validité obligatoire.
+- **Faits et relations** : assertions atomiques et liens entre les entités du dossier. Une relation peut être contractuelle, alléguée ou contestée ; son prédicat est libre. Le statut de l’assertion ne signifie pas vérité judiciairement établie.
+- **Théorie juridique** : argumentaire exécutable associant les règles datées et les faits, avec ses dépendances, hypothèses, objections et tests.
 
-Le graphe permet sélection, déplacement des nœuds, déplacement du fond, zoom et centrage. Les flèches vont de la source ou prémisse vers ce qui en dépend. Une sélection ouvre la définition, les dépendances effectivement utilisées, les inconnues, les hypothèses et les extraits. Une citation ouvre la visionneuse existante. Les onglets Scénarios, Tests et Programme montrent les vues calculées et le JSON exécutable.
+Une collecte de sources sans propositions est explicitement signalée comme **raisonnement non formalisé**. Elle ne produit aucun résultat exécutable. Les anciens objets `kind:program` restent lisibles pour préserver les dossiers existants ; les nouvelles instructions utilisent `kind:reasoning`.
 
-Pour essayer sur un dossier par le chat :
+## Contrat CITATIONS
 
-> Formalise une question précise de ce dossier en programme exécutable. Lis les pièces utiles, cite leurs passages, représente séparément les assertions contestées et les inconnues, propose deux scénarios et des tests. Ajoute l'objet program au bloc CITATIONS en fin de réponse. Ne prétends pas avoir déjà exécuté ce que tu proposes.
-
-Puis au tour suivant :
-
-> Récupère le programme et ses résultats par SQL. Compare les scénarios, indique l'inconnue qui empêche de conclure et la prochaine pièce utile à rechercher. Révise le programme si nécessaire.
-
-## Contrat version 1
-
-Le tableau `CITATIONS` habituel est conservé. Il accepte en plus un seul objet `kind:program`. Le vérifieur historique continue à traiter les citations ordinaires ; le programme est extrait séparément du même bloc complet. Aucune compilation pendant les deltas, ni en cas d'abandon. Le rechargement de l'historique n'ingère pas une nouvelle fois le programme.
-
-Exemple entièrement fictif :
+Conserver un seul bloc JSON strict en fin de réponse. Les citations ordinaires restent inchangées. Elles peuvent recevoir des liens vers des propositions :
 
 ```json
 [
   {
     "ref": 1,
     "kind": "document",
-    "doc_id": "pieces/exemple.md",
-    "quotes": [{"page": 1, "quote": "Le montant facturé est de 12 000 euros."}]
+    "doc_id": "pieces/piece-fictive.md",
+    "quotes": [{ "page": 1, "quote": "La somme convenue est de douze euros." }],
+    "links": [{ "target": "F_montant", "relation": "supports" }]
   },
   {
-    "kind": "program",
+    "kind": "reasoning",
     "version": 1,
-    "nodes": [
-      {"id": "F_montant", "kind": "fact", "label": "Montant facturé en centimes", "value": 1200000, "citations": [1]},
-      {"id": "F_versement", "kind": "fact", "label": "Versement à déterminer en centimes", "state": "unknown"},
-      {"id": "C_solde", "kind": "calculation", "label": "Solde documentaire en centimes", "expression": {"op": "subtract", "args": [{"ref": "F_montant"}, {"ref": "F_versement"}]}}
-    ],
-    "scenarios": [
-      {"id": "S_versement", "label": "Hypothèse : versement de 4 000 euros", "assumptions": {"F_versement": 400000}}
-    ],
-    "tests": [
-      {"id": "T_solde", "label": "Solde sous cette hypothèse", "target": "C_solde", "scenario": "S_versement", "expected": {"status": "known", "value": 800000}}
-    ]
+    "facts": [{
+      "id": "F_montant", "label": "Somme convenue en centimes", "value": 1200,
+      "state": "asserted",
+      "relation": {
+        "subject": "entite_exemple_a", "predicate": "montant_convenu",
+        "object": "entite_exemple_b", "context": "obligation_exemple", "unit": "centime",
+        "eventDate": "2024-06-15", "documentDate": "2024-06-16"
+      }
+    }]
   }
 ]
 ```
 
-Les identifiants commencent par une lettre, suivie de lettres ASCII, chiffres, `_` ou `-`, jusqu'à 80 caractères. Ils restent stables entre tours et ne contiennent pas de noms réels. Les nœuds, scénarios et tests se fusionnent par identifiant. Un nœud réémis remplace sa définition complète. `remove:["id"]` retire explicitement un nœud, scénario ou test ; il faut retirer ou adapter les tests et hypothèses qui visent un nœud supprimé.
+Les valeurs et identités de cet exemple sont fictives. Les identifiants des personnes reprennent ceux de `piecemaker_nodes` lorsqu’ils existent. `context` distingue l’obligation ou l’événement : deux paiements différents ne doivent pas être fusionnés. L’annotation est liée à toutes les citations du même numéro dans le tour ; privilégier une citation et une proposition atomiques. Les liens `reports` maintiennent un fait à l’état rapporté, sauf s’il existe aussi une annotation `supports` dans le tour.
 
-Pour un nœud, `citations:[1,2]` désigne les références du **tour courant**, jamais des références d'un ancien message. Le serveur transforme ces numéros en identifiants de sources persistants. Réémettre un nœud sans `citations` conserve ses anciennes sources. Les champs de vérification et les identifiants de sources ne sont pas acceptés de l'IA : ils proviennent du harnais.
+`citations:[1]` sur une proposition reste accepté. Sans `citations` ni nouvelle annotation, une proposition existante conserve ses sources. Chaque proposition réémise remplace toute sa définition. Les collections sont fusionnées par identifiant, les éléments non mentionnés restent présents. `remove:["id"]` retire explicitement une proposition, un scénario, un test ou un lien. L’historique conserve les versions. Deux assertions incompatibles doivent recevoir des identifiants distincts ; remplacer une assertion conserve son historique mais ne crée pas automatiquement une opposition active avec son ancienne version.
 
-| Objet | Sémantique |
-| --- | --- |
-| `fact` avec `state:asserted` (défaut) | Assertion extraite et proposée, pas fait judiciairement établi. Une valeur renseignée exige une source vérifiée. |
-| `fact` avec `state:disputed` ou `unknown` | Valeur indéterminée dans le dossier de base, même si une valeur candidate est enregistrée. |
-| `rule`, `calculation`, `conclusion` | Expression calculable, éventuellement rattachée à des citations et accompagnée d'un `rationale`. Les choix d'interprétation restent ceux du modèle proposé. |
-| `scenario` | Surcharge explicite de faits existants uniquement. Toutes les déductions qui utilisent ces surcharges portent leurs hypothèses. Aucun changement au dossier de base. |
-| `test` | Comparaison d'un résultat à une attente explicite dans un scénario donné, ou `base` par défaut. Les attentes de l'IA ne sont pas un oracle juridique indépendant. |
+## Règles de droit et application datée
 
-Une expression est un scalaire JSON, `{"ref":"id"}`, ou `{"op":"…","args":[…]}`. `null` signifie inconnu. Les opérateurs acceptés sont `and`, `or`, `not`, `equal`, `greater`, `atLeast`, `less`, `atMost`, `add`, `subtract`, `multiply`, `divide`, `if`. Les opérations booléennes exigent des booléens ; les opérations arithmétiques et comparaisons ordonnées exigent des nombres. `equal` compare strictement les valeurs. `if` n'évalue que la branche sélectionnée lorsque la condition est connue. Une référence absente demeure inconnue ; les cycles et divisions par zéro produisent des erreurs explicites.
+Une entrée de `law` est une règle avec `id`, `label`, `parameters`, `expression`, `validity`, `rationale` et ses citations. L’expression utilise les paramètres par leurs noms. Une entrée de `theories` fournit `kind` (`rule`, `calculation` ou `conclusion`), `id`, `label`, `expression`, `rationale`.
 
-Les résultats ont quatre états :
+```json
+{
+  "apply": "R_regle",
+  "bindings": { "condition": { "ref": "F_condition" } },
+  "at": { "ref": "F_date_pertinente" }
+}
+```
 
-- `known` : résultat calculé sous les assertions du modèle et les hypothèses indiquées ; ce statut n'établit pas la vérité de ses prémisses ;
-- `unknown` : prémisse indéterminée ou absente, conservée dans `missing` ;
-- `blocked` : source absente, non vérifiée, recalée ou remplacée, ou fait renseigné sans source ;
-- `error` : cycle, opération invalide, mauvais type ou résultat numérique non représentable.
+Le serveur exige tous les paramètres et une date ISO connue. Une référence directe à la règle ne l’applique pas. Une règle seule est affichée comme une définition à appliquer. Les applications imbriquées sont acceptées ; les cycles sont des erreurs.
 
-Une source recalée mécaniquement n'est pas suffisante pour réutiliser son interprétation. Le nœud reste à réexaminer, même si un autre tour cite exactement le passage. Il faut réémettre sa définition avec une référence exacte du nouveau tour.
+Les périodes sont représentées par `{"from":"2024-01-01","to":"2025-01-01"}` : début inclus, fin exclusive. `to:null` représente une version sans fin connue. Les dates du résultat intégral `consulter_article` sont capturées par le serveur ; l’agent ne peut pas inventer le statut de vérification ni les bornes de la source. Une règle peut restreindre cette période, jamais l’élargir. Une source d’article sans période reconnue ou une date hors période bloque l’application. Les bornes proviennent du champ `Validité` du connecteur ; une autre présentation n’est pas devinée. Les dispositions transitoires et le choix de la date pertinente doivent être formalisés par le modèle : le contrôle d’intervalle ne décide pas à lui seul du droit applicable. Les périodes proposées pour d’autres sources que les articles ne sont pas certifiées par des métadonnées du connecteur.
 
-Lorsqu'un nouveau tour cite le même document avec un contenu différent, ses anciens extraits sont marqués comme remplacés. Les nœuds qui en dépendent sont recalculés et le changement de résultat est conservé. La version du contenu est son empreinte ; un changement sur disque sans nouvelle lecture citée n'est pas détecté par ce mécanisme. Il ne s'agit pas d'une surveillance continue de tous les originaux.
+Expressions : scalaires JSON, `{"ref":"id"}`, application datée, ou `{"op":"...","args":[...]}`. Opérateurs : `and`, `or`, `not`, `equal`, `greater`, `atLeast`, `less`, `atMost`, `add`, `subtract`, `multiply`, `divide`, `if`. Pas de code arbitraire. Un fait inconnu, rapporté ou contesté reste indéterminé. Une source absente, périmée, non vérifiée ou recalée bloque la proposition. Les hypothèses d’un scénario peuvent fixer les faits, en restant signalées.
 
-## SQL et retour au modèle
+## Liens, conflits et chronologie
 
-Les tables utilisent `project_id` et la fonction `dossier()` existante :
+`links` contient des objets avec `id`, `from`, `to`, `relation`, `rationale`. Relations : `supports`, `contradicts`, `reports`, `depends_on`, `qualifies`, `precedes`. Les liens de citation utilisent `target` à la place des extrémités et leur identifiant est attribué par le serveur.
+
+Le serveur relève :
+
+- des valeurs différentes pour le même sujet, prédicat, objet, contexte, unité et date d’événement ;
+- les contradictions explicitement annotées ;
+- une chronologie inversée par rapport à un lien `precedes`, à partir des dates des événements.
+
+Ce sont des conflits potentiels. Les propositions concernées sont bloquées dans la base ; des scénarios permettent d’examiner les variantes. Aucun rapprochement sémantique automatique de noms ou d’assertions n’est effectué. Le serveur ne peut pas découvrir une contradiction jamais annotée si ses objets, périmètres ou dates sont absents ou différents. `documentDate` reste distinct de `eventDate` ; la seule différence entre les deux n’est pas une anomalie.
+
+## Réutilisation SQL et autres données
+
+L’agent consulte les données existantes avec SQL, les pièces et les résultats de tabular review, puis rattache les assertions aux sources. Un résultat d’IA ne remplace pas une pièce. Les relations du raisonnement sont projetées dans une table dédiée ; elles ne remplacent pas les liens documentaires existants.
+
+Un fait peut porter une liaison scalaire surveillée :
+
+```json
+{
+  "input": {
+    "table": "piecemaker_nodes",
+    "where": { "id": "entite_exemple_a" },
+    "column": "data_json",
+    "path": "$.montant"
+  }
+}
+```
+
+Tables permises : `piecemaker_nodes`, `piecemaker_links`, `piecemaker_citations`. `where` identifie exactement une ligne ; le serveur impose le dossier courant. `path` est facultatif. La valeur doit correspondre à celle de la proposition sourcée. Le serveur vérifie la liaison à l’ingestion puis à la lecture du raisonnement (interface ou prochain tour). Un changement ou une ambiguïté bloque la proposition et ses dépendances, crée une révision et actualise les résultats SQL. Il ne réécrit pas silencieusement le fait sourcé. Les autres données, notamment les tabular reviews conservées en fichiers, sont intégrées comme assertions sourcées par l’agent ; elles ne sont pas réinterrogées automatiquement par le moteur. Aucune requête SQL libre ne s’exécute depuis CITATIONS.
 
 ```sql
 SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=dossier();
-SELECT scenario,node_id,status,value_json,missing_json,assumptions_json
-FROM pm_reasoning_results WHERE project_id=dossier();
-SELECT revision,snapshot_json FROM pm_reasoning_turns
-WHERE project_id=dossier() ORDER BY revision DESC;
+SELECT * FROM pm_reasoning_nodes WHERE project_id=dossier();
+SELECT * FROM pm_reasoning_relations WHERE project_id=dossier();
+SELECT * FROM pm_reasoning_links WHERE project_id=dossier();
+SELECT * FROM pm_reasoning_theories WHERE project_id=dossier();
+SELECT * FROM pm_reasoning_results WHERE project_id=dossier();
+SELECT revision,snapshot_json FROM pm_reasoning_turns WHERE project_id=dossier();
 ```
 
-`pm_reasoning_programs` conserve le snapshot courant ; `pm_reasoning_results` les résultats de chaque nœud dans chaque scénario ; `pm_reasoning_turns` les versions appliquées, avec une identité idempotente propre à chaque tour réel. Les écritures SQL directes qui nomment ces tables sont refusées par l'outil SQL. Les modifications passent par `CITATIONS`. Le masquage SQL existant s'applique aux résultats.
+`pm_reasoning_nodes` expose les couches, définitions et bornes temporelles. `pm_reasoning_relations` expose les extrémités, prédicat, contexte, unité, dates, valeur, état et sources. `pm_reasoning_links` expose les liens argumentatifs. `pm_reasoning_theories` expose les points d’entrée, faits requis, règles appliquées, tests et état de chaque programme de théorie. Les conflits sont dans `snapshot_json.conflicts`. Les écritures SQL directes qui nomment les tables gérées sont refusées par l’outil SQL ; toutes les modifications passent par CITATIONS. Le masquage SQL existant s’applique.
 
-Les instructions du tour suivant incluent le snapshot tant qu'il tient dans 48 000 caractères. Au-delà, elles incluent la révision, les changements et les requêtes pour récupérer l'état complet par SQL. L'écho utilisateur ne contient pas ces instructions. Les commandes slash conservent le comportement existant : elles ne reçoivent pas cette injection de chat supplémentaire.
+## Lecture du résultat
 
-Un bloc invalide conserve le programme précédent et publie le diagnostic au chat, dans le graphe et au tour suivant. Les écritures du programme et des résultats sont transactionnelles. Le graphe relit le snapshot toutes les 2,5 secondes. L'exemple fictif n'écrit aucune table du dossier.
+Le volet démarre sur **Théories** : chaque conclusion est le point d’entrée d’un programme, avec ses faits d’entrée, les règles datées appliquées, son résultat et ses tests. Les statuts distinguent programme incomplet, non testé, tests en échec et tests du modèle réussis. Les attentes des tests doivent porter une justification (`rationale`) ; leur absence maintient la théorie incomplète. Une conclusion attendue indéterminée peut avoir des tests réussis sans devenir un fait établi. La répartition des couches, les inconnues, blocages et conflits restent visibles sous les programmes. Le graphe propose des filtres par couche et par conclusion. Les relations contradictoires sont pointillées et colorées. Les sources sans lien sont masquées lorsqu’un raisonnement existe ; une collecte seule reste explicitement identifiée. Le détail montre les dates, le contexte relationnel, les hypothèses et les raisons du blocage. Une source réparée conserve aussi l’extrait initial proposé. Les simulations sont signalées dans le détail et dans le chat.
 
-## Périmètre et limites
+**Scénarios** compare les variantes ; **Tests** expose les attentes et résultats ; **Programme** expose la représentation compilée. Les tests proposés par l’IA évaluent son modèle et ne certifient pas le droit ni les faits. L’exemple fictif n’est pas enregistré dans le dossier. Il comporte une règle datée, un paiement contesté, un programme de théorie et sept tests, dont les variantes contradictoires et une application à la borne d’expiration.
 
-Le moteur est un interpréteur déclaratif natif TypeScript. Catala et Blawx ne sont pas intégrés dans cette première version. Il n'exécute aucun code arbitraire et n'introduit aucune règle de droit préchargée. Il ne produit pas automatiquement un acte Word ni un jugement sur la valeur probante : le modèle peut représenter ces questions et leurs dépendances, mais le moteur ne valide pas leur interprétation.
+## Limites et fichiers
 
-Les calculs utilisent les nombres JavaScript. Les montants doivent être représentés en centimes entiers ; aucun arrondi monétaire n'est implicite. Les divisions peuvent produire des nombres décimaux. Ce moteur n'est pas un calculateur financier certifié ni un calculateur de délais procéduraux. Le premier contrat couvre des propositions scalaires et des dépendances explicites ; il n'exécute ni règles avec variables quantifiées, ni recherche exhaustive de qualifications juridiques.
+200 propositions, 1000 sources, 1000 liens, 16 scénarios, 200 tests ; profondeur d’expression 20. Le graphe utilise un placement par forces jusqu’à 300 nœuds. La compilation attend la fin d’un tour complet ; une réponse interrompue n’est pas ingérée, l’historique ne rejoue pas les écritures. L’identité du tour est distincte du contenu pour permettre une révision identique à une ancienne version.
 
-Limites déclarées : 200 nœuds, 1 000 extraits, 16 scénarios, 200 tests, profondeur d'expression 20. Les scénarios concurrents sont ceux définis dans le programme ; le moteur n'invente pas toutes les variantes possibles. Les liens du graphe représentent les sources et dépendances du modèle proposé, sans prétendre démontrer sa complétude ou la vérité juridique.
-
-## Fichiers et vérifications
-
-- `shared/piecemaker-reasoning.ts` : contrat partagé ;
-- `server/modules/piecemaker-reasoning/` : validation, interpréteur, persistance et routes ;
-- `server/piecemaker/harness/{citation-turn,chat-harness,citation-instructions}.ts` : ingestion après vérification et retour au tour suivant ;
-- `server/piecemaker/knowledge/sql-tool.ts` et outil MCP SQL : lecture des résultats et description du schéma ;
-- `plugins/piecemaker-raisonnement/` : graphe et explorateur dans le volet droit.
-
-Les tests ciblent notamment inconnues, scénarios, erreurs de calcul, sources remplacées ou recalées, idempotence, conservation du programme après rejet, compilation en fin de tour, absence d'ingestion d'un tour interrompu ou de l'historique et récupération par le véritable outil SQL. Le plugin suit la chaîne commune décrite dans [plugins.md](plugins.md).
+- `shared/piecemaker-reasoning.ts` : contrat partagé.
+- `server/modules/piecemaker-reasoning/` : compilation, validations, interpréteur, conflits, entrées SQL et persistance.
+- `server/piecemaker/harness/citation-{instructions,turn,store}.ts` : instructions, capture des sources et branchement en fin de tour.
+- `plugins/piecemaker-raisonnement/` : volet droit.
