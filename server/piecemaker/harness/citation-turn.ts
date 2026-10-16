@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -7,6 +8,7 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { resolvePieceRef } from '../file-links.js';
 
+import type { ReasoningSource } from '../../../shared/piecemaker-reasoning.js';
 import type { createCitationStore } from './citation-store.js';
 import { formatPieceTitle } from './piece-title.js';
 import { applyNearestPassages, locateSourcePassages } from './source-passages.js';
@@ -127,7 +129,9 @@ export function createCitationTurn(options: {
   codeRoot?: string;
   recordVerification?: boolean;
   pieceTitle?: (cwd: string, docId: string) => string;
+  onVerifiedTurn?: (input: { cwd: string; sessionId: string; turnId: string; block: string; sources: ReasoningSource[] }) => string | Promise<string>;
 }) {
+  const programTurnId = randomUUID();
   const calls = new Map<string, string>();
   const decisions = new Map<string, string>();
   const decisionTitles = new Map<string, string>();
@@ -273,11 +277,13 @@ export function createCitationTurn(options: {
         const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];
         const lines: string[] = [];
+        const reasoningSources: ReasoningSource[] = [];
         for (const citation of citations) {
           const lawId = citation.decision_id ?? citation.article_id;
           const source = citation.kind === 'case' || citation.kind === 'article'
             ? decisions.get(lawId ?? '') ?? ''
             : citation.kind === 'code' ? await codeText(citation.doc_id ?? '') : await documentText(citation.doc_id ?? '');
+          const exactBeforeRepair = (citation.quotes ?? []).map((quote) => quote.verification?.verified === true);
           citation.quotes = applyNearestPassages(source, citation.quotes ?? []);
           citation.verified = citation.quotes.every((quote) => quote.verification?.verified === true);
           const ranges = locateSourcePassages(source, citation.quotes);
@@ -303,12 +309,26 @@ export function createCitationTurn(options: {
             });
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
             lines.push(sourceLine(citation, title, source, ranges));
+            if (citation.kind !== 'code') {
+              const hash = createHash('sha256').update(source).digest('hex');
+              const document = `${citation.kind}:${lawId ?? docId}`;
+              citation.quotes.forEach((quote, quoteIndex) => reasoningSources.push({
+                id: `src_${createHash('sha256').update(`${document}\0${hash}\0${quote.quote}`).digest('hex')}`,
+                ref: citation.ref, quoteIndex, token, document, title, excerpt: quote.quote, hash,
+                verified: quote.verification?.verified === true,
+                repaired: !exactBeforeRepair[quoteIndex] && quote.verification?.verified === true,
+              }));
+            }
           } catch {
             lines.push(`- [${citation.ref}] ${linkLabel(title)} — [source indisponible](${MISS})`);
           }
         }
         if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
-        const sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
+        let sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
+        if (!replay && options.onVerifiedTurn && (reasoningSources.length || /"kind"\s*:\s*"program"/.test(block))) {
+          try { sources += await options.onVerifiedTurn({ cwd: options.cwd, sessionId: options.sessionId, turnId: programTurnId, block, sources: reasoningSources }); }
+          catch (error) { sources += `\n\nProgramme non mis à jour : ${error instanceof Error ? error.message : 'enregistrement impossible'}.`; }
+        }
         if (!replay && block) await options.store.saveTurnSources(options.sessionId, block, sources).catch(() => {});
         return sources;
       })();

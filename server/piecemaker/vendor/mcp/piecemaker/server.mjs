@@ -154,6 +154,7 @@ const SQL_DESCRIPTION = [
   "piecemaker_links(project_id, from_node_id, to_node_id, relation) : 'mentions' = la pièce cite l'entité.",
   'piecemaker_citations(project_id, from_node_id, to_node_id, relation, texte, piece_id, source) : extraits qui justifient un lien, autant que voulu ; source = pièce (piece_id) ou référence libre.',
   'Dates automatiques. Renommer une pièce = UPDATE de son label (AAAA-MM-JJ_titre).',
+  'Programme exécutable alimenté par CITATIONS en fin de tour : tables à LIRE uniquement. pm_reasoning_programs(project_id, revision, snapshot_json) = définitions, sources, scénarios, tests et changements. pm_reasoning_results(project_id, scenario, node_id, status, value_json, dependencies_json, missing_json, assumptions_json, issues_json, revision) = résultats calculés ; scenario=base sans hypothèses ; status known/unknown/blocked/error. SELECT * FROM pm_reasoning_results WHERE project_id=dossier();. Les valeurs sont déduites du modèle, pas des faits judiciairement établis. Modifier par un objet kind:program dans CITATIONS, jamais par UPDATE des tables gérées.',
 ].join('\n');
 
 /**

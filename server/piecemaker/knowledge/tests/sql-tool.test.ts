@@ -7,7 +7,19 @@ import test from 'node:test';
 import Database from 'better-sqlite3';
 
 import { KnowledgeStore } from '../../../../plugins/piecemaker-dossier/src/knowledge.js';
+import { createReasoningService } from '@/modules/piecemaker-reasoning/index.js';
 import { createSqlTool } from '../sql-tool.js';
+
+test('le programme issu de CITATIONS est lisible par dossier() et ses tables sont protégées des écritures SQL', async () => {
+  await withFixture(async (context) => {
+    const service = createReasoningService(() => context.appDb);
+    service.ingest({ cwd: context.roots.one, sessionId: 's', sources: [], block: `<CITATIONS>${JSON.stringify([{ kind: 'program', version: 1, nodes: [{ id: 'F_inconnu', kind: 'fact', label: 'Question à résoudre', state: 'unknown' }] }])}</CITATIONS>` });
+    assert.match(await context.run('SELECT node_id,status,revision FROM pm_reasoning_results WHERE project_id=dossier()'), /F_inconnu\tunknown\t1/);
+    assert.match(await context.run('SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=dossier()'), /Question à résoudre/);
+    await assert.rejects(context.run("UPDATE pm_reasoning_results SET status='known'"), /lecture SQL uniquement/);
+    await assert.rejects(context.run('DELETE FROM pm_reasoning_programs'), /lecture SQL uniquement/);
+  });
+});
 
 const PROJECT_ONE = 'a1b2c3d4-aaaa-4000-8000-000000000001';
 const PROJECT_TWO = '3f2a9c11-bbbb-4000-8000-000000000002';
