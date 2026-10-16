@@ -290,6 +290,7 @@ test('installe GLiNER2 dans le venv quand le snapshot est déjà là', async () 
   };
   await installRuntimeComponents({
     sourceDir: '/src',
+    includeGliner: true,
     env,
     homeDir: '/Users/ada',
     platform: 'darwin',
