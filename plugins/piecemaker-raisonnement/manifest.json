@@ -1,8 +1,8 @@
 {
   "name": "piecemaker-raisonnement",
   "displayName": "Raisonnement",
-  "version": "0.1.0",
-  "description": "Programme exécutable du dossier : sources, règles, scénarios et résultats.",
+  "version": "0.2.0",
+  "description": "Droit daté, faits et relations SQL, théories exécutables et conflits potentiels.",
   "icon": "icon.svg",
   "type": "module",
   "slot": "tab",

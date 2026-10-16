@@ -1,4 +1,6 @@
 export const STYLES = `
+.pmr-theory{border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px}.pmr-theory button{font-size:11px;padding:3px 6px;margin:2px}
+.pmr-filters{display:flex;gap:6px;padding:6px 12px;flex-wrap:wrap}.pmr-filters select{flex:1;min-width:0;font-size:11px}.pmr-edge.is-conflict{stroke:#fb923c;opacity:.9;stroke-dasharray:5 4}
 .pmr{--ink:#e5e7eb;--muted:#9293a5;--bg:#16171e;--surface:#20212b;--border:#343540;--accent:#a78bfa;height:100%;display:flex;flex-direction:column;min-height:0;color:var(--ink);background:var(--bg);font:13px system-ui,sans-serif}
 .pmr[data-theme=light]{--ink:#242534;--muted:#696b7b;--bg:#f7f7fb;--surface:#fff;--border:#dadce5;--accent:#7251bd}
 .pmr *{box-sizing:border-box}.pmr button,.pmr select,.pmr input{font:inherit;color:inherit;border:1px solid var(--border);border-radius:7px;background:var(--surface);padding:5px 9px}.pmr button{cursor:pointer}.pmr button:hover{border-color:var(--accent)}.pmr button:focus-visible,.pmr select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.pmr button:disabled{opacity:.5;cursor:default}.pmr [hidden]{display:none!important}

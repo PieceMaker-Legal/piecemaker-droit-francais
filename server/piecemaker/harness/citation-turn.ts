@@ -3,12 +3,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { readLegalPeriod } from '@/modules/piecemaker-reasoning/index.js';
 import type { NormalizedMessage } from '@/shared/types.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { resolvePieceRef } from '../file-links.js';
-
 import type { ReasoningSource } from '../../../shared/piecemaker-reasoning.js';
+
 import type { createCitationStore } from './citation-store.js';
 import { formatPieceTitle } from './piece-title.js';
 import { applyNearestPassages, locateSourcePassages } from './source-passages.js';
@@ -284,10 +285,14 @@ export function createCitationTurn(options: {
             ? decisions.get(lawId ?? '') ?? ''
             : citation.kind === 'code' ? await codeText(citation.doc_id ?? '') : await documentText(citation.doc_id ?? '');
           const exactBeforeRepair = (citation.quotes ?? []).map((quote) => quote.verification?.verified === true);
+          const proposedQuotes = citation.quotes.map((quote) => quote.quote);
           citation.quotes = applyNearestPassages(source, citation.quotes ?? []);
+          citation.quotes.forEach((quote, index) => { if (!exactBeforeRepair[index] && quote.verification?.verified) quote.proposedQuote = proposedQuotes[index]; });
           citation.verified = citation.quotes.every((quote) => quote.verification?.verified === true);
           const ranges = locateSourcePassages(source, citation.quotes);
           const docId = citation.doc_id ?? '';
+          const validity = citation.kind === 'article' ? readLegalPeriod(source) : undefined;
+          const simulation = citation.kind === 'document' && /(?:pièce générée à titre imaginaire|document imaginaire|source fictive de démonstration)/i.test(source);
           let openId = docId;
           if (citation.kind === 'document') {
             const original = await resolvePieceRef(options.cwd, docId);
@@ -308,7 +313,11 @@ export function createCitationTurn(options: {
               ranges,
             });
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
-            lines.push(sourceLine(citation, title, source, ranges));
+            const repaired = citation.quotes.some((quote, index) => !exactBeforeRepair[index] && quote.verification?.verified);
+            lines.push(sourceLine(citation, title, source, ranges)
+              + (repaired ? ' — **extrait recalé automatiquement : soutien de l’affirmation à réexaminer**' : '')
+              + (simulation ? ' — **document de simulation**' : '')
+              + (citation.kind === 'article' ? validity ? ` — version du ${validity.from} au ${validity.to ?? 'terme non fixé'} (fin exclusive)` : ' — **période de validité inconnue**' : ''));
             if (citation.kind !== 'code') {
               const hash = createHash('sha256').update(source).digest('hex');
               const document = `${citation.kind}:${lawId ?? docId}`;
@@ -317,6 +326,9 @@ export function createCitationTurn(options: {
                 ref: citation.ref, quoteIndex, token, document, title, excerpt: quote.quote, hash,
                 verified: quote.verification?.verified === true,
                 repaired: !exactBeforeRepair[quoteIndex] && quote.verification?.verified === true,
+                ...(validity ? { validity } : {}),
+                nature: simulation ? 'simulation' : citation.kind as 'document' | 'article' | 'case',
+                ...(!exactBeforeRepair[quoteIndex] && quote.verification?.verified ? { proposedExcerpt: proposedQuotes[quoteIndex] } : {}),
               }));
             }
           } catch {
@@ -325,7 +337,7 @@ export function createCitationTurn(options: {
         }
         if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
         let sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
-        if (!replay && options.onVerifiedTurn && (reasoningSources.length || /"kind"\s*:\s*"program"/.test(block))) {
+        if (!replay && options.onVerifiedTurn && (reasoningSources.length || /"kind"\s*:\s*"(?:program|reasoning)"/.test(block))) {
           try { sources += await options.onVerifiedTurn({ cwd: options.cwd, sessionId: options.sessionId, turnId: programTurnId, block, sources: reasoningSources }); }
           catch (error) { sources += `\n\nProgramme non mis à jour : ${error instanceof Error ? error.message : 'enregistrement impossible'}.`; }
         }
