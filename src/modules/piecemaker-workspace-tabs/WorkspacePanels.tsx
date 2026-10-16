@@ -63,8 +63,9 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const expandedTab = expanded === 'viewer' ? viewerOpen ? expanded : null : expanded && enabledPanels.includes(expanded) ? expanded : null;
     const registerViewer = useCallback((open: boolean) => {
       setViewerOpen(open);
+      if (open && !filesHost) setExpanded(null);
       if (!open) setExpanded((current) => current === 'viewer' ? null : current);
-    }, []);
+    }, [filesHost]);
     useEffect(() => {
       if (viewerOpen && props.isMobile) setExpanded(filesHost ? 'files' : 'viewer');
     }, [viewerOpen, props.isMobile, filesHost]);
@@ -81,14 +82,21 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
         setMainTab(tab);
         setExpanded(null);
       } else {
+        if (expandedTab && !columns.some((column) => column.tabs.includes(tab))) setExpanded(null);
         setColumns((current) => {
           if (current.some((column) => column.tabs.includes(tab))) return current;
+          if (expandedTab) {
+            const expandedColumnIndex = current.findIndex((column) => column.tabs.includes(expandedTab));
+            const newColumn = { id: tab, tabs: [tab], width: current.length ? current.reduce((sum, column) => sum + column.width, 0) / current.length : 1, split: 50 };
+            if (expandedColumnIndex < 0) return [...current, newColumn];
+            return [...current.slice(0, expandedColumnIndex + 1), newColumn, ...current.slice(expandedColumnIndex + 1)];
+          }
           const available = current.find((column) => column.tabs.length < 2);
           return available ? current.map((column) => column === available ? { ...column, tabs: [...column.tabs, tab] } : column)
             : [...current, { id: tab, tabs: [tab], width: current.length ? current.reduce((sum, column) => sum + column.width, 0) / current.length : columnRefs.current.get('viewer')?.getBoundingClientRect().width || 1, split: 50 }];
         });
       }
-    }, []);
+    }, [columns, expandedTab]);
 
     const close = useCallback((tab: AppTab) => {
       setColumns((current) => current.map((column) => ({ ...column, tabs: column.tabs.filter((item) => item !== tab) })).filter((column) => column.tabs.length > 0));
