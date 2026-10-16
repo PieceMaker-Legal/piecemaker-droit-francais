@@ -39,7 +39,7 @@ except ImportError as exc:
     GLINER2_AVAILABLE = False
     GLINER2_IMPORT_ERROR = exc
 
-from model_config import PREFERRED_GLINER_MODEL
+from model_config import PREFERRED_GLINER_MODEL, gliner_snapshot_directory, is_model_cached
 from progress_extraction import extract_entities_with_progress
 
 # ---------------------------------------------------------------------------
@@ -86,6 +86,13 @@ DEBUG_ENTITIES = os.environ.get("PIECEMAKER_DEBUG_ENTITIES", "").lower() in ("1"
 # Constants — unique scanner entry point.
 # ---------------------------------------------------------------------------
 GLINER_MODEL = PREFERRED_GLINER_MODEL
+
+
+def _pretrained_snapshot():
+    snapshot = gliner_snapshot_directory()
+    if not is_model_cached(PREFERRED_GLINER_MODEL):
+        raise FileNotFoundError(f"Snapshot GLiNER2 absent : {snapshot}")
+    return snapshot
 
 ENTITY_MAPPING = {
     "person":       "PERSON",
@@ -341,7 +348,7 @@ class GLiNER2Recognizer:
             return
         with contextlib.redirect_stdout(sys.stderr):
             self.model = GLiNER2.from_pretrained(
-                self.model_name,
+                _pretrained_snapshot(),
                 local_files_only=True,
                 map_location=_gliner_map_location(),
             )
@@ -413,7 +420,7 @@ def _ensure_gliner_loaded():
         device = _gliner_map_location()
         with contextlib.redirect_stdout(sys.stderr):
             _gliner_model = GLiNER2.from_pretrained(
-                GLINER_MODEL,
+                _pretrained_snapshot(),
                 local_files_only=True,
                 map_location=device,
             )

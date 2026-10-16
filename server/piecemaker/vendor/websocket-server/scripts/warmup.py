@@ -23,8 +23,10 @@ if str(PRESIDIO_GLINER_DIR) not in sys.path:
 from model_config import (  # noqa: E402
     LEGACY_GLINER_MODELS,
     PREFERRED_GLINER_MODEL,
+    PREFERRED_GLINER_REVISION,
     gliner2_runtime,
     is_model_cached,
+    write_refs_main,
 )
 from mineru_improved_1 import mineru_available  # noqa: E402
 
@@ -114,9 +116,11 @@ def download_gliner2_model(model_id: str, description: str, force: bool = False)
         # Download with resume support
         snapshot_download(
             model_id,
+            revision=PREFERRED_GLINER_REVISION,
             local_files_only=False,
             force_download=force,
         )
+        write_refs_main(model_id)
 
         log_json(f"Download complete: {model_id}", model=model_id, phase="complete")
         log_plain(f"✅ Downloaded: {model_id}")

@@ -332,6 +332,20 @@ const readConnectedOpenCodeProviderIds = async (): Promise<Set<string> | null> =
   const providerIds = new Set<string>();
   const configDir = path.join(os.homedir(), '.config', 'opencode');
 
+  try {
+    const db = new Database(getOpenCodeDatabasePath(), { readonly: true, fileMustExist: true });
+    try {
+      const rows = db.prepare(
+        'SELECT integration_id FROM credential WHERE active = 1',
+      ).all() as { integration_id: string }[];
+      for (const row of rows) {
+        providerIds.add(row.integration_id);
+      }
+    } finally {
+      db.close();
+    }
+  } catch {}
+
   const auth = await readOpenCodeJsonFile(
     path.join(os.homedir(), '.local', 'share', 'opencode', 'auth.json'),
   );

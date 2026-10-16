@@ -3,13 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { autoPanelTarget, draftFromResult, panelShowDecision } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 
 describe('autoPanelTarget', () => {
-  it('ouvre le .docx traité par docx-cli', () => {
+  it('ouvre le .docx seulement quand docx-cli l’écrit', () => {
     expect(autoPanelTarget('Bash', { command: 'docx replace "Actes/Assignation Dupont.docx" --find a --replace b' })).toEqual({ kind: 'file', path: 'Actes/Assignation Dupont.docx' });
-    expect(autoPanelTarget('Bash', { command: 'cd Actes && docx read conclusions.docx' })).toEqual({ kind: 'file', path: 'conclusions.docx' });
-    expect(autoPanelTarget('Bash', { command: '~/.local/bin/docx track-changes list Mes\\ conclusions.docx' })).toEqual({ kind: 'file', path: 'Mes conclusions.docx' });
+    expect(autoPanelTarget('Bash', { command: '~/.local/bin/docx create Mes\\ conclusions.docx' })).toEqual({ kind: 'file', path: 'Mes conclusions.docx' });
+    expect(autoPanelTarget('exec', { cmd: "docx create hello.docx --text-file - <<'EOF'\nhello\nEOF\ndocx read hello.docx" })).toEqual({ kind: 'file', path: 'hello.docx' });
+    expect(autoPanelTarget('run_terminal_command', { command: 'docx create bonjour.docx --text bonjour' })).toEqual({ kind: 'file', path: 'bonjour.docx' });
+    expect(autoPanelTarget('Bash', { command: 'docx comments add notes.docx --anchor hello --text x' })).toEqual({ kind: 'file', path: 'notes.docx' });
   });
 
-  it('ignore les commandes Bash sans docx-cli ou sans fichier', () => {
+  it('n’ouvre pas un .docx seulement lu, ni une commande sans écriture', () => {
+    expect(autoPanelTarget('Bash', { command: 'cd Actes && docx read conclusions.docx' })).toBeNull();
+    expect(autoPanelTarget('Bash', { command: '~/.local/bin/docx track-changes list Mes\\ conclusions.docx' })).toBeNull();
+    expect(autoPanelTarget('Bash', { command: 'docx comments list notes.docx' })).toBeNull();
     expect(autoPanelTarget('Bash', { command: 'ls *.docx' })).toBeNull();
     expect(autoPanelTarget('Bash', { command: 'pandoc acte.docx -o acte.md' })).toBeNull();
     expect(autoPanelTarget('Bash', { command: 'docx --version' })).toBeNull();

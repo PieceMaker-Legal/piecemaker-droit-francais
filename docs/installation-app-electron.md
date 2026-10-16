@@ -119,10 +119,13 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
    l'installation s'arrête sur un message clair et l'application en place
    reste intacte.
 10. **Certificat** — déclaration de confiance et signature, voir ci-dessous.
-11. **Composants Python** — MarkItDown et pypdf (`requirements.txt` sans
-   GLiNER2 ni huggingface-hub), dans un venv. Sans eux l'application s'ouvre,
-   mais la conversion des pièces ne démarre pas. GLiNER2 et MinerU ne sont pas
-   installés ici : ils s'installent depuis l'application, après l'installation. Le détail est
+11. **Composants Python** — MarkItDown, pypdf et GLiNER2 (`gliner2[local]`),
+   dans un venv. L'archive Hub du checkpoint GLiNER2-PII épinglé
+   (`59894c087cb2923b01f337d4ee72f6ff84d5bdd6`) est téléchargée en parallèle
+   dès le début, dans `~/.piecemaker/bootstrap/prebuilt/<tag>/`, puis extraite
+   dans le cache Hugging Face (`blobs/`, `refs/main` de 40 octets, `snapshots/`).
+   Sans MarkItDown l'application s'ouvre, mais la conversion des pièces ne
+   démarre pas. MinerU reste à la demande depuis l'application. Le détail est
    plus bas.
 12. **Lancement** de l'application, au clic sur « Ouvrir PieceMaker » dans la
     fenêtre d'installation (automatique sans fenêtre).
@@ -161,13 +164,15 @@ l'installeur, et attache à la release :
 |---|---|
 | `piecemaker-droit-francais-desktop-*-win-x64.exe` | installateur NSIS signé Authenticode éditeur |
 | `piecemaker-python-win32-x64.tar.gz` | Python 3.12 + MarkItDown, hors GLiNER |
+| `piecemaker-gliner-<revision>.tar.gz` | arbre Hub GLiNER2-PII épinglé (`blobs`, `refs/main`, `snapshots`) |
 | `piecemaker-runtime-components-win32-x64-*.tar.gz` | SDK OpenAI/Anthropic, cache persisté |
 | `piecemaker-hudsucker-win32-x64.exe` | proxy d'anonymisation (Rust) |
 | `better-sqlite3-electron-win32-x64.node` | module natif compilé pour l'Electron du `package-lock.json` |
 | `piecemaker-desktop-win32-x64.tar.gz` | archive héritée, conservée pour les anciennes releases |
 
-Chaque fichier a son `.sha256`. `install.ps1` lance NSIS et télécharge Python
-et les SDK pendant l'extraction, dans `~/.piecemaker/bootstrap/prebuilt/<tag>/`.
+Chaque fichier a son `.sha256`. `install.ps1` lance NSIS et télécharge Python,
+l'arbre Hub GLiNER et les SDK pendant l'extraction, dans
+`~/.piecemaker/bootstrap/prebuilt/<tag>/`.
 Un artefact absent n'entraîne plus de compilation locale : il faut
 `--build-from-source`. Visual Studio et Rust ne sont jamais nécessaires.
 
@@ -207,15 +212,21 @@ si tout passe, 1 sinon.
 
 - un Python 3.10 à 3.13 déjà présent sur le poste, sinon un CPython 3.12
   autonome (python-build-standalone) dans `<destination>/python` ;
-- le venv `<destination>/venv`, avec `requirements.txt` privé de GLiNER2 et
-  huggingface-hub (MarkItDown, pypdf).
+- le venv `<destination>/venv` : MarkItDown et pypdf, plus `gliner2[local]` et
+  huggingface-hub à l'installation initiale. L'archive Python Windows reste
+  privée de GLiNER ; `gliner2[local]` est alors installé par pip après
+  extraction. Les poids ne viennent pas de Fastino `main` : ils sont l'arbre
+  Hub du commit `59894c087cb2923b01f337d4ee72f6ff84d5bdd6` (`config.json`,
+  `model.safetensors`, `tokenizer.json`, `tokenizer_config.json`,
+  `encoder_config/config.json`), chargé depuis
+  `snapshots/<revision>/` avec `local_files_only`.
 
-Les modèles locaux — le modèle GLiNER2-PII et MinerU 4 (`mineru==4.0.11`,
-modèle MinerU2.5-Pro en GGUF et modules ONNX de mise en page et d'OCR) — s'installent à la demande depuis l'application :
-l'onglet Dossier propose leur installation quand ils manquent, et
-Paramètres › Modèles locaux affiche leur état et permet de les supprimer ou de
-les réinstaller (routes `POST /api/piecemaker/configuration/install` et
-`/configuration/uninstall`).
+MinerU 4 (`mineru==4.0.11`, modèle MinerU2.5-Pro en GGUF et modules ONNX de
+mise en page et d'OCR) s'installe à la demande depuis l'application :
+l'onglet Dossier propose son installation quand il manque, et
+Paramètres › Modèles locaux affiche l'état de GLiNER et de MinerU et permet
+de les supprimer ou de les réinstaller (routes
+`POST /api/piecemaker/configuration/install` et `/configuration/uninstall`).
 
 `<destination>` est `PIECEMAKER_COMPONENTS_HOME`, ou `PIECEMAKER_HOME` si cette
 variable est absente. Elle ne contient que l'interpréteur et le venv. Les

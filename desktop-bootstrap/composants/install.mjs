@@ -7,6 +7,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import { installGlinerSnapshot } from './gliner-cache.mjs';
 
 const PYTHON_RELEASE_API = 'https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest';
 const BUNDLED_PYTHON_MINOR = 12;
@@ -116,6 +117,33 @@ export function dependenciesReady(status) {
 
 export function installerRequirements(text) {
   return String(text || '').split(/\r?\n/).filter((line) => !DEFERRED_REQUIREMENT.test(line)).join('\n');
+}
+
+export function glinerPipPackages() {
+  return ['gliner2[local]>=2.1.0', 'huggingface-hub>=0.20.0'];
+}
+
+async function installGlinerRuntime({ host, python, scriptsDir, env, homeDir, sourceDir, output, platform }) {
+  const warmup = path.join(scriptsDir, 'warmup.py');
+  output.step('Installation de GLiNER2…');
+  const before = await readWarmupStatus(host, python, warmup, scriptsDir);
+  if (!before?.dependencies?.gliner2 || !before?.dependencies?.huggingface_hub) {
+    const pipArgs = ['-m', 'pip', 'install', '--upgrade'];
+    if (platform === 'win32') pipArgs.push('--only-binary=:all:');
+    pipArgs.push(...glinerPipPackages());
+    await required(host, python, pipArgs);
+  }
+  await installGlinerSnapshot({ sourceDir, env, homeDir, host, output });
+  if ((await readWarmupStatus(host, python, warmup, scriptsDir))?.ready) {
+    output.ok('GLiNER2 opérationnel.');
+    return;
+  }
+  output.step('Téléchargement du snapshot GLiNER épinglé…');
+  await required(host, python, [warmup, '--models', 'gliner2'], { cwd: scriptsDir });
+  if (!(await readWarmupStatus(host, python, warmup, scriptsDir))?.ready) {
+    throw new Error('GLiNER2 n’est pas opérationnel après installation.');
+  }
+  output.ok('GLiNER2 opérationnel.');
 }
 
 export function mergeRuntimeConfig(current, paths) {
@@ -370,6 +398,7 @@ export async function installRuntimeComponents({
   host = createHost(),
   output = log,
   requirePrebuilt = false,
+  includeGliner = true,
 } = {}) {
   if (!sourceDir) throw new Error('PIECEMAKER_SRC_DIR est absent — lancez install.sh ou install.ps1.');
   const layout = componentLayout(env, homeDir);
@@ -382,47 +411,55 @@ export async function installRuntimeComponents({
 
   output.step('Composants Python — MarkItDown');
   const configured = await readConfig(host, layout.configFile);
+  let python = '';
   if (platform === 'win32' && requirePrebuilt) {
     if (configured.pythonPath && await host.exists(configured.pythonPath) && dependenciesReady(await readWarmupStatus(host, configured.pythonPath, warmup, scriptsDir))) {
       output.ok('Composants Python existants reutilises.');
-      return;
+      python = configured.pythonPath;
+    } else {
+      if (arch !== 'x64') throw new Error('Le paquet Python Windows est disponible pour x64 uniquement.');
+      const paths = await installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir, output });
+      await host.writeFile(layout.configFile, `${JSON.stringify(mergeRuntimeConfig(configured, paths), null, 2)}\n`);
+      output.ok('Composants Python precompiles installes.');
+      python = paths.pythonPath;
     }
-    if (arch !== 'x64') throw new Error('Le paquet Python Windows est disponible pour x64 uniquement.');
-    const paths = await installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir, output });
-    await host.writeFile(layout.configFile, `${JSON.stringify(mergeRuntimeConfig(configured, paths), null, 2)}\n`);
-    output.ok('Composants Python precompiles installes.');
-    return;
-  }
-  let python = venvPythonPath(layout.venvDir, platform);
-  const installedVersion = (await host.exists(python)) ? await readPythonVersion(host, python) : null;
-  if (!pythonIsCompatible(installedVersion, platform)) {
-    const basePython = await resolveBasePython(host, layout, env, platform, arch, output);
-    output.step(`Création de l'environnement Python (${layout.venvDir})…`);
-    await host.rm(layout.venvDir);
-    await host.mkdir(path.dirname(layout.venvDir));
-    await required(host, basePython, ['-m', 'venv', layout.venvDir]);
-    python = venvPythonPath(layout.venvDir, platform);
-  }
-
-  if (dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
-    output.ok('MarkItDown et les bibliothèques associées sont déjà installés.');
   } else {
-    output.step('Installation des bibliothèques Python (MarkItDown)…');
-    const installationRequirements = path.join(layout.root, 'requirements-installation.txt');
-    await host.writeFile(installationRequirements, installerRequirements(await host.readFile(requirements)));
-    await required(host, python, ['-m', 'pip', 'install', '-U', 'pip']);
-    await required(host, python, ['-m', 'pip', 'install', '--upgrade', '-r', installationRequirements]);
-    if (!dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
-      throw new Error('Les composants Python ne sont pas opérationnels après installation.');
+    python = venvPythonPath(layout.venvDir, platform);
+    const installedVersion = (await host.exists(python)) ? await readPythonVersion(host, python) : null;
+    if (!pythonIsCompatible(installedVersion, platform)) {
+      const basePython = await resolveBasePython(host, layout, env, platform, arch, output);
+      output.step(`Création de l'environnement Python (${layout.venvDir})…`);
+      await host.rm(layout.venvDir);
+      await host.mkdir(path.dirname(layout.venvDir));
+      await required(host, basePython, ['-m', 'venv', layout.venvDir]);
+      python = venvPythonPath(layout.venvDir, platform);
     }
+
+    if (dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
+      output.ok('MarkItDown et les bibliothèques associées sont déjà installés.');
+    } else {
+      output.step('Installation des bibliothèques Python (MarkItDown)…');
+      const installationRequirements = path.join(layout.root, 'requirements-installation.txt');
+      const declared = await host.readFile(requirements);
+      await host.writeFile(installationRequirements, includeGliner ? declared : installerRequirements(declared));
+      await required(host, python, ['-m', 'pip', 'install', '-U', 'pip']);
+      await required(host, python, ['-m', 'pip', 'install', '--upgrade', '-r', installationRequirements]);
+      if (!dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
+        throw new Error('Les composants Python ne sont pas opérationnels après installation.');
+      }
+    }
+
+    const next = mergeRuntimeConfig(await readConfig(host, layout.configFile), {
+      pythonPath: python,
+      venvPath: layout.venvDir,
+    });
+    await host.writeFile(layout.configFile, `${JSON.stringify(next, null, 2)}\n`);
+    output.ok(`Interpréteur enregistré : ${python}`);
   }
 
-  const next = mergeRuntimeConfig(await readConfig(host, layout.configFile), {
-    pythonPath: python,
-    venvPath: layout.venvDir,
-  });
-  await host.writeFile(layout.configFile, `${JSON.stringify(next, null, 2)}\n`);
-  output.ok(`Interpréteur enregistré : ${python}`);
+  if (includeGliner) {
+    await installGlinerRuntime({ host, python, scriptsDir, env, homeDir, sourceDir, output, platform });
+  }
 }
 
 const entry = process.argv[1] ? path.resolve(process.argv[1]) : '';

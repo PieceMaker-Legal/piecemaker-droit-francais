@@ -9,7 +9,7 @@ test('the release stays draft until the Windows package, components and runtime 
   assert.match(release, /--npm\.publish=false/);
   assert.match(release, /needs: release[\s\S]*uses: \.\/\.github\/workflows\/piecemaker-windows-release\.yml/);
   assert.match(release, /finalize: false/);
-  assert.match(release, /needs: \[release, windows-desktop\]/);
+  assert.match(release, /needs: \[release, windows-desktop, gliner-cache\]/);
   assert.match(release, /npm publish --access public/);
   assert.ok(release.indexOf('npm publish --access public') < release.indexOf('gh release edit'));
   assert.match(windows, /workflow_call:/);

@@ -29,6 +29,17 @@ https://github.com/kklimuk/docx-cli/releases/latest, verify, `chmod +x`, put it 
 PATH.) Every verb works against the `.docx` zip directly; only `docx render` needs
 Word (macOS/Windows) or LibreOffice installed.
 
+## PieceMaker — afficher le document dès qu’on y travaille
+
+Dès que vous **créez ou modifiez** un `.docx`, ouvrez-le dans le volet de lecture,
+sans attendre qu’on vous le demande. Après le succès de la commande `docx` :
+
+```sh
+~/.agents/skills/Skill-PieceMaker/scripts/pm afficher --fichier FICHIER
+```
+
+`FICHIER` est le même chemin que celui que vous venez d’écrire.
+
 ## 1. The contract is `--help` / `docx info` — start there
 
 The help text is authoritative and versioned with the binary. This skill is thin

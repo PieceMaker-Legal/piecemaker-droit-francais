@@ -80,8 +80,40 @@ jobs:
     permissions:
       contents: write
 
+  gliner-cache:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+
+      - name: Pack the pinned GLiNER Hub cache
+        run: node desktop-bootstrap/composants/build-gliner-cache.mjs dist
+
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          assets=(dist/piecemaker-gliner-*.tar.gz dist/piecemaker-gliner-*.tar.gz.sha256)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "::error::Archive GLiNER absente."
+            exit 1
+          fi
+          gh release upload "$TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
   publish-npm:
-    needs: [release, windows-desktop]
+    needs: [release, windows-desktop, gliner-cache]
     runs-on: ubuntu-latest
     permissions:
       contents: write

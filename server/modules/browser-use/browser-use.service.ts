@@ -455,21 +455,7 @@ export const browserUseService = {
   },
 
   async registerAgentMcp() {
-    const { command, args } = getMcpCommand();
-    await Promise.all(LEGACY_MCP_SERVER_NAMES.map((name) => removeMcpServerFromAllProviders(name)));
-    const results = await providerMcpService.addMcpServerToAllProviders({
-      name: MCP_SERVER_NAME,
-      scope: 'user',
-      transport: 'stdio',
-      command,
-      args,
-      env: {
-        CLOUDCLI_BROWSER_USE_MCP_TOKEN: getOrCreateMcpToken(),
-        CLOUDCLI_BROWSER_USE_API_URL: getMcpApiUrl(),
-        ...(process.env.ELECTRON_RUN_AS_NODE ? { ELECTRON_RUN_AS_NODE: process.env.ELECTRON_RUN_AS_NODE } : {}),
-      },
-    });
-    return { name: MCP_SERVER_NAME, command, args, results };
+    return this.unregisterAgentMcp();
   },
 
   getMcpToken() {

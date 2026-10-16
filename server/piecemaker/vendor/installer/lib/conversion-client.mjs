@@ -14,26 +14,33 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { GIT_REPO_ROOT } from './platform.mjs';
 
 const LOCAL_BASE = '/api/piecemaker/local';
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '0.0.0.0', '::']);
+const FALLBACK_DATA_DIRECTORY = '.piecemaker-droit-francais';
+
+let adoptedHome = null;
 
 export function appServerPort() {
   const parsed = Number.parseInt(process.env.PIECEMAKER_APP_PORT || '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 3003;
 }
 
-function runningServerMarkerPath() {
-  if (process.env.CLOUDCLI_HOME) return join(process.env.CLOUDCLI_HOME, 'local-server.json');
+function productDataDirectoryName() {
   try {
     const config = JSON.parse(fs.readFileSync(join(GIT_REPO_ROOT, 'product.config.json'), 'utf8'));
-    return join(os.homedir(), config.dataDirectoryName, 'local-server.json');
-  } catch {
-    return null;
-  }
+    if (typeof config?.dataDirectoryName === 'string' && config.dataDirectoryName) return config.dataDirectoryName;
+  } catch {}
+  return FALLBACK_DATA_DIRECTORY;
+}
+
+export function runningServerMarkerPaths({ env = process.env, homedir = os.homedir } = {}) {
+  if (env.CLOUDCLI_HOME) return [join(env.CLOUDCLI_HOME, 'local-server.json')];
+  const name = productDataDirectoryName();
+  return [...new Set([`${name}-dev`, name, '.piecemaker'])].map((dir) => join(homedir(), dir, 'local-server.json'));
 }
 
 function processAlive(pid) {
@@ -45,13 +52,23 @@ function processAlive(pid) {
   }
 }
 
-export function runningServerPort(markerPath = runningServerMarkerPath()) {
+function readLoopbackPort(markerPath) {
   if (!markerPath) return null;
   try {
     const marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
     const port = Number(marker?.port);
-    const pid = Number(marker?.pid);
     if (!Number.isInteger(port) || port <= 0 || !LOOPBACK_HOSTS.has(marker?.host)) return null;
+    return port;
+  } catch {
+    return null;
+  }
+}
+
+export function runningServerPort(markerPath = runningServerMarkerPaths()[0]) {
+  const port = readLoopbackPort(markerPath);
+  if (!port) return null;
+  try {
+    const pid = Number(JSON.parse(fs.readFileSync(markerPath, 'utf8'))?.pid);
     if (!Number.isInteger(pid) || pid <= 0 || !processAlive(pid)) return null;
     return port;
   } catch {
@@ -70,10 +87,23 @@ export function localServerReachable(port = appServerPort()) {
   });
 }
 
-export async function adoptRunningServerPort({ markerPath, reachable = localServerReachable } = {}) {
+export function adoptedServerHome() {
+  return adoptedHome;
+}
+
+export async function adoptRunningServerPort({ markerPath, markerPaths, reachable = localServerReachable } = {}) {
   if (process.env.PIECEMAKER_APP_PORT) return appServerPort();
-  const port = runningServerPort(markerPath);
-  if (port && await reachable(port)) process.env.PIECEMAKER_APP_PORT = String(port);
+  adoptedHome = null;
+  const paths = markerPath ? [markerPath] : (markerPaths ?? runningServerMarkerPaths());
+  for (const candidate of paths) {
+    const port = runningServerPort(candidate) ?? readLoopbackPort(candidate);
+    if (!port) continue;
+    if (await reachable(port)) {
+      process.env.PIECEMAKER_APP_PORT = String(port);
+      adoptedHome = dirname(candidate);
+      return port;
+    }
+  }
   return appServerPort();
 }
 

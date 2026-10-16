@@ -19,6 +19,9 @@ test('Windows initial bootstrap uses the verified installer and embedded Node wi
   const hash = crypto.createHash('sha256').update('fixture-installer').digest('hex');
   const pythonHash = crypto.createHash('sha256').update('fixture-python').digest('hex');
   const componentHash = crypto.createHash('sha256').update('fixture-components').digest('hex');
+  const glinerRevision = '59894c087cb2923b01f337d4ee72f6ff84d5bdd6';
+  const glinerHash = crypto.createHash('sha256').update('fixture-gliner').digest('hex');
+  const glinerName = `piecemaker-gliner-${glinerRevision}.tar.gz`;
   const script = fileURLToPath(new URL('../install.ps1', import.meta.url));
   const quote = value => `'${value.replaceAll("'", "''")}'`;
   const harness = path.join(root, 'harness.ps1');
@@ -31,7 +34,9 @@ function Invoke-RestMethod {
     @{ name = 'piecemaker-python-win32-x64.tar.gz'; browser_download_url = 'https://example.test/python' },
     @{ name = 'piecemaker-python-win32-x64.tar.gz.sha256'; browser_download_url = 'https://example.test/python-checksum' },
     @{ name = 'piecemaker-runtime-components-win32-x64-${componentHash}.tar.gz'; browser_download_url = 'https://example.test/components' },
-    @{ name = 'piecemaker-runtime-components-win32-x64-${componentHash}.tar.gz.sha256'; browser_download_url = 'https://example.test/components-checksum' }
+    @{ name = 'piecemaker-runtime-components-win32-x64-${componentHash}.tar.gz.sha256'; browser_download_url = 'https://example.test/components-checksum' },
+    @{ name = '${glinerName}'; browser_download_url = 'https://example.test/gliner' },
+    @{ name = '${glinerName}.sha256'; browser_download_url = 'https://example.test/gliner-checksum' }
   ) }
 }
 function Invoke-WebRequest {
@@ -42,6 +47,8 @@ function Invoke-WebRequest {
   if ($Uri -eq 'https://example.test/python-checksum') { return @{ Content = [Text.Encoding]::ASCII.GetBytes($env:FIXTURE_PYTHON_CHECKSUM) } }
   if ($Uri -eq 'https://example.test/components') { [IO.File]::WriteAllText($OutFile, 'fixture-components'); return }
   if ($Uri -eq 'https://example.test/components-checksum') { return @{ Content = [Text.Encoding]::ASCII.GetBytes($env:FIXTURE_COMPONENT_CHECKSUM) } }
+  if ($Uri -eq 'https://example.test/gliner') { [IO.File]::WriteAllText($OutFile, 'fixture-gliner'); return }
+  if ($Uri -eq 'https://example.test/gliner-checksum') { return @{ Content = [Text.Encoding]::ASCII.GetBytes($env:FIXTURE_GLINER_CHECKSUM) } }
   throw "Unexpected network: $Uri"
 }
 function Wait-Process { param($Id) }
@@ -72,6 +79,7 @@ if ($env:ELECTRON_RUN_AS_NODE -ne 'original') { throw 'RunAsNode environment was
       FIXTURE_CHECKSUM: checksum,
       FIXTURE_PYTHON_CHECKSUM: pythonHash,
       FIXTURE_COMPONENT_CHECKSUM: componentHash,
+      FIXTURE_GLINER_CHECKSUM: glinerHash,
     },
   });
   const valid = run(hash);
@@ -84,6 +92,7 @@ if ($env:ELECTRON_RUN_AS_NODE -ne 'original') { throw 'RunAsNode environment was
   assert.equal(prepared.assets, prefetched);
   assert.equal(fs.readFileSync(path.join(prefetched, 'piecemaker-python-win32-x64.tar.gz'), 'utf8'), 'fixture-python');
   assert.equal(fs.readFileSync(path.join(prefetched, `piecemaker-runtime-components-win32-x64-${componentHash}.tar.gz`), 'utf8'), 'fixture-components');
+  assert.equal(fs.readFileSync(path.join(prefetched, glinerName), 'utf8'), 'fixture-gliner');
   assert.equal(fs.existsSync(path.join(root, 'bootstrap/src')), false);
   fs.unlinkSync(report);
   const invalid = run('0'.repeat(64));
