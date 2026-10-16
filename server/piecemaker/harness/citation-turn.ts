@@ -267,13 +267,16 @@ export function createCitationTurn(options: {
     finish() {
       if (finished) return finished;
       finished = (async () => {
-        const block = overflow || !fullText.includes(OPEN) ? '' : fullText.slice(fullText.indexOf(OPEN));
+        let block = overflow || !fullText.includes(OPEN) ? '' : fullText.slice(fullText.indexOf(OPEN));
+        const originalBlock = block;
         const replay = options.recordVerification === false;
-        if (replay && block) {
-          const saved = await options.store.readTurnSources(options.sessionId, block);
+        if (replay && originalBlock) {
+          const saved = await options.store.readTurnSources(options.sessionId, originalBlock);
           if (saved !== null) return saved;
         }
-        const parsed = overflow ? [] : parseCitationsWithDiagnostics(fullText).citations as Citation[];
+        const citationResult = overflow ? null : parseCitationsWithDiagnostics(fullText);
+        if (citationResult?.normalizedBlock) block = citationResult.normalizedBlock;
+        const parsed = (citationResult?.citations ?? []) as Citation[];
         const citations = await verifyCitations(parsed, (id: string, kind: string) => kind === 'code' ? codeText(id) : documentText(id), async (id: string) => decisions.get(id) ?? '') as Citation[];
         const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];
@@ -341,7 +344,7 @@ export function createCitationTurn(options: {
           try { sources += await options.onVerifiedTurn({ cwd: options.cwd, sessionId: options.sessionId, turnId: programTurnId, block, sources: reasoningSources }); }
           catch (error) { sources += `\n\nProgramme non mis à jour : ${error instanceof Error ? error.message : 'enregistrement impossible'}.`; }
         }
-        if (!replay && block) await options.store.saveTurnSources(options.sessionId, block, sources).catch(() => {});
+        if (!replay && originalBlock) await options.store.saveTurnSources(options.sessionId, originalBlock, sources).catch(() => {});
         return sources;
       })();
       return finished;

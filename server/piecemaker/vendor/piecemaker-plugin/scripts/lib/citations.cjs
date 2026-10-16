@@ -178,29 +178,51 @@ function parseCitationsWithDiagnostics(text) {
   if (!match) {
     return { citations: [], diagnostics: { hasBlock: false, rawLength: 0, error: null } };
   }
-  const raw = match[1] ?? '';
+  let raw = match[1] ?? '';
+  let repaired = false;
+  const fenced = raw.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenced) {
+    raw = fenced[1];
+    repaired = true;
+  }
+  let parsed;
   try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    const trimmed = raw.trimEnd();
+    if (!trimmed.endsWith('}')) {
       return {
         citations: [],
-        diagnostics: { hasBlock: true, rawLength: raw.length, error: 'Le bloc CITATIONS ne contenait pas un tableau JSON.' },
+        diagnostics: { hasBlock: true, rawLength: raw.length, error: error instanceof Error ? error.message : String(error) },
       };
     }
-    return {
-      citations: parsed.map(normalizeCitation).filter((c) => c !== null),
-      diagnostics: { hasBlock: true, rawLength: raw.length, error: null },
-    };
-  } catch (error) {
+    try {
+      raw = trimmed.slice(0, -1);
+      parsed = JSON.parse(raw);
+      repaired = true;
+    } catch {
+      return {
+        citations: [],
+        diagnostics: { hasBlock: true, rawLength: raw.length, error: error instanceof Error ? error.message : String(error) },
+      };
+    }
+  }
+  if (!Array.isArray(parsed) && parsed && typeof parsed === 'object' && (['program', 'reasoning'].includes(parsed.kind) || Number.isSafeInteger(parsed.ref))) {
+    parsed = [parsed];
+    raw = JSON.stringify(parsed);
+    repaired = true;
+  }
+  if (!Array.isArray(parsed)) {
     return {
       citations: [],
-      diagnostics: {
-        hasBlock: true,
-        rawLength: raw.length,
-        error: error instanceof Error ? error.message : String(error),
-      },
+      diagnostics: { hasBlock: true, rawLength: raw.length, error: 'Le bloc CITATIONS ne contenait pas un tableau JSON.' },
     };
   }
+  return {
+    citations: parsed.map(normalizeCitation).filter((c) => c !== null),
+    normalizedBlock: repaired ? `${CITATIONS_OPEN}${raw}${CITATIONS_CLOSE_TAG}` : undefined,
+    diagnostics: { hasBlock: true, rawLength: raw.length, error: null, repaired },
+  };
 }
 
 function parseCitations(text) {
