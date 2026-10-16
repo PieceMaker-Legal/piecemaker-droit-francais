@@ -81,15 +81,29 @@ it('agrandit puis restaure une card sans perdre son contenu ni les autres volets
   expect(screen.getByText('Fichiers du dossier').closest('[hidden]')).toBeNull();
 });
 
-it('ouvre le nouvel éditeur à droite du volet agrandi', () => {
+it('garde le volet agrandi à gauche et ouvre le nouvel éditeur à droite', () => {
   render(<Harness />);
   fireEvent.click(screen.getByRole('button', { name: 'plugin:example' }));
   fireEvent.click(screen.getByRole('button', { name: 'Agrandir Exemple' }));
   fireEvent.click(screen.getByRole('button', { name: 'Ouvrir l’éditeur' }));
   const columns = Array.from(document.querySelectorAll('.piecemaker-workspace-column'));
-  expect(screen.getByRole('button', { name: 'Agrandir Exemple' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Réduire Exemple' })).toBeTruthy();
   expect(columns[0].querySelector('[aria-label="Contenu example"]')).toBeTruthy();
   expect(columns[1].getAttribute('aria-label')).toBe('Colonne visionneuse');
+  expect(columns[1].hasAttribute('hidden')).toBe(false);
+});
+
+it('déplace à droite le volet Fichiers qui héberge le nouvel éditeur', () => {
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'plugin:example' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Agrandir Exemple' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ouvrir l’éditeur' }));
+  const columns = Array.from(document.querySelectorAll('.piecemaker-workspace-column'));
+  expect(screen.getByRole('button', { name: 'Réduire Exemple' })).toBeTruthy();
+  expect(columns[0].querySelector('[aria-label="Contenu example"]')).toBeTruthy();
+  expect(columns[1].querySelector('.piecemaker-files-panel')).toBeTruthy();
+  expect(columns[1].hasAttribute('hidden')).toBe(false);
 });
 
 it('ouvre le .docx dès que l’agent l’écrit, sans attendre un afficher', () => {
