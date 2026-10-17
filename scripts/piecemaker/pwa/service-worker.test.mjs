@@ -113,6 +113,7 @@ test('remote access explains the powered-off computer and never opens a local pr
   assert.equal(page.location.href, '');
   assert.equal(page.elements.get('relaunch').textContent, 'Réessayer');
   assert.match(page.elements.get('hint').textContent, /ordinateur est éteint/);
+  assert.equal(page.elements.get('tailscale').hidden, false);
   assert.ok(page.reloads() >= 1);
   assert.equal(page.dark(), false);
   assert.equal(page.fetches[0].url, '/api/auth/status');
@@ -123,4 +124,5 @@ test('the page waits for both the backend and the interface before reloading', a
   const page = recoveryPage({ online: true, clientOnline: false });
   await page.ready;
   assert.equal(page.reloads(), 0);
+  assert.equal(page.elements.get('tailscale').hidden, true);
 });

@@ -1,9 +1,10 @@
-import { MoreVertical, type LucideIcon } from 'lucide-react';
+import { MoreVertical, RefreshCw, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { pmGet, pmPost } from '@/piecemaker/dossier/api';
+import { refreshApplication } from '@/modules/piecemaker-workspace-tabs/refreshApplication';
 import { Button } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 
@@ -18,6 +19,7 @@ export function WorkspaceMoreMenu({ items, triggerClassName }: { items: Workspac
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [keepAwake, setKeepAwake] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [refreshState, setRefreshState] = useState<'idle' | 'loading' | 'failed'>('idle');
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const label = t('tabs.more', { defaultValue: 'Autres onglets' });
@@ -75,6 +77,20 @@ export function WorkspaceMoreMenu({ items, triggerClassName }: { items: Workspac
             </button>
           ))}
           {items.length > 0 && <div className="mx-2 my-1 h-px bg-border" />}
+          <button type="button" role="menuitem" disabled={refreshState === 'loading'} className={cn(itemClass, 'disabled:opacity-60')} onClick={async () => {
+            setRefreshState('loading');
+            try {
+              await refreshApplication();
+            } catch {
+              setRefreshState('failed');
+            }
+          }}>
+            <RefreshCw className={cn('h-4 w-4 flex-shrink-0', refreshState === 'loading' && 'animate-spin')} />
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium leading-5">{refreshState === 'loading' ? 'Actualisation…' : 'Actualiser PieceMaker'}</span>
+              <span aria-live="polite" className="block text-xs leading-4 text-muted-foreground">{refreshState === 'failed' ? 'Connexion impossible. Vérifiez Tailscale et que l’ordinateur est allumé, puis réessayez.' : 'Dernière version de cet ordinateur, sans réinstallation'}</span>
+            </span>
+          </button>
           <button type="button" role="menuitemcheckbox" aria-checked={keepAwake} disabled={busy} className={cn(itemClass, 'disabled:opacity-60')} onClick={() => void toggleKeepAwake()}>
             <span className="min-w-0 flex-1">
               <span className="block font-medium leading-5">{keepAwakeLabel}</span>

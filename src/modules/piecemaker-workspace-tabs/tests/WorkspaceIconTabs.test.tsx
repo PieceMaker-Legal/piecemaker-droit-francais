@@ -9,6 +9,8 @@ import { CloseWorkspacePanelContext, WorkspacePanelsContext } from '@/modules/pi
 
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspacePanels', () => ({ withWorkspacePanels: vi.fn() }));
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspaceViewer', () => ({ WorkspaceViewer: vi.fn() }));
+const refreshApplication = vi.fn();
+vi.mock('@/modules/piecemaker-workspace-tabs/refreshApplication', () => ({ refreshApplication: () => refreshApplication() }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 const pmGet = vi.fn();
@@ -24,6 +26,7 @@ let resize: () => void;
 
 beforeEach(() => {
   width = 400;
+  refreshApplication.mockReset().mockResolvedValue(undefined);
   pmGet.mockResolvedValue({ active: false });
   pmPost.mockImplementation((_path: string, body: { enabled: boolean }) => Promise.resolve({ active: body.enabled }));
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({ width, height: 40, top: 0, bottom: 40, left: 0, right: width, x: 0, y: 0, toJSON() {} }));
@@ -68,7 +71,19 @@ it('place le surplus dans le menu et conserve l’onglet actif visible après re
   act(() => resize());
   expect(screen.getAllByRole('tab')).toHaveLength(4);
   fireEvent.click(screen.getByRole('button', { name: 'tabs.more' }));
-  expect(screen.queryAllByRole('menuitem')).toHaveLength(0);
+  expect(screen.queryAllByRole('menuitem')).toHaveLength(1);
+  expect(screen.getByRole('menuitem', { name: /Actualiser PieceMaker/ })).toBeTruthy();
+});
+
+it('permet d’actualiser puis de réessayer après une connexion indisponible', async () => {
+  refreshApplication.mockRejectedValueOnce(new Error('offline'));
+  render(<WorkspaceIconTabs activeTab="files" setActiveTab={vi.fn()} shouldShowTasksTab shouldShowBrowserTab />);
+  fireEvent.click(screen.getByRole('button', { name: 'tabs.more' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: /Actualiser PieceMaker/ }));
+  expect(screen.getByRole('menuitem', { name: /Actualisation/ }).hasAttribute('disabled')).toBe(true);
+  await screen.findByText(/Connexion impossible. Vérifiez Tailscale/);
+  fireEvent.click(screen.getByRole('menuitem', { name: /Actualiser PieceMaker/ }));
+  await waitFor(() => expect(refreshApplication).toHaveBeenCalledTimes(2));
 });
 
 it('propose toujours de maintenir l’ordinateur actif dans le menu', async () => {
