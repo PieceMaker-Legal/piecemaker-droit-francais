@@ -79,6 +79,23 @@ test('le script Python reçoit un environnement UTF-8, même sur une console cp1
   }
 });
 
+test('un document non converti est annoncé à l’appelant, et le travail se termine sans erreur', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-job-'));
+  const script = path.join(directory, 'job.js');
+  fs.writeFileSync(script, "console.log('CONVERSION_FAILED:' + JSON.stringify({ file: 'scans/bail.pdf', reason: 'MinerU failed' })); process.exit(0);\n");
+  const previous = process.env.PYTHON_PATH;
+  process.env.PYTHON_PATH = process.execPath;
+  const announced = [];
+  try {
+    await runManagedPythonJob({ action: 'anonymize', script, args: [], onConversionFailed: (payload) => announced.push(payload) });
+    assert.deepStrictEqual(announced, [{ file: 'scans/bail.pdf', reason: 'MinerU failed' }]);
+  } finally {
+    if (previous === undefined) delete process.env.PYTHON_PATH;
+    else process.env.PYTHON_PATH = previous;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('anonymisation : un traitement seul démarre, le suivant attend puis démarre', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-job-'));
   const script = path.join(directory, 'job.js');

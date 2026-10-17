@@ -41,8 +41,11 @@ type OriginalsPipeline = {
     input?: string;
     onMapping?: (mapping: unknown) => void;
     onOcrRequired?: (payload: unknown) => void;
+    onConversionFailed?: (payload: unknown) => void;
   }): Promise<unknown>;
 };
+
+type FailedDocument = { file: string; reason: string };
 
 const require = createRequire(import.meta.url);
 const {
@@ -188,6 +191,12 @@ function ocrRequiredFiles(payload: unknown): string[] {
   return Array.isArray(files) ? files.filter((file): file is string => typeof file === 'string') : [];
 }
 
+function conversionFailure(payload: unknown): FailedDocument | null {
+  const record = payload && typeof payload === 'object' ? payload as { file?: unknown; reason?: unknown } : {};
+  if (typeof record.file !== 'string') return null;
+  return { file: record.file, reason: typeof record.reason === 'string' ? record.reason : '' };
+}
+
 async function withPythonPath<T>(pythonPath: string, run: () => Promise<T>): Promise<T> {
   const previous = process.env.PYTHON_PATH;
   process.env.PYTHON_PATH = pythonPath;
@@ -236,6 +245,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       if (!explicitFiles) args.push('--skip-existing');
       let received: GlinerMappingDocument | null = null;
       let ocrRequired: string[] | null = null;
+      const failedDocuments: FailedDocument[] = [];
       try {
         await withPythonPath(pythonExecutable(options.pythonPath), () => runManagedPythonJob({
           action: 'anonymize',
@@ -246,6 +256,10 @@ export function createKnowledgePipeline(options: PipelineOptions) {
           input: JSON.stringify(seed),
           onMapping: (value) => { received = value as GlinerMappingDocument; },
           onOcrRequired: (value) => { ocrRequired = ocrRequiredFiles(value); },
+          onConversionFailed: (value) => {
+            const failure = conversionFailure(value);
+            if (failure) failedDocuments.push(failure);
+          },
         }));
       } catch (error) {
         if (ocrRequired) throw new OcrRequiredError(ocrRequired);
@@ -256,7 +270,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const documents = documentsFromIndex(projectPath, files, readDocumentIndex(projectPath));
       const scanResult = { projectId, mapping, documents };
       const result = persistScanResult(scanResult, options.store, (document) => convertedMarkdown(projectPath, document));
-      return { ...result, documents: documents.length };
+      return { ...result, documents: documents.length, failedDocuments };
     },
 
     /** Pièces originales du dossier, avec leur statut et leur Markdown converti. */

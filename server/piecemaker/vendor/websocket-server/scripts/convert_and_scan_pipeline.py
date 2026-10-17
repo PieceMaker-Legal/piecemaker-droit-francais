@@ -17,6 +17,7 @@ Progress Format:
     PROGRESS:CONVERT:percentage:current:total    (Phase 1: Converting documents)
     PROGRESS:SCAN:percentage:current:total       (Phase 2: Scanning for PII)
     MAPPING:<json>                               (merged case mapping, written to the database by PieceMaker)
+    CONVERSION_FAILED:<json>                     ({"file", "reason"} per document that could not be converted; the run continues)
 
 Persistent Output Structure:
     {output_dir}/
@@ -29,8 +30,8 @@ created in a private temporary directory, merged into the case mapping sent
 back on stdout, then removed automatically. No mapping file is written.
 
 Exit Codes:
-    0: Success (at least one file fully processed)
-    1: No file could be fully converted and scanned
+    0: Run finished; documents that could not be converted are reported, never abort the run
+    1: Scans ran but none could be merged
 """
 
 import sys
@@ -328,7 +329,7 @@ def convert_file(
     output_dir: str,
     engine: Optional[str] = None,
     output_name: Optional[str] = None,
-) -> Tuple[bool, Optional[str]]:
+) -> Tuple[bool, Optional[str], Optional[str]]:
     """Run smart_converter.py subprocess to convert a file to Markdown with real-time output streaming.
 
     Args:
@@ -338,14 +339,15 @@ def convert_file(
         output_name: Markdown file stem, defaults to the input stem
 
     Returns:
-        (success, md_path): Tuple of success flag and path to generated .md file
+        (success, md_path, reason): success flag, path to generated .md file, and on
+        failure the last diagnostic line of the converter
     """
     script_dir = Path(__file__).parent
     converter_script = script_dir / "smart_converter.py"
 
     if not converter_script.exists():
         print(f"❌ smart_converter.py not found at {converter_script}", file=sys.stderr)
-        return False, None
+        return False, None, "smart_converter.py introuvable"
 
     # Build command
     cmd = [sys.executable, str(converter_script), input_file, "-o", output_dir]
@@ -371,6 +373,7 @@ def convert_file(
         os.set_blocking(process.stderr.fileno(), False)
 
         return_code = None
+        last_error = ""
         while return_code is None:
             # Check if process has finished
             return_code = process.poll()
@@ -390,6 +393,8 @@ def convert_file(
                     if not line:
                         break
                     print(line, end="", file=sys.stderr, flush=True)
+                    if line.strip():
+                        last_error = line.strip()
 
             except (IOError, OSError):
                 pass
@@ -405,28 +410,31 @@ def convert_file(
                 print(remaining_stdout, end="", flush=True)
             if remaining_stderr:
                 print(remaining_stderr, end="", file=sys.stderr, flush=True)
+                remaining_lines = [line.strip() for line in remaining_stderr.splitlines() if line.strip()]
+                if remaining_lines:
+                    last_error = remaining_lines[-1]
         except subprocess.TimeoutExpired:
             pass
 
         if return_code != 0:
             print(f"⚠️  Conversion failed with exit code {return_code}", file=sys.stderr)
-            return False, None
+            return False, None, last_error or f"code de sortie {return_code}"
 
         # Determine generated .md file path
         md_path = Path(output_dir) / f"{output_name or Path(input_file).stem}.md"
 
         if not md_path.exists():
             print(f"⚠️  Expected output file not found: {md_path}", file=sys.stderr)
-            return False, None
+            return False, None, "fichier Markdown absent"
 
-        return True, str(md_path)
+        return True, str(md_path), None
 
     except subprocess.TimeoutExpired:
         print(f"❌ Conversion timeout (>10 minutes): {input_file}", file=sys.stderr)
-        return False, None
+        return False, None, "délai dépassé (10 minutes)"
     except Exception as e:
         print(f"❌ Conversion error: {e}", file=sys.stderr)
-        return False, None
+        return False, None, str(e)
 
 
 def read_mapping_seed() -> Dict:
@@ -2223,6 +2231,7 @@ def run_pipeline(resources: PipelineResources):
     md_files = []
     md_sources = {}
     convert_success_count = 0
+    failed_documents = []
 
     for i, input_file in enumerate(input_files, start=1):
         print_progress("CONVERT", i, len(input_files))
@@ -2245,7 +2254,7 @@ def run_pipeline(resources: PipelineResources):
         if without_ocr:
             print("   ⚠️  Scanned document converted without OCR (MinerU not installed): text layer only")
 
-        success, md_path = convert_file(
+        success, md_path, reason = convert_file(
             input_file,
             args.output,
             engine="markitdown" if without_ocr else args.engine,
@@ -2261,13 +2270,19 @@ def run_pipeline(resources: PipelineResources):
             )
             convert_success_count += 1
         else:
-            print(f"   ❌ Conversion failed, skipping...")
+            failure = {"file": case_relative_name(input_file), "reason": reason or "conversion échouée"}
+            failed_documents.append(failure)
+            print(f"CONVERSION_FAILED:{json.dumps(failure, ensure_ascii=False)}", flush=True)
+            print(f"   ❌ Conversion failed, skipping: {failure['reason']}")
 
         print()
 
-    if not md_files:
-        print("❌ All conversions failed — pipeline aborted", file=sys.stderr)
-        return 1
+    if failed_documents:
+        print(
+            f"⚠️  {len(failed_documents)} document(s) non converti(s) : le traitement continue avec les autres",
+            file=sys.stderr,
+        )
+        print()
 
     print(
         f"✅ Phase 1 complete: {convert_success_count}/{len(input_files)} files converted"

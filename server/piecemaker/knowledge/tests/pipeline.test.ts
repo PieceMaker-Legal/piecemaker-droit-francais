@@ -73,6 +73,32 @@ test('scan delegates every file format to the converter and still rejects unsafe
   }
 });
 
+test('a document the converter could not convert is returned as failed and the scan still completes', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-failed-')));
+  const database = new Database(':memory:');
+  database.exec('CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT NOT NULL UNIQUE)');
+  database.prepare('INSERT INTO projects (project_id, project_path) VALUES (?, ?)').run('project-1', root);
+  const store = new KnowledgeStore(database);
+  try {
+    writeFile(root, 'piece.pdf');
+    const applicationRoot = path.join(root, '.converter');
+    writeFile(applicationRoot, 'server/piecemaker/vendor/websocket-server/scripts/convert_and_scan_pipeline.py',
+      `console.log('CONVERSION_FAILED:' + JSON.stringify({ file: 'piece.pdf', reason: 'Conversion arrêtée : fictif' }));`);
+    const pipeline = createKnowledgePipeline({
+      applicationRoot,
+      projects: { getProjectById: () => ({ project_id: 'project-1', project_path: root }) },
+      store,
+      pythonPath: process.execPath,
+    });
+    const result = await pipeline.scan('project-1', ['piece.pdf']);
+    assert.deepEqual(result.failedDocuments, [{ file: 'piece.pdf', reason: 'Conversion arrêtée : fictif' }]);
+    assert.equal(result.documents, 1);
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('defaultScanFiles lists nested originals and ignores generated markdown', async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-scan-')));
   try {
