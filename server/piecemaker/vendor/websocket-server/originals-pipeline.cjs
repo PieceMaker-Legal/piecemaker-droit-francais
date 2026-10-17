@@ -222,6 +222,8 @@ function spawnTracked(job, script, args, progressScale = {}, io = {}) {
       env: {
         ...process.env,
         PYTHONUNBUFFERED: '1',
+        PYTHONIOENCODING: 'utf-8',
+        PYTHONUTF8: '1',
         // Le worker et MinerU, enfants de ce process, héritent de la variable.
         PIECEMAKER_TORCH_THREADS: JOB_TORCH_THREADS(),
       },
