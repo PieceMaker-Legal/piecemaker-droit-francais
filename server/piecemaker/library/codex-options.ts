@@ -6,10 +6,10 @@ export function buildCodexClientOptions(libraryDisabledSkills: unknown, permissi
   const paths = Array.isArray(libraryDisabledSkills)
     ? libraryDisabledSkills.map((skill) => (skill as { path?: unknown } | null)?.path).filter((file): file is string => typeof file === 'string' && path.isAbsolute(file))
     : [];
-  const skills = paths.length
+  const skills: NonNullable<CodexOptions['config']> = paths.length
     ? { skills: { config: [...new Set(paths)].map((file) => ({ path: file, enabled: false })) } }
     : {};
-  const modeConfig = permissionMode === 'bypassPermissions'
+  const modeConfig: NonNullable<CodexOptions['config']> = permissionMode === 'bypassPermissions'
     ? { sandbox_mode: 'danger-full-access', approval_policy: 'never' }
     : permissionMode === 'plan'
       ? { sandbox_mode: 'read-only', approval_policy: 'never' }
