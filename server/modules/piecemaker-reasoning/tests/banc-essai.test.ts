@@ -80,6 +80,7 @@ test('une proposition invalide est écartée sans faire tomber le reste du progr
   const { service, folder } = fixture(t);
   const reply = service.ingest({ cwd: folder, sessionId: 's', turnId: 't1', sources: [source('courriel', 1, 'La seconde tranche est suspendue.')], block: block({ facts: [
     { id: 'F_engagement', label: 'Engagement de financement', value: true, citations: [1] },
+    { id: 'F_jour', label: 'Virement du jour', evidence: { nature: ['relevé bancaire'], from: '2025-02-21', to: '2025-02-21' } },
     { id: 'F_suspension', label: 'Suspension de la seconde tranche', relation: { subject: 'entity:SOCIETE_1', predicate: 'suspend', object: 'tranche_2' } },
   ], theories: [
     { id: 'C_delai', kind: 'calculation', label: 'Délai en jours', expression: { op: 'daysBetween', args: ['2025-03-12', '2025-03-20'] }, value: 8, rationale: 'Calcul fictif.' },
@@ -92,6 +93,7 @@ test('une proposition invalide est écartée sans faire tomber le reste du progr
   assert.match(reply, /Lien de citation \[7\] vers F_engagement écarté : citation introuvable/);
   assert.match(reply, /F_suspension écarté : Relation factuelle invalide/);
   assert.match(reply, /L_orphelin écarté : Lien de raisonnement invalide/);
+  assert.match(reply, /F_jour écarté : Exigence de preuve invalide/);
   assert.match(reply, /C_delai écarté : Expression attendue/);
   assert.match(reply, /T_mal_forme écarté : Attente invalide/);
   const snapshot = service.read(folder);
