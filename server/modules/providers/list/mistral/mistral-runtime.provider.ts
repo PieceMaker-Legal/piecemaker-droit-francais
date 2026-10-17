@@ -359,7 +359,7 @@ async function spawnVibe(
       // trailing positional, but the explicit flag form is unambiguous.
       args.push('-p', promptText);
 
-      const env: NodeJS.ProcessEnv = { ...process.env };
+      const env: NodeJS.ProcessEnv = { ...process.env, PYTHONIOENCODING: 'utf-8' };
       if (resolvedModel) {
         env.VIBE_ACTIVE_MODEL = resolvedModel;
       }

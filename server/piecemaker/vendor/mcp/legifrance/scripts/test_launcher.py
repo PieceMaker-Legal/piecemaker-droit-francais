@@ -33,6 +33,11 @@ class LauncherTests(unittest.TestCase):
         execv.assert_called_once()
         run.assert_not_called()
 
+    def test_server_speaks_utf8_whatever_the_console_code_page(self):
+        with mock.patch.dict(launcher.os.environ, {"PYTHONIOENCODING": "cp1252", "LEGIFRANCE_ENV_FILE": "exemple.env"}):
+            launcher.configure_environment()
+            self.assertEqual(launcher.os.environ["PYTHONIOENCODING"], "utf-8")
+
 
 if __name__ == "__main__":
     unittest.main()

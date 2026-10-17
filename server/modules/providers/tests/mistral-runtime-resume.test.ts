@@ -69,6 +69,32 @@ test('a new Vibe session keeps every streamed entry', async (t) => {
   assert.equal((await runVibe(t, null)).length, replayedTurn.length + newTurn.length);
 });
 
+test('Vibe writes its stream in UTF-8 whatever the Windows code page', async (t) => {
+  const previous = process.env.PYTHONIOENCODING;
+  process.env.PYTHONIOENCODING = 'cp1252';
+  t.after(() => {
+    if (previous === undefined) delete process.env.PYTHONIOENCODING;
+    else process.env.PYTHONIOENCODING = previous;
+  });
+  let spawnedEnv: NodeJS.ProcessEnv | undefined;
+  t.mock.method(childProcess, 'spawn', (_command: string, _args: string[], options: { env?: NodeJS.ProcessEnv }) => {
+    spawnedEnv = options.env;
+    const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => true });
+    setImmediate(() => child.emit('close', 0));
+    return child;
+  });
+  const context = {
+    resolveProviderSessionId: () => null,
+    resolveResumeModel: async () => undefined,
+    getProviderModels: async () => ({ OPTIONS: [], DEFAULT: '' }),
+    normalizeMessage: () => [],
+    isProviderInstalled: async () => true,
+  } as unknown as ProviderRuntimeContext;
+  const writer = { send() {}, userId: null } as unknown as ProviderRuntimeWriter;
+  await mistralRuntime.run('bonjour', { sessionId: 'app-2', cwd: os.tmpdir() }, writer, context);
+  assert.equal(spawnedEnv?.PYTHONIOENCODING, 'utf-8');
+});
+
 test('only entries without a turn are recognised as replayed history', () => {
   assert.equal(isReplayedVibeHistoryEntry({ turnId: null }), true);
   assert.equal(isReplayedVibeHistoryEntry({ turnId: 'turn-2' }), false);
