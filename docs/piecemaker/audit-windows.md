@@ -1,5 +1,68 @@
 # Audit Windows PieceMaker
 
+## Contre-vérification après corrections — 2026-10-17
+
+Sources vérifiées après le commit `3393b95f`. Dépôt et application affichent 2.0.48, mais leurs contenus diffèrent. Un agent Luna distinct a été affecté à chacun des huit bugs initiaux, puis deux autres au scan complémentaire. Les essais utilisent des données fictives et des répertoires temporaires. Aucun correctif applicatif, téléchargement de modèle, changement de configuration persistante ni redémarrage de l'application n'a été effectué pendant cette passe.
+
+**Résultat : sept correctifs présents dans les sources, un correctif partiel (WIN-008), aucune des huit corrections retrouvée dans les chemins installés inspectés.** WIN-004 et WIN-005 restent des défauts conditionnels. Le pipeline Python corrigé réussit un essai avec GLiNER ; cela ne valide pas encore les parcours API et OCR complets.
+
+### Vérification des huit bugs initiaux
+
+| ID | Sources actuelles et preuves | Installation actuelle | Verdict |
+| --- | --- | --- | --- |
+| WIN-001 | Le build compile et embarque `node-shim/node.exe`, puis configure son PATH. Les trois tests du shim (ressource, exécution/arguments, arrêt) passent. | Sidecar absent ; helper absent de l'ASAR et aucun appel dans l'entrée principale installée. | Corrigé dans les sources ; persiste sur le poste. |
+| WIN-002 | MinGit épinglé, SHA-256 vérifié, ressource embarquée et helper câblé. Quatre tests ciblés réussis. | `resources/mingit/cmd/git.exe` absent ; helper retourne `false`, puis lancement Git en `ENOENT`. | Corrigé dans les sources ; persiste sur le poste. |
+| WIN-003 | `compact-package.mjs:61` décompresse désormais `electron/uninstallPlan.js`. Suites `place` et `compact-package` : 8 réussis, 1 ignoré. | Module absent de l'arbre physique ; import de `place.mjs` en `ERR_MODULE_NOT_FOUND`. | Corrigé dans les sources ; persiste sur le poste. |
+| WIN-004 | `sessions.ts` résout PATH/PATHEXT et lance directement la cible Node des shims npm. Essai fictif : nom nu en `ENOENT`, cible Node directe réussie avec arguments et stdin. Vitest absent, suite dédiée non exécutée. | Ancien `spawn(command,args)` dans le plugin compilé ; chemins fournisseurs vides, donc noms nus utilisés. | Corrigé dans les sources pour le shim npm testé ; plugin installé ancien. Aucun fournisseur réel appelé. |
+| WIN-005 | Les deux consommateurs utilisent `python` sous Windows, `python3` ailleurs. Test du repli sans interpréteur configuré réussi ; suite du lanceur : 4 réussis. Suite TypeScript bloquée par `better-sqlite3` absent. | Repli inconditionnel `python3` encore présent. L'interpréteur configuré existe sur ce poste. | Corrigé dans les sources ; ancien défaut conditionnel installé, sans échec actuel de cette condition. |
+| WIN-006 | Le lanceur force `PYTHONIOENCODING=utf-8` et `PYTHONUTF8=1`. Essai indépendant avec parent forcé en CP1252 : enfant en UTF-8, mode UTF-8 actif. Test de régression réussi. | Même essai via le lanceur installé : CP1252, mode UTF-8 inactif ; variables correctrices absentes. | Corrigé dans les sources ; persiste sur le poste. |
+| WIN-007 | Lecture par thread et file de résultats. Test READY réussi ; essais indépendants READY + réponse immédiate, sortie prématurée et timeout réussis. | Ancien `select.select` présent ; worker fictif écrivant immédiatement READY déclaré indisponible au timeout, puis tué. | Corrigé dans les sources ; persiste sur le poste. |
+| WIN-008 | Deux tests réussissent lorsque les deux homonymes sont dans le même lot ; noms suffixés et contenus distincts préservés. Le lecteur et le renommage retrouvent les noms suffixés. Collisions résiduelles ci-dessous. | Pipeline sans `_source_digest` ni `markdown_stems_for_batch`. | Partiellement corrigé dans les sources ; défaut initial encore installé. |
+
+### WIN-008 : collisions résiduelles reproduites
+
+`markdown_stems_for_batch` (`convert_and_scan_pipeline.py:319`) ne considère que les fichiers du lot courant. Deux conversions successives de `a/exemple.txt`, puis `b/exemple.txt`, vers la même sortie choisissent toutes deux `exemple.md`. Reproduction réelle avec markitdown : deux conversions réussies, un seul Markdown conservé, contenant uniquement le marqueur fictif de la seconde pièce. `knowledge/pipeline.ts` permet explicitement une sélection de fichiers : les traitements séparés sont possibles.
+
+Un original déjà nommé `exemple-<suffixe calculé>.txt` peut également entrer en collision avec le nom généré pour un homonyme `exemple.txt` dans le même lot. Collision reproduite sur la fonction de nommage actuelle ; aucune conversion de modèle nécessaire.
+
+### Nouveaux bugs confirmés
+
+| ID | Priorité | Bug et reproduction | Source | Statut |
+| --- | --- | --- | --- | --- |
+| WIN-009 | Haute | Contenu scanné perdu dans un PDF mixte. Un PDF fictif de deux pages, texte natif puis page raster, est orienté vers markitdown dès qu'une des trois premières pages contient assez de texte. La conversion garde le marqueur natif et perd celui de la page scannée ; GLiNER ne peut pas analyser le texte absent. | `server/piecemaker/vendor/websocket-server/scripts/smart_converter.py:168`, puis `inspect_file` | Reproduit sur les sources. |
+| WIN-010 | Moyenne | Statut « non converti » pour les Markdown suffixés. Deux originaux fictifs et leurs Markdown suffixés : `markdownCounterpart` trouve les deux fichiers, mais `originalFilesOverview` retourne `converted:false`, `status:not-converted`. La liste compare encore les noms simples aux clés suffixées. | `server/piecemaker/vendor/piecemaker-plugin/scripts/lib/commits.cjs:617`, `:664` | Reproduit sur les sources ; incohérence avec WIN-008. |
+| WIN-011 | Moyenne, validation | Test de repli OCR cassé par la nouvelle signature. Avec le Python configuré, premier test réussi, second en `TypeError: convert() got an unexpected keyword argument 'output_name'`. Le mock n'accepte pas le nouvel argument ; sans Python trouvé par la suite, le test est ignoré et masque cette régression. | `server/piecemaker/vendor/websocket-server/ocr-fallback.test.js:24`, appel dans `convert_and_scan_pipeline.py:2253` | Reproduit. Défaut du test, sans preuve que le repli OCR réel échoue. |
+| WIN-012 | Haute, conditionnelle | Tabular Review accepte un Markdown extérieur au dossier via une jonction Windows locale. Fixture temporaire : `project/linked/fixture.md` pointe hors du projet, passe le même contrôle lexical de confinement, est reconnu comme fichier et son contenu externe est lu. L'import de documents utilise ce contrôle puis lit le fichier. | `plugins/piecemaker-tabular-review/src/server/documents.ts:43`, `paths.ts:45`, `reviews.ts:62` | Mécanisme reproduit avec les mêmes opérations et le même prédicat ; aucun fournisseur IA appelé. Nécessite une jonction déjà présente et un chemin demandé. |
+| WIN-013 | Moyenne | Désinstallation depuis l'application refusée pour le répertoire installé actuel. `packagedApplicationRoot` exige un dossier nommé `PieceMaker`, alors que le bootstrap utilise ici `@piecemaker-legalpiecemaker-desktop`. Le calcul retourne `null` et `scheduleUninstall` lève « Dossier de l'application introuvable » avant planification. | `electron/uninstallPlan.js:19`, `electron/piecemakerUninstall.js:53`, `desktop-bootstrap/install.ps1:104` | Calcul reproduit sur le chemin installé ; aucune désinstallation déclenchée. |
+
+Aucun de ces nouveaux bugs n'a été corrigé pendant l'audit.
+
+### Autres pistes non confirmées de bout en bout
+
+- Arrêt pendant le démarrage d'un plugin : `stopAllPlugins` ne parcourt que `runningPlugins`, alors que `startingPlugins` suit séparément les lancements en cours. Un démarrage tardif pourrait échapper à l'arrêt. Course identifiée dans le code, non reproduite.
+- Arrêt normal du serveur Windows : `electron/localServer.js:552` utilise `child.kill('SIGTERM')`, tandis que le serveur compte sur son gestionnaire SIGTERM pour arrêter les services. Un processus fictif exécuté avec le runtime Electron installé ne reçoit pas son gestionnaire JS lors du SIGTERM testé. Survie des descendants après fermeture réelle non testée ; aucune fermeture de l'application utilisateur.
+- Shims `.cmd` non npm : le repli conserve `shell:true`. Aucun problème d'échappement exploitable n'a été démontré.
+
+### Vérifications de cette passe
+
+| Périmètre | Résultat et portée |
+| --- | --- |
+| Packaging, shim Node/Git, ASAR, admission des travaux, renommage | 28 tests réussis, 3 ignorés : deux OCR faute de Python détecté, un réservé aux groupes de processus POSIX. |
+| Installation, désinstallation, dépendances runtime, archives et publication | 18 tests réussis ; aucun installateur ou désinstallateur réel exécuté. |
+| Repli OCR avec le Python configuré | 1 réussi, 1 en échec : WIN-011. Copie temporaire du test avec le seul chemin des scripts adapté à une jonction courte ; logique inchangée. |
+| Python : formes juridiques, codes globaux, doublons, page d'entités fictives | 24 tests réussis, dont une inférence GLiNER vérifiant les entités, métadonnées et mapping attendus. |
+| Python : homonymes et READY | 2 tests homonymes et 1 test READY réussis ; scénarios indépendants supplémentaires détaillés plus haut. |
+| Pipeline Python actuel, texte fictif, modèles hors ligne | Sortie 0 en 18,1 secondes : Markdown, worker prêt, un événement MAPPING, index documentaire, état `converted`/`scanned`. UTF-8 forcé comme par le lanceur corrigé ; métadonnées désactivées pour isoler ce parcours. |
+| Services installés | Aucun serveur en écoute sur 3002, 3003 ou 5173 au contrôle ; application non redémarrée. |
+
+Les suites déléguées recouvrent parfois les sélections principales ; leurs comptes ne s'additionnent pas comme des tests distincts. Les suites TypeScript/Vitest complètes restent indisponibles faute de dépendances de développement. Les imports cassés par les longs chemins du workspace ont été contournés par une jonction temporaire courte, sans modification des sources ; ils ne sont pas comptés comme défauts supplémentaires de l'application.
+
+Le succès Python ne valide pas l'enregistrement final par l'API dans SQLite, la protection après scan, les parcours visuels ni les fournisseurs IA. MinerU n'a pas fait l'objet d'une nouvelle inférence lourde : environ 3,7 Go étaient libres au contrôle intermédiaire. Sa conversion complète reste non validée ; l'arrêt mémoire de l'audit initial reste décrit ci-dessous.
+
+## Archive : audit initial avant contre-vérification
+
+Les constats et conclusions ci-dessous décrivent l'état initial. Pour les corrections et le statut actuel, se référer aux sections précédentes.
+
 Date : 2026-10-17. Version installée et version du dépôt : 2.0.48.
 
 Ce registre centralise les anomalies de l'installation locale et les défauts repérés dans le code. Aucun document métier n'est utilisé pour les reproductions. Aucun correctif n'a encore été appliqué.
