@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 
 const DIGEST_LENGTH = 8;
+const CANONICAL_DIGEST_LENGTH = 16;
 
 function caseRelativeKey(absolutePath, caseRoot) {
   const resolved = path.resolve(absolutePath);
@@ -29,11 +30,20 @@ function homonymMarkdownStem(absolutePath, caseRoot) {
   return `${sourceStem(absolutePath)}-${digest}`;
 }
 
+function canonicalMarkdownStem(absolutePath, caseRoot) {
+  const digest = crypto.createHash('sha256')
+    .update(caseRelativeKey(absolutePath, caseRoot).normalize('NFC'), 'utf8')
+    .digest('hex')
+    .slice(0, CANONICAL_DIGEST_LENGTH);
+  return `${Array.from(sourceStem(absolutePath)).slice(0, 80).join('')}-${digest}`;
+}
+
 function markdownStemCandidates(absolutePath, caseRoot) {
-  return [homonymMarkdownStem(absolutePath, caseRoot), markdownStem(absolutePath)];
+  return [canonicalMarkdownStem(absolutePath, caseRoot), homonymMarkdownStem(absolutePath, caseRoot), markdownStem(absolutePath)];
 }
 
 module.exports = {
+  canonicalMarkdownStem,
   homonymMarkdownStem,
   markdownStem,
   markdownStemCandidates,

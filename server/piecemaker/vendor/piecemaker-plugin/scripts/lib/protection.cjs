@@ -353,17 +353,15 @@ function isResourceFile(absolutePath, caseRoot, state = null) {
  * de la pièce. À défaut, le chemin attendu rend le refus actionnable.
  */
 function markdownCounterpart(absolutePath, caseRoot) {
-  const [homonymStem, stem] = markdownStemCandidates(absolutePath, caseRoot);
+  const stems = markdownStemCandidates(absolutePath, caseRoot);
+  const stem = stems.at(-1);
   const structured = structuredMarkdownCounterpart(absolutePath, caseRoot);
   const workspaceMarkdown = path.join(caseRoot, WORKSPACE_SUBDIR, `${stem}.md`);
   const candidates = [
     ...(structured ? [structured.path] : []),
-    path.join(caseRoot, WORKSPACE_SUBDIR, `${homonymStem}.md`),
-    workspaceMarkdown,
-    path.join(path.dirname(absolutePath), `${homonymStem}.md`),
-    path.join(path.dirname(absolutePath), `${stem}.md`),
-    path.join(caseRoot, `${homonymStem}.md`),
-    path.join(caseRoot, `${stem}.md`),
+    ...stems.map((candidate) => path.join(caseRoot, WORKSPACE_SUBDIR, `${candidate}.md`)),
+    ...stems.map((candidate) => path.join(path.dirname(absolutePath), `${candidate}.md`)),
+    ...stems.map((candidate) => path.join(caseRoot, `${candidate}.md`)),
   ];
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) return { path: candidate, exists: true };

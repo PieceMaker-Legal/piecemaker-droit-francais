@@ -17,9 +17,9 @@ pipeline.mineru_available = lambda: mineru_state == "present"
 pipeline.start_scanner_worker = lambda: None
 pipeline.wait_for_worker_ready = lambda *args, **kwargs: True
 converted, scanned = [], []
-def convert(input_file, output_dir, engine=None, mode=None, lang=None):
+def convert(input_file, output_dir, engine=None, mode=None, lang=None, output_name=None):
     converted.append([Path(input_file).name, engine])
-    target = Path(output_dir) / f"{Path(input_file).stem}.md"
+    target = Path(output_dir) / f"{output_name or Path(input_file).stem}.md"
     target.write_text(f"converti par {engine}", encoding="utf-8")
     return True, str(target)
 def scan(worker, md_file, output_dir, *rest):
@@ -143,7 +143,9 @@ test('refusé, les scans passent par l’outil standard puis sont reconvertis et
     const installed = runPipeline(python, folder, 'present', ['--ocr-missing', 'ask', '--skip-existing']);
     assert.equal(installed.code, 0);
     assert.deepEqual(installed.converted, [['scanne.pdf', 'auto'], ['recu.png', 'auto']]);
-    assert.deepEqual(installed.scanned, ['scanne.md', 'recu.md']);
+    assert.equal(installed.scanned.length, 2);
+    assert.match(installed.scanned[0], /^scanne-[0-9a-f]{16}\.md$/);
+    assert.match(installed.scanned[1], /^recu-[0-9a-f]{16}\.md$/);
     assert.deepEqual(convertedEntries(folder).map((entry) => entry.ocr || null), [null, null, null]);
   } finally {
     fs.rmSync(folder.root, { recursive: true, force: true });

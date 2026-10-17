@@ -16,7 +16,7 @@ const {
   WORKSPACE_SUBDIR,
   writeProtection,
 } = require('../piecemaker-plugin/scripts/lib/protection.cjs');
-const { homonymMarkdownStem, markdownStem } = require('../piecemaker-plugin/scripts/lib/markdown-name.cjs');
+const { canonicalMarkdownStem, homonymMarkdownStem, markdownStem } = require('../piecemaker-plugin/scripts/lib/markdown-name.cjs');
 const { documentIndexFile } = require('./document-index.cjs');
 const { STAMPED_PIECES_SUBFOLDER } = require('./lib/stamping.cjs');
 
@@ -100,7 +100,9 @@ function renameMarkdown(root, { previous, current }) {
   const previousAbsolute = absoluteIn(root, previous);
   const currentAbsolute = absoluteIn(root, current);
   const homonym = stemOf(markdown.path) === homonymMarkdownStem(previousAbsolute, root);
-  const stem = homonym ? homonymMarkdownStem(currentAbsolute, root) : markdownStem(currentAbsolute);
+  const canonical = stemOf(markdown.path) === canonicalMarkdownStem(previousAbsolute, root);
+  const stem = canonical ? canonicalMarkdownStem(currentAbsolute, root)
+    : homonym ? homonymMarkdownStem(currentAbsolute, root) : markdownStem(currentAbsolute);
   const target = path.join(path.dirname(markdown.path), `${stem}.md`);
   if (fs.existsSync(target)) return false;
   fs.renameSync(markdown.path, target);

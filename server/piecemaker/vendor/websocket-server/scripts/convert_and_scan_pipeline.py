@@ -313,19 +313,14 @@ def _source_digest(source: str, case_root: str) -> str:
         key = resolved.relative_to(Path(case_root).resolve()).as_posix()
     except ValueError:
         key = resolved.as_posix()
-    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:8]
+    return hashlib.sha256(unicodedata.normalize("NFC", key).encode("utf-8")).hexdigest()[:16]
 
 
 def markdown_stems_for_batch(input_files: List[str], case_root: str) -> Dict[str, str]:
-    groups: Dict[str, List[str]] = {}
-    for source in input_files:
-        groups.setdefault(Path(source).stem.casefold(), []).append(source)
-    stems: Dict[str, str] = {}
-    for sources in groups.values():
-        for source in sources:
-            stem = Path(source).stem
-            stems[source] = stem if len(sources) == 1 else f"{stem}-{_source_digest(source, case_root)}"
-    return stems
+    return {
+        source: f"{Path(source).stem[:80]}-{_source_digest(source, case_root)}"
+        for source in input_files
+    }
 
 
 def convert_file(
