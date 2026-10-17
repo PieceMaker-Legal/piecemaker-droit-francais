@@ -150,7 +150,15 @@ function pythonExecutable(explicit: string | undefined): string {
   const candidate = process.platform === 'win32'
     ? path.join(home, 'venv', 'Scripts', 'python.exe')
     : path.join(home, 'venv', 'bin', 'python');
-  return fs.existsSync(candidate) ? candidate : 'python3';
+  if (fs.existsSync(candidate)) return candidate;
+  // Desktop installs have no venv: their portable Python is recorded in config.json.
+  try {
+    const { pythonPath } = JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8'));
+    if (typeof pythonPath === 'string' && fs.existsSync(pythonPath)) return pythonPath;
+  } catch {
+    // No readable config: fall back to the PATH interpreter.
+  }
+  return 'python3';
 }
 
 function mappingSeed(projectId: string, store: KnowledgeStore): GlinerMappingDocument {
