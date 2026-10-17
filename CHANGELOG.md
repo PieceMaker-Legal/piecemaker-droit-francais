@@ -3,6 +3,13 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.48](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.47...v2.0.48) (2026-10-17)
+
+### Bug Fixes
+
+* **anonymizer:** allow writes through session-scoped process.env proxy ([56de59f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/56de59f106f16ac09b1f71c7a1d1afcfe7f4c5e7))
+* **windows:** find the installed app where the installer actually put it ([4b3e3ad](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4b3e3ad9ce22bb2fb51526d91a5fb7ef94a55229))
+
 ## [2.0.47](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.45...v2.0.47) (2026-10-17)
 
 ### New Features
