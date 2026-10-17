@@ -11,7 +11,7 @@ export async function verifyPythonRuntime(sourceDir, assetsDir) {
   await fs.mkdir(scripts, { recursive: true });
   await fs.cp(scriptsDirectory(sourceDir), scripts, { recursive: true, filter: async target => {
     if (['__pycache__', 'node_modules', 'eval', 'tests'].includes(path.basename(target))) return false;
-    return (await fs.stat(target)).isDirectory() || /\.(py|txt)$/.test(target);
+    return (await fs.stat(target)).isDirectory() || /\.(py|txt|json)$/.test(target);
   } });
   await fs.copyFile(path.join(assetsDir, 'python-runtime.json'), path.join(source, 'python-runtime.json'));
   const env = { ...process.env, PIECEMAKER_HOME: path.join(root, 'home with spaces'), PIECEMAKER_PREBUILT_ASSET_DIR: assetsDir };
