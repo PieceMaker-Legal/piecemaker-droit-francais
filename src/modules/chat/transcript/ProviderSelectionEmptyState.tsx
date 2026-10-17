@@ -78,6 +78,7 @@ function getProviderDisplayName(p: LLMProvider) {
   if (p === "claude") return "Claude";
   if (p === "cursor") return "Cursor";
   if (p === "codex") return "Codex";
+  if (p === "mistral") return "Mistral";
   if (p === "opencode") return "OpenCode";
   return "Claude";
 }
