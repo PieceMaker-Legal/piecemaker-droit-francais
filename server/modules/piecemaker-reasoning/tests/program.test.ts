@@ -76,7 +76,7 @@ test('ingestion atomique et idempotente, récupération complète SQL et context
   assert.equal((db.prepare('SELECT status FROM pm_reasoning_results WHERE project_id=?').get('example') as { status: string }).status, 'known');
   assert.match(service.context(input.cwd), /F1/);
   const malformed = block({ nodes: [{ ...fact, kind: 'calculation', expression: { op: 'eval', args: ['arbitrary'] } }] });
-  assert.match(service.ingest({ ...input, block: malformed }), /non appliqué/);
+  assert.match(service.ingest({ ...input, block: malformed }), /F1 écarté : Expression attendue : F1\. Aucune modification du programme/);
   assert.equal(service.read(input.cwd).program.nodes[0].value, 10);
   assert.equal(service.read(input.cwd).revision, 1);
 });

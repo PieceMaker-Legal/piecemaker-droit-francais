@@ -61,13 +61,13 @@ export function validateProgram(program: ReasoningProgram) {
     }
   }
   for (const scenario of program.scenarios) {
-    if (typeof scenario.label !== 'string' || !scenario.assumptions || typeof scenario.assumptions !== 'object' || Array.isArray(scenario.assumptions)) throw new TypeError('Scénario invalide.');
+    if (typeof scenario.label !== 'string' || !scenario.assumptions || typeof scenario.assumptions !== 'object' || Array.isArray(scenario.assumptions)) throw new TypeError('Scénario invalide : {"id","label","assumptions":{"F_id":valeur}} attendu.');
     for (const [id, value] of Object.entries(scenario.assumptions)) {
       if (!scalar(value) || !program.nodes.some((node) => node.id === id && node.kind === 'fact')) throw new TypeError(`Une hypothèse doit viser un fait existant : ${id}.`);
     }
   }
   for (const test of program.tests) {
-    if (typeof test.label !== 'string' || !program.nodes.some((node) => node.id === test.target) || (test.scenario && !program.scenarios.some((scenario) => scenario.id === test.scenario))) throw new TypeError(`Cible ou scénario du test introuvable : ${test.id}.`);
+    if (typeof test.label !== 'string' || !program.nodes.some((node) => node.id === test.target) || (test.scenario && !program.scenarios.some((scenario) => scenario.id === test.scenario))) throw new TypeError(`Cible ${test.target} ou scénario ${test.scenario ?? 'base'} introuvable.`);
     if (!test.expected || !['known', 'unknown', 'blocked', 'error'].includes(test.expected.status) || (Object.hasOwn(test.expected, 'value') && !scalar(test.expected.value))) throw new TypeError(`Attente invalide : ${test.id}.`);
     if (test.rationale !== undefined && (typeof test.rationale !== 'string' || test.rationale.length > 8000)) throw new TypeError(`Justification du test invalide : ${test.id}.`);
   }
