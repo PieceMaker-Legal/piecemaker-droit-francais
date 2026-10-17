@@ -134,6 +134,14 @@ function sessionScopedEnvironment(environment, sessions) {
       const scoped = SESSION_PROXY_KEYS.has(key) ? sessions.getStore() : undefined;
       return scoped === undefined ? Reflect.get(target, key) : scoped;
     },
+    set(target, key, value) {
+      target[key] = value;
+      return true;
+    },
+    deleteProperty(target, key) {
+      delete target[key];
+      return true;
+    },
   });
 }
 
