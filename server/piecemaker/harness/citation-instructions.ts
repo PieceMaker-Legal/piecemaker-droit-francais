@@ -9,7 +9,22 @@ export function withCitationInstructions(command: string) {
 }
 
 export function withoutCitationInstructions(command: string) {
-  if (!command.endsWith(CLOSE)) return command;
-  const start = command.lastIndexOf(`\n\n${OPEN}\n`);
-  return start < 0 ? command : command.slice(0, start);
+  const trimmed = command.trimEnd();
+  const start = trimmed.lastIndexOf(OPEN);
+  if (start < 0 || !trimmed.endsWith(CLOSE)) return command;
+  const before = trimmed.slice(0, start);
+  const kept = before.replace(/(\r?\n\r?\n| )$/, '');
+  return before && kept === before ? command : kept;
+}
+
+type SearchMatcher<Snippet> = {
+  matchesQuery: (text: string) => boolean;
+  buildSnippet: (text: string) => Snippet;
+};
+
+export function withoutCitationInstructionsInSearch<Snippet>(matcher: SearchMatcher<Snippet>): SearchMatcher<Snippet> {
+  return {
+    matchesQuery: (text) => matcher.matchesQuery(withoutCitationInstructions(text)),
+    buildSnippet: (text) => matcher.buildSnippet(withoutCitationInstructions(text)),
+  };
 }
