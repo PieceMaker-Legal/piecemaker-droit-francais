@@ -27,6 +27,26 @@ test('la liste des pièces scannées annoncée par le pipeline remonte à l’ap
   }
 });
 
+test('le script Python reçoit un environnement UTF-8, même sur une console cp1252 (WIN-006)', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-job-'));
+  const script = path.join(directory, 'job.js');
+  fs.writeFileSync(script, "console.log('OCR_REQUIRED:' + JSON.stringify({ files: [process.env.PYTHONUTF8, process.env.PYTHONIOENCODING] })); process.exit(3);\n");
+  const previous = process.env.PYTHON_PATH;
+  process.env.PYTHON_PATH = process.execPath;
+  const announced = [];
+  try {
+    await assert.rejects(
+      runManagedPythonJob({ action: 'anonymize', script, args: [], onOcrRequired: (payload) => announced.push(payload) }),
+      /code 3/,
+    );
+    assert.deepStrictEqual(announced, [{ files: ['1', 'utf-8'] }]);
+  } finally {
+    if (previous === undefined) delete process.env.PYTHON_PATH;
+    else process.env.PYTHON_PATH = previous;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('anonymisation : un traitement seul démarre, le suivant attend puis démarre', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-job-'));
   const script = path.join(directory, 'job.js');
