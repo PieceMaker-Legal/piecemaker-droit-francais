@@ -3,7 +3,19 @@ import type { ReasoningEvaluation, ReasoningExpression, ReasoningProgram, Reason
 import { detectConflicts, isLegalDate, validateAnnotations } from './model.js';
 
 const ID = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/;
-const OPS: Record<string, [number, number]> = { and: [2, 20], or: [2, 20], not: [1, 1], equal: [2, 2], greater: [2, 2], atLeast: [2, 2], less: [2, 2], atMost: [2, 2], add: [2, 20], subtract: [2, 2], multiply: [2, 20], divide: [2, 2], if: [3, 3] };
+const OPS: Record<string, [number, number]> = { and: [2, 20], or: [2, 20], not: [1, 1], equal: [2, 2], greater: [2, 2], atLeast: [2, 2], less: [2, 2], atMost: [2, 2], add: [2, 20], subtract: [2, 2], multiply: [2, 20], divide: [2, 2], if: [3, 3], addDuration: [3, 3], daysBetween: [2, 2] };
+const DURATIONS = ['days', 'months', 'years'];
+const COMPARISONS = ['greater', 'atLeast', 'less', 'atMost'];
+
+export function addDuration(date: string, amount: number, unit: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+  if (unit === 'days') return new Date(Date.UTC(year, month - 1, day) + amount * 86400000).toISOString().slice(0, 10);
+  const total = year * 12 + month - 1 + (unit === 'years' ? amount * 12 : amount);
+  const targetYear = Math.floor(total / 12);
+  const targetMonth = total - targetYear * 12;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  return `${String(targetYear).padStart(4, '0')}-${String(targetMonth + 1).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
+}
 
 export function emptyProgram(): ReasoningProgram {
   return { version: 1, nodes: [], sources: [], scenarios: [], tests: [] };
@@ -45,6 +57,7 @@ export function validateProgram(program: ReasoningProgram) {
     } else {
       if (node.expression === undefined || node.value !== undefined) throw new TypeError(`Expression attendue : ${node.id}.`);
       validateExpression(node.expression);
+      if (Array.isArray(node.exceptions)) for (const exception of node.exceptions) { validateExpression(exception?.when); validateExpression(exception?.then); }
     }
   }
   for (const scenario of program.scenarios) {
@@ -70,15 +83,17 @@ export function evaluateProgram(program: ReasoningProgram): ReasoningEvaluation[
     const cache = new Map<string, ReasoningResult>();
     const evaluating = new Set<string>();
     const applying = new Set<string>();
-    const outcome = (id: string, status: ReasoningResult['status'], value: ReasoningValue = null, issues: string[] = []): ReasoningResult => ({ id, status, value, dependencies: [], missing: status === 'unknown' ? [id] : [], assumptions: [], issues });
+    const outcome = (id: string, status: ReasoningResult['status'], value: ReasoningValue = null, issues: string[] = []): ReasoningResult => ({ id, status, value, dependencies: [], missing: status === 'unknown' ? [id] : [], assumptions: [], issues, unestablished: [] });
     const merge = (id: string, children: ReasoningResult[], result: ReasoningResult): ReasoningResult => ({
       ...result, id,
       dependencies: [...new Set(children.flatMap((child) => child.dependencies))],
       missing: [...new Set(children.flatMap((child) => child.missing))],
       assumptions: [...new Set(children.flatMap((child) => child.assumptions))],
       issues: [...new Set([...result.issues, ...children.flatMap((child) => child.issues)])],
+      unestablished: [...new Set([...(result.unestablished ?? []), ...children.flatMap((child) => child.unestablished ?? [])])],
     });
     const sourceIssues = (node: ReasoningProgram['nodes'][number]): string[] => {
+      if (node.review?.decision === 'rejected') return ['Écarté par l’avocat.'];
       if (node.inputIssue) return [node.inputIssue];
       const objections = conflicts.filter((conflict) => conflict.nodes.includes(node.id));
       if (objections.length) return objections.map((conflict) => conflict.message);
@@ -96,6 +111,18 @@ export function evaluateProgram(program: ReasoningProgram): ReasoningEvaluation[
         }
       }
       return [];
+    };
+    const applyExceptions = (rule: ReasoningProgram['nodes'][number], args: Record<string, ReasoningResult>): ReasoningResult => {
+      const checks = (rule.exceptions ?? []).map((exception) => ({ exception, result: expression(exception.when, args) }));
+      const results = checks.map((check) => check.result);
+      const failed = results.find((entry) => entry.status === 'error' || entry.status === 'blocked');
+      if (failed) return merge('', results, outcome('', failed.status));
+      if (results.some((entry) => entry.status === 'known' && typeof entry.value !== 'boolean')) return merge('', results, outcome('', 'error', null, [`La condition d’une exception de ${rule.id} doit être booléenne.`]));
+      const active = checks.filter((check) => check.result.status === 'known' && check.result.value === true);
+      if (active.length > 1) return merge('', results, outcome('', 'error', null, [`Conflit d’exceptions dans ${rule.id} : ${active.map((check) => check.exception.id).join(', ')}.`]));
+      if (results.some((entry) => entry.status !== 'known')) return merge('', results, outcome('', 'unknown', null, [`Exception de ${rule.id} non écartée.`]));
+      const chosen = active.length ? expression(active[0].exception.then, args) : expression(rule.expression!, args);
+      return merge('', [...results, chosen], active.length ? { ...chosen, issues: [...chosen.issues, `Exception appliquée : ${active[0].exception.label}.`] } : chosen);
     };
     const expression = (value: ReasoningExpression, bindings: Record<string, ReasoningResult> = {}): ReasoningResult => {
       if (value === null || typeof value !== 'object') return value === null ? outcome('', 'unknown') : outcome('', 'known', value);
@@ -118,7 +145,7 @@ export function evaluateProgram(program: ReasoningProgram): ReasoningEvaluation[
         if (date.value < rule.validity!.from || (rule.validity!.to !== null && date.value >= rule.validity!.to)) return merge('', [date], outcome('', 'blocked', null, [`${rule.id} n’est pas applicable à la date ${date.value}.` ]));
         const args = Object.fromEntries(Object.entries(value.bindings).map(([id, argument]) => [id, expression(argument, bindings)]));
         applying.add(rule.id);
-        const applied = expression(rule.expression!, args);
+        const applied = applyExceptions(rule, args);
         applying.delete(rule.id);
         const result = merge('', [date, applied], applied);
         return { ...result, dependencies: [...new Set([rule.id, ...result.dependencies])] };
@@ -146,7 +173,16 @@ export function evaluateProgram(program: ReasoningProgram): ReasoningEvaluation[
         if (typeof values[0] !== 'boolean') return merge('', args, outcome('', 'error', null, ['not exige un booléen.']));
         result = !values[0];
       } else if (value.op === 'and' || value.op === 'or') result = value.op === 'and' ? values.every(Boolean) : values.some(Boolean);
-      else {
+      else if (value.op === 'addDuration') {
+        if (!isLegalDate(values[0]) || !Number.isSafeInteger(values[1]) || !DURATIONS.includes(String(values[2]))) return merge('', args, outcome('', 'error', null, ['addDuration attend une date ISO, un entier et days, months ou years.']));
+        result = addDuration(values[0], values[1] as number, String(values[2]));
+      } else if (value.op === 'daysBetween') {
+        if (!isLegalDate(values[0]) || !isLegalDate(values[1])) return merge('', args, outcome('', 'error', null, ['daysBetween attend deux dates ISO.']));
+        result = Math.round((Date.parse(values[1]) - Date.parse(values[0])) / 86400000);
+      } else if (COMPARISONS.includes(value.op) && isLegalDate(values[0]) && isLegalDate(values[1])) {
+        const [left, right] = values as string[];
+        result = value.op === 'greater' ? left > right : value.op === 'atLeast' ? left >= right : value.op === 'less' ? left < right : left <= right;
+      } else {
         if (!values.every((item) => typeof item === 'number')) return merge('', args, outcome('', 'error', null, ['Opération numérique sur une valeur non numérique.']));
         const numbers = values as number[];
         switch (value.op) {
@@ -166,6 +202,18 @@ export function evaluateProgram(program: ReasoningProgram): ReasoningEvaluation[
       }
       return merge('', args, outcome('', 'known', result));
     };
+    const unestablished = (node: ReasoningProgram['nodes'][number], proof: NonNullable<ReasoningResult['proof']>, issues: string[]): ReasoningResult => {
+      const evidence = node.evidence;
+      const notes = [
+        ...issues,
+        ...(node.evidenceIssue ? [node.evidenceIssue] : []),
+        ...(evidence && proof === 'to_examine' ? [`Preuve à examiner : ${node.evidenceCandidates!.map((piece) => piece.label).join(' ; ')}.`] : []),
+        ...(evidence && proof === 'unestablished' && !node.evidenceIssue ? [`Pièce à produire : ${[evidence.nature?.join(' ou ') ?? 'pièce', evidence.mentions?.length ? `mentionnant ${evidence.mentions.join(', ')}` : '', evidence.from ? `à partir du ${evidence.from}` : '', evidence.to ? `avant le ${evidence.to}` : ''].filter(Boolean).join(' ')}.`] : []),
+      ];
+      const binary = Boolean(evidence) || typeof node.value === 'boolean';
+      if (node.burden && binary && proof === 'unestablished') return { ...outcome(node.id, 'known', false, [`Non établi : charge de la preuve sur ${node.burden}.`, ...notes]), unestablished: [node.id], proof };
+      return { ...outcome(node.id, 'unknown', null, [...(node.burden ? [`Non établi : charge de la preuve sur ${node.burden}.`] : []), ...notes]), proof };
+    };
     const evaluate = (id: string): ReasoningResult => {
       const cached = cache.get(id);
       if (cached) return cached;
@@ -174,13 +222,17 @@ export function evaluateProgram(program: ReasoningProgram): ReasoningEvaluation[
       if (!node) return outcome(id, 'unknown', null, [`Nœud absent : ${id}.`]);
       evaluating.add(id);
       let result: ReasoningResult;
-      if (node.kind === 'fact' && Object.hasOwn(scenario.assumptions, id)) result = { ...outcome(id, scenario.assumptions[id] === null ? 'unknown' : 'known', scenario.assumptions[id]), assumptions: [id] };
+      if (node.kind === 'fact' && Object.hasOwn(scenario.assumptions, id)) result = { ...outcome(id, scenario.assumptions[id] === null ? 'unknown' : 'known', scenario.assumptions[id]), assumptions: [id], proof: 'assumed' };
+      else if (node.kind === 'fact' && node.review?.decision === 'retained') result = { ...outcome(id, 'known', node.value ?? true), proof: 'established' };
+      else if (node.kind === 'fact' && node.review?.decision === 'rejected') result = unestablished(node, 'unestablished', ['Écarté par l’avocat.']);
       else if (sourceIssues(node).length) result = outcome(id, 'blocked', null, sourceIssues(node));
       else if (node.layer === 'law') result = outcome(id, 'unknown', null, ['Règle à appliquer avec ses paramètres et une date explicite.']);
       else if (node.kind === 'fact') {
-        if (node.state === 'disputed' || node.state === 'unknown' || node.state === 'reported' || node.value === null || node.value === undefined) result = outcome(id, 'unknown');
-        else if (!node.sources.length) result = outcome(id, 'blocked', null, ['Un fait renseigné doit être rattaché à une citation vérifiée.']);
-        else result = outcome(id, 'known', node.value);
+        const hasValue = node.value !== null && node.value !== undefined;
+        const asserted = node.state === undefined || node.state === 'asserted';
+        if (asserted && node.sources.length && (hasValue || node.evidence)) result = { ...outcome(id, 'known', hasValue ? node.value! : true), proof: 'established' };
+        else if (asserted && hasValue && !node.sources.length) result = outcome(id, 'blocked', null, ['Un fait renseigné doit être rattaché à une citation vérifiée.']);
+        else result = unestablished(node, node.state === 'disputed' ? 'disputed' : node.evidenceCandidates?.length ? 'to_examine' : 'unestablished', []);
       } else result = { ...expression(node.expression!), id };
       evaluating.delete(id);
       if (result.status === 'unknown' && !result.missing.filter(Boolean).length) result.missing = [id];

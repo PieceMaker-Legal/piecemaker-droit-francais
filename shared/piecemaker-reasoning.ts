@@ -7,9 +7,15 @@ export type ReasoningExpression = ReasoningValue | { ref: string } | {
   bindings: Record<string, ReasoningExpression>;
   at: ReasoningExpression;
 } | {
-  op: 'and' | 'or' | 'not' | 'equal' | 'greater' | 'atLeast' | 'less' | 'atMost' | 'add' | 'subtract' | 'multiply' | 'divide' | 'if';
+  op: 'and' | 'or' | 'not' | 'equal' | 'greater' | 'atLeast' | 'less' | 'atMost' | 'add' | 'subtract' | 'multiply' | 'divide' | 'if' | 'addDuration' | 'daysBetween';
   args: ReasoningExpression[];
 };
+
+export type ReasoningEvidence = { nature?: string[]; mentions?: string[]; from?: string; to?: string };
+export type ReasoningEvidenceCandidate = { id: string; label: string; date: string | null; nature: string | null };
+export type ReasoningReview = { decision: 'retained' | 'rejected'; at: string; note?: string };
+export type ReasoningException = { id: string; label: string; when: ReasoningExpression; then: ReasoningExpression };
+export type ReasoningProof = 'established' | 'unestablished' | 'to_examine' | 'disputed' | 'assumed';
 
 export type ReasoningNode = {
   id: string;
@@ -28,6 +34,14 @@ export type ReasoningNode = {
   relation?: { subject: string; predicate: string; object: string; context: string; unit?: string; eventDate?: string; documentDate?: string };
   input?: { table: 'piecemaker_nodes' | 'piecemaker_links' | 'piecemaker_citations'; where: Record<string, ReasoningValue>; column: string; path?: string };
   inputIssue?: string;
+  burden?: string;
+  evidence?: ReasoningEvidence;
+  evidenceCandidates?: ReasoningEvidenceCandidate[];
+  evidenceIssue?: string;
+  conditions?: Record<string, { label: string; burden?: string }>;
+  exceptions?: ReasoningException[];
+  origin?: 'library';
+  review?: ReasoningReview;
 };
 
 export type ReasoningLink = { id: string; from: string; to: string; relation: 'supports' | 'contradicts' | 'reports' | 'depends_on' | 'qualifies' | 'precedes'; rationale?: string };
@@ -58,6 +72,19 @@ export type ReasoningTest = {
   scenario?: string;
   rationale?: string;
   expected: { status: 'known' | 'unknown' | 'blocked' | 'error'; value?: ReasoningValue };
+  review?: ReasoningReview;
+};
+
+export type ReasoningMatrixRow = {
+  rule: string;
+  parameter: string;
+  label: string;
+  burden?: string;
+  facts: string[];
+  status: 'established' | 'unestablished' | 'to_examine' | 'disputed' | 'assumed' | 'unknown' | 'blocked';
+  pieces: string[];
+  candidates: string[];
+  objections: string[];
 };
 
 export type ReasoningTheory = {
@@ -68,6 +95,8 @@ export type ReasoningTheory = {
   tests: string[];
   status: 'incomplete' | 'untested' | 'failing' | 'passing';
   issues: string[];
+  validatedTests: number;
+  matrix: ReasoningMatrixRow[];
 };
 
 export type ReasoningProgram = {
@@ -87,6 +116,8 @@ export type ReasoningResult = {
   missing: string[];
   assumptions: string[];
   issues: string[];
+  unestablished?: string[];
+  proof?: ReasoningProof;
 };
 
 export type ReasoningEvaluation = {
@@ -104,5 +135,9 @@ export type ReasoningSnapshot = {
   diagnostics: string[];
   conflicts?: ReasoningConflict[];
   theories?: ReasoningTheory[];
+  notes?: string[];
   demo?: boolean;
 };
+
+export type ReasoningDraftFinding = { kind: 'amount' | 'date' | 'reserve'; text: string; message: string };
+export type ReasoningDraftCheck = { file: string; findings: ReasoningDraftFinding[]; checkedAmounts: number; checkedDates: number };
