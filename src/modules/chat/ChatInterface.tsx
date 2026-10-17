@@ -22,7 +22,7 @@ import { useScheduledMessages } from '@/modules/chat/composer/useScheduledMessag
 import { useChatSessionState } from '@/modules/chat/hooks/useChatSessionState';
 import { useChatRealtimeHandlers } from '@/modules/chat/hooks/useChatRealtimeHandlers';
 import { useChatComposerState } from '@/modules/chat/hooks/useChatComposerState';
-import { useSessionStore } from '@/modules/chat/hooks/useSessionStore';
+import { useSessionStore } from '@/piecemaker/chat/useMistralSessionStore';
 import {
   useProcessingSessions,
   useSessionProtectionActions,

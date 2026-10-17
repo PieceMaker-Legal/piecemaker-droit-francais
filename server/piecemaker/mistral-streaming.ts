@@ -6,14 +6,25 @@ import json
 import sys
 from vibe.cli import programmatic
 from vibe.app_server.events import HistoryEntryAdded, HistoryEntryUpdated
-from vibe.app_server.models import PublicMessageEntry
+from vibe.app_server.models import PublicMessageEntry, PublicReasoningEntry
 
 class StreamingOutput(programmatic.ProgrammaticOutput):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._streamed_text = {}
+        self._streamed_reasoning = {}
 
     def consume(self, event):
+        if (self._format is programmatic.OutputFormat.STREAMING
+            and isinstance(event, (HistoryEntryAdded, HistoryEntryUpdated))
+            and isinstance(event.entry, PublicReasoningEntry)
+            and event.entry.turn_id is not None):
+            entry = event.entry
+            if entry.text and self._streamed_reasoning.get(entry.id) != entry.text:
+                self._streamed_reasoning[entry.id] = entry.text
+                print(json.dumps({"type": "piecemaker_reasoning", "sessionId": entry.session_id,
+                    "id": entry.id, "turnId": entry.turn_id, "createdAt": entry.created_at,
+                    "content": entry.text}, ensure_ascii=False), file=self._stream, flush=True)
         if (self._format is programmatic.OutputFormat.STREAMING
             and isinstance(event, (HistoryEntryAdded, HistoryEntryUpdated))
             and isinstance(event.entry, PublicMessageEntry)
@@ -32,6 +43,10 @@ class StreamingOutput(programmatic.ProgrammaticOutput):
         super().consume(event)
 
     def _emit_completed(self, entry):
+        if entry.id in self._streamed_reasoning:
+            if entry.generation_status is programmatic.PublicEntryGenerationStatus.COMPLETED:
+                self._emitted.add(entry.id)
+            return
         if entry.id in self._streamed_text and entry.id not in self._emitted:
             if entry.generation_status is programmatic.PublicEntryGenerationStatus.COMPLETED:
                 self._emitted.add(entry.id)
