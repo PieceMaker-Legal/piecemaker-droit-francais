@@ -1,6 +1,7 @@
 import { AlertTriangle, LogIn } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { VibeInstallNotice } from '@/piecemaker/vibe/VibeInstallNotice';
 import { Badge, Button, LLMProviderLogo } from '@/shared/ui';
 import type { AgentProvider, ProviderAuthStatus, ProviderAuthSubscriptionOverride } from '@/shared/types';
 
@@ -161,6 +162,8 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
           {!authStatus.loading && authStatus.subscriptionOverride && (
             <SubscriptionOverrideNotice override={authStatus.subscriptionOverride} />
           )}
+
+          {agent === 'mistral' && !authStatus.loading && <VibeInstallNotice onInstalled={onLogin} />}
 
           {authStatus.method !== 'api_key' && (
             <div className="border-t border-border/50 pt-4">

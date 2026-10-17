@@ -13,6 +13,7 @@ import {
   findVibeApiKey,
   findVibeBinDirectory,
   isVibeInstalled,
+  piecemakerVibeDirectory,
   resolveVibeExecutable,
   vibeEnvFilePath,
   windowsCredentialProbeScript,
@@ -103,6 +104,28 @@ test('UV_TOOL_BIN_DIR, then XDG_BIN_HOME, then XDG_DATA_HOME/../bin win over ~/.
 
   const onlyXdgData = { '/Users/jean/xdg/bin/vibe': '', '/Users/jean/.local/bin/vibe': '' };
   assert.equal(findVibeBinDirectory(fakeHost({ env, files: onlyXdgData }).host), '/Users/jean/xdg/bin');
+});
+
+test('the vibe installed by PieceMaker is found in ~/.piecemaker/vibe on macOS and Windows', () => {
+  assert.equal(
+    resolveVibeExecutable(fakeHost({ files: { '/Users/jean/.piecemaker/vibe/bin/vibe': '' } }).host),
+    '/Users/jean/.piecemaker/vibe/bin/vibe',
+  );
+  assert.equal(
+    resolveVibeExecutable(fakeHost({ platform: 'win32', files: { 'C:\\Users\\jean\\.piecemaker\\vibe\\Scripts\\vibe.exe': '' } }).host),
+    'C:\\Users\\jean\\.piecemaker\\vibe\\Scripts\\vibe.exe',
+  );
+});
+
+test('PIECEMAKER_HOME moves the PieceMaker vibe folder', () => {
+  const { host } = fakeHost({ env: { PIECEMAKER_HOME: '/srv/pm' }, files: { '/srv/pm/vibe/bin/vibe': '' } });
+  assert.equal(piecemakerVibeDirectory(host), '/srv/pm/vibe');
+  assert.equal(findVibeBinDirectory(host), '/srv/pm/vibe/bin');
+});
+
+test('a vibe the user installed with uv wins over the one PieceMaker installed', () => {
+  const { host } = fakeHost({ files: { '/Users/jean/.local/bin/vibe': '', '/Users/jean/.piecemaker/vibe/bin/vibe': '' } });
+  assert.equal(findVibeBinDirectory(host), '/Users/jean/.local/bin');
 });
 
 test('the Windows environment is read without regard to case, as Windows does', () => {
