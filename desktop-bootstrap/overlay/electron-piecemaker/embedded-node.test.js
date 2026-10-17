@@ -9,7 +9,7 @@ const shimDirectory = path.join(resourcesPath, 'node-shim');
 
 test('adds the node shim after the existing PATH so an installed Node keeps priority', () => {
   const environment = { PATH: 'C:\\Windows\\System32' };
-  assert.equal(addEmbeddedNode({ resourcesPath, environment, exists: (file) => file === path.join(shimDirectory, 'node.cmd') }), true);
+  assert.equal(addEmbeddedNode({ resourcesPath, environment, exists: (file) => file === path.join(shimDirectory, 'node.exe') }), true);
   assert.equal(environment.PATH, `C:\\Windows\\System32${path.delimiter}${shimDirectory}`);
 });
 
