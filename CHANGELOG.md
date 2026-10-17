@@ -3,6 +3,17 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.44](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.43...v2.0.44) (2026-10-17)
+
+### New Features
+
+* **desktop:** icône PieceMaker et guide d'installation allégé ([8e8792a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8e8792a578b6b89026324d50cb202b53d3a3d91a))
+* **desktop:** intégrer le guide Légifrance dans la fenêtre d'installation ([5b3ee45](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5b3ee45dec5bb9f6a9c52666228084435695792c))
+
+### Bug Fixes
+
+* **desktop:** nom d'application PISTE au choix dans le guide ([90b04e6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/90b04e608e4ce9b32888be0d70091b89b8e5f65c))
+
 ## [2.0.43](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.42...v2.0.43) (2026-10-17)
 
 ### Bug Fixes
