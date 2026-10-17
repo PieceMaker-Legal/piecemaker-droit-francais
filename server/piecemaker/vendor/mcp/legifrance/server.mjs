@@ -26,6 +26,7 @@ const child = spawn(pythonFromConfig(home) || (process.platform === 'win32' ? 'p
   windowsHide: true,
   env: {
     ...process.env,
+    PYTHONIOENCODING: 'utf-8',
     PIECEMAKER_HOME: home,
     ...(fs.existsSync(envFile) ? { LEGIFRANCE_ENV_FILE: envFile } : {}),
   },
