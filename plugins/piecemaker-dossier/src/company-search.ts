@@ -1,5 +1,5 @@
 import type { CompanySearchResult } from './api.js';
-import { nodeCode } from './party-codes.js';
+import { codeRegistry, nodeCode } from './party-codes.js';
 import type { PartySide } from './party-codes.js';
 import type { JsonData, KnowledgeNode, KnowledgeSnapshot, KnowledgeUpdateOperation, NodeKind } from './types.js';
 
@@ -25,17 +25,6 @@ type EntityReference = { code: string; nodeId: string };
 const PUBLIC_REGISTER_SOURCE = 'Registre national des entreprises';
 const clean = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 
-function allocateCode(prefix: string, used: Set<string>): string {
-  let number = 1;
-  let code = `${prefix}_${String(number).padStart(2, '0')}`;
-  while (used.has(code)) {
-    number += 1;
-    code = `${prefix}_${String(number).padStart(2, '0')}`;
-  }
-  used.add(code);
-  return code;
-}
-
 function unique(values: string[]): string[] {
   return [...new Set(values.map(clean).filter(Boolean))];
 }
@@ -48,12 +37,12 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
   const aliases = unique([...(input.node?.aliases || []), currentLabel, clean(result.name)]).filter((value) => value !== legalName);
   const companyId = input.nodeId;
   const companyCode = input.node ? nodeCode(input.node) : '';
-  const usedCodes = new Set([
+  const usedCodes = codeRegistry([
     ...graph.nodes.map((node) => nodeCode(node)),
     ...graph.mappings.map((mapping) => clean(mapping.masked)),
     ...(graph.reservedCodes || []),
     companyCode,
-  ].filter(Boolean));
+  ]);
   const operations: KnowledgeUpdateOperation[] = [];
   const references = new Map<string, EntityReference>();
   const fieldOperations: Array<{ entity: ValueEntity; reference: EntityReference }> = [];
@@ -73,7 +62,7 @@ export function buildCompanyValidationOperations(result: CompanySearchResult, in
       if (includeRelation) fieldOperations.push({ entity: { ...entity, value }, reference: existing });
       return existing;
     }
-    const code = allocateCode(entity.prefix, usedCodes);
+    const code = usedCodes.next(entity.prefix);
     const nodeId = `entity:${code}`;
     const data: JsonData = { code, source: 'registre-public' };
     operations.push({ op: 'upsertNode', node: { id: nodeId, kind: entity.kind, label: value, aliases: [], data } });

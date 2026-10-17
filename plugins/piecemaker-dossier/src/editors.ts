@@ -8,7 +8,7 @@ import { deleteEntityOperations, removedAliasOperations } from './exclusions.js'
 import type { DeleteScope } from './exclusions.js';
 import type { ViewData } from './views.js';
 import type { KnowledgeNode, KnowledgeUpdateOperation, NodeKind } from './types.js';
-import { PROCEDURE_POSITIONS, isPartyCode, nodeCode, nodePosition, partyCodeChange } from './party-codes.js';
+import { PROCEDURE_POSITIONS, codeRegistry, isPartyCode, nodeCode, nodePosition, partyCodeChange } from './party-codes.js';
 import type { PartySide } from './party-codes.js';
 import { changeNodeSide, cleanSelection, createEntity, findEntityBySelection, parseSelectionDate } from './selection-categories.js';
 import type { SelectionChange, SelectionGraph } from './selection-categories.js';
@@ -558,10 +558,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
         const existingAddress = data.graph.nodes.find((entry) => entry.kind === 'address' && [entry.label, ...entry.aliases].some((value) => cleanSelection(value).toLocaleLowerCase('fr-FR') === address.toLocaleLowerCase('fr-FR')));
         let addressId = existingAddress?.id;
         if (!addressId) {
-          const usedCodes = new Set([code, ...data.graph.nodes.map(nodeCode), ...data.graph.mappings.map((entry) => entry.masked), ...(data.graph.reservedCodes || [])]);
-          let number = 1;
-          while (usedCodes.has(`ADRESSE_${String(number).padStart(2, '0')}`)) number += 1;
-          const addressCode = `ADRESSE_${String(number).padStart(2, '0')}`;
+          const addressCode = codeRegistry([code, ...data.graph.nodes.map(nodeCode), ...data.graph.mappings.map((entry) => entry.masked), ...(data.graph.reservedCodes || [])]).next('ADRESSE');
           addressId = `entity:${addressCode}`;
           operations.push({ op: 'upsertNode', node: { id: addressId, kind: 'address', label: address, aliases: [], data: { code: addressCode } } });
           operations.push({ op: 'upsertMapping', mapping: { nodeId: addressId, real: address, masked: addressCode } });
