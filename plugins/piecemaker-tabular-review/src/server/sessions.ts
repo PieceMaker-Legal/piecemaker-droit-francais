@@ -6,6 +6,7 @@ import path from 'node:path';
 
 import type { Provider } from '../shared.js';
 import { PIECEMAKER_HOME, PLUGIN_HOME, UserError } from './paths.js';
+import { vibeExecutable } from './vibe-executable.js';
 
 type Runtime = {
   nodePath?: string;
@@ -201,7 +202,7 @@ function codexCommand(request: SessionRequest, directory: string): Command {
 function vibeCommand(request: SessionRequest, directory: string): Command {
   const tools = request.mode === 'path' ? VIBE_PATH_TOOLS : ['re:^$'];
   return {
-    command: runtime().vibePath || 'vibe',
+    command: vibeExecutable(runtime().vibePath, { environment: request.environment }),
     args: [
       '-p',
       '--output', 'json',
