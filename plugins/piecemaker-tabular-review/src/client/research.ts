@@ -4,6 +4,8 @@ import {
   BULLETIN_PUBLICATIONS,
   CAA_VILLES,
   CASSATION_MATIERES,
+  DEFAULT_MODEL,
+  DEFAULT_PROVIDER,
   defaultUpdateSince,
   LEBON_PUBLICATIONS,
   ORIGIN_LABELS,
@@ -573,14 +575,15 @@ export function createResearchView(app: App): View {
     questions = draftColumns(draft?.columns.length ? { columns: draft.columns } as Template : null);
     renderQuestions();
     draftId = draft?.id ?? null;
-    if (draft?.provider && draft.provider !== providerSelect.value) {
-      providerSelect.value = draft.provider;
-      preferredModel = draft.model ?? '';
+    const provider = draft?.provider ?? DEFAULT_PROVIDER;
+    if (provider !== providerSelect.value) {
+      providerSelect.value = provider;
+      preferredModel = draft?.model ?? DEFAULT_MODEL[provider];
       void loadProviderModels();
     } else if (draft?.model && models.options.some((option) => option.value === draft.model)) {
       modelSelect.value = draft.model;
     } else {
-      preferredModel = draft?.model ?? '';
+      preferredModel = draft?.model ?? DEFAULT_MODEL[provider];
     }
     renderAll();
   }
@@ -980,6 +983,8 @@ export function createResearchView(app: App): View {
     renderSourceFilters();
     renderQuestions();
     renderAll();
+    providerSelect.value = DEFAULT_PROVIDER;
+    preferredModel = DEFAULT_MODEL[DEFAULT_PROVIDER];
     void loadProviderModels();
     void app.rpc<{ configured: boolean }>('GET', '/research/legifrance').then((result) => {
       configured = result.configured;

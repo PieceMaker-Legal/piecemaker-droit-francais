@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-assistant-'));
 const project = path.join(home, 'Dossier Exemple');
 vi.stubEnv('HOME', home);
+vi.stubEnv('USERPROFILE', home);
 
 const { assistant } = await import('../server/assistant.js');
 
@@ -34,12 +35,12 @@ describe('outil tabular_review', () => {
   it('prépare une analyse depuis un dossier de documents puis la lance', async () => {
     const run = launchers();
     const prepared = await assistant({ action: 'preparer', project, nom: 'Baux', documents: ['Pièces/Contrats/'], questions: [{ consigne: 'Quelle est la durée du bail ?' }] }, run) as Record<string, unknown>;
-    expect(prepared).toMatchObject({ nom: 'Baux', mode: 'analyse', documents: ['Pièces/Contrats/avenant.md', 'Pièces/Contrats/bail.md'], questions: ['Quelle est la durée du bail ?'], ia: 'claude', modele_ia: 'haiku', a_completer: [] });
+    expect(prepared).toMatchObject({ nom: 'Baux', mode: 'analyse', documents: ['Pièces/Contrats/avenant.md', 'Pièces/Contrats/bail.md'], questions: ['Quelle est la durée du bail ?'], ia: 'mistral', modele_ia: 'mistral-small', a_completer: [] });
     const listed = await assistant({ action: 'lister', project }, run) as { projets: { projet: string }[] };
     expect(listed.projets.map((entry) => entry.projet)).toEqual([prepared.projet]);
     const launched = await assistant({ action: 'lancer', project, projet: prepared.projet, proxyOrigin: 'http://127.0.0.1:9' }, run);
     expect(launched).toEqual({ fichier: 'Baux.json', statut: 'running' });
-    expect(run.launchAnalysis).toHaveBeenCalledWith(expect.objectContaining({ project, model: 'haiku', proxyOrigin: 'http://127.0.0.1:9', rows: [{ label: 'avenant', documents: ['Pièces/Contrats/avenant.md'] }, { label: 'bail', documents: ['Pièces/Contrats/bail.md'] }] }));
+    expect(run.launchAnalysis).toHaveBeenCalledWith(expect.objectContaining({ project, provider: 'mistral', model: 'mistral-small', proxyOrigin: 'http://127.0.0.1:9', rows: [{ label: 'avenant', documents: ['Pièces/Contrats/avenant.md'] }, { label: 'bail', documents: ['Pièces/Contrats/bail.md'] }] }));
     expect((await assistant({ action: 'lister', project }, run) as { projets: unknown[] }).projets).toEqual([]);
   });
 
@@ -59,6 +60,16 @@ describe('outil tabular_review', () => {
     await assistant({ action: 'enregistrer_modele', modele: created.id, description: 'Pour les baux' }, run);
     expect(await assistant({ action: 'modeles', modele: 'modèle exemple' }, run)).toMatchObject({ id: created.id, description: 'Pour les baux', questions: [{ nom: 'Date' }] });
     expect((await assistant({ action: 'modeles' }, run) as { nom: string }[]).some((entry) => entry.nom === 'Modèle exemple')).toBe(true);
+  });
+
+  it('garde Claude et les autres fournisseurs tels qu’ils sont choisis', async () => {
+    const run = launchers();
+    const claude = await assistant({ action: 'preparer', project, nom: 'Claude', ia: 'claude', documents: ['Pièces/courrier.md'], questions: [{ consigne: 'Quel est l’objet ?' }] }, run) as Record<string, unknown>;
+    expect(claude).toMatchObject({ ia: 'claude', modele_ia: 'haiku', a_completer: [] });
+    const codex = await assistant({ action: 'preparer', project, nom: 'Codex', ia: 'codex', documents: ['Pièces/courrier.md'], questions: [{ consigne: 'Quel est l’objet ?' }] }, run) as Record<string, unknown>;
+    expect(codex).toMatchObject({ ia: 'codex', modele_ia: '', a_completer: ['modele_ia'] });
+    const mistral = await assistant({ action: 'preparer', project, nom: 'Mistral', ia: 'mistral', modele_ia: 'mistral-medium-3.5', documents: ['Pièces/courrier.md'], questions: [{ consigne: 'Quel est l’objet ?' }] }, run) as Record<string, unknown>;
+    expect(mistral).toMatchObject({ ia: 'mistral', modele_ia: 'mistral-medium-3.5', a_completer: [] });
   });
 
   it('refuse un document inconnu et le tri des pièces', async () => {

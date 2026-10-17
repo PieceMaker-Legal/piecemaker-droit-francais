@@ -35,6 +35,7 @@ const VIBE_MODELS = JSON.stringify({
   'mistral-medium-3.5': { name: 'mistral-vibe-cli-latest', provider: 'mistral', alias: 'mistral-medium-3.5', display_name: 'Mistral Medium 3.5', thinking: 'medium' },
   'glm-5.3': { name: 'zai-glm-5-3', provider: 'mistral', alias: 'glm-5.3', display_name: 'Z.ai GLM 5.3', thinking: 'medium' },
   'glm-5.2': { name: 'zai-glm-5-2', provider: 'mistral', alias: 'glm-5.2', display_name: 'Z.ai GLM 5.2', thinking: 'medium' },
+  'mistral-small': { name: 'mistral-small-latest', provider: 'mistral', alias: 'mistral-small', display_name: 'Mistral Small' },
 });
 
 let runtimeCache: Runtime | null = null;
