@@ -54,7 +54,7 @@ test('network failure and unavailable gateway show a self-contained recovery pag
     const response = await navigation(worker(fetch));
     const page = await response.text();
     assert.match(page, /Relancer PieceMaker/);
-    assert.match(page, /Si votre ordinateur est éteint/);
+    assert.match(page, /Ouvrez l’app Tailscale et activez la connexion/);
     assert.match(page, /data:image\/png;base64,/);
     assert.doesNotMatch(page, /__LOGO__/);
     assert.match(response.headers.get('content-type'), /charset=utf-8/);
@@ -112,7 +112,9 @@ test('remote access explains the powered-off computer and never opens a local pr
   page.click();
   assert.equal(page.location.href, '');
   assert.equal(page.elements.get('relaunch').textContent, 'Réessayer');
-  assert.match(page.elements.get('hint').textContent, /ordinateur est éteint/);
+  assert.equal(page.elements.get('title').textContent, 'Ordinateur injoignable');
+  assert.match(page.elements.get('description').textContent, /n’arrive pas à se connecter à votre ordinateur/);
+  assert.match(page.elements.get('hint').textContent, /Inutile de réinstaller/);
   assert.equal(page.elements.get('tailscale').hidden, false);
   assert.ok(page.reloads() >= 1);
   assert.equal(page.dark(), false);
