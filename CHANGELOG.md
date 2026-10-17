@@ -3,6 +3,23 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.47](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.45...v2.0.47) (2026-10-17)
+
+### New Features
+
+* **mistral:** install Vibe from the Mistral account panel ([38257b6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/38257b6d05a8b44bbe189294174532b4b5a5cd04))
+* **pwa:** refresh phone interface without reinstalling ([609a630](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/609a6301a6362e8c2f88b7a2c9ea3b1b309fd6e0))
+
+### Bug Fixes
+
+* **mistral:** detect Vibe and its API key instead of the mistral CLI ([3f1de14](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3f1de140a820979dccc0bf91c69bb34470793336))
+* **pwa:** clarify phone offline recovery steps ([ca3da4b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ca3da4bef4592a80b174cb1f6829436823c98c47))
+* **pwa:** remove obvious internet connection reminders ([15c0d05](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/15c0d05a378615942c13495018c526ed81d8e163))
+* **pwa:** remove redundant phone offline messages ([4e5bbb5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4e5bbb55e223d2b446d7d5b78c3c388044386447))
+* **pwa:** remove repeated Tailscale check ([d1b22ee](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d1b22ee046357cb3fed449ceae9ffe9fc1248605))
+* **pwa:** require both phone and computer connection checks ([eef1877](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/eef18773cdcaf341f35f44fdb43960ec4e2a9ba4))
+* **pwa:** simplify Tailscale connection instruction ([89ceb9f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/89ceb9f891657612af7b8955e40979a781519f8b))
+
 ## [2.0.45](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.44...v2.0.45) (2026-10-17)
 
 ### New Features
