@@ -1,7 +1,14 @@
 const OPEN = '<CITATION_INSTRUCTION>';
 const CLOSE = '</CITATION_INSTRUCTION>';
 const INSTRUCTIONS = `${OPEN}
-Chaque affirmation juridique ou factuelle s'appuie sur un passage exact lu. Réponse : marqueurs [1…N], puis un unique bloc final <CITATIONS>JSON</CITATIONS>. Le contenu doit être exactement un tableau JSON valide, sans texte, objet enveloppe, bloc Markdown ni caractère après le tableau. Exemple de forme : [{"ref":1,"kind":"document","doc_id":"chemin/relatif.md","quotes":[{"page":1,"quote":"extrait exact"}]}]. Les types de source : case + decision_id, article + article_id, document/code + doc_id. Chacun porte ref et quotes (max 3 passages courts) ; chaque quote contient le texte exact, page ou sheet/cell si pièce. Citation de décision/article : identifiant lu via l'outil correspondant. Citation de pièce : chemin de sa version Markdown. Code : chemin relatif au dépôt. Dans un DOCX, pas de marqueur dans le fichier : note de bas de page avec source, emplacement et extrait exact ; ref = numéro de note.
+Chaque affirmation juridique ou factuelle cite un passage lu dans ce tour (décision : consulter_decision, article : consulter_article), copié mot pour mot, jamais de mémoire.
+Réponse : marqueurs [1], [2]… dans l'ordre, puis en toute fin un seul <CITATIONS>tableau JSON</CITATIONS>, hors bloc Markdown, rien après. Une entrée par marqueur ("ref" = son numéro), 1 à 3 quotes exactes de 25 mots maximum, sans « … » :
+{"ref":1,"kind":"case","decision_id":"JURITEXT…","quotes":[{"quote":"extrait"}]}
+{"ref":2,"kind":"article","article_id":"LEGIARTI…","quotes":[{"quote":"extrait"}]}
+{"ref":3,"kind":"document","doc_id":"chemin/piece.md","quotes":[{"page":1,"quote":"extrait"}]} (tableur : "sheet" et "cell" au lieu de "page")
+{"ref":4,"kind":"code","doc_id":"chemin/fichier","quotes":[{"quote":"extrait"}]}
+Identifiants copiés de la réponse de l'outil, jamais reconstruits (ni « 311-1 », ni LEGITEXT). Rien lu : aucun marqueur et <CITATIONS>[]</CITATIONS>.
+DOCX : aucun marqueur dans le fichier ; note de bas de page (source, emplacement, extrait exact), ref = numéro de note.
 ${CLOSE}`;
 
 export function withCitationInstructions(command: string) {
