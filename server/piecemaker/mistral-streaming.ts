@@ -2,11 +2,31 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const vibeStreamingEntrypoint = `
+import asyncio
 import json
+import os
 import sys
 from vibe.cli import programmatic
 from vibe.app_server.events import HistoryEntryAdded, HistoryEntryUpdated
 from vibe.app_server.models import PublicMessageEntry, PublicReasoningEntry
+
+if sys.platform == "win32":
+    from vibe.core.utils import shell as shell_utils
+    from vibe.core.tools.builtins import bash as bash_tool
+    os.environ["PATH"] = os.path.dirname(sys.executable) + os.pathsep + os.environ.get("PATH", "")
+    original_spawn_shell_command = shell_utils.spawn_shell_command
+
+    async def spawn_windows_shell_command(command, *, cwd=None):
+        if shell_utils.uses_posix_shell():
+            return await original_spawn_shell_command(command, cwd=cwd)
+        return await asyncio.create_subprocess_shell(
+            command, cwd=cwd, env=shell_utils._shell_environment(),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.DEVNULL,
+        )
+
+    shell_utils.spawn_shell_command = spawn_windows_shell_command
+    bash_tool.spawn_shell_command = spawn_windows_shell_command
 
 class StreamingOutput(programmatic.ProgrammaticOutput):
     def __init__(self, *args, **kwargs):

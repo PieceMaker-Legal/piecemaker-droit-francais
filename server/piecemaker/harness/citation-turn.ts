@@ -21,6 +21,9 @@ const SOURCE_TOOL = /(?:^|_)consulter_(?:decision|article)$/;
 const { markdownCounterpart } = require(path.join(vendor, 'protection.cjs'));
 const JSZip = require('jszip');
 const OPEN = '<CITATIONS>';
+const INSTRUCTION_OPEN = '<CITATION_INSTRUCTION>';
+const INSTRUCTION_CLOSE = '</CITATION_INSTRUCTION>';
+const CITATIONS_CLOSE = '</CITATIONS>';
 const MISS = '#piecemaker-cite-miss';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_CHARACTERS = 32 * 1024 * 1024;
@@ -120,6 +123,22 @@ function visibleText(text: string) {
   return index < 0 ? text : text.slice(0, index);
 }
 
+function withoutEchoedCitationInstructions(text: string) {
+  return text.replace(/<CITATION_INSTRUCTION>[\s\S]*?(?:<\/CITATION_INSTRUCTION>|$)/g, '');
+}
+
+function closeCitationBlockAtEnd(text: string) {
+  const start = text.indexOf(OPEN);
+  if (start < 0 || text.includes(CITATIONS_CLOSE, start + OPEN.length)) return text;
+  const json = text.slice(start + OPEN.length).trim();
+  try {
+    if (!Array.isArray(JSON.parse(json))) return text;
+    return `${text}${CITATIONS_CLOSE}`;
+  } catch {
+    return text;
+  }
+}
+
 export function createCitationTurn(options: {
   cwd: string;
   sessionId: string;
@@ -137,9 +156,76 @@ export function createCitationTurn(options: {
   let sourceCharacters = 0;
   let fullText = '';
   let visibleTail = '';
+  let instructionTail = '';
+  let insideInstruction = false;
   let hidden = false;
   let overflow = false;
   let finished: Promise<string> | undefined;
+
+  const matchingTailLength = (value: string, marker: string) => {
+    const max = Math.min(marker.length - 1, value.length);
+    for (let length = max; length > 0; length--) {
+      if (marker.startsWith(value.slice(-length))) return length;
+    }
+    return 0;
+  };
+
+  const sanitizeDelta = (delta: string, final = false): string => {
+    if (insideInstruction) {
+      const combined = instructionTail + delta;
+      instructionTail = '';
+      const close = combined.indexOf(INSTRUCTION_CLOSE);
+      if (close < 0) {
+        if (!final) {
+          const tailLength = matchingTailLength(combined, INSTRUCTION_CLOSE);
+          instructionTail = tailLength ? combined.slice(-tailLength) : '';
+        }
+        return '';
+      }
+      insideInstruction = false;
+      return sanitizeDelta(combined.slice(close + INSTRUCTION_CLOSE.length), final);
+    }
+    const combined = instructionTail + delta;
+    instructionTail = '';
+    const start = combined.indexOf(INSTRUCTION_OPEN);
+    if (start >= 0) {
+      const after = combined.slice(start + INSTRUCTION_OPEN.length);
+      const close = after.indexOf(INSTRUCTION_CLOSE);
+      if (close < 0) {
+        insideInstruction = true;
+        const tailLength = matchingTailLength(after, INSTRUCTION_CLOSE);
+        instructionTail = tailLength ? after.slice(-tailLength) : '';
+        return combined.slice(0, start);
+      }
+      return `${combined.slice(0, start)}${sanitizeDelta(after.slice(close + INSTRUCTION_CLOSE.length), final)}`;
+    }
+    if (final) return combined;
+    const tailLength = matchingTailLength(combined, INSTRUCTION_OPEN);
+    if (tailLength) {
+      instructionTail = combined.slice(-tailLength);
+      return combined.slice(0, -tailLength);
+    }
+    return combined;
+  };
+
+  const processDelta = (delta: string) => {
+    if (!overflow && fullText.length + delta.length > MAX_TURN_CHARACTERS) {
+      overflow = true;
+      fullText = '';
+    }
+    if (!overflow) fullText += delta;
+    if (hidden) return '';
+    const combined = visibleTail + delta;
+    const marker = combined.indexOf(OPEN);
+    if (marker >= 0) {
+      hidden = true;
+      visibleTail = '';
+      return combined.slice(0, marker);
+    }
+    const keep = Math.min(OPEN.length - 1, combined.length);
+    visibleTail = combined.slice(combined.length - keep);
+    return combined.slice(0, combined.length - keep);
+  };
 
   const takeSource = async (text: string) => {
     sourceCharacters += text.length;
@@ -229,29 +315,17 @@ export function createCitationTurn(options: {
       }
     },
     delta(delta: string) {
-      if (!overflow && fullText.length + delta.length > MAX_TURN_CHARACTERS) {
-        overflow = true;
-        fullText = '';
-      }
-      if (!overflow) fullText += delta;
-      if (hidden) return '';
-      const combined = visibleTail + delta;
-      const marker = combined.indexOf(OPEN);
-      if (marker >= 0) {
-        hidden = true;
-        visibleTail = '';
-        return combined.slice(0, marker);
-      }
-      const keep = Math.min(OPEN.length - 1, combined.length);
-      visibleTail = combined.slice(combined.length - keep);
-      return combined.slice(0, combined.length - keep);
+      return processDelta(sanitizeDelta(delta));
     },
     flush() {
+      const cleaned = sanitizeDelta('', true);
+      const emitted = processDelta(cleaned);
       const tail = hidden ? '' : visibleTail;
       visibleTail = '';
-      return tail;
+      return `${emitted}${tail}`;
     },
     text(text: string) {
+      text = withoutEchoedCitationInstructions(text);
       if (text.includes(OPEN)) {
         if (text.length <= MAX_TURN_CHARACTERS) fullText = text;
         else overflow = true;
@@ -262,13 +336,14 @@ export function createCitationTurn(options: {
     finish() {
       if (finished) return finished;
       finished = (async () => {
-        const block = overflow || !fullText.includes(OPEN) ? '' : fullText.slice(fullText.indexOf(OPEN));
+        const citationText = closeCitationBlockAtEnd(fullText);
+        const block = overflow || !citationText.includes(OPEN) ? '' : citationText.slice(citationText.indexOf(OPEN));
         const replay = options.recordVerification === false;
         if (replay && block) {
           const saved = await options.store.readTurnSources(options.sessionId, block);
           if (saved !== null) return saved;
         }
-        const parsed = overflow ? [] : parseCitationsWithDiagnostics(fullText).citations as Citation[];
+        const parsed = overflow ? [] : parseCitationsWithDiagnostics(citationText).citations as Citation[];
         const citations = await verifyCitations(parsed, (id: string, kind: string) => kind === 'code' ? codeText(id) : documentText(id), async (id: string) => decisions.get(id) ?? '') as Citation[];
         const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];
