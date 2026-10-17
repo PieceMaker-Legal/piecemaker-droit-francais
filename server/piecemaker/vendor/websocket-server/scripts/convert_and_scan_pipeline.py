@@ -132,7 +132,7 @@ def wait_for_worker_ready(
     if proc is None:
         return False
 
-    import select
+    import queue
     import threading
     progress_context["event"] = threading.Event()
 
@@ -174,24 +174,32 @@ def wait_for_worker_ready(
     stderr_thread = threading.Thread(target=_stream_stderr, daemon=True)
     stderr_thread.start()
 
+    ready_outcomes = queue.Queue()
+
+    def _read_until_ready():
+        for line in proc.stdout:
+            if line.strip() == "READY":
+                ready_outcomes.put(True)
+                return
+        ready_outcomes.put(False)
+
+    threading.Thread(target=_read_until_ready, daemon=True).start()
+
     start = time.time()
     while time.time() - start < timeout:
         if proc.poll() is not None:
             print(f"⚠️  Scanner worker exited prematurely (exit {proc.returncode})", file=sys.stderr)
             return False
 
-        # TextIOWrapper does not reliably distinguish EAGAIN from EOF when its
-        # descriptor is toggled to non-blocking mode. select() keeps the stream
-        # blocking and reads only after a complete line is available.
         try:
-            readable, _, _ = select.select([proc.stdout], [], [], 0.1)
-            line = proc.stdout.readline() if readable else ""
-        except (IOError, OSError):
-            line = ""
+            outcome = ready_outcomes.get(timeout=0.1)
+        except queue.Empty:
+            continue
 
-        if line.strip() == "READY":
+        if outcome:
             print("✅ Scanner worker ready (models loaded)")
             return True
+        break
 
     # Timeout
     print("⚠️  Scanner worker timed out waiting for READY", file=sys.stderr)
