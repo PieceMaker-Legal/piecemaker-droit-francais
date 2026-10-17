@@ -82,12 +82,11 @@ export async function install(ctx) {
   if (!fs.existsSync(WARMUP)) {
     return { status: 'failed', note: `warmup.py introuvable : ${WARMUP}` };
   }
-  if (!ctx.python) {
-    return { status: 'failed', note: 'Python >= 3.10 introuvable — exécutez d\'abord l\'étape des prérequis.' };
-  }
-
   const venvDir = ctx.config.venvPath;
   const vp = venvPaths(venvDir);
+  if (!vp.exists && !ctx.python) {
+    return { status: 'failed', note: 'Python >= 3.10 introuvable — exécutez d\'abord l\'étape des prérequis.' };
+  }
 
   if (ctx.dryRun) {
     log.info(`[simulation] Création du venv dans ${venvDir}`);
