@@ -10,6 +10,7 @@ import type { SortState } from './ordering.js';
 import { openQuestionsDrawer } from './questions-drawer.js';
 import { newPieces, plannedChange, targetPath } from './sorting.js';
 import type { PlannedChange } from './sorting.js';
+import { selectMenu } from './select-menu.js';
 
 const POLL_INTERVAL = 2500;
 const RUNNING_PHASES: ResearchState['phase'][] = ['counting', 'listing', 'downloading'];
@@ -102,13 +103,18 @@ export function createReviewView(app: App, project: string, file: string, onBack
   let sort: SortState = null;
 
   async function loadChoiceModels(provider: Provider) {
+    models = { provider, options: [], cheapest: '' };
+    render();
+    let loaded: { options: ModelOption[]; cheapest: string };
     try {
-      models = { provider, ...await loadModels(provider) };
+      loaded = await loadModels(provider);
     } catch {
-      models = { provider, options: [], cheapest: '' };
+      loaded = { options: [], cheapest: '' };
     }
+    if (destroyed || choice?.provider !== provider) return;
+    models = { provider, ...loaded };
     if (choice && !choice.model) choice.model = models.cheapest || models.options[0]?.value || '';
-    if (!destroyed) render();
+    render();
   }
 
   function modelSelector(running: boolean): string {
@@ -116,8 +122,8 @@ export function createReviewView(app: App, project: string, file: string, onBack
     const options = models?.provider === choice.provider ? models.options : [];
     const listed = !choice.model || options.some((option) => option.value === choice!.model) ? options : [{ value: choice.model, label: choice.model }, ...options];
     return `
-        <label class="ptr-bar-field" title="IA utilisée pour les relances"><select class="ptr-select" aria-label="IA" data-choice-provider${running ? ' disabled' : ''}>${PROVIDERS.map((provider) => `<option value="${provider.value}"${provider.value === choice!.provider ? ' selected' : ''}>${provider.label}</option>`).join('')}</select></label>
-        <label class="ptr-bar-field" title="Modèle IA utilisé pour les relances"><select class="ptr-select" aria-label="Modèle" data-choice-model${running ? ' disabled' : ''}>${listed.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === choice!.model ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>`;
+        <div class="ptr-bar-field" title="IA utilisée pour les relances"><span class="ptr-bar-label">IA</span>${selectMenu('IA', 'provider', choice.provider, PROVIDERS, running)}</div>
+        <div class="ptr-bar-field" title="Modèle IA utilisé pour les relances"><span class="ptr-bar-label">Modèle</span>${selectMenu('Modèle', 'model', choice.model, listed.length ? listed : [{ value: '', label: 'Chargement…' }], running || !listed.length)}</div>`;
   }
 
   function costlyChoice(): string {
@@ -210,6 +216,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
         <span class="ptr-chip ptr-chip-${status}">${running ? '<span class="ptr-spinner"></span>' : ''}${escapeHtml(reviewStatusLabel(status))} · ${done}/${review.rows.length}</span>
         ${running ? `<div class="ptr-progress" aria-hidden="true"><div style="width:${review.rows.length ? Math.round((done / review.rows.length) * 100) : 0}%"></div></div>` : ''}
         ${running ? '<button type="button" class="ptr-button ptr-button-danger" data-cancel>Annuler</button>' : ''}
+        <button type="button" class="ptr-button" data-refresh-review aria-label="Actualiser l’analyse" title="Actualiser l’analyse">↻ Actualiser</button>
         ${sorting ? `<button type="button" class="ptr-button" data-add-pieces title="Ajoute une ligne par pièce absente du tri (converties d’abord si besoin) et lance leur analyse">Ajouter les nouvelles pièces</button>
         <button type="button" class="ptr-button ptr-button-primary" data-apply-all title="Renomme et range toutes les pièces selon les colonnes d’action, après confirmation">Appliquer pour tous</button>` : ''}
         <details class="ptr-menu">
@@ -506,18 +513,26 @@ export function createReviewView(app: App, project: string, file: string, onBack
       since = (target as HTMLInputElement).value;
       return;
     }
-    if (!choice) return;
-    if (target.matches('[data-choice-provider]')) {
-      choice = { provider: (target as HTMLSelectElement).value as Provider, model: '' };
-      void loadChoiceModels(choice.provider);
-    } else if (target.matches('[data-choice-model]')) {
-      choice.model = (target as HTMLSelectElement).value;
-      render();
-    }
   });
 
   element.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    const option = target.closest<HTMLButtonElement>('[data-choice-option]');
+    if (option && !option.disabled && choice) {
+      if (option.dataset.choiceOption === 'provider') {
+        const provider = option.dataset.value as Provider;
+        choice = { provider, model: '' };
+        void loadChoiceModels(provider);
+      } else {
+        choice.model = option.dataset.value ?? '';
+        render();
+      }
+      return;
+    }
+    if (target.closest('[data-refresh-review]')) {
+      void load();
+      return;
+    }
     const citation = target.closest<HTMLElement>('[data-citation]');
     if (citation) {
       event.preventDefault();
