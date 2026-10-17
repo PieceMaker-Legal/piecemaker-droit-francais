@@ -11,8 +11,10 @@ export const pseudonymizationApi = {
   status: () => authenticatedFetch('/api/piecemaker/configuration').then((response) =>
     localModelsResponse<{ components: Record<PseudonymizationModelId, PseudonymizationModelStatus> }>(response)),
   jobs: () => authenticatedFetch('/api/piecemaker/configuration/install').then((response) =>
-    localModelsResponse<{ jobs: PseudonymizationInstallJob[]; busy: boolean }>(response)),
+    localModelsResponse<{ jobs: PseudonymizationInstallJob[]; busy: boolean; paused: boolean }>(response)),
   install: (component: PseudonymizationModelId) => authenticatedFetch('/api/piecemaker/configuration/install', {
     method: 'POST', body: JSON.stringify({ component }),
   }).then((response) => localModelsResponse<{ job: PseudonymizationInstallJob }>(response)),
+  pause: () => authenticatedFetch('/api/piecemaker/configuration/install/pause', { method: 'POST' }).then((response) =>
+    localModelsResponse<{ job: PseudonymizationInstallJob | null }>(response)),
 };

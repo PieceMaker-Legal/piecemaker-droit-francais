@@ -5,7 +5,7 @@ export type PseudonymizationModelStatus = { name: string; installed: boolean };
 export type PseudonymizationInstallJob = {
   id: string;
   component: PseudonymizationModelId;
-  state: 'running' | 'done' | 'failed';
+  state: 'running' | 'done' | 'failed' | 'paused';
   progress: string;
   error: string;
 };
