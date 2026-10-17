@@ -76,6 +76,30 @@ test('la décision de l’avocat prime et verrouille la proposition', (t) => {
   assert.equal(base(service.review(folder, 'F_versement', null), 'F_versement').proof, 'established');
 });
 
+test('une proposition invalide est écartée sans faire tomber le reste du programme', (t) => {
+  const { service, folder } = fixture(t);
+  const reply = service.ingest({ cwd: folder, sessionId: 's', turnId: 't1', sources: [source('courriel', 1, 'La seconde tranche est suspendue.')], block: block({ facts: [
+    { id: 'F_engagement', label: 'Engagement de financement', value: true, citations: [1] },
+    { id: 'F_suspension', label: 'Suspension de la seconde tranche', relation: { subject: 'entity:SOCIETE_1', predicate: 'suspend', object: 'tranche_2' } },
+  ], theories: [
+    { id: 'C_delai', kind: 'calculation', label: 'Délai en jours', expression: { op: 'daysBetween', args: ['2025-03-12', '2025-03-20'] }, value: 8, rationale: 'Calcul fictif.' },
+    { id: 'K_engagement', label: 'Engagement retenu', expression: { ref: 'F_engagement' }, rationale: 'Conclusion fictive.' },
+  ], tests: [
+    { id: 'T_mal_forme', label: 'Attente en texte libre', target: 'K_engagement', expect: 'retenu' },
+    { id: 'T_engagement', label: 'Engagement retenu', target: 'K_engagement', expected: { status: 'known', value: true }, rationale: 'Pièce citée.' },
+  ], links: [{ id: 'L_orphelin', from: 'F_engagement', to: 'F_inexistant', relation: 'precedes' }] }, [{ ref: 1, links: [{ target: 'F_suspension', relation: 'reports' }, { target: 'R_inconnue', relation: 'supports' }] }, { ref: 7, links: [{ target: 'F_engagement', relation: 'supports' }] }]) });
+  assert.match(reply, /Lien de citation vers R_inconnue écarté : proposition absente/);
+  assert.match(reply, /Lien de citation \[7\] vers F_engagement écarté : citation introuvable/);
+  assert.match(reply, /F_suspension écarté : Relation factuelle invalide/);
+  assert.match(reply, /L_orphelin écarté : Lien de raisonnement invalide/);
+  assert.match(reply, /C_delai écarté : Expression attendue/);
+  assert.match(reply, /T_mal_forme écarté : Attente invalide/);
+  const snapshot = service.read(folder);
+  assert.deepEqual(snapshot.program.nodes.map((node) => node.id), ['F_engagement', 'K_engagement']);
+  assert.deepEqual(snapshot.program.tests.map((test) => test.id), ['T_engagement']);
+  assert.equal(base(snapshot, 'F_engagement').proof, 'established');
+});
+
 test('durées : même quantième, dernier jour du mois à défaut, jours calendaires', () => {
   assert.equal(addDuration('2024-01-31', 1, 'months'), '2024-02-29');
   assert.equal(addDuration('2020-02-29', 5, 'years'), '2025-02-28');

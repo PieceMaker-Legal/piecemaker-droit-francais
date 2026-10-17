@@ -64,9 +64,15 @@ function mergeProgram(previous: ReasoningProgram, block: string, incoming: Reaso
     if (!entry || entry.links === undefined || !Object.hasOwn(entry, 'ref')) continue;
     if (!Array.isArray(entry.links) || entry.links.length > 200) throw new TypeError('Annotations de citation invalides.');
     for (const link of entry.links) {
-      if (!link || typeof link.target !== 'string' || !['supports', 'contradicts', 'reports', 'qualifies'].includes(link.relation)) throw new TypeError('Lien de citation invalide.');
+      if (!link || typeof link.target !== 'string' || !['supports', 'contradicts', 'reports', 'qualifies'].includes(link.relation)) {
+        notes.push(`Lien de citation [${entry.ref}] écarté : cible ou relation invalide.`);
+        continue;
+      }
       const matching = incoming.filter((source) => source.ref === entry.ref);
-      if (!matching.length) throw new TypeError(`Citation annotée introuvable : ${entry.ref}.`);
+      if (!matching.length) {
+        notes.push(`Lien de citation [${entry.ref}] vers ${link.target} écarté : citation introuvable.`);
+        continue;
+      }
       if (link.relation === 'reports') reported.add(link.target);
       if (link.relation === 'supports') supported.add(link.target);
       for (const source of matching) {
@@ -78,7 +84,12 @@ function mergeProgram(previous: ReasoningProgram, block: string, incoming: Reaso
   }
   if (patch?.nodes !== undefined && !Array.isArray(patch.nodes)) throw new TypeError('nodes doit être une liste.');
   if (patch?.nodes?.length > 200) throw new TypeError('Trop de nœuds dans ce tour.');
+  const screen = <T extends { id: string }>(items: T[], check: (item: T) => void) => items.filter((item) => {
+    try { check(item); return true; }
+    catch (error) { notes.push(`${item.id} écarté : ${error instanceof Error ? error.message : 'proposition invalide.'}`); return false; }
+  });
   const ids = new Set<string>();
+  const dropped = new Set<string>();
   for (const proposed of patch?.nodes ?? []) {
     if (!proposed || typeof proposed !== 'object' || typeof proposed.id !== 'string' || ids.has(proposed.id)) throw new TypeError('Nœud invalide ou dupliqué dans ce tour.');
     ids.add(proposed.id);
@@ -110,6 +121,10 @@ function mergeProgram(previous: ReasoningProgram, block: string, incoming: Reaso
       ...(proposed.conditions !== undefined ? { conditions: proposed.conditions } : {}),
       ...(proposed.exceptions !== undefined ? { exceptions: proposed.exceptions } : {}),
     };
+    if (!screen([node], (item) => validateProgram({ version: 1, nodes: [item], sources: [], scenarios: [], tests: [] })).length) {
+      dropped.add(node.id);
+      continue;
+    }
     if (node.kind === 'fact' && reported.has(node.id) && !supported.has(node.id)) node.state = 'reported';
     if (proposed.citations !== undefined || evidence.has(node.id)) for (const [id, link] of links) {
       if (link.to === node.id && sources.has(link.from) && ['supports', 'reports', 'qualifies'].includes(link.relation) && !linked.includes(link.from)) links.delete(id);
@@ -119,7 +134,11 @@ function mergeProgram(previous: ReasoningProgram, block: string, incoming: Reaso
   for (const [id, linked] of evidence) {
     if (ids.has(id)) continue;
     const old = nodes.get(id);
-    if (!old) throw new TypeError(`Proposition annotée absente : ${id}.`);
+    if (!old) {
+      notes.push(`Lien de citation vers ${id} écarté : proposition absente.`);
+      for (const [linkId, link] of links) if (link.to === id) links.delete(linkId);
+      continue;
+    }
     nodes.set(id, { ...old, ...(old.kind === 'fact' && reported.has(id) && !supported.has(id) ? { state: 'reported' as const } : {}), sources: [...new Set([...old.sources, ...linked])], requiresReview: old.requiresReview || linked.some((sourceId) => sources.get(sourceId)?.repaired) });
   }
   if (patch?.links !== undefined && !Array.isArray(patch.links)) throw new TypeError('links doit être une liste.');
@@ -138,11 +157,22 @@ function mergeProgram(previous: ReasoningProgram, block: string, incoming: Reaso
     version: 1, nodes: [...nodes.values()], sources: [...sources.values()],
     scenarios: mergeList(previous.scenarios.filter((item) => !removed.includes(item.id)), patch?.scenarios),
     tests: mergeList(previous.tests.filter((item) => !removed.includes(item.id)), patch?.tests),
-    links: [...links.values()].filter((link) => !removed.includes(link.from) && !removed.includes(link.to)),
+    links: [...links.values()].filter((link) => !removed.includes(link.from) && !removed.includes(link.to) && (!dropped.has(link.to) || nodes.has(link.to))),
   });
+  program.links = screen(program.links ?? [], (link) => validateProgram({ ...program, links: [link], scenarios: [], tests: [] }));
+  program.scenarios = screen(program.scenarios, (scenario) => validateProgram({ ...program, scenarios: [scenario], tests: [] }));
+  program.tests = screen(program.tests, (test) => validateProgram({ ...program, tests: [test] }));
   if (program.scenarios.some((scenario) => scenario.id === 'base')) throw new TypeError('Le scénario base est réservé au dossier sans hypothèses.');
   validateProgram(program);
   return { program, notes };
+}
+
+function completeness(program: ReasoningProgram, theories: NonNullable<ReasoningSnapshot['theories']>): string[] {
+  const unsourced = program.nodes.filter((node) => node.kind === 'fact' && !node.sources.length && !node.input && !node.evidence && !node.review).map((node) => node.id);
+  return [
+    ...(!theories.length ? ['Aucune conclusion : appliquer une règle datée (law) aux faits par une théorie, avec tests.'] : []),
+    ...(unsourced.length ? [`Faits sans pièce citée (citations:[n]) ni preuve attendue (evidence) : ${unsourced.join(', ')}.`] : []),
+  ];
 }
 
 export function createReasoningService(getDatabase: () => Database.Database) {
@@ -241,7 +271,7 @@ export function createReasoningService(getDatabase: () => Database.Database) {
     const evaluations = evaluateProgram(program);
     const changes = changesSince(previous, evaluations);
     const theories = assessTheories(program, evaluations, changes);
-    const snapshot: ReasoningSnapshot = { revision: previous.revision + 1, updatedAt: new Date().toISOString(), program, evaluations, changes, conflicts: detectConflicts(program), theories, notes, diagnostics: [...notes, ...(program.nodes.length ? theories.flatMap((theory) => theory.issues.map((issue) => `${theory.id} : ${issue}`)) : ['Sources collectées : raisonnement non formalisé. Aucun résultat exécuté.'])] };
+    const snapshot: ReasoningSnapshot = { revision: previous.revision + 1, updatedAt: new Date().toISOString(), program, evaluations, changes, conflicts: detectConflicts(program), theories, notes, diagnostics: [...notes, ...(program.nodes.length ? [...theories.flatMap((theory) => theory.issues.map((issue) => `${theory.id} : ${issue}`)), ...completeness(program, theories)] : ['Sources collectées : raisonnement non formalisé. Aucun résultat exécuté.'])] };
     persist(id, snapshot, turnId);
     return snapshot;
   };
@@ -289,6 +319,10 @@ export function createReasoningService(getDatabase: () => Database.Database) {
       }
       if (!previous.revision && !program.sources.length && !program.nodes.length) return '';
       program = resolveEvidence(db, id, resolveInputs(db, id, program));
+      if (notes.length && JSON.stringify(program) === JSON.stringify(previous.program)) {
+        db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?) ON CONFLICT(project_id) DO UPDATE SET snapshot_json=excluded.snapshot_json').run(id, previous.revision, JSON.stringify({ ...previous, diagnostics: notes }));
+        return `\n\n${notes.join(' ')} Aucune modification du programme.`;
+      }
       const snapshot = commit(id, previous, program, notes, turnId);
       const { evaluations, conflicts = [] } = snapshot;
       const tests = evaluations.flatMap((evaluation) => evaluation.tests);
