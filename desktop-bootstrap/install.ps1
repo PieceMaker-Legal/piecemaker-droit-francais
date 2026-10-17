@@ -100,11 +100,12 @@ if ($args -notcontains '--build-from-source') {
       else { Wait-Process -Id $installerProcess.Id -ErrorAction SilentlyContinue }
     }
     if ($installerProcess.ExitCode -ne 0) { Fail "Installation interrompue (code $($installerProcess.ExitCode))." }
-    $appDir = Join-Path $env:LOCALAPPDATA 'Programs\PieceMaker'
+    $appDir = (Get-ItemProperty -LiteralPath 'HKCU:\Software\be668065-da35-5797-91d0-75b4725f56f1' -ErrorAction SilentlyContinue).InstallLocation
+    if (-not $appDir) { $appDir = Join-Path $env:LOCALAPPDATA 'Programs\@piecemaker-legalpiecemaker-desktop' }
     $executable = Join-Path $appDir 'PieceMaker.exe'
     $appRoot = Join-Path $appDir 'resources\app.asar.unpacked'
     $prepareScript = Join-Path $appRoot 'desktop-bootstrap\lib\prepare-installed.mjs'
-    if (-not (Test-Path -LiteralPath $prepareScript)) { Fail 'Le paquet installe ne contient pas la preparation initiale.' }
+    if (-not (Test-Path -LiteralPath $prepareScript)) { Fail "Le paquet installe ne contient pas la preparation initiale ($prepareScript)." }
     $env:PIECEMAKER_SRC_DIR = $appRoot
     $env:PIECEMAKER_TAG = $tag
     $env:PIECEMAKER_REPO = $repo

@@ -10,7 +10,7 @@ import test from 'node:test';
 test('Windows initial bootstrap uses the verified installer and embedded Node without sources or a system toolchain', { skip: process.platform !== 'win32' }, t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-bootstrap-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 }));
-  const app = path.join(root, 'local/Programs/PieceMaker');
+  const app = path.join(root, 'local/Programs/@piecemaker-legalpiecemaker-desktop');
   const scripts = path.join(app, 'resources/app.asar.unpacked/desktop-bootstrap/lib');
   fs.mkdirSync(scripts, { recursive: true });
   fs.copyFileSync(process.execPath, path.join(app, 'PieceMaker.exe'));
@@ -52,6 +52,12 @@ function Invoke-WebRequest {
   throw "Unexpected network: $Uri"
 }
 function Wait-Process { param($Id) }
+function Get-ItemProperty {
+  param($LiteralPath, $ErrorAction)
+  if ($LiteralPath -ne 'HKCU:\Software\be668065-da35-5797-91d0-75b4725f56f1') { throw "Unexpected registry key: $LiteralPath" }
+  if ($env:FIXTURE_INSTALL_LOCATION) { return @{ InstallLocation = $env:FIXTURE_INSTALL_LOCATION } }
+  return $null
+}
 function Start-Process {
   param($FilePath, $ArgumentList, $WindowStyle, [switch]$Wait, [switch]$PassThru, $RedirectStandardOutput, $RedirectStandardError)
   if ($FilePath -like '*PieceMaker.exe') {
@@ -67,7 +73,7 @@ function Start-Process {
 & ${quote(script)} --no-launch --no-certificate
 if ($env:ELECTRON_RUN_AS_NODE -ne 'original') { throw 'RunAsNode environment was not restored' }
 `);
-  const run = checksum => spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', harness], {
+  const run = (checksum, installLocation = '') => spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', harness], {
     encoding: 'utf8', windowsHide: true, timeout: 30000,
     env: {
       ...process.env,
@@ -80,6 +86,7 @@ if ($env:ELECTRON_RUN_AS_NODE -ne 'original') { throw 'RunAsNode environment was
       FIXTURE_PYTHON_CHECKSUM: pythonHash,
       FIXTURE_COMPONENT_CHECKSUM: componentHash,
       FIXTURE_GLINER_CHECKSUM: glinerHash,
+      FIXTURE_INSTALL_LOCATION: installLocation,
     },
   });
   const valid = run(hash);
@@ -95,6 +102,12 @@ if ($env:ELECTRON_RUN_AS_NODE -ne 'original') { throw 'RunAsNode environment was
   assert.equal(fs.existsSync(path.join(prefetched, glinerName)), false);
   assert.equal(fs.existsSync(path.join(root, 'bootstrap/src')), false);
   fs.unlinkSync(report);
+  const relocated = path.join(root, 'elsewhere/PieceMaker');
+  fs.cpSync(app, relocated, { recursive: true });
+  const moved = run(hash, relocated);
+  assert.equal(moved.status, 0, moved.stderr);
+  assert.equal(JSON.parse(fs.readFileSync(report, 'utf8')).root, path.join(relocated, 'resources/app.asar.unpacked'));
+  fs.unlinkSync(report);
   const invalid = run('0'.repeat(64));
   assert.notEqual(invalid.status, 0);
   assert.match(invalid.stderr, /integrite/);
@@ -105,4 +118,16 @@ test('the Windows bootstrap shows the Légifrance guide after the first install 
   const script = fs.readFileSync(new URL('../install.ps1', import.meta.url), 'utf8');
   assert.match(script, /finish-install\.mjs/);
   assert.match(script, /if \(\$args -notcontains '--no-launch'\)/);
+});
+
+test('the Windows bootstrap looks for the app where electron-builder installs it', async () => {
+  const { UUID } = await import('builder-util-runtime');
+  const { sanitizeFileName } = await import('builder-util/out/filename.js');
+  const script = fs.readFileSync(new URL('../install.ps1', import.meta.url), 'utf8');
+  const product = JSON.parse(fs.readFileSync(new URL('../../product.config.json', import.meta.url), 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  const guid = UUID.v5(product.appId, UUID.parse('50e065bc-3134-11e6-9bab-38c9862bdaf3'));
+  assert.ok(script.includes(`'HKCU:\\Software\\${guid}'`), guid);
+  assert.ok(script.includes(`'Programs\\${sanitizeFileName(`${manifest.name}-desktop`)}'`));
+  assert.ok(script.includes(`Join-Path $appDir '${product.shortName}.exe'`));
 });
