@@ -65,14 +65,9 @@ export function startPluginServer(name, pluginDir, serverEntry) {
 
     const serverPath = path.join(pluginDir, serverEntry);
 
-    // Use the host's own runtime: desktop installs have no `node` on PATH, only
-    // the Electron binary, which runs as Node with ELECTRON_RUN_AS_NODE.
-    const pluginProcess = spawn(process.execPath, [serverPath], {
+    const pluginProcess = spawn('node', [serverPath], {
       cwd: pluginDir,
-      env: {
-        ...buildPluginEnv(name),
-        ...(process.versions.electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
-      },
+      env: buildPluginEnv(name),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 

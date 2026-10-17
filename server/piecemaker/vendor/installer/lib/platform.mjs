@@ -135,12 +135,16 @@ export function findPython() {
 /** Paths inside a virtualenv, which differ on Windows. */
 export function venvPaths(venvDir) {
   const binDir = path.join(venvDir, IS_WINDOWS ? 'Scripts' : 'bin');
+  const portablePython = path.join(venvDir, 'python.exe');
+  const python = IS_WINDOWS && fs.existsSync(portablePython)
+    ? portablePython
+    : path.join(binDir, IS_WINDOWS ? 'python.exe' : 'python');
   return {
     dir: venvDir,
     binDir,
-    python: path.join(binDir, IS_WINDOWS ? 'python.exe' : 'python'),
+    python,
     pip: path.join(binDir, IS_WINDOWS ? 'pip.exe' : 'pip'),
-    exists: fs.existsSync(path.join(binDir, IS_WINDOWS ? 'python.exe' : 'python')),
+    exists: fs.existsSync(python),
   };
 }
 
