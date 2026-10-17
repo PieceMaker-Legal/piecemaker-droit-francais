@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.43](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.42...v2.0.43) (2026-10-17)
+
+### Bug Fixes
+
+* copier gliner-checkpoint.json dans le test Python relocalisé ([3febb4d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3febb4dfa51edc78134fb13eb788a3374a23c198))
+
 ## [2.0.42](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.41...v2.0.42) (2026-10-17)
 
 ### New Features
