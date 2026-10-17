@@ -307,10 +307,32 @@ class PipelineResources:
                 self.scan_workspace.cleanup()
 
 
+def _source_digest(source: str, case_root: str) -> str:
+    resolved = Path(source).resolve()
+    try:
+        key = resolved.relative_to(Path(case_root).resolve()).as_posix()
+    except ValueError:
+        key = resolved.as_posix()
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:8]
+
+
+def markdown_stems_for_batch(input_files: List[str], case_root: str) -> Dict[str, str]:
+    groups: Dict[str, List[str]] = {}
+    for source in input_files:
+        groups.setdefault(Path(source).stem.casefold(), []).append(source)
+    stems: Dict[str, str] = {}
+    for sources in groups.values():
+        for source in sources:
+            stem = Path(source).stem
+            stems[source] = stem if len(sources) == 1 else f"{stem}-{_source_digest(source, case_root)}"
+    return stems
+
+
 def convert_file(
     input_file: str,
     output_dir: str,
     engine: Optional[str] = None,
+    output_name: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """Run smart_converter.py subprocess to convert a file to Markdown with real-time output streaming.
 
@@ -318,6 +340,7 @@ def convert_file(
         input_file: Path to input document
         output_dir: Directory for output markdown
         engine: Conversion engine (auto/markitdown/mineru)
+        output_name: Markdown file stem, defaults to the input stem
 
     Returns:
         (success, md_path): Tuple of success flag and path to generated .md file
@@ -334,6 +357,9 @@ def convert_file(
 
     if engine:
         cmd.extend(["--engine", engine])
+
+    if output_name:
+        cmd.extend(["--output-name", output_name])
 
     try:
         # Run converter with real-time output streaming
@@ -392,8 +418,7 @@ def convert_file(
             return False, None
 
         # Determine generated .md file path
-        input_stem = Path(input_file).stem
-        md_path = Path(output_dir) / f"{input_stem}.md"
+        md_path = Path(output_dir) / f"{output_name or Path(input_file).stem}.md"
 
         if not md_path.exists():
             print(f"⚠️  Expected output file not found: {md_path}", file=sys.stderr)
@@ -2143,11 +2168,13 @@ def run_pipeline(resources: PipelineResources):
     print(f"   Engine: {args.engine}")
     print()
 
+    markdown_stems = markdown_stems_for_batch(input_files, state_case_root)
+
     # What is left to do, decided before anything runs: the scanner worker loads
     # ~1.2GB of GLiNER2-PII weights, so it must only start when at least one
     # file actually needs a PII scan.
     def markdown_path(input_file: str) -> Path:
-        return Path(args.output) / f"{Path(input_file).stem}.md"
+        return Path(args.output) / f"{markdown_stems[input_file]}.md"
 
     mineru_ready = args.engine == "mineru" or (args.engine == "auto" and mineru_available())
 
@@ -2227,6 +2254,7 @@ def run_pipeline(resources: PipelineResources):
             input_file,
             args.output,
             engine="markitdown" if without_ocr else args.engine,
+            output_name=markdown_stems[input_file],
         )
 
         if success and md_path:
