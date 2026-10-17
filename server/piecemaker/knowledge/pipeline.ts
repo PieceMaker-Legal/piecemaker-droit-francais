@@ -143,7 +143,7 @@ function convertedMarkdown(projectPath: string, document: GlinerDocument): strin
   }
 }
 
-function pythonExecutable(explicit: string | undefined): string {
+export function pythonExecutable(explicit: string | undefined): string {
   if (explicit) return explicit;
   if (process.env.PYTHON_PATH) return process.env.PYTHON_PATH;
   const home = process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
@@ -155,7 +155,7 @@ function pythonExecutable(explicit: string | undefined): string {
     const { pythonPath } = JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8'));
     if (typeof pythonPath === 'string' && fs.existsSync(pythonPath)) return pythonPath;
   } catch {}
-  return 'python3';
+  return process.platform === 'win32' ? 'python' : 'python3';
 }
 
 function mappingSeed(projectId: string, store: KnowledgeStore): GlinerMappingDocument {

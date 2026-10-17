@@ -9,7 +9,29 @@ import Database from 'better-sqlite3';
 
 import { KnowledgeStore } from '../../../../plugins/piecemaker-dossier/src/knowledge.js';
 import { persistScanResult } from '../../../../plugins/piecemaker-dossier/src/scan-result.js';
-import { createKnowledgePipeline, defaultScanFiles } from '../pipeline.js';
+import { createKnowledgePipeline, defaultScanFiles, pythonExecutable } from '../pipeline.js';
+
+test('sans venv ni configuration, le repli Python est python sous Windows et python3 ailleurs (WIN-005)', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'python-home-'));
+  const previousHome = process.env.PIECEMAKER_HOME;
+  const previousPython = process.env.PYTHON_PATH;
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  process.env.PIECEMAKER_HOME = home;
+  delete process.env.PYTHON_PATH;
+  try {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    assert.equal(pythonExecutable(undefined), 'python');
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    assert.equal(pythonExecutable(undefined), 'python3');
+  } finally {
+    Object.defineProperty(process, 'platform', platform!);
+    if (previousHome === undefined) delete process.env.PIECEMAKER_HOME;
+    else process.env.PIECEMAKER_HOME = previousHome;
+    if (previousPython === undefined) delete process.env.PYTHON_PATH;
+    else process.env.PYTHON_PATH = previousPython;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
 
 function writeFile(root: string, relative: string, contents = 'x') {
   const target = path.join(root, relative);
