@@ -423,6 +423,12 @@ def load_reserved_codes(database_path: str) -> Set[str]:
             codes |= {row[0] for row in connection.execute("SELECT masked_value FROM piecemaker_mappings")}
         if "piecemaker_nodes" in tables:
             codes |= {row[0][len("entity:"):] for row in connection.execute("SELECT id FROM piecemaker_nodes WHERE id LIKE 'entity:%'")}
+            for (data_json,) in connection.execute("SELECT data_json FROM piecemaker_nodes WHERE data_json LIKE '%codes_retires%'"):
+                try:
+                    retired = json.loads(data_json or "{}").get("codes_retires") or []
+                except (ValueError, AttributeError):
+                    continue
+                codes |= {code for code in retired if isinstance(code, str) and code}
     print(f"✅ Codes reserved by every case: {len(codes)}")
     return codes
 
@@ -1746,6 +1752,15 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
     }
 
 
+def merge_existing_duplicates(current_mapping: Dict, reserved_codes: Set[str] = frozenset()) -> Optional[Dict]:
+    if not current_mapping:
+        return None
+    merged = merge_with_existing_mapping({}, current_mapping, reserved_codes)
+    if set(merged["reverse_mapping"]) == set(current_mapping.get("reverse_mapping", {})):
+        return None
+    return merged
+
+
 def emit_mapping(mapping_data: Dict) -> None:
     """Send the merged mapping to PieceMaker, which writes it to its database."""
     payload = {
@@ -2346,6 +2361,10 @@ def run_pipeline(resources: PipelineResources):
     print()
 
     if not pending_scans:
+        merged_duplicates = merge_existing_duplicates(current_mapping, reserved_codes)
+        if merged_duplicates:
+            emit_mapping(merged_duplicates)
+            print("✅ Duplicate entities merged in the existing mapping")
         print("✅ No new scan to merge; mapping and processing state are already up to date")
         return 0
 
