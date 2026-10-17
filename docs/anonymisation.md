@@ -22,9 +22,10 @@ flowchart TD
   LOCK --> PY["convert_and_scan_pipeline.py"]
   PY --> MD["smart_converter.py — markitdown / MinerU"]
   PY --> SCAN["scanner_worker.py — GLiNER2-PII"]
-  SCAN --> JSON["mapping_default.json + central-mapping.json"]
+  SCAN --> IDX[".piecemaker/document-index.json — pièces et codes cités"]
+  IDX --> SQL
   SCAN --> SQL["SQLite piecemaker_mappings"]
-  JSON --> HOOK["protect-originals — refuse un dossier sans mapping"]
+  SQL --> HOOK["protect-originals — bouclier vert : anonymized-projects.json"]
   SQL --> DICT["sqlite-dictionary.cjs"]
   DICT --> BRIDGE["rewriter-bridge.cjs — réécrivain"]
   BRIDGE <--> PROXY["hudsucker — piecemaker-hudsucker"]
@@ -94,21 +95,21 @@ dans SQLite (voir `outil-sql.md`).
 
 ## 3. SQLite et mapping disque
 
-Après un scan réussi, le pipeline fait les deux écritures :
+Après un scan réussi, le mapping n'est écrit qu'en base :
 
-| Cible | Module | Consommateur |
+| Cible | Écrit par | Consommateur |
 | --- | --- | --- |
 | `piecemaker_mappings` / `piecemaker_nodes` | `persistScanResult` | proxy PII (`createSqliteDictionaryLoader`) |
-| `Fichiers convertis PieceMaker/mapping_default.json` | `writeCaseMapping` | `protect-originals` (`caseHasMapping`), Cursor |
-| `~/.piecemaker/central-mapping.json` | `syncCentralMapping` | garde Cursor, rechargement historique |
+| `.piecemaker/document-index.json` | `write_document_index` (Python), à chaque scan | `readDocumentIndex` (`knowledge/pipeline.ts`), juste après |
 
-Sans le JSON, le hook PreToolUse traiterait le dossier comme non anonymisé.
-Sans SQLite, le proxy relayerait en clair.
+Aucun fichier `mapping*.json` n'est plus écrit ; `central-mapping.json` est
+supprimé au démarrage. Les anciens `mapping*.json` restent lus seulement et
+toujours interdits à l'IA. Sans SQLite, le proxy relayerait en clair.
 
 ## 4. Proxy PII
 
 La substitution n’a jamais lieu dans un hook. `protect-originals.mjs` refuse
-les originaux protégés et un dossier sans `mapping_default.json`.
+les originaux des dossiers au bouclier vert (`anonymized-projects.json`).
 
 Démarré avec le serveur (`createAnonymizerService`, `startRequiredAnonymizer`).
 Deux pièces, un seul cycle de vie :
@@ -278,8 +279,9 @@ registre public : dirigeants, SIREN, adresse ; `originalCode`).
 Ce qui ne l'est pas :
 
 - `.piecemaker/document-index.json` (`personnes_visees`) du dossier
-  renuméroté garde l'ancien code. Sans effet : le scan suivant l'ignore, les
-  liens déjà en base ont été renommés, une pièce rescannée reçoit le nouveau.
+  renuméroté garde l'ancien code jusqu'au scan suivant, qui le réécrit pour les
+  pièces scannées. Sans effet : les liens en base sont déjà renommés et un code
+  sans nœud est ignoré.
 - Les anciens fichiers `mapping*.json` d'un dossier (plus jamais écrits, lus
   seulement) gardent l'ancien code.
 - Ce que le fournisseur garde d'une conversation (`previous_response_id`,
