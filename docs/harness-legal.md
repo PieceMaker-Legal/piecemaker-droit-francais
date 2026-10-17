@@ -54,8 +54,12 @@ Deux points de branchement distincts :
   du navigateur et un nouvel onglet. L'intégration directe testée en iframe
   est refusée par Légifrance (HTTP 403, `X-Frame-Options: SAMEORIGIN`).
 - `server/piecemaker/harness/citation-instructions.ts` — discipline de lecture
-  et format JSON ajoutés aux requêtes de chat Claude/Codex, retirés de l'écho
-  utilisateur et de l'historique affiché. Les commandes slash sont préservées.
+  et format JSON ajoutés aux requêtes de chat Claude/Codex/Mistral, retirés de
+  l'écho utilisateur et de l'historique affiché (y compris sous la forme aplatie
+  par `flattenPromptForWindowsShell` que Vibe stocke sous Windows, et en CRLF),
+  ainsi que des titres de session (`normalizeSessionName`) et de la recherche
+  (`session-conversations-search.service.ts`). Les commandes slash sont
+  préservées.
 - `server/piecemaker/harness/flux-sse.cjs` — collecteur du texte visible d'un
   flux SSE (`thinking` et `partial_json` exclus), mémoire bornée.
 - `server/piecemaker/harness/index.cjs` et `verification.cjs` — observateurs

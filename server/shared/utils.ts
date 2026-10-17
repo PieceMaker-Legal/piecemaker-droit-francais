@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { parseFrontMatter } from '@/shared/frontmatter.js';
+import { withoutCitationInstructions } from '@/piecemaker/harness/citation-instructions.js';
 import type {
   AnyRecord,
   ApiSuccessShape,
@@ -955,7 +956,7 @@ export function readProviderSkillMarkdownDefinitionFromContent(
  * If the normalized input is empty, it returns the supplied fallback title.
  */
 export function normalizeSessionName(rawValue: string | undefined, fallback: string): string {
-  const normalized = (rawValue ?? '').replace(/\s+/g, ' ').trim();
+  const normalized = withoutCitationInstructions(rawValue ?? '').replace(/\s+/g, ' ').trim();
   if (!normalized) {
     return fallback;
   }

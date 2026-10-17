@@ -7,6 +7,7 @@ import { rgPath } from '@vscode/ripgrep';
 
 import { stripAnsiSequences } from '@/shared/utils.js';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { withoutCitationInstructions, withoutCitationInstructionsInSearch } from '@/piecemaker/harness/citation-instructions.js';
 
 type AnyRecord = Record<string, any>;
 type SearchableProvider = 'claude' | 'codex' | 'mistral';
@@ -159,7 +160,7 @@ function toSummaryText(customName: string | null, fallback: string | null | unde
     return trimmedCustomName;
   }
 
-  const trimmedFallback = typeof fallback === 'string' ? fallback.trim() : '';
+  const trimmedFallback = typeof fallback === 'string' ? withoutCitationInstructions(fallback).trim() : '';
   if (!trimmedFallback) {
     return emptyLabel;
   }
@@ -351,7 +352,7 @@ function createWordMatcher(
     return { snippet, highlights: merged };
   };
 
-  return { matchesQuery, buildSnippet };
+  return withoutCitationInstructionsInSearch({ matchesQuery, buildSnippet });
 }
 
 function extractClaudeText(content: unknown): string {
