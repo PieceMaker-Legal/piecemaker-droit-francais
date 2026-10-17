@@ -52,12 +52,36 @@ test('la liste par défaut écarte les juridictions telles que la doctrine les c
   });
 });
 
-test('une liste déjà présente dans le fichier est reprise dans la base', () => {
+test('une liste déjà présente dans le fichier est reprise dans la base, complétée par la liste par défaut', () => {
   withTermsFile((file) => {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify({ version: 1, terms: ['Tribunal arbitral du sport'] }));
-    const store = openInstitutionalTerms(new Database(':memory:'), applicationRoot);
-    assert.deepEqual(store.read().terms, ['Tribunal arbitral du sport']);
+    const { terms } = openInstitutionalTerms(new Database(':memory:'), applicationRoot).read();
+    assert.ok(terms.includes('Tribunal arbitral du sport'));
+    assert.ok(terms.includes('Cour de cassation'));
+  });
+});
+
+test('un terme par défaut retiré par l’utilisateur ne revient pas au redémarrage', () => {
+  withTermsFile(() => {
+    const database = new Database(':memory:');
+    const store = openInstitutionalTerms(database, applicationRoot);
+    store.write(store.read().terms.filter((term) => term !== 'Cour de cassation'));
+    assert.ok(!openInstitutionalTerms(database, applicationRoot).read().terms.includes('Cour de cassation'));
+  });
+});
+
+test('un nouveau terme par défaut rejoint la liste de l’utilisateur sans écraser ses ajouts ni ses retraits', () => {
+  withTermsFile(() => {
+    const database = new Database(':memory:');
+    const store = openInstitutionalTerms(database, applicationRoot);
+    store.write([...store.read().terms.filter((term) => term !== 'BODACC'), 'Ordre des géomètres']);
+    database.prepare('DELETE FROM piecemaker_institutional_terms_offered_defaults WHERE term = ?').run('cour de cassation');
+    database.prepare('DELETE FROM piecemaker_institutional_terms WHERE term = ?').run('Cour de cassation');
+    const { terms } = openInstitutionalTerms(database, applicationRoot).read();
+    assert.ok(terms.includes('Cour de cassation'));
+    assert.ok(terms.includes('Ordre des géomètres'));
+    assert.ok(!terms.includes('BODACC'));
   });
 });
 

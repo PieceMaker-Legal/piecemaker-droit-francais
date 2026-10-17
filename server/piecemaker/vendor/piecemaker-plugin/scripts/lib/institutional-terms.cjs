@@ -153,6 +153,7 @@ module.exports = {
   dedupeTerms,
   institutionalTermsFile,
   isInstitutionalEntity,
+  normalizeForMatch,
   readInstitutionalTerms,
   writeInstitutionalTerms,
 };

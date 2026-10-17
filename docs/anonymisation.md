@@ -182,8 +182,12 @@ les institutions à ne pas anonymiser sont écartées en aval, à la constructio
 La liste (globale, éditable depuis le mapping du dossier, « Termes institutionnels ») vit dans la
 table `piecemaker_institutional_terms` de `auth.db`, que la désinstallation conserve
 (`server/piecemaker/institutional-terms.ts`). À la création de la table, elle reprend
-`~/.piecemaker/institutional-terms.json` s’il existe, sinon `institutional-terms.default.json`
-livré à côté du module ; une liste vidée ensuite reste vide. Le fichier JSON n’est plus qu’une
+`~/.piecemaker/institutional-terms.json` s’il existe. À chaque démarrage, les termes de
+`institutional-terms.default.json` (livré à côté du module) jamais encore proposés à cette base
+y sont ajoutés, puis notés dans `piecemaker_institutional_terms_offered_defaults` : les ajouts
+de l’utilisateur sont conservés, un terme par défaut qu’il a retiré ne revient pas, et une liste
+vidée reste vide. Lors de la mise à jour qui crée cette table, tous les termes par défaut sont
+proposés une fois. Le fichier JSON n’est plus qu’une
 copie, réécrite depuis la base à chaque démarrage et à chaque enregistrement : c’est elle que
 lisent `institutional-terms.cjs` et le plugin Dossier, sans dépendance SQLite. Une modification
 faite à la main dans ce fichier est donc perdue.
