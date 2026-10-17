@@ -3,6 +3,16 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.50](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.49...v2.0.50) (2026-10-17)
+
+### New Features
+
+* **tabular-review:** default new tables to Mistral Small ([c2a6c66](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c2a6c667a4252881a34dfc6a4488d45cc6c91069))
+
+### Bug Fixes
+
+* **tabular-review:** find PieceMaker's Vibe install when vibe is not on PATH ([ee67f78](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ee67f783a6c1259cee51ab4cb5e99aea01e7f60c))
+
 ## [2.0.49](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.48...v2.0.49) (2026-10-17)
 
 ### New Features
