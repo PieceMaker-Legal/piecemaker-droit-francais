@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { spawnSync } from 'node:child_process';
 
 import express from 'express';
 
 import { providerSkillsService } from '@/modules/providers/index.js';
 
 import type { createLibraryStore } from './store.js';
+import { runClaudeCommand } from './claude-cli.js';
 import { normalizeProviderConnector, setWorkspaceClaudePlugin, workspaceClaudePlugins } from './connector-installation.js';
 import { importLibraryDirectory } from './migrate.js';
 import { scanAndPersistLibraryProviderAgents } from './provider-agents.js';
@@ -210,10 +210,7 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
   const require = createRequire(import.meta.url);
   const { listMarketplaceConnectors, listRegisteredMarketplaces, registerOfficialMarketplace } = require(path.join(applicationRoot, 'server/piecemaker/vendor/websocket-server/admin-routes.cjs'));
   const router = express.Router();
-  const run = runCommand ?? ((command: string, args: string[], timeout = 60000) => {
-    const result = spawnSync(command, args, { encoding: 'utf8', timeout, maxBuffer: 8 * 1024 * 1024, windowsHide: true });
-    return { ok: result.status === 0, output: `${result.stdout || ''}${result.stderr || ''}`, status: result.status };
-  });
+  const run = runCommand ?? runClaudeCommand;
   const listed = () => listRegisteredMarketplaces(run);
   const scope = (value: unknown) => resolveMarketplace(value, listed());
   const installed = () => {
