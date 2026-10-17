@@ -746,3 +746,85 @@ test('other shells and initial commands only get the COLORFGBG hint', () => {
     );
   });
 });
+
+function withVibeHome(body: (fixture: { home: string; vibeBin: string; projectPath: string }) => void) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-vibe-'));
+  const home = path.join(root, 'home');
+  const vibeBin = path.join(home, '.local', 'bin');
+  const projectPath = path.join(root, 'project');
+  fs.mkdirSync(vibeBin, { recursive: true });
+  fs.mkdirSync(projectPath, { recursive: true });
+  const saved = Object.fromEntries(
+    ['HOME', 'USERPROFILE', 'PATH', 'UV_TOOL_BIN_DIR', 'XDG_BIN_HOME', 'XDG_DATA_HOME', 'npm_config_prefix', 'APPDATA']
+      .map((key) => [key, process.env[key]]),
+  );
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+  process.env.PATH = ['/usr/bin', '/bin'].join(path.delimiter);
+  for (const key of ['UV_TOOL_BIN_DIR', 'XDG_BIN_HOME', 'XDG_DATA_HOME', 'npm_config_prefix', 'APPDATA']) {
+    delete process.env[key];
+  }
+  try {
+    body({ home, vibeBin, projectPath });
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test('the Mistral login shell finds a uv-installed vibe even with no npm folder on the PATH', () => {
+  withVibeHome(({ vibeBin, projectPath }) => {
+    fs.writeFileSync(path.join(vibeBin, process.platform === 'win32' ? 'vibe.exe' : 'vibe'), '');
+    const { calls, dependencies } = spawnRecorder();
+    launch(dependencies, { provider: 'mistral', initialCommand: 'vibe --setup' }, projectPath);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].command, 'vibe --setup');
+    const pathKey = Object.keys(calls[0].env).find((key) => key.toLowerCase() === 'path') as string;
+    assert.deepEqual(calls[0].env[pathKey]?.split(path.delimiter), [vibeBin, '/usr/bin', '/bin']);
+  });
+});
+
+test('without a uv-installed vibe the shell PATH is left as it was', () => {
+  withVibeHome(({ projectPath }) => {
+    const { calls, dependencies } = spawnRecorder();
+    launch(dependencies, { provider: 'mistral', initialCommand: 'vibe --setup' }, projectPath);
+    const pathKey = Object.keys(calls[0].env).find((key) => key.toLowerCase() === 'path') as string;
+    assert.equal(calls[0].env[pathKey], ['/usr/bin', '/bin'].join(path.delimiter));
+  });
+});
+
+test('reopening the Mistral login replaces the previous vibe --setup shell instead of reattaching', () => {
+  withVibeHome(({ projectPath }) => {
+    const ptys: ReturnType<typeof createFakePty>[] = [];
+    const dependencies = {
+      resolveProviderSessionId: () => null,
+      spawnPty: () => {
+        const pty = createFakePty();
+        ptys.push(pty);
+        return pty as never;
+      },
+    };
+    const init = JSON.stringify({
+      type: 'init',
+      projectPath,
+      sessionId: `vibe-login-${Date.now()}`,
+      hasSession: false,
+      provider: 'mistral',
+      initialCommand: 'vibe --setup',
+    });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const socket = createFakeSocket();
+      handleShellConnection(socket as never, dependencies);
+      socket.emit('message', init);
+    }
+    assert.equal(ptys.length, 2);
+    assert.equal(ptys[0].killed, true);
+    assert.equal(ptys[1].killed, false);
+  });
+});
