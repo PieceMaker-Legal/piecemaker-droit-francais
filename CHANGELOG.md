@@ -3,6 +3,15 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.52](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.51...v2.0.52) (2026-10-17)
+
+### Bug Fixes
+
+* **installer:** give Windows PowerShell its own module path ([3a0c4af](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3a0c4af2563424517ac4cbfa5e0520324953640f))
+* **marketplace:** resolve claude in admin routes and auto-register catalogues ([6f563b5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6f563b53e6c31360c98fc67420f628d54cb3baf3))
+* **mcp:** enforce UTF-8 at the Python entrypoint ([916ff8c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/916ff8ca211dc84ed3d2470415dccca6f2dd4fd5))
+* **mistral:** force UTF-8 for Vibe and MCP subprocesses ([348ce1c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/348ce1c1e3c95a8da22680c5b845143190b5992c))
+
 ## [2.0.51](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.50...v2.0.51) (2026-10-17)
 
 ### New Features
