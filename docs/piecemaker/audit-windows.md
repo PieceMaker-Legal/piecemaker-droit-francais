@@ -1,5 +1,26 @@
 # Audit Windows PieceMaker
 
+## État des correctifs — publication 2.0.49
+
+| ID | Commit | Vérification |
+| --- | --- | --- |
+| WIN-001 | `ea37700b`, `0d672dc5` | Tests du shim Node réussis. |
+| WIN-002 | `f6bc6a54` | Tests MinGit réussis. |
+| WIN-003 | `106b1e88` | Tests `compact-package` réussis. |
+| WIN-004 | `9d3f4dff` | Suite Vitest non exécutée (dépendances absentes). |
+| WIN-005 | `ae59fa8c` | Test du lanceur réussi ; test TypeScript non exécutable sans build. |
+| WIN-006 | `b77a90b8` | Test du lanceur réussi. |
+| WIN-007 | `a19e4d39` | Test READY réussi ; échoue sur l'ancien code. |
+| WIN-008 | `f7180613`, `3393b95f`, `8a76df7c` | Nom canonique `<nom[:80]>-<sha256[:16]>` pour chaque pièce, identique en Python et en JS (test d'empreinte figée des deux côtés) ; anciens noms encore retrouvés. |
+| WIN-009 | `a7c10bf4` | Test de routage du PDF mixte réussi. |
+| WIN-010 | `0dc89302` | Test `originalFilesOverview` sur deux homonymes réussi. |
+| WIN-011 | `8a76df7c` | Tests de repli OCR réussis avec le Python configuré. |
+| WIN-012 | `80b8f8d7` | Suite Vitest non exécutée (dépendances absentes). |
+| WIN-013 | `2868c063` | Test `packagedApplicationRoot` réussi. |
+| Arrêt des plugins en démarrage | `6aaaab89` | Test réussi ; échoue sur l'ancien code. |
+
+Totaux de la dernière passe : 31 tests Python et 46 tests Node réussis. Non traité : arrêt SIGTERM du serveur sous Windows (piste non confirmée). Les sections suivantes décrivent l'état avant ces correctifs.
+
 ## Contre-vérification après corrections — 2026-10-17
 
 Sources vérifiées après le commit `3393b95f`. Dépôt et application affichent 2.0.48, mais leurs contenus diffèrent. Un agent Luna distinct a été affecté à chacun des huit bugs initiaux, puis deux autres au scan complémentaire. Les essais utilisent des données fictives et des répertoires temporaires. Aucun correctif applicatif, téléchargement de modèle, changement de configuration persistante ni redémarrage de l'application n'a été effectué pendant cette passe.
@@ -32,10 +53,10 @@ Un original déjà nommé `exemple-<suffixe calculé>.txt` peut également entre
 | WIN-009 | Haute | Contenu scanné perdu dans un PDF mixte. Un PDF fictif de deux pages, texte natif puis page raster, est orienté vers markitdown dès qu'une des trois premières pages contient assez de texte. La conversion garde le marqueur natif et perd celui de la page scannée ; GLiNER ne peut pas analyser le texte absent. | `server/piecemaker/vendor/websocket-server/scripts/smart_converter.py:168`, puis `inspect_file` | Reproduit sur les sources. |
 | WIN-010 | Moyenne | Statut « non converti » pour les Markdown suffixés. Deux originaux fictifs et leurs Markdown suffixés : `markdownCounterpart` trouve les deux fichiers, mais `originalFilesOverview` retourne `converted:false`, `status:not-converted`. La liste compare encore les noms simples aux clés suffixées. | `server/piecemaker/vendor/piecemaker-plugin/scripts/lib/commits.cjs:617`, `:664` | Reproduit sur les sources ; incohérence avec WIN-008. |
 | WIN-011 | Moyenne, validation | Test de repli OCR cassé par la nouvelle signature. Avec le Python configuré, premier test réussi, second en `TypeError: convert() got an unexpected keyword argument 'output_name'`. Le mock n'accepte pas le nouvel argument ; sans Python trouvé par la suite, le test est ignoré et masque cette régression. | `server/piecemaker/vendor/websocket-server/ocr-fallback.test.js:24`, appel dans `convert_and_scan_pipeline.py:2253` | Reproduit. Défaut du test, sans preuve que le repli OCR réel échoue. |
-| WIN-012 | Haute, conditionnelle | Tabular Review accepte un Markdown extérieur au dossier via une jonction Windows locale. Fixture temporaire : `project/linked/fixture.md` pointe hors du projet, passe le même contrôle lexical de confinement, est reconnu comme fichier et son contenu externe est lu. L'import de documents utilise ce contrôle puis lit le fichier. | `plugins/piecemaker-tabular-review/src/server/documents.ts:43`, `paths.ts:45`, `reviews.ts:62` | Mécanisme reproduit avec les mêmes opérations et le même prédicat ; aucun fournisseur IA appelé. Nécessite une jonction déjà présente et un chemin demandé. |
+| WIN-012 | Haute, conditionnelle | Tabular Review acceptait un Markdown extérieur au dossier via une jonction Windows locale : le contrôle lexical ne suivait pas les jonctions avant lecture. | `plugins/piecemaker-tabular-review/src/server/documents.ts`, `paths.ts` | Corrigé dans les sources : projet enregistré et document sélectionné sont résolus physiquement, avec comparaison compatible avec la casse Windows ; tests ajoutés pour document normal, jonctions interne et externe. À exécuter avec Vitest, absent de l'environnement pendant cette passe. Nécessite toujours une jonction déjà présente et un chemin demandé. |
 | WIN-013 | Moyenne | Désinstallation depuis l'application refusée pour le répertoire installé actuel. `packagedApplicationRoot` exige un dossier nommé `PieceMaker`, alors que le bootstrap utilise ici `@piecemaker-legalpiecemaker-desktop`. Le calcul retourne `null` et `scheduleUninstall` lève « Dossier de l'application introuvable » avant planification. | `electron/uninstallPlan.js:19`, `electron/piecemakerUninstall.js:53`, `desktop-bootstrap/install.ps1:104` | Calcul reproduit sur le chemin installé ; aucune désinstallation déclenchée. |
 
-Aucun de ces nouveaux bugs n'a été corrigé pendant l'audit.
+Ces bugs ont été corrigés après l'audit ; voir « État des correctifs ».
 
 ### Autres pistes non confirmées de bout en bout
 
