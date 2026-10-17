@@ -10,6 +10,7 @@ import { scanPlugins, getPluginsConfig, getPluginDir } from './plugin-registry.s
 const runningPlugins = new Map();
 // Map<pluginName, Promise<port>> — in-flight start operations
 const startingPlugins = new Map();
+let stoppingPlugins = false;
 
 /**
  * Build the environment handed to a plugin server subprocess.
@@ -52,6 +53,7 @@ function buildPluginEnv(name) {
  * to stdout within 10 seconds.
  */
 export function startPluginServer(name, pluginDir, serverEntry) {
+  if (stoppingPlugins) return Promise.reject(new Error('Plugin host is shutting down'));
   if (runningPlugins.has(name)) {
     return Promise.resolve(runningPlugins.get(name).port);
   }
@@ -185,12 +187,18 @@ export function isPluginRunning(name) {
 /**
  * Stop all running plugin servers (called on host shutdown).
  */
-export function stopAllPlugins() {
-  const stops = [];
-  for (const [name] of runningPlugins) {
-    stops.push(stopPluginServer(name));
-  }
-  return Promise.all(stops);
+export async function stopAllPlugins() {
+  stoppingPlugins = true;
+  const starts = [...startingPlugins.entries()];
+  await Promise.all(starts.map(async ([name, start]) => {
+    try {
+      await start;
+    } catch {
+      return;
+    }
+  }));
+
+  return Promise.all([...runningPlugins.keys()].map(stopPluginServer));
 }
 
 /**
