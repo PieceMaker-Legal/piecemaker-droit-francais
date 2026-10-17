@@ -178,15 +178,10 @@ def pdf_has_text_layer(pdf_path):
         with open(pdf_path, 'rb') as f:
             reader = PyPDF2.PdfReader(f)
 
-            # Check first 3 pages for text content
-            pages_to_check = min(3, len(reader.pages))
-            for i in range(pages_to_check):
-                text = reader.pages[i].extract_text()
-                # Require at least 50 chars to avoid false positives
-                if text and len(text.strip()) > 50:
-                    return True
-
-            return False  # No substantial text found
+            return bool(reader.pages) and all(
+                text and len(text.strip()) > 50
+                for text in (page.extract_text() for page in reader.pages)
+            )
 
     except Exception as e:
         print(f"⚠️  PDF inspection error: {e}", file=sys.stderr)
