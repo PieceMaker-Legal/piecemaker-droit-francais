@@ -3,6 +3,17 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.53](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.52...v2.0.53) (2026-10-17)
+
+### New Features
+
+* **mistral:** stream partial assistant text from Vibe ([b9bdb52](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b9bdb52256c47ab5dc13832c44a82ff1b832e0c7))
+
+### Bug Fixes
+
+* **mistral:** display reasoning while it streams ([88591b3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/88591b34e0ebfab60c55319d7bd7201c2567d9ff))
+* **piecemaker:** preserve Windows shell arguments and recover citation blocks ([dede88d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/dede88d120e3ef656c9aa12b5180bb783d020ab7))
+
 ## [2.0.52](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.51...v2.0.52) (2026-10-17)
 
 ### Bug Fixes
