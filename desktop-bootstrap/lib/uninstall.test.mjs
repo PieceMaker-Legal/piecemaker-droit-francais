@@ -23,6 +23,17 @@ test('repère le dossier Windows', () => {
   );
 });
 
+test('repère le paquet npm Windows et refuse un dossier arbitraire', () => {
+  assert.equal(
+    packagedApplicationRoot('C:\\Users\\me\\AppData\\Local\\Programs\\@piecemaker-legalpiecemaker-desktop\\resources\\app', 'win32'),
+    'C:\\Users\\me\\AppData\\Local\\Programs\\@piecemaker-legalpiecemaker-desktop',
+  );
+  assert.equal(
+    packagedApplicationRoot('C:\\Users\\me\\AppData\\Local\\Programs\\UnrelatedApp\\resources\\app', 'win32'),
+    null,
+  );
+});
+
 test('retire tout, y compris les données, sauf la base auth.db et la bibliothèque', () => {
   const plan = removalPlan('/Applications/PieceMaker.app', '/Users/me', {}, 'darwin', {
     config: { venvPath: '/Users/me/.piecemaker/venv' },

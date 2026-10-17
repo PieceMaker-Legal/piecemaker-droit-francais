@@ -1,7 +1,19 @@
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 
-const PRODUCT_NAME = 'PieceMaker';
+const require = createRequire(import.meta.url);
+const PRODUCT_CONFIG = require('../product.config.json');
+const PACKAGE = require('../package.json');
+const PRODUCT_NAME = PRODUCT_CONFIG.name || PACKAGE.productName || 'PieceMaker';
+const APPLICATION_DIRECTORY_NAMES = new Set([
+  PRODUCT_CONFIG.name,
+  PRODUCT_CONFIG.shortName,
+  PRODUCT_CONFIG.slug,
+  PACKAGE.productName,
+  PACKAGE.name?.split('/').at(-1),
+  PACKAGE.name?.replace('/', '') + '-desktop',
+].filter(Boolean).map((name) => name.toLocaleLowerCase('en-US')));
 const LIBRARY_DIRECTORY = 'library-backend';
 export const UNINSTALL_ARGUMENT = '--piecemaker-uninstall';
 export const WINDOWS_UNINSTALL_KEY = `HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${PRODUCT_NAME}`;
@@ -25,7 +37,7 @@ export function packagedApplicationRoot(appPath, platform = process.platform) {
   }
   if (platform === 'win32') {
     const root = paths.resolve(appPath, '..', '..');
-    return paths.basename(root) === PRODUCT_NAME ? root : null;
+    return APPLICATION_DIRECTORY_NAMES.has(paths.basename(root).toLocaleLowerCase('en-US')) ? root : null;
   }
   return null;
 }
