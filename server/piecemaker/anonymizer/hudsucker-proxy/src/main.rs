@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -34,6 +34,8 @@ struct Handler {
     http: reqwest::Client,
     provider: &'static str,
     ws_id: Option<String>,
+    sessions: Arc<Mutex<HashMap<SocketAddr, String>>>,
+    session: Option<String>,
 }
 
 fn arg(name: &str) -> String {
@@ -145,12 +147,31 @@ impl Handler {
         }
     }
 
+    fn remember_session(&self, client: SocketAddr, req: &Request<Body>) {
+        let mut sessions = self.sessions.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        match proxy_authorization(req) {
+            Some(value) => sessions.insert(client, value),
+            None => sessions.remove(&client),
+        };
+    }
+
+    fn session_of(&self, client: SocketAddr) -> Option<String> {
+        self.sessions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&client)
+            .cloned()
+    }
+
     async fn rewrite(&self, path: &str, extra: &[(&str, &str)], body: Bytes) -> Result<Bytes, &'static str> {
         let mut request = self
             .http
             .post(format!("{}{path}", self.rewriter))
             .header("x-piecemaker-provider", self.provider)
             .body(body);
+        if let Some(session) = &self.session {
+            request = request.header("x-piecemaker-proxy-authorization", session.as_str());
+        }
         for (name, value) in extra {
             request = request.header(*name, *value);
         }
@@ -182,10 +203,13 @@ impl Handler {
     }
 
     fn spawn_sse(&self, body: Body) -> Body {
-        let request = self
+        let mut request = self
             .http
             .post(format!("{}/v1/sse", self.rewriter))
             .header("x-piecemaker-provider", self.provider);
+        if let Some(session) = &self.session {
+            request = request.header("x-piecemaker-proxy-authorization", session.as_str());
+        }
         let (tx, rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(8);
         tokio::spawn(async move {
             let incoming = BodyStream::new(body).filter_map(|frame| async move {
@@ -264,12 +288,18 @@ impl HttpHandler for Handler {
             .unwrap_or(false)
     }
 
-    async fn handle_request(&mut self, _ctx: &HttpContext, req: Request<Body>) -> RequestOrResponse {
+    async fn handle_request(&mut self, ctx: &HttpContext, mut req: Request<Body>) -> RequestOrResponse {
         let host = request_host(&req);
         if req.method() == Method::GET && req.uri().path() == "/health" && (host == "127.0.0.1" || host == "localhost") {
             return self.health().await.into();
         }
-        if req.method() == Method::CONNECT || !self.allowed(&host) {
+        if req.method() == Method::CONNECT {
+            self.remember_session(ctx.client_addr, &req);
+            return req.into();
+        }
+        self.session = proxy_authorization(&req).or_else(|| self.session_of(ctx.client_addr));
+        req.headers_mut().remove("proxy-authorization");
+        if !self.allowed(&host) {
             return req.into();
         }
         self.provider = provider_for(&host);
@@ -342,10 +372,11 @@ impl WebSocketHandler for Handler {
         mut stream: impl futures::Stream<Item = Result<Message, WsError>> + Unpin + Send + 'static,
         mut sink: impl futures::Sink<Message, Error = WsError> + Unpin + Send + 'static,
     ) {
-        let (outbound, uri) = match &ctx {
-            WebSocketContext::ClientToServer { dst, .. } => (true, dst),
-            WebSocketContext::ServerToClient { src, .. } => (false, src),
+        let (outbound, uri, client) = match &ctx {
+            WebSocketContext::ClientToServer { src, dst, .. } => (true, dst, *src),
+            WebSocketContext::ServerToClient { src, dst, .. } => (false, src, *dst),
         };
+        self.session = self.session_of(client);
         let target = self.intercepted_host(uri);
         let intercepted = target.is_some();
         let host = target.unwrap_or_default();
@@ -426,6 +457,13 @@ fn pending_messages(bytes: &Bytes) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn proxy_authorization(req: &Request<Body>) -> Option<String> {
+    req.headers()
+        .get("proxy-authorization")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string)
+}
+
 fn parse_list(value: &str) -> HashSet<String> {
     value
         .split(',')
@@ -499,6 +537,8 @@ async fn main() {
         http,
         provider: "claude",
         ws_id: None,
+        sessions: Arc::new(Mutex::new(HashMap::new())),
+        session: None,
     };
     let proxy = Proxy::builder()
         .with_listener(listener)

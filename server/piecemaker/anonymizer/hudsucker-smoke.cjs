@@ -13,6 +13,8 @@ const { startRewriterWorker } = require('./rewriter-worker.cjs');
 const HOST = 'api.anthropic.com';
 const NAME = 'Jean Dupont';
 const CODE = 'PERSONNE_PHYSIQUE_01';
+const SHARED = 'Exemplon';
+const SESSION_TOKEN = 'jeton-smoke';
 const CHECK_TIMEOUT_MS = 10000;
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
 
@@ -33,6 +35,10 @@ function mappingDatabase(directory) {
   `);
   database.prepare('INSERT INTO piecemaker_nodes VALUES (?, ?, ?)').run('smoke', 'n0', NAME);
   database.prepare('INSERT INTO piecemaker_mappings VALUES (?, ?, ?, ?, ?)').run('smoke', 'n0', NAME, CODE, '2026-01-01T00:00:00.000Z');
+  for (const [projectId, code, label] of [['smoke-a', 'PERSONNE_PHYSIQUE_10', `Paul ${SHARED}`], ['smoke-b', 'PERSONNE_PHYSIQUE_20', `Anne ${SHARED}`]]) {
+    database.prepare('INSERT INTO piecemaker_nodes VALUES (?, ?, ?)').run(projectId, code, label);
+    for (const real of [label, SHARED]) database.prepare('INSERT INTO piecemaker_mappings VALUES (?, ?, ?, ?, ?)').run(projectId, code, real, code, '2026-01-01T00:00:00.000Z');
+  }
   database.close();
   return file;
 }
@@ -58,12 +64,14 @@ function sseEvent(text) {
 
 function startUpstream() {
   const seen = [];
+  const seenHeaders = [];
   const server = http.createServer((request, response) => {
     const chunks = [];
     request.on('data', (chunk) => chunks.push(chunk));
     request.on('end', () => {
       const body = Buffer.concat(chunks).toString('utf8');
       seen.push(body);
+      seenHeaders.push(request.headers);
       if (request.headers['x-smoke-mode'] === 'sse') {
         response.writeHead(200, { 'content-type': 'text/event-stream' });
         for (const text of ['Le client ', 'PERSONNE_', 'PHYSIQUE', '_01', ' a signé.']) response.write(sseEvent(text));
@@ -75,7 +83,7 @@ function startUpstream() {
     });
   });
   return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve({ seen, server, port: server.address().port }));
+    server.listen(0, '127.0.0.1', () => resolve({ seen, seenHeaders, server, port: server.address().port }));
   });
 }
 
@@ -149,9 +157,10 @@ function refuseDirectResolution(hostname, _options, callback) {
   callback(new Error(`résolution directe de ${hostname} interdite : tout doit passer par le proxy`));
 }
 
-function postThroughProxy(port, ca, { body, contentType = 'application/json', mode = 'json' }) {
+function postThroughProxy(port, ca, { body, contentType = 'application/json', mode = 'json', session = null }) {
   return new Promise((resolve, reject) => {
-    const connect = http.request({ host: '127.0.0.1', port, method: 'CONNECT', path: `${HOST}:443`, headers: { host: `${HOST}:443` } });
+    const credentials = session ? { 'proxy-authorization': `Basic ${Buffer.from(`${session}:${SESSION_TOKEN}`).toString('base64')}` } : {};
+    const connect = http.request({ host: '127.0.0.1', port, method: 'CONNECT', path: `${HOST}:443`, headers: { host: `${HOST}:443`, ...credentials } });
     connect.once('error', reject);
     connect.once('connect', (answer, socket) => {
       if (answer.statusCode !== 200) {
@@ -234,7 +243,7 @@ async function runHudsuckerSmokeTest({ binary: requestedBinary = defaultBinary()
     }
     const ca = fs.readFileSync(authority.cert);
 
-    bridge = await startRewriterWorker({ databasePath: mappingDatabase(directory), homeDir: directory });
+    bridge = await startRewriterWorker({ databasePath: mappingDatabase(directory), homeDir: directory, token: SESSION_TOKEN });
     upstream = await startUpstream();
 
     const logs = { text: '' };
@@ -287,6 +296,21 @@ async function runHudsuckerSmokeTest({ binary: requestedBinary = defaultBinary()
       const response = await postThroughProxy(port, ca, { body: JSON.stringify({ stream: true, messages: [] }), mode: 'sse' });
       const text = streamedText(response.body);
       if (response.status !== 200 || text !== `Le client ${NAME} a signé.`) throw new Error(`HTTP ${response.status}, texte « ${text} »`);
+    });
+
+    await step('dossier de la session transmis par le CONNECT', async () => {
+      const sentFor = async (session) => {
+        const before = upstream.seen.length;
+        const response = await postThroughProxy(port, ca, { body: JSON.stringify({ messages: [{ role: 'user', content: `Courrier de ${SHARED}` }] }), session });
+        if (response.status !== 200) throw new Error(`HTTP ${response.status} ${response.body}`);
+        if (upstream.seenHeaders[before]?.['proxy-authorization']) throw new Error('identifiants du proxy relayés au serveur distant');
+        return upstream.seen[before] || '';
+      };
+      const [b, a, none] = [await sentFor('smoke-b'), await sentFor('smoke-a'), await sentFor(null)];
+      if (!b.includes('PERSONNE_PHYSIQUE_20') || !a.includes('PERSONNE_PHYSIQUE_10') || !none.includes('PERSONNE_PHYSIQUE_10') || [a, b, none].some((sent) => sent.includes(SHARED))) {
+        throw new Error(`reçu : ${b} | ${a} | ${none}`);
+      }
+      return `« ${SHARED} » codé selon le dossier de la session, identifiants non relayés`;
     });
 
     await step('refus d’un corps non JSON', async () => {

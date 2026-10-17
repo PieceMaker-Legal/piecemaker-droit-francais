@@ -92,7 +92,7 @@ if ($env:ELECTRON_RUN_AS_NODE -ne 'original') { throw 'RunAsNode environment was
   assert.equal(prepared.assets, prefetched);
   assert.equal(fs.readFileSync(path.join(prefetched, 'piecemaker-python-win32-x64.tar.gz'), 'utf8'), 'fixture-python');
   assert.equal(fs.readFileSync(path.join(prefetched, `piecemaker-runtime-components-win32-x64-${componentHash}.tar.gz`), 'utf8'), 'fixture-components');
-  assert.equal(fs.readFileSync(path.join(prefetched, glinerName), 'utf8'), 'fixture-gliner');
+  assert.equal(fs.existsSync(path.join(prefetched, glinerName)), false);
   assert.equal(fs.existsSync(path.join(root, 'bootstrap/src')), false);
   fs.unlinkSync(report);
   const invalid = run('0'.repeat(64));

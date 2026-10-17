@@ -398,7 +398,7 @@ export async function installRuntimeComponents({
   host = createHost(),
   output = log,
   requirePrebuilt = false,
-  includeGliner = true,
+  includeGliner = false,
 } = {}) {
   if (!sourceDir) throw new Error('PIECEMAKER_SRC_DIR est absent — lancez install.sh ou install.ps1.');
   const layout = componentLayout(env, homeDir);

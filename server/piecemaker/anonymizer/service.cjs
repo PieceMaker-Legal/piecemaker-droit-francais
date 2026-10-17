@@ -1,4 +1,6 @@
+const { AsyncLocalStorage } = require('node:async_hooks');
 const { spawn } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -124,6 +126,24 @@ function waitForListening(child, timeoutMs) {
   });
 }
 
+const SESSION_PROXY_KEYS = new Set(['HTTPS_PROXY', 'https_proxy']);
+
+function sessionScopedEnvironment(environment, sessions) {
+  return new Proxy(environment, {
+    get(target, key) {
+      const scoped = SESSION_PROXY_KEYS.has(key) ? sessions.getStore() : undefined;
+      return scoped === undefined ? Reflect.get(target, key) : scoped;
+    },
+  });
+}
+
+function sessionProxyUrl(origin, projectId, token) {
+  const url = new URL(origin);
+  url.username = encodeURIComponent(projectId);
+  url.password = token;
+  return url.toString().replace(/\/$/, '');
+}
+
 function proxyEnvironment(proxyUrl, caFile, trustBundle) {
   return {
     HTTPS_PROXY: proxyUrl,
@@ -145,6 +165,9 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
   let proxy = null;
   let bridge = null;
   let previousEnv = null;
+  let unscopedEnv = null;
+  const sessions = new AsyncLocalStorage();
+  const token = crypto.randomBytes(24).toString('hex');
   const killProxy = () => proxy?.kill('SIGKILL');
 
   async function start() {
@@ -167,7 +190,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
     const hosts = [...new Set([...INTERCEPTED_HOSTS, new URL(upstream).hostname])];
 
     try {
-      bridge = await startRewriterWorker({ databasePath, homeDir });
+      bridge = await startRewriterWorker({ databasePath, homeDir, token });
     } catch (error) {
       state.reason = `listen_failed: ${error.message}`;
       logger.warn?.(`[piecemaker] réécriture PII non démarrée : ${error.message}`);
@@ -212,6 +235,8 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
       .map((key) => [key, process.env[key]]));
     for (const key of ['HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']) delete process.env[key];
     Object.assign(process.env, environment);
+    unscopedEnv = process.env;
+    process.env = sessionScopedEnvironment(unscopedEnv, sessions);
     removeLegacyCentralMapping(homeDir);
     installCursorGuard({ binDir, mappingFile: path.join(homeDir, 'central-mapping.json') });
     process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
@@ -244,6 +269,8 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
     if (bridge) await bridge.close();
     bridge = null;
     fs.rmSync(path.join(binDir, 'cursor-agent'), { force: true });
+    if (unscopedEnv) process.env = unscopedEnv;
+    unscopedEnv = null;
     if (previousEnv) {
       for (const [key, value] of Object.entries(previousEnv)) {
         if (value === undefined) delete process.env[key];
@@ -272,12 +299,19 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
     };
   }
 
-  return { dictionary, start, status, stop };
+  function runInProject(projectId, run) {
+    if (!projectId || !state.enabled || !state.origin) return run();
+    return sessions.run(sessionProxyUrl(state.origin, projectId, token), run);
+  }
+
+  return { dictionary, runInProject, start, status, stop };
 }
 
 module.exports = {
   createAnonymizerService,
   installCursorGuard,
   resolveUpstream,
+  sessionProxyUrl,
+  sessionScopedEnvironment,
   writeTrustBundle,
 };

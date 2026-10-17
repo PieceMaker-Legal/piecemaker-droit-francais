@@ -1,6 +1,7 @@
+const crypto = require('node:crypto');
 const http = require('node:http');
 
-const { anonymize, deanonymize } = require('./dictionary.cjs');
+const { anonymize, deanonymize, resolveContext } = require('./dictionary.cjs');
 const { createSseRewriter, rewriteJsonBody } = require('./rewrite.cjs');
 const { createCollecteurTexte } = require('../harness/flux-sse.cjs');
 
@@ -27,6 +28,23 @@ function readBody(request) {
 function header(request, name) {
   const value = request.headers[name];
   return Array.isArray(value) ? value[0] : value || '';
+}
+
+function sessionProject(request, token) {
+  const value = header(request, 'x-piecemaker-proxy-authorization');
+  const match = /^Basic\s+(\S+)$/i.exec(value);
+  if (!token || !match) return null;
+  const decoded = Buffer.from(match[1], 'base64').toString('utf8');
+  const separator = decoded.indexOf(':');
+  if (separator <= 0) return null;
+  const secret = Buffer.from(decoded.slice(separator + 1));
+  const expected = Buffer.from(token);
+  if (secret.length !== expected.length || !crypto.timingSafeEqual(secret, expected)) return null;
+  try {
+    return decodeURIComponent(decoded.slice(0, separator));
+  } catch {
+    return null;
+  }
 }
 
 function observeRequest(harness, body, contentType, provider) {
@@ -77,12 +95,13 @@ function ssePayloads(tail) {
     .filter((line) => line && line !== '[DONE]');
 }
 
-function startRewriterBridge({ dictionary, harness = null }) {
+function startRewriterBridge({ dictionary, harness = null, token = null }) {
   const sessions = new Map();
   const stats = { requests: 0, anonymized: 0, deanonymized: 0, failures: 0, lastError: null };
 
   const server = http.createServer((request, response) => {
     const provider = header(request, 'x-piecemaker-provider') || 'claude';
+    const projectId = sessionProject(request, token);
     const current = () => dictionary.get();
     const outbound = () => (dictionary.getForOutbound ? dictionary.getForOutbound() : dictionary.get());
 
@@ -97,9 +116,10 @@ function startRewriterBridge({ dictionary, harness = null }) {
         stats.requests += 1;
         const contentType = header(request, 'content-type') || 'application/json';
         const dict = outbound();
+        const context = dict.empty ? null : resolveContext(dict, { projectId, text: body.toString('utf8') });
         const rewritten = !body.length || dict.empty
           ? body
-          : Buffer.from(rewriteJsonBody(body, (text) => anonymize(text, dict)), 'utf8');
+          : Buffer.from(rewriteJsonBody(body, (text) => anonymize(text, dict, context)), 'utf8');
         if (!rewritten.equals(body)) stats.anonymized += 1;
         response.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': rewritten.length });
         response.end(rewritten);
@@ -118,7 +138,7 @@ function startRewriterBridge({ dictionary, harness = null }) {
         const dict = current();
         const rewritten = !body.length || dict.empty
           ? body
-          : Buffer.from(rewriteJsonBody(body, (text) => deanonymize(text, dict)), 'utf8');
+          : Buffer.from(rewriteJsonBody(body, (text) => deanonymize(text, dict, { projectId })), 'utf8');
         if (!rewritten.equals(body)) stats.deanonymized += 1;
         observeResponse(harness, assistantText(rewritten), provider);
         response.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': rewritten.length });
@@ -134,7 +154,7 @@ function startRewriterBridge({ dictionary, harness = null }) {
 
     if (request.method === 'POST' && request.url === '/v1/sse') {
       const dict = current();
-      const rewriter = createSseRewriter((text) => deanonymize(text, dict));
+      const rewriter = createSseRewriter((text) => deanonymize(text, dict, { projectId }));
       const collecteur = createCollecteurTexte();
       response.writeHead(200, {
         'content-type': 'text/event-stream',
@@ -169,7 +189,8 @@ function startRewriterBridge({ dictionary, harness = null }) {
         const text = body.toString('utf8');
         if (direction === 'out') {
           const dict = outbound();
-          const rewritten = dict.empty ? text : rewriteJsonBody(text, (value) => anonymize(value, dict));
+          const context = dict.empty ? null : resolveContext(dict, { projectId, text });
+          const rewritten = dict.empty ? text : rewriteJsonBody(text, (value) => anonymize(value, dict, context));
           response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
           response.end(rewritten);
           setImmediate(() => observeRequest(harness, body, 'application/json', provider));
@@ -178,7 +199,7 @@ function startRewriterBridge({ dictionary, harness = null }) {
         const dict = current();
         let entry = sessions.get(id);
         if (!entry) {
-          entry = { rewriter: createSseRewriter((value) => deanonymize(value, dict)) };
+          entry = { rewriter: createSseRewriter((value) => deanonymize(value, dict, { projectId })) };
           sessions.set(id, entry);
         }
         if (!text.includes('\n')) {
@@ -187,7 +208,7 @@ function startRewriterBridge({ dictionary, harness = null }) {
           response.end(payloads.join('\n'));
           return;
         }
-        const rewritten = dict.empty ? text : rewriteJsonBody(text, (value) => deanonymize(value, dict));
+        const rewritten = dict.empty ? text : rewriteJsonBody(text, (value) => deanonymize(value, dict, { projectId }));
         response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
         response.end(rewritten);
       }).catch(() => {

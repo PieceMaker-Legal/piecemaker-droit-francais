@@ -1,14 +1,7 @@
 const OPEN = '<CITATION_INSTRUCTION>';
 const CLOSE = '</CITATION_INSTRUCTION>';
 const INSTRUCTIONS = `${OPEN}
-Chaque affirmation doit être justifiée par une citation mot pour mot d'une pièce, d'un texte de loi ou d'une décision lue.
-Marqueurs [1], [2]. Finir par <CITATIONS>[…]</CITATIONS> (JSON strict) :
-Décision : {"ref":1,"kind":"case","decision_id":"text_id passé à consulter_decision","quotes":[{"quote":"extrait exact"}]}.
-Article : {"ref":2,"kind":"article","article_id":"LEGIARTI… passé à consulter_article","quotes":[{"quote":"extrait exact"}]}.
-Pièce : {"ref":3,"kind":"document","doc_id":"chemin relatif au dossier du Markdown converti","quotes":[{"page":1,"quote":"extrait exact"}]}.
-Code (pour une affirmation sur le dépôt applicatif) : {"ref":4,"kind":"code","doc_id":"chemin relatif à la racine du dépôt","quotes":[{"quote":"extrait exact"}]}.
-Au plus 3 citations par document, pas plus d'une phrase par citation. Extrait sur deux pages : "page":"1-2" et [[PAGE_BREAK]] dans quote entre la fin de la page 1 et le début de la page 2. Tableur : sheet et cell au lieu de page.
-Dans un .docx : aucun [n] dans le document mais une note de bas de page « source, localisation : "extrait exact" » ; même bloc <CITATIONS> en fin de réponse, ref = numéro de la note.
+Chaque affirmation juridique ou factuelle s'appuie sur un passage exact lu. Réponse : marqueurs [1…N], puis un unique bloc final <CITATIONS>JSON</CITATIONS>. Le contenu doit être exactement un tableau JSON valide, sans texte, objet enveloppe, bloc Markdown ni caractère après le tableau. Exemple de forme : [{"ref":1,"kind":"document","doc_id":"chemin/relatif.md","quotes":[{"page":1,"quote":"extrait exact"}]}]. Les types de source : case + decision_id, article + article_id, document/code + doc_id. Chacun porte ref et quotes (max 3 passages courts) ; chaque quote contient le texte exact, page ou sheet/cell si pièce. Citation de décision/article : identifiant lu via l'outil correspondant. Citation de pièce : chemin de sa version Markdown. Code : chemin relatif au dépôt. Dans un DOCX, pas de marqueur dans le fichier : note de bas de page avec source, emplacement et extrait exact ; ref = numéro de note.
 ${CLOSE}`;
 
 export function withCitationInstructions(command: string) {

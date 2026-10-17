@@ -236,28 +236,40 @@ function compileMapping(mapping) {
     const regex = buildEntityRegex(entity);
     if (!regex) continue;
     const trimmed = entity.trim();
-    replacements.push({ regex, code, anchor: literalAnchor(regex.flags.includes('i') ? trimmed : trimmed.toUpperCase()) });
+    replacements.push({ regex, code, entity, anchor: literalAnchor(regex.flags.includes('i') ? trimmed : trimmed.toUpperCase()) });
   }
   const compiled = {
     frozen: Object.isFrozen(mapping),
     signature,
-    codes,
-    codeProbe: codes.length ? new RegExp(codes.map(escapeRegex).join('|')) : null,
+    codes: new Set(codes),
+    codeScan: codes.length ? new RegExp(codes.map(escapeRegex).join('|'), 'g') : null,
     replacements: compileReplacements(replacements),
   };
   compiledMappings.set(mapping, compiled);
   return compiled;
 }
 
-function applyReplacements({ replacements, scan }, text) {
+const MASK_DIGITS = 0xF8FF - 0xE000;
+
+function maskToken(index) {
+  let digits = '';
+  let rest = index;
+  do {
+    digits = String.fromCharCode(0xE000 + (rest % MASK_DIGITS)) + digits;
+    rest = Math.floor(rest / MASK_DIGITS);
+  } while (rest);
+  return `\uF8FF${digits}\uF8FF`;
+}
+
+function applyReplacements({ replacements, scan }, text, overrides = null) {
   let output = text;
   let present = null;
-  replacements.forEach(({ regex, code, anchor }, index) => {
+  replacements.forEach(({ regex, code, entity, anchor }, index) => {
     if (anchor) {
       if (present === null) present = scan(output);
       if (!present.has(index)) return;
     }
-    const next = output.replace(regex, code);
+    const next = output.replace(regex, (overrides && overrides.get(entity)) || code);
     if (next !== output) {
       output = next;
       present = null;
@@ -271,24 +283,24 @@ function applyReplacements({ replacements, scan }, text) {
  * qu'un nom contenu dans un autre ne consomme jamais le plus long en premier
  * (« Dupont » dans « Jean Dupont-Martin »).
  */
-function applyMapping(text, mapping) {
+function applyMapping(text, mapping, overrides = null) {
   if (typeof text !== 'string' || !text) return text;
   if (!mapping || typeof mapping !== 'object') return text;
   const compiled = compileMapping(mapping);
   if (!compiled.replacements.replacements.length) return text;
 
+  const present = new Set(compiled.codeScan ? Array.from(text.matchAll(compiled.codeScan), ([code]) => code) : []);
+  for (const code of overrides ? overrides.values() : []) if (!compiled.codes.has(code) && text.includes(code)) present.add(code);
   const restore = [];
   let masked = text;
-  if (compiled.codeProbe && compiled.codeProbe.test(text)) {
-    compiled.codes.forEach((code, idx) => {
-      if (!masked.includes(code)) return;
-      const token = String.fromCodePoint(0xE000 + idx);
-      restore.push([token, code]);
-      masked = masked.split(code).join(token);
-    });
+  for (const code of [...present].sort((a, b) => b.length - a.length)) {
+    if (!masked.includes(code)) continue;
+    const token = maskToken(restore.length);
+    restore.push([token, code]);
+    masked = masked.split(code).join(token);
   }
 
-  let output = applyReplacements(compiled.replacements, masked);
+  let output = applyReplacements(compiled.replacements, masked, overrides);
   if (output === masked) return text;
 
   for (const [token, code] of restore) output = output.split(token).join(code);

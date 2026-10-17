@@ -45,6 +45,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const [mainTab, setMainTab] = useState<AppTab>(props.activeTab === 'shell' ? 'shell' : 'chat');
     const [columns, setColumns] = useState<WorkspaceColumn[]>([]);
     const [expanded, setExpanded] = useState<AppTab | 'viewer' | null>(null);
+    const [expandedCompanion, setExpandedCompanion] = useState<AppTab | 'viewer' | null>(null);
     const [dockWidth, setDockWidth] = useState(48);
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerTarget, setViewerTarget] = useState<HTMLElement | null>(null);
@@ -59,17 +60,51 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
         : tab.startsWith('plugin:') ? plugins.some((plugin) => plugin.enabled && tab === `plugin:${plugin.name}`) : true) })).filter((column) => column.tabs.length > 0);
     const enabledPanels = enabledColumns.flatMap((column) => column.tabs);
     const filesHost = enabledPanels.includes('files') ? filesSlots : null;
-    const layoutColumns: WorkspaceColumn[] = [...enabledColumns, ...(viewerOpen && !filesHost ? [{ id: 'viewer' as const, tabs: [], width: viewerWidth ?? (enabledColumns.length ? enabledColumns.reduce((sum, column) => sum + column.width, 0) / enabledColumns.length : 1), split: 100 }] : [])];
     const expandedTab = expanded === 'viewer' ? viewerOpen ? expanded : null : expanded && enabledPanels.includes(expanded) ? expanded : null;
+    const viewerColumn: WorkspaceColumn | null = viewerOpen && !filesHost
+      ? { id: 'viewer', tabs: [], width: viewerWidth ?? (enabledColumns.length ? enabledColumns.reduce((sum, column) => sum + column.width, 0) / enabledColumns.length : 1), split: 100 }
+      : null;
+    const allLayoutColumns: WorkspaceColumn[] = [...enabledColumns, ...(viewerColumn ? [viewerColumn] : [])];
+    const expandedColumn = expandedTab === 'viewer' ? viewerColumn : enabledColumns.find((column) => column.tabs.includes(expandedTab as AppTab)) ?? null;
+    const companionColumn = expandedCompanion === 'viewer' ? viewerColumn : enabledColumns.find((column) => column.tabs.includes(expandedCompanion as AppTab)) ?? null;
+    const hasExpandedPair = Boolean(expandedTab && expandedColumn && companionColumn && expandedColumn.id !== companionColumn.id);
+    const layoutColumns: WorkspaceColumn[] = hasExpandedPair
+      ? [expandedColumn!, companionColumn!, ...allLayoutColumns.filter((column) => column.id !== expandedColumn!.id && column.id !== companionColumn!.id)]
+      : allLayoutColumns;
     const registerViewer = useCallback((open: boolean) => {
       setViewerOpen(open);
-      if (!open) setExpanded((current) => current === 'viewer' ? null : current);
-    }, []);
+      if (open && expandedTab && expandedTab !== 'files' && expandedTab !== 'viewer') {
+        if (filesHost) {
+          setExpandedCompanion('files');
+          setColumns((current) => {
+            const expandedColumn = current.find((column) => column.tabs.includes(expandedTab));
+            const filesColumn = current.find((column) => column.tabs.includes('files'));
+            if (!expandedColumn || !filesColumn || expandedColumn.id !== filesColumn.id) return current;
+            const remainingTabs = expandedColumn.tabs.filter((tab) => tab !== 'files');
+            const width = expandedColumn.width / 2;
+            const leftColumn = { ...expandedColumn, id: expandedColumn.id === 'files' ? remainingTabs[0] ?? expandedTab : expandedColumn.id, tabs: remainingTabs, width };
+            return current.flatMap((column) => column.id === expandedColumn.id ? [leftColumn, { id: 'files', tabs: ['files'], width, split: 100 }] : [column]);
+          });
+        } else {
+          setExpandedCompanion('viewer');
+        }
+      }
+      if (!open) {
+        setExpanded((current) => current === 'viewer' ? null : current);
+        setExpandedCompanion(null);
+      }
+    }, [expandedTab, filesHost]);
     useEffect(() => {
       if (viewerOpen && props.isMobile) setExpanded(filesHost ? 'files' : 'viewer');
     }, [viewerOpen, props.isMobile, filesHost]);
-    const toggleViewerExpand = useCallback(() => setExpanded((current) => current === 'viewer' ? null : 'viewer'), []);
-    const toggleFilesExpand = useCallback(() => setExpanded((current) => current === 'files' ? null : 'files'), []);
+    const toggleViewerExpand = useCallback(() => {
+      setExpanded((current) => current === 'viewer' ? null : 'viewer');
+      setExpandedCompanion(null);
+    }, []);
+    const toggleFilesExpand = useCallback(() => {
+      setExpanded((current) => current === 'files' ? null : 'files');
+      setExpandedCompanion(null);
+    }, []);
     const bindViewerColumn = useCallback((element: HTMLDivElement | null) => {
       if (element) columnRefs.current.set('viewer', element);
       else columnRefs.current.delete('viewer');
@@ -80,19 +115,28 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       if (tab === 'chat' || tab === 'shell') {
         setMainTab(tab);
         setExpanded(null);
+        setExpandedCompanion(null);
       } else {
+        if (expandedTab && !columns.some((column) => column.tabs.includes(tab))) setExpandedCompanion(tab);
         setColumns((current) => {
           if (current.some((column) => column.tabs.includes(tab))) return current;
+          if (expandedTab) {
+            const expandedColumnIndex = expandedTab === 'viewer' ? -1 : current.findIndex((column) => column.tabs.includes(expandedTab));
+            const newColumn = { id: tab, tabs: [tab], width: current.length ? current.reduce((sum, column) => sum + column.width, 0) / current.length : 1, split: 50 };
+            if (expandedColumnIndex < 0) return [...current, newColumn];
+            return [...current.slice(0, expandedColumnIndex + 1), newColumn, ...current.slice(expandedColumnIndex + 1)];
+          }
           const available = current.find((column) => column.tabs.length < 2);
           return available ? current.map((column) => column === available ? { ...column, tabs: [...column.tabs, tab] } : column)
             : [...current, { id: tab, tabs: [tab], width: current.length ? current.reduce((sum, column) => sum + column.width, 0) / current.length : columnRefs.current.get('viewer')?.getBoundingClientRect().width || 1, split: 50 }];
         });
       }
-    }, []);
+    }, [columns, expandedTab]);
 
     const close = useCallback((tab: AppTab) => {
       setColumns((current) => current.map((column) => ({ ...column, tabs: column.tabs.filter((item) => item !== tab) })).filter((column) => column.tabs.length > 0));
       setExpanded((current) => current === tab ? null : current);
+      setExpandedCompanion(null);
       if (props.activeTab === tab) props.setActiveTab(mainTab);
     }, [mainTab, props]);
 
@@ -101,6 +145,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     useEffect(() => {
       setColumns([]);
       setExpanded(null);
+      setExpandedCompanion(null);
       setViewerWidth(null);
     }, [props.selectedProject?.projectId]);
     useEffect(() => open(props.activeTab), [props.activeTab, props.selectedProject?.projectId, open]);
@@ -145,6 +190,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       const totalWeight = left.width + right.width;
       setColumns((current) => current.map((column) => column.id === left.id ? { ...column, width: totalWeight * nextLeft / total }
         : column.id === right.id ? { ...column, width: totalWeight * (total - nextLeft) / total } : column));
+      if (left.id === 'viewer') setViewerWidth(totalWeight * nextLeft / total);
       if (right.id === 'viewer') setViewerWidth(totalWeight * (total - nextLeft) / total);
     };
 
@@ -180,20 +226,20 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
             />}
             <aside ref={dockRef} className={`piecemaker-workspace-dock ${expandedTab ? 'is-expanded' : ''}`} style={{ width: expandedTab || props.isMobile ? '100%' : `${dockWidth}%` }} aria-label="Volets des outils">
               {layoutColumns.map((column, columnIndex) => <Fragment key={`${props.selectedProject!.projectId}:${column.id}`}>
-                {columnIndex > 0 && !expandedTab && <WorkspaceColumnSeparator orientation="vertical" label={`Largeur colonnes ${columnIndex} et ${columnIndex + 1}`} value={layoutColumns[columnIndex - 1].width / (layoutColumns[columnIndex - 1].width + column.width) * 100} onMove={(delta) => resizeColumns(layoutColumns[columnIndex - 1], column, delta)} />}
-                <div className="piecemaker-workspace-column" aria-label={column.id === 'viewer' ? 'Colonne visionneuse' : undefined} hidden={Boolean(expandedTab && (column.id === 'viewer' ? expandedTab !== 'viewer' : expandedTab === 'viewer' || !column.tabs.includes(expandedTab)))} style={{ flexGrow: expandedTab ? 1 : column.width }} ref={column.id === 'viewer' ? bindViewerColumn : (element) => { if (element) columnRefs.current.set(column.id, element); else columnRefs.current.delete(column.id); }}>
+                {columnIndex > 0 && (!expandedTab || hasExpandedPair && column.id === companionColumn?.id) && <WorkspaceColumnSeparator orientation="vertical" label={`Largeur colonnes ${columnIndex} et ${columnIndex + 1}`} value={layoutColumns[columnIndex - 1].width / (layoutColumns[columnIndex - 1].width + column.width) * 100} onMove={(delta) => resizeColumns(layoutColumns[columnIndex - 1], column, delta)} />}
+                <div className="piecemaker-workspace-column" aria-label={column.id === 'viewer' ? 'Colonne visionneuse' : undefined} hidden={Boolean(expandedTab && (hasExpandedPair ? column.id !== expandedColumn?.id && column.id !== companionColumn?.id : column.id === 'viewer' ? expandedTab !== 'viewer' : expandedTab === 'viewer' || !column.tabs.includes(expandedTab)))} style={{ flexGrow: hasExpandedPair || !expandedTab ? column.width : 1 }} ref={column.id === 'viewer' ? bindViewerColumn : (element) => { if (element) columnRefs.current.set(column.id, element); else columnRefs.current.delete(column.id); }}>
                   {column.tabs.map((tab, rowIndex) => {
                     const plugin = plugins.find((item) => tab === `plugin:${item.name}`);
                     const label = plugin?.displayName ?? t(`tabs.${tab}`);
-                    const hidden = Boolean(expandedTab && expandedTab !== tab);
-                    const style = { flexGrow: expandedTab || column.tabs.length === 1 ? 1 : rowIndex === 0 ? column.split : 100 - column.split };
+                    const hidden = Boolean(expandedTab && (hasExpandedPair ? tab !== expandedTab && tab !== expandedCompanion : expandedTab !== tab));
+                    const style = { flexGrow: hasExpandedPair || expandedTab || column.tabs.length === 1 ? 1 : rowIndex === 0 ? column.split : 100 - column.split };
                     return <Fragment key={tab}>
                       {rowIndex > 0 && !expandedTab && <WorkspaceColumnSeparator orientation="horizontal" label={`Hauteur fenêtres colonne ${columnIndex + 1}`} value={column.split} onMove={(delta) => resizeRows(column, delta)} />}
                       {tab === 'files' ? <WorkspaceFilesPanel label={label} selectedProject={props.selectedProject} documentOpen={viewerOpen} expanded={expandedTab === tab} hidden={hidden} style={style} onSlots={setFilesSlots} onToggleExpand={toggleFilesExpand} onClose={() => close(tab)} />
                       : <Card className="piecemaker-workspace-panel" hidden={hidden} style={style}>
                         <header className="piecemaker-workspace-panel-header">
                           <span className="truncate text-sm font-medium">{label}</span>
-                          <button type="button" aria-label={`${expandedTab === tab ? 'Réduire' : 'Agrandir'} ${label}`} onClick={() => setExpanded(expandedTab === tab ? null : tab)}>{expandedTab === tab ? <Minimize2 /> : <Maximize2 />}</button>
+                          <button type="button" aria-label={`${expandedTab === tab ? 'Réduire' : 'Agrandir'} ${label}`} onClick={() => { setExpanded(expandedTab === tab ? null : tab); setExpandedCompanion(null); }}>{expandedTab === tab ? <Minimize2 /> : <Maximize2 />}</button>
                           <button type="button" aria-label={`Fermer ${label}`} onClick={() => close(tab)}><X /></button>
                         </header>
                         <div className="piecemaker-workspace-panel-content">

@@ -12,7 +12,7 @@ function runInsideWorker() {
   const dictionary = createSqliteDictionaryLoader({ databasePath: workerData.databasePath });
   const harness = createHarnessJuridique({ homeDir: workerData.homeDir, verifyResponses: false });
 
-  startRewriterBridge({ dictionary, harness }).then((bridge) => {
+  startRewriterBridge({ dictionary, harness, token: workerData.token }).then((bridge) => {
     let published = '';
     const publishStats = () => {
       const snapshot = JSON.stringify(bridge.stats);
@@ -37,9 +37,9 @@ function runInsideWorker() {
   });
 }
 
-function startRewriterWorker({ databasePath, homeDir }) {
+function startRewriterWorker({ databasePath, homeDir, token = null }) {
   const worker = new Worker(path.join(__dirname, 'rewriter-worker.cjs'), {
-    workerData: { databasePath, homeDir },
+    workerData: { databasePath, homeDir, token },
     env: SHARE_ENV,
   });
   const stats = { requests: 0, anonymized: 0, deanonymized: 0, failures: 0, lastError: null };

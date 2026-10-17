@@ -34,6 +34,11 @@ type CodeEditorProps = {
   onPopOut?: (() => void) | null;
 };
 
+const isMarkdownFilename = (filename: string) => {
+  const extension = filename.split('.').pop()?.toLowerCase();
+  return extension === 'md' || extension === 'markdown';
+};
+
 /** Rendered by the code-editor module's own EditorSidebar, and re-exported on the module barrel, as the full CodeMirror editor for one open file. */
 export default function CodeEditor({
   file,
@@ -49,7 +54,10 @@ export default function CodeEditor({
   const paletteOps = usePaletteOps();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDiff, setShowDiff] = useState(Boolean(file.diffInfo));
-  const [markdownPreview, setMarkdownPreview] = useState(false);
+  const [markdownPreviewState, setMarkdownPreviewState] = useState(() => ({
+    file,
+    enabled: isMarkdownFilename(file.name),
+  }));
 
   // The code editor follows the app-wide theme; it has no theme of its own.
   const { isDarkMode } = useTheme();
@@ -118,10 +126,10 @@ export default function CodeEditor({
     [file],
   );
 
-  const isMarkdownFile = useMemo(() => {
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    return extension === 'md' || extension === 'markdown';
-  }, [file.name]);
+  const isMarkdownFile = isMarkdownFilename(file.name);
+  const markdownPreview = markdownPreviewState.file === file
+    ? markdownPreviewState.enabled
+    : isMarkdownFile;
 
   const isHtmlPreviewFile = useMemo(() => {
     const extension = file.name.split('.').pop()?.toLowerCase();
@@ -304,7 +312,7 @@ export default function CodeEditor({
             saving={saving}
             saveSuccess={saveSuccess}
             hasUnsavedChanges={hasUnsavedChanges}
-            onToggleMarkdownPreview={() => setMarkdownPreview((previous) => !previous)}
+            onToggleMarkdownPreview={() => setMarkdownPreviewState({ file, enabled: !markdownPreview })}
             onOpenHtmlPreview={openHtmlPreview}
             onOpenSettings={() => paletteOps.openSettings('appearance')}
             onDownload={handleDownload}

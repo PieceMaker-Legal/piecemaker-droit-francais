@@ -5,7 +5,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import { isInstitutionalEntity } from './institutional-terms.js';
-import { nodePosition, partyCodeChange } from './party-codes.js';
+import { codeRegistry, nodePosition, partyCodeChange } from './party-codes.js';
 
 import { EXCLUSIONS_NODE_ID, NODE_KINDS } from './types.js';
 import type {
@@ -108,6 +108,8 @@ CREATE INDEX IF NOT EXISTS piecemaker_links_from ON piecemaker_links(project_id,
 CREATE INDEX IF NOT EXISTS piecemaker_links_to ON piecemaker_links(project_id, to_node_id);
 CREATE INDEX IF NOT EXISTS piecemaker_mappings_lookup ON piecemaker_mappings(project_id, search_text);
 CREATE INDEX IF NOT EXISTS piecemaker_mappings_masked ON piecemaker_mappings(project_id, masked_value);
+CREATE INDEX IF NOT EXISTS piecemaker_mappings_code ON piecemaker_mappings(masked_value, project_id);
+CREATE INDEX IF NOT EXISTS piecemaker_nodes_code ON piecemaker_nodes(json_extract(data_json, '$.code'), project_id);
 CREATE INDEX IF NOT EXISTS piecemaker_citations_link ON piecemaker_citations(project_id, from_node_id, to_node_id, relation);
 `;
 
@@ -119,19 +121,20 @@ const objectValue = (value: unknown, field: string): JsonData => { if (value ===
 const arrayValue = (value: unknown, field: string): string[] => { if (value === undefined) return []; if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) throw new TypeError(`${field} must be an array of strings`); return [...new Set(value.map((entry) => entry.trim()).filter(Boolean))]; };
 const kindValue = (value: unknown): NodeKind => { if (typeof value !== 'string' || !NODE_KINDS.includes(value as NodeKind)) throw new TypeError(`kind must be one of ${NODE_KINDS.join(', ')}`); return value as NodeKind; };
 export const searchable = (values: string[]): string => values.join('\u0000').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
-const nextFreeCode = (code: string, used: Set<string>): string => {
-  const match = /^(.*)_(\d+)$/.exec(code);
-  const prefix = match ? match[1] : code;
-  const width = match && match[2].length > 1 ? match[2].length : 0;
-  let highest = 0;
-  for (const candidate of used) {
-    const numbered = /^(.*)_(\d+)$/.exec(candidate);
-    if (numbered && numbered[1] === prefix) highest = Math.max(highest, Number(numbered[2]));
-  }
-  let number = highest + 1;
-  while (used.has(`${prefix}_${String(number).padStart(width, '0')}`)) number += 1;
-  return `${prefix}_${String(number).padStart(width, '0')}`;
+const codePrefix = (code: string): string => /^(.*)_\d+$/.exec(code)?.[1] || code;
+const replaceCodeValues = (value: unknown, from: string, to: string): unknown => {
+  if (value === from) return to;
+  if (Array.isArray(value)) return value.map((entry) => replaceCodeValues(entry, from, to));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, key === 'codes_retires' ? entry : replaceCodeValues(entry, from, to)]));
+  return value;
 };
+const CODE_HOLDERS_SQL = `SELECT code, project_id, MIN(created_at) AS first_seen, MAX(live) AS live FROM (
+    SELECT masked_value AS code, project_id, created_at, 1 AS live FROM piecemaker_mappings
+    UNION ALL SELECT substr(id, 8), project_id, created_at, 1 FROM piecemaker_nodes WHERE id LIKE 'entity:%'
+    UNION ALL SELECT json_extract(data_json, '$.code'), project_id, created_at, 1 FROM piecemaker_nodes WHERE json_type(data_json, '$.code')='text'
+    UNION ALL SELECT r.value, n.project_id, n.created_at, 0 FROM piecemaker_nodes n, json_each(n.data_json, '$.codes_retires') r WHERE n.data_json LIKE '%codes_retires%' AND r.type='text'
+  ) WHERE code<>'' GROUP BY code, project_id ORDER BY code, first_seen, project_id`;
+type CodeHolder = { code: string; project_id: string; live: number };
 const linkKey = (piece: string, entite: string, relation: string): string => [piece, entite, relation].join('\u0000');
 const aliasKey = (entite: string, alias: string): string => `${entite}\u0000${searchable([alias])}`;
 const exclusionEntries = (value: unknown): JsonData[] => Array.isArray(value) ? value.filter((entry): entry is JsonData => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry)) : [];
@@ -221,6 +224,8 @@ export class KnowledgeStore {
   private readonly removePartyDesignation;
   private readonly deleteNode;
   private readonly findCodeOwner;
+  private readonly findLiveCode;
+  private retiredHolders: Map<string, Set<string>> | null = null;
 
   public constructor(databaseSource: string | DatabaseConnection = resolveKnowledgeDatabasePath()) {
     this.ownsDatabase = typeof databaseSource === 'string';
@@ -241,7 +246,10 @@ export class KnowledgeStore {
     this.removePartyDesignation = this.database.prepare("UPDATE piecemaker_nodes SET data_json=json_remove(data_json, '$.partySide', '$.position'), updated_at=@at WHERE project_id=@projectId AND id=@nodeId");
     this.deleteNode = this.database.prepare('DELETE FROM piecemaker_nodes WHERE project_id=@projectId AND id=@nodeId');
     this.findCodeOwner = this.database.prepare(`SELECT project_id FROM piecemaker_mappings WHERE masked_value=@code AND project_id<>@projectId
-      UNION SELECT project_id FROM piecemaker_nodes WHERE id='entity:'||@code AND project_id<>@projectId LIMIT 1`);
+      UNION SELECT project_id FROM piecemaker_nodes WHERE id='entity:'||@code AND project_id<>@projectId
+      UNION SELECT project_id FROM piecemaker_nodes WHERE json_extract(data_json, '$.code')=@code AND project_id<>@projectId LIMIT 1`);
+    this.findLiveCode = this.database.prepare('SELECT 1 FROM piecemaker_mappings WHERE masked_value=@code AND project_id=@projectId LIMIT 1');
+    if (this.codeConflicts().length) this.backupDatabase('avant-codes-globaux');
     this.database.transaction(() => { this.renumberConflictingCodes(); this.removeGhostDocuments(); })();
     if (typeof databaseSource === 'string') {
       try { fs.chmodSync(databaseSource, 0o600); } catch {}
@@ -261,6 +269,7 @@ export class KnowledgeStore {
   }
 
   public update(input: KnowledgeUpdateInput): KnowledgeUpdateResult {
+    this.retiredHolders = null;
     const projectId = this.resolveProject(input.projectId);
     if (!Array.isArray(input.operations)) throw new TypeError('operations must be an array');
     const operations = input.operations.map((operation) => this.validateOperation(operation));
@@ -273,6 +282,7 @@ export class KnowledgeStore {
   }
 
   public mergeScan(projectIdInput: string, operations: KnowledgeUpdateOperation[]): KnowledgeUpdateResult {
+    this.retiredHolders = null;
     const projectId = this.resolveProject(projectIdInput);
     const validated = operations.map((operation) => this.validateOperation(operation));
     return this.database.transaction(() => {
@@ -321,9 +331,11 @@ export class KnowledgeStore {
 
   public reservedCodes(projectIdInput: string): string[] {
     const projectId = this.resolveProject(projectIdInput);
-    return (this.database.prepare(`SELECT masked_value AS code FROM piecemaker_mappings WHERE project_id<>?
-      UNION SELECT substr(id, 8) AS code FROM piecemaker_nodes WHERE project_id<>? AND id LIKE 'entity:%'
-      ORDER BY code`).all(projectId, projectId) as Array<{ code: string }>).map(({ code }) => code);
+    return (this.database.prepare(`SELECT masked_value AS code FROM piecemaker_mappings WHERE project_id<>@projectId
+      UNION SELECT substr(id, 8) AS code FROM piecemaker_nodes WHERE project_id<>@projectId AND id LIKE 'entity:%'
+      UNION SELECT json_extract(data_json, '$.code') AS code FROM piecemaker_nodes WHERE project_id<>@projectId AND json_type(data_json, '$.code')='text'
+      UNION SELECT r.value AS code FROM piecemaker_nodes n, json_each(n.data_json, '$.codes_retires') r WHERE n.data_json LIKE '%codes_retires%' AND r.type='text'
+      ORDER BY code`).all({ projectId }) as Array<{ code: string }>).map(({ code }) => code).filter(Boolean);
   }
 
   public markAnonymizationComplete(projectIdInput: string): void {
@@ -585,35 +597,59 @@ export class KnowledgeStore {
 
   private assertCodeFree(projectId: string, code: string): void {
     const owner = this.findCodeOwner.get({ projectId, code }) as { project_id: string } | undefined;
-    if (owner) throw new Error(`code ${code} already used by another case`);
+    const retiredElsewhere = [...(this.retiredCodeHolders().get(code) || [])].some((holder) => holder !== projectId);
+    if (owner || (retiredElsewhere && !this.findLiveCode.get({ projectId, code }))) throw new Error(`code ${code} already used by another case`);
+  }
+
+  private retiredCodeHolders(): Map<string, Set<string>> {
+    if (this.retiredHolders) return this.retiredHolders;
+    const holders = new Map<string, Set<string>>();
+    for (const row of this.database.prepare("SELECT r.value AS code, n.project_id FROM piecemaker_nodes n, json_each(n.data_json, '$.codes_retires') r WHERE n.data_json LIKE '%codes_retires%' AND r.type='text'").all() as Array<{ code: string; project_id: string }>) {
+      holders.set(row.code, new Set([...(holders.get(row.code) || []), row.project_id]));
+    }
+    this.retiredHolders = holders;
+    return holders;
+  }
+
+  private codeConflicts(): Array<{ code: string; projectId: string }> {
+    const conflicts: Array<{ code: string; projectId: string }> = [];
+    const owners = new Map<string, string>();
+    for (const { code, project_id: projectId, live } of this.database.prepare(CODE_HOLDERS_SQL).all() as CodeHolder[]) {
+      if (!owners.has(code)) owners.set(code, projectId);
+      else if (live) conflicts.push({ code, projectId });
+    }
+    return conflicts;
+  }
+
+  private backupDatabase(label: string): void {
+    const file = this.database.name;
+    if (!file || file === ':memory:' || !fs.existsSync(file)) return;
+    const directory = path.join(path.dirname(file), 'backups');
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    this.database.prepare('VACUUM INTO ?').run(path.join(directory, `${path.basename(file, path.extname(file))}-${label}-${at().replace(/[:.]/g, '-')}.db`));
   }
 
   private renumberConflictingCodes(): number {
-    const holders = this.database.prepare(`SELECT code, project_id, MIN(created_at) AS first_seen FROM (
-        SELECT masked_value AS code, project_id, created_at FROM piecemaker_mappings
-        UNION ALL SELECT substr(id, 8), project_id, created_at FROM piecemaker_nodes WHERE id LIKE 'entity:%'
-      ) GROUP BY code, project_id ORDER BY code, first_seen, project_id`).all() as Array<{ code: string; project_id: string }>;
-    const used = new Set(holders.map(({ code }) => code));
-    const owners = new Map<string, string>();
+    const conflicts = this.codeConflicts();
+    if (!conflicts.length) return 0;
+    const used = codeRegistry((this.database.prepare(CODE_HOLDERS_SQL).all() as CodeHolder[]).map(({ code }) => code));
     const timestamp = at();
-    let renumbered = 0;
-    for (const { code, project_id: projectId } of holders) {
-      if (!owners.has(code)) {
-        owners.set(code, projectId);
-        continue;
-      }
-      const replacement = nextFreeCode(code, used);
-      used.add(replacement);
-      if (this.database.prepare('SELECT 1 FROM piecemaker_nodes WHERE project_id=? AND id=?').get(projectId, `entity:${code}`)) {
-        this.renameNodeRows(projectId, `entity:${code}`, `entity:${replacement}`, timestamp);
-      }
+    for (const { code, projectId } of conflicts) {
+      const replacement = used.next(codePrefix(code));
+      const holders = new Set((this.database.prepare("SELECT id FROM piecemaker_nodes WHERE project_id=? AND (id=? OR json_extract(data_json, '$.code')=?)").all(projectId, `entity:${code}`, code) as Array<{ id: string }>)
+        .map(({ id }) => id === `entity:${code}` ? `entity:${replacement}` : id));
+      if (holders.has(`entity:${replacement}`)) this.renameNodeRows(projectId, `entity:${code}`, `entity:${replacement}`, timestamp);
       this.database.prepare('UPDATE piecemaker_mappings SET masked_value=?, search_text=replace(search_text, ?, ?), updated_at=? WHERE project_id=? AND masked_value=?')
         .run(replacement, searchable([code]), searchable([replacement]), timestamp, projectId, code);
-      this.database.prepare("UPDATE piecemaker_nodes SET data_json=json_set(data_json, '$.code', ?), updated_at=? WHERE project_id=? AND json_extract(data_json, '$.code')=?")
-        .run(replacement, timestamp, projectId, code);
-      renumbered += 1;
+      const nodes = this.database.prepare('SELECT id, data_json FROM piecemaker_nodes WHERE project_id=? AND (instr(data_json, ?)>0 OR id IN (SELECT value FROM json_each(?)))')
+        .all(projectId, JSON.stringify(code), JSON.stringify([...holders])) as Array<{ id: string; data_json: string }>;
+      for (const node of nodes) {
+        const data = replaceCodeValues(parseJson<JsonData>(node.data_json, {}), code, replacement) as JsonData;
+        if (holders.has(node.id)) data.codes_retires = [...new Set([...(Array.isArray(data.codes_retires) ? data.codes_retires : []), code])];
+        this.database.prepare('UPDATE piecemaker_nodes SET data_json=?, updated_at=? WHERE project_id=? AND id=?').run(JSON.stringify(data), timestamp, projectId, node.id);
+      }
     }
-    return renumbered;
+    return conflicts.length;
   }
 
   private renameNodeRows(projectId: string, fromNodeId: string, toNodeId: string, timestamp: string): void {

@@ -175,7 +175,7 @@ export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null,
       <div class="pmd-scan-status" data-ready="${scanned || mappingCount > 0}" data-scanning="${scanning}">
         ${scanStatusMarkup(mappingCount, job, scanned)}
       </div>
-      <button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--sm" data-action="local-models" title="Modèles locaux" aria-label="Ouvrir les paramètres des modèles locaux">${cpuIcon}</button>
+      <button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--sm" data-action="local-models" title="Système de pseudonymisation" aria-label="Voir l’installation du système de pseudonymisation">${cpuIcon}</button>
     </div>
     <div data-error></div>
     <div class="pmd-workspace"><main class="pmd-content" data-content></main></div>`;
