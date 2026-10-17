@@ -22,6 +22,7 @@ const {
   readAnonymizationState,
   stateKey,
 } = require('./anonymization-state.cjs');
+const { conversionFailureOf, readConversionFailures } = require('./conversion-failures.cjs');
 const { formatDurationFr } = require('./session-timing.cjs');
 const { markdownStemCandidates } = require('./markdown-name.cjs');
 
@@ -622,6 +623,7 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
       .map((file) => documentKey(file).replace(/-sensitive-map$/, ''))
   );
   const anonymizationState = readAnonymizationState(root);
+  const conversionFailures = readConversionFailures(root);
   const protection = readProtection(root);
   const originals = [];
   let truncated = false;
@@ -668,6 +670,7 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
         isAnonymizedEntry(stateEntry, stat)
         || scanKeys.has(key)
       );
+      const conversionFailure = converted ? null : conversionFailureOf(conversionFailures, relative);
       originals.push({
         name: entry.name,
         path: relative,
@@ -678,7 +681,8 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
         scanned,
         protected: isProtectedFile(absolute, root, protection),
         resource: isResourceFile(absolute, root, protection),
-        status: converted ? (scanned ? 'ready' : 'awaiting-scan') : 'not-converted',
+        conversionFailure,
+        status: converted ? (scanned ? 'ready' : 'awaiting-scan') : conversionFailure ? 'conversion-failed' : 'not-converted',
       });
     }
   }

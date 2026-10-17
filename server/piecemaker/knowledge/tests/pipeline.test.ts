@@ -99,6 +99,76 @@ test('a document the converter could not convert is returned as failed and the s
   }
 });
 
+test('a failed conversion is kept on the case with its reason, then cleared by a later successful conversion', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-persist-failure-')));
+  const database = new Database(':memory:');
+  database.exec('CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT NOT NULL UNIQUE)');
+  database.prepare('INSERT INTO projects (project_id, project_path) VALUES (?, ?)').run('project-1', root);
+  const store = new KnowledgeStore(database);
+  try {
+    writeFile(root, 'piece.pdf');
+    const applicationRoot = path.join(root, '.converter');
+    const repaired = path.join(applicationRoot, 'repaired.marker');
+    writeFile(applicationRoot, 'server/piecemaker/vendor/websocket-server/scripts/convert_and_scan_pipeline.py',
+      `const fs = require('node:fs');
+if (!fs.existsSync(${JSON.stringify(repaired)})) console.log('CONVERSION_FAILED:' + JSON.stringify({ file: 'piece.pdf', reason: 'Conversion arrêtée : fictif' }));`);
+    const projects = { getProjectById: (id: string) => (id === 'project-1' ? { project_id: id, project_path: root } : null) };
+    const pipeline = createKnowledgePipeline({ applicationRoot, projects, store, pythonPath: process.execPath });
+
+    await pipeline.scan('project-1', ['piece.pdf']);
+    const failedPieces = await pipeline.pieces('project-1');
+    assert.deepEqual(failedPieces.map((piece) => [piece.path, piece.status, piece.markdown, piece.conversionFailure?.reason]), [
+      ['piece.pdf', 'conversion-failed', null, 'Conversion arrêtée : fictif'],
+    ]);
+    const stored = JSON.parse(fs.readFileSync(path.join(root, '.piecemaker', 'conversion-failures.json'), 'utf8')) as { files: Record<string, { reason: string }> };
+    assert.deepEqual(Object.keys(stored.files), ['piece.pdf']);
+    assert.equal(stored.files['piece.pdf'].reason, 'Conversion arrêtée : fictif');
+
+    writeFile(root, path.join('Fichiers convertis PieceMaker', 'piece.md'), '# Pièce fictive');
+    writeFile(applicationRoot, 'repaired.marker');
+    await pipeline.scan('project-1', ['piece.pdf']);
+    assert.deepEqual((await pipeline.pieces('project-1')).map((piece) => [piece.path, piece.status, piece.conversionFailure]), [
+      ['piece.pdf', 'awaiting-scan', null],
+    ]);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, '.piecemaker', 'conversion-failures.json'), 'utf8')), { version: 1, files: {} });
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('renaming a piece whose conversion failed keeps its failure on the new name', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-rename-failure-')));
+  const termsFile = path.join(root, 'institutional-terms.json');
+  fs.writeFileSync(termsFile, JSON.stringify({ version: 1, terms: [] }));
+  const previousTerms = process.env.PIECEMAKER_INSTITUTIONAL_TERMS;
+  process.env.PIECEMAKER_INSTITUTIONAL_TERMS = termsFile;
+  const database = new Database(':memory:');
+  database.exec('CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT NOT NULL UNIQUE)');
+  database.prepare('INSERT INTO projects (project_id, project_path) VALUES (?, ?)').run('project-1', root);
+  const store = new KnowledgeStore(database);
+  try {
+    writeFile(root, path.join('Pièces', 'scan.pdf'));
+    const applicationRoot = path.join(root, '.converter');
+    writeFile(applicationRoot, 'server/piecemaker/vendor/websocket-server/scripts/convert_and_scan_pipeline.py',
+      `console.log('CONVERSION_FAILED:' + JSON.stringify({ file: 'Pièces/scan.pdf', reason: 'MinerU failed' }));`);
+    const projects = { getProjectById: (id: string) => (id === 'project-1' ? { project_id: id, project_path: root } : null) };
+    const pipeline = createKnowledgePipeline({ applicationRoot, projects, store, pythonPath: process.execPath });
+    await pipeline.scan('project-1', [path.join('Pièces', 'scan.pdf')]);
+
+    const renamed = await pipeline.rename('project-1', 'Pièces/scan.pdf', '2024-01-09_Scan fictif');
+
+    assert.deepEqual((await pipeline.pieces('project-1')).map((piece) => [piece.path, piece.status, piece.conversionFailure?.reason]), [
+      [renamed.current, 'conversion-failed', 'MinerU failed'],
+    ]);
+  } finally {
+    database.close();
+    if (previousTerms === undefined) delete process.env.PIECEMAKER_INSTITUTIONAL_TERMS;
+    else process.env.PIECEMAKER_INSTITUTIONAL_TERMS = previousTerms;
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('defaultScanFiles lists nested originals and ignores generated markdown', async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-scan-')));
   try {
@@ -166,7 +236,7 @@ test('rename moves the piece, its markdown and its document node with its links'
     const movedNode = store.snapshot('project-1').nodes.find((entry) => entry.id === `document:${hash(moved.current)}`);
     assert.equal(movedNode?.data.path, path.join(root, 'Procédure', '2024-01-09_Jugement du Tribunal judiciaire de Paris.pdf'));
     assert.deepEqual(await pipeline.pieces('project-1'), [
-      { path: moved.current, status: 'awaiting-scan', markdown: 'Fichiers convertis PieceMaker/2024-01-09_Jugement du Tribunal judiciaire de Paris.md' },
+      { path: moved.current, status: 'awaiting-scan', markdown: 'Fichiers convertis PieceMaker/2024-01-09_Jugement du Tribunal judiciaire de Paris.md', conversionFailure: null },
     ]);
   } finally {
     database.close();
