@@ -3,6 +3,37 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.42](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.41...v2.0.42) (2026-10-17)
+
+### New Features
+
+* add pinned GLiNER cache and improve DOCX review ([1c1dd20](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1c1dd20f42e6b7d13bff926363d0d6920e7b8e25))
+* **piecemaker:** skill CLI POSIX à la place du MCP piecemaker ([535354d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/535354db9fc150b3ce88e97489d412ca7aad9d57))
+* **piecemaker:** volets suivent le geste, lecture et fermeture ([efec220](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/efec2206a5ff8a5f573e9053c288fe92a1dac809))
+* **pwa:** relancer PieceMaker depuis la page de reconnexion ([0ab97d9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0ab97d9293e8bd26ba558e681a682119c7bb92e2))
+
+### Bug Fixes
+
+* **icons:** icônes desktop et PWA sans mode sombre ([4e30a33](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4e30a3344f2ed73de874b786409763478132aadf))
+* **piecemaker:** chaque mode de permission atteint le runtime ([923d2ca](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/923d2ca2a217a9c530ae87364f6774e0a5a49872)), closes [#1263](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/issues/1263) [#1417](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/issues/1417)
+* **piecemaker:** citations .docx lues depuis le XML Word ([bc248a0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/bc248a02fbde4a7e47dc6a87ee19f40c5b1bfe13))
+* **piecemaker:** citations de pièces ouvrent l’original, pas le Markdown ([7e550a4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7e550a4bca1bb9d2e9f12f677a3145128cd434f9))
+* **piecemaker:** citations mal nommées vérifiées sur l’original ([ef4d9d3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ef4d9d3f775399feefdb0c494419b3de04354ec5))
+* **piecemaker:** citations SKILL.md lues et ouvertes dans l’éditeur ([5256617](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/525661798219b129402c0fbfd97aef6259c29972))
+* **piecemaker:** codex ouvre les volets malgré le bac à sable ([fd2db3e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fd2db3e5ad7e6f33757155799d4dedd2f5f2d582))
+* **piecemaker:** contourner les permissions atteint les 3 agents ([716da3c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/716da3cde2c2040e39854cb4e688def0040fff83))
+* **piecemaker:** extraits llm toujours visibles si non retrouvés ([15f4c39](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/15f4c394fbe7b1c203f1cd01ee77bfbbb31cbea9))
+* **piecemaker:** le mode affiché est celui du runtime ([df90e79](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/df90e791b229173dc6864889e184ee29d9649151))
+* **piecemaker:** pastille rouge petite, sur la mention introuvable ([f436d80](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f436d805a9019497ae0a929ce2126e974d67fe93))
+* **piecemaker:** surligne la citation dans le document original ([94bc1dc](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/94bc1dc320949f97adbe84963fed241dc9f503fd))
+* **piecemaker:** valider les citations proches et injecter l'extrait ([29025dc](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/29025dcfefb27332199a07edafe51e4da215e234))
+* resynchroniser package-lock.json pour npm ci ([9e6d469](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9e6d4694b353d25d7913c492392812ee5a96835d))
+* typer la config Codex pour la compilation serveur ([5222996](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5222996aba5b302a42f8cd953b0c70669900a39c))
+
+### Documentation
+
+* explorer la fiabilite du raisonnement juridique ([2d1a583](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2d1a583c49903e42d6d58ed35b1df6ccc0c467ba))
+
 ## [2.0.41](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.40...v2.0.41) (2026-10-15)
 
 ### Bug Fixes
