@@ -72,6 +72,7 @@ function recoveryPage({ hostname = 'localhost', platform = 'MacIntel', storedThe
   const document = {
     documentElement: { classList: { toggle(_name, value) { dark = value; } } },
     addEventListener() {},
+    querySelector() { return this.getElementById('footer'); },
     getElementById(id) {
       if (!elements.has(id)) elements.set(id, { textContent: '', addEventListener(_name, handler) { click = handler; } });
       return elements.get(id);
@@ -113,8 +114,8 @@ test('remote access explains the powered-off computer and never opens a local pr
   assert.equal(page.location.href, '');
   assert.equal(page.elements.get('relaunch').textContent, 'Réessayer');
   assert.equal(page.elements.get('title').textContent, 'Ordinateur injoignable');
-  assert.match(page.elements.get('description').textContent, /n’arrive pas à se connecter à votre ordinateur/);
-  assert.match(page.elements.get('hint').textContent, /Inutile de réinstaller/);
+  assert.equal(page.elements.get('description').hidden, true);
+  assert.equal(page.elements.get('footer').hidden, true);
   assert.equal(page.elements.get('tailscale').hidden, false);
   assert.ok(page.reloads() >= 1);
   assert.equal(page.dark(), false);
