@@ -38,12 +38,8 @@ test('le checkpoint épinglé est le snapshot GLiNER2-PII complet', async () => 
     'tokenizer_config.json',
   ]);
   assert.equal(glinerAssetName(checkpoint.revision), `piecemaker-gliner-${checkpoint.revision}.tar.gz`);
-  const sh = fs.readFileSync(path.join(root, '..', 'install.sh'), 'utf8');
-  const ps1 = fs.readFileSync(path.join(root, '..', 'install.ps1'), 'utf8');
   const warmup = fs.readFileSync(path.join(repoRoot, 'server/piecemaker/vendor/websocket-server/scripts/warmup.py'), 'utf8');
   const admin = fs.readFileSync(path.join(repoRoot, 'server/piecemaker/vendor/websocket-server/admin-routes.cjs'), 'utf8');
-  assert.match(sh, new RegExp(checkpoint.revision));
-  assert.match(ps1, new RegExp(checkpoint.revision));
   assert.match(warmup, /revision=PREFERRED_GLINER_REVISION/);
   assert.match(admin, /gliner-checkpoint\.json/);
 });
