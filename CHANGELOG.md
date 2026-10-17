@@ -3,6 +3,46 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.49](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.48...v2.0.49) (2026-10-17)
+
+### New Features
+
+* **desktop:** embed MinGit in the Windows app and put it on PATH ([f6bc6a5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f6bc6a540f1c06fd84a04b1066dee5bfe1217ee3))
+* **desktop:** ship a node.cmd shim so plugin servers find node on Windows ([ea37700](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ea37700b260f2220df8d6e874260ffe0953a43dc))
+
+### Bug Fixes
+
+* **desktop:** accept the npm-named Windows install folder for in-app uninstall (WIN-013) ([2868c06](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2868c0631a13ae44bbb88835b34b24994c3e5db3))
+* **desktop:** stop plugin servers for real when the node shim is killed ([0d672dc](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0d672dc508d3734d4857663bf8adb06fc6b896ca))
+* **harness:** ne jamais afficher le bloc CITATION_INSTRUCTION (Claude, Codex, Mistral) ([fc8ab57](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fc8ab575ee26cf6c4f1f0f0fd2dba0af692f8bb9))
+* **installer:** only require a system Python when the GLiNER venv is missing ([e269a9e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e269a9e0b5b6311467ef1087a5348b4f05edc341))
+* **installer:** use the portable Windows Python for GLiNER and MinerU ([62d6a63](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/62d6a63fae6a279a918341498a5bf09dbe197b51))
+* **knowledge:** use the portable Python from config.json for scans ([fb9a3bf](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fb9a3bf84792d8508dea8bda6b1b7ef187620d76))
+* **mistral:** give Vibe a readable theme in PieceMaker terminals on Windows ([2aedb90](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2aedb90d209f4445275a3b9215c50ce265deffbe))
+* **mistral:** name Mistral, not Claude, in the new-session picker and reply headers ([35e5340](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/35e53400e39074b957596d087ebc16c69bc207fb))
+* **originals:** count canonical Markdown names as converted (WIN-010) ([0dc8930](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0dc8930296265a1ad84d9b74f6ec339952df8b07))
+* **pipeline:** detect the GLiNER worker READY line on Windows (WIN-007) ([a19e4d3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a19e4d39d0a9a3f14c3ee55f8ff0cfa198f070e5))
+* **pipeline:** fall back to python instead of python3 on Windows (WIN-005) ([ae59fa8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ae59fa8ce4a1bbdac01b4b3dedfecb978fc9b679))
+* **pipeline:** find suffixed Markdown of homonymous originals (WIN-008) ([3393b95](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3393b95fbf12e2d8cd0ea84d2f33d71f30393057))
+* **pipeline:** force UTF-8 for the Python scan on Windows (WIN-006) ([b77a90b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b77a90b82fd5a40efb7aaab53c6a698894caef59))
+* **pipeline:** give every converted piece a stable, collision-free Markdown name (WIN-008, WIN-011) ([8a76df7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8a76df7c9c96e22f7dd8422373fd8ea9b81afaf6))
+* **pipeline:** keep homonymous documents from overwriting each other's Markdown (WIN-008) ([f718061](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f718061324e717ce599f2e8e49ade07497436db7))
+* **pipeline:** send PDFs with any scanned page to the OCR engine (WIN-009) ([a7c10bf](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a7c10bf4b9fc8d53a5bc32f601ea2d8b75b31760))
+* **plugins:** start plugin servers with the host runtime instead of node on PATH ([fd33ed6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/fd33ed603c86fd231c1a5e07f23be5b9d5327a34))
+* **plugins:** stop plugins that were still starting at shutdown ([6aaaab8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6aaaab891dd805b3aa59a86383b802ecdd63dbe4))
+* **tabular-review:** lancer les CLI npm sous Windows sans cmd.exe (WIN-004) ([9d3f4df](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9d3f4dff2e9a317e1a34ec6440cb9cc16bb3f5f7))
+* **tabular-review:** resolve junctions before accepting a project or a document (WIN-012) ([80b8f8d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/80b8f8d752f7031a43d68930c65080a0679103b6))
+
+### Documentation
+
+* **piecemaker:** centralize Windows installation and pipeline audit ([3615501](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/361550121d3160d3ac2f239709f2a4d216f4d5df))
+* **piecemaker:** record which commit fixes each Windows audit bug ([67a16e9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/67a16e99dacc150265238f3bcec76b62d00067a7))
+* **piecemaker:** verify audit fixes and record additional Windows bugs ([0fce6c2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0fce6c21f2dbcd848d017a9a01a3a4be7b76b3a4))
+
+### Maintenance
+
+* drop code comments added in recent fixes ([630d359](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/630d35914091cc14242f7cace20f3c993dae7050))
+
 ## [2.0.48](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.47...v2.0.48) (2026-10-17)
 
 ### Bug Fixes
