@@ -63,3 +63,25 @@ test('une base absente reste un dictionnaire vide utilisable à l’envoi', () =
   assert.equal(loader.getForOutbound().empty, true);
   loader.close();
 });
+
+test('un code fusionné dans un autre se ré-identifie toujours vers le nom du survivant', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-sqlite-dictionary-retired-'));
+  const base = path.join(directory, 'retired.sqlite');
+  const database = new Database(base);
+  database.exec(`
+    CREATE TABLE piecemaker_nodes (project_id TEXT, id TEXT, label TEXT, data_json TEXT, PRIMARY KEY (project_id,id));
+    CREATE TABLE piecemaker_mappings (project_id TEXT,node_id TEXT,real_value TEXT,masked_value TEXT,updated_at TEXT);
+  `);
+  const survivor = 'PERSONNE_PHYSIQUE_' + '904';
+  const retired = 'PERSONNE_PHYSIQUE_' + '905';
+  database.prepare('INSERT INTO piecemaker_nodes VALUES (?,?,?,?)')
+    .run('dossier-1', `entity:${survivor}`, 'Jean Dupont', JSON.stringify({ code: survivor, codes_retires: [retired] }));
+  for (const real of ['Jean Dupont', 'M. Dupont']) {
+    database.prepare('INSERT INTO piecemaker_mappings VALUES (?,?,?,?,?)').run('dossier-1', `entity:${survivor}`, real, survivor, '2026-10-17T10:00:00.000Z');
+  }
+  const loader = createSqliteDictionaryLoader({ databasePath: base });
+  assert.equal(deanonymize(`Courrier de ${retired}`, loader.get()), 'Courrier de Jean Dupont');
+  assert.equal(anonymize('Courrier de M. Dupont', loader.get()), `Courrier de ${survivor}`);
+  loader.close();
+  database.close();
+});

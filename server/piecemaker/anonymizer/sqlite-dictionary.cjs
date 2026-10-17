@@ -5,7 +5,23 @@ const Database = require('better-sqlite3');
 
 const { buildDictionary, EMPTY_DICTIONARY } = require('./dictionary.cjs');
 
-function buildMappingDocument(rows) {
+function retiredCodes(nodes) {
+  const retired = [];
+  for (const node of nodes) {
+    let data;
+    try {
+      data = JSON.parse(node.data_json || '{}');
+    } catch {
+      continue;
+    }
+    const survivor = typeof data?.code === 'string' ? data.code : '';
+    if (!survivor || !Array.isArray(data.codes_retires)) continue;
+    for (const code of data.codes_retires) if (typeof code === 'string' && code && code !== survivor) retired.push([code, survivor]);
+  }
+  return retired;
+}
+
+function buildMappingDocument(rows, retiredNodes = []) {
   const grouped = new Map();
   let updatedAt = null;
   for (const row of rows) {
@@ -24,6 +40,9 @@ function buildMappingDocument(rows) {
     const variants = [canonical, ...group.variants.filter((value) => value !== canonical)];
     reverse_mapping[code] = variants;
     for (const variant of variants) if (!mapping[variant]) mapping[variant] = code;
+  }
+  for (const [code, survivor] of retiredCodes(retiredNodes)) {
+    if (!reverse_mapping[code] && reverse_mapping[survivor]) reverse_mapping[code] = reverse_mapping[survivor];
   }
   return { mapping, reverse_mapping, updated_at: updatedAt };
 }
@@ -68,8 +87,11 @@ function createSqliteDictionaryLoader({ databasePath }) {
       }
       mappingSignature = nextSignature;
       const rows = target.prepare('SELECT m.project_id,m.node_id,m.real_value,m.masked_value,m.updated_at,n.label FROM piecemaker_mappings m JOIN piecemaker_nodes n ON n.project_id=m.project_id AND n.id=m.node_id ORDER BY m.project_id,m.masked_value,m.node_id,LENGTH(m.real_value) DESC,m.real_value').all();
+      const retiredNodes = target.prepare("SELECT 1 FROM pragma_table_info('piecemaker_nodes') WHERE name='data_json'").get()
+        ? target.prepare("SELECT data_json FROM piecemaker_nodes WHERE data_json LIKE '%codes_retires%'").all()
+        : [];
       generation += 1;
-      current = buildDictionary(buildMappingDocument(rows), generation);
+      current = buildDictionary(buildMappingDocument(rows, retiredNodes), generation);
       dataVersion = nextDataVersion;
       failure = null;
       return current;

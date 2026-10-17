@@ -196,6 +196,9 @@ faite à la main dans ce fichier est donc perdue.
 - Substitution triée de l’entité la plus longue à la plus courte.
 - Un code n’est jamais réattribué ; les collisions inter-dossiers sont
   dé-conflictées dans `sqlite-dictionary.cjs`.
+- Un code fusionné dans un autre (`codes_retires` du survivant) reste réservé
+  dans tous les dossiers et se ré-identifie toujours vers le survivant. Un
+  scan sans pièce nouvelle fusionne aussi les doublons déjà en base.
 - Les originaux ne quittent pas le dossier ; seuls Markdown + codes partent
   vers le modèle.
 - Le harnais de citations observe le clair **avant** anonymisation et **après**
