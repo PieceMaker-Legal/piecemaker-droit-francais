@@ -458,6 +458,7 @@ function ChatInterface({
       ? t('messageTypes.cursor')
       : provider === 'codex'
         ? t('messageTypes.codex')
+        : provider === 'mistral' ? t('messageTypes.mistral', { defaultValue: 'Mistral' })
         : provider === 'opencode'
             ? t('messageTypes.opencode', { defaultValue: 'OpenCode' })
           : t('messageTypes.claude');
