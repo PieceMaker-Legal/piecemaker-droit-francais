@@ -73,15 +73,17 @@
     if (!local) {
       document.getElementById('title').textContent = 'Ordinateur injoignable';
       status.textContent = 'Nouvelle tentative automatique…';
+      document.getElementById('description').hidden = true;
+      document.querySelector('footer').hidden = true;
     }
     if (!canRelaunch) {
       button.textContent = 'Réessayer';
       document.getElementById('description').textContent = local
         ? 'Ouvrez PieceMaker sur cet ordinateur pour retrouver votre espace.'
-        : 'PieceMaker sur votre téléphone n’arrive pas à se connecter à votre ordinateur. Vérifiez les deux points ci-dessous.';
+        : '';
       document.getElementById('hint').textContent = local
         ? 'Votre espace s’ouvrira automatiquement dès que PieceMaker sera prêt.'
-        : 'Inutile de réinstaller PieceMaker. Cette page se reconnectera dès que votre ordinateur sera joignable.';
+        : '';
     }
     let checking = false;
     async function reconnect() {
