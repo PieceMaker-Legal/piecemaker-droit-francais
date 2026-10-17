@@ -23,6 +23,7 @@ const {
   stateKey,
 } = require('./anonymization-state.cjs');
 const { formatDurationFr } = require('./session-timing.cjs');
+const { markdownStemCandidates } = require('./markdown-name.cjs');
 
 const fsp = fs.promises;
 
@@ -661,7 +662,8 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
       // Un dossier ancien sans manifeste conserve le comportement historique
       // (Markdown présent = converti). Dès qu'une empreinte existe, elle rend un
       // Markdown périmé visible au lieu de le réutiliser silencieusement.
-      const converted = markdownKeys.has(key) && (!stateEntry || isConvertedEntry(stateEntry, stat));
+      const hasMarkdown = markdownStemCandidates(absolute, root).some((stem) => markdownKeys.has(documentKey(`${stem}.md`)));
+      const converted = hasMarkdown && (!stateEntry || isConvertedEntry(stateEntry, stat));
       const scanned = converted && (
         isAnonymizedEntry(stateEntry, stat)
         || scanKeys.has(key)
