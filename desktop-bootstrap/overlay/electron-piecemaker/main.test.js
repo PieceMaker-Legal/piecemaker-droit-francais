@@ -34,6 +34,7 @@ async function loadEntry(startupError) {
     '../electron/localServer.js': { LocalServerController: class {} },
     './windowsTitleBar.js': { installWindowsTitleBar: () => {} },
     './embedded-git.js': { addEmbeddedGit: () => {} },
+    './embedded-node.js': { addEmbeddedNode: () => {} },
     './compact-runtime.mjs': {
       initializeCompactRuntime: async ({ applicationRoot }) => ({ applicationRoot, moduleRoots: [] }),
       portablePluginRuntime: () => ({}),

@@ -13,11 +13,13 @@ import { installWindowsTitleBar } from './windowsTitleBar.js';
 import { installWindowsUpdater } from './windowsUpdater.js';
 import { initializeCompactRuntime, portablePluginRuntime } from './compact-runtime.mjs';
 import { addEmbeddedGit } from './embedded-git.js';
+import { addEmbeddedNode } from './embedded-node.js';
 
 installWindowsTitleBar({ app, DesktopWindowManager });
 
 process.env.ELECTRON_FORCE_OWN_SERVER = '1';
 addEmbeddedGit();
+addEmbeddedNode();
 
 const OPEN_LOCAL_EXPRESSION = 'window.cloudcliDesktop && window.cloudcliDesktop.openLocal()';
 

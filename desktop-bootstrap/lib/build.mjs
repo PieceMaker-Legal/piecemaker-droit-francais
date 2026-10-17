@@ -11,6 +11,7 @@ import { configureWindowsUpdates } from './windows-update-config.mjs';
 import { pruneDesktopDependencies, configureCompactPackage } from './compact-package.mjs';
 import { packageRuntimeComponents } from './components-package.mjs';
 import { embedMinGit } from './mingit.mjs';
+import { embedNodeShim } from './node-shim.mjs';
 import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath, releaseRepo, releaseTag } from './paths.mjs';
 
 function npmTool(tool) {
@@ -72,6 +73,7 @@ async function verifyBuiltApp(builtApp) {
     if (!(await exists(path.join(appRoot, relativePath)))) missing.push(relativePath);
   }
   if (process.platform === 'win32' && !(await exists(path.join(builtApp, 'resources', 'mingit', 'cmd', 'git.exe')))) missing.push('resources/mingit/cmd/git.exe');
+  if (process.platform === 'win32' && !(await exists(path.join(builtApp, 'resources', 'node-shim', 'node.cmd')))) missing.push('resources/node-shim/node.cmd');
   if (missing.length) throw new Error(`Application construite incomplète — fichiers absents : ${missing.join(', ')}`);
 }
 
@@ -424,6 +426,7 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
     await fs.cp(path.join(bootstrapRoot, 'certs'), path.join(stageDir, 'desktop-bootstrap', 'certs'), { recursive: true, filter: isShippedFile });
     await fs.cp(path.join(bootstrapRoot, 'installer-ui'), path.join(stageDir, 'desktop-bootstrap', 'installer-ui'), { recursive: true, filter: isShippedFile });
     await embedMinGit(stageDir);
+    await embedNodeShim(stageDir);
     if (windowsInstaller) {
       await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));
       const manifestPath = path.join(stageDir, 'package.json');
