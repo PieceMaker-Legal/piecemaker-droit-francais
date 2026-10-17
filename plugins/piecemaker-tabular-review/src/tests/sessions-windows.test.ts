@@ -51,6 +51,7 @@ describe('lancement des CLI installées par npm sous Windows', () => {
     fs.writeFileSync(path.join(bin, 'vibe.cmd'), NPM_SHIM);
     const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'));
     environment.Path = bin;
+    environment.PIECEMAKER_HOME = bin;
 
     const session = openSession({
       provider: 'mistral',
