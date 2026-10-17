@@ -1,5 +1,5 @@
 import type { Draft, ReviewCategory, ReviewSummary } from '../shared.js';
-import { CATEGORY_LABELS, reviewStatusLabel } from '../shared.js';
+import { CATEGORY_LABELS, DEFAULT_MODEL, DEFAULT_PROVIDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, formatDate, toast } from './dom.js';
 import type { HostProject } from './host.js';
@@ -14,7 +14,8 @@ type Entry = ReviewSummary & { draft?: Draft };
 const statusLabel = (entry: Entry) => entry.draft ? 'Projet' : reviewStatusLabel(entry.status);
 
 function draftEntry(draft: Draft): Entry {
-  return { project: draft.project, file: '', title: draft.title, templateName: draft.templateName || `${draft.columns.length} question${draft.columns.length > 1 ? 's' : ''}`, category: draft.mode === 'recherche' ? 'recherche-juridique' : 'documents', createdAt: draft.updatedAt, status: 'done', rowCount: draft.rows.length, doneCount: 0, columnCount: draft.columns.length, provider: 'claude', model: '', draft } as Entry;
+  const provider = draft.provider ?? DEFAULT_PROVIDER;
+  return { project: draft.project, file: '', title: draft.title, templateName: draft.templateName || `${draft.columns.length} question${draft.columns.length > 1 ? 's' : ''}`, category: draft.mode === 'recherche' ? 'recherche-juridique' : 'documents', createdAt: draft.updatedAt, status: 'done', rowCount: draft.rows.length, doneCount: 0, columnCount: draft.columns.length, provider, model: draft.model ?? DEFAULT_MODEL[provider], draft } as Entry;
 }
 
 export function createHistoryView(app: App): View {

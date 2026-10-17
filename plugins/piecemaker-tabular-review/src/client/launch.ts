@@ -1,5 +1,5 @@
 import type { Draft, Provider, ReviewDetail, RowRequest, TemplateColumn } from '../shared.js';
-import { COLUMN_FORMATS, hasActions, REVIEW_FOLDER } from '../shared.js';
+import { COLUMN_FORMATS, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, REVIEW_FOLDER } from '../shared.js';
 import type { App, View } from './app.js';
 import { basename, confirmDialog, errorMessage, escapeHtml, toast } from './dom.js';
 import { openDocumentsDrawer } from './documents-drawer.js';
@@ -64,7 +64,7 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
   let protectedProject = true;
   let models: { options: ModelOption[]; cheapest: string } = { options: [], cheapest: '' };
   let launching = false;
-  let preferredModel = draft.model ?? '';
+  let preferredModel = draft.model ?? DEFAULT_MODEL[draft.provider ?? DEFAULT_PROVIDER];
 
   const isSorting = () => hasActions(columns);
 
@@ -242,7 +242,7 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
   });
 
   renderAll();
-  if (draft.provider) providerSelect.value = draft.provider;
+  providerSelect.value = draft.provider ?? DEFAULT_PROVIDER;
   void loadProviderModels();
   void app.rpc<{ projects: string[] }>('GET', '/protected-projects').then((result) => {
     protectedProject = result.projects.includes(project);
