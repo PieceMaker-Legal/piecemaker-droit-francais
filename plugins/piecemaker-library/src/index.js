@@ -54,6 +54,7 @@ export function mount(container, api) {
   const pluginTrees = new Map();
   let pluginTreeBusy = '';
   let marketplace = null;
+  const autoRegistered = new Set();
   let loading = false;
   let busy = false;
   let error = '';
@@ -126,7 +127,14 @@ export function mount(container, api) {
       }
       if (view === 'discover') {
         const kind = tab === 'connectors' ? 'connector' : tab;
-        const data = await request('GET', `/plugin/marketplace?scope=${scope}&kind=${kind}`);
+        const path = `/plugin/marketplace?scope=${scope}&kind=${kind}`;
+        let data = await request('GET', path);
+        if (version === revision && !data.registered && !autoRegistered.has(scope)) {
+          autoRegistered.add(scope);
+          marketplace = data;
+          await request('POST', '/plugin/marketplace/register', { scope });
+          data = await request('GET', path);
+        }
         if (version === revision) marketplace = data;
       } else if (tab === 'tabular') {
         const tabularData = await request('GET', '/tabular');
