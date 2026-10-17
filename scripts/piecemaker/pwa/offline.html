@@ -49,6 +49,7 @@
       <img class="logo" src="__LOGO__" alt="PieceMaker">
       <h1 id="title">Retrouver PieceMaker</h1>
       <p class="description" id="description">Votre espace vous attend. Relancez PieceMaker pour reprendre votre travail.</p>
+      <p class="description" id="tailscale" hidden>Vérifiez que Tailscale est connecté sur votre téléphone et sur votre ordinateur, avec le même compte.</p>
       <div class="actions">
         <button id="relaunch" type="button">Relancer PieceMaker</button>
         <p class="status" role="status"><span class="dot" aria-hidden="true"></span><span id="status">En attente de PieceMaker…</span></p>
@@ -61,6 +62,7 @@
     const canRelaunch = local && location.port === '__LAUNCHER_PORT__' && /Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2;
     const button = document.getElementById('relaunch');
     const status = document.getElementById('status');
+    document.getElementById('tailscale').hidden = local;
     if (!canRelaunch) {
       button.textContent = 'Réessayer';
       document.getElementById('description').textContent = local

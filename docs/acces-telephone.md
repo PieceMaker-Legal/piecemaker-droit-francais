@@ -19,6 +19,8 @@ Piloter depuis un téléphone les sessions qui tournent sur l'ordinateur : le t�
 4. « Copier le lien » (`https://<machine>.<tailnet>.ts.net`).
 5. Téléphone : Tailscale connecté au même compte → lien dans Safari → « Sur l'écran d'accueil » → ouvrir l'icône → login PieceMaker (l'icône a un stockage distinct de Safari).
 
+L'icône téléphone reste installée après les mises à jour du Mac. Le menu ⋮ › « Actualiser PieceMaker » vérifie que le serveur répond, demande la mise à jour du service worker, puis recharge l'interface depuis cet ordinateur, sans effacer la connexion ni les réglages. Il faut d'abord mettre à jour PieceMaker sur l'ordinateur pour recevoir une nouvelle version sur le téléphone. Une connexion indisponible conserve la page ouverte et affiche un rappel Tailscale ; la page hors connexion rappelle également de connecter Tailscale sur les deux appareils avec le même compte, puis se reconnecte automatiquement.
+
 ## Architecture
 
 ```
