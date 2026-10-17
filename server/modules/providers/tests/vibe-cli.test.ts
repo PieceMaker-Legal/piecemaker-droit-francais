@@ -16,6 +16,7 @@ import {
   piecemakerVibeDirectory,
   resolveVibeExecutable,
   vibeEnvFilePath,
+  vibeTerminalEnvironment,
   windowsCredentialProbeScript,
   type VibeCliHost,
 } from '@/shared/vibe-cli.js';
@@ -165,6 +166,26 @@ test('the Vibe .env lives in ~/.vibe, or in VIBE_HOME when it is set', () => {
   assert.equal(vibeEnvFilePath(fakeHost({ env: { VIBE_HOME: '/srv/vibe' } }).host), '/srv/vibe/.env');
   assert.equal(vibeEnvFilePath(fakeHost({ platform: 'win32' }).host), 'C:\\Users\\jean\\.vibe\\.env');
   assert.equal(vibeEnvFilePath(fakeHost({ platform: 'win32', env: { VIBE_HOME: 'D:\\vibe' } }).host), 'D:\\vibe\\.env');
+});
+
+test('on Windows, terminals get a Vibe theme with its own colours while Vibe would pick an ANSI theme', () => {
+  const configFile = 'C:\\Users\\jean\\.vibe\\config.toml';
+  assert.deepEqual(vibeTerminalEnvironment(fakeHost({ platform: 'win32' }).host), { VIBE_THEME: 'textual-dark' });
+  assert.deepEqual(
+    vibeTerminalEnvironment(fakeHost({ platform: 'win32', files: { [configFile]: 'theme = "auto"\n' } }).host),
+    { VIBE_THEME: 'textual-dark' },
+  );
+  assert.deepEqual(
+    vibeTerminalEnvironment(fakeHost({ platform: 'win32', files: { [configFile]: 'theme = "tokyo-night"\n' } }).host),
+    {},
+  );
+  assert.deepEqual(
+    vibeTerminalEnvironment(fakeHost({ platform: 'win32', env: { VIBE_HOME: 'D:\\vibe' }, files: { 'D:\\vibe\\config.toml': "theme = 'nord'\n" } }).host),
+    {},
+  );
+  assert.deepEqual(vibeTerminalEnvironment(fakeHost({ platform: 'win32', env: { VIBE_THEME: 'nord' } }).host), {});
+  assert.deepEqual(vibeTerminalEnvironment(fakeHost({ platform: 'darwin' }).host), {});
+  assert.deepEqual(vibeTerminalEnvironment(fakeHost({ platform: 'linux' }).host), {});
 });
 
 test('every way vibe --setup or a person writes the key in .env is recognised', () => {

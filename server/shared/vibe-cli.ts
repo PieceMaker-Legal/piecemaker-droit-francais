@@ -90,9 +90,30 @@ export function isVibeInstalled(host: VibeCliHost = currentVibeCliHost()): boole
   }
 }
 
-export function vibeEnvFilePath(host: VibeCliHost = currentVibeCliHost()): string {
+function vibeHomeDirectory(host: VibeCliHost): string {
   const vibeHome = readEnv(host, 'VIBE_HOME');
-  return pathApi(host).join(vibeHome ? expandHome(host, vibeHome) : pathApi(host).join(host.homedir, '.vibe'), '.env');
+  return vibeHome ? expandHome(host, vibeHome) : pathApi(host).join(host.homedir, '.vibe');
+}
+
+export function vibeEnvFilePath(host: VibeCliHost = currentVibeCliHost()): string {
+  return pathApi(host).join(vibeHomeDirectory(host), '.env');
+}
+
+function configuredVibeTheme(host: VibeCliHost): string | null {
+  try {
+    const content = host.readFileSync(pathApi(host).join(vibeHomeDirectory(host), 'config.toml'), 'utf8');
+    return content.match(/^\s*theme\s*=\s*["']([^"']*)["']/m)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function vibeTerminalEnvironment(host: VibeCliHost = currentVibeCliHost()): Record<string, string> {
+  if (host.platform !== 'win32' || readEnv(host, 'VIBE_THEME')) {
+    return {};
+  }
+  const theme = configuredVibeTheme(host);
+  return theme && theme !== 'auto' ? {} : { VIBE_THEME: 'textual-dark' };
 }
 
 function envFileHasApiKey(host: VibeCliHost): boolean {
