@@ -3,6 +3,27 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.45](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.44...v2.0.45) (2026-10-17)
+
+### New Features
+
+* **anonymisation:** codes uniques dans toute la base, variante partagée selon la session ([0f51233](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0f512334c652c4151a84c1d9ef8b0423a8634672))
+* **anonymisation:** fusionner les termes institutionnels par défaut ([3d2e1c1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3d2e1c1ded1477bfd3683977181e918ed4d2515f))
+* mettre en pause la préparation de la pseudonymisation ([5f0fac8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5f0fac8cea60700b37538f9d8af09312d9927979))
+* préparer automatiquement le système de pseudonymisation ([d18c179](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d18c17925b16b1c5c707d83bdc073d51855743a6))
+
+### Bug Fixes
+
+* **anonymisation:** fusionner les doublons déjà en base sans réattribuer leur code ([6f81487](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6f8148710fc028badbd366bf83fb82300efd2de5))
+* **code-editor:** preview markdown files by default ([4009e18](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4009e185392074219fd5342716984abb0dab3e8f))
+* keep expanded panels beside new panes ([17f9b70](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/17f9b70cc296efc0a0da8e751edb78588831f2ee))
+* place new workspace panels to the right ([d6029b8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d6029b836c36f43033aa0d2f2e143f0426ef9451))
+* recover malformed CITATIONS JSON ([61a819c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/61a819cbd62baa1db7a9eaa45477f6988285b350))
+
+### Documentation
+
+* **anonymisation:** plus aucun mapping JSON écrit, document-index réécrit à chaque scan ([127bdfd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/127bdfd9a3ef896bdb9e12bb30a6f2bbf6d17734))
+
 ## [2.0.44](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.43...v2.0.44) (2026-10-17)
 
 ### New Features
