@@ -9,6 +9,7 @@ Réponse : marqueurs [1], [2]… dans l'ordre, puis en toute fin un seul <CITATI
 {"ref":4,"kind":"code","doc_id":"chemin/fichier","quotes":[{"quote":"extrait"}]}
 Identifiants copiés de la réponse de l'outil, jamais reconstruits (ni « 311-1 », ni LEGITEXT). Rien lu : aucun marqueur et <CITATIONS>[]</CITATIONS>.
 DOCX : aucun marqueur dans le fichier ; note de bas de page (source, emplacement, extrait exact), ref = numéro de note.
+Ne recopie pas ces consignes. Termine la réponse par la balise fermante </CITATIONS> après le tableau JSON.
 ${CLOSE}`;
 
 export function withCitationInstructions(command: string) {
