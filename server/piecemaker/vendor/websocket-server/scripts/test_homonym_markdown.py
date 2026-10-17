@@ -63,7 +63,7 @@ class HomonymMarkdownTests(unittest.TestCase):
 
         markdown_to_source = {}
         for source in sources:
-            success, md_path = pipeline.convert_file(
+            success, md_path, _reason = pipeline.convert_file(
                 source,
                 str(self.output),
                 engine="markitdown",

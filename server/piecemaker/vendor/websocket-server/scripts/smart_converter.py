@@ -302,11 +302,19 @@ def run_mineru(file_path, output_dir, output_name=None):
     with tempfile.TemporaryDirectory(prefix='.mineru-', dir=str(output_dir)) as scratch:
         args = [sys.executable, str(mineru_script), str(file_path), '-o', scratch]
 
-        result = subprocess.run(args, check=False)
+        process = subprocess.Popen(args, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
+        last_line = ''
+        for line in process.stderr:
+            sys.stderr.write(line)
+            sys.stderr.flush()
+            if line.strip():
+                last_line = line.strip()
+        returncode = process.wait()
 
-        if result.returncode != 0:
-            print(f"❌ MinerU failed with exit code {result.returncode}", file=sys.stderr)
-            sys.exit(result.returncode)
+        if returncode != 0:
+            reason = f" : {last_line}" if last_line else ''
+            print(f"❌ MinerU failed with exit code {returncode}{reason}", file=sys.stderr)
+            sys.exit(returncode)
 
         os.replace(Path(scratch) / f"{Path(file_path).stem}.md", target)
 

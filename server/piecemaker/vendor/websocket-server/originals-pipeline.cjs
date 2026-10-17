@@ -265,6 +265,14 @@ function spawnTracked(job, script, args, progressScale = {}, io = {}) {
           }
           continue;
         }
+        if (line.startsWith('CONVERSION_FAILED:')) {
+          try {
+            io.onConversionFailed?.(JSON.parse(line.slice('CONVERSION_FAILED:'.length)));
+          } catch (error) {
+            errorLines.push(`échec de conversion illisible : ${error.message}`);
+          }
+          continue;
+        }
         const progress = /^PROGRESS:([A-Z]+):(\d+):(\d+):(\d+)/.exec(line.trim());
         if (!progress) continue;
         const [, marker, pct, current, total] = progress;
@@ -351,7 +359,7 @@ function spawnTracked(job, script, args, progressScale = {}, io = {}) {
  * `onProgress`, si fourni, est appelé à chaque mise à jour de la progression
  * avec `{ phase, percent, processed, total }`.
  */
-function runManagedPythonJob({ action, script, args, onProgress, signal, input, onMapping, onOcrRequired } = {}) {
+function runManagedPythonJob({ action, script, args, onProgress, signal, input, onMapping, onOcrRequired, onConversionFailed } = {}) {
   if (!['convert', 'anonymize'].includes(action)) throw new Error('Action inconnue.');
   if (!acceptingJobs) throw new Error('Le serveur est en cours d’arrêt : aucun nouveau traitement ne peut démarrer.');
   const job = {
@@ -385,7 +393,7 @@ function runManagedPythonJob({ action, script, args, onProgress, signal, input, 
     if (signal.aborted) abort();
     else signal.addEventListener('abort', abort, { once: true });
   }
-  const run = () => spawnTracked(job, script, args, {}, { input, onMapping, onOcrRequired });
+  const run = () => spawnTracked(job, script, args, {}, { input, onMapping, onOcrRequired, onConversionFailed });
   const descriptor = { job, run };
   const completion = new Promise((resolve, reject) => {
     descriptor.resolve = resolve;
