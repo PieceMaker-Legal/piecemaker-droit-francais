@@ -11,8 +11,14 @@ export function run(command, args, options = {}) {
   });
 }
 
+export function windowsPowerShellEnvironment(command, environment = process.env) {
+  if (!/^powershell(\.exe)?$/i.test(command)) return environment;
+  const { PSModulePath, ...rest } = environment;
+  return rest;
+}
+
 export function capture(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: 'utf8', ...options });
+  const result = spawnSync(command, args, { encoding: 'utf8', ...options, env: windowsPowerShellEnvironment(command, options.env) });
   return {
     code: result.status ?? 1,
     stdout: (result.stdout || '').trim(),
