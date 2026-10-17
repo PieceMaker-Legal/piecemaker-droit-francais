@@ -38,7 +38,7 @@ const configuredPythonPath = () => {
     return null;
   }
 };
-const PYTHON = () => process.env.PYTHON_PATH || configuredPythonPath() || 'python3';
+const PYTHON = () => process.env.PYTHON_PATH || configuredPythonPath() || (process.platform === 'win32' ? 'python' : 'python3');
 const MAX_LOG_LINES = 200;
 const MAX_ERROR_LINES = 12;
 
@@ -473,4 +473,5 @@ module.exports = {
   runManagedPythonJob,
   stopOriginalsJobs,
   listOriginals,
+  PYTHON,
 };
