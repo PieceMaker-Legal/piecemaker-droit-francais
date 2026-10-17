@@ -18,8 +18,17 @@ const logoPath = path.join(here, '..', '..', 'public', 'logo-256.png');
 const ESTIMATED_STEPS = 14;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
 const FINAL_STATE_DELAY_MS = 3_000;
-const WINDOW_WIDTH = 860;
-const WINDOW_HEIGHT = 800;
+const WINDOW_WIDTH = 960;
+const WINDOW_HEIGHT = 760;
+const WINDOWS_CSC = path.join(process.env.WINDIR || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
+const WINDOW_ICON = path.join(here, '..', '..', 'server', 'piecemaker', 'vendor', 'installer', 'assets', 'piecemaker.ico');
+const WEBVIEW2_DIR = path.join(here, 'webview2');
+const WINDOW_SOURCE = path.join(here, 'window-win32.cs');
+const WEBVIEW2_FILES = [
+  'Microsoft.Web.WebView2.Core.dll',
+  'Microsoft.Web.WebView2.WinForms.dll',
+  'WebView2Loader.dll',
+];
 
 export const PISTE_LINKS = {
   registration: 'https://piste.gouv.fr/registration',
@@ -31,6 +40,7 @@ export const PISTE_LINKS = {
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.png': 'image/png',
+  '.ico': 'image/x-icon',
 };
 
 let session = null;
@@ -140,6 +150,8 @@ async function route(request, response) {
     sendFile(response, path.join(uiDir, 'index.html'));
   } else if (request.method === 'GET' && target === 'logo.png') {
     sendFile(response, logoPath);
+  } else if (request.method === 'GET' && target === 'favicon.ico') {
+    sendFile(response, WINDOW_ICON);
   } else if (request.method === 'GET' && /^piste\/[a-z-]+\.png$/.test(target)) {
     sendFile(response, path.join(uiDir, target));
   } else if (request.method === 'GET' && target === 'state') {
@@ -164,38 +176,72 @@ async function route(request, response) {
   }
 }
 
-function edgeExecutable() {
-  const roots = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean);
-  return roots
-    .map((root) => path.join(root, 'Microsoft', 'Edge', 'Application', 'msedge.exe'))
-    .find((candidate) => fs.existsSync(candidate));
+function windowUserData() {
+  return path.join(bootstrapHome, 'fenetre-installation');
 }
 
-function windowCommand(url) {
+function copyHostFile(from, to) {
+  try {
+    const source = fs.statSync(from);
+    const current = fs.existsSync(to) ? fs.statSync(to) : null;
+    if (current && current.size === source.size && current.mtimeMs >= source.mtimeMs) return;
+    fs.copyFileSync(from, to);
+  } catch (error) {
+    if (error.code === 'EBUSY' && fs.existsSync(to)) return;
+    throw error;
+  }
+}
+
+function prepareWindowsInstallerHost() {
+  const userData = windowUserData();
+  const exe = path.join(userData, 'installer-window.exe');
+  fs.mkdirSync(userData, { recursive: true });
+  for (const name of WEBVIEW2_FILES) {
+    copyHostFile(path.join(WEBVIEW2_DIR, name), path.join(userData, name));
+  }
+  copyHostFile(WINDOW_SOURCE, path.join(userData, 'window-win32.cs'));
+  const stale = !fs.existsSync(exe) || fs.statSync(WINDOW_SOURCE).mtimeMs > fs.statSync(exe).mtimeMs;
+  if (!stale) return exe;
+  if (!fs.existsSync(WINDOWS_CSC)) {
+    throw new Error("Le compilateur Windows est absent : impossible d'ouvrir la fenêtre d'installation.");
+  }
+  const compiled = spawnSync(WINDOWS_CSC, [
+    '/nologo',
+    '/target:winexe',
+    '/out:installer-window.exe',
+    '/r:Microsoft.Web.WebView2.Core.dll',
+    '/r:Microsoft.Web.WebView2.WinForms.dll',
+    '/r:System.Windows.Forms.dll',
+    '/r:System.Drawing.dll',
+    'window-win32.cs',
+  ], { cwd: userData, encoding: 'utf8', windowsHide: true });
+  if (compiled.status !== 0 || !fs.existsSync(exe)) {
+    throw new Error((compiled.stdout || compiled.stderr || "Compilation de la fenêtre d'installation impossible.").trim());
+  }
+  return exe;
+}
+
+export function installerWindowCommand(url) {
   if (IS_MAC) {
     return ['osascript', ['-l', 'JavaScript', path.join(here, 'window-darwin.js'), url, String(WINDOW_WIDTH), String(WINDOW_HEIGHT)]];
   }
-  const edge = IS_WINDOWS && edgeExecutable();
-  if (!edge) return null;
-  return [edge, [
-    `--app=${url}`,
-    `--user-data-dir=${path.join(bootstrapHome, 'fenetre-installation')}`,
-    `--window-size=${WINDOW_WIDTH},${WINDOW_HEIGHT}`,
-    '--no-first-run',
-    '--no-default-browser-check',
+  if (!IS_WINDOWS) return null;
+  return [prepareWindowsInstallerHost(), [
+    url,
+    String(WINDOW_WIDTH),
+    String(WINDOW_HEIGHT),
+    `Installation de ${PRODUCT_NAME}`,
+    fs.existsSync(WINDOW_ICON) ? WINDOW_ICON : '',
+    windowUserData(),
   ]];
 }
 
 function launchWindow(url) {
-  const command = windowCommand(url);
-  if (!command) {
-    openExternal(url);
-    return;
-  }
+  const command = installerWindowCommand(url);
+  if (!command) return;
   const child = spawn(command[0], command[1], { detached: true, stdio: 'ignore' });
   child.on('error', () => {
     session.window = null;
-    openExternal(url);
   });
   child.on('exit', () => {
     if (session?.window !== child) return;
@@ -254,6 +300,7 @@ export async function openProgressWindow({
     try {
       launchWindow(session.url);
     } catch (error) {
+      session.window = null;
       process.stderr.write(`Fenêtre d'installation indisponible (${error.message}).\n`);
     }
   }
