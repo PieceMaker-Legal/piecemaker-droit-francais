@@ -10,6 +10,7 @@ export function usePseudonymization() {
   const [models, setModels] = useState<Partial<Record<PseudonymizationModelId, PseudonymizationModelStatus>>>({});
   const [jobs, setJobs] = useState<PseudonymizationInstallJob[]>([]);
   const [error, setError] = useState('');
+  const [paused, setPaused] = useState(false);
   const attempted = useRef(new Set<PseudonymizationModelId>());
 
   useEffect(() => {
@@ -32,7 +33,8 @@ export function usePseudonymization() {
         }
         setJobs((current) => [...new Map([...current, ...response.jobs].map((job) => [job.component, job])).values()]);
         setError('');
-        if (response.busy) return;
+        setPaused(response.paused);
+        if (response.busy || response.paused) return;
         const missing = MODEL_IDS.find((id) => !models?.[id]?.installed && !attempted.current.has(id));
         if (!missing) return;
         starting = missing;
@@ -66,5 +68,28 @@ export function usePseudonymization() {
     };
   }, []);
 
-  return { models, jobs, error, retry: () => attempted.current.clear() };
+  const pause = async () => {
+    try {
+      const { job } = await pseudonymizationApi.pause();
+      setPaused(true);
+      if (job) setJobs((current) => [...current.filter((entry) => entry.component !== job.component), { ...job, state: 'paused' }]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  const resume = async () => {
+    const missing = MODEL_IDS.find((id) => !models[id]?.installed);
+    if (!missing) return;
+    try {
+      attempted.current.add(missing);
+      const { job } = await pseudonymizationApi.install(missing);
+      setPaused(false);
+      setJobs((current) => [...current.filter((entry) => entry.component !== missing), job]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  return { models, jobs, error, paused, retry: () => attempted.current.clear(), pause, resume };
 }
