@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import type Database from 'better-sqlite3';
@@ -6,7 +6,9 @@ import type Database from 'better-sqlite3';
 import type { ReasoningLink, ReasoningNode, ReasoningProgram, ReasoningSnapshot, ReasoningSource } from '../../../shared/piecemaker-reasoning.js';
 
 import { emptyProgram, evaluateProgram, validateProgram } from './engine.js';
+import { resolveEvidence } from './evidence.js';
 import { resolveInputs } from './inputs.js';
+import { LIBRARY, withLibrary } from './library.js';
 import { detectConflicts } from './model.js';
 import { assessTheories } from './theories.js';
 
@@ -26,7 +28,7 @@ function changesSince(previous: ReasoningSnapshot, evaluations: ReasoningSnapsho
   return changes;
 }
 
-function mergeProgram(previous: ReasoningProgram, block: string, incoming: ReasoningSource[]): ReasoningProgram {
+function mergeProgram(previous: ReasoningProgram, block: string, incoming: ReasoningSource[]): { program: ReasoningProgram; notes: string[] } {
   const match = block.match(/<CITATIONS>\s*([\s\S]*?)\s*<\/CITATIONS>/);
   if (!match) throw new TypeError('Bloc CITATIONS incomplet.');
   const entries: unknown = JSON.parse(match[1]);
@@ -46,8 +48,15 @@ function mergeProgram(previous: ReasoningProgram, block: string, incoming: Reaso
   }
   const nodes = new Map(previous.nodes.map((node) => [node.id, node]));
   const links = new Map((previous.links ?? []).map((link) => [link.id, link]));
+  const notes: string[] = [];
+  const locked = (id: string) => LIBRARY.some((rule) => rule.id === id) ? 'module de bibliothèque' : nodes.get(id)?.review || previous.tests.find((test) => test.id === id)?.review ? 'décision de l’avocat' : '';
   if (patch?.remove !== undefined && (!Array.isArray(patch.remove) || patch.remove.some((id: unknown) => typeof id !== 'string'))) throw new TypeError('remove doit être une liste d’identifiants.');
-  for (const id of patch?.remove ?? []) { nodes.delete(id); links.delete(id); }
+  const removed = (patch?.remove ?? []).filter((id: string) => {
+    if (!locked(id)) return true;
+    notes.push(`${id} verrouillé (${locked(id)}) : retrait ignoré.`);
+    return false;
+  });
+  for (const id of removed) { nodes.delete(id); links.delete(id); }
   const evidence = new Map<string, string[]>();
   const reported = new Set<string>();
   const supported = new Set<string>();
@@ -73,6 +82,10 @@ function mergeProgram(previous: ReasoningProgram, block: string, incoming: Reaso
   for (const proposed of patch?.nodes ?? []) {
     if (!proposed || typeof proposed !== 'object' || typeof proposed.id !== 'string' || ids.has(proposed.id)) throw new TypeError('Nœud invalide ou dupliqué dans ce tour.');
     ids.add(proposed.id);
+    if (locked(proposed.id)) {
+      notes.push(`${proposed.id} verrouillé (${locked(proposed.id)}) : proposition ignorée.`);
+      continue;
+    }
     if (proposed.citations !== undefined && (!Array.isArray(proposed.citations) || proposed.citations.some((ref: unknown) => !Number.isSafeInteger(ref)))) throw new TypeError('citations doit contenir les numéros de références du tour.');
     const old = nodes.get(proposed.id);
     const linked = proposed.citations === undefined ? evidence.get(proposed.id) ?? old?.sources ?? [] : proposed.citations.flatMap((ref: number) => {
@@ -92,6 +105,10 @@ function mergeProgram(previous: ReasoningProgram, block: string, incoming: Reaso
       ...(proposed.validity !== undefined ? { validity: proposed.validity } : {}),
       ...(proposed.relation !== undefined ? { relation: proposed.relation } : {}),
       ...(proposed.input !== undefined ? { input: proposed.input } : {}),
+      ...(proposed.burden !== undefined ? { burden: proposed.burden } : {}),
+      ...(proposed.evidence !== undefined ? { evidence: proposed.evidence } : {}),
+      ...(proposed.conditions !== undefined ? { conditions: proposed.conditions } : {}),
+      ...(proposed.exceptions !== undefined ? { exceptions: proposed.exceptions } : {}),
     };
     if (node.kind === 'fact' && reported.has(node.id) && !supported.has(node.id)) node.state = 'reported';
     if (proposed.citations !== undefined || evidence.has(node.id)) for (const [id, link] of links) {
@@ -111,18 +128,21 @@ function mergeProgram(previous: ReasoningProgram, block: string, incoming: Reaso
     if (updates === undefined) return old;
     if (!Array.isArray(updates) || updates.some((item) => !item || typeof item.id !== 'string')) throw new TypeError('Liste de scénarios ou tests invalide.');
     const combined = new Map(old.map((item) => [item.id, item]));
-    for (const item of updates) combined.set(item.id, item);
+    for (const item of updates) {
+      if (locked(item.id)) notes.push(`${item.id} verrouillé (${locked(item.id)}) : proposition ignorée.`);
+      else combined.set(item.id, item);
+    }
     return [...combined.values()];
   };
-  const program: ReasoningProgram = {
+  const program = withLibrary({
     version: 1, nodes: [...nodes.values()], sources: [...sources.values()],
-    scenarios: mergeList(previous.scenarios.filter((item) => !patch?.remove?.includes(item.id)), patch?.scenarios),
-    tests: mergeList(previous.tests.filter((item) => !patch?.remove?.includes(item.id)), patch?.tests),
-    links: [...links.values()].filter((link) => !(patch?.remove ?? []).includes(link.from) && !(patch?.remove ?? []).includes(link.to)),
-  };
+    scenarios: mergeList(previous.scenarios.filter((item) => !removed.includes(item.id)), patch?.scenarios),
+    tests: mergeList(previous.tests.filter((item) => !removed.includes(item.id)), patch?.tests),
+    links: [...links.values()].filter((link) => !removed.includes(link.from) && !removed.includes(link.to)),
+  });
   if (program.scenarios.some((scenario) => scenario.id === 'base')) throw new TypeError('Le scénario base est réservé au dossier sans hypothèses.');
   validateProgram(program);
-  return program;
+  return { program, notes };
 }
 
 export function createReasoningService(getDatabase: () => Database.Database) {
@@ -212,17 +232,38 @@ export function createReasoningService(getDatabase: () => Database.Database) {
     const row = database().prepare('SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=?').get(id) as { snapshot_json: string } | undefined;
     if (!row) return emptySnapshot();
     const snapshot = JSON.parse(row.snapshot_json) as ReasoningSnapshot;
-    const program = resolveInputs(database(), id, snapshot.program);
+    const program = resolveEvidence(database(), id, resolveInputs(database(), id, snapshot.program));
     const conflicts = detectConflicts(program);
-    if (JSON.stringify(program) === JSON.stringify(snapshot.program)) return { ...snapshot, conflicts, theories: assessTheories(program, snapshot.evaluations) };
+    if (JSON.stringify(program) === JSON.stringify(snapshot.program)) return { ...snapshot, conflicts, theories: assessTheories(program, snapshot.evaluations, snapshot.changes) };
+    return commit(id, snapshot, program, [], `sql_${digest(JSON.stringify(program))}_${snapshot.revision}`);
+  };
+  const commit = (id: string, previous: ReasoningSnapshot, program: ReasoningProgram, notes: string[], turnId: string): ReasoningSnapshot => {
     const evaluations = evaluateProgram(program);
-    const refreshed = { ...snapshot, program, evaluations, conflicts, theories: assessTheories(program, evaluations), revision: snapshot.revision + 1, updatedAt: new Date().toISOString(), changes: changesSince(snapshot, evaluations) };
-    persist(id, refreshed, `sql_${digest(JSON.stringify(refreshed))}`);
-    return refreshed;
+    const changes = changesSince(previous, evaluations);
+    const theories = assessTheories(program, evaluations, changes);
+    const snapshot: ReasoningSnapshot = { revision: previous.revision + 1, updatedAt: new Date().toISOString(), program, evaluations, changes, conflicts: detectConflicts(program), theories, notes, diagnostics: [...notes, ...(program.nodes.length ? theories.flatMap((theory) => theory.issues.map((issue) => `${theory.id} : ${issue}`)) : ['Sources collectées : raisonnement non formalisé. Aucun résultat exécuté.'])] };
+    persist(id, snapshot, turnId);
+    return snapshot;
   };
   database();
   return {
     read,
+    review(cwd: string, target: string, decision: 'retained' | 'rejected' | null, note?: string): ReasoningSnapshot {
+      const id = projectId(cwd);
+      const previous = read(cwd);
+      if (!['retained', 'rejected', null].includes(decision)) throw new TypeError('Décision attendue : retained, rejected ou null.');
+      if (note !== undefined && (typeof note !== 'string' || note.length > 2000)) throw new TypeError('Note trop longue.');
+      const review = decision ? { decision, at: new Date().toISOString(), ...(note?.trim() ? { note: note.trim() } : {}) } : undefined;
+      const apply = <T extends { id: string; review?: unknown }>(item: T): T => {
+        if (item.id !== target) return item;
+        const { review: _old, ...rest } = item;
+        return (review ? { ...rest, review } : rest) as T;
+      };
+      if (!previous.program.nodes.some((node) => node.id === target) && !previous.program.tests.some((test) => test.id === target)) throw new TypeError('Proposition ou test introuvable.');
+      const program = { ...previous.program, nodes: previous.program.nodes.map(apply), tests: previous.program.tests.map(apply) };
+      validateProgram(program);
+      return commit(id, previous, program, [`Décision de l’avocat sur ${target} : ${decision === 'retained' ? 'retenu' : decision === 'rejected' ? 'écarté' : 'annulée'}${note?.trim() ? ` (${note.trim()})` : ''}.`], `review_${randomUUID()}`);
+    },
     context(cwd: string) {
       try {
         const snapshot = read(cwd);
@@ -238,7 +279,8 @@ export function createReasoningService(getDatabase: () => Database.Database) {
       if (db.prepare('SELECT 1 FROM pm_reasoning_turns WHERE project_id=? AND turn_id=?').get(id, turnId)) return '';
       const previous = read(input.cwd);
       let program: ReasoningProgram;
-      try { program = mergeProgram(previous.program, input.block, input.sources); }
+      let notes: string[];
+      try { ({ program, notes } = mergeProgram(previous.program, input.block, input.sources)); }
       catch (error) {
         const diagnostic = error instanceof Error ? error.message : 'Programme invalide.';
         const rejected = { ...previous, diagnostics: [diagnostic] };
@@ -246,17 +288,14 @@ export function createReasoningService(getDatabase: () => Database.Database) {
         return `\n\nProgramme non appliqué : ${diagnostic} Le programme précédent est conservé.`;
       }
       if (!previous.revision && !program.sources.length && !program.nodes.length) return '';
-      program = resolveInputs(db, id, program);
-      const evaluations = evaluateProgram(program);
-      const changes = changesSince(previous, evaluations);
-      const conflicts = detectConflicts(program);
-      const theories = assessTheories(program, evaluations);
-      const snapshot: ReasoningSnapshot = { revision: previous.revision + 1, updatedAt: new Date().toISOString(), program, evaluations, changes, conflicts, theories, diagnostics: program.nodes.length ? theories.flatMap((theory) => theory.issues.map((issue) => `${theory.id} : ${issue}`)) : ['Sources collectées : raisonnement non formalisé. Aucun résultat exécuté.'] };
-      persist(id, snapshot, turnId);
+      program = resolveEvidence(db, id, resolveInputs(db, id, program));
+      const snapshot = commit(id, previous, program, notes, turnId);
+      const { evaluations, conflicts = [] } = snapshot;
       const tests = evaluations.flatMap((evaluation) => evaluation.tests);
       if (!program.nodes.length) return `\n\nSources collectées · ${program.sources.length} extraits · raisonnement non formalisé. Aucun résultat exécuté, aucun test. Formalisation attendue au prochain tour pour une analyse de fond.`;
       const base = evaluations[0].results;
-      return `\n\nProgramme du dossier · révision ${snapshot.revision} · ${program.nodes.filter((node) => node.layer === 'law').length} règles de droit · ${program.nodes.filter((node) => node.kind === 'fact').length} faits · ${program.nodes.filter((node) => node.layer === 'theory').length} propositions de théorie · ${base.filter((result) => result.status === 'blocked').length} bloqués · ${base.filter((result) => result.status === 'unknown').length} indéterminés · ${conflicts.length} conflits potentiels · ${tests.length ? `${tests.filter((test) => test.passed).length}/${tests.length} tests du modèle réussis` : 'aucun test formalisé'}. État et modifications disponibles dans le volet Raisonnement et par SQL.`;
+      const unestablished = evaluations[0].results.filter((result) => result.proof === 'unestablished' && program.nodes.some((node) => node.id === result.id && node.evidence)).length;
+      return `${notes.length ? `\n\n${notes.join(' ')}` : ''}\n\nProgramme du dossier · révision ${snapshot.revision} ·${unestablished ? ` ${unestablished} pièce(s) à produire ·` : ''} ${program.nodes.filter((node) => node.layer === 'law').length} règles de droit · ${program.nodes.filter((node) => node.kind === 'fact').length} faits · ${program.nodes.filter((node) => node.layer === 'theory').length} propositions de théorie · ${base.filter((result) => result.status === 'blocked').length} bloqués · ${base.filter((result) => result.status === 'unknown').length} indéterminés · ${conflicts.length} conflits potentiels · ${tests.length ? `${tests.filter((test) => test.passed).length}/${tests.length} tests du modèle réussis` : 'aucun test formalisé'}. État et modifications disponibles dans le volet Raisonnement et par SQL.`;
     },
   };
 }

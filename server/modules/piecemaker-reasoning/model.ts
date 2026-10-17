@@ -21,7 +21,19 @@ export function validateAnnotations(program: ReasoningProgram) {
         else expression.args.forEach(checkParameters);
       };
       checkParameters(node.expression!);
+      for (const exception of node.exceptions ?? []) { checkParameters(exception.when); checkParameters(exception.then); }
     }
+    const text = (value: unknown, max: number) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
+    if (node.burden !== undefined && (node.kind !== 'fact' || !text(node.burden, 200))) throw new TypeError(`Charge de la preuve invalide : ${node.id}.`);
+    if (node.evidence !== undefined) {
+      const evidence = node.evidence;
+      const list = (value: unknown, max: number) => value === undefined || (Array.isArray(value) && value.length <= 10 && value.every((item) => text(item, max)));
+      if (node.kind !== 'fact' || !evidence || typeof evidence !== 'object' || Array.isArray(evidence) || !list(evidence.nature, 120) || !list(evidence.mentions, 200) || (evidence.from !== undefined && !isLegalDate(evidence.from)) || (evidence.to !== undefined && !isLegalDate(evidence.to)) || (!evidence.nature?.length && !evidence.mentions?.length)) throw new TypeError(`Exigence de preuve invalide : ${node.id} (nature ou mentions requises).`);
+    }
+    if (node.conditions !== undefined && (node.layer !== 'law' || !node.conditions || typeof node.conditions !== 'object' || Array.isArray(node.conditions) || Object.entries(node.conditions).some(([parameter, condition]) => !(node.parameters ?? []).includes(parameter) || !condition || !text(condition.label, 300) || (condition.burden !== undefined && !text(condition.burden, 200))))) throw new TypeError(`Conditions invalides : ${node.id} (une entrée par paramètre).`);
+    if (node.exceptions !== undefined && (node.layer !== 'law' || !Array.isArray(node.exceptions) || node.exceptions.length > 20 || new Set(node.exceptions.map((exception) => exception?.id)).size !== node.exceptions.length || node.exceptions.some((exception) => !exception || typeof exception.id !== 'string' || !/^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(exception.id) || !text(exception.label, 300) || exception.when === undefined || exception.then === undefined))) throw new TypeError(`Exceptions invalides : ${node.id}.`);
+    if (node.review !== undefined && (!node.review || !['retained', 'rejected'].includes(node.review.decision) || typeof node.review.at !== 'string')) throw new TypeError(`Décision de l’avocat invalide : ${node.id}.`);
+    if (node.origin !== undefined && node.origin !== 'library') throw new TypeError(`Origine invalide : ${node.id}.`);
     if (node.validity && (!isLegalDate(node.validity.from) || (node.validity.to !== null && (!isLegalDate(node.validity.to) || node.validity.to <= node.validity.from)))) throw new TypeError(`Période invalide : ${node.id} (fin exclusive).`);
     if (node.relation) {
       const relation = node.relation;
