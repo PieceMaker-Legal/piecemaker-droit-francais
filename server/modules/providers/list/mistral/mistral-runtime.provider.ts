@@ -300,7 +300,18 @@ async function spawnVibe(
         const record = response as { sessionId?: string } | null;
         registerSession(record?.sessionId ?? null);
         recordVibeMessageTime(response);
-        const streamed = response as { type?: string; content?: string };
+        const streamed = response as { type?: string; id?: string; createdAt?: number; content?: string };
+        if (streamed?.type === 'piecemaker_reasoning') {
+          ws.send(createNormalizedMessage({
+            id: streamed.id,
+            kind: 'thinking',
+            content: streamed.content ?? '',
+            timestamp: new Date(streamed.createdAt!).toISOString(),
+            sessionId: capturedSessionId || sessionId || null,
+            provider: 'mistral',
+          }));
+          return;
+        }
         if (streamed?.type === 'piecemaker_text_delta' || streamed?.type === 'piecemaker_text_end') {
           ws.send(createNormalizedMessage({
             kind: streamed.type === 'piecemaker_text_delta' ? 'stream_delta' : 'stream_end',

@@ -19,7 +19,7 @@ import json
 import vibe.cli.entrypoint
 vibe.cli.entrypoint.main = lambda: None
 ${vibeStreamingEntrypoint}
-from vibe.app_server.models import PublicMessageEntry, PublicEntryGenerationStatus
+from vibe.app_server.models import PublicMessageEntry, PublicEntryGenerationStatus, PublicReasoningEntry
 output = io.StringIO()
 writer = StreamingOutput(programmatic.OutputFormat.STREAMING, output)
 def entry(id, text, status="in_progress", turn="turn-1"):
@@ -27,6 +27,20 @@ def entry(id, text, status="in_progress", turn="turn-1"):
         created_at=1, updated_at=1, generation_status=status, role="assistant",
         content=[{"type": "text", "text": text}])
 writer.start([entry("old", "Ancien", "completed", None)])
+def reasoning(text, status="in_progress"):
+    return PublicReasoningEntry(id="reason-1", session_id="session-1", turn_id="turn-1",
+        created_at=1, updated_at=2, generation_status=status, text=text)
+writer.consume(HistoryEntryAdded(reasoning("Je")))
+rows = [json.loads(line) for line in output.getvalue().splitlines()]
+assert rows[-1]["type"] == "piecemaker_reasoning"
+assert rows[-1]["content"] == "Je"
+writer.consume(HistoryEntryUpdated(reasoning("Je"), reasoning("Je réfléchis →"), []))
+writer.consume(HistoryEntryUpdated(reasoning("Je réfléchis →"), reasoning("Je réfléchis →", "completed"), []))
+rows = [json.loads(line) for line in output.getvalue().splitlines()]
+thoughts = [row for row in rows if row["type"] == "piecemaker_reasoning"]
+assert [row["content"] for row in thoughts] == ["Je", "Je réfléchis →"]
+assert all(row["id"] == "reason-1" for row in thoughts)
+assert not any(row["type"] == "reasoning" for row in rows)
 writer.consume(HistoryEntryAdded(entry("new", "Bon")))
 rows = [json.loads(line) for line in output.getvalue().splitlines()]
 assert rows[-1]["type"] == "piecemaker_text_delta"

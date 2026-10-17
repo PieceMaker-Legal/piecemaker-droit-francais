@@ -65,6 +65,8 @@ test('a resumed Vibe turn shows only its own entries, not the replayed history',
 test('Vibe forwards UTF-8 text fragments and closes each message without replaying its text', async (t) => {
   const sent: unknown[] = [];
   const normalized = await runVibe(t, 'vibe-1', [
+    { type: 'piecemaker_reasoning', sessionId: 'vibe-1', id: 'r', turnId: 'turn-2', createdAt: Date.UTC(2026, 0, 1), content: 'Je' },
+    { type: 'piecemaker_reasoning', sessionId: 'vibe-1', id: 'r', turnId: 'turn-2', createdAt: Date.UTC(2026, 0, 1), content: 'Je réfléchis' },
     { type: 'piecemaker_text_delta', sessionId: 'vibe-1', id: 'a', content: 'Début → ' },
     { type: 'piecemaker_text_delta', sessionId: 'vibe-1', id: 'a', content: 'fin' },
     { type: 'piecemaker_text_end', sessionId: 'vibe-1', id: 'a' },
@@ -73,7 +75,11 @@ test('Vibe forwards UTF-8 text fragments and closes each message without replayi
     { type: 'piecemaker_text_end', sessionId: 'vibe-1', id: 'b' },
   ], sent);
   assert.deepEqual(normalized, ['tool']);
-  const messages = sent as { kind?: string; content?: string }[];
+  const messages = sent as { id?: string; kind?: string; content?: string; timestamp?: string }[];
+  assert.deepEqual(messages.filter((message) => message.kind === 'thinking').map((message) => [message.id, message.content, message.timestamp]), [
+    ['r', 'Je', '2026-01-01T00:00:00.000Z'],
+    ['r', 'Je réfléchis', '2026-01-01T00:00:00.000Z'],
+  ]);
   assert.deepEqual(messages.filter((message) => message.kind === 'stream_delta').map((message) => message.content), ['Début → ', 'fin', 'Suite']);
   assert.equal(messages.filter((message) => message.kind === 'stream_end').length, 2);
 });
