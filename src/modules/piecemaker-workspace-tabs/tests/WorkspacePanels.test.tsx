@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import type { ComponentProps } from 'react';
 import { expect, it, vi } from 'vitest';
 
 import { withWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';
+import { WorkspaceViewerContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspaceViewerContext';
 import type { AppTab, Project, ServerEvent } from '@/shared/types';
 
 const socket = vi.hoisted(() => ({ listeners: new Set<(event: ServerEvent) => void>() }));
@@ -25,7 +26,10 @@ vi.mock('@/modules/plugins', () => ({
     { name: 'other', displayName: 'Autre', enabled: true },
     { name: 'piecemaker-dossier', displayName: 'Dossier', enabled: true },
   ] }),
-  PluginTabContent: ({ pluginName }: { pluginName: string }) => <input aria-label={`Contenu ${pluginName}`} />,
+  PluginTabContent: ({ pluginName }: { pluginName: string }) => {
+    const viewer = useContext(WorkspaceViewerContext);
+    return <><input aria-label={`Contenu ${pluginName}`} /><button onClick={() => viewer?.register(true)}>Ouvrir l’éditeur</button></>;
+  },
 }));
 vi.mock('@/modules/file-tree', () => ({ FileTree: () => <div>Fichiers du dossier</div> }));
 vi.mock('@/modules/git-panel', () => ({ GitPanel: () => <div>Git</div> }));
@@ -75,6 +79,31 @@ it('agrandit puis restaure une card sans perdre son contenu ni les autres volets
   expect(screen.getByTestId('main').closest('[hidden]')).toBeNull();
   expect((screen.getByLabelText('Contenu example') as HTMLInputElement).value).toBe('Brouillon fictif');
   expect(screen.getByText('Fichiers du dossier').closest('[hidden]')).toBeNull();
+});
+
+it('garde le volet agrandi à gauche et ouvre le nouvel éditeur à droite', () => {
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'plugin:example' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Agrandir Exemple' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ouvrir l’éditeur' }));
+  const columns = Array.from(document.querySelectorAll('.piecemaker-workspace-column'));
+  expect(screen.getByRole('button', { name: 'Réduire Exemple' })).toBeTruthy();
+  expect(columns[0].querySelector('[aria-label="Contenu example"]')).toBeTruthy();
+  expect(columns[1].getAttribute('aria-label')).toBe('Colonne visionneuse');
+  expect(columns[1].hasAttribute('hidden')).toBe(false);
+});
+
+it('déplace à droite le volet Fichiers qui héberge le nouvel éditeur', () => {
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'plugin:example' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Agrandir Exemple' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ouvrir l’éditeur' }));
+  const columns = Array.from(document.querySelectorAll('.piecemaker-workspace-column'));
+  expect(screen.getByRole('button', { name: 'Réduire Exemple' })).toBeTruthy();
+  expect(columns[0].querySelector('[aria-label="Contenu example"]')).toBeTruthy();
+  expect(columns[1].querySelector('.piecemaker-files-panel')).toBeTruthy();
+  expect(columns[1].hasAttribute('hidden')).toBe(false);
 });
 
 it('ouvre le .docx dès que l’agent l’écrit, sans attendre un afficher', () => {

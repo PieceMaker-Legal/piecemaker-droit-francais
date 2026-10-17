@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 
 import type { Project } from '@/shared/types';
 import { AnonymizationLauncher } from '@/piecemaker/sidebar-anonymization/AnonymizationLauncher';
+import { PseudonymizationSystem } from '@/modules/pseudonymization';
 
 const ROOT_ID = 'piecemaker-sidebar-anonymization';
 const SIDEBAR_SELECTOR = '.md\\:select-none';
@@ -30,6 +31,7 @@ function projectContent(project: Project): HTMLElement | null {
 
 function renderIntoSidebar(): void {
   const buttonSlots: HTMLElement[] = [];
+  const systemSlots: HTMLElement[] = [];
   document.querySelectorAll<HTMLElement>(SIDEBAR_SELECTOR).forEach((sidebar) => {
     sidebar.querySelectorAll<HTMLElement>('button').forEach((button) => {
       if (!button.querySelector('.lucide-refresh-cw')) return;
@@ -42,6 +44,16 @@ function renderIntoSidebar(): void {
         parent.insertBefore(slot, button);
       }
       buttonSlots.push(slot);
+      const row = parent.parentElement;
+      if (!row) return;
+      let systemSlot = row.querySelector<HTMLElement>(':scope > [data-piecemaker-pseudonymization-slot]');
+      if (!systemSlot) {
+        systemSlot = document.createElement('span');
+        systemSlot.dataset.piecemakerPseudonymizationSlot = '';
+        systemSlot.className = 'mr-auto';
+        row.prepend(systemSlot);
+      }
+      systemSlots.push(systemSlot);
     });
   });
 
@@ -59,7 +71,7 @@ function renderIntoSidebar(): void {
     progressSlots.set(project.fullPath, slot);
   }
 
-  root.render(<AnonymizationLauncher buttonSlots={buttonSlots} progressSlots={progressSlots} onProjectsChange={updateProjects} />);
+  root.render(<><PseudonymizationSystem buttonSlots={systemSlots} /><AnonymizationLauncher buttonSlots={buttonSlots} progressSlots={progressSlots} onProjectsChange={updateProjects} /></>);
 }
 
 function scheduleRender(): void {
@@ -78,7 +90,7 @@ if (import.meta.hot) {
     window.cancelAnimationFrame(frame);
     root.unmount();
     host.remove();
-    document.querySelectorAll('[data-piecemaker-anonymization-slot], [data-piecemaker-project-progress]').forEach((element) => element.remove());
+    document.querySelectorAll('[data-piecemaker-anonymization-slot], [data-piecemaker-project-progress], [data-piecemaker-pseudonymization-slot]').forEach((element) => element.remove());
     document.querySelectorAll('[data-piecemaker-project-path]').forEach((element) => element.removeAttribute('data-piecemaker-project-path'));
   });
 }

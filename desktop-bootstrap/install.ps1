@@ -6,7 +6,6 @@ $repo = if ($env:PIECEMAKER_REPO) { $env:PIECEMAKER_REPO } else { 'PieceMaker-Le
 $bootstrapHome = if ($env:PIECEMAKER_BOOTSTRAP_HOME) { $env:PIECEMAKER_BOOTSTRAP_HOME } else { Join-Path $env:USERPROFILE '.piecemaker\bootstrap' }
 $nodeChannel = if ($env:PIECEMAKER_NODE_CHANNEL) { $env:PIECEMAKER_NODE_CHANNEL } else { 'latest-v22.x' }
 $minNodeMajor = 22
-$glinerRevision = '59894c087cb2923b01f337d4ee72f6ff84d5bdd6'
 
 function Say([string] $message) { Write-Host "== $message" -ForegroundColor Cyan }
 function Fail([string] $message) { Write-Host "!! $message" -ForegroundColor Red; throw $message }
@@ -95,13 +94,6 @@ if ($args -notcontains '--build-from-source') {
         $expected = if ($componentChecksum.Count -eq 1) { Read-Checksum $componentChecksum[0].browser_download_url } else { '' }
         Say 'Telechargement des composants IA precompiles...'
         Save-ReleaseAsset $componentAsset[0].browser_download_url (Join-Path $prebuiltDir $componentAsset[0].name) $expected
-      }
-      $glinerName = "piecemaker-gliner-$glinerRevision.tar.gz"
-      $glinerAsset = @($release.assets | Where-Object { $_.name -eq $glinerName })
-      $glinerChecksum = @($release.assets | Where-Object { $_.name -eq "$glinerName.sha256" })
-      if ($glinerAsset.Count -eq 1 -and $glinerChecksum.Count -eq 1) {
-        Say 'Telechargement du modele GLiNER...'
-        Save-ReleaseAsset $glinerAsset[0].browser_download_url (Join-Path $prebuiltDir $glinerAsset[0].name) (Read-Checksum $glinerChecksum[0].browser_download_url)
       }
     } finally {
       if ($installerProcess -is [System.Diagnostics.Process]) { [void]$installerProcess.WaitForExit() }

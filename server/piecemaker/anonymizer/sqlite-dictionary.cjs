@@ -5,12 +5,28 @@ const Database = require('better-sqlite3');
 
 const { buildDictionary, EMPTY_DICTIONARY } = require('./dictionary.cjs');
 
-function buildMappingDocument(rows) {
+function retiredCodes(nodes) {
+  const retired = [];
+  for (const node of nodes) {
+    let data;
+    try {
+      data = JSON.parse(node.data_json || '{}');
+    } catch {
+      continue;
+    }
+    const survivor = typeof data?.code === 'string' ? data.code : '';
+    if (!survivor || !Array.isArray(data.codes_retires)) continue;
+    for (const code of data.codes_retires) if (typeof code === 'string' && code && code !== survivor) retired.push([code, survivor, node.project_id]);
+  }
+  return retired;
+}
+
+function buildMappingDocument(rows, retiredNodes = []) {
   const grouped = new Map();
   let updatedAt = null;
   for (const row of rows) {
     const key = `${row.project_id}\u0000${row.node_id}\u0000${row.masked_value}`;
-    const group = grouped.get(key) || { localCode: row.masked_value, label: row.label, variants: [] };
+    const group = grouped.get(key) || { localCode: row.masked_value, projectId: row.project_id, label: row.label, variants: [] };
     if (!group.variants.includes(row.real_value)) group.variants.push(row.real_value);
     grouped.set(key, group);
     if (!updatedAt || row.updated_at > updatedAt) updatedAt = row.updated_at;
@@ -18,14 +34,41 @@ function buildMappingDocument(rows) {
 
   const mapping = {};
   const reverse_mapping = {};
+  const code_projects = {};
+  const sharers = new Map();
   for (const group of grouped.values()) {
     const code = group.localCode;
     const canonical = group.variants.includes(group.label) ? group.label : group.variants[0];
     const variants = [canonical, ...group.variants.filter((value) => value !== canonical)];
     reverse_mapping[code] = variants;
-    for (const variant of variants) if (!mapping[variant]) mapping[variant] = code;
+    code_projects[code] = group.projectId;
+    for (const variant of variants) {
+      if (!mapping[variant]) mapping[variant] = code;
+      const folded = variant.trim().toLocaleLowerCase();
+      const entry = sharers.get(folded) || { codes: [], variants: new Set() };
+      if (!entry.codes.includes(code)) entry.codes.push(code);
+      entry.variants.add(variant);
+      sharers.set(folded, entry);
+    }
   }
-  return { mapping, reverse_mapping, updated_at: updatedAt };
+  const ambiguous = {};
+  for (const { codes, variants } of sharers.values()) {
+    if (codes.length > 1) for (const variant of variants) ambiguous[variant] = codes;
+  }
+  const retired_by_project = {};
+  const retiredOwners = new Map();
+  for (const [code, survivor, projectId] of retiredCodes(retiredNodes)) {
+    if (!reverse_mapping[survivor]) continue;
+    if (!reverse_mapping[code]) {
+      reverse_mapping[code] = reverse_mapping[survivor];
+      retiredOwners.set(code, projectId);
+      continue;
+    }
+    if ((code_projects[code] || retiredOwners.get(code)) !== projectId) {
+      retired_by_project[projectId] = { ...retired_by_project[projectId], [code]: survivor };
+    }
+  }
+  return { mapping, reverse_mapping, ambiguous, code_projects, retired_by_project, updated_at: updatedAt };
 }
 
 function createSqliteDictionaryLoader({ databasePath }) {
@@ -68,8 +111,11 @@ function createSqliteDictionaryLoader({ databasePath }) {
       }
       mappingSignature = nextSignature;
       const rows = target.prepare('SELECT m.project_id,m.node_id,m.real_value,m.masked_value,m.updated_at,n.label FROM piecemaker_mappings m JOIN piecemaker_nodes n ON n.project_id=m.project_id AND n.id=m.node_id ORDER BY m.project_id,m.masked_value,m.node_id,LENGTH(m.real_value) DESC,m.real_value').all();
+      const retiredNodes = target.prepare("SELECT 1 FROM pragma_table_info('piecemaker_nodes') WHERE name='data_json'").get()
+        ? target.prepare("SELECT project_id, data_json FROM piecemaker_nodes WHERE data_json LIKE '%codes_retires%' ORDER BY rowid").all()
+        : [];
       generation += 1;
-      current = buildDictionary(buildMappingDocument(rows), generation);
+      current = buildDictionary(buildMappingDocument(rows, retiredNodes), generation);
       dataVersion = nextDataVersion;
       failure = null;
       return current;

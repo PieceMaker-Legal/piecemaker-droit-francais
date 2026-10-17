@@ -29,6 +29,7 @@ const {
   worktreeDetails,
 } = require('../piecemaker-plugin/scripts/lib/commits.cjs');
 const { listOriginals } = require('./originals-pipeline.cjs');
+const { terminateProcessTree } = require('./process-group.cjs');
 const { invalidateOriginals, listOriginalsCached } = require('../../originals-cache.cjs');
 const {
   documentKey,
@@ -1582,6 +1583,7 @@ const INSTALL_STEP_IDS = {
 };
 const installJobs = new Map();
 let activeInstallComponent = null;
+let installPaused = false;
 
 // Nettoie une ligne de sortie de l'installateur (codes ANSI, spinner) pour n'en
 // garder qu'un texte de progression lisible ; les lignes JSON de warmup.py
@@ -1601,10 +1603,13 @@ function startInstallJob(repoRoot, component) {
   const stepId = INSTALL_STEP_IDS[component];
   if (!stepId) throw new Error(`Composant non installable : ${component}`);
   if (activeInstallComponent) {
+    const running = [...installJobs.values()].find((job) => job.component === component && job.state === 'running');
+    if (running) return running;
     throw Object.assign(new Error(`Une installation est déjà en cours (${activeInstallComponent}).`), { conflict: true });
   }
   const installer = path.join(repoRoot, 'installer', 'bin', 'piecemaker.mjs');
   if (!fs.existsSync(installer)) throw new Error('Installateur PieceMaker introuvable.');
+  installPaused = false;
   const id = crypto.randomUUID();
   const job = { id, component, state: 'running', progress: 'Démarrage de l’installation…', startedAt: Date.now(), finishedAt: null, error: '' };
   installJobs.set(id, job);
@@ -1613,6 +1618,7 @@ function startInstallJob(repoRoot, component) {
   const child = spawn(process.execPath, [installer, '--step', stepId], {
     cwd: repoRoot,
     windowsHide: true,
+    detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
     // PIECEMAKER_YES=1 : accepte les valeurs par défaut (MinerU inclus) sans TTY.
     env: {
@@ -1642,8 +1648,12 @@ function startInstallJob(repoRoot, component) {
     job.finishedAt = Date.now();
     activeInstallComponent = null;
   });
+  job.pid = child.pid;
   child.once('close', (code) => {
-    if (job.state === 'running') {
+    if (job.pausing) {
+      job.state = 'paused';
+      job.finishedAt = Date.now();
+    } else if (job.state === 'running') {
       job.state = code === 0 ? 'done' : 'failed';
       if (code !== 0) job.error = cleanInstallProgressLine(tailStderr.join('')) || `L’installateur s’est arrêté avec le code ${code}.`;
       if (code === 0) job.progress = 'Installation terminée.';
@@ -1654,6 +1664,15 @@ function startInstallJob(repoRoot, component) {
     setTimeout(() => installJobs.delete(id), 5 * 60 * 1000).unref?.();
   });
   return job;
+}
+
+async function pauseInstallJobs() {
+  installPaused = true;
+  const running = [...installJobs.values()].find((job) => job.state === 'running');
+  if (!running) return null;
+  running.pausing = true;
+  await terminateProcessTree(running.pid);
+  return running;
 }
 
 function publicInstallJob(job) {
@@ -1875,6 +1894,14 @@ function createAdminRouter({
     }
   });
 
+  router.post('/configuration/install/pause', async (_req, res) => {
+    try {
+      res.json({ ok: true, job: publicInstallJob(await pauseInstallJobs()) });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   router.post('/configuration/uninstall', async (req, res) => {
     const component = String(req.body?.component || '');
     if (!INSTALL_STEP_IDS[component]) return res.status(400).json({ error: `Composant non supprimable : ${component}` });
@@ -1891,6 +1918,7 @@ function createAdminRouter({
   });
 
   router.get('/configuration/install', (req, res) => {
+    if (!req.query?.id) return res.json({ jobs: [...installJobs.values()].map(publicInstallJob), busy: Boolean(activeInstallComponent), paused: installPaused });
     const job = installJobs.get(String(req.query?.id || ''));
     if (!job) return res.status(404).json({ error: 'Installation inconnue ou expirée.' });
     res.json({ ok: true, job: publicInstallJob(job) });
@@ -2471,6 +2499,7 @@ module.exports = {
   managedFileKind,
   normalizeAgentModel,
   normalizeAgentTools,
+  pauseInstallJobs,
   readManagedFile,
   registerLegalCase,
   registerOfficialMarketplace,
@@ -2478,5 +2507,6 @@ module.exports = {
   revealCommands,
   saveManagedAsset,
   saveManagedFile,
+  startInstallJob,
   updateEnvFile,
 };

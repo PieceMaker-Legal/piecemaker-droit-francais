@@ -37,37 +37,9 @@ TAG="${PIECEMAKER_TAG:-$(resolve_release)}"
 [ -n "$TAG" ] || fail "Impossible de déterminer la dernière version publiée de $REPO."
 say "Version retenue : $TAG"
 
-GLINER_REVISION="59894c087cb2923b01f337d4ee72f6ff84d5bdd6"
-GLINER_ASSET="piecemaker-gliner-${GLINER_REVISION}.tar.gz"
 PREBUILT_DIR="$BOOTSTRAP_HOME/prebuilt/$TAG"
 mkdir -p "$PREBUILT_DIR"
 export PIECEMAKER_PREBUILT_ASSET_DIR="$PREBUILT_DIR"
-
-say "Téléchargement du modèle GLiNER (en parallèle)…"
-(
-  trap '' HUP
-  dest="$PREBUILT_DIR/$GLINER_ASSET"
-  lock="$dest.lock"
-  : > "$lock"
-  if [ ! -f "$dest" ]; then
-    base="https://github.com/$REPO/releases/download/$TAG"
-    if curl -fsSL -o "$dest.sha256" "$base/$GLINER_ASSET.sha256"; then
-      if curl -fL --retry 3 --retry-delay 2 -o "$dest.partial" "$base/$GLINER_ASSET"; then
-        expected="$(tr -d ' \r\n' < "$dest.sha256")"
-        actual="$(shasum -a 256 "$dest.partial" | awk '{print $1}')"
-        if [ "$expected" = "$actual" ]; then
-          mv "$dest.partial" "$dest"
-        else
-          rm -f "$dest.partial" "$dest.sha256"
-        fi
-      else
-        rm -f "$dest.partial" "$dest.sha256"
-      fi
-    fi
-  fi
-  rm -f "$lock"
-) >"$PREBUILT_DIR/gliner.log" 2>&1 &
-echo $! > "$PREBUILT_DIR/gliner.pid"
 
 SRC_DIR="$BOOTSTRAP_HOME/src/$TAG"
 if [ ! -d "$SRC_DIR" ]; then
