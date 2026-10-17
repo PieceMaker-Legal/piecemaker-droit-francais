@@ -3,6 +3,19 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.51](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.50...v2.0.51) (2026-10-17)
+
+### New Features
+
+* **pipeline:** flag pieces whose conversion failed ([e12b62a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e12b62a394f912bf784d8752bed35f4d2bdbbfcb))
+
+### Bug Fixes
+
+* **harness:** tighten citation instruction ([0ab391b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0ab391b1f4020e6ad0a22c9b86e266789e39033e))
+* **legifrance:** keep MCP launcher alive on Windows ([111f3e6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/111f3e6effefd81b1d6158502e79edc00b1ef686))
+* **library:** resolve Claude CLI for marketplace registration ([1d2404f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1d2404f5020a298c5069ba01a7e7329db5f58491))
+* **pipeline:** never abort the scan when a conversion fails ([2d2d7e0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2d2d7e0d6e6a1ca3adc73239a463db7abaca8532))
+
 ## [2.0.50](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.49...v2.0.50) (2026-10-17)
 
 ### New Features
