@@ -54,7 +54,7 @@ test('network failure and unavailable gateway show a self-contained recovery pag
     const response = await navigation(worker(fetch));
     const page = await response.text();
     assert.match(page, /Relancer PieceMaker/);
-    assert.match(page, /Ouvrez l’app Tailscale et activez la connexion/);
+    assert.match(page, /Tailscale doit être connecté sur votre ordinateur et votre téléphone/);
     assert.match(page, /data:image\/png;base64,/);
     assert.doesNotMatch(page, /__LOGO__/);
     assert.match(response.headers.get('content-type'), /charset=utf-8/);
