@@ -28,10 +28,12 @@ type OriginalFile = { path: string; resource?: boolean };
 
 type RenamedPiece = { previous: string; current: string; markdown: string | null };
 
-type CasePiece = { path: string; status: string; markdown: string | null };
+type ConversionFailure = { reason: string; failedAt: string };
+
+type CasePiece = { path: string; status: string; markdown: string | null; conversionFailure: ConversionFailure | null };
 
 type OriginalsPipeline = {
-  listOriginals(caseRoot: string): Promise<Array<OriginalFile & { status: string }>>;
+  listOriginals(caseRoot: string): Promise<Array<OriginalFile & { status: string; conversionFailure: ConversionFailure | null }>>;
   runManagedPythonJob(options: {
     action: 'convert' | 'anonymize';
     script: string;
@@ -83,6 +85,19 @@ const { markdownCounterpart } = require(path.join(
   'lib',
   'protection.cjs',
 )) as { markdownCounterpart(filePath: string, caseRoot: string): { path: string; exists: boolean } };
+const { moveConversionFailure, recordConversionOutcome } = require(path.join(
+  findApplicationRoot(getModuleDirectory(import.meta.url)),
+  'server',
+  'piecemaker',
+  'vendor',
+  'piecemaker-plugin',
+  'scripts',
+  'lib',
+  'conversion-failures.cjs',
+)) as {
+  moveConversionFailure(caseRoot: string, previous: string, current: string): void;
+  recordConversionOutcome(caseRoot: string, outcome: { attempted: string[]; failed: FailedDocument[] }): unknown;
+};
 
 function relativeKey(projectPath: string, filePath: string): string {
   const relative = path.relative(projectPath, filePath).split(path.sep).join('/').normalize('NFC');
@@ -266,6 +281,11 @@ export function createKnowledgePipeline(options: PipelineOptions) {
         if (received) persistScanResult({ projectId, mapping: received, documents: [] }, options.store);
         throw error;
       }
+      recordConversionOutcome(projectPath, {
+        attempted: files.map((file) => path.relative(projectPath, file)),
+        failed: failedDocuments,
+      });
+      invalidateOriginals(projectPath);
       const mapping: GlinerMappingDocument = received || seed;
       const documents = documentsFromIndex(projectPath, files, readDocumentIndex(projectPath));
       const scanResult = { projectId, mapping, documents };
@@ -280,7 +300,12 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const projectPath = fs.realpathSync(project.project_path);
       return (await listOriginals(projectPath)).map((file) => {
         const markdown = markdownCounterpart(path.join(projectPath, file.path), projectPath);
-        return { path: file.path, status: file.status, markdown: markdown.exists ? path.relative(projectPath, markdown.path).split(path.sep).join('/') : null };
+        return {
+          path: file.path,
+          status: file.status,
+          markdown: markdown.exists ? path.relative(projectPath, markdown.path).split(path.sep).join('/') : null,
+          conversionFailure: file.conversionFailure,
+        };
       });
     },
 
@@ -291,6 +316,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const projectPath = fs.realpathSync(project.project_path);
       const renamed = await renamePiece(projectPath, String(piecePath ?? ''), name, directory);
       if (renamed.current === renamed.previous) return renamed;
+      moveConversionFailure(projectPath, renamed.previous, renamed.current);
       invalidateOriginals(projectPath);
       const fromNodeId = `document:${relativeKey(projectPath, path.join(projectPath, renamed.previous))}`;
       const node = options.store.snapshot(projectId).nodes.find((candidate) => candidate.id === fromNodeId);
