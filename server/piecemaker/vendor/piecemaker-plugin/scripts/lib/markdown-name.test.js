@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
+  canonicalMarkdownStem,
   homonymMarkdownStem,
   markdownStem,
   markdownStemCandidates,
@@ -42,11 +43,24 @@ test('le suffixe homonyme reprend le calcul du pipeline Python', () => {
   }
 });
 
-test('les candidats désignent d’abord le nom suffixé, puis le nom simple', () => {
+test('le nom canonique reprend le calcul du pipeline Python', () => {
+  const root = makeCase();
+  try {
+    assert.strictEqual(
+      canonicalMarkdownStem(path.join(root, 'Pièces', 'a', 'exemple.docx'), root),
+      'exemple-f746693ae66db90e',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('les candidats désignent d’abord le nom canonique, puis le suffixe homonyme, puis le nom simple', () => {
   const root = makeCase();
   try {
     const piece = path.join(root, 'a', 'exemple.docx');
     assert.deepStrictEqual(markdownStemCandidates(piece, root), [
+      canonicalMarkdownStem(piece, root),
       homonymMarkdownStem(piece, root),
       'exemple',
     ]);

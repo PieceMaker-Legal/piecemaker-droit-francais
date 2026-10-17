@@ -186,9 +186,12 @@ function structuredMarkdownCounterpart(absolutePath, caseRoot, config = {}) {
   if (!relative || relative.startsWith('../')) return null;
   const output = caseConversionOutputDirectory(caseRoot, relative, config);
   if (!output) return null;
-  const [homonymStem, stem] = markdownStemCandidates(absolutePath, caseRoot);
-  const homonym = path.join(output, `${homonymStem}.md`);
-  if (fs.existsSync(homonym)) return { path: homonym, exists: true };
+  const stems = markdownStemCandidates(absolutePath, caseRoot);
+  for (const candidate of stems) {
+    const markdown = path.join(output, `${candidate}.md`);
+    if (fs.existsSync(markdown)) return { path: markdown, exists: true };
+  }
+  const stem = stems.at(-1);
   const expected = path.join(output, `${stem}.md`);
   if (fs.existsSync(expected)) return { path: expected, exists: true };
   const key = comparableName(stem).replace(/[\s_-]+/g, ' ').trim();

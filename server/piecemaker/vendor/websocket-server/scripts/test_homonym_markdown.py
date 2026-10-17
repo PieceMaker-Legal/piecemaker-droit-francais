@@ -28,9 +28,33 @@ class HomonymMarkdownTests(unittest.TestCase):
             source.parent.mkdir(parents=True)
             source.write_text(text, encoding="utf-8")
 
-    def test_single_source_keeps_plain_markdown_name(self):
+    def test_single_source_uses_stable_digest_name(self):
         names = pipeline.markdown_stems_for_batch([str(self.first)], str(self.case_root))
-        self.assertEqual(names, {str(self.first): "exemple"})
+        self.assertEqual(names[str(self.first)], f"exemple-{pipeline._source_digest(str(self.first), str(self.case_root))}")
+
+    def test_incremental_sources_keep_stable_distinct_names(self):
+        first_name = pipeline.markdown_stems_for_batch([str(self.first)], str(self.case_root))[str(self.first)]
+        second_name = pipeline.markdown_stems_for_batch([str(self.second)], str(self.case_root))[str(self.second)]
+        together = pipeline.markdown_stems_for_batch([str(self.first), str(self.second)], str(self.case_root))
+
+        self.assertEqual(together[str(self.first)], first_name)
+        self.assertEqual(together[str(self.second)], second_name)
+        self.assertNotEqual(first_name, second_name)
+
+    def test_literal_digest_suffix_source_does_not_collide(self):
+        first_name = pipeline.markdown_stems_for_batch([str(self.first)], str(self.case_root))[str(self.first)]
+        literal = self.case_root / "c" / f"{first_name}.txt"
+        literal.parent.mkdir(parents=True)
+        literal.write_text("MARQUEUR-LITTERAL-3017", encoding="utf-8")
+        names = pipeline.markdown_stems_for_batch([str(self.first), str(literal)], str(self.case_root))
+
+        self.assertEqual(names[str(self.first)], first_name)
+        self.assertNotEqual(names[str(literal)], first_name)
+
+    def test_canonical_name_is_pinned_for_javascript_parity(self):
+        source = self.case_root / "Pièces" / "a" / "exemple.docx"
+        names = pipeline.markdown_stems_for_batch([str(source)], str(self.case_root))
+        self.assertEqual(names[str(source)], "exemple-f746693ae66db90e")
 
     def test_homonyms_get_distinct_markdown_files_with_their_own_content(self):
         sources = [str(self.first), str(self.second)]
