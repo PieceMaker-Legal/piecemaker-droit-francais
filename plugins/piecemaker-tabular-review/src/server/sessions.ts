@@ -130,13 +130,42 @@ function turnTimeout(request: SessionRequest): number {
   return request.mode === 'path' ? PATH_TIMEOUT_MS : INLINE_TIMEOUT_MS;
 }
 
+const NPM_SHIM_TARGET = /"%dp0%\\([^"]+)"\s+%\*/;
+
+function environmentValue(environment: NodeJS.ProcessEnv, key: string): string {
+  return Object.entries(environment).find(([name]) => name.toUpperCase() === key)?.[1] ?? '';
+}
+
+function searchPath(command: string, environment: NodeJS.ProcessEnv): string | null {
+  const extensions = path.extname(command) ? [''] : (environmentValue(environment, 'PATHEXT') || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
+  for (const directory of environmentValue(environment, 'PATH').split(';').filter(Boolean)) {
+    for (const extension of extensions) {
+      const candidate = path.join(directory, `${command}${extension}`);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+function windowsCommand(command: string, args: string[], environment: NodeJS.ProcessEnv): { command: string; args: string[] } {
+  const file = path.isAbsolute(command) ? command : searchPath(command, environment);
+  if (!file || !/\.cmd$/i.test(file)) return { command: file ?? command, args };
+  const target = NPM_SHIM_TARGET.exec(fs.readFileSync(file, 'utf8'))?.[1];
+  if (!target) return { command: file, args };
+  const script = path.join(path.dirname(file), target);
+  if (/\.exe$/i.test(script)) return { command: script, args };
+  return { command: runtime().nodePath || process.execPath, args: [script, ...args] };
+}
+
 function spawnCommand(command: string, args: string[], request: SessionRequest, directory: string, environment?: NodeJS.ProcessEnv) {
-  return spawn(command, args, {
+  const env = { ...request.environment, ...environment };
+  const resolved = process.platform === 'win32' ? windowsCommand(command, args, env) : { command, args };
+  return spawn(resolved.command, resolved.args, {
     cwd: directory,
-    env: { ...request.environment, ...environment },
+    env,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
-    shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(command),
+    shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(resolved.command),
   });
 }
 
