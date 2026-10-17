@@ -18,7 +18,7 @@ import type {
 
 /**
  * Mistral AI provider implementation.
- * Supports OAuth2 authentication via the Mistral CLI.
+ * Authenticates through the API key that Mistral Vibe stores.
  */
 export class MistralProvider extends AbstractProvider {
   readonly runtime: IProviderRuntime = mistralRuntime;

@@ -6,6 +6,7 @@ import pty, { type IPty } from 'node-pty';
 import { WebSocket, type RawData } from 'ws';
 
 import { getApplicationDataRoot, parseIncomingJsonObject, stripAnsiSequences } from '@/shared/utils.js';
+import { findVibeBinDirectory } from '@/shared/vibe-cli.js';
 
 type ShellIncomingMessage = {
   type?: string;
@@ -494,10 +495,8 @@ function prioritizeUserNpmGlobalBin(env: NodeJS.ProcessEnv): { key: string; valu
     path.join(os.homedir(), 'AppData', 'Roaming', 'npm'),
     path.join(os.homedir(), '.npm-global', 'bin'),
   ].filter(Boolean);
-  const mistralBin = path.join(os.homedir(), '.mistral', 'bin');
-  const extraCliEntries = fs.existsSync(path.join(mistralBin, os.platform() === 'win32' ? 'mistral.exe' : 'mistral'))
-    ? [mistralBin]
-    : [];
+  const vibeBin = findVibeBinDirectory();
+  const extraCliEntries = vibeBin ? [vibeBin] : [];
 
   const normalizedPathEntries = pathEntries.map((entry) => os.platform() === 'win32' ? entry.toLowerCase() : entry);
   const preferredEntries = candidates.filter((candidate, index) => {
@@ -508,7 +507,7 @@ function prioritizeUserNpmGlobalBin(env: NodeJS.ProcessEnv): { key: string; valu
     );
   });
 
-  if (preferredEntries.length === 0) {
+  if (preferredEntries.length === 0 && extraCliEntries.length === 0) {
     return { key: pathKey, value: currentPath };
   }
 
@@ -571,7 +570,7 @@ export function handleShellConnection(
           (initialCommand.includes('setup-token') ||
             initialCommand.includes('cursor-agent login') ||
             initialCommand.includes('auth login') ||
-            initialCommand.includes('mistral login'));
+            initialCommand.includes('vibe --setup'));
 
         const commandSuffix =
           isPlainShell && initialCommand

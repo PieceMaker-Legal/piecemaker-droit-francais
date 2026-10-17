@@ -12,6 +12,7 @@ import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index
 import type { IProviderRuntime } from '@/shared/interfaces.js';
 import type { AnyRecord, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/types.js';
 import { createCompleteMessage, createNormalizedMessage, flattenPromptForWindowsShell } from '@/shared/utils.js';
+import { isVibeInstalled, resolveVibeExecutable } from '@/shared/vibe-cli.js';
 
 const require = createRequire(import.meta.url);
 const TOML = require('@iarna/toml') as { parse(value: string): Record<string, unknown> };
@@ -131,12 +132,7 @@ export class MistralProviderRuntime implements IProviderRuntime {
    * its own.
    */
   private checkInstalled(): boolean {
-    try {
-      const result = crossSpawn.sync('vibe', ['--version'], { stdio: 'ignore', timeout: 5000 });
-      return !result.error && result.status === 0;
-    } catch {
-      return false;
-    }
+    return isVibeInstalled();
   }
 
   async run(
@@ -380,7 +376,7 @@ async function spawnVibe(
         }
       }
 
-      vibeProcess = spawnFunction('vibe', args, {
+      vibeProcess = spawnFunction(resolveVibeExecutable(), args, {
         cwd: workingDir,
         stdio: ['ignore', 'pipe', 'pipe'],
         env,

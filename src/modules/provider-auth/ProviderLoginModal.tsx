@@ -56,7 +56,7 @@ const getProviderCommand = ({
   }
 
   if (provider === 'mistral') {
-    return 'mistral login';
+    return 'vibe --setup';
   }
 
   if (provider === 'opencode') {
@@ -70,7 +70,7 @@ const getProviderTitle = (provider: LLMProvider) => {
   if (provider === 'claude') return 'Claude CLI Login';
   if (provider === 'cursor') return 'Cursor CLI Login';
   if (provider === 'codex') return 'Codex CLI Login';
-  if (provider === 'mistral') return 'Mistral CLI Login';
+  if (provider === 'mistral') return 'Mistral Vibe Login';
   if (provider === 'opencode') return 'OpenCode CLI Login';
   return 'Claude CLI Login';
 };
