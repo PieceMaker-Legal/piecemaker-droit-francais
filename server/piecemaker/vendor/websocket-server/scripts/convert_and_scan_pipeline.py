@@ -423,12 +423,13 @@ def load_reserved_codes(database_path: str) -> Set[str]:
             codes |= {row[0] for row in connection.execute("SELECT masked_value FROM piecemaker_mappings")}
         if "piecemaker_nodes" in tables:
             codes |= {row[0][len("entity:"):] for row in connection.execute("SELECT id FROM piecemaker_nodes WHERE id LIKE 'entity:%'")}
-            for (data_json,) in connection.execute("SELECT data_json FROM piecemaker_nodes WHERE data_json LIKE '%codes_retires%'"):
+            for (data_json,) in connection.execute("SELECT data_json FROM piecemaker_nodes WHERE data_json LIKE '%\"code%'"):
                 try:
-                    retired = json.loads(data_json or "{}").get("codes_retires") or []
+                    data = json.loads(data_json or "{}")
+                    retired = data.get("codes_retires") or []
                 except (ValueError, AttributeError):
                     continue
-                codes |= {code for code in retired if isinstance(code, str) and code}
+                codes |= {code for code in [data.get("code"), *retired] if isinstance(code, str) and code}
     print(f"✅ Codes reserved by every case: {len(codes)}")
     return codes
 

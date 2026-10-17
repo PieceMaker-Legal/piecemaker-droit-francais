@@ -21,6 +21,10 @@ const EMPTY = Object.freeze({
   version: 0,
   updatedAt: null,
   mapping: Object.freeze({}),
+  unambiguous: Object.freeze({}),
+  ambiguous: Object.freeze([]),
+  codeProjects: Object.freeze(new Map()),
+  retiredByProject: Object.freeze({}),
   reverse: Object.freeze({}),
   canonical: Object.freeze({}),
   displayNames: Object.freeze([]),
@@ -33,6 +37,8 @@ const EMPTY = Object.freeze({
 const MEMO_MIN_LENGTH = 256;
 const MEMO_BUDGET = 16 * 1024 * 1024;
 const memos = new WeakMap();
+const projectReverses = new WeakMap();
+const CODE_TOKEN = /(?<![\p{L}\p{N}_])[A-Z][A-Z0-9_]*_\d+(?![\p{L}\p{N}_])/gu;
 
 function memoFor(dictionary) {
   let memo = memos.get(dictionary);
@@ -83,6 +89,13 @@ function buildDictionary(document, stamp) {
     const folded = trimmed.toLocaleLowerCase();
     if (!foldedNames.has(folded)) foldedNames.set(folded, trimmed);
   }
+  const ambiguousCodes = plainObject(document?.ambiguous);
+  const ambiguous = Object.freeze(Object.entries(ambiguousCodes)
+    .filter(([variant, codes]) => Array.isArray(codes) && codes.length > 1 && mapping[variant] && buildEntityRegex(variant))
+    .map(([variant, codes]) => Object.freeze({ variant, codes: Object.freeze([...codes]), regex: buildEntityRegex(variant) })));
+  const unambiguous = Object.freeze(Object.fromEntries(Object.entries(mapping).filter(([variant]) => !Array.isArray(ambiguousCodes[variant]))));
+  const codeProjects = new Map(Object.entries(plainObject(document?.code_projects)));
+  const retiredByProject = Object.freeze(plainObject(document?.retired_by_project));
   const displayNames = Array.from(foldedNames.values());
   const displayAcronyms = Array.from(acronyms);
   const entityCount = Object.keys(mapping).length;
@@ -91,6 +104,10 @@ function buildDictionary(document, stamp) {
     version: stamp,
     updatedAt: typeof document?.updated_at === 'string' ? document.updated_at : null,
     mapping,
+    unambiguous,
+    ambiguous,
+    codeProjects,
+    retiredByProject,
     reverse,
     canonical,
     displayNames,
@@ -101,19 +118,63 @@ function buildDictionary(document, stamp) {
   };
 }
 
+function presentCodes(text) {
+  const counts = new Map();
+  for (const [code] of text.matchAll(CODE_TOKEN)) counts.set(code, (counts.get(code) || 0) + 1);
+  return counts;
+}
+
+/**
+ * Choisit, pour une requête entière, le code de chaque variante partagée par
+ * plusieurs nœuds : celui du dossier de la session d'abord, puis celui du
+ * dossier dont les autres noms et codes sont les plus présents dans la requête,
+ * puis celui de la personne déjà citée, puis l'ordre du dictionnaire.
+ */
+function resolveContext(dictionary, { projectId = null, text = '' } = {}) {
+  const context = { projectId: projectId || null, overrides: null, key: '' };
+  if (!dictionary.ambiguous?.length || typeof text !== 'string' || !text) return context;
+  const shared = dictionary.ambiguous.filter((entry) => {
+    entry.regex.lastIndex = 0;
+    return entry.regex.test(text);
+  });
+  if (!shared.length) return context;
+  const counts = presentCodes(applyMapping(text, dictionary.unambiguous));
+  const projectScores = new Map();
+  for (const code of counts.keys()) {
+    const project = dictionary.codeProjects.get(code);
+    if (project) projectScores.set(project, (projectScores.get(project) || 0) + 1);
+  }
+  const rank = (code) => {
+    const project = dictionary.codeProjects.get(code);
+    return [project && project === context.projectId ? 1 : 0, projectScores.get(project) || 0, counts.get(code) || 0];
+  };
+  const overrides = new Map();
+  for (const { variant, codes } of shared) {
+    const best = codes.reduce((winner, code) => {
+      const [a, b] = [rank(code), rank(winner)];
+      return (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) > 0 ? code : winner;
+    });
+    if (best !== dictionary.mapping[variant]) overrides.set(variant, best);
+  }
+  if (!overrides.size) return context;
+  return { ...context, overrides, key: [...overrides].map(([variant, code]) => `${variant}\u0000${code}`).join('\u0001') };
+}
+
 /** Nom réel → code, sur tout ce qui part vers l'API. */
-function anonymize(text, dictionary) {
+function anonymize(text, dictionary, context = null) {
   if (dictionary.empty) return text;
-  if (typeof text !== 'string' || text.length < MEMO_MIN_LENGTH) return applyMapping(text, dictionary.mapping);
+  const overrides = context?.overrides || null;
+  if (typeof text !== 'string' || text.length < MEMO_MIN_LENGTH) return applyMapping(text, dictionary.mapping, overrides);
   const memo = memoFor(dictionary);
-  const cached = memo.entries.get(text);
+  const key = overrides ? `${context.key}\u0002${text}` : text;
+  const cached = memo.entries.get(key);
   if (cached !== undefined) {
-    memo.entries.delete(text);
-    memo.entries.set(text, cached);
+    memo.entries.delete(key);
+    memo.entries.set(key, cached);
     return cached;
   }
-  const result = applyMapping(text, dictionary.mapping);
-  memo.entries.set(text, result);
+  const result = applyMapping(text, dictionary.mapping, overrides);
+  memo.entries.set(key, result);
   memo.size += text.length + (result === text ? 0 : result.length);
   for (const [key, value] of memo.entries) {
     if (memo.size <= MEMO_BUDGET) break;
@@ -123,9 +184,30 @@ function anonymize(text, dictionary) {
   return result;
 }
 
-/** Code → nom réel, sur tout ce qui revient de l'API vers la machine. */
-function deanonymize(text, dictionary) {
-  return dictionary.empty ? text : revertMapping(text, dictionary.reverse);
+function reverseFor(dictionary, projectId) {
+  const retired = projectId ? dictionary.retiredByProject?.[projectId] : null;
+  if (!retired) return dictionary.reverse;
+  let byProject = projectReverses.get(dictionary);
+  if (!byProject) {
+    byProject = new Map();
+    projectReverses.set(dictionary, byProject);
+  }
+  let reverse = byProject.get(projectId);
+  if (!reverse) {
+    const overrides = Object.entries(retired).filter(([, survivor]) => dictionary.reverse[survivor]).map(([code, survivor]) => [code, dictionary.reverse[survivor]]);
+    reverse = overrides.length ? Object.freeze({ ...dictionary.reverse, ...Object.fromEntries(overrides) }) : dictionary.reverse;
+    byProject.set(projectId, reverse);
+  }
+  return reverse;
+}
+
+/**
+ * Code → nom réel, sur tout ce qui revient de l'API vers la machine. Dans une
+ * session d'un dossier, un code que ce dossier a dû céder à un autre lors de la
+ * renumérotation revient vers sa propre personne.
+ */
+function deanonymize(text, dictionary, context = null) {
+  return dictionary.empty ? text : revertMapping(text, reverseFor(dictionary, context?.projectId));
 }
 
 module.exports = {
@@ -133,4 +215,5 @@ module.exports = {
   anonymize,
   buildDictionary,
   deanonymize,
+  resolveContext,
 };

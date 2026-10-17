@@ -74,14 +74,38 @@ export function nodePosition(node: Pick<KnowledgeNode, 'id' | 'data'>): string {
   return position ? PROCEDURE_POSITIONS.find(({ value }) => codeToken(value) === codeToken(position))?.value || position : '';
 }
 
-function numberedCode(prefix: string, used: Set<string>, current: string): string {
-  if (current.startsWith(`${prefix}_`) && /^\d+$/.test(current.slice(prefix.length + 1))) return current;
-  let number = 1;
-  while (used.has(`${prefix}_${String(number).padStart(2, '0')}`)) number += 1;
-  return `${prefix}_${String(number).padStart(2, '0')}`;
+export type CodeRegistry = {
+  has(code: string): boolean;
+  add(code: string): void;
+  next(prefix: string): string;
+};
+
+export function codeRegistry(codes: Iterable<string>): CodeRegistry {
+  const used = new Set<string>();
+  const highest = new Map<string, number>();
+  const add = (code: string): void => {
+    used.add(code);
+    const numbered = /^(.*)_(\d+)$/.exec(code);
+    if (numbered) highest.set(numbered[1], Math.max(highest.get(numbered[1]) || 0, Number(numbered[2])));
+  };
+  for (const code of codes) if (code) add(code);
+  return {
+    has: (code) => used.has(code),
+    add,
+    next(prefix) {
+      const code = `${prefix}_${String((highest.get(prefix) || 0) + 1).padStart(2, '0')}`;
+      add(code);
+      return code;
+    },
+  };
 }
 
-export function partyCode(identity: PartyIdentity, current: string, used: Set<string>, originalCode = ''): string {
+function numberedCode(prefix: string, used: CodeRegistry, current: string): string {
+  if (current.startsWith(`${prefix}_`) && /^\d+$/.test(current.slice(prefix.length + 1))) return current;
+  return used.next(prefix);
+}
+
+export function partyCode(identity: PartyIdentity, current: string, used: CodeRegistry, originalCode = ''): string {
   if (identity.side !== 'client' && identity.side !== 'adversaire') {
     if (originalCode && (originalCode === current || !used.has(originalCode))) return originalCode;
     return numberedCode(identity.kind === 'company' ? companyFormToken(identity.legalForm) : 'PERSONNE_PHYSIQUE', used, current);
@@ -101,7 +125,7 @@ export function partyCodeChange(
   customCode?: string,
 ): PartyCodeChange {
   const current = nodeCode(node);
-  const used = new Set(nodes.filter((entry) => entry.id !== node.id).map((entry) => nodeCode(entry)).filter(Boolean));
+  const used = codeRegistry(nodes.filter((entry) => entry.id !== node.id).map((entry) => nodeCode(entry)));
   for (const code of reserved) if (clean(code)) used.add(clean(code));
   for (const mapping of mappings) {
     if (mapping.nodeId !== node.id && clean(mapping.masked)) used.add(clean(mapping.masked));
