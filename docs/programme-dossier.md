@@ -63,6 +63,26 @@ Les périodes sont représentées par `{"from":"2024-01-01","to":"2025-01-01"}` 
 
 Expressions : scalaires JSON, `{"ref":"id"}`, application datée, ou `{"op":"...","args":[...]}`. Opérateurs : `and`, `or`, `not`, `equal`, `greater`, `atLeast`, `less`, `atMost`, `add`, `subtract`, `multiply`, `divide`, `if`. Pas de code arbitraire. Un fait inconnu, rapporté ou contesté reste indéterminé. Une source absente, périmée, non vérifiée ou recalée bloque la proposition. Les hypothèses d’un scénario peuvent fixer les faits, en restant signalées.
 
+## Preuve des faits, charge de la preuve et pièces attendues
+
+Une pièce est une preuve ; un fait est **prouvé** ou **non établi**. Un fait est prouvé par une citation vérifiée qui le soutient (`supports`) ou par la décision de l’avocat. Un fait rapporté, sans source, sans valeur ou écarté par l’avocat est non établi ; contesté, il reste « contesté ». `burden` nomme la partie qui supporte la charge de la preuve : un fait booléen (ou une exigence de preuve) non établi vaut alors `false`, et le résultat garde la liste `unestablished` des faits dont il dépend.
+
+`evidence:{"nature":["relevé bancaire"],"mentions":["entity:CODE"],"from":"2024-06-15","to":"2025-01-01"}` décrit la pièce attendue. À chaque lecture (volet, tour suivant), le serveur cherche par une requête fixe les pièces du dossier de cette nature, dans cet intervalle de `doc_date`, mentionnant toutes ces entités (`piecemaker_nodes`, `piecemaker_links`) : aucune → « pièce à produire » ; au moins une → « preuve à examiner » (pièces candidates, sans conclure) ; la citation vérifiée de la pièce, ou « Retenir » de l’avocat, rend le fait prouvé. Une pièce ajoutée puis scannée réévalue donc le dossier et les théories touchées sont signalées « à réexaminer ». La nature d’une pièce est devinée par le scan sur son en-tête : une exigence par mentions seules évite de manquer une pièce mal classée.
+
+## Décisions de l’avocat
+
+Dans le détail d’un fait, d’une règle, d’une conclusion ou d’un test : **Retenir**, **Écarter**, **Annuler la décision**, avec un motif (`POST /api/piecemaker/reasoning/review`). Un fait retenu est prouvé ; un élément écarté bloque ce qui en dépend ; un test retenu est compté « validé par l’avocat ». Un élément décidé est verrouillé : l’agent ne peut ni le redéfinir ni le retirer, sa proposition est ignorée et signalée.
+
+## Durées, dates, exceptions et bibliothèque
+
+Les comparaisons acceptent deux dates ISO. `addDuration:[date,n,"days|months|years"]` ajoute des jours calendaires, ou des mois/années au même quantième (dernier jour du mois à défaut, art. 641 CPC) ; `daysBetween:[début,fin]`. Une règle peut porter `exceptions:[{id,label,when,then}]` : une exception active remplace l’expression, deux exceptions actives sont un conflit, une exception indéterminée laisse le résultat indéterminé. `conditions:{"param":{"label","burden"}}` nomme les conditions affichées dans la matrice.
+
+La bibliothèque (`library.ts`) contient des règles écrites une fois, testées et non redéfinissables par l’agent, injectées dès qu’une théorie les applique : `LIB_prescription_2224` (paramètres `connaissance`, `action` ; vrai si l’action est postérieure au dernier jour du terme de cinq ans). Sont hors module : délais spéciaux, report du point de départ, suspension, interruption antérieure et dispositions transitoires. Le module reste à valider par l’avocat.
+
+## Matrice des conditions et contrôle de rédaction
+
+Chaque théorie affiche, sous le graphe conservé, une matrice : condition de chaque règle appliquée, faits, preuves citées et candidates, charge de la preuve, statut (prouvé, non établi, preuve à examiner, contesté, indéterminé, bloqué) et objections (`contradicts`). L’onglet **Rédaction** contrôle un projet d’acte du dossier (`.docx`, `.md`, `.txt`) : montants et dates absents du raisonnement, et réserves (faits non établis, contestés ou à examiner) à ne pas présenter comme acquis. Ce contrôle est mécanique ; il ne vérifie pas le sens des phrases.
+
 ## Liens, conflits et chronologie
 
 `links` contient des objets avec `id`, `from`, `to`, `relation`, `rationale`. Relations : `supports`, `contradicts`, `reports`, `depends_on`, `qualifies`, `precedes`. Les liens de citation utilisent `target` à la place des extrémités et leur identifiant est attribué par le serveur.
@@ -119,4 +139,6 @@ Le volet démarre sur **Théories** : chaque conclusion est le point d’entrée
 - `shared/piecemaker-reasoning.ts` : contrat partagé.
 - `server/modules/piecemaker-reasoning/` : compilation, validations, interpréteur, conflits, entrées SQL et persistance.
 - `server/piecemaker/harness/citation-{instructions,turn,store}.ts` : instructions, capture des sources et branchement en fin de tour.
+- `server/modules/piecemaker-reasoning/{evidence,library,draft}.ts` : exigences de preuve, bibliothèque, contrôle de rédaction.
+- `server/modules/piecemaker-reasoning/tests/banc-essai.test.ts` : banc d’essai fictif à défauts injectés (promesse prise pour un paiement, pièce absente puis ajoutée, décision de l’avocat, durées, prescription, conflit d’exceptions, rédaction).
 - `plugins/piecemaker-raisonnement/` : volet droit.
