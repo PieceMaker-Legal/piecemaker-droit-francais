@@ -36,6 +36,7 @@ import { createFolderHistory } from './folder-history/history.js';
 import { createOpenPanelRequestsRouter, createOpenPanelsRouter } from './open-panels.js';
 import { startRemoteAccess } from './remote/index.js';
 import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
+import { createVibeInstallRouter } from './vibe-install.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -123,6 +124,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createShellEnvironmentRouter(shellEnvironment));
   router.use(createOpenPanelsRouter(piecemakerHome()));
   router.use(remoteRouter);
+  router.use(createVibeInstallRouter());
   return router;
 }
 export type { PieceMakerRuntimeStatus };

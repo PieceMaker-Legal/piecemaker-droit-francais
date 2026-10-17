@@ -47,6 +47,15 @@ function expandHome(host: VibeCliHost, value: string): string {
   return pathApi(host).resolve(value.replace(/^~(?=$|[\\/])/, host.homedir));
 }
 
+export function piecemakerVibeDirectory(host: VibeCliHost = currentVibeCliHost()): string {
+  const piecemakerHome = readEnv(host, 'PIECEMAKER_HOME');
+  return pathApi(host).join(piecemakerHome ? expandHome(host, piecemakerHome) : pathApi(host).join(host.homedir, '.piecemaker'), 'vibe');
+}
+
+export function piecemakerVibeBinDirectory(host: VibeCliHost = currentVibeCliHost()): string {
+  return pathApi(host).join(piecemakerVibeDirectory(host), host.platform === 'win32' ? 'Scripts' : 'bin');
+}
+
 export function vibeBinDirectoryCandidates(host: VibeCliHost = currentVibeCliHost()): string[] {
   const api = pathApi(host);
   const uvToolBin = readEnv(host, 'UV_TOOL_BIN_DIR');
@@ -57,6 +66,7 @@ export function vibeBinDirectoryCandidates(host: VibeCliHost = currentVibeCliHos
     xdgBin ? expandHome(host, xdgBin) : '',
     xdgData ? api.resolve(expandHome(host, xdgData), '..', 'bin') : '',
     api.join(host.homedir, '.local', 'bin'),
+    piecemakerVibeBinDirectory(host),
   ].filter((candidate, index, all) => candidate && all.indexOf(candidate) === index);
 }
 
