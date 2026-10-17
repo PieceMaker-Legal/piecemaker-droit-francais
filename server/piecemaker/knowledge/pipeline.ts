@@ -151,13 +151,10 @@ function pythonExecutable(explicit: string | undefined): string {
     ? path.join(home, 'venv', 'Scripts', 'python.exe')
     : path.join(home, 'venv', 'bin', 'python');
   if (fs.existsSync(candidate)) return candidate;
-  // Desktop installs have no venv: their portable Python is recorded in config.json.
   try {
     const { pythonPath } = JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8'));
     if (typeof pythonPath === 'string' && fs.existsSync(pythonPath)) return pythonPath;
-  } catch {
-    // No readable config: fall back to the PATH interpreter.
-  }
+  } catch {}
   return 'python3';
 }
 

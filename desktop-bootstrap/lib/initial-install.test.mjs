@@ -131,7 +131,6 @@ test('the Windows bootstrap shows the Légifrance guide after the first install 
   assert.match(script, /if \(\$args -notcontains '--no-launch'\)/);
 });
 
-// Runs before `npm ci` in the Windows release workflow, where electron-builder is not installed yet.
 test('the Windows bootstrap looks for the app where electron-builder installs it', { skip: !hasElectronBuilder && 'electron-builder is not installed' }, async () => {
   const { UUID } = await import('builder-util-runtime');
   const { sanitizeFileName } = await import('builder-util/out/filename.js');
