@@ -98,7 +98,10 @@ def main() -> None:
         if "--bootstrap-only" in sys.argv[1:]:
             return
         configure_environment()
-        os.execv(str(venv_python()), [str(venv_python()), str(ROOT / "mcp_stdio_server.py")])
+        command = [str(venv_python()), str(ROOT / "mcp_stdio_server.py")]
+        if os.name == "nt":
+            raise SystemExit(subprocess.run(command).returncode)
+        os.execv(command[0], command)
     except Exception as error:
         print(f"Impossible de démarrer Légifrance MCP : {error}", file=sys.stderr)
         raise SystemExit(1) from error
