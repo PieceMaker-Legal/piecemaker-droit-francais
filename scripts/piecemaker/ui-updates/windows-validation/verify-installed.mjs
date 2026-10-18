@@ -63,7 +63,8 @@ async function start() {
     call(method, params = {}) {
       return new Promise((resolve, reject) => {
         const id = ++sequence;
-        pending.set(id, { resolve, reject });
+        const timer = setTimeout(() => { pending.delete(id); reject(new Error(`Interface command timed out: ${method}`)); }, 20000);
+        pending.set(id, { resolve: (value) => { clearTimeout(timer); resolve(value); }, reject: (error) => { clearTimeout(timer); reject(error); } });
         socket.send(JSON.stringify({ id, method, params }));
       });
     },
@@ -143,6 +144,9 @@ try {
   await fs.writeFile(path.join(output, 'installation-verification.json'), JSON.stringify({ installed: true, initialInterface: true, remoteChannelEmbedded: config.feed, updateNotPublished: true, accountCreated: true, sessionRetained: true, authenticatedInterfaceRendered: true, onboardingCompletedThroughUI: true, localCertificateGenerated: true, localCertificateTrusted: true, certificateConsentPreapprovedOnDisposableRunner: true, anonymizerActive: status.enabled && restarted.enabled, nativeUninstallVerified: true, productionDataUntouched: true, runtime: config.runtime }, null, 2));
   console.log('FULL INSTALLATION PASS: embedded remote channel, fresh local CA, active proxy, account and restart; no UI update published.');
 } finally {
+  if (page && child?.exitCode === null) {
+    await evaluate(page, '({url:location.href,text:document.body.innerText,buttons:[...document.querySelectorAll("button")].map(b=>({text:b.innerText,disabled:b.disabled}))})').then((value) => fs.writeFile(path.join(output, 'interface-diagnostic.json'), JSON.stringify(value, null, 2))).catch(() => {});
+  }
   if (page && child?.exitCode === null) await stop(page).catch(() => {});
   await fs.writeFile(path.join(output, 'installation-verification.log'), log);
 }
