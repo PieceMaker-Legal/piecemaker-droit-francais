@@ -1,11 +1,11 @@
 import { REASONING_FORCES } from '../../../shared/piecemaker-reasoning.js';
-import type { ReasoningCondition, ReasoningFact, ReasoningQuestion, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningTestRun, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningCondition, ReasoningFact, ReasoningQuestion, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningTestRun, ReasoningValue, ReasoningVoie } from '../../../shared/piecemaker-reasoning.js';
 import { appreciateFact, deleteTest, loadReasoning, reviewItem, runTest, saveTest } from './api.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
 type Host = { readonly context: Context; onContextChange(callback: (context: Context) => void): () => void; openFileInEditor?(file: string): void };
-type Tab = 'graph' | 'schema' | 'tests' | 'code' | 'sources';
+type Tab = 'graph' | 'argument' | 'schema' | 'tests' | 'code' | 'sources';
 type GraphNode = { key: string; column: number; label: string; sub: string; status: string; kind: 'source' | 'condition' | 'result' | 'fact'; x: number; y: number };
 const NODE = { width: 164, height: 50, column: 188, row: 62 };
 
@@ -53,7 +53,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="graph">Graphe</button><button role="tab" data-tab="schema">Schéma</button><button role="tab" data-tab="tests">Tests</button><button role="tab" data-tab="code">Code</button><button role="tab" data-tab="sources">Sources</button></div><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-meta"></div><div class="pmr-warning" hidden></div><div class="pmr-body"></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="graph">Graphe</button><button role="tab" data-tab="argument">Argumentaire</button><button role="tab" data-tab="schema">Schéma</button><button role="tab" data-tab="tests">Tests</button><button role="tab" data-tab="code">Code</button><button role="tab" data-tab="sources">Sources</button></div><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-meta"></div><div class="pmr-warning" hidden></div><div class="pmr-body"></div>`;
   container.replaceChildren(style, root);
   let context = api.context;
   let snapshot: ReasoningSnapshot | null = null;
@@ -102,7 +102,7 @@ export function mount(container: HTMLElement, api: Host) {
     const pieces = fact.sources.map(source).filter((entry): entry is ReasoningSource => Boolean(entry));
     return `<div class="pmr-card fact${fact.sources.length ? '' : ' missing'}">
       <h4>${escape(fact.variable)} = ${escape(formatValue(fact.value))}</h4>
-      <div class="pmr-answer">${badge(fact.status)}${fact.force ? `<span class="pmr-badge">${escape(FORCE_LABELS[fact.force])}</span>` : ''}<span class="pmr-muted">appréciation : ${fact.author === 'avocat' ? 'avocat' : 'IA'}</span></div>
+      <div class="pmr-answer">${badge(fact.status)}${fact.force ? `<span class="pmr-badge">${escape(FORCE_LABELS[fact.force])}</span>` : ''}<span class="pmr-muted">appréciation : ${fact.author === 'avocat' ? 'avocat' : 'IA'}${fact.burden ? ` · preuve à la charge ${fact.burden === 'nous' ? 'du client' : 'de l’adversaire'}` : ''}</span></div>
       ${fact.appreciation ? `<p class="pmr-muted">${escape(fact.appreciation)}</p>` : ''}
       ${chips(fact.sources)}${pieces.map((entry) => `<p class="pmr-excerpt">« ${escape(entry.excerpt)} »</p>`).join('')}
       ${issues(fact.issues)}${editing === fact.id ? factForm(fact) : review(fact.id, fact.review, true)}</div>`;
@@ -123,7 +123,7 @@ export function mount(container: HTMLElement, api: Host) {
     const vigueur = question.vigueur.map((entry) => `${escape(source(entry.source)?.title ?? entry.source)} : ${entry.inForce === true ? `en vigueur au ${formatValue(entry.date)}` : entry.inForce === false ? `non en vigueur au ${formatValue(entry.date)}` : 'vigueur indéterminée (date ou période inconnue)'}`).join(' · ');
     return `<article class="pmr-question">
       <h3>${escape(question.question || question.scope)}</h3>
-      <div class="pmr-answer">${badge(question.status, `Réponse : ${question.status}`)}${question.valid ? '' : badge('indéterminée', 'Raisonnement incomplet')}<span class="pmr-muted">date de référence : ${escape(formatValue(question.referenceDate))}</span></div>
+      <div class="pmr-answer">${badge(question.status, `Réponse : ${question.status}`)}${question.objectiveStatus ? badge(question.objectiveStatus === 'atteint' ? 'remplie' : question.objectiveStatus === 'à établir' ? 'indéterminée' : 'bloquée', `Objectif ${question.objective ? 'rempli' : 'non rempli'} : ${question.objectiveStatus}`) : ''}${question.valid ? '' : badge('indéterminée', 'Raisonnement incomplet')}<span class="pmr-muted">date de référence : ${escape(formatValue(question.referenceDate))}</span></div>
       ${issues(question.issues)}${vigueur ? `<p class="pmr-vigueur">Vigueur · ${vigueur}</p>` : ''}
       <div class="pmr-columns"><div class="pmr-colhead law">DROIT</div><div class="pmr-colhead gap"></div><div class="pmr-colhead fact">FAITS / PIÈCES</div>
       ${rows.join('')}
@@ -218,9 +218,30 @@ export function mount(container: HTMLElement, api: Host) {
     }).join('');
     const boxes = [...nodes.values()].map((node) => `<g class="pmr-node pmr-n-${node.kind}${members && !members.has(node.key) ? ' is-dim' : ''}${node.key === selected ? ' is-selected' : ''}" data-node="${escape(node.key)}" tabindex="0" role="button" aria-label="${escape(`${node.label} — ${node.status}`)}"><rect x="${node.x}" y="${node.y}" width="${NODE.width}" height="${NODE.height}" rx="8" class="pmr-s-${escape(slug(node.status))}"/><text x="${node.x + 9}" y="${node.y + 20}">${escape(shorten(node.label, 27))}</text><text class="pmr-sub" x="${node.x + 9}" y="${node.y + 38}">${escape(shorten(`${node.sub} · ${node.status}`, 32))}</text></g>`).join('');
     const heads = ['SOURCES DU DROIT', 'RÉPONSE ET CONDITIONS', 'FAITS / PIÈCES'].map((label, index) => `<text class="pmr-head-text ${index < 2 ? 'law' : 'fact'}" x="${12 + index * NODE.column + (index ? 40 : 0)}" y="14">${label}</text>`).join('');
-    return `${questionPicker()}<article class="pmr-question"><h3>${escape(question.question || question.scope)}</h3><div class="pmr-answer">${badge(question.status, `Réponse : ${question.status}`)}${question.valid ? '' : badge('indéterminée', 'Raisonnement incomplet')}</div>${issues(question.issues)}
+    return `${questionPicker()}<article class="pmr-question"><h3>${escape(question.question || question.scope)}</h3><div class="pmr-answer">${badge(question.status, `Réponse : ${question.status}`)}${question.objectiveStatus ? badge(question.objectiveStatus === 'atteint' ? 'remplie' : question.objectiveStatus === 'à établir' ? 'indéterminée' : 'bloquée', `Objectif ${question.objective ? 'rempli' : 'non rempli'} : ${question.objectiveStatus}`) : ''}${question.valid ? '' : badge('indéterminée', 'Raisonnement incomplet')}</div>${issues(question.issues)}
       <div class="pmr-graph-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-fit>Ajuster</button></div><div class="pmr-graph" data-graph-width="${width}"><svg viewBox="0 0 ${width} ${height + 20}" width="${Math.round(width * scale)}" height="${Math.round((height + 20) * scale)}" role="group" aria-label="Graphe du raisonnement"><defs><marker id="pmr-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>${heads}<g transform="translate(0,20)">${paths}${boxes}</g></svg></div>
       <div class="pmr-linked">${selected ? `<div class="pmr-answer"><strong>Branche sélectionnée</strong><button data-unselect>Tout afficher</button></div>${linkedCards(question, selected, members!)}` : '<p class="pmr-muted">Cliquez sur une case du graphe : sa branche s’éclaire et les cases liées s’affichent ici.</p>'}</div></article>`;
+  };
+
+  const VOIE_STATUS = { ouverte: 'remplie', 'à établir': 'indéterminée', fermée: 'non remplie', bloquée: 'bloquée' };
+  const voieView = (voie: ReasoningVoie, title: string, ours: boolean) => {
+    const conditions = voie.conditions.map((id) => snapshot!.conditions.find((entry) => entry.id === id)).filter((entry): entry is ReasoningCondition => Boolean(entry));
+    const facts = voie.toProve.map((id) => snapshot!.facts.find((entry) => entry.id === id)?.variable ?? id);
+    return `<div class="pmr-card ${ours ? 'law' : 'fact'}"><h4>${escape(title)} · ${escape(voie.label)}</h4><div class="pmr-answer">${badge(VOIE_STATUS[voie.status], voie.status)}${voie.strength ? `<span class="pmr-badge pmr-k-${voie.strength}">${STRENGTH_LABELS[voie.strength]}</span>` : ''}</div>
+      ${conditions.length ? `<div class="pmr-chips">${conditions.map((entry) => `<button class="pmr-chip" data-goto="${escape(entry.id)}">${escape(entry.label)} · ${escape(entry.status)}</button>`).join('')}</div>` : ''}
+      ${facts.length ? `<p class="pmr-muted"><strong>${ours ? 'À prouver par le client' : 'À prouver par l’adversaire'} :</strong> ${facts.map(escape).join(', ')}</p>` : ''}
+      ${voie.weaknesses.length ? `<p class="pmr-muted"><strong>Points faibles :</strong></p>${issues(voie.weaknesses)}` : ''}</div>`;
+  };
+  const argumentView = () => {
+    const question = currentQuestion();
+    if (!question) return '<p class="pmr-muted">Aucune question.</p>';
+    const ours = question.voies.filter((voie) => voie.favorable);
+    const theirs = question.voies.filter((voie) => !voie.favorable);
+    const rank = (index: number) => (index === 0 ? 'Principal' : ours.length > 2 ? `Subsidiaire ${index}` : 'Subsidiaire');
+    return `${questionPicker()}<article class="pmr-question"><h3>${escape(question.question || question.scope)}</h3><div class="pmr-answer">${badge(question.status, `Réponse : ${question.status}`)}${question.objectiveStatus ? badge(question.objectiveStatus === 'atteint' ? 'remplie' : question.objectiveStatus === 'à établir' ? 'indéterminée' : 'bloquée', `Objectif ${question.objective ? 'rempli' : 'non rempli'} : ${question.objectiveStatus}`) : ''}</div>
+      ${question.objective === null ? '<p class="pmr-muted">Aucun objectif déclaré : les voies sont listées sans orientation. Le modèle déclare #[objectif = rempli] ou #[objectif = non rempli].</p>' : ''}
+      <h4>Moyens ${question.objective === null ? '' : 'du client'}</h4>${ours.map((voie, index) => voieView(voie, rank(index), true)).join('') || '<p class="pmr-muted">Aucune voie ne mène à l’objectif.</p>'}
+      ${theirs.length ? `<h4>Moyens adverses</h4>${theirs.map((voie, index) => voieView(voie, `Moyen ${index + 1}`, false)).join('')}` : ''}</article>`;
   };
 
   const testsView = () => {
@@ -252,6 +273,7 @@ export function mount(container: HTMLElement, api: Host) {
     warning.textContent = snapshot.diagnostics.join(' · ');
     if (!snapshot.code) { body.innerHTML = '<div class="pmr-empty"><strong>Aucun raisonnement</strong><p>Posez une question de droit dans le chat : le raisonnement (conditions, fondements, pièces) apparaît ici à la fin du tour, et chaque élément attend votre validation.</p></div>'; return; }
     if (tab === 'graph') body.innerHTML = graphView();
+    else if (tab === 'argument') body.innerHTML = argumentView();
     else if (tab === 'tests') body.innerHTML = testsView();
     else if (tab === 'code') body.innerHTML = `<pre class="pmr-code">${escape(snapshot.code)}</pre>`;
     else if (tab === 'sources') body.innerHTML = snapshot.sources.map((entry) => `<div class="pmr-source"><div class="pmr-answer"><span class="pmr-badge">${escape(kindLabel(entry))}</span><button class="pmr-chip" data-open="${escape(entry.id)}">${escape(entry.title)}</button>${badge(entry.verified ? 'établi' : 'non établi', entry.verified ? (entry.repaired ? 'Extrait recalé' : 'Extrait vérifié') : 'Extrait introuvable')}<code>${escape(entry.id)}</code></div><p class="pmr-excerpt">« ${escape(entry.excerpt)} »</p>${entry.validity ? `<p class="pmr-muted">Version du ${formatValue(entry.validity.from)} au ${entry.validity.to ? formatValue(entry.validity.to) : 'terme non fixé'} (fin exclusive)</p>` : entry.kind === 'article' ? '<p class="pmr-muted">Période de vigueur inconnue</p>' : ''}${entry.history ? `<p class="pmr-muted">Historique judiciaire : ${escape(entry.history.status)}</p>${entry.history.lines.map((line) => `<p class="pmr-muted">· ${escape(line)}</p>`).join('')}` : ''}</div>`).join('') || '<p class="pmr-muted">Aucune source.</p>';
@@ -288,6 +310,7 @@ export function mount(container: HTMLElement, api: Host) {
     }
     if (button.dataset.edit) { editing = button.dataset.edit; paint(); }
     if (button.hasAttribute('data-unselect')) { selected = ''; paint(); }
+    if (button.dataset.goto) { selected = button.dataset.goto; tab = 'graph'; paint(); }
     if (button.dataset.zoom) {
       const current = Number(root.querySelector<SVGSVGElement>('.pmr-graph svg')?.getAttribute('width')) / Number(root.querySelector<HTMLElement>('[data-graph-width]')?.dataset.graphWidth) || 1;
       zoom = Math.max(0.4, Math.min(2, current * (Number(button.dataset.zoom) > 0 ? 1.2 : 1 / 1.2)));
