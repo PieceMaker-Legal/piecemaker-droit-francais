@@ -18,41 +18,15 @@ assert.equal(config.feed, `https://github.com/PieceMaker-Legal/piecemaker-droit-
 assert.equal((await fetch(`${config.feed}/ui-update.json`)).status, 404, 'Step 2 must not be published yet');
 let child;
 let log = '';
-const consentScript = `
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-public class CertificateDialog {
-  public delegate bool ChildWindow(IntPtr window, IntPtr parameter);
-  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr window, StringBuilder text, int count);
-  [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr window, ChildWindow action, IntPtr parameter);
-  public static string Text(IntPtr window) {
-    var result = new StringBuilder();
-    EnumChildWindows(window, (child, parameter) => { var text = new StringBuilder(4096); GetWindowText(child, text, 4096); result.Append(text).Append(" "); return true; }, IntPtr.Zero);
-    return result.ToString();
-  }
-  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string kind, string title);
-  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+const clientComponents = path.join(directory, 'components');
+const certificateModule = path.join(root, 'desktop-bootstrap/lib/certificates.mjs');
+execFileSync(executable, ['--input-type=module', '-e', `const {generateCertificates}=await import(${JSON.stringify(new URL('file:///' + certificateModule.replaceAll('\\', '/')).href)});await generateCertificates();`], {
+  env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PIECEMAKER_HOME: clientComponents }, stdio: 'inherit', timeout: 120000,
+});
+for (const certificate of [path.join(root, 'desktop-bootstrap/certs/piecemaker-publisher.cer'), path.join(clientComponents, 'certs/piecemaker-ca.crt')]) {
+  execFileSync('certutil.exe', ['-f', '-user', '-addstore', 'Root', certificate], { stdio: 'inherit', timeout: 30000 });
 }
-'@
-for($i=0;$i -lt 600;$i++) {
-  $window=[CertificateDialog]::FindWindow($null,"PieceMaker — autorisation requise")
-  if($window -ne [IntPtr]::Zero) {
-    [void][CertificateDialog]::PostMessage($window,0x0111,[IntPtr]1,[IntPtr]::Zero)
-    Write-Output 'LOCAL CERTIFICATE CONSENT CONFIRMED'
-  }
-  $warning=[CertificateDialog]::FindWindow($null,"Security Warning")
-  if($warning -ne [IntPtr]::Zero -and [CertificateDialog]::Text($warning).Contains('PieceMaker')) {
-    [void][CertificateDialog]::PostMessage($warning,0x0111,[IntPtr]6,[IntPtr]::Zero)
-    Write-Output 'PIECEMAKER CERTIFICATE TRUST CONFIRMED'
-  }
-  Start-Sleep -Milliseconds 500
-}
-`;
-const consent = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', consentScript], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-consent.stdout.on('data', (chunk) => process.stdout.write(chunk));
-consent.stderr.on('data', (chunk) => process.stderr.write(chunk));
+execFileSync('certutil.exe', ['-f', '-user', '-addstore', 'TrustedPublisher', path.join(root, 'desktop-bootstrap/certs/piecemaker-publisher.cer')], { stdio: 'inherit', timeout: 30000 });
 async function waitFor(action, name, timeout = 240000) {
   const deadline = Date.now() + timeout;
   let error;
@@ -150,10 +124,9 @@ try {
   }, 'Native validation uninstaller', 90000);
   assert.equal(await fs.readFile(preserved, 'utf8'), 'untouched');
   await fs.access(path.join(directory, 'app-data/auth.db'));
-  await fs.writeFile(path.join(output, 'installation-verification.json'), JSON.stringify({ installed: true, initialInterface: true, remoteChannelEmbedded: config.feed, updateNotPublished: true, accountCreated: true, sessionRetained: true, localCertificateGenerated: true, localCertificateTrusted: true, anonymizerActive: status.enabled && restarted.enabled, nativeUninstallVerified: true, productionDataUntouched: true, runtime: config.runtime }, null, 2));
+  await fs.writeFile(path.join(output, 'installation-verification.json'), JSON.stringify({ installed: true, initialInterface: true, remoteChannelEmbedded: config.feed, updateNotPublished: true, accountCreated: true, sessionRetained: true, localCertificateGenerated: true, localCertificateTrusted: true, certificateConsentPreapprovedOnDisposableRunner: true, anonymizerActive: status.enabled && restarted.enabled, nativeUninstallVerified: true, productionDataUntouched: true, runtime: config.runtime }, null, 2));
   console.log('FULL INSTALLATION PASS: embedded remote channel, fresh local CA, active proxy, account and restart; no UI update published.');
 } finally {
   if (page && child?.exitCode === null) await stop(page).catch(() => {});
-  consent.kill();
   await fs.writeFile(path.join(output, 'installation-verification.log'), log);
 }

@@ -290,3 +290,8 @@ bornées de renommage atomique, sans suppression du fichier de destination.
 Les tests simulent un verrouillage temporaire pendant un retour arrière ainsi
 qu'une erreur permanente, qui conserve le dernier état complet. Cet installateur
 embarque ce correctif, contrairement au premier banc déjà distribué.
+
+Sur le runner CI sans session utilisateur, les certificats sont générés avec le
+code embarqué puis préautorisés avec certutil avant le lancement graphique.
+Cette préautorisation reste dans le script de vérification, hors de l'application.
+Les demandes de consentement Windows restent à vérifier sur le poste utilisateur.
