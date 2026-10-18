@@ -2,7 +2,7 @@ export type ReasoningValue = boolean | null;
 
 export type ReasoningStatus = 'acquis' | 'exclu' | 'à établir' | 'contesté';
 
-export type ReasoningIssue = { id: string; kind: 'erreur' | 'manque'; path: string; line: number | null; text: string };
+export type ReasoningIssue = { id: string; kind: 'erreur' | 'manque'; path: string; line: number | null; text: string; avocat?: string; cible?: string };
 
 export type ReasoningDismissal = { id: string; path: string; text: string; at: string };
 

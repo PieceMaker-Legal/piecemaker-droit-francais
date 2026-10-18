@@ -1,5 +1,5 @@
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
-import { dismissIssue, loadReasoning, ratePiece, runTest } from './api.js';
+import { dismissIssue, loadReasoning, loadSource, ratePiece, runTest } from './api.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
@@ -33,6 +33,21 @@ const pill = (status: string, label = status) => `<span class="pmr-pill pmr-${TO
 const date = (value: unknown) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : 'toujours en vigueur');
 const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
 const STEP: Record<ReasoningLogEntry['step'], string> = { source: 'Source', pièce: 'Pièce', fait: 'Fait', condition: 'Terme', essai: 'Essai', registre: 'Registre Public', réponse: 'Réponse' };
+const highlight = (text: string, quotes: string[]) => {
+  const ranges = quotes.flatMap((quote) => {
+    const pattern = quote.split(/\s+/).filter(Boolean).map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+    const match = pattern ? new RegExp(pattern).exec(text) : null;
+    return match ? [[match.index, match.index + match[0].length]] : [];
+  }).sort((a, b) => a[0] - b[0]);
+  let offset = 0;
+  let html = '';
+  for (const [start, end] of ranges) {
+    if (start < offset) continue;
+    html += `${escape(text.slice(offset, start))}<mark>${escape(text.slice(start, end))}</mark>`;
+    offset = end;
+  }
+  return html + escape(text.slice(offset));
+};
 const cleanups = new WeakMap<HTMLElement, () => void>();
 
 export function mount(container: HTMLElement, api: Host) {
@@ -66,6 +81,7 @@ export function mount(container: HTMLElement, api: Host) {
   let fresh: { key: string; added: boolean } | null = null;
   let pacing = 0;
   let finish: (() => void) | null = null;
+  const texts = new Map<string, { title: string; text: string } | 'loading' | 'error'>();
   let stopped = false;
   let timer = 0;
   let sequence = 0;
@@ -205,12 +221,37 @@ export function mount(container: HTMLElement, api: Host) {
     paintGraph();
   };
 
-  const issueList = (list: ReasoningIssue[], restore = false) => (list.length ? list.map((issue) => `<div class="pmr-issue">${pill(issue.kind === 'erreur' ? 'exclu' : 'à établir', issue.kind)}<span>${escape(issue.text)}<br><code>${escape(issue.path || 'fichier')}${issue.line ? ` · ligne ${issue.line}` : ''}</code></span>${snapshot?.demo ? '' : `<button data-dismiss="${escape(issue.id)}"${restore ? ' data-restore' : ''}>${restore ? 'Rétablir' : 'Écarter'}</button>`}</div>`).join('') : '<p class="pmr-muted">Aucune.</p>');
+  const issueList = (list: ReasoningIssue[], restore = false) => {
+    const dismiss = (issue: ReasoningIssue) => (snapshot?.demo ? '' : `<button data-dismiss="${escape(issue.id)}"${restore ? ' data-restore' : ''}>${restore ? 'Rétablir' : 'Écarter'}</button>`);
+    const technical = (issue: ReasoningIssue) => `<code>${escape(issue.text)} · ${escape(issue.path || 'fichier')}${issue.line ? ` · ligne ${issue.line}` : ''}</code>`;
+    const open = (target: string) => `<button data-open="${escape(target)}">${target.startsWith('#piece:') ? 'Ouvrir la pièce' : target.startsWith('#source:') ? 'Lire le texte' : 'Voir dans le graphe'}</button>`;
+    const readable = list.filter((issue) => issue.avocat).map((issue) => `<div class="pmr-issue">${pill(issue.kind === 'erreur' ? 'exclu' : 'à établir', issue.kind === 'erreur' ? 'À corriger' : 'À compléter')}<div class="pmr-issue-body"><p>${escape(issue.avocat)}</p><details><summary>Détail technique</summary>${technical(issue)}</details></div><span class="pmr-decision">${issue.cible ? open(issue.cible) : ''}${dismiss(issue)}</span></div>`);
+    const drafting = list.filter((issue) => !issue.avocat);
+    const agent = drafting.length ? `<div class="pmr-issue">${pill('exclu', 'Rédaction')}<div class="pmr-issue-body"><p>${plural(drafting.length, 'défaut')} d’écriture du raisonnement. Rien à décider : demandez à l’agent de relancer la vérification, il les corrigera.</p><details><summary>Détail technique</summary>${drafting.map((issue) => `<p>${technical(issue)} ${dismiss(issue)}</p>`).join('')}</details></div></div>` : '';
+    return readable.length || agent ? readable.join('') + agent : '<p class="pmr-muted">Aucune.</p>';
+  };
   const sourceBlock = (source: Json) => `<div class="pmr-quote"><p><strong>${escape(source.titre ?? source.source)}</strong>${source.source && source.titre ? ` <span class="pmr-muted">${escape(source.source)}</span>` : ''}${source.vigueur ? ` · ${pill(source.en_vigueur === false ? 'exclu' : source.en_vigueur ? 'acquis' : 'à établir', `en vigueur du ${date(source.vigueur.debut)} ${source.vigueur.fin ? `au ${date(source.vigueur.fin)}` : '(toujours en vigueur)'}`)}` : ''}</p><blockquote>${escape(source.citation)}</blockquote>${source.corrigee ? `<p class="pmr-muted">Citation rétablie d’après le texte (écrite : « ${escape(source.citation_d_origine)} »).</p>` : ''}</div>`;
   const pieceBlock = (piece: Json, against = false) => {
     const rated = piece.fiable === true ? 'fiable' : piece.fiable === false ? 'non fiable' : 'à évaluer';
     const actions = snapshot?.demo ? '' : `<span class="pmr-decision"><button data-rate="${escape(piece.piece)}" data-value="true"${piece.fiable === true ? ' disabled' : ''}>Fiable</button><button data-rate="${escape(piece.piece)}" data-value="false"${piece.fiable === false ? ' disabled' : ''}>Non fiable</button>${piece.fiable === null || piece.fiable === undefined ? '' : `<button data-rate="${escape(piece.piece)}" data-value="null">Annuler</button>`}</span>`;
     return `<div class="pmr-quote"><p><strong>${against ? 'Contredit par' : 'Prouvé par'}</strong> ${escape(piece.titre ?? piece.piece)}${piece.nature ? ` · ${escape(piece.nature)}` : ''} · ${pill(piece.fiable === true ? 'acquis' : piece.fiable === false ? 'exclu' : 'à établir', rated)}</p><blockquote>${escape(piece.citation)}</blockquote>${piece.personnes?.length ? `<p class="pmr-muted">Personnes : ${escape(piece.personnes.join(', '))}</p>` : ''}${actions}</div>`;
+  };
+  const textBlock = (id: string, quotes: string[]) => {
+    const project = context.project?.path;
+    if (snapshot?.demo || !project) return '';
+    const cached = texts.get(id);
+    if (!cached) {
+      texts.set(id, 'loading');
+      loadSource(project, id).then((value) => { texts.set(id, value); }, () => { texts.set(id, 'error'); }).finally(() => {
+        if (selected !== `#source:${id}` && selected !== `#piece:${id}`) return;
+        paintDetail();
+        const box = detail.querySelector<HTMLElement>('.pmr-text');
+        const mark = box?.querySelector<HTMLElement>('mark');
+        if (box && mark) box.scrollTop = mark.offsetTop - box.clientHeight / 3;
+      });
+    }
+    if (cached === 'error') return '<p class="pmr-muted">Texte indisponible.</p>';
+    return `<h4>Texte</h4>${!cached || cached === 'loading' ? '<p class="pmr-muted">Chargement du texte…</p>' : `<div class="pmr-text">${highlight(cached.text, quotes)}</div>`}`;
   };
   const conditionBlock = (path: string, condition: Json) => {
     const members = Array.isArray(condition.l_une) ? `<p>Au choix, une suffit : ${condition.l_une.map((member: Json) => `<button class="pmr-link" data-select="${escape(member.condition)}">${escape(human(member.condition ?? ''))}</button> ${pill(member.statut ?? 'à établir')}`).join(', ')}</p>` : '';
@@ -220,7 +261,7 @@ export function mount(container: HTMLElement, api: Host) {
 
   const paintTest = () => {
     const entries = live ?? snapshot?.test?.log ?? [];
-    const view = (entry: ReasoningLogEntry) => `<li class="pmr-entry${fresh?.key === entry.key ? fresh.added ? ' is-new' : ' is-updated' : ''}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(STEP[entry.step])}</span><strong>${escape(entry.subject)}</strong></div><span class="pmr-entry-text">${escape(entry.text)}</span></li>`;
+    const view = (entry: ReasoningLogEntry) => `<li class="pmr-entry${fresh?.key === entry.key ? fresh.added ? ' is-new' : ' is-updated' : ''}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(STEP[entry.step])}</span>${(entry.step === 'source' || entry.step === 'pièce') && entry.status !== 'en cours' ? `<button class="pmr-link" data-select="#${entry.step === 'source' ? 'source' : 'piece'}:${escape(entry.key.split(':')[1])}"><strong>${escape(entry.subject)}</strong></button>` : `<strong>${escape(entry.subject)}</strong>`}</div><span class="pmr-entry-text">${escape(entry.text)}</span></li>`;
     const part = (title: string, lead: string, steps: ReasoningLogEntry['step'][]) => {
       const list = entries.filter((entry) => steps.includes(entry.step));
       return list.length ? `<section class="pmr-part"><h4>${title}</h4><p class="pmr-lead">${lead}</p><ol class="pmr-log" aria-live="polite">${list.map(view).join('')}</ol></section>` : '';
@@ -239,7 +280,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (tab === 'alertes') {
       const dismissed = (snapshot?.issues ?? []).filter((issue) => dismissedIds().has(issue.id));
       const bilan = annotated()?.bilan as Json | undefined;
-      detail.innerHTML = `<h4>Erreurs et manques</h4>${issueList(visibleIssues())}${bilan?.pieces_a_evaluer_par_l_avocat?.length ? `<h4>Pièces à évaluer</h4><p>${escape(bilan.pieces_a_evaluer_par_l_avocat.join(', '))}</p>` : ''}${bilan?.registre?.length ? `<h4>Registre et BODACC</h4><ul>${bilan.registre.map((line: string) => `<li>${escape(line)}</li>`).join('')}</ul>` : ''}<h4>Écartées par vous</h4>${issueList(dismissed, true)}`;
+      detail.innerHTML = `<h4>Erreurs et manques</h4>${issueList(visibleIssues())}${bilan?.pieces_a_evaluer_par_l_avocat?.length ? `<h4>Pièces dont la fiabilité est à évaluer</h4><p>${bilan.pieces_a_evaluer_par_l_avocat.map((piece: string) => `<button class="pmr-link" data-open="#piece:${escape(piece)}">${escape(basename(piece))}</button>`).join(', ')}</p>` : ''}${bilan?.registre?.length ? `<h4>Registre et BODACC</h4><ul>${bilan.registre.map((line: string) => `<li>${escape(line)}</li>`).join('')}</ul>` : ''}<h4>Écartées par vous</h4>${issueList(dismissed, true)}`;
       return;
     }
     if (!question) { detail.innerHTML = '<p class="pmr-muted">Aucune question.</p>'; return; }
@@ -251,13 +292,13 @@ export function mount(container: HTMLElement, api: Host) {
     if (selected.startsWith('#source:')) {
       const id = selected.slice('#source:'.length);
       const uses = based().filter((entry) => entry.source.source === id);
-      detail.innerHTML = `<h3>${escape(uses[0]?.source.titre ?? id)}</h3>${uses[0] ? sourceBlock(uses[0].source) : ''}${uses.map((entry) => `<p class="pmr-muted">Fonde : ${entry.target.startsWith('#ou:') ? 'l’alternative' : `<button class="pmr-link" data-select="${escape(entry.target)}">${escape(human(entry.target))}</button>`}${entry.source.citation !== uses[0].source.citation ? ` · « ${escape(entry.source.citation)} »` : ''}</p>`).join('')}`;
+      detail.innerHTML = `<h3>${escape(uses[0]?.source.titre ?? id)}</h3>${uses[0] ? sourceBlock(uses[0].source) : ''}${uses.map((entry) => `<p class="pmr-muted">Fonde : ${entry.target.startsWith('#ou:') ? 'l’alternative' : `<button class="pmr-link" data-select="${escape(entry.target)}">${escape(human(entry.target))}</button>`}${entry.source.citation !== uses[0].source.citation ? ` · « ${escape(entry.source.citation)} »` : ''}</p>`).join('')}${textBlock(id, uses.map((entry) => String(entry.source.citation ?? '')))}`;
       return;
     }
     if (selected.startsWith('#piece:')) {
       const file = selected.slice('#piece:'.length);
       const uses = cited().filter((entry) => entry.piece.piece === file);
-      detail.innerHTML = `<h3>${escape(uses[0]?.piece.titre ?? basename(file))}</h3><p class="pmr-muted">${escape(file)}</p>${uses.map((entry) => `<p class="pmr-muted">${entry.against ? 'Contredit' : 'Prouve'} : <button class="pmr-link" data-select="${escape(entry.target)}">${escape(human(entry.target))}</button></p>${pieceBlock(entry.piece, entry.against)}`).join('')}`;
+      detail.innerHTML = `<h3>${escape(uses[0]?.piece.titre ?? basename(file))}</h3><p class="pmr-muted">${escape(file)}</p>${uses.map((entry) => `<p class="pmr-muted">${entry.against ? 'Contredit' : 'Prouve'} : <button class="pmr-link" data-select="${escape(entry.target)}">${escape(human(entry.target))}</button></p>${pieceBlock(entry.piece, entry.against)}`).join('')}${textBlock(file, uses.map((entry) => String(entry.piece.citation ?? '')))}`;
       return;
     }
     const term = terms()[selected];
@@ -332,10 +373,11 @@ export function mount(container: HTMLElement, api: Host) {
       busy = true;
       paint();
       const done = (end: () => void) => { finish = () => { finish = null; fresh = null; live = null; end(); busy = false; paint(); }; if (!pacing && !pending.length) finish(); };
-      runTest(project, (entry) => { pending.push(entry); if (!pacing) reveal(); })
+      runTest(project, (entry) => { if (entry.status === 'en cours') return; pending.push(entry); if (!pacing) reveal(); })
         .then((data) => done(() => apply(data)), (error) => done(() => showError(error)));
     }
     if (button.dataset.select) select(button.dataset.select);
+    if (button.dataset.open) { selected = button.dataset.open; tab = 'detail'; paintGraph(); paint(); }
     if (button.dataset.dismiss && project) act(() => dismissIssue(project, button.dataset.dismiss!, button.hasAttribute('data-restore')));
     if (button.dataset.rate && project) act(() => ratePiece(project, button.dataset.rate!, button.dataset.value === 'null' ? null : button.dataset.value === 'true'));
     if (button.dataset.zoom) { zoom = Math.max(.1, Math.min(3, zoom * (Number(button.dataset.zoom) > 0 ? 1.2 : 1 / 1.2))); paintGraph(); }

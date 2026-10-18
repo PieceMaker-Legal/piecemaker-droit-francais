@@ -7,7 +7,7 @@ export type Term = { si: Condition[]; sauf: Condition[] };
 export type Question = { question: string; reponse: string; date?: { valeur: string; preuve: Ref[] } };
 export type Trial = { nom: string; faits: Record<string, boolean>; attendu: Record<string, boolean> };
 export type Reasoning = { questions: Question[]; essais: Trial[]; terms: Map<string, Term> };
-export type Problem = { path: string; text: string };
+export type Problem = { path: string; text: string; avocat?: string; cible?: string };
 export type Parsed = { value: unknown; lines: Map<string, number> };
 
 const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u;
@@ -74,11 +74,12 @@ export function parseLiteral(text: string): Parsed {
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+const human = (name: string) => { const value = name.replace(/_/g, ' '); return value.charAt(0).toUpperCase() + value.slice(1); };
 const text = (value: unknown) => typeof value === 'string' && value.trim() !== '';
 
 export function readReasoning(value: unknown): { reasoning: Reasoning; problems: Problem[] } {
   const problems: Problem[] = [];
-  const problem = (path: string, message: string) => { problems.push({ path, text: message }); };
+  const problem = (path: string, message: string, avocat?: string, cible?: string) => { problems.push({ path, text: message, ...(avocat ? { avocat, cible } : {}) }); };
   const reasoning: Reasoning = { questions: [], essais: [], terms: new Map() };
   if (!isObject(value)) { problem('', 'le raisonnement est un objet { questions: [...], terme: {...} }'); return { reasoning, problems }; }
 
@@ -125,7 +126,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       if (result.preuve.length || result.contredit.length) problem(path, 'preuve et contredit se placent sur chaque condition de l_une');
       result.l_une = raw.l_une.flatMap((entry, index) => condition(entry, `${path}.l_une[${index}]`, true));
     }
-    if (!nested && !result.selon.length) problem(`${path}.selon`, 'condition sans source : ajoute selon: [{ source, citation }]');
+    if (!nested && !result.selon.length) problem(`${path}.selon`, 'condition sans source : ajoute selon: [{ source, citation }]', result.condition ? `${human(result.condition)} : aucun texte ne fonde cette condition.` : 'Une alternative n’est fondée sur aucun texte.', result.condition);
     return [result];
   };
 

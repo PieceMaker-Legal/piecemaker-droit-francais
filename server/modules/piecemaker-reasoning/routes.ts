@@ -15,6 +15,10 @@ export function createReasoningRouter(service: ReturnType<typeof createReasoning
   };
   router.get('/example', (_request, response) => { reasoningExample().then((snapshot) => response.json(snapshot), (error: unknown) => fail(response, error)); });
   router.get('/', handle((body) => service.read(body.projectPath as string)));
+  router.get('/source', handle((body) => {
+    if (typeof body.id !== 'string') throw new TypeError('id requis.');
+    return service.source(body.projectPath as string, body.id);
+  }));
   router.post('/verify', express.json(), handle((body) => service.verify(body.projectPath as string)));
   router.post('/test', express.json(), (request, response) => {
     const { projectPath } = request.body ?? {};
