@@ -7,7 +7,7 @@ if not exist "%APP%" (
   exit /b 1
 )
 set ELECTRON_RUN_AS_NODE=1
-"%APP%" "%~dp0activer.mjs" "%APP%"
+start /wait "" "%APP%" "%~dp0activer.mjs" "%APP%"
 if errorlevel 1 (
   pause
   exit /b 1

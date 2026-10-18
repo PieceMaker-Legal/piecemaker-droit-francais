@@ -47,8 +47,10 @@ jobs:
           if($process.ExitCode -ne 0){throw 'Installation failed'}
           $exe=Join-Path $destination 'PieceMakerTestMAJ.exe'
           $env:ELECTRON_RUN_AS_NODE='1'
-          & $exe "$env:PIECEMAKER_TEST_OUTPUT/activer.mjs" $exe
-          if($LASTEXITCODE -ne 0){throw 'Remote activation failed'}
+          $activation=Start-Process -FilePath $exe -ArgumentList @("`"$env:PIECEMAKER_TEST_OUTPUT/activer.mjs`"","`"$exe`"") -Wait -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/activate.log" -RedirectStandardError "$env:RUNNER_TEMP/activate-error.log"
+          Get-Content "$env:RUNNER_TEMP/activate.log"
+          Get-Content "$env:RUNNER_TEMP/activate-error.log"
+          if($activation.ExitCode -ne 0){throw 'Remote activation failed'}
           Remove-Item Env:ELECTRON_RUN_AS_NODE
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "PIECEMAKER_TEST_INSTALLED=$destination"
       - name: Exercise the signed package over the local HTTPS test transport
