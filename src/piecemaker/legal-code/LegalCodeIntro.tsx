@@ -22,7 +22,7 @@ export function LegalCodeIntro() {
   if (!active) return null;
 
   return (
-    <div className="mb-6 rounded-lg border border-border/60 bg-muted/20 p-4 text-left">
+    <div className="mt-6 rounded-lg border border-border/60 bg-muted/20 p-4 text-left">
       <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
         Legal Code
         <span className="rounded-full bg-violet-200/70 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-violet-900 dark:bg-violet-300/30 dark:text-violet-100">

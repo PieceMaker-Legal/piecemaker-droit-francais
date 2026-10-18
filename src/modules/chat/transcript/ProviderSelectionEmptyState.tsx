@@ -173,7 +173,6 @@ export default function ProviderSelectionEmptyState({
     return (
       <div className="flex h-full items-center justify-center px-4">
         <div className="w-full max-w-[34.25rem]">
-          <LegalCodeIntro />
           <div className="mb-8 text-center">
             <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
               {t("providerSelection.title")}
@@ -333,6 +332,7 @@ export default function ProviderSelectionEmptyState({
               }}
             />
           </p>
+          <LegalCodeIntro />
 
           {provider && tasksEnabled && isTaskMasterInstalled && (
             <div className="mt-5">
