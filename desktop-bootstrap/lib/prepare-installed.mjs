@@ -13,7 +13,7 @@ export async function prepareInstalledDesktop({ applicationRoot = sourceDir, ski
     await fs.writeFile(trustMarkerPath, `${JSON.stringify({ trustedAt: new Date().toISOString(), release: releaseTag })}\n`);
   }
   const manifest = JSON.parse(await fs.readFile(path.join(applicationRoot, 'runtime-components.json'), 'utf8'));
-  const cacheRoot = path.join(process.env.LOCALAPPDATA, 'PieceMaker', 'runtime-components');
+  const cacheRoot = process.env.PIECEMAKER_RUNTIME_CACHE_ROOT || path.join(process.env.LOCALAPPDATA, 'PieceMaker', 'runtime-components');
   await Promise.all([
     ...(includeProviders ? [ensureRuntimeComponents({ manifest, cacheRoot, log: console.log })] : []),
     installRuntimeComponents({ sourceDir: applicationRoot, requirePrebuilt: true }),

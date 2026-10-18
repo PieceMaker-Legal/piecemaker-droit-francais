@@ -21,7 +21,7 @@ export async function initializeCompactRuntime({ app, LocalServerController, app
   const packedRoot = applicationRoot;
   const physicalRoot = `${packedRoot}.unpacked`;
   const manifest = JSON.parse(fs.readFileSync(path.join(physicalRoot, 'runtime-components.json'), 'utf8'));
-  const cacheRoot = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'PieceMaker', 'runtime-components');
+  const cacheRoot = process.env.PIECEMAKER_RUNTIME_CACHE_ROOT || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'PieceMaker', 'runtime-components');
   let progress;
   let runtime;
   try {

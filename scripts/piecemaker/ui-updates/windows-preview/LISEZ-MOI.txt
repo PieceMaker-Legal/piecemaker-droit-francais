@@ -1,0 +1,27 @@
+PIECEMAKER TEST MAJ — WINDOWS X64
+
+1. Extraire le ZIP entier dans un dossier local.
+2. Double-cliquer sur Lancer-test.cmd. Le premier lancement installe
+   PieceMaker Test MAJ, séparément de l’application habituelle.
+3. Une page locale de contrôle s’ouvre. Cliquer « Ouvrir PieceMaker Test MAJ ».
+4. Créer un compte de test et utiliser seulement des dossiers fictifs.
+5. Fermer l’application puis la rouvrir depuis la page de contrôle.
+   La bannière verte confirme que l’interface signée téléchargée a été activée.
+6. Choisir « Interface défaillante ». Fermer et rouvrir deux fois : une fois
+   pour télécharger, une fois pour activer. Le retour arrière est automatique.
+7. Fermer l’application de test puis cette console pour terminer.
+
+La page de contrôle explique aussi le refus d’une signature invalide.
+Réinitialiser le cache, application fermée, permet de recommencer les essais.
+
+Identité : legal.piecemaker.testmaj ; exécutable : PieceMakerTestMAJ.exe.
+Données : %USERPROFILE%\.piecemaker-maj-test, séparées de PieceMaker.
+Ports du banc local : 39147 (HTTPS), 39148 (contrôle HTTP), loopback uniquement.
+Les clés et le certificat contenus dans ce ZIP sont propres à ce test.
+Aucune autorité n’est importée dans Windows par le lanceur de test.
+
+Le test ne publie rien et ne modifie pas le canal de mise à jour public.
+L’anonymiseur est volontairement désactivé pour ce banc : ne jamais y ouvrir
+de véritables dossiers clients. Ce paquet ne valide pas l’anonymisation.
+La désinstallation se fait dans les applications Windows sous le nom
+« PieceMaker Test MAJ ». Ne pas utiliser le bouton de désinstallation interne.
