@@ -3,7 +3,7 @@ import express from 'express';
 import { reasoningExample } from './program.js';
 import type { createReasoningService } from './program.js';
 
-export function createReasoningRouter(service: ReturnType<typeof createReasoningService>) {
+export function createReasoningRouter(service: ReturnType<typeof createReasoningService>, cite: (cwd: string, id: string, quote: string) => Promise<string>) {
   const router = express.Router();
   const fail = (response: express.Response, error: unknown) => response.status(400).json({ error: error instanceof Error ? error.message : 'Raisonnement indisponible.' });
   const handle = (run: (body: Record<string, unknown>) => unknown) => async (request: express.Request, response: express.Response) => {
@@ -15,9 +15,9 @@ export function createReasoningRouter(service: ReturnType<typeof createReasoning
   };
   router.get('/example', (_request, response) => { reasoningExample().then((snapshot) => response.json(snapshot), (error: unknown) => fail(response, error)); });
   router.get('/', handle((body) => service.read(body.projectPath as string)));
-  router.get('/source', handle((body) => {
-    if (typeof body.id !== 'string') throw new TypeError('id requis.');
-    return service.source(body.projectPath as string, body.id);
+  router.post('/citation', express.json(), handle(async (body) => {
+    if (typeof body.source !== 'string' || typeof body.citation !== 'string') throw new TypeError('source et citation requis.');
+    return { token: await cite(body.projectPath as string, body.source, body.citation) };
   }));
   router.post('/verify', express.json(), handle((body) => service.verify(body.projectPath as string)));
   router.post('/test', express.json(), (request, response) => {

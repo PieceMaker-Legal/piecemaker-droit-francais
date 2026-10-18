@@ -4,8 +4,8 @@ export function loadReasoning(projectPath: string | null, example = false): Prom
   return request<ReasoningSnapshot>(`/api/piecemaker/reasoning${example ? '/example' : `?projectPath=${encodeURIComponent(projectPath ?? '')}`}`);
 }
 
-export function loadSource(projectPath: string, id: string): Promise<{ title: string; text: string }> {
-  return request<{ title: string; text: string }>(`/api/piecemaker/reasoning/source?projectPath=${encodeURIComponent(projectPath)}&id=${encodeURIComponent(id)}`);
+export function citeSource(projectPath: string, source: string, citation: string): Promise<{ token: string }> {
+  return request<{ token: string }>('/api/piecemaker/reasoning/citation', { projectPath, source, citation });
 }
 
 export function dismissIssue(projectPath: string, id: string, restore = false): Promise<ReasoningSnapshot> {
