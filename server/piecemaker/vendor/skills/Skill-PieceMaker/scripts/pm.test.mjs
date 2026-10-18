@@ -6,7 +6,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { CASSATION_MATIERES, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES, VOLETS } from '../../../mcp/piecemaker/volets.mjs';
-import { findVendor, parseArgv, run } from './pm.mjs';
+import { findVendor, parseArgv, run, sessionDossier } from './pm.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -188,4 +188,15 @@ test('raisonnement transmet la commande et ses champs à reasoningFn', async () 
   });
   await assert.rejects(run(['raisonnement', 'inconnue'], { cwd: dossier, deps }));
   fs.rmSync(dossier, { recursive: true, force: true });
+});
+
+test('sessionDossier remonte au dossier de la session quand le répertoire courant est hors dossier', () => {
+  const dossier = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pm-session-')));
+  const ailleurs = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pm-ailleurs-')));
+  fs.mkdirSync(path.join(dossier, 'pieces'));
+  assert.equal(sessionDossier(ailleurs, { folders: [dossier], ancestors: () => [ailleurs, dossier] }), dossier);
+  assert.equal(sessionDossier(path.join(dossier, 'pieces'), { folders: [dossier], ancestors: () => [] }), path.join(dossier, 'pieces'));
+  assert.equal(sessionDossier(ailleurs, { folders: [dossier], ancestors: () => [] }), ailleurs);
+  fs.rmSync(dossier, { recursive: true, force: true });
+  fs.rmSync(ailleurs, { recursive: true, force: true });
 });
