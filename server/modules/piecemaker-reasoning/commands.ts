@@ -255,7 +255,7 @@ export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel
     const conditions = snapshot.conditions.filter((item) => item.scope === entry.scope && item.variable !== entry.result);
     if (conditions.length) lines.push('Conditions :', ...conditions.map((item) => `- ${item.variable}${roles.get(item.id) !== 'condition' ? ` (${roles.get(item.id)?.replace('_', ' ')})` : ''} : ${STATUS[item.status]} — ${item.label}${item.sources.length ? ` [${item.sources.map((id) => sources.get(id)?.title ?? id).join(' ; ')}]` : ''}${item.review ? ` · ${item.review.status} par l'avocat` : ''}`));
     const facts = snapshot.facts.filter((item) => item.scope === entry.scope);
-    if (facts.length) lines.push('Faits :', ...facts.map((item) => `- ${item.variable} (${item.type}) : ${item.status === 'établi' ? `${printValue(item.value)} — ${item.sources.map((id) => sources.get(id)?.title ?? id).join(' ; ') || 'avocat'}${item.force ? `, ${item.force}` : ''}` : 'à prouver'}${item.review ? ` · ${item.review.status} par l'avocat` : ''}`));
+    if (facts.length) lines.push('Faits :', ...facts.map((item) => `- ${item.variable} (${item.type}) : ${item.status === 'établi' ? `${printValue(item.value).replace(/^\|(.*)\|$/, '$1')} — ${item.sources.map((id) => sources.get(id)?.title ?? id).join(' ; ') || 'avocat'}${item.force ? `, ${item.force}` : ''}` : 'à prouver'}${item.review ? ` · ${item.review.status} par l'avocat` : ''}`));
     const todo = [
       ...entry.issues,
       ...conditions.flatMap((item) => item.issues.map((issue) => `${item.variable} : ${issue}`)),
