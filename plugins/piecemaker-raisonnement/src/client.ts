@@ -7,15 +7,24 @@ type Host = { readonly context: Context; onContextChange(callback: (context: Con
 type Tab = 'detail' | 'test' | 'alertes' | 'code';
 type Json = Record<string, any>;
 type Occurrence = { path: string; parent: string; link: 'si' | 'sauf' | 'l_une'; condition: Json };
-type GraphNode = { id: string; label: string; status: string; kind: 'question' | 'terme' | 'fait' | 'ou' | 'piece'; decisive: boolean; x: number; y: number };
-type Edge = { from: string; to: string; link: Occurrence['link'] | 'preuve' | 'contredit' };
+type GraphNode = { id: string; label: string; status: string; kind: 'question' | 'terme' | 'fait' | 'ou' | 'piece' | 'source'; decisive: boolean; x: number; y: number };
+type Edge = { from: string; to: string; link: Occurrence['link'] | 'preuve' | 'contredit' | 'selon' };
 type Cited = { piece: Json; target: string; against: boolean };
+type Based = { source: Json; target: string };
 
 const RESERVED = new Set(['bilan', 'questions', 'essais']);
-const COLORS: Record<string, string> = { acquis: '#68bea3', exclu: '#e08a8a', 'à établir': '#e0b354', contesté: '#ba9ce9', question: '#e2a5c6', piece: '#9aa3b2' };
+const COLORS: Record<string, string> = { acquis: '#68bea3', exclu: '#e08a8a', 'à établir': '#e0b354', contesté: '#ba9ce9', question: '#e2a5c6', piece: '#9aa3b2', source: '#7aa7d8' };
 const ANSWER: Record<string, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', contesté: 'Contestée' };
 const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
 const basename = (file: string) => file.split('/').pop()!.replace(/\.[a-z0-9]+$/i, '');
+const sourceLabel = (source: Json) => {
+  const title = String(source.titre ?? source.source);
+  const article = /article\s+(\S+)/i.exec(title);
+  if (article) return `Art. ${article[1]}`;
+  const pourvoi = /\b(\d{2}-\d{2}\.\d{3})\b/.exec(title);
+  if (pourvoi) return `${title.startsWith('Cour de cassation') ? 'Cass.' : 'Arrêt'} ${pourvoi[1]}`;
+  return /[/\\]/.test(String(source.source)) ? basename(String(source.source)) : shorten(title, 22);
+};
 const TONE: Record<string, string> = { acquis: 'ok', exclu: 'ko', 'à établir': 'warn', contesté: 'warn' };
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const human = (name: string) => { const text = name.replace(/_/g, ' '); return text.charAt(0).toUpperCase() + text.slice(1); };
@@ -32,7 +41,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${['acquis', 'exclu', 'à établir', 'contesté'].map((key) => `<span><i style="background:${COLORS[key]}"></i>${escape(human(key))}</span>`).join('')}<span><i class="is-square"></i>Pièce</span><span>- - sauf, contredit</span><span>ou : une suffit</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${['acquis', 'exclu', 'à établir', 'contesté'].map((key) => `<span><i style="background:${COLORS[key]}"></i>${escape(human(key))}</span>`).join('')}<span><i class="is-square"></i>Pièce</span><span><i class="is-diamond"></i>Source</span><span><i class="is-ring"></i>Décisif : sa preuve fait basculer la réponse</span><span>- - sauf</span><span>ou : une suffit</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const svg = root.querySelector<SVGSVGElement>('svg')!;
@@ -87,8 +96,15 @@ export function mount(container: HTMLElement, api: Host) {
     for (const entry of occurrences()) for (const field of ['preuve', 'contredit'] as const) for (const piece of entry.condition[field] ?? []) found.push({ piece, target: entry.condition.condition, against: field === 'contredit' });
     return found;
   };
-  const size = () => ({ width: Math.max(320, canvas.clientWidth), height: Math.max(240, canvas.clientHeight) });
-  const radius = (node: GraphNode) => (node.kind === 'question' ? 19 : node.kind === 'terme' ? 15 : node.kind === 'ou' ? 9 : node.kind === 'piece' ? 9 : 11);
+  const based = (): Based[] => {
+    const found: Based[] = [];
+    for (const group of groups()) if (Array.isArray(group.condition.l_une)) for (const source of group.condition.selon ?? []) found.push({ source, target: `#ou:${group.path}` });
+    for (const entry of occurrences()) for (const source of entry.condition.selon ?? []) found.push({ source, target: entry.condition.condition });
+    return found;
+  };
+  const size = () => ({ width: Math.max(1, canvas.clientWidth), height: Math.max(1, canvas.clientHeight) });
+  const radius = (node: GraphNode) => (node.kind === 'question' ? 19 : node.kind === 'terme' ? 15 : node.kind === 'ou' || node.kind === 'piece' ? 9 : node.kind === 'source' ? 8 : 11);
+  const evidence = (node: GraphNode) => node.kind === 'piece' || node.kind === 'source';
   const branch = (id: string) => {
     const found = new Set([id]);
     const walk = (current: string, up: boolean) => { for (const edge of edges) { const [from, to] = up ? [edge.to, edge.from] : [edge.from, edge.to]; if (from === current && !found.has(to)) { found.add(to); walk(to, up); } } };
@@ -106,15 +122,16 @@ export function mount(container: HTMLElement, api: Host) {
       const a = byId.get(edge.from), b = byId.get(edge.to);
       if (!a || !b) return '';
       const lit = members?.has(edge.from) && members.has(edge.to);
-      const label = edge.link === 'sauf' ? 'sauf' : edge.link === 'contredit' ? 'contredit' : '';
-      return `<path class="pmr-edge${edge.link === 'sauf' || edge.link === 'contredit' ? ' is-sauf' : ''}${edge.link === 'preuve' || edge.link === 'contredit' ? ' is-evidence' : ''}${lit ? ' is-neighbour' : ''}${members && !lit ? ' is-dim' : ''}" d="M${a.x} ${a.y - radius(a)} C${a.x} ${(a.y + b.y) / 2} ${b.x} ${(a.y + b.y) / 2} ${b.x} ${b.y + radius(b)}"/>${label ? `<text class="pmr-edge-label" x="${(a.x + b.x) / 2 + 4}" y="${(a.y + b.y) / 2}">${label}</text>` : ''}`;
-    }).join('')}${nodes.map((node) => (node.kind === 'ou' ? `<g class="pmr-node pmr-or${members && !members.has(node.id) ? ' is-dim' : ''}" transform="translate(${node.x} ${node.y})"><circle r="${radius(node)}" fill="var(--bg)" stroke="var(--muted)"/><text text-anchor="middle" y="4" class="pmr-value">ou</text><title>Au choix : une de ces conditions suffit</title></g>` : `<g class="pmr-node${selected === node.id ? ' is-selected' : ''}${members && !members.has(node.id) ? ' is-dim' : ''}${node.decisive ? ' is-decisive' : ''}" data-node="${escape(node.id)}" transform="translate(${node.x} ${node.y})" tabindex="0" role="button" aria-label="${escape(`${node.label}, ${node.status}`)}">${node.kind === 'piece' ? `<rect x="-${radius(node)}" y="-${radius(node)}" width="${radius(node) * 2}" height="${radius(node) * 2}" rx="3" fill="${COLORS[node.status] ?? COLORS.piece}"/>` : `<circle r="${radius(node)}" fill="${COLORS[node.kind === 'question' ? 'question' : node.status] ?? COLORS['à établir']}"/>`}<text text-anchor="middle" y="${radius(node) + 15}"${node.kind === 'question' ? ' class="pmr-strong"' : ''}>${escape(shorten(node.label, 34))}</text>${node.decisive ? `<text text-anchor="middle" class="pmr-value" y="${radius(node) + 29}">décisif</text>` : ''}<title>${escape(`${node.label}\n${node.status}`)}</title></g>`)).join('')}</g>`;
+      const label = edge.link === 'sauf' ? 'sauf' : '';
+      const path = Math.abs(a.y - b.y) < 6 ? `M${a.x + Math.sign(b.x - a.x) * radius(a)} ${a.y} L${b.x - Math.sign(b.x - a.x) * radius(b)} ${b.y}` : `M${a.x} ${a.y - radius(a)} C${a.x} ${(a.y + b.y) / 2} ${b.x} ${(a.y + b.y) / 2} ${b.x} ${b.y + radius(b)}`;
+      return `<path class="pmr-edge${edge.link === 'sauf' ? ' is-sauf' : ''}${['preuve', 'contredit', 'selon'].includes(edge.link) ? ` is-${edge.link}` : ''}${lit ? ' is-neighbour' : ''}${members && !lit ? ' is-dim' : ''}" d="${path}"/>${label ? `<text class="pmr-edge-label" x="${(a.x + b.x) / 2 + 4}" y="${(a.y + b.y) / 2}">${label}</text>` : ''}`;
+    }).join('')}${nodes.map((node) => (node.kind === 'ou' ? `<g class="pmr-node pmr-or${members && !members.has(node.id) ? ' is-dim' : ''}" transform="translate(${node.x} ${node.y})"><circle r="${radius(node)}" fill="var(--bg)" stroke="var(--muted)"/><text text-anchor="middle" y="4" class="pmr-value">ou</text><title>Au choix : une de ces conditions suffit</title></g>` : `<g class="pmr-node${selected === node.id ? ' is-selected' : ''}${members && !members.has(node.id) ? ' is-dim' : ''}${node.decisive ? ' is-decisive' : ''}" data-node="${escape(node.id)}" transform="translate(${node.x} ${node.y})" tabindex="0" role="button" aria-label="${escape(`${node.label}, ${node.status}`)}">${node.kind === 'piece' ? `<rect x="-${radius(node)}" y="-${radius(node)}" width="${radius(node) * 2}" height="${radius(node) * 2}" rx="3" fill="${COLORS[node.status] ?? COLORS.piece}"/>` : node.kind === 'source' ? `<rect x="-${radius(node)}" y="-${radius(node)}" width="${radius(node) * 2}" height="${radius(node) * 2}" transform="rotate(45)" fill="${COLORS[node.status] ?? COLORS.source}"/>` : `<circle r="${radius(node)}" fill="${COLORS[node.kind === 'question' ? 'question' : node.status] ?? COLORS['à établir']}"/>`}<text text-anchor="middle" y="${radius(node) + (evidence(node) ? 13 : 15)}"${node.kind === 'question' ? ' class="pmr-strong"' : evidence(node) ? ' class="pmr-small"' : ''}>${escape(shorten(node.label, evidence(node) ? 22 : 34))}</text>${node.decisive ? `<text text-anchor="middle" class="pmr-value" y="${radius(node) + 29}">décisif</text>` : ''}<title>${escape(`${node.label}\n${node.status}`)}</title></g>`)).join('')}</g>`;
   };
 
   const fitGraph = () => {
     if (!nodes.length) { zoom = 1; pan = { x: 0, y: 0 }; return; }
     const minX = Math.min(...nodes.map((node) => node.x)) - 90, maxX = Math.max(...nodes.map((node) => node.x)) + 90;
-    const minY = Math.min(...nodes.map((node) => node.y)) - 30, maxY = Math.max(...nodes.map((node) => node.y)) + 50;
+    const minY = Math.min(...nodes.map((node) => node.y)) - 30, maxY = Math.max(...nodes.map((node) => node.y)) + 70;
     const { width, height } = size();
     zoom = Math.min(1.2, (width - 24) / Math.max(1, maxX - minX), (height - 70) / Math.max(1, maxY - minY));
     pan = { x: -(minX + maxX) / 2 * zoom, y: -(minY + maxY) / 2 * zoom };
@@ -158,22 +175,31 @@ export function mount(container: HTMLElement, api: Host) {
       const members = list.filter((entry) => entry.path.startsWith(`${group.path}.l_une[`));
       for (const member of members) if (levels.has(member.condition.condition)) edges.push({ from: member.condition.condition, to: `#ou:${group.path}`, link: 'si' });
     }
-    const pieceLevels = new Map<string, number>();
-    for (const entry of cited()) {
-      const target = levels.get(entry.target);
-      if (target === undefined) continue;
-      const id = `#piece:${entry.piece.piece}`;
-      if (!pieceLevels.has(id)) nodes.push({ id, label: entry.piece.titre ?? basename(entry.piece.piece), status: entry.piece.fiable === true ? 'acquis' : entry.piece.fiable === false ? 'exclu' : 'piece', kind: 'piece', decisive: false, x: 0, y: 0 });
-      pieceLevels.set(id, Math.max(pieceLevels.get(id) ?? 0, target + 1));
-      if (!edges.some((edge) => edge.from === id && edge.to === entry.target)) edges.push({ from: id, to: entry.target, link: entry.against ? 'contredit' : 'preuve' });
-    }
     const rows = new Map<number, GraphNode[]>();
-    for (const node of nodes) { const level = node.kind === 'question' ? 0 : node.kind === 'ou' ? orLevels.get(node.id)! : node.kind === 'piece' ? pieceLevels.get(node.id)! + 0.6 : levels.get(node.id)!; rows.set(level, [...(rows.get(level) ?? []), node]); }
+    for (const node of nodes) { const level = node.kind === 'question' ? 0 : node.kind === 'ou' ? orLevels.get(node.id)! : levels.get(node.id)!; rows.set(level, [...(rows.get(level) ?? []), node]); }
     for (const [level, row] of rows) row.forEach((node, index) => {
       const previous = old.get(node.id);
-      node.x = previous?.x ?? (index - (row.length - 1) / 2) * 180;
-      node.y = previous?.y ?? level * 80;
+      node.x = previous?.x ?? (index - (row.length - 1) / 2) * 190;
+      node.y = previous?.y ?? level * 100;
     });
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const attached = new Map<string, number>();
+    const attach = (id: string, label: string, status: string, kind: 'piece' | 'source', target: string, link: Edge['link']) => {
+      const anchor = byId.get(target);
+      if (!anchor) return;
+      if (!byId.has(id)) {
+        const count = attached.get(target) ?? 0;
+        attached.set(target, count + 1);
+        const side = anchor.kind === 'ou' ? [66, -66, 132, -132] : anchor.kind === 'fait' ? [0, 96, -96, 192, -192] : [80, -80, 160, -160];
+        const previous = old.get(id);
+        const node: GraphNode = { id, label, status, kind, decisive: false, x: previous?.x ?? anchor.x + side[count % side.length], y: previous?.y ?? anchor.y + (anchor.kind === 'ou' ? 0 : 46) };
+        nodes.push(node);
+        byId.set(id, node);
+      }
+      if (!edges.some((edge) => edge.from === id && edge.to === target)) edges.push({ from: id, to: target, link });
+    };
+    for (const entry of based()) attach(`#source:${entry.source.source}`, sourceLabel(entry.source), entry.source.en_vigueur === false ? 'exclu' : 'source', 'source', entry.target, 'selon');
+    for (const entry of cited()) attach(`#piece:${entry.piece.piece}`, entry.piece.titre ?? basename(entry.piece.piece), entry.piece.fiable === true ? 'acquis' : entry.piece.fiable === false ? 'exclu' : 'piece', 'piece', entry.target, entry.against ? 'contredit' : 'preuve');
     if (selected && !nodes.some((node) => node.id === selected)) selected = '';
     if (nodes.some((node) => !old.has(node.id))) fitGraph();
     paintGraph();
@@ -220,6 +246,12 @@ export function mount(container: HTMLElement, api: Host) {
     if (!selected || selected === '#question') {
       const essais = Array.isArray(annotated()?.essais) ? annotated()!.essais as Json[] : [];
       detail.innerHTML = `<h3>${escape(question.question)}</h3><p>${pill(question.statut ?? 'à établir', `Réponse : ${ANSWER[question.statut ?? 'à établir']}`)}</p>${question.date ? `<p class="pmr-muted">Droit appliqué au ${date(question.date.valeur)}</p>${(question.date.preuve ?? []).map((piece: Json) => pieceBlock(piece)).join('')}` : ''}${question.decisifs?.length ? `<h4>Faits décisifs</h4><p>${question.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${question.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(question.en_jeu.map(human).join(', '))}</p>` : ''}${question.personnes?.length ? `<h4>Personnes</h4><p>${escape(question.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Essais</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}`;
+      return;
+    }
+    if (selected.startsWith('#source:')) {
+      const id = selected.slice('#source:'.length);
+      const uses = based().filter((entry) => entry.source.source === id);
+      detail.innerHTML = `<h3>${escape(uses[0]?.source.titre ?? id)}</h3>${uses[0] ? sourceBlock(uses[0].source) : ''}${uses.map((entry) => `<p class="pmr-muted">Fonde : ${entry.target.startsWith('#ou:') ? 'l’alternative' : `<button class="pmr-link" data-select="${escape(entry.target)}">${escape(human(entry.target))}</button>`}${entry.source.citation !== uses[0].source.citation ? ` · « ${escape(entry.source.citation)} »` : ''}</p>`).join('')}`;
       return;
     }
     if (selected.startsWith('#piece:')) {
