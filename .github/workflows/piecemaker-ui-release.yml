@@ -24,7 +24,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-desktop:
+    uses: ./.github/workflows/piecemaker-ui-tests.yml
+    permissions:
+      contents: read
+
   publish-interface:
+    needs: validate-desktop
     runs-on: ubuntu-latest
     environment: ui-updates
     permissions:

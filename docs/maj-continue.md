@@ -82,8 +82,9 @@ précédent reste disponible. Les signatures et empreintes sont revérifiées de
 le cache, sans connexion réseau.
 
 Le processus Electron confirme le paquet lorsque la page a fini de charger et
-que React a rendu un élément dans `#root`. Une page vide, un échec de chargement
-ou la disparition du renderer avant confirmation provoque le repli et le
+que React a rendu un élément dans `#root`, après deux secondes d’observation.
+Une exception JavaScript non interceptée au démarrage, une page vide, un échec de
+chargement ou la disparition du renderer avant confirmation provoque le repli et le
 rechargement. Une fermeture avant confirmation laisse le marqueur d’essai : le
 lancement suivant revient à la version précédente. Si le cache est altéré ou
 absent, l’interface embarquée reste disponible.
@@ -135,6 +136,8 @@ une ancienne exécution. Les canaux sont sérialisés par la concurrence GitHub.
 
 Le workflow `piecemaker-ui-tests.yml` exécute les tests de paquets et un vrai
 Electron sur les runners macOS et Windows, pour activation et retour arrière.
+La publication de l’interface dépend de la réussite de ce workflow sur les deux
+systèmes. Ces tests ne remplacent pas la validation des fonctions métier.
 Le test Electron utilise un profil temporaire, un serveur local fictif et des
 clés éphémères ; il vérifie POST, cookies, flux HTTP, WebSocket et localStorage.
 
@@ -145,10 +148,44 @@ node --test desktop-bootstrap/overlay/electron-piecemaker/ui-updates/*.test.mjs 
 node --experimental-vm-modules --test desktop-bootstrap/overlay/electron-piecemaker/main.test.js
 npx --no-install electron scripts/piecemaker/ui-updates/electron-smoke.mjs
 npx --no-install electron scripts/piecemaker/ui-updates/electron-smoke.mjs --broken
+npx --no-install electron scripts/piecemaker/ui-updates/electron-smoke.mjs --startup-error
 ```
 
 Aucun build Vite n’est nécessaire pour ces tests. La compilation complète de
 l’interface se fait sur les runners GitHub, pas sur le poste de développement.
+
+## Test HTTPS local avec l’interface déjà installée
+
+Sur un Mac équipé de PieceMaker et du binaire Electron de développement :
+
+```sh
+node scripts/piecemaker/ui-updates/local-test.mjs
+```
+
+Un argument facultatif indique le dossier `Contents/Resources/app` d’une autre
+installation. Le test copie seulement son interface compilée dans un dossier
+temporaire, utilise un profil Electron vierge et sert des réponses API fictives.
+Il ne lance pas le backend de l’application installée et n’accède à aucun dossier.
+Il ne construit pas Vite, ne lit pas la clé de signature de production, ne contacte
+pas GitHub et ne modifie ni l’application ni les releases.
+
+Le flux utilise réellement HTTPS, avec une clé de signature éphémère et un certificat
+local approuvé seulement dans les processus de test via `NODE_EXTRA_CA_CERTS`.
+Aucune autorité n’est installée dans le système. Les accès réseau du renderer à
+des hôtes externes sont bloqués. Une bannière identifie la fenêtre de test.
+
+Les onze étapes vérifient le téléchargement sans activation immédiate, le lancement
+suivant, le fonctionnement hors connexion, le refus des signatures invalides,
+des runtimes incompatibles et des archives altérées, le téléchargement d’une
+interface vide et son retour arrière, le refus de la réessayer, puis le retour
+arrière d’une interface qui a déjà affiché un élément avant de lever une exception.
+Le localStorage persiste entre les lancements. Des captures et un `report.json`
+restent dans le dossier temporaire annoncé par la commande.
+
+Ce banc valide le transport et le chargement de l’interface de production jusqu’à
+l’écran de connexion, avec un serveur fictif. Il ne valide ni les fonctions métier
+après connexion, ni un installateur macOS signé complet, ni le parcours Windows.
+Une réussite locale n’autorise pas à elle seule une distribution.
 
 Références : [protocol.handle](https://www.electronjs.org/docs/latest/api/protocol),
 [session.fetch / bypassCustomProtocolHandlers](https://www.electronjs.org/docs/latest/api/net),
