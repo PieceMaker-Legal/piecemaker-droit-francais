@@ -5,7 +5,7 @@ description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions)
 
 # PieceMaker
 
-L’application PieceMaker doit tourner. Depuis le dossier de l’affaire (`--dossier PATH` pour un autre) :
+L’application PieceMaker doit tourner. Depuis le dossier de l’affaire, en appelant le script par son chemin, jamais après un `cd` dans la skill (`--dossier PATH` pour un autre) :
 
 ```
 <cette-skill>/scripts/pm <outil> …

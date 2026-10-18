@@ -119,7 +119,11 @@ function conversionArgs({ dossier, pieces, force }) {
 }
 
 function resolveDossier(dossier, cwd) {
-  return dossier && String(dossier).trim() ? String(dossier).trim() : cwd;
+  if (dossier && String(dossier).trim()) return String(dossier).trim();
+  const skill = path.resolve(HERE, '..');
+  const here = path.resolve(cwd);
+  if (here === skill || here.startsWith(`${skill}${path.sep}`)) usage('Lancez pm depuis le dossier de l’affaire (sans cd dans la skill), ou passez --dossier PATH.');
+  return cwd;
 }
 
 function parseJson(value, name) {
