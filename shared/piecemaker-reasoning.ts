@@ -1,7 +1,9 @@
 export type ReasoningPeriod = { from: string; to: string | null };
 
 export type ReasoningDuration = { ans: number; mois: number; jours: number };
-export type ReasoningValue = boolean | number | string | ReasoningDuration | null;
+export type ReasoningStructure = { structure: string; champs: Record<string, ReasoningValue> };
+export type ReasoningEnumeration = { énumération: string; cas: string; contenu?: ReasoningValue };
+export type ReasoningValue = boolean | number | string | ReasoningDuration | ReasoningStructure | ReasoningEnumeration | ReasoningValue[] | null;
 
 export const REASONING_FORCES = ['acte_authentique', 'acte_sous_seing_privé', 'commencement_de_preuve', 'indice', 'sans_valeur'] as const;
 export type ReasoningForce = typeof REASONING_FORCES[number];

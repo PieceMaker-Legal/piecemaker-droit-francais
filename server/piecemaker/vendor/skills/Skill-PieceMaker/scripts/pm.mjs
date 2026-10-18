@@ -7,8 +7,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement'];
-const REASONING_COMMANDS = ['etat', 'question', 'condition', 'fait', 'retirer', 'tester'];
-const REASONING_FIELDS = ['question', 'texte', 'objectif', 'date', 'nom', 'libelle', 'regle', 'role', 'source', 'extrait', 'a_la_date', 'type', 'valeur', 'piece', 'force', 'appreciation'];
+const REASONING_COMMANDS = ['etat', 'question', 'type', 'condition', 'fait', 'retirer', 'tester'];
+const REASONING_FIELDS = ['question', 'texte', 'objectif', 'date', 'nom', 'libelle', 'regle', 'role', 'source', 'extrait', 'a_la_date', 'type', 'valeur', 'piece', 'force', 'appreciation', 'vue', 'parametres', 'etiquette', 'exception_de', 'etat', 'si', 'consequence', 'champs', 'cas'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
@@ -34,6 +34,8 @@ export const HELP = `Usage: pm <outil> [options]
       [--libelle TEXT] [--regle EXPR] [--role condition|fondement|moyen_adverse]
       [--source ID|PATH] [--extrait TEXT] [--a-la-date AAAA-MM-JJ] [--type TYPE]
       [--valeur V] [--piece PATH] [--force-probante FORCE] [--appreciation TEXT]
+      [--vue complete] [--champs TEXT] [--cas TEXT] [--parametres TEXT]
+      [--etiquette NOM] [--exception-de NOM|base] [--etat NOM] [--si EXPR] [--consequence non]
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {

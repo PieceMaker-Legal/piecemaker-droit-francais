@@ -95,11 +95,12 @@ Théorie juridique du dossier, pas à pas ; chaque commande renvoie l’état et
 
 | Commande | Options |
 | --- | --- |
-| `pm raisonnement etat` | `--question Q1` |
+| `pm raisonnement etat` | `--question Q1`, `--vue complete` (règles, pièces, citations, force probante) ; par défaut l’arbre synthétique |
 | `pm raisonnement question` | `--texte` question de droit, `--objectif oui\|non`, `--date` nom du fait date de référence, `--question Q1` pour modifier |
-| `pm raisonnement condition` | `--question`, `--nom`, `--libelle`, `--regle` (et, ou, non, = < >, \|AAAA-MM-JJ\|, 2 mois), `--source` LEGIARTI…/JURITEXT…/note, `--extrait` exact, `--role condition\|fondement\|moyen_adverse`, `--a-la-date` |
-| `pm raisonnement fait` | `--question`, `--nom`, `--type booléen\|date\|entier\|décimal\|argent\|durée`, `--valeur`, `--piece` chemin, `--extrait` exact, `--force-probante acte_authentique\|acte_sous_seing_privé\|commencement_de_preuve\|indice\|sans_valeur`, `--appreciation` |
-| `pm raisonnement retirer` | `--question`, `--nom` (sans nom : toute la question) |
+| `pm raisonnement type` | `--nom` Majuscule, `--champs "montant contenu argent, payee contenu booléen"` (structure) ou `--cas "Amiable, Judiciaire contenu date"` (énumération) |
+| `pm raisonnement condition` | `--question`, `--nom`, `--libelle`, `--regle` (expression Catala : et, ou, non, = < >, \|AAAA-MM-JJ\|, 2 mois, 1 000 €, 30%, si/alors/sinon, listes, `x.champ`, `x sous forme Cas`, `f de x`, `q1.reponse`…), `--source` LEGIARTI…/JURITEXT…/note, `--extrait` exact, `--role condition\|fondement\|moyen_adverse\|assertion`, `--a-la-date` ; `--type` (valeur calculée, ex. argent), `--parametres "montant contenu argent"` (fonction), `--etiquette`, `--exception-de base\|étiquette`, `--consequence non`, `--etat`, `--si` |
+| `pm raisonnement fait` | `--question`, `--nom`, `--type booléen\|date\|entier\|décimal\|argent\|durée\|liste de T\|Structure\|Énumération`, `--valeur` (constante Catala pour les types composés), `--piece` chemin, `--extrait` exact, `--force-probante acte_authentique\|acte_sous_seing_privé\|commencement_de_preuve\|indice\|sans_valeur`, `--appreciation` |
+| `pm raisonnement retirer` | `--question`, `--nom` (sans nom : toute la question), `--etiquette`, `--etat` ; ou `--type Nom` |
 | `pm raisonnement tester` | vigueur, recours, extraits, personnes morales ; liste les alertes |
 
 Un nom inconnu dans `--regle` devient un fait à prouver. Sans pièce, ne donnez pas de valeur. Un élément validé ou écarté par l’avocat est verrouillé.

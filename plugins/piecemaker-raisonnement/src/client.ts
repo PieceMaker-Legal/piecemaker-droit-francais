@@ -32,6 +32,9 @@ function formatValue(value: ReasoningValue): string {
   if (typeof value === 'boolean') return value ? 'oui' : 'non';
   if (typeof value === 'number') return String(value).replace('.', ',');
   if (typeof value === 'string') return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value;
+  if (Array.isArray(value)) return `[${value.map(formatValue).join(' ; ')}]`;
+  if ('structure' in value) return `${value.structure} (${Object.entries(value.champs).map(([field, entry]) => `${field} : ${formatValue(entry)}`).join(', ')})`;
+  if ('énumération' in value) return value.contenu === undefined ? value.cas : `${value.cas} (${formatValue(value.contenu)})`;
   return [value.ans && `${value.ans} an(s)`, value.mois && `${value.mois} mois`, value.jours && `${value.jours} jour(s)`].filter(Boolean).join(' ') || '0 jour';
 }
 
