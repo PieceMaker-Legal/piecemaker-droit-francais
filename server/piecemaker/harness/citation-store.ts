@@ -22,7 +22,6 @@ type CitationSnapshot = {
       sheet?: string;
       cell?: string;
       verification?: { verified: boolean; start_char?: number; end_char?: number; source_excerpt?: string };
-      proposedQuote?: string;
     }>;
   };
   ranges: Array<{ start: number; end: number; quoteIndex: number }>;

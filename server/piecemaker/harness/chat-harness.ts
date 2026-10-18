@@ -94,7 +94,7 @@ export function installChatCitationHarness(options: {
     const finish = () => {
       if (!completion) completion = (async () => {
         flush();
-        options.folderHistory?.end({ cwd, request: command, conclusion: lastText?.content ?? streamed.split('<CITATIONS>')[0], aborted: interrupted, author: agentIdentity(provider, runtimeOptions.model) });
+        options.folderHistory?.end({ cwd, request: command, conclusion: lastText?.content ?? streamed.split(/<CITATIONS>|<RAISONNEMENT>/)[0], aborted: interrupted, author: agentIdentity(provider, runtimeOptions.model) });
         const suffix = interrupted ? '' : await turn.finish();
         if (suffix && lastDelta && (heldStreamEnd || !lastText)) writer.send({ ...lastDelta, content: suffix });
         if (heldStreamEnd) writer.send(heldStreamEnd);

@@ -1,14 +1,14 @@
 import { createRequire } from 'node:module';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import { readLegalPeriod } from '@/modules/piecemaker-reasoning/index.js';
+import { readHistory, readLegalPeriod, sourceId } from '@/modules/piecemaker-reasoning/index.js';
+import type { TurnSource } from '@/modules/piecemaker-reasoning/index.js';
 import type { NormalizedMessage } from '@/shared/types.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { resolvePieceRef } from '../file-links.js';
-import type { ReasoningSource } from '../../../shared/piecemaker-reasoning.js';
 
 import type { createCitationStore } from './citation-store.js';
 import { formatPieceTitle } from './piece-title.js';
@@ -23,7 +23,8 @@ const { extractFullText, extractSourceTitle } = require(path.join(root, 'server/
 const SOURCE_TOOL = /(?:^|_)consulter_(?:decision|article)$/;
 const { markdownCounterpart } = require(path.join(vendor, 'protection.cjs'));
 const JSZip = require('jszip');
-const OPEN = '<CITATIONS>';
+const MARKERS = ['<CITATIONS>', '<RAISONNEMENT>'];
+const MARKER_TAIL = Math.max(...MARKERS.map((marker) => marker.length)) - 1;
 const MISS = '#piecemaker-cite-miss';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_CHARACTERS = 32 * 1024 * 1024;
@@ -118,8 +119,13 @@ function sourceLine(citation: Citation, title: string, source: string, ranges: A
   return `- [${citation.ref}] [${linkLabel(title + locator(citation, ranges, source))}][${citation.ref}] — ${quotes.join(' · ')}`;
 }
 
+function markerIndex(text: string) {
+  const found = MARKERS.map((marker) => text.indexOf(marker)).filter((index) => index >= 0);
+  return found.length ? Math.min(...found) : -1;
+}
+
 function visibleText(text: string) {
-  const index = text.indexOf(OPEN);
+  const index = markerIndex(text);
   return index < 0 ? text : text.slice(0, index);
 }
 
@@ -130,12 +136,13 @@ export function createCitationTurn(options: {
   codeRoot?: string;
   recordVerification?: boolean;
   pieceTitle?: (cwd: string, docId: string) => string;
-  onVerifiedTurn?: (input: { cwd: string; sessionId: string; turnId: string; block: string; sources: ReasoningSource[] }) => string | Promise<string>;
+  onVerifiedTurn?: (input: { cwd: string; sessionId: string; turnId: string; code: string; sources: TurnSource[] }) => string | Promise<string>;
 }) {
   const programTurnId = randomUUID();
   const calls = new Map<string, string>();
   const decisions = new Map<string, string>();
   const decisionTitles = new Map<string, string>();
+  const histories = new Map<string, NonNullable<ReturnType<typeof readHistory>>>();
   const documents = new Map<string, Promise<string>>();
   const codeFiles = new Map<string, Promise<string>>();
   const codeRoot = path.resolve(options.codeRoot ?? options.cwd);
@@ -230,6 +237,8 @@ export function createCitationTurn(options: {
           decisions.set(id, text);
           const title = extractSourceTitle(raw) as string;
           if (title) decisionTitles.set(id, title);
+          const history = readHistory(raw);
+          if (history) histories.set(id, history);
         }
       }
     },
@@ -241,13 +250,13 @@ export function createCitationTurn(options: {
       if (!overflow) fullText += delta;
       if (hidden) return '';
       const combined = visibleTail + delta;
-      const marker = combined.indexOf(OPEN);
+      const marker = markerIndex(combined);
       if (marker >= 0) {
         hidden = true;
         visibleTail = '';
         return combined.slice(0, marker);
       }
-      const keep = Math.min(OPEN.length - 1, combined.length);
+      const keep = Math.min(MARKER_TAIL, combined.length);
       visibleTail = combined.slice(combined.length - keep);
       return combined.slice(0, combined.length - keep);
     },
@@ -257,7 +266,7 @@ export function createCitationTurn(options: {
       return tail;
     },
     text(text: string) {
-      if (text.includes(OPEN)) {
+      if (markerIndex(text) >= 0) {
         if (text.length <= MAX_TURN_CHARACTERS) fullText = text;
         else overflow = true;
         hidden = true;
@@ -267,21 +276,20 @@ export function createCitationTurn(options: {
     finish() {
       if (finished) return finished;
       finished = (async () => {
-        let block = overflow || !fullText.includes(OPEN) ? '' : fullText.slice(fullText.indexOf(OPEN));
-        const originalBlock = block;
+        const marker = markerIndex(fullText);
+        const block = overflow || marker < 0 ? '' : fullText.slice(marker);
         const replay = options.recordVerification === false;
-        if (replay && originalBlock) {
-          const saved = await options.store.readTurnSources(options.sessionId, originalBlock);
+        if (replay && block) {
+          const saved = await options.store.readTurnSources(options.sessionId, block);
           if (saved !== null) return saved;
         }
-        const citationResult = overflow ? null : parseCitationsWithDiagnostics(fullText);
-        if (citationResult?.normalizedBlock) block = citationResult.normalizedBlock;
-        const parsed = (citationResult?.citations ?? []) as Citation[];
+        const code = overflow ? undefined : /<RAISONNEMENT>([\s\S]*?)(?:<\/RAISONNEMENT>|$)/.exec(fullText)?.[1];
+        const parsed = overflow ? [] : parseCitationsWithDiagnostics(fullText).citations as Citation[];
         const citations = await verifyCitations(parsed, (id: string, kind: string) => kind === 'code' ? codeText(id) : documentText(id), async (id: string) => decisions.get(id) ?? '') as Citation[];
         const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];
         const lines: string[] = [];
-        const reasoningSources: ReasoningSource[] = [];
+        const reasoningSources: TurnSource[] = [];
         for (const citation of citations) {
           const lawId = citation.decision_id ?? citation.article_id;
           const source = citation.kind === 'case' || citation.kind === 'article'
@@ -290,12 +298,9 @@ export function createCitationTurn(options: {
           const exactBeforeRepair = (citation.quotes ?? []).map((quote) => quote.verification?.verified === true);
           const proposedQuotes = citation.quotes.map((quote) => quote.quote);
           citation.quotes = applyNearestPassages(source, citation.quotes ?? []);
-          citation.quotes.forEach((quote, index) => { if (!exactBeforeRepair[index] && quote.verification?.verified) quote.proposedQuote = proposedQuotes[index]; });
           citation.verified = citation.quotes.every((quote) => quote.verification?.verified === true);
           const ranges = locateSourcePassages(source, citation.quotes);
           const docId = citation.doc_id ?? '';
-          const validity = citation.kind === 'article' ? readLegalPeriod(source) : undefined;
-          const simulation = citation.kind === 'document' && /(?:pièce générée à titre imaginaire|document imaginaire|source fictive de démonstration)/i.test(source);
           let openId = docId;
           if (citation.kind === 'document') {
             const original = await resolvePieceRef(options.cwd, docId);
@@ -316,23 +321,22 @@ export function createCitationTurn(options: {
               ranges,
             });
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
-            const repaired = citation.quotes.some((quote, index) => !exactBeforeRepair[index] && quote.verification?.verified);
-            lines.push(sourceLine(citation, title, source, ranges)
-              + (repaired ? ' — **extrait recalé automatiquement : soutien de l’affirmation à réexaminer**' : '')
-              + (simulation ? ' — **document de simulation**' : '')
-              + (citation.kind === 'article' ? validity ? ` — version du ${validity.from} au ${validity.to ?? 'terme non fixé'} (fin exclusive)` : ' — **période de validité inconnue**' : ''));
+            lines.push(sourceLine(citation, title, source, ranges));
             if (citation.kind !== 'code') {
-              const hash = createHash('sha256').update(source).digest('hex');
-              const document = `${citation.kind}:${lawId ?? docId}`;
-              citation.quotes.forEach((quote, quoteIndex) => reasoningSources.push({
-                id: `src_${createHash('sha256').update(`${document}\0${hash}\0${quote.quote}`).digest('hex')}`,
-                ref: citation.ref, quoteIndex, token, document, title, excerpt: quote.quote, hash,
-                verified: quote.verification?.verified === true,
-                repaired: !exactBeforeRepair[quoteIndex] && quote.verification?.verified === true,
-                ...(validity ? { validity } : {}),
-                nature: simulation ? 'simulation' : citation.kind as 'document' | 'article' | 'case',
-                ...(!exactBeforeRepair[quoteIndex] && quote.verification?.verified ? { proposedExcerpt: proposedQuotes[quoteIndex] } : {}),
-              }));
+              const document = `${citation.kind}:${lawId ?? openId}`;
+              const validity = citation.kind === 'article' ? readLegalPeriod(source) : undefined;
+              const history = citation.kind === 'case' ? histories.get(lawId ?? '') : undefined;
+              citation.quotes.forEach((quote, quoteIndex) => {
+                const repaired = !exactBeforeRepair[quoteIndex] && quote.verification?.verified === true;
+                reasoningSources.push({
+                  id: sourceId(document, quote.quote), ref: citation.ref, kind: citation.kind as 'article' | 'case' | 'document',
+                  document, title, excerpt: quote.quote, token,
+                  verified: quote.verification?.verified === true, repaired,
+                  ...(repaired ? { proposedExcerpt: proposedQuotes[quoteIndex] } : {}),
+                  ...(validity ? { validity } : {}),
+                  ...(history ? { history } : {}),
+                });
+              });
             }
           } catch {
             lines.push(`- [${citation.ref}] ${linkLabel(title)} — [source indisponible](${MISS})`);
@@ -340,11 +344,14 @@ export function createCitationTurn(options: {
         }
         if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
         let sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
-        if (!replay && options.onVerifiedTurn && (reasoningSources.length || /"kind"\s*:\s*"(?:program|reasoning)"/.test(block))) {
-          try { sources += await options.onVerifiedTurn({ cwd: options.cwd, sessionId: options.sessionId, turnId: programTurnId, block, sources: reasoningSources }); }
-          catch (error) { sources += `\n\nProgramme non mis à jour : ${error instanceof Error ? error.message : 'enregistrement impossible'}.`; }
+        if (code !== undefined) {
+          sources = '';
+          if (!replay && options.onVerifiedTurn) {
+            try { sources = `\n\n${await options.onVerifiedTurn({ cwd: options.cwd, sessionId: options.sessionId, turnId: programTurnId, code, sources: reasoningSources })}`; }
+            catch (error) { sources = `\n\nRaisonnement non mis à jour : ${error instanceof Error ? error.message : 'enregistrement impossible'}.`; }
+          }
         }
-        if (!replay && originalBlock) await options.store.saveTurnSources(options.sessionId, originalBlock, sources).catch(() => {});
+        if (!replay && block) await options.store.saveTurnSources(options.sessionId, block, sources).catch(() => {});
         return sources;
       })();
       return finished;

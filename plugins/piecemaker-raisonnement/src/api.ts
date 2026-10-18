@@ -1,15 +1,15 @@
-import type { ReasoningDraftCheck, ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningSnapshot, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 export function loadReasoning(projectPath: string | null, example = false): Promise<ReasoningSnapshot> {
   return request<ReasoningSnapshot>(`/api/piecemaker/reasoning${example ? '/example' : `?projectPath=${encodeURIComponent(projectPath ?? '')}`}`);
 }
 
-export function reviewReasoning(projectPath: string, id: string, decision: 'retained' | 'rejected' | null, note?: string): Promise<ReasoningSnapshot> {
-  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/review', { projectPath, id, decision, note });
+export function reviewItem(projectPath: string, id: string, status: 'validé' | 'écarté' | null, note?: string): Promise<ReasoningSnapshot> {
+  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/review', { projectPath, id, status, note });
 }
 
-export function checkDraft(projectPath: string, file: string): Promise<ReasoningDraftCheck> {
-  return request<ReasoningDraftCheck>('/api/piecemaker/reasoning/draft-check', { projectPath, file });
+export function appreciateFact(projectPath: string, id: string, input: { value: ReasoningValue; force: string | null; appreciation: string; note?: string }): Promise<ReasoningSnapshot> {
+  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/appreciation', { projectPath, id, ...input });
 }
 
 async function request<T>(url: string, body?: object): Promise<T> {

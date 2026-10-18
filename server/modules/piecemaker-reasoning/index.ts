@@ -1,3 +1,4 @@
-export { createReasoningService } from './program.js';
+export { createReasoningService, sourceId } from './program.js';
+export type { TurnSource } from './program.js';
 export { createReasoningRouter } from './routes.js';
-export { readLegalPeriod } from './legal-period.js';
+export { readHistory, readLegalPeriod } from './legal-period.js';

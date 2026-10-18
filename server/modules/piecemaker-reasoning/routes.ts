@@ -1,12 +1,11 @@
 import express from 'express';
 
-import { checkDraft } from './draft.js';
 import { reasoningExample } from './program.js';
 import type { createReasoningService } from './program.js';
 
 export function createReasoningRouter(service: ReturnType<typeof createReasoningService>) {
   const router = express.Router();
-  const fail = (response: express.Response, error: unknown) => response.status(400).json({ error: error instanceof Error ? error.message : 'Programme indisponible.' });
+  const fail = (response: express.Response, error: unknown) => response.status(400).json({ error: error instanceof Error ? error.message : 'Raisonnement indisponible.' });
   router.get('/example', (_request, response) => response.json(reasoningExample()));
   router.get('/', (request, response) => {
     try {
@@ -16,16 +15,16 @@ export function createReasoningRouter(service: ReturnType<typeof createReasoning
   });
   router.post('/review', express.json(), (request, response) => {
     try {
-      const { projectPath, id, decision, note } = request.body ?? {};
+      const { projectPath, id, status, note } = request.body ?? {};
       if (typeof projectPath !== 'string' || typeof id !== 'string') throw new TypeError('projectPath et id requis.');
-      response.json(service.review(projectPath, id, decision ?? null, note));
+      response.json(service.review(projectPath, id, status ?? null, note));
     } catch (error) { fail(response, error); }
   });
-  router.post('/draft-check', express.json(), async (request, response) => {
+  router.post('/appreciation', express.json(), (request, response) => {
     try {
-      const { projectPath, file } = request.body ?? {};
-      if (typeof projectPath !== 'string' || typeof file !== 'string') throw new TypeError('projectPath et file requis.');
-      response.json(await checkDraft(projectPath, file, service.read(projectPath)));
+      const { projectPath, id, value, force, appreciation, note } = request.body ?? {};
+      if (typeof projectPath !== 'string' || typeof id !== 'string') throw new TypeError('projectPath et id requis.');
+      response.json(service.appreciate(projectPath, id, { value, force: force ?? null, appreciation: appreciation ?? '', note }));
     } catch (error) { fail(response, error); }
   });
   return router;
