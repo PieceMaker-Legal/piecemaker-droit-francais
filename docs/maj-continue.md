@@ -249,3 +249,9 @@ Il dépose les preuves et le paquet prêt à publier, sans permission d'écritur
 La publication distante n'est effectuée qu'après sa réussite. Cette vérification
 locale ne constitue pas encore une preuve de réception réseau sur le poste de
 l'utilisateur ; ce dernier doit fermer et rouvrir l'édition Test MAJ.
+
+Limite observée pendant ces essais : un passage du smoke test Windows a échoué
+sur un `rename` de `state.json` avec `EPERM` pendant la restauration. Les passages
+suivants et le parcours complet du paquet installé ont réussi, mais ce verrouillage
+intermittent n'est pas corrigé par le bouton bleu. Il reste à durcir les écritures
+atomiques Windows et à valider ce cas avant une mise en production.
