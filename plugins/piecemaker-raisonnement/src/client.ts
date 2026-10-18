@@ -22,7 +22,6 @@ const human = (variable: string) => { const text = variable.replace(/_/g, ' '); 
 const shorten = (text: string, length: number) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
 const pill = (status: string, label: string) => `<span class="pmr-pill pmr-${TONE[status] ?? 'muted'}">${escape(label)}</span>`;
 const STEP: Record<ReasoningLogEntry['step'], string> = { question: 'Question', source: 'Source', registre: 'Registre Public', fait: 'Fait', règle: 'Règle', vigueur: 'Vigueur', conclusion: 'Condition', réponse: 'Réponse' };
-const PARTS = [['question', 'La question'], ['droit', 'En droit'], ['fait', 'En fait'], ['conclusion', 'Conclusion']] as const;
 const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
 const PACE = 140;
 const cleanups = new WeakMap<HTMLElement, () => void>();
@@ -84,6 +83,7 @@ export function mount(container: HTMLElement, api: Host) {
   let drain = 0;
   let finish: (() => void) | null = null;
   let sequence = 0;
+  const fresh = new Map<string, string>();
   let stopped = false;
   let timer = 0;
 
@@ -243,10 +243,9 @@ export function mount(container: HTMLElement, api: Host) {
     const found = source(entry.key.replace(/^source:/, '').split('.')[0]);
     return found ? sourceKind(found) : STEP.source;
   };
-  const part = (entry: ReasoningLogEntry) => (entry.step === 'question' ? 'question' : entry.step === 'fait' || entry.step === 'registre' || (entry.step === 'source' && source(entry.key.replace(/^source:/, '').split('.')[0])?.kind === 'document') ? 'fait' : entry.step === 'conclusion' || entry.step === 'réponse' ? 'conclusion' : 'droit');
+  const andList = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} et ${items.at(-1)}` : items[0] ?? '');
   const entryText = (entry: ReasoningLogEntry) => (entry.step === 'fait' && !testing && fact(entry.key) && !snapshot?.demo ? `<button class="pmr-fix" data-fix="${escape(entry.key)}" title="Renseigner ce fait">${escape(entry.text)}<span aria-hidden="true">✎</span></button>` : `<span class="pmr-entry-text">${escape(entry.text)}</span>`);
-  const entryView = (entry: ReasoningLogEntry, motion = '') => `<li class="pmr-entry${motion}" data-key="${escape(entry.key)}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head">${entry.step === 'question' || entry.step === 'réponse' ? '' : `<span class="pmr-step">${escape(stepLabel(entry))}</span>`}<strong>${escape(entry.step === 'fait' ? human(entry.subject) : entry.subject)}</strong>${entry.step === 'réponse' || !entry.text ? '' : entryText(entry)}</div>${entry.step === 'réponse' ? entryText(entry) : ''}</li>`;
-  const partsView = (entries: ReasoningLogEntry[]) => PARTS.map(([id, title]) => { const own = entries.filter((entry) => part(entry) === id); return `<section class="pmr-part" data-part="${id}"${own.length ? '' : ' hidden'}><h4>${title}</h4><ol class="pmr-log" aria-live="polite">${own.map((entry) => entryView(entry)).join('')}</ol></section>`; }).join('');
+  const entryView = (entry: ReasoningLogEntry, label = stepLabel(entry), extra = '', named = true) => `<li class="pmr-entry${fresh.get(entry.key) ?? ''}" data-key="${escape(entry.key)}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true"${entry.status === 'en cours' ? ` style="animation-delay:-${Date.now() % 800}ms"` : ''}>${MARK[entry.status]}</span><div class="pmr-entry-head">${label ? `<span class="pmr-step">${escape(label)}</span>` : ''}${named ? `<strong>${escape(entry.step === 'fait' ? human(entry.subject) : entry.subject)}</strong>` : ''}${entry.step === 'réponse' || !entry.text ? '' : entryText(entry)}</div>${entry.step === 'réponse' ? entryText(entry) : ''}${extra}</li>`;
   const tally = () => {
     const shown = new Map(journal().map((entry) => [entry.key, entry.status]));
     const alerts = [...shown.values()].filter((status) => status === 'alerte').length;
@@ -260,13 +259,80 @@ export function mount(container: HTMLElement, api: Host) {
     badge.textContent = String(alerts);
   };
 
+  const yesNo = (value: boolean) => (value ? '« oui »' : '« non »');
+  const goalView = (current: ReasoningQuestion) => {
+    const resultId = `${current.scope}.${current.result}`;
+    const goal = current.objective ?? true;
+    const voies = current.voies.map((voie) => {
+      const members = voie.conditions.filter((id) => id !== resultId);
+      return `<li><strong>${voie.favorable ? 'Moyen du client' : 'Moyen adverse'}</strong> : la réponse est ${yesNo(voie.favorable ? goal : !goal)}${members.length ? ` si ${andList(members.map(link))} ${members.length > 1 ? 'sont remplies' : 'est remplie'}` : ` selon ${escape(voie.label)}`}.</li>`;
+    }).join('');
+    return `<div class="pmr-goal"><h4>Ce que le test doit démontrer</h4><p class="pmr-question">${escape(current.question || current.scope)}</p>${current.objective === null ? '' : `<p>Objectif du client : obtenir ${yesNo(current.objective)}.</p>`}${voies ? `<ul>${voies}</ul>` : ''}<p class="pmr-muted">Le test le vérifie en trois temps : il relit chaque source et chaque pièce, applique chaque règle aux faits prouvés, puis en déduit la réponse.</p></div>`;
+  };
+
+  const purpose = (entry: ReasoningLogEntry) => {
+    const id = entry.key.replace(/^source:/, '').split('.')[0];
+    const grounds = snapshot!.conditions.filter((other) => other.sources.includes(id)).map((other) => other.id);
+    const proves = snapshot!.facts.filter((other) => other.sources.includes(id)).map((other) => other.id);
+    const uses = [grounds.length ? `fonde ${andList(grounds.map(link))}` : '', proves.length ? `prouve ${andList(proves.map(link))}` : ''].filter(Boolean).join(' · ');
+    return uses ? `<p class="pmr-use">${uses}</p>` : '';
+  };
+  const proof = (entry: ReasoningFact, byKey: Map<string, ReasoningLogEntry>) => (entry.sources.length ? `<p class="pmr-use">${entry.sources.map((id) => {
+    const check = byKey.get(`source:${id}`);
+    const state = !check ? '' : check.status === 'ok' ? ' — extrait retrouvé' : check.status === 'en cours' ? ' — relecture…' : ` — ${escape(check.text)}`;
+    return `Pièce : ${escape(source(id)?.title ?? id)}${state}`;
+  }).join(' ; ')}</p>` : '');
+
+  const conditionCard = (entry: ReasoningCondition, index: number, byKey: Map<string, ReasoningLogEntry>) => {
+    const rule = byKey.get(entry.id), done = byKey.get(`${entry.id}:conclusion`);
+    if (!rule && !done) return '';
+    const vigueur = entry.sources.map((id) => byKey.get(`${entry.scope}:vigueur:${id}`)).filter((item): item is ReasoningLogEntry => Boolean(item));
+    const inputs = entry.dependsOn.map((id) => {
+      const item = fact(id), log = byKey.get(id) ?? byKey.get(`${id}:conclusion`);
+      if (!log) return '';
+      return item ? entryView(log, 'Fait', proof(item, byKey)) : entryView(log, 'Condition');
+    }).join('');
+    return `<article class="pmr-card"><header><span class="pmr-step">Condition ${index + 1}</span>${link(entry.id)}</header><ol class="pmr-log">${rule ? entryView(rule, 'En droit', '', false) : ''}${vigueur.map((item) => entryView(item, 'Vigueur')).join('')}${inputs || entry.dependsOn.length ? inputs : '<li class="pmr-entry" data-status="neutre"><span class="pmr-mark" aria-hidden="true"></span><span class="pmr-entry-text pmr-muted">Aucun fait du dossier ne s’y rapporte.</span></li>'}${done ? entryView(done, 'Donc', '', false) : ''}</ol></article>`;
+  };
+
+  const verdict = (current: ReasoningQuestion, entries: ReasoningLogEntry[]) => {
+    if (testing) return '';
+    const answer = ANSWER[current.status].toLowerCase();
+    const principal = current.voies.find((voie) => voie.favorable);
+    const toProve = principal?.toProve ?? current.facts.filter((id) => fact(id)?.status !== 'établi');
+    const blocked = current.conditions.filter((id) => condition(id)?.status === 'bloquée');
+    const alerts = new Set(entries.filter((entry) => entry.status === 'alerte').map((entry) => entry.key)).size;
+    const text = current.status === 'remplie' || current.status === 'non remplie'
+      ? `<strong>Démontré</strong> : appliquées aux faits prouvés par les pièces, les règles citées donnent la réponse « ${answer} ».${current.objectiveStatus === 'atteint' ? ' C’est la réponse recherchée pour le client.' : current.objectiveStatus === 'hors d’atteinte' ? ' Ce n’est pas la réponse recherchée pour le client : il faut un autre moyen ou contester un fait.' : ''}`
+      : current.status === 'bloquée'
+        ? `<strong>Non démontrable en l’état</strong> : le fondement de ${andList(blocked.map(link)) || 'une condition'} est à revoir.`
+        : `<strong>Pas encore démontré</strong> : la réponse dépend de faits qui ne sont pas prouvés${toProve.length ? ` (${andList(toProve.map(link))})` : ''}.`;
+    return `<p class="pmr-verdict">${text}${alerts ? ` <span class="pmr-muted">${alerts} point${alerts > 1 ? 's' : ''} signalé${alerts > 1 ? 's' : ''} ci-dessus.</span>` : ''}</p>`;
+  };
+
   const testsView = () => {
-    if (snapshot!.demo) return '<p class="pmr-muted">Le test s’exécute sur le raisonnement d’un dossier, pas sur l’exemple fictif.</p>';
+    const current = question()!;
     const report = snapshot!.test;
     const entries = journal();
-    const fallback = !testing && !entries.length && report ? report.findings.map((finding, index): ReasoningLogEntry => ({ key: `constat:${index}`, step: 'règle', status: finding.level, subject: finding.subject, text: finding.text })) : entries;
-    const intro = !testing && !report ? '<p class="pmr-muted">Le test exécute la théorie avec tout le dossier : il relit les sources sur Légifrance, retrouve les extraits dans les pièces, interroge le Registre Public et le BODACC, puis raisonne : la question, en droit, en fait, et la conclusion.</p>' : '';
-    return `<div class="pmr-run"><button class="pmr-primary" data-run-test${testing ? ' disabled' : ''}>${testing ? 'Test en cours…' : report ? 'Relancer le test' : 'Lancer le test'}</button>${report && !testing ? `<span class="pmr-muted">${escape(new Date(report.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}<span class="pmr-tally" data-tally>${tally()}</span></div>${intro}${partsView(fallback)}`;
+    const byKey = new Map(entries.map((entry) => [entry.key, entry]));
+    const run = snapshot!.demo
+      ? `<div class="pmr-run"><span class="pmr-muted">Exemple fictif : journal d’un test simulé.</span><span class="pmr-tally" data-tally>${tally()}</span></div>`
+      : `<div class="pmr-run"><button class="pmr-primary" data-run-test${testing ? ' disabled' : ''}>${testing ? 'Test en cours…' : report ? 'Relancer le test' : 'Lancer le test'}</button>${report && !testing ? `<span class="pmr-muted">${escape(new Date(report.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}<span class="pmr-tally" data-tally>${tally()}</span></div>`;
+    const checks = !testing && !entries.length && report
+      ? report.findings.map((finding, index): ReasoningLogEntry => ({ key: `constat:${index}`, step: 'règle', status: finding.level, subject: finding.subject, text: finding.text }))
+      : entries.filter((entry) => entry.step === 'source' || entry.step === 'registre');
+    const ordered = [...new Set([...entries.filter((entry) => entry.step === 'règle').map((entry) => entry.key), ...current.conditions])]
+      .map(condition).filter((entry): entry is ReasoningCondition => Boolean(entry) && entry!.scope === current.scope && entry!.id !== `${current.scope}.${current.result}`);
+    const used = new Set(ordered.flatMap((entry) => entry.dependsOn));
+    const others = snapshot!.facts.filter((entry) => entry.scope === current.scope && !used.has(entry.id) && byKey.has(entry.id));
+    const cards = ordered.map((entry, index) => conditionCard(entry, index, byKey)).join('');
+    const answer = byKey.get(`${current.scope}:réponse`);
+    const html = `${run}${goalView(current)}
+      <section class="pmr-part"${checks.length ? '' : ' hidden'}><h4>1. Les sources tiennent-elles ?</h4><p class="pmr-lead">Chaque texte est relu sur Légifrance, chaque extrait est recherché à nouveau dans sa pièce, chaque société est vérifiée au Registre Public.</p><ol class="pmr-log" aria-live="polite">${checks.map((entry) => entryView(entry, stepLabel(entry), entry.step === 'source' ? purpose(entry) : '')).join('')}</ol></section>
+      <section class="pmr-part"${cards || others.length ? '' : ' hidden'}><h4>2. Chaque condition est-elle remplie ?</h4><p class="pmr-lead">Pour chaque condition : la règle qui la pose, les faits du dossier qui s’y rapportent et les pièces qui les prouvent, puis ce qu’on en conclut.</p>${others.length ? `<ol class="pmr-log">${others.map((entry) => entryView(byKey.get(entry.id)!, entry.type === 'date' && entry.value === current.referenceDate ? 'Date de référence' : 'Fait', proof(entry, byKey))).join('')}</ol>` : ''}${cards}</section>
+      <section class="pmr-part"${answer ? '' : ' hidden'}><h4>3. Ce que le test démontre</h4>${answer ? `<ol class="pmr-log">${entryView(answer, '', '', false)}</ol>${verdict(current, entries)}` : ''}</section>`;
+    fresh.clear();
+    return html;
   };
 
   const reveal = (entry: ReasoningLogEntry) => {
@@ -274,20 +340,13 @@ export function mount(container: HTMLElement, api: Host) {
     if (!list) return;
     const index = list.findIndex((item) => item.key === entry.key);
     if (index >= 0) list[index] = entry; else list.push(entry);
+    fresh.set(entry.key, index >= 0 ? ' is-updated' : ' is-new');
     if (tab !== 'tests') return;
-    const section = detail.querySelector<HTMLElement>(`[data-part="${part(entry)}"]`);
-    const log = section?.querySelector<HTMLElement>('.pmr-log');
-    if (!section || !log) return;
-    section.hidden = false;
-    const scroller = detail;
-    const pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
-    const existing = [...detail.querySelectorAll('.pmr-entry')].find((item) => (item as HTMLElement).dataset.key === entry.key);
-    const template = document.createElement('template');
-    template.innerHTML = entryView(entry, existing ? ' is-updated' : ' is-new');
-    if (existing) existing.replaceWith(template.content); else log.append(template.content);
-    detail.querySelector<HTMLElement>('[data-tally]')!.innerHTML = tally();
-    if (pinned) scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+    const pinned = detail.scrollHeight - detail.scrollTop - detail.clientHeight < 40;
+    detail.innerHTML = testsView();
+    if (pinned) detail.scrollTo({ top: detail.scrollHeight, behavior: 'smooth' });
   };
+
   const pump = () => {
     const next = queue.shift();
     if (next) { reveal(next); drain = window.setTimeout(pump, PACE); return; }
