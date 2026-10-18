@@ -136,6 +136,8 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   db.prepare('INSERT INTO projects VALUES(?,?)').run('fictif', folder);
   t.after(() => { db.close(); fs.rmSync(folder, { recursive: true, force: true }); });
   const service = createReasoningService(() => db, connectors());
+  db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?)').run('fictif', 3, 'ancien format', JSON.stringify({ code: 'ancien format', questions: [] }));
+  assert.equal(service.read(folder).code, '');
   const text = await service.command(folder, { commande: 'verifier' });
   assert.match(text, /^\{\n {2}bilan: \{/);
   assert.match(fs.readFileSync(file, 'utf8'), /`Sauf inexécution définitive`/);

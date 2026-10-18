@@ -317,7 +317,8 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   const read = (cwd: string): ReasoningSnapshot => {
     const id = projectId(cwd);
     const row = database().prepare('SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=?').get(id) as { snapshot_json: string } | undefined;
-    const stored = row ? JSON.parse(row.snapshot_json) as Partial<ReasoningSnapshot> : {};
+    const parsed = row ? JSON.parse(row.snapshot_json) as Partial<ReasoningSnapshot> : {};
+    const stored = 'annotated' in parsed ? parsed : {};
     return { ...emptySnapshot(), ...stored, dismissed: dismissed(id), reliability: reliability(id) };
   };
 
