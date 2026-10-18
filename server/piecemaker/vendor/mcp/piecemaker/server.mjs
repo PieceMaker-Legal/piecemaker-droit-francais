@@ -154,7 +154,7 @@ const SQL_DESCRIPTION = [
   "piecemaker_links(project_id, from_node_id, to_node_id, relation) : 'mentions' = la pièce cite l'entité.",
   'piecemaker_citations(project_id, from_node_id, to_node_id, relation, texte, piece_id, source) : extraits qui justifient un lien, autant que voulu ; source = pièce (piece_id) ou référence libre.',
   'Dates automatiques. Renommer une pièce = UPDATE de son label (AAAA-MM-JJ_titre).',
-  "Raisonnement du dossier (lecture seule, écrit par le bloc RAISONNEMENT et par l'avocat) : pm_reasoning_programs(project_id, revision, code, snapshot_json) = code Catala, sources vérifiées, questions, conditions, faits ; pm_reasoning_items(project_id, item_id, kind condition|fait, label, status proposé|validé|écarté, value_json, force, appreciation, author ia|avocat, sources_json, note, updated_at) = appréciation de chaque élément et son auteur ; un élément validé ou écarté est verrouillé.",
+  "Raisonnement du dossier (lecture seule, écrit par le bloc RAISONNEMENT et par l'avocat) : pm_reasoning_programs(project_id, revision, code, snapshot_json) = code Catala, sources vérifiées, questions, conditions, faits ; pm_reasoning_items(project_id, item_id, kind condition|fait, label, status proposé|validé|écarté, value_json, force, appreciation, author ia|avocat, sources_json, note, updated_at) = appréciation de chaque élément et son auteur ; un élément validé ou écarté est verrouillé. pm_reasoning_tests(project_id, test_id, label, scope, values_json, expected) = tests de l'avocat (hypothèses et réponse attendue), rejoués à chaque révision.",
 ].join('\n');
 
 /**

@@ -25,5 +25,15 @@ export const STYLES = `
 .pmr-vigueur{font-size:11.5px;margin:4px 0 8px;color:var(--muted)}
 .pmr-code{white-space:pre;overflow:auto;font:12px ui-monospace,monospace;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;margin:10px 0}
 .pmr-source{border-bottom:1px solid var(--border);padding:8px 0}
+.pmr-graph-tools{display:flex;gap:4px;justify-content:flex-end;margin-top:6px}.pmr-graph-tools button{font-size:11px;padding:1px 8px}
+.pmr-graph{overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg);margin:8px 0}.pmr-graph svg{display:block}
+.pmr-edge{fill:none;stroke:var(--muted);stroke-width:1.4;opacity:.75}.pmr-edge.is-dim{opacity:.12}.pmr-graph marker path{fill:var(--muted)}
+.pmr-node{cursor:pointer}.pmr-node rect{fill:var(--surface);stroke-width:1.6;stroke:currentColor}.pmr-node text{fill:var(--ink);font-size:11.5px}.pmr-node text.pmr-sub{fill:var(--muted);font-size:10px}
+.pmr-n-source rect,.pmr-n-condition rect,.pmr-n-result rect{fill:color-mix(in srgb,var(--law) 10%,var(--surface))}.pmr-n-fact rect{fill:color-mix(in srgb,var(--fact) 10%,var(--surface))}.pmr-n-result rect{stroke-width:2.6}
+.pmr-node.is-dim{opacity:.22}.pmr-node.is-selected rect{stroke:var(--accent);stroke-width:3}.pmr-node:focus-visible{outline:none}.pmr-node:focus-visible rect{stroke:var(--accent);stroke-dasharray:4 3}
+.pmr-head-text{font-size:10px;font-weight:700;letter-spacing:.06em}.pmr-head-text.law{fill:var(--law)}.pmr-head-text.fact{fill:var(--fact)}
+.pmr-linked{margin-top:6px}.pmr-linked>.pmr-card,.pmr-linked .pmr-card{margin-bottom:6px}
+.pmr-test{display:grid;gap:6px;margin:8px 0}.pmr-test-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center}
+.pmr-question>select,.pmr-body>select{margin:10px 0 0;max-width:100%}
 @container (max-width:520px){.pmr-columns{grid-template-columns:minmax(0,1fr)}.pmr-arrow{transform:rotate(90deg);height:12px;line-height:12px}.pmr-colhead.fact,.pmr-colhead.gap{display:none}}
 `;

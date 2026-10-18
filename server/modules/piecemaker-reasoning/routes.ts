@@ -27,5 +27,26 @@ export function createReasoningRouter(service: ReturnType<typeof createReasoning
       response.json(service.appreciate(projectPath, id, { value, force: force ?? null, appreciation: appreciation ?? '', note }));
     } catch (error) { fail(response, error); }
   });
+  router.post('/test/run', express.json(), (request, response) => {
+    try {
+      const { projectPath, scope, values } = request.body ?? {};
+      if (typeof projectPath !== 'string' || typeof scope !== 'string') throw new TypeError('projectPath et scope requis.');
+      response.json(service.runTest(projectPath, scope, values));
+    } catch (error) { fail(response, error); }
+  });
+  router.post('/test', express.json(), (request, response) => {
+    try {
+      const { projectPath, label, scope, values, expected } = request.body ?? {};
+      if (typeof projectPath !== 'string' || typeof scope !== 'string') throw new TypeError('projectPath et scope requis.');
+      response.json(service.saveTest(projectPath, { label, scope, values, expected }));
+    } catch (error) { fail(response, error); }
+  });
+  router.post('/test/delete', express.json(), (request, response) => {
+    try {
+      const { projectPath, id } = request.body ?? {};
+      if (typeof projectPath !== 'string' || typeof id !== 'string') throw new TypeError('projectPath et id requis.');
+      response.json(service.deleteTest(projectPath, id));
+    } catch (error) { fail(response, error); }
+  });
   return router;
 }
