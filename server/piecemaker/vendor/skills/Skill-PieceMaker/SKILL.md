@@ -1,6 +1,6 @@
 ---
 name: piecemaker
-description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, volets (lire, pointer, fermer), tabular review. Use when the user asks about case documents, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
+description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, volets (lire, pointer, fermer), tabular review, raisonnement juridique. Use when the user asks about case documents, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
 ---
 
 # PieceMaker
@@ -88,3 +88,18 @@ pm tabular_review lancer --projet ID [--ia claude|codex|mistral] [--modele-ia TE
 `--questions` JSON : `[{nom, consigne, format, etiquettes}]`. `format` : `text` `list` `date` `amount` `yes_no` `tags`.
 
 `--recherche` JSON : `query`, `sources` (`cassation` `appel` `conseil_etat` `caa` `premiere_instance`), `matieres` (cassation : `CIVIL` `COMMERCIAL` `PENAL` `SOCIAL`), `publicationBulletin` (`TOUS` `PUBLIE` `INEDIT`), `sieges`, `publicationConseilEtat` (`TOUS` `PUBLIE` `NON_PUBLIE`), `villesCaa`, `publicationCaa` (`TOUS` `PUBLIE` `NON_PUBLIE`), `typesPremiereInstance` (`TRIBUNAL_JUDICIAIRE` `TRIBUNAL_GRANDE_INSTANCE` `TRIBUNAL_INSTANCE` `TRIBUNAL_COMMERCE` `CONSEIL_PRUDHOMMES` `TRIBUNAL_CORRECTIONNEL` `TRIBUNAL_SECURITE_SOCIALE` `TRIBUNAL_BAUX_RURAUX` `JURIDICTION_PROXIMITE` `OUTRE_MER` `TRIBUNAL_CONFLITS`), `dateDebut`, `dateFin`, `dispositifOnly`.
+
+## raisonnement
+
+Théorie juridique du dossier, pas à pas ; chaque commande renvoie l’état et ce qui reste à faire. Volet Raisonnement à côté du chat.
+
+| Commande | Options |
+| --- | --- |
+| `pm raisonnement etat` | `--question Q1` |
+| `pm raisonnement question` | `--texte` question de droit, `--objectif oui\|non`, `--date` nom du fait date de référence, `--question Q1` pour modifier |
+| `pm raisonnement condition` | `--question`, `--nom`, `--libelle`, `--regle` (et, ou, non, = < >, \|AAAA-MM-JJ\|, 2 mois), `--source` LEGIARTI…/JURITEXT…/note, `--extrait` exact, `--role condition\|fondement\|moyen_adverse`, `--a-la-date` |
+| `pm raisonnement fait` | `--question`, `--nom`, `--type booléen\|date\|entier\|décimal\|argent\|durée`, `--valeur`, `--piece` chemin, `--extrait` exact, `--force-probante acte_authentique\|acte_sous_seing_privé\|commencement_de_preuve\|indice\|sans_valeur`, `--appreciation` |
+| `pm raisonnement retirer` | `--question`, `--nom` (sans nom : toute la question) |
+| `pm raisonnement tester` | vigueur, recours, extraits, personnes morales ; liste les alertes |
+
+Un nom inconnu dans `--regle` devient un fait à prouver. Sans pièce, ne donnez pas de valeur. Un élément validé ou écarté par l’avocat est verrouillé.

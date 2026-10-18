@@ -6,7 +6,9 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review'];
+const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement'];
+const REASONING_COMMANDS = ['etat', 'question', 'condition', 'fait', 'retirer', 'tester'];
+const REASONING_FIELDS = ['question', 'texte', 'objectif', 'date', 'nom', 'libelle', 'regle', 'role', 'source', 'extrait', 'a_la_date', 'type', 'valeur', 'piece', 'force', 'appreciation'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
@@ -27,6 +29,11 @@ export const HELP = `Usage: pm <outil> [options]
       [--dossier PATH] [--fichier FILE] [--projet ID] [--mode analyse|recherche]
       [--nom TEXT] [--modele ID] [--description TEXT] [--questions JSON]
       [--documents a,b] [--recherche JSON] [--ia claude|codex|mistral] [--modele-ia TEXT]
+  raisonnement ${REASONING_COMMANDS.join('|')}
+      [--question Q1] [--texte TEXT] [--objectif oui|non] [--date NOM] [--nom NOM]
+      [--libelle TEXT] [--regle EXPR] [--role condition|fondement|moyen_adverse]
+      [--source ID|PATH] [--extrait TEXT] [--a-la-date AAAA-MM-JJ] [--type TYPE]
+      [--valeur V] [--piece PATH] [--force-probante FORCE] [--appreciation TEXT]
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {
@@ -168,6 +175,7 @@ async function defaultDeps(cwd) {
   const panelsPath = panels.openPanelsFile();
   return {
     sqlFn: client.runSql,
+    reasoningFn: client.runReasoning,
     tabularFn: client.runTabularReview,
     execFn: (args, dir) => spawnPiecemaker(cliPath, args, dir),
     chronologieSql: volets.chronologieSql,
@@ -408,7 +416,24 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     return text;
   }
 
+  if (tool === 'raisonnement') {
+    const commande = positional[1];
+    if (!REASONING_COMMANDS.includes(commande)) usage(`raisonnement attend ${REASONING_COMMANDS.join(', ')}.`);
+    const input = { commande, cwd: path.resolve(resolved) };
+    for (const field of REASONING_FIELDS) {
+      const value = field === 'force' ? flags.force_probante : flags[field];
+      if (value !== undefined && value !== true) input[field] = field === 'valeur' ? reasoningValue(String(value)) : String(value);
+    }
+    return api.reasoningFn(input);
+  }
+
   usage(`Outil inconnu : ${tool}`);
+}
+
+function reasoningValue(value) {
+  if (value === 'true' || value === 'vrai') return true;
+  if (value === 'false' || value === 'faux') return false;
+  return /^-?\d+(?:\.\d+)?$/.test(value) ? Number(value) : value;
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
