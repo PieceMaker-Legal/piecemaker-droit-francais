@@ -95,7 +95,7 @@ test('une décision remise en cause ne fonde plus la condition ; la doctrine seu
   assert.equal(blocked.questions[0].status, 'bloquée');
   const weak = run(code(facts, 'sdoc0001')).conditions.find((entry) => entry.id === 'Q.approbation')!;
   assert.equal(weak.strength, 'doctrine');
-  assert.match(weak.issues.join(' '), /seule doctrine/);
+  assert.match(weak.issues.join(' '), /Fondée sur un document du dossier \(Note fictive\), non sur un texte ou une décision/);
   assert.equal(run(code(facts, 'sjur0001, sdoc0001')).conditions.find((entry) => entry.id === 'Q.approbation')!.strength, 'jurisprudence');
 });
 
@@ -281,4 +281,35 @@ test('les commandes exposent tout Catala : types, listes, valeurs calculées, fo
   assert.match(await run({ commande: 'tester' }), /Assertion non vérifiée/);
   await run({ commande: 'condition', question: 'Q2', nom: 'erreur', libelle: 'Erreur de type', regle: 'du et vrai', ...law });
   assert.match(await run({ commande: 'etat', question: 'Q2' }), /Erreurs du programme :\n- .*« et » attend des booléens/);
+});
+
+test('la vue de l’agent dit comment la réponse combine fondements et moyens adverses, et isole le registre', async (t) => {
+  const { db, service } = fixture(t, '/dossier-fictif', connectors());
+  db.exec(`CREATE TABLE piecemaker_nodes(project_id TEXT, id TEXT, kind TEXT, label TEXT);
+    CREATE TABLE piecemaker_links(project_id TEXT, from_node_id TEXT, to_node_id TEXT, relation TEXT);
+    CREATE TABLE piecemaker_mappings(project_id TEXT, node_id TEXT, real_value TEXT);
+    INSERT INTO piecemaker_nodes VALUES ('example','c2','company','ZETABIO');`);
+  const law = { source: 'LEGIARTI000000000001', extrait: 'L’approbation préalable de l’assemblée est requise.' };
+  const proof = { piece: 'pieces/pv.md', force: 'acte_sous_seing_privé' };
+  await service.command('/dossier-fictif', { commande: 'question', texte: 'La créance de Société Exemple SAS doit-elle être admise ?', objectif: 'oui', date: 'date_jugement' });
+  await service.command('/dossier-fictif', { commande: 'condition', question: 'Q1', nom: 'declaree', libelle: 'Créance déclarée', regle: 'declaration_faite', role: 'fondement', ...law });
+  await service.command('/dossier-fictif', { commande: 'condition', question: 'Q1', nom: 'anterieure', libelle: 'Créance née avant le jugement', regle: 'naissance < date_jugement', role: 'fondement', ...law });
+  await service.command('/dossier-fictif', { commande: 'condition', question: 'Q1', nom: 'conteste', libelle: 'Contestation du mandataire', regle: 'contestation et non original', role: 'moyen_adverse', source: 'pieces/pv.md', extrait: 'l’assemblée approuve' });
+  await service.command('/dossier-fictif', { commande: 'fait', question: 'Q1', nom: 'date_jugement', valeur: '2024-03-12', extrait: 'Le 1er mars 2024', ...proof });
+  await service.command('/dossier-fictif', { commande: 'fait', question: 'Q1', nom: 'naissance', type: 'date', valeur: '2024-03-01', extrait: 'Le 1er mars 2024', ...proof });
+  await service.command('/dossier-fictif', { commande: 'fait', question: 'Q1', nom: 'declaration_faite', valeur: 'vrai', extrait: 'l’assemblée approuve', ...proof });
+  await service.command('/dossier-fictif', { commande: 'fait', question: 'Q1', nom: 'contestation', valeur: 'vrai', extrait: 'l’assemblée approuve', ...proof });
+  await service.command('/dossier-fictif', { commande: 'tester' });
+  const view = await service.command('/dossier-fictif', { commande: 'etat' });
+  assert.match(view, /\nreponse : à établir \?\n {2}= declaree ou anterieure, sauf si conteste \(alors non\)\n {2}\(fondements alternatifs : un seul suffit ; des conditions cumulatives se réunissent par « et » dans une même condition\)\n/);
+  assert.doesNotMatch(view, /\nreponse : [^\n]*(—|\[)/);
+  assert.match(view, /- pour · ouverte · ne suffit pas tant que conteste n'est pas écarté — Créance déclarée/);
+  assert.match(view, /conteste : Fondée sur un document du dossier \(PV fictif\), non sur un texte ou une décision/);
+  assert.doesNotMatch(view, /seule doctrine/);
+  const [reasoning, registry] = view.split('Sociétés citées dans le dossier (hors raisonnement) :');
+  assert.doesNotMatch(reasoning, /ZETABIO/);
+  assert.match(registry, /^\n- ZETABIO : Personne morale introuvable au Registre Public\./);
+  const full = await service.command('/dossier-fictif', { commande: 'etat', vue: 'complete' });
+  assert.match(full, /\nreponse : à établir \?\n {2}= declaree ou anterieure, sauf si conteste \(alors non\)\n/);
+  assert.doesNotMatch(full, /règle reponse/);
 });
