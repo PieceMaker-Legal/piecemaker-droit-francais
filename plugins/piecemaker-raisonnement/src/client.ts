@@ -1,11 +1,11 @@
 import { REASONING_FORCES } from '../../../shared/piecemaker-reasoning.js';
-import type { ReasoningCondition, ReasoningFact, ReasoningQuestion, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningCondition, ReasoningFact, ReasoningLogEntry, ReasoningQuestion, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 import { appreciateFact, loadReasoning, reviewItem, runTheoryTest } from './api.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
 type Host = { readonly context: Context; onContextChange(callback: (context: Context) => void): () => void; openFileInEditor?(file: string): void };
-type Tab = 'detail' | 'tests' | 'code';
+type Tab = 'detail' | 'tests';
 type Kind = 'source' | 'condition' | 'result' | 'fact';
 type GraphNode = { id: string; label: string; kind: Kind; value: string; uncertain: boolean; missing: boolean; x: number; y: number };
 type Edge = { from: string; to: string };
@@ -21,6 +21,11 @@ const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char
 const human = (variable: string) => { const text = variable.replace(/_/g, ' '); return text.charAt(0).toUpperCase() + text.slice(1); };
 const shorten = (text: string, length: number) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
 const pill = (status: string, label: string) => `<span class="pmr-pill pmr-${TONE[status] ?? 'muted'}">${escape(label)}</span>`;
+const STEP: Record<ReasoningLogEntry['step'], string> = { théorie: 'Programme', source: 'Source', registre: 'Registre Public', fait: 'Fait', règle: 'Règle', vigueur: 'Vigueur', réponse: 'Réponse' };
+const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
+const KEYWORDS = /\b(règle|définition|sous condition|conséquence|non|rempli|égal à|exception|étiquette|et|ou|vrai|faux)\b/g;
+const catala = (code: string) => escape(code).replace(KEYWORDS, '<b>$1</b>').replace(/\|(\d{4}-\d{2}-\d{2})\|/g, '<i>|$1|</i>');
+const PACE = 140;
 const cleanups = new WeakMap<HTMLElement, () => void>();
 
 function formatValue(value: ReasoningValue): string {
@@ -49,9 +54,9 @@ export function mount(container: HTMLElement, api: Host) {
   const style = document.createElement('style');
   style.textContent = STYLES;
   const root = document.createElement('section');
-  root.className = 'pmr';
+  root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-meta"></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Sources, conditions et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-legend"><span><i style="background:${COLORS.source}"></i>Loi, jurisprudence, doctrine</span><span><i style="background:${COLORS.condition}"></i>Conditions</span><span><i style="background:${COLORS.fact}"></i>Faits prouvés par pièces</span></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="tests">Tests</button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-meta"></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Sources, conditions et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-legend"><span><i style="background:${COLORS.source}"></i>Loi, jurisprudence, doctrine</span><span><i style="background:${COLORS.condition}"></i>Conditions</span><span><i style="background:${COLORS.fact}"></i>Faits prouvés par pièces</span></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="tests">Tests<span class="pmr-count" data-alerts hidden></span></button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const svg = root.querySelector<SVGSVGElement>('svg')!;
@@ -72,6 +77,10 @@ export function mount(container: HTMLElement, api: Host) {
   let pan = { x: 0, y: 0 };
   let drag: { id: string; x: number; y: number; moved: boolean } | null = null;
   let testing = false;
+  let live: ReasoningLogEntry[] | null = null;
+  let queue: ReasoningLogEntry[] = [];
+  let drain = 0;
+  let finish: (() => void) | null = null;
   let sequence = 0;
   let stopped = false;
   let timer = 0;
@@ -226,20 +235,67 @@ export function mount(container: HTMLElement, api: Host) {
     return `${back}<h3>${escape(entry.title)}</h3>${sourceBlock(entry.id)}${period}${entry.history ? `<p class="pmr-muted">Historique judiciaire : ${escape(entry.history.status)}.</p>` : ''}${users.length ? `<p class="pmr-muted">Utilisée pour : ${users.map(link).join(' ')}</p>` : ''}`;
   };
 
+  const journal = () => live ?? snapshot?.test?.log ?? [];
+  const stepLabel = (entry: ReasoningLogEntry) => {
+    if (entry.step !== 'source') return STEP[entry.step];
+    const found = source(entry.key.replace(/^source:/, '').split('.')[0]);
+    return found ? sourceKind(found) : STEP.source;
+  };
+  const entryView = (entry: ReasoningLogEntry, motion = '') => `<li class="pmr-entry${motion}" data-key="${escape(entry.key)}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(stepLabel(entry))}</span><strong>${escape(entry.step === 'fait' ? human(entry.subject) : entry.subject)}</strong>${entry.step === 'réponse' ? '' : `<span class="pmr-entry-text">${escape(entry.text)}</span>`}</div>${entry.step === 'réponse' ? `<span class="pmr-entry-text">${escape(entry.text)}</span>` : ''}${entry.code ? `<pre class="pmr-code">${catala(entry.code)}</pre>` : ''}</li>`;
+  const tally = () => {
+    const shown = new Map(journal().map((entry) => [entry.key, entry.status]));
+    const alerts = [...shown.values()].filter((status) => status === 'alerte').length;
+    const checks = [...shown.values()].filter((status) => status === 'ok').length;
+    return `${alerts ? `<span class="pmr-pill pmr-ko">${alerts} alerte${alerts > 1 ? 's' : ''}</span>` : ''}${checks ? `<span class="pmr-pill pmr-ok">${checks} vérifié${checks > 1 ? 's' : ''}</span>` : ''}`;
+  };
+  const paintCount = () => {
+    const badge = root.querySelector<HTMLElement>('[data-alerts]')!;
+    const alerts = testing ? 0 : snapshot?.test?.findings.filter((finding) => finding.level === 'alerte').length ?? 0;
+    badge.hidden = !alerts;
+    badge.textContent = String(alerts);
+  };
+
   const testsView = () => {
     if (snapshot!.demo) return '<p class="pmr-muted">Le test s’exécute sur le raisonnement d’un dossier, pas sur l’exemple fictif.</p>';
     const report = snapshot!.test;
-    const findings = report ? report.findings.map((finding) => `<p>${pill(finding.level === 'ok' ? 'remplie' : 'bloquée', finding.level === 'ok' ? 'OK' : 'Alerte')} <strong>${escape(finding.subject)}</strong> — ${escape(finding.text)}</p>`).join('') : '';
-    return `<p class="pmr-muted">Le test exécute la théorie sur tout le dossier : vigueur des articles, recours contre les décisions citées, extraits des pièces, personnes morales au Registre Public et au BODACC.</p><div class="pmr-decision"><button class="pmr-primary" data-run-test${testing ? ' disabled' : ''}>${testing ? 'Test en cours…' : 'Lancer le test'}</button>${report ? `<span class="pmr-muted">Dernier test : ${escape(new Date(report.at).toLocaleString('fr-FR'))}</span>` : ''}</div>${findings ? `<div class="pmr-box">${findings}</div>` : ''}`;
+    const entries = journal();
+    const fallback = !testing && !entries.length && report ? report.findings.map((finding, index): ReasoningLogEntry => ({ key: `constat:${index}`, step: 'règle', status: finding.level, subject: finding.subject, text: finding.text })) : entries;
+    const intro = !testing && !report ? '<p class="pmr-muted">Le test exécute la théorie avec tout le dossier : il relit les sources sur Légifrance, retrouve les extraits dans les pièces, interroge le Registre Public et le BODACC, puis résout le programme Catala condition par condition.</p>' : '';
+    return `<div class="pmr-run"><button class="pmr-primary" data-run-test${testing ? ' disabled' : ''}>${testing ? 'Test en cours…' : report ? 'Relancer le test' : 'Lancer le test'}</button>${report && !testing ? `<span class="pmr-muted">${escape(new Date(report.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}<span class="pmr-tally" data-tally>${tally()}</span></div>${intro}<ol class="pmr-log" aria-live="polite">${fallback.map((entry) => entryView(entry)).join('')}</ol>`;
   };
 
+  const reveal = (entry: ReasoningLogEntry) => {
+    const list = live;
+    if (!list) return;
+    const index = list.findIndex((item) => item.key === entry.key);
+    if (index >= 0) list[index] = entry; else list.push(entry);
+    if (tab !== 'tests') return;
+    const log = detail.querySelector<HTMLElement>('.pmr-log');
+    if (!log) return;
+    const scroller = detail;
+    const pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
+    const existing = [...log.children].find((item) => (item as HTMLElement).dataset.key === entry.key);
+    const template = document.createElement('template');
+    template.innerHTML = entryView(entry, existing ? ' is-updated' : ' is-new');
+    if (existing) existing.replaceWith(template.content); else log.append(template.content);
+    detail.querySelector<HTMLElement>('[data-tally]')!.innerHTML = tally();
+    if (pinned) scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+  };
+  const pump = () => {
+    const next = queue.shift();
+    if (next) { reveal(next); drain = window.setTimeout(pump, PACE); return; }
+    drain = 0;
+    finish?.();
+  };
+  const enqueue = (entry: ReasoningLogEntry) => { if (!live) return; queue.push(entry); if (!drain) drain = window.setTimeout(pump, live.length ? PACE : 0); };
+  const settled = () => new Promise<void>((resolve) => { if (!drain && !queue.length) resolve(); else finish = resolve; });
 
   const paintDetails = () => {
     root.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => button.setAttribute('aria-selected', String(button.dataset.tab === tab)));
     const current = question();
+    paintCount();
     if (!snapshot?.code || !current) { detail.innerHTML = ''; return; }
-    if (tab === 'code') detail.innerHTML = `<pre>${escape(snapshot.code)}</pre>`;
-    else if (tab === 'tests') detail.innerHTML = testsView();
+    if (tab === 'tests') detail.innerHTML = testsView();
     else detail.innerHTML = selected ? nodeDetail(current, selected) : summary(current);
   };
 
@@ -271,7 +327,7 @@ export function mount(container: HTMLElement, api: Host) {
       if (serialized === lastSerialized) return;
       lastSerialized = serialized;
       snapshot = data;
-      if (!editing && !detail.contains(document.activeElement)) paint();
+      if (!editing && !testing && !detail.contains(document.activeElement)) paint();
     } catch (error) {
       if (!stopped && request === sequence) showError(error);
     }
@@ -301,8 +357,15 @@ export function mount(container: HTMLElement, api: Host) {
     }
     if (button.hasAttribute('data-run-test') && context.project && !testing) {
       testing = true;
+      live = [];
+      queue = [];
+      tab = 'tests';
       paintDetails();
-      void runTheoryTest(context.project.path).then(apply).catch(showError).finally(() => { testing = false; paintDetails(); });
+      const path = context.project.path;
+      void runTheoryTest(path, enqueue)
+        .then(async (data) => { await settled(); return data; })
+        .then((data) => { testing = false; live = null; finish = null; if (context.project?.path === path) apply(data); else paintDetails(); })
+        .catch((error) => { testing = false; live = null; finish = null; queue = []; showError(error); paintDetails(); });
     }
   });
 
@@ -361,7 +424,7 @@ export function mount(container: HTMLElement, api: Host) {
     const changed = next.project?.path !== context.project?.path;
     context = next;
     root.dataset.theme = next.theme;
-    if (changed) { sequence++; snapshot = null; lastSerialized = ''; editing = ''; scope = ''; selected = ''; nodes = []; void load(); }
+    if (changed) { window.clearTimeout(drain); drain = 0; queue = []; live = null; testing = false; finish?.(); sequence++; snapshot = null; lastSerialized = ''; editing = ''; scope = ''; selected = ''; nodes = []; void load(); }
     paint();
   });
   const poll = () => { if (!stopped) { if (!snapshot?.demo) void load(); timer = window.setTimeout(poll, 2500); } };
@@ -369,7 +432,7 @@ export function mount(container: HTMLElement, api: Host) {
   void load();
   timer = window.setTimeout(poll, 2500);
   window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: 'plugin:piecemaker-raisonnement' } }));
-  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); resize.disconnect(); unsubscribe(); container.replaceChildren(); });
+  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); window.clearTimeout(drain); resize.disconnect(); unsubscribe(); container.replaceChildren(); });
 }
 
 export function unmount(container: HTMLElement) {

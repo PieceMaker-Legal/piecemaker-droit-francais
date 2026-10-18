@@ -3,7 +3,7 @@ import path from 'node:path';
 import type Database from 'better-sqlite3';
 
 import { REASONING_FORCES } from '../../../shared/piecemaker-reasoning.js';
-import type { ReasoningFinding, ReasoningForce, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningTestReport, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningFinding, ReasoningForce, ReasoningLogEntry, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningTestReport, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 import { parseCatala, printCatala, printValue } from './catala.js';
 import type { CatalaProgram, DeclarationItem, Rule } from './catala.js';
@@ -236,16 +236,27 @@ export function createReasoningService(getDatabase: () => Database.Database, con
       const snapshot = rebuild(id, previous, result.model, result.sources, [], null);
       return `${result.note}\n\n${describeState(snapshot, result.model, result.focus)}`;
     },
-    async test(cwd: string): Promise<ReasoningSnapshot> {
+    async test(cwd: string, emit: (entry: ReasoningLogEntry) => void = () => {}): Promise<ReasoningSnapshot> {
       const id = projectId(cwd);
       const previous = read(cwd);
-      const sourceFindings: ReasoningFinding[] = [];
-      const companyFindings: ReasoningFinding[] = [];
-      const sources = await Promise.all(previous.sources.map((source) => checkSource(cwd, source, sourceFindings)));
-      await Promise.all(companies(id).map((company) => checkCompany(company, companyFindings)));
-      const evaluated = rebuild(id, previous, loadModel(id), sources, ['Test exécuté.'], null);
-      const findings = [...programFindings(evaluated), ...sourceFindings, ...companyFindings];
-      const test: ReasoningTestReport = { at: new Date().toISOString(), findings: [...findings.filter((finding) => finding.level === 'alerte'), ...findings.filter((finding) => finding.level === 'ok')] };
+      const list = companies(id);
+      const log: ReasoningLogEntry[] = [];
+      const send = (entry: ReasoningLogEntry) => { log.push(entry); emit(entry); };
+      const watch = async <T>(key: string, step: ReasoningLogEntry['step'], subject: string, waiting: string, done: string, run: (findings: ReasoningFinding[]) => Promise<T>) => {
+        send({ key, step, status: 'en cours', subject, text: waiting });
+        const findings: ReasoningFinding[] = [];
+        const value = await run(findings);
+        if (!findings.length) send({ key, step, status: 'ok', subject, text: done });
+        findings.forEach((finding, index) => send({ key: index ? `${key}.${index}` : key, step, status: finding.level, subject: finding.subject, text: finding.text }));
+        return { value, findings };
+      };
+      send({ key: 'théorie', step: 'théorie', status: 'neutre', subject: 'Théorie du dossier', text: `${previous.questions.length} question(s), ${previous.sources.length} source(s), ${list.length} personne(s) morale(s).` });
+      const checked = await Promise.all(previous.sources.map((source) => watch(`source:${source.id}`, 'source', source.title, source.kind === 'document' ? 'Relecture de la pièce…' : source.kind === 'case' ? 'Recherche des recours sur Légifrance…' : 'Consultation de Légifrance…', 'Texte relu sur Légifrance.', (findings) => checkSource(cwd, source, findings))));
+      const registry = await Promise.all(list.map((company) => watch(`registre:${company.label}`, 'registre', company.label, company.siren ? 'Registre Public et BODACC…' : 'Recherche au Registre Public…', 'Registre Public consulté.', (findings) => checkCompany(company, findings))));
+      const evaluated = rebuild(id, previous, loadModel(id), checked.map((entry) => entry.value), [], null);
+      for (const entry of resolution(evaluated)) send(entry);
+      const findings = [...programFindings(evaluated), ...checked.flatMap((entry) => entry.findings), ...registry.flatMap((entry) => entry.findings)];
+      const test: ReasoningTestReport = { at: new Date().toISOString(), findings: [...findings.filter((finding) => finding.level === 'alerte'), ...findings.filter((finding) => finding.level === 'ok')], log: [...new Map(log.map((entry) => [entry.key, entry])).values()] };
       const snapshot = { ...evaluated, test };
       database().prepare('UPDATE pm_reasoning_programs SET snapshot_json=? WHERE project_id=?').run(JSON.stringify(snapshot), id);
       return snapshot;
@@ -284,6 +295,32 @@ export function createReasoningService(getDatabase: () => Database.Database, con
       return reload(id, cwd, `Avocat · ${target} = ${printValue(input.value)}${input.force ? ` (${input.force})` : ''}.`);
     },
   };
+}
+
+const shown = (value: ReasoningValue) => (value === true ? 'oui' : value === false ? 'non' : value === null ? 'inconnu' : printValue(value).replace(/^\|(\d{4})-(\d{2})-(\d{2})\|$/, '$3/$2/$1'));
+const ruleCode = (code: string) => code.split('\n').filter((line) => line.trim() && !line.trim().startsWith('#[')).join('\n').trim();
+const CONDITION_TEXT = { remplie: 'remplie', 'non remplie': 'non remplie', indéterminée: 'indéterminée', bloquée: 'bloquée : fondement à revoir' };
+const ANSWER_TEXT = { remplie: 'oui', 'non remplie': 'non', indéterminée: 'pas encore établie', bloquée: 'bloquée' };
+
+function resolution(snapshot: ReasoningSnapshot): ReasoningLogEntry[] {
+  const titles = new Map(snapshot.sources.map((source) => [source.id, source.title]));
+  return snapshot.questions.flatMap((question): ReasoningLogEntry[] => {
+    const facts = snapshot.facts.filter((fact) => fact.scope === question.scope);
+    const pending = snapshot.conditions.filter((condition) => condition.scope === question.scope);
+    const ordered: typeof pending = [];
+    while (pending.length) {
+      const next = pending.findIndex((condition) => condition.dependsOn.every((dependency) => !pending.some((other) => other !== condition && other.id === dependency)));
+      ordered.push(...pending.splice(next < 0 ? 0 : next, 1));
+    }
+    const resultId = `${question.scope}.${question.result}`;
+    return [
+      { key: `${question.scope}:début`, step: 'théorie', status: 'neutre', subject: question.question || question.scope, text: `Résolution du champ d’application ${question.scope}.` },
+      ...facts.map((fact): ReasoningLogEntry => ({ key: fact.id, step: 'fait', status: fact.status === 'établi' ? 'ok' : 'alerte', subject: fact.variable, text: fact.status === 'établi' ? `= ${shown(fact.value)}` : 'inconnu : pièce à rechercher' })),
+      ...ordered.filter((condition) => condition.id !== resultId).map((condition): ReasoningLogEntry => ({ key: condition.id, step: 'règle', status: condition.status === 'remplie' ? 'ok' : condition.status === 'indéterminée' ? 'neutre' : 'alerte', subject: condition.label, text: CONDITION_TEXT[condition.status], code: ruleCode(condition.code) })),
+      ...question.vigueur.map((entry): ReasoningLogEntry => ({ key: `${question.scope}:vigueur:${entry.source}`, step: 'vigueur', status: entry.inForce === true ? 'ok' : 'alerte', subject: titles.get(entry.source) ?? entry.source, text: entry.inForce === true ? `en vigueur au ${shown(entry.date)}` : entry.inForce === false ? `non en vigueur au ${shown(entry.date)}` : 'vigueur non contrôlée : date de référence non prouvée' })),
+      { key: `${question.scope}:réponse`, step: 'réponse', status: question.status === 'remplie' || question.status === 'non remplie' ? (question.objectiveStatus === 'hors d’atteinte' ? 'alerte' : 'ok') : question.status === 'bloquée' ? 'alerte' : 'neutre', subject: question.question || question.scope, text: `Réponse : ${ANSWER_TEXT[question.status]}${question.objectiveStatus ? ` · objectif ${question.objectiveStatus}` : ''}`, code: ruleCode(snapshot.conditions.find((condition) => condition.id === resultId)?.code ?? '') },
+    ];
+  });
 }
 
 function describeTest(test: ReasoningTestReport) {

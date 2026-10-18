@@ -87,7 +87,9 @@ export type ReasoningQuestion = {
 
 export type ReasoningFinding = { level: 'ok' | 'alerte'; subject: string; text: string };
 
-export type ReasoningTestReport = { at: string; findings: ReasoningFinding[] };
+export type ReasoningLogEntry = { key: string; step: 'théorie' | 'source' | 'registre' | 'fait' | 'règle' | 'vigueur' | 'réponse'; status: 'en cours' | 'ok' | 'alerte' | 'neutre'; subject: string; text: string; code?: string };
+
+export type ReasoningTestReport = { at: string; findings: ReasoningFinding[]; log?: ReasoningLogEntry[] };
 
 export type ReasoningSnapshot = {
   revision: number;

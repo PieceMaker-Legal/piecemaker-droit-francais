@@ -30,7 +30,13 @@ export function createReasoningRouter(service: ReturnType<typeof createReasoning
   router.post('/test', express.json(), (request, response) => {
     const { projectPath } = request.body ?? {};
     if (typeof projectPath !== 'string') { fail(response, new TypeError('projectPath requis.')); return; }
-    service.test(projectPath).then((snapshot) => response.json(snapshot), (error: unknown) => fail(response, error));
+    response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    response.setHeader('Cache-Control', 'no-cache');
+    response.flushHeaders();
+    const write = (line: object) => response.write(`${JSON.stringify(line)}\n`);
+    service.test(projectPath, (entry) => write({ entry }))
+      .then((snapshot) => write({ snapshot }), (error: unknown) => write({ error: error instanceof Error ? error.message : 'Test impossible.' }))
+      .finally(() => response.end());
   });
   return router;
 }

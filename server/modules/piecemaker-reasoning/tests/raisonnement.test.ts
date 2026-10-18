@@ -208,6 +208,19 @@ test('le test exécute la théorie sur tout le dossier : vigueur, recours, pièc
   assert.match(report, /✓ PV fictif : Extrait retrouvé dans la pièce\./);
   assert.ok(service.read('/dossier-fictif').test!.findings.length);
   assert.match(service.describe('/dossier-fictif'), /Dernier test .* alerte\(s\)/);
+  const streamed: string[] = [];
+  const snapshot = await service.test('/dossier-fictif', (entry) => streamed.push(`${entry.step}|${entry.status}|${entry.subject}|${entry.text}`));
+  assert.equal(new Set(snapshot.test!.log!.map((entry) => entry.key)).size, snapshot.test!.log!.length);
+  assert.ok(snapshot.test!.log!.every((entry) => entry.status !== 'en cours'));
+  assert.ok(snapshot.test!.log!.every((entry) => streamed.includes(`${entry.step}|${entry.status}|${entry.subject}|${entry.text}`)));
+  assert.match(streamed[0], /^théorie\|neutre\|Théorie du dossier\|1 question\(s\)/);
+  assert.ok(streamed.includes('registre|en cours|ZETABIO|Recherche au Registre Public…'));
+  assert.ok(streamed.includes('registre|alerte|ZETABIO|Personne morale introuvable au Registre Public.'));
+  assert.ok(streamed.indexOf('registre|en cours|ZETABIO|Recherche au Registre Public…') < streamed.indexOf('registre|alerte|ZETABIO|Personne morale introuvable au Registre Public.'));
+  assert.ok(streamed.some((line) => line.startsWith('fait|alerte|faute|')));
+  const rule = snapshot.test!.log!.find((entry) => entry.step === 'règle' && entry.code);
+  assert.ok(rule && !rule.code!.includes('#['));
+  assert.match(streamed.at(-1)!, /^réponse\|/);
 });
 
 test('l’exemple fictif décrit une condition sans fondement et un fait sans pièce', () => {
