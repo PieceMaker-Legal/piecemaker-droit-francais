@@ -1,0 +1,74 @@
+name: PieceMaker Remote UI Preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [MAJ-continue]
+    paths:
+      - '.github/workflows/piecemaker-ui-preview-publish.yml'
+      - 'scripts/piecemaker/ui-updates/windows-remote/**'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-blue-update:
+    if: github.ref == 'refs/heads/MAJ-continue'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+      - name: Download the exact installer already tested by the user
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 39115887479 --repo PieceMaker-Legal/piecemaker-droit-francais --name PieceMaker-Test-MAJ-Windows-x64-3 --dir "$env:RUNNER_TEMP/original"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "PIECEMAKER_TEST_OUTPUT=$env:RUNNER_TEMP/remote-preview"
+      - name: Prepare separately signed blue-button update
+        env:
+          PIECEMAKER_PREVIEW_UI_SIGNING_KEY: ${{ secrets.PIECEMAKER_PREVIEW_UI_SIGNING_KEY }}
+        run: node scripts/piecemaker/ui-updates/windows-remote/prepare.mjs "$env:RUNNER_TEMP/original"
+      - name: Test update signature, integrity and publication rules
+        run: node --test desktop-bootstrap/overlay/electron-piecemaker/ui-updates/*.test.mjs scripts/piecemaker/ui-updates/*.test.mjs desktop-bootstrap/lib/ui-updates.test.mjs
+      - name: Install the original NSIS package and activate the remote channel
+        shell: pwsh
+        run: |
+          $installer=Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/original" -Filter *.exe | Select-Object -First 1
+          $destination=Join-Path $env:RUNNER_TEMP 'installed-preview'
+          $process=Start-Process -FilePath $installer.FullName -ArgumentList @('/S',"/D=$destination") -Wait -PassThru
+          if($process.ExitCode -ne 0){throw 'Installation failed'}
+          $exe=Join-Path $destination 'PieceMakerTestMAJ.exe'
+          $env:ELECTRON_RUN_AS_NODE='1'
+          & $exe "$env:PIECEMAKER_TEST_OUTPUT/activer.mjs" $exe
+          if($LASTEXITCODE -ne 0){throw 'Remote activation failed'}
+          Remove-Item Env:ELECTRON_RUN_AS_NODE
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "PIECEMAKER_TEST_INSTALLED=$destination"
+      - name: Exercise the signed package over the local HTTPS test transport
+        shell: pwsh
+        env:
+          PIECEMAKER_EXPECT_BLUE: '1'
+        run: |
+          node --input-type=module -e 'import fs from "node:fs";import path from "node:path";const file=path.join(process.env.PIECEMAKER_TEST_INSTALLED,"resources/app.asar.unpacked/electron-piecemaker/ui-update-runtime.json");const config=JSON.parse(fs.readFileSync(file));if(!config.feed.includes("/test-maj-ui-"))throw Error("Remote channel missing");config.feed="https://127.0.0.1:39147";fs.writeFileSync(file,JSON.stringify(config));'
+          node scripts/piecemaker/ui-updates/windows-preview/verify-installed.mjs "$env:PIECEMAKER_TEST_INSTALLED/PieceMakerTestMAJ.exe"
+          if($LASTEXITCODE -ne 0){throw 'Installed application verification failed'}
+      - name: Package the one-time channel activation tool
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "$env:PIECEMAKER_TEST_OUTPUT/activer.mjs","$env:PIECEMAKER_TEST_OUTPUT/Activer-MAJ-distantes.cmd","$env:PIECEMAKER_TEST_OUTPUT/remote-runtime.json","$env:PIECEMAKER_TEST_OUTPUT/LISEZ-MOI.txt" -DestinationPath "$env:PIECEMAKER_TEST_OUTPUT/Activer-MAJ-distantes-Windows.zip"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: PieceMaker-Remote-UI-Preview
+          path: |
+            ${{ env.PIECEMAKER_TEST_OUTPUT }}/remote/*
+            ${{ env.PIECEMAKER_TEST_OUTPUT }}/Activer-MAJ-distantes-Windows.zip
+            ${{ env.PIECEMAKER_TEST_OUTPUT }}/verification.*
+            ${{ env.PIECEMAKER_TEST_OUTPUT }}/*.png
+          retention-days: 14
+          if-no-files-found: error

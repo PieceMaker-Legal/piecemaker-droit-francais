@@ -226,3 +226,26 @@ réussissent. Ce test n’exécute aucune requête à un modèle d’IA.
 Références : [protocol.handle](https://www.electronjs.org/docs/latest/api/protocol),
 [session.fetch / bypassCustomProtocolHandlers](https://www.electronjs.org/docs/latest/api/net),
 [isolation et sécurité Electron](https://www.electronjs.org/docs/latest/tutorial/security).
+
+## Publication distante du test Windows
+
+Le premier installateur ne connaissait qu'un flux loopback, avec une clé éphémère.
+Il faut activer une fois un canal distant distinct pour recevoir de nouveaux paquets.
+`windows-remote/activer.mjs` vérifie l'appId et le dossier de données du test, refuse
+une application ouverte, sauvegarde la configuration et l'ancien cache UI, puis
+remplace uniquement le descripteur de ce test. Les dossiers et la production
+restent intacts. Le ZIP contient la clé publique, jamais la clé privée.
+
+La clé Ed25519 durable du test est conservée hors dépôt et dans le secret Actions
+`PIECEMAKER_PREVIEW_UI_SIGNING_KEY`. Elle est distincte de celle de production.
+Le flux est la préversion GitHub `test-maj-ui-desktop-2.0.47` ; toujours créer cette
+release avec `--prerelease --latest=false`, sans npm ni assets d'installateur.
+
+Le workflow `piecemaker-ui-preview-publish.yml` reprend l'installateur
+exact déjà fourni, prépare le paquet signé du bouton bleu, installe cet NSIS,
+exécute l'activation du canal, puis teste sur HTTPS local le téléchargement,
+l'activation, le clic du bouton bleu et le retour arrière après une erreur.
+Il dépose les preuves et le paquet prêt à publier, sans permission d'écriture.
+La publication distante n'est effectuée qu'après sa réussite. Cette vérification
+locale ne constitue pas encore une preuve de réception réseau sur le poste de
+l'utilisateur ; ce dernier doit fermer et rouvrir l'édition Test MAJ.
