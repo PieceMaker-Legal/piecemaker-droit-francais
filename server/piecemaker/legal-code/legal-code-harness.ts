@@ -42,7 +42,9 @@ export function installLegalCodeHarness(options: {
         return (data: unknown) => target.send(stripUserText(data as NormalizedMessage));
       },
     }) as ProviderRuntimeWriter;
-    return run(provider, withLegalCodeInstructions(command, fs.readFileSync(instructionsPath, 'utf8')), runtimeOptions, wrapped);
+    const dossier = String(runtimeOptions.cwd ?? runtimeOptions.projectPath ?? '');
+    const instructions = `${fs.readFileSync(instructionsPath, 'utf8').trim()}\n\nDossier de la session : ${dossier}. Passe toujours --dossier "${dossier}" à pm, quel que soit le répertoire courant.`;
+    return run(provider, withLegalCodeInstructions(command, instructions), runtimeOptions, wrapped);
   };
 
   options.sessions.fetchHistory = async (sessionId, pageOptions) => {

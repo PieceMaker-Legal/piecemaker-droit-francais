@@ -5,7 +5,7 @@ description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions)
 
 # PieceMaker
 
-L’application PieceMaker doit tourner. Depuis le dossier de l’affaire, en appelant le script par son chemin, jamais après un `cd` dans la skill (`--dossier PATH` pour un autre) :
+L’application PieceMaker doit tourner. Depuis le dossier de l’affaire (`--dossier PATH` pour un autre) :
 
 ```
 <cette-skill>/scripts/pm <outil> …
@@ -14,7 +14,7 @@ L’application PieceMaker doit tourner. Depuis le dossier de l’affaire, en ap
 
 ## Volets (interface à côté du chat)
 
-Le geste ouvre le volet tout seul : `sql` (écriture), `chronologie`, `tabular_review` (lister, preparer, lancer, ouvrir), un `.docx` écrit ou édité, un tamponnage. Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
+Le geste ouvre le volet tout seul : `sql` (écriture), `chronologie`, `tabular_review` (lister, preparer, lancer, ouvrir), un `.docx` écrit ou édité, un tamponnage, `raisonnement` (volet Raisonnement du dossier). Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
 
 `afficher` sert à lire, pointer ou fermer.
 

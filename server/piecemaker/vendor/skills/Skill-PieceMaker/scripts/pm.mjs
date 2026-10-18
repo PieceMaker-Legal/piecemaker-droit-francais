@@ -119,11 +119,7 @@ function conversionArgs({ dossier, pieces, force }) {
 }
 
 function resolveDossier(dossier, cwd) {
-  if (dossier && String(dossier).trim()) return String(dossier).trim();
-  const skill = path.resolve(HERE, '..');
-  const here = path.resolve(cwd);
-  if (here === skill || here.startsWith(`${skill}${path.sep}`)) usage('Lancez pm depuis le dossier de l’affaire (sans cd dans la skill), ou passez --dossier PATH.');
-  return cwd;
+  return dossier && String(dossier).trim() ? String(dossier).trim() : cwd;
 }
 
 function parseJson(value, name) {
@@ -259,6 +255,7 @@ function voletTarget(cwd, volet, review) {
 function panelNoticeLabel(target) {
   if (target.tab === 'files') return `Fichiers (${path.basename(target.document || '')})`;
   if (target.tab === 'plugin:piecemaker-tampon') return 'Bordereau';
+  if (target.tab === 'plugin:piecemaker-raisonnement') return 'Raisonnement';
   if (target.tab === 'plugin:piecemaker-tabular-review') {
     if (target.draft) return `Analyse tabulaire (projet ${target.draft})`;
     if (target.review) return `Analyse tabulaire (${target.review})`;
@@ -428,7 +425,9 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       const value = field === 'force' ? flags.force_probante : flags[field];
       if (value !== undefined && value !== true) input[field] = field === 'valeur' ? reasoningValue(String(value)) : String(value);
     }
-    return api.reasoningFn(input);
+    const result = await api.reasoningFn(input);
+    const target = { cwd: input.cwd, tab: 'plugin:piecemaker-raisonnement' };
+    return withNotice(result, await followPanel(api, { project: input.cwd, tab: target.tab }, target));
   }
 
   usage(`Outil inconnu : ${tool}`);

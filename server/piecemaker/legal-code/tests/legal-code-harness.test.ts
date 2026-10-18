@@ -28,8 +28,9 @@ function setup() {
 
 test('ajoute les instructions au premier message Legal Code et les masque à l’affichage', async () => {
   const { runtime, sessions, calls, sent, writer } = setup();
-  await runtime.run('claude', 'La clause est-elle valable ?', { legalCode: true }, writer);
+  await runtime.run('claude', 'La clause est-elle valable ?', { legalCode: true, cwd: '/dossiers/Dupont c Exemple' }, writer);
   assert.match(calls[0], /Tu es Legal Code\./);
+  assert.match(calls[0], /--dossier "\/dossiers\/Dupont c Exemple"/);
   assert.equal(sent[0].content, 'La clause est-elle valable ?');
   const history = await sessions.fetchHistory('s1', {});
   assert.equal(history.messages[0].content, 'La clause est-elle valable ?');
