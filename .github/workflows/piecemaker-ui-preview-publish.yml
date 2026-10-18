@@ -36,6 +36,7 @@ jobs:
           PIECEMAKER_PREVIEW_UI_SIGNING_KEY: ${{ secrets.PIECEMAKER_PREVIEW_UI_SIGNING_KEY }}
         run: node scripts/piecemaker/ui-updates/windows-remote/prepare.mjs "$env:RUNNER_TEMP/original"
       - name: Test update signature, integrity and publication rules
+        shell: bash
         run: node --test desktop-bootstrap/overlay/electron-piecemaker/ui-updates/*.test.mjs scripts/piecemaker/ui-updates/*.test.mjs desktop-bootstrap/lib/ui-updates.test.mjs
       - name: Install the original NSIS package and activate the remote channel
         shell: pwsh

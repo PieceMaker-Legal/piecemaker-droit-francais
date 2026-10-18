@@ -10,7 +10,7 @@ const output = path.resolve(process.env.PIECEMAKER_TEST_OUTPUT);
 const templates = path.dirname(fileURLToPath(import.meta.url));
 const privateKey = createPrivateKey(process.env.PIECEMAKER_PREVIEW_UI_SIGNING_KEY);
 const publicKey = await fs.readFile(path.join(templates, 'public-key.pem'), 'utf8');
-if (createPublicKey(privateKey).export({ type: 'spki', format: 'pem' }).trim() !== publicKey.trim()) throw new Error('Preview signing key mismatch');
+if (!createPublicKey(privateKey).export({ type: 'spki', format: 'der' }).equals(createPublicKey(publicKey).export({ type: 'spki', format: 'der' }))) throw new Error('Preview signing key mismatch');
 const runtime = JSON.parse(await fs.readFile(path.join(input, 'test-runtime.json'))).runtime;
 if (runtime !== 'desktop-2.0.47') throw new Error('Unexpected test runtime');
 const config = { runtime, publicKey, feed: 'https://github.com/PieceMaker-Legal/piecemaker-droit-francais/releases/download/test-maj-ui-desktop-2.0.47' };
