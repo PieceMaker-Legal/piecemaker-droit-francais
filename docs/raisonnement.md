@@ -2,6 +2,14 @@
 
 L’agent construit la théorie juridique du dossier pas à pas avec la commande `pm raisonnement` de la skill `piecemaker` (`server/piecemaker/vendor/skills/Skill-PieceMaker/`, même route locale que l’ancien outil MCP). Il n’écrit pas de code : chaque commande ajoute un élément, le serveur génère le programme Catala, l’exécute et renvoie un état court avec ce qui reste à faire. Le volet droit **Raisonnement** montre le graphe, le détail de chaque élément et le test. L’avocat valide ou écarte chaque élément : un élément décidé est verrouillé et l’agent ne peut plus le modifier.
 
+## Concept
+
+Le programme d’une question est un syllogisme juridique écrit en Catala ; le graphe, le test et le volet en suivent l’ordre.
+
+1. **En droit** — le champ d’application de la question : chaque `règle` est une condition, fondée par `#[selon = …]` sur un texte, une décision ou une doctrine, et ne s’applique que si sa source est en vigueur à la `date_de_référence`.
+2. **En fait** — le champ `Dossier` : chaque `définition` établit une `entrée` par une pièce (`#[selon]`, `#[force]`, `#[appréciation]`). Un fait non prouvé vaut inconnu.
+3. **Conclusion** — le `résultat` combine les conditions (évaluation à trois valeurs) et se compare à `#[objectif]`.
+
 L’instruction de chat ajoute une seule ligne : pour une analyse appliquée au dossier, utiliser `pm raisonnement` (`pm raisonnement etat` pour reprendre). Aucun code n’est injecté dans le prompt.
 
 ## Commandes
@@ -59,11 +67,11 @@ Chaque condition et chaque fait se valide, s’écarte ou se modifie dans le vol
 - **Détail** : la réponse en langage courant, ce qui reste à prouver, puis le détail du nœud choisi avec ses boutons de validation.
 - **Tests** : bouton « Lancer le test » et journal animé présenté comme une démonstration :
   - **Ce que le test doit démontrer** : la question, l’objectif du client et, pour chaque voie, les conditions dont dépend la réponse ;
-  - **1. Les sources tiennent-elles ?** : relecture de chaque texte et de chaque pièce, avec ce que chacune fonde ou prouve, et Registre Public ;
-  - **2. Chaque condition est-elle remplie ?** : une fiche par condition, dans l’ordre des dépendances — en droit (fondement), vigueur, faits avec la pièce qui les prouve, donc (conclusion) ; les faits sans condition (date de référence) sont listés avant ;
-  - **3. Ce que le test démontre** : la réponse et un verdict (démontré, pas encore démontré faute de preuve, non démontrable faute de fondement), rapproché de l’objectif.
+  - **1. En droit** : chaque condition avec son texte relu sur Légifrance, sa période de validité et sa vigueur à la date de référence ; une condition sans fondement est signalée ;
+  - **2. En fait** : une fiche par condition, dans l’ordre des dépendances — les faits avec la pièce qui les prouve (extrait retrouvé), puis « Donc » ; Registre Public et faits sans condition (date de référence) sont listés avant ;
+  - **3. Conclusion** : la réponse et un verdict (démontré, pas encore démontré faute de preuve, non démontrable faute de fondement), rapproché de l’objectif.
 
-  Un clic sur un fait ouvre sa fiche pour le renseigner ; le nombre d’alertes du dernier test s’affiche sur l’onglet. L’exemple fictif contient un journal de test simulé. Style repris du plugin piecemaker-dossier.
+  Pendant le test, la vue suit la ligne en cours (sauf si l’avocat fait défiler). Un lien du journal éclaire l’élément dans le graphe sans quitter l’onglet ; un clic sur un nœud ouvre son détail, avec « ← Retour au test ». Un clic sur un fait ouvre sa fiche pour le renseigner ; le nombre d’alertes du dernier test s’affiche sur l’onglet. L’exemple fictif contient un journal de test simulé. Style repris du plugin piecemaker-dossier.
 
 ## SQL
 
