@@ -1,8 +1,8 @@
 # Raisonnement du dossier
 
-L’agent construit la théorie juridique du dossier pas à pas avec l’outil MCP `raisonnement` (serveur `piecemaker`). Il n’écrit pas de code : chaque commande ajoute un élément, le serveur génère le programme Catala, l’exécute et renvoie un état court avec ce qui reste à faire. Le volet droit **Raisonnement** montre le graphe, le détail de chaque élément et le test. L’avocat valide ou écarte chaque élément : un élément décidé est verrouillé et l’agent ne peut plus le modifier.
+L’agent construit la théorie juridique du dossier pas à pas avec la commande `pm raisonnement` de la skill `piecemaker` (`server/piecemaker/vendor/skills/Skill-PieceMaker/`, même route locale que l’ancien outil MCP). Il n’écrit pas de code : chaque commande ajoute un élément, le serveur génère le programme Catala, l’exécute et renvoie un état court avec ce qui reste à faire. Le volet droit **Raisonnement** montre le graphe, le détail de chaque élément et le test. L’avocat valide ou écarte chaque élément : un élément décidé est verrouillé et l’agent ne peut plus le modifier.
 
-L’instruction de chat ajoute une seule ligne : pour une analyse appliquée au dossier, utiliser l’outil `raisonnement` (commande `etat` pour reprendre). Aucun code n’est injecté dans le prompt.
+L’instruction de chat ajoute une seule ligne : pour une analyse appliquée au dossier, utiliser `pm raisonnement` (`pm raisonnement etat` pour reprendre). Aucun code n’est injecté dans le prompt.
 
 ## Commandes
 
