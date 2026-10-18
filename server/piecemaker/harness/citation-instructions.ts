@@ -7,6 +7,7 @@ CITATIONS : tableau JSON strict des sources lues dans ce tour, numérotées par 
 
 RAISONNEMENT : code Catala (syntaxe française), réécrit en entier à chaque tour. Une question = un champ d'application dont le résultat y répond exactement ; les faits sont fixés dans le champ Dossier.
 #[question = "La société peut-elle … ?"]
+#[objectif = rempli]
 #[date_de_référence = date_acte]
 déclaration champ d'application Nom:
   entrée date_acte contenu date
@@ -25,6 +26,7 @@ champ d'application Dossier:
   définition nom.societe_cotee égal à vrai
 
 Droit : pose TOUTES les conditions nécessaires à la réponse, une règle par condition, chacune avec #[libellé] et #[selon] vers le texte qui la pose. Toujours : la date de référence (le serveur contrôle la vigueur de l'article à cette date ; #[à_la_date = autre_date] sur une règle pour une autre date) et les conditions tenant à la personne. Condition imprécise dans le texte : cite aussi la décision qui l'interprète, à défaut la doctrine. Un raisonnement partiel est accepté ; complète-le au fil des tours.
+Objectif : #[objectif = rempli|non rempli] = le résultat recherché pour le client. Chaque fondement qui mène au résultat est une règle distincte sur le résultat, avec son #[libellé] ; les moyens que l'adversaire opposera sont des exceptions de conséquence contraire.
 Faits : chaque entrée reçoit sa valeur par une définition dans Dossier, prouvée par la pièce dont l'extrait répond directement à la condition (#[selon]), avec #[force] (acte_authentique, acte_sous_seing_privé, commencement_de_preuve, indice, sans_valeur) et #[appréciation]. Sans pièce, ne définis pas l'entrée : cherche la pièce (SQL, lecture des pièces).
 Syntaxe : et, ou, non, si … alors … sinon …, = != < <= > >= + - * /, vrai, faux, |AAAA-MM-JJ|, 5 an, 2 mois, 10 jour ; définition x égal à expr ; étiquette base / exception base pour une dérogation. Source déjà enregistrée : #[selon = son identifiant].
 L'avocat valide chaque élément ; un élément verrouillé se recopie à l'identique, toute modification est ignorée.

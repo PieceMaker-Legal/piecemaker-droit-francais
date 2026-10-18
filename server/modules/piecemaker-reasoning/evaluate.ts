@@ -1,5 +1,5 @@
 import { REASONING_FORCES } from '../../../shared/piecemaker-reasoning.js';
-import type { ReasoningCondition, ReasoningDuration, ReasoningFact, ReasoningForce, ReasoningQuestion, ReasoningReview, ReasoningSource, ReasoningValue, ReasoningVigueur } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningCondition, ReasoningDuration, ReasoningFact, ReasoningForce, ReasoningQuestion, ReasoningReview, ReasoningSource, ReasoningValue, ReasoningVigueur, ReasoningVoie } from '../../../shared/piecemaker-reasoning.js';
 
 import { printRule } from './catala.js';
 import type { CatalaProgram, Declaration, Expression, Rule } from './catala.js';
@@ -283,12 +283,63 @@ export function evaluateReasoning(program: CatalaProgram, sources: Map<string, R
     if (!conditionIds.some((id) => conditions.get(id)!.sources.length && id !== resultCondition?.id)) issues.push('Au moins une condition fondée est requise.');
     if (!vigueur.length) issues.push('Aucun article cité : la vigueur du texte applicable n’est pas contrôlée.');
     const status = [...closure].some((id) => conditions.get(id)?.status === 'bloquée') ? 'bloquée' : resultCondition?.status === 'bloquée' ? 'bloquée' : resultCondition?.value === true ? 'remplie' : resultCondition?.value === false ? 'non remplie' : 'indéterminée';
+    const objective = scope.attrs.objectif?.join(' ');
+    const goal = objective === 'rempli' ? true : objective === 'non rempli' ? false : null;
+    if (objective && goal === null) issues.push('Objectif attendu : rempli ou non rempli.');
+    const reach = (rule: Rule) => {
+      const found = new Set<string>();
+      const visit = (name: string) => {
+        const id = `${scope.scope}.${name}`;
+        if (found.has(id)) return;
+        found.add(id);
+        conditions.get(id)?.dependsOn.forEach((dependency) => visit(dependency.slice(scope.scope.length + 1)));
+      };
+      variables(rule.condition).forEach(visit);
+      return [...found];
+    };
+    const voieFacts = new Map<ReasoningVoie, string[]>();
+    const voies: ReasoningVoie[] = (result ? rules.filter((rule) => rule.target.length === 1 && rule.target[0] === result.name) : []).map((rule) => {
+      const state = ruleState.get(rule)!;
+      const members = reach(rule);
+      let value: ReasoningValue = null;
+      try { value = rule.condition ? evaluate(rule.condition) : true; } catch { value = null; }
+      const branch = members.map((id) => conditions.get(id)).filter((entry): entry is ReasoningCondition => Boolean(entry));
+      const kinds = [...state.sources.map((id) => STRENGTH[sources.get(id)!.kind]), ...branch.flatMap((entry) => (entry.strength ? [entry.strength] : []))];
+      const weaknesses = [
+        ...branch.filter((entry) => entry.strength === 'doctrine').map((entry) => `${entry.label} : fondée sur la seule doctrine.`),
+        ...branch.flatMap((entry) => entry.issues.filter((issue) => issue.includes('à examiner'))),
+        ...members.map((id) => facts.get(id)).filter((fact): fact is ReasoningFact => fact?.status === 'établi' && (fact.force === 'indice' || fact.force === 'commencement_de_preuve')).map((fact) => `${fact.variable} : ${fact.force === 'indice' ? 'simple indice' : 'commencement de preuve'}.`),
+      ];
+      const voie: ReasoningVoie = {
+        label: rule.attrs['libellé']?.join(', ') ?? printRule({ ...rule, attrs: {} }, '').trim(),
+        code: printRule(rule, '').trim(),
+        favorable: goal === null || rule.consequence === goal,
+        status: state.blocking || branch.some((entry) => entry.status === 'bloquée') ? 'bloquée' : state.applies === false || value === false ? 'fermée' : state.applies === true && value === true ? 'ouverte' : 'à établir',
+        strength: kinds.sort((a, b) => RANK[a] - RANK[b])[0] ?? null,
+        conditions: branch.map((entry) => entry.id),
+        toProve: members.filter((id) => facts.get(id)?.status === 'non établi'),
+        weaknesses,
+      };
+      voieFacts.set(voie, members.filter((id) => facts.has(id)));
+      return voie;
+    });
+    const ORDER = { ouverte: 0, 'à établir': 1, fermée: 2, bloquée: 3 };
+    voies.sort((a, b) => Number(b.favorable) - Number(a.favorable) || ORDER[a.status] - ORDER[b.status] || (b.strength ? RANK[b.strength] : 0) - (a.strength ? RANK[a.strength] : 0) || a.toProve.length - b.toProve.length);
+    if (goal !== null) {
+      const ours = new Set(voies.filter((voie) => voie.favorable).flatMap((voie) => voieFacts.get(voie)!));
+      const theirs = new Set(voies.filter((voie) => !voie.favorable).flatMap((voie) => voieFacts.get(voie)!));
+      for (const id of ours) facts.get(id)!.burden = 'nous';
+      for (const id of theirs) if (!ours.has(id)) facts.get(id)!.burden = 'adversaire';
+    }
     questions.push({
       scope: scope.scope, question, result: result?.name ?? '', value: resultCondition?.value ?? null, status,
       referenceDate: reference ? (factValue(reference) as string | null) : null, vigueur,
       conditions: conditionIds, facts: [...facts.values()].filter((fact) => fact.scope === scope.scope).map((fact) => fact.id),
       valid: !issues.length,
       issues,
+      objective: goal,
+      objectiveStatus: goal === null ? null : resultCondition?.value === goal ? 'atteint' : resultCondition?.value === !goal ? 'hors d’atteinte' : 'à établir',
+      voies,
     });
   }
   return { questions, conditions: [...conditions.values()], facts: [...facts.values()], diagnostics };

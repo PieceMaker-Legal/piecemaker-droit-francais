@@ -117,6 +117,28 @@ test('les dates et durées se calculent au même quantième', () => {
   assert.equal(run(text).conditions.find((entry) => entry.id === 'A.ok')!.value, true);
 });
 
+test('l’objectif ordonne les voies, désigne les moyens adverses et répartit la charge de la preuve', () => {
+  const text = code(facts)
+    .replace('#[date_de_référence = date_acte]', '#[objectif = rempli]\n#[date_de_référence = date_acte]')
+    .replace('  entrée approuve contenu booléen', '  entrée approuve contenu booléen\n  entrée tacite contenu booléen\n  entrée revocation contenu booléen')
+    .replace('  #[selon = sart0001]\n  règle du sous condition approbation conséquence rempli', '  #[libellé = "Approbation expresse"] #[selon = sart0001]\n  étiquette base règle du sous condition approbation conséquence rempli\n  #[libellé = "Approbation tacite"] #[selon = sdoc0001]\n  règle du sous condition tacite conséquence rempli\n  #[libellé = "Révocation pour faute"] #[selon = sjur0001]\n  exception base règle du sous condition revocation conséquence non rempli');
+  const question = run(text).questions[0];
+  assert.equal(question.objective, true);
+  assert.equal(question.objectiveStatus, 'à établir');
+  assert.deepEqual(question.voies.map((voie) => [voie.label, voie.favorable, voie.status, voie.strength]), [
+    ['Approbation expresse', true, 'ouverte', 'loi'],
+    ['Approbation tacite', true, 'à établir', 'doctrine'],
+    ['Révocation pour faute', false, 'à établir', 'jurisprudence'],
+  ]);
+  assert.deepEqual(question.voies[1].toProve, ['Q.tacite']);
+  const result = run(text);
+  assert.equal(result.facts.find((fact) => fact.id === 'Q.tacite')!.burden, 'nous');
+  assert.equal(result.facts.find((fact) => fact.id === 'Q.revocation')!.burden, 'adversaire');
+  const won = run(text.replace('  définition q.approuve égal à vrai', '  définition q.approuve égal à vrai\n  #[selon = spie0001] #[force = indice]\n  définition q.revocation égal à faux'));
+  assert.equal(won.questions[0].objectiveStatus, 'atteint');
+  assert.match(won.questions[0].voies[2].weaknesses.join(' '), /revocation : simple indice/);
+});
+
 test('le service réécrit les références, verrouille les éléments validés et garde l’appréciation de l’avocat', (t) => {
   const { db, service } = fixture(t);
   const turnSources: TurnSource[] = [{ ...article, ref: 1 }, { ...piece, ref: 2 }];

@@ -43,6 +43,12 @@ Sous-ensemble pris en charge (`server/modules/piecemaker-reasoning/catala.ts`) :
 
 L’évaluation est à trois valeurs (vrai, faux, inconnu). Une condition est remplie, non remplie, indéterminée ou bloquée (fondement manquant, période inconnue, écartée par l’avocat, erreur de type, conflit d’exceptions). Une question est bloquée si une condition dont elle dépend l’est.
 
+## Objectif et argumentaire
+
+`#[objectif = rempli]` (ou `non rempli`, en défense) déclare le résultat recherché pour le client. Chaque règle qui définit le résultat est une **voie** : celles dont la conséquence va dans le sens de l’objectif sont les moyens du client, les autres (en pratique des `exception` de conséquence contraire) les moyens adverses. Pour chaque voie, le serveur donne son état (ouverte, à établir, fermée, bloquée), son fondement le plus faible, les faits encore non établis qui l’alimentent et ses points faibles (doctrine seule, historique à examiner, pièce valant simple indice ou commencement de preuve). Les moyens du client sont classés (ouverts d’abord, puis par fondement, puis par nombre de faits à prouver) : le premier est le principal, les suivants subsidiaires. L’objectif est « atteint », « à établir » ou « hors d’atteinte » selon la valeur du résultat.
+
+Charge de la preuve (art. 1353 C. civ.) : un fait qui alimente un moyen du client est à sa charge ; un fait qui n’alimente qu’un moyen adverse est à la charge de l’adversaire. Aucun calcul de combinaisons : l’analyse lit seulement les dépendances du programme.
+
 ## Décisions de l’avocat
 
 Chaque condition et chaque fait se valide, s’écarte ou se modifie dans le volet (`POST /api/piecemaker/reasoning/review` et `/appreciation`). Une modification d’un fait (valeur, force probante, appréciation) est enregistrée avec l’auteur `avocat` et valide le fait. Le texte de l’élément est figé (`locked_json`) : au tour suivant, toute version différente du modèle est remplacée et signalée. « Annuler la décision » rend l’élément au modèle.
@@ -50,6 +56,7 @@ Chaque condition et chaque fait se valide, s’écarte ou se modifie dans le vol
 ## Volet
 
 - **Graphe** (par défaut) : sources du droit, puis réponse et conditions, puis faits et pièces. Un clic sur une case éclaire sa branche (tout ce dont elle dépend et tout ce qui en dépend) et affiche dessous les cases liées, avec leurs boutons de validation. Zoom −/+ et « Ajuster » à la largeur du volet.
+- **Argumentaire** : objectif, moyens du client (principal, subsidiaires) et moyens adverses, avec ce qui reste à prouver et par qui ; un clic sur une condition l’ouvre dans le graphe.
 - **Schéma** : les mêmes éléments en deux colonnes Droit → Faits / Pièces.
 - **Tests** : l’avocat fixe des hypothèses sur les entrées (vide = inconnu), exécute le raisonnement actuel sans rien enregistrer (`POST /test/run`), puis peut enregistrer le résultat obtenu comme attendu (`POST /test`). Chaque test enregistré est rejoué à chaque révision et signalé réussi ou en échec, y compris dans la ligne de bilan du chat.
 - **Code** et **Sources** : programme canonique et sources vérifiées.
@@ -72,4 +79,4 @@ SELECT label, scope, values_json, expected FROM pm_reasoning_tests WHERE project
 - `server/modules/piecemaker-reasoning/` : analyseur Catala, évaluation et vérifications, persistance, verrous, routes ; tests dans `tests/raisonnement.test.ts`.
 - `server/piecemaker/harness/citation-{instructions,turn}.ts` : instruction, masquage des blocs, capture des périodes et de l’historique, branchement en fin de tour ; test `reasoning-turn.test.ts`.
 - `server/piecemaker/vendor/mcp/legifrance/tools/decision_history.py` : `controle_historique`, appelé par `consulter_decision`.
-- `plugins/piecemaker-raisonnement/` : volet (graphe, schéma, tests, code, sources).
+- `plugins/piecemaker-raisonnement/` : volet (graphe, argumentaire, schéma, tests, code, sources).

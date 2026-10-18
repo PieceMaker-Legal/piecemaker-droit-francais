@@ -50,11 +50,23 @@ export type ReasoningFact = {
   author: 'ia' | 'avocat';
   sources: string[];
   status: 'établi' | 'non établi';
+  burden?: 'nous' | 'adversaire';
   issues: string[];
   review?: ReasoningReview;
 };
 
 export type ReasoningVigueur = { source: string; date: string | null; inForce: boolean | null };
+
+export type ReasoningVoie = {
+  label: string;
+  code: string;
+  favorable: boolean;
+  status: 'ouverte' | 'à établir' | 'fermée' | 'bloquée';
+  strength: 'loi' | 'jurisprudence' | 'doctrine' | null;
+  conditions: string[];
+  toProve: string[];
+  weaknesses: string[];
+};
 
 export type ReasoningQuestion = {
   scope: string;
@@ -68,6 +80,9 @@ export type ReasoningQuestion = {
   facts: string[];
   valid: boolean;
   issues: string[];
+  objective: boolean | null;
+  objectiveStatus: 'atteint' | 'à établir' | 'hors d’atteinte' | null;
+  voies: ReasoningVoie[];
 };
 
 export type ReasoningTest = {

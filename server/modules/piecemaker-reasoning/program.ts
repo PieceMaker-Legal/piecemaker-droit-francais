@@ -179,7 +179,7 @@ export function createReasoningService(getDatabase: () => Database.Database) {
     const toReview = [...snapshot.conditions, ...snapshot.facts].filter((item) => !item.review).length;
     const missing = snapshot.facts.filter((fact) => !fact.sources.length).length;
     const failing = snapshot.tests.filter((entry) => !entry.passed).length;
-    const answers = snapshot.questions.map((question) => `${question.scope} : ${question.status}${question.valid ? '' : ' (incomplet)'}`).join(' ; ');
+    const answers = snapshot.questions.map((question) => `${question.scope} : ${question.status}${question.objectiveStatus ? `, objectif ${question.objectiveStatus}` : ''}${question.valid ? '' : ' (incomplet)'}`).join(' ; ');
     return `Raisonnement · révision ${snapshot.revision} · ${answers || 'aucune question'} · ${snapshot.conditions.length} conditions · ${snapshot.facts.length} faits${missing ? ` dont ${missing} sans pièce` : ''} · ${toReview} élément(s) à valider${snapshot.tests.length ? ` · tests ${snapshot.tests.length - failing}/${snapshot.tests.length} réussis` : ''} dans le volet Raisonnement.`;
   };
 
@@ -299,6 +299,7 @@ export function reasoningExample(): ReasoningSnapshot {
   const piece: ReasoningSource = { id: 'sdemo0002', kind: 'document', document: 'document:pieces/pv-ag-exemple.md', title: 'Procès-verbal fictif d’assemblée générale', excerpt: 'L’assemblée générale approuve l’indemnité de départ du directeur général.', token: '', verified: true, repaired: false };
   const date: ReasoningSource = { id: 'sdemo0003', kind: 'document', document: 'document:pieces/courrier-exemple.md', title: 'Courrier fictif de révocation', excerpt: 'Le versement est demandé le 1er mars 2024.', token: '', verified: true, repaired: false };
   const code = `#[question = "Le dirigeant d'une société cotée peut-il obtenir le versement de son indemnité de départ ?"]
+#[objectif = rempli]
 #[date_de_référence = date_versement]
 déclaration champ d'application Indemnite:
   entrée date_versement contenu date
