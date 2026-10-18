@@ -56,7 +56,7 @@ export const STYLES = `
 .pmr-pill.pmr-warn{border-color:color-mix(in srgb,var(--warn-soft) 70%,transparent);background:color-mix(in srgb,var(--warn-soft) 25%,var(--surface))}
 .pmr-pill.pmr-muted{border-color:var(--border);background:var(--soft)}
 .pmr-detail .pmr-link{height:auto;border:0;box-shadow:none;background:none;backdrop-filter:none;padding:0 2px;color:var(--accent);font-weight:500;text-decoration:underline;text-underline-offset:2px;white-space:normal;text-align:left;display:inline;line-height:inherit;font-size:inherit}
-.pmr-text{position:relative;max-height:280px;overflow:auto;margin:6px 0 10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;white-space:pre-wrap;font-family:Georgia,serif;font-size:13px;line-height:1.55}.pmr-text mark{background:#fef08a;color:#030712;border-radius:2px}.pmr-quote{margin:10px 0;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}.pmr-quote p{margin:0}
+.pmr-quote{margin:10px 0;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}.pmr-quote p{margin:0}
 .pmr-problems{margin:10px 0;padding:8px 12px;border:1px solid color-mix(in srgb,var(--warn-soft) 70%,transparent);border-radius:10px;background:color-mix(in srgb,var(--warn-soft) 14%,var(--surface))}.pmr-problems ul{margin:2px 0 0;padding-left:16px}
 .pmr-decision{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}
 .pmr-form{display:grid;gap:10px;margin-top:10px}.pmr-form label{display:grid;gap:4px;font-size:12px;color:var(--muted)}.pmr-form textarea{min-height:60px;resize:vertical}

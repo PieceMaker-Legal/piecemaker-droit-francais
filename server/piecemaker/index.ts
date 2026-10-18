@@ -19,6 +19,7 @@ import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
 import { createPieceTitleResolver } from './harness/piece-title.js';
+import { locateSourcePassages } from './harness/source-passages.js';
 import { installLegalCodeHarness } from './legal-code/legal-code-harness.js';
 import { openLibrary, installLibraryRuntime, installLibrarySkillVisibility } from './library/index.js';
 import { createKnowledgeBackend } from './knowledge/index.js';
@@ -116,10 +117,16 @@ export function createPieceMakerLocalRouter() {
 export function createPieceMakerRouter(options: { getRuntimeStatus?: () => PieceMakerRuntimeStatus } = {}) {
   const router = vendor.createPieceMakerRouter({ ...options, anonymizer, publishProjects });
   router.use(createCitationsRouter(citations, (id) => {
+    if (id.startsWith('raisonnement:')) return projectsDb.getProjectPaths().some((row) => row.project_path === id.slice('raisonnement:'.length));
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));
   router.use(timesheet);
-  router.use('/reasoning', createReasoningRouter(reasoning));
+  router.use('/reasoning', createReasoningRouter(reasoning, async (cwd, id, quote) => {
+    const info = await reasoning.source(cwd, id);
+    const quotes = [{ quote, verification: { verified: true } }];
+    const reference = info.kind === 'decision' ? { kind: 'case' as const, decision_id: id } : info.kind === 'piece' ? { kind: 'document' as const, doc_id: id } : { kind: 'article' as const, article_id: id };
+    return citations.save({ sessionId: `raisonnement:${cwd}`, title: info.title, source: info.text, citation: { ref: 1, ...reference, verified: true, quotes }, ranges: locateSourcePassages(info.text, quotes) });
+  }));
   router.use('/library', library.router);
   router.use(knowledge.router);
   router.use(createCompanySearchRouter());
