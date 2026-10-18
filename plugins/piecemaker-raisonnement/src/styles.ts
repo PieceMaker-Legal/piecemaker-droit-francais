@@ -79,12 +79,13 @@ export const STYLES = `
 .pmr-entry-text{color:var(--text);font-size:12.5px}
 .pmr-entry[data-status=alerte] .pmr-entry-text{color:var(--ko)}
 .pmr-entry[data-status="en cours"] .pmr-entry-text{color:var(--muted)}
-.pmr-entry[data-step=théorie]{padding-top:12px}.pmr-entry[data-step=théorie] strong{font-family:var(--editorial);font-size:15px;font-weight:500}
-.pmr-code{margin:5px 0 0;padding:7px 10px;border-radius:8px;background:var(--soft);font:11.5px/1.55 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted)}
-.pmr-code b{color:var(--ink);font-weight:600}.pmr-code i{font-style:normal;color:var(--accent)}
+.pmr-part{margin-top:16px}.pmr-part:first-of-type{margin-top:4px}.pmr-part h4{margin:0 0 4px;font-family:var(--editorial);font-size:1.05rem;font-weight:500;font-style:italic;color:var(--ink)}
+.pmr-part[data-part=question] .pmr-log:before{display:none}.pmr-entry[data-step=question] strong{font-family:var(--editorial);font-size:1.2rem;font-weight:500}
+.pmr-fix{display:inline-flex;align-items:baseline;gap:5px;padding:1px 9px;border:1px dashed currentColor;border-radius:999px;background:transparent;color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}.pmr-fix span{opacity:.6;font-size:11px}.pmr-fix:hover{background:var(--soft)}
+.pmr-entry[data-status=alerte] .pmr-fix{color:var(--ko)}
 .pmr-entry[data-step=réponse]{margin-top:6px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:var(--glass-shadow)}
 .pmr-entry[data-step=réponse] .pmr-mark{top:15px;left:-22px}
-.pmr-entry[data-step=réponse] .pmr-entry-text{display:block;margin-top:2px;font-family:var(--editorial);font-size:1.15rem;color:var(--ink)}
+.pmr-entry[data-step=réponse] .pmr-fix,.pmr-entry[data-step=réponse] .pmr-entry-text{display:block;margin-top:2px;font-family:var(--editorial);font-size:1.15rem;color:var(--ink)}
 .pmr-entry[data-step=réponse][data-status=ok]{border-color:color-mix(in srgb,var(--ok-soft) 70%,transparent)}
 .pmr-entry[data-step=réponse][data-status=alerte]{border-color:color-mix(in srgb,var(--ko-soft) 70%,transparent)}
 @keyframes pmr-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}

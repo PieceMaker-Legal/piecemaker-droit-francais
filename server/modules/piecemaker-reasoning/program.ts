@@ -3,7 +3,7 @@ import path from 'node:path';
 import type Database from 'better-sqlite3';
 
 import { REASONING_FORCES } from '../../../shared/piecemaker-reasoning.js';
-import type { ReasoningFinding, ReasoningForce, ReasoningLogEntry, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningTestReport, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningCondition, ReasoningFinding, ReasoningForce, ReasoningLogEntry, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningTestReport, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 import { parseCatala, printCatala, printValue } from './catala.js';
 import type { CatalaProgram, DeclarationItem, Rule } from './catala.js';
@@ -250,7 +250,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
         findings.forEach((finding, index) => send({ key: index ? `${key}.${index}` : key, step, status: finding.level, subject: finding.subject, text: finding.text }));
         return { value, findings };
       };
-      send({ key: 'théorie', step: 'théorie', status: 'neutre', subject: 'Théorie du dossier', text: `${previous.questions.length} question(s), ${previous.sources.length} source(s), ${list.length} personne(s) morale(s).` });
+      for (const question of previous.questions) send({ key: `${question.scope}:question`, step: 'question', status: 'neutre', subject: question.question || question.scope, text: '' });
       const checked = await Promise.all(previous.sources.map((source) => watch(`source:${source.id}`, 'source', source.title, source.kind === 'document' ? 'Relecture de la pièce…' : source.kind === 'case' ? 'Recherche des recours sur Légifrance…' : 'Consultation de Légifrance…', 'Texte relu sur Légifrance.', (findings) => checkSource(cwd, source, findings))));
       const registry = await Promise.all(list.map((company) => watch(`registre:${company.label}`, 'registre', company.label, company.siren ? 'Registre Public et BODACC…' : 'Recherche au Registre Public…', 'Registre Public consulté.', (findings) => checkCompany(company, findings))));
       const evaluated = rebuild(id, previous, loadModel(id), checked.map((entry) => entry.value), [], null);
@@ -298,12 +298,12 @@ export function createReasoningService(getDatabase: () => Database.Database, con
 }
 
 const shown = (value: ReasoningValue) => (value === true ? 'oui' : value === false ? 'non' : value === null ? 'inconnu' : printValue(value).replace(/^\|(\d{4})-(\d{2})-(\d{2})\|$/, '$3/$2/$1'));
-const ruleCode = (code: string) => code.split('\n').filter((line) => line.trim() && !line.trim().startsWith('#[')).join('\n').trim();
-const CONDITION_TEXT = { remplie: 'remplie', 'non remplie': 'non remplie', indéterminée: 'indéterminée', bloquée: 'bloquée : fondement à revoir' };
+const CONDITION_TEXT = { remplie: 'Condition remplie', 'non remplie': 'Condition non remplie', indéterminée: 'Condition non établie', bloquée: 'Condition bloquée : fondement à revoir' };
 const ANSWER_TEXT = { remplie: 'oui', 'non remplie': 'non', indéterminée: 'pas encore établie', bloquée: 'bloquée' };
 
 function resolution(snapshot: ReasoningSnapshot): ReasoningLogEntry[] {
   const titles = new Map(snapshot.sources.map((source) => [source.id, source.title]));
+  const cited = (ids: string[]) => ids.map((id) => titles.get(id) ?? id).join(', ');
   return snapshot.questions.flatMap((question): ReasoningLogEntry[] => {
     const facts = snapshot.facts.filter((fact) => fact.scope === question.scope);
     const pending = snapshot.conditions.filter((condition) => condition.scope === question.scope);
@@ -313,12 +313,16 @@ function resolution(snapshot: ReasoningSnapshot): ReasoningLogEntry[] {
       ordered.push(...pending.splice(next < 0 ? 0 : next, 1));
     }
     const resultId = `${question.scope}.${question.result}`;
+    const rules = ordered.filter((condition) => condition.id !== resultId);
+    const reach = (ids: string[], seen = new Set<string>()): Set<string> => { for (const id of ids) if (!seen.has(id)) { seen.add(id); reach(ordered.find((condition) => condition.id === id)?.dependsOn ?? [], seen); } return seen; };
+    const missing = (ids: string[]) => { const all = reach(ids); return facts.filter((fact) => all.has(fact.id) && fact.status !== 'établi').map((fact) => fact.variable.replace(/_/g, ' ')); };
+    const why = (status: ReasoningCondition['status'], ids: string[]) => (status === 'indéterminée' && missing(ids).length ? ` : reste à prouver ${missing(ids).join(', ')}` : '');
     return [
-      { key: `${question.scope}:début`, step: 'théorie', status: 'neutre', subject: question.question || question.scope, text: `Résolution du champ d’application ${question.scope}.` },
-      ...facts.map((fact): ReasoningLogEntry => ({ key: fact.id, step: 'fait', status: fact.status === 'établi' ? 'ok' : 'alerte', subject: fact.variable, text: fact.status === 'établi' ? `= ${shown(fact.value)}` : 'inconnu : pièce à rechercher' })),
-      ...ordered.filter((condition) => condition.id !== resultId).map((condition): ReasoningLogEntry => ({ key: condition.id, step: 'règle', status: condition.status === 'remplie' ? 'ok' : condition.status === 'indéterminée' ? 'neutre' : 'alerte', subject: condition.label, text: CONDITION_TEXT[condition.status], code: ruleCode(condition.code) })),
-      ...question.vigueur.map((entry): ReasoningLogEntry => ({ key: `${question.scope}:vigueur:${entry.source}`, step: 'vigueur', status: entry.inForce === true ? 'ok' : 'alerte', subject: titles.get(entry.source) ?? entry.source, text: entry.inForce === true ? `en vigueur au ${shown(entry.date)}` : entry.inForce === false ? `non en vigueur au ${shown(entry.date)}` : 'vigueur non contrôlée : date de référence non prouvée' })),
-      { key: `${question.scope}:réponse`, step: 'réponse', status: question.status === 'remplie' || question.status === 'non remplie' ? (question.objectiveStatus === 'hors d’atteinte' ? 'alerte' : 'ok') : question.status === 'bloquée' ? 'alerte' : 'neutre', subject: question.question || question.scope, text: `Réponse : ${ANSWER_TEXT[question.status]}${question.objectiveStatus ? ` · objectif ${question.objectiveStatus}` : ''}`, code: ruleCode(snapshot.conditions.find((condition) => condition.id === resultId)?.code ?? '') },
+      ...rules.map((condition): ReasoningLogEntry => ({ key: condition.id, step: 'règle', status: condition.status === 'bloquée' || !condition.sources.length ? 'alerte' : 'ok', subject: condition.label, text: condition.status === 'bloquée' ? condition.issues[0] ?? 'Fondement à revoir' : condition.sources.length ? `Fondement : ${cited(condition.sources)}` : 'Aucun fondement cité' })),
+      ...question.vigueur.map((entry): ReasoningLogEntry => ({ key: `${question.scope}:vigueur:${entry.source}`, step: 'vigueur', status: entry.inForce === true ? 'ok' : 'alerte', subject: titles.get(entry.source) ?? entry.source, text: entry.inForce === true ? `En vigueur au ${shown(entry.date)}` : entry.inForce === false ? `Non en vigueur au ${shown(entry.date)}` : 'Vigueur non contrôlée : date des faits non prouvée' })),
+      ...facts.map((fact): ReasoningLogEntry => ({ key: fact.id, step: 'fait', status: fact.status === 'établi' ? 'ok' : 'alerte', subject: fact.variable, text: fact.status === 'établi' ? `Établi : ${shown(fact.value)}${fact.sources.length ? ` (${cited(fact.sources)})` : ''}` : 'Inconnu : pièce à rechercher' })),
+      ...rules.map((condition): ReasoningLogEntry => ({ key: `${condition.id}:conclusion`, step: 'conclusion', status: condition.status === 'remplie' ? 'ok' : condition.status === 'indéterminée' ? 'neutre' : 'alerte', subject: condition.label, text: `${CONDITION_TEXT[condition.status]}${why(condition.status, condition.dependsOn)}` })),
+      { key: `${question.scope}:réponse`, step: 'réponse', status: question.status === 'remplie' || question.status === 'non remplie' ? (question.objectiveStatus === 'hors d’atteinte' ? 'alerte' : 'ok') : question.status === 'bloquée' ? 'alerte' : 'neutre', subject: question.question || question.scope, text: `Réponse : ${ANSWER_TEXT[question.status]}${why(question.status, [resultId])}${question.objectiveStatus ? ` · objectif ${question.objectiveStatus}` : ''}` },
     ];
   });
 }

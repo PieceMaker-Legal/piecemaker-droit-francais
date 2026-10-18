@@ -213,13 +213,14 @@ test('le test exécute la théorie sur tout le dossier : vigueur, recours, pièc
   assert.equal(new Set(snapshot.test!.log!.map((entry) => entry.key)).size, snapshot.test!.log!.length);
   assert.ok(snapshot.test!.log!.every((entry) => entry.status !== 'en cours'));
   assert.ok(snapshot.test!.log!.every((entry) => streamed.includes(`${entry.step}|${entry.status}|${entry.subject}|${entry.text}`)));
-  assert.match(streamed[0], /^théorie\|neutre\|Théorie du dossier\|1 question\(s\)/);
+  assert.match(streamed[0], /^question\|neutre\|/);
   assert.ok(streamed.includes('registre|en cours|ZETABIO|Recherche au Registre Public…'));
   assert.ok(streamed.includes('registre|alerte|ZETABIO|Personne morale introuvable au Registre Public.'));
   assert.ok(streamed.indexOf('registre|en cours|ZETABIO|Recherche au Registre Public…') < streamed.indexOf('registre|alerte|ZETABIO|Personne morale introuvable au Registre Public.'));
   assert.ok(streamed.some((line) => line.startsWith('fait|alerte|faute|')));
-  const rule = snapshot.test!.log!.find((entry) => entry.step === 'règle' && entry.code);
-  assert.ok(rule && !rule.code!.includes('#['));
+  assert.ok(snapshot.test!.log!.some((entry) => entry.step === 'règle' && entry.text.startsWith('Fondement : ')));
+  assert.ok(streamed.some((line) => line.startsWith('fait|alerte|faute|Inconnu : pièce à rechercher')));
+  assert.ok(streamed.findIndex((line) => line.startsWith('fait|')) < streamed.findIndex((line) => line.startsWith('conclusion|')));
   assert.match(streamed.at(-1)!, /^réponse\|/);
 });
 

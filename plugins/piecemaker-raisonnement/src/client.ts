@@ -21,10 +21,9 @@ const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char
 const human = (variable: string) => { const text = variable.replace(/_/g, ' '); return text.charAt(0).toUpperCase() + text.slice(1); };
 const shorten = (text: string, length: number) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
 const pill = (status: string, label: string) => `<span class="pmr-pill pmr-${TONE[status] ?? 'muted'}">${escape(label)}</span>`;
-const STEP: Record<ReasoningLogEntry['step'], string> = { théorie: 'Programme', source: 'Source', registre: 'Registre Public', fait: 'Fait', règle: 'Règle', vigueur: 'Vigueur', réponse: 'Réponse' };
+const STEP: Record<ReasoningLogEntry['step'], string> = { question: 'Question', source: 'Source', registre: 'Registre Public', fait: 'Fait', règle: 'Règle', vigueur: 'Vigueur', conclusion: 'Condition', réponse: 'Réponse' };
+const PARTS = [['question', 'La question'], ['droit', 'En droit'], ['fait', 'En fait'], ['conclusion', 'Conclusion']] as const;
 const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
-const KEYWORDS = /\b(règle|définition|sous condition|conséquence|non|rempli|égal à|exception|étiquette|et|ou|vrai|faux)\b/g;
-const catala = (code: string) => escape(code).replace(KEYWORDS, '<b>$1</b>').replace(/\|(\d{4}-\d{2}-\d{2})\|/g, '<i>|$1|</i>');
 const PACE = 140;
 const cleanups = new WeakMap<HTMLElement, () => void>();
 
@@ -241,7 +240,10 @@ export function mount(container: HTMLElement, api: Host) {
     const found = source(entry.key.replace(/^source:/, '').split('.')[0]);
     return found ? sourceKind(found) : STEP.source;
   };
-  const entryView = (entry: ReasoningLogEntry, motion = '') => `<li class="pmr-entry${motion}" data-key="${escape(entry.key)}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(stepLabel(entry))}</span><strong>${escape(entry.step === 'fait' ? human(entry.subject) : entry.subject)}</strong>${entry.step === 'réponse' ? '' : `<span class="pmr-entry-text">${escape(entry.text)}</span>`}</div>${entry.step === 'réponse' ? `<span class="pmr-entry-text">${escape(entry.text)}</span>` : ''}${entry.code ? `<pre class="pmr-code">${catala(entry.code)}</pre>` : ''}</li>`;
+  const part = (entry: ReasoningLogEntry) => (entry.step === 'question' ? 'question' : entry.step === 'fait' || entry.step === 'registre' || (entry.step === 'source' && source(entry.key.replace(/^source:/, '').split('.')[0])?.kind === 'document') ? 'fait' : entry.step === 'conclusion' || entry.step === 'réponse' ? 'conclusion' : 'droit');
+  const entryText = (entry: ReasoningLogEntry) => (entry.step === 'fait' && !testing && fact(entry.key) && !snapshot?.demo ? `<button class="pmr-fix" data-fix="${escape(entry.key)}" title="Renseigner ce fait">${escape(entry.text)}<span aria-hidden="true">✎</span></button>` : `<span class="pmr-entry-text">${escape(entry.text)}</span>`);
+  const entryView = (entry: ReasoningLogEntry, motion = '') => `<li class="pmr-entry${motion}" data-key="${escape(entry.key)}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head">${entry.step === 'question' || entry.step === 'réponse' ? '' : `<span class="pmr-step">${escape(stepLabel(entry))}</span>`}<strong>${escape(entry.step === 'fait' ? human(entry.subject) : entry.subject)}</strong>${entry.step === 'réponse' || !entry.text ? '' : entryText(entry)}</div>${entry.step === 'réponse' ? entryText(entry) : ''}</li>`;
+  const partsView = (entries: ReasoningLogEntry[]) => PARTS.map(([id, title]) => { const own = entries.filter((entry) => part(entry) === id); return `<section class="pmr-part" data-part="${id}"${own.length ? '' : ' hidden'}><h4>${title}</h4><ol class="pmr-log" aria-live="polite">${own.map((entry) => entryView(entry)).join('')}</ol></section>`; }).join('');
   const tally = () => {
     const shown = new Map(journal().map((entry) => [entry.key, entry.status]));
     const alerts = [...shown.values()].filter((status) => status === 'alerte').length;
@@ -260,8 +262,8 @@ export function mount(container: HTMLElement, api: Host) {
     const report = snapshot!.test;
     const entries = journal();
     const fallback = !testing && !entries.length && report ? report.findings.map((finding, index): ReasoningLogEntry => ({ key: `constat:${index}`, step: 'règle', status: finding.level, subject: finding.subject, text: finding.text })) : entries;
-    const intro = !testing && !report ? '<p class="pmr-muted">Le test exécute la théorie avec tout le dossier : il relit les sources sur Légifrance, retrouve les extraits dans les pièces, interroge le Registre Public et le BODACC, puis résout le programme Catala condition par condition.</p>' : '';
-    return `<div class="pmr-run"><button class="pmr-primary" data-run-test${testing ? ' disabled' : ''}>${testing ? 'Test en cours…' : report ? 'Relancer le test' : 'Lancer le test'}</button>${report && !testing ? `<span class="pmr-muted">${escape(new Date(report.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}<span class="pmr-tally" data-tally>${tally()}</span></div>${intro}<ol class="pmr-log" aria-live="polite">${fallback.map((entry) => entryView(entry)).join('')}</ol>`;
+    const intro = !testing && !report ? '<p class="pmr-muted">Le test exécute la théorie avec tout le dossier : il relit les sources sur Légifrance, retrouve les extraits dans les pièces, interroge le Registre Public et le BODACC, puis raisonne : la question, en droit, en fait, et la conclusion.</p>' : '';
+    return `<div class="pmr-run"><button class="pmr-primary" data-run-test${testing ? ' disabled' : ''}>${testing ? 'Test en cours…' : report ? 'Relancer le test' : 'Lancer le test'}</button>${report && !testing ? `<span class="pmr-muted">${escape(new Date(report.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}<span class="pmr-tally" data-tally>${tally()}</span></div>${intro}${partsView(fallback)}`;
   };
 
   const reveal = (entry: ReasoningLogEntry) => {
@@ -270,11 +272,13 @@ export function mount(container: HTMLElement, api: Host) {
     const index = list.findIndex((item) => item.key === entry.key);
     if (index >= 0) list[index] = entry; else list.push(entry);
     if (tab !== 'tests') return;
-    const log = detail.querySelector<HTMLElement>('.pmr-log');
-    if (!log) return;
+    const section = detail.querySelector<HTMLElement>(`[data-part="${part(entry)}"]`);
+    const log = section?.querySelector<HTMLElement>('.pmr-log');
+    if (!section || !log) return;
+    section.hidden = false;
     const scroller = detail;
     const pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
-    const existing = [...log.children].find((item) => (item as HTMLElement).dataset.key === entry.key);
+    const existing = [...detail.querySelectorAll('.pmr-entry')].find((item) => (item as HTMLElement).dataset.key === entry.key);
     const template = document.createElement('template');
     template.innerHTML = entryView(entry, existing ? ' is-updated' : ' is-new');
     if (existing) existing.replaceWith(template.content); else log.append(template.content);
@@ -346,6 +350,7 @@ export function mount(container: HTMLElement, api: Host) {
       const entry = source(button.dataset.open);
       if (entry?.token) api.openFileInEditor?.(`piecemaker://citation/${entry.token}/${encodeURIComponent(entry.title)}`);
     }
+    if (button.dataset.fix) { selected = button.dataset.fix; editing = button.dataset.fix; tab = 'detail'; paintGraph(); paintDetails(); }
     if (button.dataset.edit) { editing = button.dataset.edit; paintDetails(); }
     if (button.hasAttribute('data-cancel')) { editing = ''; paintDetails(); }
     if (button.dataset.zoom) { zoom = Math.max(.1, Math.min(3, zoom * (Number(button.dataset.zoom) > 0 ? 1.2 : 1 / 1.2))); paintGraph(); }
