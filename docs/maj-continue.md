@@ -319,3 +319,14 @@ marqueur des données de production. Les [tests généraux macOS et Windows](htt
 sont également réussis. Le consentement graphique aux certificats reste à
 vérifier par l'utilisateur sur son Windows. L'étape 2 n'est pas publiée et
 attend son signal explicite.
+
+L'exécutable de cette étape est disponible dans la
+[prérelease isolée d'installation](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/releases/tag/validation-installation-desktop-2.0.47).
+Son empreinte SHA256 est
+`699c692e17fa9fb0f674229e8993db52377fe21bb947d6cd577a7aa8370f086c`.
+Le contrôle de l'exécutable publié parcourt aussi les deux écrans de première
+configuration et vérifie l'affichage du bureau authentifié avant et après
+redémarrage. Les captures et le rapport sont joints à cette prérelease, sans
+remplacer l'exécutable. Le processus de vérification termine seulement après
+écriture du rapport ; les commandes de débogage ont une limite de temps et
+chaque lancement utilise un port distinct.
