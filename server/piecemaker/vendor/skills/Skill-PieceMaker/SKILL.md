@@ -91,16 +91,10 @@ pm tabular_review lancer --projet ID [--ia claude|codex|mistral] [--modele-ia TE
 
 ## raisonnement
 
-Théorie juridique du dossier, pas à pas ; chaque commande renvoie l’état et ce qui reste à faire. Volet Raisonnement à côté du chat.
+Le raisonnement du dossier s’écrit dans `.piecemaker/raisonnement.js` (objet JavaScript sans fonctions : `questions`, un terme par clé avec `si`, `sauf`, `l_une`, `selon`, `preuve`, `contredit`, et `essais`). Volet Raisonnement à côté du chat.
 
-| Commande | Options |
+| Commande | Effet |
 | --- | --- |
-| `pm raisonnement etat` | `--question Q1`, `--vue complete` (règles, pièces, citations, force probante) ; par défaut l’arbre synthétique |
-| `pm raisonnement question` | `--texte` question de droit, `--objectif oui\|non`, `--date` nom du fait date de référence, `--question Q1` pour modifier |
-| `pm raisonnement type` | `--nom` Majuscule, `--champs "montant contenu argent, payee contenu booléen"` (structure) ou `--cas "Amiable, Judiciaire contenu date"` (énumération) |
-| `pm raisonnement condition` | `--question`, `--nom`, `--libelle`, `--regle` (expression Catala : et, ou, non, = < >, \|AAAA-MM-JJ\|, 2 mois, 1 000 €, 30%, si/alors/sinon, listes, `x.champ`, `x sous forme Cas`, `f de x`, `q1.reponse`…), `--source` LEGIARTI…/JURITEXT…/note, `--extrait` exact, `--role condition\|fondement\|moyen_adverse\|assertion`, `--a-la-date` ; `--type` (valeur calculée, ex. argent), `--parametres "montant contenu argent"` (fonction), `--etiquette`, `--exception-de base\|étiquette`, `--consequence non`, `--etat`, `--si` |
-| `pm raisonnement fait` | `--question`, `--nom`, `--type booléen\|date\|entier\|décimal\|argent\|durée\|liste de T\|Structure\|Énumération`, `--valeur` (constante Catala pour les types composés), `--piece` chemin, `--extrait` exact, `--force-probante acte_authentique\|acte_sous_seing_privé\|commencement_de_preuve\|indice\|sans_valeur`, `--appreciation` |
-| `pm raisonnement retirer` | `--question`, `--nom` (sans nom : toute la question), `--etiquette`, `--etat` ; ou `--type Nom` |
-| `pm raisonnement tester` | vigueur, recours, extraits, personnes morales ; liste les alertes |
+| `pm raisonnement verifier` | lit le fichier sans l’exécuter, vérifie sources, citations, vigueur, pièces et personnes, exécute le test et renvoie l’objet annoté (`bilan`, `statut`, `decisif`, `erreurs`, `manques`) |
 
-Un nom inconnu dans `--regle` devient un fait à prouver. Sans pièce, ne donnez pas de valeur. Un élément validé ou écarté par l’avocat est verrouillé.
+Une citation exacte à la ponctuation près est corrigée dans le fichier. Les alertes écartées par l’avocat et la fiabilité des pièces se gèrent dans le volet.

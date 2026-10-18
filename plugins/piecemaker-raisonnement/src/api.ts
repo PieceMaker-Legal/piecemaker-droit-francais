@@ -1,38 +1,22 @@
-import type { ReasoningLogEntry, ReasoningSnapshot, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
 
 export function loadReasoning(projectPath: string | null, example = false): Promise<ReasoningSnapshot> {
   return request<ReasoningSnapshot>(`/api/piecemaker/reasoning${example ? '/example' : `?projectPath=${encodeURIComponent(projectPath ?? '')}`}`);
 }
 
-export function reviewItem(projectPath: string, id: string, status: 'validé' | 'écarté' | null, note?: string): Promise<ReasoningSnapshot> {
-  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/review', { projectPath, id, status, note });
+export function verifyReasoning(projectPath: string): Promise<ReasoningSnapshot> {
+  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/verify', { projectPath });
 }
 
-export function appreciateFact(projectPath: string, id: string, input: { value: ReasoningValue; force: string | null; appreciation: string; note?: string }): Promise<ReasoningSnapshot> {
-  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/appreciation', { projectPath, id, ...input });
+export function dismissIssue(projectPath: string, id: string, restore = false): Promise<ReasoningSnapshot> {
+  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/dismiss', { projectPath, id, restore });
 }
 
-export async function runTheoryTest(projectPath: string, onEntry: (entry: ReasoningLogEntry) => void): Promise<ReasoningSnapshot> {
-  const response = await send('/api/piecemaker/reasoning/test', { projectPath });
-  if (!response.ok || !response.body) throw new Error((await response.json().catch(() => ({})) as { error?: string }).error || `Erreur ${response.status}`);
-  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = '';
-  for (;;) {
-    const { value, done } = await reader.read();
-    buffer += value ?? '';
-    const lines = buffer.split('\n');
-    buffer = done ? '' : lines.pop()!;
-    for (const line of lines.filter((entry) => entry.trim())) {
-      const message = JSON.parse(line) as { entry?: ReasoningLogEntry; snapshot?: ReasoningSnapshot; error?: string };
-      if (message.entry) onEntry(message.entry);
-      if (message.error) throw new Error(message.error);
-      if (message.snapshot) return message.snapshot;
-    }
-    if (done) throw new Error('Test interrompu.');
-  }
+export function ratePiece(projectPath: string, piece: string, reliable: boolean | null): Promise<ReasoningSnapshot> {
+  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/reliability', { projectPath, piece, reliable });
 }
 
-async function send(url: string, body?: object) {
+async function request<T>(url: string, body?: object): Promise<T> {
   const token = localStorage.getItem('auth-token');
   const response = await fetch(url, { ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}), headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) } });
   const refreshed = response.headers.get('X-Refreshed-Token');
@@ -40,11 +24,6 @@ async function send(url: string, body?: object) {
     localStorage.setItem('auth-token', refreshed);
     window.dispatchEvent(new CustomEvent('auth-token-refreshed', { detail: refreshed }));
   }
-  return response;
-}
-
-async function request<T>(url: string, body?: object): Promise<T> {
-  const response = await send(url, body);
   const data = await response.json() as T & { error?: string };
   if (!response.ok) throw new Error(data.error || `Erreur ${response.status}`);
   return data;

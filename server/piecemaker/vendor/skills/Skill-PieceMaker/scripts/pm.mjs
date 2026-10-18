@@ -7,8 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement'];
-const REASONING_COMMANDS = ['etat', 'question', 'type', 'condition', 'fait', 'retirer', 'tester'];
-const REASONING_FIELDS = ['question', 'texte', 'objectif', 'date', 'nom', 'libelle', 'regle', 'role', 'source', 'extrait', 'a_la_date', 'type', 'valeur', 'piece', 'force', 'appreciation', 'vue', 'parametres', 'etiquette', 'exception_de', 'etat', 'si', 'consequence', 'champs', 'cas'];
+const REASONING_COMMANDS = ['verifier'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
@@ -438,22 +437,12 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     const commande = positional[1];
     if (!REASONING_COMMANDS.includes(commande)) usage(`raisonnement attend ${REASONING_COMMANDS.join(', ')}.`);
     const input = { commande, cwd: path.resolve(resolved) };
-    for (const field of REASONING_FIELDS) {
-      const value = field === 'force' ? flags.force_probante : flags[field];
-      if (value !== undefined && value !== true) input[field] = field === 'valeur' ? reasoningValue(String(value)) : String(value);
-    }
     const result = await api.reasoningFn(input);
     const target = { cwd: input.cwd, tab: 'plugin:piecemaker-raisonnement' };
     return withNotice(result, await followPanel(api, { project: input.cwd, tab: target.tab }, target));
   }
 
   usage(`Outil inconnu : ${tool}`);
-}
-
-function reasoningValue(value) {
-  if (value === 'true' || value === 'vrai') return true;
-  if (value === 'false' || value === 'faux') return false;
-  return /^-?\d+(?:\.\d+)?$/.test(value) ? Number(value) : value;
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;

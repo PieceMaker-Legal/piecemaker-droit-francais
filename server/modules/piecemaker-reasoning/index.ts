@@ -1,4 +1,4 @@
-export { createReasoningService } from './program.js';
-export type { ReasoningConnectors } from './commands.js';
+export { createReasoningService, REASONING_FILE } from './program.js';
+export type { ReasoningConnectors, SourceInfo } from './program.js';
 export { createReasoningRouter, createReasoningLocalRouter } from './routes.js';
-export { readHistory, readLegalPeriod } from './legal-period.js';
+export { readLegalPeriod } from './legal-period.js';
