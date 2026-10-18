@@ -248,7 +248,7 @@ export async function applyCommand(model: ReasoningModel, sources: ReasoningSour
     guard(`${scope}.${name}`);
     if (next.conditions.some((entry) => entry.question === scope && entry.name === name && entry.role !== 'assertion')) throw new TypeError(`${name} est une condition, pas un fait.`);
     let fact = next.facts.find((entry) => entry.question === scope && entry.name === name);
-    if (!fact) next.facts.push(fact = { question: scope, name, type: 'booléen', value: null, sources: [], force: null, appreciation: '' });
+    if (!fact) throw new TypeError(`${name} n’est utilisé par aucune condition : écris d’abord la condition qui s’en sert (--regle), puis prouve le fait. Faits attendus : ${next.facts.filter((entry) => entry.question === scope).map((entry) => entry.name).join(', ') || 'aucun'}.`);
     if (input.type !== undefined) fact.type = checkType(next, text(input.type, 'type', 200));
     fact.value = parseValue(next, input.valeur, fact.type);
     if (input.force !== undefined && input.force !== null && !REASONING_FORCES.includes(input.force as typeof REASONING_FORCES[number])) throw new TypeError(`force : ${REASONING_FORCES.join(', ')}.`);
@@ -338,7 +338,10 @@ const STATUS = { remplie: 'remplie', 'non remplie': 'non remplie', indéterminé
 const ANSWER = { remplie: 'oui', 'non remplie': 'non', indéterminée: 'pas encore établie', bloquée: 'bloquée (fondement à revoir)' } as const;
 const MARK = { remplie: '✓', 'non remplie': '✗', indéterminée: '?', bloquée: '⚠' } as const;
 const ROLE = { condition: '', fondement: '[fondement] ', moyen_adverse: '[moyen adverse] ', assertion: '' } as const;
-const shownValue = (value: ReasoningValue, type?: string) => `${printValue(value).replace(/^\|(.*)\|$/, '$1')}${type === 'argent' && typeof value === 'number' ? ' €' : ''}`;
+const shownValue = (value: ReasoningValue, type?: string) => (type === 'argent' && typeof value === 'number'
+  ? `${value.toLocaleString('fr-FR', { maximumFractionDigits: 2 }).replace(/[\u202f\u00a0]/g, ' ')} €`
+  : printValue(value).replace(/^\|(.*)\|$/, '$1'));
+const mentions = (label: string, article: string) => new RegExp(`(?<![\\p{L}\\p{N}])${(article.match(/\p{L}+|\p{N}+/gu) ?? []).join('[^\\p{L}\\p{N}]*')}(?![\\p{N}])`, 'iu').test(label);
 const ruleText = (item: ModelCondition) => `${item.etiquette ? `[${item.etiquette}] ` : ''}${item.exceptionDe ? `[exception à ${item.exceptionDe}] ` : ''}${item.etat ? `[état ${item.etat}] ` : ''}${item.si ? `si ${item.si} : ` : ''}${item.rule}${item.negative ? ' → non remplie' : ''}`;
 
 export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel, focus: string | null, full = false, withTest = true) {
@@ -357,6 +360,13 @@ export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel
     const history = source.history ? ` · ${source.history.status}` : '';
     return [`${indent}${reference(id)}${validity}${history}`, `${indent}  « ${source.excerpt} »`];
   });
+  const cited = (ids: string[], label: string) => {
+    const titles = [...new Set(ids.map((id) => sources.get(id)?.title ?? id))].filter((title) => {
+      const article = /article\s+(\S+)/i.exec(title)?.[1];
+      return !article || !mentions(label, article);
+    });
+    return titles.length ? ` [${titles.join(' ; ')}]` : '';
+  };
   const lines: string[] = [];
   for (const entry of shown) {
     const own = model.conditions.filter((item) => item.question === entry.scope);
@@ -372,7 +382,8 @@ export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel
       const fact = facts.get(id)!;
       reached.add(id);
       const value = fact.status === 'établi' ? `${shownValue(fact.value, fact.type)} ✓` : 'à prouver ✗';
-      tree.push(`${prefix}fait ${fact.variable} (${fact.type}) : ${value}${fact.burden ? ` · charge : ${fact.burden}` : ''}${fact.review ? ` · ${fact.review.status} par l'avocat` : ''}`);
+      const pieces = fact.status === 'établi' && !full ? [...new Set(fact.sources.map((source) => sources.get(source)?.title ?? source))] : [];
+      tree.push(`${prefix}fait ${fact.variable} (${fact.type}) : ${value}${pieces.length ? ` — ${pieces.join(' ; ')}` : ''}${fact.burden ? ` · charge : ${fact.burden}` : ''}${fact.review ? ` · ${fact.review.status} par l'avocat` : ''}`);
       if (!full) return;
       const pad = prefix.replace(/[├└]─ $/, (match) => (match.startsWith('├') ? '│  ' : '   '));
       if (fact.status === 'établi') tree.push(`${pad}  force : ${fact.force ?? 'à indiquer'}${fact.appreciation ? ` · ${fact.appreciation}` : ''}${fact.author === 'avocat' ? ' · saisi par l’avocat' : ''}`);
@@ -390,7 +401,7 @@ export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel
       if (seen.has(id)) { tree.push(`${prefix}${condition.variable} : ${STATUS[condition.status]} ${MARK[condition.status]} (voir plus haut)`); return; }
       seen.add(id);
       const status = entries[0]?.parametres ? 'fonction' : entries[0]?.type ? (condition.value === null ? `${STATUS[condition.status]} ?` : `${shownValue(condition.value, entries[0].type)} ${condition.status === 'bloquée' ? MARK.bloquée : '✓'}`) : `${STATUS[condition.status]} ${MARK[condition.status]}`;
-      tree.push(`${prefix}${ROLE[role]}${condition.variable}${signature} : ${status}${label}${condition.sources.length && !full ? ` [${condition.sources.map((source) => sources.get(source)?.title ?? source).join(' ; ')}]` : ''}${condition.review ? ` · ${condition.review.status} par l'avocat` : ''}`);
+      tree.push(`${prefix}${ROLE[role]}${condition.variable}${signature} : ${status}${label}${full ? '' : cited(condition.sources, condition.label)}${condition.review ? ` · ${condition.review.status} par l'avocat` : ''}`);
       const rules = entries.map(ruleText);
       if (full) {
         if (rules.length) tree.push(...rules.map((rule) => `${childPrefix}  règle : ${rule}`));
@@ -408,8 +419,8 @@ export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel
     const outside = [...conditions.keys()].filter((id) => !seen.has(id) && id !== `${entry.scope}.${entry.result}`);
     if (outside.length) tree.push('Hors de la réponse :');
     for (const id of outside) if (!seen.has(id)) node(id, '', '');
-    const loose = [...facts.keys()].filter((id) => !reached.has(id));
-    if (loose.length) { tree.push('Faits hors de la réponse :'); loose.forEach((id, index) => factLine(id, index === loose.length - 1 ? '└─ ' : '├─ ')); }
+    const dateId = `${entry.scope}.${model.questions.find((item) => item.id === entry.scope)?.date}`;
+    if (facts.has(dateId) && !reached.has(dateId)) { tree.push('Date de référence :'); factLine(dateId, '└─ '); }
     const assertions = own.filter((item) => item.role === 'assertion');
     if (assertions.length) tree.push('Assertions :', ...assertions.map((item) => `- ${item.name} — ${item.label} : ${item.rule}`));
     lines.push('Arbre :', ...tree);
@@ -417,7 +428,7 @@ export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel
     const todo = [
       ...entry.issues,
       ...[...conditions.values()].filter((item) => item.variable !== entry.result).flatMap((item) => item.issues.map((issue) => `${item.variable} : ${issue}`)),
-      ...[...facts.values()].filter((item) => item.status !== 'établi').map((item) => `${item.variable} : ${item.issues[0] ?? 'à prouver'} (commande fait, avec piece et extrait)`),
+      ...[...facts.values()].filter((item) => item.status !== 'établi' && reached.has(item.id)).map((item) => `${item.variable} : ${item.issues[0] ?? 'à prouver'} (commande fait, avec piece et extrait)`),
     ];
     if (todo.length) lines.push(`À faire (${new Set(todo).size}) :`, ...[...new Set(todo)].map((item) => `- ${item}`));
     lines.push('');
