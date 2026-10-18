@@ -1,13 +1,32 @@
-import { readDraftText, writeDraftText } from '@/shared/chatDrafts';
+export type LegalCodeStart = { projectId: string; trigger: number };
 
-export const LEGAL_CODE_COMMAND = '/legal-code ';
+let pending: LegalCodeStart | null = null;
+const listeners = new Set<() => void>();
 
-const projectScope = (projectId: string) => `project:${projectId}`;
-
-export function prefillLegalCode(projectId: string): void {
-  writeDraftText(projectScope(projectId), LEGAL_CODE_COMMAND);
+function setPending(next: LegalCodeStart | null) {
+  pending = next;
+  listeners.forEach((listener) => listener());
 }
 
-export function isLegalCodeDraft(projectId: string): boolean {
-  return readDraftText(projectScope(projectId)).trimStart().startsWith(LEGAL_CODE_COMMAND.trim());
+export function startLegalCode(projectId: string, trigger: number): void {
+  setPending({ projectId, trigger });
+}
+
+export function cancelLegalCode(): void {
+  if (pending) setPending(null);
+}
+
+export function readLegalCodeStart(): LegalCodeStart | null {
+  return pending;
+}
+
+export function subscribeToLegalCode(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function legalCodeSendOptions(projectId: string | undefined, isNewSession: boolean): { legalCode?: true } {
+  if (!isNewSession || !projectId || pending?.projectId !== projectId) return {};
+  setPending(null);
+  return { legalCode: true };
 }

@@ -13,7 +13,6 @@ const MARKER = '.piecemaker/bundled-skills.json';
 const BUNDLED_SKILLS = [
   { slug: 'docx-cli', segments: ['vendor', 'skills', 'docx-cli'] },
   { slug: 'redaction-juridique', segments: ['vendor', 'piecemaker-plugin', 'skills', 'redaction-juridique'] },
-  { slug: 'legal-code', segments: ['vendor', 'piecemaker-plugin', 'skills', 'legal-code'] },
   { slug: 'Skill-PieceMaker', segments: ['vendor', 'skills', 'Skill-PieceMaker'] },
 ] as const;
 

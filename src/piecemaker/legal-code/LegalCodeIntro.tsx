@@ -1,13 +1,11 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
-import { useProjectCommandState } from '@/modules/project-workspace/context/ProjectsStateContext';
+import { useProjectMainState } from '@/modules/project-workspace/context/ProjectsStateContext';
 
-import { subscribeToChatDrafts } from '@/shared/chatDrafts';
-
-import { isLegalCodeDraft } from './legalCode';
+import { cancelLegalCode, readLegalCodeStart, subscribeToLegalCode } from './legalCode';
 
 const STEPS = [
-  'Posez la question juridique du dossier à la suite de /legal-code, puis envoyez.',
+  'Posez la question juridique du dossier dans la zone de saisie, puis envoyez.',
   'Legal Code la découpe en conditions, chacune fondée sur un article ou une décision lue sur Légifrance.',
   'Il rattache chaque fait à une pièce du dossier et à son extrait ; un fait sans pièce reste « à rechercher ».',
   'Le volet Raisonnement montre le graphe, le détail et le test : la question, en droit, en fait, conclusion.',
@@ -15,9 +13,13 @@ const STEPS = [
 ];
 
 export function LegalCodeIntro() {
-  const { selectedProject } = useProjectCommandState();
-  const projectId = selectedProject?.projectId ?? '';
-  const active = useSyncExternalStore(subscribeToChatDrafts, () => Boolean(projectId) && isLegalCodeDraft(projectId));
+  const { selectedProject, newSessionTrigger } = useProjectMainState();
+  const start = useSyncExternalStore(subscribeToLegalCode, readLegalCodeStart);
+  const active = Boolean(start) && start?.projectId === selectedProject?.projectId && start?.trigger === newSessionTrigger;
+
+  useEffect(() => {
+    if (start && !active) cancelLegalCode();
+  }, [start, active]);
 
   if (!active) return null;
 

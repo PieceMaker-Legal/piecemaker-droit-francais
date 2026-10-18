@@ -31,6 +31,7 @@ import { describeBackgroundTask, ownBackgroundTasks } from '@/modules/chat/utils
 import { useFileMentions } from '@/modules/chat/hooks/useFileMentions';
 import { useInputHistory } from '@/modules/chat/hooks/useInputHistory';
 import { useSlashCommands } from '@/modules/chat/hooks/useSlashCommands';
+import { legalCodeSendOptions } from '@/piecemaker/legal-code';
 
 type UseChatComposerStateArgs = {
   isActive?: boolean;
@@ -924,6 +925,7 @@ export function useChatComposerState({
         content: messageContent,
         options: {
           ...(queuedSubmission?.options ?? buildSendOptions(messageContent)),
+          ...legalCodeSendOptions(selectedProjectId, !selectedSession),
           attachments: uploadedAttachments,
         },
       });
