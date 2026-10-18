@@ -63,9 +63,9 @@ export async function verifyReasoning(input: {
   const emit = (entry: ReasoningLogEntry) => { const index = log.findIndex((item) => item.key === entry.key); if (index >= 0) log[index] = entry; else log.push(entry); input.emit?.(entry); };
   const issueAt = (at: string) => issues.filter((issue) => issue.path === at || issue.path.startsWith(`${at}.`)).map((issue) => issue.text);
   let lines = new Map<string, number>();
-  const add = (kind: ReasoningIssue['kind'], at: string, text: string) => {
+  const add = (kind: ReasoningIssue['kind'], at: string, text: string, avocat?: string, cible?: string) => {
     const id = issueId(kind, at, text);
-    if (!issues.some((issue) => issue.id === id)) issues.push({ id, kind, path: at, line: lines.get(at) ?? lines.get(at.replace(/\.[^.[\]]+$/, '')) ?? null, text });
+    if (!issues.some((issue) => issue.id === id)) issues.push({ id, kind, path: at, line: lines.get(at) ?? lines.get(at.replace(/\.[^.[\]]+$/, '')) ?? null, text, ...(avocat ? { avocat, ...(cible ? { cible } : {}) } : {}) });
   };
 
   let parsed;
@@ -77,7 +77,7 @@ export async function verifyReasoning(input: {
   lines = parsed.lines;
   const stripped = stripAnnotations(parsed.value);
   const { reasoning, problems } = readReasoning(stripped);
-  for (const entry of problems) add('erreur', entry.path, entry.text);
+  for (const entry of problems) add('erreur', entry.path, entry.text, entry.avocat, entry.cible);
   if (!isObject(stripped)) return { annotated: null, issues, code: input.code, log };
   const annotated = stripped;
 
@@ -85,8 +85,8 @@ export async function verifyReasoning(input: {
   for (const cycle of shape.cycles) add('erreur', cycle.split(' → ')[0], `boucle : ${cycle}`);
   reasoning.questions.forEach((question, index) => {
     if (!reasoning.terms.has(question.reponse)) add('erreur', `questions[${index}].reponse`, `terme ${question.reponse} non défini : écris ${question.reponse}: { si: [...] }`);
-    if (!question.date) add('manque', `questions[${index}]`, 'date d’application non renseignée : ajoute date: { valeur: \'AAAA-MM-JJ\', preuve: [{ piece, citation }] }');
-    else if (!question.date.preuve.length) add('manque', `questions[${index}].date`, 'date non justifiée : ajoute preuve: [{ piece, citation }]');
+    if (!question.date) add('manque', `questions[${index}]`, 'date d’application non renseignée : ajoute date: { valeur: \'AAAA-MM-JJ\', preuve: [{ piece, citation }] }', 'La date des faits n’est pas fixée : impossible de savoir quelle version des textes s’applique.');
+    else if (!question.date.preuve.length) add('manque', `questions[${index}].date`, 'date non justifiée : ajoute preuve: [{ piece, citation }]', `Aucune pièce ne justifie la date retenue (${day(question.date.valeur)}).`);
   });
   const roots = new Set(reasoning.questions.map((question) => question.reponse));
   for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, 'terme qui ne sert à aucune question : rattache-le comme condition ou ajoute la question à laquelle il répond');
@@ -97,9 +97,9 @@ export async function verifyReasoning(input: {
     return sources.get(id)!;
   };
   const corrections = new Map<string, string>();
-  const checkCitation = (at: string, holder: Record<string, unknown> | null, info: SourceInfo, citation: string) => {
+  const checkCitation = (at: string, holder: Record<string, unknown> | null, info: SourceInfo, citation: string, cible: string) => {
     const matched = connectors.match(info.text, citation);
-    if (!matched) { add('erreur', at, `citation introuvable dans ${info.title} : recopie le passage exact`); return false; }
+    if (!matched) { add('erreur', at, `citation introuvable dans ${info.title} : recopie le passage exact`, `Le passage cité est introuvable dans ${info.title} : « ${citation} ».`, cible); return false; }
     if (matched !== citation) {
       corrections.set(citation, matched);
       if (holder) Object.assign(holder, { citation: matched, corrigee: true, citation_d_origine: citation });
@@ -112,8 +112,8 @@ export async function verifyReasoning(input: {
     const holder = node(annotated, at);
     emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: 'en cours', subject: ref.piece, text: 'Relecture de la pièce…' });
     const info = await lookup(ref.piece);
-    if (!info) { add('erreur', `${at}.piece`, `pièce introuvable dans le dossier : ${ref.piece}`); verifiedRefs.set(at, false); emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: 'alerte', subject: ref.piece, text: 'Pièce introuvable dans le dossier' }); return; }
-    const ok = checkCitation(at, holder, info, ref.citation);
+    if (!info) { add('erreur', `${at}.piece`, `pièce introuvable dans le dossier : ${ref.piece}`, `La pièce ${ref.piece} est introuvable dans le dossier.`); verifiedRefs.set(at, false); emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: 'alerte', subject: ref.piece, text: 'Pièce introuvable dans le dossier' }); return; }
+    const ok = checkCitation(at, holder, info, ref.citation, `#piece:${ref.piece}`);
     const reliable = input.reliability.get(ref.piece);
     const nature = input.nature(ref.piece);
     const cited = String(holder?.citation ?? ref.citation);
@@ -138,17 +138,18 @@ export async function verifyReasoning(input: {
   const checkBasisInner = async (at: string, basis: Basis, holder: Record<string, unknown> | null) => {
     const info = await lookup(basis.source);
     if (info === undefined) {
-      add('manque', `${at}.source`, `source non vérifiable automatiquement : aucun connecteur pour ${basis.source}`);
+      add('manque', `${at}.source`, `source non vérifiable automatiquement : aucun connecteur pour ${basis.source}`, `${basis.source} n’a pas pu être relu automatiquement : à vérifier vous-même.`, `#source:${basis.source}`);
       basisChecks.set(at, { kind: 'texte', from: basis.vigueur?.debut ?? null, to: basis.vigueur?.fin ?? null });
-      if (!basis.vigueur) add('manque', `${at}.vigueur`, 'vigueur non renseignée : ajoute vigueur: { debut, fin }');
+      if (!basis.vigueur) add('manque', `${at}.vigueur`, 'vigueur non renseignée : ajoute vigueur: { debut, fin }', `La version applicable de ${basis.source} n’est pas précisée.`, `#source:${basis.source}`);
       return;
     }
-    if (info === null) { add('erreur', `${at}.source`, `source introuvable : ${basis.source}`); basisChecks.set(at, { kind: null, from: null, to: null }); return; }
+    if (info === null) { add('erreur', `${at}.source`, `source introuvable : ${basis.source}`, `La source ${basis.source} est introuvable.`); basisChecks.set(at, { kind: null, from: null, to: null }); return; }
     if (holder) holder.titre = info.title;
-    checkCitation(at, holder, info, basis.citation);
+    checkCitation(at, holder, info, basis.citation, `#source:${basis.source}`);
     if (info.kind === 'decision') { basisChecks.set(at, { kind: 'decision', from: null, to: null }); return; }
-    if (!basis.vigueur) add('manque', `${at}.vigueur`, `vigueur non renseignée : ajoute vigueur: { debut, fin }${info.validity ? ` (version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'})` : ''}`);
-    else if (info.validity && (basis.vigueur.debut !== info.validity.from || basis.vigueur.fin !== info.validity.to)) add('erreur', `${at}.vigueur`, `vigueur différente de la version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'}`);
+    const version = info.validity ? `en vigueur ${info.validity.to ? `du ${day(info.validity.from)} au ${day(info.validity.to)}` : `depuis le ${day(info.validity.from)}`}` : '';
+    if (!basis.vigueur) add('manque', `${at}.vigueur`, `vigueur non renseignée : ajoute vigueur: { debut, fin }${info.validity ? ` (version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'})` : ''}`, `La version applicable de ${info.title} n’est pas précisée${version ? ` (version relue : ${version})` : ''}.`, `#source:${basis.source}`);
+    else if (info.validity && (basis.vigueur.debut !== info.validity.from || basis.vigueur.fin !== info.validity.to)) add('erreur', `${at}.vigueur`, `vigueur différente de la version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'}`, `${info.title} : la version indiquée ne correspond pas au texte relu (${version}).`, `#source:${basis.source}`);
     const known = Boolean(info.validity || basis.vigueur);
     basisChecks.set(at, { kind: info.kind, from: known ? info.validity?.from ?? basis.vigueur!.debut : null, to: info.validity ? info.validity.to : basis.vigueur?.fin ?? null });
   };
@@ -220,9 +221,9 @@ export async function verifyReasoning(input: {
     holder.statut = leaf && contested(leaf) ? 'contesté' : STATUS(statuses.get(at) ?? null);
     if (leaf && decisiveLeaves.has(leaf)) {
       holder.decisif = true;
-      add('manque', at, `${leaf} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`);
+      add('manque', at, `${leaf} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(leaf)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, leaf);
     }
-    if (condition.selon.length && vigueurs.get(at) === false) add('erreur', at, 'aucune source de cette condition n’est en vigueur à la date d’application');
+    if (condition.selon.length && vigueurs.get(at) === false) add('erreur', at, 'aucune source de cette condition n’est en vigueur à la date d’application', `${condition.condition ? human(condition.condition) : 'Une alternative'} : aucun texte invoqué n’était en vigueur${firstDate ? ` au ${day(firstDate)}` : ''}.`, condition.condition);
     condition.selon.forEach((_, index) => {
       const check = basisChecks.get(`${at}.selon[${index}]`);
       const source = node(annotated, `${at}.selon[${index}]`);
@@ -242,7 +243,7 @@ export async function verifyReasoning(input: {
     const holder = node(annotated, `essais[${index}]`);
     if (holder) Object.assign(holder, result);
     emit({ key: `essai:${index}`, step: 'essai', status: result.conforme ? 'ok' : 'alerte', subject: reasoning.essais[index].nom, text: result.conforme ? 'Conforme' : `Non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${human(name)} = ${value === null ? 'à établir' : value ? 'vrai' : 'faux'}`).join(', ')}` });
-    if (!result.conforme) add('erreur', `essais[${index}]`, `essai non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${name} = ${value === null ? 'à établir' : value ? 'vrai' : 'faux'}`).join(', ')}`);
+    if (!result.conforme) add('erreur', `essais[${index}]`, `essai non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${name} = ${value === null ? 'à établir' : value ? 'vrai' : 'faux'}`).join(', ')}`, `Le cas d’essai « ${reasoning.essais[index].nom} » ne donne pas le résultat attendu : ${Object.entries(result.obtenu).map(([name, value]) => `${human(name).toLowerCase()} ${value === null ? 'reste en suspens' : value ? 'est acquis' : 'est exclu'}`).join(', ')}.`);
   });
 
   const registre: string[] = [];
@@ -380,6 +381,13 @@ export function createReasoningService(getDatabase: () => Database.Database, con
     read,
     verify,
     test: (cwd: string, emit: (entry: ReasoningLogEntry) => void) => verify(cwd, true, emit),
+    async source(cwd: string, id: string): Promise<{ kind: SourceInfo['kind']; title: string; text: string }> {
+      const { code } = read(cwd);
+      if (![`'${id}'`, `"${id}"`, `\`${id}\``].some((quoted) => code.includes(quoted))) throw new TypeError('Source absente du raisonnement.');
+      const info = await connectors.source(cwd, id).catch(() => null);
+      if (!info) throw new TypeError('Texte de la source indisponible.');
+      return { kind: info.kind, title: info.title, text: info.text };
+    },
     async command(cwd: string, input: { commande?: unknown }): Promise<string> {
       if (input.commande !== undefined && input.commande !== 'verifier') throw new TypeError('Commande : verifier.');
       return describeReasoning(await verify(cwd));
