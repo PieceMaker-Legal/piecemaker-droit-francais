@@ -10,7 +10,7 @@ import { SourceTextModule, SyntheticModule, createContext } from 'node:vm';
 const entryUrl = new URL('./main.js', import.meta.url);
 const source = await fs.readFile(entryUrl, 'utf8');
 
-async function loadEntry(startupError) {
+async function loadEntry(startupError, platform = 'win32') {
   const calls = [];
   let ready;
   const readyPromise = new Promise(resolve => { ready = resolve; });
@@ -18,12 +18,12 @@ async function loadEntry(startupError) {
   app.whenReady = () => { calls.push('waiting-ready'); return readyPromise; };
   app.quit = () => calls.push('quit');
   const context = createContext({
-    process: { platform: 'win32', env: {}, argv: [] },
+    process: { platform, env: {}, argv: [] },
     console: { error: (...args) => calls.push(['error', ...args]) },
     setTimeout,
   });
   const mocks = {
-    electron: { app, autoUpdater: new EventEmitter(), BrowserWindow: { getAllWindows: () => [] }, dialog: {}, powerSaveBlocker: {} },
+    electron: { app, autoUpdater: new EventEmitter(), BrowserWindow: { getAllWindows: () => [] }, dialog: {}, powerSaveBlocker: {}, session: {} },
     'node:child_process': { execFile: () => {} },
     'node:os': { default: os },
     'node:path': { default: path },
@@ -42,6 +42,7 @@ async function loadEntry(startupError) {
       if (startupError) throw startupError;
     } },
     './keepAwake.js': { installDesktopKeepAwake: async () => { calls.push('keep-awake'); } },
+    './ui-updates/index.mjs': { installUiUpdates: async () => { calls.push('ui-updates'); } },
   };
   function mockModule(exports) {
     return new SyntheticModule(Object.keys(exports), function () {
@@ -85,7 +86,7 @@ async function loadEntry(startupError) {
 }
 
 test('Windows entry finishes loading before ready, then starts updater, plugins and desktop', async () => {
-  assert.deepEqual(await loadEntry(), ['waiting-ready', 'updater', 'keep-awake', 'plugins', 'desktop']);
+  assert.deepEqual(await loadEntry(), ['waiting-ready', 'updater', 'keep-awake', 'ui-updates', 'plugins', 'desktop']);
 });
 
 test('startup failure is reported and quits the app without an unhandled rejection', async () => {
@@ -93,4 +94,8 @@ test('startup failure is reported and quits the app without an unhandled rejecti
   assert.deepEqual(await loadEntry(error), [
     'waiting-ready', 'updater', ['error', '[PieceMaker] Startup failed:', error], 'quit',
   ]);
+});
+
+test('macOS installs continuous UI before opening the desktop', async () => {
+  assert.deepEqual(await loadEntry(undefined, 'darwin'), ['waiting-ready', 'keep-awake', 'ui-updates', 'plugins', 'desktop']);
 });
