@@ -267,7 +267,9 @@ enregistrement, comme le programme habituel ; l'anonymiseur reste actif.
 
 Données, composants et profil sont placés dans `.piecemaker-validation`, sans
 modifier les chemins des fournisseurs d'IA. Le staging adapte la recherche du
-certificat du proxy vers les composants de cette édition. Les mises à jour
+certificat du proxy vers les composants de cette édition. Le bouton interne de
+désinstallation ouvre le désinstalleur NSIS de cette édition, sans retirer les
+modèles ni les données partagés avec le programme habituel. Les mises à jour
 complètes sont désactivées pour préserver le programme habituel. Cette édition
 reproduit le programme de la branche de test, sans intégrer les changements
 ultérieurs de `main` ni modifier sa version.
