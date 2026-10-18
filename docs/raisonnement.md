@@ -1,37 +1,36 @@
 # Raisonnement du dossier
 
-Le volet droit **Raisonnement** montre, pour chaque question de droit, les conditions posées par le droit à gauche et les faits prouvés par pièces à droite. Derrière le schéma, le modèle écrit un programme dans un sous-ensemble de Catala (syntaxe française). Le serveur l’analyse, le vérifie et l’exécute en fin de tour. L’avocat valide ou écarte chaque élément : un élément décidé est verrouillé et s’impose au modèle.
+L’agent construit la théorie juridique du dossier pas à pas avec l’outil MCP `raisonnement` (serveur `piecemaker`). Il n’écrit pas de code : chaque commande ajoute un élément, le serveur génère le programme Catala, l’exécute et renvoie un état court avec ce qui reste à faire. Le volet droit **Raisonnement** montre le graphe, le détail de chaque élément et le test. L’avocat valide ou écarte chaque élément : un élément décidé est verrouillé et l’agent ne peut plus le modifier.
 
-Les citations ne servent plus qu’au raisonnement : une analyse n’affiche plus de liste « Sources » dans le chat, seulement une ligne de bilan. Le bloc `<CITATIONS>` sans `<RAISONNEMENT>` (notes de bas de page d’un `.docx`, consigne dans la skill `redaction-juridique`) garde sa liste vérifiée.
+L’instruction de chat ajoute une seule ligne : pour une analyse appliquée au dossier, utiliser l’outil `raisonnement` (commande `etat` pour reprendre). Aucun code n’est injecté dans le prompt.
 
-## Format de fin de tour
+## Commandes
 
-```
-<CITATIONS>[{"ref":1,"kind":"article","article_id":"LEGIARTI…","quotes":[{"quote":"…"}]}, …]</CITATIONS>
-<RAISONNEMENT>
-#[question = "…"]
-#[date_de_référence = date_acte]
-déclaration champ d'application Q:
-  entrée date_acte contenu date
-  entrée cotee contenu booléen
-  interne personne condition
-  résultat effet condition
-champ d'application Q:
-  #[libellé = "…"] #[selon = 1]
-  règle personne sous condition cotee conséquence rempli
-  #[selon = 1]
-  règle effet sous condition personne conséquence rempli
-déclaration champ d'application Dossier:
-  q champ Q
-champ d'application Dossier:
-  #[selon = 2] #[force = acte_sous_seing_privé] #[appréciation = "…"]
-  définition q.cotee égal à vrai
-</RAISONNEMENT>
-```
+| Commande | Champs | Effet |
+|---|---|---|
+| `etat` | `question` facultatif | Réponse calculée, conditions, faits, « À faire », date du dernier test. |
+| `question` | `texte`, `objectif` (`oui`/`non`), `date` (nom du fait date de référence), `question` pour modifier | Crée `Q1`, `Q2`… |
+| `condition` | `question`, `nom`, `libelle`, `regle`, `source`, `extrait`, `role` (`condition`, `fondement`, `moyen_adverse`), `a_la_date` | `source` = `LEGIARTI…`, `JURITEXT…` (lus sur Légifrance par le serveur) ou chemin d’une note de doctrine ; l’extrait est recherché dans le texte, la période de vigueur et l’historique judiciaire sont relevés. Un nom inconnu dans `regle` devient un fait booléen à prouver. |
+| `fait` | `question`, `nom`, `type`, `valeur`, `piece`, `extrait`, `force`, `appreciation` | L’extrait est recherché dans la pièce (Markdown converti) ; introuvable, le fait reste non établi. |
+| `retirer` | `question`, `nom` facultatif | Retire un élément ou toute la question. |
+| `tester` | — | Exécute le test (ci-dessous) et renvoie la liste des alertes. |
 
-Les deux blocs sont masqués du chat. `#[selon = n]` renvoie au `ref` du tour ; le serveur le remplace par l’identifiant stable de la source (`s` + 8 hexadécimaux), réutilisable aux tours suivants. Le code est réimprimé sous forme canonique et réinjecté au tour suivant, avec les sources enregistrées, les éléments verrouillés et la liste « À traiter ».
+`regle` est une expression Catala : `et`, `ou`, `non`, `= != < <= > >=`, `+ - * /`, `vrai`, `faux`, `|AAAA-MM-JJ|`, `2 mois`. Une condition `fondement` mène à la réponse (`étiquette base règle reponse …`), un `moyen_adverse` l’écarte (`exception base … conséquence non rempli`).
 
-Sous-ensemble pris en charge (`server/modules/piecemaker-reasoning/catala.ts`) : déclarations `entrée`/`interne`/`résultat` (types `booléen`, `date`, `entier`, `décimal`, `argent`, `durée`, `condition`) et sous-champs ; `règle … sous condition … conséquence [non] rempli` ; `définition … [sous condition … conséquence] égal à …` ; `étiquette`/`exception` ; `et`, `ou`, `non`, `si … alors … sinon`, comparaisons, `+ - * /` ; `|AAAA-MM-JJ|`, `5 an`, `2 mois`, `10 jour` (mois et années au même quantième, dernier jour du mois à défaut) ; attributs `#[clé = valeur]` ; blocs ` ```catala ` d’un texte littéraire. Le compilateur Catala n’est pas utilisé (OCaml seulement, pas d’analyseur Node).
+Le modèle (questions, conditions, faits) est stocké dans `pm_reasoning_models` ; le Catala est régénéré à chaque commande, puis les verrous de l’avocat sont réappliqués.
+
+## Test
+
+Le test est l’exécution statique de la théorie avec tout ce qui est disponible dans le dossier (`POST /api/piecemaker/reasoning/test`, bouton « Lancer le test » ou commande `tester`) :
+
+- **Programme** : réponse calculée et objectif, vigueur de chaque article à la date de référence, conditions sans fondement, faits à prouver.
+- **Jurisprudence** : chaque décision citée est relue sur Légifrance ; une décision remise en cause par une décision supérieure ou un recours à examiner est signalé.
+- **Pièces** : chaque extrait cité est recherché à nouveau dans sa pièce.
+- **Personnes morales de la base SQL** (`piecemaker_nodes` de type `company`) : recherche au Registre Public par SIREN (sinon par nom) ; introuvable, radiée ou cessée est signalé ; avec un SIREN, les alertes BODACC (procédure collective, radiation) sont relevées.
+
+Le rapport (`ReasoningTestReport`, alertes d’abord) est conservé dans l’instantané jusqu’à la commande suivante. Une vérification impossible (réseau, Légifrance) est une alerte, jamais un succès.
+
+Sous-ensemble pris en charge (`server/modules/piecemaker-reasoning/catala.ts`) : déclarations `entrée`/`interne`/`résultat` (types `booléen`, `date`, `entier`, `décimal`, `argent`, `durée`, `condition`) et sous-champs ; `règle … sous condition … conséquence [non] rempli` ; `définition … [sous condition … conséquence] égal à …` ; `étiquette`/`exception` ; `et`, `ou`, `non`, `si … alors … sinon`, comparaisons, `+ - * /` ; `|AAAA-MM-JJ|`, `5 an`, `2 mois`, `10 jour` (mois et années au même quantième, dernier jour du mois à défaut) ; attributs `#[clé = valeur]` . Le compilateur Catala n’est pas utilisé (OCaml seulement, pas d’analyseur Node).
 
 ## Vérifications statiques
 
@@ -51,15 +50,14 @@ Charge de la preuve (art. 1353 C. civ.) : un fait qui alimente un moyen du clien
 
 ## Décisions de l’avocat
 
-Chaque condition et chaque fait se valide, s’écarte ou se modifie dans le volet (`POST /api/piecemaker/reasoning/review` et `/appreciation`). Une modification d’un fait (valeur, force probante, appréciation) est enregistrée avec l’auteur `avocat` et valide le fait. Le texte de l’élément est figé (`locked_json`) : au tour suivant, toute version différente du modèle est remplacée et signalée. « Annuler la décision » rend l’élément au modèle.
+Chaque condition et chaque fait se valide, s’écarte ou se modifie dans le volet (`POST /api/piecemaker/reasoning/review` et `/appreciation`). Une modification d’un fait (valeur, force probante, appréciation) est enregistrée avec l’auteur `avocat` et valide le fait. Le texte de l’élément est figé (`locked_json`) : toute commande de l’agent qui le vise est refusée. « Annuler la décision » rend l’élément à l’agent.
 
 ## Volet
 
-- **Graphe** (par défaut) : sources du droit, puis réponse et conditions, puis faits et pièces. Un clic sur une case éclaire sa branche (tout ce dont elle dépend et tout ce qui en dépend) et affiche dessous les cases liées, avec leurs boutons de validation. Zoom −/+ et « Ajuster » à la largeur du volet.
-- **Argumentaire** : objectif, moyens du client (principal, subsidiaires) et moyens adverses, avec ce qui reste à prouver et par qui ; un clic sur une condition l’ouvre dans le graphe.
-- **Schéma** : les mêmes éléments en deux colonnes Droit → Faits / Pièces.
-- **Tests** : l’avocat fixe des hypothèses sur les entrées (vide = inconnu), exécute le raisonnement actuel sans rien enregistrer (`POST /test/run`), puis peut enregistrer le résultat obtenu comme attendu (`POST /test`). Chaque test enregistré est rejoué à chaque révision et signalé réussi ou en échec, y compris dans la ligne de bilan du chat.
-- **Code** et **Sources** : programme canonique et sources vérifiées.
+- **Graphe** : sources du droit, conditions et réponse, faits. Un clic sur un nœud éclaire sa branche.
+- **Détail** : la réponse en langage courant, ce qui reste à prouver, puis le détail du nœud choisi avec ses boutons de validation.
+- **Tests** : bouton « Lancer le test » et rapport.
+- **Code** : programme Catala généré.
 
 ## SQL
 
@@ -68,15 +66,15 @@ Tables en lecture seule pour l’outil SQL :
 ```sql
 SELECT code, snapshot_json FROM pm_reasoning_programs WHERE project_id=dossier();
 SELECT item_id, kind, status, value_json, force, appreciation, author FROM pm_reasoning_items WHERE project_id=dossier();
-SELECT label, scope, values_json, expected FROM pm_reasoning_tests WHERE project_id=dossier();
 ```
 
-`pm_reasoning_turns` empêche de rejouer un tour. Les tables de l’ancien modèle (`pm_reasoning_results`, `_nodes`, `_relations`, `_links`, `_theories`) sont supprimées au démarrage.
+Les tables des versions précédentes (`pm_reasoning_results`, `_nodes`, `_relations`, `_links`, `_theories`, `_tests`, `_turns`) sont supprimées au démarrage.
 
 ## Fichiers
 
 - `shared/piecemaker-reasoning.ts` : contrat partagé.
-- `server/modules/piecemaker-reasoning/` : analyseur Catala, évaluation et vérifications, persistance, verrous, routes ; tests dans `tests/raisonnement.test.ts`.
-- `server/piecemaker/harness/citation-{instructions,turn}.ts` : instruction, masquage des blocs, capture des périodes et de l’historique, branchement en fin de tour ; test `reasoning-turn.test.ts`.
+- `server/modules/piecemaker-reasoning/` : commandes et génération du Catala (`commands.ts`), analyseur, évaluation, persistance, verrous, test, routes ; tests dans `tests/raisonnement.test.ts` (connecteurs fictifs).
+- `server/piecemaker/reasoning-connectors.ts` : Légifrance (`consulter_article`, `consulter_decision`), pièces, Registre Public, BODACC.
+- `server/piecemaker/vendor/mcp/piecemaker/server.mjs` : outil `raisonnement`, relayé à `POST /api/piecemaker/local/reasoning` (boucle locale seulement).
 - `server/piecemaker/vendor/mcp/legifrance/tools/decision_history.py` : `controle_historique`, appelé par `consulter_decision`.
-- `plugins/piecemaker-raisonnement/` : volet (graphe, argumentaire, schéma, tests, code, sources).
+- `plugins/piecemaker-raisonnement/` : volet.

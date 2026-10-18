@@ -142,7 +142,7 @@ function parseCompanyDetails(text: string, fallback: { name: string; siren: stri
   };
 }
 
-async function callTool(tool: string, args: Record<string, unknown>): Promise<string> {
+export async function callTool(tool: string, args: Record<string, unknown>): Promise<string> {
   let sessionId: string | undefined;
   const initialized = await mcpRequest(1, 'initialize', {
     protocolVersion: MCP_PROTOCOL_VERSION,

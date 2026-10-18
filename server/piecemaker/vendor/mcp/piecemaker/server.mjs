@@ -21,7 +21,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import fs from 'node:fs';
-import { panelRequestCompleted, requestPanelOpen, runSql, runTabularReview } from '../../installer/lib/conversion-client.mjs';
+import { panelRequestCompleted, requestPanelOpen, runReasoning, runSql, runTabularReview } from '../../installer/lib/conversion-client.mjs';
 import { CASSATION_MATIERES, chronologieSql, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES, REVIEW_FOLDER, reviewFile, VOLETS } from './volets.mjs';
 import { describeOpenPanels, listOpenPanels, openPanelsFile, waitForOpenPanel } from './volets-ouverts.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -154,14 +154,14 @@ const SQL_DESCRIPTION = [
   "piecemaker_links(project_id, from_node_id, to_node_id, relation) : 'mentions' = la pièce cite l'entité.",
   'piecemaker_citations(project_id, from_node_id, to_node_id, relation, texte, piece_id, source) : extraits qui justifient un lien, autant que voulu ; source = pièce (piece_id) ou référence libre.',
   'Dates automatiques. Renommer une pièce = UPDATE de son label (AAAA-MM-JJ_titre).',
-  "Raisonnement du dossier (lecture seule, écrit par le bloc RAISONNEMENT et par l'avocat) : pm_reasoning_programs(project_id, revision, code, snapshot_json) = code Catala, sources vérifiées, questions, conditions, faits ; pm_reasoning_items(project_id, item_id, kind condition|fait, label, status proposé|validé|écarté, value_json, force, appreciation, author ia|avocat, sources_json, note, updated_at) = appréciation de chaque élément et son auteur ; un élément validé ou écarté est verrouillé. pm_reasoning_tests(project_id, test_id, label, scope, values_json, expected) = tests de l'avocat (hypothèses et réponse attendue), rejoués à chaque révision.",
+  "Raisonnement du dossier (lecture seule, écrit par l'outil raisonnement et par l'avocat) : pm_reasoning_programs(project_id, revision, code, snapshot_json) = code Catala généré, sources vérifiées, questions, conditions, faits, dernier test ; pm_reasoning_items(project_id, item_id, kind condition|fait, label, status proposé|validé|écarté, value_json, force, appreciation, author ia|avocat, sources_json, note, updated_at) = décision de l'avocat sur chaque élément ; un élément validé ou écarté est verrouillé.",
 ].join('\n');
 
 /**
  * Construit le serveur MCP et y enregistre les outils. Séparé de
  * `main()` pour rester testable sans jamais brancher de transport stdio.
  */
-export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularReview, openPanelsPath = openPanelsFile(), openPanelsTimeoutMs = 8000 } = {}) {
+export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasoning, tabularFn = runTabularReview, openPanelsPath = openPanelsFile(), openPanelsTimeoutMs = 8000 } = {}) {
   const server = new McpServer({ name: 'piecemaker', version: '1.0.0' });
   const run = (args, dossier) => runPiecemakerCommand(args, { cwd: dossier, execFn });
 
@@ -204,6 +204,47 @@ export function createServer({ execFn, sqlFn = runSql, tabularFn = runTabularRev
   }, async ({ requete }) => {
     try {
       const resultat = await sqlFn({ requete, cwd: process.cwd() });
+      return { content: [{ type: 'text', text: resultat }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
+    }
+  });
+
+  server.registerTool('raisonnement', {
+    description: [
+      'Théorie juridique du dossier, construite pas à pas ; chaque commande renvoie l’état et ce qui reste à faire.',
+      'etat : où en est la théorie (question = Q1 pour une seule question).',
+      'question : texte = la question de droit, objectif = oui|non (réponse recherchée par le client), date = nom du fait date de référence ; question = Q1 pour modifier.',
+      'condition : question, nom (ex. societe_cotee_ok), libelle = la condition telle que le texte la pose, regle = expression sur des faits ou d’autres conditions (et, ou, non, = < >, |AAAA-MM-JJ|, 2 mois), source = LEGIARTI…, JURITEXT… ou chemin d’une note de doctrine, extrait = passage exact qui pose la condition. role : condition (défaut), fondement (mène à la réponse), moyen_adverse (l’empêche). Un nom inconnu dans regle devient un fait booléen à prouver.',
+      'fait : question, nom, type (booléen défaut, date, entier, décimal, argent, durée), valeur, piece = chemin de la pièce, extrait = passage exact qui prouve, force (acte_authentique, acte_sous_seing_privé, commencement_de_preuve, indice, sans_valeur), appreciation. Sans pièce, ne donne pas de valeur.',
+      'retirer : question, nom (sans nom : toute la question).',
+      'tester : exécute la théorie sur tout le dossier (vigueur des articles, recours contre les décisions, extraits des pièces, personnes morales au Registre Public et au BODACC) et liste les alertes.',
+      'Un élément validé ou écarté par l’avocat ne peut plus être modifié.',
+    ].join('\n'),
+    inputSchema: {
+      commande: z.enum(['etat', 'question', 'condition', 'fait', 'retirer', 'tester']),
+      question: z.string().optional(),
+      texte: z.string().optional(),
+      objectif: z.enum(['oui', 'non']).optional(),
+      date: z.string().optional(),
+      nom: z.string().optional(),
+      libelle: z.string().optional(),
+      regle: z.string().optional(),
+      role: z.enum(['condition', 'fondement', 'moyen_adverse']).optional(),
+      source: z.string().optional(),
+      extrait: z.string().optional(),
+      a_la_date: z.string().optional(),
+      type: z.enum(['booléen', 'date', 'entier', 'décimal', 'argent', 'durée']).optional(),
+      valeur: z.union([z.string(), z.number(), z.boolean()]).optional(),
+      piece: z.string().optional(),
+      force: z.enum(['acte_authentique', 'acte_sous_seing_privé', 'commencement_de_preuve', 'indice', 'sans_valeur']).optional(),
+      appreciation: z.string().optional(),
+      dossier: DOSSIER_SCHEMA,
+    },
+    annotations: { title: 'Raisonnement du dossier', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, async ({ dossier, ...input }) => {
+    try {
+      const resultat = await reasoningFn({ ...input, cwd: path.resolve(resolveDossier(dossier)) });
       return { content: [{ type: 'text', text: resultat }] };
     } catch (error) {
       return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };

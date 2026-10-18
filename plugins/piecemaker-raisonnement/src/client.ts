@@ -1,6 +1,6 @@
 import { REASONING_FORCES } from '../../../shared/piecemaker-reasoning.js';
-import type { ReasoningCondition, ReasoningFact, ReasoningQuestion, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningTestRun, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
-import { appreciateFact, deleteTest, loadReasoning, reviewItem, runTest, saveTest } from './api.js';
+import type { ReasoningCondition, ReasoningFact, ReasoningQuestion, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
+import { appreciateFact, loadReasoning, reviewItem, runTheoryTest } from './api.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
@@ -29,13 +29,6 @@ function formatValue(value: ReasoningValue): string {
   if (typeof value === 'number') return String(value).replace('.', ',');
   if (typeof value === 'string') return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value;
   return [value.ans && `${value.ans} an(s)`, value.mois && `${value.mois} mois`, value.jours && `${value.jours} jour(s)`].filter(Boolean).join(' ') || '0 jour';
-}
-
-function rawValue(value: ReasoningValue): string {
-  if (value === null) return '';
-  if (typeof value === 'boolean') return value ? 'vrai' : 'faux';
-  if (typeof value === 'object') return value.ans ? `${value.ans} an` : value.mois ? `${value.mois} mois` : `${value.jours} jour`;
-  return String(value);
 }
 
 function parseInput(type: string, raw: string): ReasoningValue {
@@ -78,8 +71,7 @@ export function mount(container: HTMLElement, api: Host) {
   let zoom = 1;
   let pan = { x: 0, y: 0 };
   let drag: { id: string; x: number; y: number; moved: boolean } | null = null;
-  let testValues: Record<string, string> = {};
-  let lastRun: (ReasoningTestRun & { values: Record<string, ReasoningValue> }) | null = null;
+  let testing = false;
   let sequence = 0;
   let stopped = false;
   let timer = 0;
@@ -234,27 +226,20 @@ export function mount(container: HTMLElement, api: Host) {
     return `${back}<h3>${escape(entry.title)}</h3>${sourceBlock(entry.id)}${period}${entry.history ? `<p class="pmr-muted">Historique judiciaire : ${escape(entry.history.status)}.</p>` : ''}${users.length ? `<p class="pmr-muted">Utilisée pour : ${users.map(link).join(' ')}</p>` : ''}`;
   };
 
-  const testsView = (current: ReasoningQuestion) => {
-    if (snapshot!.demo) return '<p class="pmr-muted">Les tests s’exécutent sur le raisonnement d’un dossier, pas sur l’exemple fictif.</p>';
-    const facts = snapshot!.facts.filter((entry) => entry.scope === current.scope);
-    const inputs = facts.map((entry) => {
-      const raw = testValues[entry.id] ?? (entry.status === 'établi' ? rawValue(entry.value) : '');
-      const field = entry.type === 'booléen'
-        ? `<select data-test-input="${escape(entry.id)}"><option value="">Inconnu</option><option value="vrai"${raw === 'vrai' ? ' selected' : ''}>Oui</option><option value="faux"${raw === 'faux' ? ' selected' : ''}>Non</option></select>`
-        : `<input data-test-input="${escape(entry.id)}" ${entry.type === 'date' ? 'type="date"' : ''} value="${escape(raw)}" placeholder="${entry.type === 'durée' ? '5 an, 2 mois' : 'inconnu'}">`;
-      return `<label class="pmr-test-row"><span>${escape(human(entry.variable))}</span>${field}</label>`;
-    }).join('');
-    const run = lastRun && lastRun.question.scope === current.scope ? `<div class="pmr-box"><p class="pmr-answer">Résultat : ${pill(lastRun.question.status, ANSWER[lastRun.question.status])}</p><div class="pmr-decision"><input data-test-label placeholder="Nom du test" aria-label="Nom du test"><button data-save-test>Enregistrer</button></div></div>` : '';
-    const saved = snapshot!.tests.filter((entry) => entry.scope === current.scope).map((entry) => `<div class="pmr-box"><p class="pmr-answer">${pill(entry.passed ? 'remplie' : 'bloquée', entry.passed ? 'Réussi' : 'Échec')} ${escape(entry.label)} <button class="pmr-link" data-delete-test="${escape(entry.id)}">Supprimer</button></p><p class="pmr-muted">Attendu : ${escape(ANSWER[entry.expected])} · obtenu : ${escape(entry.actual ? ANSWER[entry.actual] : 'erreur')}</p></div>`).join('');
-    return `<p class="pmr-muted">Changez les faits pour voir si la réponse change. Un test enregistré est rejoué à chaque nouvelle version du raisonnement.</p><div class="pmr-test">${inputs || '<p class="pmr-muted">Aucun fait à faire varier.</p>'}</div><div class="pmr-decision"><button class="pmr-primary" data-run-test>Exécuter</button><button data-reset-test>Revenir aux faits du dossier</button></div>${run}${saved ? `<h4>Tests enregistrés</h4>${saved}` : ''}`;
+  const testsView = () => {
+    if (snapshot!.demo) return '<p class="pmr-muted">Le test s’exécute sur le raisonnement d’un dossier, pas sur l’exemple fictif.</p>';
+    const report = snapshot!.test;
+    const findings = report ? report.findings.map((finding) => `<p>${pill(finding.level === 'ok' ? 'remplie' : 'bloquée', finding.level === 'ok' ? 'OK' : 'Alerte')} <strong>${escape(finding.subject)}</strong> — ${escape(finding.text)}</p>`).join('') : '';
+    return `<p class="pmr-muted">Le test exécute la théorie sur tout le dossier : vigueur des articles, recours contre les décisions citées, extraits des pièces, personnes morales au Registre Public et au BODACC.</p><div class="pmr-decision"><button class="pmr-primary" data-run-test${testing ? ' disabled' : ''}>${testing ? 'Test en cours…' : 'Lancer le test'}</button>${report ? `<span class="pmr-muted">Dernier test : ${escape(new Date(report.at).toLocaleString('fr-FR'))}</span>` : ''}</div>${findings ? `<div class="pmr-box">${findings}</div>` : ''}`;
   };
+
 
   const paintDetails = () => {
     root.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => button.setAttribute('aria-selected', String(button.dataset.tab === tab)));
     const current = question();
     if (!snapshot?.code || !current) { detail.innerHTML = ''; return; }
     if (tab === 'code') detail.innerHTML = `<pre>${escape(snapshot.code)}</pre>`;
-    else if (tab === 'tests') detail.innerHTML = testsView(current);
+    else if (tab === 'tests') detail.innerHTML = testsView();
     else detail.innerHTML = selected ? nodeDetail(current, selected) : summary(current);
   };
 
@@ -297,7 +282,7 @@ export function mount(container: HTMLElement, api: Host) {
     const button = (event.target as Element).closest<HTMLElement>('button');
     if (!button) return;
     if (button.dataset.tab) { tab = button.dataset.tab as Tab; paintDetails(); }
-    if (button.hasAttribute('data-demo')) { lastSerialized = ''; editing = ''; selected = ''; scope = ''; lastRun = null; nodes = []; void load(!snapshot?.demo); }
+    if (button.hasAttribute('data-demo')) { lastSerialized = ''; editing = ''; selected = ''; scope = ''; nodes = []; void load(!snapshot?.demo); }
     if (button.hasAttribute('data-refresh')) { lastSerialized = ''; void load(Boolean(snapshot?.demo)); }
     if (button.dataset.select) select(button.dataset.select);
     if (button.hasAttribute('data-unselect')) select(selected);
@@ -314,30 +299,14 @@ export function mount(container: HTMLElement, api: Host) {
       const note = status === 'écarté' ? window.prompt('Motif (facultatif)') ?? undefined : undefined;
       void reviewItem(context.project.path, button.dataset.review, status, note).then(apply).catch(showError);
     }
-    if (button.hasAttribute('data-reset-test')) { testValues = {}; lastRun = null; paintDetails(); }
-    if (button.hasAttribute('data-run-test') && context.project) {
-      const current = question();
-      if (!current) return;
-      try {
-        const values = Object.fromEntries(snapshot!.facts.filter((entry) => entry.scope === current.scope).map((entry) => {
-          const raw = testValues[entry.id] ?? (entry.status === 'établi' ? rawValue(entry.value) : '');
-          return [entry.id, raw === '' ? null : parseInput(entry.type, raw)];
-        }));
-        void runTest(context.project.path, current.scope, values).then((result) => { lastRun = { ...result, values }; paintDetails(); }).catch(showError);
-      } catch (error) { showError(error); }
+    if (button.hasAttribute('data-run-test') && context.project && !testing) {
+      testing = true;
+      paintDetails();
+      void runTheoryTest(context.project.path).then(apply).catch(showError).finally(() => { testing = false; paintDetails(); });
     }
-    if (button.hasAttribute('data-save-test') && context.project && lastRun) {
-      const label = root.querySelector<HTMLInputElement>('[data-test-label]')?.value.trim() ?? '';
-      if (!label) { showError(new Error('Donnez un nom au test.')); return; }
-      void saveTest(context.project.path, { label, scope: lastRun.question.scope, values: lastRun.values, expected: lastRun.question.status }).then((data) => { lastRun = null; apply(data); }).catch(showError);
-    }
-    if (button.dataset.deleteTest && context.project) void deleteTest(context.project.path, button.dataset.deleteTest).then(apply).catch(showError);
   });
-  root.addEventListener('input', (event) => {
-    const input = (event.target as Element).closest<HTMLInputElement | HTMLSelectElement>('[data-test-input]');
-    if (input) testValues[input.dataset.testInput!] = input.value;
-  });
-  picker.addEventListener('change', () => { scope = picker.value; selected = ''; lastRun = null; nodes = []; paint(); });
+
+  picker.addEventListener('change', () => { scope = picker.value; selected = ''; nodes = []; paint(); });
   root.addEventListener('submit', (event) => {
     event.preventDefault();
     const form = (event.target as Element).closest<HTMLFormElement>('form[data-fact]');
@@ -392,7 +361,7 @@ export function mount(container: HTMLElement, api: Host) {
     const changed = next.project?.path !== context.project?.path;
     context = next;
     root.dataset.theme = next.theme;
-    if (changed) { sequence++; snapshot = null; lastSerialized = ''; editing = ''; scope = ''; selected = ''; testValues = {}; lastRun = null; nodes = []; void load(); }
+    if (changed) { sequence++; snapshot = null; lastSerialized = ''; editing = ''; scope = ''; selected = ''; nodes = []; void load(); }
     paint();
   });
   const poll = () => { if (!stopped) { if (!snapshot?.demo) void load(); timer = window.setTimeout(poll, 2500); } };

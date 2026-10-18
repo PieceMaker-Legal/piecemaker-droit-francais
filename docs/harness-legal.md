@@ -64,9 +64,7 @@ Deux points de branchement distincts :
   et le journal appartiennent désormais au harnais de chat, qui connaît le
   tour et le dossier. `PIECEMAKER_CITATIONS=off` concerne ces observateurs
   historiques, pas le harnais de chat.
-- Un tour qui porte un bloc `<RAISONNEMENT>` n'affiche pas de liste Sources :
-  les sources vérifiées alimentent le raisonnement (`docs/raisonnement.md`).
-  Sinon (notes d'un `.docx`), liste **Sources** en fin de réponse (`finish` de `citation-turn.ts`), une
+- Liste **Sources** en fin de réponse (`finish` de `citation-turn.ts`), une
   ligne par citation, dérivée de la seule sortie du vérifieur (inchangé) :
   `[n]`, titre lié au panneau, extraits vérifiés entre guillemets. Titre d'une
   décision ou d'un article : le titre Légifrance tel quel. Titre d'une pièce :

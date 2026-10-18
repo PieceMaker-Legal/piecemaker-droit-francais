@@ -17,8 +17,6 @@ export function installChatCitationHarness(options: {
   ensureProxy: () => void;
   folderHistory?: Pick<FolderHistory, 'begin' | 'end'>;
   pieceTitle?: (cwd: string, docId: string) => string;
-  onVerifiedTurn?: Parameters<typeof createCitationTurn>[0]['onVerifiedTurn'];
-  programContext?: (cwd: string) => string;
 }) {
   const run = options.runtime.run.bind(options.runtime);
   const getRunner = options.runtime.getRunner.bind(options.runtime);
@@ -77,7 +75,7 @@ export function installChatCitationHarness(options: {
     const cwd = String(runtimeOptions.cwd ?? runtimeOptions.projectPath ?? '');
     if (!CITED_PROVIDERS.has(provider)) return runWithFolderHistory(provider, command, runtimeOptions, writer, cwd);
     const sessionId = String(runtimeOptions.sessionId ?? '');
-    const turn = createCitationTurn({ cwd, sessionId, store: options.store, pieceTitle: options.pieceTitle, onVerifiedTurn: options.onVerifiedTurn });
+    const turn = createCitationTurn({ cwd, sessionId, store: options.store, pieceTitle: options.pieceTitle });
     let lastText: NormalizedMessage | undefined;
     let lastDelta: NormalizedMessage | undefined;
     let heldStreamEnd: NormalizedMessage | undefined;
@@ -94,7 +92,7 @@ export function installChatCitationHarness(options: {
     const finish = () => {
       if (!completion) completion = (async () => {
         flush();
-        options.folderHistory?.end({ cwd, request: command, conclusion: lastText?.content ?? streamed.split(/<CITATIONS>|<RAISONNEMENT>/)[0], aborted: interrupted, author: agentIdentity(provider, runtimeOptions.model) });
+        options.folderHistory?.end({ cwd, request: command, conclusion: lastText?.content ?? streamed.split('<CITATIONS>')[0], aborted: interrupted, author: agentIdentity(provider, runtimeOptions.model) });
         const suffix = interrupted ? '' : await turn.finish();
         if (suffix && lastDelta && (heldStreamEnd || !lastText)) writer.send({ ...lastDelta, content: suffix });
         if (heldStreamEnd) writer.send(heldStreamEnd);
@@ -149,7 +147,7 @@ export function installChatCitationHarness(options: {
     }) as ProviderRuntimeWriter;
     options.folderHistory?.begin(cwd);
     try {
-      return await run(provider, command.startsWith('/') ? command : withCitationInstructions(command, options.programContext?.(cwd)), runtimeOptions, wrapped);
+      return await run(provider, command.startsWith('/') ? command : withCitationInstructions(command), runtimeOptions, wrapped);
     } catch (error) {
       interrupted = true;
       throw error;

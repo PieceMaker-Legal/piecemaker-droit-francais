@@ -1,4 +1,4 @@
-import type { ReasoningSnapshot, ReasoningTestRun, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningSnapshot, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 export function loadReasoning(projectPath: string | null, example = false): Promise<ReasoningSnapshot> {
   return request<ReasoningSnapshot>(`/api/piecemaker/reasoning${example ? '/example' : `?projectPath=${encodeURIComponent(projectPath ?? '')}`}`);
@@ -12,16 +12,8 @@ export function appreciateFact(projectPath: string, id: string, input: { value: 
   return request<ReasoningSnapshot>('/api/piecemaker/reasoning/appreciation', { projectPath, id, ...input });
 }
 
-export function runTest(projectPath: string, scope: string, values: Record<string, ReasoningValue>): Promise<ReasoningTestRun> {
-  return request<ReasoningTestRun>('/api/piecemaker/reasoning/test/run', { projectPath, scope, values });
-}
-
-export function saveTest(projectPath: string, input: { label: string; scope: string; values: Record<string, ReasoningValue>; expected: string }): Promise<ReasoningSnapshot> {
-  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/test', { projectPath, ...input });
-}
-
-export function deleteTest(projectPath: string, id: string): Promise<ReasoningSnapshot> {
-  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/test/delete', { projectPath, id });
+export function runTheoryTest(projectPath: string): Promise<ReasoningSnapshot> {
+  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/test', { projectPath });
 }
 
 async function request<T>(url: string, body?: object): Promise<T> {

@@ -1,10 +1,7 @@
 import { createRequire } from 'node:module';
-import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import { readHistory, readLegalPeriod, sourceId } from '@/modules/piecemaker-reasoning/index.js';
-import type { TurnSource } from '@/modules/piecemaker-reasoning/index.js';
 import type { NormalizedMessage } from '@/shared/types.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
@@ -23,8 +20,7 @@ const { extractFullText, extractSourceTitle } = require(path.join(root, 'server/
 const SOURCE_TOOL = /(?:^|_)consulter_(?:decision|article)$/;
 const { markdownCounterpart } = require(path.join(vendor, 'protection.cjs'));
 const JSZip = require('jszip');
-const MARKERS = ['<CITATIONS>', '<RAISONNEMENT>'];
-const MARKER_TAIL = Math.max(...MARKERS.map((marker) => marker.length)) - 1;
+const OPEN = '<CITATIONS>';
 const MISS = '#piecemaker-cite-miss';
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_TURN_CHARACTERS = 32 * 1024 * 1024;
@@ -119,13 +115,8 @@ function sourceLine(citation: Citation, title: string, source: string, ranges: A
   return `- [${citation.ref}] [${linkLabel(title + locator(citation, ranges, source))}][${citation.ref}] — ${quotes.join(' · ')}`;
 }
 
-function markerIndex(text: string) {
-  const found = MARKERS.map((marker) => text.indexOf(marker)).filter((index) => index >= 0);
-  return found.length ? Math.min(...found) : -1;
-}
-
 function visibleText(text: string) {
-  const index = markerIndex(text);
+  const index = text.indexOf(OPEN);
   return index < 0 ? text : text.slice(0, index);
 }
 
@@ -136,13 +127,10 @@ export function createCitationTurn(options: {
   codeRoot?: string;
   recordVerification?: boolean;
   pieceTitle?: (cwd: string, docId: string) => string;
-  onVerifiedTurn?: (input: { cwd: string; sessionId: string; turnId: string; code: string; sources: TurnSource[] }) => string | Promise<string>;
 }) {
-  const programTurnId = randomUUID();
   const calls = new Map<string, string>();
   const decisions = new Map<string, string>();
   const decisionTitles = new Map<string, string>();
-  const histories = new Map<string, NonNullable<ReturnType<typeof readHistory>>>();
   const documents = new Map<string, Promise<string>>();
   const codeFiles = new Map<string, Promise<string>>();
   const codeRoot = path.resolve(options.codeRoot ?? options.cwd);
@@ -237,8 +225,6 @@ export function createCitationTurn(options: {
           decisions.set(id, text);
           const title = extractSourceTitle(raw) as string;
           if (title) decisionTitles.set(id, title);
-          const history = readHistory(raw);
-          if (history) histories.set(id, history);
         }
       }
     },
@@ -250,13 +236,13 @@ export function createCitationTurn(options: {
       if (!overflow) fullText += delta;
       if (hidden) return '';
       const combined = visibleTail + delta;
-      const marker = markerIndex(combined);
+      const marker = combined.indexOf(OPEN);
       if (marker >= 0) {
         hidden = true;
         visibleTail = '';
         return combined.slice(0, marker);
       }
-      const keep = Math.min(MARKER_TAIL, combined.length);
+      const keep = Math.min(OPEN.length - 1, combined.length);
       visibleTail = combined.slice(combined.length - keep);
       return combined.slice(0, combined.length - keep);
     },
@@ -266,7 +252,7 @@ export function createCitationTurn(options: {
       return tail;
     },
     text(text: string) {
-      if (markerIndex(text) >= 0) {
+      if (text.includes(OPEN)) {
         if (text.length <= MAX_TURN_CHARACTERS) fullText = text;
         else overflow = true;
         hidden = true;
@@ -276,27 +262,22 @@ export function createCitationTurn(options: {
     finish() {
       if (finished) return finished;
       finished = (async () => {
-        const marker = markerIndex(fullText);
-        const block = overflow || marker < 0 ? '' : fullText.slice(marker);
+        const block = overflow || !fullText.includes(OPEN) ? '' : fullText.slice(fullText.indexOf(OPEN));
         const replay = options.recordVerification === false;
         if (replay && block) {
           const saved = await options.store.readTurnSources(options.sessionId, block);
           if (saved !== null) return saved;
         }
-        const code = overflow ? undefined : /<RAISONNEMENT>([\s\S]*?)(?:<\/RAISONNEMENT>|$)/.exec(fullText)?.[1];
         const parsed = overflow ? [] : parseCitationsWithDiagnostics(fullText).citations as Citation[];
         const citations = await verifyCitations(parsed, (id: string, kind: string) => kind === 'code' ? codeText(id) : documentText(id), async (id: string) => decisions.get(id) ?? '') as Citation[];
         const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];
         const lines: string[] = [];
-        const reasoningSources: TurnSource[] = [];
         for (const citation of citations) {
           const lawId = citation.decision_id ?? citation.article_id;
           const source = citation.kind === 'case' || citation.kind === 'article'
             ? decisions.get(lawId ?? '') ?? ''
             : citation.kind === 'code' ? await codeText(citation.doc_id ?? '') : await documentText(citation.doc_id ?? '');
-          const exactBeforeRepair = (citation.quotes ?? []).map((quote) => quote.verification?.verified === true);
-          const proposedQuotes = citation.quotes.map((quote) => quote.quote);
           citation.quotes = applyNearestPassages(source, citation.quotes ?? []);
           citation.verified = citation.quotes.every((quote) => quote.verification?.verified === true);
           const ranges = locateSourcePassages(source, citation.quotes);
@@ -322,35 +303,12 @@ export function createCitationTurn(options: {
             });
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
             lines.push(sourceLine(citation, title, source, ranges));
-            if (citation.kind !== 'code') {
-              const document = `${citation.kind}:${lawId ?? openId}`;
-              const validity = citation.kind === 'article' ? readLegalPeriod(source) : undefined;
-              const history = citation.kind === 'case' ? histories.get(lawId ?? '') : undefined;
-              citation.quotes.forEach((quote, quoteIndex) => {
-                const repaired = !exactBeforeRepair[quoteIndex] && quote.verification?.verified === true;
-                reasoningSources.push({
-                  id: sourceId(document, quote.quote), ref: citation.ref, kind: citation.kind as 'article' | 'case' | 'document',
-                  document, title, excerpt: quote.quote, token,
-                  verified: quote.verification?.verified === true, repaired,
-                  ...(repaired ? { proposedExcerpt: proposedQuotes[quoteIndex] } : {}),
-                  ...(validity ? { validity } : {}),
-                  ...(history ? { history } : {}),
-                });
-              });
-            }
           } catch {
             lines.push(`- [${citation.ref}] ${linkLabel(title)} — [source indisponible](${MISS})`);
           }
         }
         if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
-        let sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
-        if (code !== undefined) {
-          sources = '';
-          if (!replay && options.onVerifiedTurn) {
-            try { sources = `\n\n${await options.onVerifiedTurn({ cwd: options.cwd, sessionId: options.sessionId, turnId: programTurnId, code, sources: reasoningSources })}`; }
-            catch (error) { sources = `\n\nRaisonnement non mis à jour : ${error instanceof Error ? error.message : 'enregistrement impossible'}.`; }
-          }
-        }
+        const sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
         if (!replay && block) await options.store.saveTurnSources(options.sessionId, block, sources).catch(() => {});
         return sources;
       })();

@@ -13,9 +13,10 @@ import { createSqlTool } from '../sql-tool.js';
 test('le raisonnement est lisible par dossier() et ses tables sont protégées des écritures SQL', async () => {
   await withFixture(async (context) => {
     const service = createReasoningService(() => context.appDb);
-    service.ingest({ cwd: context.roots.one, sessionId: 's', turnId: 't', sources: [], code: "déclaration champ d'application Question:\n  entrée cotee contenu booléen\n  résultat effet condition\nchamp d'application Question:\n  règle effet sous condition cotee conséquence rempli\n" });
-    assert.match(await context.run('SELECT item_id,status,author FROM pm_reasoning_items WHERE project_id=dossier() ORDER BY item_id'), /Question\.cotee\tproposé\tia/);
-    assert.match(await context.run('SELECT code FROM pm_reasoning_programs WHERE project_id=dossier()'), /règle effet/);
+    await service.command(context.roots.one, { commande: 'question', texte: 'La société fictive est-elle cotée ?' });
+    await service.command(context.roots.one, { commande: 'fait', question: 'Q1', nom: 'cotee', valeur: true });
+    assert.match(await context.run('SELECT item_id,status,author FROM pm_reasoning_items WHERE project_id=dossier() ORDER BY item_id'), /Q1\.cotee\tproposé\tia/);
+    assert.match(await context.run('SELECT code FROM pm_reasoning_programs WHERE project_id=dossier()'), /résultat reponse/);
     await assert.rejects(context.run("UPDATE pm_reasoning_items SET status='validé'"), /lecture SQL uniquement/);
     await assert.rejects(context.run('DELETE FROM pm_reasoning_programs'), /lecture SQL uniquement/);
   });

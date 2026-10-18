@@ -7,14 +7,14 @@ import type { ReasoningSource } from '../../../../shared/piecemaker-reasoning.js
 import { parseCatala, printCatala } from '../catala.js';
 import { evaluateReasoning } from '../evaluate.js';
 import { createReasoningService, reasoningExample } from '../program.js';
-import type { TurnSource } from '../program.js';
+import type { ReasoningConnectors } from '../commands.js';
 
-function fixture(t: test.TestContext, folder = '/dossier-fictif') {
+function fixture(t: test.TestContext, folder = '/dossier-fictif', links?: ReasoningConnectors) {
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
   db.exec('CREATE TABLE projects(project_id TEXT PRIMARY KEY, project_path TEXT);');
   db.prepare('INSERT INTO projects VALUES(?,?)').run('example', folder);
-  const service = createReasoningService(() => db);
+  const service = createReasoningService(() => db, links);
   t.after(() => db.close());
   return { db, service };
 }
@@ -139,52 +139,75 @@ test('l’objectif ordonne les voies, désigne les moyens adverses et répartit 
   assert.match(won.questions[0].voies[2].weaknesses.join(' '), /revocation : simple indice/);
 });
 
-test('le service réécrit les références, verrouille les éléments validés et garde l’appréciation de l’avocat', (t) => {
-  const { db, service } = fixture(t);
-  const turnSources: TurnSource[] = [{ ...article, ref: 1 }, { ...piece, ref: 2 }];
-  const numbered = code(facts.replaceAll('spie0001', '2'), '1').replaceAll('sart0001', '1');
-  const summary = service.ingest({ cwd: '/dossier-fictif', sessionId: 's', turnId: 't1', code: numbered, sources: turnSources });
-  assert.match(summary, /Q : remplie/);
-  const first = service.read('/dossier-fictif');
-  assert.match(first.code, /#\[selon = sart0001\]/);
-  assert.equal(service.ingest({ cwd: '/dossier-fictif', sessionId: 's', turnId: 't1', code: numbered, sources: turnSources }), '');
+const connectors = (overrides: Partial<ReasoningConnectors> = {}): ReasoningConnectors => ({
+  async law(id) {
+    return id.startsWith('LEGIARTI')
+      ? { title: 'Code fictif, article 1', text: 'L’approbation préalable de l’assemblée est requise.', validity: { from: '2020-01-01', to: null } }
+      : { title: 'Cass. fictive', text: 'La faute grave prive le dirigeant de son indemnité.', history: { status: 'remise en cause', lines: ['Cassation fictive du 2023-01-01'] } };
+  },
+  async piece(_cwd, reference) { return reference === 'pieces/pv.md' ? { title: 'PV fictif', text: 'Le 1er mars 2024, l’assemblée approuve l’indemnité.' } : null; },
+  match: (text, excerpt) => (text.includes(excerpt) ? excerpt : null),
+  async registry({ siren }) { return siren ? { found: true, status: 'Radiée' } : { found: false, status: '' }; },
+  async bodacc() { return ['Procédure collective ouverte (fictive).']; },
+  ...overrides,
+});
 
-  service.review('/dossier-fictif', 'Q.approbation', 'validé', 'Conforme au texte');
-  const altered = first.code.replace('règle approbation sous condition approuve', 'règle approbation sous condition non approuve');
-  const note = service.ingest({ cwd: '/dossier-fictif', sessionId: 's', turnId: 't2', code: altered, sources: [] });
-  assert.match(note, /Modification ignorée : Q\.approbation/);
-  assert.match(service.read('/dossier-fictif').code, /règle approbation sous condition approuve conséquence/);
+const build = async (service: ReturnType<typeof createReasoningService>) => {
+  await service.command('/dossier-fictif', { commande: 'question', texte: 'Le versement est-il dû ?', objectif: 'oui', date: 'date_acte' });
+  await service.command('/dossier-fictif', { commande: 'condition', question: 'Q1', nom: 'approbation', libelle: 'Approbation préalable', regle: 'approuve', role: 'fondement', source: 'LEGIARTI000000000001', extrait: 'L’approbation préalable de l’assemblée est requise.' });
+  await service.command('/dossier-fictif', { commande: 'fait', question: 'Q1', nom: 'date_acte', valeur: '2024-03-01', piece: 'pieces/pv.md', extrait: 'Le 1er mars 2024', force: 'acte_sous_seing_privé' });
+  return service.command('/dossier-fictif', { commande: 'fait', question: 'Q1', nom: 'approuve', valeur: 'vrai', piece: 'pieces/pv.md', extrait: 'l’assemblée approuve', force: 'acte_sous_seing_privé', appreciation: 'PV signé' });
+};
 
-  service.appreciate('/dossier-fictif', 'Q.approuve', { value: false, force: 'indice', appreciation: 'Signature contestable' });
-  const row = db.prepare("SELECT status, author, value_json, force FROM pm_reasoning_items WHERE item_id='Q.approuve'").get() as Record<string, string>;
-  assert.deepEqual(row, { status: 'validé', author: 'avocat', value_json: 'false', force: 'indice' });
+test('les commandes construisent la théorie pas à pas et disent ce qui reste à faire', async (t) => {
+  const { service } = fixture(t, '/dossier-fictif', connectors());
+  assert.match(await service.command('/dossier-fictif', { commande: 'etat' }), /Aucune question/);
+  assert.match(await service.command('/dossier-fictif', { commande: 'question', texte: 'Le versement est-il dû ?', objectif: 'oui', date: 'date_acte' }), /Q1 enregistrée[\s\S]*date_acte \(date\) : à prouver/);
+  await assert.rejects(service.command('/dossier-fictif', { commande: 'condition', question: 'Q1', nom: 'approbation', libelle: 'x', regle: 'approuve et', source: 'LEGIARTI000000000001', extrait: 'x' }), /Règle illisible/);
+  const partial = await service.command('/dossier-fictif', { commande: 'condition', question: 'Q1', nom: 'approbation', libelle: 'Approbation préalable', regle: 'approuve', role: 'fondement', source: 'LEGIARTI000000000001', extrait: 'texte inventé' });
+  assert.match(partial, /extrait introuvable dans la source/);
+  assert.match(partial, /approuve \(booléen\) : à prouver/);
+  const done = await build(service);
+  assert.match(done, /Réponse : oui · objectif oui : atteint/);
+  const snapshot = service.read('/dossier-fictif');
+  assert.equal(snapshot.questions[0].status, 'remplie');
+  assert.match(snapshot.code, /étiquette base règle reponse sous condition approbation conséquence rempli/);
+  assert.match(await service.command('/dossier-fictif', { commande: 'fait', question: 'Q1', nom: 'approuve', valeur: 'vrai', piece: 'pieces/pv.md', extrait: 'phrase absente', force: 'indice' }), /extrait introuvable dans pieces\/pv\.md, fait non établi/);
+});
+
+test('un élément validé par l’avocat ne peut plus être modifié par l’agent', async (t) => {
+  const { db, service } = fixture(t, '/dossier-fictif', connectors());
+  await build(service);
+  service.review('/dossier-fictif', 'Q1.approbation', 'validé', 'Conforme au texte');
+  await assert.rejects(service.command('/dossier-fictif', { commande: 'condition', question: 'Q1', nom: 'approbation', libelle: 'Autre', regle: 'non approuve', source: 'LEGIARTI000000000001', extrait: 'L’approbation préalable de l’assemblée est requise.' }), /verrouillé par l'avocat/);
+  service.appreciate('/dossier-fictif', 'Q1.approuve', { value: false, force: 'indice', appreciation: 'Signature contestable' });
+  assert.deepEqual(db.prepare("SELECT status, author, value_json, force FROM pm_reasoning_items WHERE item_id='Q1.approuve'").get(), { status: 'validé', author: 'avocat', value_json: 'false', force: 'indice' });
   assert.equal(service.read('/dossier-fictif').questions[0].status, 'non remplie');
-  service.ingest({ cwd: '/dossier-fictif', sessionId: 's', turnId: 't3', code: service.read('/dossier-fictif').code.replace('égal à faux', 'égal à vrai'), sources: [] });
-  assert.equal(service.read('/dossier-fictif').facts.find((fact) => fact.id === 'Q.approuve')!.value, false);
-
-  service.review('/dossier-fictif', 'Q.approuve', null);
-  assert.equal((db.prepare("SELECT author FROM pm_reasoning_items WHERE item_id='Q.approuve'").get() as { author: string }).author, 'ia');
+  await service.command('/dossier-fictif', { commande: 'question', question: 'Q1', texte: 'Le versement est-il dû ?', objectif: 'oui', date: 'date_acte' });
+  assert.equal(service.read('/dossier-fictif').facts.find((fact) => fact.id === 'Q1.approuve')!.value, false);
+  service.review('/dossier-fictif', 'Q1.approuve', null);
+  assert.equal((db.prepare("SELECT author FROM pm_reasoning_items WHERE item_id='Q1.approuve'").get() as { author: string }).author, 'ia');
 });
 
-test('un test exécute le raisonnement sur des hypothèses puis se rejoue à chaque révision', (t) => {
-  const { service } = fixture(t);
-  service.ingest({ cwd: '/dossier-fictif', sessionId: 's', turnId: 't1', code: code(facts), sources: [] });
-  assert.throws(() => service.runTest('/dossier-fictif', 'Q', { 'Q.inconnue': true }), /Entrée inconnue/);
-  const hypothetical = service.runTest('/dossier-fictif', 'Q', { 'Q.approuve': false });
-  assert.equal(hypothetical.question.status, 'bloquée');
-  assert.match(hypothetical.facts.find((fact) => fact.id === 'Q.approuve')!.issues.join(' '), /Hypothèse de test/);
-  const saved = service.saveTest('/dossier-fictif', { label: 'Sans approbation', scope: 'Q', values: { 'Q.approuve': false }, expected: 'bloquée' });
-  assert.deepEqual(saved.tests.map((entry) => [entry.label, entry.passed]), [['Sans approbation', true]]);
-  assert.equal(service.read('/dossier-fictif').revision, 2);
-  service.deleteTest('/dossier-fictif', saved.tests[0].id);
-  assert.equal(service.read('/dossier-fictif').tests.length, 0);
-});
-
-test('un code illisible est refusé et le raisonnement précédent conservé', (t) => {
-  const { service } = fixture(t);
-  service.ingest({ cwd: '/dossier-fictif', sessionId: 's', turnId: 't1', code: code(facts), sources: [] });
-  assert.match(service.ingest({ cwd: '/dossier-fictif', sessionId: 's', turnId: 't2', code: 'règle sans champ', sources: [] }), /Raisonnement non appliqué : Ligne 1/);
-  assert.equal(service.read('/dossier-fictif').revision, 1);
+test('le test exécute la théorie sur tout le dossier : vigueur, recours, pièces, registre et BODACC', async (t) => {
+  const { db, service } = fixture(t, '/dossier-fictif', connectors());
+  db.exec(`CREATE TABLE piecemaker_nodes(project_id TEXT, id TEXT, kind TEXT, label TEXT);
+    CREATE TABLE piecemaker_links(project_id TEXT, from_node_id TEXT, to_node_id TEXT, relation TEXT);
+    CREATE TABLE piecemaker_mappings(project_id TEXT, node_id TEXT, real_value TEXT);
+    INSERT INTO piecemaker_nodes VALUES ('example','c1','company','Société Exemple SAS'), ('example','n1','siren','123456789'), ('example','c2','company','ZETABIO');
+    INSERT INTO piecemaker_links VALUES ('example','c1','n1','SIREN');`);
+  await build(service);
+  await service.command('/dossier-fictif', { commande: 'condition', question: 'Q1', nom: 'revocation', libelle: 'Révocation pour faute grave', regle: 'faute', role: 'moyen_adverse', source: 'JURITEXT000000000001', extrait: 'La faute grave prive le dirigeant de son indemnité.' });
+  const report = await service.command('/dossier-fictif', { commande: 'tester' });
+  assert.match(report, /⚠ Cass\. fictive : Remise en cause par une décision supérieure : Cassation fictive du 2023-01-01\./);
+  assert.match(report, /⚠ Société Exemple SAS : Registre Public : Radiée\./);
+  assert.match(report, /⚠ Société Exemple SAS : BODACC : Procédure collective ouverte \(fictive\)\./);
+  assert.match(report, /⚠ ZETABIO : Personne morale introuvable au Registre Public\./);
+  assert.match(report, /⚠ faute : Pièce à rechercher/);
+  assert.match(report, /✓ Code fictif, article 1 : En vigueur au 2024-03-01\./);
+  assert.match(report, /✓ PV fictif : Extrait retrouvé dans la pièce\./);
+  assert.ok(service.read('/dossier-fictif').test!.findings.length);
+  assert.match(service.describe('/dossier-fictif'), /Dernier test .* alerte\(s\)/);
 });
 
 test('l’exemple fictif décrit une condition sans fondement et un fait sans pièce', () => {
