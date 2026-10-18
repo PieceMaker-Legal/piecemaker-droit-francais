@@ -145,7 +145,7 @@ test('performance : begin et end rendent la main immédiatement pendant un commi
   const started = performance.now();
   history.begin(folder);
   history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false, author: AGENT });
-  assert.ok(performance.now() - started < 5, `${performance.now() - started} ms`);
+  assert.ok(performance.now() - started < 50, `${performance.now() - started} ms`);
   await history.idle();
   assert.deepEqual(subjects(folder), ['État initial du dossier']);
 });

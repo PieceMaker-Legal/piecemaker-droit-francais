@@ -25,7 +25,7 @@ function publishOpenPanels(file, project, entry) {
 test('les outils exposés sont afficher, chronologie, conversion, sql et tabular_review, sans renommage', async () => {
   const { client, close } = await connect({ sqlFn: async () => '' });
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'chronologie', 'conversion', 'sql', 'tabular_review', 'volets_ouverts']);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'chronologie', 'conversion', 'sql', 'tabular_review']);
   const sql = tools.find((tool) => tool.name === 'sql');
   assert.deepEqual(Object.keys(sql.inputSchema.properties), ['requete']);
   assert.deepEqual(sql.annotations, {
@@ -146,7 +146,7 @@ test('tabular_review ouvre localement et confie le reste au serveur PieceMaker',
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
-test('afficher vérifie le fichier et exige une cible', async () => {
+test('afficher vérifie le fichier et, sans cible, liste les volets ouverts', async () => {
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-open-'));
   const openPanelsPath = path.join(temporaryDirectory, 'volets-ouverts.json');
   const { client, close } = await connect({ sqlFn: async () => '', openPanelsPath, openPanelsTimeoutMs: 80 });
@@ -169,7 +169,8 @@ test('afficher vérifie le fichier et exige une cible', async () => {
   const panel = await client.callTool({ name: 'afficher', arguments: { volet: 'chronologie' } });
   assert.deepEqual(panel.content, [{ type: 'text', text: 'Volet affiché : chronologie' }]);
   const nothing = await client.callTool({ name: 'afficher', arguments: {} });
-  assert.equal(nothing.isError, true);
+  assert.equal(nothing.isError, undefined);
+  assert.equal(nothing.structuredContent.code, 'listed');
   await close();
   fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 });

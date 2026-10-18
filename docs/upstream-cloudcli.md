@@ -369,6 +369,12 @@ npm test
 npx vitest run src/piecemaker/auth/tests/authSessionSurvivesTokenRotation.test.tsx
 ```
 
+`npm test` charge `server/piecemaker/tests/upstream-mode.env`, qui pointe
+`CLOUDCLI_PRODUCT_CONFIG` vers un fichier absent : les tests upstream vérifient
+ainsi le repli sur `~/.cloudcli` au lieu d'échouer sur notre marque. Un test
+upstream qui échoue encore ne s'adapte que pour `mistral` (§5c) ou pour copier
+`shared/product-config.mjs` dans une fixture.
+
 Le `package-lock.json` se régénère **sous la version de Node de la CI**, jamais
 celle du poste — un npm plus récent produit des entrées imbriquées que `npm ci`
 sous npm 10 refuse (`Missing: <pkg> from lock file`) :
