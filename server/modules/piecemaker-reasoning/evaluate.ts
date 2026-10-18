@@ -73,7 +73,7 @@ function variables(expression: Expression | boolean | undefined, found = new Set
   return found;
 }
 
-export function evaluateReasoning(program: CatalaProgram, sources: Map<string, ReasoningSource>, items: Map<string, ReasoningItem>, assumptions = new Map<string, ReasoningValue>()) {
+export function evaluateReasoning(program: CatalaProgram, sources: Map<string, ReasoningSource>, items: Map<string, ReasoningItem>) {
   const diagnostics: string[] = [];
   const declarations = new Map<string, Declaration>();
   for (const declaration of program.declarations) {
@@ -123,7 +123,6 @@ export function evaluateReasoning(program: CatalaProgram, sources: Map<string, R
     const validated = fact.review?.status === 'validé';
     if (fact.review?.status === 'écarté') fact.issues.push('Écarté par l’avocat.');
     else if (fact.value !== null && (validated || (usable.length && fact.force && fact.force !== 'sans_valeur'))) fact.status = 'établi';
-    if (assumptions.has(fact.id)) Object.assign(fact, { value: assumptions.get(fact.id), status: assumptions.get(fact.id) === null ? 'non établi' : 'établi', issues: ['Hypothèse de test.'] });
   }
 
   const conditions = new Map<string, ReasoningCondition>();

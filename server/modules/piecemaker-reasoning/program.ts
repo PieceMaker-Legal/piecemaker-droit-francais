@@ -1,28 +1,22 @@
-import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import type Database from 'better-sqlite3';
 
 import { REASONING_FORCES } from '../../../shared/piecemaker-reasoning.js';
-import type { ReasoningForce, ReasoningQuestion, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningTest, ReasoningTestRun, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningFinding, ReasoningForce, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningTestReport, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 import { parseCatala, printCatala, printValue } from './catala.js';
 import type { CatalaProgram, DeclarationItem, Rule } from './catala.js';
+import { applyCommand, describeState, emptyModel, modelToCatala } from './commands.js';
+import type { ReasoningCommand, ReasoningConnectors, ReasoningModel } from './commands.js';
 import { evaluateReasoning } from './evaluate.js';
 import type { ReasoningItem } from './evaluate.js';
 
-export type TurnSource = ReasoningSource & { ref: number };
 type Lock = { scope: string; declaration?: DeclarationItem; rules: Rule[] };
-type TestRow = { test_id: string; label: string; scope: string; values_json: string; expected: ReasoningQuestion['status'] };
 type ItemRow = { item_id: string; kind: string; status: string; value_json: string | null; force: string | null; appreciation: string | null; author: string; sources_json: string; locked_json: string | null; note: string | null; updated_at: string };
 
-const MAX_CODE = 200_000;
-const LEGACY_TABLES = ['pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories'];
-const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', sources: [], questions: [], conditions: [], facts: [], tests: [], diagnostics: [] });
-
-export function sourceId(document: string, excerpt: string) {
-  return `s${createHash('sha256').update(`${document}\0${excerpt}`).digest('hex').slice(0, 8)}`;
-}
+const LEGACY_TABLES = ['pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories', 'pm_reasoning_tests', 'pm_reasoning_turns'];
+const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', sources: [], questions: [], conditions: [], facts: [], test: null, diagnostics: [] });
 
 function lawScopeOf(program: CatalaProgram, dossierScope: string, sub: string) {
   const item = program.declarations.find((declaration) => declaration.scope === dossierScope)?.items.find((entry) => entry.role === 'champ' && entry.name === sub);
@@ -62,14 +56,17 @@ function referencedSources(program: CatalaProgram) {
   return new Set(program.bodies.flatMap((body) => body.rules.flatMap((rule) => rule.attrs.selon ?? [])));
 }
 
-export function createReasoningService(getDatabase: () => Database.Database) {
+const offline = (): never => { throw new Error('Connecteurs du raisonnement indisponibles.'); };
+const OFFLINE: ReasoningConnectors = { law: offline, piece: offline, match: offline, registry: offline, bodacc: offline };
+
+export function createReasoningService(getDatabase: () => Database.Database, connectors: ReasoningConnectors = OFFLINE) {
   let initialized = false;
   const database = () => {
     const db = getDatabase();
     if (!initialized) {
       for (const table of LEGACY_TABLES) db.exec(`DROP TABLE IF EXISTS ${table}`);
       const columns = db.prepare("SELECT name FROM pragma_table_info('pm_reasoning_programs')").all() as Array<{ name: string }>;
-      if (columns.length && !columns.some((column) => column.name === 'code')) db.exec('DROP TABLE pm_reasoning_programs; DROP TABLE IF EXISTS pm_reasoning_turns;');
+      if (columns.length && !columns.some((column) => column.name === 'code')) db.exec('DROP TABLE pm_reasoning_programs;');
       db.exec(`
         CREATE TABLE IF NOT EXISTS pm_reasoning_programs (
           project_id TEXT PRIMARY KEY REFERENCES projects(project_id) ON DELETE CASCADE,
@@ -84,15 +81,9 @@ export function createReasoningService(getDatabase: () => Database.Database) {
           sources_json TEXT NOT NULL, locked_json TEXT, note TEXT, updated_at TEXT NOT NULL,
           PRIMARY KEY(project_id, item_id)
         );
-        CREATE TABLE IF NOT EXISTS pm_reasoning_tests (
-          project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-          test_id TEXT NOT NULL, label TEXT NOT NULL, scope TEXT NOT NULL,
-          values_json TEXT NOT NULL CHECK(json_valid(values_json)), expected TEXT NOT NULL, created_at TEXT NOT NULL,
-          PRIMARY KEY(project_id, test_id)
-        );
-        CREATE TABLE IF NOT EXISTS pm_reasoning_turns (
-          project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-          turn_id TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(project_id, turn_id)
+        CREATE TABLE IF NOT EXISTS pm_reasoning_models (
+          project_id TEXT PRIMARY KEY REFERENCES projects(project_id) ON DELETE CASCADE,
+          model_json TEXT NOT NULL CHECK(json_valid(model_json))
         );
       `);
       initialized = true;
@@ -121,27 +112,7 @@ export function createReasoningService(getDatabase: () => Database.Database) {
     return row ? { ...emptySnapshot(), ...JSON.parse(row.snapshot_json) as Partial<ReasoningSnapshot> } : emptySnapshot();
   };
 
-  const simulate = (id: string, program: CatalaProgram, sources: ReasoningSource[], scope: string, values: Record<string, ReasoningValue>): ReasoningTestRun => {
-    const evaluation = evaluateReasoning(program, new Map(sources.map((source) => [source.id, source])), items(id), new Map(Object.entries(values)));
-    const question = evaluation.questions.find((entry) => entry.scope === scope);
-    if (!question) throw new TypeError(`Question inconnue : ${scope}.`);
-    return { question, conditions: evaluation.conditions.filter((condition) => condition.scope === scope), facts: evaluation.facts.filter((fact) => fact.scope === scope) };
-  };
-
-  const runTests = (id: string, program: CatalaProgram, sources: ReasoningSource[]): ReasoningTest[] => (database().prepare('SELECT * FROM pm_reasoning_tests WHERE project_id=? ORDER BY created_at').all(id) as TestRow[]).map((row) => {
-    const values = JSON.parse(row.values_json) as Record<string, ReasoningValue>;
-    let actual: ReasoningQuestion['status'] | null = null;
-    try { actual = simulate(id, program, sources, row.scope, values).question.status; } catch { actual = null; }
-    return { id: row.test_id, label: row.label, scope: row.scope, values, expected: row.expected, actual, passed: actual === row.expected };
-  });
-
-  const checkValues = (snapshot: ReasoningSnapshot, scope: string, values: unknown): Record<string, ReasoningValue> => {
-    if (!values || typeof values !== 'object' || Array.isArray(values)) throw new TypeError('Valeurs attendues : objet { fait: valeur }.');
-    for (const key of Object.keys(values)) if (!snapshot.facts.some((fact) => fact.id === key && fact.scope === scope)) throw new TypeError(`Entrée inconnue : ${key}.`);
-    return values as Record<string, ReasoningValue>;
-  };
-
-  const commit = (id: string, previous: ReasoningSnapshot, program: CatalaProgram, sources: ReasoningSource[], notes: string[], turnId?: string): ReasoningSnapshot => {
+  const commit = (id: string, previous: ReasoningSnapshot, program: CatalaProgram, sources: ReasoningSource[], notes: string[], test = previous.test): ReasoningSnapshot => {
     const db = database();
     const used = referencedSources(program);
     const kept = sources.filter((source) => used.has(source.id));
@@ -149,7 +120,7 @@ export function createReasoningService(getDatabase: () => Database.Database) {
     const snapshot: ReasoningSnapshot = {
       revision: previous.revision + 1, updatedAt: new Date().toISOString(), code: printCatala(program), sources: kept,
       questions: evaluation.questions, conditions: evaluation.conditions, facts: evaluation.facts,
-      tests: runTests(id, program, kept),
+      test,
       diagnostics: [...notes, ...evaluation.diagnostics],
     };
     const now = new Date().toISOString();
@@ -161,49 +132,123 @@ export function createReasoningService(getDatabase: () => Database.Database) {
         ON CONFLICT(project_id,item_id) DO UPDATE SET label=excluded.label, value_json=CASE WHEN author='avocat' THEN value_json ELSE excluded.value_json END, force=CASE WHEN author='avocat' THEN force ELSE excluded.force END, appreciation=CASE WHEN author='avocat' THEN appreciation ELSE excluded.appreciation END, sources_json=CASE WHEN author='avocat' THEN sources_json ELSE excluded.sources_json END`);
       for (const condition of snapshot.conditions) upsert.run(id, condition.id, 'condition', condition.label, JSON.stringify(condition.value), null, null, JSON.stringify(condition.sources), now);
       for (const fact of snapshot.facts) upsert.run(id, fact.id, 'fait', fact.variable, JSON.stringify(fact.value), fact.force, fact.appreciation, JSON.stringify(fact.sources), now);
-      if (turnId) db.prepare('INSERT INTO pm_reasoning_turns VALUES(?,?,?)').run(id, turnId, snapshot.revision);
     })();
     return snapshot;
   };
 
   const locks = (id: string) => rows(id).filter((row) => row.locked_json).map((row) => [row.item_id, JSON.parse(row.locked_json!) as Lock] as const);
 
-  const reload = (id: string, cwd: string, note: string) => {
-    const previous = read(cwd);
-    const program = parseCatala(previous.code);
-    for (const [item, lock] of locks(id)) applyLock(program, item, lock);
-    return commit(id, previous, program, previous.sources, [note]);
+  const loadModel = (id: string): ReasoningModel => {
+    const row = database().prepare('SELECT model_json FROM pm_reasoning_models WHERE project_id=?').get(id) as { model_json: string } | undefined;
+    return row ? JSON.parse(row.model_json) as ReasoningModel : emptyModel();
   };
 
-  const summary = (snapshot: ReasoningSnapshot) => {
-    const toReview = [...snapshot.conditions, ...snapshot.facts].filter((item) => !item.review).length;
-    const missing = snapshot.facts.filter((fact) => !fact.sources.length).length;
-    const failing = snapshot.tests.filter((entry) => !entry.passed).length;
-    const answers = snapshot.questions.map((question) => `${question.scope} : ${question.status}${question.objectiveStatus ? `, objectif ${question.objectiveStatus}` : ''}${question.valid ? '' : ' (incomplet)'}`).join(' ; ');
-    return `Raisonnement · révision ${snapshot.revision} · ${answers || 'aucune question'} · ${snapshot.conditions.length} conditions · ${snapshot.facts.length} faits${missing ? ` dont ${missing} sans pièce` : ''} · ${toReview} élément(s) à valider${snapshot.tests.length ? ` · tests ${snapshot.tests.length - failing}/${snapshot.tests.length} réussis` : ''} dans le volet Raisonnement.`;
+  const rebuild = (id: string, previous: ReasoningSnapshot, model: ReasoningModel, sources: ReasoningSource[], notes: string[], test?: ReasoningTestReport | null) => {
+    const program = parseCatala(model.questions.length || !previous.code ? modelToCatala(model) : previous.code);
+    for (const [item, lock] of locks(id)) applyLock(program, item, lock);
+    return commit(id, previous, program, sources, notes, test);
+  };
+
+  const reload = (id: string, cwd: string, note: string) => {
+    const previous = read(cwd);
+    return rebuild(id, previous, loadModel(id), previous.sources, [note]);
+  };
+
+  const companies = (id: string) => {
+    const db = database();
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='piecemaker_nodes'").get()) return [];
+    return db.prepare(`SELECT c.label,
+        (SELECT m.real_value FROM piecemaker_mappings m WHERE m.project_id=c.project_id AND m.node_id=c.id LIMIT 1) AS name,
+        (SELECT COALESCE((SELECT m.real_value FROM piecemaker_mappings m WHERE m.project_id=s.project_id AND m.node_id=s.id LIMIT 1), s.label)
+           FROM piecemaker_links l JOIN piecemaker_nodes s ON s.project_id=l.project_id AND s.id=l.to_node_id
+           WHERE l.project_id=c.project_id AND l.from_node_id=c.id AND s.kind='siren' LIMIT 1) AS siren
+      FROM piecemaker_nodes c WHERE c.project_id=? AND c.kind='company' ORDER BY c.label`).all(id) as Array<{ label: string; name: string | null; siren: string | null }>;
+  };
+
+  const checkSource = async (cwd: string, source: ReasoningSource, findings: ReasoningFinding[]): Promise<ReasoningSource> => {
+    const link = connectors;
+    const [kind, ...rest] = source.document.split(':');
+    const reference = rest.join(':');
+    try {
+      if (kind === 'document') {
+        const piece = await link.piece(cwd, reference);
+        const found = Boolean(piece && link.match(piece.text, source.excerpt));
+        findings.push({ level: found ? 'ok' : 'alerte', subject: source.title, text: found ? 'Extrait retrouvé dans la pièce.' : 'Extrait introuvable : la pièce a changé ou n’est plus dans le dossier.' });
+        return { ...source, verified: found };
+      }
+      const law = await link.law(reference);
+      const fresh = { ...source, ...(law.validity ? { validity: law.validity } : {}), ...(law.history ? { history: law.history } : {}) };
+      if (kind === 'case') {
+        const status = fresh.history?.status;
+        findings.push(status === 'non remise en cause'
+          ? { level: 'ok', subject: source.title, text: 'Aucune décision ultérieure ne la remet en cause.' }
+          : { level: 'alerte', subject: source.title, text: status === 'remise en cause' ? `Remise en cause par une décision supérieure${fresh.history!.lines[0] ? ` : ${fresh.history!.lines[0]}` : ''}.` : status === 'à examiner' ? `Recours à examiner${fresh.history!.lines[0] ? ` : ${fresh.history!.lines[0]}` : ''}.` : 'Historique judiciaire indisponible.' });
+      }
+      return fresh;
+    } catch (error) {
+      findings.push({ level: 'alerte', subject: source.title, text: `Vérification impossible : ${error instanceof Error ? error.message : 'erreur'}.` });
+      return source;
+    }
+  };
+
+  const checkCompany = async (company: { label: string; name: string | null; siren: string | null }, findings: ReasoningFinding[]) => {
+    const link = connectors;
+    const siren = company.siren?.replace(/\D/g, '').slice(0, 9) || null;
+    try {
+      const record = await link.registry({ siren, name: company.name ?? company.label });
+      if (!record.found) findings.push({ level: 'alerte', subject: company.label, text: `Personne morale introuvable au Registre Public${siren ? ` (SIREN ${siren})` : ''}.` });
+      else if (/radi|cess|ferm|liquid|dissou/i.test(record.status)) findings.push({ level: 'alerte', subject: company.label, text: `Registre Public : ${record.status}.` });
+      else findings.push({ level: 'ok', subject: company.label, text: `Registre Public : ${record.status || 'trouvée'}.` });
+      if (siren) {
+        const alerts = await link.bodacc(siren);
+        if (alerts.length) findings.push(...alerts.map((alert) => ({ level: 'alerte' as const, subject: company.label, text: `BODACC : ${alert}` })));
+      }
+    } catch (error) {
+      findings.push({ level: 'alerte', subject: company.label, text: `Vérification impossible : ${error instanceof Error ? error.message : 'erreur'}.` });
+    }
+  };
+
+  const programFindings = (snapshot: ReasoningSnapshot): ReasoningFinding[] => {
+    const titles = new Map(snapshot.sources.map((source) => [source.id, source.title]));
+    return snapshot.questions.flatMap((question): ReasoningFinding[] => [
+      { level: question.status === 'bloquée' || question.objectiveStatus === 'hors d’atteinte' ? 'alerte' : 'ok', subject: question.scope, text: `Réponse calculée : ${({ remplie: 'oui', 'non remplie': 'non', indéterminée: 'pas encore établie', bloquée: 'bloquée' })[question.status]}${question.objectiveStatus ? ` · objectif ${question.objectiveStatus}` : ''}.` },
+      ...question.vigueur.map((entry): ReasoningFinding => ({ level: entry.inForce === true ? 'ok' : 'alerte', subject: titles.get(entry.source) ?? entry.source, text: entry.inForce === true ? `En vigueur au ${entry.date}.` : entry.inForce === false ? `Non en vigueur au ${entry.date}.` : 'Vigueur non contrôlée : date de référence non prouvée.' })),
+      ...question.issues.map((issue): ReasoningFinding => ({ level: 'alerte', subject: question.scope, text: issue })),
+      ...snapshot.conditions.filter((condition) => condition.scope === question.scope && condition.variable !== question.result).flatMap((condition) => condition.issues.map((issue): ReasoningFinding => ({ level: 'alerte', subject: condition.label, text: issue }))),
+      ...snapshot.facts.filter((fact) => fact.scope === question.scope && fact.status !== 'établi').map((fact): ReasoningFinding => ({ level: 'alerte', subject: fact.variable, text: fact.issues[0] ?? 'Fait à prouver.' })),
+    ]);
   };
 
   database();
   return {
     read,
-    runTest(cwd: string, scope: string, values: unknown): ReasoningTestRun {
-      const id = projectId(cwd);
-      const snapshot = read(cwd);
-      return simulate(id, parseCatala(snapshot.code), snapshot.sources, scope, checkValues(snapshot, scope, values));
+    describe(cwd: string, focus: string | null = null) {
+      return describeState(read(cwd), loadModel(projectId(cwd)), focus);
     },
-    saveTest(cwd: string, input: { label: unknown; scope: string; values: unknown; expected: unknown }): ReasoningSnapshot {
+    async command(cwd: string, input: ReasoningCommand): Promise<string> {
+      if (input.commande === 'etat' || input.commande === undefined) return this.describe(cwd, typeof input.question === 'string' ? input.question : null);
+      if (input.commande === 'tester') return this.test(cwd).then((snapshot) => describeTest(snapshot.test!));
       const id = projectId(cwd);
-      const snapshot = read(cwd);
-      const values = checkValues(snapshot, input.scope, input.values);
-      if (typeof input.label !== 'string' || !input.label.trim() || input.label.length > 300) throw new TypeError('Intitulé du test requis.');
-      if (!['remplie', 'non remplie', 'indéterminée', 'bloquée'].includes(input.expected as string)) throw new TypeError('Résultat attendu invalide.');
-      database().prepare('INSERT INTO pm_reasoning_tests VALUES(?,?,?,?,?,?,?)').run(id, randomUUID(), input.label.trim(), input.scope, JSON.stringify(values), input.expected, new Date().toISOString());
-      return reload(id, cwd, `Avocat · test enregistré : ${input.label.trim()}.`);
+      const previous = read(cwd);
+      const locked = new Set(rows(id).filter((row) => row.locked_json).map((row) => row.item_id));
+      const result = await applyCommand(loadModel(id), previous.sources, locked, cwd, input, connectors);
+      database().prepare('INSERT INTO pm_reasoning_models VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET model_json=excluded.model_json').run(id, JSON.stringify(result.model));
+      const snapshot = rebuild(id, previous, result.model, result.sources, [], null);
+      return `${result.note}\n\n${describeState(snapshot, result.model, result.focus)}`;
     },
-    deleteTest(cwd: string, testId: string): ReasoningSnapshot {
+    async test(cwd: string): Promise<ReasoningSnapshot> {
       const id = projectId(cwd);
-      database().prepare('DELETE FROM pm_reasoning_tests WHERE project_id=? AND test_id=?').run(id, testId);
-      return reload(id, cwd, 'Avocat · test supprimé.');
+      const previous = read(cwd);
+      const sourceFindings: ReasoningFinding[] = [];
+      const companyFindings: ReasoningFinding[] = [];
+      const sources = await Promise.all(previous.sources.map((source) => checkSource(cwd, source, sourceFindings)));
+      await Promise.all(companies(id).map((company) => checkCompany(company, companyFindings)));
+      const evaluated = rebuild(id, previous, loadModel(id), sources, ['Test exécuté.'], null);
+      const findings = [...programFindings(evaluated), ...sourceFindings, ...companyFindings];
+      const test: ReasoningTestReport = { at: new Date().toISOString(), findings: [...findings.filter((finding) => finding.level === 'alerte'), ...findings.filter((finding) => finding.level === 'ok')] };
+      const snapshot = { ...evaluated, test };
+      database().prepare('UPDATE pm_reasoning_programs SET snapshot_json=? WHERE project_id=?').run(JSON.stringify(snapshot), id);
+      return snapshot;
     },
     review(cwd: string, target: string, status: 'validé' | 'écarté' | null, note?: string): ReasoningSnapshot {
       const id = projectId(cwd);
@@ -238,60 +283,12 @@ export function createReasoningService(getDatabase: () => Database.Database) {
         .run(JSON.stringify(input.value), input.force, input.appreciation.trim(), JSON.stringify(lock), input.note?.trim() || null, new Date().toISOString(), id, target);
       return reload(id, cwd, `Avocat · ${target} = ${printValue(input.value)}${input.force ? ` (${input.force})` : ''}.`);
     },
-    context(cwd: string) {
-      try {
-        const snapshot = read(cwd);
-        if (!snapshot.revision) return '';
-        const locked = [...snapshot.conditions, ...snapshot.facts].filter((item) => item.review).map((item) => `${item.id} (${item.review!.status})`);
-        const todo = [
-          ...snapshot.diagnostics,
-          ...snapshot.questions.flatMap((question) => question.issues.map((issue) => `${question.scope} : ${issue}`)),
-          ...snapshot.conditions.flatMap((condition) => condition.issues.map((issue) => `${condition.id} : ${issue}`)),
-          ...snapshot.facts.flatMap((fact) => fact.issues.map((issue) => `${fact.id} : ${issue}`)),
-        ];
-        const sources = snapshot.sources.map((source) => `${source.id} = ${source.title} « ${source.excerpt.slice(0, 160)} »`);
-        const text = [
-          `Raisonnement enregistré (révision ${snapshot.revision}) : réécris-le en entier en le complétant.`,
-          '<RAISONNEMENT_ACTUEL>', snapshot.code, '</RAISONNEMENT_ACTUEL>',
-          sources.length ? `Sources enregistrées (réutilisables par leur identifiant) :\n${sources.join('\n')}` : '',
-          locked.length ? `Verrouillé par l'avocat, à recopier à l'identique : ${locked.join(', ')}.` : '',
-          todo.length ? `À traiter :\n- ${todo.join('\n- ')}` : '',
-        ].filter(Boolean).join('\n');
-        return text.length <= 40_000 ? text : `${text.slice(0, 40_000)}\n… (suite : SELECT code, snapshot_json FROM pm_reasoning_programs WHERE project_id=dossier();)`;
-      } catch { return ''; }
-    },
-    ingest(input: { cwd: string; sessionId: string; turnId: string; code: string; sources: TurnSource[] }): string {
-      const id = projectId(input.cwd);
-      const db = database();
-      const turnId = createHash('sha256').update(`${input.sessionId}\0${input.turnId}`).digest('hex');
-      if (db.prepare('SELECT 1 FROM pm_reasoning_turns WHERE project_id=? AND turn_id=?').get(id, turnId)) return '';
-      const previous = read(input.cwd);
-      if (!input.code.trim()) return '';
-      let program: CatalaProgram;
-      try {
-        if (input.code.length > MAX_CODE) throw new SyntaxError('Code trop long.');
-        program = parseCatala(input.code);
-      } catch (error) {
-        const message = `Raisonnement non appliqué : ${error instanceof Error ? error.message : 'code illisible'} Le raisonnement précédent est conservé.`;
-        db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET snapshot_json=excluded.snapshot_json').run(id, previous.revision, previous.code, JSON.stringify({ ...previous, diagnostics: [message] }));
-        return message;
-      }
-      const notes: string[] = [];
-      const known = new Map(previous.sources.map((source) => [source.id, source]));
-      for (const { ref: _ref, ...source } of input.sources) known.set(source.id, source);
-      for (const body of program.bodies) for (const rule of body.rules) if (rule.attrs.selon) {
-        rule.attrs.selon = [...new Set(rule.attrs.selon.flatMap((value) => {
-          if (!/^\d+$/.test(value)) return [value];
-          const matches = input.sources.filter((source) => source.ref === Number(value)).map((source) => source.id);
-          if (!matches.length) notes.push(`Source [${value}] absente du bloc CITATIONS.`);
-          return matches.length ? matches : [`ref${value}`];
-        }))];
-      }
-      for (const [item, lock] of locks(id)) if (applyLock(program, item, lock)) notes.push(`Modification ignorée : ${item} est verrouillé par l'avocat.`);
-      const snapshot = commit(id, previous, program, [...known.values()], notes, turnId);
-      return [...notes, summary(snapshot)].join(' ');
-    },
   };
+}
+
+function describeTest(test: ReasoningTestReport) {
+  const alerts = test.findings.filter((finding) => finding.level === 'alerte');
+  return [`Test : ${alerts.length ? `${alerts.length} alerte(s)` : 'aucune alerte'}.`, ...test.findings.map((finding) => `${finding.level === 'alerte' ? '⚠' : '✓'} ${finding.subject} : ${finding.text}`)].join('\n');
 }
 
 export function reasoningExample(): ReasoningSnapshot {
@@ -335,5 +332,5 @@ champ d'application Dossier:
   const program = parseCatala(code);
   const sources = [article, piece, date];
   const evaluation = evaluateReasoning(program, new Map(sources.map((source) => [source.id, source])), new Map());
-  return { revision: 0, updatedAt: null, code: printCatala(program), sources, ...evaluation, tests: [], demo: true };
+  return { revision: 0, updatedAt: null, code: printCatala(program), sources, ...evaluation, test: null, demo: true };
 }

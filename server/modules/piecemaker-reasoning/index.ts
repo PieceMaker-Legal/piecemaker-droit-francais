@@ -1,4 +1,4 @@
-export { createReasoningService, sourceId } from './program.js';
-export type { TurnSource } from './program.js';
-export { createReasoningRouter } from './routes.js';
+export { createReasoningService } from './program.js';
+export type { ReasoningConnectors } from './commands.js';
+export { createReasoningRouter, createReasoningLocalRouter } from './routes.js';
 export { readHistory, readLegalPeriod } from './legal-period.js';

@@ -25,7 +25,6 @@ export const STYLES = `
 .pmr-problems{margin:8px 0;padding:6px 10px;border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 8%,transparent)}.pmr-problems ul{margin:2px 0 0;padding-left:16px}
 .pmr-decision{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px}.pmr-decision button{font-size:12px}.pmr-primary{border-color:var(--accent)!important;color:var(--accent)}
 .pmr-form{display:grid;gap:6px;margin-top:8px}.pmr-form label{display:grid;gap:2px;font-size:11.5px;color:var(--muted)}.pmr-form textarea{min-height:48px;resize:vertical;color:var(--ink)}
-.pmr-test{display:grid;gap:6px;margin:8px 0}.pmr-test-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center}
 .pmr-box{border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:8px 0;background:var(--bg)}.pmr-box p{margin:3px 0}
 @container (min-width:880px){.pmr-workspace{flex-direction:row}.pmr-canvas{min-width:0;min-height:0}.pmr-inspector{flex:0 0 36%;width:36%;max-height:none;min-height:0;height:100%;border-top:0;border-left:1px solid var(--border)}}
 `;

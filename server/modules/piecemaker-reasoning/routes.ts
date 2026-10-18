@@ -27,26 +27,21 @@ export function createReasoningRouter(service: ReturnType<typeof createReasoning
       response.json(service.appreciate(projectPath, id, { value, force: force ?? null, appreciation: appreciation ?? '', note }));
     } catch (error) { fail(response, error); }
   });
-  router.post('/test/run', express.json(), (request, response) => {
-    try {
-      const { projectPath, scope, values } = request.body ?? {};
-      if (typeof projectPath !== 'string' || typeof scope !== 'string') throw new TypeError('projectPath et scope requis.');
-      response.json(service.runTest(projectPath, scope, values));
-    } catch (error) { fail(response, error); }
-  });
   router.post('/test', express.json(), (request, response) => {
-    try {
-      const { projectPath, label, scope, values, expected } = request.body ?? {};
-      if (typeof projectPath !== 'string' || typeof scope !== 'string') throw new TypeError('projectPath et scope requis.');
-      response.json(service.saveTest(projectPath, { label, scope, values, expected }));
-    } catch (error) { fail(response, error); }
+    const { projectPath } = request.body ?? {};
+    if (typeof projectPath !== 'string') { fail(response, new TypeError('projectPath requis.')); return; }
+    service.test(projectPath).then((snapshot) => response.json(snapshot), (error: unknown) => fail(response, error));
   });
-  router.post('/test/delete', express.json(), (request, response) => {
-    try {
-      const { projectPath, id } = request.body ?? {};
-      if (typeof projectPath !== 'string' || typeof id !== 'string') throw new TypeError('projectPath et id requis.');
-      response.json(service.deleteTest(projectPath, id));
-    } catch (error) { fail(response, error); }
+  return router;
+}
+
+export function createReasoningLocalRouter(service: ReturnType<typeof createReasoningService>, isLoopback: (request: express.Request) => boolean) {
+  const router = express.Router();
+  router.post('/reasoning', express.json(), (request, response) => {
+    if (!isLoopback(request)) { response.status(403).json({ erreur: 'Réservé aux appels locaux.' }); return; }
+    const { cwd, ...input } = request.body ?? {};
+    if (typeof cwd !== 'string' || !cwd) { response.status(400).json({ erreur: 'cwd requis.' }); return; }
+    service.command(cwd, input).then((resultat) => response.json({ resultat }), (error: unknown) => response.status(400).json({ erreur: error instanceof Error ? error.message : 'Commande impossible.' }));
   });
   return router;
 }
