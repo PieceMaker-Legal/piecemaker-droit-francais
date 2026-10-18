@@ -55,3 +55,9 @@ jobs:
         run: |
           set -euo pipefail
           gh release upload validation-installation-desktop-2.0.47 "$PIECEMAKER_TEST_OUTPUT/00-onboarding.png" "$PIECEMAKER_TEST_OUTPUT/installation-verification.json" "$PIECEMAKER_TEST_OUTPUT/01-installed.png" "$PIECEMAKER_TEST_OUTPUT/02-restarted.png" --clobber
+      - name: Preserve verification diagnostics
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: Published-installer-verification
+          path: ${{ runner.temp }}/public-verification
