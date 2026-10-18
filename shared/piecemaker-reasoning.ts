@@ -70,6 +70,18 @@ export type ReasoningQuestion = {
   issues: string[];
 };
 
+export type ReasoningTest = {
+  id: string;
+  label: string;
+  scope: string;
+  values: Record<string, ReasoningValue>;
+  expected: ReasoningQuestion['status'];
+  actual: ReasoningQuestion['status'] | null;
+  passed: boolean;
+};
+
+export type ReasoningTestRun = { question: ReasoningQuestion; conditions: ReasoningCondition[]; facts: ReasoningFact[] };
+
 export type ReasoningSnapshot = {
   revision: number;
   updatedAt: string | null;
@@ -78,6 +90,7 @@ export type ReasoningSnapshot = {
   questions: ReasoningQuestion[];
   conditions: ReasoningCondition[];
   facts: ReasoningFact[];
+  tests: ReasoningTest[];
   diagnostics: string[];
   demo?: boolean;
 };

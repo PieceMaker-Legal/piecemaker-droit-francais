@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import type Database from 'better-sqlite3';
 
 import { REASONING_FORCES } from '../../../shared/piecemaker-reasoning.js';
-import type { ReasoningForce, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningForce, ReasoningQuestion, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningTest, ReasoningTestRun, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 import { parseCatala, printCatala, printValue } from './catala.js';
 import type { CatalaProgram, DeclarationItem, Rule } from './catala.js';
@@ -13,11 +13,12 @@ import type { ReasoningItem } from './evaluate.js';
 
 export type TurnSource = ReasoningSource & { ref: number };
 type Lock = { scope: string; declaration?: DeclarationItem; rules: Rule[] };
+type TestRow = { test_id: string; label: string; scope: string; values_json: string; expected: ReasoningQuestion['status'] };
 type ItemRow = { item_id: string; kind: string; status: string; value_json: string | null; force: string | null; appreciation: string | null; author: string; sources_json: string; locked_json: string | null; note: string | null; updated_at: string };
 
 const MAX_CODE = 200_000;
 const LEGACY_TABLES = ['pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories'];
-const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', sources: [], questions: [], conditions: [], facts: [], diagnostics: [] });
+const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', sources: [], questions: [], conditions: [], facts: [], tests: [], diagnostics: [] });
 
 export function sourceId(document: string, excerpt: string) {
   return `s${createHash('sha256').update(`${document}\0${excerpt}`).digest('hex').slice(0, 8)}`;
@@ -83,6 +84,12 @@ export function createReasoningService(getDatabase: () => Database.Database) {
           sources_json TEXT NOT NULL, locked_json TEXT, note TEXT, updated_at TEXT NOT NULL,
           PRIMARY KEY(project_id, item_id)
         );
+        CREATE TABLE IF NOT EXISTS pm_reasoning_tests (
+          project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+          test_id TEXT NOT NULL, label TEXT NOT NULL, scope TEXT NOT NULL,
+          values_json TEXT NOT NULL CHECK(json_valid(values_json)), expected TEXT NOT NULL, created_at TEXT NOT NULL,
+          PRIMARY KEY(project_id, test_id)
+        );
         CREATE TABLE IF NOT EXISTS pm_reasoning_turns (
           project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
           turn_id TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(project_id, turn_id)
@@ -111,7 +118,27 @@ export function createReasoningService(getDatabase: () => Database.Database) {
 
   const read = (cwd: string): ReasoningSnapshot => {
     const row = database().prepare('SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=?').get(projectId(cwd)) as { snapshot_json: string } | undefined;
-    return row ? JSON.parse(row.snapshot_json) as ReasoningSnapshot : emptySnapshot();
+    return row ? { ...emptySnapshot(), ...JSON.parse(row.snapshot_json) as Partial<ReasoningSnapshot> } : emptySnapshot();
+  };
+
+  const simulate = (id: string, program: CatalaProgram, sources: ReasoningSource[], scope: string, values: Record<string, ReasoningValue>): ReasoningTestRun => {
+    const evaluation = evaluateReasoning(program, new Map(sources.map((source) => [source.id, source])), items(id), new Map(Object.entries(values)));
+    const question = evaluation.questions.find((entry) => entry.scope === scope);
+    if (!question) throw new TypeError(`Question inconnue : ${scope}.`);
+    return { question, conditions: evaluation.conditions.filter((condition) => condition.scope === scope), facts: evaluation.facts.filter((fact) => fact.scope === scope) };
+  };
+
+  const runTests = (id: string, program: CatalaProgram, sources: ReasoningSource[]): ReasoningTest[] => (database().prepare('SELECT * FROM pm_reasoning_tests WHERE project_id=? ORDER BY created_at').all(id) as TestRow[]).map((row) => {
+    const values = JSON.parse(row.values_json) as Record<string, ReasoningValue>;
+    let actual: ReasoningQuestion['status'] | null = null;
+    try { actual = simulate(id, program, sources, row.scope, values).question.status; } catch { actual = null; }
+    return { id: row.test_id, label: row.label, scope: row.scope, values, expected: row.expected, actual, passed: actual === row.expected };
+  });
+
+  const checkValues = (snapshot: ReasoningSnapshot, scope: string, values: unknown): Record<string, ReasoningValue> => {
+    if (!values || typeof values !== 'object' || Array.isArray(values)) throw new TypeError('Valeurs attendues : objet { fait: valeur }.');
+    for (const key of Object.keys(values)) if (!snapshot.facts.some((fact) => fact.id === key && fact.scope === scope)) throw new TypeError(`Entrée inconnue : ${key}.`);
+    return values as Record<string, ReasoningValue>;
   };
 
   const commit = (id: string, previous: ReasoningSnapshot, program: CatalaProgram, sources: ReasoningSource[], notes: string[], turnId?: string): ReasoningSnapshot => {
@@ -122,6 +149,7 @@ export function createReasoningService(getDatabase: () => Database.Database) {
     const snapshot: ReasoningSnapshot = {
       revision: previous.revision + 1, updatedAt: new Date().toISOString(), code: printCatala(program), sources: kept,
       questions: evaluation.questions, conditions: evaluation.conditions, facts: evaluation.facts,
+      tests: runTests(id, program, kept),
       diagnostics: [...notes, ...evaluation.diagnostics],
     };
     const now = new Date().toISOString();
@@ -150,13 +178,33 @@ export function createReasoningService(getDatabase: () => Database.Database) {
   const summary = (snapshot: ReasoningSnapshot) => {
     const toReview = [...snapshot.conditions, ...snapshot.facts].filter((item) => !item.review).length;
     const missing = snapshot.facts.filter((fact) => !fact.sources.length).length;
+    const failing = snapshot.tests.filter((entry) => !entry.passed).length;
     const answers = snapshot.questions.map((question) => `${question.scope} : ${question.status}${question.valid ? '' : ' (incomplet)'}`).join(' ; ');
-    return `Raisonnement · révision ${snapshot.revision} · ${answers || 'aucune question'} · ${snapshot.conditions.length} conditions · ${snapshot.facts.length} faits${missing ? ` dont ${missing} sans pièce` : ''} · ${toReview} élément(s) à valider dans le volet Raisonnement.`;
+    return `Raisonnement · révision ${snapshot.revision} · ${answers || 'aucune question'} · ${snapshot.conditions.length} conditions · ${snapshot.facts.length} faits${missing ? ` dont ${missing} sans pièce` : ''} · ${toReview} élément(s) à valider${snapshot.tests.length ? ` · tests ${snapshot.tests.length - failing}/${snapshot.tests.length} réussis` : ''} dans le volet Raisonnement.`;
   };
 
   database();
   return {
     read,
+    runTest(cwd: string, scope: string, values: unknown): ReasoningTestRun {
+      const id = projectId(cwd);
+      const snapshot = read(cwd);
+      return simulate(id, parseCatala(snapshot.code), snapshot.sources, scope, checkValues(snapshot, scope, values));
+    },
+    saveTest(cwd: string, input: { label: unknown; scope: string; values: unknown; expected: unknown }): ReasoningSnapshot {
+      const id = projectId(cwd);
+      const snapshot = read(cwd);
+      const values = checkValues(snapshot, input.scope, input.values);
+      if (typeof input.label !== 'string' || !input.label.trim() || input.label.length > 300) throw new TypeError('Intitulé du test requis.');
+      if (!['remplie', 'non remplie', 'indéterminée', 'bloquée'].includes(input.expected as string)) throw new TypeError('Résultat attendu invalide.');
+      database().prepare('INSERT INTO pm_reasoning_tests VALUES(?,?,?,?,?,?,?)').run(id, randomUUID(), input.label.trim(), input.scope, JSON.stringify(values), input.expected, new Date().toISOString());
+      return reload(id, cwd, `Avocat · test enregistré : ${input.label.trim()}.`);
+    },
+    deleteTest(cwd: string, testId: string): ReasoningSnapshot {
+      const id = projectId(cwd);
+      database().prepare('DELETE FROM pm_reasoning_tests WHERE project_id=? AND test_id=?').run(id, testId);
+      return reload(id, cwd, 'Avocat · test supprimé.');
+    },
     review(cwd: string, target: string, status: 'validé' | 'écarté' | null, note?: string): ReasoningSnapshot {
       const id = projectId(cwd);
       if (![null, 'validé', 'écarté'].includes(status)) throw new TypeError('Décision attendue : validé, écarté ou null.');
@@ -286,5 +334,5 @@ champ d'application Dossier:
   const program = parseCatala(code);
   const sources = [article, piece, date];
   const evaluation = evaluateReasoning(program, new Map(sources.map((source) => [source.id, source])), new Map());
-  return { revision: 0, updatedAt: null, code: printCatala(program), sources, ...evaluation, demo: true };
+  return { revision: 0, updatedAt: null, code: printCatala(program), sources, ...evaluation, tests: [], demo: true };
 }

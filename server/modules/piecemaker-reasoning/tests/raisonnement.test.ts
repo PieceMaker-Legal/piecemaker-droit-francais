@@ -144,6 +144,20 @@ test('le service réécrit les références, verrouille les éléments validés 
   assert.equal((db.prepare("SELECT author FROM pm_reasoning_items WHERE item_id='Q.approuve'").get() as { author: string }).author, 'ia');
 });
 
+test('un test exécute le raisonnement sur des hypothèses puis se rejoue à chaque révision', (t) => {
+  const { service } = fixture(t);
+  service.ingest({ cwd: '/dossier-fictif', sessionId: 's', turnId: 't1', code: code(facts), sources: [] });
+  assert.throws(() => service.runTest('/dossier-fictif', 'Q', { 'Q.inconnue': true }), /Entrée inconnue/);
+  const hypothetical = service.runTest('/dossier-fictif', 'Q', { 'Q.approuve': false });
+  assert.equal(hypothetical.question.status, 'bloquée');
+  assert.match(hypothetical.facts.find((fact) => fact.id === 'Q.approuve')!.issues.join(' '), /Hypothèse de test/);
+  const saved = service.saveTest('/dossier-fictif', { label: 'Sans approbation', scope: 'Q', values: { 'Q.approuve': false }, expected: 'bloquée' });
+  assert.deepEqual(saved.tests.map((entry) => [entry.label, entry.passed]), [['Sans approbation', true]]);
+  assert.equal(service.read('/dossier-fictif').revision, 2);
+  service.deleteTest('/dossier-fictif', saved.tests[0].id);
+  assert.equal(service.read('/dossier-fictif').tests.length, 0);
+});
+
 test('un code illisible est refusé et le raisonnement précédent conservé', (t) => {
   const { service } = fixture(t);
   service.ingest({ cwd: '/dossier-fictif', sessionId: 's', turnId: 't1', code: code(facts), sources: [] });

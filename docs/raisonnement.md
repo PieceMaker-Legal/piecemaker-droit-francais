@@ -47,6 +47,13 @@ L’évaluation est à trois valeurs (vrai, faux, inconnu). Une condition est re
 
 Chaque condition et chaque fait se valide, s’écarte ou se modifie dans le volet (`POST /api/piecemaker/reasoning/review` et `/appreciation`). Une modification d’un fait (valeur, force probante, appréciation) est enregistrée avec l’auteur `avocat` et valide le fait. Le texte de l’élément est figé (`locked_json`) : au tour suivant, toute version différente du modèle est remplacée et signalée. « Annuler la décision » rend l’élément au modèle.
 
+## Volet
+
+- **Graphe** (par défaut) : sources du droit, puis réponse et conditions, puis faits et pièces. Un clic sur une case éclaire sa branche (tout ce dont elle dépend et tout ce qui en dépend) et affiche dessous les cases liées, avec leurs boutons de validation. Zoom −/+ et « Ajuster » à la largeur du volet.
+- **Schéma** : les mêmes éléments en deux colonnes Droit → Faits / Pièces.
+- **Tests** : l’avocat fixe des hypothèses sur les entrées (vide = inconnu), exécute le raisonnement actuel sans rien enregistrer (`POST /test/run`), puis peut enregistrer le résultat obtenu comme attendu (`POST /test`). Chaque test enregistré est rejoué à chaque révision et signalé réussi ou en échec, y compris dans la ligne de bilan du chat.
+- **Code** et **Sources** : programme canonique et sources vérifiées.
+
 ## SQL
 
 Tables en lecture seule pour l’outil SQL :
@@ -54,6 +61,7 @@ Tables en lecture seule pour l’outil SQL :
 ```sql
 SELECT code, snapshot_json FROM pm_reasoning_programs WHERE project_id=dossier();
 SELECT item_id, kind, status, value_json, force, appreciation, author FROM pm_reasoning_items WHERE project_id=dossier();
+SELECT label, scope, values_json, expected FROM pm_reasoning_tests WHERE project_id=dossier();
 ```
 
 `pm_reasoning_turns` empêche de rejouer un tour. Les tables de l’ancien modèle (`pm_reasoning_results`, `_nodes`, `_relations`, `_links`, `_theories`) sont supprimées au démarrage.
@@ -64,4 +72,4 @@ SELECT item_id, kind, status, value_json, force, appreciation, author FROM pm_re
 - `server/modules/piecemaker-reasoning/` : analyseur Catala, évaluation et vérifications, persistance, verrous, routes ; tests dans `tests/raisonnement.test.ts`.
 - `server/piecemaker/harness/citation-{instructions,turn}.ts` : instruction, masquage des blocs, capture des périodes et de l’historique, branchement en fin de tour ; test `reasoning-turn.test.ts`.
 - `server/piecemaker/vendor/mcp/legifrance/tools/decision_history.py` : `controle_historique`, appelé par `consulter_decision`.
-- `plugins/piecemaker-raisonnement/` : volet (schéma, code, sources).
+- `plugins/piecemaker-raisonnement/` : volet (graphe, schéma, tests, code, sources).
