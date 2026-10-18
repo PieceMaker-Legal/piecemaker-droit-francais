@@ -1,0 +1,108 @@
+name: PieceMaker Windows Test Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [MAJ-continue]
+    paths:
+      - '.github/workflows/piecemaker-windows-preview.yml'
+      - 'scripts/piecemaker/ui-updates/windows-preview/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: piecemaker-windows-preview
+  cancel-in-progress: false
+
+jobs:
+  build-test-installer:
+    if: github.ref == 'refs/heads/MAJ-continue'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      PIECEMAKER_TAG: preview-maj
+      PIECEMAKER_REPO: ${{ github.repository }}
+      PIECEMAKER_NO_PROGRESS: '1'
+      PIECEMAKER_HOME: ${{ runner.temp }}/preview-components
+      PIECEMAKER_PREBUILT_ASSET_DIR: ${{ runner.temp }}/preview-assets
+      PIECEMAKER_TEST_OUTPUT: ${{ runner.temp }}/PieceMaker-Test-MAJ
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+      - name: Build Windows anonymization proxy
+        run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
+      - name: Install and compile native SQLite for Electron
+        shell: bash
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          ELECTRON_VERSION="$(node -p "require('./package-lock.json').packages['node_modules/electron'].version")"
+          npx electron-rebuild --version "$ELECTRON_VERSION" --arch x64 --only better-sqlite3 --force
+          mkdir -p "$PIECEMAKER_PREBUILT_ASSET_DIR"
+          cp node_modules/better-sqlite3/build/Release/better_sqlite3.node "$PIECEMAKER_PREBUILT_ASSET_DIR/better-sqlite3-electron-win32-x64.node"
+          cp server/piecemaker/anonymizer/hudsucker-proxy/target/release/piecemaker-hudsucker.exe "$PIECEMAKER_PREBUILT_ASSET_DIR/piecemaker-hudsucker-win32-x64.exe"
+          for asset in "$PIECEMAKER_PREBUILT_ASSET_DIR"/*.node "$PIECEMAKER_PREBUILT_ASSET_DIR"/*.exe; do
+            sha256sum "$asset" | cut -d' ' -f1 > "$asset.sha256"
+          done
+      - name: Build and verify bundled Python
+        shell: bash
+        run: |
+          export PATH="$(cygpath -u "$(node -p process.env.SystemRoot)")/System32:$PATH"
+          node desktop-bootstrap/composants/build-release.mjs "$PIECEMAKER_PREBUILT_ASSET_DIR"
+      - name: Configure installer signature
+        shell: bash
+        env:
+          PREVIEW_CERTIFICATE: ${{ secrets.WINDOWS_CSC_LINK }}
+          PREVIEW_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: |
+          if [ -z "$PREVIEW_CERTIFICATE" ] || [ -z "$PREVIEW_PASSWORD" ]; then
+            echo "::error::Windows signing credentials are required."
+            exit 1
+          fi
+          echo "$PREVIEW_CERTIFICATE" | base64 -d > "$RUNNER_TEMP/preview-signing.p12"
+          echo "CSC_LINK=$RUNNER_TEMP/preview-signing.p12" >> "$GITHUB_ENV"
+          echo "WIN_CSC_LINK=$RUNNER_TEMP/preview-signing.p12" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=$PREVIEW_PASSWORD" >> "$GITHUB_ENV"
+          echo "WIN_CSC_KEY_PASSWORD=$PREVIEW_PASSWORD" >> "$GITHUB_ENV"
+      - name: Build isolated test installer
+        shell: bash
+        run: |
+          export PATH="$(cygpath -u "$(node -p process.env.SystemRoot)")/System32:$PATH"
+          node scripts/piecemaker/ui-updates/windows-preview/build.mjs > "$RUNNER_TEMP/preview-build.log" 2>&1 || {
+            tail -c 24000 "$RUNNER_TEMP/preview-build.log"
+            exit 1
+          }
+          tail -n 20 "$RUNNER_TEMP/preview-build.log"
+      - name: Verify packaged server and native dependencies
+        shell: bash
+        run: |
+          node --input-type=module -e 'import path from "node:path"; import {verifyPackagedRuntime} from "./desktop-bootstrap/lib/verify-packaged-runtime.mjs"; console.log(await verifyPackagedRuntime(path.resolve("release/desktop/win-unpacked"), path.resolve("release/desktop"), {executableName:"PieceMakerTestMAJ.exe"}));'
+          powershell.exe -NoProfile -NonInteractive -Command '$exe=Get-ChildItem -LiteralPath $env:PIECEMAKER_TEST_OUTPUT -Filter *.exe | Select-Object -First 1; $signature=Get-AuthenticodeSignature $exe.FullName; if(-not $signature.SignerCertificate){throw "Unsigned test installer"}; Write-Host $signature.SignerCertificate.Subject'
+      - name: Install the actual NSIS package
+        shell: pwsh
+        run: |
+          $installer=Get-ChildItem -LiteralPath $env:PIECEMAKER_TEST_OUTPUT -Filter *.exe | Select-Object -First 1
+          $destination=Join-Path $env:RUNNER_TEMP 'installed-preview'
+          $process=Start-Process -FilePath $installer.FullName -ArgumentList @('/S',"/D=$destination") -Wait -PassThru
+          if($process.ExitCode -ne 0){throw "Installer exited $($process.ExitCode)"}
+          if(-not (Test-Path (Join-Path $destination 'PieceMakerTestMAJ.exe'))){throw 'Installed test executable missing'}
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "PIECEMAKER_TEST_INSTALLED=$destination"
+      - name: Verify actual installed application and UI updates
+        shell: bash
+        run: node scripts/piecemaker/ui-updates/windows-preview/verify-installed.mjs "$PIECEMAKER_TEST_INSTALLED/PieceMakerTestMAJ.exe"
+      - name: Create installer checksums
+        shell: bash
+        run: |
+          cd "$PIECEMAKER_TEST_OUTPUT"
+          sha256sum *.exe > SHA256SUMS.txt
+      - name: Upload test package only
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: PieceMaker-Test-MAJ-Windows-x64-${{ github.run_number }}
+          path: ${{ env.PIECEMAKER_TEST_OUTPUT }}
+          if-no-files-found: error
+          retention-days: 14

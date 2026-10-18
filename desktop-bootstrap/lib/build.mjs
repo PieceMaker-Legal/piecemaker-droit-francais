@@ -38,7 +38,7 @@ async function exists(target) {
   }
 }
 
-async function findBuiltApp(sourceDir) {
+async function findBuiltApp(sourceDir, executableName = PRODUCT_NAME) {
   const releaseRoot = path.join(sourceDir, 'release', 'desktop');
   const entries = await fs.readdir(releaseRoot, { withFileTypes: true });
 
@@ -49,7 +49,7 @@ async function findBuiltApp(sourceDir) {
       const app = inner.find((name) => name.endsWith('.app'));
       if (app) return path.join(dir, app);
     } else if (entry.name.includes('unpacked')) {
-      const executable = path.join(dir, `${PRODUCT_NAME}.exe`);
+      const executable = path.join(dir, `${executableName}.exe`);
       if (await exists(executable)) return dir;
     }
   }
@@ -403,7 +403,7 @@ async function smokeTestAnonymizerProxy(sourceDir, binary) {
   ui.ok(`Proxy d'anonymisation validé${result.sandboxed ? ' (sandbox-exec : réseau local seul, écriture confinée)' : ' (dossier et ports isolés)'}.`);
 }
 
-export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = {}) {
+export async function buildDesktopApp(sourceDir, { windowsInstaller = false, prepareStage } = {}) {
   ui.step('Installation des dépendances du projet (plusieurs minutes)…');
   await npm(['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
   await npm(['rebuild', 'better-sqlite3', '--no-audit', '--no-fund'], { cwd: sourceDir });
@@ -458,6 +458,7 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
   }
 
   ui.step("Construction de l'application Electron…");
+  await prepareStage?.(stageDir);
   const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', ...(windowsInstaller ? ['--win', 'nsis', '--x64', '--publish', 'never'] : ['--dir'])];
   if (prebuiltSqlite && process.platform !== 'win32') builderArgs.push('-c.npmRebuild=false');
   const signingEnv = { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' };
@@ -468,7 +469,8 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
     env: signingEnv,
   });
 
-  const built = await findBuiltApp(sourceDir);
+  const stagedManifest = await readPackageJson(stageDir);
+  const built = await findBuiltApp(sourceDir, stagedManifest.build?.executableName || PRODUCT_NAME);
   await verifyBuiltApp(built);
   ui.ok(`Application construite : ${built}`);
   return built;

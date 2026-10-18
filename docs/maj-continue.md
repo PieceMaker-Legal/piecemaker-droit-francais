@@ -187,6 +187,42 @@ l’écran de connexion, avec un serveur fictif. Il ne valide ni les fonctions m
 après connexion, ni un installateur macOS signé complet, ni le parcours Windows.
 Une réussite locale n’autorise pas à elle seule une distribution.
 
+## Installateur Windows de test isolé
+
+Le workflow `piecemaker-windows-preview.yml`, limité à `MAJ-continue`, construit
+un installateur Authenticode et le dépose uniquement dans les artefacts Actions,
+avec une rétention de quatorze jours. Il ne crée aucun tag, aucune release et
+n’effectue aucune publication npm ; son jeton n’a que `contents: read`.
+Le build utilise `--publish never`.
+
+L’application s’appelle `PieceMaker Test MAJ`, avec l’appId
+`legal.piecemaker.testmaj`, le protocole `piecemaker-test-maj` et l’exécutable
+`PieceMakerTestMAJ.exe`. Ses données, composants, cache IA et profil navigateur
+restent dans `%USERPROFILE%/.piecemaker-maj-test`. La version de production
+conserve son identité et ses dossiers. Les mises à jour complètes sont désactivées
+dans le staging de cette édition et sa source d’interface est un serveur local.
+
+Extraire tout l’artefact puis lancer `Lancer-test.cmd`. Ce lanceur installe
+l’application séparée si nécessaire et ouvre une page locale de contrôle. Celle-ci
+permet de choisir une interface valide, une interface qui plante ou une signature
+invalide, puis de rouvrir l’application. Il faut un lancement pour télécharger et
+le suivant pour activer. La bannière verte confirme l’interface téléchargée.
+La réinitialisation ne retire que le cache UI du test, application fermée.
+
+Le certificat HTTPS et les signatures sont propres au paquet de test ; la clé de
+signature de production n’est pas utilisée. Le certificat n’est approuvé que par
+les processus lancés avec `NODE_EXTRA_CA_CERTS`, pas dans les autorités Windows.
+Les archives Python et IA accompagnent l’installateur et sont vérifiées avant
+installation. L’anonymiseur est désactivé dans ce banc : utiliser exclusivement
+des données fictives. Il ne valide pas la chaîne PII. La désinstallation de ce
+paquet se fait par les applications Windows, pas par le bouton interne.
+
+Avant le dépôt de l’artefact, le runner vérifie les modules natifs, le serveur
+et ses assets, installe réellement NSIS dans un dossier de test, ouvre l’application
+installée et contrôle téléchargement, activation et retour arrière par CDP.
+Les captures et `verification.json` accompagnent le paquet lorsque ces contrôles
+réussissent. Ce test n’exécute aucune requête à un modèle d’IA.
+
 Références : [protocol.handle](https://www.electronjs.org/docs/latest/api/protocol),
 [session.fetch / bypassCustomProtocolHandlers](https://www.electronjs.org/docs/latest/api/net),
 [isolation et sécurité Electron](https://www.electronjs.org/docs/latest/tutorial/security).
