@@ -190,13 +190,11 @@ test('raisonnement transmet la commande et ses champs à reasoningFn', async () 
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
-test('sessionDossier remonte au dossier de la session quand le répertoire courant est hors dossier', () => {
-  const dossier = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pm-session-')));
-  const ailleurs = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pm-ailleurs-')));
-  fs.mkdirSync(path.join(dossier, 'pieces'));
-  assert.equal(sessionDossier(ailleurs, { folders: [dossier], ancestors: () => [ailleurs, dossier] }), dossier);
-  assert.equal(sessionDossier(path.join(dossier, 'pieces'), { folders: [dossier], ancestors: () => [] }), path.join(dossier, 'pieces'));
-  assert.equal(sessionDossier(ailleurs, { folders: [dossier], ancestors: () => [] }), ailleurs);
-  fs.rmSync(dossier, { recursive: true, force: true });
-  fs.rmSync(ailleurs, { recursive: true, force: true });
+test('sessionDossier suit la session plutôt que le répertoire courant', async () => {
+  const lookup = async (id) => ({ 'claude-1': '/dossiers/Dupont', 'thread-1': '/dossiers/Exemple' })[id] ?? null;
+  assert.equal(await sessionDossier('/ailleurs', { env: { PIECEMAKER_DOSSIER: '/dossiers/Vibe' }, lookup }), '/dossiers/Vibe');
+  assert.equal(await sessionDossier('/ailleurs', { env: { CLAUDE_CODE_SESSION_ID: 'claude-1' }, lookup }), '/dossiers/Dupont');
+  assert.equal(await sessionDossier('/ailleurs', { env: { CODEX_THREAD_ID: 'thread-1' }, lookup }), '/dossiers/Exemple');
+  assert.equal(await sessionDossier('/ailleurs', { env: { CLAUDE_CODE_SESSION_ID: 'inconnue' }, lookup }), '/ailleurs');
+  assert.equal(await sessionDossier('/ailleurs', { env: { CLAUDE_CODE_SESSION_ID: 'claude-1' }, lookup: async () => { throw new Error('hors ligne'); } }), '/ailleurs');
 });
