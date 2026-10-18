@@ -39,7 +39,7 @@ export const STYLES = `
 .pmr-legend{padding:4px 16px 6px;color:var(--muted);font-size:10.5px;display:flex;gap:2px 12px;flex-wrap:wrap}.pmr-legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}.pmr-legend i.is-square{border-radius:2px;background:#9aa3b2}.pmr-legend i.is-ring{background:transparent;box-shadow:0 0 0 2px var(--accent)}.pmr-legend i.is-diamond{border-radius:1px;background:#7aa7d8;transform:rotate(45deg) scale(.85)}
 .pmr-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;padding:28px;text-align:center;color:var(--muted);background:var(--bg)}
 .pmr-empty strong{font-family:var(--editorial);font-size:1.35rem;font-weight:500;color:var(--ink)}.pmr-empty p{max-width:340px;margin:0;font-size:13px;line-height:1.6}
-.pmr-inspector{display:flex;flex-direction:column;flex:0 0 auto;max-height:42%;min-height:150px;border-top:1px solid var(--border);background:var(--bg)}
+.pmr-split{flex:0 0 7px;cursor:row-resize;touch-action:none;background:linear-gradient(var(--border),var(--border)) center/100% 1px no-repeat}.pmr-split:hover,.pmr-split:focus-visible,.pmr-split.is-dragging{outline:none;background:linear-gradient(#7aa7d8,#7aa7d8) center/100% 3px no-repeat}.pmr-inspector{display:flex;flex-direction:column;flex:0 0 auto;max-height:42%;min-height:120px;background:var(--bg)}
 .pmr-tabs{display:flex;align-self:flex-start;gap:3px;margin:12px 16px 0;padding:3px;border:1px solid var(--glass-border);border-radius:9999px;background:var(--glass-bg);box-shadow:var(--glass-shadow);backdrop-filter:blur(20px)}
 .pmr-tabs button{height:1.6rem;border:0;box-shadow:none;background:transparent;backdrop-filter:none;color:var(--muted)}
 .pmr-tabs button[aria-selected=true]{color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 1px rgb(var(--piecemaker-ink-rgb,17 24 39) / 22%)}
@@ -101,5 +101,5 @@ export const STYLES = `
 @keyframes pmr-pop{0%{transform:scale(.4)}70%{transform:scale(1.25)}100%{transform:scale(1)}}
 @keyframes pmr-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.pmr-entry.is-new,.pmr-entry.is-updated .pmr-mark{animation:none}.pmr-entry[data-status="en cours"] .pmr-mark{animation-duration:2.4s}}
-@container (min-width:880px){.pmr-workspace{flex-direction:row}.pmr-canvas{min-width:0;min-height:0}.pmr-inspector{flex:0 0 38%;width:38%;max-height:none;min-height:0;height:100%;border-top:0;border-left:1px solid var(--border)}}
+@container (min-width:880px){.pmr-workspace{flex-direction:row}.pmr-canvas{min-width:0;min-height:0}.pmr-split{cursor:col-resize;background:linear-gradient(var(--border),var(--border)) center/1px 100% no-repeat}.pmr-split:hover,.pmr-split:focus-visible,.pmr-split.is-dragging{background:linear-gradient(#7aa7d8,#7aa7d8) center/3px 100% no-repeat}.pmr-inspector{flex:0 0 38%;width:38%;max-height:none;min-height:0;min-width:220px;height:100%}}
 `;

@@ -236,7 +236,7 @@ export async function verifyReasoning(input: {
     const cited = (field: 'preuve' | 'contredit') => [...new Set(occurrences.filter((item) => item.condition.condition === name).flatMap((item) => item.condition[field].map((_, index) => `${item.at}.${field}[${index}]`)).filter((at) => verifiedRefs.get(at)).map((at) => String(node(annotated, at)?.titre ?? '')))].filter(Boolean).join(', ');
     emit({ key: `fait:${name}`, step: 'fait', status: value === null ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: contested(name) ? 'Contesté : une pièce le prouve, une autre le contredit' : value === true ? `Prouvé par ${cited('preuve')}` : value === false ? `Contredit par ${cited('contredit')}` : `${occurrences.some((item) => item.condition.condition === name && item.condition.preuve.length + item.condition.contredit.length > 0) ? 'Les pièces citées ne l’établissent pas' : 'Aucune pièce citée'}${decisiveLeaves.has(name) ? ' · décisif' : ''}` });
   }
-  for (const name of reasoning.terms.keys()) emit({ key: `terme:${name}`, step: 'condition', status: statuses.get(name) === null || statuses.get(name) === undefined ? 'neutre' : 'ok', subject: human(name), text: STATUS(statuses.get(name) ?? null) });
+  for (const name of reasoning.terms.keys()) emit({ key: `terme:${name}`, step: 'condition', status: statuses.get(name) === null || statuses.get(name) === undefined ? 'neutre' : 'ok', subject: human(name), text: ANSWER[STATUS(statuses.get(name) ?? null)] });
 
   const trials = shape.cycles.length ? [] : runTrials(reasoning, test);
   trials.forEach((result, index) => {

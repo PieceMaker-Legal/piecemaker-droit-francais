@@ -32,7 +32,7 @@ const shorten = (text: string, length: number) => (text.length > length ? `${tex
 const pill = (status: string, label = status) => `<span class="pmr-pill pmr-${TONE[status] ?? 'muted'}">${escape(label)}</span>`;
 const date = (value: unknown) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : 'toujours en vigueur');
 const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
-const STEP: Record<ReasoningLogEntry['step'], string> = { source: 'Source', pièce: 'Pièce', fait: 'Fait', condition: 'Terme', essai: 'Essai', registre: 'Registre Public', réponse: 'Réponse' };
+const STEP: Record<ReasoningLogEntry['step'], string> = { source: 'Source', pièce: 'Pièce', fait: 'Fait', condition: 'Étape', essai: 'Essai', registre: 'Registre Public', réponse: 'Réponse' };
 const cleanups = new WeakMap<HTMLElement, () => void>();
 
 export function mount(container: HTMLElement, api: Host) {
@@ -41,11 +41,14 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${['acquis', 'exclu', 'à établir', 'contesté'].map((key) => `<span><i style="background:${COLORS[key]}"></i>${escape(human(key))}</span>`).join('')}<span><i class="is-square"></i>Pièce</span><span><i class="is-diamond"></i>Source</span><span><i class="is-ring"></i>Décisif : sa preuve fait basculer la réponse</span><span>- - sauf</span><span>ou : une suffit</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${['acquis', 'exclu', 'à établir', 'contesté'].map((key) => `<span><i style="background:${COLORS[key]}"></i>${escape(human(key))}</span>`).join('')}<span><i class="is-square"></i>Pièce</span><span><i class="is-diamond"></i>Source</span><span><i class="is-ring"></i>Décisif : sa preuve fait basculer la réponse</span><span>- - sauf</span><span>ou : une suffit</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const svg = root.querySelector<SVGSVGElement>('svg')!;
   const detail = root.querySelector<HTMLElement>('.pmr-detail')!;
+  const workspace = root.querySelector<HTMLElement>('.pmr-workspace')!;
+  const inspector = root.querySelector<HTMLElement>('.pmr-inspector')!;
+  const split = root.querySelector<HTMLElement>('.pmr-split')!;
   const warning = root.querySelector<HTMLElement>('.pmr-warning')!;
   const empty = root.querySelector<HTMLElement>('.pmr-empty')!;
   const picker = root.querySelector<HTMLSelectElement>('[data-scope]')!;
@@ -228,7 +231,7 @@ export function mount(container: HTMLElement, api: Host) {
 
   const paintTest = () => {
     const entries = live ?? snapshot?.test?.log ?? [];
-    const view = (entry: ReasoningLogEntry) => `<li class="pmr-entry${fresh?.key === entry.key ? fresh.added ? ' is-new' : ' is-updated' : ''}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(STEP[entry.step])}</span>${(entry.step === 'source' || entry.step === 'pièce') && entry.status !== 'en cours' ? `<button class="pmr-link" data-show="#${entry.step === 'source' ? 'source' : 'piece'}:${escape(entry.key.split(':')[1])}" data-quote="${escape(entry.key.split(':').slice(2).join(':'))}"><strong>${escape(entry.subject)}</strong></button>` : `<strong>${escape(entry.subject)}</strong>`}</div><span class="pmr-entry-text">${escape(entry.text)}</span></li>`;
+    const view = (entry: ReasoningLogEntry) => `<li class="pmr-entry${fresh?.key === entry.key ? fresh.added ? ' is-new' : ' is-updated' : ''}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(entry.status === 'ok' && entry.step === 'source' ? 'Source vérifiée' : entry.status === 'ok' && entry.step === 'pièce' ? 'Pièce vérifiée' : STEP[entry.step])}</span>${(entry.step === 'source' || entry.step === 'pièce') && entry.status !== 'en cours' ? `<button class="pmr-link" data-show="#${entry.step === 'source' ? 'source' : 'piece'}:${escape(entry.key.split(':')[1])}" data-quote="${escape(entry.key.split(':').slice(2).join(':'))}"><strong>${escape(entry.subject)}</strong></button>` : `<strong>${escape(entry.subject)}</strong>`}</div><span class="pmr-entry-text">${escape(entry.text)}</span></li>`;
     const part = (title: string, lead: string, steps: ReasoningLogEntry['step'][]) => {
       const list = entries.filter((entry) => steps.includes(entry.step));
       return list.length ? `<section class="pmr-part"><h4>${title}</h4><p class="pmr-lead">${lead}</p><ol class="pmr-log" aria-live="polite">${list.map(view).join('')}</ol></section>` : '';
@@ -237,7 +240,7 @@ export function mount(container: HTMLElement, api: Host) {
     const run = snapshot?.demo
       ? '<div class="pmr-run"><span class="pmr-muted">Exemple fictif : test simulé.</span></div>'
       : `<div class="pmr-run"><button class="pmr-primary" data-run-test${live || busy || !context.project ? ' disabled' : ''}>${live ? 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</span>` : ''}</div>`;
-    detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${part('1. En droit', 'Chaque source relue, sa citation et sa version applicable.', ['source'])}${part('2. En fait', 'Les pièces relues et les faits qu’elles établissent.', ['pièce', 'fait', 'registre'])}${part('3. Conclusion', 'Les termes calculés, les essais et la réponse.', ['condition', 'essai', 'réponse'])}`;
+    detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${part('1. En droit', 'Chaque source relue, sa citation et sa version applicable.', ['source'])}${part('2. En fait', 'Les pièces relues et les faits qu’elles établissent.', ['pièce', 'fait', 'registre'])}${part('3. Conclusion', 'Les étapes du raisonnement, les essais et la réponse.', ['condition', 'essai', 'réponse'])}`;
   };
 
   const paintDetail = () => {
@@ -399,6 +402,29 @@ export function mount(container: HTMLElement, api: Host) {
     zoom = Math.max(.1, Math.min(3, zoom * (event.deltaY < 0 ? 1.1 : 1 / 1.1)));
     paintGraph();
   }, { passive: false });
+
+  const wide = () => getComputedStyle(workspace).flexDirection === 'row';
+  const share = (value: number) => {
+    const bounded = Math.min(0.85, Math.max(0.15, value));
+    inspector.style.flex = `0 0 ${bounded * 100}%`;
+    inspector.style.maxHeight = 'none';
+    split.setAttribute('aria-valuenow', String(Math.round(bounded * 100)));
+    try { localStorage.setItem('pmr-split', String(bounded)); } catch {}
+  };
+  try { const saved = Number(localStorage.getItem('pmr-split')); if (saved) share(saved); } catch {}
+  split.addEventListener('pointerdown', (event) => { split.setPointerCapture(event.pointerId); split.classList.add('is-dragging'); event.preventDefault(); });
+  split.addEventListener('pointermove', (event) => {
+    if (!split.hasPointerCapture(event.pointerId)) return;
+    const box = workspace.getBoundingClientRect();
+    share(wide() ? (box.right - event.clientX) / box.width : (box.bottom - event.clientY) / box.height);
+  });
+  split.addEventListener('pointerup', (event) => { split.releasePointerCapture(event.pointerId); split.classList.remove('is-dragging'); });
+  split.addEventListener('keydown', (event) => {
+    const step = { ArrowUp: 0.05, ArrowLeft: 0.05, ArrowDown: -0.05, ArrowRight: -0.05 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    share(inspector.getBoundingClientRect()[wide() ? 'width' : 'height'] / workspace.getBoundingClientRect()[wide() ? 'width' : 'height'] + step);
+  });
 
   const resize = new ResizeObserver(() => { fitGraph(); paintGraph(); });
   resize.observe(canvas);
