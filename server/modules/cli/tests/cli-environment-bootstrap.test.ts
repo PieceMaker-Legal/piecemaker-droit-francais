@@ -32,6 +32,7 @@ async function runCliBootstrapFixture(isPlatform: boolean): Promise<BootstrapRes
 
   try {
     await mkdir(fixtureCliDirectory, { recursive: true });
+    await mkdir(path.join(fixtureRoot, 'shared'), { recursive: true });
     await Promise.all([
       copyFile(
         path.join(applicationRoot, 'server', 'load-env.ts'),
@@ -40,6 +41,10 @@ async function runCliBootstrapFixture(isPlatform: boolean): Promise<BootstrapRes
       copyFile(
         path.join(applicationRoot, 'server', 'modules', 'cli', 'cli.ts'),
         path.join(fixtureCliDirectory, 'cli.ts'),
+      ),
+      copyFile(
+        path.join(applicationRoot, 'shared', 'product-config.mjs'),
+        path.join(fixtureRoot, 'shared', 'product-config.mjs'),
       ),
     ]);
     await writeFile(
