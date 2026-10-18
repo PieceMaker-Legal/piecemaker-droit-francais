@@ -300,3 +300,8 @@ La fenêtre de préparation reste ouverte jusqu'à la création de la fenêtre d
 bureau : la fermer plus tôt laissait temporairement l'application sans fenêtre
 pendant le bootstrap asynchrone. Un test Electron réel reproduit ce défaut puis
 vérifie la transition, sur macOS et Windows.
+
+La fenêtre de préparation n'expose pas le pont du bureau. Une tentative sur
+cette fenêtre ne doit pas consommer l'ouverture automatique du serveur local :
+le lanceur réessaie après chargement de la vraie fenêtre. Ce cas est reproduit
+par le test de démarrage avec un pont absent, puis présent.

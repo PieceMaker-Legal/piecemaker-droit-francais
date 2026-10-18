@@ -10,7 +10,7 @@ import { SourceTextModule, SyntheticModule, createContext } from 'node:vm';
 const entryUrl = new URL('./main.js', import.meta.url);
 const source = await fs.readFile(entryUrl, 'utf8');
 
-async function loadEntry(startupError, platform = 'win32') {
+async function loadEntry(startupError, platform = 'win32', preparationWindow = false) {
   const calls = [];
   let ready;
   const readyPromise = new Promise(resolve => { ready = resolve; });
@@ -22,6 +22,12 @@ async function loadEntry(startupError, platform = 'win32') {
     console: { error: (...args) => calls.push(['error', ...args]) },
     setTimeout,
   });
+  const emitWindow = (label, result) => {
+    const contents = Object.assign(new EventEmitter(), { isLoading: () => false, executeJavaScript: async () => { calls.push(label); return result; } });
+    const window = { webContents: contents };
+    app.emit('browser-window-created', null, window);
+    return window;
+  };
   const mocks = {
     electron: { app, autoUpdater: new EventEmitter(), BrowserWindow: { getAllWindows: () => [] }, dialog: {}, powerSaveBlocker: {}, session: {} },
     'node:child_process': { execFile: () => {} },
@@ -34,7 +40,10 @@ async function loadEntry(startupError, platform = 'win32') {
     '../electron/localServer.js': { LocalServerController: class {} },
     './windowsTitleBar.js': { installWindowsTitleBar: () => {} },
     './compact-runtime.mjs': {
-      initializeCompactRuntime: async ({ applicationRoot }) => ({ applicationRoot, moduleRoots: [] }),
+      initializeCompactRuntime: async ({ applicationRoot }) => {
+        if (preparationWindow) emitWindow('preparation-probe', undefined).piecemakerPreparingRuntime = true;
+        return { applicationRoot, moduleRoots: [] };
+      },
       portablePluginRuntime: () => ({}),
     },
     './windowsUpdater.js': { installWindowsUpdater: async () => {
@@ -57,6 +66,7 @@ async function loadEntry(startupError, platform = 'win32') {
       if (specifier.endsWith('/sync.mjs')) exports = { syncPlugins: () => calls.push('plugins') };
       else if (specifier === '../electron/main.js') {
         calls.push('desktop');
+        if (preparationWindow) emitWindow('open-local', { opened: true });
         exports = {};
       } else throw new Error(`Unexpected import: ${specifier}`);
       const module = mockModule(exports);
@@ -98,4 +108,10 @@ test('startup failure is reported and quits the app without an unhandled rejecti
 
 test('macOS installs continuous UI before opening the desktop', async () => {
   assert.deepEqual(await loadEntry(undefined, 'darwin'), ['waiting-ready', 'keep-awake', 'ui-updates', 'plugins', 'desktop']);
+});
+
+test('a preparation window without the desktop bridge cannot consume the automatic local launch', async () => {
+  const calls = await loadEntry(undefined, 'win32', true);
+  assert.ok(calls.includes('preparation-probe'));
+  assert.ok(calls.includes('open-local'));
 });
