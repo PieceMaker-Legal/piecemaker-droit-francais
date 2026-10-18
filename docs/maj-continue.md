@@ -255,3 +255,36 @@ sur un `rename` de `state.json` avec `EPERM` pendant la restauration. Les passag
 suivants et le parcours complet du paquet installé ont réussi, mais ce verrouillage
 intermittent n'est pas corrigé par le bouton bleu. Il reste à durcir les écritures
 atomiques Windows et à valider ce cas avant une mise en production.
+
+## Essai grandeur nature en deux étapes
+
+`piecemaker-windows-validation.yml` construit le programme complet de la branche
+sous l'identité `PieceMaker Validation` (`legal.piecemaker.validation`,
+`PieceMakerValidation.exe`, port 3218). L'installateur NSIS embarque Python,
+les SDK IA, le proxy et le canal distant signé. Aucun lanceur ni ZIP d'activation
+n'est nécessaire. Le premier lancement génère sa propre CA locale et demande son
+enregistrement, comme le programme habituel ; l'anonymiseur reste actif.
+
+Données, composants et profil sont placés dans `.piecemaker-validation`, sans
+modifier les chemins des fournisseurs d'IA. Le staging adapte la recherche du
+certificat du proxy vers les composants de cette édition. Les mises à jour
+complètes sont désactivées pour préserver le programme habituel. Cette édition
+reproduit le programme de la branche de test, sans intégrer les changements
+ultérieurs de `main` ni modifier sa version.
+
+Étape 1 : installer et vérifier l'interface embarquée. Le flux
+`validation-ui-desktop-2.0.47` est distinct de celui du premier banc ; aucun
+manifeste n'y est publié. Le runner vérifie le canal vide, la création et la
+confiance de la CA locale, l'anonymiseur actif, la création d'un compte fictif et
+le redémarrage avec session conservée. L'archive `ui-baseline.json.gz` conservée
+dans l'artefact servira de base à l'étape suivante, sans publication à ce stade.
+
+Étape 2 : seulement après le signal de l'utilisateur, signer puis publier une
+interface compatible dans ce flux. Ne pas remplacer l'installateur et ne pas
+modifier la configuration du poste entre ces deux étapes.
+
+Le verrouillage transitoire de l'état UI est désormais traité par des tentatives
+bornées de renommage atomique, sans suppression du fichier de destination.
+Les tests simulent un verrouillage temporaire pendant un retour arrière ainsi
+qu'une erreur permanente, qui conserve le dernier état complet. Cet installateur
+embarque ce correctif, contrairement au premier banc déjà distribué.
