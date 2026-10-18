@@ -9,6 +9,7 @@ type Tab = 'detail' | 'tests';
 type Kind = 'source' | 'condition' | 'result' | 'fact';
 type GraphNode = { id: string; label: string; kind: Kind; value: string; uncertain: boolean; missing: boolean; x: number; y: number };
 type Edge = { from: string; to: string };
+type Row = { part: 1 | 2 | 3; card?: ReasoningCondition; index?: number; key: string; has: boolean; ready: boolean; view: (settled: boolean) => string };
 
 const COLORS: Record<Kind, string> = { source: '#6b9fdb', condition: '#ba9ce9', result: '#e2a5c6', fact: '#68bea3' };
 const COLUMN: Record<Kind, number> = { source: -230, condition: 0, result: 0, fact: 230 };
@@ -23,7 +24,7 @@ const shorten = (text: string, length: number) => (text.length > length ? `${tex
 const pill = (status: string, label: string) => `<span class="pmr-pill pmr-${TONE[status] ?? 'muted'}">${escape(label)}</span>`;
 const STEP: Record<ReasoningLogEntry['step'], string> = { question: 'Question', source: 'Source', registre: 'Registre Public', fait: 'Fait', règle: 'Règle', vigueur: 'Vigueur', conclusion: 'Condition', réponse: 'Réponse' };
 const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
-const PACE = 140;
+const PACE = 180;
 const cleanups = new WeakMap<HTMLElement, () => void>();
 
 function formatValue(value: ReasoningValue): string {
@@ -79,8 +80,10 @@ export function mount(container: HTMLElement, api: Host) {
   let drag: { id: string; x: number; y: number; moved: boolean } | null = null;
   let testing = false;
   let live: ReasoningLogEntry[] | null = null;
-  let queue: ReasoningLogEntry[] = [];
-  let drain = 0;
+  let cursor = 0;
+  let revealed = 0;
+  let streamed = false;
+  let ticking = 0;
   let finish: (() => void) | null = null;
   let sequence = 0;
   let following = true;
@@ -274,35 +277,46 @@ export function mount(container: HTMLElement, api: Host) {
 
   const checkState = (check: ReasoningLogEntry | undefined, done: string) => (!check ? '' : check.status === 'ok' ? ` — ${done}` : check.status === 'en cours' ? ' — relecture…' : ` — ${escape(check.text)}`);
   const proof = (entry: ReasoningFact, byKey: Map<string, ReasoningLogEntry>) => (entry.sources.length ? `<p class="pmr-use">${entry.sources.map((id) => `Pièce : ${escape(source(id)?.title ?? id)}${checkState(byKey.get(`source:${id}`), 'extrait retrouvé')}`).join(' ; ')}</p>` : '');
-  const pending = (key: string, subject: string, checks: (ReasoningLogEntry | undefined)[], step: ReasoningLogEntry['step'], text: string): ReasoningLogEntry | undefined => {
-    const found = checks.filter((item): item is ReasoningLogEntry => Boolean(item));
-    return found.length ? { key, step, status: found.some((item) => item.status === 'en cours') ? 'en cours' : 'neutre', subject, text } : undefined;
-  };
-
-  const lawRow = (entry: ReasoningCondition, index: number, byKey: Map<string, ReasoningLogEntry>) => {
-    const rule = byKey.get(entry.id) ?? pending(entry.id, entry.label, entry.sources.map((id) => byKey.get(`source:${id}`)), 'règle', 'Vérification du fondement…');
-    if (!rule) return '';
-    const texts = entry.sources.map((id) => {
-      const found = source(id);
-      if (!found) return '';
-      const period = found.validity ? ` · version du ${formatValue(found.validity.from)} ${found.validity.to ? `au ${formatValue(found.validity.to)}` : 'à ce jour'}` : '';
-      const vigueur = byKey.get(`${entry.scope}:vigueur:${id}`);
-      const force = vigueur ? ` · <span class="pmr-${vigueur.status === 'alerte' ? 'ko' : vigueur.status === 'ok' ? 'ok' : 'muted'}">${escape(vigueur.text)}</span>` : '';
-      return `<p class="pmr-use">${escape(sourceKind(found))} : ${escape(found.title)}${checkState(byKey.get(`source:${id}`), 'texte relu')}${period}${force}</p>`;
-    }).join('');
-    return entryView({ ...rule, subject: entry.label, text: rule.status === 'alerte' ? rule.text : '' }, `Condition ${index + 1}`, texts);
-  };
-
-  const factCard = (entry: ReasoningCondition, index: number, byKey: Map<string, ReasoningLogEntry>) => {
-    const done = byKey.get(`${entry.id}:conclusion`);
-    const inputs = entry.dependsOn.map((id) => {
-      const item = fact(id);
-      const log = byKey.get(id) ?? byKey.get(`${id}:conclusion`) ?? (item ? pending(id, item.variable, item.sources.map((other) => byKey.get(`source:${other}`)), 'fait', 'Relecture de la pièce…') : undefined);
-      if (!log) return '';
-      return item ? entryView(log, 'Fait', proof(item, byKey)) : entryView(log, 'Condition');
-    }).join('');
-    if (!inputs && !done) return '';
-    return `<article class="pmr-card"><header><span class="pmr-step">Condition ${index + 1}</span>${link(entry.id)}</header><ol class="pmr-log">${inputs || '<li class="pmr-entry" data-status="neutre"><span class="pmr-mark" aria-hidden="true"></span><span class="pmr-entry-text pmr-muted">Aucun fait du dossier ne s’y rapporte.</span></li>'}${done ? entryView(done, 'Donc', '', false) : ''}</ol></article>`;
+  const testRows = (final: boolean): Row[] => {
+    const current = question()!;
+    const byKey = new Map(journal().map((entry) => [entry.key, entry]));
+    const busy = (keys: string[]) => keys.some((key) => byKey.get(key)?.status === 'en cours');
+    const make = (part: Row['part'], key: string, real: ReasoningLogEntry | undefined, ready: boolean, wait: Omit<ReasoningLogEntry, 'key' | 'status'>, render: (entry: ReasoningLogEntry) => string, card?: ReasoningCondition, index?: number): Row => ({
+      part, key, card, index, has: Boolean(real), ready: final || (Boolean(real) && real!.status !== 'en cours' && ready),
+      view: (settled) => render(settled ? real ?? { ...wait, key, status: 'neutre', text: 'Non vérifié' } : { ...wait, key, status: 'en cours' }),
+    });
+    const placeholder = (part: Row['part'], key: string, html: string, card?: ReasoningCondition, index?: number): Row => ({ part, key, card, index, has: true, ready: true, view: () => html });
+    const pieceKeys = (entry: ReasoningFact) => entry.sources.map((id) => `source:${id}`);
+    const factRow = (entry: ReasoningFact, label: string, card?: ReasoningCondition, index?: number) => make(2, entry.id, byKey.get(entry.id), !busy(pieceKeys(entry)), { step: 'fait', subject: entry.variable, text: 'Relecture de la pièce…' }, (shown) => entryView(shown, label, proof(entry, byKey)), card, index);
+    const ordered = [...new Set([...journal().filter((entry) => entry.step === 'règle').map((entry) => entry.key), ...current.conditions])]
+      .map(condition).filter((entry): entry is ReasoningCondition => Boolean(entry) && entry!.scope === current.scope && entry!.id !== `${current.scope}.${current.result}`);
+    const used = new Set(ordered.flatMap((entry) => entry.dependsOn));
+    const report = snapshot!.test;
+    const findings = !testing && !journal().length && report ? report.findings.map((finding, index) => placeholder(1, `constat:${index}`, entryView({ key: `constat:${index}`, step: 'règle', status: finding.level, subject: finding.subject, text: finding.text }))) : [];
+    const law = ordered.map((entry, index) => make(1, entry.id, byKey.get(entry.id), !busy(entry.sources.map((id) => `source:${id}`)), { step: 'règle', subject: entry.label, text: 'Vérification du fondement…' }, (shown) => {
+      const waiting = shown.status === 'en cours';
+      const texts = entry.sources.map((id) => {
+        const found = source(id);
+        if (!found) return '';
+        if (waiting) return `<p class="pmr-use">${escape(sourceKind(found))} : ${escape(found.title)}</p>`;
+        const period = found.validity ? ` · version du ${formatValue(found.validity.from)} ${found.validity.to ? `au ${formatValue(found.validity.to)}` : 'à ce jour'}` : '';
+        const vigueur = byKey.get(`${entry.scope}:vigueur:${id}`);
+        const force = vigueur ? ` · <span class="pmr-${vigueur.status === 'alerte' ? 'ko' : vigueur.status === 'ok' ? 'ok' : 'muted'}">${escape(vigueur.text)}</span>` : '';
+        return `<p class="pmr-use">${escape(sourceKind(found))} : ${escape(found.title)}${checkState(byKey.get(`source:${id}`), 'texte relu')}${period}${force}</p>`;
+      }).join('');
+      return entryView({ ...shown, subject: entry.label, text: shown.status === 'ok' ? '' : shown.text }, `Condition ${index + 1}`, texts);
+    }));
+    const registry = journal().filter((entry) => entry.step === 'registre').map((entry) => make(2, entry.key, byKey.get(entry.key), true, entry, (shown) => entryView(shown)));
+    const others = snapshot!.facts.filter((entry) => entry.scope === current.scope && !used.has(entry.id)).map((entry) => factRow(entry, entry.type === 'date' && entry.value === current.referenceDate ? 'Date de référence' : 'Fait'));
+    const cards = ordered.flatMap((entry, index) => [
+      ...(entry.dependsOn.length ? entry.dependsOn.map((id) => {
+        const item = fact(id);
+        return item ? factRow(item, 'Fait', entry, index) : make(2, `${id}:conclusion`, byKey.get(`${id}:conclusion`), true, { step: 'conclusion', subject: nameOf(id), text: 'Application de la règle…' }, (shown) => entryView(shown, 'Condition'), entry, index);
+      }) : [placeholder(2, `${entry.id}:vide`, '<li class="pmr-entry" data-status="neutre"><span class="pmr-mark" aria-hidden="true"></span><span class="pmr-entry-text pmr-muted">Aucun fait du dossier ne s’y rapporte.</span></li>', entry, index)]),
+      make(2, `${entry.id}:conclusion`, byKey.get(`${entry.id}:conclusion`), true, { step: 'conclusion', subject: entry.label, text: 'Application de la règle aux faits…' }, (shown) => entryView(shown, 'Donc', '', false), entry, index),
+    ]);
+    const answer = make(3, `${current.scope}:réponse`, byKey.get(`${current.scope}:réponse`), true, { step: 'réponse', subject: current.question, text: 'Calcul de la réponse…' }, (shown) => entryView(shown, '', '', false));
+    return [...law, ...findings, ...registry, ...others, ...cards, answer];
   };
 
   const verdict = (current: ReasoningQuestion, entries: ReasoningLogEntry[]) => {
@@ -324,52 +338,55 @@ export function mount(container: HTMLElement, api: Host) {
     const current = question()!;
     const report = snapshot!.test;
     const entries = journal();
-    const byKey = new Map(entries.map((entry) => [entry.key, entry]));
     const run = snapshot!.demo
-      ? `<div class="pmr-run"><span class="pmr-muted">Exemple fictif : journal d’un test simulé.</span><span class="pmr-tally" data-tally>${tally()}</span></div>`
-      : `<div class="pmr-run"><button class="pmr-primary" data-run-test${testing ? ' disabled' : ''}>${testing ? 'Test en cours…' : report ? 'Relancer le test' : 'Lancer le test'}</button>${report && !testing ? `<span class="pmr-muted">${escape(new Date(report.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}<span class="pmr-tally" data-tally>${tally()}</span></div>`;
-    const findings = !testing && !entries.length && report
-      ? report.findings.map((finding, index): ReasoningLogEntry => ({ key: `constat:${index}`, step: 'règle', status: finding.level, subject: finding.subject, text: finding.text }))
-      : [];
-    const registry = entries.filter((entry) => entry.step === 'registre');
-    const ordered = [...new Set([...entries.filter((entry) => entry.step === 'règle').map((entry) => entry.key), ...current.conditions])]
-      .map(condition).filter((entry): entry is ReasoningCondition => Boolean(entry) && entry!.scope === current.scope && entry!.id !== `${current.scope}.${current.result}`);
-    const used = new Set(ordered.flatMap((entry) => entry.dependsOn));
-    const others = snapshot!.facts.filter((entry) => entry.scope === current.scope && !used.has(entry.id) && byKey.has(entry.id));
-    const law = ordered.map((entry, index) => lawRow(entry, index, byKey)).join('') + findings.map((entry) => entryView(entry)).join('');
-    const cards = ordered.map((entry, index) => factCard(entry, index, byKey)).join('');
+      ? `<div class="pmr-run"><span class="pmr-muted">Exemple fictif : journal d’un test simulé.</span><span class="pmr-tally" data-tally>${testing ? '' : tally()}</span></div>`
+      : `<div class="pmr-run"><button class="pmr-primary" data-run-test${testing ? ' disabled' : ''}>${testing ? 'Test en cours…' : report ? 'Relancer le test' : 'Lancer le test'}</button>${report && !testing ? `<span class="pmr-muted">${escape(new Date(report.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}<span class="pmr-tally" data-tally>${testing ? '' : tally()}</span></div>`;
+    const animating = testing && Boolean(live);
+    const rows = testRows(false);
+    const visible = animating ? rows.slice(0, cursor).map((row, index) => ({ row, html: row.view(index < revealed) })) : rows.filter((row) => row.has).map((row) => ({ row, html: row.view(true) }));
+    const part = (number: Row['part']) => visible.filter((item) => item.row.part === number);
+    const law = part(1).map((item) => item.html).join('');
+    const loose = part(2).filter((item) => !item.row.card).map((item) => item.html).join('');
+    const groups = new Map<number, { card: ReasoningCondition; html: string }>();
+    for (const item of part(2)) if (item.row.card) { const group = groups.get(item.row.index!) ?? { card: item.row.card, html: '' }; group.html += item.html; groups.set(item.row.index!, group); }
+    const cards = [...groups.entries()].map(([index, group]) => `<article class="pmr-card"><header><span class="pmr-step">Condition ${index + 1}</span>${link(group.card.id)}</header><ol class="pmr-log">${group.html}</ol></article>`).join('');
+    const answer = part(3).map((item) => item.html).join('');
     const reference = current.referenceDate ? ` au ${escape(formatValue(current.referenceDate))}, date de référence` : '';
-    const loose = [...registry.map((entry) => entryView(entry)), ...others.map((entry) => entryView(byKey.get(entry.id)!, entry.type === 'date' && entry.value === current.referenceDate ? 'Date de référence' : 'Fait', proof(entry, byKey)))].join('');
-    const answer = byKey.get(`${current.scope}:réponse`);
     const html = `${run}${goalView(current)}
       <section class="pmr-part"${law ? '' : ' hidden'}><h4>1. En droit</h4><p class="pmr-lead">Les textes qui posent chaque condition, relus sur Légifrance, et leur version applicable${reference}.</p><ol class="pmr-log" aria-live="polite">${law}</ol></section>
       <section class="pmr-part"${cards || loose ? '' : ' hidden'}><h4>2. En fait</h4><p class="pmr-lead">Pour chaque condition, les faits du dossier et les pièces qui les prouvent.</p>${loose ? `<ol class="pmr-log">${loose}</ol>` : ''}${cards}</section>
-      <section class="pmr-part"${answer ? '' : ' hidden'}><h4>3. Conclusion</h4>${answer ? `<ol class="pmr-log">${entryView(answer, '', '', false)}</ol>${verdict(current, entries)}` : ''}</section>`;
+      <section class="pmr-part"${answer ? '' : ' hidden'}><h4>3. Conclusion</h4>${answer ? `<ol class="pmr-log">${answer}</ol>${animating ? '' : verdict(current, entries)}` : ''}</section>`;
     fresh.clear();
     return html;
   };
 
-  const reveal = (entry: ReasoningLogEntry) => {
-    const list = live;
-    if (!list) return;
-    const index = list.findIndex((item) => item.key === entry.key);
-    if (index >= 0) list[index] = entry; else list.push(entry);
-    fresh.set(entry.key, index >= 0 ? ' is-updated' : ' is-new');
+  const paintLive = () => {
     if (tab !== 'tests') return;
     const top = detail.scrollTop;
     detail.innerHTML = testsView();
     detail.scrollTop = top;
-    if (following) (detail.querySelector(`[data-key="${CSS.escape(entry.key)}"]`) ?? [...detail.querySelectorAll('[data-status="en cours"]')].at(-1))?.scrollIntoView({ block: 'nearest' });
+    if (following) (detail.querySelector('.is-new, .is-updated') ?? [...detail.querySelectorAll('[data-status="en cours"]')].at(-1))?.scrollIntoView({ block: 'nearest' });
   };
-
-  const pump = () => {
-    const next = queue.shift();
-    if (next) { reveal(next); drain = window.setTimeout(pump, PACE); return; }
-    drain = 0;
-    finish?.();
+  const tick = () => {
+    ticking = 0;
+    if (!live) return;
+    const rows = testRows(streamed);
+    if (revealed < cursor) {
+      if (rows[revealed]?.ready ?? true) { fresh.set(rows[revealed]?.key ?? '', ' is-updated'); revealed++; paintLive(); }
+    } else if (cursor < rows.length) {
+      cursor++;
+      fresh.set(rows[cursor - 1].key, ' is-new');
+      paintLive();
+    } else if (streamed) { finish?.(); return; }
+    ticking = window.setTimeout(tick, PACE);
   };
-  const enqueue = (entry: ReasoningLogEntry) => { if (!live) return; queue.push(entry); if (!drain) drain = window.setTimeout(pump, live.length ? PACE : 0); };
-  const settled = () => new Promise<void>((resolve) => { if (!drain && !queue.length) resolve(); else finish = resolve; });
+  const store = (entry: ReasoningLogEntry) => {
+    if (!live) return;
+    const index = live.findIndex((item) => item.key === entry.key);
+    if (index >= 0) live[index] = entry; else live.push(entry);
+    if (!ticking) ticking = window.setTimeout(tick, 0);
+  };
+  const settled = () => new Promise<void>((resolve) => { streamed = true; finish = resolve; if (!ticking) ticking = window.setTimeout(tick, 0); });
 
   const paintDetails = () => {
     root.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => button.setAttribute('aria-selected', String(button.dataset.tab === tab)));
@@ -450,14 +467,16 @@ export function mount(container: HTMLElement, api: Host) {
       testing = true;
       following = true;
       live = [];
-      queue = [];
+      cursor = 0;
+      revealed = 0;
+      streamed = false;
       tab = 'tests';
       paintDetails();
       const path = context.project.path;
-      void runTheoryTest(path, enqueue)
+      void runTheoryTest(path, store)
         .then(async (data) => { await settled(); return data; })
         .then((data) => { testing = false; live = null; finish = null; if (context.project?.path === path) apply(data); else paintDetails(); })
-        .catch((error) => { testing = false; live = null; finish = null; queue = []; showError(error); paintDetails(); });
+        .catch((error) => { testing = false; live = null; finish = null; window.clearTimeout(ticking); ticking = 0; showError(error); paintDetails(); });
     }
   });
 
@@ -519,7 +538,7 @@ export function mount(container: HTMLElement, api: Host) {
     const changed = next.project?.path !== context.project?.path;
     context = next;
     root.dataset.theme = next.theme;
-    if (changed) { window.clearTimeout(drain); drain = 0; queue = []; live = null; testing = false; finish?.(); sequence++; snapshot = null; lastSerialized = ''; editing = ''; scope = ''; selected = ''; nodes = []; void load(); }
+    if (changed) { window.clearTimeout(ticking); ticking = 0; live = null; testing = false; finish?.(); sequence++; snapshot = null; lastSerialized = ''; editing = ''; scope = ''; selected = ''; nodes = []; void load(); }
     paint();
   });
   const poll = () => { if (!stopped) { if (!snapshot?.demo) void load(); timer = window.setTimeout(poll, 2500); } };
@@ -527,7 +546,7 @@ export function mount(container: HTMLElement, api: Host) {
   void load();
   timer = window.setTimeout(poll, 2500);
   window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: 'plugin:piecemaker-raisonnement' } }));
-  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); window.clearTimeout(drain); resize.disconnect(); unsubscribe(); container.replaceChildren(); });
+  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); window.clearTimeout(ticking); resize.disconnect(); unsubscribe(); container.replaceChildren(); });
 }
 
 export function unmount(container: HTMLElement) {

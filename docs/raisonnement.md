@@ -71,7 +71,7 @@ Chaque condition et chaque fait se valide, s’écarte ou se modifie dans le vol
   - **2. En fait** : une fiche par condition, dans l’ordre des dépendances — les faits avec la pièce qui les prouve (extrait retrouvé), puis « Donc » ; Registre Public et faits sans condition (date de référence) sont listés avant ;
   - **3. Conclusion** : la réponse et un verdict (démontré, pas encore démontré faute de preuve, non démontrable faute de fondement), rapproché de l’objectif.
 
-  Pendant le test, la vue suit la ligne en cours (sauf si l’avocat fait défiler). Un lien du journal éclaire l’élément dans le graphe sans quitter l’onglet ; un clic sur un nœud ouvre son détail, avec « ← Retour au test ». Un clic sur un fait ouvre sa fiche pour le renseigner ; le nombre d’alertes du dernier test s’affiche sur l’onglet. L’exemple fictif contient un journal de test simulé. Style repris du plugin piecemaker-dossier.
+  Pendant le test, les vérifications tournent en parallèle mais la démonstration se déroule dans cet ordre, une ligne à la fois : chaque ligne apparaît « en cours », se valide quand ses vérifications sont terminées, puis la suivante démarre ; le compteur n’apparaît qu’à la fin et la vue suit la ligne en cours (sauf si l’avocat fait défiler). Un lien du journal éclaire l’élément dans le graphe sans quitter l’onglet ; un clic sur un nœud ouvre son détail, avec « ← Retour au test ». Un clic sur un fait ouvre sa fiche pour le renseigner ; le nombre d’alertes du dernier test s’affiche sur l’onglet. L’exemple fictif contient un journal de test simulé. Style repris du plugin piecemaker-dossier.
 
 ## SQL
 
