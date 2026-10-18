@@ -26,7 +26,8 @@ export const REASONING_FILE = path.join('.piecemaker', 'raisonnement.js');
 
 const LEGACY_TABLES = ['pm_reasoning_items', 'pm_reasoning_models', 'pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories', 'pm_reasoning_tests', 'pm_reasoning_turns'];
 const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', annotated: null, issues: [], dismissed: [], reliability: [], test: null });
-const human = (name: string) => { const text = name.replace(/_/g, ' ').replace(/(^|\s)([cdjlmnst]) (?=[aeiouyhàâéèêëîïôûù])/giu, '$1$2’'); return text.charAt(0).toUpperCase() + text.slice(1); };
+const phrase = (name: string) => name.replace(/_/g, ' ').replace(/(^|\s)([cdjlmnst]) (?=[aeiouyhàâéèêëîïôûù])/giu, '$1$2’');
+const human = (name: string) => { const text = phrase(name); return text.charAt(0).toUpperCase() + text.slice(1); };
 const listing = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}` : names.join(''));
 const day = (value: string) => value.split('-').reverse().join('/');
 const ANSWER: Record<ReasoningStatus, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', contesté: 'Contestée' };
@@ -243,7 +244,7 @@ export async function verifyReasoning(input: {
     const holder = node(annotated, `essais[${index}]`);
     if (holder) Object.assign(holder, result);
     emit({ key: `essai:${index}`, step: 'essai', status: result.conforme ? 'ok' : 'alerte', subject: reasoning.essais[index].nom, text: result.conforme ? 'Conforme' : `Non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${human(name)} = ${value === null ? 'à établir' : value ? 'vrai' : 'faux'}`).join(', ')}` });
-    if (!result.conforme) add('erreur', `essais[${index}]`, `essai non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${name} = ${value === null ? 'à établir' : value ? 'vrai' : 'faux'}`).join(', ')}`, `Le cas d’essai « ${reasoning.essais[index].nom} » ne donne pas le résultat attendu : ${Object.entries(result.obtenu).map(([name, value]) => `${human(name).toLowerCase()} ${value === null ? 'reste en suspens' : value ? 'est acquis' : 'est exclu'}`).join(', ')}.`);
+    if (!result.conforme) add('erreur', `essais[${index}]`, `essai non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${name} = ${value === null ? 'à établir' : value ? 'vrai' : 'faux'}`).join(', ')}`, `Le cas d’essai « ${reasoning.essais[index].nom} » ne donne pas le résultat attendu : ${Object.entries(result.obtenu).map(([name, value]) => `${phrase(name)} ${value === null ? 'reste en suspens' : value ? 'est acquis' : 'est exclu'}`).join(', ')}.`);
   });
 
   const registre: string[] = [];
@@ -286,7 +287,7 @@ export async function verifyReasoning(input: {
   reasoning.questions.forEach((question, index) => {
     const holder = node(annotated, `questions[${index}]`);
     const decisifs = (holder?.decisifs ?? holder?.en_jeu ?? []) as string[];
-    emit({ key: `réponse:${index}`, step: 'réponse', status: holder?.statut === 'à établir' ? 'neutre' : bilan.erreurs ? 'alerte' : 'ok', subject: question.question, text: `${holder?.statut ? ANSWER[holder.statut as ReasoningStatus] : 'Non calculée'}${decisifs.length ? ` : dépend de ${listing(decisifs.map((name) => human(name).toLowerCase()))}` : ''}${bilan.erreurs ? ` · ${bilan.erreurs} erreur${bilan.erreurs > 1 ? 's' : ''} à corriger` : ''}` });
+    emit({ key: `réponse:${index}`, step: 'réponse', status: holder?.statut === 'à établir' ? 'neutre' : bilan.erreurs ? 'alerte' : 'ok', subject: question.question, text: `${holder?.statut ? ANSWER[holder.statut as ReasoningStatus] : 'Non calculée'}${decisifs.length ? ` : dépend de ${listing(decisifs.map((name) => phrase(name)))}` : ''}${bilan.erreurs ? ` · ${bilan.erreurs} erreur${bilan.erreurs > 1 ? 's' : ''} à corriger` : ''}` });
   });
   let code = input.code;
   for (const [original, fixed] of corrections) code = code.split(original).join(fixed);
