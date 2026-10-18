@@ -34,6 +34,13 @@ jobs:
       - name: Configure temporary build directories
         shell: bash
         run: node --input-type=module -e 'import fs from "node:fs";import path from "node:path";for(const [key,name] of Object.entries({PIECEMAKER_HOME:"preview-components",PIECEMAKER_PREBUILT_ASSET_DIR:"preview-assets",PIECEMAKER_TEST_OUTPUT:"PieceMaker-Validation"})){fs.appendFileSync(process.env.GITHUB_ENV, `${key}=${path.join(process.env.RUNNER_TEMP,name)}\n`);}'
+      - name: Trust the existing publisher only on the disposable CI runner
+        shell: pwsh
+        run: |
+          certutil.exe -f -user -addstore Root desktop-bootstrap/certs/piecemaker-publisher.cer
+          if($LASTEXITCODE -ne 0){throw 'Publisher trust failed'}
+          certutil.exe -f -user -addstore TrustedPublisher desktop-bootstrap/certs/piecemaker-publisher.cer
+          if($LASTEXITCODE -ne 0){throw 'Publisher registration failed'}
       - name: Restore compiled preview components
         id: component-cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
