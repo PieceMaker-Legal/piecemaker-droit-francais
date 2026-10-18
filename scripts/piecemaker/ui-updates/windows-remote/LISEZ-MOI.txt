@@ -1,0 +1,20 @@
+MISE A JOUR DISTANTE — PIECEMAKER TEST MAJ UNIQUEMENT
+
+1. Fermer PieceMaker Test MAJ (et la console locale de test si ouverte).
+2. Extraire ce ZIP, puis double-cliquer Activer-MAJ-distantes.cmd.
+3. L'application s'ouvre et télécharge l'interface signée en arrière-plan.
+4. Attendre une minute, fermer puis rouvrir PieceMaker Test MAJ
+   depuis son raccourci Windows : un gros bouton bleu TEST MAJ apparaît.
+
+Cette activation du canal n'est nécessaire qu'une fois. Les publications suivantes
+sont téléchargées au lancement ou toutes les 30 minutes, puis activées au prochain
+lancement. Aucun installateur complet n'est téléchargé pour le bouton bleu.
+Le clic sur le bouton confirme visuellement le test et ne modifie aucun dossier.
+
+L'outil refuse l'identité de l'application de production. Il ne change que la
+clé publique et l'adresse du canal de l'édition Test MAJ. L'ancien fichier et
+l'ancien cache UI sont conservés dans des sauvegardes before-remote.
+Aucune donnée de dossier ni autorité de certification Windows n'est modifiée.
+Ne plus utiliser les boutons de scénarios de l'ancienne console locale : ils
+concernent l'ancien canal local. Utiliser le raccourci PieceMaker Test MAJ.
+L'anonymiseur du banc reste désactivé : utiliser seulement des dossiers fictifs.

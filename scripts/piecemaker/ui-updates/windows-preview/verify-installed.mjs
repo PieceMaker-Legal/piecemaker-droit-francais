@@ -73,6 +73,15 @@ async function launch(label, expectedCurrent, expectedPending, banner) {
       const pending = current.pending ? JSON.parse(current.pending.payload).sequence : 0;
       return value?.ready && !current.trial && active === expectedCurrent && pending === expectedPending && (!banner || value.text.includes('TEST MAJ :'));
     }, label);
+    if (process.env.PIECEMAKER_EXPECT_BLUE && banner) {
+      const result = await page.call('Runtime.evaluate', { expression: `(() => {
+        const button = document.getElementById('piecemaker-test-maj-blue');
+        if (!button || button.getBoundingClientRect().width < 200 || getComputedStyle(button).backgroundColor !== 'rgb(0, 102, 255)') return false;
+        button.click();
+        return button.textContent === 'MAJ DISTANTE OK !';
+      })()`, returnByValue: true });
+      assert.equal(result.result?.value, true, 'Visible blue update button responds to clicks');
+    }
     const screenshot = await page.call('Page.captureScreenshot');
     await fs.writeFile(path.join(output, `${label}.png`), Buffer.from(screenshot.data, 'base64'));
     console.log(`PACKAGED PASS ${label}`);
