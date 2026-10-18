@@ -20,7 +20,7 @@ export type ReasoningConnectors = {
   bodacc(siren: string): Promise<string[]>;
 };
 
-export type Person = { label: string; kind: string; siren: string | null; name: string | null };
+export type Person = { label: string; kind: string; siren: string | null; name: string | null; side?: string | null };
 
 export const REASONING_FILE = path.join('.piecemaker', 'raisonnement.js');
 
@@ -237,7 +237,7 @@ export async function verifyReasoning(input: {
   for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = STATUS(statuses.get(name) ?? null); }
   for (const name of [...shape.leaves].sort()) {
     const value = leafValue(name);
-    const cited = (field: 'preuve' | 'contredit') => [...new Set(occurrences.filter((item) => item.condition.condition === name).flatMap((item) => item.condition[field].map((_, index) => `${item.at}.${field}[${index}]`)).filter((at) => verifiedRefs.get(at)).map((at) => String(node(annotated, at)?.titre ?? '')))].filter(Boolean).join(', ');
+    const cited = (field: 'preuve' | 'contredit') => [...new Set(occurrences.filter((item) => item.condition.condition === name).flatMap((item) => item.condition[field].map((_, index) => `${item.at}.${field}[${index}]`)).filter((at) => verifiedRefs.get(at)).map((at) => node(annotated, at)).filter((ref) => ref?.titre).map((ref) => `${String(ref!.titre)} : « ${String(ref!.citation ?? '')} »`))].join(', ');
     emit({ key: `fait:${name}`, step: 'fait', status: value === null ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: contested(name) ? 'Contesté : une pièce le prouve, une autre le contredit' : value === true ? `Prouvé par ${cited('preuve')}` : value === false ? `Contredit par ${cited('contredit')}` : `${occurrences.some((item) => item.condition.condition === name && item.condition.preuve.length + item.condition.contredit.length > 0) ? 'Les pièces citées ne l’établissent pas' : 'Aucune pièce citée'}${decisiveLeaves.has(name) ? ' · décisif' : ''}` });
   }
   for (const name of reasoning.terms.keys()) emit({ key: `terme:${name}`, step: 'condition', status: statuses.get(name) === null || statuses.get(name) === undefined ? 'neutre' : 'ok', subject: human(name), text: ANSWER[STATUS(statuses.get(name) ?? null)] });
@@ -252,19 +252,25 @@ export async function verifyReasoning(input: {
 
   const registre: string[] = [];
   if (input.online) {
-    const cited = new Set<string>();
-    const collect = (value: unknown) => {
-      if (Array.isArray(value)) value.forEach(collect);
-      else if (isObject(value)) for (const [key, item] of Object.entries(value)) { if (key === 'personnes' && Array.isArray(item)) item.forEach((label) => cited.add(String(label))); else collect(item); }
-    };
-    collect(annotated);
-    for (const person of input.persons.filter((entry) => entry.kind === 'company' && cited.has(entry.label))) {
+    for (const person of input.persons.filter((entry) => entry.kind === 'company' && (entry.side === 'client' || entry.side === 'adversaire'))) {
       try {
         const siren = person.siren?.replace(/\D/g, '').slice(0, 9) || null;
         const record = await connectors.registry({ siren, name: person.name ?? person.label });
+        const closed = !record.found || /radi|cess|ferm|liquid|dissou/i.test(record.status);
         registre.push(`${person.label} : ${record.found ? record.status || 'trouvée au Registre Public' : 'introuvable au Registre Public'}`);
-        emit({ key: `registre:${person.label}`, step: 'registre', status: record.found && !/radi|cess|ferm|liquid|dissou/i.test(record.status) ? 'ok' : 'alerte', subject: person.label, text: record.found ? record.status || 'Trouvée au Registre Public' : 'Introuvable au Registre Public' });
-        if (siren) for (const alert of await connectors.bodacc(siren)) registre.push(`${person.label} : BODACC ${alert}`);
+        emit({ key: `registre:${person.label}`, step: 'registre', status: closed ? 'alerte' : 'ok', subject: person.label, text: record.found ? record.status || 'Trouvée au Registre Public' : 'Introuvable au Registre Public' });
+        if (closed) add('manque', '', `registre : ${person.label} ${record.found ? record.status : 'introuvable au Registre Public'} ; vérifie sa capacité à agir ou à être poursuivie avant de conclure`, `${person.label} : ${record.found ? `le Registre Public la donne ${record.status}` : 'introuvable au Registre Public'}.`);
+        if (!siren) {
+          emit({ key: `bodacc:${person.label}`, step: 'registre', status: 'alerte', subject: person.label, text: 'SIREN non renseigné : BODACC non consulté' });
+          add('manque', '', `BODACC non consulté pour ${person.label} : SIREN absent des parties du dossier`, `${person.label} : SIREN non renseigné dans les parties, le BODACC n’a pas été consulté.`);
+          continue;
+        }
+        const alerts = await connectors.bodacc(siren);
+        emit({ key: `bodacc:${person.label}`, step: 'registre', status: alerts.length ? 'alerte' : 'ok', subject: person.label, text: alerts.length ? `BODACC : ${alerts.join(' ; ')}` : 'BODACC : aucune procédure collective ni radiation' });
+        for (const alert of alerts) {
+          registre.push(`${person.label} : BODACC ${alert}`);
+          add('manque', '', `BODACC, ${person.label} : ${alert} ; intègre ses effets au raisonnement (arrêt des poursuites individuelles, déclaration de créance, pouvoirs des organes de la procédure)`, `${person.label} : le BODACC signale ${alert}.`);
+        }
       } catch (error) { registre.push(`${person.label} : vérification impossible (${error instanceof Error ? error.message : 'erreur'})`); }
     }
   }
@@ -297,7 +303,7 @@ export async function verifyReasoning(input: {
   return { annotated: { bilan, ...annotated }, issues, code, log };
 }
 
-type PersonRow = { label: string; kind: string; name: string | null; siren: string | null };
+type PersonRow = { label: string; kind: string; name: string | null; siren: string | null; side: string | null };
 
 export function createReasoningService(getDatabase: () => Database.Database, connectors: ReasoningConnectors) {
   let initialized = false;
@@ -338,7 +344,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   };
 
   const hasGraph = () => Boolean(database().prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='piecemaker_nodes'").get());
-  const persons = (id: string): Person[] => (hasGraph() ? database().prepare(`SELECT n.label, n.kind,
+  const persons = (id: string): Person[] => (hasGraph() ? database().prepare(`SELECT n.label, n.kind, json_extract(n.data_json,'$.partySide') AS side,
       (SELECT m.real_value FROM piecemaker_mappings m WHERE m.project_id=n.project_id AND m.node_id=n.id LIMIT 1) AS name,
       (SELECT COALESCE((SELECT m.real_value FROM piecemaker_mappings m WHERE m.project_id=s.project_id AND m.node_id=s.id LIMIT 1), s.label)
          FROM piecemaker_links l JOIN piecemaker_nodes s ON s.project_id=l.project_id AND s.id=l.to_node_id
