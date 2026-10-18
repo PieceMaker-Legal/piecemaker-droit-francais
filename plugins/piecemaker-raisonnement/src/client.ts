@@ -83,6 +83,8 @@ export function mount(container: HTMLElement, api: Host) {
   let drain = 0;
   let finish: (() => void) | null = null;
   let sequence = 0;
+  let following = true;
+  let origin: Tab = 'detail';
   const fresh = new Map<string, string>();
   let stopped = false;
   let timer = 0;
@@ -213,7 +215,7 @@ export function mount(container: HTMLElement, api: Host) {
   };
 
   const nodeDetail = (current: ReasoningQuestion, id: string) => {
-    const back = '<button class="pmr-link" data-unselect>← Vue d’ensemble</button>';
+    const back = `<button class="pmr-link" data-unselect>${origin === 'tests' ? '← Retour au test' : '← Vue d’ensemble'}</button>`;
     const law = condition(id);
     if (law) {
       const isResult = law.id === `${current.scope}.${current.result}`;
@@ -267,32 +269,40 @@ export function mount(container: HTMLElement, api: Host) {
       const members = voie.conditions.filter((id) => id !== resultId);
       return `<li><strong>${voie.favorable ? 'Moyen du client' : 'Moyen adverse'}</strong> : la réponse est ${yesNo(voie.favorable ? goal : !goal)}${members.length ? ` si ${andList(members.map(link))} ${members.length > 1 ? 'sont remplies' : 'est remplie'}` : ` selon ${escape(voie.label)}`}.</li>`;
     }).join('');
-    return `<div class="pmr-goal"><h4>Ce que le test doit démontrer</h4><p class="pmr-question">${escape(current.question || current.scope)}</p>${current.objective === null ? '' : `<p>Objectif du client : obtenir ${yesNo(current.objective)}.</p>`}${voies ? `<ul>${voies}</ul>` : ''}<p class="pmr-muted">Le test le vérifie en trois temps : il relit chaque source et chaque pièce, applique chaque règle aux faits prouvés, puis en déduit la réponse.</p></div>`;
+    return `<div class="pmr-goal"><h4>Ce que le test doit démontrer</h4><p class="pmr-question">${escape(current.question || current.scope)}</p>${current.objective === null ? '' : `<p>Objectif du client : obtenir ${yesNo(current.objective)}.</p>`}${voies ? `<ul>${voies}</ul>` : ''}</div>`;
   };
 
-  const purpose = (entry: ReasoningLogEntry) => {
-    const id = entry.key.replace(/^source:/, '').split('.')[0];
-    const grounds = snapshot!.conditions.filter((other) => other.sources.includes(id)).map((other) => other.id);
-    const proves = snapshot!.facts.filter((other) => other.sources.includes(id)).map((other) => other.id);
-    const uses = [grounds.length ? `fonde ${andList(grounds.map(link))}` : '', proves.length ? `prouve ${andList(proves.map(link))}` : ''].filter(Boolean).join(' · ');
-    return uses ? `<p class="pmr-use">${uses}</p>` : '';
+  const checkState = (check: ReasoningLogEntry | undefined, done: string) => (!check ? '' : check.status === 'ok' ? ` — ${done}` : check.status === 'en cours' ? ' — relecture…' : ` — ${escape(check.text)}`);
+  const proof = (entry: ReasoningFact, byKey: Map<string, ReasoningLogEntry>) => (entry.sources.length ? `<p class="pmr-use">${entry.sources.map((id) => `Pièce : ${escape(source(id)?.title ?? id)}${checkState(byKey.get(`source:${id}`), 'extrait retrouvé')}`).join(' ; ')}</p>` : '');
+  const pending = (key: string, subject: string, checks: (ReasoningLogEntry | undefined)[], step: ReasoningLogEntry['step'], text: string): ReasoningLogEntry | undefined => {
+    const found = checks.filter((item): item is ReasoningLogEntry => Boolean(item));
+    return found.length ? { key, step, status: found.some((item) => item.status === 'en cours') ? 'en cours' : 'neutre', subject, text } : undefined;
   };
-  const proof = (entry: ReasoningFact, byKey: Map<string, ReasoningLogEntry>) => (entry.sources.length ? `<p class="pmr-use">${entry.sources.map((id) => {
-    const check = byKey.get(`source:${id}`);
-    const state = !check ? '' : check.status === 'ok' ? ' — extrait retrouvé' : check.status === 'en cours' ? ' — relecture…' : ` — ${escape(check.text)}`;
-    return `Pièce : ${escape(source(id)?.title ?? id)}${state}`;
-  }).join(' ; ')}</p>` : '');
 
-  const conditionCard = (entry: ReasoningCondition, index: number, byKey: Map<string, ReasoningLogEntry>) => {
-    const rule = byKey.get(entry.id), done = byKey.get(`${entry.id}:conclusion`);
-    if (!rule && !done) return '';
-    const vigueur = entry.sources.map((id) => byKey.get(`${entry.scope}:vigueur:${id}`)).filter((item): item is ReasoningLogEntry => Boolean(item));
+  const lawRow = (entry: ReasoningCondition, index: number, byKey: Map<string, ReasoningLogEntry>) => {
+    const rule = byKey.get(entry.id) ?? pending(entry.id, entry.label, entry.sources.map((id) => byKey.get(`source:${id}`)), 'règle', 'Vérification du fondement…');
+    if (!rule) return '';
+    const texts = entry.sources.map((id) => {
+      const found = source(id);
+      if (!found) return '';
+      const period = found.validity ? ` · version du ${formatValue(found.validity.from)} ${found.validity.to ? `au ${formatValue(found.validity.to)}` : 'à ce jour'}` : '';
+      const vigueur = byKey.get(`${entry.scope}:vigueur:${id}`);
+      const force = vigueur ? ` · <span class="pmr-${vigueur.status === 'alerte' ? 'ko' : vigueur.status === 'ok' ? 'ok' : 'muted'}">${escape(vigueur.text)}</span>` : '';
+      return `<p class="pmr-use">${escape(sourceKind(found))} : ${escape(found.title)}${checkState(byKey.get(`source:${id}`), 'texte relu')}${period}${force}</p>`;
+    }).join('');
+    return entryView({ ...rule, subject: entry.label, text: rule.status === 'alerte' ? rule.text : '' }, `Condition ${index + 1}`, texts);
+  };
+
+  const factCard = (entry: ReasoningCondition, index: number, byKey: Map<string, ReasoningLogEntry>) => {
+    const done = byKey.get(`${entry.id}:conclusion`);
     const inputs = entry.dependsOn.map((id) => {
-      const item = fact(id), log = byKey.get(id) ?? byKey.get(`${id}:conclusion`);
+      const item = fact(id);
+      const log = byKey.get(id) ?? byKey.get(`${id}:conclusion`) ?? (item ? pending(id, item.variable, item.sources.map((other) => byKey.get(`source:${other}`)), 'fait', 'Relecture de la pièce…') : undefined);
       if (!log) return '';
       return item ? entryView(log, 'Fait', proof(item, byKey)) : entryView(log, 'Condition');
     }).join('');
-    return `<article class="pmr-card"><header><span class="pmr-step">Condition ${index + 1}</span>${link(entry.id)}</header><ol class="pmr-log">${rule ? entryView(rule, 'En droit', '', false) : ''}${vigueur.map((item) => entryView(item, 'Vigueur')).join('')}${inputs || entry.dependsOn.length ? inputs : '<li class="pmr-entry" data-status="neutre"><span class="pmr-mark" aria-hidden="true"></span><span class="pmr-entry-text pmr-muted">Aucun fait du dossier ne s’y rapporte.</span></li>'}${done ? entryView(done, 'Donc', '', false) : ''}</ol></article>`;
+    if (!inputs && !done) return '';
+    return `<article class="pmr-card"><header><span class="pmr-step">Condition ${index + 1}</span>${link(entry.id)}</header><ol class="pmr-log">${inputs || '<li class="pmr-entry" data-status="neutre"><span class="pmr-mark" aria-hidden="true"></span><span class="pmr-entry-text pmr-muted">Aucun fait du dossier ne s’y rapporte.</span></li>'}${done ? entryView(done, 'Donc', '', false) : ''}</ol></article>`;
   };
 
   const verdict = (current: ReasoningQuestion, entries: ReasoningLogEntry[]) => {
@@ -318,19 +328,23 @@ export function mount(container: HTMLElement, api: Host) {
     const run = snapshot!.demo
       ? `<div class="pmr-run"><span class="pmr-muted">Exemple fictif : journal d’un test simulé.</span><span class="pmr-tally" data-tally>${tally()}</span></div>`
       : `<div class="pmr-run"><button class="pmr-primary" data-run-test${testing ? ' disabled' : ''}>${testing ? 'Test en cours…' : report ? 'Relancer le test' : 'Lancer le test'}</button>${report && !testing ? `<span class="pmr-muted">${escape(new Date(report.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}<span class="pmr-tally" data-tally>${tally()}</span></div>`;
-    const checks = !testing && !entries.length && report
+    const findings = !testing && !entries.length && report
       ? report.findings.map((finding, index): ReasoningLogEntry => ({ key: `constat:${index}`, step: 'règle', status: finding.level, subject: finding.subject, text: finding.text }))
-      : entries.filter((entry) => entry.step === 'source' || entry.step === 'registre');
+      : [];
+    const registry = entries.filter((entry) => entry.step === 'registre');
     const ordered = [...new Set([...entries.filter((entry) => entry.step === 'règle').map((entry) => entry.key), ...current.conditions])]
       .map(condition).filter((entry): entry is ReasoningCondition => Boolean(entry) && entry!.scope === current.scope && entry!.id !== `${current.scope}.${current.result}`);
     const used = new Set(ordered.flatMap((entry) => entry.dependsOn));
     const others = snapshot!.facts.filter((entry) => entry.scope === current.scope && !used.has(entry.id) && byKey.has(entry.id));
-    const cards = ordered.map((entry, index) => conditionCard(entry, index, byKey)).join('');
+    const law = ordered.map((entry, index) => lawRow(entry, index, byKey)).join('') + findings.map((entry) => entryView(entry)).join('');
+    const cards = ordered.map((entry, index) => factCard(entry, index, byKey)).join('');
+    const reference = current.referenceDate ? ` au ${escape(formatValue(current.referenceDate))}, date de référence` : '';
+    const loose = [...registry.map((entry) => entryView(entry)), ...others.map((entry) => entryView(byKey.get(entry.id)!, entry.type === 'date' && entry.value === current.referenceDate ? 'Date de référence' : 'Fait', proof(entry, byKey)))].join('');
     const answer = byKey.get(`${current.scope}:réponse`);
     const html = `${run}${goalView(current)}
-      <section class="pmr-part"${checks.length ? '' : ' hidden'}><h4>1. Les sources tiennent-elles ?</h4><p class="pmr-lead">Chaque texte est relu sur Légifrance, chaque extrait est recherché à nouveau dans sa pièce, chaque société est vérifiée au Registre Public.</p><ol class="pmr-log" aria-live="polite">${checks.map((entry) => entryView(entry, stepLabel(entry), entry.step === 'source' ? purpose(entry) : '')).join('')}</ol></section>
-      <section class="pmr-part"${cards || others.length ? '' : ' hidden'}><h4>2. Chaque condition est-elle remplie ?</h4><p class="pmr-lead">Pour chaque condition : la règle qui la pose, les faits du dossier qui s’y rapportent et les pièces qui les prouvent, puis ce qu’on en conclut.</p>${others.length ? `<ol class="pmr-log">${others.map((entry) => entryView(byKey.get(entry.id)!, entry.type === 'date' && entry.value === current.referenceDate ? 'Date de référence' : 'Fait', proof(entry, byKey))).join('')}</ol>` : ''}${cards}</section>
-      <section class="pmr-part"${answer ? '' : ' hidden'}><h4>3. Ce que le test démontre</h4>${answer ? `<ol class="pmr-log">${entryView(answer, '', '', false)}</ol>${verdict(current, entries)}` : ''}</section>`;
+      <section class="pmr-part"${law ? '' : ' hidden'}><h4>1. En droit</h4><p class="pmr-lead">Les textes qui posent chaque condition, relus sur Légifrance, et leur version applicable${reference}.</p><ol class="pmr-log" aria-live="polite">${law}</ol></section>
+      <section class="pmr-part"${cards || loose ? '' : ' hidden'}><h4>2. En fait</h4><p class="pmr-lead">Pour chaque condition, les faits du dossier et les pièces qui les prouvent.</p>${loose ? `<ol class="pmr-log">${loose}</ol>` : ''}${cards}</section>
+      <section class="pmr-part"${answer ? '' : ' hidden'}><h4>3. Conclusion</h4>${answer ? `<ol class="pmr-log">${entryView(answer, '', '', false)}</ol>${verdict(current, entries)}` : ''}</section>`;
     fresh.clear();
     return html;
   };
@@ -342,9 +356,10 @@ export function mount(container: HTMLElement, api: Host) {
     if (index >= 0) list[index] = entry; else list.push(entry);
     fresh.set(entry.key, index >= 0 ? ' is-updated' : ' is-new');
     if (tab !== 'tests') return;
-    const pinned = detail.scrollHeight - detail.scrollTop - detail.clientHeight < 40;
+    const top = detail.scrollTop;
     detail.innerHTML = testsView();
-    if (pinned) detail.scrollTo({ top: detail.scrollHeight, behavior: 'smooth' });
+    detail.scrollTop = top;
+    if (following) (detail.querySelector(`[data-key="${CSS.escape(entry.key)}"]`) ?? [...detail.querySelectorAll('[data-status="en cours"]')].at(-1))?.scrollIntoView({ block: 'nearest' });
   };
 
   const pump = () => {
@@ -398,15 +413,24 @@ export function mount(container: HTMLElement, api: Host) {
       if (!stopped && request === sequence) showError(error);
     }
   };
-  const select = (id: string) => { selected = selected === id ? '' : id; tab = 'detail'; editing = ''; paintGraph(); paintDetails(); };
+  const select = (id: string) => {
+    selected = selected === id ? '' : id;
+    editing = '';
+    if (selected && tab === 'tests') origin = 'tests';
+    tab = selected ? 'detail' : origin;
+    if (!selected) origin = 'detail';
+    paintGraph();
+    paintDetails();
+  };
 
   root.addEventListener('click', (event) => {
     const button = (event.target as Element).closest<HTMLElement>('button');
     if (!button) return;
-    if (button.dataset.tab) { tab = button.dataset.tab as Tab; paintDetails(); }
+    if (button.dataset.tab) { tab = button.dataset.tab as Tab; origin = 'detail'; paintDetails(); }
     if (button.hasAttribute('data-demo')) { lastSerialized = ''; editing = ''; selected = ''; scope = ''; nodes = []; void load(!snapshot?.demo); }
     if (button.hasAttribute('data-refresh')) { lastSerialized = ''; void load(Boolean(snapshot?.demo)); }
-    if (button.dataset.select) select(button.dataset.select);
+    if (button.dataset.select && tab === 'tests') { selected = selected === button.dataset.select ? '' : button.dataset.select; paintGraph(); }
+    else if (button.dataset.select) select(button.dataset.select);
     if (button.hasAttribute('data-unselect')) select(selected);
     if (button.dataset.open) {
       const entry = source(button.dataset.open);
@@ -424,6 +448,7 @@ export function mount(container: HTMLElement, api: Host) {
     }
     if (button.hasAttribute('data-run-test') && context.project && !testing) {
       testing = true;
+      following = true;
       live = [];
       queue = [];
       tab = 'tests';
@@ -436,6 +461,9 @@ export function mount(container: HTMLElement, api: Host) {
     }
   });
 
+  const stopFollowing = () => { if (testing) following = false; };
+  detail.addEventListener('wheel', stopFollowing, { passive: true });
+  detail.addEventListener('touchmove', stopFollowing, { passive: true });
   picker.addEventListener('change', () => { scope = picker.value; selected = ''; nodes = []; paint(); });
   root.addEventListener('submit', (event) => {
     event.preventDefault();
