@@ -49,3 +49,23 @@ test('le proxy de la session porte le dossier dans l’environnement hérité pa
   });
   assert.equal(environment.HTTPS_PROXY, 'http://127.0.0.1:4100');
 });
+
+test('le proxy conserve les écritures natives de process.env et la lecture propre à la session', async (t) => {
+  const { createRequire } = await import('node:module');
+  const { sessionScopedEnvironment } = createRequire(import.meta.url)('./service.cjs');
+  const key = 'PIECEMAKER_PROXY_ENV_TEST';
+  const previous = process.env[key];
+  t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous; });
+  process.env[key] = 'before';
+  const sessions = new AsyncLocalStorage<string>();
+  const environment = sessionScopedEnvironment(process.env, sessions);
+  environment[key] = 'after';
+  assert.equal(process.env[key], 'after');
+  await sessions.run('http://127.0.0.1:4100', async () => {
+    await Promise.resolve();
+    assert.equal(environment.HTTPS_PROXY, 'http://127.0.0.1:4100');
+    environment[key] = 'inside-session';
+    assert.equal(process.env[key], 'inside-session');
+  });
+  assert.equal(environment.HTTPS_PROXY, process.env.HTTPS_PROXY);
+});

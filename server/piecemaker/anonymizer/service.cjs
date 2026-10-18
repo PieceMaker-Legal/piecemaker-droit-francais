@@ -134,6 +134,9 @@ function sessionScopedEnvironment(environment, sessions) {
       const scoped = SESSION_PROXY_KEYS.has(key) ? sessions.getStore() : undefined;
       return scoped === undefined ? Reflect.get(target, key) : scoped;
     },
+    set(target, key, value) {
+      return Reflect.set(target, key, value);
+    },
   });
 }
 

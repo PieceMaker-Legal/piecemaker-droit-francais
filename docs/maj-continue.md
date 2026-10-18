@@ -305,3 +305,9 @@ La fenêtre de préparation n'expose pas le pont du bureau. Une tentative sur
 cette fenêtre ne doit pas consommer l'ouverture automatique du serveur local :
 le lanceur réessaie après chargement de la vraie fenêtre. Ce cas est reproduit
 par le test de démarrage avec un pont absent, puis présent.
+
+Le test avec anonymiseur actif a détecté une erreur du proxy de `process.env` :
+les écritures de variables natives échouaient avant le démarrage du serveur.
+Le proxy transmet désormais explicitement les écritures à l'environnement natif,
+tout en conservant la lecture propre à chaque session. Le test utilise le vrai
+`process.env`, sans le remplacer par un objet ordinaire, sur macOS et Windows.
