@@ -1,7 +1,7 @@
 import { parseExpressionAt } from 'acorn';
 
 export type Ref = { piece: string; citation: string };
-export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null } };
+export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null }; applicabilite?: string };
 export type Condition = { condition?: string; l_une?: Condition[]; selon: Basis[]; preuve: Ref[]; contredit: Ref[] };
 export type Term = { si: Condition[]; sauf: Condition[] };
 export type Question = { question: string; reponse: string; date?: { valeur: string; preuve: Ref[] } };
@@ -100,8 +100,12 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     return raw.flatMap((entry, index) => {
       const at = `${path}[${index}]`;
       if (!isObject(entry) || !text(entry.source) || !text(entry.citation)) { problem(at, '{ source: identifiant du texte, de la décision ou chemin de la pièce, citation: passage exact } attendu'); return []; }
-      for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur'].includes(key)) problem(`${at}.${key}`, `clé inconnue ${key}`);
+      for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite'].includes(key)) problem(`${at}.${key}`, `clé inconnue ${key}`);
       const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string };
+      if (entry.applicabilite !== undefined) {
+        if (text(entry.applicabilite)) basis.applicabilite = entry.applicabilite as string;
+        else problem(`${at}.applicabilite`, 'applicabilite : une phrase disant pourquoi ce texte s’applique au dossier');
+      }
       if (entry.vigueur !== undefined) {
         const vigueur = entry.vigueur;
         if (!isObject(vigueur) || typeof vigueur.debut !== 'string' || !DATE.test(vigueur.debut) || !(vigueur.fin === null || vigueur.fin === undefined || (typeof vigueur.fin === 'string' && DATE.test(vigueur.fin)))) problem(`${at}.vigueur`, 'vigueur : { debut: \'AAAA-MM-JJ\', fin: \'AAAA-MM-JJ\' ou null }');
