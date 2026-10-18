@@ -27,7 +27,7 @@ const sourceLabel = (source: Json) => {
 };
 const TONE: Record<string, string> = { acquis: 'ok', exclu: 'ko', 'à établir': 'warn', contesté: 'warn' };
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
-const human = (name: string) => { const text = name.replace(/_/g, ' '); return text.charAt(0).toUpperCase() + text.slice(1); };
+const human = (name: string) => { const text = name.replace(/_/g, ' ').replace(/(^|\s)([cdjlmnst]) (?=[aeiouyhàâéèêëîïôûù])/giu, '$1$2’'); return text.charAt(0).toUpperCase() + text.slice(1); };
 const shorten = (text: string, length: number) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
 const pill = (status: string, label = status) => `<span class="pmr-pill pmr-${TONE[status] ?? 'muted'}">${escape(label)}</span>`;
 const date = (value: unknown) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : 'toujours en vigueur');

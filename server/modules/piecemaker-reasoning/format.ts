@@ -74,7 +74,7 @@ export function parseLiteral(text: string): Parsed {
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const human = (name: string) => { const value = name.replace(/_/g, ' '); return value.charAt(0).toUpperCase() + value.slice(1); };
+const human = (name: string) => { const value = name.replace(/_/g, ' ').replace(/(^|\s)([cdjlmnst]) (?=[aeiouyhàâéèêëîïôûù])/giu, '$1$2’'); return value.charAt(0).toUpperCase() + value.slice(1); };
 const text = (value: unknown) => typeof value === 'string' && value.trim() !== '';
 
 export function readReasoning(value: unknown): { reasoning: Reasoning; problems: Problem[] } {

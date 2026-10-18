@@ -26,7 +26,7 @@ export const REASONING_FILE = path.join('.piecemaker', 'raisonnement.js');
 
 const LEGACY_TABLES = ['pm_reasoning_items', 'pm_reasoning_models', 'pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories', 'pm_reasoning_tests', 'pm_reasoning_turns'];
 const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', annotated: null, issues: [], dismissed: [], reliability: [], test: null });
-const human = (name: string) => { const text = name.replace(/_/g, ' '); return text.charAt(0).toUpperCase() + text.slice(1); };
+const human = (name: string) => { const text = name.replace(/_/g, ' ').replace(/(^|\s)([cdjlmnst]) (?=[aeiouyhàâéèêëîïôûù])/giu, '$1$2’'); return text.charAt(0).toUpperCase() + text.slice(1); };
 const listing = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}` : names.join(''));
 const day = (value: string) => value.split('-').reverse().join('/');
 const ANSWER: Record<ReasoningStatus, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', contesté: 'Contestée' };
