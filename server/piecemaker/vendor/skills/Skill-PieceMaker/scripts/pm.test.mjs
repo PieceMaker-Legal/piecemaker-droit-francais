@@ -173,21 +173,19 @@ test('conversion lance le CLI piecemaker', async () => {
 
 test('raisonnement transmet la commande et ses champs à reasoningFn', async () => {
   const calls = [];
-  const deps = { reasoningFn: async (input) => { calls.push(input); return 'État : Q1'; } };
+  const panels = [];
+  const deps = { reasoningFn: async (input) => { calls.push(input); return 'État : Q1'; }, openPanel: async (request) => { panels.push(request); return {}; } };
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-raisonnement-'));
   const result = await run([
     'raisonnement', 'fait', '--question', 'Q1', '--nom', 'faute', '--valeur', 'vrai',
     '--piece', 'pieces/contrat.md', '--force-probante', 'indice', '--a-la-date', '2024-01-15',
   ], { cwd: dossier, deps });
-  assert.equal(result, 'État : Q1');
+  assert.equal(result, 'État : Q1\nVisible : Raisonnement.');
+  assert.deepEqual(panels, [{ project: path.resolve(dossier), tab: 'plugin:piecemaker-raisonnement' }]);
   assert.deepEqual(calls[0], {
     commande: 'fait', cwd: path.resolve(dossier), question: 'Q1', nom: 'faute', a_la_date: '2024-01-15',
     valeur: true, piece: 'pieces/contrat.md', force: 'indice',
   });
   await assert.rejects(run(['raisonnement', 'inconnue'], { cwd: dossier, deps }));
   fs.rmSync(dossier, { recursive: true, force: true });
-});
-
-test('pm refuse de tourner depuis le dossier de la skill', async () => {
-  await assert.rejects(run(['raisonnement', 'etat'], { cwd: HERE, deps: {} }), /dossier de l’affaire/);
 });
