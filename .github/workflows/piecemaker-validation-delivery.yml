@@ -1,0 +1,69 @@
+name: PieceMaker Validated Installer Delivery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [MAJ-continue]
+    paths: ['.github/workflows/piecemaker-validation-delivery.yml']
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  deliver-installation-only:
+    if: github.ref == 'refs/heads/MAJ-continue'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: PieceMaker-Legal/piecemaker-droit-francais
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - name: Require the exact successful Windows and desktop test runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for run in 39135692984 39135692974; do
+            gh api "repos/$GH_REPO/actions/runs/$run" --jq '.conclusion + " " + .head_sha' | awk '$0 != "success eaa21fc0c0634421bd06ce91fd4df6978f03080f" { exit 1 }'
+          done
+          gh api "repos/$GH_REPO/releases/latest" --jq '.id' > "$RUNNER_TEMP/latest-before.txt"
+          gh run download 39135692984 --name PieceMaker-Validation-Windows-x64-9 --dir "$RUNNER_TEMP/validated"
+      - name: Verify the delivered bytes and the complete installation report
+        working-directory: ${{ runner.temp }}/validated
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum -c SHA256SUMS.txt
+          node --input-type=module -e 'import fs from "node:fs";const report=JSON.parse(fs.readFileSync("installation-verification.json"));for(const field of ["installed","initialInterface","updateNotPublished","accountCreated","sessionRetained","localCertificateGenerated","localCertificateTrusted","anonymizerActive","nativeUninstallVerified","productionDataUntouched"]){if(report[field]!==true)throw Error("Failed installation check: "+field);}if(report.runtime!=="desktop-2.0.47"||report.remoteChannelEmbedded!=="https://github.com/PieceMaker-Legal/piecemaker-droit-francais/releases/download/validation-ui-desktop-2.0.47")throw Error("Unexpected validation channel");'
+      - name: Deliver only the installer as an isolated prerelease
+        working-directory: ${{ runner.temp }}/validated
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
+          Étape 1 : programme complet de MAJ-continue, réservé à l'essai grandeur nature Windows.
+
+          Télécharger l'exécutable, l'installer puis ouvrir le raccourci « PieceMaker Validation ». Aucun ZIP d'activation ni outil de développement à installer. Accepter les demandes de certificats Windows habituelles et laisser la préparation initiale se terminer. Les modèles GLiNER et MinerU se préparent automatiquement, comme dans le programme habituel.
+
+          Serveur, interface, plugins, Python de conversion, SDK IA et anonymiseur actif sont inclus. Identité legal.piecemaker.validation ; données dans %USERPROFILE%\.piecemaker-validation ; canal distant déjà embarqué et encore vide. La signature Authenticode auto-signée habituelle du projet est conservée. La CA du proxy est créée sur chaque poste.
+
+          Installation NSIS réelle, compte fictif, proxy actif, session après redémarrage et désinstallation native vérifiés sur Windows (run 39135692984). Les certificats sont préautorisés uniquement sur le runner jetable ; leurs confirmations graphiques restent à vérifier sur le poste utilisateur.
+
+          Aucun paquet de mise à jour d'interface n'est publié à cette étape. L'étape 2 attend le signal explicite de l'utilisateur. Aucune release stable ni publication npm n'est modifiée, aucun merge.
+          NOTES
+          gh release create validation-installation-desktop-2.0.47 --target eaa21fc0c0634421bd06ce91fd4df6978f03080f --prerelease --latest=false --title 'Installation complète PieceMaker — validation Windows, étape 1' --notes-file "$RUNNER_TEMP/notes.md" PieceMaker-Validation-2.0.47-win-x64.exe SHA256SUMS.txt installation-verification.json 01-installed.png 02-restarted.png
+          gh api "repos/$GH_REPO/releases/latest" --jq '.id' > "$RUNNER_TEMP/latest-after.txt"
+          cmp "$RUNNER_TEMP/latest-before.txt" "$RUNNER_TEMP/latest-after.txt"
+      - name: Preserve the exact initial UI for step 2 without publishing an update
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: PieceMaker-Validation-Step1-Baseline
+          path: |
+            ${{ runner.temp }}/validated/ui-baseline.json.gz
+            ${{ runner.temp }}/validated/ui-baseline.sha256
+            ${{ runner.temp }}/validated/validation-runtime.json
+            ${{ runner.temp }}/validated/installation-verification.json
+          retention-days: 90
+          if-no-files-found: error
