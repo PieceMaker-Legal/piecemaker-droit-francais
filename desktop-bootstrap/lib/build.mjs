@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { capture, run } from './shell.mjs';
 import { BUNDLE_DIR, embedBundledPlugins } from './plugins.mjs';
+import { embedUiRuntimeConfig } from './ui-updates.mjs';
 import { ui } from './ui.mjs';
 import { configureWindowsUpdates } from './windows-update-config.mjs';
 import { pruneDesktopDependencies, configureCompactPackage } from './compact-package.mjs';
@@ -416,6 +417,7 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false } = 
   const stageDir = path.join(sourceDir, '.desktop-build', 'desktop-app');
   await embedLocalServer(sourceDir, stageDir);
   await embedDesktopOverlay(stageDir);
+  await embedUiRuntimeConfig(sourceDir, stageDir);
   if (process.platform === 'win32') {
     await fs.cp(path.join(bootstrapRoot, 'lib'), path.join(stageDir, 'desktop-bootstrap', 'lib'), { recursive: true, filter: isShippedFile });
     await fs.cp(path.join(bootstrapRoot, 'composants'), path.join(stageDir, 'desktop-bootstrap', 'composants'), { recursive: true, filter: isShippedFile });

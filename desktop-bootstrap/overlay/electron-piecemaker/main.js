@@ -1,4 +1,4 @@
-import { app, autoUpdater, BrowserWindow, dialog, powerSaveBlocker } from 'electron';
+import { app, autoUpdater, BrowserWindow, dialog, powerSaveBlocker, session } from 'electron';
 import { execFile } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,6 +12,7 @@ import { installDesktopKeepAwake } from './keepAwake.js';
 import { installWindowsTitleBar } from './windowsTitleBar.js';
 import { installWindowsUpdater } from './windowsUpdater.js';
 import { initializeCompactRuntime, portablePluginRuntime } from './compact-runtime.mjs';
+import { installUiUpdates } from './ui-updates/index.mjs';
 
 installWindowsTitleBar({ app, DesktopWindowManager });
 
@@ -77,6 +78,11 @@ async function startApplication() {
       return window;
     },
   });
+  try {
+    await installUiUpdates({ app, session, LocalServerController, applicationRoot: runtime.applicationRoot });
+  } catch (error) {
+    console.error(`[PieceMaker UI] Initialisation impossible : ${error.message}`);
+  }
   // Avant electron/main.js : le serveur local lit les plugins (et lance leurs
   // sous-processus) une seule fois, à son démarrage. Le bundle et son sync.mjs
   // sont produits par plugins/toolchain (voir docs/plugins.md).

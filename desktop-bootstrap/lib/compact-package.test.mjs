@@ -23,6 +23,7 @@ test('native and external script dependency closures stay physical even with exp
   assert.ok(manifest.build.asarUnpack.includes('dist/**'));
   assert.ok(manifest.build.asarUnpack.includes('public/**'));
   assert.ok(manifest.build.asarUnpack.includes('electron-piecemaker/runtime-components.mjs'));
+  assert.ok(manifest.build.asarUnpack.includes('electron-piecemaker/ui-update-runtime.json'));
   assert.ok(manifest.build.asarUnpack.includes('node_modules/export-only/**'));
   assert.ok(manifest.build.asarUnpack.includes('node_modules/child/**'));
   assert.equal(manifest.build.nsis.differentialPackage, true);

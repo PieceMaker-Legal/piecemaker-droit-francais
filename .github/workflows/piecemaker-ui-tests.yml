@@ -1,0 +1,47 @@
+name: PieceMaker Interface Tests
+
+on:
+  pull_request:
+    paths:
+      - 'desktop-bootstrap/**'
+      - 'scripts/piecemaker/ui-updates/**'
+      - '.github/workflows/piecemaker-ui-*.yml'
+  push:
+    branches: [main, MAJ-continue]
+    paths:
+      - 'desktop-bootstrap/**'
+      - 'scripts/piecemaker/ui-updates/**'
+      - '.github/workflows/piecemaker-ui-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-interface:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+      - name: Test packages and publication rules
+        shell: bash
+        run: node --test desktop-bootstrap/overlay/electron-piecemaker/ui-updates/*.test.mjs scripts/piecemaker/ui-updates/*.test.mjs desktop-bootstrap/lib/ui-updates.test.mjs
+      - name: Test desktop startup
+        run: node --experimental-vm-modules --test desktop-bootstrap/overlay/electron-piecemaker/main.test.js
+      - name: Install Electron
+        shell: bash
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node node_modules/electron/install.js
+      - name: Test actual Electron transport and activation
+        shell: bash
+        run: |
+          npx --no-install electron scripts/piecemaker/ui-updates/electron-smoke.mjs
+          npx --no-install electron scripts/piecemaker/ui-updates/electron-smoke.mjs --broken

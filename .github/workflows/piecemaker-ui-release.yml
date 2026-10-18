@@ -1,0 +1,72 @@
+name: PieceMaker Interface Continue
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_tag:
+        description: "Version complète déjà installée (vX.Y.Z)"
+        required: true
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'pwa/**'
+      - 'index.html'
+      - 'vite.config.js'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: piecemaker-ui
+  cancel-in-progress: false
+
+jobs:
+  publish-interface:
+    runs-on: ubuntu-latest
+    environment: ui-updates
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+
+      - name: Resolve runtime
+        env:
+          REQUESTED_RUNTIME: ${{ inputs.runtime_tag }}
+        run: |
+          node --input-type=module -e 'import fs from "node:fs"; const version = JSON.parse(fs.readFileSync("package.json")).version; const tag = process.env.REQUESTED_RUNTIME || `v${version}`; if (!/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error("Tag de version invalide"); fs.appendFileSync(process.env.GITHUB_ENV, `UI_RUNTIME_TAG=${tag}\n`);'
+
+      - name: Require an interface-only change
+        run: node scripts/piecemaker/ui-updates/release.mjs check
+
+      - name: Test updater
+        run: node --test desktop-bootstrap/overlay/electron-piecemaker/ui-updates/*.test.mjs scripts/piecemaker/ui-updates/*.test.mjs desktop-bootstrap/lib/ui-updates.test.mjs
+
+      - run: npm ci
+
+      - name: Check types and frontend tests
+        run: |
+          npm run typecheck
+          npm run test:client
+
+      - name: Build interface
+        run: npm run build:client
+
+      - name: Sign interface package
+        env:
+          PIECEMAKER_UI_SIGNING_KEY: ${{ secrets.PIECEMAKER_UI_SIGNING_KEY }}
+        run: node scripts/piecemaker/ui-updates/release.mjs pack
+
+      - name: Publish the compatible interface channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/piecemaker/ui-updates/publish.mjs
