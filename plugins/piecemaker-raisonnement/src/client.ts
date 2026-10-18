@@ -53,6 +53,10 @@ export function mount(container: HTMLElement, api: Host) {
   let drag: { id: string; x: number; y: number; moved: boolean } | null = null;
   let busy = false;
   let live: ReasoningLogEntry[] | null = null;
+  let pending: ReasoningLogEntry[] = [];
+  let fresh: { key: string; added: boolean } | null = null;
+  let pacing = 0;
+  let finish: (() => void) | null = null;
   let stopped = false;
   let timer = 0;
   let sequence = 0;
@@ -190,7 +194,7 @@ export function mount(container: HTMLElement, api: Host) {
 
   const paintTest = () => {
     const entries = live ?? snapshot?.test?.log ?? [];
-    const view = (entry: ReasoningLogEntry) => `<li class="pmr-entry" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(STEP[entry.step])}</span><strong>${escape(entry.subject)}</strong></div><span class="pmr-entry-text">${escape(entry.text)}</span></li>`;
+    const view = (entry: ReasoningLogEntry) => `<li class="pmr-entry${fresh?.key === entry.key ? fresh.added ? ' is-new' : ' is-updated' : ''}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(STEP[entry.step])}</span><strong>${escape(entry.subject)}</strong></div><span class="pmr-entry-text">${escape(entry.text)}</span></li>`;
     const part = (title: string, lead: string, steps: ReasoningLogEntry['step'][]) => {
       const list = entries.filter((entry) => steps.includes(entry.step));
       return list.length ? `<section class="pmr-part"><h4>${title}</h4><p class="pmr-lead">${lead}</p><ol class="pmr-log" aria-live="polite">${list.map(view).join('')}</ol></section>` : '';
@@ -272,6 +276,15 @@ export function mount(container: HTMLElement, api: Host) {
     paint();
     run().then(apply, showError).finally(() => { busy = false; paint(); });
   };
+  const reveal = () => {
+    const entry = pending.shift();
+    if (!entry || !live) { pacing = 0; finish?.(); return; }
+    const index = live.findIndex((item) => item.key === entry.key);
+    if (index >= 0) live[index] = entry; else live.push(entry);
+    fresh = { key: entry.key, added: index < 0 };
+    if (tab === 'test') { paintTest(); detail.querySelector('.is-new, .is-updated')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    pacing = window.setTimeout(reveal, index < 0 ? 420 : 160);
+  };
   const select = (id: string) => { selected = selected === id ? '' : id; tab = 'detail'; paintGraph(); paint(); };
 
   root.addEventListener('click', (event) => {
@@ -283,14 +296,12 @@ export function mount(container: HTMLElement, api: Host) {
     if (button.hasAttribute('data-refresh')) { serialized = ''; void load(Boolean(snapshot?.demo)); }
     if (button.hasAttribute('data-run-test') && project && !live) {
       live = [];
+      pending = [];
       busy = true;
       paint();
-      runTest(project, (entry) => {
-        if (!live) return;
-        const index = live.findIndex((item) => item.key === entry.key);
-        if (index >= 0) live[index] = entry; else live.push(entry);
-        if (tab === 'test') paintTest();
-      }).then((data) => { live = null; apply(data); }, (error) => { live = null; showError(error); }).finally(() => { busy = false; paint(); });
+      const done = (end: () => void) => { finish = () => { finish = null; fresh = null; live = null; end(); busy = false; paint(); }; if (!pacing && !pending.length) finish(); };
+      runTest(project, (entry) => { pending.push(entry); if (!pacing) reveal(); })
+        .then((data) => done(() => apply(data)), (error) => done(() => showError(error)));
     }
     if (button.dataset.select) select(button.dataset.select);
     if (button.dataset.dismiss && project) act(() => dismissIssue(project, button.dataset.dismiss!, button.hasAttribute('data-restore')));
@@ -349,7 +360,7 @@ export function mount(container: HTMLElement, api: Host) {
   void load();
   timer = window.setTimeout(poll, 2500);
   window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: 'plugin:piecemaker-raisonnement' } }));
-  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); resize.disconnect(); unsubscribe(); container.replaceChildren(); });
+  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); window.clearTimeout(pacing); resize.disconnect(); unsubscribe(); container.replaceChildren(); });
 }
 
 export function unmount(container: HTMLElement) {
