@@ -24,9 +24,9 @@ execFileSync(executable, ['--input-type=module', '-e', `const {generateCertifica
   env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PIECEMAKER_HOME: clientComponents }, stdio: 'inherit', timeout: 120000,
 });
 for (const certificate of [path.join(root, 'desktop-bootstrap/certs/piecemaker-publisher.cer'), path.join(clientComponents, 'certs/piecemaker-ca.crt')]) {
-  execFileSync('certutil.exe', ['-f', '-user', '-addstore', 'Root', certificate], { stdio: 'inherit', timeout: 30000 });
+  execFileSync('certutil.exe', ['-f', '-addstore', 'Root', certificate], { stdio: 'inherit', timeout: 30000 });
 }
-execFileSync('certutil.exe', ['-f', '-user', '-addstore', 'TrustedPublisher', path.join(root, 'desktop-bootstrap/certs/piecemaker-publisher.cer')], { stdio: 'inherit', timeout: 30000 });
+execFileSync('certutil.exe', ['-f', '-addstore', 'TrustedPublisher', path.join(root, 'desktop-bootstrap/certs/piecemaker-publisher.cer')], { stdio: 'inherit', timeout: 30000 });
 async function waitFor(action, name, timeout = 240000) {
   const deadline = Date.now() + timeout;
   let error;
