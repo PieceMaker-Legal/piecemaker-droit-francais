@@ -50,11 +50,13 @@ export async function installUiUpdates({ app, session, LocalServerController, ap
   }
 
   const observeContents = (_event, contents) => {
+    let startupException = false;
     const belongsToApp = () => {
       try { return new URL(contents.getURL()).origin === origin; } catch { return false; }
     };
     contents.on('did-start-navigation', (_navigation, url, _inPlace, isMainFrame) => {
       if (!store?.trial || !isMainFrame || new URL(url).origin !== origin) return;
+      startupException = false;
       trialContents = contents;
       if (trialTimer) return;
       trialTimer = setTimeout(() => { void rollback(); }, 45000);
@@ -62,6 +64,10 @@ export async function installUiUpdates({ app, session, LocalServerController, ap
     });
     contents.on('did-finish-load', async () => {
       if (!store?.trial || !belongsToApp()) return;
+      if (startupException) {
+        setImmediate(() => { void rollback(); });
+        return;
+      }
       try {
         const rendered = await contents.executeJavaScript(`new Promise(resolve => {
           let attempts = 0;
@@ -71,7 +77,9 @@ export async function installUiUpdates({ app, session, LocalServerController, ap
           }, 200);
         })`);
         if (!rendered) return rollback();
-        if (!contents.isDestroyed() && belongsToApp()) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (startupException) return rollback();
+        if (store.trial && !contents.isDestroyed() && belongsToApp()) {
           await store.confirm();
           clearTimeout(trialTimer);
         }
@@ -84,6 +92,9 @@ export async function installUiUpdates({ app, session, LocalServerController, ap
     });
     contents.on('render-process-gone', () => {
       if (belongsToApp()) void rollback();
+    });
+    contents.on('console-message', (event) => {
+      if (event.level === 'error' && /^Uncaught\b/.test(event.message) && belongsToApp()) startupException = true;
     });
   };
   app.on('web-contents-created', observeContents);

@@ -12,7 +12,8 @@ import { archiveHash } from '../../../desktop-bootstrap/overlay/electron-piecema
 
 const root = mkdtempSync(path.join(os.tmpdir(), 'pm-ui-electron-'));
 app.setPath('userData', path.join(root, 'browser-profile'));
-const broken = process.argv.includes('--broken');
+const startupError = process.argv.includes('--startup-error');
+const broken = process.argv.includes('--broken') || startupError;
 const sockets = new Set();
 const backend = createServer(async (request, response) => {
   if (request.url === '/api/echo') {
@@ -56,7 +57,9 @@ async function run() {
     await fs.writeFile(path.join(root, 'electron-piecemaker/ui-update-runtime.json'), JSON.stringify(config));
     const entries = [
       ['index.html', Buffer.from('<div id="root"></div><script type="module" src="/assets/main.js"></script>').toString('base64')],
-      ['assets/main.js', Buffer.from(broken ? 'throw new Error("Simulated render failure")' : 'document.getElementById("root").innerHTML = "<p>Updated interface</p>"').toString('base64')],
+      ['assets/main.js', Buffer.from(startupError
+        ? 'document.getElementById("root").innerHTML = "<p>Loading</p>"; throw new Error("Simulated startup exception")'
+        : broken ? 'throw new Error("Simulated render failure")' : 'document.getElementById("root").innerHTML = "<p>Updated interface</p>"').toString('base64')],
     ];
     const archive = gzipSync(JSON.stringify(entries));
     const sha256 = archiveHash(archive);
