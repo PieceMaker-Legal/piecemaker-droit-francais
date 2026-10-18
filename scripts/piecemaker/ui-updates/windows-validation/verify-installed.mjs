@@ -105,7 +105,18 @@ try {
   assert.equal(state.highest, 0);
   assert.ok(!state.current && !state.pending && !state.trial);
   await fs.writeFile(path.join(output, '02-restarted.png'), Buffer.from((await page.call('Page.captureScreenshot')).data, 'base64'));
-  await fs.writeFile(path.join(output, 'installation-verification.json'), JSON.stringify({ installed: true, initialInterface: true, remoteChannelEmbedded: config.feed, updateNotPublished: true, accountCreated: true, sessionRetained: true, localCertificateGenerated: true, localCertificateTrusted: true, anonymizerActive: status.enabled && restarted.enabled, runtime: config.runtime }, null, 2));
+  const preserved = path.join(os.homedir(), '.piecemaker-droit-francais', 'validation-sentinel.txt');
+  await fs.mkdir(path.dirname(preserved), { recursive: true });
+  await fs.writeFile(preserved, 'untouched');
+  const uninstall = await evaluate(page, 'window.piecemakerDesktop.uninstall()');
+  assert.equal(uninstall.scheduled, true);
+  page.close();
+  await waitFor(async () => {
+    try { await fs.access(executable); return false; } catch (error) { if (error.code === 'ENOENT') return child.exitCode !== null; throw error; }
+  }, 'Native validation uninstaller', 90000);
+  assert.equal(await fs.readFile(preserved, 'utf8'), 'untouched');
+  await fs.access(path.join(directory, 'app-data/auth.db'));
+  await fs.writeFile(path.join(output, 'installation-verification.json'), JSON.stringify({ installed: true, initialInterface: true, remoteChannelEmbedded: config.feed, updateNotPublished: true, accountCreated: true, sessionRetained: true, localCertificateGenerated: true, localCertificateTrusted: true, anonymizerActive: status.enabled && restarted.enabled, nativeUninstallVerified: true, productionDataUntouched: true, runtime: config.runtime }, null, 2));
   console.log('FULL INSTALLATION PASS: embedded remote channel, fresh local CA, active proxy, account and restart; no UI update published.');
 } finally {
   if (page && child?.exitCode === null) await stop(page).catch(() => {});
