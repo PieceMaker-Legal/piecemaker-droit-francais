@@ -231,7 +231,7 @@ export async function verifyReasoning(input: {
       const title = String(source?.titre ?? basis.source);
       if (source && check?.kind && check.kind !== 'decision') source.en_vigueur = firstDate && check.from ? inForce(firstDate, check.from, check.to) : null;
       if (firstDate && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${firstDate} ; cite la version en vigueur à la date d’application`, `${title} : la version citée n’était pas en vigueur au ${day(firstDate)}.`, `#source:${basis.source}`);
-      if (check?.kind === 'texte' && !basis.applicabilite) add('manque', `${place}.applicabilite`, 'justifie pourquoi ce texte s’applique au dossier (champ d’application, qualité des parties, date) : ajoute applicabilite: `…`', `${title} : l’agent n’a pas justifié applicabilite ce texte s’applique au dossier.`, `#source:${basis.source}`);
+      if (check?.kind === 'texte' && !basis.applicabilite) add('manque', `${place}.applicabilite`, 'justifie pourquoi ce texte s’applique au dossier (champ d’application, qualité des parties, date) : ajoute applicabilite: `…`', `${title} : l’agent n’a pas justifié pourquoi ce texte s’applique au dossier.`, `#source:${basis.source}`);
     });
   }
   for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = STATUS(statuses.get(name) ?? null); }
