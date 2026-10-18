@@ -161,6 +161,24 @@ test('le test se déroule ligne par ligne : sources, pièces, faits, termes, ess
   });
   assert.ok(seen.indexOf('source:en cours') < seen.indexOf('source:ok'));
   assert.deepEqual([...new Set(result.log.map((entry) => entry.step))], ['source', 'pièce', 'fait', 'condition', 'essai', 'réponse']);
-  assert.match(result.log.find((entry) => entry.key === 'fait:retard_de_livraison')!.text, /Prouvé par Bon de livraison \(fictif\)/);
+  assert.match(result.log.find((entry) => entry.key === 'fait:retard_de_livraison')!.text, /Prouvé par Bon de livraison \(fictif\) : « /);
   assert.match(result.log.find((entry) => entry.step === 'réponse')!.text, /En suspens : dépend de force majeure et grève nationale/);
+});
+
+test('seules les parties sociétés du dossier passent au registre et au BODACC', async () => {
+  const checked: string[] = [];
+  const result = await verifyReasoning({
+    code: EXAMPLE_CODE, cwd: '/dossier-fictif', online: true,
+    connectors: { ...connectors(), registry: async ({ name }) => { checked.push(String(name)); return { found: true, status: 'active' }; }, bodacc: async () => ['procédure collective : redressement judiciaire ouvert le 02/05/2025'] },
+    reliability: new Map(), nature: () => null, dismissed: new Set(),
+    persons: [
+      { label: 'Société Beta SARL', kind: 'company', name: null, siren: '123456789', side: 'adversaire' },
+      { label: 'Société Exemple SAS', kind: 'company', name: null, siren: null, side: 'client' },
+      { label: 'Société Tiers SA', kind: 'company', name: null, siren: '987654321', side: 'tiers' },
+    ],
+  });
+  assert.deepEqual(checked.sort(), ['Société Beta SARL', 'Société Exemple SAS']);
+  assert.ok(result.issues.some((issue) => issue.avocat === 'Société Beta SARL : le BODACC signale procédure collective : redressement judiciaire ouvert le 02/05/2025.'));
+  assert.ok(result.issues.some((issue) => issue.avocat?.startsWith('Société Exemple SAS : SIREN non renseigné')));
+  assert.equal(result.log.find((entry) => entry.key === 'bodacc:Société Beta SARL')?.status, 'alerte');
 });
