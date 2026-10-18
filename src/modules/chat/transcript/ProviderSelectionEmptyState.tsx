@@ -24,6 +24,7 @@ import {
 } from "@/shared/ui";
 import ModelGroupList, { type ModelGroup } from "@/modules/chat/composer/ModelGroupList";
 import ModelLibraryPanel from "@/modules/chat/modals/ModelLibraryPanel";
+import { LegalCodeIntro } from "@/piecemaker/legal-code";
 import { writeSelectedProvider } from '@/shared/selectedProvider';
 
 const PROVIDER_META: { id: LLMProvider; name: string }[] = [
@@ -172,6 +173,7 @@ export default function ProviderSelectionEmptyState({
     return (
       <div className="flex h-full items-center justify-center px-4">
         <div className="w-full max-w-[34.25rem]">
+          <LegalCodeIntro />
           <div className="mb-8 text-center">
             <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
               {t("providerSelection.title")}

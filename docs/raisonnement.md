@@ -77,3 +77,7 @@ Les tables des versions précédentes (`pm_reasoning_results`, `_nodes`, `_relat
 - `server/piecemaker/vendor/mcp/piecemaker/server.mjs` : outil `raisonnement`, relayé à `POST /api/piecemaker/local/reasoning` (boucle locale seulement).
 - `server/piecemaker/vendor/mcp/legifrance/tools/decision_history.py` : `controle_historique`, appelé par `consulter_decision`.
 - `plugins/piecemaker-raisonnement/` : volet.
+
+## Legal Code (beta)
+
+Bouton « Legal Code » sous « Nouvelle session » (`src/piecemaker/legal-code/`) : ouvre une session vierge dont le composeur est prérempli par `/legal-code `, avec un encart qui explique le fonctionnement tant que la commande est dans le brouillon. La skill `legal-code` (`server/piecemaker/vendor/piecemaker-plugin/skills/legal-code/`, déclarée dans chaque dossier) porte les instructions de l’agent ; le reste de la session est une session classique. Rien n’est envoyé au modèle sans action de l’avocat.

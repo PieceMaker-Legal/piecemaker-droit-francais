@@ -101,5 +101,5 @@ test('un répertoire à la place d’un lien provider est remplacé', () => {
 test('un dossier inexistant est journalisé sans lever d’erreur', (context) => {
   const warn = context.mock.method(console, 'warn', () => undefined);
   declareBundledSkills(path.join(temporaryFolder(), 'absent'));
-  assert.equal(warn.mock.callCount(), 3);
+  assert.equal(warn.mock.callCount(), 4);
 });
