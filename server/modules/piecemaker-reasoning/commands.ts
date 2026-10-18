@@ -375,6 +375,13 @@ export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel
     const conditions = new Map(snapshot.conditions.filter((item) => item.scope === entry.scope).map((item) => [item.id, item]));
     const facts = new Map(snapshot.facts.filter((item) => item.scope === entry.scope).map((item) => [item.id, item]));
     lines.push(`${entry.scope} — ${entry.question}`, `Réponse : ${ANSWER[entry.status]}${entry.objective === null ? '' : ` · objectif ${entry.objective ? 'oui' : 'non'} : ${entry.objectiveStatus}`}${entry.referenceDate ? ` · date de référence ${entry.referenceDate}` : ''}`);
+    const resultId = `${entry.scope}.${entry.result}`;
+    const grounds = [...new Set(own.filter((item) => item.role === 'fondement').map((item) => item.name))];
+    const defences = [...new Set(own.filter((item) => item.role === 'moyen_adverse').map((item) => item.name))];
+    const combination = [
+      `${grounds.length ? grounds.join(' ou ') : 'aucun fondement'}${defences.length ? `, sauf si ${defences.join(' ou ')} (alors non)` : ''}`,
+      ...(grounds.length > 1 ? ['(fondements alternatifs : un seul suffit ; des conditions cumulatives se réunissent par « et » dans une même condition)'] : []),
+    ];
     const seen = new Set<string>();
     const reached = new Set<string>();
     const tree: string[] = [];
@@ -397,13 +404,15 @@ export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel
       const entries = modelConditions.get(id) ?? [];
       const role = entries.find((item) => item.role !== 'condition')?.role ?? 'condition';
       const signature = entries[0] ? `${entries[0].parametres ? ` (${entries[0].parametres})` : ''}${entries[0].type ? ` [${entries[0].type}]` : ''}` : '';
-      const label = condition.label !== condition.variable ? ` — ${condition.label}` : '';
+      const derived = id === resultId && !entries.length && (grounds.length > 0 || defences.length > 0);
+      const label = !derived && condition.label !== condition.variable ? ` — ${condition.label}` : '';
       if (seen.has(id)) { tree.push(`${prefix}${condition.variable} : ${STATUS[condition.status]} ${MARK[condition.status]} (voir plus haut)`); return; }
       seen.add(id);
       const status = entries[0]?.parametres ? 'fonction' : entries[0]?.type ? (condition.value === null ? `${STATUS[condition.status]} ?` : `${shownValue(condition.value, entries[0].type)} ${condition.status === 'bloquée' ? MARK.bloquée : '✓'}`) : `${STATUS[condition.status]} ${MARK[condition.status]}`;
-      tree.push(`${prefix}${ROLE[role]}${condition.variable}${signature} : ${status}${label}${full ? '' : cited(condition.sources, condition.label)}${condition.review ? ` · ${condition.review.status} par l'avocat` : ''}`);
-      const rules = entries.map(ruleText);
-      if (full) {
+      tree.push(`${prefix}${ROLE[role]}${condition.variable}${signature} : ${status}${label}${full || derived ? '' : cited(condition.sources, condition.label)}${condition.review ? ` · ${condition.review.status} par l'avocat` : ''}`);
+      const rules = derived ? combination : entries.map(ruleText);
+      if (derived) tree.push(...rules.map((rule, index) => `${childPrefix}  ${index ? '' : '= '}${rule}`), ...(full ? condition.issues.map((issue) => `${childPrefix}  ⚠ ${issue}`) : []));
+      else if (full) {
         if (rules.length) tree.push(...rules.map((rule) => `${childPrefix}  règle : ${rule}`));
         else if (condition.code) tree.push(...condition.code.trim().split('\n').filter((line) => !line.trim().startsWith('#[')).map((line) => `${childPrefix}  ${line.trim()}`));
         tree.push(...citations(condition.sources, `${childPrefix}  `));
@@ -424,7 +433,9 @@ export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel
     const assertions = own.filter((item) => item.role === 'assertion');
     if (assertions.length) tree.push('Assertions :', ...assertions.map((item) => `- ${item.name} — ${item.label} : ${item.rule}`));
     lines.push('Arbre :', ...tree);
-    if (entry.voies.length > 1) lines.push('Voies :', ...entry.voies.map((voie) => `- ${voie.favorable ? 'pour' : 'contre'} · ${voie.status} — ${voie.label}${voie.toProve.length ? ` · à prouver : ${voie.toProve.map((id) => id.slice(entry.scope.length + 1)).join(', ')}` : ''}${full && voie.weaknesses.length ? ` · faiblesses : ${voie.weaknesses.join(' ')}` : ''}`));
+    const standing = entry.voies.filter((voie) => !voie.favorable && voie.status !== 'fermée').map((voie) => voie.conditions[0]?.slice(entry.scope.length + 1) ?? voie.label);
+    const held = (voie: (typeof entry.voies)[number]) => (voie.favorable && voie.status === 'ouverte' && entry.objectiveStatus !== 'atteint' && standing.length ? ` · ne suffit pas tant que ${standing.join(', ')} n'est pas écarté` : '');
+    if (entry.voies.length > 1) lines.push('Voies :', ...entry.voies.map((voie) => `- ${voie.favorable ? 'pour' : 'contre'} · ${voie.status}${held(voie)} — ${voie.label}${voie.toProve.length ? ` · à prouver : ${voie.toProve.map((id) => id.slice(entry.scope.length + 1)).join(', ')}` : ''}${full && voie.weaknesses.length ? ` · faiblesses : ${voie.weaknesses.join(' ')}` : ''}`));
     const todo = [
       ...entry.issues,
       ...[...conditions.values()].filter((item) => item.variable !== entry.result).flatMap((item) => item.issues.map((issue) => `${item.variable} : ${issue}`)),
@@ -436,8 +447,10 @@ export function describeState(snapshot: ReasoningSnapshot, model: ReasoningModel
   const diagnostics = snapshot.diagnostics.filter((line) => !line.startsWith('Avocat · '));
   if (diagnostics.length) lines.push('Erreurs du programme :', ...diagnostics.map((line) => `- ${line}`), '');
   if (withTest && snapshot.test) {
-    const alerts = snapshot.test.findings.filter((finding) => finding.level === 'alerte');
-    lines.push(`Dernier test (${snapshot.test.at.slice(0, 16).replace('T', ' ')}) : ${alerts.length ? `${alerts.length} alerte(s)` : 'aucune alerte'}.`, ...alerts.map((finding) => `- ${finding.subject} : ${finding.text}`));
+    const alerts = snapshot.test.findings.filter((finding) => finding.level === 'alerte' && finding.topic !== 'registre');
+    const registry = snapshot.test.findings.filter((finding) => finding.level === 'alerte' && finding.topic === 'registre');
+    lines.push(`Dernier test (${snapshot.test.at.slice(0, 16).replace('T', ' ')}) : ${alerts.length ? `${alerts.length} alerte(s) sur le raisonnement` : 'aucune alerte sur le raisonnement'}.`, ...alerts.map((finding) => `- ${finding.subject} : ${finding.text}`));
+    if (registry.length) lines.push('Sociétés citées dans le dossier (hors raisonnement) :', ...registry.map((finding) => `- ${finding.subject} : ${finding.text}`));
   } else if (withTest) lines.push('Pas encore testé : commande tester une fois la théorie posée.');
   if (!full) lines.push('Détail des pièces, citations et règles : commande etat avec vue complete.');
   return lines.join('\n').trim();

@@ -578,7 +578,7 @@ export function evaluateReasoning(program: CatalaProgram, sources: Map<string, R
       const review = items.get(id)?.review;
       if (!isFunction) {
         if (!own.length) issues.push(`Aucune règle ne définit ${entry.name}.`);
-        if (strength === 'doctrine') issues.push('Fondée sur la seule doctrine : à confirmer par un texte ou une décision.');
+        if (strength === 'doctrine') issues.push(`Fondée sur un document du dossier (${usable.map((sourceId) => sources.get(sourceId)!.title).join(' ; ')}), non sur un texte ou une décision : citer le texte ou la décision qui pose la condition.`);
         if (review?.status === 'écarté') issues.push('Écartée par l’avocat.');
       }
       const dependsOn = [...new Set(own.flatMap((rule) => dependencies(rule)))].map((name) => `${scope.scope}.${name}`);
@@ -638,7 +638,7 @@ export function evaluateReasoning(program: CatalaProgram, sources: Map<string, R
       const branch = members.map((id) => conditions.get(id)).filter((entry): entry is ReasoningCondition => Boolean(entry));
       const kinds = [...state.sources.map((id) => STRENGTH[sources.get(id)!.kind]), ...branch.flatMap((entry) => (entry.strength ? [entry.strength] : []))];
       const weaknesses = [
-        ...branch.filter((entry) => entry.strength === 'doctrine').map((entry) => `${entry.label} : fondée sur la seule doctrine.`),
+        ...branch.filter((entry) => entry.strength === 'doctrine').map((entry) => `${entry.label} : fondée sur un document du dossier, non sur un texte ou une décision.`),
         ...branch.flatMap((entry) => entry.issues.filter((issue) => issue.includes('à examiner'))),
         ...members.map((id) => facts.get(id)).filter((fact): fact is ReasoningFact => fact?.status === 'établi' && (fact.force === 'indice' || fact.force === 'commencement_de_preuve')).map((fact) => `${fact.variable} : ${fact.force === 'indice' ? 'simple indice' : 'commencement de preuve'}.`),
       ];

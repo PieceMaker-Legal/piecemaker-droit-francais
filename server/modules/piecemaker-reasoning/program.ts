@@ -255,7 +255,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
       const registry = await Promise.all(list.map((company) => watch(`registre:${company.label}`, 'registre', company.label, company.siren ? 'Registre Public et BODACC…' : 'Recherche au Registre Public…', 'Registre Public consulté.', (findings) => checkCompany(company, findings))));
       const evaluated = rebuild(id, previous, loadModel(id), checked.map((entry) => entry.value), [], null);
       for (const entry of resolution(evaluated)) send(entry);
-      const findings = [...programFindings(evaluated), ...checked.flatMap((entry) => entry.findings), ...registry.flatMap((entry) => entry.findings)];
+      const findings = [...programFindings(evaluated), ...checked.flatMap((entry) => entry.findings), ...registry.flatMap((entry) => entry.findings.map((finding) => ({ ...finding, topic: 'registre' as const })))];
       const test: ReasoningTestReport = { at: new Date().toISOString(), findings: [...findings.filter((finding) => finding.level === 'alerte'), ...findings.filter((finding) => finding.level === 'ok')], log: [...new Map(log.map((entry) => [entry.key, entry])).values()] };
       const snapshot = { ...evaluated, test };
       database().prepare('UPDATE pm_reasoning_programs SET snapshot_json=? WHERE project_id=?').run(JSON.stringify(snapshot), id);
@@ -330,13 +330,15 @@ function resolution(snapshot: ReasoningSnapshot): ReasoningLogEntry[] {
 
 function describeTest(test: ReasoningTestReport) {
   const alerts = test.findings.filter((finding) => finding.level === 'alerte');
-  const subjects = [...new Set(alerts.map((finding) => finding.subject))];
+  const grouped = (list: ReasoningFinding[]) => [...new Set(list.map((finding) => finding.subject))].flatMap((subject) => {
+    const own = list.filter((finding) => finding.subject === subject);
+    return own.length === 1 ? [`⚠ ${subject} : ${own[0].text}`] : [`⚠ ${subject} :`, ...own.map((finding) => `  - ${finding.text}`)];
+  });
+  const registry = alerts.filter((finding) => finding.topic === 'registre');
   return [
     `Test : ${alerts.length ? `${alerts.length} alerte(s)` : 'aucune alerte'} · ${test.findings.length - alerts.length} vérification(s) conforme(s).`,
-    ...subjects.flatMap((subject) => {
-      const own = alerts.filter((finding) => finding.subject === subject);
-      return own.length === 1 ? [`⚠ ${subject} : ${own[0].text}`] : [`⚠ ${subject} :`, ...own.map((finding) => `  - ${finding.text}`)];
-    }),
+    ...grouped(alerts.filter((finding) => finding.topic !== 'registre')),
+    ...(registry.length ? ['Sociétés citées dans le dossier (hors raisonnement) :', ...grouped(registry)] : []),
   ].join('\n');
 }
 

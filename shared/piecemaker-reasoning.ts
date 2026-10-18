@@ -87,7 +87,7 @@ export type ReasoningQuestion = {
   voies: ReasoningVoie[];
 };
 
-export type ReasoningFinding = { level: 'ok' | 'alerte'; subject: string; text: string };
+export type ReasoningFinding = { level: 'ok' | 'alerte'; subject: string; text: string; topic?: 'registre' };
 
 export type ReasoningLogEntry = { key: string; step: 'question' | 'source' | 'registre' | 'fait' | 'règle' | 'vigueur' | 'conclusion' | 'réponse'; status: 'en cours' | 'ok' | 'alerte' | 'neutre'; subject: string; text: string };
 
