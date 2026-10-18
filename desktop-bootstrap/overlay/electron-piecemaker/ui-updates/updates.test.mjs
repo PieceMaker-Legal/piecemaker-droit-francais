@@ -193,3 +193,39 @@ test('local delivery preserves origin, APIs, HTTP methods and unrelated traffic'
   assert.equal((await handler(request('/assets/%5csecret'))).status, 400);
   assert.match(await (await handler(request('/sw.js'))).text(), /skipWaiting/);
 });
+
+test('temporary Windows file locks cannot prevent persisting a rollback', async (t) => {
+  const f = await fixture(t);
+  const first = await f.open();
+  await first.check();
+  const trial = await f.open();
+  const rename = fs.rename;
+  let locks = 0;
+  t.mock.method(fs, 'rename', async (source, target) => {
+    if (target === path.join(f.directory, 'state.json') && locks++ < 2) {
+      throw Object.assign(new Error('Temporary Windows file lock'), { code: locks === 1 ? 'EPERM' : 'EBUSY' });
+    }
+    return rename(source, target);
+  });
+  await trial.rollback();
+  assert.equal(trial.files, null);
+  const saved = JSON.parse(await fs.readFile(path.join(f.directory, 'state.json')));
+  assert.equal(saved.trial, false);
+  assert.equal(saved.current, null);
+  assert.equal(locks, 3);
+});
+
+test('a permanent rename error preserves the last complete state file', async (t) => {
+  const f = await fixture(t);
+  const store = await f.open();
+  await store.check();
+  const stateFile = path.join(f.directory, 'state.json');
+  const before = await fs.readFile(stateFile, 'utf8');
+  const trial = await f.open();
+  const active = await fs.readFile(stateFile, 'utf8');
+  assert.notEqual(active, before);
+  t.mock.method(fs, 'rename', async () => { throw Object.assign(new Error('Read-only filesystem'), { code: 'EROFS' }); });
+  await assert.rejects(trial.rollback(), { code: 'EROFS' });
+  assert.equal(await fs.readFile(stateFile, 'utf8'), active);
+  assert.equal((await fs.readdir(f.directory)).some((name) => name.endsWith('.tmp')), false);
+});

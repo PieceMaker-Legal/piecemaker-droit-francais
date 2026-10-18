@@ -16,7 +16,15 @@ async function writeAtomic(file, content) {
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {
     await fs.writeFile(temporary, content, { mode: 0o600 });
-    await fs.rename(temporary, file);
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await fs.rename(temporary, file);
+        break;
+      } catch (error) {
+        if (attempt >= 7 || !['EPERM', 'EACCES', 'EBUSY'].includes(error.code)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+      }
+    }
   } finally {
     await fs.rm(temporary, { force: true });
   }
