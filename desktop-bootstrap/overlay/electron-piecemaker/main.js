@@ -26,18 +26,17 @@ function openLocalOnce(window) {
   if (window.piecemakerPreparingRuntime) return;
   if (alreadyOpened) return;
   alreadyOpened = true;
-  window.webContents.executeJavaScript(OPEN_LOCAL_EXPRESSION, true).catch(() => {
+  window.webContents.executeJavaScript(OPEN_LOCAL_EXPRESSION, true).then((opened) => {
+    if (!opened) alreadyOpened = false;
+  }).catch(() => {
     alreadyOpened = false;
   });
 }
 
 function adoptWindow(window) {
   if (alreadyOpened) return;
-  if (window.webContents.isLoading()) {
-    window.webContents.once('did-finish-load', () => openLocalOnce(window));
-    return;
-  }
-  openLocalOnce(window);
+  window.webContents.on('did-finish-load', () => openLocalOnce(window));
+  if (!window.webContents.isLoading()) openLocalOnce(window);
 }
 
 app.on('browser-window-created', (_event, window) => adoptWindow(window));
