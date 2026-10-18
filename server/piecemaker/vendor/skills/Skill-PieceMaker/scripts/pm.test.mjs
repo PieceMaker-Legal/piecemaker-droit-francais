@@ -187,3 +187,7 @@ test('raisonnement transmet la commande et ses champs à reasoningFn', async () 
   await assert.rejects(run(['raisonnement', 'inconnue'], { cwd: dossier, deps }));
   fs.rmSync(dossier, { recursive: true, force: true });
 });
+
+test('pm refuse de tourner depuis le dossier de la skill', async () => {
+  await assert.rejects(run(['raisonnement', 'etat'], { cwd: HERE, deps: {} }), /dossier de l’affaire/);
+});
