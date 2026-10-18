@@ -1,8 +1,9 @@
 import { Scale } from 'lucide-react';
 
+import { useProjectMainState } from '@/modules/project-workspace/context/ProjectsStateContext';
 import type { Project } from '@/shared/types';
 
-import { prefillLegalCode } from './legalCode';
+import { startLegalCode } from './legalCode';
 
 type LegalCodeButtonProps = {
   project: Project;
@@ -10,13 +11,15 @@ type LegalCodeButtonProps = {
 };
 
 export function LegalCodeButton({ project, onNewSession }: LegalCodeButtonProps) {
+  const { newSessionTrigger } = useProjectMainState();
+
   return (
     <button
       type="button"
       className="flex h-8 w-full items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent"
       onClick={() => {
         onNewSession(project);
-        prefillLegalCode(project.projectId);
+        startLegalCode(project.projectId, newSessionTrigger + 1);
       }}
     >
       <Scale className="h-3 w-3" />
