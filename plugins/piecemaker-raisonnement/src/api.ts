@@ -4,10 +4,6 @@ export function loadReasoning(projectPath: string | null, example = false): Prom
   return request<ReasoningSnapshot>(`/api/piecemaker/reasoning${example ? '/example' : `?projectPath=${encodeURIComponent(projectPath ?? '')}`}`);
 }
 
-export function verifyReasoning(projectPath: string): Promise<ReasoningSnapshot> {
-  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/verify', { projectPath });
-}
-
 export function dismissIssue(projectPath: string, id: string, restore = false): Promise<ReasoningSnapshot> {
   return request<ReasoningSnapshot>('/api/piecemaker/reasoning/dismiss', { projectPath, id, restore });
 }

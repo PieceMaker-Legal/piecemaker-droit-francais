@@ -44,38 +44,38 @@ test('l’exemple fictif est à établir et désigne les faits décisifs', async
   const result = await verify(EXAMPLE_CODE);
   assert.deepEqual(texts(result, 'erreur'), []);
   assert.equal(at(result.annotated, 'questions[0].statut'), 'à établir');
-  assert.deepEqual(at(result.annotated, 'questions[0].decisifs'), ['force_majeure', 'greve_nationale']);
+  assert.deepEqual(at(result.annotated, 'questions[0].decisifs'), ['force_majeure', 'grève_nationale']);
   assert.deepEqual(at(result.annotated, 'questions[0].personnes'), ['Société Beta SARL']);
-  assert.equal(at(result.annotated, 'penalite_stipulee.si[0].statut'), 'acquis');
-  assert.equal(at(result.annotated, 'greve.si[0].l_une[1].statut'), 'exclu');
+  assert.equal(at(result.annotated, 'pénalité_stipulée.si[0].statut'), 'acquis');
+  assert.equal(at(result.annotated, 'grève.si[0].l_une[1].statut'), 'exclu');
   assert.equal(at(result.annotated, 'force_majeure_contractuelle.si[0].l_une[0].decisif'), true);
   assert.equal(at(result.annotated, 'bilan.essais'), '1/1');
-  assert.equal(at(result.annotated, 'penalite_encourue.si[0].selon[0].titre'), 'Code civil fictif, article 1231-5');
-  assert.equal(at(result.annotated, 'penalite_encourue.si[0].selon[0].en_vigueur'), true);
-  assert.match(describeReasoning(result), /decisifs: \[`force_majeure`, `greve_nationale`\]/);
+  assert.equal(at(result.annotated, 'pénalité_encourue.si[0].selon[0].titre'), 'Code civil fictif, article 1231-5');
+  assert.equal(at(result.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
+  assert.match(describeReasoning(result), /decisifs: \[`force_majeure`, `grève_nationale`\]/);
 });
 
 test('toutes les feuilles établies : la réponse est acquise ; la preuve de l’exception l’exclut', async () => {
   const closed = EXAMPLE_CODE
     .replace("{ condition: 'force_majeure' }", "{ condition: 'force_majeure', contredit: [{ piece: 'pieces/07_courriel.md', citation: `a duré deux jours` }] }")
-    .replace("{ condition: 'greve_nationale' }", "{ condition: 'greve_nationale', contredit: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }");
+    .replace("{ condition: 'grève_nationale' }", "{ condition: 'grève_nationale', contredit: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }");
   assert.equal(at((await verify(closed)).annotated, 'questions[0].statut'), 'acquis');
-  const excused = EXAMPLE_CODE.replace("{ condition: 'greve_nationale' }", "{ condition: 'greve_nationale', preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }");
+  const excused = EXAMPLE_CODE.replace("{ condition: 'grève_nationale' }", "{ condition: 'grève_nationale', preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }");
   assert.equal(at((await verify(excused)).annotated, 'questions[0].statut'), 'exclu');
 });
 
 test('une citation à la ponctuation près est validée et remplacée par l’original ; une citation fausse est une erreur', async () => {
   const comma = await verify(EXAMPLE_CODE.replace('`Sauf inexécution définitive`', '`Sauf, inexécution définitive`'));
-  assert.equal(at(comma.annotated, 'penalite_encourue.si[1].selon[0].corrigee'), true);
-  assert.equal(at(comma.annotated, 'penalite_encourue.si[1].selon[0].citation'), 'Sauf inexécution définitive');
+  assert.equal(at(comma.annotated, 'pénalité_encourue.si[1].selon[0].corrigee'), true);
+  assert.equal(at(comma.annotated, 'pénalité_encourue.si[1].selon[0].citation'), 'Sauf inexécution définitive');
   assert.match(comma.code, /`Sauf inexécution définitive`/);
   const wrong = await verify(EXAMPLE_CODE.replace('`Sauf inexécution définitive`', '`Sauf exécution partielle`'));
-  assert.match(texts(wrong, 'erreur').join('\n'), /penalite_encourue\.si\[1\]\.selon\[0\] : citation introuvable/);
+  assert.match(texts(wrong, 'erreur').join('\n'), /pénalité_encourue\.si\[1\]\.selon\[0\] : citation introuvable/);
 });
 
 test('la vigueur est une condition : absente c’est un manque, fausse une erreur, dépassée la condition est exclue', async () => {
   const missing = await verify(EXAMPLE_CODE.replace("débiteur est mis en demeure`, vigueur: { debut: '2016-10-01', fin: null }", 'débiteur est mis en demeure`'));
-  assert.match(texts(missing, 'manque').join('\n'), /penalite_encourue\.si\[0\]\.selon\[0\]\.vigueur : vigueur non renseignée.*debut '2016-10-01'/);
+  assert.match(texts(missing, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.vigueur : vigueur non renseignée.*debut '2016-10-01'/);
   assert.deepEqual(texts(missing, 'erreur'), []);
   const differs = await verify(EXAMPLE_CODE.replace("débiteur est mis en demeure`, vigueur: { debut: '2016-10-01'", "débiteur est mis en demeure`, vigueur: { debut: '2016-02-10'"));
   assert.match(texts(differs, 'erreur').join('\n'), /vigueur différente de la version citée : debut '2016-10-01'/);
@@ -97,9 +97,9 @@ test('une condition sans source, un terme non défini, une boucle et un essai no
 });
 
 test('un essai rejoue le droit seul et signale un résultat contraire à l’attendu', async () => {
-  const result = await verify(EXAMPLE_CODE.replace('attendu: { penalite_encourue: faux }', 'attendu: { penalite_encourue: vrai }'));
+  const result = await verify(EXAMPLE_CODE.replace('attendu: { pénalité_encourue: faux }', 'attendu: { pénalité_encourue: vrai }'));
   assert.equal(at(result.annotated, 'essais[0].conforme'), false);
-  assert.match(texts(result, 'erreur').join('\n'), /essais\[0\] : essai non conforme : obtenu penalite_encourue = faux/);
+  assert.match(texts(result, 'erreur').join('\n'), /essais\[0\] : essai non conforme : obtenu pénalité_encourue = faux/);
 });
 
 test('une source d’un autre droit est acceptée mais signalée comme non vérifiable', async () => {
@@ -110,8 +110,8 @@ test('une source d’un autre droit est acceptée mais signalée comme non véri
 
 test('une pièce non fiable ne prouve rien ; une pièce non évaluée est signalée', async () => {
   const result = await verify(EXAMPLE_CODE, { reliability: new Map([['pieces/06_mise_en_demeure.md', false]]) });
-  assert.equal(at(result.annotated, 'penalite_encourue.si[1].l_une[0].statut'), 'à établir');
-  assert.equal(at(result.annotated, 'penalite_encourue.si[1].l_une[0].preuve[0].fiable'), false);
+  assert.equal(at(result.annotated, 'pénalité_encourue.si[1].l_une[0].statut'), 'à établir');
+  assert.equal(at(result.annotated, 'pénalité_encourue.si[1].l_une[0].preuve[0].fiable'), false);
   assert.ok(!at(result.annotated, 'bilan.pieces_a_evaluer_par_l_avocat').includes('pieces/06_mise_en_demeure.md'));
   assert.ok(at(result.annotated, 'bilan.pieces_a_evaluer_par_l_avocat').includes('pieces/07_courriel.md'));
 });
@@ -159,5 +159,5 @@ test('le test se déroule ligne par ligne : sources, pièces, faits, termes, ess
   assert.ok(seen.indexOf('source:en cours') < seen.indexOf('source:ok'));
   assert.deepEqual([...new Set(result.log.map((entry) => entry.step))], ['source', 'pièce', 'fait', 'condition', 'essai', 'réponse']);
   assert.match(result.log.find((entry) => entry.key === 'fait:retard_de_livraison')!.text, /Prouvé par Bon de livraison \(fictif\)/);
-  assert.match(result.log.find((entry) => entry.step === 'réponse')!.text, /Réponse : à établir · reste à établir : force majeure, greve nationale/);
+  assert.match(result.log.find((entry) => entry.step === 'réponse')!.text, /En suspens : dépend de force majeure et grève nationale/);
 });

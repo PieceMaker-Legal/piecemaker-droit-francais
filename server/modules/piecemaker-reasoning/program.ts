@@ -26,7 +26,10 @@ export const REASONING_FILE = path.join('.piecemaker', 'raisonnement.js');
 
 const LEGACY_TABLES = ['pm_reasoning_items', 'pm_reasoning_models', 'pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories', 'pm_reasoning_tests', 'pm_reasoning_turns'];
 const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', annotated: null, issues: [], dismissed: [], reliability: [], test: null });
-const human = (name: string) => name.replace(/_/g, ' ');
+const human = (name: string) => { const text = name.replace(/_/g, ' '); return text.charAt(0).toUpperCase() + text.slice(1); };
+const listing = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}` : names.join(''));
+const day = (value: string) => value.split('-').reverse().join('/');
+const ANSWER: Record<ReasoningStatus, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', contesté: 'Contestée' };
 const issueId = (kind: string, at: string, text: string) => createHash('sha256').update(`${kind}\0${at}\0${text}`).digest('hex').slice(0, 10);
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const STATUS = (value: ReasoningValue): ReasoningStatus => (value === true ? 'acquis' : value === false ? 'exclu' : 'à établir');
@@ -130,7 +133,7 @@ export async function verifyReasoning(input: {
     const title = String(holder?.titre ?? basis.source);
     const problems = issueAt(at);
     const check = basisChecks.get(at);
-    emit({ key, step: 'source', status: problems.some((text) => !text.startsWith('vigueur non') && !text.startsWith('source non vérifiable')) ? 'alerte' : problems.length ? 'neutre' : 'ok', subject: title, text: problems.length ? problems.join(' · ') : `« ${String(holder?.citation ?? basis.citation)} »${check?.kind === 'decision' ? '' : check?.from ? ` · version du ${check.from}${check.to ? ` au ${check.to}` : ', toujours en vigueur'}` : ''}` });
+    emit({ key, step: 'source', status: problems.some((text) => !text.startsWith('vigueur non') && !text.startsWith('source non vérifiable')) ? 'alerte' : problems.length ? 'neutre' : 'ok', subject: title, text: problems.length ? problems.join(' · ') : `« ${String(holder?.citation ?? basis.citation)} »${check?.kind === 'decision' ? '' : check?.from ? check.to ? ` · en vigueur du ${day(check.from)} au ${day(check.to)}` : ` · en vigueur depuis le ${day(check.from)}` : ''}` });
   };
   const checkBasisInner = async (at: string, basis: Basis, holder: Record<string, unknown> | null) => {
     const info = await lookup(basis.source);
@@ -231,7 +234,7 @@ export async function verifyReasoning(input: {
     const entry = evidence.get(name);
     const value = leafValue(name);
     const cited = (field: 'preuve' | 'contredit') => [...new Set(occurrences.filter((item) => item.condition.condition === name).flatMap((item) => item.condition[field].map((_, index) => `${item.at}.${field}[${index}]`)).filter((at) => verifiedRefs.get(at)).map((at) => String(node(annotated, at)?.titre ?? '')))].filter(Boolean).join(', ');
-    emit({ key: `fait:${name}`, step: 'fait', status: value === null ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: contested(name) ? 'Contesté : une pièce le prouve, une autre le contredit' : value === true ? `Prouvé par ${cited('preuve')}` : value === false ? `Contredit par ${cited('contredit')}` : `À établir${decisiveLeaves.has(name) ? ' · décide de la réponse' : ''}${entry ? '' : ' · aucune pièce citée'}` });
+    emit({ key: `fait:${name}`, step: 'fait', status: value === null ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: contested(name) ? 'Contesté : une pièce le prouve, une autre le contredit' : value === true ? `Prouvé par ${cited('preuve')}` : value === false ? `Contredit par ${cited('contredit')}` : `${entry ? 'Les pièces citées ne l’établissent pas' : 'Aucune pièce citée'}${decisiveLeaves.has(name) ? ' · décisif' : ''}` });
   }
   for (const name of reasoning.terms.keys()) emit({ key: `terme:${name}`, step: 'condition', status: statuses.get(name) === null || statuses.get(name) === undefined ? 'neutre' : 'ok', subject: human(name), text: STATUS(statuses.get(name) ?? null) });
 
@@ -283,7 +286,7 @@ export async function verifyReasoning(input: {
   reasoning.questions.forEach((question, index) => {
     const holder = node(annotated, `questions[${index}]`);
     const decisifs = (holder?.decisifs ?? holder?.en_jeu ?? []) as string[];
-    emit({ key: `réponse:${index}`, step: 'réponse', status: holder?.statut === 'à établir' ? 'neutre' : bilan.erreurs ? 'alerte' : 'ok', subject: question.question, text: `Réponse : ${String(holder?.statut ?? 'non calculée')}${decisifs.length ? ` · reste à établir : ${decisifs.map(human).join(', ')}` : ''}${bilan.erreurs ? ` · ${bilan.erreurs} erreur(s) à corriger` : ''}` });
+    emit({ key: `réponse:${index}`, step: 'réponse', status: holder?.statut === 'à établir' ? 'neutre' : bilan.erreurs ? 'alerte' : 'ok', subject: question.question, text: `${holder?.statut ? ANSWER[holder.statut as ReasoningStatus] : 'Non calculée'}${decisifs.length ? ` : dépend de ${listing(decisifs.map((name) => human(name).toLowerCase()))}` : ''}${bilan.erreurs ? ` · ${bilan.erreurs} erreur${bilan.erreurs > 1 ? 's' : ''} à corriger` : ''}` });
   });
   let code = input.code;
   for (const [original, fixed] of corrections) code = code.split(original).join(fixed);
@@ -411,22 +414,22 @@ export const EXAMPLE_CODE = `{
   questions: [
     {
       question: \`La pénalité de retard est-elle due par Société Beta SARL ?\`,
-      reponse: 'penalite_encourue',
+      reponse: 'pénalité_encourue',
       date: { valeur: '2025-06-14', preuve: [{ piece: 'pieces/05_bon_de_livraison.md', citation: \`Livré le 14/06/2025\` }] },
     },
   ],
-  penalite_encourue: {
+  pénalité_encourue: {
     si: [
-      { condition: 'penalite_stipulee',
+      { condition: 'pénalité_stipulée',
         selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null } }] },
       { l_une: [
           { condition: 'mise_en_demeure', preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: \`vous met en demeure\` }] },
-          { condition: 'inexecution_definitive' },
+          { condition: 'inexécution_définitive' },
         ],
         selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null } }] },
     ],
   },
-  penalite_stipulee: {
+  pénalité_stipulée: {
     si: [
       { condition: 'retard_de_livraison',
         selon: [{ source: 'pieces/01_contrat.md', citation: \`En cas de retard de livraison\`, vigueur: { debut: '2024-01-15', fin: null } }],
@@ -439,21 +442,21 @@ export const EXAMPLE_CODE = `{
   },
   force_majeure_contractuelle: {
     si: [
-      { l_une: [{ condition: 'force_majeure' }, { condition: 'greve' }],
+      { l_une: [{ condition: 'force_majeure' }, { condition: 'grève' }],
         selon: [{ source: 'pieces/01_contrat.md', citation: \`ainsi que les grèves\`, vigueur: { debut: '2024-01-15', fin: null } }] },
     ],
   },
-  greve: {
+  grève: {
     si: [
       { l_une: [
-          { condition: 'greve_nationale' },
-          { condition: 'greve_du_secteur', contredit: [{ piece: 'pieces/07_courriel.md', citation: \`mouvement limité à notre atelier\` }] },
+          { condition: 'grève_nationale' },
+          { condition: 'grève_du_secteur', contredit: [{ piece: 'pieces/07_courriel.md', citation: \`mouvement limité à notre atelier\` }] },
         ],
         selon: [{ source: 'pieces/01_contrat.md', citation: \`grève nationale ou propre au secteur\`, vigueur: { debut: '2024-01-15', fin: null } }] },
     ],
   },
   essais: [
-    { nom: \`grève nationale : pas de pénalité\`, faits: { retard_de_livraison: vrai, mise_en_demeure: vrai, greve_nationale: vrai }, attendu: { penalite_encourue: faux } },
+    { nom: \`grève nationale : pas de pénalité\`, faits: { retard_de_livraison: vrai, mise_en_demeure: vrai, grève_nationale: vrai }, attendu: { pénalité_encourue: faux } },
   ],
 }
 `;
