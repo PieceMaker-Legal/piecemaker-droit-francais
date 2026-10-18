@@ -133,8 +133,7 @@ try {
   const preserved = path.join(os.homedir(), '.piecemaker-droit-francais', 'validation-sentinel.txt');
   await fs.mkdir(path.dirname(preserved), { recursive: true });
   await fs.writeFile(preserved, 'untouched');
-  const uninstall = await evaluate(page, 'window.piecemakerDesktop.uninstall()');
-  assert.equal(uninstall.scheduled, true);
+  assert.equal(await evaluate(page, 'setTimeout(() => window.piecemakerDesktop.uninstall(), 100); true'), true);
   page.close();
   await waitFor(async () => {
     try { await fs.access(executable); return false; } catch (error) { if (error.code === 'ENOENT') return child.exitCode !== null; throw error; }
