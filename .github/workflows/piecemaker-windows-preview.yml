@@ -34,6 +34,14 @@ jobs:
       - name: Configure temporary build directories
         shell: bash
         run: node --input-type=module -e 'import fs from "node:fs";import path from "node:path";for(const [key,name] of Object.entries({PIECEMAKER_HOME:"preview-components",PIECEMAKER_PREBUILT_ASSET_DIR:"preview-assets",PIECEMAKER_TEST_OUTPUT:"PieceMaker-Test-MAJ"})){fs.appendFileSync(process.env.GITHUB_ENV, `${key}=${path.join(process.env.RUNNER_TEMP,name)}\n`);}'
+      - name: Restore compiled preview components
+        id: component-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            server/piecemaker/anonymizer/hudsucker-proxy/target
+            ${{ runner.temp }}/preview-assets
+          key: windows-preview-${{ hashFiles('server/piecemaker/anonymizer/hudsucker-proxy/Cargo.lock', 'package-lock.json', 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/requirements.txt', 'desktop-bootstrap/composants/*.mjs') }}
       - name: Build Windows anonymization proxy
         run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
       - name: Install and compile native SQLite for Electron
@@ -45,14 +53,22 @@ jobs:
           mkdir -p "$PIECEMAKER_PREBUILT_ASSET_DIR"
           cp node_modules/better-sqlite3/build/Release/better_sqlite3.node "$PIECEMAKER_PREBUILT_ASSET_DIR/better-sqlite3-electron-win32-x64.node"
           cp server/piecemaker/anonymizer/hudsucker-proxy/target/release/piecemaker-hudsucker.exe "$PIECEMAKER_PREBUILT_ASSET_DIR/piecemaker-hudsucker-win32-x64.exe"
-          for asset in "$PIECEMAKER_PREBUILT_ASSET_DIR"/*.node "$PIECEMAKER_PREBUILT_ASSET_DIR"/*.exe; do
-            sha256sum "$asset" | cut -d' ' -f1 > "$asset.sha256"
-          done
+          node --input-type=module -e 'import fs from "node:fs";import path from "node:path";import crypto from "node:crypto";const root=process.env.PIECEMAKER_PREBUILT_ASSET_DIR;for(const name of fs.readdirSync(root).filter(name=>/\.(exe|node)$/.test(name))){const file=path.join(root,name);fs.writeFileSync(file+".sha256",crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex")+"\n");}'
       - name: Build and verify bundled Python
+        id: python
+        if: steps.component-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           export PATH="$(cygpath -u "$(node -p process.env.SystemRoot)")/System32:$PATH"
           node desktop-bootstrap/composants/build-release.mjs "$PIECEMAKER_PREBUILT_ASSET_DIR"
+      - name: Preserve compiled components for packaging retries
+        if: steps.python.outcome == 'success' && steps.component-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            server/piecemaker/anonymizer/hudsucker-proxy/target
+            ${{ runner.temp }}/preview-assets
+          key: ${{ steps.component-cache.outputs.cache-primary-key }}
       - name: Configure installer signature
         shell: bash
         env:
