@@ -28,7 +28,7 @@ Le test est l’exécution statique de la théorie avec tout ce qui est disponib
 - **Pièces** : chaque extrait cité est recherché à nouveau dans sa pièce.
 - **Personnes morales de la base SQL** (`piecemaker_nodes` de type `company`) : recherche au Registre Public par SIREN (sinon par nom) ; introuvable, radiée ou cessée est signalé ; avec un SIREN, les alertes BODACC (procédure collective, radiation) sont relevées.
 
-Le rapport (`ReasoningTestReport`, alertes d’abord) est conservé dans l’instantané jusqu’à la commande suivante. Une vérification impossible (réseau, Légifrance) est une alerte, jamais un succès.
+La route répond en NDJSON : une ligne `{entry}` par étape du journal (`ReasoningLogEntry` : vérification en cours puis son résultat, sous la même clé ; puis la résolution du programme fait par fait, règle par règle dans l’ordre des dépendances, vigueur, réponse), et une dernière ligne `{snapshot}`. L’onglet Tests du volet affiche ce journal à mesure qu’il arrive. Le rapport (`ReasoningTestReport`, alertes d’abord, avec le journal final) est conservé dans l’instantané jusqu’à la commande suivante. Une vérification impossible (réseau, Légifrance) est une alerte, jamais un succès.
 
 Sous-ensemble pris en charge (`server/modules/piecemaker-reasoning/catala.ts`) : déclarations `entrée`/`interne`/`résultat` (types `booléen`, `date`, `entier`, `décimal`, `argent`, `durée`, `condition`) et sous-champs ; `règle … sous condition … conséquence [non] rempli` ; `définition … [sous condition … conséquence] égal à …` ; `étiquette`/`exception` ; `et`, `ou`, `non`, `si … alors … sinon`, comparaisons, `+ - * /` ; `|AAAA-MM-JJ|`, `5 an`, `2 mois`, `10 jour` (mois et années au même quantième, dernier jour du mois à défaut) ; attributs `#[clé = valeur]` . Le compilateur Catala n’est pas utilisé (OCaml seulement, pas d’analyseur Node).
 
@@ -56,8 +56,7 @@ Chaque condition et chaque fait se valide, s’écarte ou se modifie dans le vol
 
 - **Graphe** : sources du droit, conditions et réponse, faits. Un clic sur un nœud éclaire sa branche.
 - **Détail** : la réponse en langage courant, ce qui reste à prouver, puis le détail du nœud choisi avec ses boutons de validation.
-- **Tests** : bouton « Lancer le test » et rapport.
-- **Code** : programme Catala généré.
+- **Tests** : bouton « Lancer le test » et journal animé (vérifications, résolution des règles Catala, réponse) ; le nombre d’alertes du dernier test s’affiche sur l’onglet. Style repris du plugin piecemaker-dossier.
 
 ## SQL
 
