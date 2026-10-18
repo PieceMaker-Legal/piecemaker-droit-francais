@@ -73,7 +73,7 @@ test('une citation à la ponctuation près est validée et remplacée par l’or
   assert.match(texts(wrong, 'erreur').join('\n'), /pénalité_encourue\.si\[1\]\.selon\[0\] : citation introuvable/);
 });
 
-test('la vigueur est une condition : absente c’est un manque, fausse une erreur, dépassée la condition est exclue', async () => {
+test('la vigueur est une condition : absente ou dépassée c’est un manque, fausse une erreur, et chaque article dit pourquoi il s’applique', async () => {
   const missing = await verify(EXAMPLE_CODE.replace("débiteur est mis en demeure`, vigueur: { debut: '2016-10-01', fin: null }", 'débiteur est mis en demeure`'));
   assert.match(texts(missing, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.vigueur : vigueur non renseignée.*debut '2016-10-01'/);
   assert.deepEqual(texts(missing, 'erreur'), []);
@@ -81,7 +81,10 @@ test('la vigueur est une condition : absente c’est un manque, fausse une erreu
   assert.match(texts(differs, 'erreur').join('\n'), /vigueur différente de la version citée : debut '2016-10-01'/);
   const late = await verify(EXAMPLE_CODE.replace("valeur: '2025-06-14'", "valeur: '2015-06-14'"));
   assert.equal(at(late.annotated, 'questions[0].statut'), 'exclu');
-  assert.match(texts(late, 'erreur').join('\n'), /n’est en vigueur à la date d’application/);
+  assert.match(texts(late, 'manque').join('\n'), /selon\[0\]\.vigueur : version non applicable : elle n’était pas en vigueur au 2015-06-14/);
+  const unjustified = await verify(EXAMPLE_CODE.replace(", applicabilite: `contrat de vente assorti d’une clause pénale` }] },", " }] },"));
+  assert.match(texts(unjustified, 'manque').join('\n'), /selon\[0\]\.applicabilite : justifie pourquoi ce texte s’applique/);
+  assert.doesNotMatch(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /applicabilite/);
 });
 
 test('une condition sans source, un terme non défini, une boucle et un essai non conforme sont des erreurs', async () => {

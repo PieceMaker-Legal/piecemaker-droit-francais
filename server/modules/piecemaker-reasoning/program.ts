@@ -224,11 +224,14 @@ export async function verifyReasoning(input: {
       holder.decisif = true;
       add('manque', at, `${leaf} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(leaf)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, leaf);
     }
-    if (condition.selon.length && vigueurs.get(at) === false) add('erreur', at, 'aucune source de cette condition n’est en vigueur à la date d’application', `${condition.condition ? human(condition.condition) : 'Une alternative'} : aucun texte invoqué n’était en vigueur${firstDate ? ` au ${day(firstDate)}` : ''}.`, condition.condition);
-    condition.selon.forEach((_, index) => {
-      const check = basisChecks.get(`${at}.selon[${index}]`);
-      const source = node(annotated, `${at}.selon[${index}]`);
+    condition.selon.forEach((basis, index) => {
+      const place = `${at}.selon[${index}]`;
+      const check = basisChecks.get(place);
+      const source = node(annotated, place);
+      const title = String(source?.titre ?? basis.source);
       if (source && check?.kind && check.kind !== 'decision') source.en_vigueur = firstDate && check.from ? inForce(firstDate, check.from, check.to) : null;
+      if (firstDate && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${firstDate} ; cite la version en vigueur à la date d’application`, `${title} : la version citée n’était pas en vigueur au ${day(firstDate)}.`, `#source:${basis.source}`);
+      if (check?.kind === 'texte' && !basis.applicabilite) add('manque', `${place}.applicabilite`, 'justifie pourquoi ce texte s’applique au dossier (champ d’application, qualité des parties, date) : ajoute applicabilite: `…`', `${title} : l’agent n’a pas justifié applicabilite ce texte s’applique au dossier.`, `#source:${basis.source}`);
     });
   }
   for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = STATUS(statuses.get(name) ?? null); }
@@ -429,12 +432,12 @@ export const EXAMPLE_CODE = `{
   pénalité_encourue: {
     si: [
       { condition: 'pénalité_stipulée',
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null } }] },
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null }, applicabilite: \`contrat de vente assorti d’une clause pénale\` }] },
       { l_une: [
           { condition: 'mise_en_demeure', preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: \`vous met en demeure\` }] },
           { condition: 'inexécution_définitive' },
         ],
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null } }] },
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null }, applicabilite: \`contrat de vente assorti d’une clause pénale\` }] },
     ],
   },
   pénalité_stipulée: {
