@@ -295,3 +295,8 @@ Sur le runner CI sans session utilisateur, les certificats sont générés avec 
 code embarqué puis préautorisés avec certutil avant le lancement graphique.
 Cette préautorisation reste dans le script de vérification, hors de l'application.
 Les demandes de consentement Windows restent à vérifier sur le poste utilisateur.
+
+La fenêtre de préparation reste ouverte jusqu'à la création de la fenêtre du
+bureau : la fermer plus tôt laissait temporairement l'application sans fenêtre
+pendant le bootstrap asynchrone. Un test Electron réel reproduit ce défaut puis
+vérifie la transition, sur macOS et Windows.

@@ -44,6 +44,7 @@ jobs:
       - name: Test actual Electron transport and activation
         shell: bash
         run: |
+          npx --no-install electron scripts/piecemaker/ui-updates/electron-preparation-smoke.mjs
           npx --no-install electron scripts/piecemaker/ui-updates/electron-smoke.mjs
           npx --no-install electron scripts/piecemaker/ui-updates/electron-smoke.mjs --broken
           npx --no-install electron scripts/piecemaker/ui-updates/electron-smoke.mjs --startup-error

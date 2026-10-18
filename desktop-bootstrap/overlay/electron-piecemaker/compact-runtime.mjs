@@ -35,7 +35,8 @@ export async function initializeCompactRuntime({ app, LocalServerController, app
       if (message.toLowerCase().includes('download')) progress ||= createProgress?.();
     } }), preparation]);
   } finally {
-    progress?.destroy();
+    if (progress && runtime) app.once('browser-window-created', () => progress.destroy());
+    else progress?.destroy();
   }
   moduleRoots = runtime.moduleRoots;
   configureRuntimeEnvironment({ packedRoot, physicalRoot, moduleRoots });
