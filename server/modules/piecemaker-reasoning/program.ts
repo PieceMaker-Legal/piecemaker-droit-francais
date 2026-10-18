@@ -251,7 +251,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
         return { value, findings };
       };
       for (const question of previous.questions) send({ key: `${question.scope}:question`, step: 'question', status: 'neutre', subject: question.question || question.scope, text: '' });
-      const checked = await Promise.all(previous.sources.map((source) => watch(`source:${source.id}`, 'source', source.title, source.kind === 'document' ? 'Relecture de la pièce…' : source.kind === 'case' ? 'Recherche des recours sur Légifrance…' : 'Consultation de Légifrance…', 'Texte relu sur Légifrance.', (findings) => checkSource(cwd, source, findings))));
+      const checked = await Promise.all(previous.sources.map((source) => watch(`source:${source.id}`, 'source', source.title, source.kind === 'document' ? 'Relecture de la pièce…' : source.kind === 'case' ? 'Recherche des recours sur Légifrance…' : 'Consultation de Légifrance…', verifiedText(source), (findings) => checkSource(cwd, source, findings))));
       const registry = await Promise.all(list.map((company) => watch(`registre:${company.label}`, 'registre', company.label, company.siren ? 'Registre Public et BODACC…' : 'Recherche au Registre Public…', 'Registre Public consulté.', (findings) => checkCompany(company, findings))));
       const evaluated = rebuild(id, previous, loadModel(id), checked.map((entry) => entry.value), [], null);
       for (const entry of resolution(evaluated)) send(entry);
@@ -297,6 +297,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   };
 }
 
+const verifiedText = (source: ReasoningSource) => (source.kind === 'document' ? 'Extrait retrouvé dans la pièce.' : 'Texte relu sur Légifrance.');
 const shown = (value: ReasoningValue) => (value === true ? 'oui' : value === false ? 'non' : value === null ? 'inconnu' : printValue(value).replace(/^\|(\d{4})-(\d{2})-(\d{2})\|$/, '$3/$2/$1'));
 const CONDITION_TEXT = { remplie: 'Condition remplie', 'non remplie': 'Condition non remplie', indéterminée: 'Condition non établie', bloquée: 'Condition bloquée : fondement à revoir' };
 const ANSWER_TEXT = { remplie: 'oui', 'non remplie': 'non', indéterminée: 'pas encore établie', bloquée: 'bloquée' };
@@ -320,7 +321,7 @@ function resolution(snapshot: ReasoningSnapshot): ReasoningLogEntry[] {
     return [
       ...rules.map((condition): ReasoningLogEntry => ({ key: condition.id, step: 'règle', status: condition.status === 'bloquée' || !condition.sources.length ? 'alerte' : 'ok', subject: condition.label, text: condition.status === 'bloquée' ? condition.issues[0] ?? 'Fondement à revoir' : condition.sources.length ? `Fondement : ${cited(condition.sources)}` : 'Aucun fondement cité' })),
       ...question.vigueur.map((entry): ReasoningLogEntry => ({ key: `${question.scope}:vigueur:${entry.source}`, step: 'vigueur', status: entry.inForce === true ? 'ok' : 'alerte', subject: titles.get(entry.source) ?? entry.source, text: entry.inForce === true ? `En vigueur au ${shown(entry.date)}` : entry.inForce === false ? `Non en vigueur au ${shown(entry.date)}` : 'Vigueur non contrôlée : date des faits non prouvée' })),
-      ...facts.map((fact): ReasoningLogEntry => ({ key: fact.id, step: 'fait', status: fact.status === 'établi' ? 'ok' : 'alerte', subject: fact.variable, text: fact.status === 'établi' ? `Établi : ${shown(fact.value)}${fact.sources.length ? ` (${cited(fact.sources)})` : ''}` : 'Inconnu : pièce à rechercher' })),
+      ...facts.map((fact): ReasoningLogEntry => ({ key: fact.id, step: 'fait', status: fact.status === 'établi' ? 'ok' : 'alerte', subject: fact.variable, text: fact.status === 'établi' ? `Établi : ${shown(fact.value)}` : fact.sources.length && fact.issues.length ? `Inconnu : ${fact.issues[0]}` : 'Inconnu : pièce à rechercher' })),
       ...rules.map((condition): ReasoningLogEntry => ({ key: `${condition.id}:conclusion`, step: 'conclusion', status: condition.status === 'remplie' ? 'ok' : condition.status === 'indéterminée' ? 'neutre' : 'alerte', subject: condition.label, text: `${CONDITION_TEXT[condition.status]}${why(condition.status, condition.dependsOn)}` })),
       { key: `${question.scope}:réponse`, step: 'réponse', status: question.status === 'remplie' || question.status === 'non remplie' ? (question.objectiveStatus === 'hors d’atteinte' ? 'alerte' : 'ok') : question.status === 'bloquée' ? 'alerte' : 'neutre', subject: question.question || question.scope, text: `Réponse : ${ANSWER_TEXT[question.status]}${why(question.status, [resultId])}${question.objectiveStatus ? ` · objectif ${question.objectiveStatus}` : ''}` },
     ];
@@ -380,5 +381,7 @@ champ d'application Dossier:
   const program = parseCatala(code);
   const sources = [article, piece, date];
   const evaluation = evaluateReasoning(program, new Map(sources.map((source) => [source.id, source])), new Map());
-  return { revision: 0, updatedAt: null, code: printCatala(program), sources, ...evaluation, test: null, demo: true };
+  const snapshot: ReasoningSnapshot = { revision: 0, updatedAt: null, code: printCatala(program), sources, ...evaluation, test: null, demo: true };
+  const checks = sources.map((source): ReasoningLogEntry => ({ key: `source:${source.id}`, step: 'source', status: 'ok', subject: source.title, text: verifiedText(source) }));
+  return { ...snapshot, test: { at: new Date().toISOString(), findings: [], log: [...checks, ...resolution(snapshot)] } };
 }

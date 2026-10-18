@@ -233,6 +233,8 @@ test('l’exemple fictif décrit une condition sans fondement et un fait sans pi
   assert.equal(example.questions[0].status, 'bloquée');
   assert.match(example.conditions.find((entry) => entry.id === 'Indemnite.approbation_ex_post')!.issues.join(' '), /Fondement manquant/);
   assert.equal(example.facts.find((entry) => entry.id === 'Indemnite.societe_cotee')!.status, 'non établi');
+  assert.ok(example.test!.log!.some((entry) => entry.step === 'source' && entry.text === 'Extrait retrouvé dans la pièce.'));
+  assert.ok(example.test!.log!.some((entry) => entry.key === 'Indemnite.approbation_ex_ante:conclusion'));
 });
 
 test('les commandes exposent tout Catala : types, listes, valeurs calculées, fonctions, exceptions, états, assertions et questions liées', async (t) => {
