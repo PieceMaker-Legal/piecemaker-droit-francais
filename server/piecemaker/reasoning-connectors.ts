@@ -2,8 +2,8 @@ import { createRequire } from 'node:module';
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
-import { readHistory, readLegalPeriod } from '@/modules/piecemaker-reasoning/index.js';
-import type { ReasoningConnectors } from '@/modules/piecemaker-reasoning/index.js';
+import { readLegalPeriod } from '@/modules/piecemaker-reasoning/index.js';
+import type { ReasoningConnectors, SourceInfo } from '@/modules/piecemaker-reasoning/index.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { legifranceText, searchBodacc } from './bodacc-search.js';
@@ -25,27 +25,49 @@ const notFound = (error: unknown) => {
 };
 
 const inside = (base: string, target: string) => target === base || target.startsWith(`${base}${path.sep}`);
+const words = (value: string) => (value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).join(' ');
+
+type Resolver = { accepts(id: string): boolean; resolve(cwd: string, id: string): Promise<SourceInfo | null> };
+
+const legifrance: Resolver = {
+  accepts: (id) => /^(LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id),
+  async resolve(_cwd, id) {
+    const article = id.startsWith('LEGIARTI');
+    const raw = await legifranceText(article ? 'consulter_article' : 'consulter_decision', article ? { article_id: id } : { text_id: id });
+    const text = extractFullText(raw);
+    if (!text) return null;
+    const validity = article ? readLegalPeriod(raw) : undefined;
+    return { kind: article ? 'texte' : 'decision', title: extractSourceTitle(raw) || id, text, ...(validity ? { validity } : {}) };
+  },
+};
+
+const piece: Resolver = {
+  accepts: (id) => /[/\\]/.test(id) || /\.[a-z0-9]{2,5}$/i.test(id),
+  async resolve(cwd, reference) {
+    const caseRoot = await realpath(cwd);
+    const located = await resolvePieceRef(cwd, reference) ?? path.resolve(cwd, reference);
+    const canonical = await realpath(located).catch(() => null);
+    if (!canonical || !inside(caseRoot, canonical)) return null;
+    const counterpart = path.extname(canonical).toLowerCase() === '.md' ? { exists: true, path: canonical } : markdownCounterpart(canonical, cwd);
+    if (!counterpart?.exists || typeof counterpart.path !== 'string') return null;
+    const markdown = await realpath(counterpart.path);
+    if (!inside(caseRoot, markdown)) return null;
+    return { kind: 'piece', title: formatPieceTitle(undefined, path.relative(caseRoot, canonical)), text: await readFile(markdown, 'utf8') };
+  },
+};
+
+const RESOLVERS: Resolver[] = [legifrance, piece];
 
 export function createReasoningConnectors(): ReasoningConnectors {
   return {
-    async law(id) {
-      const raw = await legifranceText(id.startsWith('LEGIARTI') ? 'consulter_article' : 'consulter_decision', id.startsWith('LEGIARTI') ? { article_id: id } : { text_id: id });
-      return { title: extractSourceTitle(raw) || id, text: extractFullText(raw), validity: readLegalPeriod(raw), history: readHistory(raw) };
-    },
-    async piece(cwd, reference) {
-      const caseRoot = await realpath(cwd);
-      const piece = await resolvePieceRef(cwd, reference) ?? path.resolve(cwd, reference);
-      const canonical = await realpath(piece).catch(() => null);
-      if (!canonical || !inside(caseRoot, canonical)) return null;
-      const counterpart = path.extname(canonical).toLowerCase() === '.md' ? { exists: true, path: canonical } : markdownCounterpart(canonical, cwd);
-      if (!counterpart?.exists || typeof counterpart.path !== 'string') return null;
-      const markdown = await realpath(counterpart.path);
-      if (!inside(caseRoot, markdown)) return null;
-      return { title: formatPieceTitle(undefined, path.relative(caseRoot, canonical)), text: await readFile(markdown, 'utf8') };
+    async source(cwd, id) {
+      const resolver = RESOLVERS.find((entry) => entry.accepts(id));
+      return resolver ? resolver.resolve(cwd, id) : undefined;
     },
     match(text, excerpt) {
       if (verifyQuoteAgainstSource(text, excerpt).verified) return excerpt;
-      return nearestPassage(text, excerpt);
+      const nearest = nearestPassage(text, excerpt);
+      return nearest && words(nearest) === words(excerpt) ? nearest : null;
     },
     async registry({ siren, name }) {
       if (siren) {

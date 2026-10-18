@@ -94,6 +94,10 @@ export const STYLES = `
 .pmr-entry[data-step=réponse] .pmr-fix,.pmr-entry[data-step=réponse] .pmr-entry-text{display:block;margin-top:2px;font-weight:600;font-size:13px;color:var(--ink)}
 .pmr-entry[data-step=réponse][data-status=ok]{border-color:color-mix(in srgb,var(--ok-soft) 70%,transparent)}
 .pmr-entry[data-step=réponse][data-status=alerte]{border-color:color-mix(in srgb,var(--ko-soft) 70%,transparent)}
+.pmr-edge.is-sauf{stroke-dasharray:5 4}.pmr-edge-label{fill:var(--muted);font-size:10px;paint-order:stroke;stroke:var(--bg);stroke-width:3px}
+.pmr-node.is-decisive circle{stroke:var(--accent);stroke-width:3}
+.pmr-code{margin:0;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--soft);font:12px/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+.pmr-issue{display:flex;gap:8px;align-items:baseline;justify-content:space-between;margin:6px 0;padding:6px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}.pmr-issue span{flex:1;overflow-wrap:anywhere}.pmr-issue code{font:11px var(--mono);color:var(--muted)}
 @keyframes pmr-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes pmr-pop{0%{transform:scale(.4)}70%{transform:scale(1.25)}100%{transform:scale(1)}}
 @keyframes pmr-spin{to{transform:rotate(360deg)}}

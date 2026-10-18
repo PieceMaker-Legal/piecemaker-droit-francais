@@ -12,13 +12,14 @@ import { createSqlTool } from '../sql-tool.js';
 
 test('le raisonnement est lisible par dossier() et ses tables sont protégées des écritures SQL', async () => {
   await withFixture(async (context) => {
-    const service = createReasoningService(() => context.appDb);
-    await service.command(context.roots.one, { commande: 'question', texte: 'La société fictive est-elle cotée ?' });
-    await service.command(context.roots.one, { commande: 'fait', question: 'Q1', nom: 'cotee', valeur: true });
-    assert.match(await context.run('SELECT item_id,status,author FROM pm_reasoning_items WHERE project_id=dossier() ORDER BY item_id'), /Q1\.cotee\tproposé\tia/);
-    assert.match(await context.run('SELECT code FROM pm_reasoning_programs WHERE project_id=dossier()'), /résultat reponse/);
-    await assert.rejects(context.run("UPDATE pm_reasoning_items SET status='validé'"), /lecture SQL uniquement/);
+    const service = createReasoningService(() => context.appDb, { source: async () => undefined, match: () => null, registry: async () => ({ found: false, status: '' }), bodacc: async () => [] });
+    fs.mkdirSync(path.join(context.roots.one, '.piecemaker'), { recursive: true });
+    fs.writeFileSync(path.join(context.roots.one, '.piecemaker', 'raisonnement.js'), "{ questions: [{ question: `La société fictive est-elle cotée ?`, reponse: 'cotee' }], cotee: { si: [{ condition: 'titres_admis', selon: [{ source: 'CELEX:00000', citation: `texte fictif` }] }] } }");
+    await service.verify(context.roots.one, false);
+    assert.match(await context.run('SELECT code FROM pm_reasoning_programs WHERE project_id=dossier()'), /titres_admis/);
     await assert.rejects(context.run('DELETE FROM pm_reasoning_programs'), /lecture SQL uniquement/);
+    await assert.rejects(context.run("INSERT INTO pm_reasoning_dismissed VALUES(dossier(),'x','','','')"), /lecture SQL uniquement/);
+    await assert.rejects(context.run("INSERT INTO pm_reasoning_reliability VALUES(dossier(),'pieces/a.md',1,'')"), /lecture SQL uniquement/);
   });
 });
 
