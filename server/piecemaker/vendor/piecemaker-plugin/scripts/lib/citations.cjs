@@ -207,7 +207,7 @@ function parseCitationsWithDiagnostics(text) {
       };
     }
   }
-  if (!Array.isArray(parsed) && parsed && typeof parsed === 'object' && (['program', 'reasoning'].includes(parsed.kind) || Number.isSafeInteger(parsed.ref))) {
+  if (!Array.isArray(parsed) && parsed && typeof parsed === 'object' && Number.isSafeInteger(parsed.ref)) {
     parsed = [parsed];
     raw = JSON.stringify(parsed);
     repaired = true;

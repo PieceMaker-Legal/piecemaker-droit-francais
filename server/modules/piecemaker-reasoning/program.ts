@@ -1,178 +1,64 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 import type Database from 'better-sqlite3';
 
-import type { ReasoningLink, ReasoningNode, ReasoningProgram, ReasoningSnapshot, ReasoningSource } from '../../../shared/piecemaker-reasoning.js';
+import { REASONING_FORCES } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningForce, ReasoningReview, ReasoningSnapshot, ReasoningSource, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import { emptyProgram, evaluateProgram, validateProgram } from './engine.js';
-import { resolveEvidence } from './evidence.js';
-import { resolveInputs } from './inputs.js';
-import { LIBRARY, withLibrary } from './library.js';
-import { detectConflicts } from './model.js';
-import { assessTheories } from './theories.js';
+import { parseCatala, printCatala, printValue } from './catala.js';
+import type { CatalaProgram, DeclarationItem, Rule } from './catala.js';
+import { evaluateReasoning } from './evaluate.js';
+import type { ReasoningItem } from './evaluate.js';
 
-const digest = (text: string) => createHash('sha256').update(text).digest('hex');
-const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, program: emptyProgram(), evaluations: [], changes: [], diagnostics: [] });
+export type TurnSource = ReasoningSource & { ref: number };
+type Lock = { scope: string; declaration?: DeclarationItem; rules: Rule[] };
+type ItemRow = { item_id: string; kind: string; status: string; value_json: string | null; force: string | null; appreciation: string | null; author: string; sources_json: string; locked_json: string | null; note: string | null; updated_at: string };
 
-function changesSince(previous: ReasoningSnapshot, evaluations: ReasoningSnapshot['evaluations']): ReasoningSnapshot['changes'] {
-  const old = new Map<string, ReasoningSnapshot['evaluations'][number]['results'][number]>(previous.evaluations.flatMap((evaluation) => evaluation.results.map((result) => [`${evaluation.scenario}:${result.id}`, result] as const)));
-  const changes: ReasoningSnapshot['changes'] = [];
-  for (const evaluation of evaluations) for (const result of evaluation.results) {
-    const key = `${evaluation.scenario}:${result.id}`;
-    const before = old.get(key);
-    if (JSON.stringify(before) !== JSON.stringify(result)) changes.push({ id: result.id, scenario: evaluation.scenario, before: before ? JSON.stringify(before) : 'Absent', after: JSON.stringify(result) });
-    old.delete(key);
-  }
-  for (const [key, result] of old) changes.push({ id: result.id, scenario: key.split(':')[0], before: JSON.stringify(result), after: 'Retiré' });
-  return changes;
+const MAX_CODE = 200_000;
+const LEGACY_TABLES = ['pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories'];
+const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', sources: [], questions: [], conditions: [], facts: [], diagnostics: [] });
+
+export function sourceId(document: string, excerpt: string) {
+  return `s${createHash('sha256').update(`${document}\0${excerpt}`).digest('hex').slice(0, 8)}`;
 }
 
-function mergeProgram(previous: ReasoningProgram, block: string, incoming: ReasoningSource[]): { program: ReasoningProgram; notes: string[] } {
-  const match = block.match(/<CITATIONS>\s*([\s\S]*?)\s*<\/CITATIONS>/);
-  if (!match) throw new TypeError('Bloc CITATIONS incomplet.');
-  const entries: unknown = JSON.parse(match[1]);
-  if (!Array.isArray(entries)) throw new TypeError('CITATIONS doit contenir un tableau.');
-  const patches = entries.filter((entry) => entry && typeof entry === 'object' && ['program', 'reasoning'].includes(entry.kind));
-  if (patches.length > 1) throw new TypeError('Un seul objet reasoning ou program est accepté par tour.');
-  const annotation = patches[0];
-  const patch = annotation?.kind === 'reasoning' ? { ...annotation, nodes: ['law', 'facts', 'theories'].flatMap((key) => {
-    if (annotation[key] !== undefined && !Array.isArray(annotation[key])) throw new TypeError(`${key} doit être une liste.`);
-    return (annotation[key] ?? []).map((node: ReasoningNode) => ({ ...node, layer: key === 'law' ? 'law' : key === 'facts' ? 'fact' : 'theory', kind: key === 'law' ? 'rule' : key === 'facts' ? 'fact' : node.kind ?? 'conclusion' }));
-  }) } : annotation;
-  if (patch && patch.version !== 1) throw new TypeError('Version de programme non prise en charge.');
-  const sources = new Map(previous.sources.map((source) => [source.id, { ...source }]));
-  for (const source of incoming) {
-    for (const old of sources.values()) if (old.document === source.document && old.hash !== source.hash) old.stale = true;
-    sources.set(source.id, { ...source, stale: false });
-  }
-  const nodes = new Map(previous.nodes.map((node) => [node.id, node]));
-  const links = new Map((previous.links ?? []).map((link) => [link.id, link]));
-  const notes: string[] = [];
-  const locked = (id: string) => LIBRARY.some((rule) => rule.id === id) ? 'module de bibliothèque' : nodes.get(id)?.review || previous.tests.find((test) => test.id === id)?.review ? 'décision de l’avocat' : '';
-  if (patch?.remove !== undefined && (!Array.isArray(patch.remove) || patch.remove.some((id: unknown) => typeof id !== 'string'))) throw new TypeError('remove doit être une liste d’identifiants.');
-  const removed = (patch?.remove ?? []).filter((id: string) => {
-    if (!locked(id)) return true;
-    notes.push(`${id} verrouillé (${locked(id)}) : retrait ignoré.`);
-    return false;
-  });
-  for (const id of removed) { nodes.delete(id); links.delete(id); }
-  const evidence = new Map<string, string[]>();
-  const reported = new Set<string>();
-  const supported = new Set<string>();
-  for (const entry of entries as Array<{ ref?: number; links?: Array<{ target: string; relation: ReasoningLink['relation'] }> }>) {
-    if (!entry || entry.links === undefined || !Object.hasOwn(entry, 'ref')) continue;
-    if (!Array.isArray(entry.links) || entry.links.length > 200) throw new TypeError('Annotations de citation invalides.');
-    for (const link of entry.links) {
-      if (!link || typeof link.target !== 'string' || !['supports', 'contradicts', 'reports', 'qualifies'].includes(link.relation)) {
-        notes.push(`Lien de citation [${entry.ref}] écarté : cible ou relation invalide.`);
-        continue;
-      }
-      const matching = incoming.filter((source) => source.ref === entry.ref);
-      if (!matching.length) {
-        notes.push(`Lien de citation [${entry.ref}] vers ${link.target} écarté : citation introuvable.`);
-        continue;
-      }
-      if (link.relation === 'reports') reported.add(link.target);
-      if (link.relation === 'supports') supported.add(link.target);
-      for (const source of matching) {
-        const id = `e_${digest(`${source.id}:${link.target}:${link.relation}`).slice(0, 40)}`;
-        links.set(id, { id, from: source.id, to: link.target, relation: link.relation });
-        if (link.relation === 'supports' || link.relation === 'reports') evidence.set(link.target, [...(evidence.get(link.target) ?? []), source.id]);
-      }
-    }
-  }
-  if (patch?.nodes !== undefined && !Array.isArray(patch.nodes)) throw new TypeError('nodes doit être une liste.');
-  if (patch?.nodes?.length > 200) throw new TypeError('Trop de nœuds dans ce tour.');
-  const screen = <T extends { id: string }>(items: T[], check: (item: T) => void) => items.filter((item) => {
-    try { check(item); return true; }
-    catch (error) { notes.push(`${item.id} écarté : ${error instanceof Error ? error.message : 'proposition invalide.'}`); return false; }
-  });
-  const ids = new Set<string>();
-  const dropped = new Set<string>();
-  for (const proposed of patch?.nodes ?? []) {
-    if (!proposed || typeof proposed !== 'object' || typeof proposed.id !== 'string' || ids.has(proposed.id)) throw new TypeError('Nœud invalide ou dupliqué dans ce tour.');
-    ids.add(proposed.id);
-    if (locked(proposed.id)) {
-      notes.push(`${proposed.id} verrouillé (${locked(proposed.id)}) : proposition ignorée.`);
-      continue;
-    }
-    if (proposed.citations !== undefined && (!Array.isArray(proposed.citations) || proposed.citations.some((ref: unknown) => !Number.isSafeInteger(ref)))) throw new TypeError('citations doit contenir les numéros de références du tour.');
-    const old = nodes.get(proposed.id);
-    const linked = proposed.citations === undefined ? evidence.get(proposed.id) ?? old?.sources ?? [] : proposed.citations.flatMap((ref: number) => {
-      const matches = incoming.filter((source) => source.ref === ref);
-      return matches.length ? matches.map((source) => source.id) : [`missing:${ref}`];
-    });
-    const node: ReasoningNode = {
-      id: proposed.id, kind: proposed.kind, label: proposed.label,
-      sources: [...new Set(linked)] as string[],
-      requiresReview: proposed.citations === undefined ? old?.requiresReview ?? false : linked.some((id: string) => sources.get(id)?.repaired === true),
-      ...(proposed.state !== undefined ? { state: proposed.state } : {}),
-      ...(Object.hasOwn(proposed, 'value') ? { value: proposed.value } : {}),
-      ...(proposed.expression !== undefined ? { expression: proposed.expression } : {}),
-      ...(typeof proposed.rationale === 'string' ? { rationale: proposed.rationale.slice(0, 8000) } : {}),
-      ...(proposed.layer !== undefined ? { layer: proposed.layer } : {}),
-      ...(proposed.parameters !== undefined ? { parameters: proposed.parameters } : {}),
-      ...(proposed.validity !== undefined ? { validity: proposed.validity } : {}),
-      ...(proposed.relation !== undefined ? { relation: proposed.relation } : {}),
-      ...(proposed.input !== undefined ? { input: proposed.input } : {}),
-      ...(proposed.burden !== undefined ? { burden: proposed.burden } : {}),
-      ...(proposed.evidence !== undefined ? { evidence: proposed.evidence } : {}),
-      ...(proposed.conditions !== undefined ? { conditions: proposed.conditions } : {}),
-      ...(proposed.exceptions !== undefined ? { exceptions: proposed.exceptions } : {}),
-    };
-    if (!screen([node], (item) => validateProgram({ version: 1, nodes: [item], sources: [], scenarios: [], tests: [] })).length) {
-      dropped.add(node.id);
-      continue;
-    }
-    if (node.kind === 'fact' && reported.has(node.id) && !supported.has(node.id)) node.state = 'reported';
-    if (proposed.citations !== undefined || evidence.has(node.id)) for (const [id, link] of links) {
-      if (link.to === node.id && sources.has(link.from) && ['supports', 'reports', 'qualifies'].includes(link.relation) && !linked.includes(link.from)) links.delete(id);
-    }
-    nodes.set(node.id, node);
-  }
-  for (const [id, linked] of evidence) {
-    if (ids.has(id)) continue;
-    const old = nodes.get(id);
-    if (!old) {
-      notes.push(`Lien de citation vers ${id} écarté : proposition absente.`);
-      for (const [linkId, link] of links) if (link.to === id) links.delete(linkId);
-      continue;
-    }
-    nodes.set(id, { ...old, ...(old.kind === 'fact' && reported.has(id) && !supported.has(id) ? { state: 'reported' as const } : {}), sources: [...new Set([...old.sources, ...linked])], requiresReview: old.requiresReview || linked.some((sourceId) => sources.get(sourceId)?.repaired) });
-  }
-  if (patch?.links !== undefined && !Array.isArray(patch.links)) throw new TypeError('links doit être une liste.');
-  for (const link of patch?.links ?? []) links.set(link.id, link);
-  const mergeList = <T extends { id: string }>(old: T[], updates: unknown): T[] => {
-    if (updates === undefined) return old;
-    if (!Array.isArray(updates) || updates.some((item) => !item || typeof item.id !== 'string')) throw new TypeError('Liste de scénarios ou tests invalide.');
-    const combined = new Map(old.map((item) => [item.id, item]));
-    for (const item of updates) {
-      if (locked(item.id)) notes.push(`${item.id} verrouillé (${locked(item.id)}) : proposition ignorée.`);
-      else combined.set(item.id, item);
-    }
-    return [...combined.values()];
-  };
-  const program = withLibrary({
-    version: 1, nodes: [...nodes.values()], sources: [...sources.values()],
-    scenarios: mergeList(previous.scenarios.filter((item) => !removed.includes(item.id)), patch?.scenarios),
-    tests: mergeList(previous.tests.filter((item) => !removed.includes(item.id)), patch?.tests),
-    links: [...links.values()].filter((link) => !removed.includes(link.from) && !removed.includes(link.to) && (!dropped.has(link.to) || nodes.has(link.to))),
-  });
-  program.links = screen(program.links ?? [], (link) => validateProgram({ ...program, links: [link], scenarios: [], tests: [] }));
-  program.scenarios = screen(program.scenarios, (scenario) => validateProgram({ ...program, scenarios: [scenario], tests: [] }));
-  program.tests = screen(program.tests, (test) => validateProgram({ ...program, tests: [test] }));
-  if (program.scenarios.some((scenario) => scenario.id === 'base')) throw new TypeError('Le scénario base est réservé au dossier sans hypothèses.');
-  validateProgram(program);
-  return { program, notes };
+function lawScopeOf(program: CatalaProgram, dossierScope: string, sub: string) {
+  const item = program.declarations.find((declaration) => declaration.scope === dossierScope)?.items.find((entry) => entry.role === 'champ' && entry.name === sub);
+  return item?.role === 'champ' ? item.scope : undefined;
 }
 
-function completeness(program: ReasoningProgram, theories: NonNullable<ReasoningSnapshot['theories']>): string[] {
-  const unsourced = program.nodes.filter((node) => node.kind === 'fact' && !node.sources.length && !node.input && !node.evidence && !node.review).map((node) => node.id);
-  return [
-    ...(!theories.length ? ['Aucune conclusion : appliquer une règle datée (law) aux faits par une théorie, avec tests.'] : []),
-    ...(unsourced.length ? [`Faits sans pièce citée (citations:[n]) ni preuve attendue (evidence) : ${unsourced.join(', ')}.`] : []),
-  ];
+function itemRules(program: CatalaProgram, id: string): Lock {
+  const [scope, variable] = id.split('.');
+  const declaration = program.declarations.find((entry) => entry.scope === scope)?.items.find((entry) => entry.name === variable);
+  if (declaration?.role === 'entrée') {
+    for (const body of program.bodies) {
+      const rules = body.rules.filter((rule) => rule.target.length === 2 && rule.target[1] === variable && lawScopeOf(program, body.scope, rule.target[0]) === scope);
+      if (rules.length) return { scope: body.scope, rules };
+    }
+    return { scope: '', rules: [] };
+  }
+  return { scope, declaration, rules: program.bodies.filter((body) => body.scope === scope).flatMap((body) => body.rules).filter((rule) => rule.target.length === 1 && rule.target[0] === variable) };
+}
+
+function applyLock(program: CatalaProgram, id: string, lock: Lock) {
+  const current = itemRules(program, id);
+  const same = JSON.stringify(current.rules) === JSON.stringify(lock.rules) && (!lock.declaration || JSON.stringify(current.declaration) === JSON.stringify(lock.declaration));
+  if (same) return false;
+  for (const body of program.bodies) body.rules = body.rules.filter((rule) => !current.rules.includes(rule));
+  if (lock.declaration) {
+    let declaration = program.declarations.find((entry) => entry.scope === lock.scope);
+    if (!declaration) program.declarations.push(declaration = { scope: lock.scope, attrs: {}, items: [] });
+    declaration.items = [...declaration.items.filter((item) => item.name !== lock.declaration!.name), lock.declaration];
+  }
+  let body = program.bodies.find((entry) => entry.scope === lock.scope);
+  if (!body && lock.rules.length) program.bodies.push(body = { scope: lock.scope, rules: [] });
+  body?.rules.push(...lock.rules);
+  return true;
+}
+
+function referencedSources(program: CatalaProgram) {
+  return new Set(program.bodies.flatMap((body) => body.rules.flatMap((rule) => rule.attrs.selon ?? [])));
 }
 
 export function createReasoningService(getDatabase: () => Database.Database) {
@@ -180,75 +66,33 @@ export function createReasoningService(getDatabase: () => Database.Database) {
   const database = () => {
     const db = getDatabase();
     if (!initialized) {
+      for (const table of LEGACY_TABLES) db.exec(`DROP TABLE IF EXISTS ${table}`);
+      const columns = db.prepare("SELECT name FROM pragma_table_info('pm_reasoning_programs')").all() as Array<{ name: string }>;
+      if (columns.length && !columns.some((column) => column.name === 'code')) db.exec('DROP TABLE pm_reasoning_programs; DROP TABLE IF EXISTS pm_reasoning_turns;');
       db.exec(`
         CREATE TABLE IF NOT EXISTS pm_reasoning_programs (
           project_id TEXT PRIMARY KEY REFERENCES projects(project_id) ON DELETE CASCADE,
-          revision INTEGER NOT NULL, snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json))
+          revision INTEGER NOT NULL, code TEXT NOT NULL, snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json))
         );
-        CREATE TABLE IF NOT EXISTS pm_reasoning_results (
+        CREATE TABLE IF NOT EXISTS pm_reasoning_items (
           project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-          scenario TEXT NOT NULL, node_id TEXT NOT NULL, status TEXT NOT NULL,
-          value_json TEXT NOT NULL, dependencies_json TEXT NOT NULL, missing_json TEXT NOT NULL,
-          assumptions_json TEXT NOT NULL, issues_json TEXT NOT NULL, revision INTEGER NOT NULL,
-          PRIMARY KEY(project_id, scenario, node_id)
+          item_id TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('proposé','validé','écarté')),
+          value_json TEXT, force TEXT, appreciation TEXT,
+          author TEXT NOT NULL CHECK(author IN ('ia','avocat')),
+          sources_json TEXT NOT NULL, locked_json TEXT, note TEXT, updated_at TEXT NOT NULL,
+          PRIMARY KEY(project_id, item_id)
         );
         CREATE TABLE IF NOT EXISTS pm_reasoning_turns (
           project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-          turn_id TEXT NOT NULL, revision INTEGER NOT NULL, snapshot_json TEXT NOT NULL,
-          PRIMARY KEY(project_id, turn_id)
-        );
-        CREATE TABLE IF NOT EXISTS pm_reasoning_nodes (
-          project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-          node_id TEXT NOT NULL, layer TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL,
-          definition_json TEXT NOT NULL, valid_from TEXT, valid_to TEXT, revision INTEGER NOT NULL,
-          PRIMARY KEY(project_id,node_id)
-        );
-        CREATE TABLE IF NOT EXISTS pm_reasoning_relations (
-          project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-          node_id TEXT NOT NULL, subject TEXT NOT NULL, predicate TEXT NOT NULL, object TEXT NOT NULL,
-          context TEXT NOT NULL, unit TEXT, event_date TEXT, document_date TEXT,
-          value_json TEXT NOT NULL, state TEXT NOT NULL, sources_json TEXT NOT NULL, revision INTEGER NOT NULL,
-          PRIMARY KEY(project_id,node_id)
-        );
-        CREATE TABLE IF NOT EXISTS pm_reasoning_links (
-          project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-          link_id TEXT NOT NULL, from_id TEXT NOT NULL, to_id TEXT NOT NULL, relation TEXT NOT NULL,
-          rationale TEXT, revision INTEGER NOT NULL, PRIMARY KEY(project_id,link_id)
-        );
-        CREATE TABLE IF NOT EXISTS pm_reasoning_theories (
-          project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-          theory_id TEXT NOT NULL, label TEXT NOT NULL, status TEXT NOT NULL,
-          facts_json TEXT NOT NULL, laws_json TEXT NOT NULL, tests_json TEXT NOT NULL,
-          issues_json TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(project_id,theory_id)
+          turn_id TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(project_id, turn_id)
         );
       `);
       initialized = true;
     }
     return db;
   };
-  const persist = (id: string, snapshot: ReasoningSnapshot, turnId: string) => {
-    const db = database();
-    db.transaction(() => {
-      db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?) ON CONFLICT(project_id) DO UPDATE SET revision=excluded.revision,snapshot_json=excluded.snapshot_json').run(id, snapshot.revision, JSON.stringify(snapshot));
-      for (const table of ['pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories']) db.prepare(`DELETE FROM ${table} WHERE project_id=?`).run(id);
-      const result = db.prepare('INSERT INTO pm_reasoning_results VALUES(?,?,?,?,?,?,?,?,?,?)');
-      for (const evaluation of snapshot.evaluations) for (const row of evaluation.results) result.run(id, evaluation.scenario, row.id, row.status, JSON.stringify(row.value), JSON.stringify(row.dependencies), JSON.stringify(row.missing), JSON.stringify(row.assumptions), JSON.stringify(row.issues), snapshot.revision);
-      const node = db.prepare('INSERT INTO pm_reasoning_nodes VALUES(?,?,?,?,?,?,?,?,?)');
-      const relation = db.prepare('INSERT INTO pm_reasoning_relations VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)');
-      for (const row of snapshot.program.nodes) {
-        node.run(id, row.id, row.layer ?? (row.kind === 'fact' ? 'fact' : 'theory'), row.kind, row.label, JSON.stringify(row), row.validity?.from ?? null, row.validity?.to ?? null, snapshot.revision);
-        if (row.relation) {
-          const value = row.relation;
-          relation.run(id, row.id, value.subject, value.predicate, value.object, value.context, value.unit ?? null, value.eventDate ?? null, value.documentDate ?? null, JSON.stringify(row.value ?? null), row.state ?? 'asserted', JSON.stringify(row.sources), snapshot.revision);
-        }
-      }
-      const link = db.prepare('INSERT INTO pm_reasoning_links VALUES(?,?,?,?,?,?,?)');
-      for (const row of snapshot.program.links ?? []) link.run(id, row.id, row.from, row.to, row.relation, row.rationale ?? null, snapshot.revision);
-      const theory = db.prepare('INSERT INTO pm_reasoning_theories VALUES(?,?,?,?,?,?,?,?,?)');
-      for (const row of snapshot.theories ?? []) theory.run(id, row.id, row.label, row.status, JSON.stringify(row.facts), JSON.stringify(row.laws), JSON.stringify(row.tests), JSON.stringify(row.issues), snapshot.revision);
-      db.prepare('INSERT INTO pm_reasoning_turns VALUES(?,?,?,?)').run(id, turnId, snapshot.revision, JSON.stringify(snapshot));
-    })();
-  };
+
   const projectId = (cwd: string) => {
     if (!cwd) throw new TypeError('Dossier requis.');
     const projects = database().prepare('SELECT project_id, project_path FROM projects').all() as Array<{ project_id: string; project_path: string }>;
@@ -257,115 +101,190 @@ export function createReasoningService(getDatabase: () => Database.Database) {
     if (!project) throw new TypeError('Dossier non enregistré.');
     return project.project_id;
   };
+
+  const rows = (id: string) => database().prepare('SELECT * FROM pm_reasoning_items WHERE project_id=?').all(id) as ItemRow[];
+  const items = (id: string) => new Map(rows(id).map((row): [string, ReasoningItem] => {
+    const review: ReasoningReview | undefined = row.status === 'proposé' ? undefined : { status: row.status as 'validé' | 'écarté', at: row.updated_at, ...(row.note ? { note: row.note } : {}) };
+    const lawyer = row.author === 'avocat' && row.kind === 'fait';
+    return [row.item_id, { ...(review ? { review } : {}), ...(lawyer ? { value: JSON.parse(row.value_json ?? 'null') as ReasoningValue, force: row.force as ReasoningForce | null, appreciation: row.appreciation ?? '', sources: JSON.parse(row.sources_json) as string[] } : {}) }];
+  }));
+
   const read = (cwd: string): ReasoningSnapshot => {
-    const id = projectId(cwd);
-    const row = database().prepare('SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=?').get(id) as { snapshot_json: string } | undefined;
-    if (!row) return emptySnapshot();
-    const snapshot = JSON.parse(row.snapshot_json) as ReasoningSnapshot;
-    const program = resolveEvidence(database(), id, resolveInputs(database(), id, snapshot.program));
-    const conflicts = detectConflicts(program);
-    if (JSON.stringify(program) === JSON.stringify(snapshot.program)) return { ...snapshot, conflicts, theories: assessTheories(program, snapshot.evaluations, snapshot.changes) };
-    return commit(id, snapshot, program, [], `sql_${digest(JSON.stringify(program))}_${snapshot.revision}`);
+    const row = database().prepare('SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=?').get(projectId(cwd)) as { snapshot_json: string } | undefined;
+    return row ? JSON.parse(row.snapshot_json) as ReasoningSnapshot : emptySnapshot();
   };
-  const commit = (id: string, previous: ReasoningSnapshot, program: ReasoningProgram, notes: string[], turnId: string): ReasoningSnapshot => {
-    const evaluations = evaluateProgram(program);
-    const changes = changesSince(previous, evaluations);
-    const theories = assessTheories(program, evaluations, changes);
-    const snapshot: ReasoningSnapshot = { revision: previous.revision + 1, updatedAt: new Date().toISOString(), program, evaluations, changes, conflicts: detectConflicts(program), theories, notes, diagnostics: [...notes, ...(program.nodes.length ? [...theories.flatMap((theory) => theory.issues.map((issue) => `${theory.id} : ${issue}`)), ...completeness(program, theories)] : ['Sources collectées : raisonnement non formalisé. Aucun résultat exécuté.'])] };
-    persist(id, snapshot, turnId);
+
+  const commit = (id: string, previous: ReasoningSnapshot, program: CatalaProgram, sources: ReasoningSource[], notes: string[], turnId?: string): ReasoningSnapshot => {
+    const db = database();
+    const used = referencedSources(program);
+    const kept = sources.filter((source) => used.has(source.id));
+    const evaluation = evaluateReasoning(program, new Map(kept.map((source) => [source.id, source])), items(id));
+    const snapshot: ReasoningSnapshot = {
+      revision: previous.revision + 1, updatedAt: new Date().toISOString(), code: printCatala(program), sources: kept,
+      questions: evaluation.questions, conditions: evaluation.conditions, facts: evaluation.facts,
+      diagnostics: [...notes, ...evaluation.diagnostics],
+    };
+    const now = new Date().toISOString();
+    db.transaction(() => {
+      db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET revision=excluded.revision, code=excluded.code, snapshot_json=excluded.snapshot_json').run(id, snapshot.revision, snapshot.code, JSON.stringify(snapshot));
+      const live = new Set([...snapshot.conditions.map((condition) => condition.id), ...snapshot.facts.map((fact) => fact.id)]);
+      for (const row of rows(id)) if (row.status === 'proposé' && !live.has(row.item_id)) db.prepare('DELETE FROM pm_reasoning_items WHERE project_id=? AND item_id=?').run(id, row.item_id);
+      const upsert = db.prepare(`INSERT INTO pm_reasoning_items(project_id,item_id,kind,label,status,value_json,force,appreciation,author,sources_json,locked_json,note,updated_at) VALUES(?,?,?,?,'proposé',?,?,?,'ia',?,NULL,NULL,?)
+        ON CONFLICT(project_id,item_id) DO UPDATE SET label=excluded.label, value_json=CASE WHEN author='avocat' THEN value_json ELSE excluded.value_json END, force=CASE WHEN author='avocat' THEN force ELSE excluded.force END, appreciation=CASE WHEN author='avocat' THEN appreciation ELSE excluded.appreciation END, sources_json=CASE WHEN author='avocat' THEN sources_json ELSE excluded.sources_json END`);
+      for (const condition of snapshot.conditions) upsert.run(id, condition.id, 'condition', condition.label, JSON.stringify(condition.value), null, null, JSON.stringify(condition.sources), now);
+      for (const fact of snapshot.facts) upsert.run(id, fact.id, 'fait', fact.variable, JSON.stringify(fact.value), fact.force, fact.appreciation, JSON.stringify(fact.sources), now);
+      if (turnId) db.prepare('INSERT INTO pm_reasoning_turns VALUES(?,?,?)').run(id, turnId, snapshot.revision);
+    })();
     return snapshot;
   };
+
+  const locks = (id: string) => rows(id).filter((row) => row.locked_json).map((row) => [row.item_id, JSON.parse(row.locked_json!) as Lock] as const);
+
+  const reload = (id: string, cwd: string, note: string) => {
+    const previous = read(cwd);
+    const program = parseCatala(previous.code);
+    for (const [item, lock] of locks(id)) applyLock(program, item, lock);
+    return commit(id, previous, program, previous.sources, [note]);
+  };
+
+  const summary = (snapshot: ReasoningSnapshot) => {
+    const toReview = [...snapshot.conditions, ...snapshot.facts].filter((item) => !item.review).length;
+    const missing = snapshot.facts.filter((fact) => !fact.sources.length).length;
+    const answers = snapshot.questions.map((question) => `${question.scope} : ${question.status}${question.valid ? '' : ' (incomplet)'}`).join(' ; ');
+    return `Raisonnement · révision ${snapshot.revision} · ${answers || 'aucune question'} · ${snapshot.conditions.length} conditions · ${snapshot.facts.length} faits${missing ? ` dont ${missing} sans pièce` : ''} · ${toReview} élément(s) à valider dans le volet Raisonnement.`;
+  };
+
   database();
   return {
     read,
-    review(cwd: string, target: string, decision: 'retained' | 'rejected' | null, note?: string): ReasoningSnapshot {
+    review(cwd: string, target: string, status: 'validé' | 'écarté' | null, note?: string): ReasoningSnapshot {
       const id = projectId(cwd);
-      const previous = read(cwd);
-      if (!['retained', 'rejected', null].includes(decision)) throw new TypeError('Décision attendue : retained, rejected ou null.');
+      if (![null, 'validé', 'écarté'].includes(status)) throw new TypeError('Décision attendue : validé, écarté ou null.');
       if (note !== undefined && (typeof note !== 'string' || note.length > 2000)) throw new TypeError('Note trop longue.');
-      const review = decision ? { decision, at: new Date().toISOString(), ...(note?.trim() ? { note: note.trim() } : {}) } : undefined;
-      const apply = <T extends { id: string; review?: unknown }>(item: T): T => {
-        if (item.id !== target) return item;
-        const { review: _old, ...rest } = item;
-        return (review ? { ...rest, review } : rest) as T;
-      };
-      if (!previous.program.nodes.some((node) => node.id === target) && !previous.program.tests.some((test) => test.id === target)) throw new TypeError('Proposition ou test introuvable.');
-      const program = { ...previous.program, nodes: previous.program.nodes.map(apply), tests: previous.program.tests.map(apply) };
-      validateProgram(program);
-      return commit(id, previous, program, [`Décision de l’avocat sur ${target} : ${decision === 'retained' ? 'retenu' : decision === 'rejected' ? 'écarté' : 'annulée'}${note?.trim() ? ` (${note.trim()})` : ''}.`], `review_${randomUUID()}`);
+      const row = rows(id).find((entry) => entry.item_id === target);
+      if (!row) throw new TypeError('Élément introuvable.');
+      const lock = status ? JSON.stringify(itemRules(parseCatala(read(cwd).code), target)) : null;
+      const reset = status === null && row.kind === 'fait';
+      database().prepare(`UPDATE pm_reasoning_items SET status=?, locked_json=?, note=?, updated_at=?${reset ? ", author='ia'" : ''} WHERE project_id=? AND item_id=?`).run(status ?? 'proposé', lock, note?.trim() || null, new Date().toISOString(), id, target);
+      return reload(id, cwd, `Avocat · ${target} : ${status ?? 'décision annulée'}${note?.trim() ? ` (${note.trim()})` : ''}.`);
+    },
+    appreciate(cwd: string, target: string, input: { value: ReasoningValue; force: string | null; appreciation: string; note?: string }): ReasoningSnapshot {
+      const id = projectId(cwd);
+      const row = rows(id).find((entry) => entry.item_id === target && entry.kind === 'fait');
+      if (!row) throw new TypeError('Fait introuvable.');
+      if (input.force !== null && !REASONING_FORCES.includes(input.force as ReasoningForce)) throw new TypeError('Force probante inconnue.');
+      if (typeof input.appreciation !== 'string' || input.appreciation.length > 2000) throw new TypeError('Appréciation invalide.');
+      if (input.value === null || input.value === undefined) throw new TypeError('Valeur requise.');
+      const program = parseCatala(read(cwd).code);
+      const lock = itemRules(program, target);
+      const [scope, variable] = target.split('.');
+      if (!lock.rules.length) {
+        const dossier = program.declarations.find((declaration) => declaration.items.some((item) => item.role === 'champ' && item.scope === scope));
+        const sub = dossier?.items.find((item) => item.role === 'champ' && item.scope === scope);
+        if (!dossier || !sub) throw new TypeError('Aucun champ d’application Dossier ne reçoit ce fait.');
+        Object.assign(lock, { scope: dossier.scope, rules: [{ kind: 'définition', target: [sub.name, variable], consequence: { t: 'lit', v: null }, attrs: {} }] });
+      }
+      lock.rules = lock.rules.map((rule) => ({ ...rule, condition: undefined, consequence: { t: 'lit', v: input.value }, attrs: { ...rule.attrs, force: input.force ? [input.force] : [], 'appréciation': input.appreciation.trim() ? [input.appreciation.trim()] : [] } }));
+      for (const rule of lock.rules) for (const key of ['force', 'appréciation']) if (!rule.attrs[key].length) delete rule.attrs[key];
+      database().prepare("UPDATE pm_reasoning_items SET status='validé', author='avocat', value_json=?, force=?, appreciation=?, locked_json=?, note=?, updated_at=? WHERE project_id=? AND item_id=?")
+        .run(JSON.stringify(input.value), input.force, input.appreciation.trim(), JSON.stringify(lock), input.note?.trim() || null, new Date().toISOString(), id, target);
+      return reload(id, cwd, `Avocat · ${target} = ${printValue(input.value)}${input.force ? ` (${input.force})` : ''}.`);
     },
     context(cwd: string) {
       try {
         const snapshot = read(cwd);
-        if (!snapshot.revision && !snapshot.diagnostics.length) return '';
-        const state = JSON.stringify(snapshot);
-        return `État du programme après les tours précédents (les valeurs connues sont déduites du modèle, pas des faits judiciairement établis) :\n${state.length <= 48000 ? state : JSON.stringify({ revision: snapshot.revision, diagnostics: snapshot.diagnostics, changes: snapshot.changes, note: 'État complet à récupérer par SQL.' })}\nSQL état complet : SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=dossier();\nSQL résultats : SELECT * FROM pm_reasoning_results WHERE project_id=dossier();`;
+        if (!snapshot.revision) return '';
+        const locked = [...snapshot.conditions, ...snapshot.facts].filter((item) => item.review).map((item) => `${item.id} (${item.review!.status})`);
+        const todo = [
+          ...snapshot.diagnostics,
+          ...snapshot.questions.flatMap((question) => question.issues.map((issue) => `${question.scope} : ${issue}`)),
+          ...snapshot.conditions.flatMap((condition) => condition.issues.map((issue) => `${condition.id} : ${issue}`)),
+          ...snapshot.facts.flatMap((fact) => fact.issues.map((issue) => `${fact.id} : ${issue}`)),
+        ];
+        const sources = snapshot.sources.map((source) => `${source.id} = ${source.title} « ${source.excerpt.slice(0, 160)} »`);
+        const text = [
+          `Raisonnement enregistré (révision ${snapshot.revision}) : réécris-le en entier en le complétant.`,
+          '<RAISONNEMENT_ACTUEL>', snapshot.code, '</RAISONNEMENT_ACTUEL>',
+          sources.length ? `Sources enregistrées (réutilisables par leur identifiant) :\n${sources.join('\n')}` : '',
+          locked.length ? `Verrouillé par l'avocat, à recopier à l'identique : ${locked.join(', ')}.` : '',
+          todo.length ? `À traiter :\n- ${todo.join('\n- ')}` : '',
+        ].filter(Boolean).join('\n');
+        return text.length <= 40_000 ? text : `${text.slice(0, 40_000)}\n… (suite : SELECT code, snapshot_json FROM pm_reasoning_programs WHERE project_id=dossier();)`;
       } catch { return ''; }
     },
-    ingest(input: { cwd: string; sessionId: string; turnId?: string; block: string; sources: ReasoningSource[] }): string {
+    ingest(input: { cwd: string; sessionId: string; turnId: string; code: string; sources: TurnSource[] }): string {
       const id = projectId(input.cwd);
       const db = database();
-      const turnId = digest(`${input.sessionId}\0${input.turnId ?? JSON.stringify([input.block, input.sources])}`);
+      const turnId = createHash('sha256').update(`${input.sessionId}\0${input.turnId}`).digest('hex');
       if (db.prepare('SELECT 1 FROM pm_reasoning_turns WHERE project_id=? AND turn_id=?').get(id, turnId)) return '';
       const previous = read(input.cwd);
-      let program: ReasoningProgram;
-      let notes: string[];
-      try { ({ program, notes } = mergeProgram(previous.program, input.block, input.sources)); }
-      catch (error) {
-        const diagnostic = error instanceof Error ? error.message : 'Programme invalide.';
-        const rejected = { ...previous, diagnostics: [diagnostic] };
-        db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?) ON CONFLICT(project_id) DO UPDATE SET snapshot_json=excluded.snapshot_json').run(id, previous.revision, JSON.stringify(rejected));
-        return `\n\nProgramme non appliqué : ${diagnostic} Le programme précédent est conservé.`;
+      if (!input.code.trim()) return '';
+      let program: CatalaProgram;
+      try {
+        if (input.code.length > MAX_CODE) throw new SyntaxError('Code trop long.');
+        program = parseCatala(input.code);
+      } catch (error) {
+        const message = `Raisonnement non appliqué : ${error instanceof Error ? error.message : 'code illisible'} Le raisonnement précédent est conservé.`;
+        db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET snapshot_json=excluded.snapshot_json').run(id, previous.revision, previous.code, JSON.stringify({ ...previous, diagnostics: [message] }));
+        return message;
       }
-      if (!previous.revision && !program.sources.length && !program.nodes.length) return '';
-      program = resolveEvidence(db, id, resolveInputs(db, id, program));
-      if (notes.length && JSON.stringify(program) === JSON.stringify(previous.program)) {
-        db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?) ON CONFLICT(project_id) DO UPDATE SET snapshot_json=excluded.snapshot_json').run(id, previous.revision, JSON.stringify({ ...previous, diagnostics: notes }));
-        return `\n\n${notes.join(' ')} Aucune modification du programme.`;
+      const notes: string[] = [];
+      const known = new Map(previous.sources.map((source) => [source.id, source]));
+      for (const { ref: _ref, ...source } of input.sources) known.set(source.id, source);
+      for (const body of program.bodies) for (const rule of body.rules) if (rule.attrs.selon) {
+        rule.attrs.selon = [...new Set(rule.attrs.selon.flatMap((value) => {
+          if (!/^\d+$/.test(value)) return [value];
+          const matches = input.sources.filter((source) => source.ref === Number(value)).map((source) => source.id);
+          if (!matches.length) notes.push(`Source [${value}] absente du bloc CITATIONS.`);
+          return matches.length ? matches : [`ref${value}`];
+        }))];
       }
-      const snapshot = commit(id, previous, program, notes, turnId);
-      const { evaluations, conflicts = [] } = snapshot;
-      const tests = evaluations.flatMap((evaluation) => evaluation.tests);
-      if (!program.nodes.length) return `\n\nSources collectées · ${program.sources.length} extraits · raisonnement non formalisé. Aucun résultat exécuté, aucun test. Formalisation attendue au prochain tour pour une analyse de fond.`;
-      const base = evaluations[0].results;
-      const unestablished = evaluations[0].results.filter((result) => result.proof === 'unestablished' && program.nodes.some((node) => node.id === result.id && node.evidence)).length;
-      return `${notes.length ? `\n\n${notes.join(' ')}` : ''}\n\nProgramme du dossier · révision ${snapshot.revision} ·${unestablished ? ` ${unestablished} pièce(s) à produire ·` : ''} ${program.nodes.filter((node) => node.layer === 'law').length} règles de droit · ${program.nodes.filter((node) => node.kind === 'fact').length} faits · ${program.nodes.filter((node) => node.layer === 'theory').length} propositions de théorie · ${base.filter((result) => result.status === 'blocked').length} bloqués · ${base.filter((result) => result.status === 'unknown').length} indéterminés · ${conflicts.length} conflits potentiels · ${tests.length ? `${tests.filter((test) => test.passed).length}/${tests.length} tests du modèle réussis` : 'aucun test formalisé'}. État et modifications disponibles dans le volet Raisonnement et par SQL.`;
+      for (const [item, lock] of locks(id)) if (applyLock(program, item, lock)) notes.push(`Modification ignorée : ${item} est verrouillé par l'avocat.`);
+      const snapshot = commit(id, previous, program, [...known.values()], notes, turnId);
+      return [...notes, summary(snapshot)].join(' ');
     },
   };
 }
 
 export function reasoningExample(): ReasoningSnapshot {
-  const program: ReasoningProgram = {
-    version: 1,
-    sources: [
-      { id: 'src_invoice', nature: 'simulation', ref: 1, quoteIndex: 0, token: '', document: 'exemple_facture', title: 'Facture fictive', excerpt: 'La facture du 15 juin 2024 indique un montant de 12 000 euros.', hash: 'demo1', verified: true, repaired: false },
-      { id: 'src_payment', nature: 'simulation', ref: 2, quoteIndex: 0, token: '', document: 'exemple_versement', title: 'Déclaration fictive', excerpt: 'La déclaration du 16 juin 2024 rapporte un versement contesté de 4 000 euros du 15 juin 2024.', hash: 'demo2', verified: true, repaired: false },
-      { id: 'src_rule', nature: 'simulation', ref: 3, quoteIndex: 0, token: '', document: 'exemple_regle', title: 'Règle fictive datée', excerpt: 'Pour cette simulation, comparer le solde au seuil de 10 000 euros pendant l’année 2024.', hash: 'demo3', verified: true, repaired: false, validity: { from: '2024-01-01', to: '2025-01-01' } },
-    ],
-    nodes: [
-      { id: 'F_date', kind: 'fact', layer: 'fact', label: 'Date pertinente fictive', value: '2024-06-15', sources: ['src_invoice'] },
-      { id: 'R_seuil', kind: 'rule', layer: 'law', label: 'Règle fictive : comparer au seuil', sources: ['src_rule'], parameters: ['montant'], validity: { from: '2024-01-01', to: '2025-01-01' }, expression: { op: 'greater', args: [{ ref: 'montant' }, 1000000] }, rationale: 'Règle entièrement fictive pour démontrer une application datée ; aucune disposition de droit réel.' },
-      { id: 'F_facture', kind: 'fact', label: 'Montant facturé (centimes)', layer: 'fact', value: 1200000, relation: { subject: 'entite_exemple_a', predicate: 'montant_facture', object: 'entite_exemple_b', context: 'facture_exemple', unit: 'centime', eventDate: '2024-06-15', documentDate: '2024-06-15' }, sources: ['src_invoice'] },
-      { id: 'F_versement', kind: 'fact', label: 'Versement contesté (centimes)', layer: 'fact', value: 400000, relation: { subject: 'entite_exemple_b', predicate: 'versement_allegue', object: 'entite_exemple_a', context: 'versement_exemple', unit: 'centime', eventDate: '2024-06-15', documentDate: '2024-06-16' }, state: 'disputed', sources: ['src_payment'] },
-      { id: 'C_solde', kind: 'calculation', layer: 'theory', rationale: 'Solde arithmétique sous réserve du versement contesté.', label: 'Solde documentaire (centimes)', expression: { op: 'subtract', args: [{ ref: 'F_facture' }, { ref: 'F_versement' }] }, sources: [] },
-      { id: 'K_seuil', kind: 'conclusion', label: 'Le solde dépasse 10 000 €', expression: { apply: 'R_seuil', bindings: { montant: { ref: 'C_solde' } }, at: { ref: 'F_date' } }, layer: 'theory', sources: [], rationale: 'Application de la règle fictive pendant sa période de validité, sans qualification juridique réelle.' },
-    ],
-    scenarios: [
-      { id: 'versement_retenu', label: 'Hypothèse : versement de 4 000 €', assumptions: { F_versement: 400000 } },
-      { id: 'aucun_versement', label: 'Hypothèse : aucun versement', assumptions: { F_versement: 0 } },
-      { id: 'hors_periode', label: 'Hypothèse : règle expirée', assumptions: { F_date: '2025-01-01', F_versement: 0 } },
-    ],
-    links: [{ id: 'L_chronologie', from: 'F_facture', to: 'F_versement', relation: 'precedes', rationale: 'Ordre attendu des événements fictifs.' }],
-    tests: [
-      { id: 'T_conclusion_base', label: 'Versement contesté : conclusion indéterminée', target: 'K_seuil', expected: { status: 'unknown' }, rationale: 'Le solde dépend du fait contesté ; la règle ne permet pas de trancher sans hypothèse.' },
-      { id: 'T_conclusion_versement', label: 'Avec versement : seuil non dépassé', target: 'K_seuil', scenario: 'versement_retenu', expected: { status: 'known', value: false }, rationale: '12 000 moins 4 000 donne 8 000, inférieur au seuil fictif de 10 000.' },
-      { id: 'T_conclusion_zero', label: 'Sans versement : seuil dépassé', target: 'K_seuil', scenario: 'aucun_versement', expected: { status: 'known', value: true }, rationale: '12 000 dépasse le seuil fictif de 10 000 pendant la validité de la règle.' },
-      { id: 'T_conclusion_periode', label: 'Fin de validité : application bloquée', target: 'K_seuil', scenario: 'hors_periode', expected: { status: 'blocked' }, rationale: 'Le premier jour hors de la période ne permet pas d’appliquer cette version de la règle, même si le montant dépasse le seuil.' },
-      { id: 'T_inconnu', label: 'Le dossier seul ne fixe pas le solde', target: 'C_solde', expected: { status: 'unknown' } },
-      { id: 'T_retenu', label: 'Avec versement : 8 000 €', target: 'C_solde', scenario: 'versement_retenu', expected: { status: 'known', value: 800000 } },
-      { id: 'T_sans', label: 'Sans versement : 12 000 €', target: 'C_solde', scenario: 'aucun_versement', expected: { status: 'known', value: 1200000 } },
-    ],
-  };
-  const evaluations = evaluateProgram(program);
-  return { revision: 0, updatedAt: null, program, evaluations, theories: assessTheories(program, evaluations), conflicts: detectConflicts(program), changes: [], diagnostics: [], demo: true };
+  const article: ReasoningSource = { id: 'sdemo0001', kind: 'article', document: 'article:LEGIARTI000000000001', title: 'Code fictif, article 1', excerpt: 'Les indemnités de départ des dirigeants de sociétés cotées sont soumises à l’approbation préalable de l’assemblée générale.', token: '', verified: true, repaired: false, validity: { from: '2019-05-24', to: null } };
+  const piece: ReasoningSource = { id: 'sdemo0002', kind: 'document', document: 'document:pieces/pv-ag-exemple.md', title: 'Procès-verbal fictif d’assemblée générale', excerpt: 'L’assemblée générale approuve l’indemnité de départ du directeur général.', token: '', verified: true, repaired: false };
+  const date: ReasoningSource = { id: 'sdemo0003', kind: 'document', document: 'document:pieces/courrier-exemple.md', title: 'Courrier fictif de révocation', excerpt: 'Le versement est demandé le 1er mars 2024.', token: '', verified: true, repaired: false };
+  const code = `#[question = "Le dirigeant d'une société cotée peut-il obtenir le versement de son indemnité de départ ?"]
+#[date_de_référence = date_versement]
+déclaration champ d'application Indemnite:
+  entrée date_versement contenu date
+  entrée societe_cotee contenu booléen
+  entrée vote_ex_ante contenu booléen
+  entrée vote_ex_post contenu booléen
+  interne personne condition
+  interne approbation_ex_ante condition
+  interne approbation_ex_post condition
+  résultat versement condition
+
+champ d'application Indemnite:
+  #[libellé = "Société dont les titres sont admis sur un marché réglementé"]
+  #[selon = sdemo0001]
+  règle personne sous condition societe_cotee conséquence rempli
+  #[libellé = "Approbation préalable par l'assemblée générale"]
+  #[selon = sdemo0001]
+  règle approbation_ex_ante sous condition vote_ex_ante conséquence rempli
+  #[libellé = "Approbation a posteriori du versement"]
+  règle approbation_ex_post sous condition vote_ex_post conséquence rempli
+  #[selon = sdemo0001]
+  règle versement sous condition personne et approbation_ex_ante et approbation_ex_post conséquence rempli
+
+déclaration champ d'application Dossier:
+  indemnite champ Indemnite
+
+champ d'application Dossier:
+  #[selon = sdemo0003] #[force = acte_sous_seing_privé] #[appréciation = "Date de la demande de versement"]
+  définition indemnite.date_versement égal à |2024-03-01|
+  #[selon = sdemo0002] #[force = acte_sous_seing_privé] #[appréciation = "Procès-verbal signé par le bureau"]
+  définition indemnite.vote_ex_ante égal à vrai
+`;
+  const program = parseCatala(code);
+  const sources = [article, piece, date];
+  const evaluation = evaluateReasoning(program, new Map(sources.map((source) => [source.id, source])), new Map());
+  return { revision: 0, updatedAt: null, code: printCatala(program), sources, ...evaluation, demo: true };
 }

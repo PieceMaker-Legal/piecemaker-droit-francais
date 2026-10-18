@@ -67,6 +67,7 @@ Ces templates peuvent être déplacés vers `~/.piecemaker/templates/` pour un e
 
 - **Citations vérifiables uniquement** : voir la skill `recherche-juridique` pour le détail des outils et de la procédure de vérification. Ne jamais produire un identifiant de texte ou de décision non confirmé.
 - **Ne jamais réutiliser un nom réel** présent dans une pièce anonymisée du dossier pour rédiger un extrait destiné à sortir du dossier de travail — rester sur les codes du mapping (`PERSONNE_PHYSIQUE_1`, `PERSONNE_MORALE_1`, `SOCIETE_SCI_1`, `ADRESSE_1`, etc.) tant que le document n'est pas définitivement destiné à un usage interne au dossier.
+- **Notes de bas de page vérifiées** : dans le `.docx`, aucun marqueur `[n]` ; chaque source est une note de bas de page (source, emplacement, extrait exact). Dans le chat, terminer par un bloc `<CITATIONS>` (format de la skill `recherche-juridique`) dont chaque `ref` est le numéro de la note : le serveur vérifie chaque extrait.
 - **Respecter les règles de validation du template** (ex. : une section "FAITS" doit s'appuyer sur des notes de bas de page référençant les pièces communiquées) plutôt que de les contourner pour faire passer un placeholder vide ou incomplet.
 - L'édition du document de travail passe par le skill `docx-cli` : le binaire
   `docx` mute l'OOXML en place, sans dépaquetage ni application Word, et sans

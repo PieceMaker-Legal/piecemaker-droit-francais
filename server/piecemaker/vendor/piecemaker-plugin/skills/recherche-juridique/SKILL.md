@@ -95,11 +95,10 @@ tabulaire en mode recherche).
   pas un écart de sens).
 - **Au plus 3 extraits par citation**, chacun **25 mots maximum**, bien ciblés
   sur l'affirmation qu'ils appuient.
-- **Références contiguës** : les marqueurs `[N]` dans le texte de la réponse
-  vont de `[1]` à `[N]` sans saut, dans l'ordre de première apparition. Chaque
-  `[N]` a exactement une entrée correspondante `"ref": N` dans le bloc
-  `<CITATIONS>`. Réutiliser un `ref` existant pour citer à nouveau la même
-  source/le même passage plutôt que d'en créer un nouveau.
+- **Références** : dans une analyse, aucun marqueur `[N]` dans la réponse ;
+  chaque `"ref": N` du bloc `<CITATIONS>` est rattaché à une condition ou à un
+  fait par `#[selon = N]` dans le bloc `<RAISONNEMENT>`. Dans un acte `.docx`,
+  `ref` est le numéro de la note de bas de page.
 - Si une source utile n'a pas encore été lue, la lire avant de la citer — ou,
   à défaut, dire qu'elle n'a pas pu être lue et ne pas s'appuyer dessus.
 

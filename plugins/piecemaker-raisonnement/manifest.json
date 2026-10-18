@@ -1,12 +1,14 @@
 {
   "name": "piecemaker-raisonnement",
   "displayName": "Raisonnement",
-  "version": "0.2.0",
-  "description": "Droit daté, faits et relations SQL, théories exécutables et conflits potentiels.",
+  "version": "0.3.0",
+  "description": "Question de droit, conditions fondées et faits prouvés par pièces, validés par l'avocat.",
   "icon": "icon.svg",
   "type": "module",
   "slot": "tab",
   "entry": "dist/index.js",
   "permissions": [],
-  "piecemakerSources": { "index": "src/client.ts" }
+  "piecemakerSources": {
+    "index": "src/client.ts"
+  }
 }

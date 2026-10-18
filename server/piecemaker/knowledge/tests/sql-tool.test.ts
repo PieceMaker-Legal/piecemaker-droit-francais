@@ -10,13 +10,13 @@ import { KnowledgeStore } from '../../../../plugins/piecemaker-dossier/src/knowl
 import { createReasoningService } from '@/modules/piecemaker-reasoning/index.js';
 import { createSqlTool } from '../sql-tool.js';
 
-test('le programme issu de CITATIONS est lisible par dossier() et ses tables sont protégées des écritures SQL', async () => {
+test('le raisonnement est lisible par dossier() et ses tables sont protégées des écritures SQL', async () => {
   await withFixture(async (context) => {
     const service = createReasoningService(() => context.appDb);
-    service.ingest({ cwd: context.roots.one, sessionId: 's', sources: [], block: `<CITATIONS>${JSON.stringify([{ kind: 'program', version: 1, nodes: [{ id: 'F_inconnu', kind: 'fact', label: 'Question à résoudre', state: 'unknown' }] }])}</CITATIONS>` });
-    assert.match(await context.run('SELECT node_id,status,revision FROM pm_reasoning_results WHERE project_id=dossier()'), /F_inconnu\tunknown\t1/);
-    assert.match(await context.run('SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=dossier()'), /Question à résoudre/);
-    await assert.rejects(context.run("UPDATE pm_reasoning_results SET status='known'"), /lecture SQL uniquement/);
+    service.ingest({ cwd: context.roots.one, sessionId: 's', turnId: 't', sources: [], code: "déclaration champ d'application Question:\n  entrée cotee contenu booléen\n  résultat effet condition\nchamp d'application Question:\n  règle effet sous condition cotee conséquence rempli\n" });
+    assert.match(await context.run('SELECT item_id,status,author FROM pm_reasoning_items WHERE project_id=dossier() ORDER BY item_id'), /Question\.cotee\tproposé\tia/);
+    assert.match(await context.run('SELECT code FROM pm_reasoning_programs WHERE project_id=dossier()'), /règle effet/);
+    await assert.rejects(context.run("UPDATE pm_reasoning_items SET status='validé'"), /lecture SQL uniquement/);
     await assert.rejects(context.run('DELETE FROM pm_reasoning_programs'), /lecture SQL uniquement/);
   });
 });
