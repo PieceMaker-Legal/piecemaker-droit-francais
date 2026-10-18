@@ -149,3 +149,4 @@ try {
   if (page && child?.exitCode === null) await stop(page).catch(() => {});
   await fs.writeFile(path.join(output, 'installation-verification.log'), log);
 }
+process.exit(0);
