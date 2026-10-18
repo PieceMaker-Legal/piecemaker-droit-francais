@@ -216,18 +216,18 @@ export function createReasoningService(getDatabase: () => Database.Database, con
       ...question.issues.map((issue): ReasoningFinding => ({ level: 'alerte', subject: question.scope, text: issue })),
       ...snapshot.conditions.filter((condition) => condition.scope === question.scope && condition.variable !== question.result).flatMap((condition) => condition.issues.map((issue): ReasoningFinding => ({ level: 'alerte', subject: condition.label, text: issue }))),
       ...snapshot.facts.filter((fact) => fact.scope === question.scope && fact.status !== 'établi').map((fact): ReasoningFinding => ({ level: 'alerte', subject: fact.variable, text: fact.issues[0] ?? 'Fait à prouver.' })),
-    ]);
+    ]).concat(snapshot.diagnostics.filter((line) => !line.startsWith('Avocat · ')).map((line): ReasoningFinding => ({ level: 'alerte', subject: 'Programme', text: line })));
   };
 
   database();
   return {
     read,
-    describe(cwd: string, focus: string | null = null) {
-      return describeState(read(cwd), loadModel(projectId(cwd)), focus);
+    describe(cwd: string, focus: string | null = null, full = false) {
+      return describeState(read(cwd), loadModel(projectId(cwd)), focus, full);
     },
     async command(cwd: string, input: ReasoningCommand): Promise<string> {
-      if (input.commande === 'etat' || input.commande === undefined) return this.describe(cwd, typeof input.question === 'string' ? input.question : null);
-      if (input.commande === 'tester') return this.test(cwd).then((snapshot) => describeTest(snapshot.test!));
+      if (input.commande === 'etat' || input.commande === undefined) return this.describe(cwd, typeof input.question === 'string' ? input.question : null, input.vue === 'complete');
+      if (input.commande === 'tester') return this.test(cwd).then((snapshot) => `${describeTest(snapshot.test!)}\n\n${describeState(snapshot, loadModel(projectId(cwd)), null, false, false)}`);
       const id = projectId(cwd);
       const previous = read(cwd);
       const locked = new Set(rows(id).filter((row) => row.locked_json).map((row) => row.item_id));
@@ -329,7 +329,14 @@ function resolution(snapshot: ReasoningSnapshot): ReasoningLogEntry[] {
 
 function describeTest(test: ReasoningTestReport) {
   const alerts = test.findings.filter((finding) => finding.level === 'alerte');
-  return [`Test : ${alerts.length ? `${alerts.length} alerte(s)` : 'aucune alerte'}.`, ...test.findings.map((finding) => `${finding.level === 'alerte' ? '⚠' : '✓'} ${finding.subject} : ${finding.text}`)].join('\n');
+  const subjects = [...new Set(alerts.map((finding) => finding.subject))];
+  return [
+    `Test : ${alerts.length ? `${alerts.length} alerte(s)` : 'aucune alerte'} · ${test.findings.length - alerts.length} vérification(s) conforme(s).`,
+    ...subjects.flatMap((subject) => {
+      const own = alerts.filter((finding) => finding.subject === subject);
+      return own.length === 1 ? [`⚠ ${subject} : ${own[0].text}`] : [`⚠ ${subject} :`, ...own.map((finding) => `  - ${finding.text}`)];
+    }),
+  ].join('\n');
 }
 
 export function reasoningExample(): ReasoningSnapshot {
