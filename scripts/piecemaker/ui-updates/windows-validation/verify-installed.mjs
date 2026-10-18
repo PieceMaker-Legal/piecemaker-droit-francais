@@ -18,7 +18,29 @@ assert.equal(config.feed, `https://github.com/PieceMaker-Legal/piecemaker-droit-
 assert.equal((await fetch(`${config.feed}/ui-update.json`)).status, 404, 'Step 2 must not be published yet');
 let child;
 let log = '';
-const consent = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '$shell=New-Object -ComObject WScript.Shell; for($i=0;$i -lt 240;$i++){if($shell.AppActivate("PieceMaker — autorisation requise")){$shell.SendKeys("{ENTER}");exit 0};Start-Sleep -Milliseconds 500};exit 1'], { windowsHide: true });
+const consentScript = `
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class CertificateDialog {
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string kind, string title);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+}
+'@
+for($i=0;$i -lt 360;$i++) {
+  $window=[CertificateDialog]::FindWindow($null,"PieceMaker — autorisation requise")
+  if($window -ne [IntPtr]::Zero) {
+    [void][CertificateDialog]::PostMessage($window,0x0111,[IntPtr]1,[IntPtr]::Zero)
+    Write-Output 'LOCAL CERTIFICATE CONSENT CONFIRMED'
+    exit 0
+  }
+  Start-Sleep -Milliseconds 500
+}
+throw 'Local certificate consent dialog was not found'
+`;
+const consent = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', consentScript], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+consent.stdout.on('data', (chunk) => process.stdout.write(chunk));
+consent.stderr.on('data', (chunk) => process.stderr.write(chunk));
 async function waitFor(action, name, timeout = 240000) {
   const deadline = Date.now() + timeout;
   let error;
