@@ -37,13 +37,14 @@ async function waitFor(action, name, timeout = 240000) {
   throw new Error(`${name} timed out: ${error?.message || ''}\n${log.slice(-12000)}`);
 }
 async function start() {
-  child = spawn(executable, ['--remote-debugging-port=39218'], { env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawn(executable, ['--remote-debugging-port=39218'], { env: { ...process.env, PIECEMAKER_VALIDATION_DIAGNOSTICS: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
   const capture = (chunk) => { log += chunk; process.stdout.write(chunk); };
+  child.on('exit', (code, signal) => capture(`[Validation] process exit ${code} ${signal}\n`));
   child.stdout.on('data', capture);
   child.stderr.on('data', capture);
   const target = await waitFor(async () => {
-    const pages = await (await fetch('http://127.0.0.1:39218/json/list')).json();
-    return pages.find((page) => page.type === 'page' && /^http:\/\/(?:localhost|127\.0\.0\.1):3218\//.test(page.url));
+    const pages = await (await fetch('http://127.0.0.1:39218/json/list', { signal: AbortSignal.timeout(3000) })).json();
+    return pages.find((page) => page.type === 'page' && /^http:\/\/(?:localhost|127\.0\.0\.1):/.test(page.url));
   }, 'Installed full application');
   const socket = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });

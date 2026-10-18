@@ -12,4 +12,13 @@ process.env.PIECEMAKER_RUNTIME_CACHE_ROOT = path.join(directory, 'runtime-compon
 process.env.PIECEMAKER_PREBUILT_ASSET_DIR = path.join(path.dirname(app.getPath('exe')), 'resources', 'validation-assets');
 process.env.PIECEMAKER_ANONYMIZER = 'on';
 app.setPath('userData', path.join(directory, 'browser-profile'));
+if (process.env.PIECEMAKER_VALIDATION_DIAGNOSTICS === '1') {
+  const { LocalServerController } = await import('../electron/localServer.js');
+  const appendStartupLog = LocalServerController.prototype.appendStartupLog;
+  LocalServerController.prototype.appendStartupLog = function (line) {
+    console.log(`[Validation server] ${line}`);
+    return appendStartupLog.call(this, line);
+  };
+  app.on('before-quit', () => console.log('[Validation] before-quit'));
+}
 await import('./main.js');
