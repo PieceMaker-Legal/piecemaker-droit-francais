@@ -181,6 +181,12 @@ export async function runReasoning(body) {
   return response.resultat;
 }
 
+export async function sessionDossier(session) {
+  await adoptRunningServerPort();
+  const response = await requestJson({ method: 'GET', path: `${LOCAL_BASE}/session-dossier?${new URLSearchParams({ session })}`, timeout: 5_000 });
+  return response.dossier || null;
+}
+
 export async function runTabularReview(body) {
   await adoptRunningServerPort();
   const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/tabular-review`, body });

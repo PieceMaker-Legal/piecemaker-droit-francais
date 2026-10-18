@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -118,60 +118,18 @@ function conversionArgs({ dossier, pieces, force }) {
   return args;
 }
 
-function realDirectory(value) {
-  try {
-    const resolved = fs.realpathSync(path.resolve(String(value)));
-    return fs.statSync(resolved).isDirectory() ? resolved : null;
-  } catch {
-    return null;
+const SESSION_VARIABLES = ['CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID'];
+
+export async function sessionDossier(cwd, { env = process.env, lookup } = {}) {
+  if (env.PIECEMAKER_DOSSIER) return env.PIECEMAKER_DOSSIER;
+  for (const name of SESSION_VARIABLES) {
+    if (!env[name] || !lookup) continue;
+    try {
+      const dossier = await lookup(env[name]);
+      if (dossier) return dossier;
+    } catch {}
   }
-}
-
-function isInside(root, candidate) {
-  const relative = path.relative(root, candidate);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-}
-
-function caseFolders(env = process.env) {
-  const home = realDirectory(os.homedir());
-  try {
-    const sources = JSON.parse(fs.readFileSync(path.join(env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker'), 'projects.json'), 'utf8')).sources || {};
-    return [...new Set(Object.values(sources).flat().map(realDirectory).filter(Boolean))].filter((folder) => !home || !isInside(folder, home));
-  } catch {
-    return [];
-  }
-}
-
-function processParent(pid) {
-  if (process.platform === 'linux') return Number(fs.readFileSync(`/proc/${pid}/stat`, 'utf8').replace(/^.*\) /s, '').split(' ')[1]);
-  return Number(execFileSync('ps', ['-o', 'ppid=', '-p', String(pid)], { encoding: 'utf8' }).trim());
-}
-
-function processCwd(pid) {
-  if (process.platform === 'linux') return fs.readlinkSync(`/proc/${pid}/cwd`);
-  const line = execFileSync('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'], { encoding: 'utf8' }).split('\n').find((entry) => entry.startsWith('n'));
-  return line ? line.slice(1) : null;
-}
-
-function ancestorCwds(pid = process.ppid, depth = 8) {
-  const cwds = [];
-  if (process.platform === 'win32') return cwds;
-  try {
-    for (let current = pid; current > 1 && cwds.length < depth; current = processParent(current)) {
-      const cwd = processCwd(current);
-      if (cwd) cwds.push(cwd);
-    }
-  } catch {}
-  return cwds;
-}
-
-export function sessionDossier(cwd, { folders = caseFolders(), ancestors = ancestorCwds } = {}) {
-  const inCase = (dir) => {
-    const real = realDirectory(dir);
-    return Boolean(real && folders.some((folder) => isInside(folder, real)));
-  };
-  if (inCase(cwd)) return cwd;
-  return ancestors().find(inCase) ?? cwd;
+  return cwd;
 }
 
 function resolveDossier(dossier, cwd) {
@@ -230,7 +188,7 @@ async function defaultDeps(cwd) {
   const cliPath = path.join(vendor, 'installer', 'bin', 'piecemaker.mjs');
   const panelsPath = panels.openPanelsFile();
   return {
-    sessionDossier,
+    sessionDossier: (cwd) => sessionDossier(cwd, { lookup: client.sessionDossier }),
     sqlFn: client.runSql,
     reasoningFn: client.runReasoning,
     tabularFn: client.runTabularReview,
@@ -353,7 +311,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   if (!TOOLS.includes(tool)) usage(`Outil inconnu : ${tool}`);
   if (flags.help) return HELP;
   const api = deps || await defaultDeps(cwd);
-  const resolved = resolveDossier(flags.dossier, api.sessionDossier ? api.sessionDossier(cwd) : cwd);
+  const resolved = resolveDossier(flags.dossier, flags.dossier || !api.sessionDossier ? cwd : await api.sessionDossier(cwd));
 
   if (tool === 'conversion') {
     const pieces = positional.slice(1);

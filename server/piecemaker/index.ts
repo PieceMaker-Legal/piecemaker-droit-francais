@@ -4,7 +4,7 @@ import path from 'path';
 
 import type { Router } from 'express';
 
-import { getConnection, projectsDb } from '@/modules/database/index.js';
+import { getConnection, projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { createReasoningLocalRouter, createReasoningRouter, createReasoningService } from '@/modules/piecemaker-reasoning/index.js';
 import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
@@ -28,6 +28,7 @@ import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
 import { isLoopback } from './knowledge/local-routes.js';
 import { createReasoningConnectors } from './reasoning-connectors.js';
+import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
 import { createExternalFileRouter, createFileLinksRouter } from './file-links.js';
@@ -99,6 +100,7 @@ startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => 
 const localRouter = express.Router();
 localRouter.use(knowledge.localRouter);
 localRouter.use(createReasoningLocalRouter(reasoning, isLoopback));
+localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
 localRouter.use(createTabularReviewLocalRouter({
   proxyOrigin: () => {
