@@ -311,3 +311,11 @@ les écritures de variables natives échouaient avant le démarrage du serveur.
 Le proxy transmet désormais explicitement les écritures à l'environnement natif,
 tout en conservant la lecture propre à chaque session. Le test utilise le vrai
 `process.env`, sans le remplacer par un objet ordinaire, sur macOS et Windows.
+
+Validation de l'étape 1 réussie : [installation complète Windows](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/actions/runs/39135692984),
+source `eaa21fc0`, avec installation NSIS, compte fictif, proxy actif,
+redémarrage avec session conservée et désinstallation native préservant le
+marqueur des données de production. Les [tests généraux macOS et Windows](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/actions/runs/39135692974)
+sont également réussis. Le consentement graphique aux certificats reste à
+vérifier par l'utilisateur sur son Windows. L'étape 2 n'est pas publiée et
+attend son signal explicite.
