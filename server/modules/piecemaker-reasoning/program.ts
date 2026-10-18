@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import type Database from 'better-sqlite3';
 
-import type { ReasoningIssue, ReasoningPieceReliability, ReasoningSnapshot, ReasoningStatus, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, ReasoningSnapshot, ReasoningStatus, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 import { compile, decisive, reachableLeaves, runTrials, structure } from './engine.js';
 import type { Facts, Trace } from './engine.js';
@@ -25,7 +25,8 @@ export type Person = { label: string; kind: string; siren: string | null; name: 
 export const REASONING_FILE = path.join('.piecemaker', 'raisonnement.js');
 
 const LEGACY_TABLES = ['pm_reasoning_items', 'pm_reasoning_models', 'pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories', 'pm_reasoning_tests', 'pm_reasoning_turns'];
-const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', annotated: null, issues: [], dismissed: [], reliability: [] });
+const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', annotated: null, issues: [], dismissed: [], reliability: [], test: null });
+const human = (name: string) => name.replace(/_/g, ' ');
 const issueId = (kind: string, at: string, text: string) => createHash('sha256').update(`${kind}\0${at}\0${text}`).digest('hex').slice(0, 10);
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const STATUS = (value: ReasoningValue): ReasoningStatus => (value === true ? 'acquis' : value === false ? 'exclu' : 'à établir');
@@ -40,7 +41,7 @@ function node(root: Record<string, unknown>, at: string): Record<string, unknown
   return isObject(current) ? current : null;
 }
 
-export type Verification = { annotated: Record<string, unknown> | null; issues: ReasoningIssue[]; code: string };
+export type Verification = { annotated: Record<string, unknown> | null; issues: ReasoningIssue[]; code: string; log: ReasoningLogEntry[] };
 
 export async function verifyReasoning(input: {
   code: string;
@@ -51,9 +52,13 @@ export async function verifyReasoning(input: {
   persons: Person[];
   dismissed: Set<string>;
   online?: boolean;
+  emit?: (entry: ReasoningLogEntry) => void;
 }): Promise<Verification> {
   const { connectors, cwd } = input;
   const issues: ReasoningIssue[] = [];
+  const log: ReasoningLogEntry[] = [];
+  const emit = (entry: ReasoningLogEntry) => { const index = log.findIndex((item) => item.key === entry.key); if (index >= 0) log[index] = entry; else log.push(entry); input.emit?.(entry); };
+  const issueAt = (at: string) => issues.filter((issue) => issue.path === at || issue.path.startsWith(`${at}.`)).map((issue) => issue.text);
   let lines = new Map<string, number>();
   const add = (kind: ReasoningIssue['kind'], at: string, text: string) => {
     const id = issueId(kind, at, text);
@@ -63,13 +68,14 @@ export async function verifyReasoning(input: {
   let parsed;
   try { parsed = parseLiteral(input.code); } catch (error) {
     if (!(error instanceof LiteralError)) throw error;
-    return { annotated: null, issues: [{ id: issueId('erreur', '', error.message), kind: 'erreur', path: '', line: error.line, text: error.message }], code: input.code };
+    emit({ key: 'lecture', step: 'réponse', status: 'alerte', subject: 'Fichier illisible', text: error.message });
+    return { annotated: null, issues: [{ id: issueId('erreur', '', error.message), kind: 'erreur', path: '', line: error.line, text: error.message }], code: input.code, log };
   }
   lines = parsed.lines;
   const stripped = stripAnnotations(parsed.value);
   const { reasoning, problems } = readReasoning(stripped);
   for (const entry of problems) add('erreur', entry.path, entry.text);
-  if (!isObject(stripped)) return { annotated: null, issues, code: input.code };
+  if (!isObject(stripped)) return { annotated: null, issues, code: input.code, log };
   const annotated = stripped;
 
   const shape = structure(reasoning);
@@ -101,8 +107,9 @@ export async function verifyReasoning(input: {
   const verifiedRefs = new Map<string, boolean>();
   const checkRef = async (at: string, ref: Ref) => {
     const holder = node(annotated, at);
+    emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: 'en cours', subject: ref.piece, text: 'Relecture de la pièce…' });
     const info = await lookup(ref.piece);
-    if (!info) { add('erreur', `${at}.piece`, `pièce introuvable dans le dossier : ${ref.piece}`); verifiedRefs.set(at, false); return; }
+    if (!info) { add('erreur', `${at}.piece`, `pièce introuvable dans le dossier : ${ref.piece}`); verifiedRefs.set(at, false); emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: 'alerte', subject: ref.piece, text: 'Pièce introuvable dans le dossier' }); return; }
     const ok = checkCitation(at, holder, info, ref.citation);
     const reliable = input.reliability.get(ref.piece);
     const nature = input.nature(ref.piece);
@@ -110,12 +117,22 @@ export async function verifyReasoning(input: {
     const personnes = input.persons.filter((person) => cited.includes(person.label)).map((person) => person.label);
     if (holder) Object.assign(holder, { titre: info.title, ...(nature ? { nature } : {}), fiable: reliable ?? null, ...(personnes.length ? { personnes } : {}) });
     verifiedRefs.set(at, ok && reliable !== false);
+    emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: ok && reliable !== false ? 'ok' : 'alerte', subject: info.title, text: !ok ? `Citation introuvable : « ${ref.citation} »` : reliable === false ? 'Pièce marquée non fiable : ignorée' : `« ${String(holder?.citation ?? ref.citation)} »${reliable === undefined ? ' · fiabilité à évaluer' : ''}` });
   };
 
   type BasisCheck = { kind: SourceInfo['kind'] | null; from: string | null; to: string | null };
   const basisChecks = new Map<string, BasisCheck>();
   const checkBasis = async (at: string, basis: Basis) => {
     const holder = node(annotated, at);
+    const key = `source:${basis.source}:${basis.citation}`;
+    emit({ key, step: 'source', status: 'en cours', subject: basis.source, text: 'Consultation de la source…' });
+    await checkBasisInner(at, basis, holder);
+    const title = String(holder?.titre ?? basis.source);
+    const problems = issueAt(at);
+    const check = basisChecks.get(at);
+    emit({ key, step: 'source', status: problems.some((text) => !text.startsWith('vigueur non') && !text.startsWith('source non vérifiable')) ? 'alerte' : problems.length ? 'neutre' : 'ok', subject: title, text: problems.length ? problems.join(' · ') : `« ${String(holder?.citation ?? basis.citation)} »${check?.kind === 'decision' ? '' : check?.from ? ` · version du ${check.from}${check.to ? ` au ${check.to}` : ', toujours en vigueur'}` : ''}` });
+  };
+  const checkBasisInner = async (at: string, basis: Basis, holder: Record<string, unknown> | null) => {
     const info = await lookup(basis.source);
     if (info === undefined) {
       add('manque', `${at}.source`, `source non vérifiable automatiquement : aucun connecteur pour ${basis.source}`);
@@ -210,11 +227,19 @@ export async function verifyReasoning(input: {
     });
   }
   for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = STATUS(statuses.get(name) ?? null); }
+  for (const name of [...shape.leaves].sort()) {
+    const entry = evidence.get(name);
+    const value = leafValue(name);
+    const cited = (field: 'preuve' | 'contredit') => [...new Set(occurrences.filter((item) => item.condition.condition === name).flatMap((item) => item.condition[field].map((_, index) => `${item.at}.${field}[${index}]`)).filter((at) => verifiedRefs.get(at)).map((at) => String(node(annotated, at)?.titre ?? '')))].filter(Boolean).join(', ');
+    emit({ key: `fait:${name}`, step: 'fait', status: value === null ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: contested(name) ? 'Contesté : une pièce le prouve, une autre le contredit' : value === true ? `Prouvé par ${cited('preuve')}` : value === false ? `Contredit par ${cited('contredit')}` : `À établir${decisiveLeaves.has(name) ? ' · décide de la réponse' : ''}${entry ? '' : ' · aucune pièce citée'}` });
+  }
+  for (const name of reasoning.terms.keys()) emit({ key: `terme:${name}`, step: 'condition', status: statuses.get(name) === null || statuses.get(name) === undefined ? 'neutre' : 'ok', subject: human(name), text: STATUS(statuses.get(name) ?? null) });
 
   const trials = shape.cycles.length ? [] : runTrials(reasoning, test);
   trials.forEach((result, index) => {
     const holder = node(annotated, `essais[${index}]`);
     if (holder) Object.assign(holder, result);
+    emit({ key: `essai:${index}`, step: 'essai', status: result.conforme ? 'ok' : 'alerte', subject: reasoning.essais[index].nom, text: result.conforme ? 'Conforme' : `Non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${human(name)} = ${value === null ? 'à établir' : value ? 'vrai' : 'faux'}`).join(', ')}` });
     if (!result.conforme) add('erreur', `essais[${index}]`, `essai non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${name} = ${value === null ? 'à établir' : value ? 'vrai' : 'faux'}`).join(', ')}`);
   });
 
@@ -231,6 +256,7 @@ export async function verifyReasoning(input: {
         const siren = person.siren?.replace(/\D/g, '').slice(0, 9) || null;
         const record = await connectors.registry({ siren, name: person.name ?? person.label });
         registre.push(`${person.label} : ${record.found ? record.status || 'trouvée au Registre Public' : 'introuvable au Registre Public'}`);
+        emit({ key: `registre:${person.label}`, step: 'registre', status: record.found && !/radi|cess|ferm|liquid|dissou/i.test(record.status) ? 'ok' : 'alerte', subject: person.label, text: record.found ? record.status || 'Trouvée au Registre Public' : 'Introuvable au Registre Public' });
         if (siren) for (const alert of await connectors.bodacc(siren)) registre.push(`${person.label} : BODACC ${alert}`);
       } catch (error) { registre.push(`${person.label} : vérification impossible (${error instanceof Error ? error.message : 'erreur'})`); }
     }
@@ -254,9 +280,14 @@ export async function verifyReasoning(input: {
     ...(registre.length ? { registre } : {}),
   };
 
+  reasoning.questions.forEach((question, index) => {
+    const holder = node(annotated, `questions[${index}]`);
+    const decisifs = (holder?.decisifs ?? holder?.en_jeu ?? []) as string[];
+    emit({ key: `réponse:${index}`, step: 'réponse', status: holder?.statut === 'à établir' ? 'neutre' : bilan.erreurs ? 'alerte' : 'ok', subject: question.question, text: `Réponse : ${String(holder?.statut ?? 'non calculée')}${decisifs.length ? ` · reste à établir : ${decisifs.map(human).join(', ')}` : ''}${bilan.erreurs ? ` · ${bilan.erreurs} erreur(s) à corriger` : ''}` });
+  });
   let code = input.code;
   for (const [original, fixed] of corrections) code = code.split(original).join(fixed);
-  return { annotated: { bilan, ...annotated }, issues, code };
+  return { annotated: { bilan, ...annotated }, issues, code, log };
 }
 
 type PersonRow = { label: string; kind: string; name: string | null; siren: string | null };
@@ -322,13 +353,13 @@ export function createReasoningService(getDatabase: () => Database.Database, con
     return { ...emptySnapshot(), ...stored, dismissed: dismissed(id), reliability: reliability(id) };
   };
 
-  const verify = async (cwd: string, online = true): Promise<ReasoningSnapshot> => {
+  const verify = async (cwd: string, online = true, emit?: (entry: ReasoningLogEntry) => void): Promise<ReasoningSnapshot> => {
     const id = projectId(cwd);
     const file = path.join(cwd, REASONING_FILE);
     const code = await readFile(file, 'utf8').catch(() => null);
     if (code === null) throw new TypeError(`Aucun raisonnement : écris ${REASONING_FILE} (objet { questions: [...], terme: { si: [...] } }), puis relance verifier.`);
     const result = await verifyReasoning({
-      code, cwd, connectors, online,
+      code, cwd, connectors, online, emit,
       reliability: new Map(reliability(id).map((entry) => [entry.piece, entry.reliable])),
       nature: nature(id),
       persons: persons(id),
@@ -336,7 +367,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
     });
     if (result.code !== code) await writeFile(file, result.code, 'utf8');
     const previous = read(cwd);
-    const snapshot: ReasoningSnapshot = { ...previous, revision: previous.revision + 1, updatedAt: new Date().toISOString(), code: result.code, annotated: result.annotated, issues: result.issues };
+    const snapshot: ReasoningSnapshot = { ...previous, revision: previous.revision + 1, updatedAt: new Date().toISOString(), code: result.code, annotated: result.annotated, issues: result.issues, test: { at: new Date().toISOString(), log: result.log } };
     const { dismissed: _dismissed, reliability: _reliability, ...stored } = snapshot;
     database().prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET revision=excluded.revision, code=excluded.code, snapshot_json=excluded.snapshot_json').run(id, snapshot.revision, snapshot.code, JSON.stringify(stored));
     return snapshot;
@@ -346,6 +377,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   return {
     read,
     verify,
+    test: (cwd: string, emit: (entry: ReasoningLogEntry) => void) => verify(cwd, true, emit),
     async command(cwd: string, input: { commande?: unknown }): Promise<string> {
       if (input.commande !== undefined && input.commande !== 'verifier') throw new TypeError('Commande : verifier.');
       return describeReasoning(await verify(cwd));
@@ -447,5 +479,5 @@ export async function reasoningExample(): Promise<ReasoningSnapshot> {
     persons: [{ label: 'Société Beta SARL', kind: 'company', name: null, siren: null }],
     dismissed: new Set(),
   });
-  return { ...emptySnapshot(), code: result.code, annotated: result.annotated, issues: result.issues, demo: true };
+  return { ...emptySnapshot(), code: result.code, annotated: result.annotated, issues: result.issues, test: { at: new Date().toISOString(), log: result.log }, demo: true };
 }

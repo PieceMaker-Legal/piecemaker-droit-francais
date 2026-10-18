@@ -1,13 +1,13 @@
-import type { ReasoningIssue, ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
-import { dismissIssue, loadReasoning, ratePiece, verifyReasoning } from './api.js';
+import type { ReasoningIssue, ReasoningLogEntry, ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
+import { dismissIssue, loadReasoning, ratePiece, runTest, verifyReasoning } from './api.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
 type Host = { readonly context: Context; onContextChange(callback: (context: Context) => void): () => void; openFileInEditor?(file: string): void };
-type Tab = 'detail' | 'alertes' | 'code';
+type Tab = 'detail' | 'test' | 'alertes' | 'code';
 type Json = Record<string, any>;
 type Occurrence = { path: string; parent: string; link: 'si' | 'sauf' | 'l_une'; condition: Json };
-type GraphNode = { id: string; label: string; status: string; kind: 'question' | 'terme' | 'fait'; decisive: boolean; x: number; y: number };
+type GraphNode = { id: string; label: string; status: string; kind: 'question' | 'terme' | 'fait' | 'ou'; decisive: boolean; x: number; y: number };
 type Edge = { from: string; to: string; link: Occurrence['link'] };
 
 const RESERVED = new Set(['bilan', 'questions', 'essais']);
@@ -18,6 +18,8 @@ const human = (name: string) => { const text = name.replace(/_/g, ' '); return t
 const shorten = (text: string, length: number) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
 const pill = (status: string, label = status) => `<span class="pmr-pill pmr-${TONE[status] ?? 'muted'}">${escape(label)}</span>`;
 const date = (value: unknown) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : 'toujours en vigueur');
+const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
+const STEP: Record<ReasoningLogEntry['step'], string> = { source: 'Source', pièce: 'Pièce', fait: 'Fait', condition: 'Terme', essai: 'Essai', registre: 'Registre Public', réponse: 'Réponse' };
 const cleanups = new WeakMap<HTMLElement, () => void>();
 
 export function mount(container: HTMLElement, api: Host) {
@@ -26,7 +28,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-verify class="pmr-primary">Vérifier</button><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-meta"></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-legend">${Object.entries(COLORS).filter(([key]) => key !== 'question').map(([key, color]) => `<span><i style="background:${color}"></i>${escape(human(key))}</span>`).join('')}<span>— si · - - sauf</span></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-verify class="pmr-primary">Vérifier</button><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-meta"></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-legend">${Object.entries(COLORS).filter(([key]) => key !== 'question').map(([key, color]) => `<span><i style="background:${color}"></i>${escape(human(key))}</span>`).join('')}<span>— si · - - sauf · ○ ou : une suffit</span></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const svg = root.querySelector<SVGSVGElement>('svg')!;
@@ -47,6 +49,7 @@ export function mount(container: HTMLElement, api: Host) {
   let pan = { x: 0, y: 0 };
   let drag: { id: string; x: number; y: number; moved: boolean } | null = null;
   let busy = false;
+  let live: ReasoningLogEntry[] | null = null;
   let stopped = false;
   let timer = 0;
   let sequence = 0;
@@ -73,7 +76,7 @@ export function mount(container: HTMLElement, api: Host) {
   const visibleIssues = () => (snapshot?.issues ?? []).filter((issue) => !dismissedIds().has(issue.id));
 
   const size = () => ({ width: Math.max(320, canvas.clientWidth), height: Math.max(240, canvas.clientHeight) });
-  const radius = (node: GraphNode) => (node.kind === 'question' ? 19 : node.kind === 'terme' ? 15 : 11);
+  const radius = (node: GraphNode) => (node.kind === 'question' ? 19 : node.kind === 'terme' ? 15 : node.kind === 'ou' ? 9 : 11);
   const branch = (id: string) => {
     const found = new Set([id]);
     const walk = (current: string, up: boolean) => { for (const edge of edges) { const [from, to] = up ? [edge.to, edge.from] : [edge.from, edge.to]; if (from === current && !found.has(to)) { found.add(to); walk(to, up); } } };
@@ -91,9 +94,9 @@ export function mount(container: HTMLElement, api: Host) {
       const a = byId.get(edge.from), b = byId.get(edge.to);
       if (!a || !b) return '';
       const lit = members?.has(edge.from) && members.has(edge.to);
-      const label = edge.link === 'si' ? '' : edge.link === 'sauf' ? 'sauf' : "l'une";
+      const label = edge.link === 'sauf' ? 'sauf' : '';
       return `<path class="pmr-edge${edge.link === 'sauf' ? ' is-sauf' : ''}${lit ? ' is-neighbour' : ''}${members && !lit ? ' is-dim' : ''}" d="M${a.x} ${a.y - radius(a)} C${a.x} ${(a.y + b.y) / 2} ${b.x} ${(a.y + b.y) / 2} ${b.x} ${b.y + radius(b)}"/>${label ? `<text class="pmr-edge-label" x="${(a.x + b.x) / 2 + 4}" y="${(a.y + b.y) / 2}">${label}</text>` : ''}`;
-    }).join('')}${nodes.map((node) => `<g class="pmr-node${selected === node.id ? ' is-selected' : ''}${members && !members.has(node.id) ? ' is-dim' : ''}${node.decisive ? ' is-decisive' : ''}" data-node="${escape(node.id)}" transform="translate(${node.x} ${node.y})" tabindex="0" role="button" aria-label="${escape(`${node.label}, ${node.status}`)}"><circle r="${radius(node)}" fill="${COLORS[node.kind === 'question' ? 'question' : node.status] ?? COLORS['à établir']}"/><text text-anchor="middle" y="${radius(node) + 15}"${node.kind === 'question' ? ' class="pmr-strong"' : ''}>${escape(shorten(node.label, 34))}</text><text text-anchor="middle" class="pmr-value" y="${radius(node) + 29}">${escape(node.decisive ? `${node.status} · décisif` : node.status)}</text><title>${escape(`${node.label}\n${node.status}`)}</title></g>`).join('')}</g>`;
+    }).join('')}${nodes.map((node) => (node.kind === 'ou' ? `<g class="pmr-node pmr-or${members && !members.has(node.id) ? ' is-dim' : ''}" transform="translate(${node.x} ${node.y})"><circle r="${radius(node)}" fill="var(--bg)" stroke="var(--muted)"/><text text-anchor="middle" y="4" class="pmr-value">ou</text><title>Au choix : une de ces conditions suffit</title></g>` : `<g class="pmr-node${selected === node.id ? ' is-selected' : ''}${members && !members.has(node.id) ? ' is-dim' : ''}${node.decisive ? ' is-decisive' : ''}" data-node="${escape(node.id)}" transform="translate(${node.x} ${node.y})" tabindex="0" role="button" aria-label="${escape(`${node.label}, ${node.status}`)}"><circle r="${radius(node)}" fill="${COLORS[node.kind === 'question' ? 'question' : node.status] ?? COLORS['à établir']}"/><text text-anchor="middle" y="${radius(node) + 15}"${node.kind === 'question' ? ' class="pmr-strong"' : ''}>${escape(shorten(node.label, 34))}</text><text text-anchor="middle" class="pmr-value" y="${radius(node) + 29}">${escape(node.decisive ? `${node.status} · décisif` : node.status)}</text><title>${escape(`${node.label}\n${node.status}`)}</title></g>`)).join('')}</g>`;
   };
 
   const fitGraph = () => {
@@ -114,6 +117,7 @@ export function mount(container: HTMLElement, api: Host) {
     const all = terms();
     const list = occurrences();
     const levels = new Map<string, number>();
+    const orLevels = new Map<string, number>();
     const order: string[] = [];
     const visit = (name: string, level: number) => {
       if ((levels.get(name) ?? -1) >= level || level > 40) return;
@@ -129,9 +133,21 @@ export function mount(container: HTMLElement, api: Host) {
       nodes.push({ id: name, label: human(name), status: term ? term.statut ?? 'à établir' : occurrence?.condition.statut ?? 'à établir', kind: term ? 'terme' : 'fait', decisive: Boolean(occurrence?.condition.decisif), x: 0, y: 0 });
     }
     edges.push({ from: question.reponse, to: '#question', link: 'si' });
-    for (const entry of list) if (levels.has(entry.parent) && levels.has(entry.condition.condition) && !edges.some((edge) => edge.from === entry.condition.condition && edge.to === entry.parent)) edges.push({ from: entry.condition.condition, to: entry.parent, link: entry.link });
+    for (const group of groups().filter((entry) => levels.has(entry.parent))) {
+      const link = group.path.includes('.sauf[') ? 'sauf' : 'si';
+      if (!Array.isArray(group.condition.l_une)) {
+        if (levels.has(group.condition.condition) && !edges.some((edge) => edge.from === group.condition.condition && edge.to === group.parent)) edges.push({ from: group.condition.condition, to: group.parent, link });
+        continue;
+      }
+      const level = levels.get(group.parent)! + 0.5;
+      nodes.push({ id: `#ou:${group.path}`, label: 'ou', status: group.condition.statut ?? 'à établir', kind: 'ou', decisive: false, x: 0, y: 0 });
+      orLevels.set(`#ou:${group.path}`, level);
+      edges.push({ from: `#ou:${group.path}`, to: group.parent, link });
+      const members = list.filter((entry) => entry.path.startsWith(`${group.path}.l_une[`));
+      for (const member of members) if (levels.has(member.condition.condition)) edges.push({ from: member.condition.condition, to: `#ou:${group.path}`, link: 'si' });
+    }
     const rows = new Map<number, GraphNode[]>();
-    for (const node of nodes) { const level = node.kind === 'question' ? 0 : levels.get(node.id)!; rows.set(level, [...(rows.get(level) ?? []), node]); }
+    for (const node of nodes) { const level = node.kind === 'question' ? 0 : node.kind === 'ou' ? orLevels.get(node.id)! : levels.get(node.id)!; rows.set(level, [...(rows.get(level) ?? []), node]); }
     for (const [level, row] of rows) row.forEach((node, index) => {
       const previous = old.get(node.id);
       node.x = previous?.x ?? (index - (row.length - 1) / 2) * 170;
@@ -150,13 +166,28 @@ export function mount(container: HTMLElement, api: Host) {
     return `<div class="pmr-quote"><p><strong>${against ? 'Contredit par' : 'Prouvé par'}</strong> ${escape(piece.titre ?? piece.piece)}${piece.nature ? ` · ${escape(piece.nature)}` : ''} · ${pill(piece.fiable === true ? 'acquis' : piece.fiable === false ? 'exclu' : 'à établir', rated)}</p><blockquote>${escape(piece.citation)}</blockquote>${piece.personnes?.length ? `<p class="pmr-muted">Personnes : ${escape(piece.personnes.join(', '))}</p>` : ''}${actions}</div>`;
   };
   const conditionBlock = (path: string, condition: Json) => {
-    const members = Array.isArray(condition.l_une) ? `<p>L’une de : ${condition.l_une.map((member: Json) => `<button class="pmr-link" data-select="${escape(member.condition)}">${escape(human(member.condition ?? ''))}</button> ${pill(member.statut ?? 'à établir')}`).join(', ')}</p>` : '';
+    const members = Array.isArray(condition.l_une) ? `<p>Au choix, une suffit : ${condition.l_une.map((member: Json) => `<button class="pmr-link" data-select="${escape(member.condition)}">${escape(human(member.condition ?? ''))}</button> ${pill(member.statut ?? 'à établir')}`).join(', ')}</p>` : '';
     const name = condition.condition ? `<button class="pmr-link" data-select="${escape(condition.condition)}">${escape(human(condition.condition))}</button> ` : '';
     return `<div class="pmr-card"><header>${path.includes('.sauf[') ? '<span class="pmr-step">Sauf</span>' : '<span class="pmr-step">Si</span>'}${name}${pill(condition.statut ?? 'à établir')}${condition.decisif ? ' <span class="pmr-pill pmr-warn">décisif</span>' : ''}</header>${members}${(condition.selon ?? []).map(sourceBlock).join('')}${(condition.preuve ?? []).map((piece: Json) => pieceBlock(piece)).join('')}${(condition.contredit ?? []).map((piece: Json) => pieceBlock(piece, true)).join('')}</div>`;
   };
 
+  const paintTest = () => {
+    const entries = live ?? snapshot?.test?.log ?? [];
+    const view = (entry: ReasoningLogEntry) => `<li class="pmr-entry" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(STEP[entry.step])}</span><strong>${escape(entry.subject)}</strong></div><span class="pmr-entry-text">${escape(entry.text)}</span></li>`;
+    const part = (title: string, lead: string, steps: ReasoningLogEntry['step'][]) => {
+      const list = entries.filter((entry) => steps.includes(entry.step));
+      return list.length ? `<section class="pmr-part"><h4>${title}</h4><p class="pmr-lead">${lead}</p><ol class="pmr-log" aria-live="polite">${list.map(view).join('')}</ol></section>` : '';
+    };
+    const alerts = entries.filter((entry) => entry.status === 'alerte').length;
+    const run = snapshot?.demo
+      ? '<div class="pmr-run"><span class="pmr-muted">Exemple fictif : test simulé.</span></div>'
+      : `<div class="pmr-run"><button class="pmr-primary" data-run-test${live || busy || !context.project ? ' disabled' : ''}>${live ? 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? `${alerts} alerte(s)` : 'aucune alerte')}</span>` : ''}</div>`;
+    detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${part('1. En droit', 'Chaque source relue, sa citation et sa version applicable.', ['source'])}${part('2. En fait', 'Les pièces relues et les faits qu’elles établissent.', ['pièce', 'fait', 'registre'])}${part('3. Conclusion', 'Les termes calculés, les essais et la réponse.', ['condition', 'essai', 'réponse'])}`;
+  };
+
   const paintDetail = () => {
     const question = questions()[scope];
+    if (tab === 'test') { paintTest(); return; }
     if (tab === 'code') { detail.innerHTML = snapshot?.code ? `<pre class="pmr-code">${escape(snapshot.code)}</pre>` : '<p class="pmr-muted">Aucun fichier .piecemaker/raisonnement.js.</p>'; return; }
     if (tab === 'alertes') {
       const dismissed = (snapshot?.issues ?? []).filter((issue) => dismissedIds().has(issue.id));
@@ -177,7 +208,7 @@ export function mount(container: HTMLElement, api: Host) {
       return;
     }
     const uses = occurrences().filter((entry) => entry.condition.condition === selected);
-    detail.innerHTML = `<h3>${escape(human(selected))}</h3><p class="pmr-muted">Fait à établir par les pièces.</p>${uses.map((entry) => `<p class="pmr-muted">Condition de <button class="pmr-link" data-select="${escape(entry.parent)}">${escape(human(entry.parent))}</button>${entry.link === 'sauf' ? ' (exception)' : entry.link === 'l_une' ? " (l'une de)" : ''}</p>${conditionBlock(entry.path, entry.condition)}`).join('')}<h4>Alertes</h4>${issueList(issuesOf(uses.map((entry) => entry.path)).filter((issue) => !dismissedIds().has(issue.id)))}`;
+    detail.innerHTML = `<h3>${escape(human(selected))}</h3><p class="pmr-muted">Fait à établir par les pièces.</p>${uses.map((entry) => `<p class="pmr-muted">Condition de <button class="pmr-link" data-select="${escape(entry.parent)}">${escape(human(entry.parent))}</button>${entry.link === 'sauf' ? ' (exception)' : entry.link === 'l_une' ? ' (au choix avec d’autres conditions)' : ''}</p>${conditionBlock(entry.path, entry.condition)}`).join('')}<h4>Alertes</h4>${issueList(issuesOf(uses.map((entry) => entry.path)).filter((issue) => !dismissedIds().has(issue.id)))}`;
   };
 
   const paint = () => {
@@ -230,6 +261,17 @@ export function mount(container: HTMLElement, api: Host) {
     if (button.hasAttribute('data-demo')) { serialized = ''; selected = ''; scope = 0; nodes = []; void load(!snapshot?.demo); }
     if (button.hasAttribute('data-refresh')) { serialized = ''; void load(Boolean(snapshot?.demo)); }
     if (button.hasAttribute('data-verify') && project) act(() => verifyReasoning(project));
+    if (button.hasAttribute('data-run-test') && project && !live) {
+      live = [];
+      busy = true;
+      paint();
+      runTest(project, (entry) => {
+        if (!live) return;
+        const index = live.findIndex((item) => item.key === entry.key);
+        if (index >= 0) live[index] = entry; else live.push(entry);
+        if (tab === 'test') paintTest();
+      }).then((data) => { live = null; apply(data); }, (error) => { live = null; showError(error); }).finally(() => { busy = false; paint(); });
+    }
     if (button.dataset.select) select(button.dataset.select);
     if (button.dataset.dismiss && project) act(() => dismissIssue(project, button.dataset.dismiss!, button.hasAttribute('data-restore')));
     if (button.dataset.rate && project) act(() => ratePiece(project, button.dataset.rate!, button.dataset.value === 'null' ? null : button.dataset.value === 'true'));
