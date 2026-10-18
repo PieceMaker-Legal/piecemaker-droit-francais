@@ -88,6 +88,8 @@ try {
     const value = await response.json();
     if (!response.ok || !value.token) throw Error('Test registration failed');
     localStorage.setItem('auth-token',value.token);
+    const git = await fetch('/api/user/git-config', {method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+value.token},body:JSON.stringify({gitName:'Jean Dupont',gitEmail:'jean.dupont@example.test'})});
+    if (!git.ok) throw Error('Fictitious Git configuration failed');
     return value.success;
   })()`);
   assert.equal(registered, true);
@@ -99,6 +101,15 @@ try {
     return response.json();
   })()`;
   const status = await waitFor(async () => { const value = await evaluate(page, statusExpression); return value.enabled && value.listening && value; }, 'Active anonymization proxy');
+  await waitFor(() => evaluate(page, 'document.getElementById("gitName")?.value === "Jean Dupont" && ![...document.querySelectorAll("button")].at(-1)?.disabled'), 'First-run Git configuration interface');
+  await fs.writeFile(path.join(output, '00-onboarding.png'), Buffer.from((await page.call('Page.captureScreenshot')).data, 'base64'));
+  await evaluate(page, '[...document.querySelectorAll("button")].at(-1).click()');
+  await waitFor(() => evaluate(page, '!document.getElementById("gitName") && [...document.querySelectorAll("button")].length >= 3 && ![...document.querySelectorAll("button")].at(-1)?.disabled'), 'First-run provider connections interface');
+  await evaluate(page, '[...document.querySelectorAll("button")].at(-1).click()');
+  await waitFor(() => evaluate(page, `(async () => {
+    const response=await fetch('/api/user/onboarding-status',{headers:{Authorization:'Bearer '+localStorage.getItem('auth-token')}});
+    return (await response.json()).hasCompletedOnboarding;
+  })()`), 'First-run setup completed through the interface');
   await waitFor(() => evaluate(page, 'document.querySelectorAll("button").length >= 3 && !document.querySelector("input[autocomplete=username]")'), 'Usable authenticated interface');
   await fs.writeFile(path.join(output, '01-installed.png'), Buffer.from((await page.call('Page.captureScreenshot')).data, 'base64'));
   const caFile = path.join(directory, 'components/certs/piecemaker-ca.crt');
@@ -127,7 +138,7 @@ try {
   }, 'Native validation uninstaller', 90000);
   assert.equal(await fs.readFile(preserved, 'utf8'), 'untouched');
   await fs.access(path.join(directory, 'app-data/auth.db'));
-  await fs.writeFile(path.join(output, 'installation-verification.json'), JSON.stringify({ installed: true, initialInterface: true, remoteChannelEmbedded: config.feed, updateNotPublished: true, accountCreated: true, sessionRetained: true, authenticatedInterfaceRendered: true, localCertificateGenerated: true, localCertificateTrusted: true, certificateConsentPreapprovedOnDisposableRunner: true, anonymizerActive: status.enabled && restarted.enabled, nativeUninstallVerified: true, productionDataUntouched: true, runtime: config.runtime }, null, 2));
+  await fs.writeFile(path.join(output, 'installation-verification.json'), JSON.stringify({ installed: true, initialInterface: true, remoteChannelEmbedded: config.feed, updateNotPublished: true, accountCreated: true, sessionRetained: true, authenticatedInterfaceRendered: true, onboardingCompletedThroughUI: true, localCertificateGenerated: true, localCertificateTrusted: true, certificateConsentPreapprovedOnDisposableRunner: true, anonymizerActive: status.enabled && restarted.enabled, nativeUninstallVerified: true, productionDataUntouched: true, runtime: config.runtime }, null, 2));
   console.log('FULL INSTALLATION PASS: embedded remote channel, fresh local CA, active proxy, account and restart; no UI update published.');
 } finally {
   if (page && child?.exitCode === null) await stop(page).catch(() => {});
