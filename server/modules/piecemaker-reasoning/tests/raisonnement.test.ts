@@ -149,3 +149,15 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   fs.rmSync(file);
   await assert.rejects(service.verify(folder), /Aucun raisonnement/);
 });
+
+test('le test se déroule ligne par ligne : sources, pièces, faits, termes, essais, réponse', async () => {
+  const seen: string[] = [];
+  const result = await verifyReasoning({
+    code: EXAMPLE_CODE, cwd: '/dossier-fictif', connectors: connectors(), reliability: new Map(), nature: () => null,
+    persons: [], dismissed: new Set(), emit: (entry) => seen.push(`${entry.step}:${entry.status}`),
+  });
+  assert.ok(seen.indexOf('source:en cours') < seen.indexOf('source:ok'));
+  assert.deepEqual([...new Set(result.log.map((entry) => entry.step))], ['source', 'pièce', 'fait', 'condition', 'essai', 'réponse']);
+  assert.match(result.log.find((entry) => entry.key === 'fait:retard_de_livraison')!.text, /Prouvé par Bon de livraison \(fictif\)/);
+  assert.match(result.log.find((entry) => entry.step === 'réponse')!.text, /Réponse : à établir · reste à établir : force majeure, greve nationale/);
+});

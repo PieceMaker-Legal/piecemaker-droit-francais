@@ -8,6 +8,10 @@ export type ReasoningDismissal = { id: string; path: string; text: string; at: s
 
 export type ReasoningPieceReliability = { piece: string; reliable: boolean; at: string };
 
+export type ReasoningLogEntry = { key: string; step: 'source' | 'pièce' | 'fait' | 'condition' | 'essai' | 'registre' | 'réponse'; status: 'en cours' | 'ok' | 'alerte' | 'neutre'; subject: string; text: string };
+
+export type ReasoningTestReport = { at: string; log: ReasoningLogEntry[] };
+
 export type ReasoningSnapshot = {
   revision: number;
   updatedAt: string | null;
@@ -16,5 +20,6 @@ export type ReasoningSnapshot = {
   issues: ReasoningIssue[];
   dismissed: ReasoningDismissal[];
   reliability: ReasoningPieceReliability[];
+  test: ReasoningTestReport | null;
   demo?: boolean;
 };

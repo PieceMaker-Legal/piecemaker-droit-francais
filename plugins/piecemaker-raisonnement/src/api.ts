@@ -1,4 +1,4 @@
-import type { ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
+import type { ReasoningLogEntry, ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
 
 export function loadReasoning(projectPath: string | null, example = false): Promise<ReasoningSnapshot> {
   return request<ReasoningSnapshot>(`/api/piecemaker/reasoning${example ? '/example' : `?projectPath=${encodeURIComponent(projectPath ?? '')}`}`);
@@ -14,6 +14,27 @@ export function dismissIssue(projectPath: string, id: string, restore = false): 
 
 export function ratePiece(projectPath: string, piece: string, reliable: boolean | null): Promise<ReasoningSnapshot> {
   return request<ReasoningSnapshot>('/api/piecemaker/reasoning/reliability', { projectPath, piece, reliable });
+}
+
+export async function runTest(projectPath: string, onEntry: (entry: ReasoningLogEntry) => void): Promise<ReasoningSnapshot> {
+  const token = localStorage.getItem('auth-token');
+  const response = await fetch('/api/piecemaker/reasoning/test', { method: 'POST', body: JSON.stringify({ projectPath }), headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' } });
+  if (!response.ok || !response.body) throw new Error((await response.json().catch(() => ({})) as { error?: string }).error || `Erreur ${response.status}`);
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    buffer += value ?? '';
+    const lines = buffer.split('\n');
+    buffer = done ? '' : lines.pop()!;
+    for (const line of lines.filter((entry) => entry.trim())) {
+      const message = JSON.parse(line) as { entry?: ReasoningLogEntry; snapshot?: ReasoningSnapshot; error?: string };
+      if (message.entry) onEntry(message.entry);
+      if (message.error) throw new Error(message.error);
+      if (message.snapshot) return message.snapshot;
+    }
+    if (done) throw new Error('Test interrompu.');
+  }
 }
 
 async function request<T>(url: string, body?: object): Promise<T> {
