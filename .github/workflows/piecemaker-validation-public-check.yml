@@ -54,4 +54,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release upload validation-installation-desktop-2.0.47 "$PIECEMAKER_TEST_OUTPUT/installation-verification.json" "$PIECEMAKER_TEST_OUTPUT/01-installed.png" "$PIECEMAKER_TEST_OUTPUT/02-restarted.png" --clobber
+          gh release upload validation-installation-desktop-2.0.47 "$PIECEMAKER_TEST_OUTPUT/00-onboarding.png" "$PIECEMAKER_TEST_OUTPUT/installation-verification.json" "$PIECEMAKER_TEST_OUTPUT/01-installed.png" "$PIECEMAKER_TEST_OUTPUT/02-restarted.png" --clobber
