@@ -6,10 +6,10 @@ import type Database from 'better-sqlite3';
 
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, ReasoningSnapshot, ReasoningStatus, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import { and, answer, calculate, compile, or, questionRoots, decisive, reachableLeaves, runTrials, structure } from './engine.js';
+import { and, answer, calculate, compile, evaluate, or, questionRoots, decisive, reachableLeaves, runTrials, structure } from './engine.js';
 import type { Calculation, Facts, Trace } from './engine.js';
 import { canonical, LiteralError, parseLiteral, printLiteral, readReasoning, stripAnnotations } from './format.js';
-import type { Basis, Condition, Measure, Ref } from './format.js';
+import type { Basis, Condition, Measure, Ref, Target } from './format.js';
 
 export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null } };
 
@@ -134,6 +134,12 @@ export async function verifyReasoning(input: {
   };
 
   const verifiedRefs = new Map<string, boolean>();
+  const checkTarget = async (at: string, target: Target) => {
+    const info = await lookup(target.piece);
+    if (info === undefined) return;
+    if (!info) { add('manque', at, `le projet renvoie à un élément absent du dossier (${target.piece}) : joins-le ou corrige le renvoi`, `Élément visé absent du dossier : ${target.piece}.`, `#piece:${target.piece}`); return; }
+    if (target.citation && !connectors.match(info.text, target.citation)) add('manque', at, `passage visé introuvable dans ${info.title} : complète l’élément visé ou corrige le renvoi`, `Le passage visé est introuvable dans ${info.title} : « ${target.citation} ».`, `#piece:${target.piece}`);
+  };
   const checkRef = async (at: string, ref: Ref) => {
     const holder = node(annotated, at);
     emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: 'en cours', subject: ref.piece, text: 'Relecture de la pièce…' });
@@ -191,7 +197,11 @@ export async function verifyReasoning(input: {
   }
   const checks: Array<Promise<void>> = [];
   for (const { at, condition } of occurrences) {
-    condition.selon.forEach((basis, index) => checks.push(checkBasis(`${at}.selon[${index}]`, basis)));
+    condition.selon.forEach((basis, index) => {
+      checks.push(checkBasis(`${at}.selon[${index}]`, basis));
+      basis.contredit.forEach((ref, other) => checks.push(checkRef(`${at}.selon[${index}].contredit[${other}]`, ref)));
+      basis.renvoi.forEach((target, other) => checks.push(checkTarget(`${at}.selon[${index}].renvoi[${other}]`, target)));
+    });
     if (condition.mesure?.delai && !condition.decompte) add('manque', `${at}.decompte`, `délai sans décompte : ajoute decompte: 'décompte_de_${condition.condition}' et définis ce terme, dont les conditions sourcées établissent la règle de calcul du délai`, `${human(condition.condition!)} : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.`, condition.condition);
     condition.preuve.forEach((ref, index) => checks.push(checkRef(`${at}.preuve[${index}]`, ref)));
     condition.contredit.forEach((ref, index) => checks.push(checkRef(`${at}.contredit[${index}]`, ref)));
@@ -212,10 +222,20 @@ export async function verifyReasoning(input: {
     return !entry || entry.pro === entry.con ? null : entry.pro;
   };
   const contested = (name: string) => Boolean(evidence.get(name)?.pro && evidence.get(name)?.con);
-  const valueOf = (name: string) => {
+  const computing = new Set<string>();
+  const stated = (name: string) => {
     const entry = reasoning.valeurs.get(name);
-    return entry && entry.preuve.some((_, index) => verifiedRefs.get(`valeurs.${name}.preuve[${index}]`)) ? entry.valeur : null;
+    return entry && entry.valeur !== null && entry.preuve.some((_, index) => verifiedRefs.get(`valeurs.${name}.preuve[${index}]`)) ? entry.valeur : null;
   };
+  const computedValue = (name: string): number | null => {
+    const formula = reasoning.valeurs.get(name)?.formule;
+    if (!formula || computing.has(name)) return null;
+    computing.add(name);
+    const result = evaluate(formula, valueOf);
+    computing.delete(name);
+    return result;
+  };
+  const valueOf = (name: string): string | number | null => stated(name) ?? computedValue(name);
   const leaf = (name: string): ReasoningValue => {
     const measure = reasoning.computed.get(name);
     return measure ? calculate(measure, valueOf).value : leafValue(name);
@@ -229,7 +249,7 @@ export async function verifyReasoning(input: {
 
   const basisValue = (at: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue => {
     if (!condition.selon.length) return true;
-    const checked = condition.selon.map((basis, index) => ({ basis, check: basisChecks.get(`${at}.selon[${index}]`), applicable: applicable[index] }));
+    const checked = condition.selon.map((basis, index) => ({ basis, check: basisChecks.get(`${at}.selon[${index}]`), applicable: basis.contredit.some((_, other) => verifiedRefs.get(`${at}.selon[${index}].contredit[${other}]`)) ? null : applicable[index] }));
     const texts = checked.filter((entry) => entry.check && entry.check.kind !== 'decision');
     if (texts.length) return or(texts.map((entry) => and([inForceAt(entry.basis, entry.check!), entry.applicable])));
     const decisions = checked.filter((entry) => entry.check?.kind === 'decision');
@@ -264,6 +284,28 @@ export async function verifyReasoning(input: {
       else add('manque', `${at}.montant`, `seuil écrit en dur (${amount.seuil}) : déclare-le dans valeurs avec sa preuve et désigne-le par son nom`, `${human(condition.condition!)} : le seuil de ${amount.seuil} n’est rattaché à aucune pièce.`, condition.condition);
     }
     condition.selon.forEach((basis) => { if (basis.vigueur?.au) declared(basis.vigueur.au, at); });
+  }
+  const drafting = reasoning.qualification === 'drafting';
+  const BLANK = /\[[^\]]*\]|●|\bX{3,}\b|à compléter/i;
+  const blank = (at: string, citation: string | undefined) => { if (drafting && citation && BLANK.test(citation)) add('manque', at, `passage à compléter ou à confirmer dans le projet : « ${citation.match(BLANK)![0]} »`, `Passage à compléter dans le projet : « ${citation} ».`); };
+  for (const { at, condition } of occurrences) {
+    condition.selon.forEach((basis, index) => {
+      const place = `${at}.selon[${index}]`;
+      blank(place, basis.citation);
+      basis.renvoi.forEach((target, other) => blank(`${place}.renvoi[${other}]`, target.citation));
+      if (basis.contredit.some((_, other) => verifiedRefs.get(`${place}.contredit[${other}]`))) add('manque', `${place}.contredit`, drafting ? 'stipulations contradictoires : à harmoniser dans le projet' : 'règle contredite par une autre stipulation : à trancher', drafting ? 'Deux stipulations du projet se contredisent : à harmoniser.' : 'Deux stipulations se contredisent : la règle applicable est à trancher.', `#source:${basis.source}`);
+    });
+    for (const field of ['preuve', 'contredit'] as const) condition[field].forEach((ref, index) => blank(`${at}.${field}[${index}]`, ref.citation));
+  }
+  for (const [name, entry] of reasoning.valeurs) {
+    entry.preuve.forEach((ref, index) => blank(`valeurs.${name}.preuve[${index}]`, ref.citation));
+    if (drafting && entry.valeur === null && !entry.formule) add('manque', `valeurs.${name}`, 'valeur laissée en blanc dans le projet : à compléter', `${human(name)} : laissée en blanc dans le projet.`);
+    if (!entry.formule) continue;
+    const walkOperands = (formula: NonNullable<typeof entry.formule>): string[] => formula.termes.flatMap((item) => (typeof item === 'string' ? [item] : typeof item === 'number' ? [] : walkOperands(item)));
+    for (const operand of new Set(walkOperands(entry.formule))) declared(operand, `valeurs.${name}`);
+    const statedValue = stated(name);
+    const result = computedValue(name);
+    if (typeof statedValue === 'number' && result !== null && Math.abs(statedValue - result) > 0.005) add('manque', `valeurs.${name}`, `montant stipulé (${statedValue}) différent du calcul (${result}) : à rectifier`, `${human(name)} : le montant indiqué (${statedValue}) ne correspond pas au calcul (${result}).`);
   }
   for (const [name, entry] of reasoning.valeurs) if (entry.valeur !== null && !entry.preuve.length) add('manque', `valeurs.${name}`, 'valeur sans preuve : ajoute preuve: [{ piece, citation }], ou valeur: null si le dossier ne la fixe pas', `${human(name)} : aucune pièce ne justifie cette valeur.`);
 
@@ -326,7 +368,7 @@ export async function verifyReasoning(input: {
     });
   }
   for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = STATUS(statuses.get(name) ?? null); }
-  for (const name of reasoning.valeurs.keys()) { const holder = node(annotated, `valeurs.${name}`); if (holder) holder.statut = valueOf(name) === null ? 'à établir' : 'acquis'; }
+  for (const name of reasoning.valeurs.keys()) { const holder = node(annotated, `valeurs.${name}`); if (holder) { holder.statut = valueOf(name) === null ? 'à établir' : 'acquis'; const result = computedValue(name); if (result !== null) holder.calcul = result; } }
   for (const name of [...shape.leaves].sort()) {
     const measure = reasoning.computed.get(name);
     if (measure) {

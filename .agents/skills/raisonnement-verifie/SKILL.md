@@ -22,8 +22,8 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.js`, un o
 - `qualification` : `'drafting'` (faits à prévoir), `'contentieux'` ou `'consultation'` (faits à prouver ; la consultation suit les règles du contentieux). Non affichée dans le volet.
 - `questions: [{ question, reponse, validite?, prescription? }]`.
 - Un terme par clé : `{ si: [...], sauf: [...] }` ; `l_une` = une condition suffit. Une condition sans clé propre est un fait (`preuve`, `contredit: [{ piece, citation }]`).
-- `selon: [{ source, citation, vigueur: { debut, fin, au }, applicabilite, validite }]` : identifiant officiel (LEGIARTI, JURITEXT, CETATEXT…) ou chemin de pièce pour une clause ; citation exacte.
-- Délai : `delai: { de, a, au_plus | au_moins: { jours | jours_ouvres | mois | ans: n } }` + `decompte`. Montant : `montant: { valeur, plus_de | au_moins | moins_de | au_plus: nom }`. Données dans `valeurs: { nom: { valeur, preuve } }`, `valeur: null` si le dossier ne la fixe pas.
+- `selon: [{ source, citation, vigueur: { debut, fin, au }, applicabilite, validite, renvoi, contredit }]` : identifiant officiel (LEGIARTI, JURITEXT, CETATEXT…) ou chemin de pièce pour une clause ; citation exacte. `renvoi: [{ piece, citation? }]` = ce à quoi la stipulation renvoie (déclaré par l'agent, quel que soit le mot employé) ; `contredit` = stipulation contraire.
+- Délai : `delai: { de, a, au_plus | au_moins: { jours | jours_ouvres | mois | ans: n } }` + `decompte`. Montant : `montant: { valeur, plus_de | au_moins | moins_de | au_plus: nom }`. Données dans `valeurs: { nom: { valeur, preuve, formule? } }`, `valeur: null` si le dossier ne la fixe pas ; `formule: { somme | difference | produit | quotient: [nombres, noms, formules] }` calcule un montant (sans valeur prouvée, la formule le donne ; avec, les deux doivent concorder).
 - `essais: [{ nom, faits, attendu }]` : un fait absent reprend sa valeur établie par les pièces.
 
 ## Contrôles (sous-raisonnements)
@@ -42,8 +42,8 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 
 ## Manques par mode
 
-- **Tous** : non qualifié ; texte sans `vigueur`, sans `vigueur.au` ou date non prouvée ; version non en vigueur ; clause qui renvoie à un article sans ce texte ; donnée de calcul non déclarée ; valeur non nulle sans preuve ; seuil en dur ; source non vérifiable ; terme inutile.
-- **Drafting** : faits = hypothèses, pas de manque de preuve ; chaque question a un essai.
+- **Tous** : non qualifié ; renvoi vers un élément absent du dossier ou un passage introuvable ; stipulation contredite (la source ne compte plus : à trancher) ; montant stipulé différent de sa formule ; texte sans `vigueur`, sans `vigueur.au` ou date non prouvée ; version non en vigueur ; clause qui renvoie à un article sans ce texte ; donnée de calcul non déclarée ; valeur non nulle sans preuve ; seuil en dur ; source non vérifiable ; terme inutile.
+- **Drafting** : faits = hypothèses, pas de manque de preuve ; chaque question a un essai ; passage cité contenant une marque de rédaction (`[…]`, `●`, `XXX`, « à compléter ») ; valeur à `null` = laissée en blanc ; stipulations contradictoires = à harmoniser.
 - **Contentieux / consultation** : fait décisif sans pièce ; prescription.
 
 ## Sortie de `verifier`
@@ -70,4 +70,4 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 
 ## En suspens (proposé, non validé)
 
-Drafting : blancs (`[●]`, `null`) en manques, renvois déclarés (`renvoi`), stipulations contradictoires (`contredit` sous une source). Formules de calcul de montants. Connecteur BOFiP. Contrôles propres au contentieux (recevabilité, compétence, délais de procédure).
+Relecture du document lui-même (définitions, désignations, chiffres en lettres, numérotation) : outil séparé, non décidé. Connecteur BOFiP. Contrôles propres au contentieux (recevabilité, compétence, délais de procédure).

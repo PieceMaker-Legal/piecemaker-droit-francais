@@ -1,7 +1,7 @@
 import type { ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 import { basisControls } from './format.js';
-import type { Condition, Duration, Measure, Question, Reasoning, Term } from './format.js';
+import type { Condition, Duration, Formula, Measure, Question, Reasoning, Term } from './format.js';
 
 export type Facts = { leaf(name: string): ReasoningValue; basis(path: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue };
 export type Trace = Map<string, ReasoningValue>;
@@ -105,6 +105,15 @@ export function addDuration(start: string, { unite, nombre }: Duration): string 
   return date.toISOString().slice(0, 10);
 }
 
+export function evaluate(formula: Formula, lookup: Lookup): number | null {
+  const values = formula.termes.map((item) => (typeof item === 'number' ? item : typeof item === 'string' ? lookup(item) : evaluate(item, lookup)));
+  if (values.some((value) => typeof value !== 'number')) return null;
+  const [first, ...rest] = values as number[];
+  if (formula.operation === 'quotient' && rest.includes(0)) return null;
+  const result = rest.reduce((total, value) => (formula.operation === 'somme' ? total + value : formula.operation === 'difference' ? total - value : formula.operation === 'produit' ? total * value : total / value), first);
+  return Math.round(result * 100) / 100;
+}
+
 export function calculate(measure: Measure, lookup: Lookup): Calculation {
   if (measure.delai) {
     const { de, a, borne, duree } = measure.delai;
@@ -127,7 +136,7 @@ export function calculate(measure: Measure, lookup: Lookup): Calculation {
 export function runTrials(reasoning: Reasoning, test: Test, known: { leaf(name: string): ReasoningValue; value: Lookup } = { leaf: () => null, value: () => null }) {
   return reasoning.essais.map((trial) => {
     const trace: Trace = new Map();
-    const given: Lookup = (name) => { const item = trial.faits[name]; return item === undefined ? known.value(name) : typeof item === 'boolean' ? null : item; };
+    const given: Lookup = (name) => { const item = trial.faits[name]; const formula = reasoning.valeurs.get(name)?.formule; return item !== undefined ? (typeof item === 'boolean' ? null : item) : formula && reasoning.valeurs.get(name)!.valeur === null ? evaluate(formula, given) : known.value(name); };
     const leaf = (name: string): ReasoningValue => {
       const item = trial.faits[name];
       if (typeof item === 'boolean') return item;
