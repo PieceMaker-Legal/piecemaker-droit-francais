@@ -12,7 +12,7 @@ export type Condition = { condition?: string; l_une?: Condition[]; mesure?: Meas
 export type Term = { si: Condition[]; sauf: Condition[] };
 export type Question = { question: string; reponse: string; validite?: string; prescription?: string };
 export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean> };
-export type Reasoning = { qualification?: 'drafting' | 'contentieux'; questions: Question[]; essais: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
+export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; questions: Question[]; essais: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
 export type Problem = { path: string; text: string; avocat?: string; cible?: string };
 export type Parsed = { value: unknown; lines: Map<string, number> };
 
@@ -220,8 +220,8 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       continue;
     }
     if (key === 'qualification') {
-      if (raw === 'drafting' || raw === 'contentieux') reasoning.qualification = raw;
-      else problem('qualification', 'qualification : \'drafting\' ou \'contentieux\'');
+      if (raw === 'drafting' || raw === 'contentieux' || raw === 'consultation') reasoning.qualification = raw;
+      else problem('qualification', 'qualification : \'drafting\', \'contentieux\' ou \'consultation\'');
       continue;
     }
     if (key === 'valeurs') {

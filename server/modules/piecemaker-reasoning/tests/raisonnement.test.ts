@@ -308,7 +308,10 @@ test('le raisonnement se qualifie drafting ou contentieux ; la qualification app
   assert.deepEqual(texts(valid, 'erreur'), []);
   assert.equal(at(valid.annotated, 'validité_du_contrat.statut'), 'exclu');
   assert.equal(at(valid.annotated, 'questions[0].statut'), 'exclu');
-  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'pénal',\n  questions:")), 'erreur').join('\n'), /qualification : qualification : 'drafting' ou 'contentieux'/);
+  const advice = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'consultation',\n  questions:")), 'manque').join('\n');
+  assert.match(advice, /questions\[0\] : consultation : vérifier la prescription : ajoute prescription:/);
+  assert.match(advice, /décide de la réponse/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'pénal',\n  questions:")), 'erreur').join('\n'), /qualification : qualification : 'drafting', 'contentieux' ou 'consultation'/);
 });
 
 test('les contrôles portent un nom préfixé, désigné par leur emplacement ; le fichier revient dans l’ordre canonique', async () => {
