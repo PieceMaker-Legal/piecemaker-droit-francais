@@ -315,7 +315,7 @@ test('le raisonnement se qualifie drafting ou contentieux ; la qualification app
   assert.equal(at(valid.annotated, 'validité_du_contrat.statut'), 'exclu');
   assert.equal(at(valid.annotated, 'questions[0].statut'), 'exclu');
   const advice = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'consultation',\n  questions:")), 'manque').join('\n');
-  assert.match(advice, /questions\[0\] : consultation : vérifier la prescription : ajoute prescription:/);
+  assert.doesNotMatch(advice, /prescription/);
   assert.match(advice, /décide de la réponse/);
   assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'pénal',\n  questions:")), 'erreur').join('\n'), /qualification : qualification : 'drafting', 'contentieux' ou 'consultation'/);
 });
