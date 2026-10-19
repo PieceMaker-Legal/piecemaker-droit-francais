@@ -6,10 +6,10 @@ import type Database from 'better-sqlite3';
 
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, ReasoningSnapshot, ReasoningStatus, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import { and, answer, calculate, compile, evaluate, or, questionRoots, decisive, reachableLeaves, runTrials, simulate, structure } from './engine.js';
+import { and, answer, calculate, compile, evaluate, or, objectiveRoots, decisive, reachableLeaves, runTrials, simulate, structure } from './engine.js';
 import type { Calculation, Facts, Trace } from './engine.js';
-import { canonical, formulaConditions, formulaNames, formulaNumbers, LiteralError, parseLiteral, printLiteral, readReasoning, stripAnnotations } from './format.js';
-import type { Basis, Condition, Formula, Measure, Question, Ref, Target, Trial } from './format.js';
+import { canonical, formulaConditions, VERBS, formulaNames, formulaNumbers, LiteralError, parseLiteral, printLiteral, readReasoning, stripAnnotations } from './format.js';
+import type { Basis, Condition, Formula, Measure, Objective, Ref, Target, Trial } from './format.js';
 
 export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null } };
 
@@ -38,7 +38,7 @@ const inForce = (date: string, from: string, to: string | null): boolean => from
 const UNIT: Record<string, string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
 const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moins', moins_de: 'moins de', au_plus: 'au plus' };
 const amount = (value: string | number) => (typeof value === 'number' ? value.toLocaleString('fr-FR') : phrase(value));
-const ANCHORED = /\.(piece|source|vigueur|reponse|decompte|applicabilite|validite|prescription)$/;
+const ANCHORED = /\.(piece|source|vigueur|obtenir|écarter|réduire|augmenter|decompte|applicabilite|validite|prescription)$/;
 const applicabilityName = (title: string) => {
   const article = /article\s+(\S+)/i.exec(title);
   return `applicabilité_de_${(article ? `l_article_${article[1]}` : title).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 50)}`;
@@ -64,7 +64,7 @@ function node(root: Record<string, unknown>, at: string): Record<string, unknown
   return isObject(current) ? current : null;
 }
 
-export type Simulation = { questions: Array<{ question: string; statut: ReasoningStatus; montant?: number | null }>; valeurs: Record<string, string | number | null> };
+export type Simulation = { objectifs: Array<{ objectif: string; statut: ReasoningStatus; montant?: number | null }>; valeurs: Record<string, string | number | null> };
 export type Verification = { annotated: Record<string, unknown> | null; issues: ReasoningIssue[]; code: string; log: ReasoningLogEntry[]; simulation?: Simulation };
 const shown = (value: ReasoningValue | number | string) => (value === null ? 'à établir' : typeof value === 'boolean' ? (value ? 'vrai' : 'faux') : String(value));
 const told = (name: string, value: ReasoningValue | number | string) => `${phrase(name)} ${value === null ? 'reste en suspens' : typeof value === 'boolean' ? (value ? 'est acquis' : 'est exclu') : `vaut ${typeof value === 'number' ? value.toLocaleString('fr-FR') : value}`}`;
@@ -109,18 +109,21 @@ export async function verifyReasoning(input: {
 
   const shape = structure(reasoning);
   for (const cycle of shape.cycles) add('erreur', cycle.split(' → ')[0], `boucle : ${cycle}`);
-  const amountQuestion = (question: Question) => !reasoning.terms.has(question.reponse) && reasoning.valeurs.has(question.reponse);
-  reasoning.questions.forEach((question, index) => {
-    if (!reasoning.terms.has(question.reponse) && !amountQuestion(question)) add('erreur', `questions[${index}].reponse`, `terme ${question.reponse} non défini : écris ${question.reponse}: { si: [...] }, ou déclare-le dans valeurs si la réponse est un montant`);
+  const amountObjective = (objective: Objective) => !reasoning.terms.has(objective.effet) && reasoning.valeurs.has(objective.effet);
+  reasoning.objectifs.forEach((objective, index) => {
+    const at = `objectifs[${index}].${objective.verbe}`;
+    if (!reasoning.terms.has(objective.effet) && !amountObjective(objective)) add('erreur', at, `terme ${objective.effet} non défini : écris ${objective.effet}: { si: [...] }, ou déclare-le dans valeurs si l’objectif porte sur un montant`);
+    else if (VERBS[objective.verbe] === 'terme' && amountObjective(objective)) add('erreur', at, `${objective.effet} est un montant : utilise réduire ou augmenter`);
+    else if (VERBS[objective.verbe] === 'montant' && !amountObjective(objective)) add('erreur', at, `${objective.effet} est un terme vrai/faux : utilise obtenir ou écarter`);
   });
   if (!reasoning.qualification) add('manque', 'qualification', 'raisonnement non qualifié : ajoute qualification: \'drafting\', \'contentieux\' ou \'consultation\'', 'Le raisonnement n’est pas qualifié : drafting, contentieux ou consultation.');
-  reasoning.questions.forEach((question, index) => {
-    if (reasoning.qualification === 'drafting' && !reasoning.hypotheses.some((trial) => questionRoots(question).some((name) => name in trial.attendu))) add('manque', `questions[${index}]`, `question sans hypothèse : ajoute dans hypotheses un cas dont attendu porte sur ${question.reponse}`, 'Aucune hypothèse ne vérifie la réponse à cette question.');
-    if (reasoning.qualification === 'contentieux' && !question.prescription && !question.reponse.startsWith('prescription_')) add('manque', `questions[${index}]`, `${reasoning.qualification} : vérifier la prescription : ajoute prescription: \'prescription_de_…\' sur la question et définis ce terme`, 'Prescription à vérifier.');
-    if (reasoning.qualification === 'drafting' && !question.validite && !question.reponse.startsWith('validité_')) add('manque', `questions[${index}]`, 'drafting : vérifier la validité : ajoute validite: \'validité_de_…\' sur la question et définis ce terme', 'Validité à vérifier.');
+  reasoning.objectifs.forEach((objective, index) => {
+    if (reasoning.qualification === 'drafting' && !reasoning.hypotheses.some((trial) => objectiveRoots(objective).some((name) => name in trial.attendu))) add('manque', `objectifs[${index}]`, `objectif sans hypothèse : ajoute dans hypotheses un cas dont attendu porte sur ${objective.effet}`, 'Aucune hypothèse ne vérifie cet objectif.');
+    if (reasoning.qualification === 'contentieux' && !objective.prescription && !objective.effet.startsWith('prescription_')) add('manque', `objectifs[${index}]`, `${reasoning.qualification} : vérifier la prescription : ajoute prescription: \'prescription_de_…\' sur l’objectif et définis ce terme`, 'Prescription à vérifier.');
+    if (reasoning.qualification === 'drafting' && !objective.validite && !objective.effet.startsWith('validité_')) add('manque', `objectifs[${index}]`, 'drafting : vérifier la validité : ajoute validite: \'validité_de_…\' sur l’objectif et définis ce terme', 'Validité à vérifier.');
   });
-  const roots = new Set(reasoning.questions.flatMap(questionRoots));
-  for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, 'terme qui ne sert à aucune question : rattache-le comme condition ou ajoute la question à laquelle il répond');
+  const roots = new Set(reasoning.objectifs.flatMap(objectiveRoots));
+  for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, 'terme qui ne sert à aucun objectif : rattache-le comme condition ou ajoute l’objectif qu’il sert');
 
   const sources = new Map<string, Promise<SourceInfo | null | undefined>>();
   const lookup = (id: string) => {
@@ -289,8 +292,8 @@ export async function verifyReasoning(input: {
     collect(root);
     return found;
   };
-  const actValidities = new Set(reasoning.questions.map((question) => question.validite).filter((name): name is string => Boolean(name)));
-  const validityRoots = [...reasoning.questions.map((question) => question.validite), ...occurrences.flatMap(({ condition }) => condition.selon.map((basis) => basis.validite))].filter((name): name is string => Boolean(name));
+  const actValidities = new Set(reasoning.objectifs.map((objective) => objective.validite).filter((name): name is string => Boolean(name)));
+  const validityRoots = [...reasoning.objectifs.map((objective) => objective.validite), ...occurrences.flatMap(({ condition }) => condition.selon.map((basis) => basis.validite))].filter((name): name is string => Boolean(name));
   const applicabilityTerms = new Set([...occurrences.flatMap(({ condition }) => condition.selon), ...[...reasoning.valeurs.values()].flatMap((entry) => entry.selon)].flatMap((basis) => (basis.applicabilite ? [...tree(basis.applicabilite)] : [])));
   const validityTerms = new Set(validityRoots.flatMap((name) => [...tree(name)]));
   const citesLaw = (name: string) => occurrences.some(({ at, condition }) => tree(name).has(at.split('.')[0]) && condition.selon.some((_, index) => basisChecks.get(`${at}.selon[${index}]`)?.kind === 'texte'));
@@ -331,10 +334,10 @@ export async function verifyReasoning(input: {
   const statuses = new Map<string, ReasoningValue>();
   const vigueurs = new Map<string, ReasoningValue>();
   const decisiveLeaves = new Set<string>();
-  const decisiveFor = new Map<string, Question[]>();
+  const decisiveFor = new Map<string, Objective[]>();
   const trials = shape.cycles.length ? [] : runTrials(reasoning, test, { leaf: leafValue, value: (name, check) => stated(name, check) ?? computedValue(name) });
   const supposing = (names: string[], roots: string[]) => reasoning.hypotheses.filter((trial, index) => trials[index]?.conforme && names.some((name) => name in trial.faits) && roots.some((root) => root in trial.attendu));
-  const bracketed = (names: string[], question: Question) => questionRoots(question).some((root) => new Set(supposing(names, [root]).map((trial) => String(trial.attendu[root]))).size > 1);
+  const bracketed = (names: string[], objective: Objective) => objectiveRoots(objective).some((root) => new Set(supposing(names, [root]).map((trial) => String(trial.attendu[root]))).size > 1);
   const open = (formula: Formula, found: Set<string>, seen: Set<string>) => {
     if (formula.operation === 'si') {
       const held = holds(formula.condition);
@@ -351,41 +354,41 @@ export async function verifyReasoning(input: {
     const formula = reasoning.valeurs.get(name)?.formule;
     if (formula && reasoning.valeurs.get(name)!.valeur === null) open(formula, found, seen); else found.add(name);
   };
-  reasoning.questions.forEach((question, index) => {
+  reasoning.objectifs.forEach((objective, index) => {
     if (shape.cycles.length) return;
-    if (amountQuestion(question)) {
+    if (amountObjective(objective)) {
       const trace: Trace = new Map();
-      const controls = questionRoots(question).filter((name) => reasoning.terms.has(name));
+      const controls = objectiveRoots(objective).filter((name) => reasoning.terms.has(name));
       const checked = and([...test(baseFacts, trace, controls).values()]);
       for (const [key, item] of trace) if (!statuses.has(key)) statuses.set(key, item);
-      const amount = valueOf(question.reponse);
+      const amount = valueOf(objective.effet);
       const statut = typeof amount !== 'number' ? 'à établir' : STATUS(checked);
-      const holder = node(annotated, `questions[${index}]`);
+      const holder = node(annotated, `objectifs[${index}]`);
       if (holder) Object.assign(holder, { statut, montant_calcule: typeof amount === 'number' ? amount : null });
       const missing = new Set<string>();
-      openValue(question.reponse, missing, new Set());
+      openValue(objective.effet, missing, new Set());
       for (const name of missing) {
         const isValue = reasoning.valeurs.has(name);
-        const at = isValue ? `valeurs.${name}` : `questions[${index}]`;
-        if (isValue && reasoning.valeurs.get(name)!.selon.length && reasoning.valeurs.get(name)!.valeur !== null) { add('manque', at, `${question.reponse} dépend de ${name}, dont la source n’est pas acquise : établis sa vigueur à la date et son applicabilité`, `${human(question.reponse)} dépend de ${phrase(name)}, dont le texte n’est pas encore établi comme applicable.`); continue; }
-        const covered = supposing([name], [question.reponse]).length > 0;
-        const supposed = `ajoute une hypothèse qui la suppose (faits) et donne le montant attendu de ${question.reponse}`;
-        if (drafting && !covered) add('manque', at, `${question.reponse} dépend de ${name}, que le projet ne fixe pas : ${isValue ? 'fixe-la dans valeurs, ou ' : ''}${supposed}`, `${human(question.reponse)} dépend de ${phrase(name)}, que le projet ne fixe pas.`, isValue ? undefined : name);
-        if (!drafting && !(consultation && covered)) add('manque', at, isValue ? `${question.reponse} dépend de ${name} : renseigne-la dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)${consultation ? `, ou ${supposed}` : ''}` : `${question.reponse} dépend de ${name} : établis ce point (preuve, ou ses propres conditions)${consultation ? `, ou ${supposed}` : ''}`, `${human(question.reponse)} dépend de ${phrase(name)}, qui n’est pas établi.`, isValue ? undefined : name);
+        const at = isValue ? `valeurs.${name}` : `objectifs[${index}]`;
+        if (isValue && reasoning.valeurs.get(name)!.selon.length && reasoning.valeurs.get(name)!.valeur !== null) { add('manque', at, `${objective.effet} dépend de ${name}, dont la source n’est pas acquise : établis sa vigueur à la date et son applicabilité`, `${human(objective.effet)} dépend de ${phrase(name)}, dont le texte n’est pas encore établi comme applicable.`); continue; }
+        const covered = supposing([name], [objective.effet]).length > 0;
+        const supposed = `ajoute une hypothèse qui la suppose (faits) et donne le montant attendu de ${objective.effet}`;
+        if (drafting && !covered) add('manque', at, `${objective.effet} dépend de ${name}, que le projet ne fixe pas : ${isValue ? 'fixe-la dans valeurs, ou ' : ''}${supposed}`, `${human(objective.effet)} dépend de ${phrase(name)}, que le projet ne fixe pas.`, isValue ? undefined : name);
+        if (!drafting && !(consultation && covered)) add('manque', at, isValue ? `${objective.effet} dépend de ${name} : renseigne-la dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)${consultation ? `, ou ${supposed}` : ''}` : `${objective.effet} dépend de ${name} : établis ce point (preuve, ou ses propres conditions)${consultation ? `, ou ${supposed}` : ''}`, `${human(objective.effet)} dépend de ${phrase(name)}, qui n’est pas établi.`, isValue ? undefined : name);
       }
       return;
     }
-    if (!reasoning.terms.has(question.reponse)) return;
+    if (!reasoning.terms.has(objective.effet)) return;
     const facts: Facts = { leaf, basis: (at, condition, applicable) => { const value = basisValue(at, condition, applicable); if (!vigueurs.has(at)) vigueurs.set(at, value); return value; } };
     const trace: Trace = new Map();
-    const value = answer(question, test(facts, trace, questionRoots(question)));
+    const value = answer(objective, test(facts, trace, objectiveRoots(objective)));
     for (const [key, item] of trace) if (!statuses.has(key)) statuses.set(key, item);
-    const reachable = [...new Set(questionRoots(question).flatMap((root) => [...reachableLeaves(reasoning, root)]))];
+    const reachable = [...new Set(objectiveRoots(objective).flatMap((root) => [...reachableLeaves(reasoning, root)]))];
     const unknown = reachable.filter((name) => facts.leaf(name) === null).sort();
-    const found = value === null ? decisive(test, facts, question, unknown) : { decisive: [], inPlay: false };
-    for (const name of found.decisive) { decisiveLeaves.add(name); decisiveFor.set(name, [...(decisiveFor.get(name) ?? []), question]); }
-    const holder = node(annotated, `questions[${index}]`);
-    const personnes = input.persons.filter((person) => question.question.includes(person.label)).map((person) => person.label);
+    const found = value === null ? decisive(test, facts, objective, unknown) : { decisive: [], inPlay: false };
+    for (const name of found.decisive) { decisiveLeaves.add(name); decisiveFor.set(name, [...(decisiveFor.get(name) ?? []), objective]); }
+    const holder = node(annotated, `objectifs[${index}]`);
+    const personnes = input.persons.filter((person) => objective.objectif.includes(person.label)).map((person) => person.label);
     if (holder) Object.assign(holder, { statut: STATUS(value), ...(found.decisive.length ? { [found.inPlay ? 'en_jeu' : 'decisifs']: found.decisive } : {}), ...(personnes.length ? { personnes } : {}) });
   });
 
@@ -407,9 +410,9 @@ export async function verifyReasoning(input: {
     controlSlots.push(basis.applicabilite ?? null);
     if (!basis.applicabilite) add('manque', `${place}.applicabilite`, `applicabilité non établie : ajoute applicabilite: '${applicabilityName(title)}' et définis ce terme, dont les conditions établissent que ce texte s’applique au dossier`, `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
   };
-  for (const question of reasoning.questions) {
-    if (reasoning.qualification === 'drafting' || question.validite) controlSlots.push(question.validite ?? null);
-    if (reasoning.qualification === 'contentieux' || question.prescription) controlSlots.push(question.prescription ?? null);
+  for (const objective of reasoning.objectifs) {
+    if (reasoning.qualification === 'drafting' || objective.validite) controlSlots.push(objective.validite ?? null);
+    if (reasoning.qualification === 'contentieux' || objective.prescription) controlSlots.push(objective.prescription ?? null);
   }
   for (const { condition } of occurrences) if (condition.mesure?.delai) controlSlots.push(condition.decompte ?? null);
   for (const { at, condition } of occurrences) {
@@ -421,8 +424,8 @@ export async function verifyReasoning(input: {
     if (result?.calcul) holder.calcul = result.calcul;
     if (fact && decisiveLeaves.has(fact)) {
       holder.decisif = true;
-      if (drafting && result?.missing.length && !(decisiveFor.get(fact) ?? []).some((question) => bracketed([fact, ...result.missing], question))) add('manque', at, `${fact} décide de la réponse et dépend de ${result.missing.join(', ')}, que le projet ne fixe pas : fixe ${result.missing.length > 1 ? 'ces valeurs' : 'cette valeur'} dans valeurs, ou ajoute des hypothèses qui montrent quand la réponse change`, `${human(fact)} : la réponse dépend de ${listing(result.missing.map(phrase))}, que le projet ne fixe pas.`, fact);
-      if (reasoning.qualification !== 'drafting' && result && !(consultation && (decisiveFor.get(fact) ?? []).some((question) => bracketed([fact, ...result.missing], question)))) add('manque', at, `${fact} décide de la réponse : renseigne ${result.missing.join(', ')} dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)${consultation ? ', ou ajoute des hypothèses qui montrent quand la réponse change' : ''}`, `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
+      if (drafting && result?.missing.length && !(decisiveFor.get(fact) ?? []).some((objective) => bracketed([fact, ...result.missing], objective))) add('manque', at, `${fact} décide de la réponse et dépend de ${result.missing.join(', ')}, que le projet ne fixe pas : fixe ${result.missing.length > 1 ? 'ces valeurs' : 'cette valeur'} dans valeurs, ou ajoute des hypothèses qui montrent quand la réponse change`, `${human(fact)} : la réponse dépend de ${listing(result.missing.map(phrase))}, que le projet ne fixe pas.`, fact);
+      if (reasoning.qualification !== 'drafting' && result && !(consultation && (decisiveFor.get(fact) ?? []).some((objective) => bracketed([fact, ...result.missing], objective)))) add('manque', at, `${fact} décide de la réponse : renseigne ${result.missing.join(', ')} dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)${consultation ? ', ou ajoute des hypothèses qui montrent quand la réponse change' : ''}`, `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
       else if (reasoning.qualification !== 'drafting' && !result) add('manque', at, `${fact} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
     }
     condition.selon.forEach((basis, index) => {
@@ -436,6 +439,56 @@ export async function verifyReasoning(input: {
       if (check?.kind === 'piece' && !basis.validite && !clauseExempt) add('manque', `${place}.validite`, `validité de la clause non établie : ajoute validite: 'validité_de_la_clause_${condition.condition ?? at.split('.')[0]}' et définis ce terme, dont les conditions établissent que la clause est valable au regard du droit applicable`, `${title} : la validité de la clause n’est pas établie.`, `#source:${basis.source}`);
       if (check?.kind === 'piece' && /\b(code|cgi|loi n|ordonnance n|décret n)/i.test(basis.citation) && /\barticles?\b/i.test(basis.citation) && !condition.selon.some((_, other) => basisChecks.get(`${at}.selon[${other}]`)?.kind === 'texte')) add('manque', place, 'la clause renvoie à un texte de loi : ajoute ce texte à selon (source, citation, vigueur)', `${title} : la clause renvoie à un texte de loi qui n’est pas cité.`, `#source:${basis.source}`);
       if (!exempt) applicability(place, basis, title);
+    });
+  }
+  if (!shape.cycles.length) {
+    const flipped = (flip: { leaf?: string; at?: string }): Facts => ({
+      leaf: (name) => { const value = leaf(name); return name === flip.leaf && value !== null ? !value : value; },
+      basis: (at, condition, applicable) => { const value = basisValue(at, condition, applicable); return at === flip.at && value !== null ? !value : value; },
+    });
+    const amountUnder = (name: string, facts: Facts, seen: Set<string>): number | null => {
+      const fixed = stated(name);
+      const formula = reasoning.valeurs.get(name)?.formule;
+      if (fixed !== null || !formula || seen.has(name)) return typeof fixed === 'number' ? fixed : null;
+      return evaluate(formula, (operand) => amountUnder(operand, facts, new Set([...seen, name])), (condition) => (reasoning.terms.has(condition) ? test(facts, undefined, [condition]).get(condition) ?? null : facts.leaf(condition)));
+    };
+    const score = (objective: Objective, facts: Facts) => (amountObjective(objective) ? amountUnder(objective.effet, facts, new Set()) : answer(objective, test(facts, undefined, objectiveRoots(objective))));
+    const gap = (objective: Objective, value: ReasoningValue | number) => (amountObjective(objective) ? (typeof value === 'number' ? (objective.verbe === 'réduire' ? value : -value) : Infinity) : value === null ? 1 : value === (objective.verbe === 'obtenir') ? 0 : 2);
+    const regimes = (name: string, seen: Set<string>): string[] => {
+      const formula = reasoning.valeurs.get(name)?.formule;
+      if (!formula || seen.has(name)) return [];
+      seen.add(name);
+      return [...formulaConditions(formula), ...formulaNames(formula).flatMap((operand) => regimes(operand, seen))];
+    };
+    const gaps = reasoning.objectifs.map((objective) => gap(objective, score(objective, baseFacts)));
+    const located = (name: string, index: number) => occurrences.find(({ condition }) => condition.condition === name)?.at ?? [...reasoning.valeurs].filter(([, entry]) => entry.formule && formulaConditions(entry.formule).includes(name)).map(([value]) => `valeurs.${value}.formule`)[0] ?? `objectifs[${index}]`;
+    reasoning.objectifs.forEach((objective, index) => {
+      if (gaps[index] === 0) { const holder = node(annotated, `objectifs[${index}]`); if (holder) holder.atteint = true; return; }
+      const scope = amountObjective(objective) ? [...new Set(regimes(objective.effet, new Set()))] : objectiveRoots(objective);
+      const bases = new Map<string, ReasoningValue>();
+      test({ leaf, basis: (at, condition, applicable) => { const value = basisValue(at, condition, applicable); bases.set(at, value); return value; } }, undefined, scope.filter((name) => reasoning.terms.has(name)));
+      const leaves = [...new Set(scope.flatMap((root) => [...reachableLeaves(reasoning, root)]))].filter((name) => leaf(name) !== null);
+      const found: string[] = [];
+      const places = new Set<string>();
+      const flips = [...leaves.map((name) => ({ leaf: name, at: located(name, index) })), ...occurrences.filter(({ at, condition }) => condition.selon.length && bases.has(at) && bases.get(at) !== null).map(({ at, condition }) => ({ basis: condition.condition ?? `l’alternative de ${at.split('.')[0]}`, at }))];
+      for (const flip of flips) {
+        if (!('leaf' in flip) && places.has(flip.at)) continue;
+        const facts = flipped('leaf' in flip ? { leaf: flip.leaf } : { at: flip.at });
+        if (gap(objective, score(objective, facts)) >= gaps[index]) continue;
+        const tension = reasoning.objectifs.filter((other, at) => at !== index && gap(other, score(other, facts)) > gaps[at]).map((other) => other.objectif);
+        const name = 'leaf' in flip ? flip.leaf! : flip.basis!;
+        const value = 'leaf' in flip ? leaf(flip.leaf!) : bases.get(flip.at);
+        const goal = `l’objectif « ${objective.objectif} »`;
+        const advice = 'leaf' in flip
+          ? `${name} ${value ? 'fait obstacle à' : 'manque à'} ${goal} : ${reasoning.computed.has(name) ? 'discute les valeurs du calcul ou la règle qui le fixe' : value ? 'conteste-le (contredit) ou l’interprétation de la règle qui le retient' : 'cherche une pièce qui l’établit ou une autre interprétation de la règle'}, ou cherche une exception (sauf) ou un autre fondement (l_une)`
+          : value ? `la source de ${name} fait obstacle à ${goal} : discute son interprétation, sa version ou son applicabilité, ou cherche une source contraire` : `la source de ${name} ne compte pas alors que ${goal} en dépend : établis sa version et son applicabilité, ou cherche une autre source`;
+        add('manque', flip.at, `${advice}${tension.length ? ` ; en tension avec ${tension.map((other) => `l’objectif « ${other} »`).join(', ')} : à arbitrer` : ''}`, `${'leaf' in flip ? human(name) : `La source de ${phrase(name)}`} ${value ? 'fait obstacle à' : 'manque à'} l’objectif : ${objective.objectif}.${tension.length ? ` En tension avec : ${tension.join(' ; ')}.` : ''}`, 'leaf' in flip ? name : undefined);
+        places.add(flip.at);
+        found.push(name);
+      }
+      const holder = node(annotated, `objectifs[${index}]`);
+      if (holder) Object.assign(holder, { ...(amountObjective(objective) ? {} : { atteint: gaps[index] === 2 ? false : null }), ...(found.length ? { obstacles: [...new Set(found)] } : {}) });
+      if (gaps[index] === 2 && !found.length) add('manque', `objectifs[${index}]`, 'objectif non atteint et aucun élément seul ne le fait basculer : cherche un autre fondement (l_une), une exception (sauf) ou une autre lecture des règles retenues', `Objectif non atteint : ${objective.objectif}.`);
     });
   }
   for (const [name, entry] of reasoning.valeurs) entry.selon.forEach((basis, index) => applicability(`valeurs.${name}.selon[${index}]`, basis, sourceIssues(`valeurs.${name}.selon[${index}]`, basis)));
@@ -507,10 +560,10 @@ export async function verifyReasoning(input: {
     ...(registre.length ? { registre } : {}),
   };
 
-  reasoning.questions.forEach((question, index) => {
-    const holder = node(annotated, `questions[${index}]`);
+  reasoning.objectifs.forEach((objective, index) => {
+    const holder = node(annotated, `objectifs[${index}]`);
     const decisifs = (holder?.decisifs ?? holder?.en_jeu ?? []) as string[];
-    emit({ key: `réponse:${index}`, step: 'réponse', status: holder?.statut === 'à établir' ? 'neutre' : bilan.erreurs ? 'alerte' : 'ok', subject: question.question, text: `${typeof holder?.montant_calcule === 'number' ? holder.montant_calcule.toLocaleString('fr-FR') : holder?.statut ? ANSWER[holder.statut as ReasoningStatus] : 'Non calculée'}${decisifs.length ? ` : dépend de ${listing(decisifs.map((name) => phrase(name)))}` : ''}${bilan.erreurs ? ` · ${bilan.erreurs} erreur${bilan.erreurs > 1 ? 's' : ''} à corriger` : ''}` });
+    emit({ key: `réponse:${index}`, step: 'réponse', status: holder?.statut === 'à établir' ? 'neutre' : bilan.erreurs ? 'alerte' : 'ok', subject: objective.objectif, text: `${typeof holder?.montant_calcule === 'number' ? holder.montant_calcule.toLocaleString('fr-FR') : holder?.statut ? ANSWER[holder.statut as ReasoningStatus] : 'Non calculée'}${decisifs.length ? ` : dépend de ${listing(decisifs.map((name) => phrase(name)))}` : ''}${bilan.erreurs ? ` · ${bilan.erreurs} erreur${bilan.erreurs > 1 ? 's' : ''} à corriger` : ''}` });
   });
   let code = ordered ?? input.code;
   for (const [original, fixed] of corrections) code = code.split(original).join(fixed);
@@ -518,11 +571,11 @@ export async function verifyReasoning(input: {
   if (input.simulation && !shape.cycles.length) {
     const run = simulate(reasoning, test, { leaf: leafValue, value: (name, check) => stated(name, check) ?? computedValue(name) }, input.simulation);
     simulation = {
-      questions: reasoning.questions.map((question) => {
-        if (!amountQuestion(question)) return { question: question.question, statut: STATUS(answer(question, run.test(questionRoots(question)))) };
-        const montant = run.value(question.reponse);
-        const checked = and([...run.test(questionRoots(question).filter((name) => reasoning.terms.has(name))).values()]);
-        return { question: question.question, statut: typeof montant === 'number' ? STATUS(checked) : 'à établir', montant: typeof montant === 'number' ? montant : null };
+      objectifs: reasoning.objectifs.map((objective) => {
+        if (!amountObjective(objective)) return { objectif: objective.objectif, statut: STATUS(answer(objective, run.test(objectiveRoots(objective)))) };
+        const montant = run.value(objective.effet);
+        const checked = and([...run.test(objectiveRoots(objective).filter((name) => reasoning.terms.has(name))).values()]);
+        return { objectif: objective.objectif, statut: typeof montant === 'number' ? STATUS(checked) : 'à établir', montant: typeof montant === 'number' ? montant : null };
       }),
       valeurs: Object.fromEntries([...reasoning.valeurs.keys()].map((name) => [name, run.value(name)])),
     };
@@ -598,7 +651,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   const run = async (cwd: string, options: { online: boolean; emit?: (entry: ReasoningLogEntry) => void; simulation?: Trial['faits'] }) => {
     const id = projectId(cwd);
     const code = await readFile(path.join(cwd, REASONING_FILE), 'utf8').catch(() => null);
-    if (code === null) throw new TypeError(`Aucun raisonnement : écris ${REASONING_FILE} (objet { questions: [...], terme: { si: [...] } }), puis relance verifier.`);
+    if (code === null) throw new TypeError(`Aucun raisonnement : écris ${REASONING_FILE} (objet { objectifs: [...], terme: { si: [...] } }), puis relance verifier.`);
     const result = await verifyReasoning({
       code, cwd, connectors: cached, ...options,
       reliability: new Map(reliability(id).map((entry) => [entry.piece, entry.reliable])),
@@ -688,10 +741,10 @@ export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'issues' | '
 }
 
 export const EXAMPLE_CODE = `{
-  questions: [
+  objectifs: [
     {
-      question: \`La pénalité de retard est-elle due par Société Beta SARL ?\`,
-      reponse: 'pénalité_encourue',
+      objectif: \`Obtenir de Société Beta SARL le paiement de la pénalité de retard\`,
+      obtenir: 'pénalité_encourue',
     },
   ],
   valeurs: {

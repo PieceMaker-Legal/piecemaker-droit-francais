@@ -13,7 +13,8 @@ type Edge = { from: string; to: string; link: Occurrence['link'] | 'preuve' | 'c
 type Cited = { piece: Json; target: string; against: boolean };
 type Based = { source: Json; target: string };
 
-const RESERVED = new Set(['bilan', 'questions', 'hypotheses', 'valeurs']);
+const RESERVED = new Set(['bilan', 'objectifs', 'hypotheses', 'valeurs']);
+const VERBS: Record<string, string> = { obtenir: 'Obtenir', écarter: 'Écarter', réduire: 'Réduire', augmenter: 'Augmenter' };
 const UNIT: Record<string, string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
 const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moins', moins_de: 'moins de', au_plus: 'au plus' };
 const inputs = (condition: Json): string[] => condition.delai ? [condition.delai.de, condition.delai.a] : condition.montant ? [condition.montant.valeur, condition.montant.seuil].filter((item) => typeof item === 'string') : [];
@@ -58,7 +59,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${[['question', 'Question'], ['terme', 'Termes'], ['controle', 'Contrôles'], ['fait', 'Faits'], ['source', 'Sources'], ['piece', 'Pièces']].map(([key, label]) => `<span><i style="background:${COLORS[key]}"></i>${label}</span>`).join('')}<span><i class="is-dashed"></i>À établir</span><span><i class="is-ring"></i>Décisif</span><span>- - sauf</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Objectif" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${[['question', 'Objectif'], ['terme', 'Termes'], ['controle', 'Contrôles'], ['fait', 'Faits'], ['source', 'Sources'], ['piece', 'Pièces']].map(([key, label]) => `<span><i style="background:${COLORS[key]}"></i>${label}</span>`).join('')}<span><i class="is-dashed"></i>À établir</span><span><i class="is-ring"></i>Décisif</span><span>- - sauf</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Objectif, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const svg = root.querySelector<SVGSVGElement>('svg')!;
@@ -95,7 +96,8 @@ export function mount(container: HTMLElement, api: Host) {
 
   const annotated = () => (snapshot?.annotated ?? null) as Json | null;
   const values = () => (annotated()?.valeurs ?? {}) as Record<string, Json>;
-  const questions = () => (Array.isArray(annotated()?.questions) ? annotated()!.questions as Json[] : []);
+  const objectives = () => (Array.isArray(annotated()?.objectifs) ? annotated()!.objectifs as Json[] : []);
+  const verb = (objective: Json) => Object.keys(VERBS).find((key) => typeof objective[key] === 'string') ?? 'obtenir';
   const terms = () => Object.fromEntries(Object.entries(annotated() ?? {}).filter(([key, value]) => !RESERVED.has(key) && value && typeof value === 'object' && !Array.isArray(value))) as Record<string, Json>;
   const occurrences = (): Occurrence[] => {
     const found: Occurrence[] = [];
@@ -170,8 +172,8 @@ export function mount(container: HTMLElement, api: Host) {
     const old = new Map(nodes.map((node) => [node.id, node]));
     nodes = [];
     edges = [];
-    const question = questions()[scope];
-    if (!question) { paintGraph(); return; }
+    const objective = objectives()[scope];
+    if (!objective) { paintGraph(); return; }
     const all = terms();
     const list = occurrences();
     const levels = new Map<string, number>();
@@ -183,16 +185,16 @@ export function mount(container: HTMLElement, api: Host) {
       for (const entry of list.filter((item) => item.parent === name)) { visit(entry.condition.condition, level + 1); if (typeof entry.condition.decompte === 'string') visit(entry.condition.decompte, level + 2); }
       for (const group of groups().filter((item) => item.parent === name)) for (const source of [group.condition, ...(group.condition.l_une ?? [])].flatMap((condition: Json) => condition.selon ?? [])) for (const control of [source.applicabilite, source.validite]) if (typeof control === 'string') visit(control, level + 1);
     };
-    visit(question.reponse, 1);
-    for (const control of [question.validite, question.prescription]) if (typeof control === 'string') visit(control, 1);
-    nodes.push({ id: '#question', label: question.question, status: question.statut ?? 'à établir', kind: 'question', decisive: false, x: 0, y: 0 });
+    visit(objective[verb(objective)], 1);
+    for (const control of [objective.validite, objective.prescription]) if (typeof control === 'string') visit(control, 1);
+    nodes.push({ id: '#question', label: objective.objectif, status: objective.statut ?? 'à établir', kind: 'question', decisive: false, x: 0, y: 0 });
     for (const name of order) {
       const occurrence = list.find((item) => item.condition.condition === name);
       const term = all[name];
       nodes.push({ id: name, label: human(name), status: term ? term.statut ?? 'à établir' : occurrence?.condition.statut ?? 'à établir', kind: term ? (isControl(name) ? 'controle' : 'terme') : 'fait', decisive: Boolean(occurrence?.condition.decisif), x: 0, y: 0 });
     }
-    edges.push({ from: question.reponse, to: '#question', link: 'si' });
-    for (const control of [question.validite, question.prescription]) if (typeof control === 'string' && levels.has(control)) edges.push({ from: control, to: '#question', link: 'si' });
+    edges.push({ from: objective[verb(objective)], to: '#question', link: 'si' });
+    for (const control of [objective.validite, objective.prescription]) if (typeof control === 'string' && levels.has(control)) edges.push({ from: control, to: '#question', link: 'si' });
     for (const entry of list) if (typeof entry.condition.decompte === 'string' && levels.has(entry.condition.decompte) && levels.has(entry.condition.condition)) edges.push({ from: entry.condition.decompte, to: entry.condition.condition, link: 'si' });
     for (const group of groups().filter((entry) => levels.has(entry.parent))) {
       const link = group.path.includes('.sauf[') ? 'sauf' : 'si';
@@ -271,7 +273,7 @@ export function mount(container: HTMLElement, api: Host) {
     const variables = Object.entries(values()).filter(([, entry]) => !entry.formule);
     if (!variables.length || snapshot?.demo || !context.project) return '';
     const computed = simulated ? Object.entries(simulated.valeurs).filter(([name]) => values()[name]?.formule) : [];
-    const results = simulated ? `${simulated.questions.map((entry) => `<p>${escape(entry.question)} ${entry.montant !== undefined ? `<strong>${escape(amountText(entry.montant))}</strong>` : pill(entry.statut, ANSWER[entry.statut] ?? 'En suspens')}</p>`).join('')}${computed.length ? `<p class="pmr-muted">${computed.map(([name, value]) => `${escape(human(name))} : ${escape(amountText(value))}`).join(' · ')}</p>` : ''}` : '';
+    const results = simulated ? `${simulated.objectifs.map((entry) => `<p>${escape(entry.objectif)} ${entry.montant !== undefined ? `<strong>${escape(amountText(entry.montant))}</strong>` : pill(entry.statut, ANSWER[entry.statut] ?? 'En suspens')}</p>`).join('')}${computed.length ? `<p class="pmr-muted">${computed.map(([name, value]) => `${escape(human(name))} : ${escape(amountText(value))}`).join(' · ')}</p>` : ''}` : '';
     return `<h4>Simulation</h4><p class="pmr-muted">Modifiez une valeur pour rejouer le raisonnement. Rien n’est enregistré.</p><div class="pmr-variables">${variables.map(([name, entry]) => `<label><span>${escape(human(name))}</span><input data-variable="${escape(name)}" value="${escape(draft[name] ?? (entry.valeur === null || entry.valeur === undefined ? '' : typeof entry.valeur === 'number' ? String(entry.valeur) : date(entry.valeur)))}" placeholder="non fixée"></label>`).join('')}</div><div class="pmr-run"><button class="pmr-primary" data-simulate${busy ? ' disabled' : ''}>Simuler</button>${simulated ? '<button data-simulate-reset>Effacer</button>' : ''}</div>${results}`;
   };
   const controlLink = (name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button> ${pill(terms()[name]?.statut ?? 'à établir')}`;
@@ -328,7 +330,7 @@ export function mount(container: HTMLElement, api: Host) {
   };
 
   const paintDetail = () => {
-    const question = questions()[scope];
+    const objective = objectives()[scope];
     if (tab === 'test') { paintTest(); return; }
     if (tab === 'code') { detail.innerHTML = snapshot?.code ? `<pre class="pmr-code">${escape(snapshot.code)}</pre>` : '<p class="pmr-muted">Aucun fichier .piecemaker/raisonnement.js.</p>'; return; }
     if (tab === 'alertes') {
@@ -337,10 +339,10 @@ export function mount(container: HTMLElement, api: Host) {
       detail.innerHTML = `<h4>Erreurs et manques</h4>${issueList(visibleIssues())}${bilan?.pieces_a_evaluer_par_l_avocat?.length ? `<h4>Pièces dont la fiabilité est à évaluer</h4><p>${bilan.pieces_a_evaluer_par_l_avocat.map((piece: string) => `<button class="pmr-link" data-open="#piece:${escape(piece)}" data-show="#piece:${escape(piece)}">${escape(basename(piece))}</button>`).join(', ')}</p>` : ''}${bilan?.registre?.length ? `<h4>Registre et BODACC</h4><ul>${bilan.registre.map((line: string) => `<li>${escape(line)}</li>`).join('')}</ul>` : ''}<h4>Écartées par vous</h4>${issueList(dismissed, true)}`;
       return;
     }
-    if (!question) { detail.innerHTML = '<p class="pmr-muted">Aucune question.</p>'; return; }
+    if (!objective) { detail.innerHTML = '<p class="pmr-muted">Aucun objectif.</p>'; return; }
     if (!selected || selected === '#question') {
       const essais = Array.isArray(annotated()?.hypotheses) ? annotated()!.hypotheses as Json[] : [];
-      detail.innerHTML = `<h3>${escape(question.question)}</h3><p>${pill(question.statut ?? 'à établir', `Réponse : ${'montant_calcule' in question ? amountText(question.montant_calcule) : ANSWER[question.statut ?? 'à établir']}`)}</p>${[['validite', 'Validité'], ['prescription', 'Prescription']].filter(([slot]) => typeof question[slot] === 'string').map(([slot, label]) => `<p><strong>${label} :</strong> ${controlLink(question[slot])}</p>`).join('')}${question.decisifs?.length ? `<h4>Faits décisifs</h4><p>${question.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${question.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(question.en_jeu.map(human).join(', '))}</p>` : ''}${question.personnes?.length ? `<h4>Personnes</h4><p>${escape(question.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Hypothèses</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}${controlsBlock()}${simulationBlock()}`;
+      detail.innerHTML = `<h3>${escape(objective.objectif)}</h3><p><strong>${VERBS[verb(objective)]} :</strong> <button class="pmr-link" data-select="${escape(objective[verb(objective)])}">${escape(human(objective[verb(objective)]))}</button> ${pill(objective.statut ?? 'à établir', `${'montant_calcule' in objective ? amountText(objective.montant_calcule) : ANSWER[objective.statut ?? 'à établir']}`)}${'atteint' in objective ? ` ${pill(objective.atteint === true ? 'acquis' : objective.atteint === false ? 'exclu' : 'à établir', objective.atteint === true ? 'objectif atteint' : objective.atteint === false ? 'objectif non atteint' : 'objectif en suspens')}` : ''}</p>${objective.obstacles?.length ? `<h4>Obstacles</h4><p>${objective.obstacles.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${[['validite', 'Validité'], ['prescription', 'Prescription']].filter(([slot]) => typeof objective[slot] === 'string').map(([slot, label]) => `<p><strong>${label} :</strong> ${controlLink(objective[slot])}</p>`).join('')}${objective.decisifs?.length ? `<h4>Faits décisifs</h4><p>${objective.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${objective.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(objective.en_jeu.map(human).join(', '))}</p>` : ''}${objective.personnes?.length ? `<h4>Personnes</h4><p>${escape(objective.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Hypothèses</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}${controlsBlock()}${simulationBlock()}`;
       return;
     }
     if (selected.startsWith('#source:')) {
@@ -367,9 +369,9 @@ export function mount(container: HTMLElement, api: Host) {
 
   const paint = () => {
     root.dataset.theme = context.theme;
-    const list = questions();
+    const list = objectives();
     picker.hidden = list.length < 2;
-    picker.innerHTML = list.map((question, index) => `<option value="${index}"${index === scope ? ' selected' : ''}>${escape(shorten(question.question, 80))}</option>`).join('');
+    picker.innerHTML = list.map((objective, index) => `<option value="${index}"${index === scope ? ' selected' : ''}>${escape(shorten(objective.objectif, 80))}</option>`).join('');
     const count = root.querySelector<HTMLElement>('[data-alerts]')!;
     count.hidden = !visibleIssues().length;
     count.textContent = String(visibleIssues().length);
@@ -378,7 +380,7 @@ export function mount(container: HTMLElement, api: Host) {
     root.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => button.setAttribute('aria-selected', String(view === 'panel' && button.dataset.tab === tab)));
     empty.hidden = Boolean(list.length);
     root.querySelector<HTMLElement>('.pmr-legend')!.hidden = !list.length;
-    empty.innerHTML = !context.project ? '<strong>Aucun dossier</strong><p>Ouvrez un dossier pour voir son raisonnement.</p>' : snapshot?.code && !snapshot.annotated ? `<strong>Raisonnement illisible</strong><p>${escape(snapshot.issues.map((issue) => issue.text).join(' · '))}</p>` : '<strong>Pas encore de raisonnement</strong><p>Posez une question juridique dans le chat : l’agent transcrit sa réponse dans .piecemaker/raisonnement.js, que ce volet vérifie et affiche.</p>';
+    empty.innerHTML = !context.project ? '<strong>Aucun dossier</strong><p>Ouvrez un dossier pour voir son raisonnement.</p>' : snapshot?.code && !snapshot.annotated ? `<strong>Raisonnement illisible</strong><p>${escape(snapshot.issues.map((issue) => issue.text).join(' · '))}</p>` : '<strong>Pas encore de raisonnement</strong><p>Confiez un objectif juridique à l’agent dans le chat : il transcrit son raisonnement dans .piecemaker/raisonnement.js, que ce volet vérifie et affiche.</p>';
     buildGraph();
     paintDetail();
   };
@@ -390,7 +392,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (next === serialized) return;
     serialized = next;
     snapshot = data;
-    if (scope >= questions().length) scope = 0;
+    if (scope >= objectives().length) scope = 0;
     paint();
   };
   const load = async (example = false) => {

@@ -45,9 +45,9 @@ test('le fichier est lu sans être exécuté : fonctions, appels, variables et c
 test('l’exemple fictif est à établir et désigne les faits décisifs', async () => {
   const result = await verify(EXAMPLE_CODE);
   assert.deepEqual(texts(result, 'erreur'), []);
-  assert.equal(at(result.annotated, 'questions[0].statut'), 'à établir');
-  assert.deepEqual(at(result.annotated, 'questions[0].decisifs'), ['force_majeure', 'grève_nationale']);
-  assert.deepEqual(at(result.annotated, 'questions[0].personnes'), ['Société Beta SARL']);
+  assert.equal(at(result.annotated, 'objectifs[0].statut'), 'à établir');
+  assert.deepEqual(at(result.annotated, 'objectifs[0].decisifs'), ['force_majeure', 'grève_nationale']);
+  assert.deepEqual(at(result.annotated, 'objectifs[0].personnes'), ['Société Beta SARL']);
   assert.equal(at(result.annotated, 'pénalité_stipulée.si[0].statut'), 'acquis');
   assert.equal(at(result.annotated, 'grève.si[0].l_une[1].statut'), 'exclu');
   assert.equal(at(result.annotated, 'force_majeure_contractuelle.si[0].l_une[0].decisif'), true);
@@ -65,9 +65,9 @@ test('toutes les feuilles établies : la réponse est acquise ; la preuve de l�
   const closed = EXAMPLE_CODE
     .replace("{ condition: 'force_majeure' }", "{ condition: 'force_majeure', contredit: [{ piece: 'pieces/07_courriel.md', citation: `a duré deux jours` }] }")
     .replace("{ condition: 'grève_nationale' }", "{ condition: 'grève_nationale', contredit: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }");
-  assert.equal(at((await verify(closed)).annotated, 'questions[0].statut'), 'acquis');
+  assert.equal(at((await verify(closed)).annotated, 'objectifs[0].statut'), 'acquis');
   const excused = EXAMPLE_CODE.replace("{ condition: 'grève_nationale' }", "{ condition: 'grève_nationale', preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }");
-  assert.equal(at((await verify(excused)).annotated, 'questions[0].statut'), 'exclu');
+  assert.equal(at((await verify(excused)).annotated, 'objectifs[0].statut'), 'exclu');
 });
 
 test('une citation à la ponctuation près est validée et remplacée par l’original ; une citation fausse est une erreur', async () => {
@@ -86,16 +86,16 @@ test('la vigueur est une condition appréciée à la date que chaque texte dési
   const differs = await verify(EXAMPLE_CODE.replace("débiteur est mis en demeure`, vigueur: { debut: '2016-10-01'", "débiteur est mis en demeure`, vigueur: { debut: '2016-02-10'"));
   assert.match(texts(differs, 'erreur').join('\n'), /vigueur différente de la version citée : debut '2016-10-01'/);
   const late = await verify(EXAMPLE_CODE.replace("valeur: '2024-01-15'", "valeur: '2015-06-14'"));
-  assert.equal(at(late.annotated, 'questions[0].statut'), 'exclu');
+  assert.equal(at(late.annotated, 'objectifs[0].statut'), 'exclu');
   assert.match(texts(late, 'manque').join('\n'), /selon\[0\]\.vigueur : version non applicable : elle n’était pas en vigueur au 2015-06-14/);
   const undated = await verify(EXAMPLE_CODE.replaceAll(", au: 'date_de_conclusion_du_contrat'", ''));
-  assert.equal(at(undated.annotated, 'questions[0].statut'), 'à établir');
+  assert.equal(at(undated.annotated, 'objectifs[0].statut'), 'à établir');
   assert.match(texts(undated, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.vigueur : applicabilité dans le temps non établie : ajoute vigueur: \{ debut, fin, au:/);
   assert.equal(undated.issues.find((entry) => entry.path === 'pénalité_encourue.si[0].selon[0].vigueur' && entry.text.startsWith('applicabilité dans le temps'))!.avocat, 'Code civil fictif, article 1231-5 : l’applicabilité du texte dans le temps n’est pas établie.');
   const unproven = await verify(EXAMPLE_CODE.replace(", preuve: [{ piece: 'pieces/01_contrat.md', citation: `Fait le 15/01/2024` }] }", ' }'));
   assert.match(texts(unproven, 'manque').join('\n'), /selon\[0\]\.vigueur : date_de_conclusion_du_contrat : renseigne cette date dans valeurs, avec sa preuve/);
   assert.match(texts(await verify(EXAMPLE_CODE.replace("valeur: '2024-01-15'", 'valeur: 12')), 'erreur').join('\n'), /date_de_conclusion_du_contrat sert à .*\.au : une date 'AAAA-MM-JJ' attendue/);
-  assert.match(texts(await verify(EXAMPLE_CODE.replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', date: { valeur: '2025-06-14' },")), 'erreur').join('\n'), /questions\[0\]\.date : clé inconnue date/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', date: { valeur: '2025-06-14' },")), 'erreur').join('\n'), /objectifs\[0\]\.date : clé inconnue date/);
 });
 
 test('l’applicabilité d’un texte est un terme : ses conditions, sourcées et prouvées, décident si le texte s’applique', async () => {
@@ -108,9 +108,9 @@ test('l’applicabilité d’un texte est un terme : ses conditions, sourcées e
   const inapplicable = await verify(EXAMPLE_CODE.replace("preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", "contredit: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },"));
   assert.equal(at(inapplicable.annotated, 'applicabilité_de_l_article_1231_5.statut'), 'exclu');
   assert.equal(at(inapplicable.annotated, 'pénalité_encourue.si[0].statut'), 'exclu');
-  assert.equal(at(inapplicable.annotated, 'questions[0].statut'), 'exclu');
+  assert.equal(at(inapplicable.annotated, 'objectifs[0].statut'), 'exclu');
   const unproven = await verify(EXAMPLE_CODE.replace("\n        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", ' },'));
-  assert.ok(at(unproven.annotated, 'questions[0].decisifs').includes('contrat_stipulant_une_pénalité'));
+  assert.ok(at(unproven.annotated, 'objectifs[0].decisifs').includes('contrat_stipulant_une_pénalité'));
   const errors = texts(await verify(EXAMPLE_CODE.replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", "applicabilite: 'applicabilité_inconnue' }] },").replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", 'applicabilite: `un contrat` }] },')), 'erreur').join('\n');
   assert.match(errors, /selon\[0\]\.applicabilite : terme applicabilité_inconnue non défini/);
   assert.match(errors, /selon\[0\]\.applicabilite : applicabilite : nom du terme qui établit que ce texte s’applique, commençant par applicabilité_/);
@@ -118,13 +118,13 @@ test('l’applicabilité d’un texte est un terme : ses conditions, sourcées e
 
 test('une condition sans source, un terme non défini, une boucle et un hypothèse non conforme sont des erreurs', async () => {
   const errors = texts(await verify(`{
-    questions: [{ question: \`Question fictive ?\`, reponse: 'a' }, { question: \`Autre ?\`, reponse: 'absent' }],
+    objectifs: [{ objectif: \`Objectif fictif\`, obtenir: 'a' }, { objectif: \`Autre objectif\`, obtenir: 'absent' }],
     a: { si: [{ condition: 'b', selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\` }] }, { condition: 'c' }] },
     b: { si: [{ condition: 'a', selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\` }] }] },
     hypotheses: [{ nom: \`faux\`, faits: { c: vrai }, attendu: { c: faux } }],
   }`), 'erreur').join('\n');
   assert.match(errors, /a\.si\[1\]\.selon : condition sans source/);
-  assert.match(errors, /questions\[1\]\.reponse : terme absent non défini/);
+  assert.match(errors, /objectifs\[1\]\.obtenir : terme absent non défini/);
   assert.match(errors, /boucle : a → b → a/);
 });
 
@@ -180,7 +180,7 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   await assert.rejects(service.command(folder, { commande: 'condition' }), /Commande : verifier/);
   const before = fs.readFileSync(file, 'utf8');
   const simulated = await service.simulate(folder, { grève_nationale: false, force_majeure: false, mise_en_demeure: true, retard_de_livraison: true });
-  assert.equal(simulated.questions[0].statut, 'acquis');
+  assert.equal(simulated.objectifs[0].statut, 'acquis');
   assert.equal(fs.readFileSync(file, 'utf8'), before);
   await assert.rejects(service.simulate(folder, { prix: 'cher' }), /faits/);
   fs.rmSync(file);
@@ -223,7 +223,7 @@ const CESSION_SOURCES: Record<string, SourceInfo> = {
   'pieces/08_notification.md': { kind: 'piece', title: 'Notification de réclamation (fictive)', text: 'Notification du 10/02/2024 : dommage de 45.000 euros.' },
 };
 const CESSION_CODE = `{
-  questions: [{ question: \`La réduction de prix est-elle due à Société Exemple SAS ?\`, reponse: 'réduction_due' }],
+  objectifs: [{ objectif: \`Obtenir une réduction de prix pour Société Exemple SAS\`, obtenir: 'réduction_due' }],
   valeurs: {
     date_de_réalisation: { valeur: '2022-06-15', preuve: [{ piece: 'pieces/03_realisation.md', citation: \`intervenue le 15/06/2022\` }] },
     date_de_notification: { valeur: '2024-02-10', preuve: [{ piece: 'pieces/08_notification.md', citation: \`Notification du 10/02/2024\` }] },
@@ -255,7 +255,7 @@ const cession = (code: string) => verifyReasoning({
 test('un délai et un montant se calculent à partir des valeurs prouvées, et les hypothèses les rejouent', async () => {
   const result = await cession(CESSION_CODE);
   assert.deepEqual(texts(result, 'erreur'), []);
-  assert.equal(at(result.annotated, 'questions[0].statut'), 'acquis');
+  assert.equal(at(result.annotated, 'objectifs[0].statut'), 'acquis');
   assert.deepEqual(at(result.annotated, 'réduction_due.si[0].calcul'), { depart: '2022-06-15', echeance: '2024-06-15', date_retenue: '2024-02-10' });
   assert.deepEqual(at(result.annotated, 'réduction_due.si[1].calcul'), { montant: 45000, seuil: 3000 });
   assert.equal(at(result.annotated, 'valeurs.montant_du_dommage.statut'), 'acquis');
@@ -271,7 +271,7 @@ test('un délai sans décompte est un manque, sans que le système choisisse la 
   assert.equal(issue.kind, 'manque');
   assert.equal(issue.avocat, 'Notification dans la garantie : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.');
   assert.ok(at(result.annotated, 'réduction_due.si[0].manques').some((text: string) => text.startsWith('délai sans décompte : ajoute decompte: \'décompte_de_notification_dans_la_garantie\'')));
-  assert.equal(at(result.annotated, 'questions[0].statut'), 'acquis');
+  assert.equal(at(result.annotated, 'objectifs[0].statut'), 'acquis');
   const contradicted = await cession(CESSION_CODE.replace("preuve: [{ piece: 'pieces/02_cession.md', citation: `Les délais se calculent de date à date` }] }],", "contredit: [{ piece: 'pieces/02_cession.md', citation: `Les délais se calculent de date à date` }] }],"));
   assert.equal(at(contradicted.annotated, 'décompte_de_la_garantie.statut'), 'exclu');
   assert.equal(at(contradicted.annotated, 'réduction_due.si[0].statut'), 'exclu');
@@ -279,8 +279,8 @@ test('un délai sans décompte est un manque, sans que le système choisisse la 
 
 test('une valeur sans pièce laisse le calcul en suspens et devient décisive ; un délai sans date retenue est une erreur', async () => {
   const unproven = await cession(CESSION_CODE.replace("date_de_notification: { valeur: '2024-02-10', preuve: [{ piece: 'pieces/08_notification.md', citation: `Notification du 10/02/2024` }] },", "date_de_notification: { valeur: '2024-02-10' },"));
-  assert.equal(at(unproven.annotated, 'questions[0].statut'), 'à établir');
-  assert.deepEqual(at(unproven.annotated, 'questions[0].decisifs'), ['notification_dans_la_garantie']);
+  assert.equal(at(unproven.annotated, 'objectifs[0].statut'), 'à établir');
+  assert.deepEqual(at(unproven.annotated, 'objectifs[0].decisifs'), ['notification_dans_la_garantie']);
   assert.match(texts(unproven, 'manque').join('\n'), /notification_dans_la_garantie décide de la réponse : renseigne date_de_notification dans valeurs, avec sa preuve/);
   assert.match(texts(await cession(CESSION_CODE.replace(", a: 'date_de_notification'", '')), 'erreur').join('\n'), /réduction_due\.si\[0\]\.delai : delai : \{ de: date_de_départ, a: date_retenue,/);
 });
@@ -303,21 +303,21 @@ test('un délai ou un montant mal écrit, prouvé sur la condition ou appliqué 
 
 test('le raisonnement se qualifie drafting ou contentieux ; la qualification appelle la vérification de la validité ou de la prescription', async () => {
   assert.match(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /qualification : raisonnement non qualifié/);
-  const contractual = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:")), 'manque').join('\n');
-  assert.match(contractual, /questions\[0\] : drafting : vérifier la validité : ajoute validite: 'validité_de_…' sur la question/);
+  const contractual = texts(await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:")), 'manque').join('\n');
+  assert.match(contractual, /objectifs\[0\] : drafting : vérifier la validité : ajoute validite: 'validité_de_…' sur l’objectif/);
   assert.doesNotMatch(contractual, /non qualifié|prescription/);
-  const litigation = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contentieux',\n  questions:")), 'manque').join('\n');
-  assert.match(litigation, /questions\[0\] : contentieux : vérifier la prescription : ajoute prescription:/);
+  const litigation = texts(await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'contentieux',\n  objectifs:")), 'manque').join('\n');
+  assert.match(litigation, /objectifs\[0\] : contentieux : vérifier la prescription : ajoute prescription:/);
   assert.doesNotMatch(litigation, /vérifier la validité/);
-  const valid = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace('\n  hypotheses:', "\n  validité_du_contrat: { sauf: [{ condition: 'vice_du_consentement', selon: [{ source: 'pieces/01_contrat.md', citation: `En cas de retard de livraison` }], preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },\n  hypotheses:"));
+  const valid = await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:").replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', validite: 'validité_du_contrat',").replace('\n  hypotheses:', "\n  validité_du_contrat: { sauf: [{ condition: 'vice_du_consentement', selon: [{ source: 'pieces/01_contrat.md', citation: `En cas de retard de livraison` }], preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },\n  hypotheses:"));
   assert.doesNotMatch(texts(valid, 'manque').join('\n'), /vérifier la validité/);
   assert.deepEqual(texts(valid, 'erreur'), []);
   assert.equal(at(valid.annotated, 'validité_du_contrat.statut'), 'exclu');
-  assert.equal(at(valid.annotated, 'questions[0].statut'), 'exclu');
-  const advice = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'consultation',\n  questions:")), 'manque').join('\n');
+  assert.equal(at(valid.annotated, 'objectifs[0].statut'), 'exclu');
+  const advice = texts(await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'consultation',\n  objectifs:")), 'manque').join('\n');
   assert.doesNotMatch(advice, /prescription/);
   assert.match(advice, /décide de la réponse/);
-  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'pénal',\n  questions:")), 'erreur').join('\n'), /qualification : qualification : 'drafting', 'contentieux' ou 'consultation'/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'pénal',\n  objectifs:")), 'erreur').join('\n'), /qualification : qualification : 'drafting', 'contentieux' ou 'consultation'/);
 });
 
 test('les contrôles portent un nom préfixé, désigné par leur emplacement ; le fichier revient dans l’ordre canonique', async () => {
@@ -327,7 +327,7 @@ test('les contrôles portent un nom préfixé, désigné par leur emplacement ; 
   assert.match(texts(await verify(EXAMPLE_CODE.replace("au: 'date_de_conclusion_du_contrat' }, applicabilite", "au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_inconnue', autre")), 'erreur').join('\n'), /terme applicabilité_inconnue non défini/);
   const result = await verify(EXAMPLE_CODE);
   const keys = Object.keys(result.annotated as object);
-  assert.deepEqual(keys.slice(0, 3), ['bilan', 'questions', 'pénalité_encourue']);
+  assert.deepEqual(keys.slice(0, 3), ['bilan', 'objectifs', 'pénalité_encourue']);
   assert.ok(keys.indexOf('applicabilité_de_l_article_1231_5') > keys.indexOf('grève'));
   assert.deepEqual(keys.slice(-2), ['valeurs', 'hypotheses']);
   assert.deepEqual(Object.keys(at(result.annotated, 'pénalité_encourue.si[0].selon[0]')).slice(0, 5), ['source', 'citation', 'vigueur', 'applicabilite', 'titre']);
@@ -335,23 +335,23 @@ test('les contrôles portent un nom préfixé, désigné par leur emplacement ; 
 });
 
 test('en contrat, les faits sont des hypothèses : pas de manque de preuve, mais chaque question a son hypothèse, et les hypothèses reprennent les faits établis', async () => {
-  const contractual = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:"));
+  const contractual = await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:"));
   const manques = texts(contractual, 'manque').join('\n');
   assert.doesNotMatch(manques, /décide de la réponse/);
-  assert.ok(at(contractual.annotated, 'questions[0].decisifs').length);
-  assert.doesNotMatch(manques, /question sans hypothèse/);
-  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace(/\n  hypotheses: \[[\s\S]*?\n  \],/, '')), 'manque').join('\n'), /questions\[0\] : question sans hypothèse : ajoute dans hypotheses un cas dont attendu porte sur pénalité_encourue/);
+  assert.ok(at(contractual.annotated, 'objectifs[0].decisifs').length);
+  assert.doesNotMatch(manques, /objectif sans hypothèse/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:").replace(/\n  hypotheses: \[[\s\S]*?\n  \],/, '')), 'manque').join('\n'), /objectifs\[0\] : objectif sans hypothèse : ajoute dans hypotheses un cas dont attendu porte sur pénalité_encourue/);
   assert.match(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /décide de la réponse/);
   const inherited = await verify(EXAMPLE_CODE.replace('faits: { retard_de_livraison: vrai, mise_en_demeure: vrai, grève_nationale: vrai }', 'faits: { grève_nationale: vrai }'));
   assert.equal(at(inherited.annotated, 'bilan.hypotheses'), '1/1');
-  assert.match(texts(await verify(EXAMPLE_CODE.replace("reponse: 'pénalité_encourue',", "reponse: 'validité_du_contrat', validite: 'validité_du_contrat',")), 'erreur').join('\n'), /questions\[0\]\.validite : validite : la question porte déjà sur ce contrôle/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace("obtenir: 'pénalité_encourue',", "obtenir: 'validité_du_contrat', validite: 'validité_du_contrat',")), 'erreur').join('\n'), /objectifs\[0\]\.validite : validite : l’objectif porte déjà sur ce contrôle/);
 });
 
 test('une clause n’a pas à porter sa vigueur ; le fichier est réécrit dans l’ordre canonique', async () => {
   assert.doesNotMatch(texts(await verify(EXAMPLE_CODE.replaceAll(", vigueur: { debut: '2024-01-15', fin: null }", '')), 'manque').join('\n'), /vigueur non renseignée/);
-  const shuffled = EXAMPLE_CODE.replace('{\n  questions:', '{\n  hypotheses: [],\n  questions:');
+  const shuffled = EXAMPLE_CODE.replace('{\n  objectifs:', '{\n  hypotheses: [],\n  objectifs:');
   const result = await verify(shuffled);
-  assert.ok(result.code.indexOf('questions:') < result.code.indexOf('pénalité_encourue:'));
+  assert.ok(result.code.indexOf('objectifs:') < result.code.indexOf('pénalité_encourue:'));
   assert.ok(result.code.indexOf('pénalité_encourue:') < result.code.indexOf('applicabilité_de_l_article_1231_5:'));
   assert.ok(result.code.lastIndexOf('hypotheses:') > result.code.indexOf('valeurs:'));
   assert.deepEqual(texts(await verify(result.code), 'erreur'), texts(result, 'erreur'));
@@ -390,7 +390,7 @@ test('les données des calculs sont déclarées dans valeurs, prouvées ou laiss
 });
 
 test('une clause a son propre contrôle de validité ; une clause citée pour l’applicabilité n’en réclame pas', async () => {
-  const shared = EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_du_contrat' }],").replace('\n  hypotheses:', "\n  validité_du_contrat: { si: [{ condition: 'contrat_signé', selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },\n  hypotheses:");
+  const shared = EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:").replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', validite: 'validité_du_contrat',").replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_du_contrat' }],").replace('\n  hypotheses:', "\n  validité_du_contrat: { si: [{ condition: 'contrat_signé', selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },\n  hypotheses:");
   assert.match(texts(await verify(shared), 'erreur').join('\n'), /pénalité_stipulée\.si\[0\]\.selon\[0\]\.validite : validite : validité_du_contrat est le contrôle de validité de l’acte ; une clause a son propre contrôle/);
   const governed = EXAMPLE_CODE.replace("        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", "        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },\n      { condition: 'droit_français_choisi', selon: [{ source: 'pieces/01_contrat.md', citation: `Article 1. Grève` }], preuve: [{ piece: 'pieces/01_contrat.md', citation: `Article 1. Grève` }] },");
   assert.notEqual(governed, EXAMPLE_CODE);
@@ -401,7 +401,7 @@ test('une clause a son propre contrôle de validité ; une clause citée pour l�
 
 test('drafting : valeur laissée en blanc, renvois, stipulations contradictoires et formules', async () => {
   const draft = (code: string) => verifyReasoning({
-    code: code.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:"), cwd: '/dossier-fictif',
+    code: code.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:"), cwd: '/dossier-fictif',
     connectors: connectors({ ...EXAMPLE_SOURCES, 'pieces/01_contrat.md': { ...EXAMPLE_SOURCES['pieces/01_contrat.md'], text: `${EXAMPLE_SOURCES['pieces/01_contrat.md'].text} Article 9. Prix : [●] euros. Article 10. Aucune pénalité n'est due.` }, 'pieces/02_bareme.md': { kind: 'piece', title: 'Barème (fictif)', text: 'Pénalité de 100 euros par jour.' } }),
     reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(),
   });
@@ -416,7 +416,7 @@ test('drafting : valeur laissée en blanc, renvois, stipulations contradictoires
   assert.match(notes, /renvoi\[1\] : le projet renvoie à un élément absent du dossier \(pieces\/09_annexe_absente\.md\)/);
   assert.match(notes, /pénalité_stipulée\.si\[0\]\.selon\[0\]\.contredit : stipulations contradictoires : à harmoniser dans le projet/);
   assert.equal(at(referred.annotated, 'pénalité_stipulée.si[0].statut'), 'à établir');
-  const litigation = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contentieux',\n  questions:"));
+  const litigation = await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'contentieux',\n  objectifs:"));
   assert.doesNotMatch(texts(litigation, 'manque').join('\n'), /laissée en blanc/);
   const priced = await cession(CESSION_CODE.replace("    montant_du_dommage:", "    valeur_d_entreprise: { valeur: 50000, preuve: [{ piece: 'pieces/08_notification.md', citation: `dommage de 45.000 euros` }] },\n    dette_nette: { valeur: 5000, preuve: [{ piece: 'pieces/08_notification.md', citation: `dommage de 45.000 euros` }] },\n    prix_calculé: { formule: { produit: [0.9, { difference: ['valeur_d_entreprise', 'dette_nette'] }] } },\n    prix_stipulé: { valeur: 41000, preuve: [{ piece: 'pieces/08_notification.md', citation: `dommage de 45.000 euros` }], formule: { produit: [0.9, { difference: ['valeur_d_entreprise', 'dette_nette'] }] } },\n    montant_du_dommage:"));
   assert.deepEqual(texts(priced, 'erreur'), []);
@@ -432,7 +432,7 @@ const FISCAL_SOURCES: Record<string, SourceInfo> = {
 };
 const FISCAL_CODE = `{
   qualification: 'drafting',
-  questions: [{ question: \`Quel impôt Jean Dupont doit-il sur la cession ?\`, reponse: 'impôt_dû', validite: 'validité_de_la_cession' }],
+  objectifs: [{ objectif: \`Payer le moins d’impôt possible sur la cession de Jean Dupont\`, réduire: 'impôt_dû', validite: 'validité_de_la_cession' }],
   validité_de_la_cession: { si: [{ condition: 'consentement_des_parties', selon: [{ source: 'LEGIARTI000000000102', citation: \`le consentement des parties\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' }, applicabilite: 'applicabilité_de_l_article_1128' }] }] },
   applicabilité_de_l_article_1128: { si: [{ condition: 'contrat_de_cession', selon: [{ source: 'LEGIARTI000000000102', citation: \`la validité d’un contrat\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' } }], preuve: [{ piece: 'pieces/projet_cession.md', citation: \`cède ses titres\` }] }] },
   applicabilité_de_l_article_150: { si: [{ condition: 'cession_par_une_personne_physique', selon: [{ source: 'LEGIARTI000000000101', citation: \`cessions de titres par les personnes physiques\`, vigueur: { debut: '2018-01-01', fin: null, au: 'date_de_cession' } }], preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Jean Dupont, personne physique\` }] }] },
@@ -469,8 +469,8 @@ test('une question peut appeler un montant : le taux se source par un texte appl
   assert.deepEqual(texts(result, 'erreur'), []);
   assert.equal(at(result.annotated, 'valeurs.taux_forfaitaire.statut'), 'acquis');
   assert.equal(at(result.annotated, 'valeurs.taux_forfaitaire.selon[0].en_vigueur'), true);
-  assert.equal(at(result.annotated, 'questions[0].statut'), 'à établir');
-  assert.equal(at(result.annotated, 'questions[0].montant_calcule'), null);
+  assert.equal(at(result.annotated, 'objectifs[0].statut'), 'à établir');
+  assert.equal(at(result.annotated, 'objectifs[0].montant_calcule'), null);
   assert.equal(at(result.annotated, 'bilan.hypotheses'), '1/1');
   const manques = texts(result, 'manque').join('\n');
   assert.doesNotMatch(manques, /prix_de_cession|nombres écrits|taux_forfaitaire|applicabilité_de_l_article_150/);
@@ -482,10 +482,10 @@ test('une question peut appeler un montant : le taux se source par un texte appl
   assert.equal(at(hypothetical.annotated, 'valeurs.taux_forfaitaire.statut'), 'à établir');
   assert.deepEqual(texts(hypothetical, 'erreur'), []);
   const simulated = await fiscal(FISCAL_CODE, { prix_de_cession: 300000 });
-  assert.equal(simulated.simulation?.questions[0].montant, 30100);
+  assert.equal(simulated.simulation?.objectifs[0].montant, 30100);
   assert.equal(simulated.simulation?.valeurs.gain_net, 200000);
   const fixed = await fiscal(FISCAL_CODE.replace('prix_de_cession: { valeur: null },', "prix_de_cession: { valeur: 200000, preuve: [{ piece: 'pieces/projet_cession.md', citation: `cède ses titres` }] },"));
-  assert.equal(at(fixed.annotated, 'questions[0].montant_calcule'), 14300);
+  assert.equal(at(fixed.annotated, 'objectifs[0].montant_calcule'), 14300);
   const unsourced = await fiscal(FISCAL_CODE.replace(", applicabilite: 'applicabilité_de_l_article_150' }] },\n    impôt_dû", " }] },\n    impôt_dû").replace(/\n {6}selon: \[\{ source: 'LEGIARTI000000000101', citation: `une contribution de 3 %`[^\n]*\] \},/, ' },'));
   const gaps = texts(unsourced, 'manque').join('\n');
   assert.match(gaps, /valeurs\.taux_forfaitaire\.selon\[0\]\.applicabilite : applicabilité non établie/);
@@ -497,7 +497,7 @@ test('une question peut appeler un montant : le taux se source par un texte appl
 test('drafting : une valeur laissée ouverte n’est un manque que si la réponse en dépend, et des hypothèses qui montrent la bascule le lèvent', async () => {
   const code = (essais: string) => `{
   qualification: 'drafting',
-  questions: [{ question: \`La réduction de prix est-elle due ?\`, reponse: 'réduction_due', validite: 'validité_de_la_cession' }],
+  objectifs: [{ objectif: \`Obtenir une réduction de prix\`, obtenir: 'réduction_due', validite: 'validité_de_la_cession' }],
   réduction_due: { si: [{ condition: 'prix_supérieur_au_seuil', montant: { valeur: 'prix_de_cession', plus_de: 'seuil_de_réduction' }, selon: [{ source: 'pieces/projet_cession.md', citation: \`Si le prix excède le seuil\` }] }] },
   validité_de_la_cession: { si: [{ condition: 'consentement_des_parties', selon: [{ source: 'LEGIARTI000000000102', citation: \`le consentement des parties\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' } }] }] },
   valeurs: {
@@ -526,4 +526,38 @@ test('consultation : des hypothèses lèvent le manque d’une valeur ouverte, p
   const bare = await consult(FISCAL_CODE.replace(/ {2}hypotheses: \[[^\n]*\],\n/, ''));
   assert.match(texts(bare, 'manque').join('\n'), /valeurs\.prix_de_cession : impôt_dû dépend de prix_de_cession : renseigne-la dans valeurs, avec sa preuve \(pièce\) ou sa source \(selon : texte\), ou ajoute une hypothèse/);
   assert.match(texts(await fiscal(FISCAL_CODE.replace('  hypotheses: [', '  essais: [')), 'erreur').join('\n'), /essais : la clé essais s’appelle hypotheses/);
+});
+
+test('un objectif oriente le raisonnement : le vérificateur désigne ce qui y fait obstacle et les objectifs en tension', async () => {
+  const excused = EXAMPLE_CODE.replace("{ condition: 'grève_nationale' }", "{ condition: 'grève_nationale', preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }");
+  const sought = await verify(excused);
+  assert.equal(at(sought.annotated, 'objectifs[0].atteint'), false);
+  assert.ok(at(sought.annotated, 'objectifs[0].obstacles').includes('grève_nationale'));
+  const gaps = texts(sought, 'manque').join('\n');
+  assert.match(gaps, /grève\.si\[0\]\.l_une\[0\] : grève_nationale fait obstacle à l’objectif « Obtenir de Société Beta SARL le paiement de la pénalité de retard » : conteste-le \(contredit\)/);
+  assert.match(gaps, /pénalité_stipulée\.sauf\[0\] : la source de force_majeure_contractuelle fait obstacle à l’objectif/);
+  const avoided = await verify(excused.replace("obtenir: 'pénalité_encourue'", "écarter: 'pénalité_encourue'"));
+  assert.equal(at(avoided.annotated, 'objectifs[0].atteint'), true);
+  assert.doesNotMatch(texts(avoided, 'manque').join('\n'), /objectif/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace("obtenir: 'pénalité_encourue'", "réduire: 'pénalité_encourue'")), 'erreur').join('\n'), /objectifs\[0\]\.réduire : pénalité_encourue est un terme vrai\/faux : utilise obtenir ou écarter/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', écarter: 'grève',")), 'erreur').join('\n'), /objectifs\[0\] : un seul verbe/);
+  const legacy = texts(await verify(EXAMPLE_CODE.replace('objectifs: [', 'questions: [')), 'erreur').join('\n');
+  assert.match(legacy, /questions : la clé questions s’appelle objectifs/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', reponse: 'pénalité_encourue',")), 'erreur').join('\n'), /objectifs\[0\]\.reponse : reponse est remplacée par le verbe/);
+
+  const tension = await fiscal(`{
+  qualification: 'consultation',
+  objectifs: [
+    { objectif: \`Payer le moins d’impôt possible\`, réduire: 'impôt_dû' },
+    { objectif: \`Rester dirigeant de Société Exemple SAS\`, obtenir: 'qualité_de_dirigeant' },
+  ],
+  qualité_de_dirigeant: { si: [{ condition: 'mandat_social', selon: [{ source: 'pieces/projet_cession.md', citation: \`cède ses titres\` }], preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Jean Dupont, personne physique\` }] }] },
+  valeurs: {
+    gain: { valeur: 100000, preuve: [{ piece: 'pieces/projet_cession.md', citation: \`acquis pour 100 000 euros\` }] },
+    impôt_dû: { formule: { si: 'mandat_social', alors: { produit: ['gain', 0.3] }, sinon: { produit: ['gain', 0.128] } } },
+  },
+}`);
+  assert.deepEqual(texts(tension, 'erreur'), []);
+  assert.match(texts(tension, 'manque').join('\n'), /qualité_de_dirigeant\.si\[0\] : mandat_social fait obstacle à l’objectif « Payer le moins d’impôt possible » : conteste-le .* ; en tension avec l’objectif « Rester dirigeant de Société Exemple SAS » : à arbitrer/);
+  assert.equal(at(tension.annotated, 'objectifs[1].atteint'), true);
 });
