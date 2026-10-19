@@ -1,13 +1,16 @@
 import { parseExpressionAt } from 'acorn';
 
 export type Ref = { piece: string; citation: string };
-export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null; au?: string }; applicabilite?: string; validite?: string };
+export type Target = { piece: string; citation?: string };
+export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null; au?: string }; applicabilite?: string; validite?: string; renvoi: Target[]; contredit: Ref[] };
 export type Duration = { unite: 'jours' | 'jours_ouvres' | 'mois' | 'ans'; nombre: number };
 export type Measure = {
   delai?: { de: string; a: string; borne: 'au_plus' | 'au_moins'; duree: Duration };
   montant?: { valeur: string; comparaison: 'plus_de' | 'au_moins' | 'moins_de' | 'au_plus'; seuil: number | string };
 };
-export type Value = { valeur: string | number | null; preuve: Ref[] };
+export const OPERATIONS = ['somme', 'difference', 'produit', 'quotient'] as const;
+export type Formula = { operation: typeof OPERATIONS[number]; termes: Array<number | string | Formula> };
+export type Value = { valeur: string | number | null; preuve: Ref[]; formule?: Formula };
 export type Condition = { condition?: string; l_une?: Condition[]; mesure?: Measure; selon: Basis[]; decompte?: string; preuve: Ref[]; contredit: Ref[] };
 export type Term = { si: Condition[]; sauf: Condition[] };
 export type Question = { question: string; reponse: string; validite?: string; prescription?: string };
@@ -118,14 +121,34 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     });
   };
 
+  const targets = (raw: unknown, path: string): Target[] => {
+    if (raw === undefined) return [];
+    if (!Array.isArray(raw)) { problem(path, 'liste attendue : [{ piece, citation }] (citation facultative si l’élément visé n’existe pas encore)'); return []; }
+    return raw.flatMap((entry, index) => {
+      const at = `${path}[${index}]`;
+      if (!isObject(entry) || !text(entry.piece) || (entry.citation !== undefined && !text(entry.citation)) || Object.keys(entry).some((key) => !['piece', 'citation'].includes(key))) { problem(at, '{ piece: chemin de l’élément visé, citation: passage visé (facultatif) } attendu'); return []; }
+      return [{ piece: entry.piece as string, ...(entry.citation !== undefined ? { citation: entry.citation as string } : {}) }];
+    });
+  };
+
+  const formula = (raw: unknown, path: string): Formula | null => {
+    const operations = isObject(raw) ? Object.keys(raw) : [];
+    const operation = operations[0] as Formula['operation'];
+    const list = isObject(raw) ? raw[operation] : undefined;
+    if (operations.length !== 1 || !(OPERATIONS as readonly string[]).includes(operation) || !Array.isArray(list) || list.length < 2) { problem(path, `formule : { ${OPERATIONS.join(' | ')}: [termes] }, au moins deux termes : nombres, noms de valeurs ou formules`); return null; }
+    const termes = list.map((item, index) => (typeof item === 'number' ? item : typeof item === 'string' && IDENTIFIER.test(item) ? item : formula(item, `${path}.${operation}[${index}]`)));
+    if (termes.some((item) => item === null)) return null;
+    return { operation, termes: termes as Formula['termes'] };
+  };
+
   const bases = (raw: unknown, path: string): Basis[] => {
     if (raw === undefined) return [];
     if (!Array.isArray(raw)) { problem(path, 'liste attendue : [{ source, citation, vigueur }]'); return []; }
     return raw.flatMap((entry, index) => {
       const at = `${path}[${index}]`;
       if (!isObject(entry) || !text(entry.source) || !text(entry.citation)) { problem(at, '{ source: identifiant du texte, de la décision ou chemin de la pièce, citation: passage exact } attendu'); return []; }
-      for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'validite'].includes(key)) problem(`${at}.${key}`, `clé inconnue ${key}`);
-      const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string };
+      for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'validite', 'renvoi', 'contredit'].includes(key)) problem(`${at}.${key}`, `clé inconnue ${key}`);
+      const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string, renvoi: targets(entry.renvoi, `${at}.renvoi`), contredit: refs(entry.contredit, `${at}.contredit`) };
       if (entry.applicabilite !== undefined) {
         const name = control('applicabilite', entry.applicabilite, `${at}.applicabilite`);
         if (name) basis.applicabilite = name;
@@ -228,9 +251,16 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       if (!isObject(raw)) { problem('valeurs', 'valeurs: { nom: { valeur, preuve } } attendu'); continue; }
       for (const [name, entry] of Object.entries(raw)) {
         const at = `valeurs.${name}`;
-        if (!IDENTIFIER.test(name) || !isObject(entry) || !(typeof entry.valeur === 'number' || isDate(entry.valeur) || entry.valeur === null)) { problem(at, '{ valeur: \'AAAA-MM-JJ\', nombre ou null si le dossier ne la fixe pas, preuve: [{ piece, citation }] } attendu'); continue; }
-        for (const field of Object.keys(entry)) if (!['valeur', 'preuve'].includes(field)) problem(`${at}.${field}`, `clé inconnue ${field} (admises : valeur, preuve)`);
-        reasoning.valeurs.set(name, { valeur: entry.valeur as string | number | null, preuve: refs(entry.preuve, `${at}.preuve`) });
+        const computedOnly = isObject(entry) && entry.valeur === undefined && entry.formule !== undefined;
+        if (!IDENTIFIER.test(name) || !isObject(entry) || !(computedOnly || typeof entry.valeur === 'number' || isDate(entry.valeur) || entry.valeur === null)) { problem(at, '{ valeur: \'AAAA-MM-JJ\', nombre ou null si le dossier ne la fixe pas, preuve: [{ piece, citation }], formule } attendu'); continue; }
+        for (const field of Object.keys(entry)) if (!['valeur', 'preuve', 'formule'].includes(field)) problem(`${at}.${field}`, `clé inconnue ${field} (admises : valeur, preuve, formule)`);
+        const value: Value = { valeur: computedOnly ? null : entry.valeur as string | number | null, preuve: refs(entry.preuve, `${at}.preuve`) };
+        if (entry.formule !== undefined) {
+          const parsed = formula(entry.formule, `${at}.formule`);
+          if (parsed) value.formule = parsed;
+          if (typeof entry.valeur === 'string') problem(`${at}.formule`, 'une formule calcule un nombre, pas une date');
+        }
+        reasoning.valeurs.set(name, value);
       }
       continue;
     }
@@ -272,13 +302,23 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     if (slot && !controls.some((entry) => entry.slot === slot && entry.name === name)) problem(name, `${name} est un contrôle : désigne-le par ${slot}: '${name}' ${slot === 'applicabilite' ? 'sur la source' : slot === 'decompte' ? 'sur le délai' : slot === 'validite' ? 'sur la question ou la clause' : 'sur la question'} qu’il conditionne`);
   }
   for (const { slot, name, at } of controls) if (!reasoning.terms.has(name)) problem(at, `terme ${name} non défini : écris ${name}: { si: [...] }, le terme qui ${CONTROL_PURPOSE[slot]}`);
+  const operands = (value: Formula): string[] => value.termes.flatMap((item) => (typeof item === 'string' ? [item] : typeof item === 'number' ? [] : operands(item)));
+  const reaches = (origin: string, current: string, seen: Set<string>): boolean => {
+    const next = reasoning.valeurs.get(current)?.formule ? operands(reasoning.valeurs.get(current)!.formule!) : [];
+    return next.some((name) => name === origin || (!seen.has(name) && reaches(origin, name, seen.add(name))));
+  };
+  for (const [name, entry] of reasoning.valeurs) {
+    if (!entry.formule) continue;
+    if (reaches(name, name, new Set())) problem(`valeurs.${name}.formule`, `${name} se calcule à partir d’elle-même`);
+    for (const operand of operands(entry.formule)) if (reasoning.valeurs.has(operand) && typeof reasoning.valeurs.get(operand)!.valeur === 'string') problem(`valeurs.${operand}`, `${operand} sert à la formule de ${name} : un nombre attendu`);
+  }
   if (!reasoning.questions.length && !problems.some((entry) => entry.path === 'questions')) problem('questions', 'ajoute questions: [{ question, reponse }]');
   return { reasoning, problems };
 }
 
 const ANNOTATIONS = new Set(['bilan', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul']);
 
-const KEY_ORDER = ['qualification', 'questions', 'question', 'reponse', 'condition', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'decompte', 'validite', 'prescription', 'preuve', 'contredit', 'si', 'sauf', 'nom', 'faits', 'attendu'];
+const KEY_ORDER = ['qualification', 'questions', 'question', 'reponse', 'condition', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'contredit', 'si', 'sauf', 'nom', 'faits', 'attendu'];
 const rank = (key: string) => { const at = KEY_ORDER.indexOf(key); return at < 0 ? KEY_ORDER.length : at; };
 const ordered = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(ordered);
