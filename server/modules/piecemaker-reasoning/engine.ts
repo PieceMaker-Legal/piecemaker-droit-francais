@@ -1,7 +1,7 @@
 import type { ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import { basisControls } from './format.js';
-import type { Condition, Duration, Formula, Measure, Question, Reasoning, Term } from './format.js';
+import { basisControls, formulaConditions } from './format.js';
+import type { Condition, Duration, Formula, Measure, Operand, Question, Reasoning, Term, Trial } from './format.js';
 
 export type Facts = { leaf(name: string): ReasoningValue; basis(path: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue };
 export type Trace = Map<string, ReasoningValue>;
@@ -27,6 +27,8 @@ export function structure(reasoning: Reasoning) {
     [...term.si, ...term.sauf].forEach(walk);
   };
   for (const question of reasoning.questions) for (const root of questionRoots(question)) { used.add(root); if (reasoning.terms.has(root)) visit(root, []); }
+  for (const value of reasoning.valeurs.values()) for (const name of value.formule ? formulaConditions(value.formule) : []) { used.add(name); visit(name, []); }
+  for (const value of reasoning.valeurs.values()) for (const basis of value.selon) for (const control of basisControls(basis)) { used.add(control); visit(control, []); }
   for (const name of reasoning.terms.keys()) visit(name, []);
   return { leaves, used, cycles: [...new Set(cycles)] };
 }
@@ -105,13 +107,33 @@ export function addDuration(start: string, { unite, nombre }: Duration): string 
   return date.toISOString().slice(0, 10);
 }
 
-export function evaluate(formula: Formula, lookup: Lookup): number | null {
-  const values = formula.termes.map((item) => (typeof item === 'number' ? item : typeof item === 'string' ? lookup(item) : evaluate(item, lookup)));
-  if (values.some((value) => typeof value !== 'number')) return null;
+export type Holds = (name: string) => ReasoningValue;
+
+const cents = (value: number) => Math.round(value * 100) / 100;
+
+export function evaluate(formula: Formula, lookup: Lookup, holds: Holds = () => null): number | null {
+  const operand = (item: Operand): number | null => { const value = typeof item === 'number' ? item : typeof item === 'string' ? lookup(item) : evaluate(item, lookup, holds); return typeof value === 'number' ? value : null; };
+  if (formula.operation === 'si') { const held = holds(formula.condition); return held === null ? null : operand(held ? formula.alors : formula.sinon); }
+  if (formula.operation === 'bareme') {
+    const base = operand(formula.assiette);
+    const tranches = formula.tranches.map((tranche) => ({ limit: tranche.jusqu_a === null ? Infinity : operand(tranche.jusqu_a), rate: operand(tranche.taux) }));
+    if (base === null || tranches.some((tranche) => tranche.limit === null || tranche.rate === null)) return null;
+    let floor = 0;
+    let total = 0;
+    for (const tranche of tranches as Array<{ limit: number; rate: number }>) {
+      if (base > floor) total += (Math.min(base, tranche.limit) - floor) * tranche.rate;
+      floor = Math.max(floor, tranche.limit);
+    }
+    return cents(total);
+  }
+  const values = formula.termes.map(operand);
+  if (values.some((value) => value === null)) return null;
   const [first, ...rest] = values as number[];
+  if (formula.operation === 'arrondi') { const factor = 10 ** rest[0]; return Math.round(first * factor) / factor; }
+  if (formula.operation === 'minimum') return Math.min(first, ...rest);
+  if (formula.operation === 'maximum') return Math.max(first, ...rest);
   if (formula.operation === 'quotient' && rest.includes(0)) return null;
-  const result = rest.reduce((total, value) => (formula.operation === 'somme' ? total + value : formula.operation === 'difference' ? total - value : formula.operation === 'produit' ? total * value : total / value), first);
-  return Math.round(result * 100) / 100;
+  return cents(rest.reduce((total, value) => (formula.operation === 'somme' ? total + value : formula.operation === 'difference' ? total - value : formula.operation === 'produit' ? total * value : total / value), first));
 }
 
 export function calculate(measure: Measure, lookup: Lookup): Calculation {
@@ -133,18 +155,34 @@ export function calculate(measure: Measure, lookup: Lookup): Calculation {
   return { value, missing, calcul: { montant: amount, seuil: threshold } };
 }
 
-export function runTrials(reasoning: Reasoning, test: Test, known: { leaf(name: string): ReasoningValue; value: Lookup } = { leaf: () => null, value: () => null }) {
+export type Known = { leaf(name: string): ReasoningValue; value: Lookup };
+
+export function simulate(reasoning: Reasoning, test: Test, known: Known, faits: Trial['faits']) {
+  const computing = new Set<string>();
+  const facts: Facts = {
+    leaf: (name) => { const item = faits[name]; if (typeof item === 'boolean') return item; const measure = reasoning.computed.get(name); return measure ? calculate(measure, value).value : known.leaf(name); },
+    basis: (_path, _condition, applicable) => (applicable.length ? or(applicable) : true),
+  };
+  const holds: Holds = (name) => (reasoning.terms.has(name) ? test(facts, undefined, [name]).get(name) ?? null : facts.leaf(name));
+  function value(name: string): string | number | null {
+    const item = faits[name];
+    if (item !== undefined) return typeof item === 'boolean' ? null : item;
+    const entry = reasoning.valeurs.get(name);
+    if (!entry?.formule || entry.valeur !== null || computing.has(name)) return known.value(name);
+    computing.add(name);
+    const result = evaluate(entry.formule, value, holds);
+    computing.delete(name);
+    return result;
+  }
+  return { test: (names: string[]) => test(facts, undefined, names), value };
+}
+
+export function runTrials(reasoning: Reasoning, test: Test, known: Known = { leaf: () => null, value: () => null }) {
   return reasoning.essais.map((trial) => {
-    const trace: Trace = new Map();
-    const given: Lookup = (name) => { const item = trial.faits[name]; const formula = reasoning.valeurs.get(name)?.formule; return item !== undefined ? (typeof item === 'boolean' ? null : item) : formula && reasoning.valeurs.get(name)!.valeur === null ? evaluate(formula, given) : known.value(name); };
-    const leaf = (name: string): ReasoningValue => {
-      const item = trial.faits[name];
-      if (typeof item === 'boolean') return item;
-      const measure = reasoning.computed.get(name);
-      return measure ? calculate(measure, given).value : known.leaf(name);
-    };
-    const values = test({ leaf, basis: (_path, _condition, applicable) => (applicable.length ? or(applicable) : true) }, trace, Object.keys(trial.attendu));
-    const obtenu = Object.fromEntries(Object.keys(trial.attendu).map((name) => [name, values.get(name) ?? null]));
-    return { obtenu, conforme: Object.entries(trial.attendu).every(([name, expected]) => obtenu[name] === expected) };
+    const run = simulate(reasoning, test, known, trial.faits);
+    const names = Object.keys(trial.attendu);
+    const values = run.test(names.filter((name) => !reasoning.valeurs.has(name)));
+    const obtenu = Object.fromEntries(names.map((name) => [name, reasoning.valeurs.has(name) ? run.value(name) : values.get(name) ?? null])) as Record<string, ReasoningValue | number | string>;
+    return { obtenu, conforme: Object.entries(trial.attendu).every(([name, expected]) => (typeof expected === 'number' ? typeof obtenu[name] === 'number' && Math.abs((obtenu[name] as number) - expected) < 0.005 : obtenu[name] === expected)) };
   });
 }

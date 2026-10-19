@@ -20,11 +20,14 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.js`, un o
 ## Le fichier
 
 - `qualification` : `'drafting'` (faits à prévoir), `'contentieux'` ou `'consultation'` (faits à prouver ; la consultation suit les règles du contentieux). Non affichée dans le volet.
-- `questions: [{ question, reponse, validite?, prescription? }]`.
+- `questions: [{ question, reponse, validite?, prescription? }]` ; `reponse` désigne un terme, ou une valeur quand la réponse est un montant (statut + `montant_calcule`).
 - Un terme par clé : `{ si: [...], sauf: [...] }` ; `l_une` = une condition suffit. Une condition sans clé propre est un fait (`preuve`, `contredit: [{ piece, citation }]`).
 - `selon: [{ source, citation, vigueur: { debut, fin, au }, applicabilite, validite, renvoi, contredit }]` : identifiant officiel (LEGIARTI, JURITEXT, CETATEXT…) ou chemin de pièce pour une clause ; citation exacte. `renvoi: [{ piece, citation? }]` = ce à quoi la stipulation renvoie (déclaré par l'agent, quel que soit le mot employé) ; `contredit` = stipulation contraire.
-- Délai : `delai: { de, a, au_plus | au_moins: { jours | jours_ouvres | mois | ans: n } }` + `decompte`. Montant : `montant: { valeur, plus_de | au_moins | moins_de | au_plus: nom }`. Données dans `valeurs: { nom: { valeur, preuve, formule? } }`, `valeur: null` si le dossier ne la fixe pas ; `formule: { somme | difference | produit | quotient: [nombres, noms, formules] }` calcule un montant (sans valeur prouvée, la formule le donne ; avec, les deux doivent concorder).
-- `essais: [{ nom, faits, attendu }]` : un fait absent reprend sa valeur établie par les pièces.
+- Délai : `delai: { de, a, au_plus | au_moins: { jours | jours_ouvres | mois | ans: n } }` + `decompte`. Montant : `montant: { valeur, plus_de | au_moins | moins_de | au_plus: nom }`. Données dans `valeurs: { nom: { valeur, preuve | selon, formule? } }`, `valeur: null` si le dossier ne la fixe pas. `preuve` = pièce (donnée stipulée ou constatée) ; `selon` = texte qui fixe la valeur (taux, seuil, barème), vérifié comme toute source (citation, vigueur à la date `au`, applicabilité) ; une pièce en `selon` est une erreur.
+- `formule` calcule un montant (sans valeur prouvée, la formule le donne ; avec, les deux doivent concorder) : `somme | difference | produit | quotient | minimum | maximum: [termes]`, `arrondi: [montant, décimales]`, `bareme: { assiette, tranches: [{ jusqu_a, taux }, …, { taux }] }` (progressif), `{ si: terme, alors, sinon }` (montant selon un régime ; terme à trois valeurs). Nombres écrits dans une formule sans `preuve` ni `selon` = manque.
+- `essais: [{ nom, faits, attendu }]` : un fait absent reprend sa valeur établie ; `attendu` porte sur un terme (vrai/faux) ou un montant (nombre).
+- Variables : une valeur ouverte (`null`) n'est signalée que si une réponse en dépend (fait décisif calculé, ou opérande d'un montant-réponse). En drafting le manque se lève en fixant la valeur ou par des essais qui la supposent : pour un terme, des essais conformes donnant des résultats différents (la bascule) ; pour un montant, un essai conforme qui donne le montant attendu. Aucune détection textuelle des blancs.
+- Simulation (volet, onglet Détail de la question) : l'avocat modifie les valeurs, `POST /reasoning/simulate` rejoue le raisonnement hors ligne (sources en cache du dernier test), rien n'est écrit.
 
 ## Contrôles (sous-raisonnements)
 
@@ -42,8 +45,8 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 
 ## Manques par mode
 
-- **Tous** : non qualifié ; renvoi vers un élément absent du dossier ou un passage introuvable ; stipulation contredite (la source ne compte plus : à trancher) ; montant stipulé différent de sa formule ; texte sans `vigueur`, sans `vigueur.au` ou date non prouvée ; version non en vigueur ; clause qui renvoie à un article sans ce texte ; donnée de calcul non déclarée ; valeur non nulle sans preuve ; seuil en dur ; source non vérifiable ; terme inutile.
-- **Drafting** : faits = hypothèses, pas de manque de preuve ; chaque question a un essai ; valeur à `null` = laissée en blanc (aucune détection des blancs dans le texte : l'agent déclare la donnée ouverte) ; stipulations contradictoires = à harmoniser.
+- **Tous** : non qualifié ; valeur ouverte dont dépend une réponse ; renvoi vers un élément absent du dossier ou un passage introuvable ; stipulation contredite (la source ne compte plus : à trancher) ; montant stipulé différent de sa formule ; texte sans `vigueur`, sans `vigueur.au` ou date non prouvée ; version non en vigueur ; clause qui renvoie à un article sans ce texte ; donnée de calcul non déclarée ; valeur non nulle sans preuve ; seuil en dur ; source non vérifiable ; terme inutile.
+- **Drafting** : faits = hypothèses, pas de manque de preuve ; chaque question a un essai ; une valeur ouverte décisive se lève par des essais ; stipulations contradictoires = à harmoniser.
 - **Contentieux / consultation** : fait décisif sans pièce ; prescription.
 
 ## Sortie de `verifier`
@@ -70,4 +73,4 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 
 ## En suspens (proposé, non validé)
 
-Relecture du document lui-même (définitions, désignations, chiffres en lettres, numérotation) : outil séparé, non décidé. Connecteur BOFiP. Contrôles propres au contentieux (recevabilité, compétence, délais de procédure).
+Relecture du document lui-même (définitions, désignations, chiffres en lettres, numérotation, blancs à remplir) : outil séparé, non décidé. Options de rédaction (clause présente ou non) : seulement par un fait vrai/faux sans source. Connecteur BOFiP. Contrôles propres au contentieux (recevabilité, compétence, délais de procédure).

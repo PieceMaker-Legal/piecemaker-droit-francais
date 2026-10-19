@@ -8,8 +8,9 @@ Le fichier est un objet JavaScript littéral, sans fonction, commentaire ni phra
 - `selon: [{ source, citation, vigueur: { debut, fin } }]` donne la règle : identifiant officiel du texte ou de la décision, ou chemin de la pièce pour une clause, avec le passage exact.
 - Une condition sans clé propre est un fait : `preuve` et `contredit: [{ piece, citation }]`. Quand deux pièces ou deux clauses se contredisent sur un fait, cite l'une en `preuve`, l'autre en `contredit`.
 - Sous une source, `renvoi: [{ piece, citation }]` désigne ce à quoi elle renvoie (autre stipulation, document joint ou visé) et `contredit` la stipulation qui la contredit.
-- Un délai : `delai: { de, a, au_plus: { jours: 30 } }` (`au_moins` ; `jours`, `jours_ouvres`, `mois`, `ans`). Un montant : `montant: { valeur, plus_de: 3000 }` (`au_moins`, `moins_de`, `au_plus`). Les dates et montants qu'ils nomment vont dans `valeurs: { nom: { valeur, preuve } }` ; un montant qui se calcule porte `formule: { somme | difference | produit | quotient: [termes] }`.
-- `essais` : des faits supposés (vrai/faux, dates, montants) et le résultat attendu.
+- Un délai : `delai: { de, a, au_plus: { jours: 30 } }` (`au_moins` ; `jours`, `jours_ouvres`, `mois`, `ans`). Un montant : `montant: { valeur, plus_de: 3000 }` (`au_moins`, `moins_de`, `au_plus`). Les dates et montants qu'ils nomment vont dans `valeurs: { nom: { valeur, preuve } }` ; quand un texte fixe la valeur (taux, seuil), `selon` remplace `preuve`. Un montant qui se calcule porte `formule` : `{ somme | difference | produit | quotient | minimum | maximum: [termes] }`, `{ arrondi: [montant, décimales] }`, `{ bareme: { assiette, tranches: [{ jusqu_a, taux }, …, { taux }] } }`, `{ si: terme, alors, sinon }`.
+- Quand la réponse à une question est un montant, `reponse` désigne ce montant dans `valeurs`.
+- `essais` : des faits supposés (vrai/faux, dates, montants) et le résultat attendu (vrai/faux ou montant).
 
 ```js
 {

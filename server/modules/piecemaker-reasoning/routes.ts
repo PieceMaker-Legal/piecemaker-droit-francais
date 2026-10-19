@@ -20,6 +20,7 @@ export function createReasoningRouter(service: ReturnType<typeof createReasoning
     return { token: await cite(body.projectPath as string, body.source, body.citation) };
   }));
   router.post('/verify', express.json(), handle((body) => service.verify(body.projectPath as string)));
+  router.post('/simulate', express.json(), handle((body) => service.simulate(body.projectPath as string, body.faits)));
   router.post('/test', express.json(), (request, response) => {
     const { projectPath } = request.body ?? {};
     if (typeof projectPath !== 'string') { fail(response, new TypeError('projectPath requis.')); return; }

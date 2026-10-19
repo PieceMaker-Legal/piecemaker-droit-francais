@@ -8,8 +8,9 @@ import Database from 'better-sqlite3';
 
 import { EXAMPLE_CODE, EXAMPLE_SOURCES, createReasoningService, describeReasoning, verifyReasoning } from '../program.js';
 import type { ReasoningConnectors, SourceInfo } from '../program.js';
-import { addDuration } from '../engine.js';
+import { addDuration, evaluate } from '../engine.js';
 import { parseLiteral } from '../format.js';
+import type { Formula } from '../format.js';
 
 const plain = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
@@ -177,6 +178,11 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   assert.equal((await service.dismiss(folder, issue.id, true)).dismissed.length, 0);
   assert.equal((await service.rate(folder, 'pieces/06_mise_en_demeure.md', false)).reliability[0].reliable, false);
   await assert.rejects(service.command(folder, { commande: 'condition' }), /Commande : verifier/);
+  const before = fs.readFileSync(file, 'utf8');
+  const simulated = await service.simulate(folder, { grève_nationale: false, force_majeure: false, mise_en_demeure: true, retard_de_livraison: true });
+  assert.equal(simulated.questions[0].statut, 'acquis');
+  assert.equal(fs.readFileSync(file, 'utf8'), before);
+  await assert.rejects(service.simulate(folder, { prix: 'cher' }), /faits/);
   fs.rmSync(file);
   await assert.rejects(service.verify(folder), /Aucun raisonnement/);
 });
@@ -402,7 +408,7 @@ test('drafting : valeur laissée en blanc, renvois, stipulations contradictoires
   const blanks = await draft(EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`,", "citation: `Prix : [●] euros`,").replace("date_de_conclusion_du_contrat: { valeur: '2024-01-15',", "prix_unitaire: { valeur: null },\n    date_de_conclusion_du_contrat: { valeur: '2024-01-15',"));
   const manques = texts(blanks, 'manque').join('\n');
   assert.doesNotMatch(manques, /pénalité_stipulée\.si\[0\]\.selon\[0\] :/);
-  assert.match(manques, /valeurs\.prix_unitaire : valeur laissée en blanc dans le projet/);
+  assert.doesNotMatch(manques, /prix_unitaire/);
   const referred = await draft(EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, renvoi: [{ piece: 'pieces/02_bareme.md', citation: `100 euros par jour` }, { piece: 'pieces/09_annexe_absente.md' }], contredit: [{ piece: 'pieces/01_contrat.md', citation: `Aucune pénalité n'est due` }] }],"));
   assert.deepEqual(texts(referred, 'erreur'), []);
   const notes = texts(referred, 'manque').join('\n');
@@ -417,4 +423,95 @@ test('drafting : valeur laissée en blanc, renvois, stipulations contradictoires
   assert.equal(at(priced.annotated, 'valeurs.prix_calculé.calcul'), 40500);
   assert.match(texts(priced, 'manque').join('\n'), /valeurs\.prix_stipulé : montant stipulé \(41000\) différent du calcul \(40500\) : à rectifier/);
   assert.match(texts(await cession(CESSION_CODE.replace("    montant_du_dommage:", "    boucle: { formule: { somme: ['boucle', 1] } },\n    montant_du_dommage:")), 'erreur').join('\n'), /valeurs\.boucle\.formule : boucle se calcule à partir d’elle-même/);
+});
+
+const FISCAL_SOURCES: Record<string, SourceInfo> = {
+  LEGIARTI000000000101: { kind: 'texte', title: 'Code général des impôts fictif, article 150', text: 'Les présentes dispositions s’appliquent aux cessions de titres par les personnes physiques. Le gain net est imposé au taux de 12,8 %. Lorsque le gain excède 50 000 euros, une contribution de 3 % s’applique à la fraction excédant ce montant.', validity: { from: '2018-01-01', to: null } },
+  LEGIARTI000000000102: { kind: 'texte', title: 'Code civil fictif, article 1128', text: 'Sont nécessaires à la validité d’un contrat le consentement des parties, leur capacité de contracter et un contenu licite et certain.', validity: { from: '2016-10-01', to: null } },
+  'pieces/projet_cession.md': { kind: 'piece', title: 'Projet de cession (fictif)', text: 'Fait le 01/03/2026. Jean Dupont, personne physique, cède ses titres de Société Exemple SAS. Prix : [●] euros. Les titres ont été acquis pour 100 000 euros. Si le prix excède le seuil de 150 000 euros, une réduction est consentie.' },
+};
+const FISCAL_CODE = `{
+  qualification: 'drafting',
+  questions: [{ question: \`Quel impôt Jean Dupont doit-il sur la cession ?\`, reponse: 'impôt_dû', validite: 'validité_de_la_cession' }],
+  validité_de_la_cession: { si: [{ condition: 'consentement_des_parties', selon: [{ source: 'LEGIARTI000000000102', citation: \`le consentement des parties\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' }, applicabilite: 'applicabilité_de_l_article_1128' }] }] },
+  applicabilité_de_l_article_1128: { si: [{ condition: 'contrat_de_cession', selon: [{ source: 'LEGIARTI000000000102', citation: \`la validité d’un contrat\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' } }], preuve: [{ piece: 'pieces/projet_cession.md', citation: \`cède ses titres\` }] }] },
+  applicabilité_de_l_article_150: { si: [{ condition: 'cession_par_une_personne_physique', selon: [{ source: 'LEGIARTI000000000101', citation: \`cessions de titres par les personnes physiques\`, vigueur: { debut: '2018-01-01', fin: null, au: 'date_de_cession' } }], preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Jean Dupont, personne physique\` }] }] },
+  valeurs: {
+    date_de_cession: { valeur: '2026-03-01', preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Fait le 01/03/2026\` }] },
+    prix_de_cession: { valeur: null },
+    prix_d_acquisition: { valeur: 100000, preuve: [{ piece: 'pieces/projet_cession.md', citation: \`acquis pour 100 000 euros\` }] },
+    gain_net: { formule: { difference: ['prix_de_cession', 'prix_d_acquisition'] } },
+    taux_forfaitaire: { valeur: 0.128, selon: [{ source: 'LEGIARTI000000000101', citation: \`imposé au taux de 12,8 %\`, vigueur: { debut: '2018-01-01', fin: null, au: 'date_de_cession' }, applicabilite: 'applicabilité_de_l_article_150' }] },
+    impôt_dû: { formule: { arrondi: [{ somme: [{ produit: ['gain_net', 'taux_forfaitaire'] }, { bareme: { assiette: 'gain_net', tranches: [{ jusqu_a: 50000, taux: 0 }, { taux: 0.03 }] } }] }, 0] },
+      selon: [{ source: 'LEGIARTI000000000101', citation: \`une contribution de 3 %\`, vigueur: { debut: '2018-01-01', fin: null, au: 'date_de_cession' }, applicabilite: 'applicabilité_de_l_article_150' }] },
+  },
+  essais: [{ nom: \`prix de 200 000 euros\`, faits: { prix_de_cession: 200000 }, attendu: { impôt_dû: 14300 } }],
+}`;
+const fiscal = (code: string, simulation?: Record<string, number>) => verifyReasoning({
+  code, cwd: '/dossier-fictif', connectors: connectors(FISCAL_SOURCES),
+  reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(), ...(simulation ? { simulation } : {}),
+});
+
+test('les formules couvrent barème par tranches, minimum, maximum, arrondi et montant conditionnel', () => {
+  const lookup = (name: string) => ({ base: 120000, plafond: 30000 } as Record<string, number>)[name] ?? null;
+  assert.equal(evaluate({ operation: 'bareme', assiette: 'base', tranches: [{ jusqu_a: 10000, taux: 0 }, { jusqu_a: 100000, taux: 0.1 }, { jusqu_a: null, taux: 0.2 }] }, lookup), 13000);
+  assert.equal(evaluate({ operation: 'minimum', termes: [{ operation: 'produit', termes: ['base', 0.3] }, 'plafond'] }, lookup), 30000);
+  assert.equal(evaluate({ operation: 'maximum', termes: [0, { operation: 'difference', termes: ['plafond', 'base'] }] }, lookup), 0);
+  assert.equal(evaluate({ operation: 'arrondi', termes: [1234.567, 1] }, lookup), 1234.6);
+  const regime = { operation: 'si', condition: 'option_pour_le_barème', alors: { operation: 'produit', termes: ['base', 0.3] }, sinon: { operation: 'produit', termes: ['base', 0.128] } } satisfies Formula;
+  assert.equal(evaluate(regime, lookup, () => true), 36000);
+  assert.equal(evaluate(regime, lookup, () => false), 15360);
+  assert.equal(evaluate(regime, lookup, () => null), null);
+});
+
+test('une question peut appeler un montant : le taux se source par un texte applicable, le prix en blanc se joue en essais et en simulation', async () => {
+  const result = await fiscal(FISCAL_CODE);
+  assert.deepEqual(texts(result, 'erreur'), []);
+  assert.equal(at(result.annotated, 'valeurs.taux_forfaitaire.statut'), 'acquis');
+  assert.equal(at(result.annotated, 'valeurs.taux_forfaitaire.selon[0].en_vigueur'), true);
+  assert.equal(at(result.annotated, 'questions[0].statut'), 'à établir');
+  assert.equal(at(result.annotated, 'questions[0].montant_calcule'), null);
+  assert.equal(at(result.annotated, 'bilan.essais'), '1/1');
+  const manques = texts(result, 'manque').join('\n');
+  assert.doesNotMatch(manques, /prix_de_cession|nombres écrits|taux_forfaitaire|applicabilité_de_l_article_150/);
+  const alone = await fiscal(FISCAL_CODE.replace(/ {2}essais: \[[^\n]*\],\n/, ''));
+  assert.match(texts(alone, 'manque').join('\n'), /valeurs\.prix_de_cession : impôt_dû dépend de prix_de_cession, que le projet ne fixe pas : fixe-la dans valeurs, ou ajoute un essai/);
+  const wrong = await fiscal(FISCAL_CODE.replace('attendu: { impôt_dû: 14300 }', 'attendu: { impôt_dû: 14000 }'));
+  assert.match(texts(wrong, 'erreur').join('\n'), /essais\[0\] : essai non conforme : obtenu impôt_dû = 14300/);
+  const simulated = await fiscal(FISCAL_CODE, { prix_de_cession: 300000 });
+  assert.equal(simulated.simulation?.questions[0].montant, 30100);
+  assert.equal(simulated.simulation?.valeurs.gain_net, 200000);
+  const fixed = await fiscal(FISCAL_CODE.replace('prix_de_cession: { valeur: null },', "prix_de_cession: { valeur: 200000, preuve: [{ piece: 'pieces/projet_cession.md', citation: `cède ses titres` }] },"));
+  assert.equal(at(fixed.annotated, 'questions[0].montant_calcule'), 14300);
+  const unsourced = await fiscal(FISCAL_CODE.replace(", applicabilite: 'applicabilité_de_l_article_150' }] },\n    impôt_dû", " }] },\n    impôt_dû").replace(/\n {6}selon: \[\{ source: 'LEGIARTI000000000101', citation: `une contribution de 3 %`[^\n]*\] \},/, ' },'));
+  const gaps = texts(unsourced, 'manque').join('\n');
+  assert.match(gaps, /valeurs\.taux_forfaitaire\.selon\[0\]\.applicabilite : applicabilité non établie/);
+  assert.match(gaps, /valeurs\.impôt_dû : nombres écrits dans la formule \(50000, 0, 0\.03\)/);
+  const misplaced = await fiscal(FISCAL_CODE.replace("taux_forfaitaire: { valeur: 0.128, selon: [{ source: 'LEGIARTI000000000101', citation: `imposé au taux de 12,8 %`", "taux_forfaitaire: { valeur: 0.128, selon: [{ source: 'pieces/projet_cession.md', citation: `Prix : [●] euros`"));
+  assert.match(texts(misplaced, 'erreur').join('\n'), /valeurs\.taux_forfaitaire\.selon\[0\]\.source : pieces\/projet_cession\.md est une pièce/);
+});
+
+test('drafting : une valeur laissée ouverte n’est un manque que si la réponse en dépend, et des essais qui montrent la bascule le lèvent', async () => {
+  const code = (essais: string) => `{
+  qualification: 'drafting',
+  questions: [{ question: \`La réduction de prix est-elle due ?\`, reponse: 'réduction_due', validite: 'validité_de_la_cession' }],
+  réduction_due: { si: [{ condition: 'prix_supérieur_au_seuil', montant: { valeur: 'prix_de_cession', plus_de: 'seuil_de_réduction' }, selon: [{ source: 'pieces/projet_cession.md', citation: \`Si le prix excède le seuil\` }] }] },
+  validité_de_la_cession: { si: [{ condition: 'consentement_des_parties', selon: [{ source: 'LEGIARTI000000000102', citation: \`le consentement des parties\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' } }] }] },
+  valeurs: {
+    date_de_cession: { valeur: '2026-03-01', preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Fait le 01/03/2026\` }] },
+    prix_de_cession: { valeur: null },
+    seuil_de_réduction: { valeur: 150000, preuve: [{ piece: 'pieces/projet_cession.md', citation: \`seuil de 150 000 euros\` }] },
+    nom_du_notaire: { valeur: null },
+  },
+  essais: [${essais}],
+}`;
+  const low = '{ nom: `prix bas`, faits: { prix_de_cession: 100000 }, attendu: { réduction_due: faux } }';
+  const high = '{ nom: `prix haut`, faits: { prix_de_cession: 200000 }, attendu: { réduction_due: vrai } }';
+  const once = await fiscal(code(low));
+  const gaps = texts(once, 'manque').join('\n');
+  assert.match(gaps, /réduction_due\.si\[0\] : prix_supérieur_au_seuil décide de la réponse et dépend de prix_de_cession, que le projet ne fixe pas/);
+  assert.doesNotMatch(gaps, /nom_du_notaire/);
+  const both = await fiscal(code(`${low}, ${high}`));
+  assert.deepEqual(texts(both, 'erreur'), []);
+  assert.doesNotMatch(texts(both, 'manque').join('\n'), /prix_de_cession/);
 });

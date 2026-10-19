@@ -61,6 +61,8 @@ export const STYLES = `
 .pmr-decision{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}
 .pmr-form{display:grid;gap:10px;margin-top:10px}.pmr-form label{display:grid;gap:4px;font-size:12px;color:var(--muted)}.pmr-form textarea{min-height:60px;resize:vertical}
 .pmr-run{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.pmr-variables{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin:8px 0}
+.pmr-variables label{display:flex;flex-direction:column;gap:4px;font-size:12px}
 .pmr-tally{display:flex;gap:6px;margin-left:auto}
 .pmr-log{position:relative;list-style:none;margin:0;padding:0 0 0 22px}
 .pmr-log:before{content:'';position:absolute;left:7px;top:8px;bottom:8px;width:1px;background:var(--border)}
