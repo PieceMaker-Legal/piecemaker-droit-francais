@@ -75,7 +75,7 @@ test('une citation à la ponctuation près est validée et remplacée par l’or
 });
 
 test('la vigueur est une condition appréciée à la date que chaque texte désigne : absente ou dépassée c’est un manque, fausse une erreur, et chaque article dit pourquoi il s’applique', async () => {
-  const missing = await verify(EXAMPLE_CODE.replace("débiteur est mis en demeure`, vigueur: { debut: '2016-10-01', fin: null }", 'débiteur est mis en demeure`'));
+  const missing = await verify(EXAMPLE_CODE.replace("débiteur est mis en demeure`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }", 'débiteur est mis en demeure`'));
   assert.match(texts(missing, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.vigueur : vigueur non renseignée.*debut '2016-10-01'/);
   assert.deepEqual(texts(missing, 'erreur'), []);
   const differs = await verify(EXAMPLE_CODE.replace("débiteur est mis en demeure`, vigueur: { debut: '2016-10-01'", "débiteur est mis en demeure`, vigueur: { debut: '2016-02-10'"));
@@ -85,10 +85,10 @@ test('la vigueur est une condition appréciée à la date que chaque texte dési
   assert.match(texts(late, 'manque').join('\n'), /selon\[0\]\.vigueur : version non applicable : elle n’était pas en vigueur au 2015-06-14/);
   const undated = await verify(EXAMPLE_CODE.replaceAll(", au: 'date_de_conclusion_du_contrat'", ''));
   assert.equal(at(undated.annotated, 'questions[0].statut'), 'à établir');
-  assert.match(texts(undated, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.au : applicabilité dans le temps non établie : ajoute au:/);
-  assert.equal(undated.issues.find((entry) => entry.path === 'pénalité_encourue.si[0].selon[0].au')!.avocat, 'Code civil fictif, article 1231-5 : l’applicabilité du texte dans le temps n’est pas établie.');
+  assert.match(texts(undated, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.vigueur : applicabilité dans le temps non établie : ajoute vigueur: \{ debut, fin, au:/);
+  assert.equal(undated.issues.find((entry) => entry.path === 'pénalité_encourue.si[0].selon[0].vigueur' && entry.text.startsWith('applicabilité dans le temps'))!.avocat, 'Code civil fictif, article 1231-5 : l’applicabilité du texte dans le temps n’est pas établie.');
   const unproven = await verify(EXAMPLE_CODE.replace(", preuve: [{ piece: 'pieces/01_contrat.md', citation: `Fait le 15/01/2024` }] }", ' }'));
-  assert.match(texts(unproven, 'manque').join('\n'), /selon\[0\]\.au : date_de_conclusion_du_contrat : renseigne cette date dans valeurs, avec sa preuve/);
+  assert.match(texts(unproven, 'manque').join('\n'), /selon\[0\]\.vigueur : date_de_conclusion_du_contrat : renseigne cette date dans valeurs, avec sa preuve/);
   assert.match(texts(await verify(EXAMPLE_CODE.replace("valeur: '2024-01-15'", 'valeur: 12')), 'erreur').join('\n'), /date_de_conclusion_du_contrat sert à .*\.au : une date 'AAAA-MM-JJ' attendue/);
   assert.match(texts(await verify(EXAMPLE_CODE.replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', date: { valeur: '2025-06-14' },")), 'erreur').join('\n'), /questions\[0\]\.date : clé inconnue date/);
 });
@@ -108,7 +108,7 @@ test('l’applicabilité d’un texte est un terme : ses conditions, sourcées e
   assert.ok(at(unproven.annotated, 'questions[0].decisifs').includes('contrat_stipulant_une_pénalité'));
   const errors = texts(await verify(EXAMPLE_CODE.replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", "applicabilite: 'applicabilité_inconnue' }] },").replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", 'applicabilite: `un contrat` }] },')), 'erreur').join('\n');
   assert.match(errors, /selon\[0\]\.applicabilite : terme applicabilité_inconnue non défini/);
-  assert.match(errors, /selon\[0\]\.applicabilite : applicabilite : nom du terme dont les conditions établissent que ce texte s’applique/);
+  assert.match(errors, /selon\[0\]\.applicabilite : applicabilite : nom du terme qui établit que ce texte s’applique, commençant par applicabilité_/);
 });
 
 test('une condition sans source, un terme non défini, une boucle et un essai non conforme sont des erreurs', async () => {
@@ -223,15 +223,19 @@ const CESSION_CODE = `{
     si: [
       { condition: 'notification_dans_la_garantie', delai: { de: 'date_de_réalisation', a: 'date_de_notification', au_plus: { ans: 2 } },
         selon: [{ source: 'pieces/02_cession.md', citation: \`deux ans à compter de la réalisation\`, vigueur: { debut: '2022-06-15', fin: null } }],
-        decompte: [{ source: 'pieces/02_cession.md', citation: \`Les délais se calculent de date à date\`, vigueur: { debut: '2022-06-15', fin: null } }] },
+        decompte: 'décompte_de_la_garantie' },
       { condition: 'dommage_au_dessus_du_seuil', montant: { valeur: 'montant_du_dommage', plus_de: 3000 },
         selon: [{ source: 'pieces/02_cession.md', citation: \`inférieur ou égal à 3.000 euros\`, vigueur: { debut: '2022-06-15', fin: null } }] },
     ],
   },
+  décompte_de_la_garantie: {
+    si: [{ condition: 'délai_de_date_à_date', selon: [{ source: 'pieces/02_cession.md', citation: \`Les délais se calculent de date à date\`, vigueur: { debut: '2022-06-15', fin: null } }],
+      preuve: [{ piece: 'pieces/02_cession.md', citation: \`Les délais se calculent de date à date\` }] }],
+  },
   essais: [
-    { nom: \`notification le jour de l’échéance\`, faits: { date_de_réalisation: '2022-06-15', date_de_notification: '2024-06-15', montant_du_dommage: 45000 }, attendu: { réduction_due: vrai } },
-    { nom: \`notification tardive\`, faits: { date_de_réalisation: '2022-06-15', date_de_notification: '2024-06-17', montant_du_dommage: 45000 }, attendu: { réduction_due: faux } },
-    { nom: \`dommage égal au seuil\`, faits: { date_de_réalisation: '2022-06-15', date_de_notification: '2023-09-10', montant_du_dommage: 3000 }, attendu: { réduction_due: faux } },
+    { nom: \`notification le jour de l’échéance\`, faits: { délai_de_date_à_date: vrai, date_de_réalisation: '2022-06-15', date_de_notification: '2024-06-15', montant_du_dommage: 45000 }, attendu: { réduction_due: vrai } },
+    { nom: \`notification tardive\`, faits: { délai_de_date_à_date: vrai, date_de_réalisation: '2022-06-15', date_de_notification: '2024-06-17', montant_du_dommage: 45000 }, attendu: { réduction_due: faux } },
+    { nom: \`dommage égal au seuil\`, faits: { délai_de_date_à_date: vrai, date_de_réalisation: '2022-06-15', date_de_notification: '2023-09-10', montant_du_dommage: 3000 }, attendu: { réduction_due: faux } },
   ],
 }`;
 const cession = (code: string) => verifyReasoning({
@@ -250,14 +254,17 @@ test('un délai et un montant se calculent à partir des valeurs prouvées, et l
   assert.doesNotMatch(texts(result, 'manque').join('\n'), /décompte/);
 });
 
-test('un délai sans règle de décompte est un manque, sans que le système choisisse la règle', async () => {
-  const result = await cession(CESSION_CODE.replace(/\n {8}decompte: \[[^\n]*\] \},/, ' },'));
+test('un délai sans décompte est un manque, sans que le système choisisse la règle ; le décompte est un sous-raisonnement qui conditionne le délai', async () => {
+  const result = await cession(CESSION_CODE.replace(/\n {8}decompte: '[^']*' \},/, ' },').replace(/\n  décompte_de_la_garantie: \{[\s\S]*?\n  \},/, ''));
   assert.deepEqual(texts(result, 'erreur'), []);
   const issue = result.issues.find((entry) => entry.path === 'réduction_due.si[0].decompte')!;
   assert.equal(issue.kind, 'manque');
   assert.equal(issue.avocat, 'Notification dans la garantie : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.');
-  assert.ok(at(result.annotated, 'réduction_due.si[0].manques').some((text: string) => text.startsWith('délai sans règle de décompte')));
+  assert.ok(at(result.annotated, 'réduction_due.si[0].manques').some((text: string) => text.startsWith('délai sans décompte : ajoute decompte: \'décompte_de_notification_dans_la_garantie\'')));
   assert.equal(at(result.annotated, 'questions[0].statut'), 'acquis');
+  const contradicted = await cession(CESSION_CODE.replace("preuve: [{ piece: 'pieces/02_cession.md', citation: `Les délais se calculent de date à date` }] }],", "contredit: [{ piece: 'pieces/02_cession.md', citation: `Les délais se calculent de date à date` }] }],"));
+  assert.equal(at(contradicted.annotated, 'décompte_de_la_garantie.statut'), 'exclu');
+  assert.equal(at(contradicted.annotated, 'réduction_due.si[0].statut'), 'exclu');
 });
 
 test('une valeur sans pièce laisse le calcul en suspens et devient décisive ; un délai sans date retenue est une erreur', async () => {
@@ -287,10 +294,29 @@ test('un délai ou un montant mal écrit, prouvé sur la condition ou appliqué 
 test('le raisonnement se qualifie contractuel ou contentieux ; la qualification appelle la vérification de la validité ou de la prescription', async () => {
   assert.match(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /qualification : raisonnement non qualifié/);
   const contractual = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:")), 'manque').join('\n');
-  assert.match(contractual, /qualification : contractuel : vérifier la validité/);
+  assert.match(contractual, /questions\[0\] : contractuel : vérifier la validité : ajoute validite: 'validité_de_…' sur la question/);
   assert.doesNotMatch(contractual, /non qualifié|prescription/);
   const litigation = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contentieux',\n  questions:")), 'manque').join('\n');
-  assert.match(litigation, /qualification : contentieux : vérifier la prescription/);
+  assert.match(litigation, /questions\[0\] : contentieux : vérifier la prescription : ajoute prescription:/);
   assert.doesNotMatch(litigation, /validité/);
+  const valid = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace('\n  essais:', "\n  validité_du_contrat: { sauf: [{ condition: 'vice_du_consentement', selon: [{ source: 'pieces/01_contrat.md', citation: `En cas de retard de livraison` }], preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },\n  essais:"));
+  assert.doesNotMatch(texts(valid, 'manque').join('\n'), /vérifier la validité/);
+  assert.deepEqual(texts(valid, 'erreur'), []);
+  assert.equal(at(valid.annotated, 'validité_du_contrat.statut'), 'exclu');
+  assert.equal(at(valid.annotated, 'questions[0].statut'), 'exclu');
   assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'pénal',\n  questions:")), 'erreur').join('\n'), /qualification : qualification : 'contractuel' ou 'contentieux'/);
+});
+
+test('les contrôles portent un nom préfixé, désigné par leur emplacement ; le fichier revient dans l’ordre canonique', async () => {
+  const errors = texts(await verify(EXAMPLE_CODE.replaceAll("applicabilite: 'applicabilité_de_l_article_1231_5'", "applicabilite: 'article_1231_5_applicable'")), 'erreur').join('\n');
+  assert.match(errors, /applicabilite : le nom commence par applicabilité_ \(ex\. applicabilité_article_1231_5_applicable\)/);
+  assert.match(errors, /applicabilité_de_l_article_1231_5 : applicabilité_de_l_article_1231_5 est un contrôle : désigne-le par applicabilite/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace("au: 'date_de_conclusion_du_contrat' }, applicabilite", "au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_inconnue', autre")), 'erreur').join('\n'), /terme applicabilité_inconnue non défini/);
+  const result = await verify(EXAMPLE_CODE);
+  const keys = Object.keys(result.annotated as object);
+  assert.deepEqual(keys.slice(0, 3), ['bilan', 'questions', 'pénalité_encourue']);
+  assert.ok(keys.indexOf('applicabilité_de_l_article_1231_5') > keys.indexOf('grève'));
+  assert.deepEqual(keys.slice(-2), ['valeurs', 'essais']);
+  assert.deepEqual(Object.keys(at(result.annotated, 'pénalité_encourue.si[0].selon[0]')).slice(0, 5), ['source', 'citation', 'vigueur', 'applicabilite', 'titre']);
+  assert.equal(at(result.annotated, 'bilan.controles'), '2/2 établis');
 });

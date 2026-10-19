@@ -1,6 +1,6 @@
 import type { ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import type { Condition, Duration, Measure, Reasoning, Term } from './format.js';
+import type { Condition, Duration, Measure, Question, Reasoning, Term } from './format.js';
 
 export type Facts = { leaf(name: string): ReasoningValue; basis(path: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue };
 export type Trace = Map<string, ReasoningValue>;
@@ -19,19 +19,22 @@ export function structure(reasoning: Reasoning) {
     const term = reasoning.terms.get(name);
     if (!term) { leaves.add(name); return; }
     const walk = (condition: Condition) => {
-      for (const basis of condition.selon) if (basis.applicabilite) { used.add(basis.applicabilite); visit(basis.applicabilite, [...stack, name]); }
+      for (const control of [...condition.selon.map((basis) => basis.applicabilite), condition.decompte]) if (control) { used.add(control); visit(control, [...stack, name]); }
       if (condition.l_une) condition.l_une.forEach(walk);
       else { used.add(condition.condition!); visit(condition.condition!, [...stack, name]); }
     };
     [...term.si, ...term.sauf].forEach(walk);
   };
-  for (const question of reasoning.questions) if (reasoning.terms.has(question.reponse)) visit(question.reponse, []);
+  for (const question of reasoning.questions) for (const root of questionRoots(question)) { used.add(root); if (reasoning.terms.has(root)) visit(root, []); }
   for (const name of reasoning.terms.keys()) visit(name, []);
   return { leaves, used, cycles: [...new Set(cycles)] };
 }
 
+export const questionRoots = (question: Question) => [question.reponse, question.validite, question.prescription].filter((name): name is string => Boolean(name));
+export const answer = (question: Question, values: Map<string, ReasoningValue>) => and(questionRoots(question).map((name) => values.get(name) ?? null));
+
 export function compile(reasoning: Reasoning): Test {
-  return (facts, trace, roots = reasoning.questions.map((question) => question.reponse)) => {
+  return (facts, trace, roots = reasoning.questions.flatMap(questionRoots)) => {
     const memo = new Map<string, ReasoningValue>();
     const term = (name: string, stack: string[]): ReasoningValue => {
       if (memo.has(name)) return memo.get(name)!;
@@ -40,7 +43,7 @@ export function compile(reasoning: Reasoning): Test {
       const condition = (entry: Condition, path: string): ReasoningValue => {
         const inner = entry.l_une ? or(entry.l_une.map((member, index) => condition(member, `${path}.l_une[${index}]`))) : term(entry.condition!, [...stack, name]);
         const applicable = entry.selon.map((basis) => (basis.applicabilite ? term(basis.applicabilite, [...stack, name]) : true));
-        const value = and([facts.basis(path, entry, applicable), inner]);
+        const value = and([facts.basis(path, entry, applicable), inner, entry.decompte ? term(entry.decompte, [...stack, name]) : true]);
         trace?.set(path, value);
         return value;
       };
@@ -62,7 +65,7 @@ export function reachableLeaves(reasoning: Reasoning, root: string) {
     const term = reasoning.terms.get(name);
     if (!term) { found.add(name); return; }
     const walk = (condition: Condition) => {
-      for (const basis of condition.selon) if (basis.applicabilite) visit(basis.applicabilite);
+      for (const control of [...condition.selon.map((basis) => basis.applicabilite), condition.decompte]) if (control) visit(control);
       if (condition.l_une) condition.l_une.forEach(walk); else visit(condition.condition!);
     };
     [...term.si, ...term.sauf].forEach(walk);
@@ -73,11 +76,11 @@ export function reachableLeaves(reasoning: Reasoning, root: string) {
 
 export const ENUMERATION_LIMIT = 12;
 
-export function decisive(test: Test, facts: Facts, root: string, unknown: string[]): { decisive: string[]; inPlay: boolean } {
+export function decisive(test: Test, facts: Facts, question: Question, unknown: string[]): { decisive: string[]; inPlay: boolean } {
   if (unknown.length > ENUMERATION_LIMIT) return { decisive: unknown, inPlay: true };
   const found = new Set<string>();
   const total = 2 ** unknown.length;
-  const run = (mask: number) => test({ ...facts, leaf: (name) => { const at = unknown.indexOf(name); return at < 0 ? facts.leaf(name) : Boolean(mask & (1 << at)); } }).get(root);
+  const run = (mask: number) => answer(question, test({ ...facts, leaf: (name) => { const at = unknown.indexOf(name); return at < 0 ? facts.leaf(name) : Boolean(mask & (1 << at)); } }, undefined, questionRoots(question)));
   const results = Array.from({ length: total }, (_, mask) => run(mask));
   for (let mask = 0; mask < total; mask += 1) {
     unknown.forEach((name, at) => { if (results[mask] !== results[mask ^ (1 << at)]) found.add(name); });

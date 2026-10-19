@@ -7,7 +7,7 @@ type Host = { readonly context: Context; onContextChange(callback: (context: Con
 type Tab = 'detail' | 'test' | 'alertes' | 'code';
 type Json = Record<string, any>;
 type Occurrence = { path: string; parent: string; link: 'si' | 'sauf' | 'l_une'; condition: Json };
-type GraphNode = { id: string; label: string; status: string; kind: 'question' | 'terme' | 'fait' | 'ou' | 'piece' | 'source'; decisive: boolean; x: number; y: number };
+type GraphNode = { id: string; label: string; status: string; kind: 'question' | 'terme' | 'controle' | 'fait' | 'ou' | 'piece' | 'source'; decisive: boolean; x: number; y: number };
 type Edge = { from: string; to: string; link: Occurrence['link'] | 'preuve' | 'contredit' | 'selon' };
 type Cited = { piece: Json; target: string; against: boolean };
 type Based = { source: Json; target: string };
@@ -16,7 +16,9 @@ const RESERVED = new Set(['bilan', 'questions', 'essais', 'valeurs']);
 const UNIT: Record<string, string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
 const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moins', moins_de: 'moins de', au_plus: 'au plus' };
 const inputs = (condition: Json): string[] => condition.delai ? [condition.delai.de, condition.delai.a] : condition.montant ? [condition.montant.valeur, condition.montant.seuil].filter((item) => typeof item === 'string') : [];
-const COLORS: Record<string, string> = { question: '#e2a5c6', terme: '#ba9ce9', fait: '#68bea3', source: '#6b9fdb', piece: '#8c96ad' };
+const COLORS: Record<string, string> = { question: '#e2a5c6', terme: '#ba9ce9', controle: '#e0b25c', fait: '#68bea3', source: '#6b9fdb', piece: '#8c96ad' };
+const CONTROL_PREFIXES = ['applicabilité_', 'décompte_', 'validité_', 'prescription_'];
+const isControl = (name: string) => CONTROL_PREFIXES.some((prefix) => name.startsWith(prefix));
 const STATUS: Record<string, string> = { acquis: 'Acquis', exclu: 'Exclu', 'à établir': 'À établir', contesté: 'Contesté' };
 const ANSWER: Record<string, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', contesté: 'Contestée' };
 const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
@@ -45,7 +47,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${[['question', 'Question'], ['terme', 'Termes'], ['fait', 'Faits'], ['source', 'Sources'], ['piece', 'Pièces']].map(([key, label]) => `<span><i style="background:${COLORS[key]}"></i>${label}</span>`).join('')}<span><i class="is-dashed"></i>À établir</span><span><i class="is-ring"></i>Décisif</span><span>- - sauf</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${[['question', 'Question'], ['terme', 'Termes'], ['controle', 'Contrôles'], ['fait', 'Faits'], ['source', 'Sources'], ['piece', 'Pièces']].map(([key, label]) => `<span><i style="background:${COLORS[key]}"></i>${label}</span>`).join('')}<span><i class="is-dashed"></i>À établir</span><span><i class="is-ring"></i>Décisif</span><span>- - sauf</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const svg = root.querySelector<SVGSVGElement>('svg')!;
@@ -109,11 +111,11 @@ export function mount(container: HTMLElement, api: Host) {
   const based = (): Based[] => {
     const found: Based[] = [];
     for (const group of groups()) if (Array.isArray(group.condition.l_une)) for (const source of group.condition.selon ?? []) found.push({ source, target: `#ou:${group.path}` });
-    for (const entry of occurrences()) for (const source of [...entry.condition.selon ?? [], ...entry.condition.decompte ?? []]) found.push({ source, target: entry.condition.condition });
+    for (const entry of occurrences()) for (const source of entry.condition.selon ?? []) found.push({ source, target: entry.condition.condition });
     return found;
   };
   const size = () => ({ width: Math.max(1, canvas.clientWidth), height: Math.max(1, canvas.clientHeight) });
-  const radius = (node: GraphNode) => (node.kind === 'question' ? 16 : node.kind === 'terme' ? 13 : node.kind === 'fait' ? 11 : node.kind === 'ou' ? 6 : 8);
+  const radius = (node: GraphNode) => (node.kind === 'question' ? 16 : node.kind === 'terme' || node.kind === 'controle' ? 13 : node.kind === 'fait' ? 11 : node.kind === 'ou' ? 6 : 8);
   const value = (node: GraphNode) => node.kind === 'question' ? `Réponse : ${ANSWER[node.status] ?? 'En suspens'}` : node.kind === 'source' ? node.status === 'exclu' ? 'Hors vigueur' : 'Source' : node.kind === 'piece' ? node.status === 'acquis' ? 'Pièce fiable' : node.status === 'exclu' ? 'Pièce non fiable' : 'Pièce à évaluer' : `${STATUS[node.status] ?? 'À établir'}${node.decisive ? ' · décisif' : ''}`;
   const branch = (id: string) => {
     const found = new Set([id]);
@@ -138,7 +140,7 @@ export function mount(container: HTMLElement, api: Host) {
     }).join('')}${nodes.map((node) => {
       const open = node.kind !== 'ou';
       const label = node.kind === 'ou' ? 'L’une des conditions' : node.label;
-      return `<g class="pmr-node${open ? '' : ' pmr-or'}${selected === node.id ? ' is-selected' : ''}${members && !members.has(node.id) ? ' is-dim' : ''}${node.decisive ? ' is-decisive' : ''}${['terme', 'fait', 'ou'].includes(node.kind) && ['à établir', 'contesté'].includes(node.status) ? ' is-uncertain' : ''}${node.status === 'exclu' ? ' is-excluded' : ''}"${open ? ` data-node="${escape(node.id)}" tabindex="0" role="button" aria-label="${escape(`${node.label}, ${value(node)}`)}"` : ''} transform="translate(${node.x} ${node.y})"><circle r="${radius(node)}" fill="${COLORS[node.kind] ?? 'var(--bg)'}"/><g transform="scale(${1 / zoom})"><text x="${radius(node) * zoom + 7}" y="-2"${node.kind === 'question' ? ' class="pmr-strong"' : ''}>${escape(shorten(label, 37))}</text><text class="pmr-value" x="${radius(node) * zoom + 7}" y="13">${escape(value(node))}</text></g><title>${escape(`${label}\n${value(node)}`)}</title></g>`;
+      return `<g class="pmr-node${open ? '' : ' pmr-or'}${selected === node.id ? ' is-selected' : ''}${members && !members.has(node.id) ? ' is-dim' : ''}${node.decisive ? ' is-decisive' : ''}${['terme', 'controle', 'fait', 'ou'].includes(node.kind) && ['à établir', 'contesté'].includes(node.status) ? ' is-uncertain' : ''}${node.status === 'exclu' ? ' is-excluded' : ''}"${open ? ` data-node="${escape(node.id)}" tabindex="0" role="button" aria-label="${escape(`${node.label}, ${value(node)}`)}"` : ''} transform="translate(${node.x} ${node.y})"><circle r="${radius(node)}" fill="${COLORS[node.kind] ?? 'var(--bg)'}"/><g transform="scale(${1 / zoom})"><text x="${radius(node) * zoom + 7}" y="-2"${node.kind === 'question' ? ' class="pmr-strong"' : ''}>${escape(shorten(label, 37))}</text><text class="pmr-value" x="${radius(node) * zoom + 7}" y="13">${escape(value(node))}</text></g><title>${escape(`${label}\n${value(node)}`)}</title></g>`;
     }).join('')}</g>`;
   };
 
@@ -165,17 +167,20 @@ export function mount(container: HTMLElement, api: Host) {
       if ((levels.get(name) ?? -1) >= level || level > 40) return;
       if (!levels.has(name)) order.push(name);
       levels.set(name, level);
-      for (const entry of list.filter((item) => item.parent === name)) visit(entry.condition.condition, level + 1);
+      for (const entry of list.filter((item) => item.parent === name)) { visit(entry.condition.condition, level + 1); if (typeof entry.condition.decompte === 'string') visit(entry.condition.decompte, level + 2); }
       for (const group of groups().filter((item) => item.parent === name)) for (const source of [group.condition, ...(group.condition.l_une ?? [])].flatMap((condition: Json) => condition.selon ?? [])) if (source.applicabilite) visit(source.applicabilite, level + 1);
     };
     visit(question.reponse, 1);
+    for (const control of [question.validite, question.prescription]) if (typeof control === 'string') visit(control, 1);
     nodes.push({ id: '#question', label: question.question, status: question.statut ?? 'à établir', kind: 'question', decisive: false, x: 0, y: 0 });
     for (const name of order) {
       const occurrence = list.find((item) => item.condition.condition === name);
       const term = all[name];
-      nodes.push({ id: name, label: human(name), status: term ? term.statut ?? 'à établir' : occurrence?.condition.statut ?? 'à établir', kind: term ? 'terme' : 'fait', decisive: Boolean(occurrence?.condition.decisif), x: 0, y: 0 });
+      nodes.push({ id: name, label: human(name), status: term ? term.statut ?? 'à établir' : occurrence?.condition.statut ?? 'à établir', kind: term ? (isControl(name) ? 'controle' : 'terme') : 'fait', decisive: Boolean(occurrence?.condition.decisif), x: 0, y: 0 });
     }
     edges.push({ from: question.reponse, to: '#question', link: 'si' });
+    for (const control of [question.validite, question.prescription]) if (typeof control === 'string' && levels.has(control)) edges.push({ from: control, to: '#question', link: 'si' });
+    for (const entry of list) if (typeof entry.condition.decompte === 'string' && levels.has(entry.condition.decompte) && levels.has(entry.condition.condition)) edges.push({ from: entry.condition.decompte, to: entry.condition.condition, link: 'si' });
     for (const group of groups().filter((entry) => levels.has(entry.parent))) {
       const link = group.path.includes('.sauf[') ? 'sauf' : 'si';
       if (!Array.isArray(group.condition.l_une)) {
@@ -249,7 +254,12 @@ export function mount(container: HTMLElement, api: Host) {
     const agent = drafting.length ? `<div class="pmr-issue">${pill('exclu', 'Rédaction')}<div class="pmr-issue-body"><p>${plural(drafting.length, 'défaut')} d’écriture du raisonnement. Rien à décider : demandez à l’agent de relancer la vérification, il les corrigera.</p><details><summary>Détail technique</summary>${drafting.map((issue) => `<p>${technical(issue)} ${dismiss(issue)}</p>`).join('')}</details></div></div>` : '';
     return readable.length || agent ? readable.join('') + agent : '<p class="pmr-muted">Aucune.</p>';
   };
-  const sourceBlock = (source: Json) => `<div class="pmr-quote"><p><strong>${escape(source.titre ?? source.source)}</strong>${source.source && source.titre ? ` <span class="pmr-muted">${escape(source.source)}</span>` : ''}${source.vigueur ? ` · ${pill(source.en_vigueur === false ? 'exclu' : source.en_vigueur ? 'acquis' : 'à établir', `en vigueur du ${date(source.vigueur.debut)} ${source.vigueur.fin ? `au ${date(source.vigueur.fin)}` : '(toujours en vigueur)'}`)}` : ''}</p><blockquote>${escape(source.citation)}</blockquote>${source.applicabilite ? `<p><strong>Applicabilité :</strong> <button class="pmr-link" data-select="${escape(source.applicabilite)}">${escape(human(source.applicabilite))}</button> ${pill(terms()[source.applicabilite]?.statut ?? 'à établir')}</p>` : ''}${source.corrigee ? `<p class="pmr-muted">Citation rétablie d’après le texte (écrite : « ${escape(source.citation_d_origine)} »).</p>` : ''}</div>`;
+  const controlLink = (name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button> ${pill(terms()[name]?.statut ?? 'à établir')}`;
+  const controlsBlock = () => {
+    const names = Object.keys(terms()).filter(isControl);
+    return names.length ? `<h4>Contrôles${annotated()?.bilan?.controles ? ` <span class="pmr-muted">${escape(annotated()!.bilan.controles)}</span>` : ''}</h4>${names.map((name) => `<p>${controlLink(name)}</p>`).join('')}` : '';
+  };
+  const sourceBlock = (source: Json) => `<div class="pmr-quote"><p><strong>${escape(source.titre ?? source.source)}</strong>${source.source && source.titre ? ` <span class="pmr-muted">${escape(source.source)}</span>` : ''}${source.vigueur ? ` · ${pill(source.en_vigueur === false ? 'exclu' : source.en_vigueur ? 'acquis' : 'à établir', `en vigueur du ${date(source.vigueur.debut)} ${source.vigueur.fin ? `au ${date(source.vigueur.fin)}` : '(toujours en vigueur)'}`)}` : ''}</p><blockquote>${escape(source.citation)}</blockquote>${source.applicabilite ? `<p><strong>Applicabilité :</strong> ${controlLink(source.applicabilite)}</p>` : ''}${source.corrigee ? `<p class="pmr-muted">Citation rétablie d’après le texte (écrite : « ${escape(source.citation_d_origine)} »).</p>` : ''}</div>`;
   const pieceBlock = (piece: Json, against = false) => {
     const rated = piece.fiable === true ? 'fiable' : piece.fiable === false ? 'non fiable' : 'à évaluer';
     const actions = snapshot?.demo ? '' : `<span class="pmr-decision"><button data-rate="${escape(piece.piece)}" data-value="true"${piece.fiable === true ? ' disabled' : ''}>Fiable</button><button data-rate="${escape(piece.piece)}" data-value="false"${piece.fiable === false ? ' disabled' : ''}>Non fiable</button>${piece.fiable === null || piece.fiable === undefined ? '' : `<button data-rate="${escape(piece.piece)}" data-value="null">Annuler</button>`}</span>`;
@@ -265,8 +275,8 @@ export function mount(container: HTMLElement, api: Host) {
       const bound = condition.delai.au_plus ? 'au_plus' : 'au_moins';
       const [[unit, count]] = Object.entries(condition.delai[bound] as Record<string, number>);
       const calcul = condition.calcul ? `<p class="pmr-muted">Échéance au ${date(condition.calcul.echeance)}, date retenue ${date(condition.calcul.date_retenue)}.</p>` : '';
-      const rule = condition.decompte?.length ? condition.decompte.map(sourceBlock).join('') : `<p>${pill('à établir', 'règle de décompte non mentionnée')}</p>`;
-      return `<p><strong>Délai :</strong> ${COMPARE[bound]} ${count} ${UNIT[unit]} entre ${named(condition.delai.de)} et ${named(condition.delai.a)}</p>${calcul}<p><strong>Règle de décompte</strong></p>${rule}${proofs}`;
+      const rule = typeof condition.decompte === 'string' ? `${controlLink(condition.decompte)}` : pill('à établir', 'règle de décompte non mentionnée');
+      return `<p><strong>Délai :</strong> ${COMPARE[bound]} ${count} ${UNIT[unit]} entre ${named(condition.delai.de)} et ${named(condition.delai.a)}</p>${calcul}<p><strong>Décompte :</strong> ${rule}</p>${proofs}`;
     }
     if (condition.montant) {
       const comparison = Object.keys(COMPARE).find((key) => condition.montant[key] !== undefined)!;
@@ -309,7 +319,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (!question) { detail.innerHTML = '<p class="pmr-muted">Aucune question.</p>'; return; }
     if (!selected || selected === '#question') {
       const essais = Array.isArray(annotated()?.essais) ? annotated()!.essais as Json[] : [];
-      detail.innerHTML = `<h3>${escape(question.question)}</h3><p>${pill(question.statut ?? 'à établir', `Réponse : ${ANSWER[question.statut ?? 'à établir']}`)}</p>${question.decisifs?.length ? `<h4>Faits décisifs</h4><p>${question.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${question.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(question.en_jeu.map(human).join(', '))}</p>` : ''}${question.personnes?.length ? `<h4>Personnes</h4><p>${escape(question.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Essais</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}`;
+      detail.innerHTML = `<h3>${escape(question.question)}</h3><p>${pill(question.statut ?? 'à établir', `Réponse : ${ANSWER[question.statut ?? 'à établir']}`)}</p>${[['validite', 'Validité'], ['prescription', 'Prescription']].filter(([slot]) => typeof question[slot] === 'string').map(([slot, label]) => `<p><strong>${label} :</strong> ${controlLink(question[slot])}</p>`).join('')}${question.decisifs?.length ? `<h4>Faits décisifs</h4><p>${question.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${question.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(question.en_jeu.map(human).join(', '))}</p>` : ''}${question.personnes?.length ? `<h4>Personnes</h4><p>${escape(question.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Essais</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}${controlsBlock()}`;
       return;
     }
     if (selected.startsWith('#source:')) {
