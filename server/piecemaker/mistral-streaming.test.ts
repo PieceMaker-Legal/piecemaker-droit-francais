@@ -1,15 +1,23 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
-import { vibeStreamingCommand, vibeStreamingEntrypoint } from '../../../piecemaker/mistral-streaming.js';
-import { resolveVibeExecutable } from '../../../shared/vibe-cli.js';
+import { piecemakerVibeBinDirectory, resolveVibeExecutable } from '@/shared/vibe-cli.js';
+
+import { vibeStreamingCommand, vibeStreamingEntrypoint } from './mistral-streaming.js';
 
 test('Vibe emits partial text before completion and preserves other entries and resumed history', (t) => {
   let command;
   try {
     command = vibeStreamingCommand(resolveVibeExecutable());
   } catch {
+    t.skip('A Vibe Python installation is required');
+    return;
+  }
+  if (!command.args.length) {
     t.skip('A Vibe Python installation is required');
     return;
   }
@@ -59,4 +67,24 @@ assert json.loads(output.getvalue().splitlines()[-1])["role"] == "user"
 `;
   const result = spawnSync(command.executable, ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
   assert.equal(result.status, 0, result.stderr || String(result.error));
+});
+
+test('live streaming runs only on the Vibe PieceMaker installed, any other Vibe runs plainly', (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-home-'));
+  const previous = process.env.PIECEMAKER_HOME;
+  process.env.PIECEMAKER_HOME = home;
+  t.after(() => {
+    if (previous === undefined) delete process.env.PIECEMAKER_HOME;
+    else process.env.PIECEMAKER_HOME = previous;
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+  const bin = piecemakerVibeBinDirectory();
+  fs.mkdirSync(bin, { recursive: true });
+  const pinned = path.join(bin, process.platform === 'win32' ? 'vibe.exe' : 'vibe');
+  const python = path.join(bin, process.platform === 'win32' ? 'python.exe' : 'python');
+  fs.writeFileSync(pinned, '');
+  fs.writeFileSync(python, '');
+  assert.deepEqual(vibeStreamingCommand(pinned), { executable: python, args: ['-u', '-c', vibeStreamingEntrypoint] });
+  const other = path.join(home, 'autre', 'vibe');
+  assert.deepEqual(vibeStreamingCommand(other), { executable: other, args: [] });
 });

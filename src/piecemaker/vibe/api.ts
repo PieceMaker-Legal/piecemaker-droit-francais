@@ -1,6 +1,6 @@
 import { authenticatedFetch } from '@/shared/api';
 
-export type VibeInstallState = { installed: boolean; installing: boolean };
+export type VibeInstallState = { installed: boolean; installing: boolean; step?: string | null; error?: string | null };
 
 export async function fetchVibeInstallState(): Promise<VibeInstallState | null> {
   const response = await authenticatedFetch('/api/piecemaker/vibe');

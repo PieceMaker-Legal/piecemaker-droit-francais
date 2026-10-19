@@ -6,7 +6,6 @@ import { StringDecoder } from 'node:string_decoder';
 
 import crossSpawn from 'cross-spawn';
 
-import { vibeStreamingCommand } from '@/piecemaker/mistral-streaming.js';
 import { recordVibeMessageTime } from '@/modules/providers/list/mistral/mistral-message-times.js';
 import { readPlanCommand } from '@/modules/providers/list/mistral/mistral-plan-command.js';
 import { buildVibeModelsEnvironment } from '@/modules/providers/list/mistral/mistral-vibe-models.js';
@@ -41,6 +40,14 @@ const notifyRunStoppedForProvider = notifyRunStopped as unknown as (input: RunNo
 const notifyRunFailedForProvider = notifyRunFailed as unknown as (input: RunNotificationInput) => void;
 
 let enabledSkillsWarned = false;
+
+type VibeLaunchCommand = (executable: string) => { executable: string; args: string[] };
+
+let vibeLaunchCommand: VibeLaunchCommand = (executable) => ({ executable, args: [] });
+
+export function setVibeLaunchCommand(build: VibeLaunchCommand): void {
+  vibeLaunchCommand = build;
+}
 
 export function resolveVibeHome(): string {
   const home = process.env.VIBE_HOME?.trim();
@@ -399,7 +406,7 @@ async function spawnVibe(
         }
       }
 
-      const streamingCommand = vibeStreamingCommand(resolveVibeExecutable());
+      const streamingCommand = vibeLaunchCommand(resolveVibeExecutable());
       vibeProcess = spawnFunction(streamingCommand.executable, [...streamingCommand.args, ...args], {
         cwd: workingDir,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -494,7 +501,23 @@ async function spawnVibe(
         notifyTerminalState({ error });
         reject(error);
       });
-    }).catch(reject);
+    }).catch((error: unknown) => {
+      const finalSessionId = sessionId || capturedSessionId || processKey;
+      activeMistralProcesses.delete(processKey);
+      console.error('[Mistral] Vibe n’a pas pu démarrer :', error);
+      ws.send(createNormalizedMessage({
+        kind: 'error',
+        content: `Mistral Vibe n’a pas pu démarrer : ${error instanceof Error ? error.message : String(error)}`,
+        sessionId: finalSessionId,
+        provider: 'mistral',
+      }));
+      if (!completeSent) {
+        completeSent = true;
+        ws.send(createCompleteMessage({ provider: 'mistral', sessionId: finalSessionId, exitCode: 1 }));
+      }
+      notifyTerminalState({ error });
+      reject(error);
+    });
   });
 }
 
