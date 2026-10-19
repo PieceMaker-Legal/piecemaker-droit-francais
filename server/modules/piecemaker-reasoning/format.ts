@@ -8,13 +8,17 @@ export type Measure = {
   delai?: { de: string; a: string; borne: 'au_plus' | 'au_moins'; duree: Duration };
   montant?: { valeur: string; comparaison: 'plus_de' | 'au_moins' | 'moins_de' | 'au_plus'; seuil: number | string };
 };
-export const OPERATIONS = ['somme', 'difference', 'produit', 'quotient'] as const;
-export type Formula = { operation: typeof OPERATIONS[number]; termes: Array<number | string | Formula> };
-export type Value = { valeur: string | number | null; preuve: Ref[]; formule?: Formula };
+export const OPERATIONS = ['somme', 'difference', 'produit', 'quotient', 'minimum', 'maximum', 'arrondi'] as const;
+export type Operand = number | string | Formula;
+export type Formula =
+  | { operation: typeof OPERATIONS[number]; termes: Operand[] }
+  | { operation: 'bareme'; assiette: Operand; tranches: Array<{ jusqu_a: Operand | null; taux: Operand }> }
+  | { operation: 'si'; condition: string; alors: Operand; sinon: Operand };
+export type Value = { valeur: string | number | null; preuve: Ref[]; selon: Basis[]; formule?: Formula };
 export type Condition = { condition?: string; l_une?: Condition[]; mesure?: Measure; selon: Basis[]; decompte?: string; preuve: Ref[]; contredit: Ref[] };
 export type Term = { si: Condition[]; sauf: Condition[] };
 export type Question = { question: string; reponse: string; validite?: string; prescription?: string };
-export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean> };
+export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean | number> };
 export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; questions: Question[]; essais: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
 export type Problem = { path: string; text: string; avocat?: string; cible?: string };
 export type Parsed = { value: unknown; lines: Map<string, number> };
@@ -30,6 +34,11 @@ const COMPARISONS = ['plus_de', 'au_moins', 'moins_de', 'au_plus'] as const;
 const DELAY_SHAPE = 'delai : { de: date_de_départ, a: date_retenue, au_plus ou au_moins: { jours | jours_ouvres | mois | ans: nombre } }';
 const AMOUNT_SHAPE = 'montant : { valeur: montant_du_dossier, plus_de | au_moins | moins_de | au_plus: nombre ou autre montant }';
 const isDate = (value: unknown): value is string => typeof value === 'string' && DATE.test(value);
+const FORMULA_SHAPE = `formule : { ${OPERATIONS.join(' | ')}: [termes] } (arrondi: [montant, décimales]), { bareme: { assiette, tranches: [{ jusqu_a, taux }, …, { taux }] } } ou { si: terme, alors, sinon } ; un terme est un nombre, un nom de valeur ou une formule`;
+export const operands = (formula: Formula): Operand[] => (formula.operation === 'bareme' ? [formula.assiette, ...formula.tranches.flatMap((tranche) => [tranche.jusqu_a, tranche.taux]).filter((item): item is Operand => item !== null)] : formula.operation === 'si' ? [formula.alors, formula.sinon] : formula.termes);
+export const formulaNames = (formula: Formula): string[] => operands(formula).flatMap((item) => (typeof item === 'string' ? [item] : typeof item === 'number' ? [] : formulaNames(item)));
+export const formulaNumbers = (formula: Formula): number[] => operands(formula).flatMap((item, index) => (typeof item === 'number' ? (formula.operation === 'arrondi' && index === 1 ? [] : [item]) : typeof item === 'string' ? [] : formulaNumbers(item)));
+export const formulaConditions = (formula: Formula): string[] => [...(formula.operation === 'si' ? [formula.condition] : []), ...operands(formula).flatMap((item) => (typeof item === 'object' ? formulaConditions(item) : []))];
 export const CONTROLS = { applicabilite: 'applicabilité_', decompte: 'décompte_', validite: 'validité_', prescription: 'prescription_' } as const;
 export type ControlSlot = keyof typeof CONTROLS;
 export const basisControls = (basis: Basis) => [basis.applicabilite, basis.validite].filter((name): name is string => Boolean(name));
@@ -131,14 +140,32 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     });
   };
 
+  const operand = (item: unknown, path: string): Operand | null => (typeof item === 'number' ? item : typeof item === 'string' && IDENTIFIER.test(item) ? item : formula(item, path));
   const formula = (raw: unknown, path: string): Formula | null => {
+    if (isObject(raw) && raw.si !== undefined) {
+      if (typeof raw.si !== 'string' || !IDENTIFIER.test(raw.si) || raw.alors === undefined || raw.sinon === undefined || Object.keys(raw).some((key) => !['si', 'alors', 'sinon'].includes(key))) { problem(path, FORMULA_SHAPE); return null; }
+      const alors = operand(raw.alors, `${path}.alors`);
+      const sinon = operand(raw.sinon, `${path}.sinon`);
+      return alors === null || sinon === null ? null : { operation: 'si', condition: raw.si, alors, sinon };
+    }
     const operations = isObject(raw) ? Object.keys(raw) : [];
-    const operation = operations[0] as Formula['operation'];
+    if (operations.length === 1 && operations[0] === 'bareme') {
+      const scale = (raw as Record<string, unknown>).bareme;
+      const tranches = isObject(scale) && Array.isArray(scale.tranches) ? scale.tranches : [];
+      const valid = isObject(scale) && scale.assiette !== undefined && tranches.length > 0 && Object.keys(scale).every((key) => ['assiette', 'tranches'].includes(key))
+        && tranches.every((tranche, index) => isObject(tranche) && tranche.taux !== undefined && (index === tranches.length - 1 ? tranche.jusqu_a === undefined : tranche.jusqu_a !== undefined) && Object.keys(tranche).every((key) => ['jusqu_a', 'taux'].includes(key)));
+      if (!valid) { problem(`${path}.bareme`, 'bareme : { assiette, tranches: [{ jusqu_a: limite, taux }, …, { taux }] } : la dernière tranche n’a pas de limite'); return null; }
+      const assiette = operand((scale as Record<string, unknown>).assiette, `${path}.bareme.assiette`);
+      const parsed = tranches.map((tranche, index) => ({ jusqu_a: (tranche as Record<string, unknown>).jusqu_a === undefined ? null : operand((tranche as Record<string, unknown>).jusqu_a, `${path}.bareme.tranches[${index}].jusqu_a`), taux: operand((tranche as Record<string, unknown>).taux, `${path}.bareme.tranches[${index}].taux`) }));
+      if (assiette === null || parsed.some((tranche, index) => tranche.taux === null || (tranche.jusqu_a === null && index < parsed.length - 1))) return null;
+      return { operation: 'bareme', assiette, tranches: parsed as Array<{ jusqu_a: Operand | null; taux: Operand }> };
+    }
+    const operation = operations[0] as typeof OPERATIONS[number];
     const list = isObject(raw) ? raw[operation] : undefined;
-    if (operations.length !== 1 || !(OPERATIONS as readonly string[]).includes(operation) || !Array.isArray(list) || list.length < 2) { problem(path, `formule : { ${OPERATIONS.join(' | ')}: [termes] }, au moins deux termes : nombres, noms de valeurs ou formules`); return null; }
-    const termes = list.map((item, index) => (typeof item === 'number' ? item : typeof item === 'string' && IDENTIFIER.test(item) ? item : formula(item, `${path}.${operation}[${index}]`)));
+    if (operations.length !== 1 || !(OPERATIONS as readonly string[]).includes(operation) || !Array.isArray(list) || list.length < 2 || (operation === 'arrondi' && (list.length !== 2 || !Number.isInteger(list[1])))) { problem(path, FORMULA_SHAPE); return null; }
+    const termes = list.map((item, index) => operand(item, `${path}.${operation}[${index}]`));
     if (termes.some((item) => item === null)) return null;
-    return { operation, termes: termes as Formula['termes'] };
+    return { operation, termes: termes as Operand[] };
   };
 
   const bases = (raw: unknown, path: string): Basis[] => {
@@ -252,9 +279,10 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       for (const [name, entry] of Object.entries(raw)) {
         const at = `valeurs.${name}`;
         const computedOnly = isObject(entry) && entry.valeur === undefined && entry.formule !== undefined;
-        if (!IDENTIFIER.test(name) || !isObject(entry) || !(computedOnly || typeof entry.valeur === 'number' || isDate(entry.valeur) || entry.valeur === null)) { problem(at, '{ valeur: \'AAAA-MM-JJ\', nombre ou null si le dossier ne la fixe pas, preuve: [{ piece, citation }], formule } attendu'); continue; }
-        for (const field of Object.keys(entry)) if (!['valeur', 'preuve', 'formule'].includes(field)) problem(`${at}.${field}`, `clé inconnue ${field} (admises : valeur, preuve, formule)`);
-        const value: Value = { valeur: computedOnly ? null : entry.valeur as string | number | null, preuve: refs(entry.preuve, `${at}.preuve`) };
+        if (!IDENTIFIER.test(name) || !isObject(entry) || !(computedOnly || typeof entry.valeur === 'number' || isDate(entry.valeur) || entry.valeur === null)) { problem(at, '{ valeur: \'AAAA-MM-JJ\', nombre ou null si le dossier ne la fixe pas, preuve: [{ piece, citation }] ou selon: [{ source, citation, vigueur }], formule } attendu'); continue; }
+        for (const field of Object.keys(entry)) if (!['valeur', 'preuve', 'selon', 'formule'].includes(field)) problem(`${at}.${field}`, `clé inconnue ${field} (admises : valeur, preuve, selon, formule)`);
+        const value: Value = { valeur: computedOnly ? null : entry.valeur as string | number | null, preuve: refs(entry.preuve, `${at}.preuve`), selon: bases(entry.selon, `${at}.selon`) };
+        value.selon.forEach((basis, index) => { if (basis.validite) problem(`${at}.selon[${index}].validite`, 'la source d’une valeur est un texte : validite ne s’y place pas'); });
         if (entry.formule !== undefined) {
           const parsed = formula(entry.formule, `${at}.formule`);
           if (parsed) value.formule = parsed;
@@ -268,10 +296,10 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       if (!Array.isArray(raw)) { problem('essais', 'essais: [{ nom, faits, attendu }] attendu'); continue; }
       raw.forEach((entry, index) => {
         const at = `essais[${index}]`;
-        const booleans = (map: unknown) => isObject(map) && Object.values(map).every((item) => typeof item === 'boolean');
+        const booleans = (map: unknown) => isObject(map) && Object.values(map).every((item) => typeof item === 'boolean' || typeof item === 'number');
         const facts = (map: unknown) => isObject(map) && Object.values(map).every((item) => typeof item === 'boolean' || typeof item === 'number' || isDate(item));
-        if (!isObject(entry) || !text(entry.nom) || !facts(entry.faits) || !booleans(entry.attendu)) { problem(at, '{ nom, faits: { terme: vrai|faux, valeur: \'AAAA-MM-JJ\' ou nombre }, attendu: { terme: vrai|faux } } attendu'); return; }
-        reasoning.essais.push({ nom: entry.nom as string, faits: entry.faits as Trial['faits'], attendu: entry.attendu as Record<string, boolean> });
+        if (!isObject(entry) || !text(entry.nom) || !facts(entry.faits) || !booleans(entry.attendu)) { problem(at, '{ nom, faits: { terme: vrai|faux, valeur: \'AAAA-MM-JJ\' ou nombre }, attendu: { terme: vrai|faux, montant: nombre } } attendu'); return; }
+        reasoning.essais.push({ nom: entry.nom as string, faits: entry.faits as Trial['faits'], attendu: entry.attendu as Trial['attendu'] });
       });
       continue;
     }
@@ -302,23 +330,23 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     if (slot && !controls.some((entry) => entry.slot === slot && entry.name === name)) problem(name, `${name} est un contrôle : désigne-le par ${slot}: '${name}' ${slot === 'applicabilite' ? 'sur la source' : slot === 'decompte' ? 'sur le délai' : slot === 'validite' ? 'sur la question ou la clause' : 'sur la question'} qu’il conditionne`);
   }
   for (const { slot, name, at } of controls) if (!reasoning.terms.has(name)) problem(at, `terme ${name} non défini : écris ${name}: { si: [...] }, le terme qui ${CONTROL_PURPOSE[slot]}`);
-  const operands = (value: Formula): string[] => value.termes.flatMap((item) => (typeof item === 'string' ? [item] : typeof item === 'number' ? [] : operands(item)));
   const reaches = (origin: string, current: string, seen: Set<string>): boolean => {
-    const next = reasoning.valeurs.get(current)?.formule ? operands(reasoning.valeurs.get(current)!.formule!) : [];
+    const next = reasoning.valeurs.get(current)?.formule ? formulaNames(reasoning.valeurs.get(current)!.formule!) : [];
     return next.some((name) => name === origin || (!seen.has(name) && reaches(origin, name, seen.add(name))));
   };
   for (const [name, entry] of reasoning.valeurs) {
     if (!entry.formule) continue;
     if (reaches(name, name, new Set())) problem(`valeurs.${name}.formule`, `${name} se calcule à partir d’elle-même`);
-    for (const operand of operands(entry.formule)) if (reasoning.valeurs.has(operand) && typeof reasoning.valeurs.get(operand)!.valeur === 'string') problem(`valeurs.${operand}`, `${operand} sert à la formule de ${name} : un nombre attendu`);
+    for (const condition of formulaConditions(entry.formule)) if (reasoning.valeurs.has(condition)) problem(`valeurs.${name}.formule`, `si : ${condition} est une valeur ; si désigne un terme ou un fait (vrai/faux)`);
+    for (const operand of formulaNames(entry.formule)) if (reasoning.valeurs.has(operand) && typeof reasoning.valeurs.get(operand)!.valeur === 'string') problem(`valeurs.${operand}`, `${operand} sert à la formule de ${name} : un nombre attendu`);
   }
   if (!reasoning.questions.length && !problems.some((entry) => entry.path === 'questions')) problem('questions', 'ajoute questions: [{ question, reponse }]');
   return { reasoning, problems };
 }
 
-const ANNOTATIONS = new Set(['bilan', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul']);
+const ANNOTATIONS = new Set(['bilan', 'montant_calcule', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul']);
 
-const KEY_ORDER = ['qualification', 'questions', 'question', 'reponse', 'condition', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'contredit', 'si', 'sauf', 'nom', 'faits', 'attendu'];
+const KEY_ORDER = ['qualification', 'questions', 'question', 'reponse', 'condition', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'contredit', 'sauf', 'nom', 'faits', 'attendu'];
 const rank = (key: string) => { const at = KEY_ORDER.indexOf(key); return at < 0 ? KEY_ORDER.length : at; };
 const ordered = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(ordered);

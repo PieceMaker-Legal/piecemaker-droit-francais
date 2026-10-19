@@ -1,5 +1,6 @@
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
-import { citeSource, dismissIssue, loadReasoning, ratePiece, runTest } from './api.js';
+import { citeSource, dismissIssue, loadReasoning, ratePiece, runTest, simulateReasoning } from './api.js';
+import type { Simulation } from './api.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
@@ -37,6 +38,16 @@ const human = (name: string) => { const text = name.replace(/_/g, ' ').replace(/
 const shorten = (text: string, length: number) => (text.length > length ? `${text.slice(0, length - 1)}…` : text);
 const pill = (status: string, label = status) => `<span class="pmr-pill pmr-${TONE[status] ?? 'muted'}">${escape(label)}</span>`;
 const date = (value: unknown) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : 'toujours en vigueur');
+const amountText = (value: unknown) => (typeof value === 'number' ? value.toLocaleString('fr-FR') : typeof value === 'string' ? date(value) : 'à calculer');
+const parseVariable = (raw: string): number | string | null => {
+  const text = raw.trim();
+  if (!text) return null;
+  const french = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+  if (french) return `${french[3]}-${french[2]}-${french[1]}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const number = Number(text.replace(/[\s\u00a0\u202f]/g, '').replace(',', '.'));
+  return Number.isFinite(number) ? number : null;
+};
 const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
 const STEP: Record<ReasoningLogEntry['step'], string> = { source: 'Source', pièce: 'Pièce', fait: 'Fait', condition: 'Étape', essai: 'Essai', registre: 'Partie', réponse: 'Réponse' };
 const cleanups = new WeakMap<HTMLElement, () => void>();
@@ -79,6 +90,8 @@ export function mount(container: HTMLElement, api: Host) {
   let stopped = false;
   let timer = 0;
   let sequence = 0;
+  let draft: Record<string, string> = {};
+  let simulated: Simulation | null = null;
 
   const annotated = () => (snapshot?.annotated ?? null) as Json | null;
   const values = () => (annotated()?.valeurs ?? {}) as Record<string, Json>;
@@ -254,6 +267,13 @@ export function mount(container: HTMLElement, api: Host) {
     const agent = drafting.length ? `<div class="pmr-issue">${pill('exclu', 'Rédaction')}<div class="pmr-issue-body"><p>${plural(drafting.length, 'défaut')} d’écriture du raisonnement. Rien à décider : demandez à l’agent de relancer la vérification, il les corrigera.</p><details><summary>Détail technique</summary>${drafting.map((issue) => `<p>${technical(issue)} ${dismiss(issue)}</p>`).join('')}</details></div></div>` : '';
     return readable.length || agent ? readable.join('') + agent : '<p class="pmr-muted">Aucune.</p>';
   };
+  const simulationBlock = () => {
+    const variables = Object.entries(values()).filter(([, entry]) => !entry.formule);
+    if (!variables.length || snapshot?.demo || !context.project) return '';
+    const computed = simulated ? Object.entries(simulated.valeurs).filter(([name]) => values()[name]?.formule) : [];
+    const results = simulated ? `${simulated.questions.map((entry) => `<p>${escape(entry.question)} ${entry.montant !== undefined ? `<strong>${escape(amountText(entry.montant))}</strong>` : pill(entry.statut, ANSWER[entry.statut] ?? 'En suspens')}</p>`).join('')}${computed.length ? `<p class="pmr-muted">${computed.map(([name, value]) => `${escape(human(name))} : ${escape(amountText(value))}`).join(' · ')}</p>` : ''}` : '';
+    return `<h4>Simulation</h4><p class="pmr-muted">Modifiez une valeur pour rejouer le raisonnement. Rien n’est enregistré.</p><div class="pmr-variables">${variables.map(([name, entry]) => `<label><span>${escape(human(name))}</span><input data-variable="${escape(name)}" value="${escape(draft[name] ?? (entry.valeur === null || entry.valeur === undefined ? '' : typeof entry.valeur === 'number' ? String(entry.valeur) : date(entry.valeur)))}" placeholder="non fixée"></label>`).join('')}</div><div class="pmr-run"><button class="pmr-primary" data-simulate${busy ? ' disabled' : ''}>Simuler</button>${simulated ? '<button data-simulate-reset>Effacer</button>' : ''}</div>${results}`;
+  };
   const controlLink = (name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button> ${pill(terms()[name]?.statut ?? 'à établir')}`;
   const controlsBlock = () => {
     const names = Object.keys(terms()).filter(isControl);
@@ -320,7 +340,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (!question) { detail.innerHTML = '<p class="pmr-muted">Aucune question.</p>'; return; }
     if (!selected || selected === '#question') {
       const essais = Array.isArray(annotated()?.essais) ? annotated()!.essais as Json[] : [];
-      detail.innerHTML = `<h3>${escape(question.question)}</h3><p>${pill(question.statut ?? 'à établir', `Réponse : ${ANSWER[question.statut ?? 'à établir']}`)}</p>${[['validite', 'Validité'], ['prescription', 'Prescription']].filter(([slot]) => typeof question[slot] === 'string').map(([slot, label]) => `<p><strong>${label} :</strong> ${controlLink(question[slot])}</p>`).join('')}${question.decisifs?.length ? `<h4>Faits décisifs</h4><p>${question.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${question.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(question.en_jeu.map(human).join(', '))}</p>` : ''}${question.personnes?.length ? `<h4>Personnes</h4><p>${escape(question.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Essais</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}${controlsBlock()}`;
+      detail.innerHTML = `<h3>${escape(question.question)}</h3><p>${pill(question.statut ?? 'à établir', `Réponse : ${'montant_calcule' in question ? amountText(question.montant_calcule) : ANSWER[question.statut ?? 'à établir']}`)}</p>${[['validite', 'Validité'], ['prescription', 'Prescription']].filter(([slot]) => typeof question[slot] === 'string').map(([slot, label]) => `<p><strong>${label} :</strong> ${controlLink(question[slot])}</p>`).join('')}${question.decisifs?.length ? `<h4>Faits décisifs</h4><p>${question.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${question.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(question.en_jeu.map(human).join(', '))}</p>` : ''}${question.personnes?.length ? `<h4>Personnes</h4><p>${escape(question.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Essais</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}${controlsBlock()}${simulationBlock()}`;
       return;
     }
     if (selected.startsWith('#source:')) {
@@ -429,8 +449,19 @@ export function mount(container: HTMLElement, api: Host) {
     if (button.dataset.open) { selected = button.dataset.open; tab = 'detail'; view = 'panel'; paintGraph(); paint(); }
     if (button.dataset.dismiss && project) act(() => dismissIssue(project, button.dataset.dismiss!, button.hasAttribute('data-restore')));
     if (button.dataset.rate && project) act(() => ratePiece(project, button.dataset.rate!, button.dataset.value === 'null' ? null : button.dataset.value === 'true'));
+    if (button.hasAttribute('data-simulate') && project) {
+      const faits = Object.fromEntries(Object.entries(draft).map(([name, raw]) => [name, parseVariable(raw)]).filter(([, item]) => item !== null)) as Record<string, number | string>;
+      busy = true;
+      paint();
+      simulateReasoning(project, faits).then((result) => { simulated = result; warning.hidden = true; }, showError).finally(() => { busy = false; paint(); });
+    }
+    if (button.hasAttribute('data-simulate-reset')) { draft = {}; simulated = null; paint(); }
     if (button.dataset.zoom) { zoom = Math.max(.1, Math.min(3, zoom * (Number(button.dataset.zoom) > 0 ? 1.2 : 1 / 1.2))); paintGraph(); }
     if (button.hasAttribute('data-center')) { fitGraph(); paintGraph(); }
+  });
+  root.addEventListener('input', (event) => {
+    const input = (event.target as Element).closest<HTMLInputElement>('[data-variable]');
+    if (input) draft[input.dataset.variable!] = input.value;
   });
   picker.addEventListener('change', () => { scope = Number(picker.value); selected = ''; nodes = []; paint(); });
 
@@ -500,7 +531,7 @@ export function mount(container: HTMLElement, api: Host) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = next.project?.path !== context.project?.path;
     context = next;
-    if (changed) { sequence++; snapshot = null; serialized = ''; scope = 0; selected = ''; nodes = []; void load(); }
+    if (changed) { sequence++; snapshot = null; serialized = ''; scope = 0; selected = ''; nodes = []; draft = {}; simulated = null; void load(); }
     paint();
   });
   const poll = () => { if (!stopped) { if (!snapshot?.demo && !busy) void load(); timer = window.setTimeout(poll, 2500); } };

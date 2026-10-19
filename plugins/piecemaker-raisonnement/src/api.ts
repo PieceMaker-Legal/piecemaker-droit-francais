@@ -12,6 +12,12 @@ export function dismissIssue(projectPath: string, id: string, restore = false): 
   return request<ReasoningSnapshot>('/api/piecemaker/reasoning/dismiss', { projectPath, id, restore });
 }
 
+export type Simulation = { questions: Array<{ question: string; statut: string; montant?: number | null }>; valeurs: Record<string, string | number | null> };
+
+export function simulateReasoning(projectPath: string, faits: Record<string, number | string | boolean>): Promise<Simulation> {
+  return request<Simulation>('/api/piecemaker/reasoning/simulate', { projectPath, faits });
+}
+
 export function ratePiece(projectPath: string, piece: string, reliable: boolean | null): Promise<ReasoningSnapshot> {
   return request<ReasoningSnapshot>('/api/piecemaker/reasoning/reliability', { projectPath, piece, reliable });
 }
