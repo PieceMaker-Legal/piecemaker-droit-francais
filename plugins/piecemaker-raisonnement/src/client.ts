@@ -166,6 +166,7 @@ export function mount(container: HTMLElement, api: Host) {
       if (!levels.has(name)) order.push(name);
       levels.set(name, level);
       for (const entry of list.filter((item) => item.parent === name)) visit(entry.condition.condition, level + 1);
+      for (const group of groups().filter((item) => item.parent === name)) for (const source of [group.condition, ...(group.condition.l_une ?? [])].flatMap((condition: Json) => condition.selon ?? [])) if (source.applicabilite) visit(source.applicabilite, level + 1);
     };
     visit(question.reponse, 1);
     nodes.push({ id: '#question', label: question.question, status: question.statut ?? 'à établir', kind: 'question', decisive: false, x: 0, y: 0 });
@@ -207,6 +208,7 @@ export function mount(container: HTMLElement, api: Host) {
       if (!edges.some((edge) => edge.from === id && edge.to === target)) edges.push({ from: id, to: target, link });
     };
     for (const entry of based()) attach(`#source:${entry.source.source}`, sourceLabel(entry.source), entry.source.en_vigueur === false ? 'exclu' : 'source', 'source', entry.target, 'selon');
+    for (const entry of based()) if (entry.source.applicabilite && levels.has(entry.source.applicabilite) && byId.has(`#source:${entry.source.source}`) && !edges.some((edge) => edge.from === entry.source.applicabilite && edge.to === `#source:${entry.source.source}`)) edges.push({ from: entry.source.applicabilite, to: `#source:${entry.source.source}`, link: 'si' });
     for (const entry of cited()) attach(`#piece:${entry.piece.piece}`, entry.piece.titre ?? basename(entry.piece.piece), entry.piece.fiable === true ? 'acquis' : entry.piece.fiable === false ? 'exclu' : 'piece', 'piece', entry.target, entry.against ? 'contredit' : 'preuve');
     if (selected && !nodes.some((node) => node.id === selected)) selected = '';
     if (nodes.some((node) => !old.has(node.id))) {
@@ -247,7 +249,7 @@ export function mount(container: HTMLElement, api: Host) {
     const agent = drafting.length ? `<div class="pmr-issue">${pill('exclu', 'Rédaction')}<div class="pmr-issue-body"><p>${plural(drafting.length, 'défaut')} d’écriture du raisonnement. Rien à décider : demandez à l’agent de relancer la vérification, il les corrigera.</p><details><summary>Détail technique</summary>${drafting.map((issue) => `<p>${technical(issue)} ${dismiss(issue)}</p>`).join('')}</details></div></div>` : '';
     return readable.length || agent ? readable.join('') + agent : '<p class="pmr-muted">Aucune.</p>';
   };
-  const sourceBlock = (source: Json) => `<div class="pmr-quote"><p><strong>${escape(source.titre ?? source.source)}</strong>${source.source && source.titre ? ` <span class="pmr-muted">${escape(source.source)}</span>` : ''}${source.vigueur ? ` · ${pill(source.en_vigueur === false ? 'exclu' : source.en_vigueur ? 'acquis' : 'à établir', `en vigueur du ${date(source.vigueur.debut)} ${source.vigueur.fin ? `au ${date(source.vigueur.fin)}` : '(toujours en vigueur)'}`)}` : ''}</p><blockquote>${escape(source.citation)}</blockquote>${source.applicabilite ? `<p><strong>Applicabilité :</strong> ${escape(source.applicabilite)}</p>` : ''}${source.corrigee ? `<p class="pmr-muted">Citation rétablie d’après le texte (écrite : « ${escape(source.citation_d_origine)} »).</p>` : ''}</div>`;
+  const sourceBlock = (source: Json) => `<div class="pmr-quote"><p><strong>${escape(source.titre ?? source.source)}</strong>${source.source && source.titre ? ` <span class="pmr-muted">${escape(source.source)}</span>` : ''}${source.vigueur ? ` · ${pill(source.en_vigueur === false ? 'exclu' : source.en_vigueur ? 'acquis' : 'à établir', `en vigueur du ${date(source.vigueur.debut)} ${source.vigueur.fin ? `au ${date(source.vigueur.fin)}` : '(toujours en vigueur)'}`)}` : ''}</p><blockquote>${escape(source.citation)}</blockquote>${source.applicabilite ? `<p><strong>Applicabilité :</strong> <button class="pmr-link" data-select="${escape(source.applicabilite)}">${escape(human(source.applicabilite))}</button> ${pill(terms()[source.applicabilite]?.statut ?? 'à établir')}</p>` : ''}${source.corrigee ? `<p class="pmr-muted">Citation rétablie d’après le texte (écrite : « ${escape(source.citation_d_origine)} »).</p>` : ''}</div>`;
   const pieceBlock = (piece: Json, against = false) => {
     const rated = piece.fiable === true ? 'fiable' : piece.fiable === false ? 'non fiable' : 'à évaluer';
     const actions = snapshot?.demo ? '' : `<span class="pmr-decision"><button data-rate="${escape(piece.piece)}" data-value="true"${piece.fiable === true ? ' disabled' : ''}>Fiable</button><button data-rate="${escape(piece.piece)}" data-value="false"${piece.fiable === false ? ' disabled' : ''}>Non fiable</button>${piece.fiable === null || piece.fiable === undefined ? '' : `<button data-rate="${escape(piece.piece)}" data-value="null">Annuler</button>`}</span>`;

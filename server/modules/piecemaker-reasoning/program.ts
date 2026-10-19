@@ -6,7 +6,7 @@ import type Database from 'better-sqlite3';
 
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, ReasoningSnapshot, ReasoningStatus, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import { calculate, compile, decisive, reachableLeaves, runTrials, structure } from './engine.js';
+import { and, calculate, compile, or, decisive, reachableLeaves, runTrials, structure } from './engine.js';
 import type { Calculation, Facts, Trace } from './engine.js';
 import { LiteralError, parseLiteral, printLiteral, readReasoning, stripAnnotations } from './format.js';
 import type { Basis, Condition, Measure, Ref } from './format.js';
@@ -219,13 +219,23 @@ export async function verifyReasoning(input: {
     return check.kind === 'piece' && !basis.au ? true : null;
   };
 
-  const basisValue = (at: string, condition: Condition): ReasoningValue => {
+  const basisValue = (at: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue => {
     if (!condition.selon.length) return true;
-    const relevant = condition.selon.flatMap((basis, index) => { const check = basisChecks.get(`${at}.selon[${index}]`); return check && check.kind !== 'decision' ? [{ basis, check }] : []; });
-    if (!relevant.length) return condition.selon.some((_, index) => basisChecks.get(`${at}.selon[${index}]`)?.kind === 'decision') ? true : null;
-    const values = relevant.map(({ basis, check }) => inForceAt(basis, check));
-    return values.includes(true) ? true : values.includes(null) ? null : false;
+    const checked = condition.selon.map((basis, index) => ({ basis, check: basisChecks.get(`${at}.selon[${index}]`), applicable: applicable[index] }));
+    const texts = checked.filter((entry) => entry.check && entry.check.kind !== 'decision');
+    if (texts.length) return or(texts.map((entry) => and([inForceAt(entry.basis, entry.check!), entry.applicable])));
+    const decisions = checked.filter((entry) => entry.check?.kind === 'decision');
+    return decisions.length ? or(decisions.map((entry) => entry.applicable)) : null;
   };
+  const applicabilityTerms = new Set<string>();
+  const collect = (name: string) => {
+    if (applicabilityTerms.has(name)) return;
+    applicabilityTerms.add(name);
+    const term = reasoning.terms.get(name);
+    const walkCollect = (condition: Condition) => { if (condition.l_une) condition.l_une.forEach(walkCollect); else collect(condition.condition!); };
+    term && [...term.si, ...term.sauf].forEach(walkCollect);
+  };
+  for (const { condition } of occurrences) for (const basis of condition.selon) if (basis.applicabilite) collect(basis.applicabilite);
 
   const test = compile(reasoning);
   const statuses = new Map<string, ReasoningValue>();
@@ -233,7 +243,7 @@ export async function verifyReasoning(input: {
   const decisiveLeaves = new Set<string>();
   reasoning.questions.forEach((question, index) => {
     if (!reasoning.terms.has(question.reponse) || shape.cycles.length) return;
-    const facts: Facts = { leaf, basis: (at, condition) => { const value = basisValue(at, condition); if (!vigueurs.has(at)) vigueurs.set(at, value); return value; } };
+    const facts: Facts = { leaf, basis: (at, condition, applicable) => { const value = basisValue(at, condition, applicable); if (!vigueurs.has(at)) vigueurs.set(at, value); return value; } };
     const trace: Trace = new Map();
     const value = test(facts, trace, [question.reponse]).get(question.reponse) ?? null;
     for (const [key, item] of trace) if (!statuses.has(key)) statuses.set(key, item);
@@ -268,7 +278,8 @@ export async function verifyReasoning(input: {
       if (date && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${date} (${basis.au}) ; cite la version en vigueur à cette date`, `${title} : la version citée n’était pas en vigueur au ${day(date)}.`, `#source:${basis.source}`);
       if (check?.kind === 'texte' && !basis.au) add('manque', `${place}.au`, 'applicabilité dans le temps non établie : ajoute au: \'nom_de_date\', la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable', `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
       else if (check?.kind === 'texte' && !date) add('manque', `${place}.au`, `${basis.au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(basis.au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`);
-      if (check?.kind === 'texte' && !basis.applicabilite) add('manque', `${place}.applicabilite`, 'justifie pourquoi ce texte s’applique au dossier (champ d’application, qualité des parties) : ajoute applicabilite: `…`', `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
+      if (basis.applicabilite && !reasoning.terms.has(basis.applicabilite)) add('erreur', `${place}.applicabilite`, `terme ${basis.applicabilite} non défini : écris ${basis.applicabilite}: { si: [...] }`);
+      if (check?.kind === 'texte' && !basis.applicabilite && !applicabilityTerms.has(at.split(".")[0])) add('manque', `${place}.applicabilite`, 'applicabilité non établie : ajoute applicabilite: \'nom_de_terme\' et définis ce terme, dont les conditions établissent que ce texte s’applique au dossier', `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
     });
   }
   for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = STATUS(statuses.get(name) ?? null); }
@@ -484,12 +495,19 @@ export const EXAMPLE_CODE = `{
   pénalité_encourue: {
     si: [
       { condition: 'pénalité_stipulée',
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null }, au: 'date_de_conclusion_du_contrat', applicabilite: \`contrat de vente assorti d’une clause pénale\` }] },
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null }, au: 'date_de_conclusion_du_contrat', applicabilite: 'applicabilité_de_l_article_1231_5' }] },
       { l_une: [
           { condition: 'mise_en_demeure', preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: \`vous met en demeure\` }] },
           { condition: 'inexécution_définitive' },
         ],
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null }, au: 'date_de_conclusion_du_contrat', applicabilite: \`contrat de vente assorti d’une clause pénale\` }] },
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null }, au: 'date_de_conclusion_du_contrat', applicabilite: 'applicabilité_de_l_article_1231_5' }] },
+    ],
+  },
+  applicabilité_de_l_article_1231_5: {
+    si: [
+      { condition: 'contrat_stipulant_une_pénalité',
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`Lorsque le contrat stipule une pénalité\`, vigueur: { debut: '2016-10-01', fin: null }, au: 'date_de_conclusion_du_contrat' }],
+        preuve: [{ piece: 'pieces/01_contrat.md', citation: \`une pénalité est due\` }] },
     ],
   },
   pénalité_stipulée: {
@@ -525,7 +543,7 @@ export const EXAMPLE_CODE = `{
 `;
 
 export const EXAMPLE_SOURCES: Record<string, SourceInfo> = {
-  LEGIARTI000000000005: { kind: 'texte', title: 'Code civil fictif, article 1231-5', text: 'Sauf inexécution définitive, la pénalité n\'est encourue que lorsque le débiteur est mis en demeure.', validity: { from: '2016-10-01', to: null } },
+  LEGIARTI000000000005: { kind: 'texte', title: 'Code civil fictif, article 1231-5', text: 'Lorsque le contrat stipule une pénalité en cas d\'inexécution, elle est due dans les conditions suivantes. Sauf inexécution définitive, la pénalité n\'est encourue que lorsque le débiteur est mis en demeure.', validity: { from: '2016-10-01', to: null } },
   'pieces/01_contrat.md': { kind: 'piece', title: 'Contrat de prestation (fictif)', text: 'Fait le 15/01/2024. Article 1. Grève : grève nationale ou propre au secteur. Article 8. En cas de retard de livraison, une pénalité est due, sauf force majeure au sens de l\'article 12. Article 12. Constituent des cas de force majeure les événements de l\'article 1218, ainsi que les grèves.' },
   'pieces/05_bon_de_livraison.md': { kind: 'piece', title: 'Bon de livraison (fictif)', text: 'Société Beta SARL. Livré le 14/06/2025.' },
   'pieces/06_mise_en_demeure.md': { kind: 'piece', title: 'Mise en demeure (fictive)', text: 'La présente vous met en demeure de livrer.' },

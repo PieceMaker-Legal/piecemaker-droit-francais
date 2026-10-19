@@ -2,12 +2,12 @@ import type { ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 import type { Condition, Duration, Measure, Reasoning, Term } from './format.js';
 
-export type Facts = { leaf(name: string): ReasoningValue; basis(path: string, condition: Condition): ReasoningValue };
+export type Facts = { leaf(name: string): ReasoningValue; basis(path: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue };
 export type Trace = Map<string, ReasoningValue>;
 export type Test = (facts: Facts, trace?: Trace, roots?: string[]) => Map<string, ReasoningValue>;
 
-const and = (values: ReasoningValue[]): ReasoningValue => (values.includes(false) ? false : values.includes(null) ? null : true);
-const or = (values: ReasoningValue[]): ReasoningValue => (values.includes(true) ? true : values.includes(null) ? null : false);
+export const and = (values: ReasoningValue[]): ReasoningValue => (values.includes(false) ? false : values.includes(null) ? null : true);
+export const or = (values: ReasoningValue[]): ReasoningValue => (values.includes(true) ? true : values.includes(null) ? null : false);
 const not = (value: ReasoningValue): ReasoningValue => (value === null ? null : !value);
 
 export function structure(reasoning: Reasoning) {
@@ -19,6 +19,7 @@ export function structure(reasoning: Reasoning) {
     const term = reasoning.terms.get(name);
     if (!term) { leaves.add(name); return; }
     const walk = (condition: Condition) => {
+      for (const basis of condition.selon) if (basis.applicabilite) { used.add(basis.applicabilite); visit(basis.applicabilite, [...stack, name]); }
       if (condition.l_une) condition.l_une.forEach(walk);
       else { used.add(condition.condition!); visit(condition.condition!, [...stack, name]); }
     };
@@ -38,7 +39,8 @@ export function compile(reasoning: Reasoning): Test {
       if (!definition || stack.includes(name)) return definition ? null : facts.leaf(name);
       const condition = (entry: Condition, path: string): ReasoningValue => {
         const inner = entry.l_une ? or(entry.l_une.map((member, index) => condition(member, `${path}.l_une[${index}]`))) : term(entry.condition!, [...stack, name]);
-        const value = and([facts.basis(path, entry), inner]);
+        const applicable = entry.selon.map((basis) => (basis.applicabilite ? term(basis.applicabilite, [...stack, name]) : true));
+        const value = and([facts.basis(path, entry, applicable), inner]);
         trace?.set(path, value);
         return value;
       };
@@ -59,7 +61,10 @@ export function reachableLeaves(reasoning: Reasoning, root: string) {
     seen.add(name);
     const term = reasoning.terms.get(name);
     if (!term) { found.add(name); return; }
-    const walk = (condition: Condition) => (condition.l_une ? condition.l_une.forEach(walk) : visit(condition.condition!));
+    const walk = (condition: Condition) => {
+      for (const basis of condition.selon) if (basis.applicabilite) visit(basis.applicabilite);
+      if (condition.l_une) condition.l_une.forEach(walk); else visit(condition.condition!);
+    };
     [...term.si, ...term.sauf].forEach(walk);
   };
   visit(root);
@@ -125,7 +130,7 @@ export function runTrials(reasoning: Reasoning, test: Test) {
       const measure = reasoning.computed.get(name);
       return measure ? calculate(measure, given).value : null;
     };
-    const values = test({ leaf, basis: () => true }, trace, Object.keys(trial.attendu));
+    const values = test({ leaf, basis: (_path, _condition, applicable) => (applicable.length ? or(applicable) : true) }, trace, Object.keys(trial.attendu));
     const obtenu = Object.fromEntries(Object.keys(trial.attendu).map((name) => [name, values.get(name) ?? null]));
     return { obtenu, conforme: Object.entries(trial.attendu).every(([name, expected]) => obtenu[name] === expected) };
   });

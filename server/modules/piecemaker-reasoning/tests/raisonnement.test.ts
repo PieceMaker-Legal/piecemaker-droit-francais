@@ -91,9 +91,24 @@ test('la vigueur est une condition appréciée à la date que chaque texte dési
   assert.match(texts(unproven, 'manque').join('\n'), /selon\[0\]\.au : date_de_conclusion_du_contrat : renseigne cette date dans valeurs, avec sa preuve/);
   assert.match(texts(await verify(EXAMPLE_CODE.replace("valeur: '2024-01-15'", 'valeur: 12')), 'erreur').join('\n'), /date_de_conclusion_du_contrat sert à .*\.au : une date 'AAAA-MM-JJ' attendue/);
   assert.match(texts(await verify(EXAMPLE_CODE.replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', date: { valeur: '2025-06-14' },")), 'erreur').join('\n'), /questions\[0\]\.date : clé inconnue date/);
-  const unjustified = await verify(EXAMPLE_CODE.replace(", applicabilite: `contrat de vente assorti d’une clause pénale` }] },", " }] },"));
-  assert.match(texts(unjustified, 'manque').join('\n'), /selon\[0\]\.applicabilite : justifie pourquoi ce texte s’applique/);
-  assert.doesNotMatch(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /applicabilite/);
+});
+
+test('l’applicabilité d’un texte est un terme : ses conditions, sourcées et prouvées, décident si le texte s’applique', async () => {
+  const unjustified = await verify(EXAMPLE_CODE.replace(", applicabilite: 'applicabilité_de_l_article_1231_5' }] },", " }] },"));
+  assert.match(texts(unjustified, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.applicabilite : applicabilité non établie : ajoute applicabilite:/);
+  const result = await verify(EXAMPLE_CODE);
+  assert.doesNotMatch(texts(result, 'manque').join('\n'), /applicabilite/);
+  assert.equal(at(result.annotated, 'applicabilité_de_l_article_1231_5.statut'), 'acquis');
+  assert.doesNotMatch(texts(result, 'manque').join('\n'), /applicabilité_de_l_article_1231_5 : terme qui ne sert/);
+  const inapplicable = await verify(EXAMPLE_CODE.replace("preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", "contredit: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },"));
+  assert.equal(at(inapplicable.annotated, 'applicabilité_de_l_article_1231_5.statut'), 'exclu');
+  assert.equal(at(inapplicable.annotated, 'pénalité_encourue.si[0].statut'), 'exclu');
+  assert.equal(at(inapplicable.annotated, 'questions[0].statut'), 'exclu');
+  const unproven = await verify(EXAMPLE_CODE.replace("\n        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", ' },'));
+  assert.ok(at(unproven.annotated, 'questions[0].decisifs').includes('contrat_stipulant_une_pénalité'));
+  const errors = texts(await verify(EXAMPLE_CODE.replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", "applicabilite: 'applicabilité_inconnue' }] },").replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", 'applicabilite: `un contrat` }] },')), 'erreur').join('\n');
+  assert.match(errors, /selon\[0\]\.applicabilite : terme applicabilité_inconnue non défini/);
+  assert.match(errors, /selon\[0\]\.applicabilite : applicabilite : nom du terme dont les conditions établissent que ce texte s’applique/);
 });
 
 test('une condition sans source, un terme non défini, une boucle et un essai non conforme sont des erreurs', async () => {
