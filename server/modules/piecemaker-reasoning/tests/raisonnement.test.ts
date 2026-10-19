@@ -379,3 +379,13 @@ test('les données des calculs sont déclarées dans valeurs, prouvées ou laiss
   assert.match(texts(await cession(CESSION_CODE.replace(/date_de_notification: \{ valeur: '2024-02-10', preuve: \[[^\n]*\] \},/, "date_de_notification: { valeur: '2024-02-10' },")), 'manque').join('\n'), /valeurs\.date_de_notification : valeur sans preuve/);
   assert.match(texts(await cession(CESSION_CODE), 'manque').join('\n'), /réduction_due\.si\[1\]\.montant : seuil écrit en dur \(3000\)/);
 });
+
+test('une clause a son propre contrôle de validité ; une clause citée pour l’applicabilité n’en réclame pas', async () => {
+  const shared = EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_du_contrat' }],").replace('\n  essais:', "\n  validité_du_contrat: { si: [{ condition: 'contrat_signé', selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },\n  essais:");
+  assert.match(texts(await verify(shared), 'erreur').join('\n'), /pénalité_stipulée\.si\[0\]\.selon\[0\]\.validite : validite : validité_du_contrat est le contrôle de validité de l’acte ; une clause a son propre contrôle/);
+  const governed = EXAMPLE_CODE.replace("        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", "        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },\n      { condition: 'droit_français_choisi', selon: [{ source: 'pieces/01_contrat.md', citation: `Article 1. Grève` }], preuve: [{ piece: 'pieces/01_contrat.md', citation: `Article 1. Grève` }] },");
+  assert.notEqual(governed, EXAMPLE_CODE);
+  const result = await verify(governed);
+  assert.deepEqual(texts(result, 'erreur'), []);
+  assert.doesNotMatch(texts(result, 'manque').join('\n'), /applicabilité_de_l_article_1231_5\.si\[1\]\.selon\[0\]\.validite/);
+});
