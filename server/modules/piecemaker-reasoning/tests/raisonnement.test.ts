@@ -318,5 +318,28 @@ test('les contrôles portent un nom préfixé, désigné par leur emplacement ; 
   assert.ok(keys.indexOf('applicabilité_de_l_article_1231_5') > keys.indexOf('grève'));
   assert.deepEqual(keys.slice(-2), ['valeurs', 'essais']);
   assert.deepEqual(Object.keys(at(result.annotated, 'pénalité_encourue.si[0].selon[0]')).slice(0, 5), ['source', 'citation', 'vigueur', 'applicabilite', 'titre']);
-  assert.equal(at(result.annotated, 'bilan.controles'), '2/2 établis');
+  assert.equal(at(result.annotated, 'bilan.controles'), '1/1 établis');
+});
+
+test('en contrat, les faits sont des hypothèses : pas de manque de preuve, mais chaque question a son essai, et les essais reprennent les faits établis', async () => {
+  const contractual = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:"));
+  const manques = texts(contractual, 'manque').join('\n');
+  assert.doesNotMatch(manques, /décide de la réponse/);
+  assert.ok(at(contractual.annotated, 'questions[0].decisifs').length);
+  assert.doesNotMatch(manques, /question sans essai/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:").replace(/\n  essais: \[[\s\S]*?\n  \],/, '')), 'manque').join('\n'), /questions\[0\] : question sans essai : ajoute dans essais un cas dont attendu porte sur pénalité_encourue/);
+  assert.match(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /décide de la réponse/);
+  const inherited = await verify(EXAMPLE_CODE.replace('faits: { retard_de_livraison: vrai, mise_en_demeure: vrai, grève_nationale: vrai }', 'faits: { grève_nationale: vrai }'));
+  assert.equal(at(inherited.annotated, 'bilan.essais'), '1/1');
+  assert.match(texts(await verify(EXAMPLE_CODE.replace("reponse: 'pénalité_encourue',", "reponse: 'validité_du_contrat', validite: 'validité_du_contrat',")), 'erreur').join('\n'), /questions\[0\]\.validite : validite : la question porte déjà sur ce contrôle/);
+});
+
+test('une clause n’a pas à porter sa vigueur ; le fichier est réécrit dans l’ordre canonique', async () => {
+  assert.doesNotMatch(texts(await verify(EXAMPLE_CODE.replaceAll(", vigueur: { debut: '2024-01-15', fin: null }", '')), 'manque').join('\n'), /vigueur non renseignée/);
+  const shuffled = EXAMPLE_CODE.replace('{\n  questions:', '{\n  essais: [],\n  questions:');
+  const result = await verify(shuffled);
+  assert.ok(result.code.indexOf('questions:') < result.code.indexOf('pénalité_encourue:'));
+  assert.ok(result.code.indexOf('pénalité_encourue:') < result.code.indexOf('applicabilité_de_l_article_1231_5:'));
+  assert.ok(result.code.lastIndexOf('essais:') > result.code.indexOf('valeurs:'));
+  assert.deepEqual(texts(await verify(result.code), 'erreur'), texts(result, 'erreur'));
 });

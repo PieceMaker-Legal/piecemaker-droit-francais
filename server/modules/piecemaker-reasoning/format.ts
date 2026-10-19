@@ -205,7 +205,11 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
         if (!isObject(entry) || !text(entry.question) || typeof entry.reponse !== 'string' || !IDENTIFIER.test(entry.reponse)) { problem(at, '{ question: la question posée, reponse: terme qui y répond } attendu'); return; }
         for (const field of Object.keys(entry)) if (!['question', 'reponse', 'validite', 'prescription'].includes(field)) problem(`${at}.${field}`, `clé inconnue ${field} (admises : question, reponse, validite, prescription)`);
         const question: Question = { question: entry.question as string, reponse: entry.reponse };
-        for (const slot of ['validite', 'prescription'] as const) if (entry[slot] !== undefined) question[slot] = control(slot, entry[slot], `${at}.${slot}`);
+        for (const slot of ['validite', 'prescription'] as const) {
+          if (entry[slot] === undefined) continue;
+          if (entry[slot] === entry.reponse) { problem(`${at}.${slot}`, `${slot} : la question porte déjà sur ce contrôle, retire ${slot}`); continue; }
+          question[slot] = control(slot, entry[slot], `${at}.${slot}`);
+        }
         reasoning.questions.push(question);
       });
       continue;

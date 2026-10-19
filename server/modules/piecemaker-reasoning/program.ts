@@ -97,6 +97,7 @@ export async function verifyReasoning(input: {
   lines = parsed.lines;
   const stripped = stripAnnotations(parsed.value);
   const { reasoning, problems } = readReasoning(stripped);
+  const ordered = isObject(stripped) ? printLiteral(canonical(stripped, reasoning)) : null;
   for (const entry of problems) add('erreur', entry.path, entry.text, entry.avocat, entry.cible);
   if (!isObject(stripped)) return { annotated: null, issues, code: input.code, log };
   const annotated = stripped;
@@ -108,8 +109,9 @@ export async function verifyReasoning(input: {
   });
   if (!reasoning.qualification) add('manque', 'qualification', 'raisonnement non qualifié : ajoute qualification: \'contractuel\' ou \'contentieux\'', 'Le raisonnement n’est pas qualifié : contractuel ou contentieux.');
   reasoning.questions.forEach((question, index) => {
-    if (reasoning.qualification === 'contentieux' && !question.prescription) add('manque', `questions[${index}]`, 'contentieux : vérifier la prescription : ajoute prescription: \'prescription_de_…\' sur la question et définis ce terme', 'Prescription à vérifier.');
-    if (reasoning.qualification === 'contractuel' && !question.validite) add('manque', `questions[${index}]`, 'contractuel : vérifier la validité : ajoute validite: \'validité_de_…\' sur la question et définis ce terme', 'Validité à vérifier.');
+    if (reasoning.qualification === 'contractuel' && !reasoning.essais.some((trial) => questionRoots(question).some((name) => name in trial.attendu))) add('manque', `questions[${index}]`, `question sans essai : ajoute dans essais un cas dont attendu porte sur ${question.reponse}`, 'Aucun cas d’essai ne vérifie la réponse à cette question.');
+    if (reasoning.qualification === 'contentieux' && !question.prescription && !question.reponse.startsWith('prescription_')) add('manque', `questions[${index}]`, 'contentieux : vérifier la prescription : ajoute prescription: \'prescription_de_…\' sur la question et définis ce terme', 'Prescription à vérifier.');
+    if (reasoning.qualification === 'contractuel' && !question.validite && !question.reponse.startsWith('validité_')) add('manque', `questions[${index}]`, 'contractuel : vérifier la validité : ajoute validite: \'validité_de_…\' sur la question et définis ce terme', 'Validité à vérifier.');
   });
   const roots = new Set(reasoning.questions.flatMap(questionRoots));
   for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, 'terme qui ne sert à aucune question : rattache-le comme condition ou ajoute la question à laquelle il répond');
@@ -171,8 +173,8 @@ export async function verifyReasoning(input: {
     checkCitation(at, holder, info, basis.citation, `#source:${basis.source}`);
     if (info.kind === 'decision') { basisChecks.set(at, { kind: 'decision', from: null, to: null }); return; }
     const version = info.validity ? `en vigueur ${info.validity.to ? `du ${day(info.validity.from)} au ${day(info.validity.to)}` : `depuis le ${day(info.validity.from)}`}` : '';
-    if (!basis.vigueur) add('manque', `${at}.vigueur`, `vigueur non renseignée : ajoute vigueur: { debut, fin }${info.validity ? ` (version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'})` : ''}`, `La version applicable de ${info.title} n’est pas précisée${version ? ` (version relue : ${version})` : ''}.`, `#source:${basis.source}`);
-    else if (info.validity && (basis.vigueur.debut !== info.validity.from || basis.vigueur.fin !== info.validity.to)) add('erreur', `${at}.vigueur`, `vigueur différente de la version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'}`, `${info.title} : la version indiquée ne correspond pas au texte relu (${version}).`, `#source:${basis.source}`);
+    if (!basis.vigueur && info.kind === 'texte') add('manque', `${at}.vigueur`, `vigueur non renseignée : ajoute vigueur: { debut, fin }${info.validity ? ` (version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'})` : ''}`, `La version applicable de ${info.title} n’est pas précisée${version ? ` (version relue : ${version})` : ''}.`, `#source:${basis.source}`);
+    else if (basis.vigueur && info.validity && (basis.vigueur.debut !== info.validity.from || basis.vigueur.fin !== info.validity.to)) add('erreur', `${at}.vigueur`, `vigueur différente de la version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'}`, `${info.title} : la version indiquée ne correspond pas au texte relu (${version}).`, `#source:${basis.source}`);
     const known = Boolean(info.validity || basis.vigueur);
     basisChecks.set(at, { kind: info.kind, from: known ? info.validity?.from ?? basis.vigueur!.debut : null, to: info.validity ? info.validity.to : basis.vigueur?.fin ?? null });
   };
@@ -276,8 +278,8 @@ export async function verifyReasoning(input: {
     if (result?.calcul) holder.calcul = result.calcul;
     if (fact && decisiveLeaves.has(fact)) {
       holder.decisif = true;
-      if (result) add('manque', at, `${fact} décide de la réponse : renseigne ${result.missing.join(', ')} dans valeurs, avec sa preuve`, `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
-      else add('manque', at, `${fact} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
+      if (reasoning.qualification !== 'contractuel' && result) add('manque', at, `${fact} décide de la réponse : renseigne ${result.missing.join(', ')} dans valeurs, avec sa preuve`, `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
+      else if (reasoning.qualification !== 'contractuel') add('manque', at, `${fact} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
     }
     condition.selon.forEach((basis, index) => {
       const place = `${at}.selon[${index}]`;
@@ -310,7 +312,7 @@ export async function verifyReasoning(input: {
   }
   for (const name of reasoning.terms.keys()) emit({ key: `terme:${name}`, step: 'condition', status: statuses.get(name) === null || statuses.get(name) === undefined ? 'neutre' : 'ok', subject: human(name), text: ANSWER[STATUS(statuses.get(name) ?? null)] });
 
-  const trials = shape.cycles.length ? [] : runTrials(reasoning, test);
+  const trials = shape.cycles.length ? [] : runTrials(reasoning, test, { leaf: leafValue, value: valueOf });
   trials.forEach((result, index) => {
     const holder = node(annotated, `essais[${index}]`);
     if (holder) Object.assign(holder, result);
@@ -351,10 +353,11 @@ export async function verifyReasoning(input: {
   }
   const general = visible.filter((issue) => !issue.path || !node(annotated, issue.path.replace(ANCHORED, '')));
   const unrated = [...new Set([...verifiedRefs.keys()].map((at) => node(annotated, at)?.piece).filter((piece): piece is string => typeof piece === 'string' && !input.reliability.has(piece)))];
+  const distinctControls = [...new Set(controlSlots.filter((name): name is string => Boolean(name)))];
   const bilan = {
     erreurs: visible.filter((issue) => issue.kind === 'erreur').length,
     manques: visible.filter((issue) => issue.kind === 'manque').length,
-    ...(controlSlots.length ? { controles: `${controlSlots.filter((name) => name && statuses.get(name) === true).length}/${controlSlots.length} établis` } : {}),
+    ...(controlSlots.length ? { controles: `${distinctControls.filter((name) => statuses.get(name) === true).length}/${distinctControls.length + controlSlots.filter((name) => !name).length} établis` } : {}),
     ...(trials.length ? { essais: `${trials.filter((trial) => trial.conforme).length}/${trials.length}` } : {}),
     ecartees: issues.length - visible.length,
     ...(general.length ? { alertes: general.map((issue) => `${issue.path ? `${issue.path} : ` : ''}${issue.text}`) } : {}),
@@ -367,7 +370,7 @@ export async function verifyReasoning(input: {
     const decisifs = (holder?.decisifs ?? holder?.en_jeu ?? []) as string[];
     emit({ key: `réponse:${index}`, step: 'réponse', status: holder?.statut === 'à établir' ? 'neutre' : bilan.erreurs ? 'alerte' : 'ok', subject: question.question, text: `${holder?.statut ? ANSWER[holder.statut as ReasoningStatus] : 'Non calculée'}${decisifs.length ? ` : dépend de ${listing(decisifs.map((name) => phrase(name)))}` : ''}${bilan.erreurs ? ` · ${bilan.erreurs} erreur${bilan.erreurs > 1 ? 's' : ''} à corriger` : ''}` });
   });
-  let code = input.code;
+  let code = ordered ?? input.code;
   for (const [original, fixed] of corrections) code = code.split(original).join(fixed);
   return { annotated: { bilan, ...canonical(annotated, reasoning) }, issues, code, log };
 }
