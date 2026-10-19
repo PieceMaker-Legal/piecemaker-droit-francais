@@ -1,7 +1,7 @@
 import type { ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 import { basisControls, formulaConditions } from './format.js';
-import type { Condition, Duration, Formula, Measure, Operand, Question, Reasoning, Term, Trial } from './format.js';
+import type { Condition, Duration, Formula, Measure, Operand, Objective, Reasoning, Term, Trial } from './format.js';
 
 export type Facts = { leaf(name: string): ReasoningValue; basis(path: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue };
 export type Trace = Map<string, ReasoningValue>;
@@ -26,18 +26,18 @@ export function structure(reasoning: Reasoning) {
     };
     [...term.si, ...term.sauf].forEach(walk);
   };
-  for (const question of reasoning.questions) for (const root of questionRoots(question)) { used.add(root); if (reasoning.terms.has(root)) visit(root, []); }
+  for (const objective of reasoning.objectifs) for (const root of objectiveRoots(objective)) { used.add(root); if (reasoning.terms.has(root)) visit(root, []); }
   for (const value of reasoning.valeurs.values()) for (const name of value.formule ? formulaConditions(value.formule) : []) { used.add(name); visit(name, []); }
   for (const value of reasoning.valeurs.values()) for (const basis of value.selon) for (const control of basisControls(basis)) { used.add(control); visit(control, []); }
   for (const name of reasoning.terms.keys()) visit(name, []);
   return { leaves, used, cycles: [...new Set(cycles)] };
 }
 
-export const questionRoots = (question: Question) => [question.reponse, question.validite, question.prescription].filter((name): name is string => Boolean(name));
-export const answer = (question: Question, values: Map<string, ReasoningValue>) => and(questionRoots(question).map((name) => values.get(name) ?? null));
+export const objectiveRoots = (objective: Objective) => [objective.effet, objective.validite, objective.prescription].filter((name): name is string => Boolean(name));
+export const answer = (objective: Objective, values: Map<string, ReasoningValue>) => and(objectiveRoots(objective).map((name) => values.get(name) ?? null));
 
 export function compile(reasoning: Reasoning): Test {
-  return (facts, trace, roots = reasoning.questions.flatMap(questionRoots)) => {
+  return (facts, trace, roots = reasoning.objectifs.flatMap(objectiveRoots)) => {
     const memo = new Map<string, ReasoningValue>();
     const term = (name: string, stack: string[]): ReasoningValue => {
       if (memo.has(name)) return memo.get(name)!;
@@ -79,11 +79,11 @@ export function reachableLeaves(reasoning: Reasoning, root: string) {
 
 export const ENUMERATION_LIMIT = 12;
 
-export function decisive(test: Test, facts: Facts, question: Question, unknown: string[]): { decisive: string[]; inPlay: boolean } {
+export function decisive(test: Test, facts: Facts, objective: Objective, unknown: string[]): { decisive: string[]; inPlay: boolean } {
   if (unknown.length > ENUMERATION_LIMIT) return { decisive: unknown, inPlay: true };
   const found = new Set<string>();
   const total = 2 ** unknown.length;
-  const run = (mask: number) => answer(question, test({ ...facts, leaf: (name) => { const at = unknown.indexOf(name); return at < 0 ? facts.leaf(name) : Boolean(mask & (1 << at)); } }, undefined, questionRoots(question)));
+  const run = (mask: number) => answer(objective, test({ ...facts, leaf: (name) => { const at = unknown.indexOf(name); return at < 0 ? facts.leaf(name) : Boolean(mask & (1 << at)); } }, undefined, objectiveRoots(objective)));
   const results = Array.from({ length: total }, (_, mask) => run(mask));
   for (let mask = 0; mask < total; mask += 1) {
     unknown.forEach((name, at) => { if (results[mask] !== results[mask ^ (1 << at)]) found.add(name); });

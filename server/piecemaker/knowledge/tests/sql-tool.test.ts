@@ -14,7 +14,7 @@ test('le raisonnement est lisible par dossier() et ses tables sont protégées d
   await withFixture(async (context) => {
     const service = createReasoningService(() => context.appDb, { source: async () => undefined, match: () => null, registry: async () => ({ found: false, status: '' }), bodacc: async () => [] });
     fs.mkdirSync(path.join(context.roots.one, '.piecemaker'), { recursive: true });
-    fs.writeFileSync(path.join(context.roots.one, '.piecemaker', 'raisonnement.js'), "{ questions: [{ question: `La société fictive est-elle cotée ?`, reponse: 'cotee' }], cotee: { si: [{ condition: 'titres_admis', selon: [{ source: 'CELEX:00000', citation: `texte fictif` }] }] } }");
+    fs.writeFileSync(path.join(context.roots.one, '.piecemaker', 'raisonnement.js'), "{ objectifs: [{ objectif: `Établir que la société fictive est cotée`, obtenir: 'cotee' }], cotee: { si: [{ condition: 'titres_admis', selon: [{ source: 'CELEX:00000', citation: `texte fictif` }] }] } }");
     await service.verify(context.roots.one, false);
     assert.match(await context.run('SELECT code FROM pm_reasoning_programs WHERE project_id=dossier()'), /titres_admis/);
     await assert.rejects(context.run('DELETE FROM pm_reasoning_programs'), /lecture SQL uniquement/);

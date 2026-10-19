@@ -17,15 +17,17 @@ export type Formula =
 export type Value = { valeur: string | number | null; preuve: Ref[]; selon: Basis[]; formule?: Formula };
 export type Condition = { condition?: string; l_une?: Condition[]; mesure?: Measure; selon: Basis[]; decompte?: string; preuve: Ref[]; contredit: Ref[] };
 export type Term = { si: Condition[]; sauf: Condition[] };
-export type Question = { question: string; reponse: string; validite?: string; prescription?: string };
+export const VERBS = { obtenir: 'terme', écarter: 'terme', réduire: 'montant', augmenter: 'montant' } as const;
+export type Verb = keyof typeof VERBS;
+export type Objective = { objectif: string; effet: string; verbe: Verb; validite?: string; prescription?: string };
 export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean | number> };
-export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; questions: Question[]; hypotheses: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
+export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; objectifs: Objective[]; hypotheses: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
 export type Problem = { path: string; text: string; avocat?: string; cible?: string };
 export type Parsed = { value: unknown; lines: Map<string, number> };
 
 const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const RESERVED = new Set(['questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification']);
+const RESERVED = new Set(['objectifs', 'questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification']);
 const TERM_KEYS = new Set(['si', 'sauf']);
 const CONDITION_KEYS = new Set(['condition', 'l_une', 'delai', 'montant', 'selon', 'decompte', 'preuve', 'contredit']);
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
@@ -34,6 +36,7 @@ const COMPARISONS = ['plus_de', 'au_moins', 'moins_de', 'au_plus'] as const;
 const DELAY_SHAPE = 'delai : { de: date_de_départ, a: date_retenue, au_plus ou au_moins: { jours | jours_ouvres | mois | ans: nombre } }';
 const AMOUNT_SHAPE = 'montant : { valeur: montant_du_dossier, plus_de | au_moins | moins_de | au_plus: nombre ou autre montant }';
 const isDate = (value: unknown): value is string => typeof value === 'string' && DATE.test(value);
+const OBJECTIVE_SHAPE = 'objectifs: [{ objectif: le but du client, obtenir | écarter: terme (vrai/faux) ou réduire | augmenter: montant de valeurs }] attendu';
 const FORMULA_SHAPE = `formule : { ${OPERATIONS.join(' | ')}: [termes] } (arrondi: [montant, décimales]), { bareme: { assiette, tranches: [{ jusqu_a, taux }, …, { taux }] } } ou { si: terme, alors, sinon } ; un terme est un nombre, un nom de valeur ou une formule`;
 export const operands = (formula: Formula): Operand[] => (formula.operation === 'bareme' ? [formula.assiette, ...formula.tranches.flatMap((tranche) => [tranche.jusqu_a, tranche.taux]).filter((item): item is Operand => item !== null)] : formula.operation === 'si' ? [formula.alors, formula.sinon] : formula.termes);
 export const formulaNames = (formula: Formula): string[] => operands(formula).flatMap((item) => (typeof item === 'string' ? [item] : typeof item === 'number' ? [] : formulaNames(item)));
@@ -108,7 +111,7 @@ const text = (value: unknown) => typeof value === 'string' && value.trim() !== '
 export function readReasoning(value: unknown): { reasoning: Reasoning; problems: Problem[] } {
   const problems: Problem[] = [];
   const problem = (path: string, message: string, avocat?: string, cible?: string) => { problems.push({ path, text: message, ...(avocat ? { avocat, cible } : {}) }); };
-  const reasoning: Reasoning = { questions: [], hypotheses: [], terms: new Map(), valeurs: new Map(), computed: new Map() };
+  const reasoning: Reasoning = { objectifs: [], hypotheses: [], terms: new Map(), valeurs: new Map(), computed: new Map() };
   const dated: Array<{ at: string; name: string }> = [];
   const controls: Array<{ slot: ControlSlot; name: string; at: string }> = [];
   const control = (slot: ControlSlot, raw: unknown, at: string): string | undefined => {
@@ -117,7 +120,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     controls.push({ slot, name: raw, at });
     return raw;
   };
-  if (!isObject(value)) { problem('', 'le raisonnement est un objet { questions: [...], terme: {...} }'); return { reasoning, problems }; }
+  if (!isObject(value)) { problem('', 'le raisonnement est un objet { objectifs: [...], terme: {...} }'); return { reasoning, problems }; }
 
   const refs = (raw: unknown, path: string): Ref[] => {
     if (raw === undefined) return [];
@@ -253,19 +256,24 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
 
   for (const [key, raw] of Object.entries(value)) {
     if (key === 'bilan') continue;
-    if (key === 'questions') {
-      if (!Array.isArray(raw) || !raw.length) { problem('questions', 'questions: [{ question, reponse }] attendu'); continue; }
+    if (key === 'questions') { problem('questions', 'la clé questions s’appelle objectifs : chaque entrée { objectif: le but du client, obtenir | écarter | réduire | augmenter: terme } ; le verbe remplace reponse'); continue; }
+    if (key === 'objectifs') {
+      if (!Array.isArray(raw) || !raw.length) { problem('objectifs', OBJECTIVE_SHAPE); continue; }
       raw.forEach((entry, index) => {
-        const at = `questions[${index}]`;
-        if (!isObject(entry) || !text(entry.question) || typeof entry.reponse !== 'string' || !IDENTIFIER.test(entry.reponse)) { problem(at, '{ question: la question posée, reponse: terme qui y répond } attendu'); return; }
-        for (const field of Object.keys(entry)) if (!['question', 'reponse', 'validite', 'prescription'].includes(field)) problem(`${at}.${field}`, `clé inconnue ${field} (admises : question, reponse, validite, prescription)`);
-        const question: Question = { question: entry.question as string, reponse: entry.reponse };
+        const at = `objectifs[${index}]`;
+        if (!isObject(entry) || !text(entry.objectif)) { problem(at, OBJECTIVE_SHAPE); return; }
+        const verbs = (Object.keys(VERBS) as Verb[]).filter((verb) => entry[verb] !== undefined);
+        if (verbs.length !== 1) { problem(at, `${verbs.length ? 'un seul verbe' : 'verbe manquant'} : ${OBJECTIVE_SHAPE}`); return; }
+        const effet = entry[verbs[0]];
+        if (typeof effet !== 'string' || !IDENTIFIER.test(effet)) { problem(`${at}.${verbs[0]}`, `${verbs[0]} : nom du terme ou du montant visé`); return; }
+        for (const field of Object.keys(entry)) if (!['objectif', ...verbs, 'validite', 'prescription'].includes(field)) problem(`${at}.${field}`, field === 'question' ? 'question s’appelle objectif : le but du client' : field === 'reponse' ? 'reponse est remplacée par le verbe : obtenir | écarter | réduire | augmenter: terme' : `clé inconnue ${field} (admises : objectif, ${Object.keys(VERBS).join(' | ')}, validite, prescription)`);
+        const objective: Objective = { objectif: entry.objectif as string, effet, verbe: verbs[0] };
         for (const slot of ['validite', 'prescription'] as const) {
           if (entry[slot] === undefined) continue;
-          if (entry[slot] === entry.reponse) { problem(`${at}.${slot}`, `${slot} : la question porte déjà sur ce contrôle, retire ${slot}`); continue; }
-          question[slot] = control(slot, entry[slot], `${at}.${slot}`);
+          if (entry[slot] === effet) { problem(`${at}.${slot}`, `${slot} : l’objectif porte déjà sur ce contrôle, retire ${slot}`); continue; }
+          objective[slot] = control(slot, entry[slot], `${at}.${slot}`);
         }
-        reasoning.questions.push(question);
+        reasoning.objectifs.push(objective);
       });
       continue;
     }
@@ -328,7 +336,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
   for (const { at, name } of dated) if (reasoning.valeurs.has(name) && reasoning.valeurs.get(name)!.valeur !== null && !isDate(reasoning.valeurs.get(name)!.valeur)) problem(`valeurs.${name}`, `${name} sert à ${at} : une date 'AAAA-MM-JJ' attendue`);
   for (const name of reasoning.terms.keys()) {
     const slot = (Object.keys(CONTROLS) as ControlSlot[]).find((key) => name.startsWith(CONTROLS[key]));
-    if (slot && !controls.some((entry) => entry.slot === slot && entry.name === name)) problem(name, `${name} est un contrôle : désigne-le par ${slot}: '${name}' ${slot === 'applicabilite' ? 'sur la source' : slot === 'decompte' ? 'sur le délai' : slot === 'validite' ? 'sur la question ou la clause' : 'sur la question'} qu’il conditionne`);
+    if (slot && !controls.some((entry) => entry.slot === slot && entry.name === name)) problem(name, `${name} est un contrôle : désigne-le par ${slot}: '${name}' ${slot === 'applicabilite' ? 'sur la source' : slot === 'decompte' ? 'sur le délai' : slot === 'validite' ? 'sur l’objectif ou la clause' : 'sur l’objectif'} qu’il conditionne`);
   }
   for (const { slot, name, at } of controls) if (!reasoning.terms.has(name)) problem(at, `terme ${name} non défini : écris ${name}: { si: [...] }, le terme qui ${CONTROL_PURPOSE[slot]}`);
   const reaches = (origin: string, current: string, seen: Set<string>): boolean => {
@@ -341,13 +349,13 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     for (const condition of formulaConditions(entry.formule)) if (reasoning.valeurs.has(condition)) problem(`valeurs.${name}.formule`, `si : ${condition} est une valeur ; si désigne un terme ou un fait (vrai/faux)`);
     for (const operand of formulaNames(entry.formule)) if (reasoning.valeurs.has(operand) && typeof reasoning.valeurs.get(operand)!.valeur === 'string') problem(`valeurs.${operand}`, `${operand} sert à la formule de ${name} : un nombre attendu`);
   }
-  if (!reasoning.questions.length && !problems.some((entry) => entry.path === 'questions')) problem('questions', 'ajoute questions: [{ question, reponse }]');
+  if (!reasoning.objectifs.length && !problems.some((entry) => entry.path === 'objectifs' || entry.path === 'questions')) problem('objectifs', `ajoute ${OBJECTIVE_SHAPE.replace(/ attendu$/, '')}`);
   return { reasoning, problems };
 }
 
-const ANNOTATIONS = new Set(['bilan', 'montant_calcule', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul']);
+const ANNOTATIONS = new Set(['bilan', 'montant_calcule', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'atteint', 'obstacles', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul']);
 
-const KEY_ORDER = ['qualification', 'questions', 'question', 'reponse', 'condition', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'contredit', 'sauf', 'nom', 'faits', 'attendu'];
+const KEY_ORDER = ['qualification', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'condition', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'contredit', 'sauf', 'nom', 'faits', 'attendu'];
 const rank = (key: string) => { const at = KEY_ORDER.indexOf(key); return at < 0 ? KEY_ORDER.length : at; };
 const ordered = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(ordered);
@@ -373,13 +381,13 @@ export function canonical(annotated: Record<string, unknown>, reasoning: Reasoni
     };
     [...term.si, ...term.sauf].forEach(walk);
   };
-  for (const question of reasoning.questions) visit(question.reponse);
-  for (const question of reasoning.questions) for (const slot of ['validite', 'prescription'] as const) if (question[slot]) pending.push({ slot, name: question[slot]! });
+  for (const objective of reasoning.objectifs) visit(objective.effet);
+  for (const objective of reasoning.objectifs) for (const slot of ['validite', 'prescription'] as const) if (objective[slot]) pending.push({ slot, name: objective[slot]! });
   while (pending.length) {
     pending.sort((x, y) => slots.indexOf(x.slot) - slots.indexOf(y.slot));
     visit(pending.shift()!.name);
   }
-  const keys = ['qualification', 'questions', ...order, ...Object.keys(annotated).filter((key) => !order.includes(key) && !['qualification', 'questions', 'valeurs', 'hypotheses'].includes(key)), 'valeurs', 'hypotheses'];
+  const keys = ['qualification', 'objectifs', ...order, ...Object.keys(annotated).filter((key) => !order.includes(key) && !['qualification', 'objectifs', 'valeurs', 'hypotheses'].includes(key)), 'valeurs', 'hypotheses'];
   return Object.fromEntries(keys.filter((key) => key in annotated).map((key) => [key, ordered(annotated[key])]));
 }
 
