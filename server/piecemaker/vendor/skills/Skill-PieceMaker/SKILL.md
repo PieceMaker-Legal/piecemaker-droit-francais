@@ -95,6 +95,6 @@ Le raisonnement du dossier s’écrit dans `.piecemaker/raisonnement.js` (objet 
 
 | Commande | Effet |
 | --- | --- |
-| `pm raisonnement verifier` | lit le fichier sans l’exécuter, vérifie sources, citations, vigueur, pièces et personnes, exécute le test et renvoie l’objet annoté (`bilan`, `statut`, `decisif`, `erreurs`, `manques`) |
+| `pm raisonnement verifier` | lit le fichier sans l’exécuter, vérifie sources, citations, vigueur, pièces et personnes, exécute le test, réécrit le fichier dans son ordre et renvoie les résultats : bilan, réponses, erreurs et manques par terme avec leur ligne |
 
 Une citation exacte à la ponctuation près est corrigée dans le fichier. Les alertes écartées par l’avocat et la fiabilité des pièces se gèrent dans le volet.

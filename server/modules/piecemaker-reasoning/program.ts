@@ -98,6 +98,7 @@ export async function verifyReasoning(input: {
   const stripped = stripAnnotations(parsed.value);
   const { reasoning, problems } = readReasoning(stripped);
   const ordered = isObject(stripped) ? printLiteral(canonical(stripped, reasoning)) : null;
+  if (ordered) lines = parseLiteral(ordered).lines;
   for (const entry of problems) add('erreur', entry.path, entry.text, entry.avocat, entry.cible);
   if (!isObject(stripped)) return { annotated: null, issues, code: input.code, log };
   const annotated = stripped;
@@ -234,15 +235,36 @@ export async function verifyReasoning(input: {
     const decisions = checked.filter((entry) => entry.check?.kind === 'decision');
     return decisions.length ? or(decisions.map((entry) => entry.applicable)) : null;
   };
-  const applicabilityTerms = new Set<string>();
-  const collect = (name: string) => {
-    if (applicabilityTerms.has(name)) return;
-    applicabilityTerms.add(name);
-    const term = reasoning.terms.get(name);
-    const walkCollect = (condition: Condition) => { if (condition.l_une) condition.l_une.forEach(walkCollect); else collect(condition.condition!); };
-    term && [...term.si, ...term.sauf].forEach(walkCollect);
+  const tree = (root: string) => {
+    const found = new Set<string>();
+    const collect = (name: string) => {
+      if (found.has(name) || !reasoning.terms.has(name)) return;
+      found.add(name);
+      const term = reasoning.terms.get(name)!;
+      const walkCollect = (condition: Condition) => { if (condition.l_une) condition.l_une.forEach(walkCollect); else collect(condition.condition!); };
+      [...term.si, ...term.sauf].forEach(walkCollect);
+    };
+    collect(root);
+    return found;
   };
-  for (const { condition } of occurrences) for (const basis of condition.selon) if (basis.applicabilite) collect(basis.applicabilite);
+  const validityRoots = [...reasoning.questions.map((question) => question.validite), ...occurrences.flatMap(({ condition }) => condition.selon.map((basis) => basis.validite))].filter((name): name is string => Boolean(name));
+  const applicabilityTerms = new Set(occurrences.flatMap(({ condition }) => condition.selon.flatMap((basis) => (basis.applicabilite ? [...tree(basis.applicabilite)] : []))));
+  const validityTerms = new Set(validityRoots.flatMap((name) => [...tree(name)]));
+  const citesLaw = (name: string) => occurrences.some(({ at, condition }) => tree(name).has(at.split('.')[0]) && condition.selon.some((_, index) => basisChecks.get(`${at}.selon[${index}]`)?.kind === 'texte'));
+  for (const name of new Set(validityRoots)) if (reasoning.terms.has(name) && !citesLaw(name)) add('manque', name, 'la validité s’apprécie au regard du droit applicable : cite dans ce terme le texte qui la fonde (selon: [{ source, citation, vigueur }])', `${human(name)} : le texte qui fonde la validité n’est pas cité.`, name);
+  const declared = (name: string, at: string) => { if (!reasoning.valeurs.has(name)) add('manque', at, `${name} n’est pas déclarée : ajoute valeurs: { ${name}: { valeur, preuve } } (valeur: null si le dossier ne la fixe pas)`, `${human(name)} : cette donnée n’est pas renseignée.`, at.split('.')[0]); };
+  for (const { at, condition } of occurrences) {
+    const delay = condition.mesure?.delai;
+    const amount = condition.mesure?.montant;
+    if (delay) [delay.de, delay.a].forEach((name) => declared(name, at));
+    if (amount) {
+      declared(amount.valeur, at);
+      if (typeof amount.seuil === 'string') declared(amount.seuil, at);
+      else add('manque', `${at}.montant`, `seuil écrit en dur (${amount.seuil}) : déclare-le dans valeurs avec sa preuve et désigne-le par son nom`, `${human(condition.condition!)} : le seuil de ${amount.seuil} n’est rattaché à aucune pièce.`, condition.condition);
+    }
+    condition.selon.forEach((basis) => { if (basis.vigueur?.au) declared(basis.vigueur.au, at); });
+  }
+  for (const [name, entry] of reasoning.valeurs) if (entry.valeur !== null && !entry.preuve.length) add('manque', `valeurs.${name}`, 'valeur sans preuve : ajoute preuve: [{ piece, citation }], ou valeur: null si le dossier ne la fixe pas', `${human(name)} : aucune pièce ne justifie cette valeur.`);
 
   const test = compile(reasoning);
   const statuses = new Map<string, ReasoningValue>();
@@ -293,6 +315,10 @@ export async function verifyReasoning(input: {
       if (check?.kind === 'texte' && !au) add('manque', `${place}.vigueur`, 'applicabilité dans le temps non établie : ajoute vigueur: { debut, fin, au: \'nom_de_date\' }, la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable', `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
       else if (check?.kind === 'texte' && !date) add('manque', `${place}.vigueur`, `${au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`);
       const exempt = applicabilityTerms.has(at.split('.')[0]);
+      const clauseExempt = validityTerms.has(at.split('.')[0]);
+      if (check?.kind === 'piece' && !clauseExempt) controlSlots.push(basis.validite ?? null);
+      if (check?.kind === 'piece' && !basis.validite && !clauseExempt) add('manque', `${place}.validite`, `validité de la clause non établie : ajoute validite: 'validité_de_la_clause_${condition.condition ?? at.split('.')[0]}' et définis ce terme, dont les conditions établissent que la clause est valable au regard du droit applicable`, `${title} : la validité de la clause n’est pas établie.`, `#source:${basis.source}`);
+      if (check?.kind === 'piece' && /\b(code|cgi|loi n|ordonnance n|décret n)/i.test(basis.citation) && /\barticles?\b/i.test(basis.citation) && !condition.selon.some((_, other) => basisChecks.get(`${at}.selon[${other}]`)?.kind === 'texte')) add('manque', place, 'la clause renvoie à un texte de loi : ajoute ce texte à selon (source, citation, vigueur)', `${title} : la clause renvoie à un texte de loi qui n’est pas cité.`, `#source:${basis.source}`);
       if (check?.kind === 'texte' && !exempt) controlSlots.push(basis.applicabilite ?? null);
       if (check?.kind === 'texte' && !basis.applicabilite && !exempt) add('manque', `${place}.applicabilite`, `applicabilité non établie : ajoute applicabilite: '${applicabilityName(title)}' et définis ce terme, dont les conditions établissent que ce texte s’applique au dossier`, `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
     });
@@ -494,9 +520,41 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   };
 }
 
-export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'annotated' | 'issues'>) {
-  if (snapshot.annotated) return printLiteral(snapshot.annotated);
-  return ['Raisonnement illisible :', ...snapshot.issues.map((issue) => `- ${issue.text}`)].join('\n');
+export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'annotated' | 'issues' | 'code'> & { dismissed?: ReasoningSnapshot['dismissed'] }) {
+  const hidden = new Set((snapshot.dismissed ?? []).map((entry) => entry.id));
+  const issues = snapshot.issues.filter((issue) => !hidden.has(issue.id));
+  const annotated = snapshot.annotated as Record<string, any> | null;
+  if (!annotated) return ['Raisonnement illisible :', ...issues.map((issue) => `- ${issue.line ? `ligne ${issue.line} : ` : ''}${issue.text}`)].join('\n');
+  let lines = new Map<string, number>();
+  try { lines = parseLiteral(snapshot.code).lines; } catch { lines = new Map(); }
+  const where = (at: string) => (lines.get(at) ? ` (ligne ${lines.get(at)})` : '');
+  const bilan = annotated.bilan ?? {};
+  const out = [`Bilan : ${bilan.erreurs ?? 0} erreur(s) · ${bilan.manques ?? 0} manque(s)${bilan.essais ? ` · essais ${bilan.essais}` : ''}${bilan.controles ? ` · contrôles ${bilan.controles}` : ''}`, `Fichier : ${REASONING_FILE}, réécrit dans son ordre ; chaque terme commence à la ligne indiquée.`, '', 'Réponses'];
+  (annotated.questions ?? []).forEach((question: Record<string, any>, index: number) => {
+    const facts = question.decisifs ?? question.en_jeu ?? [];
+    out.push(`- questions[${index}]${where(`questions[${index}]`)} ${question.reponse} : ${question.statut ?? 'à établir'}${facts.length ? ` · ${question.decisifs ? 'décisifs' : 'en jeu'} : ${facts.join(', ')}` : ''}`);
+  });
+  const groups = new Map<string, ReasoningIssue[]>();
+  for (const issue of issues) {
+    const head = issue.path ? issue.path.split(/[.]/)[0] : 'fichier';
+    groups.set(head, [...(groups.get(head) ?? []), issue]);
+  }
+  if (groups.size) out.push('', 'À reprendre');
+  for (const [head, list] of groups) {
+    const term = annotated[head];
+    const statut = term && typeof term === 'object' && !Array.isArray(term) && typeof term.statut === 'string' ? `, ${term.statut}` : '';
+    out.push(`${head}${lines.get(head) ? ` (ligne ${lines.get(head)}${statut})` : statut ? ` (${statut.slice(2)})` : ''}`);
+    for (const issue of list) out.push(`  - ${issue.kind}${issue.path && issue.path !== head ? ` · ${issue.path.slice(head.length).replace(/^\./, '')}` : ''}${issue.line && issue.line !== lines.get(head) ? ` (ligne ${issue.line})` : ''} : ${issue.text}`);
+    const calculs: string[] = [];
+    const walk = (condition: Record<string, any>, at: string) => {
+      if (condition.calcul?.echeance) calculs.push(`  - calcul · ${at} ${condition.condition} : échéance ${condition.calcul.echeance}, date retenue ${condition.calcul.date_retenue}`);
+      else if (condition.calcul && 'seuil' in condition.calcul) calculs.push(`  - calcul · ${at} ${condition.condition} : ${condition.calcul.montant} pour un seuil de ${condition.calcul.seuil}`);
+      (condition.l_une ?? []).forEach((member: Record<string, any>, index: number) => walk(member, `${at}.l_une[${index}]`));
+    };
+    if (term && typeof term === 'object') for (const field of ['si', 'sauf']) (term[field] ?? []).forEach((condition: Record<string, any>, index: number) => walk(condition, `${field}[${index}]`));
+    out.push(...calculs);
+  }
+  return out.join('\n');
 }
 
 export const EXAMPLE_CODE = `{

@@ -53,7 +53,10 @@ test('l’exemple fictif est à établir et désigne les faits décisifs', async
   assert.equal(at(result.annotated, 'bilan.essais'), '1/1');
   assert.equal(at(result.annotated, 'pénalité_encourue.si[0].selon[0].titre'), 'Code civil fictif, article 1231-5');
   assert.equal(at(result.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
-  assert.match(describeReasoning(result), /decisifs: \[`force_majeure`, `grève_nationale`\]/);
+  const described = describeReasoning(result);
+  assert.match(described, /questions\[0\] \(ligne \d+\) pénalité_encourue : à établir · décisifs : force_majeure, grève_nationale/);
+  assert.match(described, /^grève \(ligne \d+, à établir\)$/m);
+  assert.doesNotMatch(described, /citation|statut:/);
 });
 
 test('toutes les feuilles établies : la réponse est acquise ; la preuve de l’exception l’exclut', async () => {
@@ -69,7 +72,7 @@ test('une citation à la ponctuation près est validée et remplacée par l’or
   const comma = await verify(EXAMPLE_CODE.replace('`Sauf inexécution définitive`', '`Sauf, inexécution définitive`'));
   assert.equal(at(comma.annotated, 'pénalité_encourue.si[1].selon[0].corrigee'), true);
   assert.equal(at(comma.annotated, 'pénalité_encourue.si[1].selon[0].citation'), 'Sauf inexécution définitive');
-  assert.match(comma.code, /`Sauf inexécution définitive`/);
+  assert.match(comma.code, /'Sauf inexécution définitive'/);
   const wrong = await verify(EXAMPLE_CODE.replace('`Sauf inexécution définitive`', '`Sauf exécution partielle`'));
   assert.match(texts(wrong, 'erreur').join('\n'), /pénalité_encourue\.si\[1\]\.selon\[0\] : citation introuvable/);
 });
@@ -166,8 +169,8 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?)').run('fictif', 3, 'ancien format', JSON.stringify({ code: 'ancien format', questions: [] }));
   assert.equal(service.read(folder).code, '');
   const text = await service.command(folder, { commande: 'verifier' });
-  assert.match(text, /^\{\n {2}bilan: \{/);
-  assert.match(fs.readFileSync(file, 'utf8'), /`Sauf inexécution définitive`/);
+  assert.match(text, /^Bilan : \d+ erreur/);
+  assert.match(fs.readFileSync(file, 'utf8'), /'Sauf inexécution définitive'/);
   const issue = service.read(folder).issues.find((entry) => entry.kind === 'manque')!;
   assert.equal((await service.dismiss(folder, issue.id)).dismissed.length, 1);
   assert.equal((await service.dismiss(folder, issue.id, true)).dismissed.length, 0);
@@ -251,7 +254,7 @@ test('un délai et un montant se calculent à partir des valeurs prouvées, et l
   assert.equal(at(result.annotated, 'valeurs.montant_du_dommage.statut'), 'acquis');
   assert.equal(at(result.annotated, 'bilan.essais'), '3/3');
   assert.match(result.log.find((entry) => entry.key === 'fait:notification_dans_la_garantie')!.text, /au plus 2 ans à compter du 15\/06\/2022 : échéance au 15\/06\/2024, date retenue 10\/02\/2024 → oui/);
-  assert.doesNotMatch(texts(result, 'manque').join('\n'), /décompte/);
+  assert.doesNotMatch(texts(result, 'manque').join('\n'), /délai sans décompte/);
 });
 
 test('un délai sans décompte est un manque, sans que le système choisisse la règle ; le décompte est un sous-raisonnement qui conditionne le délai', async () => {
@@ -298,7 +301,7 @@ test('le raisonnement se qualifie contractuel ou contentieux ; la qualification 
   assert.doesNotMatch(contractual, /non qualifié|prescription/);
   const litigation = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contentieux',\n  questions:")), 'manque').join('\n');
   assert.match(litigation, /questions\[0\] : contentieux : vérifier la prescription : ajoute prescription:/);
-  assert.doesNotMatch(litigation, /validité/);
+  assert.doesNotMatch(litigation, /vérifier la validité/);
   const valid = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace('\n  essais:', "\n  validité_du_contrat: { sauf: [{ condition: 'vice_du_consentement', selon: [{ source: 'pieces/01_contrat.md', citation: `En cas de retard de livraison` }], preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },\n  essais:"));
   assert.doesNotMatch(texts(valid, 'manque').join('\n'), /vérifier la validité/);
   assert.deepEqual(texts(valid, 'erreur'), []);
@@ -318,7 +321,7 @@ test('les contrôles portent un nom préfixé, désigné par leur emplacement ; 
   assert.ok(keys.indexOf('applicabilité_de_l_article_1231_5') > keys.indexOf('grève'));
   assert.deepEqual(keys.slice(-2), ['valeurs', 'essais']);
   assert.deepEqual(Object.keys(at(result.annotated, 'pénalité_encourue.si[0].selon[0]')).slice(0, 5), ['source', 'citation', 'vigueur', 'applicabilite', 'titre']);
-  assert.equal(at(result.annotated, 'bilan.controles'), '1/1 établis');
+  assert.equal(at(result.annotated, 'bilan.controles'), '1/5 établis');
 });
 
 test('en contrat, les faits sont des hypothèses : pas de manque de preuve, mais chaque question a son essai, et les essais reprennent les faits établis', async () => {
@@ -342,4 +345,36 @@ test('une clause n’a pas à porter sa vigueur ; le fichier est réécrit dans 
   assert.ok(result.code.indexOf('pénalité_encourue:') < result.code.indexOf('applicabilité_de_l_article_1231_5:'));
   assert.ok(result.code.lastIndexOf('essais:') > result.code.indexOf('valeurs:'));
   assert.deepEqual(texts(await verify(result.code), 'erreur'), texts(result, 'erreur'));
+});
+
+test('une clause appelle le contrôle de sa validité, qui s’apprécie au regard d’un texte ; une clause qui renvoie à la loi réclame ce texte', async () => {
+  const result = await verify(EXAMPLE_CODE);
+  const manques = texts(result, 'manque').join('\n');
+  assert.match(manques, /pénalité_stipulée\.si\[0\]\.selon\[0\]\.validite : validité de la clause non établie : ajoute validite: 'validité_de_la_clause_retard_de_livraison'/);
+  const withValidity = EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_de_la_clause_pénale' }],").replace('\n  essais:', "\n  validité_de_la_clause_pénale: { sauf: [{ condition: 'pénalité_manifestement_excessive', selon: [{ source: 'pieces/01_contrat.md', citation: `ainsi que les grèves` }], preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }] },\n  essais:");
+  const valid = await verify(withValidity);
+  assert.deepEqual(texts(valid, 'erreur'), []);
+  assert.match(texts(valid, 'manque').join('\n'), /validité_de_la_clause_pénale : la validité s’apprécie au regard du droit applicable : cite dans ce terme le texte qui la fonde/);
+  assert.equal(at(valid.annotated, 'validité_de_la_clause_pénale.statut'), 'exclu');
+  assert.equal(at(valid.annotated, 'pénalité_stipulée.si[0].statut'), 'exclu');
+  assert.doesNotMatch(texts(valid, 'manque').join('\n'), /validité_de_la_clause_pénale\.sauf\[0\]\.selon\[0\]\.validite/);
+  const sourced = await verify(withValidity.replace("selon: [{ source: 'pieces/01_contrat.md', citation: `ainsi que les grèves` }], preuve: [{ piece: 'pieces/07_courriel.md'", "selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }], preuve: [{ piece: 'pieces/07_courriel.md'"));
+  assert.doesNotMatch(texts(sourced, 'manque').join('\n'), /validité_de_la_clause_pénale : la validité s’apprécie/);
+  const referring = await verifyReasoning({
+    code: EXAMPLE_CODE.replace('citation: `En cas de retard de livraison`', 'citation: `conformément à l’article 1231-5 du Code civil, en cas de retard`'), cwd: '/dossier-fictif',
+    connectors: connectors({ ...EXAMPLE_SOURCES, 'pieces/01_contrat.md': { ...EXAMPLE_SOURCES['pieces/01_contrat.md'], text: `${EXAMPLE_SOURCES['pieces/01_contrat.md'].text} Article 9. Pénalité conformément à l’article 1231-5 du Code civil, en cas de retard.` } }),
+    reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(),
+  });
+  assert.match(texts(referring, 'manque').join('\n'), /pénalité_stipulée\.si\[0\]\.selon\[0\] : la clause renvoie à un texte de loi : ajoute ce texte à selon/);
+  assert.doesNotMatch(manques, /la clause renvoie à un texte de loi/);
+});
+
+test('les données des calculs sont déclarées dans valeurs, prouvées ou laissées à null ; un seuil en dur est signalé', async () => {
+  const undeclared = texts(await cession(CESSION_CODE.replace(/\n    date_de_notification: \{[^\n]*\},/, '')), 'manque').join('\n');
+  assert.match(undeclared, /réduction_due\.si\[0\] : date_de_notification n’est pas déclarée : ajoute valeurs: \{ date_de_notification: \{ valeur, preuve \} \} \(valeur: null si le dossier ne la fixe pas\)/);
+  const blank = await cession(CESSION_CODE.replace(/date_de_notification: \{[^\n]*\},/, 'date_de_notification: { valeur: null },'));
+  assert.deepEqual(texts(blank, 'erreur'), []);
+  assert.doesNotMatch(texts(blank, 'manque').join('\n'), /date_de_notification n’est pas déclarée|valeur sans preuve/);
+  assert.match(texts(await cession(CESSION_CODE.replace(/date_de_notification: \{ valeur: '2024-02-10', preuve: \[[^\n]*\] \},/, "date_de_notification: { valeur: '2024-02-10' },")), 'manque').join('\n'), /valeurs\.date_de_notification : valeur sans preuve/);
+  assert.match(texts(await cession(CESSION_CODE), 'manque').join('\n'), /réduction_due\.si\[1\]\.montant : seuil écrit en dur \(3000\)/);
 });
