@@ -3,6 +3,13 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.54](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.53...v2.0.54) (2026-10-19)
+
+### Bug Fixes
+
+* **mistral:** answer on Windows when Vibe was installed with uv ([dafb034](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/dafb03474f94ca348a59acec065fce3babe1b636))
+* **mistral:** never leave the Vibe install spinning forever ([b9d18ce](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b9d18ce6c2c697eafc2c59ca85812d9820ef4bb0))
+
 ## [2.0.53](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.52...v2.0.53) (2026-10-17)
 
 ### New Features
