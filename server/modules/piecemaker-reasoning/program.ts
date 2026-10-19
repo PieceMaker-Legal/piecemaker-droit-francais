@@ -286,19 +286,13 @@ export async function verifyReasoning(input: {
     condition.selon.forEach((basis) => { if (basis.vigueur?.au) declared(basis.vigueur.au, at); });
   }
   const drafting = reasoning.qualification === 'drafting';
-  const BLANK = /\[[^\]]*\]|●|\bX{3,}\b|à compléter/i;
-  const blank = (at: string, citation: string | undefined) => { if (drafting && citation && BLANK.test(citation)) add('manque', at, `passage à compléter ou à confirmer dans le projet : « ${citation.match(BLANK)![0]} »`, `Passage à compléter dans le projet : « ${citation} ».`); };
   for (const { at, condition } of occurrences) {
     condition.selon.forEach((basis, index) => {
       const place = `${at}.selon[${index}]`;
-      blank(place, basis.citation);
-      basis.renvoi.forEach((target, other) => blank(`${place}.renvoi[${other}]`, target.citation));
       if (basis.contredit.some((_, other) => verifiedRefs.get(`${place}.contredit[${other}]`))) add('manque', `${place}.contredit`, drafting ? 'stipulations contradictoires : à harmoniser dans le projet' : 'règle contredite par une autre stipulation : à trancher', drafting ? 'Deux stipulations du projet se contredisent : à harmoniser.' : 'Deux stipulations se contredisent : la règle applicable est à trancher.', `#source:${basis.source}`);
     });
-    for (const field of ['preuve', 'contredit'] as const) condition[field].forEach((ref, index) => blank(`${at}.${field}[${index}]`, ref.citation));
   }
   for (const [name, entry] of reasoning.valeurs) {
-    entry.preuve.forEach((ref, index) => blank(`valeurs.${name}.preuve[${index}]`, ref.citation));
     if (drafting && entry.valeur === null && !entry.formule) add('manque', `valeurs.${name}`, 'valeur laissée en blanc dans le projet : à compléter', `${human(name)} : laissée en blanc dans le projet.`);
     if (!entry.formule) continue;
     const walkOperands = (formula: NonNullable<typeof entry.formule>): string[] => formula.termes.flatMap((item) => (typeof item === 'string' ? [item] : typeof item === 'number' ? [] : walkOperands(item)));

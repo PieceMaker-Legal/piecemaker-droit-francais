@@ -393,7 +393,7 @@ test('une clause a son propre contrôle de validité ; une clause citée pour l�
   assert.doesNotMatch(texts(result, 'manque').join('\n'), /applicabilité_de_l_article_1231_5\.si\[1\]\.selon\[0\]\.validite/);
 });
 
-test('drafting : blancs, renvois, stipulations contradictoires et formules', async () => {
+test('drafting : valeur laissée en blanc, renvois, stipulations contradictoires et formules', async () => {
   const draft = (code: string) => verifyReasoning({
     code: code.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:"), cwd: '/dossier-fictif',
     connectors: connectors({ ...EXAMPLE_SOURCES, 'pieces/01_contrat.md': { ...EXAMPLE_SOURCES['pieces/01_contrat.md'], text: `${EXAMPLE_SOURCES['pieces/01_contrat.md'].text} Article 9. Prix : [●] euros. Article 10. Aucune pénalité n'est due.` }, 'pieces/02_bareme.md': { kind: 'piece', title: 'Barème (fictif)', text: 'Pénalité de 100 euros par jour.' } }),
@@ -401,7 +401,7 @@ test('drafting : blancs, renvois, stipulations contradictoires et formules', asy
   });
   const blanks = await draft(EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`,", "citation: `Prix : [●] euros`,").replace("date_de_conclusion_du_contrat: { valeur: '2024-01-15',", "prix_unitaire: { valeur: null },\n    date_de_conclusion_du_contrat: { valeur: '2024-01-15',"));
   const manques = texts(blanks, 'manque').join('\n');
-  assert.match(manques, /pénalité_stipulée\.si\[0\]\.selon\[0\] : passage à compléter ou à confirmer dans le projet : « \[●\] »/);
+  assert.doesNotMatch(manques, /pénalité_stipulée\.si\[0\]\.selon\[0\] :/);
   assert.match(manques, /valeurs\.prix_unitaire : valeur laissée en blanc dans le projet/);
   const referred = await draft(EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, renvoi: [{ piece: 'pieces/02_bareme.md', citation: `100 euros par jour` }, { piece: 'pieces/09_annexe_absente.md' }], contredit: [{ piece: 'pieces/01_contrat.md', citation: `Aucune pénalité n'est due` }] }],"));
   assert.deepEqual(texts(referred, 'erreur'), []);
@@ -411,7 +411,7 @@ test('drafting : blancs, renvois, stipulations contradictoires et formules', asy
   assert.match(notes, /pénalité_stipulée\.si\[0\]\.selon\[0\]\.contredit : stipulations contradictoires : à harmoniser dans le projet/);
   assert.equal(at(referred.annotated, 'pénalité_stipulée.si[0].statut'), 'à établir');
   const litigation = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contentieux',\n  questions:"));
-  assert.doesNotMatch(texts(litigation, 'manque').join('\n'), /laissée en blanc|à compléter ou à confirmer/);
+  assert.doesNotMatch(texts(litigation, 'manque').join('\n'), /laissée en blanc/);
   const priced = await cession(CESSION_CODE.replace("    montant_du_dommage:", "    valeur_d_entreprise: { valeur: 50000, preuve: [{ piece: 'pieces/08_notification.md', citation: `dommage de 45.000 euros` }] },\n    dette_nette: { valeur: 5000, preuve: [{ piece: 'pieces/08_notification.md', citation: `dommage de 45.000 euros` }] },\n    prix_calculé: { formule: { produit: [0.9, { difference: ['valeur_d_entreprise', 'dette_nette'] }] } },\n    prix_stipulé: { valeur: 41000, preuve: [{ piece: 'pieces/08_notification.md', citation: `dommage de 45.000 euros` }], formule: { produit: [0.9, { difference: ['valeur_d_entreprise', 'dette_nette'] }] } },\n    montant_du_dommage:"));
   assert.deepEqual(texts(priced, 'erreur'), []);
   assert.equal(at(priced.annotated, 'valeurs.prix_calculé.calcul'), 40500);
