@@ -480,7 +480,7 @@ export async function verifyReasoning(input: {
         const value = 'leaf' in flip ? leaf(flip.leaf!) : bases.get(flip.at);
         const goal = `l’objectif « ${objective.objectif} »`;
         const advice = 'leaf' in flip
-          ? `${name} ${value ? 'fait obstacle à' : 'manque à'} ${goal} : ${reasoning.computed.has(name) ? 'discute les valeurs du calcul ou la règle qui le fixe' : value ? 'conteste-le (contredit) ou l’interprétation de la règle qui le retient' : 'cherche une pièce qui l’établit ou une autre interprétation de la règle'}, ou cherche une exception (sauf) ou un autre fondement (l_une)`
+          ? `${name} ${value ? 'fait obstacle à' : 'manque à'} ${goal} : ${reasoning.computed.has(name) ? 'discute les valeurs du calcul ou la règle qui le fixe' : value ? 'conteste-le (contredit) ou l’interprétation de la règle qui le retient' : 'établis-le par une pièce ou par une autre interprétation de la règle'}, ou cherche une exception (sauf) ou un autre fondement (l_une)`
           : value ? `la source de ${name} fait obstacle à ${goal} : discute son interprétation, sa version ou son applicabilité, ou cherche une source contraire` : `la source de ${name} ne compte pas alors que ${goal} en dépend : établis sa version et son applicabilité, ou cherche une autre source`;
         add('manque', flip.at, `${advice}${tension.length ? ` ; en tension avec ${tension.map((other) => `l’objectif « ${other} »`).join(', ')} : à arbitrer` : ''}`, `${'leaf' in flip ? human(name) : `La source de ${phrase(name)}`} ${value ? 'fait obstacle à' : 'manque à'} l’objectif : ${objective.objectif}.${tension.length ? ` En tension avec : ${tension.join(' ; ')}.` : ''}`, 'leaf' in flip ? name : undefined);
         places.add(flip.at);
