@@ -262,3 +262,14 @@ test('un délai ou un montant mal écrit, prouvé sur la condition ou appliqué 
   assert.match(errors, /un délai ou un montant se calcule : sa preuve se place dans valeurs/);
   assert.match(errors, /valeurs\.date_de_réalisation : date_de_réalisation sert à dommage_au_dessus_du_seuil : un nombre attendu/);
 });
+
+test('le raisonnement se qualifie contractuel ou contentieux ; la qualification appelle la vérification de la validité ou de la prescription', async () => {
+  assert.match(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /qualification : raisonnement non qualifié/);
+  const contractual = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:")), 'manque').join('\n');
+  assert.match(contractual, /qualification : contractuel : vérifier la validité/);
+  assert.doesNotMatch(contractual, /non qualifié|prescription/);
+  const litigation = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contentieux',\n  questions:")), 'manque').join('\n');
+  assert.match(litigation, /qualification : contentieux : vérifier la prescription/);
+  assert.doesNotMatch(litigation, /validité/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'pénal',\n  questions:")), 'erreur').join('\n'), /qualification : qualification : 'contractuel' ou 'contentieux'/);
+});

@@ -30,7 +30,7 @@ L’objet de l’agent, avec en tête `bilan` (`erreurs`, `manques`, `essais`, `
 - **Citation** : retrouvée mot pour mot à la ponctuation, la casse et les accents près, elle est validée, remplacée par l’original dans le fichier et marquée `corrigee` ; sinon erreur.
 - **Vigueur** : absente, c’est un manque (avec les dates de la version citée quand Légifrance les donne) ; différente de Légifrance, une erreur.
 - **Erreurs** : syntaxe, délai ou montant mal écrit, prouvé sur la condition ou appliqué à une valeur du mauvais type, condition sans source, source ou pièce introuvable, citation introuvable, vigueur fausse, aucune source en vigueur, terme de réponse non défini, boucle, essai non conforme.
-- **Manques** : délai sans règle de décompte, date d’application absente ou non justifiée, vigueur non renseignée, source non vérifiable, fait décisif sans pièce, terme qui ne sert à aucune question.
+- **Manques** : raisonnement non qualifié (`qualification: 'contractuel' | 'contentieux'`, non affichée dans le volet) ; une fois qualifié, « vérifier la validité » (contractuel) ou « vérifier la prescription » (contentieux), volontairement génériques et absents des instructions de l’agent ; délai sans règle de décompte, date d’application absente ou non justifiée, vigueur non renseignée, source non vérifiable, fait décisif sans pièce, terme qui ne sert à aucune question.
 - **Personnes** : les personnes et sociétés du graphe du dossier citées dans une question ou dans la citation d’une pièce y sont rattachées ; les sociétés rattachées sont contrôlées au Registre Public et au BODACC.
 
 ## Décisions de l’avocat
