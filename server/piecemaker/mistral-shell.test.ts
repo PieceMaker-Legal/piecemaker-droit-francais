@@ -14,6 +14,10 @@ test('Windows Vibe shell preserves quoted paths, cmd chaining and the bundled Py
     t.skip('A Vibe Python installation is required');
     return;
   }
+  if (!command.args.length) {
+    t.skip('A Vibe Python installation is required');
+    return;
+  }
   const script = `
 import vibe.cli.entrypoint
 vibe.cli.entrypoint.main = lambda: None

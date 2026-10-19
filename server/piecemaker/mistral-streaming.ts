@@ -1,6 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { piecemakerVibeBinDirectory } from '@/shared/vibe-cli.js';
+
+import { VIBE_PACKAGE } from './vibe-install.js';
+
 export const vibeStreamingEntrypoint = `
 import asyncio
 import json
@@ -80,12 +84,17 @@ from vibe.cli.entrypoint import main
 main()
 `;
 
+let streamingUnavailableWarned = false;
+
 export function vibeStreamingCommand(executable: string): { executable: string; args: string[] } {
-  const located = path.isAbsolute(executable) ? executable : (process.env.PATH ?? '').split(path.delimiter)
-    .map((directory) => path.join(directory, executable))
-    .find((candidate) => fs.existsSync(candidate));
-  if (!located) throw new Error('Vibe executable not found for streaming');
-  const python = path.join(path.dirname(fs.realpathSync(located)), process.platform === 'win32' ? 'python.exe' : 'python');
-  if (!fs.existsSync(python)) throw new Error('The Vibe Python interpreter is required for streaming');
+  const pinnedBinDirectory = piecemakerVibeBinDirectory();
+  const python = path.join(pinnedBinDirectory, process.platform === 'win32' ? 'python.exe' : 'python');
+  if (path.dirname(executable) !== pinnedBinDirectory || !fs.existsSync(python)) {
+    if (!streamingUnavailableWarned) {
+      streamingUnavailableWarned = true;
+      console.warn(`[Mistral] ${executable} n’est pas le Vibe ${VIBE_PACKAGE} installé par PieceMaker : réponses sans affichage en direct.`);
+    }
+    return { executable, args: [] };
+  }
   return { executable: python, args: ['-u', '-c', vibeStreamingEntrypoint] };
 }
