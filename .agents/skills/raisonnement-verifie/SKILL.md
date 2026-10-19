@@ -19,7 +19,7 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.js`, un o
 
 ## Le fichier
 
-- `qualification` : `'drafting'` (faits à prévoir), `'contentieux'` ou `'consultation'` (faits à prouver ; la consultation suit les règles du contentieux). Non affichée dans le volet.
+- `qualification` : `'drafting'` (faits à prévoir), `'contentieux'` ou `'consultation'` (faits à prouver ; la consultation suit les règles du contentieux, sauf la prescription). Non affichée dans le volet.
 - `questions: [{ question, reponse, validite?, prescription? }]` ; `reponse` désigne un terme, ou une valeur quand la réponse est un montant (statut + `montant_calcule`).
 - Un terme par clé : `{ si: [...], sauf: [...] }` ; `l_une` = une condition suffit. Une condition sans clé propre est un fait (`preuve`, `contredit: [{ piece, citation }]`).
 - `selon: [{ source, citation, vigueur: { debut, fin, au }, applicabilite, validite, renvoi, contredit }]` : identifiant officiel (LEGIARTI, JURITEXT, CETATEXT…) ou chemin de pièce pour une clause ; citation exacte. `renvoi: [{ piece, citation? }]` = ce à quoi la stipulation renvoie (déclaré par l'agent, quel que soit le mot employé) ; `contredit` = stipulation contraire.
@@ -39,15 +39,18 @@ Termes ordinaires désignés par un emplacement, nommés avec son préfixe (vér
 | `validite` | source clause | `validité_` | toute clause, sauf citée dans un arbre de validité ou d'applicabilité ; distinct de la validité de l'acte ; doit citer un texte |
 | `decompte` | délai | `décompte_` | tout délai |
 | `validite` | question | `validité_` | drafting (sauf question qui porte sur la validité) |
-| `prescription` | question | `prescription_` | contentieux, consultation |
+| `prescription` | question | `prescription_` | contentieux seulement ; ailleurs facultatif |
 
 Exemptions = garde-fous contre la régression à l'infini (validité → texte → applicabilité → clause sans nouvelle validité).
+
+**Réclamé seulement ce qui vaut pour toute question du mode.** Un manque systématique n'existe que si le point se pose dans tous les cas : la vigueur pour tout texte cité, la prescription en contentieux (toute action exerce un droit). Ce qui dépend du sens de la question (la prescription en consultation : « puis-je encore agir ? » oui, « combien d'impôt sur la cession à venir ? » non) n'est jamais réclamé : le vérificateur ne lit pas le sens des questions. L'emplacement reste disponible et contrôlé ; l'agent l'ajoute s'il le juge utile.
 
 ## Manques par mode
 
 - **Tous** : non qualifié ; valeur ouverte dont dépend une réponse ; renvoi vers un élément absent du dossier ou un passage introuvable ; stipulation contredite (la source ne compte plus : à trancher) ; montant stipulé différent de sa formule ; texte sans `vigueur`, sans `vigueur.au` ou date non prouvée ; version non en vigueur ; clause qui renvoie à un article sans ce texte ; donnée de calcul non déclarée ; valeur non nulle sans preuve ; seuil en dur ; source non vérifiable ; terme inutile.
 - **Drafting** : faits = hypothèses, pas de manque de preuve ; chaque question a un essai ; une valeur ouverte décisive se lève par des essais ; stipulations contradictoires = à harmoniser.
-- **Contentieux / consultation** : fait décisif sans pièce ; prescription.
+- **Contentieux / consultation** : fait décisif sans pièce.
+- **Contentieux** : prescription de chaque question.
 
 ## Sortie de `verifier`
 

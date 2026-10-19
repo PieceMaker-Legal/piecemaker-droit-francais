@@ -116,7 +116,7 @@ export async function verifyReasoning(input: {
   if (!reasoning.qualification) add('manque', 'qualification', 'raisonnement non qualifié : ajoute qualification: \'drafting\', \'contentieux\' ou \'consultation\'', 'Le raisonnement n’est pas qualifié : drafting, contentieux ou consultation.');
   reasoning.questions.forEach((question, index) => {
     if (reasoning.qualification === 'drafting' && !reasoning.essais.some((trial) => questionRoots(question).some((name) => name in trial.attendu))) add('manque', `questions[${index}]`, `question sans essai : ajoute dans essais un cas dont attendu porte sur ${question.reponse}`, 'Aucun cas d’essai ne vérifie la réponse à cette question.');
-    if ((reasoning.qualification === 'contentieux' || reasoning.qualification === 'consultation') && !question.prescription && !question.reponse.startsWith('prescription_')) add('manque', `questions[${index}]`, `${reasoning.qualification} : vérifier la prescription : ajoute prescription: \'prescription_de_…\' sur la question et définis ce terme`, 'Prescription à vérifier.');
+    if (reasoning.qualification === 'contentieux' && !question.prescription && !question.reponse.startsWith('prescription_')) add('manque', `questions[${index}]`, `${reasoning.qualification} : vérifier la prescription : ajoute prescription: \'prescription_de_…\' sur la question et définis ce terme`, 'Prescription à vérifier.');
     if (reasoning.qualification === 'drafting' && !question.validite && !question.reponse.startsWith('validité_')) add('manque', `questions[${index}]`, 'drafting : vérifier la validité : ajoute validite: \'validité_de_…\' sur la question et définis ce terme', 'Validité à vérifier.');
   });
   const roots = new Set(reasoning.questions.flatMap(questionRoots));
@@ -406,7 +406,7 @@ export async function verifyReasoning(input: {
   };
   for (const question of reasoning.questions) {
     if (reasoning.qualification === 'drafting' || question.validite) controlSlots.push(question.validite ?? null);
-    if (reasoning.qualification === 'contentieux' || reasoning.qualification === 'consultation' || question.prescription) controlSlots.push(question.prescription ?? null);
+    if (reasoning.qualification === 'contentieux' || question.prescription) controlSlots.push(question.prescription ?? null);
   }
   for (const { condition } of occurrences) if (condition.mesure?.delai) controlSlots.push(condition.decompte ?? null);
   for (const { at, condition } of occurrences) {
