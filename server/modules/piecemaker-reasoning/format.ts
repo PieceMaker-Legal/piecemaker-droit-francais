@@ -116,8 +116,8 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'au'].includes(key)) problem(`${at}.${key}`, `clé inconnue ${key}`);
       const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string };
       if (entry.applicabilite !== undefined) {
-        if (text(entry.applicabilite)) basis.applicabilite = entry.applicabilite as string;
-        else problem(`${at}.applicabilite`, 'applicabilite : une phrase disant pourquoi ce texte s’applique au dossier');
+        if (typeof entry.applicabilite === 'string' && IDENTIFIER.test(entry.applicabilite)) basis.applicabilite = entry.applicabilite;
+        else problem(`${at}.applicabilite`, 'applicabilite : nom du terme dont les conditions établissent que ce texte s’applique (ex. applicabilité_de_l_article_1231_5)');
       }
       if (entry.au !== undefined) {
         if (typeof entry.au === 'string' && IDENTIFIER.test(entry.au)) { basis.au = entry.au; dated.push({ at: `${at}.au`, name: entry.au }); }
