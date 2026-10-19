@@ -6,6 +6,7 @@ import type { Router } from 'express';
 
 import { getConnection, projectsDb } from '@/modules/database/index.js';
 import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
+import { setVibeLaunchCommand } from '@/modules/providers/list/mistral/mistral-runtime.provider.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
@@ -37,6 +38,7 @@ import { createOpenPanelRequestsRouter, createOpenPanelsRouter } from './open-pa
 import { startRemoteAccess } from './remote/index.js';
 import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
 import { createVibeInstallRouter } from './vibe-install.js';
+import { vibeStreamingCommand } from './mistral-streaming.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -78,6 +80,7 @@ const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
 installCodexPlanRuntime(providerRuntimeService);
+setVibeLaunchCommand(vibeStreamingCommand);
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection) });
 const library = await openLibrary(piecemakerHome(), applicationRoot, () => projectsDb.getProjectPaths().map((row) => row.project_path));
 installLibrarySkillVisibility(providerSkillsService, library.store);
