@@ -11,7 +11,7 @@ s'arrête jusqu'au démarrage suivant. Rien ne quitte le poste.
 
 ## Rapport d'assistance
 
-Réglages › Assistance : l'utilisateur décrit son problème, le serveur
+Icône bouée à côté de « Paramètres » dans la barre latérale (ouverte, repliée et mobile) : l'utilisateur décrit son problème, le serveur
 (`POST /api/piecemaker/support/report`, `support/report.ts`) assemble :
 
 - la description ;
@@ -24,10 +24,9 @@ Réglages › Assistance : l'utilisateur décrit son problème, le serveur
 
 Avant affichage, le dossier personnel devient `~`, le nom du compte
 `<utilisateur>`, puis le texte passe par le dictionnaire d'anonymisation
-(noms connus des dossiers anonymisés → codes). L'utilisateur relit et modifie
-le rapport, le télécharge et l'envoie lui-même : aucun envoi automatique, donc
-pas de serveur de réception ni de sous-traitant à déclarer.
+(noms connus des dossiers anonymisés → codes). Le rapport est téléchargé
+directement, sans aperçu, et l'utilisateur l'envoie lui-même : aucun envoi
+automatique, donc pas de serveur de réception ni de sous-traitant à déclarer.
 
 Limite : seuls les noms déjà connus du dictionnaire sont remplacés ; un nom de
-dossier non anonymisé peut subsister dans un chemin. La relecture par
-l'utilisateur reste la protection principale.
+dossier non anonymisé peut subsister dans un chemin.

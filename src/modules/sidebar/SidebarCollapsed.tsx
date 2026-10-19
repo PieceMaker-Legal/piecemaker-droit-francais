@@ -2,6 +2,7 @@ import { Settings, Sparkles, PanelLeftOpen, Bug, AlertTriangle } from 'lucide-re
 import type { TFunction } from 'i18next';
 
 import { PRODUCT_REPOSITORY_URL } from '@/shared/constants';
+import { SupportButton } from '@/piecemaker/support/SupportButton';
 
 const DISCORD_INVITE_URL = 'https://discord.gg/buxwujPNRE';
 const GITHUB_ISSUES_URL = `${PRODUCT_REPOSITORY_URL}/issues/new`;
@@ -55,6 +56,8 @@ export default function SidebarCollapsed({
       >
         <Settings className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
       </button>
+
+      <SupportButton className="group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80" iconClassName="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
 
       {/* Report Issue */}
       <a

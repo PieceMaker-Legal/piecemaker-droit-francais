@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next';
 import { PRODUCT_NAME, PRODUCT_REPOSITORY_URL } from '@/shared/constants';
 import { IS_PLATFORM } from '@/shared/utils';
 import type { ReleaseInfo } from '@/shared/types';
+import { SupportButton } from '@/piecemaker/support/SupportButton';
 
 const GITHUB_ISSUES_URL = `${PRODUCT_REPOSITORY_URL}/issues/new`;
 
@@ -135,7 +136,7 @@ export default function SidebarFooter({
       </div>
 
       {/* Desktop settings */}
-      <div className="hidden px-2 py-1.5 md:block">
+      <div className="hidden items-center gap-1 px-2 py-1.5 md:flex">
         <button
           className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
           onClick={onShowSettings}
@@ -143,6 +144,7 @@ export default function SidebarFooter({
           <Settings className="h-3.5 w-3.5" />
           <span className="text-sm">{t('actions.settings')}</span>
         </button>
+        <SupportButton className="flex shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground" iconClassName="h-3.5 w-3.5" />
       </div>
 
       {/* Desktop version brand line (OSS mode only) */}
@@ -190,7 +192,7 @@ export default function SidebarFooter({
       </div>
 
       {/* Mobile settings */}
-      <div className="px-3 pb-3 pt-2 md:hidden">
+      <div className="flex items-center gap-2 px-3 pb-3 pt-2 md:hidden">
         <button
           className="flex h-10 w-full items-center gap-3 rounded-xl bg-muted/40 px-3.5 transition-all hover:bg-muted/60 active:scale-[0.98]"
           onClick={onShowSettings}
@@ -200,6 +202,7 @@ export default function SidebarFooter({
           </div>
           <span className="text-sm font-normal text-foreground">{t('actions.settings')}</span>
         </button>
+        <SupportButton className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/40 transition-all hover:bg-muted/60 active:scale-[0.98]" iconClassName="h-4 w-4 text-muted-foreground" />
       </div>
     </div>
   );
