@@ -13,7 +13,8 @@ type Cited = { piece: Json; target: string; against: boolean };
 type Based = { source: Json; target: string };
 
 const RESERVED = new Set(['bilan', 'questions', 'essais']);
-const COLORS: Record<string, string> = { acquis: '#68bea3', exclu: '#e08a8a', 'à établir': '#e0b354', contesté: '#ba9ce9', question: '#e2a5c6', piece: '#9aa3b2', source: '#7aa7d8' };
+const COLORS: Record<string, string> = { question: '#e2a5c6', terme: '#ba9ce9', fait: '#68bea3', source: '#6b9fdb', piece: '#8c96ad' };
+const STATUS: Record<string, string> = { acquis: 'Acquis', exclu: 'Exclu', 'à établir': 'À établir', contesté: 'Contesté' };
 const ANSWER: Record<string, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', contesté: 'Contestée' };
 const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
 const basename = (file: string) => file.split('/').pop()!.replace(/\.[a-z0-9]+$/i, '');
@@ -41,7 +42,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${['acquis', 'exclu', 'à établir', 'contesté'].map((key) => `<span><i style="background:${COLORS[key]}"></i>${escape(human(key))}</span>`).join('')}<span><i class="is-square"></i>Pièce</span><span><i class="is-diamond"></i>Source</span><span><i class="is-ring"></i>Décisif : sa preuve fait basculer la réponse</span><span>- - sauf</span><span>ou : une suffit</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${[['question', 'Question'], ['terme', 'Termes'], ['fait', 'Faits'], ['source', 'Sources'], ['piece', 'Pièces']].map(([key, label]) => `<span><i style="background:${COLORS[key]}"></i>${label}</span>`).join('')}<span><i class="is-dashed"></i>À établir</span><span><i class="is-ring"></i>Décisif</span><span>- - sauf</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const svg = root.querySelector<SVGSVGElement>('svg')!;
@@ -107,8 +108,8 @@ export function mount(container: HTMLElement, api: Host) {
     return found;
   };
   const size = () => ({ width: Math.max(1, canvas.clientWidth), height: Math.max(1, canvas.clientHeight) });
-  const radius = (node: GraphNode) => (node.kind === 'question' ? 19 : node.kind === 'terme' ? 15 : node.kind === 'ou' || node.kind === 'piece' ? 9 : node.kind === 'source' ? 8 : 11);
-  const evidence = (node: GraphNode) => node.kind === 'piece' || node.kind === 'source';
+  const radius = (node: GraphNode) => (node.kind === 'question' ? 16 : node.kind === 'terme' ? 13 : node.kind === 'fait' ? 11 : node.kind === 'ou' ? 6 : 8);
+  const value = (node: GraphNode) => node.kind === 'question' ? `Réponse : ${ANSWER[node.status] ?? 'En suspens'}` : node.kind === 'source' ? node.status === 'exclu' ? 'Hors vigueur' : 'Source' : node.kind === 'piece' ? node.status === 'acquis' ? 'Pièce fiable' : node.status === 'exclu' ? 'Pièce non fiable' : 'Pièce à évaluer' : `${STATUS[node.status] ?? 'À établir'}${node.decisive ? ' · décisif' : ''}`;
   const branch = (id: string) => {
     const found = new Set([id]);
     const walk = (current: string, up: boolean) => { for (const edge of edges) { const [from, to] = up ? [edge.to, edge.from] : [edge.from, edge.to]; if (from === current && !found.has(to)) { found.add(to); walk(to, up); } } };
@@ -122,23 +123,27 @@ export function mount(container: HTMLElement, api: Host) {
     const members = selected ? branch(selected) : null;
     const { width, height } = size();
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    svg.innerHTML = `<g transform="translate(${width / 2 + pan.x} ${height / 2 + pan.y}) scale(${zoom})">${edges.map((edge) => {
+    svg.innerHTML = `<defs><marker id="pmr-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="var(--muted)"/></marker></defs><g transform="translate(${width / 2 + pan.x} ${height / 2 + pan.y}) scale(${zoom})">${edges.map((edge) => {
       const a = byId.get(edge.from), b = byId.get(edge.to);
       if (!a || !b) return '';
       const lit = members?.has(edge.from) && members.has(edge.to);
-      const label = edge.link === 'sauf' ? 'sauf' : '';
-      const path = Math.abs(a.y - b.y) < 6 ? `M${a.x + Math.sign(b.x - a.x) * radius(a)} ${a.y} L${b.x - Math.sign(b.x - a.x) * radius(b)} ${b.y}` : `M${a.x} ${a.y - radius(a)} C${a.x} ${(a.y + b.y) / 2} ${b.x} ${(a.y + b.y) / 2} ${b.x} ${b.y + radius(b)}`;
-      return `<path class="pmr-edge${edge.link === 'sauf' ? ' is-sauf' : ''}${['preuve', 'contredit', 'selon'].includes(edge.link) ? ` is-${edge.link}` : ''}${lit ? ' is-neighbour' : ''}${members && !lit ? ' is-dim' : ''}" d="${path}"/>${label ? `<text class="pmr-edge-label" x="${(a.x + b.x) / 2 + 4}" y="${(a.y + b.y) / 2}">${label}</text>` : ''}`;
-    }).join('')}${nodes.map((node) => (node.kind === 'ou' ? `<g class="pmr-node pmr-or${members && !members.has(node.id) ? ' is-dim' : ''}" transform="translate(${node.x} ${node.y})"><circle r="${radius(node)}" fill="var(--bg)" stroke="var(--muted)"/><text text-anchor="middle" y="4" class="pmr-value">ou</text><title>Au choix : une de ces conditions suffit</title></g>` : `<g class="pmr-node${selected === node.id ? ' is-selected' : ''}${members && !members.has(node.id) ? ' is-dim' : ''}${node.decisive ? ' is-decisive' : ''}" data-node="${escape(node.id)}" transform="translate(${node.x} ${node.y})" tabindex="0" role="button" aria-label="${escape(`${node.label}, ${node.status}`)}">${node.kind === 'piece' ? `<rect x="-${radius(node)}" y="-${radius(node)}" width="${radius(node) * 2}" height="${radius(node) * 2}" rx="3" fill="${COLORS[node.status] ?? COLORS.piece}"/>` : node.kind === 'source' ? `<rect x="-${radius(node)}" y="-${radius(node)}" width="${radius(node) * 2}" height="${radius(node) * 2}" transform="rotate(45)" fill="${COLORS[node.status] ?? COLORS.source}"/>` : `<circle r="${radius(node)}" fill="${COLORS[node.kind === 'question' ? 'question' : node.status] ?? COLORS['à établir']}"/>`}<text text-anchor="middle" y="${radius(node) + (evidence(node) ? 13 : 15)}"${node.kind === 'question' ? ' class="pmr-strong"' : evidence(node) ? ' class="pmr-small"' : ''}>${escape(shorten(node.label, evidence(node) ? 22 : 34))}</text>${node.decisive ? `<text text-anchor="middle" class="pmr-value" y="${radius(node) + 29}">décisif</text>` : ''}<title>${escape(`${node.label}\n${node.status}`)}</title></g>`)).join('')}</g>`;
+      const dx = b.x - a.x, dy = b.y - a.y, distance = Math.max(1, Math.hypot(dx, dy));
+      const start = radius(a) / distance, end = (radius(b) + 4) / distance;
+      return `<path marker-end="url(#pmr-arrow)" class="pmr-edge${edge.link === 'sauf' ? ' is-sauf' : ''}${['preuve', 'contredit', 'selon'].includes(edge.link) ? ` is-${edge.link}` : ''}${lit ? ' is-neighbour' : ''}${members && !lit ? ' is-dim' : ''}" d="M${a.x + dx * start} ${a.y + dy * start} L${b.x - dx * end} ${b.y - dy * end}"/>${edge.link === 'sauf' ? `<text class="pmr-edge-label" transform="translate(${(a.x + b.x) / 2} ${(a.y + b.y) / 2}) scale(${1 / zoom})" x="4">sauf</text>` : ''}`;
+    }).join('')}${nodes.map((node) => {
+      const open = node.kind !== 'ou';
+      const label = node.kind === 'ou' ? 'L’une des conditions' : node.label;
+      return `<g class="pmr-node${open ? '' : ' pmr-or'}${selected === node.id ? ' is-selected' : ''}${members && !members.has(node.id) ? ' is-dim' : ''}${node.decisive ? ' is-decisive' : ''}${['terme', 'fait', 'ou'].includes(node.kind) && ['à établir', 'contesté'].includes(node.status) ? ' is-uncertain' : ''}${node.status === 'exclu' ? ' is-excluded' : ''}"${open ? ` data-node="${escape(node.id)}" tabindex="0" role="button" aria-label="${escape(`${node.label}, ${value(node)}`)}"` : ''} transform="translate(${node.x} ${node.y})"><circle r="${radius(node)}" fill="${COLORS[node.kind] ?? 'var(--bg)'}"/><g transform="scale(${1 / zoom})"><text x="${radius(node) * zoom + 7}" y="-2"${node.kind === 'question' ? ' class="pmr-strong"' : ''}>${escape(shorten(label, 37))}</text><text class="pmr-value" x="${radius(node) * zoom + 7}" y="13">${escape(value(node))}</text></g><title>${escape(`${label}\n${value(node)}`)}</title></g>`;
+    }).join('')}</g>`;
   };
 
   const fitGraph = () => {
     if (!nodes.length) { zoom = 1; pan = { x: 0, y: 0 }; return; }
-    const minX = Math.min(...nodes.map((node) => node.x)) - 90, maxX = Math.max(...nodes.map((node) => node.x)) + 90;
-    const minY = Math.min(...nodes.map((node) => node.y)) - 30, maxY = Math.max(...nodes.map((node) => node.y)) + 70;
+    const minX = Math.min(...nodes.map((node) => node.x)) - 20, maxX = Math.max(...nodes.map((node) => node.x)) + 20;
+    const minY = Math.min(...nodes.map((node) => node.y)) - 20, maxY = Math.max(...nodes.map((node) => node.y)) + 30;
     const { width, height } = size();
-    zoom = Math.min(1.2, (width - 24) / Math.max(1, maxX - minX), (height - 70) / Math.max(1, maxY - minY));
-    pan = { x: -(minX + maxX) / 2 * zoom, y: -(minY + maxY) / 2 * zoom };
+    zoom = Math.max(.35, Math.min(1.2, Math.max(60, width - 240) / Math.max(1, maxX - minX), Math.max(60, height - 40) / Math.max(1, maxY - minY)));
+    pan = { x: -(minX + maxX + 200 / zoom) / 2 * zoom, y: -(minY + maxY) / 2 * zoom };
   };
 
   const buildGraph = () => {
@@ -150,7 +155,6 @@ export function mount(container: HTMLElement, api: Host) {
     const all = terms();
     const list = occurrences();
     const levels = new Map<string, number>();
-    const orLevels = new Map<string, number>();
     const order: string[] = [];
     const visit = (name: string, level: number) => {
       if ((levels.get(name) ?? -1) >= level || level > 40) return;
@@ -172,19 +176,15 @@ export function mount(container: HTMLElement, api: Host) {
         if (levels.has(group.condition.condition) && !edges.some((edge) => edge.from === group.condition.condition && edge.to === group.parent)) edges.push({ from: group.condition.condition, to: group.parent, link });
         continue;
       }
-      const level = levels.get(group.parent)! + 0.5;
       nodes.push({ id: `#ou:${group.path}`, label: 'ou', status: group.condition.statut ?? 'à établir', kind: 'ou', decisive: false, x: 0, y: 0 });
-      orLevels.set(`#ou:${group.path}`, level);
       edges.push({ from: `#ou:${group.path}`, to: group.parent, link });
       const members = list.filter((entry) => entry.path.startsWith(`${group.path}.l_une[`));
       for (const member of members) if (levels.has(member.condition.condition)) edges.push({ from: member.condition.condition, to: `#ou:${group.path}`, link: 'si' });
     }
-    const rows = new Map<number, GraphNode[]>();
-    for (const node of nodes) { const level = node.kind === 'question' ? 0 : node.kind === 'ou' ? orLevels.get(node.id)! : levels.get(node.id)!; rows.set(level, [...(rows.get(level) ?? []), node]); }
-    for (const [level, row] of rows) row.forEach((node, index) => {
+    nodes.forEach((node, index) => {
       const previous = old.get(node.id);
-      node.x = previous?.x ?? (index - (row.length - 1) / 2) * 190;
-      node.y = previous?.y ?? level * 100;
+      node.x = previous?.x ?? Math.cos(index * 2.399) * (80 + index * 9);
+      node.y = previous?.y ?? Math.sin(index * 2.399) * (80 + index * 9);
     });
     const byId = new Map(nodes.map((node) => [node.id, node]));
     const attached = new Map<string, number>();
@@ -194,9 +194,8 @@ export function mount(container: HTMLElement, api: Host) {
       if (!byId.has(id)) {
         const count = attached.get(target) ?? 0;
         attached.set(target, count + 1);
-        const side = anchor.kind === 'ou' ? [66, -66, 132, -132] : anchor.kind === 'fait' ? [0, 96, -96, 192, -192] : [80, -80, 160, -160];
         const previous = old.get(id);
-        const node: GraphNode = { id, label, status, kind, decisive: false, x: previous?.x ?? anchor.x + side[count % side.length], y: previous?.y ?? anchor.y + (anchor.kind === 'ou' ? 0 : 46) };
+        const node: GraphNode = { id, label, status, kind, decisive: false, x: previous?.x ?? anchor.x + Math.cos(count * 2.399 + 1) * 70, y: previous?.y ?? anchor.y + Math.sin(count * 2.399 + 1) * 70 };
         nodes.push(node);
         byId.set(id, node);
       }
@@ -205,7 +204,32 @@ export function mount(container: HTMLElement, api: Host) {
     for (const entry of based()) attach(`#source:${entry.source.source}`, sourceLabel(entry.source), entry.source.en_vigueur === false ? 'exclu' : 'source', 'source', entry.target, 'selon');
     for (const entry of cited()) attach(`#piece:${entry.piece.piece}`, entry.piece.titre ?? basename(entry.piece.piece), entry.piece.fiable === true ? 'acquis' : entry.piece.fiable === false ? 'exclu' : 'piece', 'piece', entry.target, entry.against ? 'contredit' : 'preuve');
     if (selected && !nodes.some((node) => node.id === selected)) selected = '';
-    if (nodes.some((node) => !old.has(node.id))) fitGraph();
+    if (nodes.some((node) => !old.has(node.id))) {
+      for (let step = 0; step < 100 && nodes.length <= 300; step++) {
+        const forces = new Map(nodes.map((node) => [node.id, { x: -node.x * .009, y: -node.y * .009 }]));
+        for (let a = 0; a < nodes.length; a++) for (let b = a + 1; b < nodes.length; b++) {
+          const dx = nodes[a].x - nodes[b].x, dy = nodes[a].y - nodes[b].y;
+          const distance = Math.max(30, Math.hypot(dx, dy));
+          const force = 60000 / distance ** 3;
+          forces.get(nodes[a].id)!.x += dx * force;
+          forces.get(nodes[a].id)!.y += dy * force;
+          forces.get(nodes[b].id)!.x -= dx * force;
+          forces.get(nodes[b].id)!.y -= dy * force;
+        }
+        for (const edge of edges) {
+          const a = byId.get(edge.from), b = byId.get(edge.to);
+          if (!a || !b) continue;
+          const dx = b.x - a.x, dy = b.y - a.y, distance = Math.max(1, Math.hypot(dx, dy));
+          const force = (distance - 110) * .012;
+          forces.get(a.id)!.x += dx / distance * force;
+          forces.get(a.id)!.y += dy / distance * force;
+          forces.get(b.id)!.x -= dx / distance * force;
+          forces.get(b.id)!.y -= dy / distance * force;
+        }
+        nodes.forEach((node) => { node.x += forces.get(node.id)!.x; node.y += forces.get(node.id)!.y; });
+      }
+      fitGraph();
+    }
     paintGraph();
   };
 
@@ -225,9 +249,10 @@ export function mount(container: HTMLElement, api: Host) {
     return `<div class="pmr-quote"><p><strong>${against ? 'Contredit par' : 'Prouvé par'}</strong> ${escape(piece.titre ?? piece.piece)}${piece.nature ? ` · ${escape(piece.nature)}` : ''} · ${pill(piece.fiable === true ? 'acquis' : piece.fiable === false ? 'exclu' : 'à établir', rated)}</p><blockquote>${escape(piece.citation)}</blockquote>${piece.personnes?.length ? `<p class="pmr-muted">Personnes : ${escape(piece.personnes.join(', '))}</p>` : ''}${actions}</div>`;
   };
   const conditionBlock = (path: string, condition: Json) => {
-    const members = Array.isArray(condition.l_une) ? `<p>Au choix, une suffit : ${condition.l_une.map((member: Json) => `<button class="pmr-link" data-select="${escape(member.condition)}">${escape(human(member.condition ?? ''))}</button> ${pill(member.statut ?? 'à établir')}`).join(', ')}</p>` : '';
+    const members = Array.isArray(condition.l_une) ? `<p>L’une des conditions suivantes : ${condition.l_une.map((member: Json) => `<button class="pmr-link" data-select="${escape(member.condition)}">${escape(human(member.condition ?? ''))}</button> ${pill(member.statut ?? 'à établir')}`).join(' ou ')}</p>` : '';
+    const link = /\.l_une\[\d+\]$/.test(path) ? 'L’une des conditions' : /\.sauf\[/.test(path) ? 'Sauf si' : /\.si\[0\]/.test(path) ? 'Si' : 'Et';
     const name = condition.condition ? `<button class="pmr-link" data-select="${escape(condition.condition)}">${escape(human(condition.condition))}</button> ` : '';
-    return `<div class="pmr-card"><header>${path.includes('.sauf[') ? '<span class="pmr-step">Sauf</span>' : '<span class="pmr-step">Si</span>'}${name}${pill(condition.statut ?? 'à établir')}${condition.decisif ? ' <span class="pmr-pill pmr-warn">décisif</span>' : ''}</header>${members}${(condition.selon ?? []).map(sourceBlock).join('')}${(condition.preuve ?? []).map((piece: Json) => pieceBlock(piece)).join('')}${(condition.contredit ?? []).map((piece: Json) => pieceBlock(piece, true)).join('')}</div>`;
+    return `<div class="pmr-card"><header><span class="pmr-step">${link}</span>${name}${pill(condition.statut ?? 'à établir')}${condition.decisif ? ' <span class="pmr-pill pmr-warn">décisif</span>' : ''}</header>${members}${(condition.selon ?? []).map(sourceBlock).join('')}${(condition.preuve ?? []).map((piece: Json) => pieceBlock(piece)).join('')}${(condition.contredit ?? []).map((piece: Json) => pieceBlock(piece, true)).join('')}</div>`;
   };
 
   const paintTest = () => {
@@ -279,7 +304,7 @@ export function mount(container: HTMLElement, api: Host) {
       return;
     }
     const uses = occurrences().filter((entry) => entry.condition.condition === selected);
-    detail.innerHTML = `<h3>${escape(human(selected))}</h3><p class="pmr-muted">Fait à établir par les pièces.</p>${uses.map((entry) => `<p class="pmr-muted">Condition de <button class="pmr-link" data-select="${escape(entry.parent)}">${escape(human(entry.parent))}</button>${entry.link === 'sauf' ? ' (exception)' : entry.link === 'l_une' ? ' (au choix avec d’autres conditions)' : ''}</p>${conditionBlock(entry.path, entry.condition)}`).join('')}<h4>Alertes</h4>${issueList(issuesOf(uses.map((entry) => entry.path)).filter((issue) => !dismissedIds().has(issue.id)))}`;
+    detail.innerHTML = `<h3>${escape(human(selected))}</h3><p class="pmr-muted">Fait à établir par les pièces.</p>${uses.map((entry) => `<p class="pmr-muted">Condition de <button class="pmr-link" data-select="${escape(entry.parent)}">${escape(human(entry.parent))}</button>${entry.link === 'sauf' ? ' (exception)' : entry.link === 'l_une' ? ' (l’une des conditions possibles)' : ''}</p>${conditionBlock(entry.path, entry.condition)}`).join('')}<h4>Alertes</h4>${issueList(issuesOf(uses.map((entry) => entry.path)).filter((issue) => !dismissedIds().has(issue.id)))}`;
   };
 
   const paint = () => {
