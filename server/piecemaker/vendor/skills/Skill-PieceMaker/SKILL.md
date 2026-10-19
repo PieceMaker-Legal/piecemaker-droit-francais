@@ -1,6 +1,6 @@
 ---
 name: piecemaker
-description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, volets (lire, pointer, fermer), tabular review, raisonnement juridique. Use when the user asks about case documents, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
+description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, volets (lire, pointer, fermer), tabular review. Use when the user asks about case documents, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
 ---
 
 # PieceMaker
@@ -89,12 +89,3 @@ pm tabular_review lancer --projet ID [--ia claude|codex|mistral] [--modele-ia TE
 
 `--recherche` JSON : `query`, `sources` (`cassation` `appel` `conseil_etat` `caa` `premiere_instance`), `matieres` (cassation : `CIVIL` `COMMERCIAL` `PENAL` `SOCIAL`), `publicationBulletin` (`TOUS` `PUBLIE` `INEDIT`), `sieges`, `publicationConseilEtat` (`TOUS` `PUBLIE` `NON_PUBLIE`), `villesCaa`, `publicationCaa` (`TOUS` `PUBLIE` `NON_PUBLIE`), `typesPremiereInstance` (`TRIBUNAL_JUDICIAIRE` `TRIBUNAL_GRANDE_INSTANCE` `TRIBUNAL_INSTANCE` `TRIBUNAL_COMMERCE` `CONSEIL_PRUDHOMMES` `TRIBUNAL_CORRECTIONNEL` `TRIBUNAL_SECURITE_SOCIALE` `TRIBUNAL_BAUX_RURAUX` `JURIDICTION_PROXIMITE` `OUTRE_MER` `TRIBUNAL_CONFLITS`), `dateDebut`, `dateFin`, `dispositifOnly`.
 
-## raisonnement
-
-Le raisonnement du dossier s’écrit dans `.piecemaker/raisonnement.js` (objet JavaScript sans fonctions : `questions`, un terme par clé avec `si`, `sauf`, `l_une`, `selon`, `preuve`, `contredit`, des délais et montants calculés (`delai`, `montant`, `decompte`) à partir de `valeurs` prouvées, et `essais`). Volet Raisonnement à côté du chat.
-
-| Commande | Effet |
-| --- | --- |
-| `pm raisonnement verifier` | lit le fichier sans l’exécuter, vérifie sources, citations, vigueur, pièces et personnes, exécute le test, réécrit le fichier dans son ordre et ne renvoie que les erreurs et manques, chacun avec son emplacement, sa ligne et le contenu de cette ligne |
-
-Une citation exacte à la ponctuation près est corrigée dans le fichier. Les alertes écartées par l’avocat et la fiabilité des pièces se gèrent dans le volet.

@@ -247,6 +247,7 @@ export async function verifyReasoning(input: {
     collect(root);
     return found;
   };
+  const actValidities = new Set(reasoning.questions.map((question) => question.validite).filter((name): name is string => Boolean(name)));
   const validityRoots = [...reasoning.questions.map((question) => question.validite), ...occurrences.flatMap(({ condition }) => condition.selon.map((basis) => basis.validite))].filter((name): name is string => Boolean(name));
   const applicabilityTerms = new Set(occurrences.flatMap(({ condition }) => condition.selon.flatMap((basis) => (basis.applicabilite ? [...tree(basis.applicabilite)] : []))));
   const validityTerms = new Set(validityRoots.flatMap((name) => [...tree(name)]));
@@ -315,7 +316,8 @@ export async function verifyReasoning(input: {
       if (check?.kind === 'texte' && !au) add('manque', `${place}.vigueur`, 'applicabilité dans le temps non établie : ajoute vigueur: { debut, fin, au: \'nom_de_date\' }, la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable', `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
       else if (check?.kind === 'texte' && !date) add('manque', `${place}.vigueur`, `${au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`);
       const exempt = applicabilityTerms.has(at.split('.')[0]);
-      const clauseExempt = validityTerms.has(at.split('.')[0]);
+      const clauseExempt = validityTerms.has(at.split('.')[0]) || applicabilityTerms.has(at.split('.')[0]);
+      if (basis.validite && actValidities.has(basis.validite)) add('erreur', `${place}.validite`, `validite : ${basis.validite} est le contrôle de validité de l’acte ; une clause a son propre contrôle (ex. validité_de_la_clause_${condition.condition ?? at.split('.')[0]})`);
       if (check?.kind === 'piece' && !clauseExempt) controlSlots.push(basis.validite ?? null);
       if (check?.kind === 'piece' && !basis.validite && !clauseExempt) add('manque', `${place}.validite`, `validité de la clause non établie : ajoute validite: 'validité_de_la_clause_${condition.condition ?? at.split('.')[0]}' et définis ce terme, dont les conditions établissent que la clause est valable au regard du droit applicable`, `${title} : la validité de la clause n’est pas établie.`, `#source:${basis.source}`);
       if (check?.kind === 'piece' && /\b(code|cgi|loi n|ordonnance n|décret n)/i.test(basis.citation) && /\barticles?\b/i.test(basis.citation) && !condition.selon.some((_, other) => basisChecks.get(`${at}.selon[${other}]`)?.kind === 'texte')) add('manque', place, 'la clause renvoie à un texte de loi : ajoute ce texte à selon (source, citation, vigueur)', `${title} : la clause renvoie à un texte de loi qui n’est pas cité.`, `#source:${basis.source}`);
