@@ -128,3 +128,64 @@ test('only entries without a turn are recognised as replayed history', () => {
   assert.equal(isReplayedVibeHistoryEntry({}), false);
   assert.equal(isReplayedVibeHistoryEntry(null), false);
 });
+
+function silentContext() {
+  return {
+    resolveProviderSessionId: () => null,
+    resolveResumeModel: async () => undefined,
+    getProviderModels: async () => ({ OPTIONS: [], DEFAULT: '' }),
+    normalizeMessage: () => [],
+    isProviderInstalled: async () => true,
+  } as unknown as ProviderRuntimeContext;
+}
+
+function withHandInstalledVibeOnly(t: test.TestContext) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-uv-'));
+  const previous = { home: process.env.PIECEMAKER_HOME, bin: process.env.UV_TOOL_BIN_DIR };
+  process.env.PIECEMAKER_HOME = path.join(root, 'piecemaker');
+  process.env.UV_TOOL_BIN_DIR = path.join(root, 'bin');
+  fs.mkdirSync(process.env.UV_TOOL_BIN_DIR, { recursive: true });
+  const vibe = path.join(process.env.UV_TOOL_BIN_DIR, process.platform === 'win32' ? 'vibe.exe' : 'vibe');
+  fs.writeFileSync(vibe, '');
+  t.after(() => {
+    for (const [key, value] of [['PIECEMAKER_HOME', previous.home], ['UV_TOOL_BIN_DIR', previous.bin]] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  return vibe;
+}
+
+test('a Vibe copied without its Python, as uv does on Windows, still answers without live streaming', async (t) => {
+  const vibe = withHandInstalledVibeOnly(t);
+  let spawned: { command: string; args: string[] } | undefined;
+  t.mock.method(childProcess, 'spawn', (command: string, args: string[]) => {
+    spawned = { command, args };
+    const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => true });
+    setImmediate(() => {
+      child.stdout.emit('data', Buffer.from(JSON.stringify(newTurn[1]) + '\n'));
+      child.emit('close', 0);
+    });
+    return child;
+  });
+  const sent: { kind?: string }[] = [];
+  const writer = { send(message: { kind?: string }) { sent.push(message); }, userId: null } as unknown as ProviderRuntimeWriter;
+  await mistralRuntime.run('bonjour', { sessionId: 'app-3', cwd: os.tmpdir() }, writer, silentContext());
+  assert.equal(path.basename(spawned?.command ?? ''), path.basename(vibe));
+  assert.ok(!spawned?.args.includes('-c'));
+  assert.ok(spawned?.args.includes('-p'));
+  assert.equal(sent.filter((message) => message.kind === 'error').length, 0);
+});
+
+test('a Vibe launch that fails before the process starts is shown in the chat', async (t) => {
+  withHandInstalledVibeOnly(t);
+  t.mock.method(childProcess, 'spawn', () => {
+    throw new Error('spawn EPERM');
+  });
+  const sent: { kind?: string; content?: string }[] = [];
+  const writer = { send(message: { kind?: string; content?: string }) { sent.push(message); }, userId: null } as unknown as ProviderRuntimeWriter;
+  await assert.rejects(mistralRuntime.run('bonjour', { sessionId: 'app-4', cwd: os.tmpdir() }, writer, silentContext()));
+  assert.match(sent.find((message) => message.kind === 'error')?.content ?? '', /spawn EPERM/);
+  assert.equal(sent.filter((message) => message.kind === 'complete').length, 1);
+});

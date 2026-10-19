@@ -12,9 +12,11 @@ import { currentVibeCliHost, isVibeInstalled, resolveVibeExecutable, type VibeCl
 import {
   createVibeInstallRouter,
   currentVibeInstallHost,
+  installEnvironment,
   installVibe,
   pythonCandidates,
   pythonVersionIsSupported,
+  runCommand,
   VIBE_PACKAGE,
   type CommandResult,
   type VibeInstallHost,
@@ -197,11 +199,11 @@ async function withRouter(host: VibeInstallHost, run: (origin: string) => Promis
 test('the routes report the state, install, then report vibe as installed', async () => {
   const { host } = fakeInstallHost({ pythonVersions: { python3: 'Python 3.12.5' } });
   await withRouter(host, async (origin) => {
-    assert.deepEqual(await (await fetch(`${origin}/api/piecemaker/vibe`)).json(), { installed: false, installing: false });
+    assert.deepEqual(await (await fetch(`${origin}/api/piecemaker/vibe`)).json(), { installed: false, installing: false, step: null, error: null });
     const install = await fetch(`${origin}/api/piecemaker/vibe/install`, { method: 'POST' });
     assert.equal(install.status, 200);
     assert.deepEqual(await install.json(), { installed: true });
-    assert.deepEqual(await (await fetch(`${origin}/api/piecemaker/vibe`)).json(), { installed: true, installing: false });
+    assert.deepEqual(await (await fetch(`${origin}/api/piecemaker/vibe`)).json(), { installed: true, installing: false, step: null, error: null });
   });
 });
 
@@ -229,4 +231,22 @@ test('real install of Mistral Vibe from PyPI into a temporary PIECEMAKER_HOME', 
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('the install downloads from PyPI directly, not through the local anonymisation proxy', () => {
+  const env = installEnvironment({ HTTPS_PROXY: 'http://127.0.0.1:51234', https_proxy: 'http://127.0.0.1:51234', HTTP_PROXY: 'http://proxy.cabinet-exemple.fr:3128', PATH: '/usr/bin' });
+  assert.equal(env.HTTPS_PROXY, undefined);
+  assert.equal(env.https_proxy, undefined);
+  assert.equal(env.HTTP_PROXY, 'http://proxy.cabinet-exemple.fr:3128');
+  assert.equal(env.PATH, '/usr/bin');
+  assert.equal(env.PIP_DISABLE_PIP_VERSION_CHECK, '1');
+});
+
+test('a step that outlives its delay ends the install even if a child keeps the output open', async () => {
+  const holder = 'require("child_process").spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { stdio: "inherit" }); setTimeout(() => {}, 60000);';
+  const started = Date.now();
+  const result = await runCommand(process.execPath, ['-e', holder], 500);
+  assert.equal(result.code, 1);
+  assert.match(result.output, /Délai dépassé/);
+  assert.ok(Date.now() - started < 5000);
 });
