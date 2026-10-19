@@ -295,20 +295,20 @@ test('un délai ou un montant mal écrit, prouvé sur la condition ou appliqué 
   assert.match(errors, /valeurs\.date_de_réalisation : date_de_réalisation sert à dommage_au_dessus_du_seuil : un nombre attendu/);
 });
 
-test('le raisonnement se qualifie contractuel ou contentieux ; la qualification appelle la vérification de la validité ou de la prescription', async () => {
+test('le raisonnement se qualifie drafting ou contentieux ; la qualification appelle la vérification de la validité ou de la prescription', async () => {
   assert.match(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /qualification : raisonnement non qualifié/);
-  const contractual = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:")), 'manque').join('\n');
-  assert.match(contractual, /questions\[0\] : contractuel : vérifier la validité : ajoute validite: 'validité_de_…' sur la question/);
+  const contractual = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:")), 'manque').join('\n');
+  assert.match(contractual, /questions\[0\] : drafting : vérifier la validité : ajoute validite: 'validité_de_…' sur la question/);
   assert.doesNotMatch(contractual, /non qualifié|prescription/);
   const litigation = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contentieux',\n  questions:")), 'manque').join('\n');
   assert.match(litigation, /questions\[0\] : contentieux : vérifier la prescription : ajoute prescription:/);
   assert.doesNotMatch(litigation, /vérifier la validité/);
-  const valid = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace('\n  essais:', "\n  validité_du_contrat: { sauf: [{ condition: 'vice_du_consentement', selon: [{ source: 'pieces/01_contrat.md', citation: `En cas de retard de livraison` }], preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },\n  essais:"));
+  const valid = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace('\n  essais:', "\n  validité_du_contrat: { sauf: [{ condition: 'vice_du_consentement', selon: [{ source: 'pieces/01_contrat.md', citation: `En cas de retard de livraison` }], preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },\n  essais:"));
   assert.doesNotMatch(texts(valid, 'manque').join('\n'), /vérifier la validité/);
   assert.deepEqual(texts(valid, 'erreur'), []);
   assert.equal(at(valid.annotated, 'validité_du_contrat.statut'), 'exclu');
   assert.equal(at(valid.annotated, 'questions[0].statut'), 'exclu');
-  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'pénal',\n  questions:")), 'erreur').join('\n'), /qualification : qualification : 'contractuel' ou 'contentieux'/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'pénal',\n  questions:")), 'erreur').join('\n'), /qualification : qualification : 'drafting' ou 'contentieux'/);
 });
 
 test('les contrôles portent un nom préfixé, désigné par leur emplacement ; le fichier revient dans l’ordre canonique', async () => {
@@ -326,12 +326,12 @@ test('les contrôles portent un nom préfixé, désigné par leur emplacement ; 
 });
 
 test('en contrat, les faits sont des hypothèses : pas de manque de preuve, mais chaque question a son essai, et les essais reprennent les faits établis', async () => {
-  const contractual = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:"));
+  const contractual = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:"));
   const manques = texts(contractual, 'manque').join('\n');
   assert.doesNotMatch(manques, /décide de la réponse/);
   assert.ok(at(contractual.annotated, 'questions[0].decisifs').length);
   assert.doesNotMatch(manques, /question sans essai/);
-  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:").replace(/\n  essais: \[[\s\S]*?\n  \],/, '')), 'manque').join('\n'), /questions\[0\] : question sans essai : ajoute dans essais un cas dont attendu porte sur pénalité_encourue/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace(/\n  essais: \[[\s\S]*?\n  \],/, '')), 'manque').join('\n'), /questions\[0\] : question sans essai : ajoute dans essais un cas dont attendu porte sur pénalité_encourue/);
   assert.match(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /décide de la réponse/);
   const inherited = await verify(EXAMPLE_CODE.replace('faits: { retard_de_livraison: vrai, mise_en_demeure: vrai, grève_nationale: vrai }', 'faits: { grève_nationale: vrai }'));
   assert.equal(at(inherited.annotated, 'bilan.essais'), '1/1');
@@ -381,7 +381,7 @@ test('les données des calculs sont déclarées dans valeurs, prouvées ou laiss
 });
 
 test('une clause a son propre contrôle de validité ; une clause citée pour l’applicabilité n’en réclame pas', async () => {
-  const shared = EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contractuel',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_du_contrat' }],").replace('\n  essais:', "\n  validité_du_contrat: { si: [{ condition: 'contrat_signé', selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },\n  essais:");
+  const shared = EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_du_contrat' }],").replace('\n  essais:', "\n  validité_du_contrat: { si: [{ condition: 'contrat_signé', selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },\n  essais:");
   assert.match(texts(await verify(shared), 'erreur').join('\n'), /pénalité_stipulée\.si\[0\]\.selon\[0\]\.validite : validite : validité_du_contrat est le contrôle de validité de l’acte ; une clause a son propre contrôle/);
   const governed = EXAMPLE_CODE.replace("        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", "        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },\n      { condition: 'droit_français_choisi', selon: [{ source: 'pieces/01_contrat.md', citation: `Article 1. Grève` }], preuve: [{ piece: 'pieces/01_contrat.md', citation: `Article 1. Grève` }] },");
   assert.notEqual(governed, EXAMPLE_CODE);
