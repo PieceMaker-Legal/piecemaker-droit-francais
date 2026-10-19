@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { createRequire } from 'module';
 import express from 'express';
 import path from 'path';
@@ -38,6 +39,8 @@ import { createOpenPanelRequestsRouter, createOpenPanelsRouter } from './open-pa
 import { startRemoteAccess } from './remote/index.js';
 import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
 import { createVibeInstallRouter } from './vibe-install.js';
+import { startSupportLog } from './support/log.js';
+import { createSupportRouter } from './support/report.js';
 import { vibeStreamingCommand } from './mistral-streaming.js';
 
 /**
@@ -69,6 +72,9 @@ const shellEnvironment = await resolveDesktopShellEnvironment();
 const vendor = createRequire(import.meta.url)(routerPath) as PieceMakerVendorModule;
 
 export const { piecemakerHome, stopOriginalsJobs } = vendor;
+const applicationVersion = (JSON.parse(fs.readFileSync(path.join(applicationRoot, 'package.json'), 'utf8')) as { version: string }).version;
+const supportLogDirectory = path.join(piecemakerHome(), 'logs');
+startSupportLog(supportLogDirectory, applicationVersion);
 const folderHistory = createFolderHistory();
 const publishProjects = startProjectRegistry((sourceId, folders, anonymizedFolders) => {
   vendor.publishProjectSource(sourceId, folders, anonymizedFolders);
@@ -77,6 +83,7 @@ const publishProjects = startProjectRegistry((sourceId, folders, anonymizedFolde
 const institutionalTerms = openInstitutionalTerms(getConnection(), applicationRoot);
 const { createAnonymizerService } = createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/anonymizer/service.cjs'));
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
+const { anonymize } = createRequire(import.meta.url)(path.join(applicationRoot, 'server/piecemaker/anonymizer/dictionary.cjs')) as { anonymize(text: string, dictionary: unknown): string };
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
 installCodexPlanRuntime(providerRuntimeService);
@@ -128,6 +135,12 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createOpenPanelsRouter(piecemakerHome()));
   router.use(remoteRouter);
   router.use(createVibeInstallRouter());
+  router.use(createSupportRouter({
+    logDirectory: supportLogDirectory,
+    version: applicationVersion,
+    anonymizerStatus: () => anonymizer.status(),
+    pseudonymize: (text) => anonymize(text, anonymizer.dictionary.get()),
+  }));
   return router;
 }
 export type { PieceMakerRuntimeStatus };

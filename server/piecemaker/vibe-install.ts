@@ -168,6 +168,10 @@ export function installVibe(host: VibeInstallHost = currentVibeInstallHost()): P
   return pendingInstall;
 }
 
+export function vibeInstallState(): { installing: boolean; step: string | null; error: string | null } {
+  return { installing: pendingInstall !== null, step: installStep, error: lastInstallError };
+}
+
 export function createVibeInstallRouter(host: () => VibeInstallHost = currentVibeInstallHost) {
   const router = express.Router();
   router.get('/vibe', (_req: Request, res: Response) => {

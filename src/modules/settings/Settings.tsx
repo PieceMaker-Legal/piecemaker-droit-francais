@@ -18,6 +18,7 @@ import AboutTab from '@/modules/settings/tabs/AboutTab';
 import { DesktopUninstallTab } from '@/piecemaker/desktop/DesktopUninstallTab';
 import { LocalModelsSettingsTab } from '@/piecemaker/local-models/LocalModelsSettingsTab';
 import { RemoteAccessSettingsTab } from '@/piecemaker/remote/RemoteAccessSettingsTab';
+import { SupportSettingsTab } from '@/piecemaker/support/SupportSettingsTab';
 import { useSettingsController } from '@/modules/settings/hooks/useSettingsController';
 import { useWebPush } from '@/modules/settings/hooks/useWebPush';
 import type { AgentSettingsProject } from '@/shared/types';
@@ -282,6 +283,8 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
               {activeTab === 'localModels' && <LocalModelsSettingsTab />}
 
               {activeTab === 'remote' && <RemoteAccessSettingsTab />}
+
+              {activeTab === 'assistance' && <SupportSettingsTab />}
 
               {activeTab === 'about' && <AboutTab />}
             </div>
