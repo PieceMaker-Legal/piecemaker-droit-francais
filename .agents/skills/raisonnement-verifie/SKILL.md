@@ -14,6 +14,7 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.js`, un o
 - **Erreur = défaut d'écriture** (syntaxe, citation introuvable, terme non défini, essai non conforme…). **Manque = ce qui reste à établir** ; l'avocat peut l'écarter.
 - **Générique** : aucune règle ne dépend d'un domaine ou d'un vocabulaire (« annexe », « contrat »…). L'agent déclare, le vérificateur vérifie.
 - **Souplesse** : un manque désigne où se prononcer, jamais quoi répondre. Ne pas pousser le modèle à combler pour combler.
+- **Un manque n'est réclamé que s'il est systématique** : il doit se poser pour tout élément ou toute question du mode, quel que soit le sujet (la vigueur de tout texte cité ; la prescription en contentieux, où toute action exerce un droit). Ce qui ne se pose que selon le sens de la question n'est jamais réclamé, puisque le vérificateur ne lit pas ce sens (la prescription en consultation : « puis-je encore agir ? » oui, « combien d'impôt sur la cession à venir ? » non) : l'emplacement reste disponible et contrôlé, l'agent l'ajoute s'il le juge utile. Avant d'ajouter un manque, vérifier cette règle.
 - Le vérificateur ne cite jamais lui-même de texte de référence : il signale ce qui doit être entré.
 - Données réelles interdites dans le dépôt (voir `AGENTS.md`) : exemples et tests fictifs.
 
@@ -42,8 +43,6 @@ Termes ordinaires désignés par un emplacement, nommés avec son préfixe (vér
 | `prescription` | question | `prescription_` | contentieux seulement ; ailleurs facultatif |
 
 Exemptions = garde-fous contre la régression à l'infini (validité → texte → applicabilité → clause sans nouvelle validité).
-
-**Réclamé seulement ce qui vaut pour toute question du mode.** Un manque systématique n'existe que si le point se pose dans tous les cas : la vigueur pour tout texte cité, la prescription en contentieux (toute action exerce un droit). Ce qui dépend du sens de la question (la prescription en consultation : « puis-je encore agir ? » oui, « combien d'impôt sur la cession à venir ? » non) n'est jamais réclamé : le vérificateur ne lit pas le sens des questions. L'emplacement reste disponible et contrôlé ; l'agent l'ajoute s'il le juge utile.
 
 ## Manques par mode
 
