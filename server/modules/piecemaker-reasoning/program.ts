@@ -520,40 +520,27 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   };
 }
 
-export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'annotated' | 'issues' | 'code'> & { dismissed?: ReasoningSnapshot['dismissed'] }) {
+export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'issues' | 'code'> & { dismissed?: ReasoningSnapshot['dismissed'] }) {
   const hidden = new Set((snapshot.dismissed ?? []).map((entry) => entry.id));
   const issues = snapshot.issues.filter((issue) => !hidden.has(issue.id));
-  const annotated = snapshot.annotated as Record<string, any> | null;
-  if (!annotated) return ['Raisonnement illisible :', ...issues.map((issue) => `- ${issue.line ? `ligne ${issue.line} : ` : ''}${issue.text}`)].join('\n');
-  let lines = new Map<string, number>();
-  try { lines = parseLiteral(snapshot.code).lines; } catch { lines = new Map(); }
-  const where = (at: string) => (lines.get(at) ? ` (ligne ${lines.get(at)})` : '');
-  const bilan = annotated.bilan ?? {};
-  const out = [`Bilan : ${bilan.erreurs ?? 0} erreur(s) · ${bilan.manques ?? 0} manque(s)${bilan.essais ? ` · essais ${bilan.essais}` : ''}${bilan.controles ? ` · contrôles ${bilan.controles}` : ''}`, `Fichier : ${REASONING_FILE}, réécrit dans son ordre ; chaque terme commence à la ligne indiquée.`, '', 'Réponses'];
-  (annotated.questions ?? []).forEach((question: Record<string, any>, index: number) => {
-    const facts = question.decisifs ?? question.en_jeu ?? [];
-    out.push(`- questions[${index}]${where(`questions[${index}]`)} ${question.reponse} : ${question.statut ?? 'à établir'}${facts.length ? ` · ${question.decisifs ? 'décisifs' : 'en jeu'} : ${facts.join(', ')}` : ''}`);
-  });
-  const groups = new Map<string, ReasoningIssue[]>();
-  for (const issue of issues) {
-    const head = issue.path ? issue.path.split(/[.]/)[0] : 'fichier';
-    groups.set(head, [...(groups.get(head) ?? []), issue]);
-  }
-  if (groups.size) out.push('', 'À reprendre');
-  for (const [head, list] of groups) {
-    const term = annotated[head];
-    const statut = term && typeof term === 'object' && !Array.isArray(term) && typeof term.statut === 'string' ? `, ${term.statut}` : '';
-    out.push(`${head}${lines.get(head) ? ` (ligne ${lines.get(head)}${statut})` : statut ? ` (${statut.slice(2)})` : ''}`);
-    for (const issue of list) out.push(`  - ${issue.kind}${issue.path && issue.path !== head ? ` · ${issue.path.slice(head.length).replace(/^\./, '')}` : ''}${issue.line && issue.line !== lines.get(head) ? ` (ligne ${issue.line})` : ''} : ${issue.text}`);
-    const calculs: string[] = [];
-    const walk = (condition: Record<string, any>, at: string) => {
-      if (condition.calcul?.echeance) calculs.push(`  - calcul · ${at} ${condition.condition} : échéance ${condition.calcul.echeance}, date retenue ${condition.calcul.date_retenue}`);
-      else if (condition.calcul && 'seuil' in condition.calcul) calculs.push(`  - calcul · ${at} ${condition.condition} : ${condition.calcul.montant} pour un seuil de ${condition.calcul.seuil}`);
-      (condition.l_une ?? []).forEach((member: Record<string, any>, index: number) => walk(member, `${at}.l_une[${index}]`));
-    };
-    if (term && typeof term === 'object') for (const field of ['si', 'sauf']) (term[field] ?? []).forEach((condition: Record<string, any>, index: number) => walk(condition, `${field}[${index}]`));
-    out.push(...calculs);
-  }
+  const source = snapshot.code.split('\n');
+  const content = (line: number) => {
+    const text = source[line - 1]?.trim() ?? '';
+    const shown = text.length < 4 && source[line] ? `${text} ${source[line].trim()}` : text;
+    return shown.length > 220 ? `${shown.slice(0, 219)}…` : shown;
+  };
+  const errors = issues.filter((issue) => issue.kind === 'erreur');
+  const gaps = issues.filter((issue) => issue.kind === 'manque');
+  if (!errors.length && !gaps.length) return `Aucune erreur, aucun manque. ${REASONING_FILE} a été réécrit dans son ordre.`;
+  const out = [`${errors.length} erreur(s), ${gaps.length} manque(s). ${REASONING_FILE} a été réécrit dans son ordre : les lignes ci-dessous s’y rapportent.`];
+  const block = (label: string, issue: ReasoningIssue, index: number) => {
+    const place = issue.path ? issue.path.replace(/\./g, ' › ') : 'fichier';
+    out.push('', `${label} ${index + 1} — ${place}${issue.line ? ` (ligne ${issue.line})` : ''}`);
+    out.push(issue.line ? `  ligne ${issue.line} : ${content(issue.line)}` : `  ${!issue.path ? 'porte sur le fichier entier' : /[.[]/.test(issue.path) ? `absent du fichier : à ajouter dans ${issue.path.replace(/(\.[^.[\]]+|\[\d+\])$/, '')}` : 'absent du fichier : clé à ajouter au premier niveau de l’objet'}`);
+    out.push(`  ${issue.text}`);
+  };
+  errors.forEach((issue, index) => block('ERREUR', issue, index));
+  gaps.forEach((issue, index) => block('MANQUE', issue, index));
   return out.join('\n');
 }
 

@@ -54,9 +54,10 @@ test('l’exemple fictif est à établir et désigne les faits décisifs', async
   assert.equal(at(result.annotated, 'pénalité_encourue.si[0].selon[0].titre'), 'Code civil fictif, article 1231-5');
   assert.equal(at(result.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
   const described = describeReasoning(result);
-  assert.match(described, /questions\[0\] \(ligne \d+\) pénalité_encourue : à établir · décisifs : force_majeure, grève_nationale/);
-  assert.match(described, /^grève \(ligne \d+, à établir\)$/m);
-  assert.doesNotMatch(described, /citation|statut:/);
+  assert.match(described, /^0 erreur\(s\), \d+ manque\(s\)\./);
+  assert.match(described, /MANQUE \d+ — grève › si\[0\] › l_une\[0\] \(ligne (\d+)\)\n  ligne \1 : \{ condition: 'grève_nationale' \},\n  grève_nationale décide de la réponse/);
+  assert.match(described, /MANQUE \d+ — qualification\n  absent du fichier : clé à ajouter au premier niveau de l’objet\n  raisonnement non qualifié/);
+  assert.doesNotMatch(described, /Réponses|décisifs :|statut/);
 });
 
 test('toutes les feuilles établies : la réponse est acquise ; la preuve de l’exception l’exclut', async () => {
@@ -169,7 +170,7 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?)').run('fictif', 3, 'ancien format', JSON.stringify({ code: 'ancien format', questions: [] }));
   assert.equal(service.read(folder).code, '');
   const text = await service.command(folder, { commande: 'verifier' });
-  assert.match(text, /^Bilan : \d+ erreur/);
+  assert.match(text, /^\d+ erreur\(s\), \d+ manque\(s\)/);
   assert.match(fs.readFileSync(file, 'utf8'), /'Sauf inexécution définitive'/);
   const issue = service.read(folder).issues.find((entry) => entry.kind === 'manque')!;
   assert.equal((await service.dismiss(folder, issue.id)).dismissed.length, 1);
