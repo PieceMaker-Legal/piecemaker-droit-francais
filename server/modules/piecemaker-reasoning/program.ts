@@ -6,7 +6,7 @@ import type Database from 'better-sqlite3';
 
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, ReasoningSnapshot, ReasoningStatus, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import { QUESTION_DATE, calculate, compile, decisive, reachableLeaves, runTrials, structure } from './engine.js';
+import { calculate, compile, decisive, reachableLeaves, runTrials, structure } from './engine.js';
 import type { Calculation, Facts, Trace } from './engine.js';
 import { LiteralError, parseLiteral, printLiteral, readReasoning, stripAnnotations } from './format.js';
 import type { Basis, Condition, Measure, Ref } from './format.js';
@@ -101,8 +101,6 @@ export async function verifyReasoning(input: {
   for (const cycle of shape.cycles) add('erreur', cycle.split(' → ')[0], `boucle : ${cycle}`);
   reasoning.questions.forEach((question, index) => {
     if (!reasoning.terms.has(question.reponse)) add('erreur', `questions[${index}].reponse`, `terme ${question.reponse} non défini : écris ${question.reponse}: { si: [...] }`);
-    if (!question.date) add('manque', `questions[${index}]`, 'date d’application non renseignée : ajoute date: { valeur: \'AAAA-MM-JJ\', preuve: [{ piece, citation }] }', 'La date des faits n’est pas fixée : impossible de savoir quelle version des textes s’applique.');
-    else if (!question.date.preuve.length) add('manque', `questions[${index}].date`, 'date non justifiée : ajoute preuve: [{ piece, citation }]', `Aucune pièce ne justifie la date retenue (${day(question.date.valeur)}).`);
   });
   if (!reasoning.qualification) add('manque', 'qualification', 'raisonnement non qualifié : ajoute qualification: \'contractuel\' ou \'contentieux\'', 'Le raisonnement n’est pas qualifié : contractuel ou contentieux.');
   if (reasoning.qualification === 'contentieux') add('manque', 'qualification', 'contentieux : vérifier la prescription', 'Prescription à vérifier.');
@@ -190,7 +188,6 @@ export async function verifyReasoning(input: {
     condition.preuve.forEach((ref, index) => checks.push(checkRef(`${at}.preuve[${index}]`, ref)));
     condition.contredit.forEach((ref, index) => checks.push(checkRef(`${at}.contredit[${index}]`, ref)));
   }
-  reasoning.questions.forEach((question, index) => question.date?.preuve.forEach((ref, at) => checks.push(checkRef(`questions[${index}].date.preuve[${at}]`, ref))));
   for (const [name, entry] of reasoning.valeurs) entry.preuve.forEach((ref, index) => checks.push(checkRef(`valeurs.${name}.preuve[${index}]`, ref)));
   await Promise.all(checks);
 
@@ -211,17 +208,22 @@ export async function verifyReasoning(input: {
     const entry = reasoning.valeurs.get(name);
     return entry && entry.preuve.some((_, index) => verifiedRefs.get(`valeurs.${name}.preuve[${index}]`)) ? entry.valeur : null;
   };
-  const leafAt = (date: string | null) => (name: string): ReasoningValue => {
+  const leaf = (name: string): ReasoningValue => {
     const measure = reasoning.computed.get(name);
-    return measure ? calculate(measure, valueOf, date).value : leafValue(name);
+    return measure ? calculate(measure, valueOf).value : leafValue(name);
   };
-  const measureDates = new Map<string, string | null>();
+  const dateOf = (basis: Basis) => { const value = basis.au ? valueOf(basis.au) : null; return typeof value === 'string' ? value : null; };
+  const inForceAt = (basis: Basis, check: BasisCheck): ReasoningValue => {
+    const date = dateOf(basis);
+    if (date && check.from) return inForce(date, check.from, check.to);
+    return check.kind === 'piece' && !basis.au ? true : null;
+  };
 
-  const basisValue = (date: string | null, at: string, condition: Condition): ReasoningValue => {
+  const basisValue = (at: string, condition: Condition): ReasoningValue => {
     if (!condition.selon.length) return true;
-    const relevant = condition.selon.map((_, index) => basisChecks.get(`${at}.selon[${index}]`)).filter((check): check is BasisCheck => Boolean(check && check.kind !== 'decision'));
+    const relevant = condition.selon.flatMap((basis, index) => { const check = basisChecks.get(`${at}.selon[${index}]`); return check && check.kind !== 'decision' ? [{ basis, check }] : []; });
     if (!relevant.length) return condition.selon.some((_, index) => basisChecks.get(`${at}.selon[${index}]`)?.kind === 'decision') ? true : null;
-    const values = relevant.map((check): ReasoningValue => (date && check.from ? inForce(date, check.from, check.to) : null));
+    const values = relevant.map(({ basis, check }) => inForceAt(basis, check));
     return values.includes(true) ? true : values.includes(null) ? null : false;
   };
 
@@ -229,16 +231,13 @@ export async function verifyReasoning(input: {
   const statuses = new Map<string, ReasoningValue>();
   const vigueurs = new Map<string, ReasoningValue>();
   const decisiveLeaves = new Set<string>();
-  const firstDate = reasoning.questions.find((question) => question.date)?.date?.valeur ?? null;
   reasoning.questions.forEach((question, index) => {
     if (!reasoning.terms.has(question.reponse) || shape.cycles.length) return;
-    const date = question.date?.valeur ?? null;
-    const facts: Facts = { leaf: leafAt(date), basis: (at, condition) => { const value = basisValue(date, at, condition); if (!vigueurs.has(at)) vigueurs.set(at, value); return value; } };
+    const facts: Facts = { leaf, basis: (at, condition) => { const value = basisValue(at, condition); if (!vigueurs.has(at)) vigueurs.set(at, value); return value; } };
     const trace: Trace = new Map();
     const value = test(facts, trace, [question.reponse]).get(question.reponse) ?? null;
     for (const [key, item] of trace) if (!statuses.has(key)) statuses.set(key, item);
     const reachable = [...reachableLeaves(reasoning, question.reponse)];
-    for (const name of reachable) if (reasoning.computed.has(name) && !measureDates.has(name)) measureDates.set(name, date);
     const unknown = reachable.filter((name) => facts.leaf(name) === null).sort();
     const found = value === null ? decisive(test, facts, question.reponse, unknown) : { decisive: [], inPlay: false };
     for (const name of found.decisive) decisiveLeaves.add(name);
@@ -250,23 +249,26 @@ export async function verifyReasoning(input: {
   for (const { at, condition } of occurrences) {
     const holder = node(annotated, at);
     if (!holder) continue;
-    const leaf = condition.condition && !reasoning.terms.has(condition.condition) ? condition.condition : null;
-    holder.statut = leaf && contested(leaf) ? 'contesté' : STATUS(statuses.get(at) ?? null);
-    const result = condition.mesure ? calculate(condition.mesure, valueOf, measureDates.get(leaf!) ?? firstDate) : null;
+    const fact = condition.condition && !reasoning.terms.has(condition.condition) ? condition.condition : null;
+    holder.statut = fact && contested(fact) ? 'contesté' : STATUS(statuses.get(at) ?? null);
+    const result = condition.mesure ? calculate(condition.mesure, valueOf) : null;
     if (result?.calcul) holder.calcul = result.calcul;
-    if (leaf && decisiveLeaves.has(leaf)) {
+    if (fact && decisiveLeaves.has(fact)) {
       holder.decisif = true;
-      if (result) add('manque', at, `${leaf} décide de la réponse : renseigne ${result.missing.filter((name) => name !== QUESTION_DATE).join(', ') || 'la date de la question'} dans valeurs, avec sa preuve`, `${human(leaf)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, leaf);
-      else add('manque', at, `${leaf} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(leaf)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, leaf);
+      if (result) add('manque', at, `${fact} décide de la réponse : renseigne ${result.missing.join(', ')} dans valeurs, avec sa preuve`, `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
+      else add('manque', at, `${fact} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
     }
     condition.selon.forEach((basis, index) => {
       const place = `${at}.selon[${index}]`;
       const check = basisChecks.get(place);
       const source = node(annotated, place);
       const title = String(source?.titre ?? basis.source);
-      if (source && check?.kind && check.kind !== 'decision') source.en_vigueur = firstDate && check.from ? inForce(firstDate, check.from, check.to) : null;
-      if (firstDate && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${firstDate} ; cite la version en vigueur à la date d’application`, `${title} : la version citée n’était pas en vigueur au ${day(firstDate)}.`, `#source:${basis.source}`);
-      if (check?.kind === 'texte' && !basis.applicabilite) add('manque', `${place}.applicabilite`, 'justifie pourquoi ce texte s’applique au dossier (champ d’application, qualité des parties, date) : ajoute applicabilite: `…`', `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
+      const date = dateOf(basis);
+      if (source && check?.kind && check.kind !== 'decision') source.en_vigueur = date && check.from ? inForce(date, check.from, check.to) : null;
+      if (date && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${date} (${basis.au}) ; cite la version en vigueur à cette date`, `${title} : la version citée n’était pas en vigueur au ${day(date)}.`, `#source:${basis.source}`);
+      if (check?.kind === 'texte' && !basis.au) add('manque', `${place}.au`, 'applicabilité dans le temps non établie : ajoute au: \'nom_de_date\', la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable', `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
+      else if (check?.kind === 'texte' && !date) add('manque', `${place}.au`, `${basis.au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(basis.au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`);
+      if (check?.kind === 'texte' && !basis.applicabilite) add('manque', `${place}.applicabilite`, 'justifie pourquoi ce texte s’applique au dossier (champ d’application, qualité des parties) : ajoute applicabilite: `…`', `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
     });
   }
   for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = STATUS(statuses.get(name) ?? null); }
@@ -274,7 +276,7 @@ export async function verifyReasoning(input: {
   for (const name of [...shape.leaves].sort()) {
     const measure = reasoning.computed.get(name);
     if (measure) {
-      const result = calculate(measure, valueOf, measureDates.get(name) ?? firstDate);
+      const result = calculate(measure, valueOf);
       emit({ key: `fait:${name}`, step: 'fait', status: result.value === null ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: `${explain(measure, result)}${decisiveLeaves.has(name) ? ' · décisif' : ''}` });
       continue;
     }
@@ -284,7 +286,7 @@ export async function verifyReasoning(input: {
   }
   for (const name of reasoning.terms.keys()) emit({ key: `terme:${name}`, step: 'condition', status: statuses.get(name) === null || statuses.get(name) === undefined ? 'neutre' : 'ok', subject: human(name), text: ANSWER[STATUS(statuses.get(name) ?? null)] });
 
-  const trials = shape.cycles.length ? [] : runTrials(reasoning, test, firstDate);
+  const trials = shape.cycles.length ? [] : runTrials(reasoning, test);
   trials.forEach((result, index) => {
     const holder = node(annotated, `essais[${index}]`);
     if (holder) Object.assign(holder, result);
@@ -474,18 +476,20 @@ export const EXAMPLE_CODE = `{
     {
       question: \`La pénalité de retard est-elle due par Société Beta SARL ?\`,
       reponse: 'pénalité_encourue',
-      date: { valeur: '2025-06-14', preuve: [{ piece: 'pieces/05_bon_de_livraison.md', citation: \`Livré le 14/06/2025\` }] },
     },
   ],
+  valeurs: {
+    date_de_conclusion_du_contrat: { valeur: '2024-01-15', preuve: [{ piece: 'pieces/01_contrat.md', citation: \`Fait le 15/01/2024\` }] },
+  },
   pénalité_encourue: {
     si: [
       { condition: 'pénalité_stipulée',
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null }, applicabilite: \`contrat de vente assorti d’une clause pénale\` }] },
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null }, au: 'date_de_conclusion_du_contrat', applicabilite: \`contrat de vente assorti d’une clause pénale\` }] },
       { l_une: [
           { condition: 'mise_en_demeure', preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: \`vous met en demeure\` }] },
           { condition: 'inexécution_définitive' },
         ],
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null }, applicabilite: \`contrat de vente assorti d’une clause pénale\` }] },
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null }, au: 'date_de_conclusion_du_contrat', applicabilite: \`contrat de vente assorti d’une clause pénale\` }] },
     ],
   },
   pénalité_stipulée: {
@@ -522,7 +526,7 @@ export const EXAMPLE_CODE = `{
 
 export const EXAMPLE_SOURCES: Record<string, SourceInfo> = {
   LEGIARTI000000000005: { kind: 'texte', title: 'Code civil fictif, article 1231-5', text: 'Sauf inexécution définitive, la pénalité n\'est encourue que lorsque le débiteur est mis en demeure.', validity: { from: '2016-10-01', to: null } },
-  'pieces/01_contrat.md': { kind: 'piece', title: 'Contrat de prestation (fictif)', text: 'Article 1. Grève : grève nationale ou propre au secteur. Article 8. En cas de retard de livraison, une pénalité est due, sauf force majeure au sens de l\'article 12. Article 12. Constituent des cas de force majeure les événements de l\'article 1218, ainsi que les grèves.' },
+  'pieces/01_contrat.md': { kind: 'piece', title: 'Contrat de prestation (fictif)', text: 'Fait le 15/01/2024. Article 1. Grève : grève nationale ou propre au secteur. Article 8. En cas de retard de livraison, une pénalité est due, sauf force majeure au sens de l\'article 12. Article 12. Constituent des cas de force majeure les événements de l\'article 1218, ainsi que les grèves.' },
   'pieces/05_bon_de_livraison.md': { kind: 'piece', title: 'Bon de livraison (fictif)', text: 'Société Beta SARL. Livré le 14/06/2025.' },
   'pieces/06_mise_en_demeure.md': { kind: 'piece', title: 'Mise en demeure (fictive)', text: 'La présente vous met en demeure de livrer.' },
   'pieces/07_courriel.md': { kind: 'piece', title: 'Courriel (fictif)', text: 'Le mouvement limité à notre atelier a duré deux jours.' },

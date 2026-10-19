@@ -15,7 +15,7 @@ type Based = { source: Json; target: string };
 const RESERVED = new Set(['bilan', 'questions', 'essais', 'valeurs']);
 const UNIT: Record<string, string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
 const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moins', moins_de: 'moins de', au_plus: 'au plus' };
-const inputs = (condition: Json): string[] => condition.delai ? [condition.delai.de, condition.delai.a].filter(Boolean) : condition.montant ? [condition.montant.valeur, condition.montant.seuil].filter((item) => typeof item === 'string') : [];
+const inputs = (condition: Json): string[] => condition.delai ? [condition.delai.de, condition.delai.a] : condition.montant ? [condition.montant.valeur, condition.montant.seuil].filter((item) => typeof item === 'string') : [];
 const COLORS: Record<string, string> = { question: '#e2a5c6', terme: '#ba9ce9', fait: '#68bea3', source: '#6b9fdb', piece: '#8c96ad' };
 const STATUS: Record<string, string> = { acquis: 'Acquis', exclu: 'Exclu', 'à établir': 'À établir', contesté: 'Contesté' };
 const ANSWER: Record<string, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', contesté: 'Contestée' };
@@ -264,7 +264,7 @@ export function mount(container: HTMLElement, api: Host) {
       const [[unit, count]] = Object.entries(condition.delai[bound] as Record<string, number>);
       const calcul = condition.calcul ? `<p class="pmr-muted">Échéance au ${date(condition.calcul.echeance)}, date retenue ${date(condition.calcul.date_retenue)}.</p>` : '';
       const rule = condition.decompte?.length ? condition.decompte.map(sourceBlock).join('') : `<p>${pill('à établir', 'règle de décompte non mentionnée')}</p>`;
-      return `<p><strong>Délai :</strong> ${COMPARE[bound]} ${count} ${UNIT[unit]} entre ${named(condition.delai.de)} et ${condition.delai.a ? named(condition.delai.a) : 'la date de la question'}</p>${calcul}<p><strong>Règle de décompte</strong></p>${rule}${proofs}`;
+      return `<p><strong>Délai :</strong> ${COMPARE[bound]} ${count} ${UNIT[unit]} entre ${named(condition.delai.de)} et ${named(condition.delai.a)}</p>${calcul}<p><strong>Règle de décompte</strong></p>${rule}${proofs}`;
     }
     if (condition.montant) {
       const comparison = Object.keys(COMPARE).find((key) => condition.montant[key] !== undefined)!;
@@ -307,7 +307,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (!question) { detail.innerHTML = '<p class="pmr-muted">Aucune question.</p>'; return; }
     if (!selected || selected === '#question') {
       const essais = Array.isArray(annotated()?.essais) ? annotated()!.essais as Json[] : [];
-      detail.innerHTML = `<h3>${escape(question.question)}</h3><p>${pill(question.statut ?? 'à établir', `Réponse : ${ANSWER[question.statut ?? 'à établir']}`)}</p>${question.date ? `<p class="pmr-muted">Droit appliqué au ${date(question.date.valeur)}</p>${(question.date.preuve ?? []).map((piece: Json) => pieceBlock(piece)).join('')}` : ''}${question.decisifs?.length ? `<h4>Faits décisifs</h4><p>${question.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${question.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(question.en_jeu.map(human).join(', '))}</p>` : ''}${question.personnes?.length ? `<h4>Personnes</h4><p>${escape(question.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Essais</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}`;
+      detail.innerHTML = `<h3>${escape(question.question)}</h3><p>${pill(question.statut ?? 'à établir', `Réponse : ${ANSWER[question.statut ?? 'à établir']}`)}</p>${question.decisifs?.length ? `<h4>Faits décisifs</h4><p>${question.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${question.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(question.en_jeu.map(human).join(', '))}</p>` : ''}${question.personnes?.length ? `<h4>Personnes</h4><p>${escape(question.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Essais</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}`;
       return;
     }
     if (selected.startsWith('#source:')) {

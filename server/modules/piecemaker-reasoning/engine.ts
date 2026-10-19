@@ -83,8 +83,6 @@ export function decisive(test: Test, facts: Facts, root: string, unknown: string
 export type Lookup = (name: string) => string | number | null;
 export type Calculation = { value: ReasoningValue; missing: string[]; calcul: Record<string, string | number> | null };
 
-export const QUESTION_DATE = 'date_de_la_question';
-
 export function addDuration(start: string, { unite, nombre }: Duration): string {
   const date = new Date(`${start}T00:00:00Z`);
   if (unite === 'jours') date.setUTCDate(date.getUTCDate() + nombre);
@@ -98,12 +96,12 @@ export function addDuration(start: string, { unite, nombre }: Duration): string 
   return date.toISOString().slice(0, 10);
 }
 
-export function calculate(measure: Measure, lookup: Lookup, date: string | null): Calculation {
+export function calculate(measure: Measure, lookup: Lookup): Calculation {
   if (measure.delai) {
     const { de, a, borne, duree } = measure.delai;
     const start = lookup(de);
-    const end = a ? lookup(a) : date;
-    const missing = [...(typeof start === 'string' ? [] : [de]), ...(typeof end === 'string' ? [] : [a ?? QUESTION_DATE])];
+    const end = lookup(a);
+    const missing = [...(typeof start === 'string' ? [] : [de]), ...(typeof end === 'string' ? [] : [a])];
     if (typeof start !== 'string' || typeof end !== 'string') return { value: null, missing, calcul: null };
     const echeance = addDuration(start, duree);
     return { value: borne === 'au_plus' ? end <= echeance : end >= echeance, missing, calcul: { depart: start, echeance, date_retenue: end } };
@@ -117,7 +115,7 @@ export function calculate(measure: Measure, lookup: Lookup, date: string | null)
   return { value, missing, calcul: { montant: amount, seuil: threshold } };
 }
 
-export function runTrials(reasoning: Reasoning, test: Test, date: string | null = null) {
+export function runTrials(reasoning: Reasoning, test: Test) {
   return reasoning.essais.map((trial) => {
     const trace: Trace = new Map();
     const given: Lookup = (name) => { const item = trial.faits[name]; return typeof item === 'boolean' || item === undefined ? null : item; };
@@ -125,7 +123,7 @@ export function runTrials(reasoning: Reasoning, test: Test, date: string | null 
       const item = trial.faits[name];
       if (typeof item === 'boolean') return item;
       const measure = reasoning.computed.get(name);
-      return measure ? calculate(measure, given, date).value : null;
+      return measure ? calculate(measure, given).value : null;
     };
     const values = test({ leaf, basis: () => true }, trace, Object.keys(trial.attendu));
     const obtenu = Object.fromEntries(Object.keys(trial.attendu).map((name) => [name, values.get(name) ?? null]));
