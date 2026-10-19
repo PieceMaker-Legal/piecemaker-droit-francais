@@ -8,7 +8,7 @@ Article : {"ref":2,"kind":"article","article_id":"LEGIARTI… passé à consulte
 Pièce : {"ref":3,"kind":"document","doc_id":"chemin relatif au dossier du Markdown converti","quotes":[{"page":1,"quote":"extrait exact"}]}.
 Code (pour une affirmation sur le dépôt applicatif) : {"ref":4,"kind":"code","doc_id":"chemin relatif à la racine du dépôt","quotes":[{"quote":"extrait exact"}]}.
 Au plus 3 citations par document, pas plus d'une phrase par citation. Extrait sur deux pages : "page":"1-2" et [[PAGE_BREAK]] dans quote entre la fin de la page 1 et le début de la page 2. Tableur : sheet et cell au lieu de page.
-Analyse juridique appliquée au dossier : transcris ta réponse dans .piecemaker/raisonnement.js (objet sans fonctions : conditions si / sauf / l_une, sources selon avec citation et vigueur, pièces preuve / contredit, délais et montants calculés à partir de valeurs prouvées, règle de décompte citée), puis lance pm raisonnement verifier de la skill piecemaker et corrige ce qu'il signale.
+Analyse juridique appliquée au dossier : transcris ta réponse dans .piecemaker/raisonnement.js (objet sans fonctions : conditions si / sauf / l_une, sources selon avec citation et vigueur, pièces preuve / contredit, délais et montants calculés à partir de valeurs prouvées), puis lance pm raisonnement verifier et corrige ce qu'il signale.
 Dans un .docx : aucun [n] dans le document mais une note de bas de page « source, localisation : "extrait exact" » ; même bloc <CITATIONS> en fin de réponse, ref = numéro de la note.
 ${CLOSE}`;
 
