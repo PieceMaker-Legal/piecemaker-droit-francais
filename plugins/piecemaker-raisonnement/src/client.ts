@@ -13,7 +13,7 @@ type Edge = { from: string; to: string; link: Occurrence['link'] | 'preuve' | 'c
 type Cited = { piece: Json; target: string; against: boolean };
 type Based = { source: Json; target: string };
 
-const RESERVED = new Set(['bilan', 'questions', 'essais', 'valeurs']);
+const RESERVED = new Set(['bilan', 'questions', 'hypotheses', 'valeurs']);
 const UNIT: Record<string, string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
 const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moins', moins_de: 'moins de', au_plus: 'au plus' };
 const inputs = (condition: Json): string[] => condition.delai ? [condition.delai.de, condition.delai.a] : condition.montant ? [condition.montant.valeur, condition.montant.seuil].filter((item) => typeof item === 'string') : [];
@@ -49,7 +49,7 @@ const parseVariable = (raw: string): number | string | null => {
   return Number.isFinite(number) ? number : null;
 };
 const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
-const STEP: Record<ReasoningLogEntry['step'], string> = { source: 'Source', pièce: 'Pièce', fait: 'Fait', condition: 'Étape', essai: 'Essai', registre: 'Partie', réponse: 'Réponse' };
+const STEP: Record<ReasoningLogEntry['step'], string> = { source: 'Source', pièce: 'Pièce', fait: 'Fait', condition: 'Étape', essai: 'Hypothèse', registre: 'Partie', réponse: 'Réponse' };
 const cleanups = new WeakMap<HTMLElement, () => void>();
 
 export function mount(container: HTMLElement, api: Host) {
@@ -324,7 +324,7 @@ export function mount(container: HTMLElement, api: Host) {
     const run = snapshot?.demo
       ? '<div class="pmr-run"><span class="pmr-muted">Exemple fictif : test simulé.</span></div>'
       : `<div class="pmr-run"><button class="pmr-primary" data-run-test${live || busy || !context.project ? ' disabled' : ''}>${live ? 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</span>` : ''}</div>`;
-    detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${part('1. En droit', 'Chaque source relue, sa citation et sa version applicable.', ['source'])}${part('2. En fait', 'Les pièces relues et les faits qu’elles établissent.', ['pièce', 'fait', 'registre'])}${part('3. Conclusion', 'Les étapes du raisonnement, les essais et la réponse.', ['condition', 'essai', 'réponse'])}`;
+    detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${part('1. En droit', 'Chaque source relue, sa citation et sa version applicable.', ['source'])}${part('2. En fait', 'Les pièces relues et les faits qu’elles établissent.', ['pièce', 'fait', 'registre'])}${part('3. Conclusion', 'Les étapes du raisonnement, les hypothèses et la réponse.', ['condition', 'essai', 'réponse'])}`;
   };
 
   const paintDetail = () => {
@@ -339,8 +339,8 @@ export function mount(container: HTMLElement, api: Host) {
     }
     if (!question) { detail.innerHTML = '<p class="pmr-muted">Aucune question.</p>'; return; }
     if (!selected || selected === '#question') {
-      const essais = Array.isArray(annotated()?.essais) ? annotated()!.essais as Json[] : [];
-      detail.innerHTML = `<h3>${escape(question.question)}</h3><p>${pill(question.statut ?? 'à établir', `Réponse : ${'montant_calcule' in question ? amountText(question.montant_calcule) : ANSWER[question.statut ?? 'à établir']}`)}</p>${[['validite', 'Validité'], ['prescription', 'Prescription']].filter(([slot]) => typeof question[slot] === 'string').map(([slot, label]) => `<p><strong>${label} :</strong> ${controlLink(question[slot])}</p>`).join('')}${question.decisifs?.length ? `<h4>Faits décisifs</h4><p>${question.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${question.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(question.en_jeu.map(human).join(', '))}</p>` : ''}${question.personnes?.length ? `<h4>Personnes</h4><p>${escape(question.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Essais</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}${controlsBlock()}${simulationBlock()}`;
+      const essais = Array.isArray(annotated()?.hypotheses) ? annotated()!.hypotheses as Json[] : [];
+      detail.innerHTML = `<h3>${escape(question.question)}</h3><p>${pill(question.statut ?? 'à établir', `Réponse : ${'montant_calcule' in question ? amountText(question.montant_calcule) : ANSWER[question.statut ?? 'à établir']}`)}</p>${[['validite', 'Validité'], ['prescription', 'Prescription']].filter(([slot]) => typeof question[slot] === 'string').map(([slot, label]) => `<p><strong>${label} :</strong> ${controlLink(question[slot])}</p>`).join('')}${question.decisifs?.length ? `<h4>Faits décisifs</h4><p>${question.decisifs.map((name: string) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button>`).join(', ')}</p>` : ''}${question.en_jeu?.length ? `<h4>Faits en jeu</h4><p>${escape(question.en_jeu.map(human).join(', '))}</p>` : ''}${question.personnes?.length ? `<h4>Personnes</h4><p>${escape(question.personnes.join(', '))}</p>` : ''}${essais.length ? `<h4>Hypothèses</h4>${essais.map((essai) => `<p>${pill(essai.conforme ? 'acquis' : 'exclu', essai.conforme ? 'conforme' : 'non conforme')} ${escape(essai.nom)}</p>`).join('')}` : ''}${controlsBlock()}${simulationBlock()}`;
       return;
     }
     if (selected.startsWith('#source:')) {

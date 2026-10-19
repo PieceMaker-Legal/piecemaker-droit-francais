@@ -178,7 +178,7 @@ export function simulate(reasoning: Reasoning, test: Test, known: Known, faits: 
 }
 
 export function runTrials(reasoning: Reasoning, test: Test, known: Known = { leaf: () => null, value: () => null }) {
-  return reasoning.essais.map((trial) => {
+  return reasoning.hypotheses.map((trial) => {
     const run = simulate(reasoning, test, known, trial.faits);
     const names = Object.keys(trial.attendu);
     const values = run.test(names.filter((name) => !reasoning.valeurs.has(name)));
