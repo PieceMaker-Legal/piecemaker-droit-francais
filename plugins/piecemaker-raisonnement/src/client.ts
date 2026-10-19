@@ -41,7 +41,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${['acquis', 'exclu', 'à établir', 'contesté'].map((key) => `<span><i style="background:${COLORS[key]}"></i>${escape(human(key))}</span>`).join('')}<span><i class="is-square"></i>Pièce</span><span><i class="is-diamond"></i>Source</span><span><i class="is-ring"></i>Décisif : sa preuve fait basculer la réponse</span><span>- - sauf</span><span>ou : une suffit</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Question" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${['acquis', 'exclu', 'à établir', 'contesté'].map((key) => `<span><i style="background:${COLORS[key]}"></i>${escape(human(key))}</span>`).join('')}<span><i class="is-square"></i>Pièce</span><span><i class="is-diamond"></i>Source</span><span><i class="is-ring"></i>Décisif : sa preuve fait basculer la réponse</span><span>- - sauf</span><span>ou : une suffit</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Question, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const svg = root.querySelector<SVGSVGElement>('svg')!;
@@ -56,6 +56,7 @@ export function mount(container: HTMLElement, api: Host) {
   let snapshot: ReasoningSnapshot | null = null;
   let serialized = '';
   let tab: Tab = 'detail';
+  let view: 'graph' | 'panel' = 'panel';
   let scope = 0;
   let selected = '';
   let nodes: GraphNode[] = [];
@@ -289,7 +290,9 @@ export function mount(container: HTMLElement, api: Host) {
     const count = root.querySelector<HTMLElement>('[data-alerts]')!;
     count.hidden = !visibleIssues().length;
     count.textContent = String(visibleIssues().length);
-    root.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => button.setAttribute('aria-selected', String(button.dataset.tab === tab)));
+    root.dataset.view = view;
+    root.querySelector<HTMLElement>('[data-graph]')!.setAttribute('aria-selected', String(view === 'graph'));
+    root.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => button.setAttribute('aria-selected', String(view === 'panel' && button.dataset.tab === tab)));
     empty.hidden = Boolean(list.length);
     root.querySelector<HTMLElement>('.pmr-legend')!.hidden = !list.length;
     empty.innerHTML = !context.project ? '<strong>Aucun dossier</strong><p>Ouvrez un dossier pour voir son raisonnement.</p>' : snapshot?.code && !snapshot.annotated ? `<strong>Raisonnement illisible</strong><p>${escape(snapshot.issues.map((issue) => issue.text).join(' · '))}</p>` : '<strong>Pas encore de raisonnement</strong><p>Posez une question juridique dans le chat : l’agent transcrit sa réponse dans .piecemaker/raisonnement.js, que ce volet vérifie et affiche.</p>';
@@ -339,13 +342,14 @@ export function mount(container: HTMLElement, api: Host) {
     const source = based().find((entry) => entry.source.source === id)?.source;
     citeSource(project, id, citation).then(({ token }) => open(`piecemaker://citation/${token}/${encodeURIComponent(source ? sourceLabel(source) : id)}`), showError);
   };
-  const select = (id: string) => { selected = selected === id ? '' : id; tab = 'detail'; paintGraph(); paint(); };
+  const select = (id: string) => { selected = selected === id ? '' : id; tab = 'detail'; if (selected) view = 'panel'; paintGraph(); paint(); };
 
   root.addEventListener('click', (event) => {
     const button = (event.target as Element).closest<HTMLElement>('button');
     if (!button) return;
     const project = context.project?.path;
-    if (button.dataset.tab) { tab = button.dataset.tab as Tab; paint(); }
+    if (button.dataset.tab) { tab = button.dataset.tab as Tab; view = 'panel'; paint(); }
+    if (button.hasAttribute('data-graph')) { view = 'graph'; paint(); }
     if (button.hasAttribute('data-demo')) { serialized = ''; selected = ''; scope = 0; nodes = []; void load(!snapshot?.demo); }
     if (button.hasAttribute('data-refresh')) { serialized = ''; void load(Boolean(snapshot?.demo)); }
     if (button.hasAttribute('data-run-test') && project && !live) {
@@ -359,7 +363,7 @@ export function mount(container: HTMLElement, api: Host) {
     }
     if (button.dataset.select) select(button.dataset.select);
     if (button.dataset.show) show(button.dataset.show, button.dataset.quote);
-    if (button.dataset.open) { selected = button.dataset.open; tab = 'detail'; paintGraph(); paint(); }
+    if (button.dataset.open) { selected = button.dataset.open; tab = 'detail'; view = 'panel'; paintGraph(); paint(); }
     if (button.dataset.dismiss && project) act(() => dismissIssue(project, button.dataset.dismiss!, button.hasAttribute('data-restore')));
     if (button.dataset.rate && project) act(() => ratePiece(project, button.dataset.rate!, button.dataset.value === 'null' ? null : button.dataset.value === 'true'));
     if (button.dataset.zoom) { zoom = Math.max(.1, Math.min(3, zoom * (Number(button.dataset.zoom) > 0 ? 1.2 : 1 / 1.2))); paintGraph(); }
@@ -409,9 +413,9 @@ export function mount(container: HTMLElement, api: Host) {
     inspector.style.flex = `0 0 ${bounded * 100}%`;
     inspector.style.maxHeight = 'none';
     split.setAttribute('aria-valuenow', String(Math.round(bounded * 100)));
-    try { localStorage.setItem('pmr-split', String(bounded)); } catch {}
+    try { localStorage.setItem('pmr-split-colonnes', String(bounded)); } catch {}
   };
-  try { const saved = Number(localStorage.getItem('pmr-split')); if (saved) share(saved); } catch {}
+  try { const saved = Number(localStorage.getItem('pmr-split-colonnes')); if (saved) share(saved); } catch {}
   split.addEventListener('pointerdown', (event) => { split.setPointerCapture(event.pointerId); split.classList.add('is-dragging'); event.preventDefault(); });
   split.addEventListener('pointermove', (event) => {
     if (!split.hasPointerCapture(event.pointerId)) return;
@@ -428,6 +432,8 @@ export function mount(container: HTMLElement, api: Host) {
 
   const resize = new ResizeObserver(() => { fitGraph(); paintGraph(); });
   resize.observe(canvas);
+  const layout = new ResizeObserver(() => { if (view === 'graph' && wide()) { view = 'panel'; paint(); } });
+  layout.observe(workspace);
   const unsubscribe = api.onContextChange((next) => {
     const changed = next.project?.path !== context.project?.path;
     context = next;
@@ -439,7 +445,7 @@ export function mount(container: HTMLElement, api: Host) {
   void load();
   timer = window.setTimeout(poll, 2500);
   window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: 'plugin:piecemaker-raisonnement' } }));
-  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); window.clearTimeout(pacing); resize.disconnect(); unsubscribe(); container.replaceChildren(); });
+  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); window.clearTimeout(pacing); resize.disconnect(); layout.disconnect(); unsubscribe(); container.replaceChildren(); });
 }
 
 export function unmount(container: HTMLElement) {
