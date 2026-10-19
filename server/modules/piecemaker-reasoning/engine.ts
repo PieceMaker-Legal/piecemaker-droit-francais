@@ -155,7 +155,7 @@ export function calculate(measure: Measure, lookup: Lookup): Calculation {
   return { value, missing, calcul: { montant: amount, seuil: threshold } };
 }
 
-export type Known = { leaf(name: string): ReasoningValue; value: Lookup };
+export type Known = { leaf(name: string): ReasoningValue; value(name: string, holds?: Holds): string | number | null };
 
 export function simulate(reasoning: Reasoning, test: Test, known: Known, faits: Trial['faits']) {
   const computing = new Set<string>();
@@ -168,7 +168,7 @@ export function simulate(reasoning: Reasoning, test: Test, known: Known, faits: 
     const item = faits[name];
     if (item !== undefined) return typeof item === 'boolean' ? null : item;
     const entry = reasoning.valeurs.get(name);
-    if (!entry?.formule || entry.valeur !== null || computing.has(name)) return known.value(name);
+    if (!entry?.formule || entry.valeur !== null || computing.has(name)) return known.value(name, holds);
     computing.add(name);
     const result = evaluate(entry.formule, value, holds);
     computing.delete(name);

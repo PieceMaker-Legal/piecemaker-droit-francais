@@ -234,16 +234,16 @@ export async function verifyReasoning(input: {
   const computing = new Set<string>();
   const stating = new Set<string>();
   const test = compile(reasoning);
-  const sourced = (name: string) => reasoning.valeurs.get(name)!.selon.some((basis, index) => {
+  const sourced = (name: string, holdsIn: (name: string) => ReasoningValue) => reasoning.valeurs.get(name)!.selon.some((basis, index) => {
     const check = basisChecks.get(`valeurs.${name}.selon[${index}]`);
     if (!check || check.kind === 'piece' || check.kind === null) return false;
-    return (check.kind === 'decision' || inForceAt(basis, check) === true) && (!basis.applicabilite || holds(basis.applicabilite) === true);
+    return (check.kind === 'decision' || inForceAt(basis, check) === true) && (!basis.applicabilite || holdsIn(basis.applicabilite) === true);
   });
-  const stated = (name: string) => {
+  const stated = (name: string, check: (name: string) => ReasoningValue = holds) => {
     const entry = reasoning.valeurs.get(name);
     if (!entry || entry.valeur === null || stating.has(name)) return null;
     stating.add(name);
-    const proven = entry.preuve.some((_, index) => verifiedRefs.get(`valeurs.${name}.preuve[${index}]`)) || sourced(name);
+    const proven = entry.preuve.some((_, index) => verifiedRefs.get(`valeurs.${name}.preuve[${index}]`)) || sourced(name, check);
     stating.delete(name);
     return proven ? entry.valeur : null;
   };
@@ -331,11 +331,16 @@ export async function verifyReasoning(input: {
   const vigueurs = new Map<string, ReasoningValue>();
   const decisiveLeaves = new Set<string>();
   const decisiveFor = new Map<string, Question[]>();
-  const trials = shape.cycles.length ? [] : runTrials(reasoning, test, { leaf: leafValue, value: valueOf });
+  const trials = shape.cycles.length ? [] : runTrials(reasoning, test, { leaf: leafValue, value: (name, check) => stated(name, check) ?? computedValue(name) });
   const supposing = (names: string[], roots: string[]) => reasoning.essais.filter((trial, index) => trials[index]?.conforme && names.some((name) => name in trial.faits) && roots.some((root) => root in trial.attendu));
   const bracketed = (names: string[], question: Question) => questionRoots(question).some((root) => new Set(supposing(names, [root]).map((trial) => String(trial.attendu[root]))).size > 1);
   const open = (formula: Formula, found: Set<string>, seen: Set<string>) => {
-    if (formula.operation === 'si') { const held = holds(formula.condition); if (held === null) { found.add(formula.condition); return; } const branch = held ? formula.alors : formula.sinon; if (typeof branch === 'object') open(branch, found, seen); else if (typeof branch === 'string') openValue(branch, found, seen); return; }
+    if (formula.operation === 'si') {
+      const held = holds(formula.condition);
+      if (held === null) found.add(formula.condition);
+      for (const branch of held === null ? [formula.alors, formula.sinon] : [held ? formula.alors : formula.sinon]) if (typeof branch === 'object') open(branch, found, seen); else if (typeof branch === 'string') openValue(branch, found, seen);
+      return;
+    }
     const items = formula.operation === 'bareme' ? [formula.assiette, ...formula.tranches.flatMap((tranche) => [tranche.jusqu_a, tranche.taux])] : formula.termes;
     for (const item of items) if (typeof item === 'string') openValue(item, found, seen); else if (item && typeof item === 'object') open(item, found, seen);
   };
@@ -507,7 +512,7 @@ export async function verifyReasoning(input: {
   for (const [original, fixed] of corrections) code = code.split(original).join(fixed);
   let simulation: Simulation | undefined;
   if (input.simulation && !shape.cycles.length) {
-    const run = simulate(reasoning, test, { leaf: leafValue, value: valueOf }, input.simulation);
+    const run = simulate(reasoning, test, { leaf: leafValue, value: (name, check) => stated(name, check) ?? computedValue(name) }, input.simulation);
     simulation = {
       questions: reasoning.questions.map((question) => {
         if (!amountQuestion(question)) return { question: question.question, statut: STATUS(answer(question, run.test(questionRoots(question)))) };
