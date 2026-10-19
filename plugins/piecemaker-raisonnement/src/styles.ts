@@ -1,6 +1,6 @@
 export const STYLES = `
 .pmr{
-  height:100%;display:flex;flex-direction:column;min-height:0;container-type:inline-size;
+  height:100%;display:flex;flex-direction:column;min-height:0;container-type:inline-size;overflow-wrap:anywhere;
   background:hsl(var(--background));color:var(--piecemaker-text,#374151);
   font:13px/1.45 var(--piecemaker-font-ui,Inter,ui-sans-serif,system-ui,sans-serif);
   --bg:hsl(var(--background));--surface:hsl(var(--card));--soft:hsl(var(--muted));
@@ -40,7 +40,7 @@ export const STYLES = `
 .pmr-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;padding:28px;text-align:center;color:var(--muted);background:var(--bg)}
 .pmr-empty strong{font-family:var(--editorial);font-size:1.35rem;font-weight:500;color:var(--ink)}.pmr-empty p{max-width:340px;margin:0;font-size:13px;line-height:1.6}
 .pmr-split{flex:0 0 7px;cursor:row-resize;touch-action:none;background:linear-gradient(var(--border),var(--border)) center/100% 1px no-repeat}.pmr-split:hover,.pmr-split:focus-visible,.pmr-split.is-dragging{outline:none;background:linear-gradient(#7aa7d8,#7aa7d8) center/100% 3px no-repeat}.pmr-inspector{display:flex;flex-direction:column;flex:0 0 50%;width:50%;min-width:220px;min-height:0;background:var(--bg)}
-.pmr-tabs{display:flex;align-self:flex-start;gap:3px;margin:12px 16px 0;padding:3px;border:1px solid var(--glass-border);border-radius:9999px;background:var(--glass-bg);box-shadow:var(--glass-shadow);backdrop-filter:blur(20px)}
+.pmr-tabs{display:flex;align-self:flex-start;gap:3px;margin:12px 16px 0;max-width:calc(100% - 32px);overflow-x:auto;scrollbar-width:none;padding:3px;border:1px solid var(--glass-border);border-radius:9999px;background:var(--glass-bg);box-shadow:var(--glass-shadow);backdrop-filter:blur(20px)}
 .pmr-tabs button{height:1.6rem;border:0;box-shadow:none;background:transparent;backdrop-filter:none;color:var(--muted)}
 .pmr-tabs button[aria-selected=true]{color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 1px rgb(var(--piecemaker-ink-rgb,17 24 39) / 22%)}
 .pmr-tabs .pmr-count{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:color-mix(in srgb,var(--ko-soft) 40%,transparent);color:var(--ko);font-size:10px;font-weight:600;line-height:18px}
@@ -49,7 +49,7 @@ export const STYLES = `
 .pmr-detail h4{margin:16px 0 6px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}.pmr-detail p{margin:6px 0}
 .pmr-detail blockquote{margin:6px 0 0;padding:8px 12px;border-left:2px solid color-mix(in srgb,var(--accent) 60%,transparent);border-radius:0 8px 8px 0;background:var(--soft);white-space:pre-wrap;font-family:var(--editorial);font-size:14px;line-height:1.5}
 .pmr-muted{color:var(--muted)}.pmr-warn{color:var(--warn)}
-.pmr-pill{display:inline-flex;align-items:center;border:1px solid transparent;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:500;line-height:18px;white-space:nowrap}
+.pmr-pill{display:inline-flex;align-items:center;border:1px solid transparent;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:500;line-height:18px;max-width:100%}
 .pmr-ok{color:var(--ok)}.pmr-ko{color:var(--ko)}
 .pmr-pill.pmr-ok{border-color:color-mix(in srgb,var(--ok-soft) 60%,transparent);background:color-mix(in srgb,var(--ok-soft) 22%,var(--surface))}
 .pmr-pill.pmr-ko{border-color:color-mix(in srgb,var(--ko-soft) 60%,transparent);background:color-mix(in srgb,var(--ko-soft) 22%,var(--surface))}
@@ -97,6 +97,7 @@ export const STYLES = `
 .pmr-or{cursor:default}.pmr-or circle{stroke:var(--muted);stroke-width:1.2}.pmr-node.is-decisive circle{stroke:var(--accent);stroke-width:3}
 .pmr-code{margin:0;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--soft);font:12px/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
 .pmr-issue{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;margin:6px 0;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}.pmr-issue-body{flex:1;min-width:180px;overflow-wrap:anywhere}.pmr-issue-body p{margin:0 0 4px;line-height:1.45}.pmr-issue details summary{cursor:pointer;font-size:11px;color:var(--muted)}.pmr-issue code{font:11px var(--mono);color:var(--muted)}
+@container (max-width:380px){.pmr-tabs{gap:1px}.pmr-tabs button{padding:0 .4rem}}
 @keyframes pmr-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes pmr-pop{0%{transform:scale(.4)}70%{transform:scale(1.25)}100%{transform:scale(1)}}
 @keyframes pmr-spin{to{transform:rotate(360deg)}}
