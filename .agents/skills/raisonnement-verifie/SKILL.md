@@ -43,7 +43,7 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 ## Manques par mode
 
 - **Tous** : non qualifié ; renvoi vers un élément absent du dossier ou un passage introuvable ; stipulation contredite (la source ne compte plus : à trancher) ; montant stipulé différent de sa formule ; texte sans `vigueur`, sans `vigueur.au` ou date non prouvée ; version non en vigueur ; clause qui renvoie à un article sans ce texte ; donnée de calcul non déclarée ; valeur non nulle sans preuve ; seuil en dur ; source non vérifiable ; terme inutile.
-- **Drafting** : faits = hypothèses, pas de manque de preuve ; chaque question a un essai ; passage cité contenant une marque de rédaction (`[…]`, `●`, `XXX`, « à compléter ») ; valeur à `null` = laissée en blanc ; stipulations contradictoires = à harmoniser.
+- **Drafting** : faits = hypothèses, pas de manque de preuve ; chaque question a un essai ; valeur à `null` = laissée en blanc (aucune détection des blancs dans le texte : l'agent déclare la donnée ouverte) ; stipulations contradictoires = à harmoniser.
 - **Contentieux / consultation** : fait décisif sans pièce ; prescription.
 
 ## Sortie de `verifier`
