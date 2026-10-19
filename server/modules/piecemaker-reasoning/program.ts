@@ -108,11 +108,11 @@ export async function verifyReasoning(input: {
   reasoning.questions.forEach((question, index) => {
     if (!reasoning.terms.has(question.reponse)) add('erreur', `questions[${index}].reponse`, `terme ${question.reponse} non défini : écris ${question.reponse}: { si: [...] }`);
   });
-  if (!reasoning.qualification) add('manque', 'qualification', 'raisonnement non qualifié : ajoute qualification: \'contractuel\' ou \'contentieux\'', 'Le raisonnement n’est pas qualifié : contractuel ou contentieux.');
+  if (!reasoning.qualification) add('manque', 'qualification', 'raisonnement non qualifié : ajoute qualification: \'drafting\' ou \'contentieux\'', 'Le raisonnement n’est pas qualifié : drafting ou contentieux.');
   reasoning.questions.forEach((question, index) => {
-    if (reasoning.qualification === 'contractuel' && !reasoning.essais.some((trial) => questionRoots(question).some((name) => name in trial.attendu))) add('manque', `questions[${index}]`, `question sans essai : ajoute dans essais un cas dont attendu porte sur ${question.reponse}`, 'Aucun cas d’essai ne vérifie la réponse à cette question.');
+    if (reasoning.qualification === 'drafting' && !reasoning.essais.some((trial) => questionRoots(question).some((name) => name in trial.attendu))) add('manque', `questions[${index}]`, `question sans essai : ajoute dans essais un cas dont attendu porte sur ${question.reponse}`, 'Aucun cas d’essai ne vérifie la réponse à cette question.');
     if (reasoning.qualification === 'contentieux' && !question.prescription && !question.reponse.startsWith('prescription_')) add('manque', `questions[${index}]`, 'contentieux : vérifier la prescription : ajoute prescription: \'prescription_de_…\' sur la question et définis ce terme', 'Prescription à vérifier.');
-    if (reasoning.qualification === 'contractuel' && !question.validite && !question.reponse.startsWith('validité_')) add('manque', `questions[${index}]`, 'contractuel : vérifier la validité : ajoute validite: \'validité_de_…\' sur la question et définis ce terme', 'Validité à vérifier.');
+    if (reasoning.qualification === 'drafting' && !question.validite && !question.reponse.startsWith('validité_')) add('manque', `questions[${index}]`, 'drafting : vérifier la validité : ajoute validite: \'validité_de_…\' sur la question et définis ce terme', 'Validité à vérifier.');
   });
   const roots = new Set(reasoning.questions.flatMap(questionRoots));
   for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, 'terme qui ne sert à aucune question : rattache-le comme condition ou ajoute la question à laquelle il répond');
@@ -288,7 +288,7 @@ export async function verifyReasoning(input: {
 
   const controlSlots: Array<string | null> = [];
   for (const question of reasoning.questions) {
-    if (reasoning.qualification === 'contractuel' || question.validite) controlSlots.push(question.validite ?? null);
+    if (reasoning.qualification === 'drafting' || question.validite) controlSlots.push(question.validite ?? null);
     if (reasoning.qualification === 'contentieux' || question.prescription) controlSlots.push(question.prescription ?? null);
   }
   for (const { condition } of occurrences) if (condition.mesure?.delai) controlSlots.push(condition.decompte ?? null);
@@ -301,8 +301,8 @@ export async function verifyReasoning(input: {
     if (result?.calcul) holder.calcul = result.calcul;
     if (fact && decisiveLeaves.has(fact)) {
       holder.decisif = true;
-      if (reasoning.qualification !== 'contractuel' && result) add('manque', at, `${fact} décide de la réponse : renseigne ${result.missing.join(', ')} dans valeurs, avec sa preuve`, `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
-      else if (reasoning.qualification !== 'contractuel') add('manque', at, `${fact} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
+      if (reasoning.qualification !== 'drafting' && result) add('manque', at, `${fact} décide de la réponse : renseigne ${result.missing.join(', ')} dans valeurs, avec sa preuve`, `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
+      else if (reasoning.qualification !== 'drafting') add('manque', at, `${fact} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
     }
     condition.selon.forEach((basis, index) => {
       const place = `${at}.selon[${index}]`;

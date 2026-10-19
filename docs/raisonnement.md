@@ -26,7 +26,7 @@ Un objet JavaScript **sans fonctions** : objets, listes, textes (de préférence
   |---|---|---|---|
   | `applicabilite` | une source | `applicabilité_` | texte (hors arbre d’applicabilité, pas de régression à l’infini) |
   | `decompte` | un délai | `décompte_` | tout délai |
-  | `validite` | une question | `validité_` | raisonnement contractuel |
+  | `validite` | une question | `validité_` | raisonnement drafting |
   | `prescription` | une question | `prescription_` | raisonnement contentieux |
 
   Le vérificateur renvoie le fichier dans l’ordre canonique : `bilan`, `qualification`, `questions`, les termes du raisonnement en descendant depuis chaque réponse, puis les contrôles (applicabilités, décomptes, validité, prescription), `valeurs` et `essais` ; dans chaque objet, identité, fondement, contrôles, faits. Le manque propose le nom du contrôle ; `bilan.controles` compte les contrôles établis. Le volet les colore à part et les liste sous la question. Rien n’en est dit à l’agent.
@@ -40,14 +40,14 @@ Un objet JavaScript **sans fonctions** : objets, listes, textes (de préférence
 Au volet, l’objet annoté complet : `bilan` (`erreurs`, `manques`, `essais`, `controles`, `ecartees`, pièces à évaluer, registre) et, sur chaque nœud, `statut` (`acquis`, `exclu`, `à établir`, `contesté`), `decisif`, `erreurs` et `manques` ; sur chaque source `titre` et `en_vigueur` ; sur chaque pièce `titre`, `nature`, `fiable`, `personnes`. Des annotations recopiées dans le fichier sont ignorées et recalculées.
 
 - **Citation** : retrouvée mot pour mot à la ponctuation, la casse et les accents près, elle est validée, remplacée par l’original dans le fichier et marquée `corrigee` ; sinon erreur.
-- **Mode contractuel** : les faits sont des hypothèses. Un fait décisif sans pièce n’est pas un manque (il reste signalé décisif) ; chaque question doit en revanche avoir un essai dont `attendu` porte sur sa réponse. Une question qui porte sur un contrôle (`validité_…`, `prescription_…`) n’en réclame pas un second.
+- **Mode drafting** : les faits sont des hypothèses. Un fait décisif sans pièce n’est pas un manque (il reste signalé décisif) ; chaque question doit en revanche avoir un essai dont `attendu` porte sur sa réponse. Une question qui porte sur un contrôle (`validité_…`, `prescription_…`) n’en réclame pas un second.
 - **Essais** : un fait absent d’un essai reprend sa valeur établie par les pièces ; l’essai ne fixe que ce qu’il fait varier.
 - **Fichier** : le vérificateur le réécrit dans l’ordre canonique (avec les citations corrigées) ; `bilan.controles` compte les contrôles distincts.
 - **Clauses** : chaque clause citée en `selon` appelle un contrôle `validite` (hors arbre de validité) ; tout contrôle de validité doit citer un texte, d’où l’applicabilité et la vigueur. Une clause dont la citation renvoie à un article d’un code ou d’une loi réclame ce texte dans le même `selon`.
 - **Valeurs** : toute donnée d’un délai, d’un montant ou de `vigueur.au` est déclarée dans `valeurs`, prouvée ou à `null` quand le dossier ne la fixe pas ; une valeur non nulle sans preuve et un seuil écrit en dur sont des manques.
 - **Vigueur** : exigée des textes, pas des clauses ; absente, c’est un manque (avec les dates de la version citée quand Légifrance les donne) ; différente de Légifrance, une erreur.
 - **Erreurs** : syntaxe, délai ou montant mal écrit, prouvé sur la condition ou appliqué à une valeur du mauvais type, condition sans source, source ou pièce introuvable, citation introuvable, vigueur fausse, aucune source en vigueur, terme de réponse non défini, boucle, essai non conforme.
-- **Manques** : raisonnement non qualifié (`qualification: 'contractuel' | 'contentieux'`, non affichée dans le volet) ; une fois qualifié, « vérifier la validité » (contractuel) ou « vérifier la prescription » (contentieux), volontairement génériques et absents des instructions de l’agent ; délai sans décompte, applicabilité d’un texte non établie, applicabilité dans le temps d’un texte non établie (`vigueur.au` absent, ou date de `valeurs` sans preuve — volontairement absent des instructions de l’agent), vigueur non renseignée, source non vérifiable, fait décisif sans pièce, terme qui ne sert à aucune question.
+- **Manques** : raisonnement non qualifié (`qualification: 'drafting' | 'contentieux'`, non affichée dans le volet) ; une fois qualifié, « vérifier la validité » (drafting) ou « vérifier la prescription » (contentieux), volontairement génériques et absents des instructions de l’agent ; délai sans décompte, applicabilité d’un texte non établie, applicabilité dans le temps d’un texte non établie (`vigueur.au` absent, ou date de `valeurs` sans preuve — volontairement absent des instructions de l’agent), vigueur non renseignée, source non vérifiable, fait décisif sans pièce, terme qui ne sert à aucune question.
 - **Personnes** : les personnes et sociétés du graphe du dossier citées dans une question ou dans la citation d’une pièce y sont rattachées ; les sociétés rattachées sont contrôlées au Registre Public et au BODACC.
 
 ## Décisions de l’avocat
