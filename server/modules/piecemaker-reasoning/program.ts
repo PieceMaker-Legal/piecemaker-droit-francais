@@ -366,6 +366,7 @@ export async function verifyReasoning(input: {
       for (const name of missing) {
         const isValue = reasoning.valeurs.has(name);
         const at = isValue ? `valeurs.${name}` : `questions[${index}]`;
+        if (isValue && reasoning.valeurs.get(name)!.selon.length && reasoning.valeurs.get(name)!.valeur !== null) { add('manque', at, `${question.reponse} dépend de ${name}, dont la source n’est pas acquise : établis sa vigueur à la date et son applicabilité`, `${human(question.reponse)} dépend de ${phrase(name)}, dont le texte n’est pas encore établi comme applicable.`); continue; }
         if (drafting && !supposing([name], [question.reponse]).length) add('manque', at, `${question.reponse} dépend de ${name}, que le projet ne fixe pas : ${isValue ? 'fixe-la dans valeurs, ou ' : ''}ajoute un essai qui la suppose (faits) et donne le montant attendu de ${question.reponse}`, `${human(question.reponse)} dépend de ${phrase(name)}, que le projet ne fixe pas.`, isValue ? undefined : name);
         if (!drafting) add('manque', at, isValue ? `${question.reponse} dépend de ${name} : renseigne-la dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)` : `${question.reponse} dépend de ${name} : établis ce point (preuve, ou ses propres conditions)`, `${human(question.reponse)} dépend de ${phrase(name)}, qui n’est pas établi.`, isValue ? undefined : name);
       }
