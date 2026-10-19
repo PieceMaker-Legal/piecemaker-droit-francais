@@ -1,5 +1,6 @@
 import type { ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
+import { basisControls } from './format.js';
 import type { Condition, Duration, Measure, Question, Reasoning, Term } from './format.js';
 
 export type Facts = { leaf(name: string): ReasoningValue; basis(path: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue };
@@ -19,7 +20,7 @@ export function structure(reasoning: Reasoning) {
     const term = reasoning.terms.get(name);
     if (!term) { leaves.add(name); return; }
     const walk = (condition: Condition) => {
-      for (const control of [...condition.selon.map((basis) => basis.applicabilite), condition.decompte]) if (control) { used.add(control); visit(control, [...stack, name]); }
+      for (const control of [...condition.selon.flatMap(basisControls), condition.decompte]) if (control) { used.add(control); visit(control, [...stack, name]); }
       if (condition.l_une) condition.l_une.forEach(walk);
       else { used.add(condition.condition!); visit(condition.condition!, [...stack, name]); }
     };
@@ -42,7 +43,7 @@ export function compile(reasoning: Reasoning): Test {
       if (!definition || stack.includes(name)) return definition ? null : facts.leaf(name);
       const condition = (entry: Condition, path: string): ReasoningValue => {
         const inner = entry.l_une ? or(entry.l_une.map((member, index) => condition(member, `${path}.l_une[${index}]`))) : term(entry.condition!, [...stack, name]);
-        const applicable = entry.selon.map((basis) => (basis.applicabilite ? term(basis.applicabilite, [...stack, name]) : true));
+        const applicable = entry.selon.map((basis) => and(basisControls(basis).map((control) => term(control, [...stack, name]))));
         const value = and([facts.basis(path, entry, applicable), inner, entry.decompte ? term(entry.decompte, [...stack, name]) : true]);
         trace?.set(path, value);
         return value;
@@ -65,7 +66,7 @@ export function reachableLeaves(reasoning: Reasoning, root: string) {
     const term = reasoning.terms.get(name);
     if (!term) { found.add(name); return; }
     const walk = (condition: Condition) => {
-      for (const control of [...condition.selon.map((basis) => basis.applicabilite), condition.decompte]) if (control) visit(control);
+      for (const control of [...condition.selon.flatMap(basisControls), condition.decompte]) if (control) visit(control);
       if (condition.l_une) condition.l_une.forEach(walk); else visit(condition.condition!);
     };
     [...term.si, ...term.sauf].forEach(walk);
