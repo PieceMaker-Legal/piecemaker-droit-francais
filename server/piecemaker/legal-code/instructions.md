@@ -10,7 +10,7 @@ Le fichier est un objet JavaScript littéral, sans fonction, commentaire ni phra
 - Sous une source, `renvoi: [{ piece, citation }]` désigne ce à quoi elle renvoie (autre stipulation, document joint ou visé) et `contredit` la stipulation qui la contredit.
 - Un délai : `delai: { de, a, au_plus: { jours: 30 } }` (`au_moins` ; `jours`, `jours_ouvres`, `mois`, `ans`). Un montant : `montant: { valeur, plus_de: 3000 }` (`au_moins`, `moins_de`, `au_plus`). Les dates et montants qu'ils nomment vont dans `valeurs: { nom: { valeur, preuve } }` ; quand un texte fixe la valeur (taux, seuil), `selon` remplace `preuve`. Un montant qui se calcule porte `formule` : `{ somme | difference | produit | quotient | minimum | maximum: [termes] }`, `{ arrondi: [montant, décimales] }`, `{ bareme: { assiette, tranches: [{ jusqu_a, taux }, …, { taux }] } }`, `{ si: terme, alors, sinon }`.
 - Quand la réponse à une question est un montant, `reponse` désigne ce montant dans `valeurs`.
-- `essais` : des faits supposés (vrai/faux, dates, montants) et le résultat attendu (vrai/faux ou montant).
+- `hypotheses` : des faits supposés (vrai/faux, dates, montants) et le résultat attendu (vrai/faux ou montant).
 
 ```js
 {
@@ -32,7 +32,7 @@ Le fichier est un objet JavaScript littéral, sans fonction, commentaire ni phra
     date_de_commande: { valeur: '2025-05-02', preuve: [{ piece: 'pieces/02_bon_de_commande.md', citation: `Commande du 02/05/2025` }] },
     date_de_livraison: { valeur: '2025-06-14', preuve: [{ piece: 'pieces/05_bon_de_livraison.md', citation: `Livré le 14/06/2025` }] },
   },
-  essais: [
+  hypotheses: [
     { nom: `livré en vingt jours : pas de pénalité`, faits: { mise_en_demeure: vrai, force_majeure: faux, grève_nationale: faux, date_de_commande: '2025-05-02', date_de_livraison: '2025-05-22' }, attendu: { pénalité_due: faux } },
   ],
 }

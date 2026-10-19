@@ -19,13 +19,13 @@ export type Condition = { condition?: string; l_une?: Condition[]; mesure?: Meas
 export type Term = { si: Condition[]; sauf: Condition[] };
 export type Question = { question: string; reponse: string; validite?: string; prescription?: string };
 export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean | number> };
-export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; questions: Question[]; essais: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
+export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; questions: Question[]; hypotheses: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
 export type Problem = { path: string; text: string; avocat?: string; cible?: string };
 export type Parsed = { value: unknown; lines: Map<string, number> };
 
 const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const RESERVED = new Set(['questions', 'essais', 'bilan', 'valeurs', 'qualification']);
+const RESERVED = new Set(['questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification']);
 const TERM_KEYS = new Set(['si', 'sauf']);
 const CONDITION_KEYS = new Set(['condition', 'l_une', 'delai', 'montant', 'selon', 'decompte', 'preuve', 'contredit']);
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
@@ -108,7 +108,7 @@ const text = (value: unknown) => typeof value === 'string' && value.trim() !== '
 export function readReasoning(value: unknown): { reasoning: Reasoning; problems: Problem[] } {
   const problems: Problem[] = [];
   const problem = (path: string, message: string, avocat?: string, cible?: string) => { problems.push({ path, text: message, ...(avocat ? { avocat, cible } : {}) }); };
-  const reasoning: Reasoning = { questions: [], essais: [], terms: new Map(), valeurs: new Map(), computed: new Map() };
+  const reasoning: Reasoning = { questions: [], hypotheses: [], terms: new Map(), valeurs: new Map(), computed: new Map() };
   const dated: Array<{ at: string; name: string }> = [];
   const controls: Array<{ slot: ControlSlot; name: string; at: string }> = [];
   const control = (slot: ControlSlot, raw: unknown, at: string): string | undefined => {
@@ -292,14 +292,15 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       }
       continue;
     }
-    if (key === 'essais') {
-      if (!Array.isArray(raw)) { problem('essais', 'essais: [{ nom, faits, attendu }] attendu'); continue; }
+    if (key === 'essais') { problem('essais', 'la clé essais s’appelle hypotheses : renomme-la'); continue; }
+    if (key === 'hypotheses') {
+      if (!Array.isArray(raw)) { problem('hypotheses', 'hypotheses: [{ nom, faits, attendu }] attendu'); continue; }
       raw.forEach((entry, index) => {
-        const at = `essais[${index}]`;
+        const at = `hypotheses[${index}]`;
         const booleans = (map: unknown) => isObject(map) && Object.values(map).every((item) => typeof item === 'boolean' || typeof item === 'number');
         const facts = (map: unknown) => isObject(map) && Object.values(map).every((item) => typeof item === 'boolean' || typeof item === 'number' || isDate(item));
         if (!isObject(entry) || !text(entry.nom) || !facts(entry.faits) || !booleans(entry.attendu)) { problem(at, '{ nom, faits: { terme: vrai|faux, valeur: \'AAAA-MM-JJ\' ou nombre }, attendu: { terme: vrai|faux, montant: nombre } } attendu'); return; }
-        reasoning.essais.push({ nom: entry.nom as string, faits: entry.faits as Trial['faits'], attendu: entry.attendu as Trial['attendu'] });
+        reasoning.hypotheses.push({ nom: entry.nom as string, faits: entry.faits as Trial['faits'], attendu: entry.attendu as Trial['attendu'] });
       });
       continue;
     }
@@ -378,7 +379,7 @@ export function canonical(annotated: Record<string, unknown>, reasoning: Reasoni
     pending.sort((x, y) => slots.indexOf(x.slot) - slots.indexOf(y.slot));
     visit(pending.shift()!.name);
   }
-  const keys = ['qualification', 'questions', ...order, ...Object.keys(annotated).filter((key) => !order.includes(key) && !['qualification', 'questions', 'valeurs', 'essais'].includes(key)), 'valeurs', 'essais'];
+  const keys = ['qualification', 'questions', ...order, ...Object.keys(annotated).filter((key) => !order.includes(key) && !['qualification', 'questions', 'valeurs', 'hypotheses'].includes(key)), 'valeurs', 'hypotheses'];
   return Object.fromEntries(keys.filter((key) => key in annotated).map((key) => [key, ordered(annotated[key])]));
 }
 

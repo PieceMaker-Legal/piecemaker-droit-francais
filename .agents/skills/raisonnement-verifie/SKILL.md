@@ -11,7 +11,7 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.js`, un o
 
 - **Une seule source d'instructions** : `server/piecemaker/legal-code/instructions.md`. Elle ne contient que des règles d'écriture génériques et la commande. La skill `piecemaker`, l'outil MCP et le harness des citations ne la répètent pas.
 - **C'est le vérificateur qui conduit l'agent** vers un raisonnement complet et sourcé, par ses manques. Les contrôles, la qualification et leurs conséquences ne sont jamais expliqués dans l'instruction.
-- **Erreur = défaut d'écriture** (syntaxe, citation introuvable, terme non défini, essai non conforme…). **Manque = ce qui reste à établir** ; l'avocat peut l'écarter.
+- **Erreur = défaut d'écriture** (syntaxe, citation introuvable, terme non défini, hypothèse non conforme…). **Manque = ce qui reste à établir** ; l'avocat peut l'écarter.
 - **Générique** : aucune règle ne dépend d'un domaine ou d'un vocabulaire (« annexe », « contrat »…). L'agent déclare, le vérificateur vérifie.
 - **Souplesse** : un manque désigne où se prononcer, jamais quoi répondre. Ne pas pousser le modèle à combler pour combler.
 - **Un manque n'est réclamé que s'il est systématique** : il doit se poser pour tout élément ou toute question du mode, quel que soit le sujet (la vigueur de tout texte cité ; la prescription en contentieux, où toute action exerce un droit). Ce qui ne se pose que selon le sens de la question n'est jamais réclamé, puisque le vérificateur ne lit pas ce sens (la prescription en consultation : « puis-je encore agir ? » oui, « combien d'impôt sur la cession à venir ? » non) : l'emplacement reste disponible et contrôlé, l'agent l'ajoute s'il le juge utile. Avant d'ajouter un manque, vérifier cette règle.
@@ -26,8 +26,8 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.js`, un o
 - `selon: [{ source, citation, vigueur: { debut, fin, au }, applicabilite, validite, renvoi, contredit }]` : identifiant officiel (LEGIARTI, JURITEXT, CETATEXT…) ou chemin de pièce pour une clause ; citation exacte. `renvoi: [{ piece, citation? }]` = ce à quoi la stipulation renvoie (déclaré par l'agent, quel que soit le mot employé) ; `contredit` = stipulation contraire.
 - Délai : `delai: { de, a, au_plus | au_moins: { jours | jours_ouvres | mois | ans: n } }` + `decompte`. Montant : `montant: { valeur, plus_de | au_moins | moins_de | au_plus: nom }`. Données dans `valeurs: { nom: { valeur, preuve | selon, formule? } }`, `valeur: null` si le dossier ne la fixe pas. `preuve` = pièce (donnée stipulée ou constatée) ; `selon` = texte qui fixe la valeur (taux, seuil, barème), vérifié comme toute source (citation, vigueur à la date `au`, applicabilité) ; une pièce en `selon` est une erreur.
 - `formule` calcule un montant (sans valeur prouvée, la formule le donne ; avec, les deux doivent concorder) : `somme | difference | produit | quotient | minimum | maximum: [termes]`, `arrondi: [montant, décimales]`, `bareme: { assiette, tranches: [{ jusqu_a, taux }, …, { taux }] }` (progressif), `{ si: terme, alors, sinon }` (montant selon un régime ; terme à trois valeurs). Nombres écrits dans une formule sans `preuve` ni `selon` = manque.
-- `essais: [{ nom, faits, attendu }]` : un fait absent reprend sa valeur établie ; `attendu` porte sur un terme (vrai/faux) ou un montant (nombre).
-- Variables : une valeur ouverte (`null`) n'est signalée que si une réponse en dépend (fait décisif calculé, ou opérande d'un montant-réponse). En drafting le manque se lève en fixant la valeur ou par des essais qui la supposent : pour un terme, des essais conformes donnant des résultats différents (la bascule) ; pour un montant, un essai conforme qui donne le montant attendu. Aucune détection textuelle des blancs.
+- `hypotheses: [{ nom, faits, attendu }]` : cas supposés que le moteur rejoue (l'ancienne clé `essais` est une erreur qui demande de la renommer) ; un fait absent reprend sa valeur établie ; `attendu` porte sur un terme (vrai/faux) ou un montant (nombre). Une hypothèse non conforme est une erreur : le raisonnement ne dit pas ce que l'agent conclut.
+- Variables : une valeur ouverte (`null`) n'est signalée que si une réponse en dépend (fait décisif calculé, ou opérande d'un montant-réponse). En drafting et en consultation, le manque se lève en fixant la valeur ou par des hypothèses qui la supposent : pour un terme, des hypothèses conformes donnant des résultats différents (la bascule) ; pour un montant, une hypothèse conforme qui donne le montant attendu. En contentieux, seule la preuve le lève. Un fait vrai/faux décisif sans pièce n'est jamais levé par une hypothèse hors drafting. Aucune détection textuelle des blancs.
 - Simulation (volet, onglet Détail de la question) : l'avocat modifie les valeurs, `POST /reasoning/simulate` rejoue le raisonnement hors ligne (sources en cache du dernier test), rien n'est écrit.
 
 ## Contrôles (sous-raisonnements)
@@ -47,14 +47,14 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 ## Manques par mode
 
 - **Tous** : non qualifié ; valeur ouverte dont dépend une réponse ; renvoi vers un élément absent du dossier ou un passage introuvable ; stipulation contredite (la source ne compte plus : à trancher) ; montant stipulé différent de sa formule ; texte sans `vigueur`, sans `vigueur.au` ou date non prouvée ; version non en vigueur ; clause qui renvoie à un article sans ce texte ; donnée de calcul non déclarée ; valeur non nulle sans preuve ; seuil en dur ; source non vérifiable ; terme inutile.
-- **Drafting** : faits = hypothèses, pas de manque de preuve ; chaque question a un essai ; une valeur ouverte décisive se lève par des essais ; stipulations contradictoires = à harmoniser.
-- **Contentieux / consultation** : fait décisif sans pièce.
+- **Drafting** : faits supposés, pas de manque de preuve ; chaque question a une hypothèse ; une valeur ouverte décisive se lève par des hypothèses ; stipulations contradictoires = à harmoniser.
+- **Contentieux / consultation** : fait décisif sans pièce ; valeur ouverte décisive (en consultation, levée aussi par des hypothèses).
 - **Contentieux** : prescription de chaque question.
 
 ## Sortie de `verifier`
 
 - À l'agent : uniquement erreurs puis manques, numérotés, chacun avec son emplacement (`terme › si[0] › selon[1] › validite`), sa ligne, le contenu de la ligne (ou où l'ajouter) et la consigne. Pas de réponses ni de statuts.
-- Le fichier est réécrit dans l'ordre canonique (qualification, questions, termes en descendant, contrôles regroupés, valeurs, essais) et imprimé pour grep : un terme par en-tête à deux espaces, une source ou preuve par ligne. L'agent relit avec grep/sed.
+- Le fichier est réécrit dans l'ordre canonique (qualification, questions, termes en descendant, contrôles regroupés, valeurs, hypothèses) et imprimé pour grep : un terme par en-tête à deux espaces, une source ou preuve par ligne. L'agent relit avec grep/sed.
 - Au volet : l'objet annoté complet (statuts, décisifs, `bilan.controles`, vigueur, pièces). L'avocat écarte des alertes et note la fiabilité des pièces (tables `pm_reasoning_dismissed`, `pm_reasoning_reliability`).
 
 ## Fichiers
@@ -62,7 +62,7 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 | Fichier | Rôle |
 |---|---|
 | `server/modules/piecemaker-reasoning/format.ts` | lecture acorn, validation, contrôles, ordre canonique, impression |
-| `server/modules/piecemaker-reasoning/engine.ts` | logique à trois valeurs, faits décisifs, délais, essais |
+| `server/modules/piecemaker-reasoning/engine.ts` | logique à trois valeurs, faits décisifs, délais, hypothèses |
 | `server/modules/piecemaker-reasoning/program.ts` | vérification, manques, sortie, service, exemple fictif |
 | `server/piecemaker/reasoning-connectors.ts` | Légifrance, pièces, registre, BODACC |
 | `server/piecemaker/legal-code/instructions.md` | instruction de l'agent (seule source) |

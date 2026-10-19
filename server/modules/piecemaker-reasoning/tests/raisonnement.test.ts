@@ -51,7 +51,7 @@ test('l’exemple fictif est à établir et désigne les faits décisifs', async
   assert.equal(at(result.annotated, 'pénalité_stipulée.si[0].statut'), 'acquis');
   assert.equal(at(result.annotated, 'grève.si[0].l_une[1].statut'), 'exclu');
   assert.equal(at(result.annotated, 'force_majeure_contractuelle.si[0].l_une[0].decisif'), true);
-  assert.equal(at(result.annotated, 'bilan.essais'), '1/1');
+  assert.equal(at(result.annotated, 'bilan.hypotheses'), '1/1');
   assert.equal(at(result.annotated, 'pénalité_encourue.si[0].selon[0].titre'), 'Code civil fictif, article 1231-5');
   assert.equal(at(result.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
   const described = describeReasoning(result);
@@ -116,22 +116,22 @@ test('l’applicabilité d’un texte est un terme : ses conditions, sourcées e
   assert.match(errors, /selon\[0\]\.applicabilite : applicabilite : nom du terme qui établit que ce texte s’applique, commençant par applicabilité_/);
 });
 
-test('une condition sans source, un terme non défini, une boucle et un essai non conforme sont des erreurs', async () => {
+test('une condition sans source, un terme non défini, une boucle et un hypothèse non conforme sont des erreurs', async () => {
   const errors = texts(await verify(`{
     questions: [{ question: \`Question fictive ?\`, reponse: 'a' }, { question: \`Autre ?\`, reponse: 'absent' }],
     a: { si: [{ condition: 'b', selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\` }] }, { condition: 'c' }] },
     b: { si: [{ condition: 'a', selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\` }] }] },
-    essais: [{ nom: \`faux\`, faits: { c: vrai }, attendu: { c: faux } }],
+    hypotheses: [{ nom: \`faux\`, faits: { c: vrai }, attendu: { c: faux } }],
   }`), 'erreur').join('\n');
   assert.match(errors, /a\.si\[1\]\.selon : condition sans source/);
   assert.match(errors, /questions\[1\]\.reponse : terme absent non défini/);
   assert.match(errors, /boucle : a → b → a/);
 });
 
-test('un essai rejoue le droit seul et signale un résultat contraire à l’attendu', async () => {
+test('une hypothèse rejoue le droit seul et signale un résultat contraire à l’attendu', async () => {
   const result = await verify(EXAMPLE_CODE.replace('attendu: { pénalité_encourue: faux }', 'attendu: { pénalité_encourue: vrai }'));
-  assert.equal(at(result.annotated, 'essais[0].conforme'), false);
-  assert.match(texts(result, 'erreur').join('\n'), /essais\[0\] : essai non conforme : obtenu pénalité_encourue = faux/);
+  assert.equal(at(result.annotated, 'hypotheses[0].conforme'), false);
+  assert.match(texts(result, 'erreur').join('\n'), /hypotheses\[0\] : hypothèse non conforme : obtenu pénalité_encourue = faux/);
 });
 
 test('une source d’un autre droit est acceptée mais signalée comme non vérifiable', async () => {
@@ -187,7 +187,7 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   await assert.rejects(service.verify(folder), /Aucun raisonnement/);
 });
 
-test('le test se déroule ligne par ligne : sources, pièces, faits, termes, essais, réponse', async () => {
+test('le test se déroule ligne par ligne : sources, pièces, faits, termes, hypothèses, réponse', async () => {
   const seen: string[] = [];
   const result = await verifyReasoning({
     code: EXAMPLE_CODE, cwd: '/dossier-fictif', connectors: connectors(), reliability: new Map(), nature: () => null,
@@ -242,7 +242,7 @@ const CESSION_CODE = `{
     si: [{ condition: 'délai_de_date_à_date', selon: [{ source: 'pieces/02_cession.md', citation: \`Les délais se calculent de date à date\`, vigueur: { debut: '2022-06-15', fin: null } }],
       preuve: [{ piece: 'pieces/02_cession.md', citation: \`Les délais se calculent de date à date\` }] }],
   },
-  essais: [
+  hypotheses: [
     { nom: \`notification le jour de l’échéance\`, faits: { délai_de_date_à_date: vrai, date_de_réalisation: '2022-06-15', date_de_notification: '2024-06-15', montant_du_dommage: 45000 }, attendu: { réduction_due: vrai } },
     { nom: \`notification tardive\`, faits: { délai_de_date_à_date: vrai, date_de_réalisation: '2022-06-15', date_de_notification: '2024-06-17', montant_du_dommage: 45000 }, attendu: { réduction_due: faux } },
     { nom: \`dommage égal au seuil\`, faits: { délai_de_date_à_date: vrai, date_de_réalisation: '2022-06-15', date_de_notification: '2023-09-10', montant_du_dommage: 3000 }, attendu: { réduction_due: faux } },
@@ -252,14 +252,14 @@ const cession = (code: string) => verifyReasoning({
   code, cwd: '/dossier-fictif', connectors: connectors(CESSION_SOURCES), reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(),
 });
 
-test('un délai et un montant se calculent à partir des valeurs prouvées, et les essais les rejouent', async () => {
+test('un délai et un montant se calculent à partir des valeurs prouvées, et les hypothèses les rejouent', async () => {
   const result = await cession(CESSION_CODE);
   assert.deepEqual(texts(result, 'erreur'), []);
   assert.equal(at(result.annotated, 'questions[0].statut'), 'acquis');
   assert.deepEqual(at(result.annotated, 'réduction_due.si[0].calcul'), { depart: '2022-06-15', echeance: '2024-06-15', date_retenue: '2024-02-10' });
   assert.deepEqual(at(result.annotated, 'réduction_due.si[1].calcul'), { montant: 45000, seuil: 3000 });
   assert.equal(at(result.annotated, 'valeurs.montant_du_dommage.statut'), 'acquis');
-  assert.equal(at(result.annotated, 'bilan.essais'), '3/3');
+  assert.equal(at(result.annotated, 'bilan.hypotheses'), '3/3');
   assert.match(result.log.find((entry) => entry.key === 'fait:notification_dans_la_garantie')!.text, /au plus 2 ans à compter du 15\/06\/2022 : échéance au 15\/06\/2024, date retenue 10\/02\/2024 → oui/);
   assert.doesNotMatch(texts(result, 'manque').join('\n'), /délai sans décompte/);
 });
@@ -309,7 +309,7 @@ test('le raisonnement se qualifie drafting ou contentieux ; la qualification app
   const litigation = texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'contentieux',\n  questions:")), 'manque').join('\n');
   assert.match(litigation, /questions\[0\] : contentieux : vérifier la prescription : ajoute prescription:/);
   assert.doesNotMatch(litigation, /vérifier la validité/);
-  const valid = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace('\n  essais:', "\n  validité_du_contrat: { sauf: [{ condition: 'vice_du_consentement', selon: [{ source: 'pieces/01_contrat.md', citation: `En cas de retard de livraison` }], preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },\n  essais:"));
+  const valid = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace('\n  hypotheses:', "\n  validité_du_contrat: { sauf: [{ condition: 'vice_du_consentement', selon: [{ source: 'pieces/01_contrat.md', citation: `En cas de retard de livraison` }], preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },\n  hypotheses:"));
   assert.doesNotMatch(texts(valid, 'manque').join('\n'), /vérifier la validité/);
   assert.deepEqual(texts(valid, 'erreur'), []);
   assert.equal(at(valid.annotated, 'validité_du_contrat.statut'), 'exclu');
@@ -329,31 +329,31 @@ test('les contrôles portent un nom préfixé, désigné par leur emplacement ; 
   const keys = Object.keys(result.annotated as object);
   assert.deepEqual(keys.slice(0, 3), ['bilan', 'questions', 'pénalité_encourue']);
   assert.ok(keys.indexOf('applicabilité_de_l_article_1231_5') > keys.indexOf('grève'));
-  assert.deepEqual(keys.slice(-2), ['valeurs', 'essais']);
+  assert.deepEqual(keys.slice(-2), ['valeurs', 'hypotheses']);
   assert.deepEqual(Object.keys(at(result.annotated, 'pénalité_encourue.si[0].selon[0]')).slice(0, 5), ['source', 'citation', 'vigueur', 'applicabilite', 'titre']);
   assert.equal(at(result.annotated, 'bilan.controles'), '1/5 établis');
 });
 
-test('en contrat, les faits sont des hypothèses : pas de manque de preuve, mais chaque question a son essai, et les essais reprennent les faits établis', async () => {
+test('en contrat, les faits sont des hypothèses : pas de manque de preuve, mais chaque question a son hypothèse, et les hypothèses reprennent les faits établis', async () => {
   const contractual = await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:"));
   const manques = texts(contractual, 'manque').join('\n');
   assert.doesNotMatch(manques, /décide de la réponse/);
   assert.ok(at(contractual.annotated, 'questions[0].decisifs').length);
-  assert.doesNotMatch(manques, /question sans essai/);
-  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace(/\n  essais: \[[\s\S]*?\n  \],/, '')), 'manque').join('\n'), /questions\[0\] : question sans essai : ajoute dans essais un cas dont attendu porte sur pénalité_encourue/);
+  assert.doesNotMatch(manques, /question sans hypothèse/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace(/\n  hypotheses: \[[\s\S]*?\n  \],/, '')), 'manque').join('\n'), /questions\[0\] : question sans hypothèse : ajoute dans hypotheses un cas dont attendu porte sur pénalité_encourue/);
   assert.match(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /décide de la réponse/);
   const inherited = await verify(EXAMPLE_CODE.replace('faits: { retard_de_livraison: vrai, mise_en_demeure: vrai, grève_nationale: vrai }', 'faits: { grève_nationale: vrai }'));
-  assert.equal(at(inherited.annotated, 'bilan.essais'), '1/1');
+  assert.equal(at(inherited.annotated, 'bilan.hypotheses'), '1/1');
   assert.match(texts(await verify(EXAMPLE_CODE.replace("reponse: 'pénalité_encourue',", "reponse: 'validité_du_contrat', validite: 'validité_du_contrat',")), 'erreur').join('\n'), /questions\[0\]\.validite : validite : la question porte déjà sur ce contrôle/);
 });
 
 test('une clause n’a pas à porter sa vigueur ; le fichier est réécrit dans l’ordre canonique', async () => {
   assert.doesNotMatch(texts(await verify(EXAMPLE_CODE.replaceAll(", vigueur: { debut: '2024-01-15', fin: null }", '')), 'manque').join('\n'), /vigueur non renseignée/);
-  const shuffled = EXAMPLE_CODE.replace('{\n  questions:', '{\n  essais: [],\n  questions:');
+  const shuffled = EXAMPLE_CODE.replace('{\n  questions:', '{\n  hypotheses: [],\n  questions:');
   const result = await verify(shuffled);
   assert.ok(result.code.indexOf('questions:') < result.code.indexOf('pénalité_encourue:'));
   assert.ok(result.code.indexOf('pénalité_encourue:') < result.code.indexOf('applicabilité_de_l_article_1231_5:'));
-  assert.ok(result.code.lastIndexOf('essais:') > result.code.indexOf('valeurs:'));
+  assert.ok(result.code.lastIndexOf('hypotheses:') > result.code.indexOf('valeurs:'));
   assert.deepEqual(texts(await verify(result.code), 'erreur'), texts(result, 'erreur'));
 });
 
@@ -361,7 +361,7 @@ test('une clause appelle le contrôle de sa validité, qui s’apprécie au rega
   const result = await verify(EXAMPLE_CODE);
   const manques = texts(result, 'manque').join('\n');
   assert.match(manques, /pénalité_stipulée\.si\[0\]\.selon\[0\]\.validite : validité de la clause non établie : ajoute validite: 'validité_de_la_clause_retard_de_livraison'/);
-  const withValidity = EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_de_la_clause_pénale' }],").replace('\n  essais:', "\n  validité_de_la_clause_pénale: { sauf: [{ condition: 'pénalité_manifestement_excessive', selon: [{ source: 'pieces/01_contrat.md', citation: `ainsi que les grèves` }], preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }] },\n  essais:");
+  const withValidity = EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_de_la_clause_pénale' }],").replace('\n  hypotheses:', "\n  validité_de_la_clause_pénale: { sauf: [{ condition: 'pénalité_manifestement_excessive', selon: [{ source: 'pieces/01_contrat.md', citation: `ainsi que les grèves` }], preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }] },\n  hypotheses:");
   const valid = await verify(withValidity);
   assert.deepEqual(texts(valid, 'erreur'), []);
   assert.match(texts(valid, 'manque').join('\n'), /validité_de_la_clause_pénale : la validité s’apprécie au regard du droit applicable : cite dans ce terme le texte qui la fonde/);
@@ -390,7 +390,7 @@ test('les données des calculs sont déclarées dans valeurs, prouvées ou laiss
 });
 
 test('une clause a son propre contrôle de validité ; une clause citée pour l’applicabilité n’en réclame pas', async () => {
-  const shared = EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_du_contrat' }],").replace('\n  essais:', "\n  validité_du_contrat: { si: [{ condition: 'contrat_signé', selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },\n  essais:");
+  const shared = EXAMPLE_CODE.replace('{\n  questions:', "{\n  qualification: 'drafting',\n  questions:").replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', validite: 'validité_du_contrat',").replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_du_contrat' }],").replace('\n  hypotheses:', "\n  validité_du_contrat: { si: [{ condition: 'contrat_signé', selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },\n  hypotheses:");
   assert.match(texts(await verify(shared), 'erreur').join('\n'), /pénalité_stipulée\.si\[0\]\.selon\[0\]\.validite : validite : validité_du_contrat est le contrôle de validité de l’acte ; une clause a son propre contrôle/);
   const governed = EXAMPLE_CODE.replace("        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", "        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },\n      { condition: 'droit_français_choisi', selon: [{ source: 'pieces/01_contrat.md', citation: `Article 1. Grève` }], preuve: [{ piece: 'pieces/01_contrat.md', citation: `Article 1. Grève` }] },");
   assert.notEqual(governed, EXAMPLE_CODE);
@@ -445,7 +445,7 @@ const FISCAL_CODE = `{
     impôt_dû: { formule: { arrondi: [{ somme: [{ produit: ['gain_net', 'taux_forfaitaire'] }, { bareme: { assiette: 'gain_net', tranches: [{ jusqu_a: 50000, taux: 0 }, { taux: 0.03 }] } }] }, 0] },
       selon: [{ source: 'LEGIARTI000000000101', citation: \`une contribution de 3 %\`, vigueur: { debut: '2018-01-01', fin: null, au: 'date_de_cession' }, applicabilite: 'applicabilité_de_l_article_150' }] },
   },
-  essais: [{ nom: \`prix de 200 000 euros\`, faits: { prix_de_cession: 200000 }, attendu: { impôt_dû: 14300 } }],
+  hypotheses: [{ nom: \`prix de 200 000 euros\`, faits: { prix_de_cession: 200000 }, attendu: { impôt_dû: 14300 } }],
 }`;
 const fiscal = (code: string, simulation?: Record<string, number>) => verifyReasoning({
   code, cwd: '/dossier-fictif', connectors: connectors(FISCAL_SOURCES),
@@ -464,20 +464,20 @@ test('les formules couvrent barème par tranches, minimum, maximum, arrondi et m
   assert.equal(evaluate(regime, lookup, () => null), null);
 });
 
-test('une question peut appeler un montant : le taux se source par un texte applicable, le prix en blanc se joue en essais et en simulation', async () => {
+test('une question peut appeler un montant : le taux se source par un texte applicable, le prix en blanc se joue en hypothèses et en simulation', async () => {
   const result = await fiscal(FISCAL_CODE);
   assert.deepEqual(texts(result, 'erreur'), []);
   assert.equal(at(result.annotated, 'valeurs.taux_forfaitaire.statut'), 'acquis');
   assert.equal(at(result.annotated, 'valeurs.taux_forfaitaire.selon[0].en_vigueur'), true);
   assert.equal(at(result.annotated, 'questions[0].statut'), 'à établir');
   assert.equal(at(result.annotated, 'questions[0].montant_calcule'), null);
-  assert.equal(at(result.annotated, 'bilan.essais'), '1/1');
+  assert.equal(at(result.annotated, 'bilan.hypotheses'), '1/1');
   const manques = texts(result, 'manque').join('\n');
   assert.doesNotMatch(manques, /prix_de_cession|nombres écrits|taux_forfaitaire|applicabilité_de_l_article_150/);
-  const alone = await fiscal(FISCAL_CODE.replace(/ {2}essais: \[[^\n]*\],\n/, ''));
-  assert.match(texts(alone, 'manque').join('\n'), /valeurs\.prix_de_cession : impôt_dû dépend de prix_de_cession, que le projet ne fixe pas : fixe-la dans valeurs, ou ajoute un essai/);
+  const alone = await fiscal(FISCAL_CODE.replace(/ {2}hypotheses: \[[^\n]*\],\n/, ''));
+  assert.match(texts(alone, 'manque').join('\n'), /valeurs\.prix_de_cession : impôt_dû dépend de prix_de_cession, que le projet ne fixe pas : fixe-la dans valeurs, ou ajoute une hypothèse/);
   const wrong = await fiscal(FISCAL_CODE.replace('attendu: { impôt_dû: 14300 }', 'attendu: { impôt_dû: 14000 }'));
-  assert.match(texts(wrong, 'erreur').join('\n'), /essais\[0\] : essai non conforme : obtenu impôt_dû = 14300/);
+  assert.match(texts(wrong, 'erreur').join('\n'), /hypotheses\[0\] : hypothèse non conforme : obtenu impôt_dû = 14300/);
   const hypothetical = await fiscal(FISCAL_CODE.replace(", preuve: [{ piece: 'pieces/projet_cession.md', citation: `Jean Dupont, personne physique` }] }] },", ' }] },').replace('faits: { prix_de_cession: 200000 }', 'faits: { prix_de_cession: 200000, cession_par_une_personne_physique: vrai }'));
   assert.equal(at(hypothetical.annotated, 'valeurs.taux_forfaitaire.statut'), 'à établir');
   assert.deepEqual(texts(hypothetical, 'erreur'), []);
@@ -494,7 +494,7 @@ test('une question peut appeler un montant : le taux se source par un texte appl
   assert.match(texts(misplaced, 'erreur').join('\n'), /valeurs\.taux_forfaitaire\.selon\[0\]\.source : pieces\/projet_cession\.md est une pièce/);
 });
 
-test('drafting : une valeur laissée ouverte n’est un manque que si la réponse en dépend, et des essais qui montrent la bascule le lèvent', async () => {
+test('drafting : une valeur laissée ouverte n’est un manque que si la réponse en dépend, et des hypothèses qui montrent la bascule le lèvent', async () => {
   const code = (essais: string) => `{
   qualification: 'drafting',
   questions: [{ question: \`La réduction de prix est-elle due ?\`, reponse: 'réduction_due', validite: 'validité_de_la_cession' }],
@@ -506,7 +506,7 @@ test('drafting : une valeur laissée ouverte n’est un manque que si la répons
     seuil_de_réduction: { valeur: 150000, preuve: [{ piece: 'pieces/projet_cession.md', citation: \`seuil de 150 000 euros\` }] },
     nom_du_notaire: { valeur: null },
   },
-  essais: [${essais}],
+  hypotheses: [${essais}],
 }`;
   const low = '{ nom: `prix bas`, faits: { prix_de_cession: 100000 }, attendu: { réduction_due: faux } }';
   const high = '{ nom: `prix haut`, faits: { prix_de_cession: 200000 }, attendu: { réduction_due: vrai } }';
@@ -517,4 +517,13 @@ test('drafting : une valeur laissée ouverte n’est un manque que si la répons
   const both = await fiscal(code(`${low}, ${high}`));
   assert.deepEqual(texts(both, 'erreur'), []);
   assert.doesNotMatch(texts(both, 'manque').join('\n'), /prix_de_cession/);
+});
+
+test('consultation : des hypothèses lèvent le manque d’une valeur ouverte, pas celui d’un fait décisif sans pièce ; l’ancienne clé essais est refusée', async () => {
+  const consult = (code: string) => fiscal(code.replace("qualification: 'drafting'", "qualification: 'consultation'"));
+  const covered = await consult(FISCAL_CODE);
+  assert.doesNotMatch(texts(covered, 'manque').join('\n'), /dépend de prix_de_cession/);
+  const bare = await consult(FISCAL_CODE.replace(/ {2}hypotheses: \[[^\n]*\],\n/, ''));
+  assert.match(texts(bare, 'manque').join('\n'), /valeurs\.prix_de_cession : impôt_dû dépend de prix_de_cession : renseigne-la dans valeurs, avec sa preuve \(pièce\) ou sa source \(selon : texte\), ou ajoute une hypothèse/);
+  assert.match(texts(await fiscal(FISCAL_CODE.replace('  hypotheses: [', '  essais: [')), 'erreur').join('\n'), /essais : la clé essais s’appelle hypotheses/);
 });
