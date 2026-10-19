@@ -478,6 +478,9 @@ test('une question peut appeler un montant : le taux se source par un texte appl
   assert.match(texts(alone, 'manque').join('\n'), /valeurs\.prix_de_cession : impôt_dû dépend de prix_de_cession, que le projet ne fixe pas : fixe-la dans valeurs, ou ajoute un essai/);
   const wrong = await fiscal(FISCAL_CODE.replace('attendu: { impôt_dû: 14300 }', 'attendu: { impôt_dû: 14000 }'));
   assert.match(texts(wrong, 'erreur').join('\n'), /essais\[0\] : essai non conforme : obtenu impôt_dû = 14300/);
+  const hypothetical = await fiscal(FISCAL_CODE.replace(", preuve: [{ piece: 'pieces/projet_cession.md', citation: `Jean Dupont, personne physique` }] }] },", ' }] },').replace('faits: { prix_de_cession: 200000 }', 'faits: { prix_de_cession: 200000, cession_par_une_personne_physique: vrai }'));
+  assert.equal(at(hypothetical.annotated, 'valeurs.taux_forfaitaire.statut'), 'à établir');
+  assert.deepEqual(texts(hypothetical, 'erreur'), []);
   const simulated = await fiscal(FISCAL_CODE, { prix_de_cession: 300000 });
   assert.equal(simulated.simulation?.questions[0].montant, 30100);
   assert.equal(simulated.simulation?.valeurs.gain_net, 200000);
