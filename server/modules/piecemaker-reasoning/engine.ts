@@ -1,6 +1,6 @@
 import type { ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import type { Condition, Reasoning, Term } from './format.js';
+import type { Condition, Duration, Measure, Reasoning, Term } from './format.js';
 
 export type Facts = { leaf(name: string): ReasoningValue; basis(path: string, condition: Condition): ReasoningValue };
 export type Trace = Map<string, ReasoningValue>;
@@ -80,10 +80,54 @@ export function decisive(test: Test, facts: Facts, root: string, unknown: string
   return { decisive: unknown.filter((name) => found.has(name)), inPlay: false };
 }
 
-export function runTrials(reasoning: Reasoning, test: Test) {
+export type Lookup = (name: string) => string | number | null;
+export type Calculation = { value: ReasoningValue; missing: string[]; calcul: Record<string, string | number> | null };
+
+export const QUESTION_DATE = 'date_de_la_question';
+
+export function addDuration(start: string, { unite, nombre }: Duration): string {
+  const date = new Date(`${start}T00:00:00Z`);
+  if (unite === 'jours') date.setUTCDate(date.getUTCDate() + nombre);
+  else if (unite === 'jours_ouvres') for (let left = nombre; left > 0;) { date.setUTCDate(date.getUTCDate() + 1); if (date.getUTCDay() % 6 !== 0) left -= 1; }
+  else {
+    const day = date.getUTCDate();
+    date.setUTCDate(1);
+    date.setUTCMonth(date.getUTCMonth() + (unite === 'ans' ? nombre * 12 : nombre));
+    date.setUTCDate(Math.min(day, new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate()));
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+export function calculate(measure: Measure, lookup: Lookup, date: string | null): Calculation {
+  if (measure.delai) {
+    const { de, a, borne, duree } = measure.delai;
+    const start = lookup(de);
+    const end = a ? lookup(a) : date;
+    const missing = [...(typeof start === 'string' ? [] : [de]), ...(typeof end === 'string' ? [] : [a ?? QUESTION_DATE])];
+    if (typeof start !== 'string' || typeof end !== 'string') return { value: null, missing, calcul: null };
+    const echeance = addDuration(start, duree);
+    return { value: borne === 'au_plus' ? end <= echeance : end >= echeance, missing, calcul: { depart: start, echeance, date_retenue: end } };
+  }
+  const { valeur, comparaison, seuil } = measure.montant!;
+  const amount = lookup(valeur);
+  const threshold = typeof seuil === 'number' ? seuil : lookup(seuil);
+  const missing = [...(typeof amount === 'number' ? [] : [valeur]), ...(typeof threshold === 'number' ? [] : [String(seuil)])];
+  if (typeof amount !== 'number' || typeof threshold !== 'number') return { value: null, missing, calcul: null };
+  const value = comparaison === 'plus_de' ? amount > threshold : comparaison === 'au_moins' ? amount >= threshold : comparaison === 'moins_de' ? amount < threshold : amount <= threshold;
+  return { value, missing, calcul: { montant: amount, seuil: threshold } };
+}
+
+export function runTrials(reasoning: Reasoning, test: Test, date: string | null = null) {
   return reasoning.essais.map((trial) => {
     const trace: Trace = new Map();
-    const values = test({ leaf: (name) => trial.faits[name] ?? null, basis: () => true }, trace, Object.keys(trial.attendu));
+    const given: Lookup = (name) => { const item = trial.faits[name]; return typeof item === 'boolean' || item === undefined ? null : item; };
+    const leaf = (name: string): ReasoningValue => {
+      const item = trial.faits[name];
+      if (typeof item === 'boolean') return item;
+      const measure = reasoning.computed.get(name);
+      return measure ? calculate(measure, given, date).value : null;
+    };
+    const values = test({ leaf, basis: () => true }, trace, Object.keys(trial.attendu));
     const obtenu = Object.fromEntries(Object.keys(trial.attendu).map((name) => [name, values.get(name) ?? null]));
     return { obtenu, conforme: Object.entries(trial.attendu).every(([name, expected]) => obtenu[name] === expected) };
   });
