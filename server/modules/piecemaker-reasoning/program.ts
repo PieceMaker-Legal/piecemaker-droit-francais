@@ -6,9 +6,9 @@ import type Database from 'better-sqlite3';
 
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, ReasoningSnapshot, ReasoningStatus, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import { and, calculate, compile, or, decisive, reachableLeaves, runTrials, structure } from './engine.js';
+import { and, answer, calculate, compile, or, questionRoots, decisive, reachableLeaves, runTrials, structure } from './engine.js';
 import type { Calculation, Facts, Trace } from './engine.js';
-import { LiteralError, parseLiteral, printLiteral, readReasoning, stripAnnotations } from './format.js';
+import { canonical, LiteralError, parseLiteral, printLiteral, readReasoning, stripAnnotations } from './format.js';
 import type { Basis, Condition, Measure, Ref } from './format.js';
 
 export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null } };
@@ -38,7 +38,11 @@ const inForce = (date: string, from: string, to: string | null): boolean => from
 const UNIT: Record<string, string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
 const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moins', moins_de: 'moins de', au_plus: 'au plus' };
 const amount = (value: string | number) => (typeof value === 'number' ? value.toLocaleString('fr-FR') : phrase(value));
-const ANCHORED = /\.(piece|source|vigueur|reponse|decompte)$/;
+const ANCHORED = /\.(piece|source|vigueur|reponse|decompte|applicabilite|validite|prescription)$/;
+const applicabilityName = (title: string) => {
+  const article = /article\s+(\S+)/i.exec(title);
+  return `applicabilité_de_${(article ? `l_article_${article[1]}` : title).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 50)}`;
+};
 
 function explain(measure: Measure, result: Calculation) {
   if (!result.calcul) return `À calculer : ${listing(result.missing.map(phrase))} non établi${result.missing.length > 1 ? 's' : ''}`;
@@ -103,9 +107,11 @@ export async function verifyReasoning(input: {
     if (!reasoning.terms.has(question.reponse)) add('erreur', `questions[${index}].reponse`, `terme ${question.reponse} non défini : écris ${question.reponse}: { si: [...] }`);
   });
   if (!reasoning.qualification) add('manque', 'qualification', 'raisonnement non qualifié : ajoute qualification: \'contractuel\' ou \'contentieux\'', 'Le raisonnement n’est pas qualifié : contractuel ou contentieux.');
-  if (reasoning.qualification === 'contentieux') add('manque', 'qualification', 'contentieux : vérifier la prescription', 'Prescription à vérifier.');
-  if (reasoning.qualification === 'contractuel') add('manque', 'qualification', 'contractuel : vérifier la validité', 'Validité à vérifier.');
-  const roots = new Set(reasoning.questions.map((question) => question.reponse));
+  reasoning.questions.forEach((question, index) => {
+    if (reasoning.qualification === 'contentieux' && !question.prescription) add('manque', `questions[${index}]`, 'contentieux : vérifier la prescription : ajoute prescription: \'prescription_de_…\' sur la question et définis ce terme', 'Prescription à vérifier.');
+    if (reasoning.qualification === 'contractuel' && !question.validite) add('manque', `questions[${index}]`, 'contractuel : vérifier la validité : ajoute validite: \'validité_de_…\' sur la question et définis ce terme', 'Validité à vérifier.');
+  });
+  const roots = new Set(reasoning.questions.flatMap(questionRoots));
   for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, 'terme qui ne sert à aucune question : rattache-le comme condition ou ajoute la question à laquelle il répond');
 
   const sources = new Map<string, Promise<SourceInfo | null | undefined>>();
@@ -183,8 +189,7 @@ export async function verifyReasoning(input: {
   const checks: Array<Promise<void>> = [];
   for (const { at, condition } of occurrences) {
     condition.selon.forEach((basis, index) => checks.push(checkBasis(`${at}.selon[${index}]`, basis)));
-    condition.decompte.forEach((basis, index) => checks.push(checkBasis(`${at}.decompte[${index}]`, basis)));
-    if (condition.mesure?.delai && !condition.decompte.length) add('manque', `${at}.decompte`, 'délai sans règle de décompte : ajoute decompte: [{ source, citation, vigueur }] citant la clause ou le texte qui fixe le calcul du délai', `${human(condition.condition!)} : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.`, condition.condition);
+    if (condition.mesure?.delai && !condition.decompte) add('manque', `${at}.decompte`, `délai sans décompte : ajoute decompte: 'décompte_de_${condition.condition}' et définis ce terme, dont les conditions sourcées établissent la règle de calcul du délai`, `${human(condition.condition!)} : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.`, condition.condition);
     condition.preuve.forEach((ref, index) => checks.push(checkRef(`${at}.preuve[${index}]`, ref)));
     condition.contredit.forEach((ref, index) => checks.push(checkRef(`${at}.contredit[${index}]`, ref)));
   }
@@ -212,11 +217,11 @@ export async function verifyReasoning(input: {
     const measure = reasoning.computed.get(name);
     return measure ? calculate(measure, valueOf).value : leafValue(name);
   };
-  const dateOf = (basis: Basis) => { const value = basis.au ? valueOf(basis.au) : null; return typeof value === 'string' ? value : null; };
+  const dateOf = (basis: Basis) => { const value = basis.vigueur?.au ? valueOf(basis.vigueur.au) : null; return typeof value === 'string' ? value : null; };
   const inForceAt = (basis: Basis, check: BasisCheck): ReasoningValue => {
     const date = dateOf(basis);
     if (date && check.from) return inForce(date, check.from, check.to);
-    return check.kind === 'piece' && !basis.au ? true : null;
+    return check.kind === 'piece' && !basis.vigueur?.au ? true : null;
   };
 
   const basisValue = (at: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue => {
@@ -245,17 +250,23 @@ export async function verifyReasoning(input: {
     if (!reasoning.terms.has(question.reponse) || shape.cycles.length) return;
     const facts: Facts = { leaf, basis: (at, condition, applicable) => { const value = basisValue(at, condition, applicable); if (!vigueurs.has(at)) vigueurs.set(at, value); return value; } };
     const trace: Trace = new Map();
-    const value = test(facts, trace, [question.reponse]).get(question.reponse) ?? null;
+    const value = answer(question, test(facts, trace, questionRoots(question)));
     for (const [key, item] of trace) if (!statuses.has(key)) statuses.set(key, item);
-    const reachable = [...reachableLeaves(reasoning, question.reponse)];
+    const reachable = [...new Set(questionRoots(question).flatMap((root) => [...reachableLeaves(reasoning, root)]))];
     const unknown = reachable.filter((name) => facts.leaf(name) === null).sort();
-    const found = value === null ? decisive(test, facts, question.reponse, unknown) : { decisive: [], inPlay: false };
+    const found = value === null ? decisive(test, facts, question, unknown) : { decisive: [], inPlay: false };
     for (const name of found.decisive) decisiveLeaves.add(name);
     const holder = node(annotated, `questions[${index}]`);
     const personnes = input.persons.filter((person) => question.question.includes(person.label)).map((person) => person.label);
     if (holder) Object.assign(holder, { statut: STATUS(value), ...(found.decisive.length ? { [found.inPlay ? 'en_jeu' : 'decisifs']: found.decisive } : {}), ...(personnes.length ? { personnes } : {}) });
   });
 
+  const controlSlots: Array<string | null> = [];
+  for (const question of reasoning.questions) {
+    if (reasoning.qualification === 'contractuel' || question.validite) controlSlots.push(question.validite ?? null);
+    if (reasoning.qualification === 'contentieux' || question.prescription) controlSlots.push(question.prescription ?? null);
+  }
+  for (const { condition } of occurrences) if (condition.mesure?.delai) controlSlots.push(condition.decompte ?? null);
   for (const { at, condition } of occurrences) {
     const holder = node(annotated, at);
     if (!holder) continue;
@@ -275,11 +286,13 @@ export async function verifyReasoning(input: {
       const title = String(source?.titre ?? basis.source);
       const date = dateOf(basis);
       if (source && check?.kind && check.kind !== 'decision') source.en_vigueur = date && check.from ? inForce(date, check.from, check.to) : null;
-      if (date && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${date} (${basis.au}) ; cite la version en vigueur à cette date`, `${title} : la version citée n’était pas en vigueur au ${day(date)}.`, `#source:${basis.source}`);
-      if (check?.kind === 'texte' && !basis.au) add('manque', `${place}.au`, 'applicabilité dans le temps non établie : ajoute au: \'nom_de_date\', la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable', `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
-      else if (check?.kind === 'texte' && !date) add('manque', `${place}.au`, `${basis.au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(basis.au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`);
-      if (basis.applicabilite && !reasoning.terms.has(basis.applicabilite)) add('erreur', `${place}.applicabilite`, `terme ${basis.applicabilite} non défini : écris ${basis.applicabilite}: { si: [...] }`);
-      if (check?.kind === 'texte' && !basis.applicabilite && !applicabilityTerms.has(at.split(".")[0])) add('manque', `${place}.applicabilite`, 'applicabilité non établie : ajoute applicabilite: \'nom_de_terme\' et définis ce terme, dont les conditions établissent que ce texte s’applique au dossier', `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
+      const au = basis.vigueur?.au;
+      if (date && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${date} (${au}) ; cite la version en vigueur à cette date`, `${title} : la version citée n’était pas en vigueur au ${day(date)}.`, `#source:${basis.source}`);
+      if (check?.kind === 'texte' && !au) add('manque', `${place}.vigueur`, 'applicabilité dans le temps non établie : ajoute vigueur: { debut, fin, au: \'nom_de_date\' }, la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable', `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
+      else if (check?.kind === 'texte' && !date) add('manque', `${place}.vigueur`, `${au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`);
+      const exempt = applicabilityTerms.has(at.split('.')[0]);
+      if (check?.kind === 'texte' && !exempt) controlSlots.push(basis.applicabilite ?? null);
+      if (check?.kind === 'texte' && !basis.applicabilite && !exempt) add('manque', `${place}.applicabilite`, `applicabilité non établie : ajoute applicabilite: '${applicabilityName(title)}' et définis ce terme, dont les conditions établissent que ce texte s’applique au dossier`, `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
     });
   }
   for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = STATUS(statuses.get(name) ?? null); }
@@ -341,6 +354,7 @@ export async function verifyReasoning(input: {
   const bilan = {
     erreurs: visible.filter((issue) => issue.kind === 'erreur').length,
     manques: visible.filter((issue) => issue.kind === 'manque').length,
+    ...(controlSlots.length ? { controles: `${controlSlots.filter((name) => name && statuses.get(name) === true).length}/${controlSlots.length} établis` } : {}),
     ...(trials.length ? { essais: `${trials.filter((trial) => trial.conforme).length}/${trials.length}` } : {}),
     ecartees: issues.length - visible.length,
     ...(general.length ? { alertes: general.map((issue) => `${issue.path ? `${issue.path} : ` : ''}${issue.text}`) } : {}),
@@ -355,7 +369,7 @@ export async function verifyReasoning(input: {
   });
   let code = input.code;
   for (const [original, fixed] of corrections) code = code.split(original).join(fixed);
-  return { annotated: { bilan, ...annotated }, issues, code, log };
+  return { annotated: { bilan, ...canonical(annotated, reasoning) }, issues, code, log };
 }
 
 type PersonRow = { label: string; kind: string; name: string | null; siren: string | null; side: string | null };
@@ -495,18 +509,18 @@ export const EXAMPLE_CODE = `{
   pénalité_encourue: {
     si: [
       { condition: 'pénalité_stipulée',
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null }, au: 'date_de_conclusion_du_contrat', applicabilite: 'applicabilité_de_l_article_1231_5' }] },
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }] },
       { l_une: [
           { condition: 'mise_en_demeure', preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: \`vous met en demeure\` }] },
           { condition: 'inexécution_définitive' },
         ],
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null }, au: 'date_de_conclusion_du_contrat', applicabilite: 'applicabilité_de_l_article_1231_5' }] },
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }] },
     ],
   },
   applicabilité_de_l_article_1231_5: {
     si: [
       { condition: 'contrat_stipulant_une_pénalité',
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`Lorsque le contrat stipule une pénalité\`, vigueur: { debut: '2016-10-01', fin: null }, au: 'date_de_conclusion_du_contrat' }],
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`Lorsque le contrat stipule une pénalité\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }],
         preuve: [{ piece: 'pieces/01_contrat.md', citation: \`une pénalité est due\` }] },
     ],
   },

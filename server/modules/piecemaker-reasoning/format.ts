@@ -1,16 +1,16 @@
 import { parseExpressionAt } from 'acorn';
 
 export type Ref = { piece: string; citation: string };
-export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null }; applicabilite?: string; au?: string };
+export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null; au?: string }; applicabilite?: string };
 export type Duration = { unite: 'jours' | 'jours_ouvres' | 'mois' | 'ans'; nombre: number };
 export type Measure = {
   delai?: { de: string; a: string; borne: 'au_plus' | 'au_moins'; duree: Duration };
   montant?: { valeur: string; comparaison: 'plus_de' | 'au_moins' | 'moins_de' | 'au_plus'; seuil: number | string };
 };
 export type Value = { valeur: string | number; preuve: Ref[] };
-export type Condition = { condition?: string; l_une?: Condition[]; mesure?: Measure; selon: Basis[]; decompte: Basis[]; preuve: Ref[]; contredit: Ref[] };
+export type Condition = { condition?: string; l_une?: Condition[]; mesure?: Measure; selon: Basis[]; decompte?: string; preuve: Ref[]; contredit: Ref[] };
 export type Term = { si: Condition[]; sauf: Condition[] };
-export type Question = { question: string; reponse: string };
+export type Question = { question: string; reponse: string; validite?: string; prescription?: string };
 export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean> };
 export type Reasoning = { qualification?: 'contractuel' | 'contentieux'; questions: Question[]; essais: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
 export type Problem = { path: string; text: string; avocat?: string; cible?: string };
@@ -27,6 +27,9 @@ const COMPARISONS = ['plus_de', 'au_moins', 'moins_de', 'au_plus'] as const;
 const DELAY_SHAPE = 'delai : { de: date_de_départ, a: date_retenue, au_plus ou au_moins: { jours | jours_ouvres | mois | ans: nombre } }';
 const AMOUNT_SHAPE = 'montant : { valeur: montant_du_dossier, plus_de | au_moins | moins_de | au_plus: nombre ou autre montant }';
 const isDate = (value: unknown): value is string => typeof value === 'string' && DATE.test(value);
+export const CONTROLS = { applicabilite: 'applicabilité_', decompte: 'décompte_', validite: 'validité_', prescription: 'prescription_' } as const;
+export type ControlSlot = keyof typeof CONTROLS;
+const CONTROL_PURPOSE: Record<ControlSlot, string> = { applicabilite: 'établit que ce texte s’applique', decompte: 'établit le calcul du délai', validite: 'établit la validité de l’acte', prescription: 'établit que l’action n’est pas prescrite' };
 
 export class LiteralError extends Error {
   constructor(message: string, readonly line: number) { super(`ligne ${line} : ${message}`); }
@@ -94,6 +97,13 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
   const problem = (path: string, message: string, avocat?: string, cible?: string) => { problems.push({ path, text: message, ...(avocat ? { avocat, cible } : {}) }); };
   const reasoning: Reasoning = { questions: [], essais: [], terms: new Map(), valeurs: new Map(), computed: new Map() };
   const dated: Array<{ at: string; name: string }> = [];
+  const controls: Array<{ slot: ControlSlot; name: string; at: string }> = [];
+  const control = (slot: ControlSlot, raw: unknown, at: string): string | undefined => {
+    if (typeof raw !== 'string' || !IDENTIFIER.test(raw)) { problem(at, `${slot} : nom du terme qui ${CONTROL_PURPOSE[slot]}, commençant par ${CONTROLS[slot]}`); return undefined; }
+    if (!raw.startsWith(CONTROLS[slot])) { problem(at, `${slot} : le nom commence par ${CONTROLS[slot]} (ex. ${CONTROLS[slot]}${raw})`); return undefined; }
+    controls.push({ slot, name: raw, at });
+    return raw;
+  };
   if (!isObject(value)) { problem('', 'le raisonnement est un objet { questions: [...], terme: {...} }'); return { reasoning, problems }; }
 
   const refs = (raw: unknown, path: string): Ref[] => {
@@ -116,17 +126,19 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'au'].includes(key)) problem(`${at}.${key}`, `clé inconnue ${key}`);
       const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string };
       if (entry.applicabilite !== undefined) {
-        if (typeof entry.applicabilite === 'string' && IDENTIFIER.test(entry.applicabilite)) basis.applicabilite = entry.applicabilite;
-        else problem(`${at}.applicabilite`, 'applicabilite : nom du terme dont les conditions établissent que ce texte s’applique (ex. applicabilité_de_l_article_1231_5)');
-      }
-      if (entry.au !== undefined) {
-        if (typeof entry.au === 'string' && IDENTIFIER.test(entry.au)) { basis.au = entry.au; dated.push({ at: `${at}.au`, name: entry.au }); }
-        else problem(`${at}.au`, 'au : nom d’une date de valeurs (ex. date_de_conclusion_du_contrat)');
+        const name = control('applicabilite', entry.applicabilite, `${at}.applicabilite`);
+        if (name) basis.applicabilite = name;
       }
       if (entry.vigueur !== undefined) {
         const vigueur = entry.vigueur;
-        if (!isObject(vigueur) || typeof vigueur.debut !== 'string' || !DATE.test(vigueur.debut) || !(vigueur.fin === null || vigueur.fin === undefined || (typeof vigueur.fin === 'string' && DATE.test(vigueur.fin)))) problem(`${at}.vigueur`, 'vigueur : { debut: \'AAAA-MM-JJ\', fin: \'AAAA-MM-JJ\' ou null }');
-        else basis.vigueur = { debut: vigueur.debut, fin: (vigueur.fin as string | null | undefined) ?? null };
+        if (!isObject(vigueur) || typeof vigueur.debut !== 'string' || !DATE.test(vigueur.debut) || !(vigueur.fin === null || vigueur.fin === undefined || (typeof vigueur.fin === 'string' && DATE.test(vigueur.fin))) || Object.keys(vigueur).some((key) => !['debut', 'fin', 'au'].includes(key))) problem(`${at}.vigueur`, 'vigueur : { debut: \'AAAA-MM-JJ\', fin: \'AAAA-MM-JJ\' ou null, au: date_de_valeurs }');
+        else {
+          basis.vigueur = { debut: vigueur.debut, fin: (vigueur.fin as string | null | undefined) ?? null };
+          if (vigueur.au !== undefined) {
+            if (typeof vigueur.au === 'string' && IDENTIFIER.test(vigueur.au)) { basis.vigueur.au = vigueur.au; dated.push({ at: `${at}.vigueur.au`, name: vigueur.au }); }
+            else problem(`${at}.vigueur.au`, 'au : nom d’une date de valeurs (ex. date_de_conclusion_du_contrat)');
+          }
+        }
       }
       return [basis];
     });
@@ -160,7 +172,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     const hasName = raw.condition !== undefined;
     const hasChoice = raw.l_une !== undefined;
     if (hasName === hasChoice) { problem(path, 'une condition porte soit condition: terme, soit l_une: [conditions]'); return []; }
-    const result: Condition = { selon: bases(raw.selon, `${path}.selon`), decompte: bases(raw.decompte, `${path}.decompte`), preuve: refs(raw.preuve, `${path}.preuve`), contredit: refs(raw.contredit, `${path}.contredit`) };
+    const result: Condition = { selon: bases(raw.selon, `${path}.selon`), preuve: refs(raw.preuve, `${path}.preuve`), contredit: refs(raw.contredit, `${path}.contredit`) };
     if (hasName) {
       if (typeof raw.condition !== 'string' || !IDENTIFIER.test(raw.condition)) { problem(`${path}.condition`, 'terme en minuscules, lettres, chiffres et _ (ex. retard_de_livraison)'); return []; }
       result.condition = raw.condition;
@@ -173,6 +185,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
         result.mesure = mesure;
       }
       if (raw.decompte !== undefined && !mesure?.delai) problem(`${path}.decompte`, 'decompte ne s’emploie qu’avec un délai');
+      else if (raw.decompte !== undefined) result.decompte = control('decompte', raw.decompte, `${path}.decompte`);
     } else {
       if (raw.delai !== undefined || raw.montant !== undefined) problem(path, 'un délai ou un montant porte un nom : condition: terme');
       if (!Array.isArray(raw.l_une) || raw.l_une.length < 2) { problem(`${path}.l_une`, 'l_une : au moins deux conditions'); return []; }
@@ -190,8 +203,10 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       raw.forEach((entry, index) => {
         const at = `questions[${index}]`;
         if (!isObject(entry) || !text(entry.question) || typeof entry.reponse !== 'string' || !IDENTIFIER.test(entry.reponse)) { problem(at, '{ question: la question posée, reponse: terme qui y répond } attendu'); return; }
-        for (const field of Object.keys(entry)) if (!['question', 'reponse'].includes(field)) problem(`${at}.${field}`, `clé inconnue ${field} (admises : question, reponse)`);
-        reasoning.questions.push({ question: entry.question as string, reponse: entry.reponse });
+        for (const field of Object.keys(entry)) if (!['question', 'reponse', 'validite', 'prescription'].includes(field)) problem(`${at}.${field}`, `clé inconnue ${field} (admises : question, reponse, validite, prescription)`);
+        const question: Question = { question: entry.question as string, reponse: entry.reponse };
+        for (const slot of ['validite', 'prescription'] as const) if (entry[slot] !== undefined) question[slot] = control(slot, entry[slot], `${at}.${slot}`);
+        reasoning.questions.push(question);
       });
       continue;
     }
@@ -243,11 +258,49 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     if (mesure.montant) typed([mesure.montant.valeur, mesure.montant.seuil], (value) => typeof value === 'number', 'un nombre');
   }
   for (const { at, name } of dated) if (reasoning.valeurs.has(name) && !isDate(reasoning.valeurs.get(name)!.valeur)) problem(`valeurs.${name}`, `${name} sert à ${at} : une date 'AAAA-MM-JJ' attendue`);
+  for (const name of reasoning.terms.keys()) {
+    const slot = (Object.keys(CONTROLS) as ControlSlot[]).find((key) => name.startsWith(CONTROLS[key]));
+    if (slot && !controls.some((entry) => entry.slot === slot && entry.name === name)) problem(name, `${name} est un contrôle : désigne-le par ${slot}: '${name}' ${slot === 'applicabilite' ? 'sur la source' : slot === 'decompte' ? 'sur le délai' : 'sur la question'} qu’il conditionne`);
+  }
+  for (const { slot, name, at } of controls) if (!reasoning.terms.has(name)) problem(at, `terme ${name} non défini : écris ${name}: { si: [...] }, le terme qui ${CONTROL_PURPOSE[slot]}`);
   if (!reasoning.questions.length && !problems.some((entry) => entry.path === 'questions')) problem('questions', 'ajoute questions: [{ question, reponse }]');
   return { reasoning, problems };
 }
 
 const ANNOTATIONS = new Set(['bilan', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul']);
+
+const KEY_ORDER = ['qualification', 'questions', 'question', 'reponse', 'condition', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'decompte', 'validite', 'prescription', 'preuve', 'contredit', 'si', 'sauf', 'nom', 'faits', 'attendu'];
+const rank = (key: string) => { const at = KEY_ORDER.indexOf(key); return at < 0 ? KEY_ORDER.length : at; };
+const ordered = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(ordered);
+  if (!isObject(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item], index) => ({ key, item, index })).sort((x, y) => rank(x.key) - rank(y.key) || x.index - y.index).map(({ key, item }) => [key, ordered(item)]));
+};
+
+export function canonical(annotated: Record<string, unknown>, reasoning: Reasoning): Record<string, unknown> {
+  const order: string[] = [];
+  const pending: Array<{ slot: ControlSlot; name: string }> = [];
+  const slots = Object.keys(CONTROLS) as ControlSlot[];
+  const visit = (name: string) => {
+    const term = reasoning.terms.get(name);
+    if (!term || order.includes(name)) return;
+    order.push(name);
+    const walk = (condition: Condition) => {
+      for (const basis of condition.selon) if (basis.applicabilite) pending.push({ slot: 'applicabilite', name: basis.applicabilite });
+      if (condition.decompte) pending.push({ slot: 'decompte', name: condition.decompte });
+      if (condition.l_une) condition.l_une.forEach(walk); else visit(condition.condition!);
+    };
+    [...term.si, ...term.sauf].forEach(walk);
+  };
+  for (const question of reasoning.questions) visit(question.reponse);
+  for (const question of reasoning.questions) for (const slot of ['validite', 'prescription'] as const) if (question[slot]) pending.push({ slot, name: question[slot]! });
+  while (pending.length) {
+    pending.sort((x, y) => slots.indexOf(x.slot) - slots.indexOf(y.slot));
+    visit(pending.shift()!.name);
+  }
+  const keys = ['qualification', 'questions', ...order, ...Object.keys(annotated).filter((key) => !order.includes(key) && !['qualification', 'questions', 'valeurs', 'essais'].includes(key)), 'valeurs', 'essais'];
+  return Object.fromEntries(keys.filter((key) => key in annotated).map((key) => [key, ordered(annotated[key])]));
+}
 
 export function stripAnnotations(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stripAnnotations);
