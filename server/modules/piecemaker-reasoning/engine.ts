@@ -123,15 +123,15 @@ export function calculate(measure: Measure, lookup: Lookup): Calculation {
   return { value, missing, calcul: { montant: amount, seuil: threshold } };
 }
 
-export function runTrials(reasoning: Reasoning, test: Test) {
+export function runTrials(reasoning: Reasoning, test: Test, known: { leaf(name: string): ReasoningValue; value: Lookup } = { leaf: () => null, value: () => null }) {
   return reasoning.essais.map((trial) => {
     const trace: Trace = new Map();
-    const given: Lookup = (name) => { const item = trial.faits[name]; return typeof item === 'boolean' || item === undefined ? null : item; };
+    const given: Lookup = (name) => { const item = trial.faits[name]; return item === undefined ? known.value(name) : typeof item === 'boolean' ? null : item; };
     const leaf = (name: string): ReasoningValue => {
       const item = trial.faits[name];
       if (typeof item === 'boolean') return item;
       const measure = reasoning.computed.get(name);
-      return measure ? calculate(measure, given).value : null;
+      return measure ? calculate(measure, given).value : known.leaf(name);
     };
     const values = test({ leaf, basis: (_path, _condition, applicable) => (applicable.length ? or(applicable) : true) }, trace, Object.keys(trial.attendu));
     const obtenu = Object.fromEntries(Object.keys(trial.attendu).map((name) => [name, values.get(name) ?? null]));
