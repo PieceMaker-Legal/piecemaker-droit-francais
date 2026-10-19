@@ -35,7 +35,7 @@ Un objet JavaScript **sans fonctions** : objets, listes, textes (de préférence
 
 ## Ce que renvoie `verifier`
 
-À l’agent, seulement les résultats du test : le bilan, la réponse de chaque question avec ses faits décisifs, puis les erreurs et manques regroupés par terme, avec la ligne du terme et du problème dans le fichier réécrit, et les calculs de délais et montants des termes concernés. L’agent relit le fichier avec ses outils habituels (grep, sed) : un terme par en-tête à deux espaces, une source ou une preuve par ligne.
+À l’agent, seulement les erreurs puis les manques, numérotés : pour chacun, son emplacement (`terme › si[0] › selon[1] › validite`), sa ligne dans le fichier réécrit et le contenu de cette ligne (ou, s’il est absent, où l’ajouter), puis la consigne. L’agent relit le fichier avec ses outils habituels (grep, sed) : un terme par en-tête à deux espaces, une source ou une preuve par ligne.
 
 Au volet, l’objet annoté complet : `bilan` (`erreurs`, `manques`, `essais`, `controles`, `ecartees`, pièces à évaluer, registre) et, sur chaque nœud, `statut` (`acquis`, `exclu`, `à établir`, `contesté`), `decisif`, `erreurs` et `manques` ; sur chaque source `titre` et `en_vigueur` ; sur chaque pièce `titre`, `nature`, `fiable`, `personnes`. Des annotations recopiées dans le fichier sont ignorées et recalculées.
 
