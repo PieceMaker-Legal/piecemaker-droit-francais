@@ -1,16 +1,16 @@
 import { parseExpressionAt } from 'acorn';
 
 export type Ref = { piece: string; citation: string };
-export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null }; applicabilite?: string };
+export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null }; applicabilite?: string; au?: string };
 export type Duration = { unite: 'jours' | 'jours_ouvres' | 'mois' | 'ans'; nombre: number };
 export type Measure = {
-  delai?: { de: string; a: string | null; borne: 'au_plus' | 'au_moins'; duree: Duration };
+  delai?: { de: string; a: string; borne: 'au_plus' | 'au_moins'; duree: Duration };
   montant?: { valeur: string; comparaison: 'plus_de' | 'au_moins' | 'moins_de' | 'au_plus'; seuil: number | string };
 };
 export type Value = { valeur: string | number; preuve: Ref[] };
 export type Condition = { condition?: string; l_une?: Condition[]; mesure?: Measure; selon: Basis[]; decompte: Basis[]; preuve: Ref[]; contredit: Ref[] };
 export type Term = { si: Condition[]; sauf: Condition[] };
-export type Question = { question: string; reponse: string; date?: { valeur: string; preuve: Ref[] } };
+export type Question = { question: string; reponse: string };
 export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean> };
 export type Reasoning = { qualification?: 'contractuel' | 'contentieux'; questions: Question[]; essais: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
 export type Problem = { path: string; text: string; avocat?: string; cible?: string };
@@ -24,7 +24,7 @@ const CONDITION_KEYS = new Set(['condition', 'l_une', 'delai', 'montant', 'selon
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
 const BOUNDS = ['au_plus', 'au_moins'] as const;
 const COMPARISONS = ['plus_de', 'au_moins', 'moins_de', 'au_plus'] as const;
-const DELAY_SHAPE = 'delai : { de: date_de_départ, a: date_retenue (sinon la date de la question), au_plus ou au_moins: { jours | jours_ouvres | mois | ans: nombre } }';
+const DELAY_SHAPE = 'delai : { de: date_de_départ, a: date_retenue, au_plus ou au_moins: { jours | jours_ouvres | mois | ans: nombre } }';
 const AMOUNT_SHAPE = 'montant : { valeur: montant_du_dossier, plus_de | au_moins | moins_de | au_plus: nombre ou autre montant }';
 const isDate = (value: unknown): value is string => typeof value === 'string' && DATE.test(value);
 
@@ -93,6 +93,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
   const problems: Problem[] = [];
   const problem = (path: string, message: string, avocat?: string, cible?: string) => { problems.push({ path, text: message, ...(avocat ? { avocat, cible } : {}) }); };
   const reasoning: Reasoning = { questions: [], essais: [], terms: new Map(), valeurs: new Map(), computed: new Map() };
+  const dated: Array<{ at: string; name: string }> = [];
   if (!isObject(value)) { problem('', 'le raisonnement est un objet { questions: [...], terme: {...} }'); return { reasoning, problems }; }
 
   const refs = (raw: unknown, path: string): Ref[] => {
@@ -112,11 +113,15 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     return raw.flatMap((entry, index) => {
       const at = `${path}[${index}]`;
       if (!isObject(entry) || !text(entry.source) || !text(entry.citation)) { problem(at, '{ source: identifiant du texte, de la décision ou chemin de la pièce, citation: passage exact } attendu'); return []; }
-      for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite'].includes(key)) problem(`${at}.${key}`, `clé inconnue ${key}`);
+      for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'au'].includes(key)) problem(`${at}.${key}`, `clé inconnue ${key}`);
       const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string };
       if (entry.applicabilite !== undefined) {
         if (text(entry.applicabilite)) basis.applicabilite = entry.applicabilite as string;
         else problem(`${at}.applicabilite`, 'applicabilite : une phrase disant pourquoi ce texte s’applique au dossier');
+      }
+      if (entry.au !== undefined) {
+        if (typeof entry.au === 'string' && IDENTIFIER.test(entry.au)) { basis.au = entry.au; dated.push({ at: `${at}.au`, name: entry.au }); }
+        else problem(`${at}.au`, 'au : nom d’une date de valeurs (ex. date_de_conclusion_du_contrat)');
       }
       if (entry.vigueur !== undefined) {
         const vigueur = entry.vigueur;
@@ -134,9 +139,9 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       const bounds = isObject(delay) ? BOUNDS.filter((key) => delay[key] !== undefined) : [];
       const duration = bounds.length === 1 && isObject((delay as Record<string, unknown>)[bounds[0]]) ? Object.entries((delay as Record<string, Record<string, unknown>>)[bounds[0]]) : [];
       const [unit, count] = duration[0] ?? [];
-      if (!isObject(delay) || typeof delay.de !== 'string' || !IDENTIFIER.test(delay.de) || (delay.a !== undefined && (typeof delay.a !== 'string' || !IDENTIFIER.test(delay.a))) || Object.keys(delay).some((key) => !['de', 'a', ...BOUNDS].includes(key))
+      if (!isObject(delay) || typeof delay.de !== 'string' || !IDENTIFIER.test(delay.de) || typeof delay.a !== 'string' || !IDENTIFIER.test(delay.a) || Object.keys(delay).some((key) => !['de', 'a', ...BOUNDS].includes(key))
         || bounds.length !== 1 || duration.length !== 1 || !(UNITS as readonly string[]).includes(unit) || !Number.isInteger(count) || (count as number) < 0) { problem(`${path}.delai`, DELAY_SHAPE); return null; }
-      return { delai: { de: delay.de, a: (delay.a as string | undefined) ?? null, borne: bounds[0], duree: { unite: unit as Duration['unite'], nombre: count as number } } };
+      return { delai: { de: delay.de, a: delay.a, borne: bounds[0], duree: { unite: unit as Duration['unite'], nombre: count as number } } };
     }
     if (raw.montant !== undefined) {
       const amount = raw.montant;
@@ -185,13 +190,8 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       raw.forEach((entry, index) => {
         const at = `questions[${index}]`;
         if (!isObject(entry) || !text(entry.question) || typeof entry.reponse !== 'string' || !IDENTIFIER.test(entry.reponse)) { problem(at, '{ question: la question posée, reponse: terme qui y répond } attendu'); return; }
-        const question: Question = { question: entry.question as string, reponse: entry.reponse };
-        if (entry.date !== undefined) {
-          const date = entry.date;
-          if (!isObject(date) || typeof date.valeur !== 'string' || !DATE.test(date.valeur)) problem(`${at}.date`, 'date : { valeur: \'AAAA-MM-JJ\', preuve: [{ piece, citation }] }');
-          else question.date = { valeur: date.valeur, preuve: refs(date.preuve, `${at}.date.preuve`) };
-        }
-        reasoning.questions.push(question);
+        for (const field of Object.keys(entry)) if (!['question', 'reponse'].includes(field)) problem(`${at}.${field}`, `clé inconnue ${field} (admises : question, reponse)`);
+        reasoning.questions.push({ question: entry.question as string, reponse: entry.reponse });
       });
       continue;
     }
@@ -242,6 +242,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     if (mesure.delai) typed([mesure.delai.de, mesure.delai.a], isDate, 'une date \'AAAA-MM-JJ\'');
     if (mesure.montant) typed([mesure.montant.valeur, mesure.montant.seuil], (value) => typeof value === 'number', 'un nombre');
   }
+  for (const { at, name } of dated) if (reasoning.valeurs.has(name) && !isDate(reasoning.valeurs.get(name)!.valeur)) problem(`valeurs.${name}`, `${name} sert à ${at} : une date 'AAAA-MM-JJ' attendue`);
   if (!reasoning.questions.length && !problems.some((entry) => entry.path === 'questions')) problem('questions', 'ajoute questions: [{ question, reponse }]');
   return { reasoning, problems };
 }

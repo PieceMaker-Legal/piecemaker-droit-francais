@@ -6,11 +6,11 @@ L’agent répond à une question juridique sur le dossier, puis transcrit sa r�
 
 Un objet JavaScript **sans fonctions** : objets, listes, textes (de préférence entre accents graves, pour les citations), nombres, `vrai`/`faux`, `null`. Il n’est jamais exécuté : `format.ts` le lit avec `acorn` et refuse tout ce qui n’est pas une valeur (fonction, appel, variable, `${…}`, commentaire, clé en double).
 
-- `questions: [{ question, reponse, date: { valeur, preuve } }]` — la question posée, le terme qui y répond, la date à laquelle le droit s’applique et la pièce qui la justifie.
+- `questions: [{ question, reponse }]` — la question posée et le terme qui y répond.
 - Une clé par **terme** : `{ si: [...], sauf: [...] }`. Toutes les conditions `si` sont requises ; une seule condition `sauf` vraie écarte le terme. `l_une: [...]` regroupe des conditions dont une seule suffit.
 - Chaque condition porte `selon: [{ source, citation, vigueur: { debut, fin } }]` (au moins une source) et, pour un fait, `preuve` / `contredit: [{ piece, citation }]`.
 - **Affinage** : une condition obscure reçoit sa propre clé, sourcée par l’arrêt, la clause ou l’article qui la précise. Une condition sans clé est un fait.
-- **Délais et montants** : une condition nommée peut porter `delai: { de, a, au_plus | au_moins: { jours | jours_ouvres | mois | ans: n } }` ou `montant: { valeur, plus_de | au_moins | moins_de | au_plus: nombre ou nom }`. Elle n’a pas de preuve : sa valeur se calcule à partir de `valeurs: { nom: { valeur: 'AAAA-MM-JJ' | nombre, preuve } }`, une valeur ne comptant qu’avec une preuve vérifiée. Sans `a`, le délai court jusqu’à la date de la question. Le calcul est calendaire (fin de mois ramenée au dernier jour, jours ouvrés = lundi à vendredi) ; `decompte: [{ source, citation, vigueur }]` cite la règle qui le fonde, et son absence est un manque — le système ne choisit jamais la règle.
+- **Délais et montants** : une condition nommée peut porter `delai: { de, a, au_plus | au_moins: { jours | jours_ouvres | mois | ans: n } }` ou `montant: { valeur, plus_de | au_moins | moins_de | au_plus: nombre ou nom }`. Elle n’a pas de preuve : sa valeur se calcule à partir de `valeurs: { nom: { valeur: 'AAAA-MM-JJ' | nombre, preuve } }`, une valeur ne comptant qu’avec une preuve vérifiée. `a` est obligatoire : aucune date implicite. Le calcul est calendaire (fin de mois ramenée au dernier jour, jours ouvrés = lundi à vendredi) ; `decompte: [{ source, citation, vigueur }]` cite la règle qui le fonde, et son absence est un manque — le système ne choisit jamais la règle.
 - `essais: [{ nom, faits, attendu }]` — le droit seul, rejoué sur des faits supposés ; `faits` accepte aussi les dates et montants des calculs.
 
 `source` est l’identifiant officiel : `LEGIARTI…` (article), `JURITEXT…`, `CETATEXT…`, `CONSTEXT…` (décision), ou le chemin d’une pièce pour une clause. Les connecteurs (`server/piecemaker/reasoning-connectors.ts`) se choisissent selon la forme de l’identifiant ; un identifiant d’un autre droit (CELEX, ECLI…) est accepté et signalé « non vérifiable automatiquement » jusqu’à l’ajout d’un connecteur.
@@ -20,7 +20,7 @@ Un objet JavaScript **sans fonctions** : objets, listes, textes (de préférence
 `engine.ts` traduit l’objet en fonction `test(faits)` construite par le serveur (logique à trois valeurs : vrai, faux, à établir), exécutée sur les faits du dossier pour chaque question et sur les faits supposés de chaque essai.
 
 - Un fait vaut vrai avec une `preuve` vérifiée, faux avec un `contredit`, à établir sinon ou s’il a les deux (contesté). Une pièce marquée non fiable par l’avocat ne prouve rien.
-- La **vigueur est une condition** : une condition n’est remplie que si l’une de ses sources (texte ou clause) est en vigueur à la date de la question. Les décisions n’ont pas de vigueur.
+- La **vigueur est une condition** : une condition n’est remplie que si l’une de ses sources (texte ou clause) est en vigueur à la date que désigne son `au` (une date de `valeurs`, prouvée). Une clause sans `au` est tenue pour applicable ; un texte sans `au` laisse la condition à établir. Les décisions n’ont pas de vigueur.
 - Quand la réponse est à établir, les **faits décisifs** sont ceux dont la valeur change la réponse (énumération jusqu’à 12 faits inconnus ; au-delà, « en jeu »).
 
 ## Ce que renvoie `verifier`
@@ -30,7 +30,7 @@ L’objet de l’agent, avec en tête `bilan` (`erreurs`, `manques`, `essais`, `
 - **Citation** : retrouvée mot pour mot à la ponctuation, la casse et les accents près, elle est validée, remplacée par l’original dans le fichier et marquée `corrigee` ; sinon erreur.
 - **Vigueur** : absente, c’est un manque (avec les dates de la version citée quand Légifrance les donne) ; différente de Légifrance, une erreur.
 - **Erreurs** : syntaxe, délai ou montant mal écrit, prouvé sur la condition ou appliqué à une valeur du mauvais type, condition sans source, source ou pièce introuvable, citation introuvable, vigueur fausse, aucune source en vigueur, terme de réponse non défini, boucle, essai non conforme.
-- **Manques** : raisonnement non qualifié (`qualification: 'contractuel' | 'contentieux'`, non affichée dans le volet) ; une fois qualifié, « vérifier la validité » (contractuel) ou « vérifier la prescription » (contentieux), volontairement génériques et absents des instructions de l’agent ; délai sans règle de décompte, date d’application absente ou non justifiée, vigueur non renseignée, source non vérifiable, fait décisif sans pièce, terme qui ne sert à aucune question.
+- **Manques** : raisonnement non qualifié (`qualification: 'contractuel' | 'contentieux'`, non affichée dans le volet) ; une fois qualifié, « vérifier la validité » (contractuel) ou « vérifier la prescription » (contentieux), volontairement génériques et absents des instructions de l’agent ; délai sans règle de décompte, applicabilité dans le temps d’un texte non établie (`au` absent, ou date de `valeurs` sans preuve — volontairement absent des instructions de l’agent), vigueur non renseignée, source non vérifiable, fait décisif sans pièce, terme qui ne sert à aucune question.
 - **Personnes** : les personnes et sociétés du graphe du dossier citées dans une question ou dans la citation d’une pièce y sont rattachées ; les sociétés rattachées sont contrôlées au Registre Public et au BODACC.
 
 ## Décisions de l’avocat

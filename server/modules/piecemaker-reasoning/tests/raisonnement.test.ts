@@ -74,15 +74,23 @@ test('une citation à la ponctuation près est validée et remplacée par l’or
   assert.match(texts(wrong, 'erreur').join('\n'), /pénalité_encourue\.si\[1\]\.selon\[0\] : citation introuvable/);
 });
 
-test('la vigueur est une condition : absente ou dépassée c’est un manque, fausse une erreur, et chaque article dit pourquoi il s’applique', async () => {
+test('la vigueur est une condition appréciée à la date que chaque texte désigne : absente ou dépassée c’est un manque, fausse une erreur, et chaque article dit pourquoi il s’applique', async () => {
   const missing = await verify(EXAMPLE_CODE.replace("débiteur est mis en demeure`, vigueur: { debut: '2016-10-01', fin: null }", 'débiteur est mis en demeure`'));
   assert.match(texts(missing, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.vigueur : vigueur non renseignée.*debut '2016-10-01'/);
   assert.deepEqual(texts(missing, 'erreur'), []);
   const differs = await verify(EXAMPLE_CODE.replace("débiteur est mis en demeure`, vigueur: { debut: '2016-10-01'", "débiteur est mis en demeure`, vigueur: { debut: '2016-02-10'"));
   assert.match(texts(differs, 'erreur').join('\n'), /vigueur différente de la version citée : debut '2016-10-01'/);
-  const late = await verify(EXAMPLE_CODE.replace("valeur: '2025-06-14'", "valeur: '2015-06-14'"));
+  const late = await verify(EXAMPLE_CODE.replace("valeur: '2024-01-15'", "valeur: '2015-06-14'"));
   assert.equal(at(late.annotated, 'questions[0].statut'), 'exclu');
   assert.match(texts(late, 'manque').join('\n'), /selon\[0\]\.vigueur : version non applicable : elle n’était pas en vigueur au 2015-06-14/);
+  const undated = await verify(EXAMPLE_CODE.replaceAll(", au: 'date_de_conclusion_du_contrat'", ''));
+  assert.equal(at(undated.annotated, 'questions[0].statut'), 'à établir');
+  assert.match(texts(undated, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.au : applicabilité dans le temps non établie : ajoute au:/);
+  assert.equal(undated.issues.find((entry) => entry.path === 'pénalité_encourue.si[0].selon[0].au')!.avocat, 'Code civil fictif, article 1231-5 : l’applicabilité du texte dans le temps n’est pas établie.');
+  const unproven = await verify(EXAMPLE_CODE.replace(", preuve: [{ piece: 'pieces/01_contrat.md', citation: `Fait le 15/01/2024` }] }", ' }'));
+  assert.match(texts(unproven, 'manque').join('\n'), /selon\[0\]\.au : date_de_conclusion_du_contrat : renseigne cette date dans valeurs, avec sa preuve/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace("valeur: '2024-01-15'", 'valeur: 12')), 'erreur').join('\n'), /date_de_conclusion_du_contrat sert à .*\.au : une date 'AAAA-MM-JJ' attendue/);
+  assert.match(texts(await verify(EXAMPLE_CODE.replace("reponse: 'pénalité_encourue',", "reponse: 'pénalité_encourue', date: { valeur: '2025-06-14' },")), 'erreur').join('\n'), /questions\[0\]\.date : clé inconnue date/);
   const unjustified = await verify(EXAMPLE_CODE.replace(", applicabilite: `contrat de vente assorti d’une clause pénale` }] },", " }] },"));
   assert.match(texts(unjustified, 'manque').join('\n'), /selon\[0\]\.applicabilite : justifie pourquoi ce texte s’applique/);
   assert.doesNotMatch(texts(await verify(EXAMPLE_CODE), 'manque').join('\n'), /applicabilite/);
@@ -190,7 +198,7 @@ const CESSION_SOURCES: Record<string, SourceInfo> = {
   'pieces/08_notification.md': { kind: 'piece', title: 'Notification de réclamation (fictive)', text: 'Notification du 10/02/2024 : dommage de 45.000 euros.' },
 };
 const CESSION_CODE = `{
-  questions: [{ question: \`La réduction de prix est-elle due à Société Exemple SAS ?\`, reponse: 'réduction_due', date: { valeur: '2024-02-10', preuve: [{ piece: 'pieces/08_notification.md', citation: \`Notification du 10/02/2024\` }] } }],
+  questions: [{ question: \`La réduction de prix est-elle due à Société Exemple SAS ?\`, reponse: 'réduction_due' }],
   valeurs: {
     date_de_réalisation: { valeur: '2022-06-15', preuve: [{ piece: 'pieces/03_realisation.md', citation: \`intervenue le 15/06/2022\` }] },
     date_de_notification: { valeur: '2024-02-10', preuve: [{ piece: 'pieces/08_notification.md', citation: \`Notification du 10/02/2024\` }] },
@@ -237,14 +245,12 @@ test('un délai sans règle de décompte est un manque, sans que le système cho
   assert.equal(at(result.annotated, 'questions[0].statut'), 'acquis');
 });
 
-test('une valeur sans pièce laisse le calcul en suspens et devient décisive ; sans date retenue, le délai court jusqu’à la date de la question', async () => {
+test('une valeur sans pièce laisse le calcul en suspens et devient décisive ; un délai sans date retenue est une erreur', async () => {
   const unproven = await cession(CESSION_CODE.replace("date_de_notification: { valeur: '2024-02-10', preuve: [{ piece: 'pieces/08_notification.md', citation: `Notification du 10/02/2024` }] },", "date_de_notification: { valeur: '2024-02-10' },"));
   assert.equal(at(unproven.annotated, 'questions[0].statut'), 'à établir');
   assert.deepEqual(at(unproven.annotated, 'questions[0].decisifs'), ['notification_dans_la_garantie']);
   assert.match(texts(unproven, 'manque').join('\n'), /notification_dans_la_garantie décide de la réponse : renseigne date_de_notification dans valeurs, avec sa preuve/);
-  const questionDate = await cession(CESSION_CODE.replace(", a: 'date_de_notification'", '').replace("valeur: '2024-02-10', preuve: [{ piece: 'pieces/08_notification.md', citation: `Notification du 10/02/2024` }] } }]", "valeur: '2024-07-01', preuve: [{ piece: 'pieces/08_notification.md', citation: `Notification du 10/02/2024` }] } }]"));
-  assert.equal(at(questionDate.annotated, 'réduction_due.si[0].calcul.date_retenue'), '2024-07-01');
-  assert.equal(at(questionDate.annotated, 'questions[0].statut'), 'exclu');
+  assert.match(texts(await cession(CESSION_CODE.replace(", a: 'date_de_notification'", '')), 'erreur').join('\n'), /réduction_due\.si\[0\]\.delai : delai : \{ de: date_de_départ, a: date_retenue,/);
 });
 
 test('les durées s’ajoutent au calendrier : fin de mois, année bissextile, jours ouvrés', () => {
