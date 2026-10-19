@@ -212,7 +212,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
 
   server.registerTool('raisonnement', {
     description: [
-      'Vérifie et teste le raisonnement du dossier, écrit dans .piecemaker/raisonnement.js : un objet JavaScript sans fonctions (questions, un terme par clé avec si / sauf / l_une, selon: [{ source, citation, vigueur }], preuve / contredit: [{ piece, citation }], essais).',
+      'Vérifie et teste le raisonnement du dossier, écrit dans .piecemaker/raisonnement.js : un objet JavaScript sans fonctions (questions, un terme par clé avec si / sauf / l_une, selon: [{ source, citation, vigueur }], preuve / contredit: [{ piece, citation }], delai / montant calculés depuis valeurs, decompte, essais).',
       'verifier : lit le fichier sans l’exécuter, vérifie les sources (Légifrance, pièces), les citations, la vigueur, les pièces et les personnes, exécute le test et renvoie l’objet annoté (bilan, statut, decisif, erreurs, manques). Corrige ce qu’il signale puis relance.',
     ].join('\n'),
     inputSchema: {

@@ -12,7 +12,10 @@ type Edge = { from: string; to: string; link: Occurrence['link'] | 'preuve' | 'c
 type Cited = { piece: Json; target: string; against: boolean };
 type Based = { source: Json; target: string };
 
-const RESERVED = new Set(['bilan', 'questions', 'essais']);
+const RESERVED = new Set(['bilan', 'questions', 'essais', 'valeurs']);
+const UNIT: Record<string, string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
+const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moins', moins_de: 'moins de', au_plus: 'au plus' };
+const inputs = (condition: Json): string[] => condition.delai ? [condition.delai.de, condition.delai.a].filter(Boolean) : condition.montant ? [condition.montant.valeur, condition.montant.seuil].filter((item) => typeof item === 'string') : [];
 const COLORS: Record<string, string> = { question: '#e2a5c6', terme: '#ba9ce9', fait: '#68bea3', source: '#6b9fdb', piece: '#8c96ad' };
 const STATUS: Record<string, string> = { acquis: 'Acquis', exclu: 'Exclu', 'à établir': 'À établir', contesté: 'Contesté' };
 const ANSWER: Record<string, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', contesté: 'Contestée' };
@@ -76,6 +79,7 @@ export function mount(container: HTMLElement, api: Host) {
   let sequence = 0;
 
   const annotated = () => (snapshot?.annotated ?? null) as Json | null;
+  const values = () => (annotated()?.valeurs ?? {}) as Record<string, Json>;
   const questions = () => (Array.isArray(annotated()?.questions) ? annotated()!.questions as Json[] : []);
   const terms = () => Object.fromEntries(Object.entries(annotated() ?? {}).filter(([key, value]) => !RESERVED.has(key) && value && typeof value === 'object' && !Array.isArray(value))) as Record<string, Json>;
   const occurrences = (): Occurrence[] => {
@@ -99,12 +103,13 @@ export function mount(container: HTMLElement, api: Host) {
   const cited = (): Cited[] => {
     const found: Cited[] = [];
     for (const entry of occurrences()) for (const field of ['preuve', 'contredit'] as const) for (const piece of entry.condition[field] ?? []) found.push({ piece, target: entry.condition.condition, against: field === 'contredit' });
+    for (const entry of occurrences()) for (const name of inputs(entry.condition)) for (const piece of values()[name]?.preuve ?? []) found.push({ piece, target: entry.condition.condition, against: false });
     return found;
   };
   const based = (): Based[] => {
     const found: Based[] = [];
     for (const group of groups()) if (Array.isArray(group.condition.l_une)) for (const source of group.condition.selon ?? []) found.push({ source, target: `#ou:${group.path}` });
-    for (const entry of occurrences()) for (const source of entry.condition.selon ?? []) found.push({ source, target: entry.condition.condition });
+    for (const entry of occurrences()) for (const source of [...entry.condition.selon ?? [], ...entry.condition.decompte ?? []]) found.push({ source, target: entry.condition.condition });
     return found;
   };
   const size = () => ({ width: Math.max(1, canvas.clientWidth), height: Math.max(1, canvas.clientHeight) });
@@ -248,11 +253,31 @@ export function mount(container: HTMLElement, api: Host) {
     const actions = snapshot?.demo ? '' : `<span class="pmr-decision"><button data-rate="${escape(piece.piece)}" data-value="true"${piece.fiable === true ? ' disabled' : ''}>Fiable</button><button data-rate="${escape(piece.piece)}" data-value="false"${piece.fiable === false ? ' disabled' : ''}>Non fiable</button>${piece.fiable === null || piece.fiable === undefined ? '' : `<button data-rate="${escape(piece.piece)}" data-value="null">Annuler</button>`}</span>`;
     return `<div class="pmr-quote"><p><strong>${against ? 'Contredit par' : 'Prouvé par'}</strong> ${escape(piece.titre ?? piece.piece)}${piece.nature ? ` · ${escape(piece.nature)}` : ''} · ${pill(piece.fiable === true ? 'acquis' : piece.fiable === false ? 'exclu' : 'à établir', rated)}</p><blockquote>${escape(piece.citation)}</blockquote>${piece.personnes?.length ? `<p class="pmr-muted">Personnes : ${escape(piece.personnes.join(', '))}</p>` : ''}${actions}</div>`;
   };
+  const measureBlock = (condition: Json) => {
+    const named = (name: string) => {
+      const entry = values()[name];
+      return `${escape(human(name))}${entry ? ` : ${escape(typeof entry.valeur === 'number' ? entry.valeur.toLocaleString('fr-FR') : date(entry.valeur))} ${pill(entry.statut ?? 'à établir', entry.statut === 'acquis' ? 'prouvé' : 'à prouver')}` : ` ${pill('à établir', 'non renseigné')}`}`;
+    };
+    const proofs = inputs(condition).flatMap((name) => values()[name]?.preuve ?? []).map((piece: Json) => pieceBlock(piece)).join('');
+    if (condition.delai) {
+      const bound = condition.delai.au_plus ? 'au_plus' : 'au_moins';
+      const [[unit, count]] = Object.entries(condition.delai[bound] as Record<string, number>);
+      const calcul = condition.calcul ? `<p class="pmr-muted">Échéance au ${date(condition.calcul.echeance)}, date retenue ${date(condition.calcul.date_retenue)}.</p>` : '';
+      const rule = condition.decompte?.length ? condition.decompte.map(sourceBlock).join('') : `<p>${pill('à établir', 'règle de décompte non mentionnée')}</p>`;
+      return `<p><strong>Délai :</strong> ${COMPARE[bound]} ${count} ${UNIT[unit]} entre ${named(condition.delai.de)} et ${condition.delai.a ? named(condition.delai.a) : 'la date de la question'}</p>${calcul}<p><strong>Règle de décompte</strong></p>${rule}${proofs}`;
+    }
+    if (condition.montant) {
+      const comparison = Object.keys(COMPARE).find((key) => condition.montant[key] !== undefined)!;
+      const threshold = condition.montant[comparison];
+      return `<p><strong>Montant :</strong> ${named(condition.montant.valeur)} ${COMPARE[comparison]} ${typeof threshold === 'number' ? escape(threshold.toLocaleString('fr-FR')) : named(threshold)}</p>${proofs}`;
+    }
+    return '';
+  };
   const conditionBlock = (path: string, condition: Json) => {
     const members = Array.isArray(condition.l_une) ? `<p>L’une des conditions suivantes : ${condition.l_une.map((member: Json) => `<button class="pmr-link" data-select="${escape(member.condition)}">${escape(human(member.condition ?? ''))}</button> ${pill(member.statut ?? 'à établir')}`).join(' ou ')}</p>` : '';
     const link = /\.l_une\[\d+\]$/.test(path) ? 'L’une des conditions' : /\.sauf\[/.test(path) ? 'Sauf si' : /\.si\[0\]/.test(path) ? 'Si' : 'Et';
     const name = condition.condition ? `<button class="pmr-link" data-select="${escape(condition.condition)}">${escape(human(condition.condition))}</button> ` : '';
-    return `<div class="pmr-card"><header><span class="pmr-step">${link}</span>${name}${pill(condition.statut ?? 'à établir')}${condition.decisif ? ' <span class="pmr-pill pmr-warn">décisif</span>' : ''}</header>${members}${(condition.selon ?? []).map(sourceBlock).join('')}${(condition.preuve ?? []).map((piece: Json) => pieceBlock(piece)).join('')}${(condition.contredit ?? []).map((piece: Json) => pieceBlock(piece, true)).join('')}</div>`;
+    return `<div class="pmr-card"><header><span class="pmr-step">${link}</span>${name}${pill(condition.statut ?? 'à établir')}${condition.decisif ? ' <span class="pmr-pill pmr-warn">décisif</span>' : ''}</header>${members}${measureBlock(condition)}${(condition.selon ?? []).map(sourceBlock).join('')}${(condition.preuve ?? []).map((piece: Json) => pieceBlock(piece)).join('')}${(condition.contredit ?? []).map((piece: Json) => pieceBlock(piece, true)).join('')}</div>`;
   };
 
   const paintTest = () => {
@@ -304,7 +329,7 @@ export function mount(container: HTMLElement, api: Host) {
       return;
     }
     const uses = occurrences().filter((entry) => entry.condition.condition === selected);
-    detail.innerHTML = `<h3>${escape(human(selected))}</h3><p class="pmr-muted">Fait à établir par les pièces.</p>${uses.map((entry) => `<p class="pmr-muted">Condition de <button class="pmr-link" data-select="${escape(entry.parent)}">${escape(human(entry.parent))}</button>${entry.link === 'sauf' ? ' (exception)' : entry.link === 'l_une' ? ' (l’une des conditions possibles)' : ''}</p>${conditionBlock(entry.path, entry.condition)}`).join('')}<h4>Alertes</h4>${issueList(issuesOf(uses.map((entry) => entry.path)).filter((issue) => !dismissedIds().has(issue.id)))}`;
+    detail.innerHTML = `<h3>${escape(human(selected))}</h3><p class="pmr-muted">${uses.some((entry) => entry.condition.delai || entry.condition.montant) ? 'Fait calculé à partir des valeurs prouvées par les pièces.' : 'Fait à établir par les pièces.'}</p>${uses.map((entry) => `<p class="pmr-muted">Condition de <button class="pmr-link" data-select="${escape(entry.parent)}">${escape(human(entry.parent))}</button>${entry.link === 'sauf' ? ' (exception)' : entry.link === 'l_une' ? ' (l’une des conditions possibles)' : ''}</p>${conditionBlock(entry.path, entry.condition)}`).join('')}<h4>Alertes</h4>${issueList(issuesOf(uses.map((entry) => entry.path)).filter((issue) => !dismissedIds().has(issue.id)))}`;
   };
 
   const paint = () => {

@@ -6,10 +6,10 @@ import type Database from 'better-sqlite3';
 
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, ReasoningSnapshot, ReasoningStatus, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import { compile, decisive, reachableLeaves, runTrials, structure } from './engine.js';
-import type { Facts, Trace } from './engine.js';
+import { QUESTION_DATE, calculate, compile, decisive, reachableLeaves, runTrials, structure } from './engine.js';
+import type { Calculation, Facts, Trace } from './engine.js';
 import { LiteralError, parseLiteral, printLiteral, readReasoning, stripAnnotations } from './format.js';
-import type { Basis, Condition, Ref } from './format.js';
+import type { Basis, Condition, Measure, Ref } from './format.js';
 
 export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null } };
 
@@ -35,6 +35,21 @@ const issueId = (kind: string, at: string, text: string) => createHash('sha256')
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const STATUS = (value: ReasoningValue): ReasoningStatus => (value === true ? 'acquis' : value === false ? 'exclu' : 'à établir');
 const inForce = (date: string, from: string, to: string | null): boolean => from <= date && (to === null || date < to);
+const UNIT: Record<string, string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
+const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moins', moins_de: 'moins de', au_plus: 'au plus' };
+const amount = (value: string | number) => (typeof value === 'number' ? value.toLocaleString('fr-FR') : phrase(value));
+const ANCHORED = /\.(piece|source|vigueur|reponse|decompte)$/;
+
+function explain(measure: Measure, result: Calculation) {
+  if (!result.calcul) return `À calculer : ${listing(result.missing.map(phrase))} non établi${result.missing.length > 1 ? 's' : ''}`;
+  if (measure.delai) {
+    const { borne, duree } = measure.delai;
+    const { depart, echeance, date_retenue } = result.calcul as Record<string, string>;
+    return `${COMPARE[borne]} ${duree.nombre} ${UNIT[duree.unite]} à compter du ${day(depart)} : échéance au ${day(echeance)}, date retenue ${day(date_retenue)} → ${result.value ? 'oui' : 'non'}`;
+  }
+  const { montant, seuil } = result.calcul as Record<string, number>;
+  return `${amount(montant)} ${COMPARE[measure.montant!.comparaison]} ${amount(seuil)} → ${result.value ? 'oui' : 'non'}`;
+}
 
 function node(root: Record<string, unknown>, at: string): Record<string, unknown> | null {
   let current: unknown = root;
@@ -167,10 +182,13 @@ export async function verifyReasoning(input: {
   const checks: Array<Promise<void>> = [];
   for (const { at, condition } of occurrences) {
     condition.selon.forEach((basis, index) => checks.push(checkBasis(`${at}.selon[${index}]`, basis)));
+    condition.decompte.forEach((basis, index) => checks.push(checkBasis(`${at}.decompte[${index}]`, basis)));
+    if (condition.mesure?.delai && !condition.decompte.length) add('manque', `${at}.decompte`, 'délai sans règle de décompte : ajoute decompte: [{ source, citation, vigueur }] citant la clause ou le texte qui fixe le calcul du délai', `${human(condition.condition!)} : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.`, condition.condition);
     condition.preuve.forEach((ref, index) => checks.push(checkRef(`${at}.preuve[${index}]`, ref)));
     condition.contredit.forEach((ref, index) => checks.push(checkRef(`${at}.contredit[${index}]`, ref)));
   }
   reasoning.questions.forEach((question, index) => question.date?.preuve.forEach((ref, at) => checks.push(checkRef(`questions[${index}].date.preuve[${at}]`, ref))));
+  for (const [name, entry] of reasoning.valeurs) entry.preuve.forEach((ref, index) => checks.push(checkRef(`valeurs.${name}.preuve[${index}]`, ref)));
   await Promise.all(checks);
 
   const evidence = new Map<string, { pro: boolean; con: boolean }>();
@@ -186,6 +204,15 @@ export async function verifyReasoning(input: {
     return !entry || entry.pro === entry.con ? null : entry.pro;
   };
   const contested = (name: string) => Boolean(evidence.get(name)?.pro && evidence.get(name)?.con);
+  const valueOf = (name: string) => {
+    const entry = reasoning.valeurs.get(name);
+    return entry && entry.preuve.some((_, index) => verifiedRefs.get(`valeurs.${name}.preuve[${index}]`)) ? entry.valeur : null;
+  };
+  const leafAt = (date: string | null) => (name: string): ReasoningValue => {
+    const measure = reasoning.computed.get(name);
+    return measure ? calculate(measure, valueOf, date).value : leafValue(name);
+  };
+  const measureDates = new Map<string, string | null>();
 
   const basisValue = (date: string | null, at: string, condition: Condition): ReasoningValue => {
     if (!condition.selon.length) return true;
@@ -203,11 +230,13 @@ export async function verifyReasoning(input: {
   reasoning.questions.forEach((question, index) => {
     if (!reasoning.terms.has(question.reponse) || shape.cycles.length) return;
     const date = question.date?.valeur ?? null;
-    const facts: Facts = { leaf: leafValue, basis: (at, condition) => { const value = basisValue(date, at, condition); if (!vigueurs.has(at)) vigueurs.set(at, value); return value; } };
+    const facts: Facts = { leaf: leafAt(date), basis: (at, condition) => { const value = basisValue(date, at, condition); if (!vigueurs.has(at)) vigueurs.set(at, value); return value; } };
     const trace: Trace = new Map();
     const value = test(facts, trace, [question.reponse]).get(question.reponse) ?? null;
     for (const [key, item] of trace) if (!statuses.has(key)) statuses.set(key, item);
-    const unknown = [...reachableLeaves(reasoning, question.reponse)].filter((name) => leafValue(name) === null).sort();
+    const reachable = [...reachableLeaves(reasoning, question.reponse)];
+    for (const name of reachable) if (reasoning.computed.has(name) && !measureDates.has(name)) measureDates.set(name, date);
+    const unknown = reachable.filter((name) => facts.leaf(name) === null).sort();
     const found = value === null ? decisive(test, facts, question.reponse, unknown) : { decisive: [], inPlay: false };
     for (const name of found.decisive) decisiveLeaves.add(name);
     const holder = node(annotated, `questions[${index}]`);
@@ -220,9 +249,12 @@ export async function verifyReasoning(input: {
     if (!holder) continue;
     const leaf = condition.condition && !reasoning.terms.has(condition.condition) ? condition.condition : null;
     holder.statut = leaf && contested(leaf) ? 'contesté' : STATUS(statuses.get(at) ?? null);
+    const result = condition.mesure ? calculate(condition.mesure, valueOf, measureDates.get(leaf!) ?? firstDate) : null;
+    if (result?.calcul) holder.calcul = result.calcul;
     if (leaf && decisiveLeaves.has(leaf)) {
       holder.decisif = true;
-      add('manque', at, `${leaf} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(leaf)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, leaf);
+      if (result) add('manque', at, `${leaf} décide de la réponse : renseigne ${result.missing.filter((name) => name !== QUESTION_DATE).join(', ') || 'la date de la question'} dans valeurs, avec sa preuve`, `${human(leaf)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, leaf);
+      else add('manque', at, `${leaf} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(leaf)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, leaf);
     }
     condition.selon.forEach((basis, index) => {
       const place = `${at}.selon[${index}]`;
@@ -235,14 +267,21 @@ export async function verifyReasoning(input: {
     });
   }
   for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = STATUS(statuses.get(name) ?? null); }
+  for (const name of reasoning.valeurs.keys()) { const holder = node(annotated, `valeurs.${name}`); if (holder) holder.statut = valueOf(name) === null ? 'à établir' : 'acquis'; }
   for (const name of [...shape.leaves].sort()) {
+    const measure = reasoning.computed.get(name);
+    if (measure) {
+      const result = calculate(measure, valueOf, measureDates.get(name) ?? firstDate);
+      emit({ key: `fait:${name}`, step: 'fait', status: result.value === null ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: `${explain(measure, result)}${decisiveLeaves.has(name) ? ' · décisif' : ''}` });
+      continue;
+    }
     const value = leafValue(name);
     const cited = (field: 'preuve' | 'contredit') => [...new Set(occurrences.filter((item) => item.condition.condition === name).flatMap((item) => item.condition[field].map((_, index) => `${item.at}.${field}[${index}]`)).filter((at) => verifiedRefs.get(at)).map((at) => node(annotated, at)).filter((ref) => ref?.titre).map((ref) => `${String(ref!.titre)} : « ${String(ref!.citation ?? '')} »`))].join(', ');
     emit({ key: `fait:${name}`, step: 'fait', status: value === null ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: contested(name) ? 'Contesté : une pièce le prouve, une autre le contredit' : value === true ? `Prouvé par ${cited('preuve')}` : value === false ? `Contredit par ${cited('contredit')}` : `${occurrences.some((item) => item.condition.condition === name && item.condition.preuve.length + item.condition.contredit.length > 0) ? 'Les pièces citées ne l’établissent pas' : 'Aucune pièce citée'}${decisiveLeaves.has(name) ? ' · décisif' : ''}` });
   }
   for (const name of reasoning.terms.keys()) emit({ key: `terme:${name}`, step: 'condition', status: statuses.get(name) === null || statuses.get(name) === undefined ? 'neutre' : 'ok', subject: human(name), text: ANSWER[STATUS(statuses.get(name) ?? null)] });
 
-  const trials = shape.cycles.length ? [] : runTrials(reasoning, test);
+  const trials = shape.cycles.length ? [] : runTrials(reasoning, test, firstDate);
   trials.forEach((result, index) => {
     const holder = node(annotated, `essais[${index}]`);
     if (holder) Object.assign(holder, result);
@@ -277,11 +316,11 @@ export async function verifyReasoning(input: {
 
   const visible = issues.filter((issue) => !input.dismissed.has(issue.id));
   for (const issue of visible) {
-    const holder = issue.path ? node(annotated, issue.path.replace(/\.(piece|source|vigueur|reponse)$/, '')) : null;
+    const holder = issue.path ? node(annotated, issue.path.replace(ANCHORED, '')) : null;
     const key = issue.kind === 'erreur' ? 'erreurs' : 'manques';
     if (holder) holder[key] = [...(holder[key] as string[] | undefined ?? []), issue.text];
   }
-  const general = visible.filter((issue) => !issue.path || !node(annotated, issue.path.replace(/\.(piece|source|vigueur|reponse)$/, '')));
+  const general = visible.filter((issue) => !issue.path || !node(annotated, issue.path.replace(ANCHORED, '')));
   const unrated = [...new Set([...verifiedRefs.keys()].map((at) => node(annotated, at)?.piece).filter((piece): piece is string => typeof piece === 'string' && !input.reliability.has(piece)))];
   const bilan = {
     erreurs: visible.filter((issue) => issue.kind === 'erreur').length,

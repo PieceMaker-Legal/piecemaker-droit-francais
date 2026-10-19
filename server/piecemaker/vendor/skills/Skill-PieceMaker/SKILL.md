@@ -91,7 +91,7 @@ pm tabular_review lancer --projet ID [--ia claude|codex|mistral] [--modele-ia TE
 
 ## raisonnement
 
-Le raisonnement du dossier s’écrit dans `.piecemaker/raisonnement.js` (objet JavaScript sans fonctions : `questions`, un terme par clé avec `si`, `sauf`, `l_une`, `selon`, `preuve`, `contredit`, et `essais`). Volet Raisonnement à côté du chat.
+Le raisonnement du dossier s’écrit dans `.piecemaker/raisonnement.js` (objet JavaScript sans fonctions : `questions`, un terme par clé avec `si`, `sauf`, `l_une`, `selon`, `preuve`, `contredit`, des délais et montants calculés (`delai`, `montant`, `decompte`) à partir de `valeurs` prouvées, et `essais`). Volet Raisonnement à côté du chat.
 
 | Commande | Effet |
 | --- | --- |

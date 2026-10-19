@@ -10,7 +10,8 @@ Un objet JavaScript **sans fonctions** : objets, listes, textes (de préférence
 - Une clé par **terme** : `{ si: [...], sauf: [...] }`. Toutes les conditions `si` sont requises ; une seule condition `sauf` vraie écarte le terme. `l_une: [...]` regroupe des conditions dont une seule suffit.
 - Chaque condition porte `selon: [{ source, citation, vigueur: { debut, fin } }]` (au moins une source) et, pour un fait, `preuve` / `contredit: [{ piece, citation }]`.
 - **Affinage** : une condition obscure reçoit sa propre clé, sourcée par l’arrêt, la clause ou l’article qui la précise. Une condition sans clé est un fait.
-- `essais: [{ nom, faits, attendu }]` — le droit seul, rejoué sur des faits supposés.
+- **Délais et montants** : une condition nommée peut porter `delai: { de, a, au_plus | au_moins: { jours | jours_ouvres | mois | ans: n } }` ou `montant: { valeur, plus_de | au_moins | moins_de | au_plus: nombre ou nom }`. Elle n’a pas de preuve : sa valeur se calcule à partir de `valeurs: { nom: { valeur: 'AAAA-MM-JJ' | nombre, preuve } }`, une valeur ne comptant qu’avec une preuve vérifiée. Sans `a`, le délai court jusqu’à la date de la question. Le calcul est calendaire (fin de mois ramenée au dernier jour, jours ouvrés = lundi à vendredi) ; `decompte: [{ source, citation, vigueur }]` cite la règle qui le fonde, et son absence est un manque — le système ne choisit jamais la règle.
+- `essais: [{ nom, faits, attendu }]` — le droit seul, rejoué sur des faits supposés ; `faits` accepte aussi les dates et montants des calculs.
 
 `source` est l’identifiant officiel : `LEGIARTI…` (article), `JURITEXT…`, `CETATEXT…`, `CONSTEXT…` (décision), ou le chemin d’une pièce pour une clause. Les connecteurs (`server/piecemaker/reasoning-connectors.ts`) se choisissent selon la forme de l’identifiant ; un identifiant d’un autre droit (CELEX, ECLI…) est accepté et signalé « non vérifiable automatiquement » jusqu’à l’ajout d’un connecteur.
 
@@ -28,8 +29,8 @@ L’objet de l’agent, avec en tête `bilan` (`erreurs`, `manques`, `essais`, `
 
 - **Citation** : retrouvée mot pour mot à la ponctuation, la casse et les accents près, elle est validée, remplacée par l’original dans le fichier et marquée `corrigee` ; sinon erreur.
 - **Vigueur** : absente, c’est un manque (avec les dates de la version citée quand Légifrance les donne) ; différente de Légifrance, une erreur.
-- **Erreurs** : syntaxe, condition sans source, source ou pièce introuvable, citation introuvable, vigueur fausse, aucune source en vigueur, terme de réponse non défini, boucle, essai non conforme.
-- **Manques** : date d’application absente ou non justifiée, vigueur non renseignée, source non vérifiable, fait décisif sans pièce, terme qui ne sert à aucune question.
+- **Erreurs** : syntaxe, délai ou montant mal écrit, prouvé sur la condition ou appliqué à une valeur du mauvais type, condition sans source, source ou pièce introuvable, citation introuvable, vigueur fausse, aucune source en vigueur, terme de réponse non défini, boucle, essai non conforme.
+- **Manques** : délai sans règle de décompte, date d’application absente ou non justifiée, vigueur non renseignée, source non vérifiable, fait décisif sans pièce, terme qui ne sert à aucune question.
 - **Personnes** : les personnes et sociétés du graphe du dossier citées dans une question ou dans la citation d’une pièce y sont rattachées ; les sociétés rattachées sont contrôlées au Registre Public et au BODACC.
 
 ## Décisions de l’avocat

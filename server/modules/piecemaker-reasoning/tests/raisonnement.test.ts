@@ -8,6 +8,7 @@ import Database from 'better-sqlite3';
 
 import { EXAMPLE_CODE, EXAMPLE_SOURCES, createReasoningService, describeReasoning, verifyReasoning } from '../program.js';
 import type { ReasoningConnectors, SourceInfo } from '../program.js';
+import { addDuration } from '../engine.js';
 import { parseLiteral } from '../format.js';
 
 const plain = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -181,4 +182,83 @@ test('seules les parties sociétés du dossier passent au registre et au BODACC'
   assert.ok(result.issues.some((issue) => issue.avocat === 'Société Beta SARL : le BODACC signale procédure collective : redressement judiciaire ouvert le 02/05/2025.'));
   assert.ok(result.issues.some((issue) => issue.avocat?.startsWith('Société Exemple SAS : SIREN non renseigné')));
   assert.equal(result.log.find((entry) => entry.key === 'bodacc:Société Beta SARL')?.status, 'alerte');
+});
+
+const CESSION_SOURCES: Record<string, SourceInfo> = {
+  'pieces/02_cession.md': { kind: 'piece', title: 'Cession de titres (fictive)', text: 'Article 1. Les délais se calculent de date à date. Article 7. La garantie est due deux ans à compter de la réalisation. Elle ne couvre pas un préjudice inférieur ou égal à 3.000 euros.' },
+  'pieces/03_realisation.md': { kind: 'piece', title: 'Procès-verbal de réalisation (fictif)', text: 'Réalisation intervenue le 15/06/2022.' },
+  'pieces/08_notification.md': { kind: 'piece', title: 'Notification de réclamation (fictive)', text: 'Notification du 10/02/2024 : dommage de 45.000 euros.' },
+};
+const CESSION_CODE = `{
+  questions: [{ question: \`La réduction de prix est-elle due à Société Exemple SAS ?\`, reponse: 'réduction_due', date: { valeur: '2024-02-10', preuve: [{ piece: 'pieces/08_notification.md', citation: \`Notification du 10/02/2024\` }] } }],
+  valeurs: {
+    date_de_réalisation: { valeur: '2022-06-15', preuve: [{ piece: 'pieces/03_realisation.md', citation: \`intervenue le 15/06/2022\` }] },
+    date_de_notification: { valeur: '2024-02-10', preuve: [{ piece: 'pieces/08_notification.md', citation: \`Notification du 10/02/2024\` }] },
+    montant_du_dommage: { valeur: 45000, preuve: [{ piece: 'pieces/08_notification.md', citation: \`dommage de 45.000 euros\` }] },
+  },
+  réduction_due: {
+    si: [
+      { condition: 'notification_dans_la_garantie', delai: { de: 'date_de_réalisation', a: 'date_de_notification', au_plus: { ans: 2 } },
+        selon: [{ source: 'pieces/02_cession.md', citation: \`deux ans à compter de la réalisation\`, vigueur: { debut: '2022-06-15', fin: null } }],
+        decompte: [{ source: 'pieces/02_cession.md', citation: \`Les délais se calculent de date à date\`, vigueur: { debut: '2022-06-15', fin: null } }] },
+      { condition: 'dommage_au_dessus_du_seuil', montant: { valeur: 'montant_du_dommage', plus_de: 3000 },
+        selon: [{ source: 'pieces/02_cession.md', citation: \`inférieur ou égal à 3.000 euros\`, vigueur: { debut: '2022-06-15', fin: null } }] },
+    ],
+  },
+  essais: [
+    { nom: \`notification le jour de l’échéance\`, faits: { date_de_réalisation: '2022-06-15', date_de_notification: '2024-06-15', montant_du_dommage: 45000 }, attendu: { réduction_due: vrai } },
+    { nom: \`notification tardive\`, faits: { date_de_réalisation: '2022-06-15', date_de_notification: '2024-06-17', montant_du_dommage: 45000 }, attendu: { réduction_due: faux } },
+    { nom: \`dommage égal au seuil\`, faits: { date_de_réalisation: '2022-06-15', date_de_notification: '2023-09-10', montant_du_dommage: 3000 }, attendu: { réduction_due: faux } },
+  ],
+}`;
+const cession = (code: string) => verifyReasoning({
+  code, cwd: '/dossier-fictif', connectors: connectors(CESSION_SOURCES), reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(),
+});
+
+test('un délai et un montant se calculent à partir des valeurs prouvées, et les essais les rejouent', async () => {
+  const result = await cession(CESSION_CODE);
+  assert.deepEqual(texts(result, 'erreur'), []);
+  assert.equal(at(result.annotated, 'questions[0].statut'), 'acquis');
+  assert.deepEqual(at(result.annotated, 'réduction_due.si[0].calcul'), { depart: '2022-06-15', echeance: '2024-06-15', date_retenue: '2024-02-10' });
+  assert.deepEqual(at(result.annotated, 'réduction_due.si[1].calcul'), { montant: 45000, seuil: 3000 });
+  assert.equal(at(result.annotated, 'valeurs.montant_du_dommage.statut'), 'acquis');
+  assert.equal(at(result.annotated, 'bilan.essais'), '3/3');
+  assert.match(result.log.find((entry) => entry.key === 'fait:notification_dans_la_garantie')!.text, /au plus 2 ans à compter du 15\/06\/2022 : échéance au 15\/06\/2024, date retenue 10\/02\/2024 → oui/);
+  assert.doesNotMatch(texts(result, 'manque').join('\n'), /décompte/);
+});
+
+test('un délai sans règle de décompte est un manque, sans que le système choisisse la règle', async () => {
+  const result = await cession(CESSION_CODE.replace(/\n {8}decompte: \[[^\n]*\] \},/, ' },'));
+  assert.deepEqual(texts(result, 'erreur'), []);
+  const issue = result.issues.find((entry) => entry.path === 'réduction_due.si[0].decompte')!;
+  assert.equal(issue.kind, 'manque');
+  assert.equal(issue.avocat, 'Notification dans la garantie : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.');
+  assert.ok(at(result.annotated, 'réduction_due.si[0].manques').some((text: string) => text.startsWith('délai sans règle de décompte')));
+  assert.equal(at(result.annotated, 'questions[0].statut'), 'acquis');
+});
+
+test('une valeur sans pièce laisse le calcul en suspens et devient décisive ; sans date retenue, le délai court jusqu’à la date de la question', async () => {
+  const unproven = await cession(CESSION_CODE.replace("date_de_notification: { valeur: '2024-02-10', preuve: [{ piece: 'pieces/08_notification.md', citation: `Notification du 10/02/2024` }] },", "date_de_notification: { valeur: '2024-02-10' },"));
+  assert.equal(at(unproven.annotated, 'questions[0].statut'), 'à établir');
+  assert.deepEqual(at(unproven.annotated, 'questions[0].decisifs'), ['notification_dans_la_garantie']);
+  assert.match(texts(unproven, 'manque').join('\n'), /notification_dans_la_garantie décide de la réponse : renseigne date_de_notification dans valeurs, avec sa preuve/);
+  const questionDate = await cession(CESSION_CODE.replace(", a: 'date_de_notification'", '').replace("valeur: '2024-02-10', preuve: [{ piece: 'pieces/08_notification.md', citation: `Notification du 10/02/2024` }] } }]", "valeur: '2024-07-01', preuve: [{ piece: 'pieces/08_notification.md', citation: `Notification du 10/02/2024` }] } }]"));
+  assert.equal(at(questionDate.annotated, 'réduction_due.si[0].calcul.date_retenue'), '2024-07-01');
+  assert.equal(at(questionDate.annotated, 'questions[0].statut'), 'exclu');
+});
+
+test('les durées s’ajoutent au calendrier : fin de mois, année bissextile, jours ouvrés', () => {
+  assert.equal(addDuration('2023-01-31', { unite: 'mois', nombre: 1 }), '2023-02-28');
+  assert.equal(addDuration('2024-02-29', { unite: 'ans', nombre: 1 }), '2025-02-28');
+  assert.equal(addDuration('2025-05-09', { unite: 'jours_ouvres', nombre: 1 }), '2025-05-12');
+  assert.equal(addDuration('2025-05-09', { unite: 'jours', nombre: 30 }), '2025-06-08');
+});
+
+test('un délai ou un montant mal écrit, prouvé sur la condition ou appliqué à une valeur du mauvais type est une erreur', async () => {
+  const errors = texts(await cession(CESSION_CODE
+    .replace('au_plus: { ans: 2 }', 'au_plus: { semaines: 2 }')
+    .replace("montant: { valeur: 'montant_du_dommage', plus_de: 3000 },", "montant: { valeur: 'date_de_réalisation', plus_de: 3000 }, preuve: [{ piece: 'pieces/08_notification.md', citation: `45.000 euros` }],")), 'erreur').join('\n');
+  assert.match(errors, /réduction_due\.si\[0\]\.delai : delai : \{ de: date_de_départ/);
+  assert.match(errors, /un délai ou un montant se calcule : sa preuve se place dans valeurs/);
+  assert.match(errors, /valeurs\.date_de_réalisation : date_de_réalisation sert à dommage_au_dessus_du_seuil : un nombre attendu/);
 });
