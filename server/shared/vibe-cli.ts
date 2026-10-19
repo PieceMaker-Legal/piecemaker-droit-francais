@@ -62,11 +62,11 @@ export function vibeBinDirectoryCandidates(host: VibeCliHost = currentVibeCliHos
   const xdgBin = readEnv(host, 'XDG_BIN_HOME');
   const xdgData = readEnv(host, 'XDG_DATA_HOME');
   return [
+    piecemakerVibeBinDirectory(host),
     uvToolBin ? expandHome(host, uvToolBin) : '',
     xdgBin ? expandHome(host, xdgBin) : '',
     xdgData ? api.resolve(expandHome(host, xdgData), '..', 'bin') : '',
     api.join(host.homedir, '.local', 'bin'),
-    piecemakerVibeBinDirectory(host),
   ].filter((candidate, index, all) => candidate && all.indexOf(candidate) === index);
 }
 
