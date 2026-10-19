@@ -104,6 +104,9 @@ export async function verifyReasoning(input: {
     if (!question.date) add('manque', `questions[${index}]`, 'date d’application non renseignée : ajoute date: { valeur: \'AAAA-MM-JJ\', preuve: [{ piece, citation }] }', 'La date des faits n’est pas fixée : impossible de savoir quelle version des textes s’applique.');
     else if (!question.date.preuve.length) add('manque', `questions[${index}].date`, 'date non justifiée : ajoute preuve: [{ piece, citation }]', `Aucune pièce ne justifie la date retenue (${day(question.date.valeur)}).`);
   });
+  if (!reasoning.qualification) add('manque', 'qualification', 'raisonnement non qualifié : ajoute qualification: \'contractuel\' ou \'contentieux\'', 'Le raisonnement n’est pas qualifié : contractuel ou contentieux.');
+  if (reasoning.qualification === 'contentieux') add('manque', 'qualification', 'contentieux : vérifier la prescription', 'Prescription à vérifier.');
+  if (reasoning.qualification === 'contractuel') add('manque', 'qualification', 'contractuel : vérifier la validité', 'Validité à vérifier.');
   const roots = new Set(reasoning.questions.map((question) => question.reponse));
   for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, 'terme qui ne sert à aucune question : rattache-le comme condition ou ajoute la question à laquelle il répond');
 

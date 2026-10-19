@@ -12,13 +12,13 @@ export type Condition = { condition?: string; l_une?: Condition[]; mesure?: Meas
 export type Term = { si: Condition[]; sauf: Condition[] };
 export type Question = { question: string; reponse: string; date?: { valeur: string; preuve: Ref[] } };
 export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean> };
-export type Reasoning = { questions: Question[]; essais: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
+export type Reasoning = { qualification?: 'contractuel' | 'contentieux'; questions: Question[]; essais: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
 export type Problem = { path: string; text: string; avocat?: string; cible?: string };
 export type Parsed = { value: unknown; lines: Map<string, number> };
 
 const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const RESERVED = new Set(['questions', 'essais', 'bilan', 'valeurs']);
+const RESERVED = new Set(['questions', 'essais', 'bilan', 'valeurs', 'qualification']);
 const TERM_KEYS = new Set(['si', 'sauf']);
 const CONDITION_KEYS = new Set(['condition', 'l_une', 'delai', 'montant', 'selon', 'decompte', 'preuve', 'contredit']);
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
@@ -193,6 +193,11 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
         }
         reasoning.questions.push(question);
       });
+      continue;
+    }
+    if (key === 'qualification') {
+      if (raw === 'contractuel' || raw === 'contentieux') reasoning.qualification = raw;
+      else problem('qualification', 'qualification : \'contractuel\' ou \'contentieux\'');
       continue;
     }
     if (key === 'valeurs') {
