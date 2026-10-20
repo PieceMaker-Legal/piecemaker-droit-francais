@@ -1,9 +1,9 @@
 import { UnlinkedDocxError, verifyDocxReasoning } from './docx-reasoning.js';
 
-export async function checkDocxReasoning(input: Uint8Array) {
+export async function checkDocxReasoning(input: Uint8Array, cwd = '') {
   try {
     const result = await verifyDocxReasoning(input, {
-      cwd: '', reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(), online: false,
+      cwd, reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(), online: false,
       connectors: {
         source: async () => undefined,
         match: (source: string, quote: string) => source.includes(quote) ? quote : null,

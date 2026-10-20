@@ -36,7 +36,7 @@ Ouvrir un `.docx` depuis l'arborescence affiche un éditeur Word complet
 | `src/piecemaker/docx/index.ts` | `DocxDocumentViewer`, `isDocxDocument` |
 | `src/modules/code-editor/CodeEditor.tsx` | **Seul fichier CloudCLI touché** : import + une ligne de branchement, juste avant le rendu binaire |
 | `server/piecemaker/docx-document.ts` | Version, contrôle local à l’ouverture et écriture avec contrôle des octets sauvegardés |
-| `server/piecemaker/docx-reasoning-check.ts` | Test local du modèle embarqué, sans LLM ni lecture des sources externes |
+| `server/piecemaker/docx-reasoning-check.ts` | Test local du modèle lié, sans LLM ni lecture des sources externes |
 | `src/modules/docx-reasoning/` | État du contrôle, passages à revoir, calculs, alertes et relance manuelle |
 | `server/piecemaker/index.ts` | Montage du routeur |
 
@@ -54,7 +54,7 @@ Fonctionnement :
   `.docx`, chemin résolu contre la racine du projet (même contrôle lexical que
   le file-tree CloudCLI).
 
-Pour un DOCX contenant déjà un modèle lié, le contrôle est lancé à l’ouverture,
+Pour un DOCX contenant déjà une liaison au modèle, le contrôle est lancé à l’ouverture,
 après chaque sauvegarde automatique réussie et après rechargement d’une modification
 externe. Le `PUT` renvoie `{ version, reasoning }` calculé sur les octets écrits ;
 `GET /api/piecemaker/docx-document/reasoning` permet l’ouverture et la relance
@@ -75,15 +75,35 @@ et fiabilité des pièces ne sont pas relues par ce contrôle automatique.
 
 Le modèle et le moteur de raisonnement ne sont pas réécrits. Une erreur de liaison
 est signalée séparément et n’annule pas la sauvegarde du DOCX. Un document sans
-modèle embarqué ne présente pas cet affichage ; il n’est pas automatiquement lié
+liaison ne présente pas cet affichage ; il n’est pas automatiquement lié
 au fichier de raisonnement du dossier.
 
 ## Préparer un document lié et choisir le modèle de référence
 
-Pour un document déjà lié, **le modèle embarqué dans ce DOCX fait autorité**.
-Le fichier `.piecemaker/raisonnement.js` reste la source indépendante pour préparer
-de nouveaux documents. Une modification de ce fichier ne remplace jamais le modèle
-d’un DOCX existant. Le panneau du document indique cette référence.
+Pour les nouveaux documents, **le modèle reste dans le dossier PieceMaker**,
+par défaut `.piecemaker/raisonnement.js`. Le DOCX ne contient pas son code : il
+conserve un chemin relatif au dossier, une empreinte SHA-256 de la version liée,
+les balises des valeurs et clauses et leurs empreintes de texte.
+
+À chaque contrôle, PieceMaker lit ce fichier sans l’exécuter et vérifie son
+empreinte avant d’appeler le moteur existant. Un fichier absent ou modifié rend
+le contrôle impossible ; aucune autre version n’est utilisée silencieusement.
+Même une modification de mise en forme du code change son empreinte. Restaurer
+la version exacte rétablit le contrôle. L’adoption d’un nouveau modèle demande
+un réexamen explicite ; cette commande ne modifie pas le modèle.
+
+Le sondage de l’éditeur suit aussi l’empreinte du fichier externe : si elle
+change, il suspend l’ancien résultat et relance le contrôle, sans recharger le
+DOCX ni annuler sa sauvegarde programmée. Le fichier du modèle est lu et haché
+localement ; le contrôle complet ne tourne qu’après un événement. La référence
+extraite du DOCX est mise en cache pour éviter de rouvrir son archive à chaque
+sondage.
+
+Les anciens documents avec modèle embarqué restent lisibles et utilisent encore
+cette copie. Ils ne sont pas migrés implicitement. Le DOCX externe doit rester
+avec son dossier PieceMaker ; le déplacement du dossier complet préserve le
+chemin relatif. Renommer ou déplacer le DOCX à l’intérieur de ce dossier ne
+change pas sa référence.
 
 L’agent lit le DOCX, cite les paragraphes à suivre et les valeurs dans un petit
 fichier JSON, puis utilise :
@@ -97,17 +117,19 @@ pm docx extraire --fichier document-lie.docx --sortie modele-extrait.js
 
 Les chemins sont relatifs au dossier de la session ; PieceMaker doit fonctionner.
 `preparer` lit le modèle du dossier par défaut (`--modele autre.js` possible),
-ajoute les balises sans modifier le texte ni le modèle et ouvre le résultat dans
-le volet Fichiers. Les paragraphes doivent être contigus, dans un même parent ;
+ajoute les balises et la référence sans modifier le texte ni le modèle et ouvre
+le résultat dans le volet Fichiers. Les paragraphes doivent être contigus, dans un même parent ;
 chaque valeur est cherchée uniquement dans sa clause. Une sélection absente ou
 ambiguë, une révision en attente, un champ Word dynamique ou une structure non
 prise en charge provoque un refus. Les styles des segments de texte sont conservés.
 Le format JSON et son exemple figurent dans le skill `Skill-PieceMaker`.
 
 `verifier` exécute le contrôle local du DOCX, sans LLM, sans changer ses octets et
-sans lire le modèle du dossier. `comparer` compare exactement les deux copies du
-code et signale leur divergence ; il ne synchronise rien. `extraire` écrit une
-nouvelle copie exacte du modèle embarqué. Les sorties doivent être nouvelles :
+en lisant le modèle référencé dans le dossier. `comparer` confronte son empreinte
+à celle enregistrée dans le DOCX ; il ne synchronise rien. `extraire` écrit une
+nouvelle copie exacte du modèle lié, seulement si la version attendue est disponible.
+Pour les anciens DOCX, la copie embarquée reste la référence. Les sorties doivent
+être nouvelles :
 aucun fichier existant n’est écrasé. `preparer` refuse aussi un DOCX déjà lié,
 pour ne pas effacer silencieusement son historique de contrôle.
 
@@ -118,8 +140,8 @@ ne corrige pas le contrôle lexical de l’ancien routeur de l’éditeur.
 
 Les cycles réels de modification et sauvegarde dans Microsoft Word ont été testés
 par Luna : les valeurs sont relues et recalculées, les clauses réécrites sont
-signalées, le code embarqué reste identique. Voir
-[l’audit de préparation et de Word](audits/docx-preparation-word-luna-2026-10-20.md).
+signalées. Le premier audit couvrait le modèle embarqué ; la campagne externe est
+décrite dans [l’audit de référence externe](audits/docx-reference-externe-luna-2026-10-20.md).
 
 ## 3. Défauts connus (audit du 2026-09-26)
 

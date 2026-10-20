@@ -1,5 +1,9 @@
 # Comparatif du raisonnement directement depuis un DOCX
 
+> Évolution ultérieure : les nouveaux DOCX référencent maintenant le modèle externe
+> du dossier, sans embarquer son code. Cet audit décrit l’étape précédente ; voir
+> [la campagne de référence externe](docx-reference-externe-luna-2026-10-20.md).
+
 ## Choix retenu
 
 Le prototype utilise les contrôles de contenu Word comme ancres, une propriété native du DOCX pour le modèle, un lecteur OOXML limité et le moteur `verifyReasoning` déjà présent. Une commande reçoit le DOCX et rejoue le modèle embarqué avec les valeurs réellement lues dans ses champs, sans fichier de raisonnement compagnon et sans appel LLM.

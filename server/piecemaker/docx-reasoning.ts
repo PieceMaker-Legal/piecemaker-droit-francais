@@ -8,6 +8,9 @@ import { parseLiteral, printLiteral } from '../modules/piecemaker-reasoning/form
 import { verifyReasoning } from '../modules/piecemaker-reasoning/program.js';
 import { isLegalDate } from '../modules/piecemaker-reasoning/legal-period.js';
 
+import { modelHash, resolveReferencedModel, validateModelReference } from './docx-reasoning-reference.js';
+import type { DocxModelReference } from './docx-reasoning-reference.js';
+
 export const DOCX_REASONING_PART = 'docProps/custom.xml';
 export class UnlinkedDocxError extends TypeError {}
 const PROPERTY = 'PieceMakerReasoning';
@@ -80,7 +83,7 @@ const clauseText = (dom: ReturnType<typeof xml>, tag: string, fallback: XmlEleme
 
 export type DocxBinding = { tag: string; valeur: string; type: 'nombre' | 'pourcentage' | 'date' };
 export type DocxState = { body: string; clauses: Record<string, string>; text: Record<string, string>; values: Record<string, string | number>; pending: boolean };
-export type DocxReasoning = { version: 1; code: string; bindings: DocxBinding[]; clauses: string[]; anchors?: 'sdt-end'; baseline: Pick<DocxState, 'body' | 'clauses'> };
+export type DocxReasoning = { bindings: DocxBinding[]; clauses: string[]; anchors?: 'sdt-end'; baseline: Pick<DocxState, 'body' | 'clauses'> } & ({ version: 1; code: string; reference?: never } | { version: 2; code?: never; reference: DocxModelReference });
 
 function bindingValue(text: string, type: DocxBinding['type']): string | number {
   const raw = text.trim();
@@ -130,10 +133,14 @@ export async function captureDocxState(input: Uint8Array, bindings: DocxBinding[
   };
 }
 
-export async function embedDocxReasoning(input: Uint8Array, model: Omit<DocxReasoning, 'version' | 'baseline'>): Promise<Uint8Array> {
+export async function embedDocxReasoning(input: Uint8Array, model: { code: string; bindings: DocxBinding[]; clauses: string[]; reference?: DocxModelReference }): Promise<Uint8Array> {
   const state = await captureDocxState(input, model.bindings, model.clauses);
   if (state.pending) throw new TypeError('Résoudre les révisions avant de rattacher le raisonnement.');
   parseLiteral(model.code);
+  if (model.reference) {
+    validateModelReference(model.reference);
+    if (model.reference.sha256 !== modelHash(model.code)) throw new TypeError('Empreinte du modèle incohérente.');
+  }
   const zip = await JSZip.loadAsync(input);
   const document = xml(await zip.file('word/document.xml')!.async('string'));
   const linkedTags = new Set([...model.bindings.map((binding) => binding.tag), ...model.clauses]);
@@ -189,7 +196,7 @@ export async function embedDocxReasoning(input: Uint8Array, model: Omit<DocxReas
   }
   while (property.firstChild) property.removeChild(property.firstChild);
   const payload = dom.createElementNS(VALUE, 'vt:lpwstr');
-  payload.appendChild(dom.createTextNode(JSON.stringify({ version: 1, ...model, anchors: 'sdt-end', baseline: { body: state.body, clauses: state.clauses } })));
+  payload.appendChild(dom.createTextNode(JSON.stringify({ ...(model.reference ? { version: 2, reference: model.reference } : { version: 1, code: model.code }), bindings: model.bindings, clauses: model.clauses, anchors: 'sdt-end', baseline: { body: state.body, clauses: state.clauses } })));
   property.appendChild(payload);
   zip.file(DOCX_REASONING_PART, new XMLSerializer().serializeToString(dom));
   const types = xml(await zip.file('[Content_Types].xml')!.async('string'));
@@ -225,7 +232,8 @@ export async function readDocxReasoning(input: Uint8Array): Promise<DocxReasonin
   const payload = properties[0].getElementsByTagNameNS(VALUE, 'lpwstr');
   if (payload.length !== 1) throw new TypeError('Propriété de raisonnement illisible.');
   const model: unknown = JSON.parse(payload[0].textContent ?? '');
-  if (!object(model) || model.version !== 1 || typeof model.code !== 'string' || !Array.isArray(model.bindings) || !Array.isArray(model.clauses) || !model.clauses.every((tag) => typeof tag === 'string') || !object(model.baseline) || typeof model.baseline.body !== 'string' || !object(model.baseline.clauses)) throw new TypeError('Modèle DOCX invalide.');
+  if (!object(model) || !((model.version === 1 && typeof model.code === 'string' && model.reference === undefined) || (model.version === 2 && model.code === undefined && object(model.reference))) || !Array.isArray(model.bindings) || !Array.isArray(model.clauses) || !model.clauses.every((tag) => typeof tag === 'string') || !object(model.baseline) || typeof model.baseline.body !== 'string' || !object(model.baseline.clauses)) throw new TypeError('Modèle DOCX invalide.');
+  if (model.version === 2) validateModelReference(model.reference);
   for (const binding of model.bindings) if (!object(binding) || typeof binding.tag !== 'string' || typeof binding.valeur !== 'string' || !['nombre', 'pourcentage', 'date'].includes(String(binding.type))) throw new TypeError('Liaison DOCX invalide.');
   if (model.anchors !== undefined && model.anchors !== 'sdt-end') throw new TypeError('Format des repères DOCX invalide.');
   return model as DocxReasoning;
@@ -233,6 +241,7 @@ export async function readDocxReasoning(input: Uint8Array): Promise<DocxReasonin
 
 export async function verifyDocxReasoning(input: Uint8Array, options: Omit<Parameters<typeof verifyReasoning>[0], 'code' | 'simulation'>) {
   const model = await readDocxReasoning(input);
+  const code = model.version === 1 ? model.code : await resolveReferencedModel(options.cwd, model.reference);
   const state = await captureDocxState(input, model.bindings, model.clauses, model.anchors === 'sdt-end');
   const changed = model.clauses.filter((tag) => state.clauses[tag] !== model.baseline.clauses[tag]);
   if (state.pending || state.body !== model.baseline.body || changed.length > 0) return {
@@ -240,7 +249,7 @@ export async function verifyDocxReasoning(input: Uint8Array, options: Omit<Param
     changed: state.pending ? ['révisions en attente', ...changed] : changed.length ? changed : ['texte hors clauses ou ordre du document'],
     context: changed.filter((tag) => tag in state.text).map((tag) => ({ tag, text: state.text[tag] })), verification: null,
   };
-  const parsed = parseLiteral(model.code).value;
+  const parsed = parseLiteral(code).value;
   if (!object(parsed) || (model.bindings.length > 0 && !object(parsed.valeurs))) throw new TypeError('Le modèle doit déclarer ses valeurs liées.');
   for (const binding of model.bindings) {
     const values = parsed.valeurs as Record<string, unknown>;
@@ -258,5 +267,6 @@ export async function verifyDocxReasoning(input: Uint8Array, options: Omit<Param
     },
   };
   const verification = await verifyReasoning({ ...options, connectors, code: printLiteral(parsed) });
+  if (model.version === 2) await resolveReferencedModel(options.cwd, model.reference);
   return { status: 'testé' as const, changed: [], context: [], verification };
 }

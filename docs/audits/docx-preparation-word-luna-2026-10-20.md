@@ -1,5 +1,9 @@
 # Préparation des liens DOCX, modèle de référence et essais Word
 
+> Évolution ultérieure : les nouveaux DOCX référencent maintenant le modèle externe
+> du dossier, sans embarquer son code. Cet audit décrit l’étape précédente ; voir
+> [la campagne de référence externe](docx-reference-externe-luna-2026-10-20.md).
+
 ## Décision mise en œuvre
 
 Le modèle embarqué fait autorité pour son document. Le modèle du dossier reste une source indépendante pour préparer d’autres documents. Le contrôle automatique et `pm docx verifier` ne lisent pas ce fichier du dossier. `pm docx comparer` expose une différence exacte de code, sans la résoudre implicitement. `pm docx extraire` écrit une nouvelle copie du code embarqué ; aucune commande ne remplace le modèle d’un document existant.

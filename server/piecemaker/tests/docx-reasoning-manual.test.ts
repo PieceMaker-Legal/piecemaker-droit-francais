@@ -101,6 +101,7 @@ test('une révision en attente dans une note empêche le rattachement et la vér
   const input = await fixture();
   const zip = await JSZip.loadAsync(input);
   const model = await readDocxReasoning(input);
+  assert.ok(model.version === 1);
   zip.remove(DOCX_REASONING_PART);
   zip.file('word/footnotes.xml', '<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:footnote w:id="1"><w:p><w:ins w:id="80" w:author="Avocat fictif" w:date="2026-10-20T10:00:00Z"><w:r><w:t>Ajout fictif en note</w:t></w:r></w:ins></w:p></w:footnote></w:footnotes>');
   const withRevisionBeforeLink = await zip.generateAsync({ type: 'uint8array' });

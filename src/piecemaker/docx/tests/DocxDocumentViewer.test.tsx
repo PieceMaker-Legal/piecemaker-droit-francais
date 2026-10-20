@@ -421,3 +421,47 @@ test('les sauvegardes automatiques sont sérialisées et le dernier contrôle re
   assert.equal(screen.getByRole('status').textContent, 'Raisonnement à revoir');
   assert.equal(screen.getByText('Dernière retouche fictive.').textContent, 'Dernière retouche fictive.');
 });
+
+
+test('un changement du modèle relance le contrôle sans recharger le DOCX', async () => {
+  let reasoningVersion = 'modele-initial';
+  vi.mocked(authenticatedFetch).mockImplementation(async () => new Response(JSON.stringify({ version: 1, reasoningVersion }), { status: 200 }));
+  vi.mocked(checkDocxDocumentReasoning).mockImplementation(async () => ({
+    version: 1, reasoning: reasoningVersion === 'modele-initial'
+      ? { status: 'tested', issues: [] }
+      : { status: 'error', message: 'Modèle externe modifié.' },
+  }));
+  vi.useFakeTimers();
+  render(<DocxDocumentViewer file={{ name: 'scenario-externe.docx', path: 'scenario-externe.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  assert.equal(screen.getByRole('status').textContent, 'Test local exécuté');
+  reasoningVersion = 'modele-modifie';
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  assert.equal(screen.getByRole('status').textContent, 'Vérification impossible');
+  assert.equal(screen.getByText('Modèle externe modifié.').textContent, 'Modèle externe modifié.');
+  assert.equal(vi.mocked(api.readFileBlob).mock.calls.length, 1);
+  assert.equal(vi.mocked(checkDocxDocumentReasoning).mock.calls.length, 2);
+});
+
+test('un changement du modèle pendant une retouche conserve sa sauvegarde programmée', async () => {
+  let reasoningVersion = 'modele-initial';
+  vi.mocked(authenticatedFetch).mockImplementation(async (_url, options) => new Response(JSON.stringify({
+    version: options?.method === 'PUT' ? 2 : 1, reasoningVersion,
+    reasoning: { status: 'error', message: 'Modèle externe modifié.' },
+  }), { status: 200 }));
+  vi.mocked(checkDocxDocumentReasoning).mockResolvedValue({ version: 1, reasoning: { status: 'tested', issues: [] } });
+  vi.useFakeTimers();
+  render(<DocxDocumentViewer file={{ name: 'scenario-externe.docx', path: 'scenario-externe.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  const editor = screen.getByRole('button', { name: 'scenario-externe.docx' });
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  reasoningVersion = 'modele-modifie';
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  assert.match(screen.getByRole('status').textContent ?? '', /vérification à actualiser/);
+  assert.equal(vi.mocked(checkDocxDocumentReasoning).mock.calls.length, 1);
+  assert.equal(vi.mocked(api.readFileBlob).mock.calls.length, 1);
+  await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+  assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
+  assert.equal(screen.getByRole('status').textContent, 'Vérification impossible');
+});
