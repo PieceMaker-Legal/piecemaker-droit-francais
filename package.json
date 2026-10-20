@@ -36,7 +36,7 @@
   },
   "scripts": {
     "reasoning:docx": "tsx --tsconfig server/tsconfig.json scripts/piecemaker/test-docx-reasoning.mts",
-    "test:reasoning-docx": "tsx --tsconfig server/tsconfig.json --test server/piecemaker/tests/docx-reasoning.test.ts server/piecemaker/tests/docx-reasoning-roundtrip.test.ts server/piecemaker/tests/docx-reasoning-manual.test.ts server/modules/piecemaker-reasoning/tests/raisonnement.test.ts",
+    "test:reasoning-docx": "tsx --tsconfig server/tsconfig.json --test server/piecemaker/tests/docx-reasoning.test.ts server/piecemaker/tests/docx-reasoning-roundtrip.test.ts server/piecemaker/tests/docx-reasoning-manual.test.ts server/piecemaker/tests/docx-document-reasoning.test.ts server/modules/piecemaker-reasoning/tests/raisonnement.test.ts",
     "dev": "concurrently --kill-others \"npm run server:dev\" \"npm run client\"",
     "preserver": "node scripts/promote-dist-server.mjs recover",
     "server": "node dist-server/server/index.js",

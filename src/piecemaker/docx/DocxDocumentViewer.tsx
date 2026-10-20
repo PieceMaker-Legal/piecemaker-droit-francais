@@ -9,6 +9,7 @@ import fr from '@eigenpal/docx-editor-i18n/fr';
 import './docxDocumentViewer.css';
 
 import { useAuth } from '@/modules/auth';
+import { DocxReasoningStatus, useDocxReasoning } from '@/modules/docx-reasoning';
 import { useCitationPassage } from '@/piecemaker/citations/citationPassage';
 import { clearDocxCitationHighlight, highlightCitationInDocx } from '@/piecemaker/citations/docxPassage';
 import { api, authenticatedFetch } from '@/shared/api';
@@ -201,7 +202,10 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const versionRef = useRef<number | null>(null);
   const userEditingRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
-  const savingRef = useRef(false);
+  const savingRef = useRef(0);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const documentEpochRef = useRef(0);
+  const loadingEpochRef = useRef<number | null>(null);
   const resolvedPathRef = useRef(file.path);
   const [loaded, setLoaded] = useState<{ buffer: ArrayBuffer; version: number; filePath: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -211,8 +215,10 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const passage = useCitationPassage(file.path);
   const commentsOpenFromClickRef = useRef(false);
   const [revisionHint, setRevisionHint] = useState<{ x: number; y: number } | null>(null);
+  const { state: reasoningState, reset: resetReasoning, dirty: markReasoningDirty, begin: beginReasoning, publish: publishReasoning, failed: failReasoning, check: checkReasoning } = useDocxReasoning();
 
   const fetchVersion = useCallback(async () => {
+    const epoch = documentEpochRef.current;
     const requestVersion = (filePath: string) => {
       const query = new URLSearchParams({ projectId: projectId ?? '', path: filePath });
       return authenticatedFetch(`/api/piecemaker/docx-document/version?${query}`);
@@ -227,74 +233,101 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       }
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    resolvedPathRef.current = filePath;
+    if (epoch === documentEpochRef.current) resolvedPathRef.current = filePath;
     return { filePath, version: ((await response.json()) as { version: number }).version };
   }, [projectId]);
 
   const load = useCallback(async () => {
     if (!projectId) return;
-    const { filePath, version } = await fetchVersion();
-    const response = await api.readFileBlob(projectId, filePath);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const buffer = await response.arrayBuffer();
-    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = null;
-    userEditingRef.current = false;
-    versionRef.current = version;
-    setError(null);
-    setLoaded({ buffer, version, filePath });
-  }, [fetchVersion, projectId]);
+    const epoch = documentEpochRef.current;
+    if (loadingEpochRef.current === epoch) return;
+    loadingEpochRef.current = epoch;
+    try {
+      const { filePath, version } = await fetchVersion();
+      if (epoch !== documentEpochRef.current) return;
+      const response = await api.readFileBlob(projectId, filePath);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const buffer = await response.arrayBuffer();
+      if (epoch !== documentEpochRef.current) return;
+      resetReasoning();
+      if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      userEditingRef.current = false;
+      versionRef.current = version;
+      setError(null);
+      setLoaded({ buffer, version, filePath });
+      void checkReasoning(projectId, filePath, version);
+    } finally {
+      if (loadingEpochRef.current === epoch) loadingEpochRef.current = null;
+    }
+  }, [checkReasoning, fetchVersion, projectId, resetReasoning]);
 
   useEffect(() => {
+    const epoch = ++documentEpochRef.current;
     resolvedPathRef.current = file.path;
     versionRef.current = null;
     const openedAt = Date.now();
     const missing = (error: unknown) => error instanceof Error && /HTTP 404/.test(error.message);
     load().catch((loadError: unknown) => {
+      if (epoch !== documentEpochRef.current) return;
       if (missing(loadError)) return;
       setError(String(loadError));
     });
     const poll = window.setInterval(() => {
       if (savingRef.current) return;
       fetchVersion()
-        .then(({ version }) => { if (!savingRef.current && version !== versionRef.current) return load(); })
+        .then(({ version }) => { if (epoch === documentEpochRef.current && !savingRef.current && version !== versionRef.current) return load(); })
         .catch(() => {
+          if (epoch !== documentEpochRef.current) return;
           if (versionRef.current !== null || Date.now() - openedAt < MISSING_FILE_MS) return;
           setError(`Fichier introuvable : ${file.path}`);
         });
     }, VERSION_POLL_MS);
     return () => {
+      documentEpochRef.current += 1;
+      resetReasoning();
       window.clearInterval(poll);
       if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     };
-  }, [fetchVersion, file.path, load]);
+  }, [fetchVersion, file.path, load, resetReasoning]);
 
   const save = useCallback(async () => {
     saveTimerRef.current = null;
-    const buffer = await editorRef.current?.save();
-    if (!buffer) return;
-    savingRef.current = true;
-    try {
-      const documentQuery = new URLSearchParams({ projectId: projectId ?? '', path: resolvedPathRef.current });
-      const response = await authenticatedFetch(`/api/piecemaker/docx-document?${documentQuery}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': DOCX_MIME_TYPE },
-        body: buffer,
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      versionRef.current = ((await response.json()) as { version: number }).version;
-    } catch (saveError) {
-      setError(String(saveError));
-    } finally {
-      savingRef.current = false;
-    }
-  }, [projectId]);
+    const filePath = resolvedPathRef.current;
+    const epoch = documentEpochRef.current;
+    const ticket = beginReasoning();
+    const editor = editorRef.current;
+    savingRef.current += 1;
+    saveQueueRef.current = saveQueueRef.current.then(async () => {
+      try {
+        const buffer = await editor?.save();
+        if (!buffer) throw new Error('Le document n’a pas pu être enregistré.');
+        const documentQuery = new URLSearchParams({ projectId: projectId ?? '', path: filePath });
+        const response = await authenticatedFetch(`/api/piecemaker/docx-document?${documentQuery}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': DOCX_MIME_TYPE },
+          body: buffer,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const saved = (await response.json()) as { version: number; reasoning: unknown };
+        if (epoch === documentEpochRef.current && filePath === resolvedPathRef.current) versionRef.current = saved.version;
+        publishReasoning(ticket, saved.reasoning);
+      } catch (saveError) {
+        if (epoch === documentEpochRef.current) setError(String(saveError));
+        failReasoning(ticket, saveError);
+      } finally {
+        savingRef.current -= 1;
+      }
+    });
+    await saveQueueRef.current;
+  }, [beginReasoning, failReasoning, projectId, publishReasoning]);
 
   const scheduleSave = useCallback(() => {
     if (!userEditingRef.current) return;
+    markReasoningDirty();
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => { void save(); }, SAVE_DEBOUNCE_MS);
-  }, [save]);
+  }, [markReasoningDirty, save]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -438,6 +471,9 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       onPointerOutCapture={handlePointerOut}
     >
       {error && <p className="border-b border-border px-3 py-1.5 text-xs text-destructive">{error}</p>}
+      <DocxReasoningStatus state={reasoningState} onCheck={() => {
+        if (projectId && versionRef.current !== null) void checkReasoning(projectId, resolvedPathRef.current, versionRef.current);
+      }} />
       {loaded ? (
         <DocxEditor
           key={loaded.version}

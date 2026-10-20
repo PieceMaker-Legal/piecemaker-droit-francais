@@ -9,6 +9,7 @@ import { verifyReasoning } from '../modules/piecemaker-reasoning/program.js';
 import { isLegalDate } from '../modules/piecemaker-reasoning/legal-period.js';
 
 export const DOCX_REASONING_PART = 'docProps/custom.xml';
+export class UnlinkedDocxError extends TypeError {}
 const PROPERTY = 'PieceMakerReasoning';
 const CUSTOM = 'http://schemas.openxmlformats.org/officeDocument/2006/custom-properties';
 const VALUE = 'http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes';
@@ -216,9 +217,10 @@ export async function embedDocxReasoning(input: Uint8Array, model: Omit<DocxReas
 export async function readDocxReasoning(input: Uint8Array): Promise<DocxReasoning> {
   const zip = await JSZip.loadAsync(input);
   const text = await zip.file(DOCX_REASONING_PART)?.async('string');
-  if (!text) throw new TypeError('Ce DOCX ne contient pas de modèle de raisonnement lié.');
+  if (!text) throw new UnlinkedDocxError('Ce DOCX ne contient pas de modèle de raisonnement lié.');
   const dom = xml(text);
   const properties = Array.from(dom.getElementsByTagNameNS(CUSTOM, 'property')).filter((entry) => entry.getAttribute('name') === PROPERTY);
+  if (!properties.length) throw new UnlinkedDocxError('Ce DOCX ne contient pas de modèle de raisonnement lié.');
   if (properties.length !== 1) throw new TypeError('Propriété de raisonnement absente ou dupliquée.');
   const payload = properties[0].getElementsByTagNameNS(VALUE, 'lpwstr');
   if (payload.length !== 1) throw new TypeError('Propriété de raisonnement illisible.');
