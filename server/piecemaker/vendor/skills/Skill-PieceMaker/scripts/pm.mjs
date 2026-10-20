@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement'];
+const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'docx'];
 const REASONING_COMMANDS = ['verifier'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
@@ -35,6 +35,10 @@ export const HELP = `Usage: pm <outil> [options]
       [--valeur V] [--piece PATH] [--force-probante FORCE] [--appreciation TEXT]
       [--vue complete] [--champs TEXT] [--cas TEXT] [--parametres TEXT]
       [--etiquette NOM] [--exception-de NOM|base] [--etat NOM] [--si EXPR] [--consequence non]
+  docx preparer --fichier FILE.docx --liens FILE.json --sortie FILE.docx [--modele FILE.js]
+  docx verifier|comparer --fichier FILE.docx [--modele FILE.js]
+  docx extraire --fichier FILE.docx --sortie FILE.js
+      chemins relatifs au dossier ; modèle initial : .piecemaker/raisonnement.js
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {
@@ -192,6 +196,7 @@ async function defaultDeps(cwd) {
     sessionDossier: (cwd) => sessionDossier(cwd, { lookup: client.sessionDossier }),
     sqlFn: client.runSql,
     reasoningFn: client.runReasoning,
+    docxFn: client.runDocxReasoning,
     tabularFn: client.runTabularReview,
     execFn: (args, dir) => spawnPiecemaker(cliPath, args, dir),
     chronologieSql: volets.chronologieSql,
@@ -431,6 +436,23 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       return withNotice(text, await followPanel(api, { project, tab: target.tab, draft: target.draft }, target));
     }
     return text;
+  }
+
+  if (tool === 'docx') {
+    const commande = positional[1];
+    if (!['preparer', 'verifier', 'comparer', 'extraire'].includes(commande)) usage('docx attend preparer, verifier, comparer ou extraire.');
+    if (!flags.fichier || flags.fichier === true) usage('Indiquez --fichier FILE.docx.');
+    if (commande === 'preparer' && (!flags.liens || flags.liens === true)) usage('Indiquez --liens FILE.json.');
+    if (['preparer', 'extraire'].includes(commande) && (!flags.sortie || flags.sortie === true)) usage('Indiquez une nouvelle --sortie.');
+    const input = { commande, cwd: path.resolve(resolved), fichier: String(flags.fichier) };
+    for (const flag of ['liens', 'sortie', 'modele']) if (flags[flag] !== undefined) {
+      if (flags[flag] === true) usage(`Indiquez une valeur pour --${flag}.`);
+      input[flag] = String(flags[flag]);
+    }
+    const result = await api.docxFn(input);
+    if (commande !== 'preparer') return JSON.stringify(result);
+    const document = path.resolve(input.cwd, result.fichier);
+    return withNotice(JSON.stringify(result), await followPanel(api, { project: input.cwd, tab: 'files', document }, { cwd: input.cwd, tab: 'files', document }));
   }
 
   if (tool === 'raisonnement') {

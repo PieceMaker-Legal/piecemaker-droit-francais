@@ -78,6 +78,49 @@ est signalée séparément et n’annule pas la sauvegarde du DOCX. Un document 
 modèle embarqué ne présente pas cet affichage ; il n’est pas automatiquement lié
 au fichier de raisonnement du dossier.
 
+## Préparer un document lié et choisir le modèle de référence
+
+Pour un document déjà lié, **le modèle embarqué dans ce DOCX fait autorité**.
+Le fichier `.piecemaker/raisonnement.js` reste la source indépendante pour préparer
+de nouveaux documents. Une modification de ce fichier ne remplace jamais le modèle
+d’un DOCX existant. Le panneau du document indique cette référence.
+
+L’agent lit le DOCX, cite les paragraphes à suivre et les valeurs dans un petit
+fichier JSON, puis utilise :
+
+```sh
+pm docx preparer --fichier brouillon.docx --liens liens.json --sortie document-lie.docx
+pm docx verifier --fichier document-lie.docx
+pm docx comparer --fichier document-lie.docx
+pm docx extraire --fichier document-lie.docx --sortie modele-extrait.js
+```
+
+Les chemins sont relatifs au dossier de la session ; PieceMaker doit fonctionner.
+`preparer` lit le modèle du dossier par défaut (`--modele autre.js` possible),
+ajoute les balises sans modifier le texte ni le modèle et ouvre le résultat dans
+le volet Fichiers. Les paragraphes doivent être contigus, dans un même parent ;
+chaque valeur est cherchée uniquement dans sa clause. Une sélection absente ou
+ambiguë, une révision en attente, un champ Word dynamique ou une structure non
+prise en charge provoque un refus. Les styles des segments de texte sont conservés.
+Le format JSON et son exemple figurent dans le skill `Skill-PieceMaker`.
+
+`verifier` exécute le contrôle local du DOCX, sans LLM, sans changer ses octets et
+sans lire le modèle du dossier. `comparer` compare exactement les deux copies du
+code et signale leur divergence ; il ne synchronise rien. `extraire` écrit une
+nouvelle copie exacte du modèle embarqué. Les sorties doivent être nouvelles :
+aucun fichier existant n’est écrasé. `preparer` refuse aussi un DOCX déjà lié,
+pour ne pas effacer silencieusement son historique de contrôle.
+
+Le routeur local `docx-reasoning-local.ts` et le workflow
+`docx-reasoning-files.ts` limitent ces commandes aux dossiers enregistrés et
+contrôlent les chemins réels, y compris les liens symboliques. Cette protection
+ne corrige pas le contrôle lexical de l’ancien routeur de l’éditeur.
+
+Les cycles réels de modification et sauvegarde dans Microsoft Word ont été testés
+par Luna : les valeurs sont relues et recalculées, les clauses réécrites sont
+signalées, le code embarqué reste identique. Voir
+[l’audit de préparation et de Word](audits/docx-preparation-word-luna-2026-10-20.md).
+
 ## 3. Défauts connus (audit du 2026-09-26)
 
 1. **Écriture sans garde sur les pièces originales.** L'enregistrement

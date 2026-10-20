@@ -1,6 +1,6 @@
 ---
 name: piecemaker
-description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, volets (lire, pointer, fermer), tabular review. Use when the user asks about case documents, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
+description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, volets, tabular review et liaison DOCX au raisonnement. Use when the user asks about case documents, linked DOCX reasoning, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
 ---
 
 # PieceMaker
@@ -31,6 +31,59 @@ Le geste ouvre le volet tout seul : `sql` (écriture), `chronologie`, `tabular_r
 | `pm afficher --fermer --volet dossier\|chronologie\|tabular-review\|tampon` | fermer ce volet |
 
 Un `.docx` s’ouvre dans la visionneuse tout seul. Conversion n’ouvre aucun volet.
+
+## DOCX et modèle de raisonnement
+
+Pour un document lié, son modèle embarqué fait autorité. Le fichier
+`.piecemaker/raisonnement.js` du dossier reste une source de préparation distincte :
+aucune synchronisation ni substitution implicite. Ne supprimez pas cette source.
+
+```sh
+pm docx preparer --fichier projet.docx --liens liens.json --sortie projet-lie.docx
+pm docx verifier --fichier projet-lie.docx
+pm docx comparer --fichier projet-lie.docx
+pm docx extraire --fichier projet-lie.docx --sortie modele-extrait.js
+```
+
+Tous les chemins sont relatifs au dossier de la session (`--dossier` pour changer
+de dossier). `--modele FILE.js` choisit une autre source de préparation ou de
+comparaison. Les sorties doivent être nouvelles : aucun fichier existant n’est
+écrasé. Préparer un DOCX déjà lié est refusé pour ne pas remplacer son modèle ni
+effacer la trace d’une retouche. `preparer` ouvre le document produit dans le volet.
+
+Lisez d’abord le DOCX avec `docx read`. Dans `liens.json`, désignez les passages
+déjà rédigés par leurs paragraphes et les valeurs par leur texte exact. Les
+questions internes du modèle ne nécessitent pas un paragraphe dans l’acte.
+Exemple minimal pour un modèle qui déclare déjà la variable `prix` :
+
+```json
+{
+  "clauses": [{
+    "tag": "pm:clause-prix",
+    "paragraphes": ["Le prix convenu est de 12 000 EUR, payable après réception."]
+  }],
+  "valeurs": [{
+    "tag": "pm:prix", "valeur": "prix", "type": "nombre",
+    "texte": "12 000 EUR", "clause": "pm:clause-prix"
+  }]
+}
+```
+
+Une clause peut couvrir plusieurs paragraphes contigus dans le même parent,
+notamment une cellule de tableau. Une valeur peut traverser plusieurs runs de
+mise en forme dans un paragraphe. Types : `nombre`, `pourcentage` avec `%`, `date`
+ISO. Aucune règle ou formule du modèle n’est modifiée. Un texte absent, ambigu,
+des sélections qui se chevauchent, des révisions non résolues ou une valeur Word
+dynamique sont refusés ; précisez la sélection au lieu de deviner. La préparation
+conserve le texte et la mise en forme, et écrit une copie liée.
+
+`verifier` est local et ne réécrit rien : sources externes, parties et fiabilité
+des pièces ne sont pas relues. Une clause réécrite ressort « à revoir ». La commande
+`pm raisonnement verifier` porte sur le fichier du dossier, pas sur ce DOCX.
+`comparer` compare exactement les deux copies, pas leur équivalence logique ;
+une divergence ne change jamais le modèle utilisé pour tester le document.
+`extraire` sert à examiner une copie du modèle embarqué, sans écraser celui du
+dossier. Une révision du modèle embarqué relève d’une opération explicite distincte.
 
 ## sql
 
