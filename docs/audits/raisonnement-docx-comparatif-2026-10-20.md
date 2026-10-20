@@ -59,6 +59,8 @@ Le module de liaison fait environ 220 lignes et ne réimplémente pas l’algèb
 
 La suite dédiée comprend les tests du moteur existant et vingt-six tests d’intégration, de refus et de comportement des outils : 58 réussis sur cette machine. Les trois cycles LibreOffice couvrent le document inchangé, une valeur modifiée et une clause réécrite. Un autre essai enchaîne retouche de valeur et de clause, sauvegarde EigenPal, puis restauration du texte : le modèle est conservé et le calcul reprend avec la valeur courante. Les retouches de test sont injectées dans le XML avant un réenregistrement réel ; elles ne simulent pas les gestes du clavier dans l’interface de Word. Le contrôle TypeScript strict ciblé réussit. Le test qui reproduit la limite de docx-cli 0.24 est sauté si cette version n’est pas installée ; les tests LibreOffice sont sautés si `soffice` n’est pas disponible. Les succès de ces tests négatifs signifient que les limites attendues ont été reproduites, pas que toutes les solutions sont compatibles.
 
+Une session distincte `gpt-6-luna`, demandée par le propriétaire, a relancé la suite sur le commit `e7944352` avec Node 24.11.1 : 58 réussis, aucun échec. Son essai supplémentaire remplace le prix fictif `12 000 EUR` par `12 500 €` avec espace fine insécable U+202F, puis réenregistre avec LibreOffice. Le modèle est conservé, le statut reste `testé`, aucune clause n’est signalée modifiée et la pénalité est recalculée à 375. Cet essai reste un test arithmétique avec retouche XML et sauvegarde réelle, sans interaction avec l’interface Word. Les prochains essais de ce chantier doivent également être exécutés par Luna, conformément à `AGENTS.md`.
+
 Depuis la racine de `feat/plugin-raisonnement`, avec Node 24 :
 
 ```sh
