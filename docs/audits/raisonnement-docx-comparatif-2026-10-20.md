@@ -48,18 +48,34 @@ Les dix contextes complets totalisent 19 763 tokens ; les contextes ciblés pré
 - Les champs ont des tags permanents et des types explicites : nombre au format français, pourcentage ou date ISO. Une valeur ambiguë est refusée. Les liaisons ne peuvent pas remplacer une valeur calculée ou fixée par un texte de droit.
 - Les contrôles liés reçoivent `sdtLocked` : Word peut modifier leur contenu, mais leur suppression nécessite de retirer cette protection. Les contrôles temporaires sont désactivés pour éviter leur disparition au premier remplacement. Cette protection dépend de son respect par l’éditeur ; ce n’est pas une garantie contre l’effacement volontaire.
 - Chaque clause reçoit aussi un signet Word couvrant son texte complet. LibreOffice transforme les contrôles de bloc imbriqués et peut ne laisser dans le contrôle de clause que son début. Le signet conserve la portée complète après cette transformation, évitant des alertes sur les clauses inchangées et un contexte tronqué pour la clause réécrite.
+- Une sauvegarde EigenPal suivant ce passage LibreOffice peut ensuite supprimer les signets. Les nouveaux documents reçoivent donc un contrôle de fin de clause permanent, protégé et sans texte visible. Le lecteur privilégie cette portée et exige ces contrôles lorsque les métadonnées de liaison déclarent `anchors: 'sdt-end'`. Une disparition, duplication ou modification ne valide jamais implicitement la portée précédente. Les anciens documents sans cette déclaration gardent la lecture par signets ; ils ne sont pas migrés automatiquement.
 - Les empreintes de texte conservent les mots et la ponctuation. Les seuls contenus masqués sont ceux des champs typés explicitement liés. Un changement de valeur n’est donc pas confondu avec une réécriture de règle.
 - Une clause modifiée, une révision Word non résolue, un ajout hors clauses ou un changement d’ordre suspend le résultat. Les notes, en-têtes et pieds de page sont inclus dans la détection des modifications textuelles.
 - Le moteur reçoit les valeurs courantes et une citation de chaque champ réellement lu. Ses contrôles habituels restent applicables, notamment la prescription en qualification contentieux.
 - Le vérificateur n’écrit pas dans le DOCX. Les essais CLI ont vérifié l’égalité de l’empreinte du fichier avant et après exécution.
 
-Le module de liaison fait environ 220 lignes et ne réimplémente pas l’algèbre du raisonnement. Il dépend de JSZip déjà utilisé dans le projet et de xmldom désormais déclaré explicitement. Docxtemplater et PizZip sont déclarés comme dépendances de développement pour rendre le comparatif reproductible. Python et tiktoken servent uniquement à mesurer les contextes, pas à exécuter le test du DOCX.
+Le module de liaison fait environ 260 lignes et ne réimplémente pas l’algèbre du raisonnement. Il dépend de JSZip déjà utilisé dans le projet et de xmldom désormais déclaré explicitement. Docxtemplater et PizZip sont déclarés comme dépendances de développement pour rendre le comparatif reproductible. Python et tiktoken servent uniquement à mesurer les contextes, pas à exécuter le test du DOCX.
 
 ## Vérification et commandes
 
 La suite dédiée comprend les tests du moteur existant et vingt-six tests d’intégration, de refus et de comportement des outils : 58 réussis sur cette machine. Les trois cycles LibreOffice couvrent le document inchangé, une valeur modifiée et une clause réécrite. Un autre essai enchaîne retouche de valeur et de clause, sauvegarde EigenPal, puis restauration du texte : le modèle est conservé et le calcul reprend avec la valeur courante. Les retouches de test sont injectées dans le XML avant un réenregistrement réel ; elles ne simulent pas les gestes du clavier dans l’interface de Word. Le contrôle TypeScript strict ciblé réussit. Le test qui reproduit la limite de docx-cli 0.24 est sauté si cette version n’est pas installée ; les tests LibreOffice sont sautés si `soffice` n’est pas disponible. Les succès de ces tests négatifs signifient que les limites attendues ont été reproduites, pas que toutes les solutions sont compatibles.
 
 Une session distincte `gpt-6-luna`, demandée par le propriétaire, a relancé la suite sur le commit `e7944352` avec Node 24.11.1 : 58 réussis, aucun échec. Son essai supplémentaire remplace le prix fictif `12 000 EUR` par `12 500 €` avec espace fine insécable U+202F, puis réenregistre avec LibreOffice. Le modèle est conservé, le statut reste `testé`, aucune clause n’est signalée modifiée et la pénalité est recalculée à 375. Cet essai reste un test arithmétique avec retouche XML et sauvegarde réelle, sans interaction avec l’interface Word. Les prochains essais de ce chantier doivent également être exécutés par Luna, conformément à `AGENTS.md`.
+
+### Retouches successives éprouvées par Luna
+
+Une seconde session `gpt-6-luna` a reproduit deux défauts supplémentaires, puis rejoué les cas après correction de la seule liaison DOCX :
+
+- Une révision en attente dans une note pouvait être rattachée puis déclarée `testé`, car seuls les marqueurs du corps étaient inspectés. Le contrôle couvre désormais aussi les notes de bas de page et de fin, les en-têtes et les pieds de page.
+- La chaîne EigenPal → LibreOffice → modification d’une clause → EigenPal pouvait perdre les signets et tronquer les extraits avant les valeurs. Les contrôles de fin permanents conservent maintenant le passage complet ; seule la clause effectivement réécrite est signalée.
+
+Les champs Word simples contenant une instruction ne fournissent plus silencieusement leur résultat en cache comme donnée fixe. Ils sont refusés dans une liaison numérique ou date, comme les champs complexes. Une instruction changée hors d’une valeur liée déclenche une revue même si le texte affiché reste identique. Aucune règle juridique, formule, hypothèse, instruction d’agent ou source du moteur n’a été modifiée. Les tests comparent le code embarqué à l’original et les octets reçus avant/après vérification.
+
+Luna a également vérifié la chaîne avec seules les valeurs modifiées : montant calculé 1 440, code embarqué inchangé. La commande autonome sort avec le code 0 sur la fixture inchangée et le code 2 sur une clause réécrite ; les empreintes des deux fichiers restent identiques avant/après la commande. Les sorties de cette campagne restent hors dépôt dans le dossier d’audit local.
+
+Bilan final de cette seconde campagne : `npm run test:reasoning-docx` exécuté par `gpt-6-luna` sous Node 24.11.1, 65 tests réussis, aucun échec ni test ignoré. Le déplacement du seul repère de fin, sans changement du texte global, impose également la revue de la clause concernée. Les tests du moteur existant restent inclus sans aucune modification de leurs sources ; le contrôle TypeScript strict ciblé réussit.
+
+Une tentative du parent dans Microsoft Word n’a pas abouti : le dialogue prévisualisait la copie fictive mais gardait son bouton d’ouverture désactivé, puis les appels d’accessibilité ont expiré. Ce n’est pas un cycle Word validé ni la preuve d’un défaut de son format ; aucun enregistrement Word n’est annoncé.
 
 Depuis la racine de `feat/plugin-raisonnement`, avec Node 24 :
 
