@@ -18,6 +18,7 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const normalize = (text: string) => text.replace(/\s+/gu, ' ').trim();
 const hash = (text: string) => createHash('sha256').update(normalize(text)).digest('hex');
 const bookmarkName = (tag: string) => `pmr_${hash(tag).slice(0, 24)}`;
+const endTag = (tag: string) => `pmr_end_${hash(tag).slice(0, 24)}`;
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const xml = (text: string) => {
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new TypeError('XML avec DTD non pris en charge.');
@@ -27,29 +28,49 @@ const xml = (text: string) => {
 };
 const named = (node: XmlNode, name: string): node is XmlElement => node.nodeType === 1 && (node as XmlElement).namespaceURI === WORD && (node as XmlElement).localName === name;
 const children = (node: XmlNode) => Array.from(node.childNodes ?? []);
-const wordText = (node: XmlNode): string => named(node, 't') ? node.textContent ?? '' : named(node, 'instrText') ? `«champ:${node.textContent}»` : named(node, 'tab') || named(node, 'br') ? ' ' : children(node).map(wordText).join('') + (named(node, 'p') ? '\n' : '');
+const wordText = (node: XmlNode): string => {
+  if (named(node, 'sdt')) {
+    const properties = children(node).find((child): child is XmlElement => named(child, 'sdtPr'));
+    const tag = properties?.getElementsByTagNameNS(WORD, 'tag')[0]?.getAttributeNS(WORD, 'val');
+    if (tag && /^pmr_end_[a-f0-9]{24}$/.test(tag)) {
+      const content = children(node).find((child): child is XmlElement => named(child, 'sdtContent'));
+      if (!content || children(content).map(wordText).join('') !== '\u2060') throw new TypeError(`Repère de fin ${tag} modifié.`);
+      return '';
+    }
+  }
+  return named(node, 't') ? node.textContent ?? '' : named(node, 'instrText') ? `«champ:${node.textContent}»` : named(node, 'tab') || named(node, 'br') ? ' ' : (named(node, 'fldSimple') ? `«champ:${node.getAttributeNS(WORD, 'instr')}»` : '') + children(node).map(wordText).join('') + (named(node, 'p') ? '\n' : '');
+};
 const controls = (dom: ReturnType<typeof xml>) => Array.from(dom.getElementsByTagNameNS(WORD, 'sdt')).map((node) => {
   const properties = children(node).find((child): child is XmlElement => named(child, 'sdtPr'));
   return {
+    node,
     properties,
     tag: properties?.getElementsByTagNameNS(WORD, 'tag')[0]?.getAttributeNS(WORD, 'val'),
     placeholder: Boolean(properties?.getElementsByTagNameNS(WORD, 'showingPlcHdr').length),
     content: children(node).find((child): child is XmlElement => named(child, 'sdtContent')),
   };
 });
-const clauseText = (dom: ReturnType<typeof xml>, tag: string, fallback: XmlElement) => {
-  const starts = Array.from(dom.getElementsByTagNameNS(WORD, 'bookmarkStart')).filter((node) => node.getAttributeNS(WORD, 'name') === bookmarkName(tag));
+const clauseText = (dom: ReturnType<typeof xml>, tag: string, fallback: XmlElement, requireEnd: boolean) => {
+  const markers = controls(dom).filter((control) => control.tag === endTag(tag));
+  if (requireEnd && markers.length !== 1) throw new TypeError(`Repère de fin ${tag} absent ou dupliqué.`);
+  if (markers.length > 1) throw new TypeError(`Repère de fin ${tag} dupliqué.`);
+  const starts: XmlNode[] = Array.from(dom.getElementsByTagNameNS(WORD, 'bookmarkStart')).filter((node) => node.getAttributeNS(WORD, 'name') === bookmarkName(tag));
+  if (starts.length > 1) throw new TypeError(`Signet ${tag} dupliqué ou incomplet.`);
+  const bookmarkEnds = starts.length ? Array.from(dom.getElementsByTagNameNS(WORD, 'bookmarkEnd')).filter((node) => node.getAttributeNS(WORD, 'id') === (starts[0] as XmlElement).getAttributeNS(WORD, 'id')) : [];
+  if (starts.length && bookmarkEnds.length !== 1) throw new TypeError(`Signet ${tag} dupliqué ou incomplet.`);
+  if (markers.length) {
+    wordText(markers[0].node);
+    starts.splice(0, starts.length, fallback);
+  }
   if (!starts.length) return wordText(fallback);
-  const id = starts[0].getAttributeNS(WORD, 'id');
-  const ends = Array.from(dom.getElementsByTagNameNS(WORD, 'bookmarkEnd')).filter((node) => node.getAttributeNS(WORD, 'id') === id);
-  if (starts.length !== 1 || ends.length !== 1) throw new TypeError(`Signet ${tag} dupliqué ou incomplet.`);
+  const end = markers[0]?.node ?? bookmarkEnds[0];
   let active = false;
   let closed = false;
   const visit = (node: XmlNode): string => {
-    if (node === starts[0]) { active = true; return ''; }
-    if (node === ends[0]) { if (!active) throw new TypeError(`Signet ${tag} inversé.`); active = false; closed = true; return ''; }
+    if (node === starts[0]) active = true;
+    if (node === end) { if (!active) throw new TypeError(`Repères ${tag} inversés.`); active = false; closed = true; return ''; }
     if (named(node, 't') || named(node, 'instrText') || named(node, 'tab') || named(node, 'br')) return active ? wordText(node) : '';
-    return children(node).map(visit).join('') + (active && named(node, 'p') ? '\n' : '');
+    return (active && named(node, 'fldSimple') ? `«champ:${node.getAttributeNS(WORD, 'instr')}»` : '') + children(node).map(visit).join('') + (active && named(node, 'p') ? '\n' : '');
   };
   const text = visit(dom.documentElement);
   if (!closed) throw new TypeError(`Signet ${tag} incomplet.`);
@@ -58,7 +79,7 @@ const clauseText = (dom: ReturnType<typeof xml>, tag: string, fallback: XmlEleme
 
 export type DocxBinding = { tag: string; valeur: string; type: 'nombre' | 'pourcentage' | 'date' };
 export type DocxState = { body: string; clauses: Record<string, string>; text: Record<string, string>; values: Record<string, string | number>; pending: boolean };
-export type DocxReasoning = { version: 1; code: string; bindings: DocxBinding[]; clauses: string[]; baseline: Pick<DocxState, 'body' | 'clauses'> };
+export type DocxReasoning = { version: 1; code: string; bindings: DocxBinding[]; clauses: string[]; anchors?: 'sdt-end'; baseline: Pick<DocxState, 'body' | 'clauses'> };
 
 function bindingValue(text: string, type: DocxBinding['type']): string | number {
   const raw = text.trim();
@@ -73,12 +94,13 @@ function bindingValue(text: string, type: DocxBinding['type']): string | number 
   return type === 'pourcentage' ? value / 100 : value;
 }
 
-export async function captureDocxState(input: Uint8Array, bindings: DocxBinding[], clauses: string[]): Promise<DocxState> {
+export async function captureDocxState(input: Uint8Array, bindings: DocxBinding[], clauses: string[], requireEnd = false): Promise<DocxState> {
   const zip = await JSZip.loadAsync(input);
   const documentXml = await zip.file('word/document.xml')?.async('string');
   if (!documentXml) throw new TypeError('word/document.xml absent.');
   const dom = xml(documentXml);
-  const pending = ['ins', 'del', 'moveFrom', 'moveTo'].some((tag) => dom.getElementsByTagNameNS(WORD, tag).length > 0);
+  const otherParts = await Promise.all(Object.keys(zip.files).filter((name) => /^word\/(?:header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(name)).sort().map(async (name) => ({ name, dom: xml(await zip.file(name)!.async('string')) })));
+  const pending = [dom, ...otherParts.map((part) => part.dom)].some((part) => ['ins', 'del', 'moveFrom', 'moveTo'].some((tag) => part.getElementsByTagNameNS(WORD, tag).length > 0));
   if (pending) return { body: hash(documentXml), clauses: {}, text: {}, values: {}, pending };
   const foundControls = controls(dom);
   const text: Record<string, string> = {};
@@ -88,7 +110,7 @@ export async function captureDocxState(input: Uint8Array, bindings: DocxBinding[
   for (const tag of tags) {
     const found = foundControls.filter((control) => control.tag === tag);
     if (found.length !== 1 || found[0].placeholder || !found[0].content) throw new TypeError(`Ancre ${tag} absente, dupliquée ou non renseignée.`);
-    text[tag] = clauses.includes(tag) ? clauseText(dom, tag, found[0].content) : wordText(found[0].content);
+    text[tag] = clauses.includes(tag) ? clauseText(dom, tag, found[0].content, requireEnd) : wordText(found[0].content);
   }
   for (const binding of bindings) {
     values[binding.valeur] = bindingValue(text[binding.tag], binding.type);
@@ -100,10 +122,9 @@ export async function captureDocxState(input: Uint8Array, bindings: DocxBinding[
     run.appendChild(value);
     content.appendChild(run);
   }
-  const otherParts = await Promise.all(Object.keys(zip.files).filter((name) => /^word\/(?:header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(name)).sort().map(async (name) => `${name}: ${wordText(xml(await zip.file(name)!.async('string')).documentElement)}`));
   return {
-    body: hash([wordText(dom.documentElement), ...otherParts].join('\n')),
-    clauses: Object.fromEntries(clauses.map((tag) => [tag, hash(clauseText(dom, tag, foundControls.find((control) => control.tag === tag)!.content!))])),
+    body: hash([wordText(dom.documentElement), ...otherParts.map((part) => `${part.name}: ${wordText(part.dom.documentElement)}`)].join('\n')),
+    clauses: Object.fromEntries(clauses.map((tag) => [tag, hash(clauseText(dom, tag, foundControls.find((control) => control.tag === tag)!.content!, requireEnd))])),
     text, values, pending,
   };
 }
@@ -116,6 +137,7 @@ export async function embedDocxReasoning(input: Uint8Array, model: Omit<DocxReas
   const document = xml(await zip.file('word/document.xml')!.async('string'));
   const linkedTags = new Set([...model.bindings.map((binding) => binding.tag), ...model.clauses]);
   let bookmarkId = Math.max(0, ...Array.from(document.getElementsByTagNameNS(WORD, 'bookmarkStart')).map((node) => Number(node.getAttributeNS(WORD, 'id')) || 0));
+  let controlId = Math.max(0, ...Array.from(document.getElementsByTagNameNS(WORD, 'id')).map((node) => Number(node.getAttributeNS(WORD, 'val')) || 0));
   for (const control of controls(document)) {
     if (!control.tag || !linkedTags.has(control.tag)) continue;
     const properties = control.properties!;
@@ -133,6 +155,24 @@ export async function embedDocxReasoning(input: Uint8Array, model: Omit<DocxReas
       control.content!.insertBefore(start, control.content!.firstChild);
       control.content!.appendChild(end);
     }
+    if (model.clauses.includes(control.tag) && !controls(document).some((entry) => entry.tag === endTag(control.tag!))) {
+      const marker = document.createElementNS(WORD, 'w:sdt');
+      const properties = document.createElementNS(WORD, 'w:sdtPr');
+      for (const [name, value] of [['tag', endTag(control.tag)], ['id', String(++controlId)], ['lock', 'sdtContentLocked']]) {
+        const property = document.createElementNS(WORD, `w:${name}`);
+        property.setAttributeNS(WORD, 'w:val', value);
+        properties.appendChild(property);
+      }
+      const content = document.createElementNS(WORD, 'w:sdtContent');
+      const run = document.createElementNS(WORD, 'w:r');
+      const text = document.createElementNS(WORD, 'w:t');
+      text.appendChild(document.createTextNode('\u2060'));
+      run.appendChild(text);
+      content.appendChild(run);
+      marker.appendChild(properties);
+      marker.appendChild(content);
+      (Array.from(control.content!.getElementsByTagNameNS(WORD, 'p')).at(-1) ?? control.content!).appendChild(marker);
+    }
   }
   zip.file('word/document.xml', new XMLSerializer().serializeToString(document));
   const dom = xml(await zip.file(DOCX_REASONING_PART)?.async('string') ?? `<Properties xmlns="${CUSTOM}" xmlns:vt="${VALUE}"/>`);
@@ -148,7 +188,7 @@ export async function embedDocxReasoning(input: Uint8Array, model: Omit<DocxReas
   }
   while (property.firstChild) property.removeChild(property.firstChild);
   const payload = dom.createElementNS(VALUE, 'vt:lpwstr');
-  payload.appendChild(dom.createTextNode(JSON.stringify({ version: 1, ...model, baseline: { body: state.body, clauses: state.clauses } })));
+  payload.appendChild(dom.createTextNode(JSON.stringify({ version: 1, ...model, anchors: 'sdt-end', baseline: { body: state.body, clauses: state.clauses } })));
   property.appendChild(payload);
   zip.file(DOCX_REASONING_PART, new XMLSerializer().serializeToString(dom));
   const types = xml(await zip.file('[Content_Types].xml')!.async('string'));
@@ -185,14 +225,15 @@ export async function readDocxReasoning(input: Uint8Array): Promise<DocxReasonin
   const model: unknown = JSON.parse(payload[0].textContent ?? '');
   if (!object(model) || model.version !== 1 || typeof model.code !== 'string' || !Array.isArray(model.bindings) || !Array.isArray(model.clauses) || !model.clauses.every((tag) => typeof tag === 'string') || !object(model.baseline) || typeof model.baseline.body !== 'string' || !object(model.baseline.clauses)) throw new TypeError('Modèle DOCX invalide.');
   for (const binding of model.bindings) if (!object(binding) || typeof binding.tag !== 'string' || typeof binding.valeur !== 'string' || !['nombre', 'pourcentage', 'date'].includes(String(binding.type))) throw new TypeError('Liaison DOCX invalide.');
+  if (model.anchors !== undefined && model.anchors !== 'sdt-end') throw new TypeError('Format des repères DOCX invalide.');
   return model as DocxReasoning;
 }
 
 export async function verifyDocxReasoning(input: Uint8Array, options: Omit<Parameters<typeof verifyReasoning>[0], 'code' | 'simulation'>) {
   const model = await readDocxReasoning(input);
-  const state = await captureDocxState(input, model.bindings, model.clauses);
+  const state = await captureDocxState(input, model.bindings, model.clauses, model.anchors === 'sdt-end');
   const changed = model.clauses.filter((tag) => state.clauses[tag] !== model.baseline.clauses[tag]);
-  if (state.pending || state.body !== model.baseline.body) return {
+  if (state.pending || state.body !== model.baseline.body || changed.length > 0) return {
     status: 'à revoir' as const,
     changed: state.pending ? ['révisions en attente', ...changed] : changed.length ? changed : ['texte hors clauses ou ordre du document'],
     context: changed.filter((tag) => tag in state.text).map((tag) => ({ tag, text: state.text[tag] })), verification: null,

@@ -39,8 +39,8 @@ test('les contrôles liés protègent leur identité tout en laissant leur conte
   const dom = new DOMParser().parseFromString(await zip.file('word/document.xml')!.async('string'), 'application/xml');
   const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const locks = Array.from(dom.getElementsByTagNameNS(namespace, 'lock'));
-  assert.equal(locks.length, bindings.length + clauses.length);
-  assert.ok(locks.every((lock) => lock.getAttributeNS(namespace, 'val') === 'sdtLocked'));
+  assert.equal(locks.filter((lock) => lock.getAttributeNS(namespace, 'val') === 'sdtLocked').length, bindings.length + clauses.length);
+  assert.equal(locks.filter((lock) => lock.getAttributeNS(namespace, 'val') === 'sdtContentLocked').length, clauses.length);
   assert.equal(dom.getElementsByTagNameNS(namespace, 'temporary').length, 0);
   assert.equal(amount(await verifyDocxReasoning(await mutate(linked, (xml) => xml.replace('>30<', '>60<')), options)), 720);
 });
@@ -188,6 +188,43 @@ test('une modification de note de bas de page n’est pas silencieusement ignor�
   const zip = await JSZip.loadAsync(await fixture());
   zip.file('word/footnotes.xml', '<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:footnote w:id="1"><w:p><w:r><w:t>Réserve fictive nouvelle</w:t></w:r></w:p></w:footnote></w:footnotes>');
   assert.equal((await verifyDocxReasoning(await zip.generateAsync({ type: 'uint8array' }), options)).status, 'à revoir');
+});
+
+test('les révisions en attente dans les notes et marges bloquent aussi le test et le rattachement', async () => {
+  for (const [part, root] of [['footnotes', 'footnotes'], ['endnotes', 'endnotes'], ['header1', 'hdr'], ['footer1', 'ftr']]) {
+    for (const revision of ['ins', 'del', 'moveFrom', 'moveTo']) {
+      const zip = await JSZip.loadAsync(await fixture());
+      zip.file(`word/${part}.xml`, `<w:${root} xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:${revision} w:id="55" w:author="Avocat fictif">${run('Réserve fictive en attente')}</w:${revision}></w:p></w:${root}>`);
+      const input = await zip.generateAsync({ type: 'uint8array' });
+      const result = await verifyDocxReasoning(input, options);
+      assert.equal(result.status, 'à revoir');
+      assert.ok(result.changed.includes('révisions en attente'));
+      assert.equal(result.verification, null);
+      assert.equal((await readDocxReasoning(input)).code, code);
+      await assert.rejects(embedDocxReasoning(input, { code, bindings, clauses }), /Résoudre les révisions/);
+    }
+  }
+});
+
+test('les champs Word simples et complexes ne fournissent pas silencieusement une valeur en cache', async () => {
+  for (const field of [
+    `<w:fldSimple w:instr="= 60">${run('30')}</w:fldSimple>`,
+    `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>= 60</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>${run('30')}<w:r><w:fldChar w:fldCharType="end"/></w:r>`,
+  ]) {
+    const input = await mutate(await fixture(), (xml) => xml.replace(run('30'), field));
+    await assert.rejects(verifyDocxReasoning(input, options), /Valeur nombre invalide/);
+    assert.equal((await readDocxReasoning(input)).code, code);
+  }
+});
+
+test('une instruction Word modifiée est détectée même si son affichage en cache ne change pas', async () => {
+  const withField = await mutate(await fixture(), (xml) => xml.replace('payable après réception.</w:t></w:r>', 'payable après réception.</w:t></w:r><w:fldSimple w:instr="DATE">' + run('2026-10-20') + '</w:fldSimple>'));
+  const linked = await embedDocxReasoning(withField, { code, bindings, clauses });
+  const changed = await mutate(linked, (xml) => xml.replace('w:instr="DATE"', 'w:instr="CREATEDATE"'));
+  const result = await verifyDocxReasoning(changed, options);
+  assert.equal(result.status, 'à revoir');
+  assert.deepEqual(result.changed, [clauses[0]]);
+  assert.equal(result.verification, null);
 });
 
 test('le vérificateur direct ne modifie pas les octets du DOCX reçu', async () => {
