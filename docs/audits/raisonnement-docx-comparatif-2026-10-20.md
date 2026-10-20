@@ -100,7 +100,7 @@ Les sorties sont `results.json`, `payloads.json`, `tokens.json` et les DOCX fict
 
 ## Limites à conserver visibles
 
-Le chemin est un prototype opt-in en ligne de commande. Il n’est pas encore branché au volet Raisonnement ni à l’enregistrement automatique de l’éditeur. Il ne reprend pas automatiquement un DOCX quelconque sans modèle ni ancres ; il le refuse. Les liaisons de faits booléens et l’édition d’un modèle embarqué dans l’interface restent à concevoir.
+Le prototype reste accessible en ligne de commande. Le contrôle local est désormais aussi branché à l’ouverture et à l’enregistrement automatique de l’éditeur DOCX, avec son état et ses détails dans l’éditeur (voir `docs/docx.md`). Il n’est pas branché au graphe du volet Raisonnement. Il ne reprend pas automatiquement un DOCX quelconque sans modèle ni ancres. Les liaisons de faits booléens, la préparation des ancres et l’édition d’un modèle embarqué dans l’interface restent à concevoir.
 
 Les réenregistrements par EigenPal et LibreOffice sont testés ; le cycle d’ouverture et sauvegarde dans Microsoft Word lui-même ne l’est pas. Le format retenu est natif du DOCX, mais ce seul fait ne remplace pas ce test. L’effacement des propriétés ou la duplication d’ancres doit toujours produire un refus, jamais une validation implicite.
 

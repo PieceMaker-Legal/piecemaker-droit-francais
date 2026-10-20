@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { rename, rm, stat, writeFile } from 'fs/promises';
+import { open, rename, rm, stat, writeFile } from 'fs/promises';
 import path from 'path';
 
 import express, { type Request, type Response } from 'express';
@@ -7,6 +7,7 @@ import express, { type Request, type Response } from 'express';
 import { projectsDb } from '@/modules/database/index.js';
 
 import { externalRegularFile } from './file-links.js';
+import { checkDocxReasoning } from './docx-reasoning-check.js';
 
 const MAX_DOCX_BYTES = '100mb';
 
@@ -36,6 +37,21 @@ export function createDocxDocumentRouter() {
     }
   });
 
+  router.get('/docx-document/reasoning', async (request: Request, response: Response) => {
+    const filePath = await resolveDocxPath(request);
+    if (!filePath) return response.status(400).json({ error: 'Invalid docx path' });
+    try {
+      const file = await open(filePath, 'r');
+      try {
+        const version = (await file.stat()).mtimeMs;
+        const reasoning = await checkDocxReasoning(await file.readFile());
+        response.json({ version, reasoning });
+      } finally { await file.close(); }
+    } catch {
+      response.status(404).json({ error: 'File not found' });
+    }
+  });
+
   router.put('/docx-document', express.raw({ type: () => true, limit: MAX_DOCX_BYTES }), async (request: Request, response: Response) => {
     const filePath = await resolveDocxPath(request);
     if (!filePath || !Buffer.isBuffer(request.body) || request.body.length === 0) {
@@ -44,8 +60,10 @@ export function createDocxDocumentRouter() {
     const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
     try {
       await writeFile(temporaryPath, request.body);
+      const version = await readVersion(temporaryPath);
       await rename(temporaryPath, filePath);
-      response.json({ version: await readVersion(filePath) });
+      const reasoning = await checkDocxReasoning(request.body);
+      response.json({ version, reasoning });
     } catch (error) {
       await rm(temporaryPath, { force: true });
       response.status(500).json({ error: error instanceof Error ? error.message : String(error) });

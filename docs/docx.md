@@ -35,7 +35,9 @@ Ouvrir un `.docx` depuis l'arborescence affiche un éditeur Word complet
 | `src/piecemaker/docx/DocxDocumentViewer.tsx` | Éditeur, rechargement externe, enregistrement automatique |
 | `src/piecemaker/docx/index.ts` | `DocxDocumentViewer`, `isDocxDocument` |
 | `src/modules/code-editor/CodeEditor.tsx` | **Seul fichier CloudCLI touché** : import + une ligne de branchement, juste avant le rendu binaire |
-| `server/piecemaker/docx-document.ts` | `GET /api/piecemaker/docx-document/version` (mtime) et `PUT /api/piecemaker/docx-document` (écriture) |
+| `server/piecemaker/docx-document.ts` | Version, contrôle local à l’ouverture et écriture avec contrôle des octets sauvegardés |
+| `server/piecemaker/docx-reasoning-check.ts` | Test local du modèle embarqué, sans LLM ni lecture des sources externes |
+| `src/modules/docx-reasoning/` | État du contrôle, passages à revoir, calculs, alertes et relance manuelle |
 | `server/piecemaker/index.ts` | Montage du routeur |
 
 Fonctionnement :
@@ -45,11 +47,36 @@ Fonctionnement :
   disque (par exemple `docx-cli` côté assistant), l'éditeur se recharge.
 - Après une frappe ou un clic de l'utilisateur, chaque `onChange` programme un
   enregistrement 800 ms plus tard. `save()` est sélectif par défaut : seules
-  les parties modifiées de l'archive sont repackagées.
+  les parties modifiées de l'archive sont repackagées. Les sauvegardes sont
+  sérialisées pour préserver l’ordre des écritures et de leurs résultats.
 - Écriture atomique (fichier `.tmp` puis `rename`), 100 Mo maximum.
 - Route derrière `authenticateToken` (montage `/api/piecemaker`), limitée aux
   `.docx`, chemin résolu contre la racine du projet (même contrôle lexical que
   le file-tree CloudCLI).
+
+Pour un DOCX contenant déjà un modèle lié, le contrôle est lancé à l’ouverture,
+après chaque sauvegarde automatique réussie et après rechargement d’une modification
+externe. Le `PUT` renvoie `{ version, reasoning }` calculé sur les octets écrits ;
+`GET /api/piecemaker/docx-document/reasoning` permet l’ouverture et la relance
+manuelle avec une version prise sur le même fichier ouvert que ses octets.
+
+Une retouche masque immédiatement les anciens résultats et affiche « Document
+modifié · vérification à actualiser ». Les réponses d’un contrôle antérieur à cette
+retouche ou à un changement de document sont ignorées. Les chargements déjà en vol
+ne remplacent pas un autre document ouvert entre-temps et les lectures lentes ne
+se multiplient pas à chaque cycle de sondage.
+
+Le résultat distingue test local exécuté, passages à revoir et vérification
+impossible. Les erreurs du moteur restent visibles dans le statut, et les détails
+montrent les calculs, manques et extraits concernés. Le bouton « Relancer le
+contrôle » est disponible une fois la sauvegarde et le contrôle terminés. Aucun
+statut de validation juridique complète n’est affiché : sources externes, parties
+et fiabilité des pièces ne sont pas relues par ce contrôle automatique.
+
+Le modèle et le moteur de raisonnement ne sont pas réécrits. Une erreur de liaison
+est signalée séparément et n’annule pas la sauvegarde du DOCX. Un document sans
+modèle embarqué ne présente pas cet affichage ; il n’est pas automatiquement lié
+au fichier de raisonnement du dossier.
 
 ## 3. Défauts connus (audit du 2026-09-26)
 
@@ -64,8 +91,9 @@ Fonctionnement :
 3. **Contrôle de chemin lexical uniquement.** Pas de `realpath` : un lien
    symbolique dans le projet pointant hors du projet serait suivi (même
    faiblesse que le file-tree CloudCLI).
-4. **Enregistrements concurrents non sérialisés.** Deux `save()` rapprochés
-   peuvent se chevaucher ; seul le debounce les espace.
+4. **Enregistrements concurrents non sérialisés — corrigé dans l’éditeur intégré.**
+   Une file d’attente sérialise désormais `save()` et le `PUT` correspondant.
+   Les écritures par d’autres programmes restent indépendantes.
 5. **Projet absent.** Sans `projectId`, `load()` ne fait rien et l'écran reste
    sur « Chargement… ».
 6. **Chaînes en dur.** « Fermer » et « Chargement… » ne passent pas par
