@@ -28,4 +28,4 @@ Les journaux complets restent hors dépôt dans le dossier d’audit local `docx
 
 Le contrôle porte sur un DOCX déjà lié. Il ne crée pas les balises et ne synchronise pas son modèle avec celui du dossier. Les sources externes, les parties et la fiabilité des pièces restent signalées comme non relues. Une clause réécrite demande une nouvelle appréciation ; aucune interprétation juridique automatique ne remplace le modèle existant.
 
-L’intégration est du code sur la branche de travail, sans publication ni déploiement dans l’application installée. Le cycle Microsoft Word reste non validé ; les essais de sauvegarde réels EigenPal/LibreOffice du prototype restent inclus dans la suite backend.
+L’intégration est du code sur la branche de travail, sans publication ni déploiement dans l’application installée. Le cycle Microsoft Word a ensuite été validé par Luna, avec recalcul des valeurs et signalement d’une clause réécrite : voir [l’audit complémentaire](docx-preparation-word-luna-2026-10-20.md). Les essais de sauvegarde réels EigenPal/LibreOffice du prototype restent inclus dans la suite backend.

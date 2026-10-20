@@ -32,6 +32,7 @@ import { createReasoningConnectors } from './reasoning-connectors.js';
 import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
+import { createDocxReasoningLocalRouter } from './docx-reasoning-local.js';
 import { createExternalFileRouter, createFileLinksRouter } from './file-links.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
 import { createInstitutionalTermsRouter, openInstitutionalTerms } from './institutional-terms.js';
@@ -101,6 +102,7 @@ startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => 
 const localRouter = express.Router();
 localRouter.use(knowledge.localRouter);
 localRouter.use(createReasoningLocalRouter(reasoning, isLoopback));
+localRouter.use(createDocxReasoningLocalRouter(projectsDb, isLoopback));
 localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
 localRouter.use(createTabularReviewLocalRouter({

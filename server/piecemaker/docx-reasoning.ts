@@ -241,9 +241,10 @@ export async function verifyDocxReasoning(input: Uint8Array, options: Omit<Param
     context: changed.filter((tag) => tag in state.text).map((tag) => ({ tag, text: state.text[tag] })), verification: null,
   };
   const parsed = parseLiteral(model.code).value;
-  if (!object(parsed) || !object(parsed.valeurs)) throw new TypeError('Le modèle doit déclarer ses valeurs.');
+  if (!object(parsed) || (model.bindings.length > 0 && !object(parsed.valeurs))) throw new TypeError('Le modèle doit déclarer ses valeurs liées.');
   for (const binding of model.bindings) {
-    const value = parsed.valeurs[binding.valeur];
+    const values = parsed.valeurs as Record<string, unknown>;
+    const value = Object.hasOwn(values, binding.valeur) ? values[binding.valeur] : undefined;
     if (!object(value) || value.formule !== undefined || value.selon !== undefined) throw new TypeError(`Liaison vers une valeur absente, calculée ou fixée par un texte : ${binding.valeur}`);
     value.valeur = state.values[binding.valeur];
     value.preuve = [{ piece: `docx#${binding.tag}`, citation: state.text[binding.tag] }];

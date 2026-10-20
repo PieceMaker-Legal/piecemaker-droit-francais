@@ -26,6 +26,16 @@ test('un fichier DOCX autonome suffit à rejouer le moteur et ses deux hypothès
   assert.equal((result.verification?.annotated?.bilan as { hypotheses: string }).hypotheses, '2/2');
 });
 
+test('un modèle sans propriété valeurs est accepté quand le DOCX ne déclare aucune liaison', async () => {
+  const codeWithoutValues = "{ qualification: 'consultation', objectifs: [{ objectif: 'Établir un fait fictif', obtenir: 'fait_fictif' }], fait_fictif: { si: [{ condition: 'observation_fictive', selon: [{ source: 'docx#pm:clause-prix', citation: 'payable après réception.' }], preuve: [{ piece: 'docx#pm:clause-prix', citation: 'payable après réception.' }] }] }, hypotheses: [] }";
+  const input = await embedDocxReasoning(await fixture(true), { code: codeWithoutValues, bindings: [], clauses: ['pm:clause-prix'] });
+
+  assert.equal((await readDocxReasoning(input)).code, codeWithoutValues);
+  const result = await verifyDocxReasoning(input, options);
+  assert.equal(result.status, 'testé');
+  assert.deepEqual(result.verification?.issues.filter((issue) => issue.kind === 'erreur').map((issue) => issue.text), []);
+});
+
 test('les chiffres réellement modifiés dans Word remplacent les valeurs du modèle', async () => {
   const input = await mutate(await fixture(), (xml) => xml.replace('10 %', '20 %').replace('>30<', '>200<'));
   const result = await verifyDocxReasoning(input, options);
