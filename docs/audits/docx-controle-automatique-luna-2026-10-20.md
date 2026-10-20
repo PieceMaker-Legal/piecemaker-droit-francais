@@ -1,5 +1,9 @@
 # Contrôle automatique du raisonnement des DOCX liés
 
+> Évolution ultérieure : les nouveaux DOCX référencent maintenant le modèle externe
+> du dossier, sans embarquer son code. Cet audit décrit l’étape précédente ; voir
+> [la campagne de référence externe](docx-reference-externe-luna-2026-10-20.md).
+
 ## Résultat
 
 L’éditeur déclenche le contrôle local à l’ouverture, après sa sauvegarde automatique et lors du rechargement d’une modification externe. Une frappe invalide immédiatement l’affichage précédent ; seules les réponses correspondant encore au document courant peuvent être publiées. Le contrôle n’appelle aucun LLM et ne relit aucune source externe.

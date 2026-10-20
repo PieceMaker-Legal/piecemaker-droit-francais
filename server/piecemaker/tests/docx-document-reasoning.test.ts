@@ -11,9 +11,10 @@ import JSZip from 'jszip';
 import { closeConnection, initializeDatabase, projectsDb } from '@/modules/database/index.js';
 
 import { createDocxDocumentRouter } from '../docx-document.js';
-import { DOCX_REASONING_PART } from '../docx-reasoning.js';
+import { DOCX_REASONING_PART, embedDocxReasoning } from '../docx-reasoning.js';
+import { modelHash } from '../docx-reasoning-reference.js';
 
-import { fixture, mutate } from './docx-reasoning-fixture.js';
+import { bindings, clauses, code, fixture, mutate } from './docx-reasoning-fixture.js';
 
 type ReasoningSummary = {
   status: string;
@@ -27,6 +28,7 @@ type ReasoningSummary = {
 
 type DocumentResponse = {
   version?: number;
+  reasoningVersion?: string | null;
   reasoning?: ReasoningSummary;
   error?: string;
 };
@@ -171,5 +173,44 @@ test('GET rejects an unknown project or unsafe path and reports a missing file',
     assert.equal(unknownProject.status, 400);
     assert.equal(unsafePath.status, 400);
     assert.equal(missingFile.status, 404);
+  });
+});
+
+
+test('GET tracks the external model independently and PUT preserves a document with an unavailable model', async () => {
+  await withDocxServer(async (baseUrl, projectId, projectRoot) => {
+    await mkdir(path.join(projectRoot, '.piecemaker'));
+    const modelPath = path.join(projectRoot, '.piecemaker', 'raisonnement.js');
+    await writeFile(modelPath, code);
+    const bytes = await embedDocxReasoning(await fixture(), {
+      code, bindings, clauses, reference: { path: '.piecemaker/raisonnement.js', sha256: modelHash(code) },
+    });
+    const filePath = 'scenario-externe.docx';
+    await writeFile(path.join(projectRoot, filePath), bytes);
+    const first = await getReasoning(baseUrl, projectId, filePath);
+    assert.equal(first.body.reasoning?.status, 'tested');
+    assert.equal(first.body.reasoningVersion, modelHash(code));
+    const originalVersion = first.body.version;
+    const versionUrl = documentUrl(baseUrl, '/version', projectId, filePath);
+    await writeFile(modelPath, `${code}\n`);
+    const changed = await (await fetch(versionUrl)).json() as DocumentResponse;
+    assert.equal(changed.version, originalVersion);
+    assert.equal(changed.reasoningVersion, modelHash(`${code}\n`));
+    const mismatch = await getReasoning(baseUrl, projectId, filePath);
+    assert.equal(mismatch.body.reasoning?.status, 'error');
+    assert.match(mismatch.body.reasoning?.message ?? '', /modifié/u);
+    await rm(modelPath);
+    const missing = await (await fetch(versionUrl)).json() as DocumentResponse;
+    assert.equal(missing.version, originalVersion);
+    assert.notEqual(missing.reasoningVersion, changed.reasoningVersion);
+    const saved = await putDocument(baseUrl, projectId, filePath, bytes);
+    assert.equal(saved.status, 200);
+    assert.equal(saved.body.reasoning?.status, 'error');
+    assert.match(saved.body.reasoning?.message ?? '', /absent/u);
+    assert.deepEqual(await readFile(path.join(projectRoot, filePath)), Buffer.from(bytes));
+    await writeFile(modelPath, code);
+    const restored = await getReasoning(baseUrl, projectId, filePath);
+    assert.equal(restored.body.reasoning?.status, 'tested');
+    assert.equal(restored.body.reasoningVersion, modelHash(code));
   });
 });

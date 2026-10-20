@@ -52,7 +52,7 @@ test('une version différente sur disque impose une actualisation sans afficher 
 test('le statut expose les limites du test et masque les anciens montants dès une modification', () => {
   const view = render(<DocxReasoningStatus state={{ phase: 'ready', report: tested }} onCheck={() => undefined} />);
   expect(screen.getByRole('status').textContent).toBe('Test local exécuté');
-  expect(screen.getByText('Modèle embarqué dans ce document. Sources externes non relues.')).toBeTruthy();
+  expect(screen.getByText('Modèle lié au document. Sources externes non relues.')).toBeTruthy();
   expect(screen.getByText('Pénalité fictive : 720')).toBeTruthy();
   view.rerender(<DocxReasoningStatus state={{ phase: 'dirty', report: tested }} onCheck={() => undefined} />);
   expect(screen.getByRole('status').textContent).toMatch(/vérification à actualiser/);

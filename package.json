@@ -36,7 +36,7 @@
   },
   "scripts": {
     "reasoning:docx": "tsx --tsconfig server/tsconfig.json scripts/piecemaker/test-docx-reasoning.mts",
-    "test:reasoning-docx": "tsx --tsconfig server/tsconfig.json --test --test-concurrency=1 server/piecemaker/tests/docx-reasoning.test.ts server/piecemaker/tests/docx-reasoning-roundtrip.test.ts server/piecemaker/tests/docx-reasoning-manual.test.ts server/piecemaker/tests/docx-document-reasoning.test.ts server/piecemaker/tests/docx-reasoning-prepare.test.ts server/piecemaker/tests/docx-reasoning-files.test.ts server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/pm-docx.test.mjs server/modules/piecemaker-reasoning/tests/raisonnement.test.ts",
+    "test:reasoning-docx": "tsx --tsconfig server/tsconfig.json --test --test-concurrency=1 server/piecemaker/tests/docx-reasoning.test.ts server/piecemaker/tests/docx-reasoning-roundtrip.test.ts server/piecemaker/tests/docx-reasoning-manual.test.ts server/piecemaker/tests/docx-document-reasoning.test.ts server/piecemaker/tests/docx-reasoning-prepare.test.ts server/piecemaker/tests/docx-reasoning-files.test.ts server/piecemaker/tests/docx-reasoning-reference.test.ts server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/pm-docx.test.mjs server/modules/piecemaker-reasoning/tests/raisonnement.test.ts",
     "dev": "concurrently --kill-others \"npm run server:dev\" \"npm run client\"",
     "preserver": "node scripts/promote-dist-server.mjs recover",
     "server": "node dist-server/server/index.js",

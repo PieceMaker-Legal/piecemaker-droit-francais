@@ -6,6 +6,7 @@ import { parseLiteral } from '../modules/piecemaker-reasoning/format.js';
 
 import { captureDocxState, embedDocxReasoning, readDocxReasoning, UnlinkedDocxError } from './docx-reasoning.js';
 import type { DocxBinding } from './docx-reasoning.js';
+import type { DocxModelReference } from './docx-reasoning-reference.js';
 
 const WORD = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const normalize = (value: string) => value.replace(/\s+/gu, ' ').trim();
@@ -36,9 +37,9 @@ function validateLinks(value: unknown): asserts value is DocxLinks {
   if ([...tags].some((tag) => tag.startsWith('pmr_'))) throw new TypeError('Le préfixe pmr_ est réservé aux repères internes.');
 }
 
-export async function prepareDocxReasoning(input: Uint8Array, code: string, links: unknown): Promise<Uint8Array> {
+export async function prepareDocxReasoning(input: Uint8Array, code: string, links: unknown, reference?: DocxModelReference): Promise<Uint8Array> {
   validateLinks(links);
-  try { await readDocxReasoning(input); throw new TypeError('Document déjà lié : son modèle embarqué fait autorité.'); }
+  try { await readDocxReasoning(input); throw new TypeError('Document déjà lié : conserver sa référence et ses repères existants.'); }
   catch (error) { if (!(error instanceof UnlinkedDocxError)) throw error; }
   const original = await captureDocxState(input, [], []);
   if (original.pending) throw new TypeError('Résoudre les révisions avant de préparer les liens.');
@@ -142,7 +143,7 @@ export async function prepareDocxReasoning(input: Uint8Array, code: string, link
   }
   zip.file('word/document.xml', new XMLSerializer().serializeToString(dom));
   const output = await embedDocxReasoning(await zip.generateAsync({ type: 'uint8array' }), {
-    code, clauses: links.clauses.map((clause) => clause.tag),
+    code, reference, clauses: links.clauses.map((clause) => clause.tag),
     bindings: links.valeurs.map(({ tag, valeur, type }) => ({ tag, valeur, type })),
   });
   if ((await captureDocxState(output, [], [])).body !== original.body) throw new TypeError('Le texte a changé pendant la préparation ; aucun document ne doit être publié.');

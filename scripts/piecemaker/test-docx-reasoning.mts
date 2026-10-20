@@ -5,8 +5,11 @@ import { verifyDocxReasoning } from '../../server/piecemaker/docx-reasoning.js';
 
 async function main() {
   const file = process.argv[2];
-  if (!file || !file.toLowerCase().endsWith('.docx')) throw new TypeError('Usage : test-docx-reasoning.mts fichier.docx [--offline]');
+  if (!file || !file.toLowerCase().endsWith('.docx')) throw new TypeError('Usage : test-docx-reasoning.mts fichier.docx [--offline] [--dossier DOSSIER]');
   const offline = process.argv.includes('--offline');
+  const folderFlag = process.argv.indexOf('--dossier');
+  const folder = folderFlag === -1 ? path.dirname(path.resolve(file)) : process.argv[folderFlag + 1];
+  if (!folder || folder.startsWith('--')) throw new TypeError('Indiquer le dossier PieceMaker après --dossier.');
   const connectors = offline ? {
     source: async () => undefined,
     match: (source: string, quote: string) => source.includes(quote) ? quote : null,
@@ -14,7 +17,7 @@ async function main() {
     bodacc: async () => [],
   } : (await import('../../server/piecemaker/reasoning-connectors.js')).createReasoningConnectors();
   const result = await verifyDocxReasoning(await readFile(file), {
-    cwd: path.dirname(path.resolve(file)), connectors, reliability: new Map(),
+    cwd: path.resolve(folder), connectors, reliability: new Map(),
     nature: () => null, persons: [], dismissed: new Set(), online: false,
   });
   if (!result.verification) {

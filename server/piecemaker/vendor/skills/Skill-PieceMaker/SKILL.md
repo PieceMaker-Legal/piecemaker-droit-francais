@@ -34,9 +34,12 @@ Un `.docx` s’ouvre dans la visionneuse tout seul. Conversion n’ouvre aucun v
 
 ## DOCX et modèle de raisonnement
 
-Pour un document lié, son modèle embarqué fait autorité. Le fichier
-`.piecemaker/raisonnement.js` du dossier reste une source de préparation distincte :
-aucune synchronisation ni substitution implicite. Ne supprimez pas cette source.
+Pour les nouveaux documents liés, le modèle reste dans le dossier, par défaut
+`.piecemaker/raisonnement.js`. Le DOCX conserve uniquement sa référence relative,
+son empreinte de version et les repères du texte ; aucun code du modèle n’y est
+copié. Si le fichier est absent ou modifié, le contrôle est suspendu. Ne remplacez
+pas l’empreinte pour faire disparaître une alerte : un changement de modèle demande
+un réexamen. Les anciens DOCX embarqués restent lisibles sans migration implicite.
 
 ```sh
 pm docx preparer --fichier projet.docx --liens liens.json --sortie projet-lie.docx
@@ -46,9 +49,9 @@ pm docx extraire --fichier projet-lie.docx --sortie modele-extrait.js
 ```
 
 Tous les chemins sont relatifs au dossier de la session (`--dossier` pour changer
-de dossier). `--modele FILE.js` choisit une autre source de préparation ou de
-comparaison. Les sorties doivent être nouvelles : aucun fichier existant n’est
-écrasé. Préparer un DOCX déjà lié est refusé pour ne pas remplacer son modèle ni
+de dossier). `--modele FILE.js` choisit le fichier du modèle dans le dossier pour
+la préparation ou une autre source de comparaison. Les sorties doivent être nouvelles : aucun fichier existant n’est
+écrasé. Préparer un DOCX déjà lié est refusé pour ne pas remplacer sa référence ni
 effacer la trace d’une retouche. `preparer` ouvre le document produit dans le volet.
 
 Lisez d’abord le DOCX avec `docx read`. Dans `liens.json`, désignez les passages
@@ -75,15 +78,17 @@ mise en forme dans un paragraphe. Types : `nombre`, `pourcentage` avec `%`, `dat
 ISO. Aucune règle ou formule du modèle n’est modifiée. Un texte absent, ambigu,
 des sélections qui se chevauchent, des révisions non résolues ou une valeur Word
 dynamique sont refusés ; précisez la sélection au lieu de deviner. La préparation
-conserve le texte et la mise en forme, et écrit une copie liée.
+conserve le texte et la mise en forme, et écrit une copie liée au fichier externe.
 
 `verifier` est local et ne réécrit rien : sources externes, parties et fiabilité
 des pièces ne sont pas relues. Une clause réécrite ressort « à revoir ». La commande
 `pm raisonnement verifier` porte sur le fichier du dossier, pas sur ce DOCX.
-`comparer` compare exactement les deux copies, pas leur équivalence logique ;
-une divergence ne change jamais le modèle utilisé pour tester le document.
-`extraire` sert à examiner une copie du modèle embarqué, sans écraser celui du
-dossier. Une révision du modèle embarqué relève d’une opération explicite distincte.
+`comparer` compare les empreintes exactes, pas l’équivalence logique du code ; une
+divergence ne permet jamais de tester silencieusement une version différente.
+`extraire` crée une copie de la version liée si elle est disponible, sans écraser
+celle du dossier. Pour un ancien DOCX, il récupère sa copie embarquée. Renommer
+le DOCX dans le dossier, ou déplacer le dossier complet avec son modèle, conserve
+la référence ; déplacer le DOCX seul ne suffit pas pour le vérifier.
 
 ## sql
 

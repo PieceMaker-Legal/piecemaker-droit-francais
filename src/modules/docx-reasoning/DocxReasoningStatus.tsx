@@ -16,7 +16,7 @@ export function DocxReasoningStatus({ state, onCheck }: { state: DocxReasoningCh
         <p role="status" aria-live="polite">{label}</p>
         <button type="button" className="rounded border border-border px-2 py-1 disabled:opacity-50" disabled={state.phase !== 'ready'} onClick={onCheck}>Relancer le contrôle</button>
       </div>
-      {state.phase === 'ready' && <p className="mt-1 text-muted-foreground">Modèle embarqué dans ce document. Sources externes non relues.</p>}
+      {state.phase === 'ready' && <p className="mt-1 text-muted-foreground">Modèle lié au document. Sources externes non relues.</p>}
       {state.phase === 'ready' && (
         <details className="mt-1 max-h-40 overflow-auto">
           <summary className="cursor-pointer">Détails du contrôle</summary>
