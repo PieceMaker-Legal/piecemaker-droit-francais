@@ -17,6 +17,7 @@ const WORD = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const normalize = (text: string) => text.replace(/\s+/gu, ' ').trim();
 const hash = (text: string) => createHash('sha256').update(normalize(text)).digest('hex');
+const bookmarkName = (tag: string) => `pmr_${hash(tag).slice(0, 24)}`;
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const xml = (text: string) => {
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new TypeError('XML avec DTD non pris en charge.');
@@ -30,11 +31,30 @@ const wordText = (node: XmlNode): string => named(node, 't') ? node.textContent 
 const controls = (dom: ReturnType<typeof xml>) => Array.from(dom.getElementsByTagNameNS(WORD, 'sdt')).map((node) => {
   const properties = children(node).find((child): child is XmlElement => named(child, 'sdtPr'));
   return {
+    properties,
     tag: properties?.getElementsByTagNameNS(WORD, 'tag')[0]?.getAttributeNS(WORD, 'val'),
     placeholder: Boolean(properties?.getElementsByTagNameNS(WORD, 'showingPlcHdr').length),
     content: children(node).find((child): child is XmlElement => named(child, 'sdtContent')),
   };
 });
+const clauseText = (dom: ReturnType<typeof xml>, tag: string, fallback: XmlElement) => {
+  const starts = Array.from(dom.getElementsByTagNameNS(WORD, 'bookmarkStart')).filter((node) => node.getAttributeNS(WORD, 'name') === bookmarkName(tag));
+  if (!starts.length) return wordText(fallback);
+  const id = starts[0].getAttributeNS(WORD, 'id');
+  const ends = Array.from(dom.getElementsByTagNameNS(WORD, 'bookmarkEnd')).filter((node) => node.getAttributeNS(WORD, 'id') === id);
+  if (starts.length !== 1 || ends.length !== 1) throw new TypeError(`Signet ${tag} dupliqué ou incomplet.`);
+  let active = false;
+  let closed = false;
+  const visit = (node: XmlNode): string => {
+    if (node === starts[0]) { active = true; return ''; }
+    if (node === ends[0]) { if (!active) throw new TypeError(`Signet ${tag} inversé.`); active = false; closed = true; return ''; }
+    if (named(node, 't') || named(node, 'instrText') || named(node, 'tab') || named(node, 'br')) return active ? wordText(node) : '';
+    return children(node).map(visit).join('') + (active && named(node, 'p') ? '\n' : '');
+  };
+  const text = visit(dom.documentElement);
+  if (!closed) throw new TypeError(`Signet ${tag} incomplet.`);
+  return text;
+};
 
 export type DocxBinding = { tag: string; valeur: string; type: 'nombre' | 'pourcentage' | 'date' };
 export type DocxState = { body: string; clauses: Record<string, string>; text: Record<string, string>; values: Record<string, string | number>; pending: boolean };
@@ -68,7 +88,7 @@ export async function captureDocxState(input: Uint8Array, bindings: DocxBinding[
   for (const tag of tags) {
     const found = foundControls.filter((control) => control.tag === tag);
     if (found.length !== 1 || found[0].placeholder || !found[0].content) throw new TypeError(`Ancre ${tag} absente, dupliquée ou non renseignée.`);
-    text[tag] = wordText(found[0].content);
+    text[tag] = clauses.includes(tag) ? clauseText(dom, tag, found[0].content) : wordText(found[0].content);
   }
   for (const binding of bindings) {
     values[binding.valeur] = bindingValue(text[binding.tag], binding.type);
@@ -83,7 +103,7 @@ export async function captureDocxState(input: Uint8Array, bindings: DocxBinding[
   const otherParts = await Promise.all(Object.keys(zip.files).filter((name) => /^word\/(?:header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(name)).sort().map(async (name) => `${name}: ${wordText(xml(await zip.file(name)!.async('string')).documentElement)}`));
   return {
     body: hash([wordText(dom.documentElement), ...otherParts].join('\n')),
-    clauses: Object.fromEntries(clauses.map((tag) => [tag, hash(wordText(foundControls.find((control) => control.tag === tag)!.content!))])),
+    clauses: Object.fromEntries(clauses.map((tag) => [tag, hash(clauseText(dom, tag, foundControls.find((control) => control.tag === tag)!.content!))])),
     text, values, pending,
   };
 }
@@ -93,6 +113,28 @@ export async function embedDocxReasoning(input: Uint8Array, model: Omit<DocxReas
   if (state.pending) throw new TypeError('Résoudre les révisions avant de rattacher le raisonnement.');
   parseLiteral(model.code);
   const zip = await JSZip.loadAsync(input);
+  const document = xml(await zip.file('word/document.xml')!.async('string'));
+  const linkedTags = new Set([...model.bindings.map((binding) => binding.tag), ...model.clauses]);
+  let bookmarkId = Math.max(0, ...Array.from(document.getElementsByTagNameNS(WORD, 'bookmarkStart')).map((node) => Number(node.getAttributeNS(WORD, 'id')) || 0));
+  for (const control of controls(document)) {
+    if (!control.tag || !linkedTags.has(control.tag)) continue;
+    const properties = control.properties!;
+    for (const entry of children(properties)) if (named(entry, 'lock') || named(entry, 'temporary')) properties.removeChild(entry);
+    const lock = document.createElementNS(WORD, 'w:lock');
+    lock.setAttributeNS(WORD, 'w:val', 'sdtLocked');
+    properties.appendChild(lock);
+    if (model.clauses.includes(control.tag) && !Array.from(document.getElementsByTagNameNS(WORD, 'bookmarkStart')).some((node) => node.getAttributeNS(WORD, 'name') === bookmarkName(control.tag!))) {
+      const start = document.createElementNS(WORD, 'w:bookmarkStart');
+      const end = document.createElementNS(WORD, 'w:bookmarkEnd');
+      const id = String(++bookmarkId);
+      start.setAttributeNS(WORD, 'w:id', id);
+      start.setAttributeNS(WORD, 'w:name', bookmarkName(control.tag));
+      end.setAttributeNS(WORD, 'w:id', id);
+      control.content!.insertBefore(start, control.content!.firstChild);
+      control.content!.appendChild(end);
+    }
+  }
+  zip.file('word/document.xml', new XMLSerializer().serializeToString(document));
   const dom = xml(await zip.file(DOCX_REASONING_PART)?.async('string') ?? `<Properties xmlns="${CUSTOM}" xmlns:vt="${VALUE}"/>`);
   const properties = Array.from(dom.getElementsByTagNameNS(CUSTOM, 'property'));
   const existing = properties.filter((entry) => entry.getAttribute('name') === PROPERTY);

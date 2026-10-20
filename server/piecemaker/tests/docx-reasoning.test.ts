@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 
 import { findContentControls, parseDocx, repackDocx, setContentControlContent } from '@eigenpal/docx-editor-core/headless';
+import { DOMParser } from '@xmldom/xmldom';
 import JSZip from 'jszip';
 import Docxtemplater from 'docxtemplater';
 import PizZip from 'pizzip';
@@ -31,6 +32,40 @@ test('les chiffres réellement modifiés dans Word remplacent les valeurs du mod
   assert.equal(amount(result), 2400);
 });
 
+test('les contrôles liés protègent leur identité tout en laissant leur contenu modifiable', async () => {
+  const input = await mutate(await fixture(), (xml) => xml.replace('<w:lock w:val="sdtLocked"/>', '<w:lock w:val="contentLocked"/><w:temporary/>'));
+  const linked = await embedDocxReasoning(input, { code, bindings, clauses });
+  const zip = await JSZip.loadAsync(linked);
+  const dom = new DOMParser().parseFromString(await zip.file('word/document.xml')!.async('string'), 'application/xml');
+  const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const locks = Array.from(dom.getElementsByTagNameNS(namespace, 'lock'));
+  assert.equal(locks.length, bindings.length + clauses.length);
+  assert.ok(locks.every((lock) => lock.getAttributeNS(namespace, 'val') === 'sdtLocked'));
+  assert.equal(dom.getElementsByTagNameNS(namespace, 'temporary').length, 0);
+  assert.equal(amount(await verifyDocxReasoning(await mutate(linked, (xml) => xml.replace('>30<', '>60<')), options)), 720);
+});
+
+test('plusieurs retouches manuelles gardent le modèle et localisent la clause à revoir', async () => {
+  const changed = await mutate(await fixture(), (xml) => xml.replace('>30<', '>60<').replace('une pénalité est due', 'aucune pénalité n’est due'));
+  const saved = new Uint8Array(await repackDocx(await parseDocx(changed, { preloadFonts: false })));
+  assert.equal((await readDocxReasoning(saved)).code, code);
+  const result = await verifyDocxReasoning(saved, options);
+  assert.equal(result.status, 'à revoir');
+  assert.deepEqual(result.changed, [clauses[1]]);
+  assert.match(result.context[0].text, /aucune pénalité/);
+  assert.equal(result.verification, null);
+  const restored = await mutate(saved, (xml) => xml.replace('aucune pénalité n’est due', 'une pénalité est due'));
+  assert.equal(amount(await verifyDocxReasoning(restored, options)), 720);
+});
+
+test('un signet de clause cassé ou dupliqué ne permet pas une localisation silencieusement fausse', async () => {
+  const input = await fixture();
+  for (const change of [
+    (xml: string) => xml.replace(/<w:bookmarkEnd[^>]+\/>/, ''),
+    (xml: string) => xml.replace(/(<w:bookmarkStart[^>]+\/>)/, '$1$1'),
+  ]) await assert.rejects(verifyDocxReasoning(await mutate(input, change), options), /Signet .*dupliqué ou incomplet/);
+});
+
 test('la mise en forme seule ne rend pas le modèle obsolète', async () => {
   const input = await mutate(await fixture(), (xml) => xml.replace('<w:r>', '<w:r><w:rPr><w:b/></w:rPr>'));
   assert.equal((await verifyDocxReasoning(input, options)).status, 'testé');
@@ -54,7 +89,7 @@ test('un ajout hors clauses conserve les ancres mais impose une revue de structu
 test('les ancrages survivent au déplacement des clauses, sans présumer son innocuité', async () => {
   const input = await fixture();
   const moved = await mutate(input, (xml) => {
-    const pattern = /<w:sdt><w:sdtPr><w:alias w:val="pm:clause-prix"[\s\S]+?<\/w:p><\/w:sdtContent><\/w:sdt>/;
+    const pattern = /<w:sdt><w:sdtPr><w:alias w:val="pm:clause-prix"[\s\S]+?<\/w:p>(?:<w:bookmarkEnd[^>]+\/>)?<\/w:sdtContent><\/w:sdt>/;
     const found = xml.match(pattern)![0];
     return xml.replace(found, '').replace('<w:sectPr>', `${found}<w:sectPr>`);
   });
