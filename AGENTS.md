@@ -98,6 +98,10 @@ Merge procedure and writing rules: `docs/upstream-cloudcli.md`. Upstream merges 
 - **Research** — French legal research via the vendored Légifrance MCP: `server/piecemaker/vendor/mcp/legifrance/`. Identifiants PISTE dans `~/.config/mcp-legifrance/.env`.
 - **Surcharge i18n & Système de plugins** — i18n overrides rename existing UI (vocabulary/brand) without touching upstream locale files; the plugin system is the extension point for genuinely new screens/features (single `tab` slot, minimal host API). They don't overlap — full detail, comparison table and known upstream exceptions (auth bootstrap, chat tab visibility, Codex client options for per-folder skill masking): `docs/i18n-et-plugins.md`.
 
+### Tests du chantier Raisonnement
+
+- Toujours faire exécuter les essais de Raisonnement et de liaison DOCX par une session Luna, en complément des tests automatisés. Rapporter le modèle réellement utilisé, les cas testés et les limites observées. Ne pas remplacer cet essai par une simple relecture par un autre modèle.
+
 ### Frontend code standards
 
 - Frontend code under `src/`: load and follow `$frontend-module-standards` from `.agents/skills/frontend-module-standards/SKILL.md`.
