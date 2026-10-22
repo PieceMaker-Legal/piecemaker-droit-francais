@@ -151,9 +151,11 @@ export function removalPlan(appRoot, home = os.homedir(), env = process.env, pla
     ...(extra.electronPaths || []),
     ...(platform === 'win32' ? [paths.join(env.LOCALAPPDATA || paths.join(home, 'AppData', 'Local'), 'PieceMaker', 'runtime-components')] : []),
     ...macLibraryPaths(home, extra.appId, platform),
-    ...componentModelPaths(home, env, platform, extra.mineru),
-    paths.join(home, 'mineru.json'),
-    paths.join(home, '.mineru'),
+    ...(platform === 'win32' ? [
+      ...componentModelPaths(home, env, platform, extra.mineru),
+      paths.join(home, 'mineru.json'),
+      paths.join(home, '.mineru'),
+    ] : []),
     ...shortcuts,
   ], database, home, platform);
   const libraryHome = paths.resolve(dataHome);
@@ -166,7 +168,6 @@ export function removalPlan(appRoot, home = os.homedir(), env = process.env, pla
   return {
     appRoot,
     caCert: paths.join(dataHome, 'certs', 'piecemaker-ca.crt'),
-    keychain: paths.join(home, 'Library', 'Keychains', 'piecemaker-signing.keychain-db'),
     remove,
     purge,
   };
@@ -190,10 +191,10 @@ while kill -0 "$1" 2>/dev/null; do sleep 0.3; done
 sleep 0.5
 security remove-trusted-cert ${shellQuote(plan.caCert)} || true
 keychain=$(security default-keychain -d user 2>/dev/null | tr -d ' "')
-if [ -n "$keychain" ]; then
-  security delete-certificate -c "PieceMaker Local CA" "$keychain" || true
+fingerprint=$(openssl x509 -in ${shellQuote(plan.caCert)} -noout -fingerprint -sha1 2>/dev/null | cut -d= -f2 | tr -d ':')
+if [ -n "$keychain" ] && [ -n "$fingerprint" ]; then
+  security delete-certificate -Z "$fingerprint" "$keychain" || true
 fi
-security delete-keychain ${shellQuote(plan.keychain)} || true
 ${plan.remove.length ? `rm -rf ${plan.remove.map(shellQuote).join(' ')}\n` : ''}${purges}rm -rf ${shellQuote(plan.appRoot)}
 `;
 }

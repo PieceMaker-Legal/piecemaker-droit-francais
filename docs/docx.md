@@ -35,7 +35,8 @@ Ouvrir un `.docx` depuis l'arborescence affiche un éditeur Word complet
 | `src/piecemaker/docx/DocxDocumentViewer.tsx` | Éditeur, rechargement externe, enregistrement automatique |
 | `src/piecemaker/docx/index.ts` | `DocxDocumentViewer`, `isDocxDocument` |
 | `src/modules/code-editor/CodeEditor.tsx` | **Seul fichier CloudCLI touché** : import + une ligne de branchement, juste avant le rendu binaire |
-| `server/piecemaker/docx-document.ts` | `GET /api/piecemaker/docx-document/version` (mtime) et `PUT /api/piecemaker/docx-document` (écriture) |
+| `server/piecemaker/docx-document.ts` | Routes de lecture du mtime et de sauvegarde |
+| `server/modules/piecemaker-docx/` | Normalisation OOXML, lecture du mtime et écriture atomique |
 | `server/piecemaker/index.ts` | Montage du routeur |
 
 Fonctionnement :
@@ -47,6 +48,10 @@ Fonctionnement :
   enregistrement 800 ms plus tard. `save()` est sélectif par défaut : seules
   les parties modifiées de l'archive sont repackagées.
 - Écriture atomique (fichier `.tmp` puis `rename`), 100 Mo maximum.
+- La sauvegarde corrige l’attribut `w:csTheme` émis par l’éditeur en
+  `w:cstheme`, conformément au schéma OOXML. Les autres parties du document
+  sont conservées ; un fichier valide reste identique octet pour octet. Une
+  archive illisible est refusée avant toute écriture sur le document existant.
 - Route derrière `authenticateToken` (montage `/api/piecemaker`), limitée aux
   `.docx`, chemin résolu contre la racine du projet (même contrôle lexical que
   le file-tree CloudCLI).
