@@ -8,7 +8,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { installGlinerSnapshot } from './gliner-cache.mjs';
-import { sharedPythonRequirements, sharedPythonMarker, sharedPythonProbe, sharedPythonFingerprint, sharedPythonReady, sharedPythonEntrypoints } from './shared-python.mjs';
+import { requirementsForPlatform, sharedPythonMarker, sharedPythonProbe, sharedPythonFingerprint, sharedPythonReady, sharedPythonEntrypoints } from './shared-python.mjs';
 
 const PYTHON_RELEASE_API = 'https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest';
 const BUNDLED_PYTHON_MINOR = 12;
@@ -328,15 +328,12 @@ export function assertSafePythonEntries(entries, details) {
   }
 }
 
-async function installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir, output }) {
-  const metadataFile = path.join(sourceDir, 'python-runtime.json');
-  if (!(await host.exists(metadataFile))) throw new Error('Paquet Python precompile absent de cette release.');
-  const metadata = JSON.parse(await host.readFile(metadataFile));
-  if (!/^[a-f0-9]{64}$/.test(metadata.sha256) || metadata.assetName !== 'piecemaker-python-win32-x64.tar.gz' || !/^[\w.-]+\/[\w.-]+$/.test(metadata.repository) || !/^[\w.-]+$/.test(metadata.releaseTag) || (metadata.requirementsSha256 !== undefined && !/^[a-f0-9]{64}$/.test(metadata.requirementsSha256))) {
+async function installPrebuiltPython({ layout, host, env, scriptsDir, output, platform, arch, metadata }) {
+  if (!/^[a-f0-9]{64}$/.test(metadata.sha256) || metadata.assetName !== `piecemaker-python-${platform}-${arch}.tar.gz` || !/^[\w.-]+\/[\w.-]+$/.test(metadata.repository) || !/^[\w.-]+$/.test(metadata.releaseTag) || (metadata.requirementsSha256 !== undefined && !/^[a-f0-9]{64}$/.test(metadata.requirementsSha256))) {
     throw new Error('Metadonnees Python invalides.');
   }
   const root = path.join(layout.root, 'runtime-python', metadata.sha256.slice(0, 24));
-  const python = bundledPythonPath(path.join(root, 'python'), 'win32');
+  const python = bundledPythonPath(path.join(root, 'python'), platform);
   const warmup = path.join(scriptsDir, 'warmup.py');
   if (!(await host.exists(python)) || (metadata.requirementsSha256 && !await sharedPythonReady(host, python, metadata.requirementsSha256)) || !dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
     await host.mkdir(path.dirname(root));
@@ -354,13 +351,13 @@ async function installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir,
       } else {
         await downloadVerified(host, `https://github.com/${metadata.repository}/releases/download/${metadata.releaseTag}/${metadata.assetName}`, downloaded, metadata.sha256);
       }
-      const tar = path.join(env.SystemRoot || process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+      const tar = platform === 'win32' ? path.join(env.SystemRoot || process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
       const entries = await required(host, tar, ['-tzf', archive], { capture: true });
       const details = await required(host, tar, ['-tvzf', archive], { capture: true });
       assertSafePythonEntries(entries.stdout, details.stdout);
       await host.mkdir(staging);
       await required(host, tar, ['-xzf', archive, '-C', staging]);
-      const stagedPython = bundledPythonPath(path.join(staging, 'python'), 'win32');
+      const stagedPython = bundledPythonPath(path.join(staging, 'python'), platform);
       if (metadata.requirementsSha256) {
         if (!await sharedPythonReady(host, stagedPython, metadata.requirementsSha256)) throw new Error('Environnement Python commun incompatible avec cette release.');
         await required(host, stagedPython, ['-c', sharedPythonProbe], { capture: true, timeoutMs: 120_000 });
@@ -384,21 +381,26 @@ async function installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir,
   };
 }
 
-export async function buildPortableWindowsPython({ sourceDir, root, archive, host = createHost(), output = log }) {
+export async function buildPortablePython({ sourceDir, root, archive, platform = process.platform, arch = process.arch, host = createHost(), output = log }) {
+  const requirements = requirementsForPlatform(platform, arch);
   const layout = componentLayout({ PIECEMAKER_COMPONENTS_HOME: root }, root);
   await host.mkdir(root);
-  await installBundledPython(host, layout, 'win32', 'x64', output);
-  const python = bundledPythonPath(layout.pythonDir, 'win32');
+  await installBundledPython(host, layout, platform, arch, output);
+  const python = bundledPythonPath(layout.pythonDir, platform);
   const scripts = scriptsDirectory(sourceDir);
   const wheels = path.join(root, 'wheels');
   await host.mkdir(wheels);
   await required(host, python, ['-m', 'pip', 'wheel', '--no-deps', '--use-pep517', '--wheel-dir', wheels, 'jieba==0.42.1']);
-  await required(host, python, ['-m', 'pip', 'install', '--only-binary=:all:', '--find-links', wheels, '-r', sharedPythonRequirements]);
+  await required(host, python, ['-m', 'pip', 'install', ...(platform === 'darwin' ? ['--no-compile'] : []), '--only-binary=:all:', '--find-links', wheels, '-r', requirements]);
   await required(host, python, ['-m', 'pip', 'check']);
   await required(host, python, ['-c', sharedPythonProbe], { capture: true, timeoutMs: 120_000 });
-  await host.writeFile(path.join(layout.pythonDir, sharedPythonMarker), `${JSON.stringify({ format: 1, requirementsSha256: await sharedPythonFingerprint() })}\n`);
+  await host.writeFile(path.join(path.dirname(python), sharedPythonMarker), `${JSON.stringify({ format: 1, requirementsSha256: await sharedPythonFingerprint(platform, arch) })}\n`);
   if (!dependenciesReady(await readWarmupStatus(host, python, path.join(scripts, 'warmup.py'), scripts))) throw new Error('Python compile non operationnel.');
-  await required(host, 'tar', ['-czf', archive, '-C', root, 'python']);
+  if (platform === 'darwin') {
+    await required(host, python, ['-c', 'import sys,tarfile; archive=tarfile.open(sys.argv[1],"w:gz",dereference=True); archive.add(sys.argv[2],arcname="python"); archive.close()', archive, layout.pythonDir]);
+  } else {
+    await required(host, 'tar', ['-czf', archive, '-C', root, 'python']);
+  }
   const hash = crypto.createHash('sha256');
   for await (const chunk of createReadStream(archive)) hash.update(chunk);
   return hash.digest('hex');
@@ -414,6 +416,7 @@ export async function installRuntimeComponents({
   output = log,
   requirePrebuilt = false,
   includeGliner = false,
+  runtimeMetadata,
 } = {}) {
   if (!sourceDir) throw new Error('PIECEMAKER_SRC_DIR est absent — lancez install.sh ou install.ps1.');
   const layout = componentLayout(env, homeDir);
@@ -428,14 +431,14 @@ export async function installRuntimeComponents({
   const configured = await readConfig(host, layout.configFile);
   let python = '';
   let immutable = false;
-  if (platform === 'win32' && requirePrebuilt) {
-    const metadata = JSON.parse(await host.readFile(path.join(sourceDir, 'python-runtime.json')));
+  if (requirePrebuilt) {
+    const metadata = runtimeMetadata || JSON.parse(await host.readFile(path.join(sourceDir, 'python-runtime.json')));
     if (!metadata.requirementsSha256 && configured.pythonPath && await host.exists(configured.pythonPath) && dependenciesReady(await readWarmupStatus(host, configured.pythonPath, warmup, scriptsDir))) {
       output.ok('Composants Python existants reutilises.');
       python = configured.pythonPath;
     } else {
-      if (arch !== 'x64') throw new Error('Le paquet Python Windows est disponible pour x64 uniquement.');
-      const paths = await installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir, output });
+      requirementsForPlatform(platform, arch);
+      const paths = await installPrebuiltPython({ layout, host, env, scriptsDir, output, platform, arch, metadata });
       immutable = paths.pythonRuntime?.kind === 'shared';
       await host.writeFile(layout.configFile, `${JSON.stringify(mergeRuntimeConfig(configured, paths), null, 2)}\n`);
       output.ok('Composants Python precompiles installes.');

@@ -80,6 +80,15 @@ jobs:
     permissions:
       contents: write
 
+  macos-python:
+    needs: release
+    uses: ./.github/workflows/piecemaker-macos-python.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit
+    permissions:
+      contents: write
+
   gliner-cache:
     needs: release
     runs-on: ubuntu-latest
@@ -113,7 +122,7 @@ jobs:
           gh release upload "$TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
 
   publish-npm:
-    needs: [release, windows-desktop, gliner-cache]
+    needs: [release, windows-desktop, macos-python, gliner-cache]
     runs-on: ubuntu-latest
     permissions:
       contents: write

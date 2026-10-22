@@ -11,6 +11,7 @@ import {
   bootstrapHome,
   certsDir,
   releaseTag,
+  releaseRepo,
   sourceDir,
   trustMarkerPath,
 } from './paths.mjs';
@@ -44,6 +45,15 @@ async function main() {
     }
     builtArtifact = await buildDesktopApp(sourceDir);
   }
+  let runtimeMetadata;
+  if (IS_MAC && process.arch === 'arm64') {
+    const response = await fetch(`https://github.com/${releaseRepo}/releases/download/${releaseTag}/piecemaker-python-darwin-arm64.json`);
+    if (!response.ok) throw new Error(`Composants Python macOS indisponibles (${response.status}). L’application actuelle est conservée.`);
+    runtimeMetadata = await response.json();
+  }
+  await import('../composants/install.mjs').then((composants) => (
+    composants.installRuntimeComponents({ sourceDir, output: ui, requirePrebuilt: Boolean(runtimeMetadata), runtimeMetadata })
+  ));
   // Une instance encore ouverte garderait son serveur, donc ses plugins, et
   // `open` ou `start` ne ferait que la ramener au premier plan. Avec
   // --no-launch (mise à jour lancée depuis l'application, sous-processus de son
@@ -60,10 +70,6 @@ async function main() {
 
   createShortcuts(installedPath);
   registerWindowsUninstall(installedPath, releaseTag);
-
-  await import('../composants/install.mjs').then((composants) => (
-    composants.installRuntimeComponents({ sourceDir, output: ui })
-  ));
 
   console.log(`\n${PRODUCT_NAME} est installé : ${installedPath}`);
   console.log(`Certificats locaux : ${certsDir}`);

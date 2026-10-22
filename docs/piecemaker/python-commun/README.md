@@ -1,6 +1,6 @@
 # Faisabilité d'un environnement Python commun — 22 octobre 2026
 
-Depuis cette étude, la branche `MAJ-continue` utilise cette combinaison pour construire les nouveaux runtimes Windows. L'état de l'intégration et ses limites sont décrits dans [l'installation Electron](../../installation-app-electron.md). Les résultats ci-dessous restent ceux de l'étude de résolution, distincts d'une validation du paquet Windows modifié.
+La branche `MAJ-continue` utilise les verrous issus de cette étude pour construire les nouveaux runtimes Windows et macOS Apple Silicon. L'état de l'intégration et ses limites sont décrits dans [l'installation Electron](../../installation-app-electron.md). Les résultats ci-dessous restent ceux de l'étude de résolution, distincts d'une validation du paquet Windows modifié.
 
 ## Conclusion et portée
 
@@ -92,3 +92,50 @@ Les exécutables Node/Electron, Git, le proxy Rust et le binaire `docx` restent 
 ## Sources des métadonnées
 
 Métadonnées JSON PyPI lues pour les versions précises et contrôle des tags des wheels avec `packaging` 24.2 : [Vibe 2.25.0](https://pypi.org/pypi/mistral-vibe/2.25.0/json), [MinerU 4.0.11](https://pypi.org/pypi/mineru/4.0.11/json), [GLiNER2 2.1.0](https://pypi.org/pypi/gliner2/2.1.0/json), [MarkItDown 0.1.5](https://pypi.org/pypi/markitdown/0.1.5/json), [MarkItDown 0.1.9](https://pypi.org/pypi/markitdown/0.1.9/json), [Jieba 0.42.1](https://pypi.org/pypi/jieba/0.42.1/json). Les dépendances transitives ont également été contrôlées à leur version résolue.
+
+## macOS Apple Silicon
+
+Le verrou `desktop-bootstrap/composants/macos-arm64-requirements.txt` contient 196 versions exactes pour CPython 3.12 / ARM64. Il provient des mêmes exigences d’entrée, résolues séparément avec `uv pip compile --python-version 3.12 --python-platform aarch64-apple-darwin`. Les extras implicites dépendant de la plateforme expliquent une partie des différences avec Windows.
+
+| Élément | Windows x64 | macOS ARM64 |
+| --- | --- | --- |
+| Python autonome | 3.12.x | 3.12.x |
+| MarkItDown / pypdf | 0.1.5 / 6.21.2 | 0.1.5 / 6.21.2 |
+| GLiNER2 / Transformers | 2.1.0 / 5.17.0 | 2.1.0 / 5.17.0 |
+| PyTorch | 2.14.1 | 2.11.0 |
+| Torchvision | absent du verrou | 0.26.0 |
+| MinerU / moteur llama.cpp | 4.0.11 / 0.1.3 | 4.0.11 / 0.1.2 |
+| ONNX Runtime | 1.31.0 | 1.23.2 |
+| Vibe | 2.25.0 | 2.25.0 |
+| Requests / dotenv / truststore | 2.34.2 / 1.2.2 / 0.10.4 | mêmes versions |
+
+La distribution macOS utilise une archive autonome, pas le Python système ni un venv dépendant d’un chemin CI. Les lanceurs sont régénérés après extraction, y compris lorsque le chemin contient des espaces. Les marqueurs, le SHA-256 et les contrôles d’imports suivent le parcours Windows. Le fichier de métadonnées publié s’appelle `piecemaker-python-darwin-arm64.json`, pour ne pas écraser les métadonnées Windows de la même release.
+
+La CI réutilise le constructeur existant, sans build Electron supplémentaire. Son runner `macos-14` est ARM64 d’après la [documentation GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). La qualification de l’environnement commun reste limitée à Apple Silicon ; le bootstrap Intel garde son comportement historique.
+
+### Essai réel sur le Mac de développement
+
+Le 22 octobre 2026, l’archive native a été construite avec CPython **3.12.15** sur macOS **26.6.2 / ARM64**, puis extraite dans un dossier temporaire contenant des espaces. La vérification a été exécutée avec le Node **24.22.0 embarqué dans l’application Electron installée**, via `ELECTRON_RUN_AS_NODE=1`. L’application, ses données et ses certificats n’ont pas été remplacés ; les modèles locaux existants ont été réutilisés hors ligne.
+
+Un défaut a été reproduit puis corrigé : affecter directement `ScriptMaker.executable` désactivait la citation automatique du chemin par distlib. Vibe échouait après déplacement dans un chemin avec espaces. La régénération laisse maintenant distlib sélectionner et citer l’interpréteur courant, sur les deux plateformes. Le vérificateur existant teste réellement ce cas en lançant Vibe depuis le runtime déplacé.
+
+Résultats macOS :
+
+| Contrôle exécuté | Résultat |
+| --- | --- |
+| Installation des 196 versions verrouillées et `pip check` | Réussis |
+| Imports natifs après extraction et déplacement | Réussis |
+| Conversion d’un DOCX fictif avec MarkItDown | Réussie |
+| Lanceur Vibe déplacé et sélecteur PieceMaker réel | Réussis ; détection en environ 1,8 s |
+| Parcours serveur d’installation Vibe | Réussi, sans pip, création de venv ou suppression |
+| Bootstrap Légifrance avec l’interpréteur commun | Réussi, sans venv MCP supplémentaire ; aucun appel à l’API |
+| GLiNER, détection d’une personne fictive avec le snapshot épinglé | Réussie ; 83 s, pic RSS observé d’environ 1,1 Gio |
+| OCR MinerU via `smart_converter.py`, image fictive et modèles locaux | Réussi, nom fictif retrouvé ; 141 s, pic RSS cumulé observé d’environ 1,4 Gio |
+| Nouvelle sélection du runtime avec téléchargement et pip interdits | Réussie |
+| Tests ciblés des composants, de la publication et du raccord desktop | 23 réussis |
+
+L’archive mesure environ **364 Mio**, sans les modèles. La préparation depuis cette archive locale a pris environ **156 s**, sa réutilisation **24 s** sur ce poste. Ces temps incluent les contrôles et la régénération des lanceurs ; ils ne mesurent ni le téléchargement ni une installation Electron complète. Le paquet macOS évite la précompilation pip de tous les modules : les imports de vérification préparent les modules effectivement utilisés.
+
+Le lint ciblé et la lecture YAML des workflows réussissent. Un test existant de la fenêtre PISTE échoue séparément avec `ECONNRESET` lors d’un deuxième clic après fermeture du serveur ; ses fichiers sont inchangés. La connexion à un compte Mistral, une session Word, le cycle complet installation/mise à jour/désinstallation Electron et macOS Intel ne sont pas validés par cet essai. Aucune release n’a été publiée.
+
+Les runtimes et l’archive temporaires ont été supprimés après les essais. Les modèles locaux existants sont conservés.
