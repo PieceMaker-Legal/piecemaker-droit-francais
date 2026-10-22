@@ -20,6 +20,16 @@ Vérification locale de cette intégration : 104 tests du bootstrap/packaging/UI
 
 La qualification macOS Apple Silicon et les versions exactes sont détaillées dans [le rapport Python commun](piecemaker/python-commun/README.md#essai-réel-sur-le-mac-de-développement). Elle utilise le Node de l’application installée, un runtime temporaire, des documents fictifs et les modèles locaux ; elle ne remplace pas l’application en place.
 
+Sur macOS, le retrait conserve également les modèles Hugging Face, la configuration
+MinerU et le trousseau de signature, qui peuvent être partagés entre installations.
+Le certificat retiré du trousseau utilisateur est identifié par l’empreinte du
+certificat propre à cette installation, jamais par le seul nom « PieceMaker Local CA ».
+Les contrôles d’imports à froid du Python disposent de cinq minutes, lors de la
+construction comme après extraction ; ils échouent toujours sans sélectionner
+un environnement dont la vérification ne réussit pas.
+
+Le [rapport Mistral, Word et cycle macOS](piecemaker/validation-mistral-word-macos-2026-10-22.md) décrit le parcours réel de remplacement, retrait et réinstallation, ainsi que les onze phases de mise à jour continue. L’interface se télécharge en arrière-plan et s’active au lancement suivant après avoir quitté l’application. La qualification d’un nouveau bundle natif distribué reste distincte.
+
 ## Installation existante et parcours historiques
 
 Installateur autonome de l'application Electron PieceMaker sur **macOS** et

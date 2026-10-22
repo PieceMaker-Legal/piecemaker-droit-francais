@@ -1,10 +1,9 @@
-import { randomUUID } from 'crypto';
-import { rename, rm, stat, writeFile } from 'fs/promises';
 import path from 'path';
 
 import express, { type Request, type Response } from 'express';
 
 import { projectsDb } from '@/modules/database/index.js';
+import { readDocxDocumentVersion, saveDocxDocument } from '@/modules/piecemaker-docx/index.js';
 
 import { externalRegularFile } from './file-links.js';
 
@@ -19,10 +18,6 @@ async function resolveDocxPath(request: Request): Promise<string | null> {
   return resolved.startsWith(path.resolve(projectRoot) + path.sep) ? resolved : externalRegularFile(projectRoot, filePath);
 }
 
-async function readVersion(filePath: string): Promise<number> {
-  return (await stat(filePath)).mtimeMs;
-}
-
 export function createDocxDocumentRouter() {
   const router = express.Router();
 
@@ -30,7 +25,7 @@ export function createDocxDocumentRouter() {
     const filePath = await resolveDocxPath(request);
     if (!filePath) return response.status(400).json({ error: 'Invalid docx path' });
     try {
-      response.json({ version: await readVersion(filePath) });
+      response.json({ version: await readDocxDocumentVersion(filePath) });
     } catch {
       response.status(404).json({ error: 'File not found' });
     }
@@ -41,13 +36,9 @@ export function createDocxDocumentRouter() {
     if (!filePath || !Buffer.isBuffer(request.body) || request.body.length === 0) {
       return response.status(400).json({ error: 'Invalid docx payload' });
     }
-    const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
     try {
-      await writeFile(temporaryPath, request.body);
-      await rename(temporaryPath, filePath);
-      response.json({ version: await readVersion(filePath) });
+      response.json({ version: await saveDocxDocument(filePath, request.body) });
     } catch (error) {
-      await rm(temporaryPath, { force: true });
       response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
   });

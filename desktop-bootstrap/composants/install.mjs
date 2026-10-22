@@ -360,7 +360,7 @@ async function installPrebuiltPython({ layout, host, env, scriptsDir, output, pl
       const stagedPython = bundledPythonPath(path.join(staging, 'python'), platform);
       if (metadata.requirementsSha256) {
         if (!await sharedPythonReady(host, stagedPython, metadata.requirementsSha256)) throw new Error('Environnement Python commun incompatible avec cette release.');
-        await required(host, stagedPython, ['-c', sharedPythonProbe], { capture: true, timeoutMs: 120_000 });
+        await required(host, stagedPython, ['-c', sharedPythonProbe], { capture: true, timeoutMs: 300_000 });
       }
       if (!dependenciesReady(await readWarmupStatus(host, stagedPython, warmup, scriptsDir))) {
         const diagnostic = await host.run(stagedPython, [warmup, '--status'], { cwd: scriptsDir, capture: true });
@@ -393,7 +393,7 @@ export async function buildPortablePython({ sourceDir, root, archive, platform =
   await required(host, python, ['-m', 'pip', 'wheel', '--no-deps', '--use-pep517', '--wheel-dir', wheels, 'jieba==0.42.1']);
   await required(host, python, ['-m', 'pip', 'install', ...(platform === 'darwin' ? ['--no-compile'] : []), '--only-binary=:all:', '--find-links', wheels, '-r', requirements]);
   await required(host, python, ['-m', 'pip', 'check']);
-  await required(host, python, ['-c', sharedPythonProbe], { capture: true, timeoutMs: 120_000 });
+  await required(host, python, ['-c', sharedPythonProbe], { capture: true, timeoutMs: 300_000 });
   await host.writeFile(path.join(path.dirname(python), sharedPythonMarker), `${JSON.stringify({ format: 1, requirementsSha256: await sharedPythonFingerprint(platform, arch) })}\n`);
   if (!dependenciesReady(await readWarmupStatus(host, python, path.join(scripts, 'warmup.py'), scripts))) throw new Error('Python compile non operationnel.');
   if (platform === 'darwin') {

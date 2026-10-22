@@ -28,7 +28,7 @@ export async function verifyPythonRuntime(sourceDir, assetsDir) {
   const installMs = Math.round(performance.now() - started);
   const config = JSON.parse(await fs.readFile(path.join(env.PIECEMAKER_HOME, 'config.json'), 'utf8'));
   if (config.pythonRuntime?.kind === 'shared') {
-    const shared = await host.run(config.pythonPath, ['-c', sharedPythonProbe], { capture: true, timeoutMs: 120_000 });
+    const shared = await host.run(config.pythonPath, ['-c', sharedPythonProbe], { capture: true, timeoutMs: 300_000 });
     if (shared.code !== 0) throw new Error(`Shared Python imports failed: ${shared.stderr}`);
     const vibe = await host.run(process.platform === 'win32' ? path.join(path.dirname(config.pythonPath), 'Scripts', 'vibe.exe') : path.join(path.dirname(config.pythonPath), 'vibe'), ['--version'], { capture: true, timeoutMs: 30_000 });
     if (vibe.code !== 0) throw new Error(`Relocated Vibe launcher failed: ${vibe.stderr}`);
