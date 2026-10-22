@@ -108,6 +108,8 @@ Developer / PWA entry point (ports, clone/update, deps, socle components, app st
 
 ## Installation de l'app de bureau (`desktop-bootstrap/`)
 
+Pour toute modification Electron, installation, mise à jour ou désinstallation, charger `.agents/skills/electron-cloudcli/SKILL.md`. Priorité au fonctionnement CloudCLI : raccorder les ajouts PieceMaker à ses mécanismes existants.
+
 Installateur autonome, sans rapport avec la commande `piecemaker` ni avec `server/piecemaker/vendor/installer/` : `curl` (mac) / `irm` (Windows) installe l'app Electron. Windows utilise l'installeur NSIS précompilé signé Authenticode éditeur ; la CA TLS locale du proxy reste générée sur le poste. Détail : `docs/installation-app-electron.md`.
 
 ## Développement local

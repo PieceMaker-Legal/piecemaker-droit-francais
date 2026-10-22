@@ -56,8 +56,21 @@ export function piecemakerVibeBinDirectory(host: VibeCliHost = currentVibeCliHos
   return pathApi(host).join(piecemakerVibeDirectory(host), host.platform === 'win32' ? 'Scripts' : 'bin');
 }
 
+function sharedVibeBinDirectory(host: VibeCliHost): string | null {
+  const api = pathApi(host);
+  let config;
+  try {
+    config = JSON.parse(host.readFileSync(api.join(api.dirname(piecemakerVibeDirectory(host)), 'config.json'), 'utf8'));
+  } catch { return null; }
+  if (config.pythonRuntime?.kind !== 'shared') return null;
+  if (typeof config.pythonPath !== 'string' || !config.pythonPath) throw new Error('Environnement Python commun introuvable.');
+  return api.join(api.dirname(config.pythonPath), host.platform === 'win32' ? 'Scripts' : '');
+}
+
 export function vibeBinDirectoryCandidates(host: VibeCliHost = currentVibeCliHost()): string[] {
   const api = pathApi(host);
+  const sharedBin = sharedVibeBinDirectory(host);
+  if (sharedBin) return [sharedBin];
   const uvToolBin = readEnv(host, 'UV_TOOL_BIN_DIR');
   const xdgBin = readEnv(host, 'XDG_BIN_HOME');
   const xdgData = readEnv(host, 'XDG_DATA_HOME');
@@ -77,7 +90,7 @@ export function findVibeBinDirectory(host: VibeCliHost = currentVibeCliHost()): 
 }
 
 export function resolveVibeExecutable(host: VibeCliHost = currentVibeCliHost()): string {
-  const directory = findVibeBinDirectory(host);
+  const directory = sharedVibeBinDirectory(host) || findVibeBinDirectory(host);
   return directory ? pathApi(host).join(directory, host.platform === 'win32' ? 'vibe.exe' : 'vibe') : 'vibe';
 }
 

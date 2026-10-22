@@ -50,7 +50,7 @@ jobs:
           path: |
             server/piecemaker/anonymizer/hudsucker-proxy/target
             ${{ runner.temp }}/preview-assets
-          key: windows-preview-${{ hashFiles('server/piecemaker/anonymizer/hudsucker-proxy/Cargo.lock', 'package-lock.json', 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/requirements.txt', 'desktop-bootstrap/composants/*.mjs') }}
+          key: windows-preview-${{ hashFiles('server/piecemaker/anonymizer/hudsucker-proxy/Cargo.lock', 'package-lock.json', 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/requirements.txt', 'desktop-bootstrap/composants/*.mjs', 'desktop-bootstrap/composants/windows-requirements.txt') }}
       - name: Build Windows anonymization proxy
         run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
       - name: Install and compile native SQLite for Electron
@@ -84,6 +84,11 @@ jobs:
       - name: Verify active proxy environment writes
         shell: bash
         run: npx --no-install tsx --tsconfig server/tsconfig.json --test server/piecemaker/anonymizer/session-runtime.test.ts
+      - name: Verify shared Python and native uninstall contracts
+        shell: bash
+        run: |
+          node --experimental-vm-modules --test desktop-bootstrap/lib/native-uninstall.test.mjs desktop-bootstrap/composants/shared-python.test.mjs desktop-bootstrap/overlay/electron-piecemaker/shared-python-update.test.mjs
+          python -m unittest discover -s server/piecemaker/vendor/mcp/legifrance/tests -p test_shared_runtime.py
       - name: Configure installer signature
         shell: bash
         env:

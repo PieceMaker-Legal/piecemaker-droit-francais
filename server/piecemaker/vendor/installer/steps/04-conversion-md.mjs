@@ -35,17 +35,22 @@ function mineruModelsReady() {
   return MINERU_MODEL_DIRS.every((name) => fs.existsSync(path.join(modelsRoot, name)));
 }
 
-async function installMineru(vp) {
-  const spin = spinner('Installation de MinerU...');
-  const installed = await run(vp.python, ['-m', 'pip', 'install', MINERU_SPEC, '-r', path.join(SCRIPTS_DIR, 'requirements.txt')], {
-    cwd: os.homedir(),
-    onLine: (line) => spin.update(line.slice(0, 100)),
-  });
-  if (installed !== 0) {
-    spin.fail('Échec de l\'installation de MinerU');
+async function installMineru(vp, sharedPython = false) {
+  if (!sharedPython) {
+    const spin = spinner('Installation de MinerU...');
+    const installed = await run(vp.python, ['-m', 'pip', 'install', MINERU_SPEC, '-r', path.join(SCRIPTS_DIR, 'requirements.txt')], {
+      cwd: os.homedir(),
+      onLine: (line) => spin.update(line.slice(0, 100)),
+    });
+    if (installed !== 0) {
+      spin.fail('Échec de l\'installation de MinerU');
+      return false;
+    }
+    spin.succeed('MinerU installé');
+  } else if (runCapture(vp.python, ['-c', 'import mineru, mineru_llama_cpp']).code !== 0) {
+    log.error('Composant MinerU absent de l’environnement Python commun : réinstallez les composants de cette version.');
     return false;
   }
-  spin.succeed('MinerU installé');
   if (mineruModelsReady()) return true;
   const models = spinner('Téléchargement des modèles MinerU...');
   const downloaded = await run(venvScript(vp, 'mineru-models-download'), ['--tier', 'standard', '--small-backend', 'onnx', '--vlm-engine', 'llama-cpp', '-s', 'huggingface'], {
@@ -133,7 +138,7 @@ export async function install(ctx) {
   );
   let mineruNote = '';
   if (wantMineru) {
-    if (!(await installMineru(vp))) {
+    if (!(await installMineru(vp, ctx.config.pythonRuntime?.kind === 'shared'))) {
       if (mineruRequested) return { status: 'failed', note: 'MinerU n\'a pas pu être installé.' };
       mineruNote = ' MinerU n\'a pas pu être installé automatiquement — consultez sa documentation pour l\'installer manuellement.';
     }

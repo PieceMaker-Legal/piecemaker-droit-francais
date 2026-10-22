@@ -1,5 +1,7 @@
 # Faisabilité d'un environnement Python commun — 22 octobre 2026
 
+Depuis cette étude, la branche `MAJ-continue` utilise cette combinaison pour construire les nouveaux runtimes Windows. L'état de l'intégration et ses limites sont décrits dans [l'installation Electron](../../installation-app-electron.md). Les résultats ci-dessous restent ceux de l'étude de résolution, distincts d'une validation du paquet Windows modifié.
+
 ## Conclusion et portée
 
 Une combinaison des dépendances actuelles de conversion, GLiNER, MinerU, Mistral Vibe et Légifrance est résoluble pour **CPython 3.12 / Windows x64**. Le calcul aboutit à **199 paquets** sans modifier les contraintes du dépôt, avec uv 0.9.24 et PyPI. Leurs versions sont conservées dans [windows-py312-resolution.txt](windows-py312-resolution.txt) et les exigences d'entrée dans [requirements.in](requirements.in).

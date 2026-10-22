@@ -8,6 +8,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { installGlinerSnapshot } from './gliner-cache.mjs';
+import { sharedPythonRequirements, sharedPythonMarker, sharedPythonProbe, sharedPythonFingerprint, sharedPythonReady, sharedPythonEntrypoints } from './shared-python.mjs';
 
 const PYTHON_RELEASE_API = 'https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest';
 const BUNDLED_PYTHON_MINOR = 12;
@@ -123,11 +124,12 @@ export function glinerPipPackages() {
   return ['gliner2[local]>=2.1.0', 'huggingface-hub>=0.20.0'];
 }
 
-async function installGlinerRuntime({ host, python, scriptsDir, env, homeDir, sourceDir, output, platform }) {
+async function installGlinerRuntime({ host, python, scriptsDir, env, homeDir, sourceDir, output, platform, immutable }) {
   const warmup = path.join(scriptsDir, 'warmup.py');
   output.step('Installation de GLiNER2…');
   const before = await readWarmupStatus(host, python, warmup, scriptsDir);
   if (!before?.dependencies?.gliner2 || !before?.dependencies?.huggingface_hub) {
+    if (immutable) throw new Error('Composant GLiNER absent de l’environnement Python commun : réinstallez les composants de cette version.');
     const pipArgs = ['-m', 'pip', 'install', '--upgrade'];
     if (platform === 'win32') pipArgs.push('--only-binary=:all:');
     pipArgs.push(...glinerPipPackages());
@@ -148,7 +150,7 @@ async function installGlinerRuntime({ host, python, scriptsDir, env, homeDir, so
 
 export function mergeRuntimeConfig(current, paths) {
   const base = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
-  return { ...base, pythonPath: paths.pythonPath, venvPath: paths.venvPath };
+  return { ...base, ...paths };
 }
 
 export function createHost() {
@@ -330,13 +332,13 @@ async function installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir,
   const metadataFile = path.join(sourceDir, 'python-runtime.json');
   if (!(await host.exists(metadataFile))) throw new Error('Paquet Python precompile absent de cette release.');
   const metadata = JSON.parse(await host.readFile(metadataFile));
-  if (!/^[a-f0-9]{64}$/.test(metadata.sha256) || metadata.assetName !== 'piecemaker-python-win32-x64.tar.gz' || !/^[\w.-]+\/[\w.-]+$/.test(metadata.repository) || !/^[\w.-]+$/.test(metadata.releaseTag)) {
+  if (!/^[a-f0-9]{64}$/.test(metadata.sha256) || metadata.assetName !== 'piecemaker-python-win32-x64.tar.gz' || !/^[\w.-]+\/[\w.-]+$/.test(metadata.repository) || !/^[\w.-]+$/.test(metadata.releaseTag) || (metadata.requirementsSha256 !== undefined && !/^[a-f0-9]{64}$/.test(metadata.requirementsSha256))) {
     throw new Error('Metadonnees Python invalides.');
   }
   const root = path.join(layout.root, 'runtime-python', metadata.sha256.slice(0, 24));
   const python = bundledPythonPath(path.join(root, 'python'), 'win32');
   const warmup = path.join(scriptsDir, 'warmup.py');
-  if (!(await host.exists(python)) || !dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
+  if (!(await host.exists(python)) || (metadata.requirementsSha256 && !await sharedPythonReady(host, python, metadata.requirementsSha256)) || !dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
     await host.mkdir(path.dirname(root));
     const staging = `${root}.${crypto.randomBytes(6).toString('hex')}`;
     const downloaded = `${staging}.tar.gz`;
@@ -359,6 +361,10 @@ async function installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir,
       await host.mkdir(staging);
       await required(host, tar, ['-xzf', archive, '-C', staging]);
       const stagedPython = bundledPythonPath(path.join(staging, 'python'), 'win32');
+      if (metadata.requirementsSha256) {
+        if (!await sharedPythonReady(host, stagedPython, metadata.requirementsSha256)) throw new Error('Environnement Python commun incompatible avec cette release.');
+        await required(host, stagedPython, ['-c', sharedPythonProbe], { capture: true, timeoutMs: 120_000 });
+      }
       if (!dependenciesReady(await readWarmupStatus(host, stagedPython, warmup, scriptsDir))) {
         const diagnostic = await host.run(stagedPython, [warmup, '--status'], { cwd: scriptsDir, capture: true });
         throw new Error(`Paquet Python precompile non operationnel : ${diagnostic.stderr}\n${diagnostic.stdout}`);
@@ -370,7 +376,12 @@ async function installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir,
       await host.rm(staging);
     }
   }
-  return { pythonPath: python, venvPath: path.join(root, 'python') };
+  if (metadata.requirementsSha256) await required(host, python, ['-c', sharedPythonEntrypoints], { capture: true, timeoutMs: 120_000 });
+  return {
+    pythonPath: python,
+    venvPath: path.join(root, 'python'),
+    ...(metadata.requirementsSha256 ? { pythonRuntime: { kind: 'shared', requirementsSha256: metadata.requirementsSha256, sha256: metadata.sha256 } } : {}),
+  };
 }
 
 export async function buildPortableWindowsPython({ sourceDir, root, archive, host = createHost(), output = log }) {
@@ -379,9 +390,13 @@ export async function buildPortableWindowsPython({ sourceDir, root, archive, hos
   await installBundledPython(host, layout, 'win32', 'x64', output);
   const python = bundledPythonPath(layout.pythonDir, 'win32');
   const scripts = scriptsDirectory(sourceDir);
-  const requirements = path.join(root, 'requirements-installation.txt');
-  await host.writeFile(requirements, installerRequirements(await host.readFile(path.join(scripts, 'requirements.txt'))));
-  await required(host, python, ['-m', 'pip', 'install', '--only-binary=:all:', '-r', requirements]);
+  const wheels = path.join(root, 'wheels');
+  await host.mkdir(wheels);
+  await required(host, python, ['-m', 'pip', 'wheel', '--no-deps', '--use-pep517', '--wheel-dir', wheels, 'jieba==0.42.1']);
+  await required(host, python, ['-m', 'pip', 'install', '--only-binary=:all:', '--find-links', wheels, '-r', sharedPythonRequirements]);
+  await required(host, python, ['-m', 'pip', 'check']);
+  await required(host, python, ['-c', sharedPythonProbe], { capture: true, timeoutMs: 120_000 });
+  await host.writeFile(path.join(layout.pythonDir, sharedPythonMarker), `${JSON.stringify({ format: 1, requirementsSha256: await sharedPythonFingerprint() })}\n`);
   if (!dependenciesReady(await readWarmupStatus(host, python, path.join(scripts, 'warmup.py'), scripts))) throw new Error('Python compile non operationnel.');
   await required(host, 'tar', ['-czf', archive, '-C', root, 'python']);
   const hash = crypto.createHash('sha256');
@@ -412,13 +427,16 @@ export async function installRuntimeComponents({
   output.step('Composants Python — MarkItDown');
   const configured = await readConfig(host, layout.configFile);
   let python = '';
+  let immutable = false;
   if (platform === 'win32' && requirePrebuilt) {
-    if (configured.pythonPath && await host.exists(configured.pythonPath) && dependenciesReady(await readWarmupStatus(host, configured.pythonPath, warmup, scriptsDir))) {
+    const metadata = JSON.parse(await host.readFile(path.join(sourceDir, 'python-runtime.json')));
+    if (!metadata.requirementsSha256 && configured.pythonPath && await host.exists(configured.pythonPath) && dependenciesReady(await readWarmupStatus(host, configured.pythonPath, warmup, scriptsDir))) {
       output.ok('Composants Python existants reutilises.');
       python = configured.pythonPath;
     } else {
       if (arch !== 'x64') throw new Error('Le paquet Python Windows est disponible pour x64 uniquement.');
       const paths = await installPrebuiltPython({ sourceDir, layout, host, env, scriptsDir, output });
+      immutable = paths.pythonRuntime?.kind === 'shared';
       await host.writeFile(layout.configFile, `${JSON.stringify(mergeRuntimeConfig(configured, paths), null, 2)}\n`);
       output.ok('Composants Python precompiles installes.');
       python = paths.pythonPath;
@@ -458,7 +476,7 @@ export async function installRuntimeComponents({
   }
 
   if (includeGliner) {
-    await installGlinerRuntime({ host, python, scriptsDir, env, homeDir, sourceDir, output, platform });
+    await installGlinerRuntime({ host, python, scriptsDir, env, homeDir, sourceDir, output, platform, immutable });
   }
 }
 

@@ -14,19 +14,22 @@ function piecemakerHome() {
 function pythonFromConfig(home) {
   try {
     const config = JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8'));
-    if (typeof config.pythonPath === 'string' && fs.existsSync(config.pythonPath)) return config.pythonPath;
+    if (typeof config.pythonPath === 'string' && fs.existsSync(config.pythonPath)) return { executable: config.pythonPath, shared: config.pythonRuntime?.kind === 'shared' };
   } catch {}
   return null;
 }
 
 const home = piecemakerHome();
+const python = pythonFromConfig(home);
 const envFile = process.env.LEGIFRANCE_ENV_FILE || path.join(os.homedir(), '.config', 'mcp-legifrance', '.env');
-const child = spawn(pythonFromConfig(home) || (process.platform === 'win32' ? 'python' : 'python3'), [LAUNCHER, ...process.argv.slice(2)], {
+const child = spawn(python?.executable || (process.platform === 'win32' ? 'python' : 'python3'), [LAUNCHER, ...process.argv.slice(2)], {
   stdio: 'inherit',
   windowsHide: true,
   env: {
     ...process.env,
     PIECEMAKER_HOME: home,
+    PIECEMAKER_SHARED_PYTHON: python?.shared ? '1' : '0',
+    PYTHONIOENCODING: 'utf-8',
     ...(fs.existsSync(envFile) ? { LEGIFRANCE_ENV_FILE: envFile } : {}),
   },
 });

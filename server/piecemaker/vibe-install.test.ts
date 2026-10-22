@@ -106,6 +106,23 @@ test('on Windows, the Python 3.12 that PieceMaker installed creates the vibe env
   assert.equal(isVibeInstalled(host.cli), true);
 });
 
+test('a managed shared runtime checks Vibe without creating or deleting an environment', async () => {
+  const python = 'C:\\Users\\jean\\.piecemaker\\runtime-python\\abc\\python\\python.exe';
+  const { host, state } = fakeInstallHost({ platform: 'win32', files: {
+    'C:\\Users\\jean\\.piecemaker\\config.json': JSON.stringify({ pythonPath: python, pythonRuntime: { kind: 'shared' } }),
+    [python]: '', 'C:\\Users\\jean\\.piecemaker\\runtime-python\\abc\\python\\Scripts\\vibe.exe': '',
+  } });
+  host.cli.spawnSync = (() => ({ status: 0 })) as unknown as VibeCliHost['spawnSync'];
+  await installVibe(host);
+  assert.equal(state.calls.length, 1);
+  assert.equal(state.calls[0].command, python);
+  assert.equal(state.calls[0].args[0], '-c');
+  assert.deepEqual(state.removed, []);
+  host.cli.spawnSync = (() => ({ status: 1 })) as unknown as VibeCliHost['spawnSync'];
+  await assert.rejects(installVibe(host), /environnement Python commun/);
+  assert.deepEqual(state.removed, []);
+});
+
 test('on macOS, a configured Python 3.11 is skipped for python3 3.12', async () => {
   const configured = '/Users/jean/.piecemaker/venv/bin/python';
   const { host, state, vibeExecutable } = fakeInstallHost({

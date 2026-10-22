@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import os
 from pathlib import Path
 import shutil
@@ -59,6 +60,11 @@ def acquire_lock() -> None:
 
 
 def bootstrap() -> None:
+    if os.environ.get("PIECEMAKER_SHARED_PYTHON") == "1":
+        for package in ("requests", "dotenv", "truststore"):
+            if importlib.util.find_spec(package) is None:
+                raise RuntimeError(f"composant {package} absent de l'environnement Python commun")
+        return
     if ready():
         return
     VENV.parent.mkdir(parents=True, exist_ok=True)
@@ -98,7 +104,11 @@ def main() -> None:
         if "--bootstrap-only" in sys.argv[1:]:
             return
         configure_environment()
-        os.execv(str(venv_python()), [str(venv_python()), str(ROOT / "mcp_stdio_server.py")])
+        python = sys.executable if os.environ.get("PIECEMAKER_SHARED_PYTHON") == "1" else str(venv_python())
+        command = [python, str(ROOT / "mcp_stdio_server.py")]
+        if os.name == "nt":
+            raise SystemExit(subprocess.run(command).returncode)
+        os.execv(python, command)
     except Exception as error:
         print(f"Impossible de démarrer Légifrance MCP : {error}", file=sys.stderr)
         raise SystemExit(1) from error

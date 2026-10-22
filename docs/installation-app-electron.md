@@ -1,5 +1,23 @@
 # Installation de l'application de bureau
 
+## Évolution sur MAJ-continue : Python commun et désinstallation native
+
+Les nouveaux paquets Windows construisent désormais un environnement Python commun à partir de `desktop-bootstrap/composants/windows-requirements.txt` : conversion, GLiNER, MinerU, Vibe 2.25.0 et Légifrance. Les bibliothèques sont préparées en CI ; les poids des modèles restent téléchargés séparément à la demande. Cette archive sera plus volumineuse que l'ancien socle de conversion seul ; aucun gain de temps de première installation n'est encore mesuré.
+
+La release fournit une empreinte des requirements dans `python-runtime.json` et dans le runtime. L'installation vérifie les marqueurs, les imports et l'archive avant de sélectionner le nouveau Python dans la configuration. Un ancien Python fonctionnel ne suffit pas à éviter la migration : le démarrage compare les empreintes des requirements et de l'archive attendues par l'application, y compris pour un changement d'interpréteur à dépendances identiques. Les anciens dossiers sont conservés, sans suppression automatique d'environnements personnels ou non attribués.
+
+Vibe sélectionne l'environnement commun avant les installations externes. Légifrance l'utilise sans créer son propre venv. Les actions GLiNER/MinerU n'installent ni ne désinstallent de bibliothèques dans ce runtime : elles agissent sur les modèles. Une bibliothèque manquante demande une réinstallation du composant de cette release. Les parcours de développement et macOS conservent leur installation historique ; le verrou Windows ne leur est pas appliqué.
+
+Les commandes Python Windows sont régénérées après extraction pour pointer sur l'interpréteur installé, et le vérificateur du paquet lance réellement `vibe.exe --version` depuis le dossier déplacé. Aucune installation pip n'est exécutée sur le poste pour cette préparation.
+
+Le bouton de désinstallation Windows lance le désinstalleur NSIS fourni par electron-builder ; il ne supprime plus directement l'application avec PowerShell. Il reste sur l'application si le désinstalleur est absent ou ne démarre pas. Les données, modèles, certificats et composants externes sont conservés par ce parcours natif ; il ne constitue pas encore une purge des anciennes installations. Les textes de confirmation reflètent cette conservation. La politique de rétention des caches et le nettoyage fondé sur la propriété restent à traiter séparément.
+
+La skill de développement `.agents/skills/electron-cloudcli/SKILL.md`, déclarée dans `AGENTS.md`, impose de réutiliser en priorité les mécanismes CloudCLI. Les changements présents restent dans les fichiers PieceMaker et leurs tests/workflows ; aucun nouveau raccord dans un fichier CloudCLI n'est ajouté.
+
+Vérification locale de cette intégration : 104 tests du bootstrap/packaging/UI continue, 35 tests Vibe, 5 tests des modèles locaux et 3 tests Python du lanceur MCP réussis ; 4 tests ignorés au total (plateforme ou essai réseau optionnel). Contrôle TypeScript serveur et lint ciblé réussis. Le contrôle TypeScript global échoue dans des fichiers frontend non modifiés par cette tâche. Aucun paquet Windows de cette modification n'a encore été construit ni exécuté : les workflows existants ont été complétés pour vérifier les imports après déplacement, le lanceur Vibe et le changement d'empreinte. Aucune version n'est publiée par ce travail local.
+
+## Installation existante et parcours historiques
+
 Installateur autonome de l'application Electron PieceMaker sur **macOS** et
 **Windows**. Il ne dépend d'aucun autre installateur du dépôt et vit
 entièrement dans `desktop-bootstrap/`.

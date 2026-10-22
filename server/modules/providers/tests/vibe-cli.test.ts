@@ -69,6 +69,20 @@ test('without a uv install folder, vibe is looked up on the PATH', () => {
   assert.equal(resolveVibeExecutable(host), 'vibe');
 });
 
+test('the managed shared Python wins over external and legacy Vibe installations', () => {
+  const python = 'C:\\Users\\jean\\.piecemaker\\runtime-python\\abc\\python\\python.exe';
+  const executable = 'C:\\Users\\jean\\.piecemaker\\runtime-python\\abc\\python\\Scripts\\vibe.exe';
+  const { host } = fakeHost({ platform: 'win32', env: { UV_TOOL_BIN_DIR: 'C:\\external' }, files: {
+    'C:\\Users\\jean\\.piecemaker\\config.json': JSON.stringify({ pythonPath: python, pythonRuntime: { kind: 'shared' } }),
+    [python]: '', [executable]: '', 'C:\\external\\vibe.exe': '', 'C:\\Users\\jean\\.piecemaker\\vibe\\Scripts\\vibe.exe': '',
+  } });
+  assert.equal(resolveVibeExecutable(host), executable);
+  const exists = host.existsSync;
+  host.existsSync = file => file !== executable && exists(file);
+  assert.equal(resolveVibeExecutable(host), executable);
+  assert.equal(findVibeBinDirectory(host), null);
+});
+
 test('on macOS and Linux, the uv default folder ~/.local/bin is found', () => {
   for (const platform of ['darwin', 'linux'] as const) {
     const { host } = fakeHost({ platform, files: { '/Users/jean/.local/bin/vibe': '' } });

@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { createHost, installRuntimeComponents, scriptsDirectory } from './install.mjs';
+import { sharedPythonMarker, sharedPythonFingerprint, sharedPythonEntrypoints } from './shared-python.mjs';
+
+test('a managed release replaces a legacy selection and reuses its verified shared runtime without pip', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pm-shared-test-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const source = path.join(root, 'source');
+  const home = path.join(root, 'home with spaces');
+  const scripts = scriptsDirectory(source);
+  const sha256 = 'a'.repeat(64);
+  const requirementsSha256 = await sharedPythonFingerprint();
+  const runtime = path.join(home, 'runtime-python', sha256.slice(0, 24), 'python');
+  const python = path.join(runtime, 'python.exe');
+  await fs.mkdir(scripts, { recursive: true });
+  await fs.mkdir(runtime, { recursive: true });
+  await fs.writeFile(python, '');
+  await fs.writeFile(path.join(runtime, sharedPythonMarker), JSON.stringify({ format: 1, requirementsSha256 }));
+  await fs.writeFile(path.join(scripts, 'requirements.txt'), 'markitdown');
+  await fs.writeFile(path.join(scripts, 'warmup.py'), '');
+  await fs.writeFile(path.join(source, 'python-runtime.json'), JSON.stringify({ repository: 'example/example', releaseTag: 'v1.0.0', assetName: 'piecemaker-python-win32-x64.tar.gz', sha256, requirementsSha256 }));
+  await fs.writeFile(path.join(home, 'config.json'), JSON.stringify({ pythonPath: '/legacy/python', venvPath: '/legacy', setting: true }));
+  const host = createHost();
+  const calls = [];
+  host.fetch = () => { throw new Error('Unexpected download'); };
+  host.run = async (command, args) => {
+    calls.push([command, ...args]);
+    assert.equal(command, python);
+    assert.ok(!args.includes('pip'));
+    return { code: 0, stdout: JSON.stringify({ dependencies: { markitdown: true, pypdf: true } }), stderr: '' };
+  };
+  const options = { sourceDir: source, env: { PIECEMAKER_HOME: home }, host, platform: 'win32', arch: 'x64', requirePrebuilt: true, output: { step() {}, ok() {} } };
+  await installRuntimeComponents(options);
+  const config = JSON.parse(await fs.readFile(path.join(home, 'config.json')));
+  assert.equal(config.pythonPath, python);
+  assert.equal(config.pythonRuntime.kind, 'shared');
+  assert.equal(config.setting, true);
+  assert.ok(calls.some(call => call.includes(sharedPythonEntrypoints)));
+  await installRuntimeComponents(options);
+  await fs.writeFile(path.join(runtime, sharedPythonMarker), JSON.stringify({ format: 1, requirementsSha256: 'b'.repeat(64) }));
+  await assert.rejects(installRuntimeComponents(options), /Unexpected download/);
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(home, 'config.json'))), config);
+});
