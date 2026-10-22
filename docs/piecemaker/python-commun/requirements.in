@@ -1,0 +1,9 @@
+markitdown[all]>=0.1.4
+pypdf>=6.6.2
+gliner2[local]>=2.1.0
+huggingface-hub>=0.20.0
+mineru==4.0.11
+mistral-vibe==2.25.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+truststore>=0.9.1
