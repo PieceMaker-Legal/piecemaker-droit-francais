@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-test('the release stays draft until the Windows package, components and runtime are verified', () => {
+test('the release stays draft until Windows and macOS components are verified', () => {
   const release = fs.readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8');
   const windows = fs.readFileSync(new URL('../../.github/workflows/piecemaker-windows-release.yml', import.meta.url), 'utf8');
   assert.match(release, /--github\.draft/);
   assert.match(release, /--npm\.publish=false/);
   assert.match(release, /needs: release[\s\S]*uses: \.\/\.github\/workflows\/piecemaker-windows-release\.yml/);
   assert.match(release, /finalize: false/);
-  assert.match(release, /needs: \[release, windows-desktop, gliner-cache\]/);
+  assert.match(release, /needs: \[release, windows-desktop, macos-python, gliner-cache\]/);
   assert.match(release, /npm publish --access public/);
   assert.ok(release.indexOf('npm publish --access public') < release.indexOf('gh release edit'));
   assert.match(windows, /workflow_call:/);

@@ -1,20 +1,21 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { buildPortableWindowsPython } from './install.mjs';
+import { buildPortablePython } from './install.mjs';
 import { verifyPythonRuntime } from './verify-runtime.mjs';
 import { sharedPythonFingerprint } from './shared-python.mjs';
 
-if (process.platform !== 'win32') throw new Error('Construire le runtime Python sur Windows.');
+if (!['win32', 'darwin'].includes(process.platform)) throw new Error('Construire le runtime Python sur sa plateforme cible.');
 const output = path.resolve(process.argv[2]);
 await fs.mkdir(output, { recursive: true });
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pm-python-build-'));
-const assetName = 'piecemaker-python-win32-x64.tar.gz';
-const sha256 = await buildPortableWindowsPython({ sourceDir: process.cwd(), root, archive: path.join(output, assetName) });
-const metadata = { repository: process.env.PIECEMAKER_REPO || 'PieceMaker-Legal/piecemaker-droit-francais', releaseTag: process.env.PIECEMAKER_TAG, assetName, sha256, requirementsSha256: await sharedPythonFingerprint() };
+const assetName = `piecemaker-python-${process.platform}-${process.arch}.tar.gz`;
+const sha256 = await buildPortablePython({ sourceDir: process.cwd(), root, archive: path.join(output, assetName) });
+const metadata = { repository: process.env.PIECEMAKER_REPO || 'PieceMaker-Legal/piecemaker-droit-francais', releaseTag: process.env.PIECEMAKER_TAG, assetName, sha256, requirementsSha256: await sharedPythonFingerprint(process.platform, process.arch) };
 if (!metadata.releaseTag) throw new Error('PIECEMAKER_TAG absent.');
 await fs.writeFile(path.join(output, 'python-runtime.json'), `${JSON.stringify(metadata, null, 2)}\n`);
 await fs.writeFile(path.join(output, `${assetName}.sha256`), `${sha256}\n`);
+if (process.platform === 'darwin') await fs.writeFile(path.join(output, `piecemaker-python-${process.platform}-${process.arch}.json`), `${JSON.stringify(metadata, null, 2)}\n`);
 const verification = await verifyPythonRuntime(process.cwd(), output);
 console.log(JSON.stringify({ verification }));
 console.log(JSON.stringify({ root, ...metadata }));
