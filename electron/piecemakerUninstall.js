@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { loadProductConfig } from '../shared/product-config.mjs';
-import { macUninstallScript, packagedApplicationRoot, removalPlan, windowsUninstallScript } from './uninstallPlan.js';
+import { macUninstallScript, packagedApplicationRoot, removalPlan } from './uninstallPlan.js';
 
 function electronPaths(app) {
   return ['userData', 'sessionData', 'logs', 'crashDumps'].map((name) => {
@@ -30,7 +30,9 @@ export async function runUninstallFromCommandLine({ app, dialog }) {
     type: 'warning',
     title: 'PieceMaker',
     message: 'Désinstaller PieceMaker ?',
-    detail: 'L’application, ses composants, ses certificats et ses données seront retirés. Votre base de comptes (auth.db), votre Bibliothèque et vos dossiers juridiques sont conservés.',
+    detail: process.platform === 'win32'
+      ? 'Le programme de désinstallation Windows retire l’application. Les données, les modèles et les composants externes sont conservés.'
+      : 'L’application, ses composants, ses certificats et ses données seront retirés. Votre base de comptes (auth.db), votre Bibliothèque et vos dossiers juridiques sont conservés.',
     buttons: ['Désinstaller', 'Annuler'],
     defaultId: 1,
     cancelId: 1,
@@ -39,7 +41,7 @@ export async function runUninstallFromCommandLine({ app, dialog }) {
     app.quit();
     return;
   }
-  scheduleUninstall(app);
+  await scheduleUninstall(app);
 }
 
 export function registerPiecemakerUninstall({ ipcMain, app }) {
@@ -49,6 +51,20 @@ export function registerPiecemakerUninstall({ ipcMain, app }) {
 function scheduleUninstall(app) {
   if (!app.isPackaged) {
     throw new Error('La désinstallation ne s’applique qu’à l’application installée.');
+  }
+  if (process.platform === 'win32') {
+    const directory = path.dirname(app.getPath('exe'));
+    const name = fs.readdirSync(directory).find((entry) => /^Uninstall.*\.exe$/i.test(entry));
+    if (!name) throw new Error('Programme de désinstallation NSIS introuvable. Réinstallez PieceMaker avec l’installateur Windows.');
+    return new Promise((resolve, reject) => {
+      const child = spawn(path.join(directory, name), [], { detached: true, stdio: 'ignore', windowsHide: false });
+      child.once('error', reject);
+      child.once('spawn', () => {
+        child.unref();
+        setImmediate(() => app.quit());
+        resolve({ scheduled: true });
+      });
+    });
   }
   const appRoot = packagedApplicationRoot(app.getAppPath());
   if (!appRoot) {
@@ -64,21 +80,12 @@ function scheduleUninstall(app) {
     appId: product.appId,
     electronPaths: electronPaths(app),
   });
-  const helper = path.join(os.tmpdir(), `piecemaker-uninstall-${process.pid}${process.platform === 'win32' ? '.ps1' : '.sh'}`);
-  if (process.platform === 'win32') {
-    fs.writeFileSync(helper, windowsUninstallScript(plan), 'utf8');
-    spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper, '-ProcessId', String(process.pid)], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-    }).unref();
-  } else {
-    fs.writeFileSync(helper, macUninstallScript(plan), { encoding: 'utf8', mode: 0o755 });
-    spawn('/bin/sh', [helper, String(process.pid)], {
-      detached: true,
-      stdio: 'ignore',
-    }).unref();
-  }
+  const helper = path.join(os.tmpdir(), `piecemaker-uninstall-${process.pid}.sh`);
+  fs.writeFileSync(helper, macUninstallScript(plan), { encoding: 'utf8', mode: 0o755 });
+  spawn('/bin/sh', [helper, String(process.pid)], {
+    detached: true,
+    stdio: 'ignore',
+  }).unref();
   setImmediate(() => app.quit());
   return { scheduled: true };
 }

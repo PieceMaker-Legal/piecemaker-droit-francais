@@ -52,3 +52,20 @@ test('supprime le modèle GLiNER du cache sans toucher au reste', async () => {
     fs.rmSync(userHome, { recursive: true, force: true });
   }
 });
+
+test('supprimer les modèles MinerU ne désinstalle aucun paquet du Python commun', async () => {
+  const userHome = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-models-'));
+  const homeDir = path.join(userHome, 'components');
+  fs.mkdirSync(homeDir);
+  const python = path.join(homeDir, 'python.exe');
+  fs.writeFileSync(python, '');
+  fs.writeFileSync(path.join(homeDir, 'config.json'), JSON.stringify({ pythonPath: python, pythonRuntime: { kind: 'shared' } }));
+  fs.mkdirSync(path.join(userHome, '.mineru'));
+  try {
+    await removeLocalModel('mineru', { homeDir, userHome, env: {} });
+    assert.strictEqual(fs.existsSync(python), true);
+    assert.strictEqual(fs.existsSync(path.join(userHome, '.mineru')), false);
+  } finally {
+    fs.rmSync(userHome, { recursive: true, force: true });
+  }
+});

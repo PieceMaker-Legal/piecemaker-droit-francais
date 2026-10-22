@@ -82,7 +82,8 @@ async function removeLocalModel(component, { homeDir, userHome, env = process.en
   if (component === 'mineru') {
     let python = '';
     try {
-      python = JSON.parse(fs.readFileSync(path.join(homeDir, 'config.json'), 'utf8')).pythonPath || '';
+      const config = JSON.parse(fs.readFileSync(path.join(homeDir, 'config.json'), 'utf8'));
+      python = config.pythonRuntime?.kind === 'shared' ? '' : config.pythonPath || '';
     } catch {
       python = '';
     }

@@ -82,12 +82,12 @@ export async function install(ctx) {
   if (!fs.existsSync(WARMUP)) {
     return { status: 'failed', note: `warmup.py introuvable : ${WARMUP}` };
   }
-  if (!ctx.python) {
-    return { status: 'failed', note: 'Python >= 3.10 introuvable — exécutez d\'abord l\'étape des prérequis.' };
-  }
-
+  const sharedPython = ctx.config.pythonRuntime?.kind === 'shared';
   const venvDir = ctx.config.venvPath;
   const vp = venvPaths(venvDir);
+  if (!ctx.python && !vp.exists) {
+    return { status: 'failed', note: 'Python >= 3.10 introuvable — exécutez d\'abord l\'étape des prérequis.' };
+  }
 
   if (ctx.dryRun) {
     log.info(`[simulation] Création du venv dans ${venvDir}`);
@@ -99,6 +99,7 @@ export async function install(ctx) {
 
   // 1. Create the venv if it does not exist yet.
   if (!vp.exists) {
+    if (sharedPython) return { status: 'failed', note: 'Environnement Python commun introuvable : réinstallez les composants de cette version.' };
     ensureDir(path.dirname(venvDir));
     const spin = spinner(`Création de l'environnement virtuel (${ctx.python.command})...`);
     const code = await run(ctx.python.command, ['-m', 'venv', venvDir]);
@@ -111,38 +112,40 @@ export async function install(ctx) {
     log.info(`Environnement virtuel déjà présent : ${venvDir}`);
   }
 
-  // 2. Upgrade pip.
-  {
-    const spin = spinner('Mise à jour de pip...');
-    const code = await run(vp.python, ['-m', 'pip', 'install', '-U', 'pip'], {
-      onLine: (line) => spin.update(truncate(line)),
-    });
-    if (code !== 0) {
-      spin.fail('Échec de la mise à jour de pip');
-      return { status: 'failed', note: `pip install -U pip a échoué (code ${code}).` };
+  if (!sharedPython) {
+    // 2. Upgrade pip.
+    {
+      const spin = spinner('Mise à jour de pip...');
+      const code = await run(vp.python, ['-m', 'pip', 'install', '-U', 'pip'], {
+        onLine: (line) => spin.update(truncate(line)),
+      });
+      if (code !== 0) {
+        spin.fail('Échec de la mise à jour de pip');
+        return { status: 'failed', note: `pip install -U pip a échoué (code ${code}).` };
+      }
+      spin.succeed('pip à jour');
     }
-    spin.succeed('pip à jour');
-  }
 
-  // 3. Install/upgrade requirements.txt (markitdown, pypdf, gliner2...).
-  {
-    const spin = spinner('Installation des dépendances Python (requirements.txt)...');
-    const code = await run(vp.python, ['-m', 'pip', 'install', '--upgrade', '-r', REQUIREMENTS], {
-      onLine: (line) => spin.update(truncate(line)),
-    });
-    if (code !== 0) {
-      spin.fail('Échec de l\'installation des dépendances Python');
-      return {
-        status: 'failed',
-        note: `pip install -r requirements.txt a échoué (code ${code}). Relancez cette étape après avoir corrigé l'erreur ci-dessus.`,
-      };
+    // 3. Install/upgrade requirements.txt (markitdown, pypdf, gliner2...).
+    {
+      const spin = spinner('Installation des dépendances Python (requirements.txt)...');
+      const code = await run(vp.python, ['-m', 'pip', 'install', '--upgrade', '-r', REQUIREMENTS], {
+        onLine: (line) => spin.update(truncate(line)),
+      });
+      if (code !== 0) {
+        spin.fail('Échec de l\'installation des dépendances Python');
+        return {
+          status: 'failed',
+          note: `pip install -r requirements.txt a échoué (code ${code}). Relancez cette étape après avoir corrigé l'erreur ci-dessus.`,
+        };
+      }
+      spin.succeed('Dépendances Python installées');
     }
-    spin.succeed('Dépendances Python installées');
-  }
 
-  // Persist the interpreter path now — useful even if the model download is declined.
-  updateConfig({ pythonPath: vp.python, venvPath: venvDir });
-  writeEnv({ PYTHON_PATH: vp.python });
+    // Persist the interpreter path now — useful even if the model download is declined.
+    updateConfig({ pythonPath: vp.python, venvPath: venvDir });
+    writeEnv({ PYTHON_PATH: vp.python });
+  }
 
   if (process.env.PIECEMAKER_SKIP_MODELS === '1') {
     return { status: 'done', note: 'Modèle GLiNER2-PII installé à la demande depuis PieceMaker (Paramètres › Modèles locaux).' };

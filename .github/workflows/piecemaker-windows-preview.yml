@@ -41,7 +41,7 @@ jobs:
           path: |
             server/piecemaker/anonymizer/hudsucker-proxy/target
             ${{ runner.temp }}/preview-assets
-          key: windows-preview-${{ hashFiles('server/piecemaker/anonymizer/hudsucker-proxy/Cargo.lock', 'package-lock.json', 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/requirements.txt', 'desktop-bootstrap/composants/*.mjs') }}
+          key: windows-preview-${{ hashFiles('server/piecemaker/anonymizer/hudsucker-proxy/Cargo.lock', 'package-lock.json', 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/requirements.txt', 'desktop-bootstrap/composants/*.mjs', 'desktop-bootstrap/composants/windows-requirements.txt') }}
       - name: Build Windows anonymization proxy
         run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
       - name: Install and compile native SQLite for Electron

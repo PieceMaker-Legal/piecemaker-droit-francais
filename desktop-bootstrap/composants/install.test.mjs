@@ -253,7 +253,7 @@ test('installe les bibliothèques sans MinerU ni modèle quand l\'environnement 
   assert.equal(JSON.parse(files.get(layout.configFile)).pythonPath, venvPythonPath(layout.venvDir, 'darwin'));
 });
 
-test('l’archive Python Windows reste sans GLiNER', () => {
+test('le bootstrap historique diffère les dépendances d’inférence', () => {
   const requirements = [
     'markitdown[all]>=0.1.4  # conversion',
     'pypdf>=6.6.2',

@@ -89,6 +89,19 @@ function failureDetail(result: CommandResult): string {
 }
 
 async function performInstall(host: VibeInstallHost): Promise<void> {
+  let sharedPython: string | null = null;
+  let sharedRuntime = false;
+  try {
+    const config = JSON.parse(host.cli.readFileSync(pathApi(host.cli).join(pathApi(host.cli).dirname(piecemakerVibeDirectory(host.cli)), 'config.json'), 'utf8'));
+    sharedRuntime = config.pythonRuntime?.kind === 'shared';
+    if (sharedRuntime && typeof config.pythonPath === 'string') sharedPython = config.pythonPath;
+  } catch {}
+  if (sharedRuntime) {
+    if (!sharedPython) throw new Error('Environnement Python commun introuvable. Réinstallez les composants de cette version.');
+    const result = await host.run(sharedPython, ['-c', `from importlib.metadata import version; assert version("mistral-vibe") == ${JSON.stringify(VIBE_PACKAGE.split('==')[1])}`], PROBE_TIMEOUT_MS);
+    if (result.code !== 0 || !isVibeInstalled(host.cli)) throw new Error('Le composant Mistral de l’environnement Python commun est indisponible. Réinstallez le composant Python de cette version de PieceMaker.');
+    return;
+  }
   const python = await findPython(host);
   if (!python) {
     throw new Error('Python 3.12 ou 3.13 est introuvable sur ce poste : impossible d’installer Mistral Vibe.');
