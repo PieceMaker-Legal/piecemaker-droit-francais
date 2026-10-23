@@ -1,5 +1,6 @@
 import { readNativeVibeHistory } from '@/modules/providers/list/mistral/mistral-native-history.js';
 import { readVibeMessageTimes } from '@/modules/providers/list/mistral/mistral-message-times.js';
+import { isVibePlanMessage } from '@/modules/providers/list/mistral/mistral-plan-messages.js';
 import { readLegacyVibeSession, readLegacyVibeSessionOrigin } from '@/modules/providers/list/mistral/mistral-legacy-history.js';
 import type { IProviderSessions } from '@/shared/interfaces.js';
 import { prepareTranscriptMessages } from '@/shared/message-unification.js';
@@ -269,13 +270,19 @@ export class MistralSessionsProvider implements IProviderSessions {
 
     const text = extractContentText(raw.content ?? readObjectRecord(raw.message)?.content);
     if (text.trim()) {
+      const planning = role === 'assistant' && isVibePlanMessage(eventSessionId, baseId);
       messages.push(createNormalizedMessage({
         id: baseId,
         sessionId: eventSessionId,
         timestamp,
         provider: PROVIDER,
-        kind: 'stream_delta',
-        content: text,
+        ...(planning ? {
+          kind: 'tool_use',
+          toolName: 'ExitPlanMode',
+          toolId: baseId,
+          toolInput: { plan: text },
+          toolResult: { content: '', isError: false },
+        } : { kind: 'stream_delta', content: text }),
       }));
     }
 
@@ -304,9 +311,11 @@ export class MistralSessionsProvider implements IProviderSessions {
           timestamp: normalizeProviderTimestamp(record.createdAt),
         })] : [];
       }
-      return this.normalizeMessage({ ...record, sessionId }, sessionId).map((message) => (
-        message.kind === 'stream_delta' ? createNormalizedMessage({ ...message, kind: 'text', role: 'assistant' }) : message
-      ));
+      return this.normalizeMessage({ ...record, sessionId: vibeSessionId }, sessionId).map((message) => createNormalizedMessage({
+        ...message,
+        sessionId,
+        ...(message.kind === 'stream_delta' ? { kind: 'text', role: 'assistant' } : {}),
+      }));
     });
     const combined = new Map(normalized.map((message) => [message.id, message]));
     for (const message of streamed) combined.set(message.id, message);

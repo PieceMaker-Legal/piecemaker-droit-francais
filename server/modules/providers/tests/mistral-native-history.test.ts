@@ -10,6 +10,7 @@ import test from 'node:test';
 import { readNativeVibeHistory } from '@/modules/providers/list/mistral/mistral-native-history.js';
 import { MistralSessionsProvider } from '@/modules/providers/list/mistral/mistral-sessions.provider.js';
 import { recordLegacyVibeSessionOrigin } from '@/modules/providers/list/mistral/mistral-legacy-history.js';
+import { recordVibePlanMessage } from '@/modules/providers/list/mistral/mistral-plan-messages.js';
 
 const sessionId = '00000000-0000-4000-8000-000000000001';
 
@@ -76,6 +77,18 @@ test('a repeated history cursor fails without looping or changing a session', as
   const requests = setup(t, true);
   assert.equal(await readNativeVibeHistory(sessionId), null);
   assert.equal(requests.length, 4);
+});
+
+test('history reload restores the plan viewer card with the application session id', async (t) => {
+  setup(t);
+  recordVibePlanMessage({ sessionId, id: 'a1', turnId: 'turn-example', type: 'message', role: 'assistant' });
+  const history = await new MistralSessionsProvider().fetchHistory('app-1', { providerSessionId: sessionId });
+  const plan = history.messages.find(message => message.id === 'a1');
+  assert.equal(plan?.kind, 'tool_use');
+  assert.equal(plan?.sessionId, 'app-1');
+  assert.equal(plan?.toolName, 'ExitPlanMode');
+  assert.deepEqual(plan?.toolInput, { plan: 'Plan proposé.' });
+  assert.equal(history.messages.filter(message => message.id === 'a1').length, 1);
 });
 
 test('Unified history reload includes tool effects and their results', async (t) => {

@@ -8,6 +8,7 @@ import crossSpawn from 'cross-spawn';
 import { recordLegacyVibeSessionOrigin } from '@/modules/providers/list/mistral/mistral-legacy-history.js';
 import { recordVibeMessageTime } from '@/modules/providers/list/mistral/mistral-message-times.js';
 import { readPlanCommand } from '@/modules/providers/list/mistral/mistral-plan-command.js';
+import { recordVibePlanMessage } from '@/modules/providers/list/mistral/mistral-plan-messages.js';
 import { buildVibeModelsEnvironment } from '@/modules/providers/list/mistral/mistral-vibe-models.js';
 import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index.js';
 import type { IProviderRuntime } from '@/shared/interfaces.js';
@@ -195,6 +196,8 @@ async function spawnVibe(
     // provider-native session id recorded on the session row.
     const providerSessionId = context.resolveProviderSessionId(sessionId);
     const workingDir = cwd || projectPath || process.cwd();
+    const planCommand = readPlanCommand(command?.trim() || '');
+    const planning = planCommand.plan || permissionMode === 'plan';
     // Process-map key: the app session id when the caller supplied one, so
     // abort-by-app-id always works even before Vibe reports its own id.
     const processKey = sessionId || Date.now().toString();
@@ -207,6 +210,7 @@ async function spawnVibe(
     // Unified lifecycle contract: exactly one terminal `complete` per run
     // (close and error handlers can both fire for spawn failures).
     let completeSent = false;
+    let planResponse: unknown;
 
     const notifyTerminalState = ({ code = null, error = null }: { code?: number | null; error?: unknown } = {}) => {
       if (terminalNotificationSent) {
@@ -300,6 +304,10 @@ async function spawnVibe(
         recordVibeMessageTime(response);
         const normalized = context.normalizeMessage(response, capturedSessionId || sessionId || null);
         for (const msg of normalized) {
+          if (planning && msg.kind === 'stream_delta') {
+            planResponse = response;
+            continue;
+          }
           ws.send(msg);
         }
       } catch (error) {
@@ -323,7 +331,6 @@ async function spawnVibe(
       }
 
       const resolvedEffort = resolveMistralEffort(resolvedModel, effort, effortModels);
-      const planCommand = readPlanCommand(command?.trim() || '');
       const permissionOptions = resolveMistralPermissionOptions(planCommand.plan ? 'plan' : permissionMode);
 
       const args: string[] = ['--output', 'streaming', '--trust'];
@@ -351,7 +358,6 @@ async function spawnVibe(
         args.push('--max-tokens', String(maxTokens));
       }
 
-      const planning = planCommand.plan || permissionMode === 'plan';
       const promptText = flattenPromptForWindowsShell(planning
         ? `Mode plan PieceMaker : analyse la demande et propose un plan, puis attends le prochain message. Utilise uniquement les outils de lecture disponibles. Ne modifie aucun fichier et n’exécute aucune commande.\n\n${planCommand.prompt}`
         : planCommand.prompt);
@@ -413,6 +419,10 @@ async function spawnVibe(
         await sessionOriginWrite;
 
         if (code === 0) {
+          if (planning && planResponse && !vibeProcess?.aborted) {
+            recordVibePlanMessage(planResponse);
+            for (const message of context.normalizeMessage(planResponse, capturedSessionId || sessionId || null)) ws.send(message);
+          }
           if (!completeSent && !vibeProcess?.aborted) {
             completeSent = true;
             ws.send(createCompleteMessage({ provider: 'mistral', sessionId: finalSessionId, exitCode: code }));
