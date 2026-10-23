@@ -32,7 +32,7 @@ export async function runUninstallFromCommandLine({ app, dialog }) {
     message: 'Désinstaller PieceMaker ?',
     detail: process.platform === 'win32'
       ? 'Le programme de désinstallation Windows retire l’application. Les données, les modèles et les composants externes sont conservés.'
-      : 'L’application, ses composants, son certificat local et ses données seront retirés. Votre base de comptes (auth.db), votre Bibliothèque, vos dossiers juridiques, les modèles et le trousseau de signature partagés sont conservés.',
+      : 'L’application, ses composants, son certificat local et ses données seront retirés. Votre base de comptes (auth.db), votre Bibliothèque, votre historique Mistral, vos dossiers juridiques, les modèles et le trousseau de signature partagés sont conservés.',
     buttons: ['Désinstaller', 'Annuler'],
     defaultId: 1,
     cancelId: 1,

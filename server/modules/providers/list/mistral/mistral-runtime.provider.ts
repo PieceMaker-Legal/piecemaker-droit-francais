@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import crossSpawn from 'cross-spawn';
 
+import { recordLegacyVibeSessionOrigin } from '@/modules/providers/list/mistral/mistral-legacy-history.js';
 import { recordVibeMessageTime } from '@/modules/providers/list/mistral/mistral-message-times.js';
 import { readPlanCommand } from '@/modules/providers/list/mistral/mistral-plan-command.js';
 import { buildVibeModelsEnvironment } from '@/modules/providers/list/mistral/mistral-vibe-models.js';
@@ -87,20 +88,10 @@ export function buildVibeDisabledSkills(libraryDisabledSkills: unknown, inherite
   return JSON.stringify([...previous, ...patterns]);
 }
 
-/**
- * Maps the UI permission mode onto Vibe's `--agent` presets.
- *
- * Vibe ships four builtin agents (verified via `vibe --help`): `ask` (prompts
- * for every tool call), `plan` (read-only), `accept-edits` (auto-approves file
- * edits), and `auto-approve` (approves everything). There is no separate
- * bypass flag beyond `--auto-approve`/`--yolo`, which this maps onto directly
- * for the `bypassPermissions` mode so the process never blocks waiting on a
- * prompt it cannot answer non-interactively.
- */
 function resolveMistralPermissionOptions(permissionMode: string | undefined): { args: string[] } {
   switch (permissionMode) {
     case 'plan':
-      return { args: ['--agent', 'plan'] };
+      return { args: ['--agent', 'ask', '--enabled-tools', 'read_file', '--enabled-tools', 'grep', '--enabled-tools', 'skill'] };
     case 'bypassPermissions':
       return { args: ['--auto-approve'] };
     case 'acceptEdits':
@@ -209,6 +200,7 @@ async function spawnVibe(
     const processKey = sessionId || Date.now().toString();
     let capturedSessionId = providerSessionId;
     let sessionCreatedSent = false;
+    let sessionOriginWrite = Promise.resolve();
     let stdoutLineBuffer = '';
     let terminalNotificationSent = false;
     let vibeProcess: (ReturnType<typeof spawnFunction> & { aborted?: boolean; sessionId?: string }) | null = null;
@@ -248,6 +240,11 @@ async function spawnVibe(
         return;
       }
 
+      if (providerSessionId) {
+        sessionOriginWrite = recordLegacyVibeSessionOrigin(nextSessionId, providerSessionId).catch(() => {
+          console.error('[Mistral] Impossible de conserver la référence de l’historique précédent.');
+        });
+      }
       capturedSessionId = nextSessionId;
       // Legacy/direct callers without an app session id re-key the process
       // under the provider-native id once it is known.
@@ -354,7 +351,10 @@ async function spawnVibe(
         args.push('--max-tokens', String(maxTokens));
       }
 
-      const promptText = flattenPromptForWindowsShell(planCommand.prompt);
+      const planning = planCommand.plan || permissionMode === 'plan';
+      const promptText = flattenPromptForWindowsShell(planning
+        ? `Mode plan PieceMaker : analyse la demande et propose un plan, puis attends le prochain message. Utilise uniquement les outils de lecture disponibles. Ne modifie aucun fichier et n’exécute aucune commande.\n\n${planCommand.prompt}`
+        : planCommand.prompt);
       // `-p` takes the prompt as its own value; Vibe also accepts it as a
       // trailing positional, but the explicit flag form is unambiguous.
       args.push('-p', promptText);
@@ -409,6 +409,8 @@ async function spawnVibe(
           processVibeOutputLine(stdoutLineBuffer.trim());
           stdoutLineBuffer = '';
         }
+
+        await sessionOriginWrite;
 
         if (code === 0) {
           if (!completeSent && !vibeProcess?.aborted) {

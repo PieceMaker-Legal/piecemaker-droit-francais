@@ -40,6 +40,8 @@ Le comportement retenu est donc : téléchargement en arrière-plan, puis activa
 
 ## Limite de reprise constatée
 
+Cette limite a ensuite été levée avec Vibe 3.0.2 ; voir le [complément et ses essais](mistral-vibe-3.md). Le constat ci-dessous reste celui du runtime 2.25.0.
+
 La première conversation de contrôle, ouverte avec le Vibe personnel avant sélection du Python partagé, ne peut pas être importée par le runtime public : Vibe demande le paquet interne « Unified Harness ». Aucune conversion ni suppression de cette session n’est effectuée. La reprise validée ici concerne une conversation créée avec le Vibe 2.25.0 embarqué.
 
 ## Vérifications du code

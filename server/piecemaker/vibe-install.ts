@@ -12,7 +12,7 @@ import {
   type VibeCliHost,
 } from '@/shared/vibe-cli.js';
 
-export const VIBE_PACKAGE = 'mistral-vibe==2.25.0';
+export const VIBE_PACKAGE = 'mistral-vibe==3.0.2';
 
 const SUPPORTED_PYTHON_MINORS = [12, 13];
 const PROBE_TIMEOUT_MS = 15_000;

@@ -160,10 +160,11 @@ export function removalPlan(appRoot, home = os.homedir(), env = process.env, pla
   ], database, home, platform);
   const libraryHome = paths.resolve(dataHome);
   const purgedLibraryHome = purge.find((entry) => entry.directory === libraryHome);
-  if (purgedLibraryHome) purgedLibraryHome.keep.push(LIBRARY_DIRECTORY);
+  const keptData = [LIBRARY_DIRECTORY, 'vibe-session-origins', 'vibe-message-times'];
+  if (purgedLibraryHome) purgedLibraryHome.keep.push(...keptData);
   else if (remove.includes(libraryHome)) {
     remove.splice(remove.indexOf(libraryHome), 1);
-    purge.push({ directory: libraryHome, keep: [LIBRARY_DIRECTORY] });
+    purge.push({ directory: libraryHome, keep: keptData });
   }
   return {
     appRoot,

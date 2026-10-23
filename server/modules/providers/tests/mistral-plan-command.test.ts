@@ -10,7 +10,7 @@ import { readPlanCommand } from '@/modules/providers/list/mistral/mistral-plan-c
 import { mistralRuntime } from '@/modules/providers/list/mistral/mistral-runtime.provider.js';
 import type { ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/index.js';
 
-test('/plan est retiré du message et demande l’agent plan', () => {
+test('/plan est retiré du message et demande le mode plan PieceMaker', () => {
   assert.deepEqual(readPlanCommand('/plan trie les pièces'), { prompt: 'trie les pièces', plan: true });
   assert.deepEqual(readPlanCommand('crée un plan /plan pour trier les pièces'), { prompt: 'crée un plan pour trier les pièces', plan: true });
   assert.deepEqual(readPlanCommand('trie les pièces /plan'), { prompt: 'trie les pièces', plan: true });
@@ -54,11 +54,13 @@ async function vibeArgs(t: test.TestContext, prompt: string, permissionMode?: st
 const agentOf = (args: string[]) => args[args.indexOf('--agent') + 1];
 const promptOf = (args: string[]) => args[args.indexOf('-p') + 1];
 
-test('Vibe démarre avec l’agent plan quand le message contient /plan', async (t) => {
+test('Vibe limite les outils à la lecture quand le message contient /plan', async (t) => {
   const args = await vibeArgs(t, '/plan trie les pièces', 'bypassPermissions');
-  assert.equal(agentOf(args), 'plan');
+  assert.equal(agentOf(args), 'ask');
+  assert.deepEqual(args.flatMap((arg, index) => arg === '--enabled-tools' ? [args[index + 1]] : []), ['read_file', 'grep', 'skill']);
   assert.equal(args.includes('--auto-approve'), false);
-  assert.equal(promptOf(args), 'trie les pièces');
+  assert.match(promptOf(args), /^Mode plan PieceMaker/);
+  assert.match(promptOf(args), /trie les pièces$/);
 });
 
 test('sans /plan, Vibe garde le mode choisi', async (t) => {
@@ -81,9 +83,11 @@ test('Vibe par défaut passe --agent ask --auto-approve', async (t) => {
   assert.equal(promptOf(args), 'trie les pièces');
 });
 
-test('Vibe plan passe --agent plan', async (t) => {
+test('Vibe plan utilise la même restriction de lecture sans agent retiré', async (t) => {
   const args = await vibeArgs(t, 'trie les pièces', 'plan');
-  assert.equal(agentOf(args), 'plan');
+  assert.equal(agentOf(args), 'ask');
+  assert.deepEqual(args.flatMap((arg, index) => arg === '--enabled-tools' ? [args[index + 1]] : []), ['read_file', 'grep', 'skill']);
   assert.equal(args.includes('--auto-approve'), false);
-  assert.equal(promptOf(args), 'trie les pièces');
+  assert.match(promptOf(args), /^Mode plan PieceMaker/);
+  assert.match(promptOf(args), /trie les pièces$/);
 });

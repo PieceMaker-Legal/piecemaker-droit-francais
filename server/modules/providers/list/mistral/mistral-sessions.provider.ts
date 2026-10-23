@@ -1,8 +1,6 @@
-import fsp from 'node:fs/promises';
-import path from 'node:path';
-
+import { readNativeVibeHistory } from '@/modules/providers/list/mistral/mistral-native-history.js';
 import { readVibeMessageTimes } from '@/modules/providers/list/mistral/mistral-message-times.js';
-import { resolveVibeHome } from '@/modules/providers/list/mistral/mistral-runtime.provider.js';
+import { readLegacyVibeSession, readLegacyVibeSessionOrigin } from '@/modules/providers/list/mistral/mistral-legacy-history.js';
 import type { IProviderSessions } from '@/shared/interfaces.js';
 import { prepareTranscriptMessages } from '@/shared/message-unification.js';
 import type { AnyRecord, FetchHistoryOptions, FetchHistoryResult, NormalizedMessage } from '@/shared/types.js';
@@ -98,37 +96,6 @@ const formatToolContent = (value: unknown): string => {
   } catch {
     return String(value);
   }
-};
-
-type VibeSessionLog = { records: AnyRecord[]; startTime: unknown };
-
-const readVibeSessionLog = async (vibeSessionId: string): Promise<VibeSessionLog | null> => {
-  const root = path.join(resolveVibeHome(), 'logs', 'session');
-  let entries: string[];
-  try {
-    entries = await fsp.readdir(root);
-  } catch {
-    return null;
-  }
-  for (const entry of entries.filter((name) => name.endsWith(`_${vibeSessionId.slice(0, 8)}`))) {
-    try {
-      const meta = JSON.parse(await fsp.readFile(path.join(root, entry, 'meta.json'), 'utf8'));
-      if (meta?.session_id !== vibeSessionId) continue;
-      const lines = (await fsp.readFile(path.join(root, entry, 'messages.jsonl'), 'utf8')).split('\n');
-      const records = lines.flatMap((line) => {
-        try {
-          const record = readObjectRecord(JSON.parse(line));
-          return record ? [record] : [];
-        } catch {
-          return [];
-        }
-      });
-      return { records, startTime: meta.start_time };
-    } catch {
-      continue;
-    }
-  }
-  return null;
 };
 
 const parseToolArguments = (value: unknown): unknown => {
@@ -235,6 +202,30 @@ export class MistralSessionsProvider implements IProviderSessions {
       return [];
     }
 
+    if (type === 'effect') {
+      const detail = readObjectRecord(raw.detail);
+      const state = readObjectRecord(raw.state);
+      const toolName = readOptionalString(detail?.toolName);
+      if (!toolName || !state) return [];
+      const status = readOptionalString(state.status);
+      const terminal = ['completed', 'failed', 'cancelled', 'skipped'].includes(status ?? '');
+      const error = readObjectRecord(state.error);
+      return [createNormalizedMessage({
+        id: baseId,
+        sessionId: eventSessionId,
+        timestamp,
+        provider: PROVIDER,
+        kind: 'tool_use',
+        toolName,
+        toolInput: detail?.input ?? {},
+        toolId: baseId,
+        ...(terminal ? { toolResult: {
+          content: readOptionalString(state.outputText) || readOptionalString(error?.message) || readOptionalString(state.reason) || formatToolContent(state.output),
+          isError: status !== 'completed',
+        } } : {}),
+      })];
+    }
+
     if (type !== 'message') {
       return [];
     }
@@ -297,11 +288,29 @@ export class MistralSessionsProvider implements IProviderSessions {
   ): Promise<FetchHistoryResult> {
     const { limit = null, offset = 0 } = options;
     const vibeSessionId = options.providerSessionId ?? sessionId;
-    const log = await readVibeSessionLog(vibeSessionId);
+    const directLog = await readLegacyVibeSession(vibeSessionId);
+    const importedLog = directLog ? null : await readLegacyVibeSessionOrigin(vibeSessionId);
+    const log = directLog ?? importedLog;
     const normalized = log
-      ? normalizeVibeLog(log.records, sessionId, normalizeProviderTimestamp(log.startTime), readVibeMessageTimes(vibeSessionId))
+      ? normalizeVibeLog(log.records, sessionId, normalizeProviderTimestamp(log.startTime), readVibeMessageTimes(log.sessionId))
       : [];
-    const transcript = prepareTranscriptMessages(normalized);
+    const native = await readNativeVibeHistory(vibeSessionId);
+    const streamed = (native ?? []).flatMap((record) => {
+      if (importedLog && typeof record.id === 'string' && /^imported-\d+$/.test(record.id)) return [];
+      if (record.role === 'user') {
+        const content = extractContentText(record.content);
+        return content.trim() ? [createNormalizedMessage({
+          sessionId, provider: PROVIDER, id: String(record.id), kind: 'text', role: 'user', content,
+          timestamp: normalizeProviderTimestamp(record.createdAt),
+        })] : [];
+      }
+      return this.normalizeMessage({ ...record, sessionId }, sessionId).map((message) => (
+        message.kind === 'stream_delta' ? createNormalizedMessage({ ...message, kind: 'text', role: 'assistant' }) : message
+      ));
+    });
+    const combined = new Map(normalized.map((message) => [message.id, message]));
+    for (const message of streamed) combined.set(message.id, message);
+    const transcript = prepareTranscriptMessages([...combined.values()]);
     const normalizedOffset = Math.max(0, offset);
     const normalizedLimit = limit === null ? null : Math.max(0, limit);
     const { page, hasMore } = sliceTailPage(transcript, normalizedLimit, normalizedOffset);
