@@ -145,8 +145,18 @@ function convertedMarkdown(projectPath: string, document: GlinerDocument): strin
 
 function pythonExecutable(explicit: string | undefined): string {
   if (explicit) return explicit;
-  if (process.env.PYTHON_PATH) return process.env.PYTHON_PATH;
   const home = process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
+  let config: { pythonPath?: unknown; pythonRuntime?: { kind?: unknown } } | null = null;
+  try {
+    config = JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8'));
+  } catch {}
+  const configured = typeof config?.pythonPath === 'string' && fs.existsSync(config.pythonPath) ? config.pythonPath : null;
+  if (config?.pythonRuntime?.kind === 'shared') {
+    if (!configured) throw new Error('Environnement Python commun introuvable : réinstallez les composants de cette version.');
+    return configured;
+  }
+  if (process.env.PYTHON_PATH) return process.env.PYTHON_PATH;
+  if (configured) return configured;
   const candidate = process.platform === 'win32'
     ? path.join(home, 'venv', 'Scripts', 'python.exe')
     : path.join(home, 'venv', 'bin', 'python');

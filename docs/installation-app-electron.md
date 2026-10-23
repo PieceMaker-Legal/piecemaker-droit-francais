@@ -30,6 +30,8 @@ un environnement dont la vérification ne réussit pas.
 
 Le [rapport Mistral, Word et cycle macOS](piecemaker/validation-mistral-word-macos-2026-10-22.md) décrit le parcours réel de remplacement, retrait et réinstallation, ainsi que les onze phases de mise à jour continue. L’interface se télécharge en arrière-plan et s’active au lancement suivant après avoir quitté l’application. La qualification d’un nouveau bundle natif distribué reste distincte.
 
+Le [test macOS depuis un profil vierge](piecemaker/validation-installation-vierge-macos.md) vérifie les cinq plugins, le téléchargement GLiNER et le pipeline DOCX/PDF vers MarkItDown puis GLiNER. Il a révélé et corrigé un repli du scan vers le Python système au lieu du runtime commun installé.
+
 ## Installation existante et parcours historiques
 
 Installateur autonome de l'application Electron PieceMaker sur **macOS** et
