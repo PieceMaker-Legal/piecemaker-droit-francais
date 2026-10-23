@@ -14,6 +14,8 @@ Mistral a retiré l’agent `plan` et `exit_plan_mode` depuis 3.0.0. PieceMaker 
 
 Cette restriction vise les outils disponibles, en plus de la consigne. La planification ne doit pas être présentée comme une simple promesse du modèle. Les permissions administrées par Mistral peuvent restreindre davantage les outils.
 
+La dernière réponse du tour de planification réussi est présentée par la carte « Plan proposé » et le lien « Voir le plan », avec ouverture dans la visionneuse existante. PieceMaker réutilise sa représentation `ExitPlanMode` pour cet affichage ; aucun outil retiré n’est envoyé à Vibe. Les identifiants des réponses de plan sont conservés dans `vibe-message-times/*.plans.json` pour retrouver la même carte après rechargement. Les réponses ordinaires restent du texte et un tour échoué ne publie pas de carte de plan terminé. L’exécution reste un nouveau tour hors mode plan ; cette carte Mistral ne simule aucune demande de permission native.
+
 ## Historique
 
 Les sessions Unified ne sont plus des couples `meta.json` / `messages.jsonl`. Le fournisseur PieceMaker utilise le serveur officiel `vibe-app-server`, voisin du binaire Vibe sélectionné : initialisation JSON-RPC, notification `initialized`, puis `session/history/list` avec pagination. Il n’envoie ni reprise, ni démarrage de tour, ni lecture de configuration et ne contacte pas le modèle pour consulter l’historique.
