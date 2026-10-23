@@ -1,5 +1,5 @@
 import { capture } from './shell.mjs';
-import { PRODUCT_NAME } from './paths.mjs';
+import { IS_MAC, PRODUCT_NAME } from './paths.mjs';
 
 export const CONSENT_TITLE = `${PRODUCT_NAME} — autorisation requise`;
 
@@ -11,7 +11,9 @@ export const CONSENT_EXPLANATION = [
   '',
   'Cette autorité :',
   '• est créée ici, à l\'instant, et ne quitte jamais votre ordinateur ;',
-  '• sert uniquement au serveur local, pas à signer l\'application ;',
+  IS_MAC
+    ? '• sécurise le serveur local et certifie une identité locale pour signer l’application ;'
+    : '• sert uniquement au serveur local, pas à signer l\'application ;',
   '• est enregistrée pour votre seul compte, sans privilège administrateur ;',
   '• peut être retirée à tout moment (procédure indiquée dans la documentation).',
   '',

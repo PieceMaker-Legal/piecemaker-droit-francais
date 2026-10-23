@@ -344,6 +344,14 @@ lancée depuis l'Explorateur hérite déjà du PATH du registre.
 
 ## Le certificat auto-signé
 
+Sur macOS, le parcours prévu signe aussi l’application avec une identité
+créée sur le poste : `PieceMaker Local Signing`, signée par la CA locale
+autosignée. `install.mjs` appelle cette signature après l’accord de confiance,
+y compris pour une application précompilée. Aucun certificat Developer ID ni
+notarisation Apple n’est requis par ce parcours. Cette signature ne garantit
+pas à elle seule l’acceptation Gatekeeper d’un téléchargement ; le consentement
+et le lancement depuis l’installation téléchargée doivent être vérifiés.
+
 Une mini-autorité de certification propre au poste est générée à l'installation
 dans `~/.piecemaker/certs/`, puis deux certificats en sont dérivés :
 
@@ -591,9 +599,8 @@ l'ouverture ne sont proposés et rien n'attend.
 - Sur macOS, première installation longue (dépendances + build), quelques
   minutes. Sur Windows, quelques minutes seulement grâce à l'archive
   précompilée, sauf repli sur la construction locale.
-- Le certificat de signature est auto-signé : il supprime l'avertissement lié à
-  un binaire non signé, mais ne vaut pas notarisation Apple ni réputation
-  SmartScreen.
+- La signature locale ne garantit pas la disparition des avertissements du
+  système et ne vaut pas notarisation Apple ni réputation SmartScreen.
 - La fenêtre Windows s'appuie sur le runtime WebView2 (fourni avec Edge) ;
   sans ce runtime, l'installation continue sans fenêtre.
 - Les captures PISTE vieilliront avec le portail : les refaire quand
