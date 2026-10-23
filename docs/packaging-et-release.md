@@ -88,19 +88,23 @@ CSC_IDENTITY_AUTO_DISCOVERY=false npm run desktop:dist:win -- --publish never
 ```
 
 Sur macOS, `build.mac.notarize` est actuellement à `false` dans le manifeste
-CloudCLI. Fournir les identifiants Apple ne suffit donc pas : un build de
-distribution doit activer explicitement la notarisation dans sa configuration
-electron-builder, puis vérifier le ticket Apple. Le parcours local peut
+CloudCLI. Pour choisir une distribution notarisée, fournir les identifiants
+Apple ne suffit donc pas : il faudrait activer explicitement la notarisation
+dans la configuration electron-builder, puis vérifier le ticket Apple. Le parcours local peut
 produire un DMG de test non signé ou non notarisé. Le workflow
 `desktop-release.yml` est plus strict : son étape de vérification échoue avant
 le build si `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`,
 `APPLE_APP_SPECIFIC_PASSWORD` ou `APPLE_TEAM_ID` manque. Cette vérification des
 secrets ne constitue pas une preuve de notarisation.
-Une distribution macOS publique exige un certificat Developer ID Application,
-l’activation de la notarisation et un contrôle du ticket Apple. Les triplets
-de credentials
-Apple API key sont acceptés par electron-builder, mais ne satisfont pas les
-tests actuels de ce workflow, qui imposent la variante Apple ID.
+Ces workflows Desktop hérités de CloudCLI ne définissent pas le parcours
+macOS du bootstrap PieceMaker. Celui-ci génère sur le poste une CA autosignée
+et un certificat `PieceMaker Local Signing` signé par cette CA. Après
+consentement à la confiance locale, `desktop-bootstrap/lib/install.mjs` appelle
+`signApplication()` : import de l’identité dans un trousseau dédié, puis
+`codesign --force --deep --sign` sur l’application installée. Ce parcours
+ne requiert ni certificat Developer ID, ni compte Apple, ni notarisation.
+L’option `--no-certificate`, un refus de confiance ou un échec de signature
+peuvent laisser l’application sans cette signature locale ; un échec est signalé.
 
 Sur Windows, le workflow PieceMaker **exige** `WINDOWS_CSC_LINK` (PFX
 auto-signé PieceMaker, en base64) et `WINDOWS_CSC_KEY_PASSWORD`. L'installeur
@@ -110,14 +114,14 @@ certificat public dans `TrustedPublisher` (silencieux). La CA locale et le TLS
 `localhost` restent générés sur le poste, uniquement pour le proxy
 d'anonymisation, après consentement. L'utilisateur ne signe pas l'application.
 
-Un binaire macOS non signé ou seulement autosigné n'est pas une distribution
-publique équivalente : Gatekeeper peut bloquer son ouverture ou afficher un
-développeur non identifié. Un utilisateur peut l'autoriser manuellement dans
-les réglages de sécurité, mais cette procédure ne doit pas être la promesse
-de la release. La signature Developer ID et la notarisation Apple sont les
-prérequis pour une installation distribuée normalement. L'installeur Windows
-PieceMaker est signé Authenticode éditeur ; SmartScreen s'appuie sur cette
-réputation, distincte de la CA locale du proxy.
+La signature locale macOS ne vaut pas notarisation Apple et ne garantit pas
+l’acceptation par Gatekeeper d’un paquet téléchargé. Le parcours à qualifier
+est donc le téléchargement, le consentement, la signature locale, sa
+vérification et le lancement par le bootstrap prévu. Un téléchargement direct
+de DMG doit être testé séparément : il ne passe pas automatiquement par
+`install.mjs`. Developer ID et la notarisation seraient un autre mode de
+distribution, pas un prérequis du mode autosigné choisi ici. Sous Windows,
+la signature Authenticode autosignée ne garantit pas la réputation SmartScreen.
 
 Le paquet npm et le workflow Desktop CloudCLI gardent leur parcours existant.
 À partir de v2.0.33, le workflow PieceMaker Windows publie aussi l'installateur

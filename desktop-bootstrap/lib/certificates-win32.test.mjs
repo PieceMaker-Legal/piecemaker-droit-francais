@@ -7,7 +7,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { CONSENT_EXPLANATION } from './consent.mjs';
-import { publisherCertPath } from './paths.mjs';
+import { IS_MAC, publisherCertPath } from './paths.mjs';
 import { authorityPemFromWindowsExport, keepExistingAuthenticode } from './certificates-win32.mjs';
 
 const JWK_FIELDS = { Modulus: 'n', Exponent: 'e', D: 'd', P: 'p', Q: 'q', DP: 'dp', DQ: 'dq', InverseQ: 'qi' };
@@ -51,9 +51,10 @@ test("une clé qui n'appartient pas à l'autorité est refusée", () => {
   assert.throws(() => authorityPemFromWindowsExport(exported), /ne correspond pas/);
 });
 
-test("le consentement TLS ne demande pas de signer l'application", () => {
+test("le consentement explique la signature locale selon la plateforme", () => {
   assert.match(CONSENT_EXPLANATION, /https:\/\/localhost/);
-  assert.match(CONSENT_EXPLANATION, /pas à signer l'application/);
+  if (IS_MAC) assert.match(CONSENT_EXPLANATION, /identité locale pour signer l’application/);
+  else assert.match(CONSENT_EXPLANATION, /pas à signer l'application/);
 });
 
 test("l'import éditeur vise Root et TrustedPublisher", () => {

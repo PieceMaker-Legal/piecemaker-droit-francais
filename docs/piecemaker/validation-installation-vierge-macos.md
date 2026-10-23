@@ -8,7 +8,7 @@ Le banc `~/.piecemaker-clean-mac/` possède une identité d’application, un pr
 
 Le paquet local reprend l’enveloppe Electron et l’interface compilée 2.0.43 du banc précédent. Il embarque le backend de la branche, les cinq plugins recompilés et une archive Python commune préparée localement. Les ressources suivent les exclusions du packaging existant. L’installation utilise le Node d’Electron et `installRuntimeComponents({ requirePrebuilt: true })`, avec contrôle d’empreinte, extraction et validation de l’archive. Le Python installé et le modèle GLiNER sont placés dans les répertoires neufs du banc.
 
-Le Mac conserve ses logiciels habituels. Cette isolation par profil est complétée par le contrôle des processus réellement exécutés et des bibliothèques natives du runtime. La qualification d’une nouvelle DMG distribuée, signée Developer ID et notarisée reste un parcours distinct.
+Le Mac conserve ses logiciels habituels. Cette isolation par profil est complétée par le contrôle des processus réellement exécutés et des bibliothèques natives du runtime. La qualification d’un nouveau paquet téléchargé puis installé par le bootstrap, avec consentement et signature par l’identité locale, reste un parcours distinct. Developer ID et la notarisation Apple ne sont pas des prérequis du parcours autosigné PieceMaker.
 
 ## Défaut reproduit et correctif
 
@@ -58,9 +58,20 @@ Les 197 exigences du verrou macOS sont vérifiées dans l’interpréteur instal
 
 Le checkpoint GLiNER vérifié est `59894c087cb2923b01f337d4ee72f6ff84d5bdd6`. Les journaux, empreintes, résultats HTTP et documents fictifs restent hors dépôt dans le répertoire `proof/` du banc ; les identifiants du compte de contrôle restent privés.
 
+## Vérification du mode de signature
+
+Le 23 octobre, `generateCertificates()` a été exécuté séparément dans un
+répertoire temporaire neuf : autosignature de la CA vérifiée, signature du
+certificat `PieceMaker Local Signing` par cette CA vérifiée, usage
+`codeSigning` présent et chaîne validée par OpenSSL. Un second appel réutilise
+les certificats. Le répertoire est supprimé après contrôle ; aucun trousseau
+système n’est modifié par cette vérification. Le consentement affiche désormais
+sur macOS que l’autorité certifie aussi l’identité de signature locale ; le
+texte Windows conserve son rôle TLS seul.
+
 ## Limites de cette validation
 
-Le test qualifie l’installation locale des composants et plugins, puis le pipeline réel depuis des données et caches neufs. La signature du paquet de contrôle est locale. L’enregistrement de la CA dans le magasin de confiance macOS, une nouvelle DMG notarée et le téléchargement public de cette DMG restent à qualifier.
+Le test qualifie l’installation locale des composants et plugins, puis le pipeline réel depuis des données et caches neufs. Le paquet de contrôle possède une signature ad hoc ; il ne valide pas la signature par le certificat local généré pour l’utilisateur. L’enregistrement de la CA dans le magasin de confiance macOS, la signature de l’application par cette identité et le parcours depuis un téléchargement public restent à qualifier.
 
 Les mises à jour d’interface sont désactivées dans ce banc pour conserver l’interface de contrôle ; leur cycle possède sa [validation distincte](validation-mistral-word-macos-2026-10-22.md). Aucun build Vite, incrément de version, push ou publication n’est effectué pour cet essai.
 
