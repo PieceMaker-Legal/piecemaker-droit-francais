@@ -17,6 +17,57 @@ function writeFile(root: string, relative: string, contents = 'x') {
   fs.writeFileSync(target, contents);
 }
 
+function configuredPythonPipeline(t: test.TestContext, shared: boolean, missing = false) {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-configured-python-')));
+  const previous = { PIECEMAKER_HOME: process.env.PIECEMAKER_HOME, PYTHON_PATH: process.env.PYTHON_PATH };
+  process.env.PIECEMAKER_HOME = path.join(root, 'components');
+  process.env.PYTHON_PATH = missing ? process.execPath : path.join(root, 'external-python-unavailable');
+  writeFile(process.env.PIECEMAKER_HOME, 'config.json', JSON.stringify({
+    pythonPath: missing ? path.join(root, 'missing-managed-python') : process.execPath,
+    ...(shared ? { pythonRuntime: { kind: 'shared' } } : {}),
+  }));
+  writeFile(root, 'piece.pdf');
+  const output = path.join(root, 'interpreter.json');
+  const applicationRoot = path.join(root, 'application');
+  writeFile(applicationRoot, 'server/piecemaker/vendor/websocket-server/scripts/convert_and_scan_pipeline.py',
+    `require('node:fs').writeFileSync(${JSON.stringify(output)}, JSON.stringify({ executable: process.execPath }));`);
+  const database = new Database(':memory:');
+  database.exec('CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT NOT NULL UNIQUE)');
+  database.prepare('INSERT INTO projects (project_id, project_path) VALUES (?, ?)').run('project-1', root);
+  const store = new KnowledgeStore(database);
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  return {
+    pipeline: createKnowledgePipeline({ applicationRoot, projects: { getProjectById: () => ({ project_id: 'project-1', project_path: root }) }, store }),
+    output,
+  };
+}
+
+test('configured Python is used for scans with a shared desktop runtime', async (t) => {
+  const { pipeline, output } = configuredPythonPipeline(t, true);
+  await pipeline.scan('project-1', ['piece.pdf']);
+  assert.equal(JSON.parse(fs.readFileSync(output, 'utf8')).executable, process.execPath);
+});
+
+test('missing shared Python never falls back to an external interpreter', async (t) => {
+  const { pipeline, output } = configuredPythonPipeline(t, true, true);
+  await assert.rejects(pipeline.scan('project-1', ['piece.pdf']), /Environnement Python commun introuvable/);
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('configured Python remains usable for an existing non-shared installation', async (t) => {
+  const { pipeline, output } = configuredPythonPipeline(t, false);
+  delete process.env.PYTHON_PATH;
+  await pipeline.scan('project-1', ['piece.pdf']);
+  assert.equal(JSON.parse(fs.readFileSync(output, 'utf8')).executable, process.execPath);
+});
+
 test('scan delegates every file format to the converter and still rejects unsafe paths', async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-formats-')));
   const database = new Database(':memory:');
