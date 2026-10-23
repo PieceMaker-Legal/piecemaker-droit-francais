@@ -410,19 +410,23 @@ approuvés, puis racine, qui demande une confirmation Windows), et l'entrée
 « Applications installées » est retirée en dernier.
 
 Dans l'application installée, les réglages ont un onglet **Désinstaller** sous Notifications.
-Cet onglet retire tout ce que PieceMaker a installé ou écrit, sauf la base
-`auth.db` (et ses fichiers `-wal`/`-shm`) et la Bibliothèque
-(`~/.piecemaker/library-backend`) :
+Le retrait conserve la base `auth.db` (et ses fichiers `-wal`/`-shm`) et la
+Bibliothèque (`~/.piecemaker/library-backend`), ainsi que les références et dates
+d’historique Mistral (`vibe-session-origins`, `vibe-message-times`). Sur macOS, il conserve aussi les
+modèles et le trousseau de signature partagés. Il retire :
 
-- l'application, les raccourcis Windows, le certificat local et le trousseau de signature ;
-- `~/.piecemaker` (`PIECEMAKER_HOME`) vidé de tout sauf `library-backend` : Node
+- l'application, les raccourcis Windows et le certificat local propre à cette installation ;
+- `~/.piecemaker` (`PIECEMAKER_HOME`) vidé de tout sauf la Bibliothèque et les
+  métadonnées Mistral conservées ci-dessus : Node
   et Rust de `bootstrap/`, Python, venv, certificats, configuration, historique
   des dossiers, facturation, profil PWA, journaux ;
 - le dossier de données produit (`~/.piecemaker-droit-francais`, `CLOUDCLI_HOME`)
   vidé de tout sauf `auth.db` : plugins, sauvegardes, journaux ;
 - les dossiers Electron (`userData`, `logs`, `crashDumps`) et, sur macOS, les
   préférences, caches, `HTTPStorages`, `WebKit` et `Saved Application State` de l'`appId` ;
-- les modèles GLiNER et MinerU (`~/.mineru`, et `mineru.json` d'une ancienne installation).
+- dans le parcours Windows historique seulement, les modèles GLiNER et MinerU
+  (`~/.mineru`, et `mineru.json` d'une ancienne installation) ; NSIS conserve
+  les composants externes dans le parcours actuel.
 
 Seuls les chemins situés sous le dossier personnel sont touchés ; un dossier
 qui contiendrait `auth.db` plus profondément (`DATABASE_PATH` personnalisé) est

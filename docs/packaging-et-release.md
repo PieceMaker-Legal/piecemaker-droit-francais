@@ -87,15 +87,18 @@ CSC_IDENTITY_AUTO_DISCOVERY=false npm run desktop:dist:mac -- --publish never
 CSC_IDENTITY_AUTO_DISCOVERY=false npm run desktop:dist:win -- --publish never
 ```
 
-Sur macOS, `build.mac.notarize` est à `true` dans `package.json`, mais
-electron-builder ne lance la notarisation que si des identifiants Apple sont
-présents ; sans eux, il avertit et saute cette étape. Cela peut donc produire
-un DMG de test non signé ou non notarisé localement. Le workflow
+Sur macOS, `build.mac.notarize` est actuellement à `false` dans le manifeste
+CloudCLI. Fournir les identifiants Apple ne suffit donc pas : un build de
+distribution doit activer explicitement la notarisation dans sa configuration
+electron-builder, puis vérifier le ticket Apple. Le parcours local peut
+produire un DMG de test non signé ou non notarisé. Le workflow
 `desktop-release.yml` est plus strict : son étape de vérification échoue avant
 le build si `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`,
-`APPLE_APP_SPECIFIC_PASSWORD` ou `APPLE_TEAM_ID` manque. Il n'existe donc pas
-de release macOS publique via ce workflow sans certificat Developer ID
-Application et accès à la notarisation Apple. Les triplets de credentials
+`APPLE_APP_SPECIFIC_PASSWORD` ou `APPLE_TEAM_ID` manque. Cette vérification des
+secrets ne constitue pas une preuve de notarisation.
+Une distribution macOS publique exige un certificat Developer ID Application,
+l’activation de la notarisation et un contrôle du ticket Apple. Les triplets
+de credentials
 Apple API key sont acceptés par electron-builder, mais ne satisfont pas les
 tests actuels de ce workflow, qui imposent la variante Apple ID.
 

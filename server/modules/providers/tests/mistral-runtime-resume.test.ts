@@ -7,6 +7,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { readVibeMessageTimes } from '@/modules/providers/list/mistral/mistral-message-times.js';
+import { readLegacyVibeSessionOrigin } from '@/modules/providers/list/mistral/mistral-legacy-history.js';
 import { isReplayedVibeHistoryEntry, mistralRuntime } from '@/modules/providers/list/mistral/mistral-runtime.provider.js';
 import type { ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/index.js';
 
@@ -20,13 +21,23 @@ const newTurn = [
   { id: 'new-assistant', sessionId: 'vibe-1', turnId: 'turn-2', createdAt: Date.UTC(2026, 0, 1, 9, 1), type: 'message', role: 'assistant', content: [{ type: 'text', text: 'deux' }] },
 ];
 
-async function runVibe(t: test.TestContext, providerSessionId: string | null) {
+async function runVibe(t: test.TestContext, providerSessionId: string | null, legacy = false) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-home-'));
   const previous = process.env.PIECEMAKER_HOME;
+  const previousVibeHome = process.env.VIBE_HOME;
   process.env.PIECEMAKER_HOME = home;
+  process.env.VIBE_HOME = home;
+  if (legacy) {
+    const directory = path.join(home, 'logs', 'session', `session_example_${providerSessionId!.slice(0, 8)}`);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'meta.json'), JSON.stringify({ session_id: providerSessionId }));
+    fs.writeFileSync(path.join(directory, 'messages.jsonl'), JSON.stringify({ role: 'user', content: 'Exemple fictif.' }));
+  }
   t.after(() => {
     if (previous === undefined) delete process.env.PIECEMAKER_HOME;
     else process.env.PIECEMAKER_HOME = previous;
+    if (previousVibeHome === undefined) delete process.env.VIBE_HOME;
+    else process.env.VIBE_HOME = previousVibeHome;
     fs.rmSync(home, { recursive: true, force: true });
   });
   t.mock.method(childProcess, 'spawn', () => {
@@ -67,6 +78,11 @@ test('a resumed Vibe turn records the real time of its own entries only', async 
 
 test('a new Vibe session keeps every streamed entry', async (t) => {
   assert.equal((await runVibe(t, null)).length, replayedTurn.length + newTurn.length);
+});
+
+test('a legacy resume persists its original history before completing the turn', async (t) => {
+  await runVibe(t, 'legacy-example', true);
+  assert.equal((await readLegacyVibeSessionOrigin('vibe-1'))?.sessionId, 'legacy-example');
 });
 
 test('only entries without a turn are recognised as replayed history', () => {

@@ -57,7 +57,7 @@ test('retire les données privées Mac et conserve comptes, bibliothèque et mod
     keep: ['auth.db', 'auth.db-wal', 'auth.db-shm'],
   }, {
     directory: '/Users/me/.piecemaker',
-    keep: ['library-backend'],
+    keep: ['library-backend', 'vibe-session-origins', 'vibe-message-times'],
   }]);
   const script = macUninstallScript(plan);
   assert.match(script, /security remove-trusted-cert/);
@@ -65,7 +65,7 @@ test('retire les données privées Mac et conserve comptes, bibliothèque et mod
   assert.doesNotMatch(script, /delete-certificate -c|delete-keychain/);
   assert.match(script, /PieceMaker\.app/);
   assert.match(script, /find '\/Users\/me\/\.piecemaker-droit-francais' -mindepth 1 -maxdepth 1 ! -name 'auth\.db' ! -name 'auth\.db-wal' ! -name 'auth\.db-shm' -exec rm -rf/);
-  assert.match(script, /find '\/Users\/me\/\.piecemaker' -mindepth 1 -maxdepth 1 ! -name 'library-backend' -exec rm -rf/);
+  assert.match(script, /find '\/Users\/me\/\.piecemaker' -mindepth 1 -maxdepth 1 ! -name 'library-backend' ! -name 'vibe-session-origins' ! -name 'vibe-message-times' -exec rm -rf/);
   assert.doesNotMatch(script, /rm -rf [^\n]*'\/Users\/me\/\.piecemaker'( |\n)/);
   assert.doesNotMatch(script, /'\/Users\/me\/\.cache\/huggingface'/);
   assert.doesNotMatch(script, /'\/Users\/me'( |\n)/);
@@ -141,6 +141,8 @@ test('le retrait Mac conserve les ressources partagées et cible uniquement le c
       path.join(home, 'mineru.json'),
       path.join(home, 'case/sample.docx'),
       path.join(data, 'library-backend/sample'),
+      path.join(data, 'vibe-session-origins/example.json'),
+      path.join(data, 'vibe-message-times/example.json'),
       path.join(product, 'auth.db'),
     ];
     for (const file of shared) {
