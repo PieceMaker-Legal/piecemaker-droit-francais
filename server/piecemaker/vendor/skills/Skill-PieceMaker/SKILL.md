@@ -83,6 +83,8 @@ conserve le texte et la mise en forme, et écrit une copie liée au fichier exte
 `verifier` est local et ne réécrit rien : sources externes, parties et fiabilité
 des pièces ne sont pas relues. Une clause réécrite ressort « à revoir ». La commande
 `pm raisonnement verifier` porte sur le fichier du dossier, pas sur ce DOCX.
+
+Ne pas confondre avec l'acte rédigé dans le raisonnement : celui-ci s'imprime par `pm acte exporter`, et les retouches de l'avocat reviennent par `pm acte fusionner`.
 `comparer` compare les empreintes exactes, pas l’équivalence logique du code ; une
 divergence ne permet jamais de tester silencieusement une version différente.
 `extraire` crée une copie de la version liée si elle est disponible, sans écraser

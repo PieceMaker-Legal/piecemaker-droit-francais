@@ -5,7 +5,7 @@ import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
 type Host = { readonly context: Context; onContextChange(callback: (context: Context) => void): () => void; openFileInEditor?(file: string): void };
-type Tab = 'detail' | 'test' | 'alertes' | 'code';
+type Tab = 'detail' | 'test' | 'alertes' | 'acte' | 'code';
 type Json = Record<string, any>;
 type Occurrence = { path: string; parent: string; link: 'si' | 'sauf' | 'l_une'; condition: Json };
 type GraphNode = { id: string; label: string; status: string; kind: 'question' | 'terme' | 'controle' | 'fait' | 'ou' | 'piece' | 'source'; decisive: boolean; x: number; y: number };
@@ -59,7 +59,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Objectif" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${[['question', 'Objectif'], ['terme', 'Termes'], ['controle', 'Contrôles'], ['fait', 'Faits'], ['source', 'Sources'], ['piece', 'Pièces']].map(([key, label]) => `<span><i style="background:${COLORS[key]}"></i>${label}</span>`).join('')}<span><i class="is-dashed"></i>À établir</span><span><i class="is-ring"></i>Décisif</span><span>- - sauf</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Objectif, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Objectif" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${[['question', 'Objectif'], ['terme', 'Termes'], ['controle', 'Contrôles'], ['fait', 'Faits'], ['source', 'Sources'], ['piece', 'Pièces']].map(([key, label]) => `<span><i style="background:${COLORS[key]}"></i>${label}</span>`).join('')}<span><i class="is-dashed"></i>À établir</span><span><i class="is-ring"></i>Décisif</span><span>- - sauf</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Objectif, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="acte">Acte</button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const svg = root.querySelector<SVGSVGElement>('svg')!;
@@ -329,9 +329,27 @@ export function mount(container: HTMLElement, api: Host) {
     detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${part('1. En droit', 'Chaque source relue, sa citation et sa version applicable.', ['source'])}${part('2. En fait', 'Les pièces relues et les faits qu’elles établissent.', ['pièce', 'fait', 'registre'])}${part('3. Conclusion', 'Les étapes du raisonnement, les hypothèses et la réponse.', ['condition', 'essai', 'réponse'])}`;
   };
 
+  const rich = (text: string) => escape(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>');
+  const pointStatus = (name: string): string => terms()[name]?.statut ?? occurrences().find((entry) => entry.condition.condition === name)?.condition.statut ?? annotated()?.valeurs?.[name]?.statut ?? 'à établir';
+  const acteBlock = () => {
+    const sections = Array.isArray(annotated()?.acte) ? annotated()!.acte as Json[] : [];
+    if (!sections.length) return '<p class="pmr-muted">Aucun acte rédigé dans le raisonnement.</p>';
+    const own = (at: string) => visibleIssues().filter((issue) => (issue.path === at || issue.path.startsWith(`${at}.`)) && !issue.path.startsWith(`${at}.sections`));
+    const render = (list: Json[], at: string, depth: number): string => list.map((section, index) => {
+      const here = `${at}[${index}]`;
+      const traite = (Array.isArray(section.traite) ? section.traite : section.traite ? [section.traite] : []) as string[];
+      const level = Math.min(depth + 3, 6);
+      const conflicts = Array.isArray(section.conflit) ? section.conflit as Json[] : [];
+      return `<section class="pmr-acte" style="--depth:${depth}">${section.intitule ? `<h${level}>${rich(section.intitule)}</h${level}>` : ''}${traite.length ? `<p class="pmr-muted">Développe : ${traite.map((name) => `<button class="pmr-link" data-select="${escape(name)}">${escape(human(name))}</button> ${pill(pointStatus(name))}`).join(', ')}</p>` : ''}${(section.texte as string[] | undefined ?? []).map((paragraph) => `<p>${rich(paragraph)}</p>`).join('')}${conflicts.map((conflict) => `<div class="pmr-conflict"><strong>À trancher</strong><p class="pmr-muted">Raisonnement :</p>${(conflict.modele as string[]).map((line) => `<p>${rich(line)}</p>`).join('') || '<p class="pmr-muted">section supprimée</p>'}<p class="pmr-muted">DOCX de l’avocat :</p>${(conflict.avocat as string[]).map((line) => `<p>${rich(line)}</p>`).join('') || '<p class="pmr-muted">section supprimée</p>'}</div>`).join('')}${own(here).length ? issueList(own(here)) : ''}${render(section.sections as Json[] | undefined ?? [], `${here}.sections`, depth + 1)}</section>`;
+    }).join('');
+    const general = visibleIssues().filter((issue) => issue.path === 'acte' || (issue.path.startsWith('objectifs[') && issue.text.includes('l’acte')));
+    return `${general.length ? `<h4>À reprendre dans l’acte</h4>${issueList(general)}` : ''}${render(sections, 'acte', 0)}`;
+  };
+
   const paintDetail = () => {
     const objective = objectives()[scope];
     if (tab === 'test') { paintTest(); return; }
+    if (tab === 'acte') { detail.innerHTML = acteBlock(); return; }
     if (tab === 'code') { detail.innerHTML = snapshot?.code ? `<pre class="pmr-code">${escape(snapshot.code)}</pre>` : '<p class="pmr-muted">Aucun fichier .piecemaker/raisonnement.js.</p>'; return; }
     if (tab === 'alertes') {
       const dismissed = (snapshot?.issues ?? []).filter((issue) => dismissedIds().has(issue.id));

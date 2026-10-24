@@ -33,6 +33,7 @@ import { createSessionDossierRouter } from './session-dossier/session-dossier-ro
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
 import { createDocxReasoningLocalRouter } from './docx-reasoning-local.js';
+import { createActeLocalRouter } from './acte-local.js';
 import { createExternalFileRouter, createFileLinksRouter } from './file-links.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
 import { createInstitutionalTermsRouter, openInstitutionalTerms } from './institutional-terms.js';
@@ -103,6 +104,7 @@ const localRouter = express.Router();
 localRouter.use(knowledge.localRouter);
 localRouter.use(createReasoningLocalRouter(reasoning, isLoopback));
 localRouter.use(createDocxReasoningLocalRouter(projectsDb, isLoopback));
+localRouter.use(createActeLocalRouter(reasoning, isLoopback));
 localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
 localRouter.use(createTabularReviewLocalRouter({

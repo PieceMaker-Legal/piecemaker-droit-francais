@@ -6,6 +6,7 @@ import type Database from 'better-sqlite3';
 
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, ReasoningSnapshot, ReasoningStatus, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
+import { assignIds, checkActe } from './acte.js';
 import { and, answer, calculate, compile, evaluate, or, objectiveRoots, decisive, reachableLeaves, runTrials, simulate, structure } from './engine.js';
 import type { Calculation, Facts, Trace } from './engine.js';
 import { canonical, formulaConditions, VERBS, formulaNames, formulaNumbers, LiteralError, parseLiteral, printLiteral, readReasoning, stripAnnotations } from './format.js';
@@ -100,6 +101,7 @@ export async function verifyReasoning(input: {
   }
   lines = parsed.lines;
   const stripped = stripAnnotations(parsed.value);
+  if (isObject(stripped)) assignIds(stripped.acte);
   const { reasoning, problems } = readReasoning(stripped);
   const ordered = isObject(stripped) ? printLiteral(canonical(stripped, reasoning)) : null;
   if (ordered) lines = parseLiteral(ordered).lines;
@@ -514,6 +516,57 @@ export async function verifyReasoning(input: {
     emit({ key: `essai:${index}`, step: 'essai', status: result.conforme ? 'ok' : 'alerte', subject: reasoning.hypotheses[index].nom, text: result.conforme ? 'Conforme' : `Non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${human(name)} = ${shown(value)}`).join(', ')}` });
     if (!result.conforme) add('erreur', `hypotheses[${index}]`, `hypothèse non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${name} = ${shown(value)}`).join(', ')}`, `L’hypothèse « ${reasoning.hypotheses[index].nom} » ne donne pas le résultat attendu : ${Object.entries(result.obtenu).map(([name, value]) => told(name, value)).join(', ')}.`);
   });
+
+  if (reasoning.acte.length) {
+    const inScope = (names: string[]) => {
+      const terms = new Set<string>();
+      const facts = new Set<string>();
+      const values = new Set<string>();
+      const expand = (name: string) => {
+        if (reasoning.terms.has(name)) {
+          if (terms.has(name)) return;
+          terms.add(name);
+          for (const { at, condition } of occurrences) {
+            if (at.split('.')[0] !== name) continue;
+            if (condition.condition) expand(condition.condition);
+            if (condition.decompte) expand(condition.decompte);
+            const measure = condition.mesure;
+            [measure?.delai?.de, measure?.delai?.a, measure?.montant?.valeur, measure?.montant?.seuil].forEach((item) => { if (typeof item === 'string') expand(item); });
+            condition.selon.forEach((basis) => [basis.applicabilite, basis.validite, basis.vigueur?.au].forEach((item) => { if (item) expand(item); }));
+          }
+        } else if (reasoning.valeurs.has(name)) {
+          if (values.has(name)) return;
+          values.add(name);
+          const formula = reasoning.valeurs.get(name)!.formule;
+          if (formula) [...formulaNames(formula), ...formulaConditions(formula)].forEach(expand);
+        } else facts.add(name);
+      };
+      names.forEach(expand);
+      return { terms, facts, values };
+    };
+    const citationsOf = (names: string[] | null) => {
+      const scope = names ? inScope(names) : null;
+      const pool: string[] = [];
+      const cite = (items: Array<{ citation?: string }>) => items.forEach((item) => { if (item.citation) pool.push(item.citation, corrections.get(item.citation) ?? item.citation); });
+      for (const { at, condition } of occurrences) {
+        if (scope && !scope.terms.has(at.split('.')[0]) && !(condition.condition && scope.facts.has(condition.condition))) continue;
+        condition.selon.forEach((basis) => { cite([basis]); cite(basis.renvoi); cite(basis.contredit); });
+        cite(condition.preuve);
+        cite(condition.contredit);
+      }
+      for (const [name, entry] of reasoning.valeurs) if (!scope || scope.values.has(name)) { cite(entry.preuve); cite(entry.selon); }
+      return pool;
+    };
+    const statusOf = (name: string) => (reasoning.terms.has(name) ? STATUS(statuses.get(name) ?? null) : reasoning.valeurs.has(name) ? (valueOf(name) === null ? 'à établir' : 'acquis') : conditionNames.has(name) ? (contested(name) ? 'contesté' : STATUS(leaf(name))) : null);
+    const obstacles = reasoning.objectifs.flatMap((_, index) => (node(annotated, `objectifs[${index}]`)?.obstacles as string[] | undefined) ?? []);
+    for (const issue of checkActe(reasoning.acte, {
+      known: (name) => reasoning.terms.has(name) || reasoning.valeurs.has(name) || conditionNames.has(name),
+      status: statusOf,
+      citations: citationsOf,
+      objectives: reasoning.objectifs.map((objective, index) => ({ effet: objective.effet, at: `objectifs[${index}]` })),
+      obstacles,
+    })) add(issue.kind, issue.path, issue.text, issue.avocat);
+  }
 
   const registre: string[] = [];
   if (input.online) {

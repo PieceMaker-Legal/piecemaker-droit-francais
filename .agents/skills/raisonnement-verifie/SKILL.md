@@ -31,6 +31,17 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.js`, un o
 - Variables : une valeur ouverte (`null`) n'est signalée que si une réponse en dépend (fait décisif calculé, ou opérande d'un montant-réponse). En drafting et en consultation, le manque se lève en fixant la valeur ou par des hypothèses qui la supposent : pour un terme, des hypothèses conformes donnant des résultats différents (la bascule) ; pour un montant, une hypothèse conforme qui donne le montant attendu. En contentieux, seule la preuve le lève. Un fait vrai/faux décisif sans pièce n'est jamais levé par une hypothèse hors drafting. Aucune détection textuelle des blancs.
 - Simulation (volet, onglet Détail de l'objectif) : l'avocat modifie les valeurs, `POST /reasoning/simulate` rejoue le raisonnement hors ligne (sources en cache du dernier test), rien n'est écrit.
 
+## L'acte rédigé (`acte`)
+
+Le raisonnement est la seule source de l'acte : la rédaction vit dans la clé `acte` du même fichier ; le DOCX n'en est que l'impression.
+
+- `acte: [{ id, intitule, traite, texte: [paragraphes], conflit, sections }]`, dans l'ordre de lecture, distinct de l'ordre logique des termes (un fait sert plusieurs conditions, l'acte le raconte une fois). `traite` (nom ou liste) relie la section à un terme, une condition ou une valeur ; les sous-sections en héritent pour le contrôle des citations. `**gras**` et `*italique*` seuls. Les `id` (`s1`…) sont attribués par le vérificateur et relient les sections aux contrôles de contenu du DOCX.
+- Contrôles, sans lecture du sens de la prose : `traite` inconnu = erreur ; passage entre « » (trois mots ou plus) absent des citations de ce que la section traite (ou de tout le raisonnement si rien n'est traité) = erreur ; `conflit` = erreur ; section qui développe un point à établir ou contesté = manque ; objectif non développé, obstacle non discuté = manque.
+- `pm acte exporter --sortie F.docx [--modele cabinet.docx]` : refusé tant qu'une erreur porte sur l'acte. Chaque section devient un contrôle de contenu verrouillé `pma:sN` ; la base de fusion (texte exporté) est une propriété `PieceMakerActe`. Réexporter vers un DOCX existant reprend son package (styles, en-têtes, mise en page) ; refusé si ce DOCX porte des retouches non fusionnées.
+- `pm acte fusionner --fichier F.docx` : fusion à trois voies par section (base du DOCX, modèle, DOCX), texte par `git merge-file --diff3` sur un paragraphe par ligne, conflits affinés paragraphe par paragraphe. Paragraphes et titres ajoutés par l'avocat repris à leur place ; section supprimée reprise si le modèle ne l'a pas changée. Un vrai conflit garde la version du modèle et ajoute `conflit`. Refusé si suivi des modifications, tableau, image, note ou zone de texte (perdus à la réimpression). Après la fusion, la base enregistrée dans le DOCX avance au texte lu (seule la propriété change) : une retouche écartée par l'agent ne revient pas et n'empêche pas la réimpression. Repères : contrôle de contenu et signet `pma_sN` (LibreOffice retire les contrôles de contenu de bloc, garde les signets) ; sans aucun repère, la fusion est refusée plutôt que de dupliquer l'acte. Le dossier versionné (historique) garde la version d'avant.
+- `pm acte importer --fichier F.docx` : reprend un acte sans lien ; titres par styles, sinon par numérotation en gras (I., A., 1., a.) ou majuscules. L'agent transcrit ensuite le raisonnement et les `traite` ; les citations de l'acte non retrouvées sont signalées.
+- Limites : mise en forme autre que gras/italique, commentaires Word, alignements et retraits propres à un paragraphe ne sont pas conservés ; un `*` littéral est lu comme italique ; l'ordre des sections est celui du modèle.
+
 ## Contrôles (sous-raisonnements)
 
 Termes ordinaires désignés par un emplacement, nommés avec son préfixe (vérifié dans les deux sens). L'élément conditionné ne compte que si le contrôle est acquis.
@@ -67,11 +78,15 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 | `server/modules/piecemaker-reasoning/program.ts` | vérification, manques, sortie, service, exemple fictif |
 | `server/piecemaker/reasoning-connectors.ts` | Légifrance, pièces, registre, BODACC |
 | `server/piecemaker/legal-code/instructions.md` | instruction de l'agent (seule source) |
-| `plugins/piecemaker-raisonnement/src/client.ts` | volet |
+| `server/modules/piecemaker-reasoning/acte.ts` | lecture de `acte`, id, gras/italique, contrôles de l'acte |
+| `server/piecemaker/acte-docx.ts` | export et lecture DOCX (contrôles de contenu, base de fusion, import) |
+| `server/piecemaker/acte-merge.ts` | fusion à trois voies (`git merge-file`) |
+| `server/piecemaker/acte-files.ts`, `acte-local.ts` | commandes `pm acte` |
+| `plugins/piecemaker-raisonnement/src/client.ts` | volet (onglet Acte) |
 
 ## Tester
 
-- `npx tsx --tsconfig server/tsconfig.json --test server/modules/piecemaker-reasoning/tests/*.test.ts` (Node 24 via nvm).
+- `npx tsx --tsconfig server/tsconfig.json --test server/modules/piecemaker-reasoning/tests/*.test.ts server/piecemaker/tests/acte-docx.test.ts` (Node 24 via nvm).
 - Test de bout en bout : un agent léger (Haiku) ne reçoit que `instructions.md` et un dossier anonymisé, boucle sur `verifier` jusqu'à zéro erreur ; on inspecte le fichier et les manques restants. Ne jamais lui expliquer les contrôles.
 
 ## En suspens (proposé, non validé)
