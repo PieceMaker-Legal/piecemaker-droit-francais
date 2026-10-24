@@ -1,0 +1,38 @@
+# Carneades 4 : une couche d’argumentation à éprouver, pas un juge
+
+## Résultat
+
+Carneades 4 est une bibliothèque en Go pour construire et évaluer des graphes d’arguments. Son intérêt incrémental pour PieceMaker serait de rendre lisible la confrontation de deux raisonnements une fois leurs propositions alignées : arguments favorables et contraires, attaques sur une conclusion ou sur l’inférence, points qui restent indécis, et répartition explicite de certaines charges de preuve. Il ne remplace ni l’objet de raisonnement vérifié ni ses contrôles de citations, de pièces, de vigueur et d’applicabilité.
+
+Le dépôt met côte à côte deux modèles qu’il faut distinguer : le solveur d’argumentation abstraite de Dung (`src/engine/dung/`) et l’évaluateur structuré CAES (`src/engine/caes/`). Pour le rapprochement de dossiers de raisonnement, CAES paraît le plus directement pertinent : ses objets distinguent propositions (`Statement`), arguments (`Argument`), prémisses, conclusion, schéma et une proposition `Undercutter` (`src/engine/caes/caes.go`, types `Argument`, `Issue`, `Statement`). Le solveur Dung, lui, travaille sur des arguments abstraits et des relations d’attaque, avec sémantiques grounded, complete, preferred et stable. Ce second mode fournit des étiquettes et extensions formelles, mais ne contient pas par lui-même les prémisses juridiques ou les preuves.
+
+## Apports possibles à la confrontation
+
+Dans une projection à deux auteurs, chaque proposition pourrait conserver son origine et son chemin PieceMaker ; les arguments pourraient ensuite être reliés à des positions contraires seulement après validation de l’identité des propositions. CAES permet de grouper des positions dans un `Issue`, d’y rattacher des arguments et de distinguer prémisses, hypothèses et exceptions dans un `Scheme`. Les schémas peuvent être instanciés à partir de faits supposés par le moteur CHR (`src/engine/caes/inference.go`, `src/engine/caes/gochr.go`; exemples dans `examples/AGs/YAML/`). Cela donnerait un vocabulaire commun pour visualiser « ce qui soutient », « ce qui contredit » et « ce qui attaque la fiabilité d’un raisonnement ».
+
+La distinction attaque de conclusion / attaque d’inférence est utile. Une position adverse peut être représentée dans le même issue que la proposition contestée ; un `Undercutter` porte, lui, sur l’application d’un argument. Le code CAES traite ce sous-coupeur séparément des prémisses et calcule l’applicabilité de l’argument à partir de son état et de celui des prémisses (`caes.go`, `Undercut`, `Applicable`, `GetWeight`). Les graphes peuvent comporter des cycles et des arguments cumulatifs ; `examples/AGs/YAML/dung-attack-cycle.yml` montre un cycle d’attaques et `src/test/dung_test.go` couvre notamment un cycle pair en sémantique preferred. Le dépôt propose aussi un exemple de paraconsistance (`examples/AGs/YAML/paraconsistency.yml`) : deux hypothèses opposées ne déclenchent pas une explosion logique vers des conclusions sans rapport.
+
+Le format YAML accepte des libellés humains pour les prédicats, des métadonnées pouvant référencer des documents sources, et des formats d’échange/export (AIF, LKIF, CAF, AGXML, YAML, DOT, GraphML). C’est utile pour produire une carte d’arguments navigable et exporter un graphe. En revanche, la documentation ne décrit pas un lien natif entre chaque prémisse et une occurrence exacte de citation légale ou un extrait de pièce. Il faudrait conserver ces références et leur contrôle dans PieceMaker, et les transporter comme provenance rattachée aux propositions/arguments, sans traiter une métadonnée comme une preuve vérifiée.
+
+## Charges de preuve, standards et poids : précaution déterminante
+
+Le modèle CAES connaît des catégories de prémisses, hypothèses et exceptions ; les sources théoriques Carneades expliquent comment la charge de production et la charge de persuasion peuvent se répartir entre proposant et contradicteur. Dans v4, les issues déclarent un standard parmi `PE` (prépondérance), `CCE` (preuve claire et convaincante) et `BRD` (au-delà du doute raisonnable). Il s’agit donc de mécanismes de modélisation utiles pour exposer « qui doit étayer quoi » et tester des scénarios.
+
+Il ne faut pas présenter les poids calculés comme des probabilités ni comme des seuils reconnus en droit français. Les poids sont des nombres dans `[0,1]`, calculés par fonctions configurables (liée, cumulative, convergente, critères, préférences, etc.). Dans `src/engine/caes/caes.go`, les comparaisons intégrées des standards utilisent des seuils `alpha = 0.5` et `beta = 0.3` : `CCE` exige une avance supérieure à alpha ; `BRD` ajoute que le poids perdant soit inférieur à beta. La documentation n’établit pas que ces nombres soient calibrés juridiquement ou empiriquement pour la preuve civile française. Ils sont des choix d’implémentation. Toute utilisation produit devrait plutôt exposer la règle choisie et ses paramètres, ou ne pas faire d’évaluation numérique automatique. Carneades peut servir à organiser l’examen et à faire apparaître les hypothèses d’une comparaison, pas à mesurer la force probante d’une pièce.
+
+Autre limite : le schéma natif associe un standard à une `Issue`, pas un contrôleur complet de l’ensemble des exigences PieceMaker. En particulier, il n’assure pas le contrôle des sources, dates de vigueur, conditions cumulatives, montants, prescriptions, ou de l’alignement d’une proposition entre deux auteurs. Il ne produit pas non plus un acte DOCX ni ne lie des paragraphes de rédaction aux propositions discutées. Ces fonctions restent dans le modèle PieceMaker.
+
+## Maturité et licence
+
+Le dépôt est en Go, sous licence MPL-2.0 ; le fichier `go.mod` cible Go 1.18. À la date de consultation, la page GitHub de l’organisation indique une dernière mise à jour de Carneades 4 au 15 octobre 2024. Il contient des tests Go couvrant les imports, évaluations, graphes et cycles, ainsi que plusieurs dizaines d’exemples YAML. La base est donc plus qu’un article de recherche, mais la cadence visible est faible et la documentation contient des TODO explicites pour les fonctions de pondération personnalisées. `Roadmap.md` décrit aussi des objectifs ultérieurs ; leur présence dans cette feuille de route ne prouve pas qu’ils soient livrés.
+
+Pour PieceMaker, je retiendrais Carneades comme référence conceptuelle ou prototype d’une vue de confrontation : propositions alignées manuellement, graphes distincts par auteur, attaques et contre-arguments explicités, charges visibles, et états indécis préservés. Je n’en ferais pas le moteur décisionnel ni le calculateur de poids probatoires. Un premier essai peut simplement projeter deux objets existants en arguments/positions, sans modifier leur format, et comparer le graphe obtenu aux chemins de termes, `preuve`, `contredit` et `selon` déjà vérifiés.
+
+## Sources primaires
+
+- [Dépôt Carneades 4](https://github.com/carneades/carneades-4) — README, licence, exemples, code Go et tests.
+- [Guide utilisateur YAML](https://github.com/carneades/carneades-4/blob/master/USAGE.md) — schémas, prémisses, exceptions, poids, issues et standards.
+- [Évaluateur CAES](https://github.com/carneades/carneades-4/blob/master/src/engine/caes/caes.go) et [fonctions de pondération](https://github.com/carneades/carneades-4/blob/master/src/engine/caes/weighing.go).
+- [Modèle Carneades et charges de preuve](https://webspace.science.uu.nl/~prakk101/pubs/GordonPrakkenWalton2007a.pdf) — fondement théorique des prémisses et standards.
+
+Les limites et apports PieceMaker ci-dessus sont des inférences tirées de ces formats et du code consulté statiquement ; aucun scénario n’a été exécuté et aucune intégration n’a été faite.
