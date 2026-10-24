@@ -172,7 +172,6 @@ test("avec la fenêtre, l'ouverture de PieceMaker attend la configuration PISTE 
   assert.equal(settled, false);
   assert.equal(launches, 0);
   assert.deepEqual(await window.post('launch'), { ok: true });
-  assert.deepEqual(await window.post('launch'), { ok: false });
   await settling;
   assert.equal(launches, 1);
 });

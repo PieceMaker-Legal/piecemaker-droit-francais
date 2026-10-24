@@ -46,9 +46,18 @@ Les 40 tests Mistral ciblés réussissent, avec un test réseau optionnel ignor�
 
 ## Distribution native macOS
 
-L’adaptation Mistral ne vaut pas qualification d’une nouvelle DMG distribuée. Le poste ne dispose pas d’identité Developer ID Application, les variables Apple ne sont pas fournies au processus et les secrets `CSC_*` / `APPLE_*` sont absents du dépôt GitHub lors du contrôle. Aucun secret n’est lu ou affiché.
+L’adaptation Mistral ne vaut pas qualification d’un nouveau paquet téléchargé.
+Le parcours macOS PieceMaker génère une CA autosignée et une identité locale
+pour signer l’application après consentement. Il ne requiert pas de certificat
+Developer ID ni de notarisation Apple. Le manifeste CloudCLI désactive la
+notarisation ; ses workflows Desktop demandant des secrets Apple correspondent
+à un autre mode de distribution.
 
-Le manifeste CloudCLI désactive actuellement la notarisation. Une distribution normale exige donc un raccord de configuration explicite, une signature Developer ID, une notarisation et un contrôle du ticket Apple, puis un essai de mise à jour avec deux bundles distribuables. Le remplacement local et les mises à jour continues de l’interface déjà testés ne remplacent pas cette qualification. Le numéro de version de l’application n’est pas incrémenté, aucune publication n’est effectuée et le binaire personnel 2.26.1 reste en place.
+Le remplacement local et les mises à jour continues de l’interface déjà testés
+ne remplacent pas la vérification du téléchargement, du consentement, de la
+signature par le certificat local et du lancement depuis ce parcours. Le numéro
+de version de l’application n’est pas incrémenté et aucune publication n’est
+effectuée par cette adaptation.
 
 ## Sources officielles
 
