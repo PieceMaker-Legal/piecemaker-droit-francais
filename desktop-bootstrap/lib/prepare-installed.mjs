@@ -4,14 +4,12 @@ import { fileURLToPath } from 'node:url';
 import { generateCertificates, importPublisherCertificate, isCaTrusted, trustCertificateAuthority } from './certificates.mjs';
 import { installRuntimeComponents } from '../composants/install.mjs';
 import { ensureRuntimeComponents } from '../../electron-piecemaker/runtime-components.mjs';
-import { sourceDir, trustMarkerPath, releaseTag } from './paths.mjs';
+import { sourceDir } from './paths.mjs';
 
 export async function prepareInstalledDesktop({ applicationRoot = sourceDir, skipCertificateTrust = false, includeProviders = true } = {}) {
   await generateCertificates();
   importPublisherCertificate();
-  if (!skipCertificateTrust && !isCaTrusted() && await trustCertificateAuthority()) {
-    await fs.writeFile(trustMarkerPath, `${JSON.stringify({ trustedAt: new Date().toISOString(), release: releaseTag })}\n`);
-  }
+  if (!skipCertificateTrust && !isCaTrusted()) await trustCertificateAuthority();
   const manifest = JSON.parse(await fs.readFile(path.join(applicationRoot, 'runtime-components.json'), 'utf8'));
   const cacheRoot = process.env.PIECEMAKER_RUNTIME_CACHE_ROOT || path.join(process.env.LOCALAPPDATA, 'PieceMaker', 'runtime-components');
   await Promise.all([

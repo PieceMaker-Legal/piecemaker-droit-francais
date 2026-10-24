@@ -1,0 +1,46 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { IS_MAC } from './paths.mjs';
+
+async function exists(target) {
+  try {
+    await fs.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function verifyBuiltApp(builtApp) {
+  const legacyRoot = IS_MAC ? path.join(builtApp, 'Contents', 'Resources', 'app') : path.join(builtApp, 'resources', 'app');
+  const compactRoot = `${legacyRoot}.asar.unpacked`;
+  const appRoot = await exists(path.join(compactRoot, 'package.json')) ? compactRoot : legacyRoot;
+  const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
+  const required = [
+    'dist-server/server/index.js',
+    'server/piecemaker/vendor/websocket-server/originals-pipeline.cjs',
+    `server/piecemaker/anonymizer/bin/${binaryName}`,
+  ];
+  const missing = [];
+  for (const relativePath of required) {
+    if (!(await exists(path.join(appRoot, relativePath)))) missing.push(relativePath);
+  }
+  if (missing.length) throw new Error(`Application construite incomplète — fichiers absents : ${missing.join(', ')}`);
+}
+
+export async function verifyMacBundleLinks(bundle) {
+  if ((await fs.lstat(bundle)).isSymbolicLink()) throw new Error("Lien hors de l'application dans l'archive");
+  const root = await fs.realpath(bundle);
+  async function visit(directory) {
+    for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        const resolved = await fs.realpath(target);
+        if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+          throw new Error("Lien hors de l'application dans l'archive");
+        }
+      } else if (entry.isDirectory()) await visit(target);
+    }
+  }
+  await visit(bundle);
+}

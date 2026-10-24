@@ -75,7 +75,6 @@ function scheduleUninstall(app) {
   const product = loadProductConfig();
   const plan = removalPlan(appRoot, home, process.env, process.platform, {
     config: readJson(path.join(dataHome, 'config.json')),
-    mineru: readJson(path.join(home, 'mineru.json')),
     productDataRoot: process.env.CLOUDCLI_HOME || path.join(home, product.dataDirectoryName),
     appId: product.appId,
     electronPaths: electronPaths(app),

@@ -6,7 +6,34 @@ import { fileURLToPath } from 'node:url';
 export const sharedPythonRequirements = fileURLToPath(new URL('./windows-requirements.txt', import.meta.url));
 export const sharedPythonMarker = '.piecemaker-shared-python.json';
 export const sharedPythonProbe = 'import importlib; [importlib.import_module(name) for name in ["markitdown", "pypdf", "torch", "gliner2", "mineru", "mineru_llama_cpp", "onnxruntime", "vibe.cli.launcher", "mistralai_vibe_local_harness.runtime", "requests", "dotenv", "truststore"]]';
-export const sharedPythonEntrypoints = 'import os,sys; from importlib.metadata import distributions; from pip._vendor.distlib.scripts import ScriptMaker; maker=ScriptMaker(None,os.path.join(sys.prefix,"Scripts" if os.name=="nt" else "bin")); maker.clobber=True; maker.variants={""}; [maker.make(ep.name+"="+ep.value) for dist in distributions() for ep in dist.entry_points if ep.group=="console_scripts"]';
+export const sharedPythonEntrypoints = `
+import os,stat,sys
+from pathlib import Path
+from importlib.metadata import distributions
+from pip._vendor.distlib.scripts import ScriptMaker
+from pip._vendor.distlib.util import FileOperator
+
+class ChangedFiles(FileOperator):
+    def write_binary_file(self,path,data):
+        try:
+            if Path(path).read_bytes() == data:
+                return
+        except FileNotFoundError:
+            pass
+        super().write_binary_file(path,data)
+
+    def set_executable_mode(self,files):
+        super().set_executable_mode([name for name in files if stat.S_IMODE(os.stat(name).st_mode) & 0o555 != 0o555])
+
+os.environ["SOURCE_DATE_EPOCH"] = "315532800"
+maker = ScriptMaker(None,os.path.join(sys.prefix,"Scripts" if os.name == "nt" else "bin"),fileop=ChangedFiles())
+maker.clobber = True
+maker.variants = {""}
+for dist in distributions():
+    for ep in dist.entry_points:
+        if ep.group == "console_scripts":
+            maker.make(ep.name + "=" + ep.value)
+`;
 
 export function requirementsForPlatform(platform = 'win32', arch = 'x64') {
   if (platform === 'win32' && arch === 'x64') return sharedPythonRequirements;

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { replaceDirectory, stopProcessesScript } from './place.mjs';
+import { replaceDirectory } from './place.mjs';
 
 function sandbox() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-place-'));
@@ -70,11 +70,4 @@ test('refuse sans rien toucher quand la version installée ne peut pas être dé
     fs.chmodSync(parent, 0o755);
   }
   assert.equal(fs.readFileSync(path.join(destination, 'version.txt'), 'utf8'), 'ancienne');
-});
-
-test('ne ferme sous Windows que les processus lancés depuis le dossier de l\'application', () => {
-  const script = stopProcessesScript("C:\\Users\\d'Ada\\AppData\\Local\\Programs\\PieceMaker");
-  assert.match(script, /StartsWith\('C:\\Users\\d''Ada\\AppData\\Local\\Programs\\PieceMaker\\', \[StringComparison\]::OrdinalIgnoreCase\)/);
-  assert.ok(script.indexOf('CloseMainWindow') < script.indexOf('Stop-Process'));
-  assert.match(script, /\$found\.Count$/);
 });

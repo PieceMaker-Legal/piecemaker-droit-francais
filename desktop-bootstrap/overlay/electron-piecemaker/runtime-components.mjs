@@ -114,6 +114,31 @@ function cacheReady(directory, component) {
   }
 }
 
+function removeAbandonedDownloads(cacheRoot, log) {
+  for (const entry of fs.readdirSync(cacheRoot, { withFileTypes: true })) {
+    const match = entry.name.match(/^\.runtime-download-([1-9]\d*)-([A-Za-z0-9]{6})$/);
+    if (!match || !entry.isDirectory()) continue;
+    const directory = path.join(cacheRoot, entry.name);
+    try {
+      const markerPath = path.join(directory, 'owner.json');
+      if (!fs.lstatSync(markerPath).isFile()) continue;
+      const marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+      if (marker.format !== 1 || marker.owner !== 'piecemaker-runtime-download' || marker.pid !== Number(match[1]) || !Number.isSafeInteger(marker.pid)) continue;
+      if (fs.readdirSync(directory).some((name) => !['owner.json', 'component.partial', 'extracting'].includes(name))) continue;
+      try {
+        process.kill(marker.pid, 0);
+        continue;
+      } catch (error) {
+        if (error.code !== 'ESRCH') continue;
+      }
+      fs.rmSync(directory, { recursive: true, force: true });
+      log(`Removed abandoned runtime component download: ${entry.name}`);
+    } catch (error) {
+      log(`Runtime component download cleanup skipped: ${entry.name}: ${error.message}`);
+    }
+  }
+}
+
 export async function ensureRuntimeComponents({
   manifest,
   cacheRoot,
@@ -124,6 +149,7 @@ export async function ensureRuntimeComponents({
 }) {
   validateManifest(manifest);
   fs.mkdirSync(cacheRoot, { recursive: true });
+  removeAbandonedDownloads(cacheRoot, log);
   const moduleRoots = [];
   for (const component of manifest.components) {
     const destination = path.join(cacheRoot, component.id);
@@ -131,11 +157,13 @@ export async function ensureRuntimeComponents({
       log(`Runtime component cache hit: ${component.id}`);
     } else {
       const nonce = `${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
-      const partial = path.join(cacheRoot, `.${component.id}.${nonce}.partial`);
-      const staging = path.join(cacheRoot, `.${component.id}.${nonce}.extracting`);
+      const transaction = fs.mkdtempSync(path.join(cacheRoot, `.runtime-download-${process.pid}-`));
+      const partial = path.join(transaction, 'component.partial');
+      const staging = path.join(transaction, 'extracting');
       const backup = path.join(cacheRoot, `.${component.id}.${nonce}.previous`);
       const url = `https://github.com/${manifest.repository}/releases/download/${encodeURIComponent(manifest.releaseTag)}/${encodeURIComponent(component.assetName)}`;
       try {
+        fs.writeFileSync(path.join(transaction, 'owner.json'), JSON.stringify({ format: 1, owner: 'piecemaker-runtime-download', pid: process.pid }), { flag: 'wx' });
         const prefetched = assetDir ? path.join(assetDir, component.assetName) : '';
         let archive = partial;
         if (prefetched && fs.existsSync(prefetched)) {
@@ -178,8 +206,7 @@ export async function ensureRuntimeComponents({
           log(`Runtime component ready: ${component.id}`);
         }
       } finally {
-        fs.rmSync(partial, { force: true });
-        fs.rmSync(staging, { recursive: true, force: true });
+        fs.rmSync(transaction, { recursive: true, force: true });
         if (fs.existsSync(backup) && !fs.existsSync(destination)) await renameDirectory(backup, destination);
         else fs.rmSync(backup, { recursive: true, force: true });
       }

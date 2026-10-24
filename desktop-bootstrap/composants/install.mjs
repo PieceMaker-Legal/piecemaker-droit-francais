@@ -7,7 +7,6 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
-import { installGlinerSnapshot } from './gliner-cache.mjs';
 import { requirementsForPlatform, sharedPythonMarker, sharedPythonProbe, sharedPythonFingerprint, sharedPythonReady, sharedPythonEntrypoints } from './shared-python.mjs';
 
 const PYTHON_RELEASE_API = 'https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest';
@@ -118,34 +117,6 @@ export function dependenciesReady(status) {
 
 export function installerRequirements(text) {
   return String(text || '').split(/\r?\n/).filter((line) => !DEFERRED_REQUIREMENT.test(line)).join('\n');
-}
-
-export function glinerPipPackages() {
-  return ['gliner2[local]>=2.1.0', 'huggingface-hub>=0.20.0'];
-}
-
-async function installGlinerRuntime({ host, python, scriptsDir, env, homeDir, sourceDir, output, platform, immutable }) {
-  const warmup = path.join(scriptsDir, 'warmup.py');
-  output.step('Installation de GLiNER2…');
-  const before = await readWarmupStatus(host, python, warmup, scriptsDir);
-  if (!before?.dependencies?.gliner2 || !before?.dependencies?.huggingface_hub) {
-    if (immutable) throw new Error('Composant GLiNER absent de l’environnement Python commun : réinstallez les composants de cette version.');
-    const pipArgs = ['-m', 'pip', 'install', '--upgrade'];
-    if (platform === 'win32') pipArgs.push('--only-binary=:all:');
-    pipArgs.push(...glinerPipPackages());
-    await required(host, python, pipArgs);
-  }
-  await installGlinerSnapshot({ sourceDir, env, homeDir, host, output });
-  if ((await readWarmupStatus(host, python, warmup, scriptsDir))?.ready) {
-    output.ok('GLiNER2 opérationnel.');
-    return;
-  }
-  output.step('Téléchargement du snapshot GLiNER épinglé…');
-  await required(host, python, [warmup, '--models', 'gliner2'], { cwd: scriptsDir });
-  if (!(await readWarmupStatus(host, python, warmup, scriptsDir))?.ready) {
-    throw new Error('GLiNER2 n’est pas opérationnel après installation.');
-  }
-  output.ok('GLiNER2 opérationnel.');
 }
 
 export function mergeRuntimeConfig(current, paths) {
@@ -415,7 +386,6 @@ export async function installRuntimeComponents({
   host = createHost(),
   output = log,
   requirePrebuilt = false,
-  includeGliner = false,
   runtimeMetadata,
 } = {}) {
   if (!sourceDir) throw new Error('PIECEMAKER_SRC_DIR est absent — lancez install.sh ou install.ps1.');
@@ -430,7 +400,6 @@ export async function installRuntimeComponents({
   output.step('Composants Python — MarkItDown');
   const configured = await readConfig(host, layout.configFile);
   let python = '';
-  let immutable = false;
   if (requirePrebuilt) {
     const metadata = runtimeMetadata || JSON.parse(await host.readFile(path.join(sourceDir, 'python-runtime.json')));
     if (!metadata.requirementsSha256 && configured.pythonPath && await host.exists(configured.pythonPath) && dependenciesReady(await readWarmupStatus(host, configured.pythonPath, warmup, scriptsDir))) {
@@ -439,7 +408,6 @@ export async function installRuntimeComponents({
     } else {
       requirementsForPlatform(platform, arch);
       const paths = await installPrebuiltPython({ layout, host, env, scriptsDir, output, platform, arch, metadata });
-      immutable = paths.pythonRuntime?.kind === 'shared';
       await host.writeFile(layout.configFile, `${JSON.stringify(mergeRuntimeConfig(configured, paths), null, 2)}\n`);
       output.ok('Composants Python precompiles installes.');
       python = paths.pythonPath;
@@ -462,7 +430,7 @@ export async function installRuntimeComponents({
       output.step('Installation des bibliothèques Python (MarkItDown)…');
       const installationRequirements = path.join(layout.root, 'requirements-installation.txt');
       const declared = await host.readFile(requirements);
-      await host.writeFile(installationRequirements, includeGliner ? declared : installerRequirements(declared));
+      await host.writeFile(installationRequirements, installerRequirements(declared));
       await required(host, python, ['-m', 'pip', 'install', '-U', 'pip']);
       await required(host, python, ['-m', 'pip', 'install', '--upgrade', '-r', installationRequirements]);
       if (!dependenciesReady(await readWarmupStatus(host, python, warmup, scriptsDir))) {
@@ -476,10 +444,6 @@ export async function installRuntimeComponents({
     });
     await host.writeFile(layout.configFile, `${JSON.stringify(next, null, 2)}\n`);
     output.ok(`Interpréteur enregistré : ${python}`);
-  }
-
-  if (includeGliner) {
-    await installGlinerRuntime({ host, python, scriptsDir, env, homeDir, sourceDir, output, platform, immutable });
   }
 }
 

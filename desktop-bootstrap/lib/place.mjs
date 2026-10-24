@@ -1,14 +1,8 @@
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-import { capture, mustCapture, osascript, powershell } from './shell.mjs';
+import { capture, mustCapture, osascript } from './shell.mjs';
 import { ui } from './ui.mjs';
 import { IS_MAC, PRODUCT_NAME, installTargetCandidates } from './paths.mjs';
-import { UNINSTALL_ARGUMENT, WINDOWS_UNINSTALL_KEY } from '../../electron/uninstallPlan.js';
-
-function quote(value) {
-  return `'${String(value).replace(/'/g, "''")}'`;
-}
 
 async function isWritable(directory) {
   try {
@@ -77,28 +71,6 @@ export async function replaceDirectory(source, destination, copy, { attempts = 2
   }
 }
 
-export function stopProcessesScript(directory) {
-  const running = `@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith(${quote(`${directory}\\`)}, [StringComparison]::OrdinalIgnoreCase) })`;
-  return [
-    `function Running { ${running} }`,
-    '$found = Running',
-    'foreach ($process in $found) { try { $null = (Get-Process -Id $process.ProcessId -ErrorAction Stop).CloseMainWindow() } catch {} }',
-    '$deadline = (Get-Date).AddSeconds(15)',
-    'while ((Running).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }',
-    'foreach ($process in Running) { Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue }',
-    '$found.Count',
-  ].join('; ');
-}
-
-function closeRunningCopies(destination) {
-  try {
-    const stopped = Number.parseInt(powershell(stopProcessesScript(destination)), 10) || 0;
-    if (stopped > 0) ui.detail(`${PRODUCT_NAME} était ouvert : ${stopped} processus fermé(s) avant le remplacement.`);
-  } catch (error) {
-    ui.warn(`Fermeture automatique de ${PRODUCT_NAME} impossible (${error.message}).`);
-  }
-}
-
 async function placeOnMac(builtApp) {
   const target = await pickTarget();
   const destination = path.join(target, `${PRODUCT_NAME}.app`);
@@ -107,20 +79,15 @@ async function placeOnMac(builtApp) {
   return destination;
 }
 
-async function placeOnWindows(builtDir) {
-  const target = await pickTarget();
-  const destination = path.join(target, PRODUCT_NAME);
-  closeRunningCopies(destination);
-  await replaceDirectory(builtDir, destination, (from, to) => fs.cp(from, to, { recursive: true }));
-  return destination;
-}
-
 const MAC_PROCESS_PATTERN = `/${PRODUCT_NAME}.app/Contents/`;
 const WINDOWS_IMAGE = `${PRODUCT_NAME}.exe`;
 const QUIT_TIMEOUT_MS = 20_000;
 
 function applicationIsRunning() {
-  if (IS_MAC) return capture('pgrep', ['-f', MAC_PROCESS_PATTERN]).code === 0;
+  if (IS_MAC) {
+    const result = capture('pgrep', ['-f', MAC_PROCESS_PATTERN]);
+    return result.code === 0 && result.stdout.split(/\s+/).some(pid => Number(pid) > 0 && Number(pid) !== process.pid);
+  }
   const listing = capture('tasklist', ['/FI', `IMAGENAME eq ${WINDOWS_IMAGE}`, '/NH']);
   return listing.stdout.toLowerCase().includes(WINDOWS_IMAGE.toLowerCase());
 }
@@ -154,61 +121,10 @@ export async function quitRunningApplication() {
 
 export async function installApplication(builtArtifact) {
   ui.step("Installation de l'application…");
-  const destination = IS_MAC ? await placeOnMac(builtArtifact) : await placeOnWindows(builtArtifact);
+  if (!IS_MAC) throw new Error('L’installation Windows est gérée par NSIS.');
+  const destination = await placeOnMac(builtArtifact);
   ui.ok(`Application installée : ${destination}`);
   return destination;
-}
-
-export function createShortcuts(installedPath) {
-  if (IS_MAC) return;
-
-  const executable = path.join(installedPath, `${PRODUCT_NAME}.exe`);
-  const startMenu = path.join(
-    process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
-    'Microsoft', 'Windows', 'Start Menu', 'Programs', `${PRODUCT_NAME}.lnk`,
-  );
-  const desktop = path.join(os.homedir(), 'Desktop', `${PRODUCT_NAME}.lnk`);
-
-  powershell([
-    '$ErrorActionPreference = "Stop"',
-    '$shell = New-Object -ComObject WScript.Shell',
-    ...[startMenu, desktop].map((linkPath) => [
-      `$link = $shell.CreateShortcut(${quote(linkPath)})`,
-      `$link.TargetPath = ${quote(executable)}`,
-      `$link.WorkingDirectory = ${quote(installedPath)}`,
-      `$link.Description = ${quote(`${PRODUCT_NAME} — plateforme IA pour juristes`)}`,
-      '$link.Save()',
-    ].join('; ')),
-  ].join('; '));
-
-  ui.ok('Raccourcis créés (menu Démarrer et Bureau).');
-}
-
-export function windowsUninstallEntryScript(installedPath, version) {
-  const executable = path.join(installedPath, `${PRODUCT_NAME}.exe`);
-  const values = {
-    DisplayName: PRODUCT_NAME,
-    DisplayVersion: String(version || '').replace(/^v/, ''),
-    Publisher: PRODUCT_NAME,
-    DisplayIcon: executable,
-    InstallLocation: installedPath,
-    UninstallString: `"${executable}" ${UNINSTALL_ARGUMENT}`,
-  };
-  return [
-    '$ErrorActionPreference = "Stop"',
-    `$key = ${quote(WINDOWS_UNINSTALL_KEY)}`,
-    'New-Item -Path $key -Force | Out-Null',
-    ...Object.entries(values).map(([name, value]) => `New-ItemProperty -Path $key -Name ${quote(name)} -Value ${quote(value)} -PropertyType String -Force | Out-Null`),
-    ...['NoModify', 'NoRepair'].map((name) => `New-ItemProperty -Path $key -Name ${quote(name)} -Value 1 -PropertyType DWord -Force | Out-Null`),
-    `$size = (Get-ChildItem -LiteralPath ${quote(installedPath)} -Recurse -File | Measure-Object -Property Length -Sum).Sum`,
-    "New-ItemProperty -Path $key -Name 'EstimatedSize' -Value ([int]($size / 1KB)) -PropertyType DWord -Force | Out-Null",
-  ].join('; ');
-}
-
-export function registerWindowsUninstall(installedPath, version) {
-  if (IS_MAC) return;
-  powershell(windowsUninstallEntryScript(installedPath, version));
-  ui.ok('PieceMaker apparaît dans Paramètres › Applications › Applications installées.');
 }
 
 export function launchApplication(installedPath) {

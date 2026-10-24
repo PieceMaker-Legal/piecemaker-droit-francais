@@ -21,22 +21,42 @@ l’utilisateur reste effectuée par le parcours existant après placement ; auc
 certificat Developer ID ni compte Apple n’est requis par cette construction.
 
 Les anciennes releases sans cet asset conservent leur repli sur les sources.
-Le prérequis Xcode est vérifié uniquement lors de cette construction locale,
-et n’empêche plus de télécharger un bundle précompilé. Le bootstrap télécharge
-encore les sources pour ses scripts et les composants Python : ce changement
-supprime la compilation locale, pas encore cette archive de scripts. Le Node
-dédié de bootstrap reste également utilisé.
+Le prérequis Xcode est vérifié uniquement lors de cette construction locale.
+Le bootstrap télécharge et vérifie maintenant le bundle avant les sources ou
+Node. Le staging embarque ses scripts de préparation dans
+`Contents/Resources/app/desktop-bootstrap/` avec le mécanisme déjà utilisé sous
+Windows. Lorsque ces scripts sont présents, le Node d’Electron les exécute :
+ni le dépôt entier, ni un Node de bootstrap ne sont téléchargés. Le module de
+construction est chargé uniquement dans le parcours historique ; la préparation
+livrée n’importe pas les outils du dépôt.
+
+Le Python commun ARM64 reste vérifié et préparé avant le remplacement de
+l’application. La signature locale et le lancement visent ensuite l’application
+installée. Le bootstrap exclut son propre PID du contrôle des applications
+encore ouvertes et retire `ELECTRON_RUN_AS_NODE` avant le lancement graphique.
+Une transaction privée contient le téléchargement et l’extraction ; elle est
+retirée après le retour de la préparation, y compris en cas d’échec. Les anciens
+caches et sources restent conservés. Un bundle ancien sans ces scripts reprend
+le parcours historique avec les sources et un Node externe.
 
 Le nom de téléchargement accepte aussi `darwin-x64`, mais le workflow ajouté à
 ce parcours ne produit que l’asset ARM64. macOS Intel conserve donc le parcours
 historique tant qu’aucun asset Intel n’est fourni.
 
-Vérification locale : dix tests de préparation et d’extraction, dont les liens
+Vérification locale : tests de préparation et d’extraction, dont les liens
 internes, les modes exécutables, les empreintes locales et distantes invalides,
 les chemins externes, un bundle incomplet et une tentative d’écriture au travers
 d’un lien externe. Les tests utilisent le vrai `/usr/bin/tar` sur macOS et des
 bundles fictifs. Ils ne lancent pas de compilation Vite et n’installent pas une
 nouvelle application sur le poste.
+
+Les tests du bootstrap vérifient aussi l’absence des téléchargements de sources
+et de Node, les replis historiques, le blocage sur empreinte absente ou invalide,
+les liens externes et le nettoyage borné à la transaction. Les tests de
+préparation vérifient l’import sans outils de construction, l’ordre Python,
+placement, signature et lancement, ainsi que la détection de l’application
+ouverte. Ces tests de préparation passent également dans le Node d’Electron
+de l’application installée, sans la remplacer ni générer de certificat.
 
 Aucune release n’est créée par ce changement. La fabrication complète sur le
 runner, le téléchargement public, la signature locale et le lancement du nouveau

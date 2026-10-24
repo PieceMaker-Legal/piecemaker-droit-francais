@@ -17,23 +17,14 @@ test('repère le bundle macOS et refuse un dossier qui n’est pas l’applicati
   assert.equal(packagedApplicationRoot('/Users/me/repo/electron', 'darwin'), null);
 });
 
-test('repère le dossier Windows', () => {
-  const app = 'C:\\Users\\me\\AppData\\Local\\Programs\\PieceMaker\\resources\\app';
-  assert.equal(
-    packagedApplicationRoot(app, 'win32'),
-    'C:\\Users\\me\\AppData\\Local\\Programs\\PieceMaker',
-  );
+test('refuse les bundles Windows et Linux dans le repérage macOS', () => {
+  assert.equal(packagedApplicationRoot('C:\\Apps\\PieceMaker\\resources\\app', 'win32'), null);
+  assert.equal(packagedApplicationRoot('/opt/PieceMaker/resources/app', 'linux'), null);
 });
 
 test('retire les données privées Mac et conserve comptes, bibliothèque et modèles partagés', () => {
   const plan = removalPlan('/Applications/PieceMaker.app', '/Users/me', {}, 'darwin', {
     config: { venvPath: '/Users/me/.piecemaker/venv' },
-    mineru: {
-      'models-dir': {
-        pipeline: '/Users/me/.cache/huggingface/hub/models--opendatalab--PDF-Extract-Kit-1.0/snapshots/abc',
-        vlm: '',
-      },
-    },
     productDataRoot: '/Users/me/.piecemaker-droit-francais',
     appId: 'legal.piecemaker.droitfrancais',
     electronPaths: ['/Users/me/Library/Application Support/PieceMaker', '/Users/me/Library/Logs/PieceMaker', null],
@@ -87,10 +78,9 @@ test('ne retire jamais le dossier personnel ni un chemin hors du compte', () => 
   assert.deepEqual(plan.purge, []);
 });
 
-test('ignore un interpréteur système et un dossier de modèles hors du compte', () => {
+test('ignore un interpréteur système hors du compte', () => {
   const plan = removalPlan('/Applications/PieceMaker.app', '/Users/me', {}, 'darwin', {
     config: { venvPath: '/Library/Frameworks/Python.framework/Versions/3.12' },
-    mineru: { 'models-dir': { pipeline: '/usr/local/share/mineru' } },
   });
   assert.equal(plan.remove.some((entry) => entry.startsWith('/Library') || entry.startsWith('/usr')), false);
 });
