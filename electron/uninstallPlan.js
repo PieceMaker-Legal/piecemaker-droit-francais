@@ -178,10 +178,6 @@ function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function powershellQuote(value) {
-  return `'${String(value).replace(/'/g, "''")}'`;
-}
-
 export function macUninstallScript(plan) {
   const purges = plan.purge.map(({ directory, keep }) => (
     `[ -d ${shellQuote(directory)} ] && find ${shellQuote(directory)} -mindepth 1 -maxdepth 1 ${keep.map((name) => `! -name ${shellQuote(name)}`).join(' ')} -exec rm -rf {} +\n`
@@ -197,55 +193,5 @@ if [ -n "$keychain" ] && [ -n "$fingerprint" ]; then
   security delete-certificate -Z "$fingerprint" "$keychain" || true
 fi
 ${plan.remove.length ? `rm -rf ${plan.remove.map(shellQuote).join(' ')}\n` : ''}${purges}rm -rf ${shellQuote(plan.appRoot)}
-`;
-}
-
-export function windowsUninstallScript(plan) {
-  const targets = [...plan.remove, plan.appRoot];
-  const removals = targets.map((target) => `Remove-Target ${powershellQuote(target)}`).join('\n');
-  const purges = plan.purge.map(({ directory, keep }) => (
-    `Get-ChildItem -LiteralPath ${powershellQuote(directory)} -Force -ErrorAction SilentlyContinue | Where-Object { @(${keep.map(powershellQuote).join(', ')}) -notcontains $_.Name } | ForEach-Object { Remove-Target $_.FullName }`
-  )).join('\n');
-  return `param([int]$ProcessId)
-$ErrorActionPreference = 'SilentlyContinue'
-$targets = @(${targets.map(powershellQuote).join(', ')})
-function Holders {
-  @(Get-CimInstance Win32_Process | Where-Object {
-    $process = $_
-    $process.ProcessId -ne $PID -and @($targets | Where-Object {
-      ($process.ExecutablePath -and $process.ExecutablePath.StartsWith("$_\\", [StringComparison]::OrdinalIgnoreCase)) -or
-      ($process.CommandLine -and $process.CommandLine.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0)
-    }).Count -gt 0
-  })
-}
-function Remove-Target([string]$Target) {
-  for ($attempt = 0; $attempt -lt 5 -and (Test-Path -LiteralPath $Target); $attempt++) {
-    Remove-Item -LiteralPath $Target -Recurse -Force
-    if (Test-Path -LiteralPath $Target) { Start-Sleep -Seconds 1 }
-  }
-}
-while (Get-Process -Id $ProcessId) { Start-Sleep -Milliseconds 300 }
-$deadline = (Get-Date).AddSeconds(15)
-while ((Holders).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
-foreach ($process in Holders) { Stop-Process -Id $process.ProcessId -Force }
-Start-Sleep -Milliseconds 500
-foreach ($location in @('CurrentUser', 'LocalMachine')) {
-  foreach ($name in @('My', 'TrustedPublisher', 'Root', 'CA')) {
-    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($name, $location)
-    try {
-      $store.Open('ReadWrite')
-      foreach ($certificate in @($store.Certificates | Where-Object { $_.Subject -match 'PieceMaker' -or $_.Issuer -match 'PieceMaker' })) {
-        try { $store.Remove($certificate) } catch {
-          $hive = if ($location -eq 'LocalMachine') { 'HKLM:' } else { 'HKCU:' }
-          Remove-Item -LiteralPath ("$hive\\Software\\Microsoft\\SystemCertificates\\$name\\Certificates\\$($certificate.Thumbprint)") -Recurse -Force -ErrorAction SilentlyContinue
-        }
-      }
-    } catch {}
-    finally { $store.Close() }
-  }
-}
-${removals}
-${purges}
-Remove-Item -LiteralPath ${powershellQuote(WINDOWS_UNINSTALL_KEY)} -Recurse -Force
 `;
 }

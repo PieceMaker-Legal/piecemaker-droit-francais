@@ -1,4 +1,4 @@
-name: PieceMaker macOS Python
+name: PieceMaker macOS Desktop and Python
 
 on:
   workflow_call:
@@ -19,7 +19,7 @@ permissions:
 jobs:
   build-python:
     runs-on: macos-14
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
@@ -41,6 +41,28 @@ jobs:
 
       - name: Attach verified runtime to release
         run: gh release upload "$TAG" "$RUNNER_TEMP"/python-assets/piecemaker-python-darwin-arm64.* --clobber --repo "$GITHUB_REPOSITORY"
+        env:
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+
+      - name: Build precompiled desktop with Electron
+        run: |
+          export PIECEMAKER_SRC_DIR="$GITHUB_WORKSPACE"
+          node desktop-bootstrap/lib/build-release.mjs "$RUNNER_TEMP/desktop-assets/piecemaker-desktop-darwin-arm64.tar.gz"
+          cd "$RUNNER_TEMP/desktop-assets"
+          shasum -a 256 piecemaker-desktop-darwin-arm64.tar.gz | cut -d' ' -f1 > piecemaker-desktop-darwin-arm64.tar.gz.sha256
+        env:
+          CI: "true"
+          PIECEMAKER_HOME: ${{ runner.temp }}/piecemaker-home
+          PIECEMAKER_TAG: ${{ inputs.tag }}
+          PIECEMAKER_REPO: ${{ github.repository }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Test precompiled desktop and Electron integration
+        run: node --experimental-vm-modules --test desktop-bootstrap/lib/prebuilt-app.test.mjs desktop-bootstrap/overlay/electron-piecemaker/*.test.mjs desktop-bootstrap/overlay/electron-piecemaker/*.test.js
+
+      - name: Attach precompiled desktop to release
+        run: gh release upload "$TAG" "$RUNNER_TEMP"/desktop-assets/piecemaker-desktop-darwin-arm64.tar.gz* --clobber --repo "$GITHUB_REPOSITORY"
         env:
           TAG: ${{ inputs.tag }}
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}

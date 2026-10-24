@@ -29,16 +29,13 @@ async function loadEntry(startupError, platform = 'win32', preparationWindow = f
     return window;
   };
   const mocks = {
-    electron: { app, autoUpdater: new EventEmitter(), BrowserWindow: { getAllWindows: () => [] }, dialog: {}, powerSaveBlocker: {}, session: {} },
-    'node:child_process': { execFile: () => {} },
+    electron: { app, BrowserWindow: { getAllWindows: () => [] }, dialog: {}, powerSaveBlocker: {}, session: {} },
     'node:os': { default: os },
     'node:path': { default: path },
     'node:url': { fileURLToPath, pathToFileURL },
     '../shared/product-config.mjs': { loadProductConfig: () => ({ dataDirectoryName: '.example-app' }) },
     '../electron/uninstallPlan.js': { UNINSTALL_ARGUMENT: '--uninstall' },
-    '../electron/desktopWindow.js': { DesktopWindowManager: class {} },
     '../electron/localServer.js': { LocalServerController: class {} },
-    './windowsTitleBar.js': { installWindowsTitleBar: () => {} },
     './compact-runtime.mjs': {
       initializeCompactRuntime: async ({ applicationRoot }) => {
         if (preparationWindow) emitWindow('preparation-probe', undefined).piecemakerPreparingRuntime = true;

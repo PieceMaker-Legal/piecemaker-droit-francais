@@ -32,6 +32,7 @@ test('packages runtime scopes and installs them once from a verified release arc
     arch: 'x64',
   });
   assert.equal(manifest.components.length, 1);
+  assert.equal(manifest.components[0].id, 'bf49e7d5c8e5cc24a0e3bf8cd1cf7c4ba8d83e4119f466145d1078301b2a4093');
   assert.deepEqual(manifest.components[0].packageNames, ['@anthropic-ai/claude-agent-sdk', '@openai/codex-sdk', '@openai/codex-win32-x64']);
   assert.deepEqual(manifest.components[0].packageManifests['@openai/codex-win32-x64'], { name: '@openai/codex', version: '1.2.3-win32-x64' });
   assert.equal(fs.existsSync(path.join(stage, 'node_modules', '@openai')), false);
@@ -103,4 +104,22 @@ test('rejects absolute and parent traversal archive entries before extraction', 
   assert.throws(() => assertSafeTarEntries('/outside.txt\n'), /Unsafe runtime component archive entry/);
   assert.throws(() => assertSafeTarEntries('node_modules/@openai/unknown/package.json\n', '', ['@openai/codex']), /Unexpected runtime component archive entry/);
   assert.throws(() => assertSafeTarEntries('node_modules/@openai/codex/link\n', 'lrwxrwxrwx 0/0 link -> ../../outside'), /contains a link/);
+});
+
+test('rejects verified archives whose extracted content does not match the component identity', async (t) => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-runtime-content-'));
+  t.after(() => fs.rmSync(work, { recursive: true, force: true }));
+  const stage = path.join(work, 'stage');
+  const output = path.join(work, 'release');
+  writePackage(stage, '@openai/codex-sdk', '4.5.6');
+  const manifest = await packageRuntimeComponents(stage, {
+    repository: 'Owner/Repo', releaseTag: 'v1.2.3', outputDir: output, platform: 'win32', arch: 'x64',
+  });
+  const component = manifest.components[0];
+  const archive = fs.readFileSync(path.join(output, component.assetName));
+  component.assetName = component.assetName.replace(component.id, 'f'.repeat(64));
+  component.id = 'f'.repeat(64);
+  const cacheRoot = path.join(work, 'cache');
+  await assert.rejects(ensureRuntimeComponents({ manifest, cacheRoot, fetchImpl: async () => new Response(archive) }), /content hash mismatch/i);
+  assert.deepEqual(fs.readdirSync(cacheRoot), []);
 });

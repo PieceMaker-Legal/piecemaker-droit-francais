@@ -3,33 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createReadStream } from 'node:fs';
+import { digestRuntimeComponent } from '../overlay/electron-piecemaker/runtime-components.mjs';
 
 const SCOPES = ['@openai', '@anthropic-ai'];
-
-async function digestTree(root, selectedScopes) {
-  const files = [];
-  const visit = (directory) => {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      const target = path.join(directory, entry.name);
-      if (entry.isDirectory()) visit(target);
-      else if (entry.isFile()) files.push(target);
-      else if (entry.isSymbolicLink()) throw new Error(`Runtime component contains a symbolic link: ${target}`);
-    }
-  };
-  for (const scope of selectedScopes) visit(path.join(root, scope));
-  files.sort((left, right) => {
-    const a = path.relative(root, left).split(path.sep).join('/');
-    const b = path.relative(root, right).split(path.sep).join('/');
-    return a < b ? -1 : a > b ? 1 : 0;
-  });
-  const hash = crypto.createHash('sha256');
-  for (const file of files) {
-    hash.update(path.relative(root, file).split(path.sep).join('/')).update('\0');
-    for await (const chunk of createReadStream(file)) hash.update(chunk);
-    hash.update('\0');
-  }
-  return hash.digest('hex');
-}
 
 function runTar(tarCommand, args, cwd) {
   const result = spawnSync(tarCommand, args, { cwd, encoding: 'utf8', windowsHide: true });
@@ -71,7 +47,7 @@ export async function packageRuntimeComponents(stageDir, {
     const scopePath = path.join(treeRoot, scope);
     if (fs.existsSync(scopePath)) files.push(scopePath);
   }
-  const id = await digestTree(treeRoot, files.map((file) => path.basename(file)));
+  const id = await digestRuntimeComponent(treeRoot, files.map((file) => path.basename(file)));
   const assetName = `piecemaker-runtime-components-${platform}-${arch}-${id}.tar.gz`;
   fs.mkdirSync(outputDir, { recursive: true });
   const archive = path.join(outputDir, assetName);

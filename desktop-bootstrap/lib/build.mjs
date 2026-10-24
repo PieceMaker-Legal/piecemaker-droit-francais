@@ -74,6 +74,23 @@ async function verifyBuiltApp(builtApp) {
   if (missing.length) throw new Error(`Application construite incomplète — fichiers absents : ${missing.join(', ')}`);
 }
 
+async function verifyMacBundleLinks(bundle) {
+  if ((await fs.lstat(bundle)).isSymbolicLink()) throw new Error("Lien hors de l'application dans l'archive");
+  const root = await fs.realpath(bundle);
+  async function visit(directory) {
+    for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        const resolved = await fs.realpath(target);
+        if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+          throw new Error("Lien hors de l'application dans l'archive");
+        }
+      } else if (entry.isDirectory()) await visit(target);
+    }
+  }
+  await visit(bundle);
+}
+
 async function readPackageJson(target) {
   try {
     return JSON.parse(await fs.readFile(path.join(target, 'package.json'), 'utf8'));
@@ -299,7 +316,6 @@ async function ensureCargo() {
 }
 
 async function downloadReleaseAsset(asset, destination, label) {
-  if (process.platform !== 'win32') return false;
   if (process.env.PIECEMAKER_PREBUILT_ASSET_DIR) {
     const input = path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, asset);
     if (await exists(input)) {
@@ -314,16 +330,18 @@ async function downloadReleaseAsset(asset, destination, label) {
   const base = `https://github.com/${releaseRepo}/releases/download/${releaseTag}/${asset}`;
   try {
     const [binary, checksum] = await Promise.all([fetch(base), fetch(`${base}.sha256`)]);
+    if (binary.ok && !checksum.ok) throw new Error(`Artefact CI invalide : ${asset} (empreinte absente)`);
     if (!binary.ok || !checksum.ok) throw new Error(`HTTP ${binary.status}/${checksum.status}`);
     const bytes = Buffer.from(await binary.arrayBuffer());
     const expected = (await checksum.text()).trim().split(/\s+/)[0].toLowerCase();
     const actual = crypto.createHash('sha256').update(bytes).digest('hex');
-    if (actual !== expected) throw new Error('empreinte SHA-256 invalide');
+    if (actual !== expected) throw new Error(`Artefact CI invalide : ${asset}`);
     await fs.mkdir(path.dirname(destination), { recursive: true });
     await fs.writeFile(destination, bytes);
     ui.ok(`${label} précompilé vérifié (${releaseTag}).`);
     return true;
   } catch (error) {
+    if (error.message.startsWith('Artefact CI invalide :')) throw error;
     ui.warn(`${label} précompilé indisponible (${error.message}) — compilation locale.`);
     return false;
   }
@@ -336,6 +354,7 @@ async function downloadPrebuiltProxy(destination) {
 }
 
 async function downloadPrebuiltSqlite(stageDir) {
+  if (process.platform !== 'win32') return false;
   const destination = path.join(stageDir, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
   return downloadReleaseAsset('better-sqlite3-electron-win32-x64.node', destination, 'better-sqlite3 pour Electron');
 }
@@ -345,22 +364,36 @@ export function windowsTar() {
 }
 
 export async function downloadPrebuiltApp(workDir) {
-  if (process.platform !== 'win32') return null;
+  if (!['darwin', 'win32'].includes(process.platform)) return null;
+  const arch = IS_MAC ? process.arch : 'x64';
+  const asset = `piecemaker-desktop-${process.platform}-${arch}.tar.gz`;
   ui.step("Téléchargement de l'application précompilée…");
-  const archive = path.join(workDir, 'piecemaker-desktop-win32-x64.tar.gz');
-  if (!(await downloadReleaseAsset('piecemaker-desktop-win32-x64.tar.gz', archive, "Paquet de l'application"))) return null;
-  const destination = path.join(workDir, 'prebuilt', releaseTag);
+  const archive = path.join(workDir, asset);
+  if (!(await downloadReleaseAsset(asset, archive, "Paquet de l'application"))) return null;
+  const destination = path.join(workDir, 'prebuilt', releaseTag, `${process.platform}-${arch}`);
   try {
     await fs.rm(destination, { recursive: true, force: true });
     await fs.mkdir(destination, { recursive: true });
-    await run(windowsTar(), ['-xzf', archive, '-C', destination]);
-    if (!(await exists(path.join(destination, `${PRODUCT_NAME}.exe`)))) throw new Error(`${PRODUCT_NAME}.exe absent de l'archive`);
-    await verifyBuiltApp(destination);
-    ui.ok(`Application précompilée prête : ${destination}`);
-    return destination;
+    const tar = IS_MAC ? '/usr/bin/tar' : windowsTar();
+    if (IS_MAC) {
+      const listing = capture(tar, ['-tzf', archive], { maxBuffer: 32 * 1024 * 1024 });
+      if (listing.code !== 0) throw new Error(listing.stderr || 'Archive illisible');
+      const entries = listing.stdout.split('\n').filter(Boolean).map((entry) => entry.replace(/^\.\//, ''));
+      if (!entries.length || entries.some((entry) => entry.split('/').includes('..') || !(entry === `${PRODUCT_NAME}.app` || entry.startsWith(`${PRODUCT_NAME}.app/`)))) {
+        throw new Error("Chemin hors de l'application dans l'archive");
+      }
+    }
+    await run(tar, ['-xzf', archive, '-C', destination]);
+    const builtApp = IS_MAC ? path.join(destination, `${PRODUCT_NAME}.app`) : destination;
+    const executable = IS_MAC ? path.join(builtApp, 'Contents', 'MacOS', PRODUCT_NAME) : path.join(builtApp, `${PRODUCT_NAME}.exe`);
+    if (!(await exists(executable))) throw new Error(`Exécutable ${PRODUCT_NAME} absent de l'archive`);
+    if (IS_MAC) await verifyMacBundleLinks(builtApp);
+    await verifyBuiltApp(builtApp);
+    ui.ok(`Application précompilée prête : ${builtApp}`);
+    return builtApp;
   } catch (error) {
-    ui.warn(`Application précompilée inutilisable (${error.message}) — construction locale.`);
-    return null;
+    await fs.rm(destination, { recursive: true, force: true });
+    throw new Error(`Application précompilée inutilisable (${error.message}). L'application actuelle est conservée.`);
   } finally {
     await fs.rm(archive, { force: true });
   }
@@ -404,6 +437,9 @@ async function smokeTestAnonymizerProxy(sourceDir, binary) {
 }
 
 export async function buildDesktopApp(sourceDir, { windowsInstaller = false, prepareStage } = {}) {
+  if (IS_MAC && capture('xcode-select', ['-p']).code !== 0) {
+    throw new Error('Les outils Xcode sont requis pour construire depuis les sources : xcode-select --install');
+  }
   ui.step('Installation des dépendances du projet (plusieurs minutes)…');
   await npm(['install', '--no-audit', '--no-fund'], { cwd: sourceDir });
   await npm(['rebuild', 'better-sqlite3', '--no-audit', '--no-fund'], { cwd: sourceDir });

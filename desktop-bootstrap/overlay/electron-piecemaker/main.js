@@ -1,20 +1,15 @@
-import { app, autoUpdater, BrowserWindow, dialog, powerSaveBlocker, session } from 'electron';
-import { execFile } from 'node:child_process';
+import { app, BrowserWindow, dialog, powerSaveBlocker, session } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { loadProductConfig } from '../shared/product-config.mjs';
 import { UNINSTALL_ARGUMENT } from '../electron/uninstallPlan.js';
-import { DesktopWindowManager } from '../electron/desktopWindow.js';
 import { LocalServerController } from '../electron/localServer.js';
 import { installDesktopKeepAwake } from './keepAwake.js';
-import { installWindowsTitleBar } from './windowsTitleBar.js';
 import { installWindowsUpdater } from './windowsUpdater.js';
 import { initializeCompactRuntime, portablePluginRuntime } from './compact-runtime.mjs';
 import { installUiUpdates } from './ui-updates/index.mjs';
-
-installWindowsTitleBar({ app, DesktopWindowManager });
 
 process.env.ELECTRON_FORCE_OWN_SERVER = '1';
 
@@ -44,21 +39,7 @@ app.on('browser-window-created', (_event, window) => adoptWindow(window));
 async function startApplication() {
   if (process.platform === 'win32') {
     await app.whenReady();
-    await installWindowsUpdater({ app, dialog });
-    autoUpdater.once('before-quit-for-update', () => {
-      const getSettings = LocalServerController.prototype.getSettings;
-      const shutdownOwnedServer = LocalServerController.prototype.shutdownOwnedServer;
-      LocalServerController.prototype.getSettings = function () {
-        return { ...getSettings.call(this), keepLocalServerRunning: false };
-      };
-      LocalServerController.prototype.shutdownOwnedServer = async function () {
-        const pid = this.ownedServerProcess?.pid;
-        if (pid) {
-          await new Promise((resolve) => execFile('taskkill', ['/PID', String(pid), '/T', '/F'], resolve));
-        }
-        return shutdownOwnedServer.call(this);
-      };
-    });
+    await installWindowsUpdater({ app, dialog, LocalServerController });
   } else {
     await app.whenReady();
   }
@@ -68,7 +49,6 @@ async function startApplication() {
   app.on('window-all-closed', holdOpen);
   const runtime = await initializeCompactRuntime({
     app,
-    LocalServerController,
     applicationRoot: appRoot,
     createProgress: () => {
       const window = new BrowserWindow({ width: 440, height: 150, resizable: false, closable: false, autoHideMenuBar: true, webPreferences: { nodeIntegration: false, contextIsolation: true } });

@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import path from 'node:path';
+import { observeServerForUpdate } from './updateShutdown.js';
 
-export function createWindowsUpdateAction({ app, dialog, updater }) {
+export function createWindowsUpdateAction({ app, dialog, updater, prepareInstall = async () => {} }) {
   updater.autoDownload = true;
   updater.autoInstallOnAppQuit = false;
   updater.installDirectory = path.dirname(app.getPath('exe'));
@@ -24,7 +25,10 @@ export function createWindowsUpdateAction({ app, dialog, updater }) {
       defaultId: 0,
       cancelId: 1,
     });
-    if (response === 0) setTimeout(() => updater.quitAndInstall(false, true), 1000);
+    if (response === 0) {
+      await prepareInstall();
+      setTimeout(() => updater.quitAndInstall(false, true), 1000);
+    }
     return {
       success: true,
       output: response === 0
@@ -40,10 +44,10 @@ export function createWindowsUpdateAction({ app, dialog, updater }) {
   };
 }
 
-export async function installWindowsUpdater({ app, dialog, platform = process.platform }) {
+export async function installWindowsUpdater({ app, dialog, LocalServerController, platform = process.platform }) {
   if (platform !== 'win32' || !app.isPackaged) return;
   const { default: electronUpdater } = await import('electron-updater');
-  const update = createWindowsUpdateAction({ app, dialog, updater: electronUpdater.autoUpdater });
+  const update = createWindowsUpdateAction({ app, dialog, updater: electronUpdater.autoUpdater, prepareInstall: observeServerForUpdate({ LocalServerController }) });
   const endpoint = `/${randomUUID()}`;
   const server = createServer(async (request, response) => {
     if (request.method !== 'POST' || request.url !== endpoint) {

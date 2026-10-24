@@ -32,6 +32,8 @@ Le [rapport Mistral, Word et cycle macOS](piecemaker/validation-mistral-word-mac
 
 Le [test macOS depuis un profil vierge](piecemaker/validation-installation-vierge-macos.md) vérifie les cinq plugins, le téléchargement GLiNER et le pipeline DOCX/PDF vers MarkItDown puis GLiNER. Il a révélé et corrigé un repli du scan vers le Python système au lieu du runtime commun installé.
 
+Le [parcours Mac précompilé](piecemaker/installateur-macos-precompile.md) évite la compilation locale lorsqu’une release fournit son bundle et son empreinte. Les corrections et limites du raccord CloudCLI sont détaillées dans le [rapport du 24 octobre](piecemaker/raccord-electron-cloudcli-2026-10-24.md).
+
 ## Installation existante et parcours historiques
 
 Installateur autonome de l'application Electron PieceMaker sur **macOS** et
@@ -309,12 +311,11 @@ utilisateur, via le pont `contextBridge` déjà exposé par `electron/preload.cj
 L'application s'ouvre donc directement sur l'interface PieceMaker et ses
 plugins.
 
-Sur Windows uniquement, `windowsTitleBar.js` rétablit la barre CloudCLI avec
-ses onglets et réserve 44 px au-dessus de la vue de contenu. La barre conserve
-sa zone de déplacement et la marge Windows de 150 px pour les boutons système.
-La surcouche est installée avant le démarrage Electron ; ses styles sont
-réappliqués à chaque chargement du lanceur. Les fenêtres de réglages, macOS
-et Linux conservent leur comportement existant.
+La barre de titre et le calcul des dimensions restent ceux de CloudCLI :
+44 px réservés au-dessus du contenu sur Windows, macOS et Linux, avec les
+marges prévues pour les boutons système. Le masquage local et la surcouche
+Windows qui le compensaient sont retirés ; aucune modification de prototype
+ni injection CSS n’est nécessaire pour cette barre.
 
 **4. Port propre au produit.** `electron/localServer.js` sondait le port 3001
 d'amont ; tout autre service déjà à l'écoute sur ce port (un serveur MCP local,
@@ -406,37 +407,30 @@ rejette (*MAC verification failed*).
 ### Désinstaller
 
 Sous Windows, la voie standard est **Paramètres › Applications › Applications
-installées › PieceMaker › Désinstaller**. L'installateur y enregistre
-PieceMaker sous `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\PieceMaker`
-(par utilisateur, sans droits administrateur). Le bouton lance
-`PieceMaker.exe --piecemaker-uninstall`, qui demande confirmation puis exécute
-la même désinstallation que l'onglet de l'application.
-
-Avant de supprimer quoi que ce soit, le script Windows attend 15 s puis arrête
-les processus qui verrouillent encore des fichiers : serveur local, workers
-Python du venv, fenêtre Edge de l'installateur (dont le profil est dans
-`bootstrap`). Les certificats sont retirés un par un (personnel, éditeurs
-approuvés, puis racine, qui demande une confirmation Windows), et l'entrée
-« Applications installées » est retirée en dernier.
+installées › PieceMaker › Désinstaller**. NSIS enregistre et retire
+l'application. Le bouton interne et l'argument `--piecemaker-uninstall`
+délèguent au désinstalleur `Uninstall*.exe` du dossier de l'application,
+puis ferment PieceMaker. Si ce désinstalleur manque ou ne démarre pas,
+l'application reste ouverte et signale l'échec ; il faut réinstaller avec
+l'installateur Windows. Il n'y a plus de script PowerShell de retrait parallèle.
+NSIS conserve les données, les modèles, les certificats locaux et les
+composants externes dans le parcours actuel.
 
 Dans l'application installée, les réglages ont un onglet **Désinstaller** sous Notifications.
-Le retrait conserve la base `auth.db` (et ses fichiers `-wal`/`-shm`) et la
+Sur macOS, le retrait conserve la base `auth.db` (et ses fichiers `-wal`/`-shm`) et la
 Bibliothèque (`~/.piecemaker/library-backend`), ainsi que les références et dates
-d’historique Mistral (`vibe-session-origins`, `vibe-message-times`). Sur macOS, il conserve aussi les
-modèles et le trousseau de signature partagés. Il retire :
+d’historique Mistral (`vibe-session-origins`, `vibe-message-times`), les modèles
+et le trousseau de signature partagés. Il retire :
 
-- l'application, les raccourcis Windows et le certificat local propre à cette installation ;
+- l'application et le certificat local propre à cette installation ;
 - `~/.piecemaker` (`PIECEMAKER_HOME`) vidé de tout sauf la Bibliothèque et les
   métadonnées Mistral conservées ci-dessus : Node
   et Rust de `bootstrap/`, Python, venv, certificats, configuration, historique
   des dossiers, facturation, profil PWA, journaux ;
 - le dossier de données produit (`~/.piecemaker-droit-francais`, `CLOUDCLI_HOME`)
   vidé de tout sauf `auth.db` : plugins, sauvegardes, journaux ;
-- les dossiers Electron (`userData`, `logs`, `crashDumps`) et, sur macOS, les
-  préférences, caches, `HTTPStorages`, `WebKit` et `Saved Application State` de l'`appId` ;
-- dans le parcours Windows historique seulement, les modèles GLiNER et MinerU
-  (`~/.mineru`, et `mineru.json` d'une ancienne installation) ; NSIS conserve
-  les composants externes dans le parcours actuel.
+- les dossiers Electron (`userData`, `logs`, `crashDumps`), les
+  préférences, caches, `HTTPStorages`, `WebKit` et `Saved Application State` de l'`appId`.
 
 Seuls les chemins situés sous le dossier personnel sont touchés ; un dossier
 qui contiendrait `auth.db` plus profondément (`DATABASE_PATH` personnalisé) est

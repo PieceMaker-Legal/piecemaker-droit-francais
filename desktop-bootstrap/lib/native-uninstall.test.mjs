@@ -23,7 +23,7 @@ async function load({ names = ['Uninstall PieceMaker.exe'], failure = false } = 
     'node:os': { default: {} },
     'node:path': { default: path.win32 },
     '../shared/product-config.mjs': { loadProductConfig: () => ({}) },
-    './uninstallPlan.js': { macUninstallScript() {}, packagedApplicationRoot() { throw new Error('Legacy removal must not run'); }, removalPlan() {}, windowsUninstallScript() {} },
+    './uninstallPlan.js': { macUninstallScript() {}, packagedApplicationRoot() { throw new Error('Legacy removal must not run'); }, removalPlan() {} },
   };
   const entry = new SourceTextModule(source, { context });
   await entry.link(specifier => {
