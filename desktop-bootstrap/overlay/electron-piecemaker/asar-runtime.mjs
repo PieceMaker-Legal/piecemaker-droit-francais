@@ -1,12 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { registerHooks } from 'node:module';
+import { createRequire, registerHooks } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export function createRuntimeResolver({ packedRoot, physicalRoot, moduleRoots = [] }) {
   const packedParent = pathToFileURL(path.join(packedRoot, '.runtime-entry.mjs')).href;
   const componentParents = moduleRoots.map((root) => pathToFileURL(path.join(root, '..', '.runtime-entry.mjs')).href);
   let resolvingFallback = false;
+  const resolveFrom = (specifier, context, parentURL, nextResolve) => {
+    if (context.conditions?.includes('require')) {
+      return nextResolve(createRequire(parentURL).resolve(specifier), context);
+    }
+    return nextResolve(specifier, { ...context, parentURL });
+  };
   return (specifier, context, nextResolve) => {
     if (resolvingFallback) return nextResolve(specifier, context);
     try {
@@ -18,7 +24,7 @@ export function createRuntimeResolver({ packedRoot, physicalRoot, moduleRoots = 
       try {
         for (const parentURL of componentParents) {
           try {
-            return nextResolve(specifier, { ...context, parentURL });
+            return resolveFrom(specifier, context, parentURL, nextResolve);
           } catch (candidateError) {
             if (!['MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND'].includes(candidateError.code)) throw candidateError;
           }
@@ -26,10 +32,10 @@ export function createRuntimeResolver({ packedRoot, physicalRoot, moduleRoots = 
         const parentPath = context.parentURL?.startsWith('file:') ? fileURLToPath(context.parentURL) : '';
         const relative = path.relative(physicalRoot, parentPath);
         if (parentPath && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
-          return nextResolve(specifier, { ...context, parentURL: pathToFileURL(path.join(packedRoot, relative)).href });
+          return resolveFrom(specifier, context, pathToFileURL(path.join(packedRoot, relative)).href, nextResolve);
         }
         try {
-          return nextResolve(specifier, { ...context, parentURL: packedParent });
+          return resolveFrom(specifier, context, packedParent, nextResolve);
         } catch {
           throw error;
         }

@@ -45,7 +45,7 @@ jobs:
           node-version: 22
 
       - name: Test Windows startup
-        run: node --experimental-vm-modules --test desktop-bootstrap/overlay/electron-piecemaker/main.test.js desktop-bootstrap/lib/native-uninstall.test.mjs
+        run: node --experimental-vm-modules --test desktop-bootstrap/overlay/electron-piecemaker/main.test.js desktop-bootstrap/overlay/electron-piecemaker/desktopWindow.test.js desktop-bootstrap/overlay/electron-piecemaker/windowsUpdater.test.js desktop-bootstrap/overlay/electron-piecemaker/updateShutdown.test.js desktop-bootstrap/overlay/electron-piecemaker/asar-runtime.test.mjs desktop-bootstrap/lib/native-uninstall.test.mjs
 
       - name: Test desktop dependency selection
         run: |

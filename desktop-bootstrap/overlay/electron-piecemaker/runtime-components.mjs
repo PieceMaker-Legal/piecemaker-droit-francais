@@ -74,7 +74,7 @@ async function digestFile(file) {
   return hash.digest('hex');
 }
 
-async function digestComponent(modules, packageNames) {
+export async function digestRuntimeComponent(modules, relativePaths) {
   const files = [];
   const visit = (directory) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -84,7 +84,7 @@ async function digestComponent(modules, packageNames) {
       else if (entry.isSymbolicLink()) throw new Error('Runtime component archive contains a symbolic link.');
     }
   };
-  for (const name of packageNames) visit(path.join(modules, ...name.split('/')));
+  for (const relativePath of relativePaths) visit(path.join(modules, ...relativePath.split('/')));
   files.sort((left, right) => {
     const a = path.relative(modules, left).split(path.sep).join('/');
     const b = path.relative(modules, right).split(path.sep).join('/');
@@ -160,7 +160,7 @@ export async function ensureRuntimeComponents({
           const expected = component.packageManifests?.[packageName] || { name: packageName };
           if (packageManifest.name !== expected.name || (expected.version && packageManifest.version !== expected.version)) throw new Error(`Runtime component package mismatch: ${packageName}.`);
         }
-        if (await digestComponent(modules, component.packageNames) !== component.id) throw new Error('Runtime component content hash mismatch.');
+        if (await digestRuntimeComponent(modules, component.packageNames) !== component.id) throw new Error('Runtime component content hash mismatch.');
         fs.writeFileSync(path.join(staging, '.runtime-component.json'), JSON.stringify({ id: component.id, sha256: component.sha256 }));
         if (!cacheReady(destination, component)) {
           if (fs.existsSync(destination)) await renameDirectory(destination, backup);

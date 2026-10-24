@@ -17,7 +17,7 @@ export function initialPreparationNeeded(applicationRoot) {
   }
 }
 
-export async function initializeCompactRuntime({ app, LocalServerController, applicationRoot, createProgress }) {
+export async function initializeCompactRuntime({ app, applicationRoot, createProgress }) {
   let moduleRoots = [];
   if (!app.isPackaged || !applicationRoot.endsWith('.asar')) return { applicationRoot, moduleRoots };
   const packedRoot = applicationRoot;
@@ -43,11 +43,6 @@ export async function initializeCompactRuntime({ app, LocalServerController, app
   moduleRoots = runtime.moduleRoots;
   configureRuntimeEnvironment({ packedRoot, physicalRoot, moduleRoots });
   registerRuntimeModules({ packedRoot, physicalRoot, moduleRoots });
-  const resolveServerEntry = LocalServerController.prototype.resolveServerEntry;
-  LocalServerController.prototype.resolveServerEntry = function () {
-    this.appRoot = physicalRoot;
-    return resolveServerEntry.call(this);
-  };
   return { applicationRoot: physicalRoot, moduleRoots };
 }
 

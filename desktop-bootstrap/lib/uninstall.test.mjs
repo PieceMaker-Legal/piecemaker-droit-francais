@@ -9,8 +9,6 @@ import {
   macUninstallScript,
   packagedApplicationRoot,
   removalPlan,
-  windowsUninstallScript,
-  WINDOWS_UNINSTALL_KEY,
 } from '../../electron/uninstallPlan.js';
 
 test('repère le bundle macOS et refuse un dossier qui n’est pas l’application', () => {
@@ -95,36 +93,6 @@ test('ignore un interpréteur système et un dossier de modèles hors du compte'
     mineru: { 'models-dir': { pipeline: '/usr/local/share/mineru' } },
   });
   assert.equal(plan.remove.some((entry) => entry.startsWith('/Library') || entry.startsWith('/usr')), false);
-});
-
-test('le script Windows retire les raccourcis et le certificat local', () => {
-  const plan = removalPlan('C:\\Programs\\PieceMaker', 'C:\\Users\\me', {
-    APPDATA: 'C:\\Users\\me\\AppData\\Roaming',
-  }, 'win32', { productDataRoot: 'C:\\Users\\me\\.piecemaker-droit-francais' });
-  const script = windowsUninstallScript(plan);
-  assert.doesNotMatch(script, /Remove-Item -LiteralPath 'C:\\Users\\me\\\.piecemaker' /);
-  assert.match(script, /Get-ChildItem -LiteralPath 'C:\\Users\\me\\\.piecemaker' [^\n]*'library-backend'/);
-  assert.match(script, /-notcontains \$_\.Name/);
-  assert.match(script, /'auth\.db', 'auth\.db-wal', 'auth\.db-shm'/);
-  assert.match(script, /PieceMaker/);
-  assert.match(script, /TrustedPublisher/);
-  assert.match(script, /SystemCertificates/);
-  assert.match(script, /PieceMaker\.lnk/);
-  assert.match(script, /PieceMaker'/);
-  assert.match(script, /models--fastino--gliner2\.5-multi-v1/);
-  assert.match(script, /mineru\.json/);
-});
-
-test('le script Windows attend et arrête les processus qui verrouillent les fichiers, puis retire l’entrée « Applications installées »', () => {
-  const plan = removalPlan('C:\Programs\PieceMaker', 'C:\Users\me', {}, 'win32', { productDataRoot: 'C:\Users\me\.piecemaker-droit-francais' });
-  const script = windowsUninstallScript(plan);
-  assert.match(script, /function Holders/);
-  assert.match(script, /Stop-Process -Id \$process\.ProcessId -Force/);
-  assert.match(script, /foreach \(\$location in @\('CurrentUser', 'LocalMachine'\)\)/);
-  assert.match(script, /foreach \(\$name in @\('My', 'TrustedPublisher', 'Root', 'CA'\)\)/);
-  assert.match(script, /Issuer -match 'PieceMaker'/);
-  assert.match(script, /SystemCertificates/);
-  assert.ok(script.includes(`Remove-Item -LiteralPath '${WINDOWS_UNINSTALL_KEY}' -Recurse -Force`));
 });
 
 test('le retrait Mac conserve les ressources partagées et cible uniquement le certificat de cette installation', { skip: process.platform !== 'darwin' }, async () => {

@@ -20,7 +20,6 @@ esac
 command -v curl >/dev/null 2>&1 || fail "curl est requis."
 command -v tar >/dev/null 2>&1 || fail "tar est requis."
 command -v openssl >/dev/null 2>&1 || fail "openssl est requis."
-xcode-select -p >/dev/null 2>&1 || fail "Les outils en ligne de commande Xcode sont requis. Lancez : xcode-select --install"
 
 mkdir -p "$BOOTSTRAP_HOME"
 cd "$BOOTSTRAP_HOME"
