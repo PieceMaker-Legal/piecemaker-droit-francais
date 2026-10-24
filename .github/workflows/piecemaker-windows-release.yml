@@ -50,7 +50,7 @@ jobs:
       - name: Test desktop dependency selection
         run: |
           $env:PSModulePath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\Modules'
-          node --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs desktop-bootstrap/lib/initial-install.test.mjs desktop-bootstrap/composants/install.test.mjs desktop-bootstrap/composants/gliner-cache.test.mjs desktop-bootstrap/composants/shared-python.test.mjs desktop-bootstrap/overlay/electron-piecemaker/shared-python-update.test.mjs
+          node --experimental-vm-modules --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs desktop-bootstrap/lib/initial-install.test.mjs desktop-bootstrap/lib/windows-source.test.mjs desktop-bootstrap/lib/prepare-installed.test.mjs desktop-bootstrap/lib/build-sqlite.test.mjs desktop-bootstrap/composants/install.test.mjs desktop-bootstrap/composants/shared-python.test.mjs desktop-bootstrap/overlay/electron-piecemaker/shared-python-update.test.mjs
 
       - name: Build
         run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml

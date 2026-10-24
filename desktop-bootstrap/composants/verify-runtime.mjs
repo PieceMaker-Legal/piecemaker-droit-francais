@@ -24,7 +24,7 @@ export async function verifyPythonRuntime(sourceDir, assetsDir) {
     return run(command, args, { ...options, env: { ...env, ...options.env } });
   };
   const started = performance.now();
-  await installRuntimeComponents({ sourceDir: source, env, host, requirePrebuilt: true, includeGliner: false });
+  await installRuntimeComponents({ sourceDir: source, env, host, requirePrebuilt: true });
   const installMs = Math.round(performance.now() - started);
   const config = JSON.parse(await fs.readFile(path.join(env.PIECEMAKER_HOME, 'config.json'), 'utf8'));
   if (config.pythonRuntime?.kind === 'shared') {
@@ -37,7 +37,7 @@ export async function verifyPythonRuntime(sourceDir, assetsDir) {
   if (probe.code !== 0 || !probe.stdout.includes('python-runtime-ok')) throw new Error(`Relocated Python failed: ${probe.stderr}`);
   const reused = performance.now();
   host.fetch = () => { throw new Error('Python cache reuse downloaded an asset.'); };
-  await installRuntimeComponents({ sourceDir: source, env, host, requirePrebuilt: true, includeGliner: false });
+  await installRuntimeComponents({ sourceDir: source, env, host, requirePrebuilt: true });
   return { root, installMs, cacheReuseMs: Math.round(performance.now() - reused), docxConversion: true, nativePythonImports: true };
 }
 

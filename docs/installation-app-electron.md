@@ -48,13 +48,19 @@ dans `TrustedPublisher` et `Root` (sans cela Windows rapporte Authenticode
 Python et les SDK IA. Le Node embarqué prépare ensuite la CA **locale** du
 proxy et le TLS localhost. L'utilisateur ne signe pas l'application. Aucun téléchargement des sources ou installation de
 Node/npm n'est nécessaire dans ce parcours. Les anciennes releases sans checksum
-d'installateur conservent le parcours archive. Une construction locale Windows
-exige `--build-from-source`. Détails et mesures :
+d'installateur conservent leurs scripts historiques. Le chemin client de cette
+version refuse la construction Windows depuis les sources, y compris avec
+`--build-from-source` : seule une installation NSIS assure le retrait natif.
+Détails et mesures :
 [windows-initial-install-performance.md](windows-initial-install-performance.md).
 
-Sur macOS, la construction locale utilise encore les sources et la chaîne Electron
-existante (`electron/`, `scripts/release/prepare-desktop-app.js`, `npm run desktop:pack`).
-Le déroulé historique ci-dessous décrit ce parcours et les anciennes releases Windows.
+Sur macOS, le bootstrap télécharge et vérifie le bundle avant les sources ou
+Node. Les nouveaux bundles livrent les scripts de préparation et les exécutent
+avec le Node d’Electron : le dépôt et un Node externe ne sont plus nécessaires.
+Les anciennes releases sans bundle ou sans scripts livrés reprennent le
+parcours historique. La construction locale réutilise les sources et la chaîne
+Electron existante (`electron/`, `scripts/release/prepare-desktop-app.js`,
+`npm run desktop:pack`). Le déroulé ci-dessous distingue ce repli du précompilé.
 
 ## Commande d'installation
 
@@ -93,7 +99,8 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
 ## Déroulé
 
 1. **Garde-fous** — macOS ou Windows 64 bits uniquement ; sur macOS, `curl`,
-   `tar`, `openssl` et les *Command Line Tools* Xcode sont exigés.
+   `tar` et `openssl` sont exigés. Les *Command Line Tools* Xcode sont vérifiés
+   uniquement avant une construction locale, jamais pour un bundle précompilé.
 2. **Fenêtre d'installation** — dès que Node est disponible, `lib/progress.mjs`
    sert une page locale (`installer-ui/index.html`) sur `127.0.0.1`, derrière un
    jeton aléatoire, et l'affiche dans une fenêtre native sans navigateur :
@@ -113,20 +120,25 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
    champs de saisie.
 3. **Résolution de la version** — `releases/latest` de l'API GitHub. Les tags
    `v1.37.x` hérités de CloudCLI amont ne sont donc jamais choisis par erreur.
-4. **Sources** — archive du tag décompressée dans
-   `~/.piecemaker/bootstrap/src/<tag>/`.
-5. **Node.js** — si le poste n'a pas Node ≥ 22, une version dédiée est
+4. **Bundle ou sources** — sur macOS, l’archive du bundle et son SHA-256 sont
+   téléchargés dans une transaction privée. Les chemins et les liens sont
+   vérifiés avant d’exécuter le Node embarqué. Une empreinte absente ou invalide
+   arrête l’installation. Seul le repli historique décompresse les sources du
+   tag dans `~/.piecemaker/bootstrap/src/<tag>/`.
+5. **Node.js** — un nouveau bundle Mac utilise le Node d’Electron et les
+   scripts livrés dans `Contents/Resources/app/desktop-bootstrap/`. Dans le
+   repli historique, si le poste n'a pas Node ≥ 22, une version dédiée est
    téléchargée depuis nodejs.org dans `~/.piecemaker/bootstrap/toolchain/`.
    Rien n'est installé au niveau système, aucun gestionnaire de paquets requis.
 6. **Autorité locale** — générée (ou réutilisée si encore valide) avant la
-   construction : le proxy d'anonymisation s'en sert pour intercepter les appels
+   préparation Python ou la construction : le proxy d'anonymisation s'en sert pour intercepter les appels
    aux API d'IA, et le test ci-dessous la vérifie.
-7. **Proxy d'anonymisation** — compilé juste après `npm install` (`cargo build --release`), puis **testé en
+7. **Proxy d'anonymisation, construction locale seulement** — compilé juste après `npm install` (`cargo build --release`), puis **testé en
    bac à sable** par `server/piecemaker/anonymizer/hudsucker-smoke.cjs` avant
    toute autre étape. Un échec interrompt l'installation : l'application déjà
    installée n'est pas remplacée, les sessions existantes continuent de
    fonctionner. Détail plus bas (« Test du proxy en bac à sable »).
-8. **Construction** — `npm install`, `npm run build`, `npm run desktop:stage`,
+8. **Construction, repli historique seulement** — `npm install`, `npm run build`, `npm run desktop:stage`,
    puis `electron-builder --dir` avec `CSC_IDENTITY_AUTO_DISCOVERY=false` pour
    qu'electron-builder n'aille pas chercher une identité de signature du poste.
    Les trois étapes de `desktop:pack` sont appelées séparément afin d'insérer,
@@ -157,14 +169,18 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
    l'installation s'arrête sur un message clair et l'application en place
    reste intacte.
 10. **Certificat** — déclaration de confiance et signature, voir ci-dessous.
-11. **Composants Python** — MarkItDown et pypdf dans un venv. GLiNER et
-   MinerU sont préparés automatiquement en arrière-plan à l'ouverture de
-   l'application, avec suivi dans « Système de pseudonymisation ».
+11. **Composants Python, préparés avant l’étape 9 sur Mac** — les nouvelles
+   releases ARM64 installent l’archive Python commune vérifiée avant de
+   remplacer l’application. Le repli Intel conserve son venv historique.
+   Les modèles GLiNER et MinerU restent distincts des bibliothèques et sont
+   téléchargés à la demande, avec suivi dans « Système de pseudonymisation ».
 12. **Lancement** de l'application, au clic sur « Ouvrir PieceMaker » dans la
     fenêtre d'installation (automatique sans fenêtre).
 
 Les étapes 4 à 8 et 11 sont idempotentes : sources, Node, venv et modèles déjà
 présents sont réutilisés, et un certificat encore valide n'est pas régénéré.
+Le parcours Mac précompilé retire uniquement sa transaction après le retour de
+la préparation ; les anciens dossiers de sources et de caches sont conservés.
 
 **Dossier courant.** L'installateur ne s'exécute jamais depuis le dossier qu'il
 hérite : lancé par la mise à jour intégrée, ce dossier est celui de
@@ -197,7 +213,6 @@ l'installeur, et attache à la release :
 |---|---|
 | `piecemaker-droit-francais-desktop-*-win-x64.exe` | installateur NSIS signé Authenticode éditeur |
 | `piecemaker-python-win32-x64.tar.gz` | Python 3.12 + MarkItDown, hors GLiNER |
-| `piecemaker-gliner-<revision>.tar.gz` | arbre Hub GLiNER2-PII épinglé (`blobs`, `refs/main`, `snapshots`) |
 | `piecemaker-runtime-components-win32-x64-*.tar.gz` | SDK OpenAI/Anthropic, cache persisté |
 | `piecemaker-hudsucker-win32-x64.exe` | proxy d'anonymisation (Rust) |
 | `better-sqlite3-electron-win32-x64.node` | module natif compilé pour l'Electron du `package-lock.json` |
@@ -206,8 +221,13 @@ l'installeur, et attache à la release :
 Chaque fichier a son `.sha256`. `install.ps1` lance NSIS et télécharge Python
 et les SDK pendant l'extraction, dans
 `~/.piecemaker/bootstrap/prebuilt/<tag>/`.
-Un artefact absent n'entraîne plus de compilation locale : il faut
-`--build-from-source`. Visual Studio et Rust ne sont jamais nécessaires.
+Le modèle GLiNER est téléchargé à la demande depuis Hugging Face par
+`warmup.py`, à la révision épinglée dans `gliner-checkpoint.json`. La release
+ne produit plus son archive Hub inutilisée ; les archives des anciennes
+releases restent disponibles.
+Un artefact absent n'entraîne pas de compilation locale dans cette version :
+il faut attendre ou sélectionner une release avec son installateur NSIS.
+Visual Studio et Rust ne sont jamais nécessaires dans ce parcours.
 
 ## Test du proxy en bac à sable
 
@@ -517,8 +537,9 @@ desktop-bootstrap/
     electron-piecemaker/main.js  point d'entrée Electron, ouvre la cible locale
   lib/
     install.mjs                  orchestrateur des étapes
-    build.mjs                    build, stage, serveur embarqué, surcouche, empaquetage ; téléchargements précompilés (Windows)
-    build-release.mjs            construction de l'archive Windows par la CI (piecemaker-windows-release.yml)
+    build.mjs                    build, stage, serveur embarqué, surcouche, empaquetage ; téléchargements précompilés Mac/Windows
+    prebuilt-app.mjs             vérification commune des ressources et liens du bundle
+    build-release.mjs            construction des archives Mac/Windows par la CI
     windows-npm-shim.mjs         préchargement : npm/npx lancés via npm-cli.js sous Windows
     certificates.mjs             aiguillage de plateforme
     certificates-darwin.mjs      openssl, confiance utilisateur, codesign
@@ -587,11 +608,13 @@ l'ouverture ne sont proposés et rien n'attend.
 - La commande `curl` pointe sur `main`, mais construit la dernière *release*
   publiée : tant qu'une release ne contient pas `desktop-bootstrap/`, utiliser
   `PIECEMAKER_TAG` pour viser un tag qui l'embarque.
-- Sur macOS, la construction compile les dépendances natives (`better-sqlite3`,
-  `bcrypt`, `node-pty`) ; les *Command Line Tools* sont vérifiés en amont. Sur
+- Sur macOS, le repli de construction locale compile les dépendances natives (`better-sqlite3`,
+  `bcrypt`, `node-pty`) ; les *Command Line Tools* sont vérifiés avant ce repli. Sur
   Windows, voir « Windows : application précompilée à chaque release ».
-- Sur macOS, première installation longue (dépendances + build), quelques
-  minutes. Sur Windows, quelques minutes seulement grâce à l'archive
+- Sur macOS, le bundle précompilé évite les dépendances npm et le build local ;
+  le temps du nouveau parcours public n’est pas encore mesuré. Intel reste
+  sur la construction locale tant qu’aucun bundle Intel n’est publié.
+  Sur Windows, quelques minutes seulement grâce à l'archive
   précompilée, sauf repli sur la construction locale.
 - La signature locale ne garantit pas la disparition des avertissements du
   système et ne vaut pas notarisation Apple ni réputation SmartScreen.

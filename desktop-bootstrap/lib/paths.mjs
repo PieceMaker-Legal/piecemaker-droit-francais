@@ -25,7 +25,6 @@ export const signingCertPath = path.join(certsDir, 'piecemaker-signing.crt');
 export const signingKeyPath = path.join(certsDir, 'piecemaker-signing.key');
 export const signingBundlePath = path.join(certsDir, 'piecemaker-signing.p12');
 export const signingSecretPath = path.join(certsDir, 'signing-keychain.secret');
-export const trustMarkerPath = path.join(certsDir, 'trusted.json');
 export const publisherCertPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'certs', 'piecemaker-publisher.cer');
 
 export function installTargetCandidates() {

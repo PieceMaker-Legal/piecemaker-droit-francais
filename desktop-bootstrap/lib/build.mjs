@@ -11,6 +11,7 @@ import { ui } from './ui.mjs';
 import { configureWindowsUpdates } from './windows-update-config.mjs';
 import { pruneDesktopDependencies, configureCompactPackage } from './compact-package.mjs';
 import { packageRuntimeComponents } from './components-package.mjs';
+import { verifyBuiltApp, verifyMacBundleLinks } from './prebuilt-app.mjs';
 import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath, releaseRepo, releaseTag } from './paths.mjs';
 
 function npmTool(tool) {
@@ -55,40 +56,6 @@ async function findBuiltApp(sourceDir, executableName = PRODUCT_NAME) {
   }
 
   throw new Error(`Aucune application construite trouvée dans ${releaseRoot}.`);
-}
-
-async function verifyBuiltApp(builtApp) {
-  const legacyRoot = IS_MAC ? path.join(builtApp, 'Contents', 'Resources', 'app') : path.join(builtApp, 'resources', 'app');
-  const compactRoot = `${legacyRoot}.asar.unpacked`;
-  const appRoot = await exists(path.join(compactRoot, 'package.json')) ? compactRoot : legacyRoot;
-  const binaryName = process.platform === 'win32' ? 'piecemaker-hudsucker.exe' : 'piecemaker-hudsucker';
-  const required = [
-    'dist-server/server/index.js',
-    'server/piecemaker/vendor/websocket-server/originals-pipeline.cjs',
-    `server/piecemaker/anonymizer/bin/${binaryName}`,
-  ];
-  const missing = [];
-  for (const relativePath of required) {
-    if (!(await exists(path.join(appRoot, relativePath)))) missing.push(relativePath);
-  }
-  if (missing.length) throw new Error(`Application construite incomplète — fichiers absents : ${missing.join(', ')}`);
-}
-
-async function verifyMacBundleLinks(bundle) {
-  if ((await fs.lstat(bundle)).isSymbolicLink()) throw new Error("Lien hors de l'application dans l'archive");
-  const root = await fs.realpath(bundle);
-  async function visit(directory) {
-    for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
-      const target = path.join(directory, entry.name);
-      if (entry.isSymbolicLink()) {
-        const resolved = await fs.realpath(target);
-        if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
-          throw new Error("Lien hors de l'application dans l'archive");
-        }
-      } else if (entry.isDirectory()) await visit(target);
-    }
-  }
-  await visit(bundle);
 }
 
 async function readPackageJson(target) {
@@ -253,7 +220,7 @@ async function patchStagedManifest(stageDir) {
     if (!manifest.build.files.includes(pattern)) manifest.build.files.push(pattern);
   }
 
-  if (process.platform === 'win32') manifest.build.files.push('desktop-bootstrap/**');
+  manifest.build.files.push('desktop-bootstrap/**');
 
   for (const [platform, icon] of Object.entries(PRODUCT_ICONS)) {
     if (!(await exists(path.join(stageDir, icon)))) {
@@ -454,18 +421,15 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false, pre
   await embedLocalServer(sourceDir, stageDir);
   await embedDesktopOverlay(stageDir);
   await embedUiRuntimeConfig(sourceDir, stageDir);
-  if (process.platform === 'win32') {
-    await fs.cp(path.join(bootstrapRoot, 'lib'), path.join(stageDir, 'desktop-bootstrap', 'lib'), { recursive: true, filter: isShippedFile });
-    await fs.cp(path.join(bootstrapRoot, 'composants'), path.join(stageDir, 'desktop-bootstrap', 'composants'), { recursive: true, filter: isShippedFile });
-    await fs.cp(path.join(bootstrapRoot, 'certs'), path.join(stageDir, 'desktop-bootstrap', 'certs'), { recursive: true, filter: isShippedFile });
-    await fs.cp(path.join(bootstrapRoot, 'installer-ui'), path.join(stageDir, 'desktop-bootstrap', 'installer-ui'), { recursive: true, filter: isShippedFile });
-    if (windowsInstaller) {
-      await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));
-      const manifestPath = path.join(stageDir, 'package.json');
-      const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
-      manifest.build.files.push('python-runtime.json');
-      await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-    }
+  for (const directory of ['lib', 'composants', 'certs', 'installer-ui']) {
+    await fs.cp(path.join(bootstrapRoot, directory), path.join(stageDir, 'desktop-bootstrap', directory), { recursive: true, filter: isShippedFile });
+  }
+  if (process.platform === 'win32' && windowsInstaller) {
+    await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));
+    const manifestPath = path.join(stageDir, 'package.json');
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+    manifest.build.files.push('python-runtime.json');
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   }
   await embedBundledPlugins(sourceDir, stageDir);
   await patchStagedManifest(stageDir);
@@ -475,7 +439,7 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false, pre
     ui.detail(`Dépendances de construction retirées du paquet : ${removed.join(', ')}`);
   }
   await repairStagedTree(stageDir);
-  const prebuiltSqlite = await downloadPrebuiltSqlite(stageDir);
+  await downloadPrebuiltSqlite(stageDir);
   if (process.platform === 'win32') {
     await packageRuntimeComponents(stageDir, {
       repository: releaseRepo,
@@ -496,7 +460,6 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false, pre
   ui.step("Construction de l'application Electron…");
   await prepareStage?.(stageDir);
   const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', ...(windowsInstaller ? ['--win', 'nsis', '--x64', '--publish', 'never'] : ['--dir'])];
-  if (prebuiltSqlite && process.platform !== 'win32') builderArgs.push('-c.npmRebuild=false');
   const signingEnv = { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' };
   if (process.env.CSC_LINK && !process.env.WIN_CSC_LINK) signingEnv.WIN_CSC_LINK = process.env.CSC_LINK;
   if (process.env.CSC_KEY_PASSWORD && !process.env.WIN_CSC_KEY_PASSWORD) signingEnv.WIN_CSC_KEY_PASSWORD = process.env.CSC_KEY_PASSWORD;

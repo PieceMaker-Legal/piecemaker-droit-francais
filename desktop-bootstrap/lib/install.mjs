@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
-import { buildDesktopApp, downloadPrebuiltApp } from './build.mjs';
+import { verifyBuiltApp, verifyMacBundleLinks } from './prebuilt-app.mjs';
 import { generateCertificates, isCaTrusted, signApplication, trustCertificateAuthority } from './certificates.mjs';
-import { createShortcuts, installApplication, launchApplication, quitRunningApplication, registerWindowsUninstall } from './place.mjs';
+import { installApplication, launchApplication, quitRunningApplication } from './place.mjs';
 import { finishProgress, openProgressWindow, settleProgressWindow } from './progress.mjs';
 import { ui } from './ui.mjs';
 import {
@@ -13,17 +13,20 @@ import {
   releaseTag,
   releaseRepo,
   sourceDir,
-  trustMarkerPath,
 } from './paths.mjs';
 
 const options = new Set(process.argv.slice(2));
 const skipCertificates = options.has('--no-certificate');
 const skipLaunch = options.has('--no-launch');
 const skipProgress = options.has('--no-progress');
+if (process.env.ELECTRON_RUN_AS_NODE === '1') delete process.env.ELECTRON_RUN_AS_NODE;
 
 async function main() {
   if (!IS_MAC && !IS_WINDOWS) {
     throw new Error('Seuls macOS et Windows sont pris en charge.');
+  }
+  if (IS_WINDOWS) {
+    throw new Error('Cette version nécessite l’installateur Windows NSIS précompilé. Relancez install.ps1 sans --build-from-source ; une archive décompressée ne permet pas la désinstallation native.');
   }
   if (!sourceDir) {
     throw new Error('PIECEMAKER_SRC_DIR est absent — lancez install.sh ou install.ps1.');
@@ -35,15 +38,18 @@ async function main() {
   if (!skipProgress) await openProgressWindow({ version: releaseTag, offerPiste: !skipLaunch });
   console.log(`\n${PRODUCT_NAME} — installation de l'application de bureau (${releaseTag})`);
 
+  let builtArtifact = process.env.PIECEMAKER_PREBUILT_APP_PATH;
+  if (builtArtifact) {
+    await verifyMacBundleLinks(builtArtifact);
+    await verifyBuiltApp(builtArtifact);
+  }
+
   ui.step("Autorité locale du proxy d'anonymisation");
   await generateCertificates();
 
-  let builtArtifact = await downloadPrebuiltApp(bootstrapHome);
   if (!builtArtifact) {
-    if (IS_WINDOWS && !options.has('--build-from-source')) {
-      throw new Error("Le paquet Windows précompilé est indisponible. L'application actuelle est conservée. Réessayez lorsque la release est prête.");
-    }
-    builtArtifact = await buildDesktopApp(sourceDir);
+    const { buildDesktopApp, downloadPrebuiltApp } = await import('./build.mjs');
+    builtArtifact = await downloadPrebuiltApp(bootstrapHome) || await buildDesktopApp(sourceDir);
   }
   let runtimeMetadata;
   if (IS_MAC && process.arch === 'arm64') {
@@ -67,9 +73,6 @@ async function main() {
   } else {
     await runCertificateStep(installedPath);
   }
-
-  createShortcuts(installedPath);
-  registerWindowsUninstall(installedPath, releaseTag);
 
   console.log(`\n${PRODUCT_NAME} est installé : ${installedPath}`);
   console.log(`Certificats locaux : ${certsDir}`);
@@ -95,11 +98,6 @@ async function runCertificateStep(installedPath) {
       return;
     }
 
-    await fs.writeFile(
-      trustMarkerPath,
-      `${JSON.stringify({ trustedAt: new Date().toISOString(), release: releaseTag }, null, 2)}\n`,
-      'utf8',
-    );
     ui.ok('Certificat local enregistré dans le magasin de confiance.');
   }
 

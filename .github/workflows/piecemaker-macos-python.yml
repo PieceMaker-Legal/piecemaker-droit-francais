@@ -59,7 +59,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Test precompiled desktop and Electron integration
-        run: node --experimental-vm-modules --test desktop-bootstrap/lib/prebuilt-app.test.mjs desktop-bootstrap/overlay/electron-piecemaker/*.test.mjs desktop-bootstrap/overlay/electron-piecemaker/*.test.js
+        run: node --experimental-vm-modules --test desktop-bootstrap/lib/prebuilt-app.test.mjs desktop-bootstrap/lib/macos-bootstrap.test.mjs desktop-bootstrap/lib/macos-install.test.mjs desktop-bootstrap/lib/certificates-darwin.test.mjs desktop-bootstrap/lib/build-sqlite.test.mjs desktop-bootstrap/overlay/electron-piecemaker/*.test.mjs desktop-bootstrap/overlay/electron-piecemaker/*.test.js
 
       - name: Attach precompiled desktop to release
         run: gh release upload "$TAG" "$RUNNER_TEMP"/desktop-assets/piecemaker-desktop-darwin-arm64.tar.gz* --clobber --repo "$GITHUB_REPOSITORY"

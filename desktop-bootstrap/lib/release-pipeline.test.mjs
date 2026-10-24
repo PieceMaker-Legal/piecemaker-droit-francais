@@ -9,7 +9,8 @@ test('the release stays draft until Windows and macOS components are verified', 
   assert.match(release, /--npm\.publish=false/);
   assert.match(release, /needs: release[\s\S]*uses: \.\/\.github\/workflows\/piecemaker-windows-release\.yml/);
   assert.match(release, /finalize: false/);
-  assert.match(release, /needs: \[release, windows-desktop, macos-python, gliner-cache\]/);
+  assert.match(release, /needs: \[release, windows-desktop, macos-python\]/);
+  assert.doesNotMatch(release, /gliner-cache|piecemaker-gliner-/);
   assert.match(release, /npm publish --access public/);
   assert.ok(release.indexOf('npm publish --access public') < release.indexOf('gh release edit'));
   assert.match(windows, /workflow_call:/);
