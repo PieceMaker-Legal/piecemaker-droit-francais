@@ -1,5 +1,8 @@
 import { parseExpressionAt } from 'acorn';
 
+import { readActe } from './acte.js';
+import type { Section } from './acte.js';
+
 export type Ref = { piece: string; citation: string };
 export type Target = { piece: string; citation?: string };
 export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null; au?: string }; applicabilite?: string; validite?: string; renvoi: Target[]; contredit: Ref[] };
@@ -21,13 +24,13 @@ export const VERBS = { obtenir: 'terme', écarter: 'terme', réduire: 'montant',
 export type Verb = keyof typeof VERBS;
 export type Objective = { objectif: string; effet: string; verbe: Verb; validite?: string; prescription?: string };
 export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean | number> };
-export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; objectifs: Objective[]; hypotheses: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
+export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; objectifs: Objective[]; hypotheses: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure>; acte: Section[] };
 export type Problem = { path: string; text: string; avocat?: string; cible?: string };
 export type Parsed = { value: unknown; lines: Map<string, number> };
 
 const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const RESERVED = new Set(['objectifs', 'questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification']);
+const RESERVED = new Set(['objectifs', 'questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification', 'acte']);
 const TERM_KEYS = new Set(['si', 'sauf']);
 const CONDITION_KEYS = new Set(['condition', 'l_une', 'delai', 'montant', 'selon', 'decompte', 'preuve', 'contredit']);
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
@@ -111,7 +114,7 @@ const text = (value: unknown) => typeof value === 'string' && value.trim() !== '
 export function readReasoning(value: unknown): { reasoning: Reasoning; problems: Problem[] } {
   const problems: Problem[] = [];
   const problem = (path: string, message: string, avocat?: string, cible?: string) => { problems.push({ path, text: message, ...(avocat ? { avocat, cible } : {}) }); };
-  const reasoning: Reasoning = { objectifs: [], hypotheses: [], terms: new Map(), valeurs: new Map(), computed: new Map() };
+  const reasoning: Reasoning = { objectifs: [], hypotheses: [], terms: new Map(), valeurs: new Map(), computed: new Map(), acte: [] };
   const dated: Array<{ at: string; name: string }> = [];
   const controls: Array<{ slot: ControlSlot; name: string; at: string }> = [];
   const control = (slot: ControlSlot, raw: unknown, at: string): string | undefined => {
@@ -300,6 +303,12 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       }
       continue;
     }
+    if (key === 'acte') {
+      const read = readActe(raw);
+      reasoning.acte = read.sections;
+      for (const entry of read.problems) problem(entry.path, entry.text);
+      continue;
+    }
     if (key === 'essais') { problem('essais', 'la clé essais s’appelle hypotheses : renomme-la'); continue; }
     if (key === 'hypotheses') {
       if (!Array.isArray(raw)) { problem('hypotheses', 'hypotheses: [{ nom, faits, attendu }] attendu'); continue; }
@@ -355,7 +364,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
 
 const ANNOTATIONS = new Set(['bilan', 'montant_calcule', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'atteint', 'obstacles', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul']);
 
-const KEY_ORDER = ['qualification', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'condition', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'contredit', 'sauf', 'nom', 'faits', 'attendu'];
+const KEY_ORDER = ['qualification', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'condition', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'contredit', 'sauf', 'nom', 'faits', 'attendu', 'id', 'intitule', 'traite', 'conflit', 'sur', 'modele', 'avocat', 'texte', 'sections'];
 const rank = (key: string) => { const at = KEY_ORDER.indexOf(key); return at < 0 ? KEY_ORDER.length : at; };
 const ordered = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(ordered);
@@ -387,7 +396,7 @@ export function canonical(annotated: Record<string, unknown>, reasoning: Reasoni
     pending.sort((x, y) => slots.indexOf(x.slot) - slots.indexOf(y.slot));
     visit(pending.shift()!.name);
   }
-  const keys = ['qualification', 'objectifs', ...order, ...Object.keys(annotated).filter((key) => !order.includes(key) && !['qualification', 'objectifs', 'valeurs', 'hypotheses'].includes(key)), 'valeurs', 'hypotheses'];
+  const keys = ['qualification', 'objectifs', ...order, ...Object.keys(annotated).filter((key) => !order.includes(key) && !['qualification', 'objectifs', 'valeurs', 'hypotheses', 'acte'].includes(key)), 'valeurs', 'hypotheses', 'acte'];
   return Object.fromEntries(keys.filter((key) => key in annotated).map((key) => [key, ordered(annotated[key])]));
 }
 
@@ -397,7 +406,7 @@ export function stripAnnotations(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !ANNOTATIONS.has(key)).map(([key, item]) => [key, stripAnnotations(item)]));
 }
 
-const inline = (value: unknown): boolean => (Array.isArray(value) ? value.every((item) => !isObject(item) && !Array.isArray(item)) : isObject(value) ? Object.values(value).every(inline) : true);
+const inline = (value: unknown): boolean => (Array.isArray(value) ? value.every((item) => !isObject(item) && !Array.isArray(item) && !(typeof item === 'string' && item.length > 60)) : isObject(value) ? Object.values(value).every(inline) : true);
 const quote = (value: string) => (/['\\\n]/.test(value) ? (value.includes('`') ? JSON.stringify(value) : `\`${value.replace(/\\/g, '\\\\').replace(/\$\{/g, '$\\{')}\``) : `'${value}'`);
 const keyOf = (key: string) => (IDENTIFIER.test(key) ? key : `'${key}'`);
 

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'docx'];
+const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'docx', 'acte'];
 const REASONING_COMMANDS = ['verifier'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
@@ -39,6 +39,9 @@ export const HELP = `Usage: pm <outil> [options]
   docx verifier|comparer --fichier FILE.docx [--modele FILE.js]
   docx extraire --fichier FILE.docx --sortie FILE.js
       chemins relatifs au dossier ; modèle initial : .piecemaker/raisonnement.js
+  acte exporter --sortie FILE.docx [--modele MODELE.docx]
+  acte fusionner|importer --fichier FILE.docx
+      l'acte rédigé vit dans .piecemaker/raisonnement.js ; le DOCX en est l'impression
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {
@@ -197,6 +200,7 @@ async function defaultDeps(cwd) {
     sqlFn: client.runSql,
     reasoningFn: client.runReasoning,
     docxFn: client.runDocxReasoning,
+    acteFn: client.runActe,
     tabularFn: client.runTabularReview,
     execFn: (args, dir) => spawnPiecemaker(cliPath, args, dir),
     chronologieSql: volets.chronologieSql,
@@ -453,6 +457,20 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     if (commande !== 'preparer') return JSON.stringify(result);
     const document = path.resolve(input.cwd, result.fichier);
     return withNotice(JSON.stringify(result), await followPanel(api, { project: input.cwd, tab: 'files', document }, { cwd: input.cwd, tab: 'files', document }));
+  }
+
+  if (tool === 'acte') {
+    const commande = positional[1];
+    if (!['exporter', 'fusionner', 'importer'].includes(commande)) usage('acte attend exporter, fusionner ou importer.');
+    const flag = commande === 'exporter' ? 'sortie' : 'fichier';
+    if (!flags[flag] || flags[flag] === true) usage(`Indiquez --${flag} FILE.docx.`);
+    if (flags.modele === true) usage('Indiquez une valeur pour --modele.');
+    const input = { commande, cwd: path.resolve(resolved), [flag]: String(flags[flag]), ...(flags.modele ? { modele: String(flags.modele) } : {}) };
+    const result = await api.acteFn(input);
+    const text = typeof result.verification === 'string' ? `${JSON.stringify({ ...result, verification: undefined })}\n${result.verification}` : JSON.stringify(result);
+    if (commande !== 'exporter') return withNotice(text, await followPanel(api, { project: input.cwd, tab: 'plugin:piecemaker-raisonnement' }, { cwd: input.cwd, tab: 'plugin:piecemaker-raisonnement' }));
+    const document = path.resolve(input.cwd, result.fichier);
+    return withNotice(text, await followPanel(api, { project: input.cwd, tab: 'files', document }, { cwd: input.cwd, tab: 'files', document }));
   }
 
   if (tool === 'raisonnement') {
