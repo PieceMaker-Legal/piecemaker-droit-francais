@@ -1,11 +1,11 @@
 ---
 name: raisonnement-verifie
-description: Cadre du raisonnement juridique vérifié de PieceMaker (fichier .piecemaker/raisonnement.js, vérificateur, contrôles, volet Raisonnement). Use whenever modifying, reviewing or testing server/modules/piecemaker-reasoning, the agent instruction server/piecemaker/legal-code/instructions.md, or the piecemaker-raisonnement plugin.
+description: Cadre du raisonnement juridique vérifié de PieceMaker (fichier .piecemaker/raisonnement.yaml ou .js, vérificateur, contrôles, volet Raisonnement). Use whenever modifying, reviewing or testing server/modules/piecemaker-reasoning, the agent instruction server/piecemaker/legal-code/instructions.md, or the piecemaker-raisonnement plugin.
 ---
 
 # Raisonnement vérifié
 
-L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.js`, un objet JavaScript sans fonctions que le serveur lit sans l'exécuter. `pm raisonnement verifier` le vérifie, le teste, le réécrit et renvoie ses erreurs et manques. Le volet Raisonnement montre à l'avocat le graphe, le détail et les alertes.
+Sur la branche expérimentale `yaml`, l'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.yaml` (YAML 1.2 core). Le modèle, les clés obligatoires et le moteur sont ceux de l'objet JS, sans exécution de code. Un ancien `.piecemaker/raisonnement.js` reste lu si aucun YAML n'existe ; si les deux existent, YAML prime. Les alias non cycliques sont développés puis supprimés à la normalisation. Commentaires, tags, doublons et cycles d'alias sont refusés. Installer la dépendance locale avec `npm ci --prefix server/modules/piecemaker-reasoning`. Comparatif et protocole : `docs/tests/raisonnement-yaml-luna/README.md`. `pm raisonnement verifier` le vérifie, le teste, le réécrit et renvoie ses erreurs et manques. Le volet Raisonnement montre à l'avocat le graphe, le détail et les alertes.
 
 ## Principes (décidés, à ne pas défaire)
 
@@ -73,6 +73,7 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 
 | Fichier | Rôle |
 |---|---|
+| `server/modules/piecemaker-reasoning/document.ts` | sélection du fichier et codec YAML/JS, lignes des diagnostics |
 | `server/modules/piecemaker-reasoning/format.ts` | lecture acorn, validation, contrôles, ordre canonique, impression |
 | `server/modules/piecemaker-reasoning/engine.ts` | logique à trois valeurs, faits décisifs, délais, hypothèses |
 | `server/modules/piecemaker-reasoning/program.ts` | vérification, manques, sortie, service, exemple fictif |

@@ -9,7 +9,8 @@ import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, Reas
 import { assignIds, checkActe } from './acte.js';
 import { and, answer, calculate, compile, evaluate, or, objectiveRoots, decisive, reachableLeaves, runTrials, simulate, structure } from './engine.js';
 import type { Calculation, Facts, Trace } from './engine.js';
-import { canonical, formulaConditions, VERBS, formulaNames, formulaNumbers, LiteralError, parseLiteral, printLiteral, readReasoning, stripAnnotations } from './format.js';
+import { parseReasoningDocument, printReasoningDocument, resolveReasoningFile } from './document.js';
+import { canonical, formulaConditions, VERBS, formulaNames, formulaNumbers, LiteralError, readReasoning, stripAnnotations } from './format.js';
 import type { Basis, Condition, Formula, Measure, Objective, Ref, Target, Trial } from './format.js';
 
 export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null } };
@@ -72,6 +73,7 @@ const told = (name: string, value: ReasoningValue | number | string) => `${phras
 
 export async function verifyReasoning(input: {
   code: string;
+  format?: 'js' | 'yaml';
   cwd: string;
   connectors: ReasoningConnectors;
   reliability: Map<string, boolean>;
@@ -94,7 +96,7 @@ export async function verifyReasoning(input: {
   };
 
   let parsed;
-  try { parsed = parseLiteral(input.code); } catch (error) {
+  try { parsed = parseReasoningDocument(input.code, input.format); } catch (error) {
     if (!(error instanceof LiteralError)) throw error;
     emit({ key: 'lecture', step: 'réponse', status: 'alerte', subject: 'Fichier illisible', text: error.message });
     return { annotated: null, issues: [{ id: issueId('erreur', '', error.message), kind: 'erreur', path: '', line: error.line, text: error.message }], code: input.code, log };
@@ -103,8 +105,8 @@ export async function verifyReasoning(input: {
   const stripped = stripAnnotations(parsed.value);
   if (isObject(stripped)) assignIds(stripped.acte);
   const { reasoning, problems } = readReasoning(stripped);
-  const ordered = isObject(stripped) ? printLiteral(canonical(stripped, reasoning)) : null;
-  if (ordered) lines = parseLiteral(ordered).lines;
+  const ordered = isObject(stripped) ? printReasoningDocument(canonical(stripped, reasoning), parsed.format) : null;
+  if (ordered) lines = parseReasoningDocument(ordered, parsed.format).lines;
   for (const entry of problems) add('erreur', entry.path, entry.text, entry.avocat, entry.cible);
   if (!isObject(stripped)) return { annotated: null, issues, code: input.code, log };
   const annotated = stripped;
@@ -619,7 +621,19 @@ export async function verifyReasoning(input: {
     emit({ key: `réponse:${index}`, step: 'réponse', status: holder?.statut === 'à établir' ? 'neutre' : bilan.erreurs ? 'alerte' : 'ok', subject: objective.objectif, text: `${typeof holder?.montant_calcule === 'number' ? holder.montant_calcule.toLocaleString('fr-FR') : holder?.statut ? ANSWER[holder.statut as ReasoningStatus] : 'Non calculée'}${decisifs.length ? ` : dépend de ${listing(decisifs.map((name) => phrase(name)))}` : ''}${bilan.erreurs ? ` · ${bilan.erreurs} erreur${bilan.erreurs > 1 ? 's' : ''} à corriger` : ''}` });
   });
   let code = ordered ?? input.code;
-  for (const [original, fixed] of corrections) code = code.split(original).join(fixed);
+  if (parsed.format === 'yaml' && corrections.size) {
+    const correct = (value: unknown): unknown => {
+      if (typeof value === 'string') {
+        for (const [original, fixed] of corrections) value = (value as string).split(original).join(fixed);
+        return value;
+      }
+      if (Array.isArray(value)) return value.map(correct);
+      return isObject(value) ? Object.fromEntries(Object.entries(value).map(([key, child]) => [key, correct(child)])) : value;
+    };
+    code = printReasoningDocument(correct(parseReasoningDocument(code, 'yaml').value), 'yaml');
+  } else {
+    for (const [original, fixed] of corrections) code = code.split(original).join(fixed);
+  }
   let simulation: Simulation | undefined;
   if (input.simulation && !shape.cycles.length) {
     const run = simulate(reasoning, test, { leaf: leafValue, value: (name, check) => stated(name, check) ?? computedValue(name) }, input.simulation);
@@ -703,22 +717,22 @@ export function createReasoningService(getDatabase: () => Database.Database, con
 
   const run = async (cwd: string, options: { online: boolean; emit?: (entry: ReasoningLogEntry) => void; simulation?: Trial['faits'] }) => {
     const id = projectId(cwd);
-    const code = await readFile(path.join(cwd, REASONING_FILE), 'utf8').catch(() => null);
-    if (code === null) throw new TypeError(`Aucun raisonnement : écris ${REASONING_FILE} (objet { objectifs: [...], terme: { si: [...] } }), puis relance verifier.`);
+    const file = await resolveReasoningFile(cwd);
+    const code = await readFile(file, 'utf8').catch(() => null);
+    if (code === null) throw new TypeError('Aucun raisonnement : écris .piecemaker/raisonnement.yaml avec objectifs et les termes, puis relance verifier.');
     const result = await verifyReasoning({
-      code, cwd, connectors: cached, ...options,
+      code, format: file.endsWith('.yaml') ? 'yaml' : 'js', cwd, connectors: cached, ...options,
       reliability: new Map(reliability(id).map((entry) => [entry.piece, entry.reliable])),
       nature: nature(id),
       persons: persons(id),
       dismissed: new Set(dismissed(id).map((entry) => entry.id)),
     });
-    return { id, code, result };
+    return { id, code, result, file };
   };
 
   const verify = async (cwd: string, online = true, emit?: (entry: ReasoningLogEntry) => void): Promise<ReasoningSnapshot> => {
     for (const key of sources.keys()) if (key.startsWith(`${cwd}\0`)) sources.delete(key);
-    const { id, code, result } = await run(cwd, { online, emit });
-    const file = path.join(cwd, REASONING_FILE);
+    const { id, code, result, file } = await run(cwd, { online, emit });
     if (result.code !== code) await writeFile(file, result.code, 'utf8');
     const previous = read(cwd);
     const snapshot: ReasoningSnapshot = { ...previous, revision: previous.revision + 1, updatedAt: new Date().toISOString(), code: result.code, annotated: result.annotated, issues: result.issues, test: { at: new Date().toISOString(), log: result.log } };
@@ -780,8 +794,8 @@ export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'issues' | '
   };
   const errors = issues.filter((issue) => issue.kind === 'erreur');
   const gaps = issues.filter((issue) => issue.kind === 'manque');
-  if (!errors.length && !gaps.length) return `Aucune erreur, aucun manque. ${REASONING_FILE} a été réécrit dans son ordre.`;
-  const out = [`${errors.length} erreur(s), ${gaps.length} manque(s). ${REASONING_FILE} a été réécrit dans son ordre : les lignes ci-dessous s’y rapportent.`];
+  if (!errors.length && !gaps.length) return 'Aucune erreur, aucun manque. Le raisonnement a été réécrit dans son ordre.';
+  const out = [`${errors.length} erreur(s), ${gaps.length} manque(s). Le raisonnement a été réécrit dans son ordre : les lignes ci-dessous s’y rapportent.`];
   const block = (label: string, issue: ReasoningIssue, index: number) => {
     const place = issue.path ? issue.path.replace(/\./g, ' › ') : 'fichier';
     out.push('', `${label} ${index + 1} — ${place}${issue.line ? ` (ligne ${issue.line})` : ''}`);
