@@ -1,0 +1,493 @@
+qualification: contentieux
+objectifs:
+  - objectif: Obtenir la condamnation de Société Beta SARL au paiement des factures F-2025-014 et F-2025-021
+    obtenir: factures_impayées
+    prescription: prescription_de_la_créance
+  - objectif: Obtenir l'indemnité forfaitaire pour frais de recouvrement de 40 euros par facture impayée
+    obtenir: indemnité_forfaitaire_due
+    prescription: prescription_de_la_créance
+factures_impayées:
+  si:
+    - condition: contrat_de_fourniture
+      selon:
+        - source: LEGIARTI000000000101
+          citation: Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits.
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_conclusion
+          applicabilite: applicabilité_de_l_article_1103
+    - condition: facture_014_échue
+      selon:
+        - source: pieces/01_contrat_cadre.md
+          citation: Les factures sont payables à trente jours à compter de leur date d'émission.
+          vigueur:
+            debut: 2024-01-10
+            fin: null
+          validite: validité_du_contrat_cadre
+      preuve:
+        - piece: pieces/02_facture_F-2025-014.md
+          citation: Émise par Société Exemple SAS à Société Beta SARL le 3 mars 2025.
+        - piece: pieces/02_facture_F-2025-014.md
+          citation: "Montant TTC : 12 000,00 euros. Échéance : 2 avril 2025."
+    - condition: facture_021_échue
+      selon:
+        - source: pieces/01_contrat_cadre.md
+          citation: Les factures sont payables à trente jours à compter de leur date d'émission.
+          vigueur:
+            debut: 2024-01-10
+            fin: null
+          validite: validité_du_contrat_cadre
+      preuve:
+        - piece: pieces/03_facture_F-2025-021.md
+          citation: Émise par Société Exemple SAS à Société Beta SARL le 2 avril 2025.
+        - piece: pieces/03_facture_F-2025-021.md
+          citation: "Montant TTC : 8 400,00 euros. Échéance : 2 mai 2025."
+    - condition: montant_total_de_la_créance
+      montant:
+        valeur: montant_total_des_factures
+        au_moins: montant_total_des_factures
+      selon:
+        - source: LEGIARTI000000000105
+          citation: Celui qui réclame l'exécution d'une obligation doit la prouver.
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_du_relevé_de_compte
+          applicabilite: applicabilité_de_l_article_1353
+    - condition: aucun_paiement_reçu
+      selon:
+        - source: LEGIARTI000000000105
+          citation: Celui qui réclame l'exécution d'une obligation doit la prouver. Réciproquement, celui qui se prétend libéré doit justifier le paiement ou le fait qui a produit l'extinction de son obligation.
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_du_relevé_de_compte
+          applicabilite: applicabilité_de_l_article_1353
+      preuve:
+        - piece: pieces/07_releve_de_compte.md
+          citation: "Factures F-2025-014 et F-2025-021 : aucun règlement reçu."
+        - piece: pieces/07_releve_de_compte.md
+          citation: "Solde débiteur : 20 400,00 euros."
+    - condition: livraison_d_avril_acceptée
+      selon:
+        - source: pieces/01_contrat_cadre.md
+          citation: Toute réclamation relative à la conformité des produits doit être formulée par écrit dans les huit jours de la livraison ; à défaut, les produits sont réputés acceptés sans réserve.
+          vigueur:
+            debut: 2024-01-10
+            fin: null
+          validite: validité_du_contrat_cadre
+  sauf:
+    - condition: suspension_du_paiement_justifiée
+      selon:
+        - source: LEGIARTI000000000102
+          citation: Une partie peut refuser d'exécuter son obligation, alors même que celle-ci est exigible, si l'autre n'exécute pas la sienne et si cette inexécution est suffisamment grave.
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_réclamation
+          applicabilite: applicabilité_de_l_article_1219
+contrat_de_fourniture:
+  si:
+    - condition: validité_du_contrat_cadre
+      selon:
+        - source: pieces/01_contrat_cadre.md
+          citation: Les factures sont payables à trente jours à compter de leur date d'émission.
+          vigueur:
+            debut: 2024-01-10
+            fin: null
+          validite: validité_du_contrat_cadre
+validité_du_contrat_cadre:
+  si:
+    - condition: contrat_cadre_conclu
+      selon:
+        - source: LEGIARTI000000000101
+          citation: Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits.
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_conclusion
+          applicabilite: applicabilité_de_l_article_1103
+      preuve:
+        - piece: pieces/01_contrat_cadre.md
+          citation: Entre Société Exemple SAS, fournisseur, et Société Beta SARL, client.
+        - piece: pieces/01_contrat_cadre.md
+          citation: Fait à Lyon le 10 janvier 2024.
+livraison_d_avril_acceptée:
+  si:
+    - condition: livraison_reçue_sans_réserve
+      selon:
+        - source: pieces/01_contrat_cadre.md
+          citation: Toute réclamation relative à la conformité des produits doit être formulée par écrit dans les huit jours de la livraison ; à défaut, les produits sont réputés acceptés sans réserve.
+          vigueur:
+            debut: 2024-01-10
+            fin: null
+          validite: validité_du_contrat_cadre
+      preuve:
+        - piece: pieces/04_bon_de_livraison_avril.md
+          citation: Marchandise reçue le 5 avril 2025 par Société Beta SARL.
+        - piece: pieces/04_bon_de_livraison_avril.md
+          citation: "Réserves : néant."
+  sauf:
+    - condition: réclamation_dans_les_huit_jours
+      delai:
+        de: date_de_livraison_avril
+        a: date_de_réclamation
+        au_plus:
+          jours: 8
+      selon:
+        - source: pieces/01_contrat_cadre.md
+          citation: Toute réclamation relative à la conformité des produits doit être formulée par écrit dans les huit jours de la livraison ; à défaut, les produits sont réputés acceptés sans réserve.
+          vigueur:
+            debut: 2024-01-10
+            fin: null
+          validite: validité_du_contrat_cadre
+      decompte: décompte_de_réclamation_dans_les_huit_jours
+suspension_du_paiement_justifiée:
+  si:
+    - condition: allégation_de_défauts_d_usinage
+      selon:
+        - source: LEGIARTI000000000102
+          citation: si l'autre n'exécute pas la sienne
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_réclamation
+          applicabilite: applicabilité_de_l_article_1219
+      preuve:
+        - piece: pieces/05_courriel_reclamation.md
+          citation: Nous avons constaté que plusieurs pièces de la livraison d'avril présentent des défauts d'usinage.
+    - condition: inexécution_de_société_exemple
+      selon:
+        - source: LEGIARTI000000000102
+          citation: si l'autre n'exécute pas la sienne
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_réclamation
+          applicabilite: applicabilité_de_l_article_1219
+    - condition: inexécution_suffisamment_grave
+      selon:
+        - source: LEGIARTI000000000102
+          citation: si cette inexécution est suffisamment grave
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_réclamation
+          applicabilite: applicabilité_de_l_article_1219
+indemnité_forfaitaire_due:
+  si:
+    - condition: factures_impayées
+      selon:
+        - source: LEGIARTI000000000103
+          citation: Tout professionnel en situation de retard de paiement est de plein droit débiteur, à l'égard du créancier, d'une indemnité forfaitaire pour frais de recouvrement, dont le montant est fixé par décret.
+          vigueur:
+            debut: 2019-04-26
+            fin: null
+            au: date_d_échéance_facture_014
+          applicabilite: applicabilité_de_l_article_l_441_10
+    - condition: situation_de_retard_de_paiement_entre_professionnels
+      selon:
+        - source: LEGIARTI000000000103
+          citation: Tout professionnel en situation de retard de paiement est de plein droit débiteur, à l'égard du créancier, d'une indemnité forfaitaire pour frais de recouvrement, dont le montant est fixé par décret.
+          vigueur:
+            debut: 2019-04-26
+            fin: null
+            au: date_d_échéance_facture_014
+          applicabilite: applicabilité_de_l_article_l_441_10
+      preuve:
+        - piece: pieces/01_contrat_cadre.md
+          citation: Entre Société Exemple SAS, fournisseur, et Société Beta SARL, client.
+    - condition: indemnité_unitaire_de_quarante_euros
+      montant:
+        valeur: montant_indemnité_due
+        au_moins: montant_indemnité_due
+      selon:
+        - source: LEGIARTI000000000104
+          citation: Le montant de l'indemnité forfaitaire pour frais de recouvrement prévue au II de l'article L. 441-10 est fixé à 40 euros.
+          vigueur:
+            debut: 2019-04-26
+            fin: null
+            au: date_d_échéance_facture_014
+          applicabilite: applicabilité_de_l_article_d_441_5
+applicabilité_de_l_article_1103:
+  si:
+    - condition: contrat_cadre_conclu
+      selon:
+        - source: LEGIARTI000000000101
+          citation: Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits.
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_conclusion
+      preuve:
+        - piece: pieces/01_contrat_cadre.md
+          citation: Entre Société Exemple SAS, fournisseur, et Société Beta SARL, client.
+        - piece: pieces/01_contrat_cadre.md
+          citation: Fait à Lyon le 10 janvier 2024.
+applicabilité_de_l_article_1353:
+  si:
+    - condition: réclamation_du_paiement_des_factures
+      selon:
+        - source: LEGIARTI000000000105
+          citation: Celui qui réclame l'exécution d'une obligation doit la prouver.
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_du_relevé_de_compte
+      preuve:
+        - piece: pieces/02_facture_F-2025-014.md
+          citation: Émise par Société Exemple SAS à Société Beta SARL le 3 mars 2025.
+        - piece: pieces/03_facture_F-2025-021.md
+          citation: Émise par Société Exemple SAS à Société Beta SARL le 2 avril 2025.
+applicabilité_de_l_article_1219:
+  si:
+    - condition: suspension_du_paiement_invoquée
+      selon:
+        - source: LEGIARTI000000000102
+          citation: Une partie peut refuser d'exécuter son obligation, alors même que celle-ci est exigible, si l'autre n'exécute pas la sienne et si cette inexécution est suffisamment grave.
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_réclamation
+      preuve:
+        - piece: pieces/05_courriel_reclamation.md
+          citation: Nous suspendons le règlement de la facture F-2025-021 dans l'attente d'un avoir.
+applicabilité_de_l_article_l_441_10:
+  si:
+    - condition: facture_professionnelle_en_retard
+      selon:
+        - source: LEGIARTI000000000103
+          citation: Tout professionnel en situation de retard de paiement est de plein droit débiteur, à l'égard du créancier, d'une indemnité forfaitaire pour frais de recouvrement, dont le montant est fixé par décret.
+          vigueur:
+            debut: 2019-04-26
+            fin: null
+            au: date_d_échéance_facture_014
+      preuve:
+        - piece: pieces/01_contrat_cadre.md
+          citation: Entre Société Exemple SAS, fournisseur, et Société Beta SARL, client.
+        - piece: pieces/03_facture_F-2025-021.md
+          citation: Fourniture de pièces usinées, livraison d'avril 2025.
+applicabilité_de_l_article_d_441_5:
+  si:
+    - condition: indemnité_légale_de_recouvrement
+      selon:
+        - source: LEGIARTI000000000104
+          citation: Le montant de l'indemnité forfaitaire pour frais de recouvrement prévue au II de l'article L. 441-10 est fixé à 40 euros.
+          vigueur:
+            debut: 2019-04-26
+            fin: null
+            au: date_d_échéance_facture_014
+      preuve:
+        - piece: pieces/01_contrat_cadre.md
+          citation: Tout retard de paiement rend exigible l'indemnité forfaitaire pour frais de recouvrement prévue par la loi.
+décompte_de_réclamation_dans_les_huit_jours:
+  si:
+    - condition: délai_contractuel_de_huit_jours
+      selon:
+        - source: pieces/01_contrat_cadre.md
+          citation: Toute réclamation relative à la conformité des produits doit être formulée par écrit dans les huit jours de la livraison ; à défaut, les produits sont réputés acceptés sans réserve.
+          vigueur:
+            debut: 2024-01-10
+            fin: null
+          validite: validité_du_contrat_cadre
+      preuve:
+        - piece: pieces/05_courriel_reclamation.md
+          citation: Courriel du 30 mai 2025
+prescription_de_la_créance:
+  si:
+    - condition: obligation_née_entre_professionnels_dans_le_commerce
+      selon:
+        - source: LEGIARTI000000000106
+          citation: Les obligations nées à l'occasion de leur commerce entre commerçants ou entre commerçants et non-commerçants se prescrivent par cinq ans si elles ne sont pas soumises à des prescriptions spéciales plus courtes.
+          vigueur:
+            debut: 2008-06-19
+            fin: null
+            au: date_d_échéance_facture_014
+          applicabilite: applicabilité_de_l_article_l_110_4
+      preuve:
+        - piece: pieces/01_contrat_cadre.md
+          citation: Entre Société Exemple SAS, fournisseur, et Société Beta SARL, client.
+        - piece: pieces/02_facture_F-2025-014.md
+          citation: Fourniture de pièces usinées, livraison de mars 2025.
+    - condition: action_engagée_dans_les_cinq_ans
+      delai:
+        de: date_d_échéance_facture_014
+        a: date_de_saisine
+        au_plus:
+          ans: 5
+      selon:
+        - source: LEGIARTI000000000106
+          citation: se prescrivent par cinq ans
+          vigueur:
+            debut: 2008-06-19
+            fin: null
+            au: date_d_échéance_facture_014
+          applicabilite: applicabilité_de_l_article_l_110_4
+      decompte: décompte_de_action_engagée_dans_les_cinq_ans
+applicabilité_de_l_article_l_110_4:
+  si:
+    - condition: obligations_nées_entre_professionnels
+      selon:
+        - source: LEGIARTI000000000106
+          citation: Les obligations nées à l'occasion de leur commerce entre commerçants ou entre commerçants et non-commerçants se prescrivent par cinq ans si elles ne sont pas soumises à des prescriptions spéciales plus courtes.
+          vigueur:
+            debut: 2008-06-19
+            fin: null
+            au: date_d_échéance_facture_014
+      preuve:
+        - piece: pieces/01_contrat_cadre.md
+          citation: Entre Société Exemple SAS, fournisseur, et Société Beta SARL, client.
+décompte_de_action_engagée_dans_les_cinq_ans:
+  si:
+    - condition: règle_de_délai_commercial_de_cinq_ans
+      selon:
+        - source: LEGIARTI000000000106
+          citation: se prescrivent par cinq ans
+          vigueur:
+            debut: 2008-06-19
+            fin: null
+            au: date_d_échéance_facture_014
+          applicabilite: applicabilité_de_l_article_l_110_4
+      preuve:
+        - piece: pieces/01_contrat_cadre.md
+          citation: Entre Société Exemple SAS, fournisseur, et Société Beta SARL, client.
+        - piece: pieces/02_facture_F-2025-014.md
+          citation: Fourniture de pièces usinées, livraison de mars 2025.
+valeurs:
+  date_de_conclusion:
+    valeur: 2024-01-10
+    preuve:
+      - piece: pieces/01_contrat_cadre.md
+        citation: Fait à Lyon le 10 janvier 2024.
+  date_du_relevé_de_compte:
+    valeur: 2025-09-01
+    preuve:
+      - piece: pieces/07_releve_de_compte.md
+        citation: Relevé de compte client au 1er septembre 2025
+  date_de_saisine:
+    valeur: null
+  date_de_livraison_avril:
+    valeur: 2025-04-05
+    preuve:
+      - piece: pieces/04_bon_de_livraison_avril.md
+        citation: Marchandise reçue le 5 avril 2025 par Société Beta SARL.
+  date_de_réclamation:
+    valeur: 2025-05-30
+    preuve:
+      - piece: pieces/05_courriel_reclamation.md
+        citation: Courriel du 30 mai 2025
+  date_d_échéance_facture_014:
+    valeur: 2025-04-02
+    preuve:
+      - piece: pieces/02_facture_F-2025-014.md
+        citation: "Échéance : 2 avril 2025."
+  date_d_échéance_facture_021:
+    valeur: 2025-05-02
+    preuve:
+      - piece: pieces/03_facture_F-2025-021.md
+        citation: "Échéance : 2 mai 2025."
+  montant_facture_014:
+    valeur: 12000
+    preuve:
+      - piece: pieces/02_facture_F-2025-014.md
+        citation: "Montant TTC : 12 000,00 euros."
+  montant_facture_021:
+    valeur: 8400
+    preuve:
+      - piece: pieces/03_facture_F-2025-021.md
+        citation: "Montant TTC : 8 400,00 euros."
+  montant_total_des_factures:
+    valeur: 20400
+    formule:
+      somme:
+        - montant_facture_014
+        - montant_facture_021
+    preuve:
+      - piece: pieces/02_facture_F-2025-014.md
+        citation: "Montant TTC : 12 000,00 euros."
+      - piece: pieces/03_facture_F-2025-021.md
+        citation: "Montant TTC : 8 400,00 euros."
+  nombre_de_factures_impayées:
+    valeur: 2
+    preuve:
+      - piece: pieces/07_releve_de_compte.md
+        citation: "Factures F-2025-014 et F-2025-021 : aucun règlement reçu."
+  montant_indemnité_unitaire:
+    valeur: 40
+    selon:
+      - source: LEGIARTI000000000104
+        citation: Le montant de l'indemnité forfaitaire pour frais de recouvrement prévue au II de l'article L. 441-10 est fixé à 40 euros.
+        vigueur:
+          debut: 2019-04-26
+          fin: null
+          au: date_d_échéance_facture_014
+        applicabilite: applicabilité_de_l_article_d_441_5
+  montant_indemnité_due:
+    valeur: 80
+    formule:
+      produit:
+        - nombre_de_factures_impayées
+        - montant_indemnité_unitaire
+    preuve:
+      - piece: pieces/02_facture_F-2025-014.md
+        citation: Facture n° F-2025-014
+      - piece: pieces/03_facture_F-2025-021.md
+        citation: Facture n° F-2025-021
+hypotheses:
+  - nom: hypothèse conditionnelle où aucune inexécution du fournisseur n'est établie
+    faits:
+      facture_014_échue: true
+      facture_021_échue: true
+      aucun_paiement_reçu: true
+      inexécution_de_société_exemple: false
+      inexécution_suffisamment_grave: false
+    attendu:
+      factures_impayées: true
+  - nom: hypothèse conditionnelle où une inexécution suffisamment grave est établie
+    faits:
+      inexécution_de_société_exemple: true
+      inexécution_suffisamment_grave: true
+    attendu:
+      suspension_du_paiement_justifiée: true
+acte:
+  - id: s1
+    intitule: Conclusions en demande de Société Exemple SAS contre Société Beta SARL
+    texte:
+      - À Monsieur le Président et Mesdames et Messieurs les juges composant le tribunal de commerce de Lyon.
+      - Pour Société Exemple SAS, demanderesse, contre Société Beta SARL, défenderesse.
+    sections:
+      - id: s2
+        intitule: Faits et procédure
+        texte:
+          - Société Exemple SAS et Société Beta SARL ont conclu un contrat-cadre de fourniture le 10 janvier 2024. Les factures émises entre elles sont payables à trente jours à compter de leur date d'émission.
+          - Société Exemple SAS a émis la facture F-2025-014 le 3 mars 2025, d'un montant de 12 000 euros, échue le 2 avril 2025, puis la facture F-2025-021 le 2 avril 2025, d'un montant de 8 400 euros, échue le 2 mai 2025.
+          - La marchandise de la livraison d'avril a été reçue par Société Beta SARL le 5 avril 2025 sans réserve. Société Beta SARL a adressé une réclamation écrite le 30 mai 2025, alléguant des défauts d'usinage et annonçant la suspension du paiement de la facture F-2025-021.
+          - Par lettre recommandée du 20 juin 2025, reçue le 23 juin 2025, Société Exemple SAS a mis en demeure Société Beta SARL de payer 20 400 euros au titre des deux factures. Le relevé arrêté au 1er septembre 2025 constate qu'aucun règlement n'a été reçu.
+      - id: s3
+        intitule: Discussion
+        sections:
+          - id: s4
+            intitule: Sur le paiement des factures
+            traite: factures_impayées
+            texte:
+              - Les parties sont liées par un contrat-cadre qui prévoit le paiement des factures à trente jours de leur émission. La facture F-2025-014, d'un montant de 12 000 euros, et la facture F-2025-021, d'un montant de 8 400 euros, sont échues.
+              - Le relevé de compte établit qu'aucun règlement n'a été reçu et que le solde débiteur est de 20 400 euros. Société Beta SARL doit donc être condamnée à payer le principal total des deux factures.
+          - id: s5
+            intitule: Sur la contestation de la livraison d'avril
+            traite: livraison_d_avril_acceptée
+            texte:
+              - Le contrat prévoit que toute réclamation de conformité doit être formulée par écrit dans les huit jours de la livraison ; à défaut, les produits sont réputés acceptés sans réserve.
+              - La livraison a été reçue le 5 avril 2025 sans réserve. La réclamation écrite n'a été formulée que le 30 mai 2025, au-delà du délai contractuel de huit jours.
+              - Le courriel établit que Société Beta SARL a allégué des défauts d'usinage et suspendu le règlement de la facture F-2025-021 ; il ne prouve pas à lui seul que les pièces étaient défectueuses. Le dossier ne contient aucun constat, expertise ou autre pièce établissant une inexécution de Société Exemple SAS ni sa gravité. La suspension au regard de l'article 1219 du code civil n'est donc pas établie par les éléments produits.
+          - id: s6
+            intitule: Sur l'indemnité forfaitaire pour frais de recouvrement
+            traite: indemnité_forfaitaire_due
+            texte:
+              - Les deux factures professionnelles échues sont demeurées impayées. En application de l'article L. 441-10 du code de commerce, une indemnité forfaitaire de 40 euros est due de plein droit pour chaque facture impayée.
+              - La somme demandée à ce titre s'élève à 80 euros, soit 40 euros pour chacune des deux factures.
+      - id: s7
+        intitule: Par ces motifs
+        texte:
+          - Condamner Société Beta SARL à payer à Société Exemple SAS la somme de 20 400 euros au titre des factures F-2025-014 et F-2025-021.
+          - Condamner Société Beta SARL à payer à Société Exemple SAS la somme de 80 euros au titre des indemnités forfaitaires pour frais de recouvrement.
