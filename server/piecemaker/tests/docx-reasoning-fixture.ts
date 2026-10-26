@@ -11,18 +11,47 @@ export const bindings: DocxBinding[] = [
   { tag: 'pm:jours', valeur: 'jours', type: 'nombre' },
 ];
 export const clauses = ['pm:clause-prix', 'pm:clause-pénalité', 'pm:clause-retard'];
-export const code = `{
-  qualification: 'consultation',
-  objectifs: [{ objectif: 'Calculer la pénalité du scénario fictif', réduire: 'pénalité' }],
-  valeurs: {
-    prix: { valeur: null }, taux: { valeur: null }, plafond: { valeur: null }, jours: { valeur: null },
-    pénalité: { formule: { minimum: [{ produit: ['prix', 'taux', 'jours'] }, { produit: ['prix', 'plafond'] }] } },
-  },
-  hypotheses: [
-    { nom: 'Trente jours sous le plafond', faits: { prix: 12000, taux: 0.001, plafond: 0.1, jours: 30 }, attendu: { pénalité: 360 } },
-    { nom: 'Le plafond limite la pénalité', faits: { prix: 12000, taux: 0.001, plafond: 0.1, jours: 200 }, attendu: { pénalité: 1200 } },
-  ],
-}`;
+export const code = `qualification: consultation
+objectifs:
+  - objectif: Calculer la pénalité du scénario fictif
+    réduire: pénalité
+valeurs:
+  prix:
+    valeur: null
+  taux:
+    valeur: null
+  plafond:
+    valeur: null
+  jours:
+    valeur: null
+  pénalité:
+    formule:
+      minimum:
+        - produit:
+            - prix
+            - taux
+            - jours
+        - produit:
+            - prix
+            - plafond
+hypotheses:
+  - nom: Trente jours sous le plafond
+    faits:
+      prix: 12000
+      taux: 0.001
+      plafond: 0.1
+      jours: 30
+    attendu:
+      pénalité: 360
+  - nom: Le plafond limite la pénalité
+    faits:
+      prix: 12000
+      taux: 0.001
+      plafond: 0.1
+      jours: 200
+    attendu:
+      pénalité: 1200
+`;
 
 const text = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 export const run = (value: string) => `<w:r><w:t xml:space="preserve">${text(value)}</w:t></w:r>`;

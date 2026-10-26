@@ -27,7 +27,7 @@ test('un fichier DOCX autonome suffit à rejouer le moteur et ses deux hypothès
 });
 
 test('un modèle sans propriété valeurs est accepté quand le DOCX ne déclare aucune liaison', async () => {
-  const codeWithoutValues = "{ qualification: 'consultation', objectifs: [{ objectif: 'Établir un fait fictif', obtenir: 'fait_fictif' }], fait_fictif: { si: [{ observation_fictive: true, selon: [{ source: 'docx#pm:clause-prix', citation: 'payable après réception.' }] }] }, observation_fictive: { true: [{ preuve: [{ piece: 'docx#pm:clause-prix', citation: 'payable après réception.' }] }] }, hypotheses: [] }";
+  const codeWithoutValues = 'qualification: consultation\nobjectifs:\n  - objectif: Établir un fait fictif\n    obtenir: fait_fictif\nfait_fictif:\n  si:\n    - observation_fictive: true\n      selon:\n        - source: docx#pm:clause-prix\n          citation: payable après réception.\nobservation_fictive:\n  true:\n    - preuve:\n        - piece: docx#pm:clause-prix\n          citation: payable après réception.\nhypotheses: []\n';
   const input = await embedDocxReasoning(await fixture(true), { code: codeWithoutValues, bindings: [], clauses: ['pm:clause-prix'] });
 
   assert.equal((await readDocxReasoning(input)).code, codeWithoutValues);
@@ -143,15 +143,19 @@ test('un DOCX ordinaire n’est jamais déclaré vérifié sans modèle explicit
   await assert.rejects(verifyDocxReasoning(await zip.generateAsync({ type: 'uint8array' }), options), /ne contient pas/);
 });
 
+test('un ancien modèle JS est refusé avec la consigne de le transcrire en YAML', async () => {
+  await assert.rejects(embedDocxReasoning(await fixture(true), { code: "{ objectifs: [{ objectif: 'Établir un fait fictif', obtenir: 'fait' }] }", bindings: [], clauses: [] }), /Ancien modèle JS : transcris-le dans \.piecemaker\/raisonnement\.yaml/);
+});
+
 test('une liaison ne peut pas remplacer un taux fixé par un texte ni un calcul', async () => {
-  for (const field of ['formule: { produit: [1, 2] },', 'selon: [],']) {
-    const input = await embedDocxReasoning(await fixture(), { code: code.replace('prix: { valeur: null }', `prix: { ${field} valeur: null }`), bindings, clauses });
+  for (const field of ['formule: { produit: [1, 2] }', 'selon: []']) {
+    const input = await embedDocxReasoning(await fixture(), { code: code.replace('  prix:\n    valeur: null', `  prix:\n    ${field}\n    valeur: null`), bindings, clauses });
     await assert.rejects(verifyDocxReasoning(input, options), /calculée ou fixée par un texte/);
   }
 });
 
 test('la qualification contentieux appelle encore la prescription, même depuis Word', async () => {
-  const input = await embedDocxReasoning(await fixture(), { code: code.replace("qualification: 'consultation'", "qualification: 'contentieux'"), bindings, clauses });
+  const input = await embedDocxReasoning(await fixture(), { code: code.replace('qualification: consultation', 'qualification: contentieux'), bindings, clauses });
   const result = await verifyDocxReasoning(input, options);
   assert.ok(result.verification?.issues.some((issue) => issue.text.includes('prescription')));
 });

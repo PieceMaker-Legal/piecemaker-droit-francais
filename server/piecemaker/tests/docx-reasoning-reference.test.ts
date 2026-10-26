@@ -70,11 +70,11 @@ async function withProject(run: (root: string, parent: string) => Promise<void>)
 
 test('la référence v2 stocke uniquement le chemin et le SHA-256 puis vérifie le modèle externe', async () => {
   await withProject(async (root) => {
-    const modelPath = path.join(root, '.piecemaker', 'raisonnement.js');
+    const modelPath = path.join(root, '.piecemaker', 'raisonnement.yaml');
     await writeFile(modelPath, code);
     const input = await plainFixture();
     const original = Buffer.from(input);
-    const reference = { path: '.piecemaker/raisonnement.js', sha256: modelHash(code) };
+    const reference = { path: '.piecemaker/raisonnement.yaml', sha256: modelHash(code) };
     const output = await prepareDocxReasoning(input, code, links, reference);
     const model = await readDocxReasoning(output);
 
@@ -90,7 +90,7 @@ test('la référence v2 stocke uniquement le chemin et le SHA-256 puis vérifie 
 
 test('la résolution refuse une référence absente ou dont le contenu a changé', async () => {
   await withProject(async (root) => {
-    const reference = { path: '.piecemaker/raisonnement.js', sha256: modelHash(code) };
+    const reference = { path: '.piecemaker/raisonnement.yaml', sha256: modelHash(code) };
     const document = await prepareDocxReasoning(await plainFixture(), code, links, reference);
 
     await assert.rejects(resolveReferencedModel(root, reference), /Modèle externe absent/u);
@@ -102,20 +102,20 @@ test('la résolution refuse une référence absente ou dont le contenu a changé
 
 test('les références hors racine, les symlinks sortants et les chemins env.js sont refusés', async () => {
   await withProject(async (root, parent) => {
-    const outside = path.join(parent, 'outside.js');
+    const outside = path.join(parent, 'outside.yaml');
     await writeFile(outside, code);
-    await symlink(outside, path.join(root, 'escape.js'));
+    await symlink(outside, path.join(root, 'escape.yaml'));
 
-    await assert.rejects(readReferencedModel(root, { path: '../outside.js', sha256: modelHash(code) }), /Chemin de modèle relatif/u);
-    await assert.rejects(readReferencedModel(root, { path: 'escape.js', sha256: modelHash(code) }), /doit rester dans le dossier/u);
-    await assert.rejects(readReferencedModel(root, { path: '.env.js', sha256: modelHash(code) }), /Chemin de modèle relatif/u);
-    await assert.rejects(readReferencedModel(root, { path: '.piecemaker/.env.local.js', sha256: modelHash(code) }), /Chemin de modèle relatif/u);
+    await assert.rejects(readReferencedModel(root, { path: '../outside.yaml', sha256: modelHash(code) }), /Chemin de modèle relatif/u);
+    await assert.rejects(readReferencedModel(root, { path: 'escape.yaml', sha256: modelHash(code) }), /doit rester dans le dossier/u);
+    await assert.rejects(readReferencedModel(root, { path: '.env.yaml', sha256: modelHash(code) }), /Chemin de modèle relatif/u);
+    await assert.rejects(readReferencedModel(root, { path: '.piecemaker/.env.local.yaml', sha256: modelHash(code) }), /Chemin de modèle relatif/u);
   });
 });
 
 test('les métadonnées v2 mixtes, les empreintes fausses et les chemins Windows sont refusés', async () => {
   await withProject(async (root) => {
-    const reference = { path: '.piecemaker/raisonnement.js', sha256: modelHash(code) };
+    const reference = { path: '.piecemaker/raisonnement.yaml', sha256: modelHash(code) };
     const document = await prepareDocxReasoning(await plainFixture(), code, links, reference);
     const mixed = await withReference(document, (model) => ({ ...model, code }));
     const badHash = await withReference(document, (model) => ({
@@ -128,7 +128,7 @@ test('les métadonnées v2 mixtes, les empreintes fausses et les chemins Windows
     }));
     const drivePath = await withReference(document, (model) => ({
       ...model,
-      reference: { ...(model.reference as Record<string, unknown>), path: 'C:/outside/raisonnement.js' },
+      reference: { ...(model.reference as Record<string, unknown>), path: 'C:/outside/raisonnement.yaml' },
     }));
 
     await writeFile(path.join(root, reference.path), code);
@@ -142,10 +142,10 @@ test('les métadonnées v2 mixtes, les empreintes fausses et les chemins Windows
 
 test('la lecture du modèle ne l’exécute pas et déplacer le DOCX ou le dossier conserve la référence relative', async () => {
   await withProject(async (root, parent) => {
-    const modelPath = path.join(root, '.piecemaker', 'raisonnement.js');
+    const modelPath = path.join(root, '.piecemaker', 'raisonnement.yaml');
     await writeFile(modelPath, code);
     const document = await prepareDocxReasoning(await plainFixture(), code, links, {
-      path: '.piecemaker/raisonnement.js', sha256: modelHash(code),
+      path: '.piecemaker/raisonnement.yaml', sha256: modelHash(code),
     });
     const documentPath = path.join(root, 'linked.docx');
     await writeFile(documentPath, document);
@@ -157,11 +157,11 @@ test('la lecture du modèle ne l’exécute pas et déplacer le DOCX ou le dossi
     await rename(root, movedRoot);
     assert.equal((await verifyDocxReasoning(await readFile(path.join(movedRoot, 'archive', 'linked.docx')), { ...options, cwd: movedRoot })).status, 'testé');
 
-    const executablePath = path.join(movedRoot, 'read-only.js');
+    const executablePath = path.join(movedRoot, 'read-only.yaml');
     const marker = '__external_model_read_test__';
     delete (globalThis as Record<string, unknown>)[marker];
     await writeFile(executablePath, `globalThis.${marker} = true;`);
-    const read = await readReferencedModel(movedRoot, { path: 'read-only.js', sha256: modelHash(`globalThis.${marker} = true;`) });
+    const read = await readReferencedModel(movedRoot, { path: 'read-only.yaml', sha256: modelHash(`globalThis.${marker} = true;`) });
     assert.equal(read.code, `globalThis.${marker} = true;`);
     assert.equal((globalThis as Record<string, unknown>)[marker], undefined);
   });
@@ -169,10 +169,10 @@ test('la lecture du modèle ne l’exécute pas et déplacer le DOCX ou le dossi
 
 test('la vérification refuse un modèle modifié pendant son exécution', async () => {
   await withProject(async (root) => {
-    const modelPath = path.join(root, '.piecemaker', 'raisonnement.js');
+    const modelPath = path.join(root, '.piecemaker', 'raisonnement.yaml');
     await writeFile(modelPath, code);
     const document = await prepareDocxReasoning(await plainFixture(), code, links, {
-      path: '.piecemaker/raisonnement.js', sha256: modelHash(code),
+      path: '.piecemaker/raisonnement.yaml', sha256: modelHash(code),
     });
     let matches = 0;
     await assert.rejects(verifyDocxReasoning(document, {

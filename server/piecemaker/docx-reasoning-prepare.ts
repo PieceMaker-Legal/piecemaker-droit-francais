@@ -2,10 +2,9 @@ import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import type { Element, Node } from '@xmldom/xmldom';
 import JSZip from 'jszip';
 
-import { parseLiteral } from '../modules/piecemaker-reasoning/format.js';
-
 import { captureDocxState, embedDocxReasoning, readDocxReasoning, UnlinkedDocxError } from './docx-reasoning.js';
 import type { DocxBinding } from './docx-reasoning.js';
+import { parseModel } from './docx-reasoning-reference.js';
 import type { DocxModelReference } from './docx-reasoning-reference.js';
 
 const WORD = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -43,7 +42,7 @@ export async function prepareDocxReasoning(input: Uint8Array, code: string, link
   catch (error) { if (!(error instanceof UnlinkedDocxError)) throw error; }
   const original = await captureDocxState(input, [], []);
   if (original.pending) throw new TypeError('Résoudre les révisions avant de préparer les liens.');
-  const model = parseLiteral(code).value as Record<string, unknown>;
+  const model = parseModel(code) as Record<string, unknown>;
   if (!model || typeof model !== 'object' || Array.isArray(model)) throw new TypeError('Le modèle doit être un objet déclaratif.');
   for (const binding of links.valeurs) {
     const values = model.valeurs as Record<string, unknown> | undefined;

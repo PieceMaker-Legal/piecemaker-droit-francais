@@ -2,12 +2,10 @@ import { createHash } from 'node:crypto';
 import { readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { parseLiteral } from '../modules/piecemaker-reasoning/format.js';
-
 import { prepareDocxReasoning } from './docx-reasoning-prepare.js';
 import { checkDocxReasoning } from './docx-reasoning-check.js';
 import { readDocxReasoning } from './docx-reasoning.js';
-import { readReferencedModel, resolveReferencedModel } from './docx-reasoning-reference.js';
+import { parseModel, readReferencedModel, resolveReferencedModel } from './docx-reasoning-reference.js';
 
 type DocxAction = { commande: string; cwd: string; fichier: string; liens?: string; sortie?: string; modele?: string };
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -29,7 +27,7 @@ export async function runDocxReasoningAction(input: DocxAction) {
   const bytes = await readFile(file);
   if (input.commande === 'verifier') return checkDocxReasoning(bytes, root);
   if (input.commande === 'preparer') {
-    const modelPath = await resolveFile(root, input.modele ?? '.piecemaker/raisonnement.js', '.js');
+    const modelPath = await resolveFile(root, input.modele ?? '.piecemaker/raisonnement.yaml', '.yaml');
     const linksPath = await resolveFile(root, input.liens, '.json');
     const output = await resolveFile(root, input.sortie, '.docx', true);
     const code = await readFile(modelPath, 'utf8');
@@ -43,13 +41,13 @@ export async function runDocxReasoningAction(input: DocxAction) {
   const expectedHash = model.version === 2 ? model.reference.sha256 : hash(model.code);
   if (input.commande === 'extraire') {
     const code = model.version === 2 ? await resolveReferencedModel(root, model.reference) : model.code;
-    parseLiteral(code);
-    const output = await resolveFile(root, input.sortie, '.js', true);
+    parseModel(code);
+    const output = await resolveFile(root, input.sortie, '.yaml', true);
     await writeFile(output, code, { flag: 'wx' });
     return { fichier: path.relative(root, output), canonique: canonical, empreinte_modele: expectedHash };
   }
   let source: string;
-  try { source = model.version === 2 && !input.modele ? (await readReferencedModel(root, model.reference)).code : await readFile(await resolveFile(root, input.modele ?? '.piecemaker/raisonnement.js', '.js'), 'utf8'); }
+  try { source = model.version === 2 && !input.modele ? (await readReferencedModel(root, model.reference)).code : await readFile(await resolveFile(root, input.modele ?? '.piecemaker/raisonnement.yaml', '.yaml'), 'utf8'); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     return { canonique: canonical, etat: 'modele_dossier_absent', identique: false, empreinte_docx: expectedHash };

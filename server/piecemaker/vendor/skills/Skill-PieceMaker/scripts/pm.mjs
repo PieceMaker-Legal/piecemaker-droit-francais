@@ -35,10 +35,10 @@ export const HELP = `Usage: pm <outil> [options]
       [--valeur V] [--piece PATH] [--force-probante FORCE] [--appreciation TEXT]
       [--vue complete] [--champs TEXT] [--cas TEXT] [--parametres TEXT]
       [--etiquette NOM] [--exception-de NOM|base] [--etat NOM] [--si EXPR] [--consequence non]
-  docx preparer --fichier FILE.docx --liens FILE.json --sortie FILE.docx [--modele FILE.js]
-  docx verifier|comparer --fichier FILE.docx [--modele FILE.js]
-  docx extraire --fichier FILE.docx --sortie FILE.js
-      chemins relatifs au dossier ; modèle initial : .piecemaker/raisonnement.js
+  docx preparer --fichier FILE.docx --liens FILE.json --sortie FILE.docx [--modele FILE.yaml]
+  docx verifier|comparer --fichier FILE.docx [--modele FILE.yaml]
+  docx extraire --fichier FILE.docx --sortie FILE.yaml
+      chemins relatifs au dossier ; modèle initial : .piecemaker/raisonnement.yaml
   acte exporter --sortie FILE.docx [--modele MODELE.docx]
   acte fusionner|importer --fichier FILE.docx
       l'acte rédigé vit dans .piecemaker/raisonnement.yaml ; le DOCX en est l'impression

@@ -5,11 +5,10 @@ import type { Element as XmlElement, Node as XmlNode } from '@xmldom/xmldom';
 import JSZip from 'jszip';
 
 import { printReasoningDocument } from '../modules/piecemaker-reasoning/document.js';
-import { parseLiteral } from '../modules/piecemaker-reasoning/format.js';
 import { verifyReasoning } from '../modules/piecemaker-reasoning/program.js';
 import { isLegalDate } from '../modules/piecemaker-reasoning/legal-period.js';
 
-import { modelHash, resolveReferencedModel, validateModelReference } from './docx-reasoning-reference.js';
+import { modelHash, parseModel, resolveReferencedModel, validateModelReference } from './docx-reasoning-reference.js';
 import type { DocxModelReference } from './docx-reasoning-reference.js';
 
 export const DOCX_REASONING_PART = 'docProps/custom.xml';
@@ -137,7 +136,7 @@ export async function captureDocxState(input: Uint8Array, bindings: DocxBinding[
 export async function embedDocxReasoning(input: Uint8Array, model: { code: string; bindings: DocxBinding[]; clauses: string[]; reference?: DocxModelReference }): Promise<Uint8Array> {
   const state = await captureDocxState(input, model.bindings, model.clauses);
   if (state.pending) throw new TypeError('Résoudre les révisions avant de rattacher le raisonnement.');
-  parseLiteral(model.code);
+  parseModel(model.code);
   if (model.reference) {
     validateModelReference(model.reference);
     if (model.reference.sha256 !== modelHash(model.code)) throw new TypeError('Empreinte du modèle incohérente.');
@@ -250,7 +249,7 @@ export async function verifyDocxReasoning(input: Uint8Array, options: Omit<Param
     changed: state.pending ? ['révisions en attente', ...changed] : changed.length ? changed : ['texte hors clauses ou ordre du document'],
     context: changed.filter((tag) => tag in state.text).map((tag) => ({ tag, text: state.text[tag] })), verification: null,
   };
-  const parsed = parseLiteral(code).value;
+  const parsed = parseModel(code);
   if (!object(parsed) || (model.bindings.length > 0 && !object(parsed.valeurs))) throw new TypeError('Le modèle doit déclarer ses valeurs liées.');
   for (const binding of model.bindings) {
     const values = parsed.valeurs as Record<string, unknown>;

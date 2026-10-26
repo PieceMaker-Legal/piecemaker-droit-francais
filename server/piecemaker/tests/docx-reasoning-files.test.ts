@@ -56,7 +56,7 @@ async function withProject(run: (root: string) => Promise<void>) {
 
 async function prepareFiles(root: string, file = 'ordinary.docx') {
   await writeFile(path.join(root, file), await plainFixture());
-  await writeFile(path.join(root, '.piecemaker', 'raisonnement.js'), code);
+  await writeFile(path.join(root, '.piecemaker', 'raisonnement.yaml'), code);
   await writeFile(path.join(root, 'liens.json'), JSON.stringify(links));
 }
 
@@ -64,7 +64,7 @@ async function withLocalApi(run: (base: string, root: string) => Promise<void>) 
   await withProject(async (root) => {
     await writeFile(path.join(root, 'linked.docx'), await fixture());
     await writeFile(path.join(root, 'ordinary.docx'), await plainFixture());
-    await writeFile(path.join(root, '.piecemaker', 'raisonnement.js'), code);
+    await writeFile(path.join(root, '.piecemaker', 'raisonnement.yaml'), code);
     await writeFile(path.join(root, 'liens.json'), JSON.stringify(links));
     const app = express();
     app.use('/api', createDocxReasoningLocalRouter({ getProjectPath: (folder) => folder === root ? root : null }, (request) => request.get('x-test-local') !== 'false'));
@@ -90,16 +90,16 @@ async function post(base: string, body: Record<string, unknown>, local = true) {
 test('prépare vers une nouvelle sortie avec un modèle externe, compare sa référence et extrait son code exact', async () => {
   await withProject(async (root) => {
     await prepareFiles(root);
-    const modelPath = path.join(root, '.piecemaker', 'raisonnement.js');
+    const modelPath = path.join(root, '.piecemaker', 'raisonnement.yaml');
     const sourceHash = hash(await readFile(modelPath, 'utf8'));
     const prepared = await runDocxReasoningAction({
       commande: 'preparer', cwd: root, fichier: 'ordinary.docx', liens: 'liens.json', sortie: 'linked.docx',
     });
-    assert.deepEqual(prepared, { fichier: 'linked.docx', canonique: 'dossier', modele: '.piecemaker/raisonnement.js', modele_dossier_modifie: false, empreinte_modele: sourceHash });
+    assert.deepEqual(prepared, { fichier: 'linked.docx', canonique: 'dossier', modele: '.piecemaker/raisonnement.yaml', modele_dossier_modifie: false, empreinte_modele: sourceHash });
     const documentModel = await readDocxReasoning(await readFile(path.join(root, 'linked.docx')));
     assert.equal(documentModel.version, 2);
     assert.equal(documentModel.code, undefined);
-    assert.deepEqual(documentModel.reference, { path: '.piecemaker/raisonnement.js', sha256: sourceHash });
+    assert.deepEqual(documentModel.reference, { path: '.piecemaker/raisonnement.yaml', sha256: sourceHash });
     assert.equal(hash(await readFile(modelPath, 'utf8')), sourceHash);
 
     const same = await runDocxReasoningAction({ commande: 'comparer', cwd: root, fichier: 'linked.docx' });
@@ -107,9 +107,9 @@ test('prépare vers une nouvelle sortie avec un modèle externe, compare sa réf
     const verified = await runDocxReasoningAction({ commande: 'verifier', cwd: root, fichier: 'linked.docx' });
     assert.deepEqual(verified, await checkDocxReasoning(await readFile(path.join(root, 'linked.docx')), root));
 
-    const extracted = await runDocxReasoningAction({ commande: 'extraire', cwd: root, fichier: 'linked.docx', sortie: 'extraite.js' });
-    assert.deepEqual(extracted, { fichier: 'extraite.js', canonique: 'dossier', empreinte_modele: sourceHash });
-    assert.equal(await readFile(path.join(root, 'extraite.js'), 'utf8'), code);
+    const extracted = await runDocxReasoningAction({ commande: 'extraire', cwd: root, fichier: 'linked.docx', sortie: 'extraite.yaml' });
+    assert.deepEqual(extracted, { fichier: 'extraite.yaml', canonique: 'dossier', empreinte_modele: sourceHash });
+    assert.equal(await readFile(path.join(root, 'extraite.yaml'), 'utf8'), code);
 
     await writeFile(modelPath, `${code}\n`);
     const divergent = await runDocxReasoningAction({ commande: 'comparer', cwd: root, fichier: 'linked.docx' });
@@ -121,10 +121,10 @@ test('prépare vers une nouvelle sortie avec un modèle externe, compare sa réf
     assert.deepEqual(await runDocxReasoningAction({ commande: 'verifier', cwd: root, fichier: 'linked.docx' }), {
       status: 'error', message: 'Modèle externe modifié : la version liée au document doit être réexaminée.', sources: 'offline',
     });
-    await assert.rejects(runDocxReasoningAction({ commande: 'extraire', cwd: root, fichier: 'linked.docx', sortie: 'modified-extraction.js' }), /Modèle externe modifié/u);
-    await assert.rejects(readFile(path.join(root, 'modified-extraction.js')), { code: 'ENOENT' });
+    await assert.rejects(runDocxReasoningAction({ commande: 'extraire', cwd: root, fichier: 'linked.docx', sortie: 'modified-extraction.yaml' }), /Modèle externe modifié/u);
+    await assert.rejects(readFile(path.join(root, 'modified-extraction.yaml')), { code: 'ENOENT' });
     assert.equal(await readFile(modelPath, 'utf8'), `${code}\n`);
-    assert.deepEqual(await runDocxReasoningAction({ commande: 'comparer', cwd: root, fichier: 'linked.docx', modele: 'absent.js' }), {
+    assert.deepEqual(await runDocxReasoningAction({ commande: 'comparer', cwd: root, fichier: 'linked.docx', modele: 'absent.yaml' }), {
       canonique: 'dossier', etat: 'modele_dossier_absent', identique: false, empreinte_docx: sourceHash,
     });
   });
@@ -142,9 +142,9 @@ test('une sortie déjà présente ne peut pas être écrasée par la préparatio
 
     await runDocxReasoningAction({ commande: 'preparer', cwd: root, fichier: 'ordinary.docx', liens: 'liens.json', sortie: 'linked.docx' });
     const existingCode = 'existing model';
-    await writeFile(path.join(root, 'present.js'), existingCode);
-    await assert.rejects(runDocxReasoningAction({ commande: 'extraire', cwd: root, fichier: 'linked.docx', sortie: 'present.js' }), { code: 'EEXIST' });
-    assert.equal(await readFile(path.join(root, 'present.js'), 'utf8'), existingCode);
+    await writeFile(path.join(root, 'present.yaml'), existingCode);
+    await assert.rejects(runDocxReasoningAction({ commande: 'extraire', cwd: root, fichier: 'linked.docx', sortie: 'present.yaml' }), { code: 'EEXIST' });
+    assert.equal(await readFile(path.join(root, 'present.yaml'), 'utf8'), existingCode);
   });
 });
 
@@ -154,7 +154,7 @@ test('refuse les chemins hors dossier, les liens symboliques sortants et les che
     await assert.rejects(runDocxReasoningAction({ commande: 'verifier', cwd: root, fichier: '../outside.docx' }), /Chemin refusé/u);
     await assert.rejects(runDocxReasoningAction({ commande: 'verifier', cwd: root, fichier: '.env.docx' }), /Chemin refusé/u);
     await assert.rejects(runDocxReasoningAction({ commande: 'preparer', cwd: root, fichier: 'ordinary.docx', liens: '.env.json', sortie: 'linked.docx' }), /Chemin refusé/u);
-    await assert.rejects(runDocxReasoningAction({ commande: 'preparer', cwd: root, fichier: 'ordinary.docx', liens: 'liens.json', sortie: 'linked.docx', modele: '.env.js' }), /Chemin refusé/u);
+    await assert.rejects(runDocxReasoningAction({ commande: 'preparer', cwd: root, fichier: 'ordinary.docx', liens: 'liens.json', sortie: 'linked.docx', modele: '.env.yaml' }), /Chemin refusé/u);
     await assert.rejects(runDocxReasoningAction({ commande: 'preparer', cwd: root, fichier: 'ordinary.docx', liens: 'liens.json', sortie: '.env.docx' }), /Chemin refusé/u);
     await assert.rejects(runDocxReasoningAction({ commande: 'preparer', cwd: root, fichier: 'ordinary.docx', liens: 'liens.json', sortie: 'nested/missing.docx' }), /ENOENT/u);
 
@@ -186,7 +186,7 @@ test('la route locale vérifie le statut loopback et l’enregistrement du dossi
     assert.equal(prepared.status, 200);
     assert.equal(prepared.body.resultat.fichier, 'api-linked.docx');
     assert.equal(prepared.body.resultat.canonique, 'dossier');
-    assert.equal(prepared.body.resultat.modele, '.piecemaker/raisonnement.js');
+    assert.equal(prepared.body.resultat.modele, '.piecemaker/raisonnement.yaml');
     const apiModel = await readDocxReasoning(await readFile(path.join(root, 'api-linked.docx')));
     assert.equal(apiModel.version, 2);
     assert.equal(apiModel.code, undefined);

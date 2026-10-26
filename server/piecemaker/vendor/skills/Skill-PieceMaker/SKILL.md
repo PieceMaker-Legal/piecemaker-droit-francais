@@ -35,11 +35,11 @@ Un `.docx` s’ouvre dans la visionneuse tout seul. Conversion n’ouvre aucun v
 ## DOCX et modèle de raisonnement
 
 Pour les nouveaux documents liés, le modèle reste dans le dossier, par défaut
-`.piecemaker/raisonnement.js`. Le DOCX conserve uniquement sa référence relative,
+`.piecemaker/raisonnement.yaml`. Le DOCX conserve uniquement sa référence relative,
 son empreinte de version et les repères du texte ; aucun code du modèle n’y est
 copié. Si le fichier est absent ou modifié, le contrôle est suspendu. Ne remplacez
 pas l’empreinte pour faire disparaître une alerte : un changement de modèle demande
-un réexamen. Les anciens DOCX embarqués restent lisibles sans migration implicite.
+un réexamen. Un DOCX lié à un ancien modèle JS est refusé : transcrire le modèle en YAML, puis préparer à nouveau le document.
 
 ```sh
 pm docx preparer --fichier projet.docx --liens liens.json --sortie projet-lie.docx
