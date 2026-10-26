@@ -1347,6 +1347,12 @@ export type ProviderAuthStatus = {
 /** The authentication state of every CLI provider at once, keyed by LLMProvider, so onboarding and settings can render each provider's connected, loading and error state from one object returned by useProviderAuthStatus. */
 export type ProviderAuthStatusMap = Record<LLMProvider, ProviderAuthStatus>;
 
+export type MistralSdkAuthStatus = {
+  authenticated: boolean;
+  loginState: 'idle' | 'pending' | 'connected' | 'error';
+  error: string | null;
+};
+
 // ---------------------------
 
 //----------------- QUICK SETTINGS PANEL ------------
