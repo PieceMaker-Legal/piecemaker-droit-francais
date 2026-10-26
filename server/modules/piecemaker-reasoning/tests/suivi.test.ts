@@ -118,7 +118,7 @@ test('contentieux : le délai est calculé, reporté et démontré', async () =>
   assert.deepEqual(texts(result, 'manque'), []);
   const [appel] = result.echeances;
   assert.equal(appel.date, '2026-11-16');
-  assert.deepEqual(appel.calcul, ['Signification du jugement le 14/10/2026 + 1 mois → 14/11/2026', 'samedi 14/11/2026 (samedi, dimanche) → lundi 16/11/2026', 'jours fériés de métropole']);
+  assert.deepEqual(appel.calcul, ['Signification du jugement le 14/10/2026 + 1 mois → 14/11/2026', 'samedi 14/11/2026 (samedi, dimanche) → lundi 16/11/2026, jours fériés de métropole']);
   assert.equal(appel.selon[0].titre, 'Code fictif, article 10');
   assert.equal(result.evenements[0].preuve[0].titre, '03 Signification');
 });

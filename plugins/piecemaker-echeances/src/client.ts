@@ -57,6 +57,7 @@ export function mount(container: HTMLElement, api: Host) {
     scope: readScope(),
     query: '',
     open: new Set<string>(),
+    unfolded: new Set<string>(),
     busy: new Set<string>(),
     notice: '',
   };
@@ -68,7 +69,7 @@ export function mount(container: HTMLElement, api: Host) {
   const rows = (today: string) => visible().flatMap((dossier) => dossier.snapshot.echeances.map((deadline): Row => ({
     key: `${dossier.projectPath}#${deadline.nom}`, dossier, deadline,
     issues: dossier.snapshot.issues.filter((issue) => (issue.path === `echeances.${deadline.nom}` || issue.path.startsWith(`echeances.${deadline.nom}.`)) && !issue.text.startsWith(OVERDUE)),
-  }))).filter((row) => matches(`${row.deadline.intitule} ${row.dossier.nom}`)).sort((left, right) => (groupOf(left.deadline, today) === 'faites' ? (right.deadline.fait!.date).localeCompare(left.deadline.fait!.date) : (left.deadline.date ?? '9999').localeCompare(right.deadline.date ?? '9999')));
+  }))).filter((row) => matches(`${row.deadline.intitule} ${row.dossier.nom}`)).sort((left, right) => (left.deadline.fait && right.deadline.fait ? right.deadline.fait.date.localeCompare(left.deadline.fait.date) : (left.deadline.date ?? '9999').localeCompare(right.deadline.date ?? '9999')));
 
   const dateBlock = (value: string | null, today: string) => {
     if (!value) return '<div class="pme-date is-empty"><b>?</b><span>à établir</span></div>';
@@ -127,13 +128,13 @@ export function mount(container: HTMLElement, api: Host) {
     const events = visible().flatMap((dossier) => dossier.snapshot.evenements.map((event) => ({ dossier, event }))).filter(({ dossier, event }) => event.date <= today && matches(`${event.intitule} ${dossier.nom}`)).sort((left, right) => right.event.date.localeCompare(left.event.date));
     if (!events.length) return '';
     const line = ({ dossier, event }: { dossier: SuiviDossier; event: SuiviEvent }) => `<li class="pme-event"><span class="pme-when">${french(event.date)}</span><span class="pme-main"><span class="pme-title">${escape(event.intitule)}</span>${state.scope === 'tous' ? `<span class="pme-folder">${escape(dossier.nom)}</span>` : ''}</span>${event.suppose ? '<span class="pme-badge is-muted">date supposée</span>' : event.preuve.length ? `<span class="pme-badge is-muted" title="${escape(event.preuve.map((proof) => `${proof.titre ?? proof.piece} : « ${proof.citation} »`).join('\n'))}">${escape(event.preuve[0].titre ?? event.preuve[0].piece)}</span>` : ''}</li>`;
-    return `<details class="pme-group"><summary><h3>Dates passées</h3><span class="pme-count">${events.length}</span><span class="pme-hint">Actes et dates qui font courir les délais</span></summary><ul class="pme-list">${events.map(line).join('')}</ul></details>`;
+    return `<details class="pme-group"${state.unfolded.has('passees') ? ' open' : ''}><summary data-fold="passees"><h3>Dates passées</h3><span class="pme-count">${events.length}</span><span class="pme-hint">Actes et dates qui font courir les délais</span></summary><ul class="pme-list">${events.map(line).join('')}</ul></details>`;
   };
 
   const problemsHtml = () => {
     const broken = visible().map((dossier) => ({ dossier, issues: dossier.snapshot.issues.filter((issue) => !issue.path.startsWith('echeances.')) })).filter((entry) => entry.issues.length);
     if (!broken.length) return '';
-    return `<details class="pme-alert"><summary>${plural(broken.reduce((total, entry) => total + entry.issues.length, 0), 'point')} à reprendre dans le suivi de ${plural(broken.length, 'dossier')}</summary><ul>${broken.map(({ dossier, issues }) => `<li><b>${escape(dossier.nom)}</b><ul class="pme-issues">${issues.map((issue) => `<li class="is-${issue.kind === 'erreur' ? 'ko' : 'warn'}">${escape(issueText(issue))}${issue.line ? ` <small>(ligne ${issue.line})</small>` : ''}</li>`).join('')}</ul></li>`).join('')}</ul><p class="pme-hint">Demandez à l’agent de corriger .piecemaker/suivi.yaml puis de relancer la vérification.</p></details>`;
+    return `<details class="pme-alert"${state.unfolded.has('alertes') ? ' open' : ''}><summary data-fold="alertes">${plural(broken.reduce((total, entry) => total + entry.issues.length, 0), 'point')} à reprendre dans le suivi de ${plural(broken.length, 'dossier')}</summary><ul>${broken.map(({ dossier, issues }) => `<li><b>${escape(dossier.nom)}</b><ul class="pme-issues">${issues.map((issue) => `<li class="is-${issue.kind === 'erreur' ? 'ko' : 'warn'}">${escape(issueText(issue))}${issue.line ? ` <small>(ligne ${issue.line})</small>` : ''}</li>`).join('')}</ul></li>`).join('')}</ul><p class="pme-hint">Demandez à l’agent de corriger .piecemaker/suivi.yaml puis de relancer la vérification.</p></details>`;
   };
 
   const render = () => {
@@ -162,7 +163,7 @@ export function mount(container: HTMLElement, api: Host) {
       const groups = GROUPS.filter((group) => counts(group.id)).map((group) => {
         const content = `<ul class="pme-list">${byGroup.get(group.id)!.map((row) => rowHtml(row, today)).join('')}</ul>`;
         const title = `<h3>${group.title}</h3><span class="pme-count">${counts(group.id)}</span>${group.hint ? `<span class="pme-hint">${group.hint}</span>` : ''}`;
-        return group.folded ? `<details class="pme-group is-${group.id}" data-group="${group.id}"><summary>${title}</summary>${content}</details>` : `<section class="pme-group is-${group.id}" data-group="${group.id}"><div class="pme-group-head">${title}</div>${content}</section>`;
+        return group.folded ? `<details class="pme-group is-${group.id}" data-group="${group.id}"${state.unfolded.has(group.id) ? ' open' : ''}><summary data-fold="${group.id}">${title}</summary>${content}</details>` : `<section class="pme-group is-${group.id}" data-group="${group.id}"><div class="pme-group-head">${title}</div>${content}</section>`;
       }).join('');
       body = `${problemsHtml()}${groups || '<p class="pme-empty">Aucune échéance ne correspond.</p>'}${eventsHtml(today)}`;
     }
@@ -188,9 +189,10 @@ export function mount(container: HTMLElement, api: Host) {
   root.addEventListener('click', async (event) => {
     const target = (event.target as Element).closest<HTMLElement>('button, summary');
     if (!target) return;
+    if (target.dataset.fold) { event.preventDefault(); if (state.unfolded.has(target.dataset.fold)) state.unfolded.delete(target.dataset.fold); else state.unfolded.add(target.dataset.fold); render(); return; }
     if (target.dataset.scope) { state.scope = target.dataset.scope as Scope; saveScope(state.scope); render(); return; }
     if (target.hasAttribute('data-refresh')) { void reload(); return; }
-    if (target.dataset.jump) { root.querySelector(`[data-group="${target.dataset.jump}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (target.dataset.jump) { state.unfolded.add(target.dataset.jump); render(); root.querySelector(`[data-group="${target.dataset.jump}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     if (target.hasAttribute('data-verify')) {
       const current = project();
       if (!current) return;
@@ -216,8 +218,7 @@ export function mount(container: HTMLElement, api: Host) {
       try {
         replace(row.dossier.projectPath, await markDone(row.dossier.projectPath, row.deadline.nom, target.hasAttribute('data-undo') ? { annuler: true } : { date, piece }));
         flash(target.hasAttribute('data-undo') ? `« ${row.deadline.intitule} » n’est plus marquée faite.` : `« ${row.deadline.intitule} » marquée faite.`);
-      } catch (error) { flash(error instanceof Error ? error.message : 'Enregistrement impossible.'); }
-      state.busy.delete(row.key); render();
+      } catch (error) { state.notice = error instanceof Error ? error.message : 'Enregistrement impossible.'; } finally { state.busy.delete(row.key); render(); }
     }
   });
   root.addEventListener('input', (event) => {

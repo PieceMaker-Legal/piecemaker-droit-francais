@@ -231,10 +231,10 @@ export async function verifySuivi(input: {
     const report = deadline.decompte?.report;
     if (report && report !== 'aucun' && closed(term)) {
       const moved = nextOpen(term, report === 'jour_ouvrable_suivant' ? 1 : -1);
-      steps.push(`${weekday(term)} ${day(term)} (${moved.skipped.map((entry) => entry.raison).filter((reason, index, all) => all.indexOf(reason) === index).join(', ')}) → ${weekday(moved.date)} ${day(moved.date)}`);
+      steps.push(`${weekday(term)} ${day(term)} (${moved.skipped.map((entry) => entry.raison).filter((reason, index, all) => all.indexOf(reason) === index).join(', ')}) → ${weekday(moved.date)} ${day(moved.date)}, jours fériés de métropole`);
       term = moved.date;
     } else if (!report && closed(term)) steps.push(`tombe un ${closed(term)} : report à préciser dans decompte`);
-    if (deadline.delai.unite === 'jours_ouvres' || (report && report !== 'aucun')) steps.push('jours fériés de métropole');
+    else if (deadline.delai.unite === 'jours_ouvres') steps.push('jours ouvrés hors jours fériés de métropole');
     return { date: term, calcul: steps, suppose: origin.suppose, base: origin.date };
   };
   for (const nom of deadlines.keys()) compute(nom);

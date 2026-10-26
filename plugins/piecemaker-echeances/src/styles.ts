@@ -76,7 +76,7 @@ export const STYLES = `
 .pme-cites li{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}
 .pme-src{font-weight:600;color:var(--ink)}
 .pme-cites code{font:11px var(--mono);color:var(--muted)}
-.pme-cites q{flex-basis:100%;font-family:var(--editorial);font-size:14px;color:var(--text);padding-left:10px;border-left:2px solid var(--border)}
+.pme-cites q{quotes:'« ' ' »';flex-basis:100%;font-family:var(--editorial);font-size:14px;color:var(--text);padding-left:10px;border-left:2px solid var(--border)}
 .pme .pme-link{height:auto;padding:0 6px;border:0;box-shadow:none;background:none;color:var(--accent)}
 .pme-issues li{padding-left:12px;position:relative}.pme-issues li::before{content:'';position:absolute;left:0;top:.55em;width:6px;height:6px;border-radius:50%}
 .pme-issues li.is-ko::before{background:var(--ko)}.pme-issues li.is-warn::before{background:var(--warn)}
