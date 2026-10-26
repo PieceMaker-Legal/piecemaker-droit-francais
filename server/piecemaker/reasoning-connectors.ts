@@ -27,6 +27,15 @@ const notFound = (error: unknown) => {
 const inside = (base: string, target: string) => target === base || target.startsWith(`${base}${path.sep}`);
 const words = (value: string) => (value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).join(' ');
 
+const readHistory = (raw: string): SourceInfo['history'] | null => {
+  const found = /^Historique: (remise en cause|à examiner|non remise en cause)\s*$/mu.exec(raw);
+  if (!found) return null;
+  const following = raw.slice(found.index + found[0].length).split('\n').map((line) => line.trim()).filter((line, index) => line || index > 0);
+  const end = following.findIndex((line) => !line.startsWith('- '));
+  const details = following.slice(0, end < 0 ? following.length : end).map((line) => line.slice(2));
+  return { statut: found[1] as NonNullable<SourceInfo['history']>['statut'], details };
+};
+
 type Resolver = { accepts(id: string): boolean; resolve(cwd: string, id: string): Promise<SourceInfo | null> };
 
 const legifrance: Resolver = {
@@ -37,7 +46,8 @@ const legifrance: Resolver = {
     const text = extractFullText(raw);
     if (!text) return null;
     const validity = article ? readLegalPeriod(raw) : undefined;
-    return { kind: article ? 'texte' : 'decision', title: extractSourceTitle(raw) || id, text, ...(validity ? { validity } : {}) };
+    const history = article ? null : readHistory(raw);
+    return { kind: article ? 'texte' : 'decision', title: extractSourceTitle(raw) || id, text, ...(validity ? { validity } : {}), ...(history ? { history } : {}) };
   },
 };
 

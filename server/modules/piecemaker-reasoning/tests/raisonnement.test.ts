@@ -208,6 +208,18 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   await assert.rejects(service.verify(folder), /raisonnement\.js n’est plus lu : transcris-le dans \.piecemaker\/raisonnement\.yaml/);
 });
 
+test('une source porte son identifiant officiel et une décision remise en cause par un recours est signalée', async () => {
+  const code = (source: string) => `{ objectifs: [{ objectif: \`Obtenir l’effet fictif\`, obtenir: 'effet' }], effet: { si: [{ fait: true, selon: [{ source: '${source}', citation: \`règle fictive\` }] }] } }`;
+  const decision = (history?: SourceInfo['history']): Record<string, SourceInfo> => ({ JURITEXT000000000001: { kind: 'decision', title: 'Cour fictive, 1er janvier 2020', text: 'Attendu que la règle fictive s’applique.', ...(history ? { history } : {}) } });
+  const run = (source: string, sources: Record<string, SourceInfo>) => verifyReasoning({ code: code(source), cwd: '/dossier-fictif', connectors: connectors(sources), reliability: new Map(), nature: () => null, persons: [], dismissed: new Set() });
+  assert.match(texts(await run('Cass. com., 3 mai 2023', {}), 'erreur').join('\n'), /effet\.si\[0\]\.selon\[0\]\.source : source sans identifiant officiel : Cass\. com\., 3 mai 2023 ; indique son identifiant \(LEGIARTI… pour un article, JURITEXT… pour une décision judiciaire/);
+  assert.match(texts(await run('CELEX:00000X0000', {}), 'manque').join('\n'), /source non vérifiable automatiquement : aucun connecteur pour CELEX:00000X0000/);
+  assert.deepEqual(texts(await run('JURITEXT000000000001', decision({ statut: 'non remise en cause', details: [] })), 'erreur'), []);
+  const quashed = await run('JURITEXT000000000001', decision({ statut: 'remise en cause', details: ['Recours JURITEXT000000000002 du 2021-03-04 (Cour de cassation) — Solution : Cassation'] }));
+  assert.match(texts(quashed, 'erreur').join('\n'), /effet\.si\[0\]\.selon\[0\]\.source : décision remise en cause par un recours \(Recours JURITEXT000000000002 du 2021-03-04 \(Cour de cassation\) — Solution : Cassation\) : cite la décision rendue sur ce recours/);
+  assert.match(texts(await run('JURITEXT000000000001', decision({ statut: 'à examiner', details: [] })), 'manque').join('\n'), /historique judiciaire à examiner : vérifie qu’aucun recours ne l’a remise en cause/);
+});
+
 test('le test se déroule ligne par ligne : sources, pièces, faits, termes, hypothèses, réponse', async () => {
   const seen: string[] = [];
   const result = await verifyReasoning({
