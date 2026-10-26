@@ -114,15 +114,30 @@ try {
     return (await response.json()).hasCompletedOnboarding;
   })()`), 'First-run setup completed through the interface');
   await waitFor(() => evaluate(page, 'document.querySelectorAll("button").length >= 3 && !document.querySelector("input[autocomplete=username]")'), 'Usable authenticated interface');
-  const gliner = await waitFor(async () => {
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    const value = await evaluate(page, `(async () => {
-      const response = await fetch('/api/piecemaker/configuration', { headers: { Authorization: 'Bearer ' + localStorage.getItem('auth-token') } });
-      if (!response.ok) throw Error('GLiNER status unavailable');
-      return (await response.json()).components.gliner;
+  let gliner;
+  let lastGlinerState = '';
+  const glinerStarted = Date.now();
+  while (Date.now() - glinerStarted < 1200000) {
+    const state = await evaluate(page, `(async () => {
+      const headers = { Authorization: 'Bearer ' + localStorage.getItem('auth-token') };
+      const [configuration, installation] = await Promise.all([
+        fetch('/api/piecemaker/configuration', { headers }),
+        fetch('/api/piecemaker/configuration/install', { headers }),
+      ]);
+      if (!configuration.ok || !installation.ok) throw Error('GLiNER status unavailable');
+      return { component: (await configuration.json()).components.gliner, installation: await installation.json() };
     })()`);
-    return value?.installed && value;
-  }, 'Automatic GLiNER library and model installation', 1200000);
+    await fs.writeFile(path.join(output, 'gliner-installation-state.json'), JSON.stringify(state, null, 2));
+    const progress = JSON.stringify(state);
+    if (progress !== lastGlinerState) console.log(`[Validation GLiNER] ${progress}`);
+    lastGlinerState = progress;
+    const job = state.installation.jobs.find(job => job.component === 'gliner');
+    if (job?.state === 'failed') throw new Error(`Automatic GLiNER installation failed: ${job.error}`);
+    if (state.component?.installed) { gliner = state.component; break; }
+    if (!job && Date.now() - glinerStarted > 120000) throw new Error('Automatic GLiNER installation did not start.');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+  assert.ok(gliner?.installed, 'Automatic GLiNER library and model installation timed out.');
   const pythonConfig = JSON.parse(await fs.readFile(path.join(clientComponents, 'config.json')));
   const glinerScripts = path.join(root, 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner');
   const glinerProbe = [
