@@ -9,7 +9,7 @@ import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, Reas
 import { assignIds, checkActe } from './acte.js';
 import { and, answer, calculate, compile, evaluate, isLeaf, or, objectiveRoots, decisive, reachableLeaves, runTrials, simulate, structure } from './engine.js';
 import type { Calculation, Facts, Trace } from './engine.js';
-import { parseReasoningDocument, printReasoningDocument, resolveReasoningFile } from './document.js';
+import { parseReasoningDocument, printReasoningDocument, ReasoningSyntaxError, resolveReasoningFile } from './document.js';
 import { canonical, formulaConditions, SIDES, VERBS, formulaNames, formulaNumbers, LiteralError, readReasoning, stripAnnotations } from './format.js';
 import type { Basis, Condition, Foundation, Formula, Measure, Objective, Ref, Target, Trial } from './format.js';
 
@@ -24,7 +24,7 @@ export type ReasoningConnectors = {
 
 export type Person = { label: string; kind: string; siren: string | null; name: string | null; side?: string | null };
 
-export const REASONING_FILE = path.join('.piecemaker', 'raisonnement.js');
+export const REASONING_FILE = path.join('.piecemaker', 'raisonnement.yaml');
 
 const LEGACY_TABLES = ['pm_reasoning_items', 'pm_reasoning_models', 'pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories', 'pm_reasoning_tests', 'pm_reasoning_turns'];
 const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', annotated: null, issues: [], dismissed: [], reliability: [], test: null });
@@ -73,7 +73,6 @@ const told = (name: string, value: ReasoningValue | number | string) => `${phras
 
 export async function verifyReasoning(input: {
   code: string;
-  format?: 'js' | 'yaml';
   cwd: string;
   connectors: ReasoningConnectors;
   reliability: Map<string, boolean>;
@@ -108,17 +107,18 @@ export async function verifyReasoning(input: {
   };
 
   let parsed;
-  try { parsed = parseReasoningDocument(input.code, input.format); } catch (error) {
+  try { parsed = parseReasoningDocument(input.code); } catch (error) {
     if (!(error instanceof LiteralError)) throw error;
-    emit({ key: 'lecture', step: 'réponse', status: 'alerte', subject: 'Fichier illisible', text: error.message });
-    return { annotated: null, issues: [{ id: issueId('erreur', '', error.message), kind: 'erreur', path: '', line: error.line, text: error.message }], code: input.code, log };
+    const found = error instanceof ReasoningSyntaxError ? error.problems : [error];
+    emit({ key: 'lecture', step: 'réponse', status: 'alerte', subject: 'Fichier illisible', text: found.map((problem) => problem.message).join(' ; ') });
+    return { annotated: null, issues: found.map((problem) => ({ id: issueId('erreur', '', problem.message), kind: 'erreur', path: '', line: problem.line, text: problem.message })), code: input.code, log };
   }
   lines = parsed.lines;
   const stripped = stripAnnotations(parsed.value);
   if (isObject(stripped)) assignIds(stripped.acte);
   const { reasoning, problems } = readReasoning(stripped);
-  const ordered = isObject(stripped) ? printReasoningDocument(canonical(stripped, reasoning), parsed.format) : null;
-  if (ordered) lines = parseReasoningDocument(ordered, parsed.format).lines;
+  const ordered = isObject(stripped) ? printReasoningDocument(canonical(stripped, reasoning)) : null;
+  if (ordered) lines = parseReasoningDocument(ordered).lines;
   for (const entry of problems) add('erreur', entry.path, entry.text, entry.avocat, entry.cible);
   if (!isObject(stripped)) return { annotated: null, issues, code: input.code, log };
   const annotated = stripped;
@@ -634,7 +634,7 @@ export async function verifyReasoning(input: {
     emit({ key: `réponse:${index}`, step: 'réponse', status: holder?.statut === 'à établir' ? 'neutre' : bilan.erreurs ? 'alerte' : 'ok', subject: objective.objectif, text: `${typeof holder?.montant_calcule === 'number' ? holder.montant_calcule.toLocaleString('fr-FR') : holder?.statut ? ANSWER[holder.statut as ReasoningStatus] : 'Non calculée'}${decisifs.length ? ` : dépend de ${listing(decisifs.map((name) => phrase(name)))}` : ''}${bilan.erreurs ? ` · ${bilan.erreurs} erreur${bilan.erreurs > 1 ? 's' : ''} à corriger` : ''}` });
   });
   let code = ordered ?? input.code;
-  if (parsed.format === 'yaml' && corrections.size) {
+  if (corrections.size) {
     const correct = (value: unknown): unknown => {
       if (typeof value === 'string') {
         for (const [original, fixed] of corrections) value = (value as string).split(original).join(fixed);
@@ -643,9 +643,7 @@ export async function verifyReasoning(input: {
       if (Array.isArray(value)) return value.map(correct);
       return isObject(value) ? Object.fromEntries(Object.entries(value).map(([key, child]) => [key, correct(child)])) : value;
     };
-    code = printReasoningDocument(correct(parseReasoningDocument(code, 'yaml').value), 'yaml');
-  } else {
-    for (const [original, fixed] of corrections) code = code.split(original).join(fixed);
+    code = printReasoningDocument(correct(parseReasoningDocument(code).value));
   }
   let simulation: Simulation | undefined;
   if (input.simulation && !shape.cycles.length) {
@@ -734,7 +732,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
     const code = await readFile(file, 'utf8').catch(() => null);
     if (code === null) throw new TypeError('Aucun raisonnement : écris .piecemaker/raisonnement.yaml avec objectifs et les termes, puis relance verifier.');
     const result = await verifyReasoning({
-      code, format: file.endsWith('.yaml') ? 'yaml' : 'js', cwd, connectors: cached, ...options,
+      code, cwd, connectors: cached, ...options,
       reliability: new Map(reliability(id).map((entry) => [entry.piece, entry.reliable])),
       nature: nature(id),
       persons: persons(id),
@@ -821,66 +819,114 @@ export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'issues' | '
   return out.join('\n');
 }
 
-export const EXAMPLE_CODE = `{
-  objectifs: [
-    {
-      objectif: \`Obtenir de Société Beta SARL le paiement de la pénalité de retard\`,
-      obtenir: 'pénalité_encourue',
-    },
-  ],
-  valeurs: {
-    date_de_conclusion_du_contrat: { valeur: '2024-01-15', preuve: [{ piece: 'pieces/01_contrat.md', citation: \`Fait le 15/01/2024\` }] },
-  },
-  pénalité_encourue: {
-    si: [
-      { pénalité_stipulée: true,
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }] },
-      { l_une: [
-          { mise_en_demeure: true },
-          { inexécution_définitive: true },
-        ],
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }] },
-    ],
-  },
-  mise_en_demeure: { true: [{ preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: \`vous met en demeure\` }] }] },
-  applicabilité_de_l_article_1231_5: {
-    si: [
-      { contrat_stipulant_une_pénalité: true,
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`Lorsque le contrat stipule une pénalité\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] },
-    ],
-  },
-  contrat_stipulant_une_pénalité: { true: [{ preuve: [{ piece: 'pieces/01_contrat.md', citation: \`une pénalité est due\` }] }] },
-  pénalité_stipulée: {
-    si: [
-      { retard_de_livraison: true,
-        selon: [{ source: 'pieces/01_contrat.md', citation: \`En cas de retard de livraison\`, vigueur: { debut: '2024-01-15', fin: null } }] },
-    ],
-    sauf: [
-      { force_majeure_contractuelle: true,
-        selon: [{ source: 'pieces/01_contrat.md', citation: \`sauf force majeure au sens de l'article 12\`, vigueur: { debut: '2024-01-15', fin: null } }] },
-    ],
-  },
-  retard_de_livraison: { true: [{ preuve: [{ piece: 'pieces/05_bon_de_livraison.md', citation: \`Livré le 14/06/2025\` }] }] },
-  force_majeure_contractuelle: {
-    si: [
-      { l_une: [{ force_majeure: true }, { grève: true }],
-        selon: [{ source: 'pieces/01_contrat.md', citation: \`ainsi que les grèves\`, vigueur: { debut: '2024-01-15', fin: null } }] },
-    ],
-  },
-  grève: {
-    si: [
-      { l_une: [
-          { grève_nationale: true },
-          { grève_du_secteur: true },
-        ],
-        selon: [{ source: 'pieces/01_contrat.md', citation: \`grève nationale ou propre au secteur\`, vigueur: { debut: '2024-01-15', fin: null } }] },
-    ],
-  },
-  grève_du_secteur: { false: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: \`mouvement limité à notre atelier\` }] }] },
-  hypotheses: [
-    { nom: \`grève nationale : pas de pénalité\`, faits: { retard_de_livraison: vrai, mise_en_demeure: vrai, grève_nationale: vrai }, attendu: { pénalité_encourue: faux } },
-  ],
-}
+export const EXAMPLE_CODE = `objectifs:
+  - objectif: Obtenir de Société Beta SARL le paiement de la pénalité de retard
+    obtenir: pénalité_encourue
+valeurs:
+  date_de_conclusion_du_contrat:
+    valeur: 2024-01-15
+    preuve:
+      - piece: pieces/01_contrat.md
+        citation: Fait le 15/01/2024
+pénalité_encourue:
+  si:
+    - pénalité_stipulée: true
+      selon:
+        - source: LEGIARTI000000000005
+          citation: la pénalité n'est encourue que lorsque le débiteur est mis en demeure
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_conclusion_du_contrat
+          applicabilite: applicabilité_de_l_article_1231_5
+    - l_une:
+        - mise_en_demeure: true
+        - inexécution_définitive: true
+      selon:
+        - source: LEGIARTI000000000005
+          citation: Sauf inexécution définitive
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_conclusion_du_contrat
+          applicabilite: applicabilité_de_l_article_1231_5
+mise_en_demeure:
+  true:
+    - preuve:
+        - piece: pieces/06_mise_en_demeure.md
+          citation: vous met en demeure
+applicabilité_de_l_article_1231_5:
+  si:
+    - contrat_stipulant_une_pénalité: true
+      selon:
+        - source: LEGIARTI000000000005
+          citation: Lorsque le contrat stipule une pénalité
+          vigueur:
+            debut: 2016-10-01
+            fin: null
+            au: date_de_conclusion_du_contrat
+contrat_stipulant_une_pénalité:
+  true:
+    - preuve:
+        - piece: pieces/01_contrat.md
+          citation: une pénalité est due
+pénalité_stipulée:
+  si:
+    - retard_de_livraison: true
+      selon:
+        - source: pieces/01_contrat.md
+          citation: En cas de retard de livraison
+          vigueur:
+            debut: 2024-01-15
+            fin: null
+  sauf:
+    - force_majeure_contractuelle: true
+      selon:
+        - source: pieces/01_contrat.md
+          citation: sauf force majeure au sens de l'article 12
+          vigueur:
+            debut: 2024-01-15
+            fin: null
+retard_de_livraison:
+  true:
+    - preuve:
+        - piece: pieces/05_bon_de_livraison.md
+          citation: Livré le 14/06/2025
+force_majeure_contractuelle:
+  si:
+    - l_une:
+        - force_majeure: true
+        - grève: true
+      selon:
+        - source: pieces/01_contrat.md
+          citation: ainsi que les grèves
+          vigueur:
+            debut: 2024-01-15
+            fin: null
+grève:
+  si:
+    - l_une:
+        - grève_nationale: true
+        - grève_du_secteur: true
+      selon:
+        - source: pieces/01_contrat.md
+          citation: grève nationale ou propre au secteur
+          vigueur:
+            debut: 2024-01-15
+            fin: null
+grève_du_secteur:
+  false:
+    - preuve:
+        - piece: pieces/07_courriel.md
+          citation: mouvement limité à notre atelier
+hypotheses:
+  - nom: "grève nationale : pas de pénalité"
+    faits:
+      retard_de_livraison: true
+      mise_en_demeure: true
+      grève_nationale: true
+    attendu:
+      pénalité_encourue: false
 `;
 
 export const EXAMPLE_SOURCES: Record<string, SourceInfo> = {

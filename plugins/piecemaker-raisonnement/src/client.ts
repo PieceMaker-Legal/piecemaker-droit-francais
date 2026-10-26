@@ -372,7 +372,7 @@ export function mount(container: HTMLElement, api: Host) {
     const objective = objectives()[scope];
     if (tab === 'test') { paintTest(); return; }
     if (tab === 'acte') { detail.innerHTML = acteBlock(); return; }
-    if (tab === 'code') { detail.innerHTML = snapshot?.code ? `<pre class="pmr-code">${escape(snapshot.code)}</pre>` : '<p class="pmr-muted">Aucun fichier .piecemaker/raisonnement.js.</p>'; return; }
+    if (tab === 'code') { detail.innerHTML = snapshot?.code ? `<pre class="pmr-code">${escape(snapshot.code)}</pre>` : '<p class="pmr-muted">Aucun fichier .piecemaker/raisonnement.yaml.</p>'; return; }
     if (tab === 'alertes') {
       const dismissed = (snapshot?.issues ?? []).filter((issue) => dismissedIds().has(issue.id));
       const bilan = annotated()?.bilan as Json | undefined;

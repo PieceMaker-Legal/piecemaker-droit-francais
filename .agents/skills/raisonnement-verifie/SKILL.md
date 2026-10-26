@@ -1,11 +1,11 @@
 ---
 name: raisonnement-verifie
-description: Cadre du raisonnement juridique vérifié de PieceMaker (fichier .piecemaker/raisonnement.yaml ou .js, vérificateur, contrôles, volet Raisonnement). Use whenever modifying, reviewing or testing server/modules/piecemaker-reasoning, the agent instruction server/piecemaker/legal-code/instructions.md, or the piecemaker-raisonnement plugin.
+description: Cadre du raisonnement juridique vérifié de PieceMaker (fichier .piecemaker/raisonnement.yaml, vérificateur, contrôles, volet Raisonnement). Use whenever modifying, reviewing or testing server/modules/piecemaker-reasoning, the agent instruction server/piecemaker/legal-code/instructions.md, or the piecemaker-raisonnement plugin.
 ---
 
 # Raisonnement vérifié
 
-Sur la branche expérimentale `yaml`, l'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.yaml` (YAML 1.2 core). Le modèle, les clés obligatoires et le moteur sont ceux de l'objet JS, sans exécution de code. Un ancien `.piecemaker/raisonnement.js` reste lu si aucun YAML n'existe ; si les deux existent, YAML prime. Les alias non cycliques sont développés puis supprimés à la normalisation. Commentaires, tags, doublons et cycles d'alias sont refusés. Installer la dépendance locale avec `npm ci --prefix server/modules/piecemaker-reasoning`. Comparatif et protocole : `docs/tests/raisonnement-yaml-luna/README.md`. `pm raisonnement verifier` le vérifie, le teste, le réécrit et renvoie ses erreurs et manques. Le volet Raisonnement montre à l'avocat le graphe, le détail et les alertes.
+L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnement.yaml` (YAML 1.2 core), seul format lu. Un ancien `.piecemaker/raisonnement.js` seul est refusé avec la consigne de le transcrire. Commentaires, tags, ancres, alias et doublons sont refusés. Les fautes d'écriture sont toutes rendues d'un coup, chacune avec sa ligne et sa correction : valeur à mettre entre guillemets (avec la ligne corrigée), ligne mal indentée (avec le niveau sur lequel l'aligner), tabulation, clé en double, clé mal placée (avec le bloc auquel elle appartient) ou mal orthographiée (avec la bonne graphie). Les tests gardent leurs jeux d'essai en objet JS, convertis en YAML par `tests/fixtures.ts` avant vérification. Installer la dépendance locale avec `npm ci --prefix server/modules/piecemaker-reasoning`. Comparatif et protocole : `docs/tests/raisonnement-yaml-luna/README.md`. `pm raisonnement verifier` le vérifie, le teste, le réécrit et renvoie ses erreurs et manques. Le volet Raisonnement montre à l'avocat le graphe, le détail et les alertes.
 
 ## Principes (décidés, à ne pas défaire)
 

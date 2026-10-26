@@ -41,7 +41,7 @@ export const HELP = `Usage: pm <outil> [options]
       chemins relatifs au dossier ; modèle initial : .piecemaker/raisonnement.js
   acte exporter --sortie FILE.docx [--modele MODELE.docx]
   acte fusionner|importer --fichier FILE.docx
-      l'acte rédigé vit dans .piecemaker/raisonnement.js ; le DOCX en est l'impression
+      l'acte rédigé vit dans .piecemaker/raisonnement.yaml ; le DOCX en est l'impression
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {
