@@ -388,6 +388,18 @@ test('les données des calculs sont déclarées dans valeurs, prouvées ou laiss
   assert.match(texts(await cession(CESSION_CODE), 'manque').join('\n'), /réduction_due\.si\[1\]\.montant : seuil écrit en dur \(3000\)/);
 });
 
+test('une donnée manquante utilisée à plusieurs endroits forme un seul manque, levé partout par sa déclaration', async () => {
+  const twice = CESSION_CODE.replace("        decompte: 'décompte_de_la_garantie' },", "        decompte: 'décompte_de_la_garantie' },\n      { notification_dans_les_trois_ans: true, delai: { de: 'date_de_réalisation', a: 'date_de_notification', au_plus: { ans: 3 } },\n        selon: [{ source: 'pieces/02_cession.md', citation: `deux ans à compter de la réalisation`, vigueur: { debut: '2022-06-15', fin: null } }],\n        decompte: 'décompte_de_la_garantie' },");
+  assert.notEqual(twice, CESSION_CODE);
+  const result = await cession(twice.replace(/\n    date_de_notification: \{[^\n]*\},/, ''));
+  const undeclared = result.issues.filter((issue) => issue.text.startsWith('date_de_notification n’est pas déclarée'));
+  assert.equal(undeclared.length, 1);
+  assert.equal(undeclared[0].path, 'réduction_due.si[0]');
+  assert.deepEqual(undeclared[0].ailleurs?.map((other) => other.path), ['réduction_due.si[1]']);
+  assert.match(describeReasoning(result), /même cause, aussi : réduction_due › si\[1\] \(ligne \d+\)/);
+  assert.doesNotMatch(texts(await cession(twice), 'manque').join('\n'), /date_de_notification n’est pas déclarée/);
+});
+
 test('une clause a son propre contrôle de validité ; une clause citée pour l’applicabilité n’en réclame pas', async () => {
   const shared = EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:").replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', validite: 'validité_du_contrat',").replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }] },", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_du_contrat' }] },").replace('\n  hypotheses:', "\n  validité_du_contrat: { si: [{ contrat_signé: true, selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },\n  hypotheses:");
   assert.match(texts(await verify(shared), 'erreur').join('\n'), /pénalité_stipulée\.si\[0\]\.selon\[0\]\.validite : validite : validité_du_contrat est le contrôle de validité de l’acte ; une clause a son propre contrôle/);
