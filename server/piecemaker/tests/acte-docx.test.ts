@@ -108,7 +108,8 @@ const PIECE = 'Contrat. En cas de retard de livraison, une pénalité de mille e
 const MODEL = `{
   qualification: 'contentieux',
   objectifs: [{ objectif: \`Obtenir la pénalité de Société Exemple SAS\`, obtenir: 'pénalité_due' }],
-  pénalité_due: { si: [{ condition: 'retard_de_livraison', selon: [{ source: 'pieces/01_contrat.md', citation: \`En cas de retard de livraison, une pénalité de mille euros est due\` }], preuve: [{ piece: 'pieces/02_livraison.md', citation: \`Livré avec trois semaines de retard\` }] }] },
+  pénalité_due: { si: [{ retard_de_livraison: true, selon: [{ source: 'pieces/01_contrat.md', citation: \`En cas de retard de livraison, une pénalité de mille euros est due\` }] }] },
+  retard_de_livraison: { true: [{ preuve: [{ piece: 'pieces/02_livraison.md', citation: \`Livré avec trois semaines de retard\` }] }] },
 }
 `;
 
@@ -156,7 +157,7 @@ test('importer, exporter, retoucher, fusionner : le raisonnement reste la seule 
   const merged = await runActeAction({ commande: 'fusionner', cwd: root, fichier: 'acte.docx' }, verify);
   assert.equal(merged.rapport.reprises.length, 1);
   const value = parseLiteral(await readFile(path.join(root, '.piecemaker/raisonnement.js'), 'utf8')).value as Record<string, any>;
-  assert.equal(value.pénalité_due.si[0].condition, 'retard_de_livraison');
+  assert.equal(value.pénalité_due.si[0].retard_de_livraison, true);
   assert.deepEqual(value.acte[1].texte.at(-1), 'Le tribunal condamnera la défenderesse au paiement de la pénalité.');
   const again = await runActeAction({ commande: 'exporter', cwd: root, sortie: 'acte.docx' }, verify);
   assert.equal(again.mise_en_page, 'celle du DOCX remplacé');

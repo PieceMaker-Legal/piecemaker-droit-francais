@@ -134,7 +134,7 @@ export function checkActe(sections: Section[], context: ActeContext): ActeIssue[
       treated.add(name);
       if (!context.known(name)) { issues.push({ kind: 'erreur', path: `${at}.traite`, text: `traite : ${name} n’est ni un terme, ni une condition, ni une valeur du raisonnement`, avocat: `La section « ${label(section)} » renvoie à un point absent du raisonnement : ${phrase(name)}.` }); continue; }
       const status = context.status(name);
-      if (status === 'à établir' || status === 'contesté') issues.push({ kind: 'manque', path: `${at}.traite`, text: `${name} est ${status} dans le raisonnement : établis-le, ou rédige la section comme une prétention à démontrer`, avocat: `La section « ${label(section)} » développe un point ${status} : ${phrase(name)}.` });
+      if (status === 'à établir' || status === 'disputé') issues.push({ kind: 'manque', path: `${at}.traite`, text: `${name} est ${status} dans le raisonnement : établis-le, ou rédige la section comme une prétention à démontrer`, avocat: `La section « ${label(section)} » développe un point ${status} : ${phrase(name)}.` });
     }
     for (const conflict of section.conflit) issues.push({ kind: 'erreur', path: `${at}.conflit`, text: `conflit de fusion sur ${conflict.sur === 'section' ? 'la section entière' : conflict.sur === 'intitule' ? 'l’intitulé' : 'le texte'} : ${conflict.sur === 'section' ? 'garde ou retire la section' : 'reporte la version retenue'}, puis retire conflit`, avocat: `La section « ${label(section)} » a été retouchée à la fois dans le DOCX et dans le raisonnement : à trancher.` });
     const scope = traite.filter((name) => context.known(name));
@@ -142,7 +142,7 @@ export function checkActe(sections: Section[], context: ActeContext): ActeIssue[
     const paragraphs = [...(section.intitule ? [{ text: section.intitule, path: `${at}.intitule` }] : []), ...section.texte.map((text, index) => ({ text, path: `${at}.texte[${index}]` }))];
     for (const paragraph of paragraphs) for (const quote of quotations(paragraph.text)) {
       if (pool.some((citation) => citation.includes(normalize(quote)))) continue;
-      issues.push({ kind: 'erreur', path: paragraph.path, text: `citation absente du raisonnement : « ${quote} » ; cite ce passage dans preuve, contredit ou selon de ce que la section traite${scope.length ? ` (${scope.join(', ')})` : ''}, ou retire les guillemets`, avocat: `La section « ${label(section)} » cite un passage que le raisonnement ne contient pas : « ${quote} ».` });
+      issues.push({ kind: 'erreur', path: paragraph.path, text: `citation absente du raisonnement : « ${quote} » ; cite ce passage dans preuve ou selon de ce que la section traite${scope.length ? ` (${scope.join(', ')})` : ''}, ou retire les guillemets`, avocat: `La section « ${label(section)} » cite un passage que le raisonnement ne contient pas : « ${quote} ».` });
     }
   }
   for (const objective of context.objectives) if (!treated.has(objective.effet)) issues.push({ kind: 'manque', path: objective.at, text: `objectif non développé dans l’acte : ajoute traite: '${objective.effet}' à la section qui le soutient`, avocat: `L’acte ne développe pas cet objectif.` });

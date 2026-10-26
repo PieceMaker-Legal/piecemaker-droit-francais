@@ -5,7 +5,7 @@ import type { Section } from './acte.js';
 
 export type Ref = { piece: string; citation: string };
 export type Target = { piece: string; citation?: string };
-export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null; au?: string }; applicabilite?: string; validite?: string; renvoi: Target[]; contredit: Ref[] };
+export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null; au?: string }; applicabilite?: string; validite?: string; renvoi: Target[] };
 export type Duration = { unite: 'jours' | 'jours_ouvres' | 'mois' | 'ans'; nombre: number };
 export type Measure = {
   delai?: { de: string; a: string; borne: 'au_plus' | 'au_moins'; duree: Duration };
@@ -18,8 +18,11 @@ export type Formula =
   | { operation: 'bareme'; assiette: Operand; tranches: Array<{ jusqu_a: Operand | null; taux: Operand }> }
   | { operation: 'si'; condition: string; alors: Operand; sinon: Operand };
 export type Value = { valeur: string | number | null; preuve: Ref[]; selon: Basis[]; formule?: Formula };
-export type Condition = { condition?: string; l_une?: Condition[]; mesure?: Measure; selon: Basis[]; decompte?: string; preuve: Ref[]; contredit: Ref[] };
-export type Term = { si: Condition[]; sauf: Condition[] };
+export type Condition = { condition?: string; attendu?: boolean; l_une?: Condition[]; mesure?: Measure; selon: Basis[]; decompte?: string };
+export const SIDES = ['true', 'false'] as const;
+export type Side = typeof SIDES[number];
+export type Foundation = { preuve: Ref[]; selon: Basis[]; si: Condition[] };
+export type Term = { si: Condition[]; sauf: Condition[]; fondements?: Record<Side, Foundation[]> };
 export const VERBS = { obtenir: 'terme', écarter: 'terme', réduire: 'montant', augmenter: 'montant' } as const;
 export type Verb = keyof typeof VERBS;
 export type Objective = { objectif: string; effet: string; verbe: Verb; validite?: string; prescription?: string };
@@ -30,9 +33,12 @@ export type Parsed = { value: unknown; lines: Map<string, number> };
 
 const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const RESERVED = new Set(['objectifs', 'questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification', 'acte']);
+const RESERVED = new Set(['objectifs', 'questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification', 'acte', 'true', 'false']);
 const TERM_KEYS = new Set(['si', 'sauf']);
-const CONDITION_KEYS = new Set(['condition', 'l_une', 'delai', 'montant', 'selon', 'decompte', 'preuve', 'contredit']);
+const CONDITION_KEYS = new Set(['l_une', 'delai', 'montant', 'selon', 'decompte']);
+const CONDITION_SHAPE = 'condition : - nom_de_la_condition: true (ou false), avec au besoin selon, delai, montant, decompte ; ou - l_une: [conditions]';
+const FOUNDATION_SHAPE = 'fondement : { preuve: [{ piece, citation }], selon: [{ source, citation }], si: [- nom: true] } avec au moins preuve ou selon';
+const CONTREDIT_REMOVED = 'contredit n’existe plus : écris la pièce en preuve sous nom: { false: [{ preuve: [{ piece, citation }] }] } ; pour une clause contraire, deux fondements de valeurs opposées (true et false) sur la même question';
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
 const BOUNDS = ['au_plus', 'au_moins'] as const;
 const COMPARISONS = ['plus_de', 'au_moins', 'moins_de', 'au_plus'] as const;
@@ -180,8 +186,8 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     return raw.flatMap((entry, index) => {
       const at = `${path}[${index}]`;
       if (!isObject(entry) || !text(entry.source) || !text(entry.citation)) { problem(at, '{ source: identifiant du texte, de la décision ou chemin de la pièce, citation: passage exact } attendu'); return []; }
-      for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'validite', 'renvoi', 'contredit'].includes(key)) problem(`${at}.${key}`, `clé inconnue ${key}`);
-      const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string, renvoi: targets(entry.renvoi, `${at}.renvoi`), contredit: refs(entry.contredit, `${at}.contredit`) };
+      for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'validite', 'renvoi'].includes(key)) problem(`${at}.${key}`, key === 'contredit' ? CONTREDIT_REMOVED : `clé inconnue ${key}`);
+      const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string, renvoi: targets(entry.renvoi, `${at}.renvoi`) };
       if (entry.applicabilite !== undefined) {
         const name = control('applicabilite', entry.applicabilite, `${at}.applicabilite`);
         if (name) basis.applicabilite = name;
@@ -228,32 +234,49 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
   };
 
   const condition = (raw: unknown, path: string, nested: boolean): Condition[] => {
-    if (!isObject(raw)) { problem(path, '{ condition: terme, selon: [...] } attendu'); return []; }
-    for (const key of Object.keys(raw)) if (!CONDITION_KEYS.has(key)) problem(`${path}.${key}`, `clé inconnue ${key} (admises : ${[...CONDITION_KEYS].join(', ')})`);
-    const hasName = raw.condition !== undefined;
+    if (!isObject(raw)) { problem(path, CONDITION_SHAPE); return []; }
+    if (raw.condition !== undefined) { problem(`${path}.condition`, `condition: nom n’existe plus : écris ${typeof raw.condition === 'string' && IDENTIFIER.test(raw.condition) ? `${raw.condition}: true (ou ${raw.condition}: false)` : 'nom: true (ou nom: false)'}, la valeur attendue de la condition`); return []; }
+    if (raw.contredit !== undefined) problem(`${path}.contredit`, CONTREDIT_REMOVED);
+    if (raw.preuve !== undefined) problem(`${path}.preuve`, 'preuve ne se place plus sur une condition de règle : place-la sous la valeur qu’elle établit, à la racine : nom: { true: [{ preuve: [{ piece, citation }] }] } (pour un délai ou un montant : dans valeurs)');
+    const names = Object.keys(raw).filter((key) => !CONDITION_KEYS.has(key) && key !== 'contredit' && key !== 'preuve');
     const hasChoice = raw.l_une !== undefined;
-    if (hasName === hasChoice) { problem(path, 'une condition porte soit condition: terme, soit l_une: [conditions]'); return []; }
-    const result: Condition = { selon: bases(raw.selon, `${path}.selon`), preuve: refs(raw.preuve, `${path}.preuve`), contredit: refs(raw.contredit, `${path}.contredit`) };
-    if (hasName) {
-      if (typeof raw.condition !== 'string' || !IDENTIFIER.test(raw.condition)) { problem(`${path}.condition`, 'terme en minuscules, lettres, chiffres et _ (ex. retard_de_livraison)'); return []; }
-      result.condition = raw.condition;
+    if (hasChoice === (names.length > 0)) { problem(path, hasChoice ? 'l_une ne porte pas de nom de condition : retire-le ou mets-le dans l’un des membres' : `${CONDITION_SHAPE} (exactement une clé hors ${[...CONDITION_KEYS].join(', ')})`); return []; }
+    if (names.length > 1) { problem(path, `une condition porte exactement une clé nom: true|false (trouvé : ${names.join(', ')}) ; ${CONDITION_SHAPE}`); return []; }
+    const result: Condition = { selon: bases(raw.selon, `${path}.selon`) };
+    if (!hasChoice) {
+      const name = names[0];
+      const expected = raw[name];
+      if (!IDENTIFIER.test(name)) { problem(`${path}.${name}`, 'terme en minuscules, lettres, chiffres et _ (ex. retard_de_livraison)'); return []; }
+      if (typeof expected !== 'boolean') { problem(`${path}.${name}`, `${name} : true ou false attendu, la valeur que la règle exige de ${name} (${name}: true ou ${name}: false)`); return []; }
+      result.condition = name;
+      result.attendu = expected;
       const mesure = measure(raw, path);
       if (mesure) {
-        if (result.preuve.length || result.contredit.length) problem(path, 'un délai ou un montant se calcule : sa preuve se place dans valeurs, pas sur la condition');
-        const known = reasoning.computed.get(raw.condition);
-        if (known && JSON.stringify(known) !== JSON.stringify(mesure)) problem(path, `${raw.condition} est calculé de deux façons différentes : garde un seul calcul ou renomme l’un des deux`);
-        reasoning.computed.set(raw.condition, mesure);
+        const known = reasoning.computed.get(name);
+        if (known && JSON.stringify(known) !== JSON.stringify(mesure)) problem(path, `${name} est calculé de deux façons différentes : garde un seul calcul ou renomme l’un des deux`);
+        reasoning.computed.set(name, mesure);
         result.mesure = mesure;
       }
       if (raw.decompte !== undefined && !mesure?.delai) problem(`${path}.decompte`, 'decompte ne s’emploie qu’avec un délai');
       else if (raw.decompte !== undefined) result.decompte = control('decompte', raw.decompte, `${path}.decompte`);
     } else {
-      if (raw.delai !== undefined || raw.montant !== undefined) problem(path, 'un délai ou un montant porte un nom : condition: terme');
+      if (raw.delai !== undefined || raw.montant !== undefined) problem(path, 'un délai ou un montant porte un nom : nom: true');
       if (!Array.isArray(raw.l_une) || raw.l_une.length < 2) { problem(`${path}.l_une`, 'l_une : au moins deux conditions'); return []; }
-      if (result.preuve.length || result.contredit.length) problem(path, 'preuve et contredit se placent sur chaque condition de l_une');
       result.l_une = raw.l_une.flatMap((entry, index) => condition(entry, `${path}.l_une[${index}]`, true));
     }
     if (!nested && !result.selon.length) problem(`${path}.selon`, 'condition sans source : ajoute selon: [{ source, citation }]', result.condition ? `${human(result.condition)} : aucun texte ne fonde cette condition.` : 'Une alternative n’est fondée sur aucun texte.', result.condition);
+    return [result];
+  };
+
+  const foundation = (raw: unknown, path: string): Foundation[] => {
+    if (!isObject(raw)) { problem(path, FOUNDATION_SHAPE); return []; }
+    for (const key of Object.keys(raw)) if (!['preuve', 'selon', 'si'].includes(key)) problem(`${path}.${key}`, key === 'contredit' ? CONTREDIT_REMOVED : `clé inconnue ${key} (admises : preuve, selon, si)`);
+    const result: Foundation = { preuve: refs(raw.preuve, `${path}.preuve`), selon: bases(raw.selon, `${path}.selon`), si: [] };
+    if (!result.preuve.length && !result.selon.length) problem(path, FOUNDATION_SHAPE);
+    if (raw.si !== undefined) {
+      if (!Array.isArray(raw.si)) problem(`${path}.si`, 'liste de conditions attendue : - nom: true');
+      else result.si = raw.si.flatMap((entry, index) => condition(entry, `${path}.si[${index}]`, true));
+    }
     return [result];
   };
 
@@ -291,7 +314,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
         const at = `valeurs.${name}`;
         const computedOnly = isObject(entry) && entry.valeur === undefined && entry.formule !== undefined;
         if (!IDENTIFIER.test(name) || !isObject(entry) || !(computedOnly || typeof entry.valeur === 'number' || isDate(entry.valeur) || entry.valeur === null)) { problem(at, '{ valeur: \'AAAA-MM-JJ\', nombre ou null si le dossier ne la fixe pas, preuve: [{ piece, citation }] ou selon: [{ source, citation, vigueur }], formule } attendu'); continue; }
-        for (const field of Object.keys(entry)) if (!['valeur', 'preuve', 'selon', 'formule'].includes(field)) problem(`${at}.${field}`, `clé inconnue ${field} (admises : valeur, preuve, selon, formule)`);
+        for (const field of Object.keys(entry)) if (!['valeur', 'preuve', 'selon', 'formule'].includes(field)) problem(`${at}.${field}`, field === 'contredit' ? CONTREDIT_REMOVED : `clé inconnue ${field} (admises : valeur, preuve, selon, formule)`);
         const value: Value = { valeur: computedOnly ? null : entry.valeur as string | number | null, preuve: refs(entry.preuve, `${at}.preuve`), selon: bases(entry.selon, `${at}.selon`) };
         value.selon.forEach((basis, index) => { if (basis.validite) problem(`${at}.selon[${index}].validite`, 'la source d’une valeur est un texte : validite ne s’y place pas'); });
         if (entry.formule !== undefined) {
@@ -322,8 +345,25 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       continue;
     }
     if (!IDENTIFIER.test(key) || RESERVED.has(key)) { problem(key, 'nom de terme invalide'); continue; }
-    if (!isObject(raw)) { problem(key, 'un terme est { si: [...], sauf: [...] }'); continue; }
-    for (const name of Object.keys(raw)) if (!TERM_KEYS.has(name) && !['statut', 'decisif', 'erreurs', 'manques', 'en_jeu'].includes(name)) problem(`${key}.${name}`, `clé inconnue ${name} (admises : si, sauf)`);
+    if (!isObject(raw)) { problem(key, 'un terme est { si: [...], sauf: [...] } ; une question établie est { true: [fondements], false: [fondements] }'); continue; }
+    const rule = (raw.si !== undefined || raw.sauf !== undefined);
+    const sided = raw.true !== undefined || raw.false !== undefined;
+    if (rule && sided) { problem(key, `${key} mêle si/sauf et true/false : une clé est soit un terme (si, sauf), soit une question établie (true, false)`); continue; }
+    const annotations = ['statut', 'decisif', 'erreurs', 'manques', 'en_jeu'];
+    if (sided) {
+      for (const name of Object.keys(raw)) if (!SIDES.includes(name as Side) && !annotations.includes(name)) problem(`${key}.${name}`, `clé inconnue ${name} (admises : true, false)`);
+      const fondements: Record<Side, Foundation[]> = { true: [], false: [] };
+      for (const side of SIDES) {
+        const entries = raw[side];
+        if (entries === undefined) continue;
+        if (!Array.isArray(entries) || !entries.length) { problem(`${key}.${side}`, 'liste de fondements attendue : [{ preuve, selon, si }]'); continue; }
+        fondements[side] = entries.flatMap((entry, index) => foundation(entry, `${key}.${side}[${index}]`));
+      }
+      if (!fondements.true.length && !fondements.false.length) problem(key, 'question sans fondement : ajoute true: [{ preuve: [...] }] ou false: [{ preuve: [...] }]');
+      reasoning.terms.set(key, { si: [], sauf: [], fondements });
+      continue;
+    }
+    for (const name of Object.keys(raw)) if (!TERM_KEYS.has(name) && !annotations.includes(name)) problem(`${key}.${name}`, `clé inconnue ${name} (admises : si, sauf pour un terme ; true, false pour une question établie)`);
     const list = (field: 'si' | 'sauf') => {
       const entries = raw[field];
       if (entries === undefined) return [];
@@ -331,7 +371,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       return entries.flatMap((entry, index) => condition(entry, `${key}.${field}[${index}]`, false));
     };
     const term = { si: list('si'), sauf: list('sauf') };
-    if (!term.si.length && !term.sauf.length) problem(key, 'terme sans condition : ajoute si: [...]');
+    if (!term.si.length && !term.sauf.length) problem(key, 'terme sans condition : ajoute si: [...] (ou true: / false: pour établir une question)');
     reasoning.terms.set(key, term);
   }
   for (const [name, mesure] of reasoning.computed) {
@@ -364,12 +404,14 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
 
 const ANNOTATIONS = new Set(['bilan', 'montant_calcule', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'atteint', 'obstacles', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul']);
 
-const KEY_ORDER = ['qualification', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'condition', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'contredit', 'sauf', 'nom', 'faits', 'attendu', 'id', 'intitule', 'traite', 'conflit', 'sur', 'modele', 'avocat', 'texte', 'sections'];
+const KEY_ORDER = ['qualification', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'true', 'false', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'sauf', 'nom', 'faits', 'attendu', 'id', 'intitule', 'traite', 'conflit', 'sur', 'modele', 'avocat', 'texte', 'sections'];
 const rank = (key: string) => { const at = KEY_ORDER.indexOf(key); return at < 0 ? KEY_ORDER.length : at; };
 const ordered = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(ordered);
   if (!isObject(value)) return value;
-  return Object.fromEntries(Object.entries(value).map(([key, item], index) => ({ key, item, index })).sort((x, y) => rank(x.key) - rank(y.key) || x.index - y.index).map(({ key, item }) => [key, ordered(item)]));
+  const conditionLike = Object.keys(value).some((key) => CONDITION_KEYS.has(key));
+  const place = (key: string, item: unknown) => (conditionLike && typeof item === 'boolean' && !KEY_ORDER.includes(key) ? -1 : rank(key));
+  return Object.fromEntries(Object.entries(value).map(([key, item], index) => ({ key, item, index })).sort((x, y) => place(x.key, x.item) - place(y.key, y.item) || x.index - y.index).map(({ key, item }) => [key, ordered(item)]));
 };
 
 export function canonical(annotated: Record<string, unknown>, reasoning: Reasoning): Record<string, unknown> {
@@ -380,15 +422,19 @@ export function canonical(annotated: Record<string, unknown>, reasoning: Reasoni
     const term = reasoning.terms.get(name);
     if (!term || order.includes(name)) return;
     order.push(name);
-    const walk = (condition: Condition) => {
-      for (const basis of condition.selon) {
+    const bases = (list: Basis[]) => {
+      for (const basis of list) {
         if (basis.applicabilite) pending.push({ slot: 'applicabilite', name: basis.applicabilite });
         if (basis.validite) pending.push({ slot: 'validite', name: basis.validite });
       }
+    };
+    const walk = (condition: Condition) => {
+      bases(condition.selon);
       if (condition.decompte) pending.push({ slot: 'decompte', name: condition.decompte });
       if (condition.l_une) condition.l_une.forEach(walk); else visit(condition.condition!);
     };
     [...term.si, ...term.sauf].forEach(walk);
+    for (const side of SIDES) for (const entry of term.fondements?.[side] ?? []) { bases(entry.selon); entry.si.forEach(walk); }
   };
   for (const objective of reasoning.objectifs) visit(objective.effet);
   for (const objective of reasoning.objectifs) for (const slot of ['validite', 'prescription'] as const) if (objective[slot]) pending.push({ slot, name: objective[slot]! });

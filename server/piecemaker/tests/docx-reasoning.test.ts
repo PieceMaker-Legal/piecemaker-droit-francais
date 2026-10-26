@@ -27,7 +27,7 @@ test('un fichier DOCX autonome suffit à rejouer le moteur et ses deux hypothès
 });
 
 test('un modèle sans propriété valeurs est accepté quand le DOCX ne déclare aucune liaison', async () => {
-  const codeWithoutValues = "{ qualification: 'consultation', objectifs: [{ objectif: 'Établir un fait fictif', obtenir: 'fait_fictif' }], fait_fictif: { si: [{ condition: 'observation_fictive', selon: [{ source: 'docx#pm:clause-prix', citation: 'payable après réception.' }], preuve: [{ piece: 'docx#pm:clause-prix', citation: 'payable après réception.' }] }] }, hypotheses: [] }";
+  const codeWithoutValues = "{ qualification: 'consultation', objectifs: [{ objectif: 'Établir un fait fictif', obtenir: 'fait_fictif' }], fait_fictif: { si: [{ observation_fictive: true, selon: [{ source: 'docx#pm:clause-prix', citation: 'payable après réception.' }] }] }, observation_fictive: { true: [{ preuve: [{ piece: 'docx#pm:clause-prix', citation: 'payable après réception.' }] }] }, hypotheses: [] }";
   const input = await embedDocxReasoning(await fixture(true), { code: codeWithoutValues, bindings: [], clauses: ['pm:clause-prix'] });
 
   assert.equal((await readDocxReasoning(input)).code, codeWithoutValues);

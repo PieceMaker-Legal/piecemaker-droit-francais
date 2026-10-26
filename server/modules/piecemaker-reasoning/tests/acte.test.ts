@@ -66,3 +66,11 @@ test('gras et italique font l’aller-retour', () => {
   assert.equal(markup(segments(text)), text);
   assert.deepEqual(quotations(text), ['trois mots ici']);
 });
+
+test('une citation de l’acte vient de la preuve ou de la source du fondement de ce que la section traite', async () => {
+  const section = (traite: string, quote: string) => withActe(`  acte: [{ intitule: \`Discussion\`, traite: '${traite}', texte: [\`Le dossier établit « ${quote} ».\`] }],\n`);
+  const quotation = (result: Awaited<ReturnType<typeof verify>>) => acteIssues(result).filter((text) => text.includes('citation absente du raisonnement'));
+  assert.deepEqual(quotation(await verify(section('pénalité_encourue', 'Livré le 14/06/2025'))), []);
+  assert.deepEqual(quotation(await verify(section('grève', 'mouvement limité à notre atelier'))), []);
+  assert.equal(quotation(await verify(section('mise_en_demeure', 'Livré le 14/06/2025'))).length, 1);
+});

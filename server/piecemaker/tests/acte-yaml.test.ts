@@ -27,7 +27,7 @@ test('le service natif choisit YAML, le persiste et conserve les retouches Word'
   db.prepare('INSERT INTO projects VALUES(?,?)').run('fictif', root);
   await mkdir(path.join(root, '.piecemaker'));
   const file = path.join(root, '.piecemaker/raisonnement.yaml');
-  const value: Record<string, unknown> = { objectifs: [{ objectif: 'Obtenir un effet fictif', obtenir: 'effet' }], effet: { si: [{ condition: 'fait', selon: [{ source: 'LEGIARTI000000000001', citation: 'Un fait établit un effet.' }] }] } };
+  const value: Record<string, unknown> = { objectifs: [{ objectif: 'Obtenir un effet fictif', obtenir: 'effet' }], effet: { si: [{ fait: true, selon: [{ source: 'LEGIARTI000000000001', citation: 'Un fait établit un effet.' }] }] } };
   value.acte = [{ intitule: 'Discussion fictive', texte: ['Une première rédaction.'] }];
   await writeFile(file, printReasoningDocument(value, 'yaml'));
   const service = createReasoningService(() => db, connectors);

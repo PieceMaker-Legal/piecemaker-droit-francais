@@ -1,15 +1,17 @@
 import type { ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
-import { basisControls, formulaConditions } from './format.js';
-import type { Condition, Duration, Formula, Measure, Operand, Objective, Reasoning, Term, Trial } from './format.js';
+import { basisControls, formulaConditions, SIDES } from './format.js';
+import type { Condition, Duration, Foundation, Formula, Measure, Operand, Objective, Reasoning, Term, Trial } from './format.js';
 
-export type Facts = { leaf(name: string): ReasoningValue; basis(path: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue };
+export type Facts = { leaf(name: string): ReasoningValue; basis(path: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue; proven?(path: string, count: number): boolean };
 export type Trace = Map<string, ReasoningValue>;
 export type Test = (facts: Facts, trace?: Trace, roots?: string[]) => Map<string, ReasoningValue>;
 
 export const and = (values: ReasoningValue[]): ReasoningValue => (values.includes(false) ? false : values.includes(null) ? null : true);
 export const or = (values: ReasoningValue[]): ReasoningValue => (values.includes(true) ? true : values.includes(null) ? null : false);
 const not = (value: ReasoningValue): ReasoningValue => (value === null ? null : !value);
+const matches = (value: ReasoningValue, expected: boolean): ReasoningValue => (value === null ? null : value === expected);
+export const isLeaf = (reasoning: Reasoning, name: string) => { const term = reasoning.terms.get(name); return !term || Boolean(term.fondements); };
 
 export function structure(reasoning: Reasoning) {
   const leaves = new Set<string>();
@@ -19,12 +21,17 @@ export function structure(reasoning: Reasoning) {
     if (stack.includes(name)) { cycles.push([...stack.slice(stack.indexOf(name)), name].join(' → ')); return; }
     const term = reasoning.terms.get(name);
     if (!term) { leaves.add(name); return; }
+    if (term.fondements) leaves.add(name);
     const walk = (condition: Condition) => {
       for (const control of [...condition.selon.flatMap(basisControls), condition.decompte]) if (control) { used.add(control); visit(control, [...stack, name]); }
       if (condition.l_une) condition.l_une.forEach(walk);
       else { used.add(condition.condition!); visit(condition.condition!, [...stack, name]); }
     };
     [...term.si, ...term.sauf].forEach(walk);
+    for (const side of SIDES) for (const entry of term.fondements?.[side] ?? []) {
+      for (const control of entry.selon.flatMap(basisControls)) { used.add(control); visit(control, [...stack, name]); }
+      entry.si.forEach(walk);
+    }
   };
   for (const objective of reasoning.objectifs) for (const root of objectiveRoots(objective)) { used.add(root); if (reasoning.terms.has(root)) visit(root, []); }
   for (const value of reasoning.valeurs.values()) for (const name of value.formule ? formulaConditions(value.formule) : []) { used.add(name); visit(name, []); }
@@ -44,13 +51,28 @@ export function compile(reasoning: Reasoning): Test {
       const definition: Term | undefined = reasoning.terms.get(name);
       if (!definition || stack.includes(name)) return definition ? null : facts.leaf(name);
       const condition = (entry: Condition, path: string): ReasoningValue => {
-        const inner = entry.l_une ? or(entry.l_une.map((member, index) => condition(member, `${path}.l_une[${index}]`))) : term(entry.condition!, [...stack, name]);
+        const inner = entry.l_une ? or(entry.l_une.map((member, index) => condition(member, `${path}.l_une[${index}]`))) : matches(term(entry.condition!, [...stack, name]), entry.attendu!);
         const applicable = entry.selon.map((basis) => and(basisControls(basis).map((control) => term(control, [...stack, name]))));
         const value = and([facts.basis(path, entry, applicable), inner, entry.decompte ? term(entry.decompte, [...stack, name]) : true]);
         trace?.set(path, value);
         return value;
       };
-      const value = and([...definition.si.map((entry, index) => condition(entry, `${name}.si[${index}]`)), not(or(definition.sauf.map((entry, index) => condition(entry, `${name}.sauf[${index}]`))))]);
+      const founded = (entry: Foundation, path: string): ReasoningValue => {
+        const applicable = entry.selon.map((basis) => and(basisControls(basis).map((control) => term(control, [...stack, name]))));
+        const proof = entry.preuve.length > 0 && Boolean(facts.proven?.(path, entry.preuve.length));
+        const support = or([proof, entry.selon.length ? facts.basis(path, { selon: entry.selon }, applicable) : false]);
+        const value = and([support, ...entry.si.map((member, index) => condition(member, `${path}.si[${index}]`))]);
+        trace?.set(path, value);
+        return value;
+      };
+      let value: ReasoningValue;
+      if (definition.fondements) {
+        const forced = facts.leaf(name);
+        const sides = SIDES.map((side) => or(definition.fondements![side].map((entry, index) => founded(entry, `${name}.${side}[${index}]`))));
+        trace?.set(`${name}:true`, sides[0]);
+        trace?.set(`${name}:false`, sides[1]);
+        value = forced !== null ? forced : sides[0] === true && sides[1] === false ? true : sides[0] === false && sides[1] === true ? false : null;
+      } else value = and([...definition.si.map((entry, index) => condition(entry, `${name}.si[${index}]`)), not(or(definition.sauf.map((entry, index) => condition(entry, `${name}.sauf[${index}]`))))]);
       memo.set(name, value);
       trace?.set(name, value);
       return value;
@@ -66,7 +88,7 @@ export function reachableLeaves(reasoning: Reasoning, root: string) {
     if (seen.has(name)) return;
     seen.add(name);
     const term = reasoning.terms.get(name);
-    if (!term) { found.add(name); return; }
+    if (!term || term.fondements) { found.add(name); return; }
     const walk = (condition: Condition) => {
       for (const control of [...condition.selon.flatMap(basisControls), condition.decompte]) if (control) visit(control);
       if (condition.l_une) condition.l_une.forEach(walk); else visit(condition.condition!);
@@ -155,13 +177,14 @@ export function calculate(measure: Measure, lookup: Lookup): Calculation {
   return { value, missing, calcul: { montant: amount, seuil: threshold } };
 }
 
-export type Known = { leaf(name: string): ReasoningValue; value(name: string, holds?: Holds): string | number | null };
+export type Known = { leaf(name: string): ReasoningValue; value(name: string, holds?: Holds): string | number | null; proven?(path: string, count: number): boolean };
 
 export function simulate(reasoning: Reasoning, test: Test, known: Known, faits: Trial['faits']) {
   const computing = new Set<string>();
   const facts: Facts = {
     leaf: (name) => { const item = faits[name]; if (typeof item === 'boolean') return item; const measure = reasoning.computed.get(name); return measure ? calculate(measure, value).value : known.leaf(name); },
     basis: (_path, _condition, applicable) => (applicable.length ? or(applicable) : true),
+    proven: known.proven,
   };
   const holds: Holds = (name) => (reasoning.terms.has(name) ? test(facts, undefined, [name]).get(name) ?? null : facts.leaf(name));
   function value(name: string): string | number | null {
