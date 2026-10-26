@@ -114,6 +114,31 @@ try {
     return (await response.json()).hasCompletedOnboarding;
   })()`), 'First-run setup completed through the interface');
   await waitFor(() => evaluate(page, 'document.querySelectorAll("button").length >= 3 && !document.querySelector("input[autocomplete=username]")'), 'Usable authenticated interface');
+  const gliner = await waitFor(async () => {
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const value = await evaluate(page, `(async () => {
+      const response = await fetch('/api/piecemaker/configuration', { headers: { Authorization: 'Bearer ' + localStorage.getItem('auth-token') } });
+      if (!response.ok) throw Error('GLiNER status unavailable');
+      return (await response.json()).components.gliner;
+    })()`);
+    return value?.installed && value;
+  }, 'Automatic GLiNER library and model installation', 1200000);
+  const pythonConfig = JSON.parse(await fs.readFile(path.join(clientComponents, 'config.json')));
+  const glinerScripts = path.join(root, 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner');
+  const glinerProbe = [
+    'from gliner2 import GLiNER2',
+    'from model_config import gliner_snapshot_directory',
+    'model = GLiNER2.from_pretrained(gliner_snapshot_directory(), local_files_only=True, map_location="cpu")',
+    'result = model.extract_entities("Jean Dupont lives in Paris.", ["person", "location"])',
+    'assert isinstance(result.get("entities"), dict), result',
+    'print("GLINER_LOCAL_INFERENCE_PASS")',
+  ].join('\n');
+  const glinerOutput = execFileSync(pythonConfig.pythonPath, ['-c', glinerProbe], {
+    cwd: glinerScripts, encoding: 'utf8', timeout: 300000,
+    env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+  });
+  assert.match(glinerOutput, /GLINER_LOCAL_INFERENCE_PASS/);
+  await fs.writeFile(path.join(output, 'gliner-verification.json'), JSON.stringify({ installed: gliner.installed, model: gliner.model, localInference: true }, null, 2));
   await fs.writeFile(path.join(output, '01-installed.png'), Buffer.from((await page.call('Page.captureScreenshot')).data, 'base64'));
   const caFile = path.join(directory, 'components/certs/piecemaker-ca.crt');
   const localCA = new X509Certificate(await fs.readFile(caFile));
@@ -140,7 +165,7 @@ try {
   }, 'Native validation uninstaller', 90000);
   assert.equal(await fs.readFile(preserved, 'utf8'), 'untouched');
   await fs.access(path.join(directory, 'app-data/auth.db'));
-  await fs.writeFile(path.join(output, 'installation-verification.json'), JSON.stringify({ installed: true, initialInterface: true, remoteChannelEmbedded: config.feed, updateNotPublished: true, accountCreated: true, sessionRetained: true, authenticatedInterfaceRendered: true, onboardingCompletedThroughUI: true, localCertificateGenerated: true, localCertificateTrusted: true, certificateConsentPreapprovedOnDisposableRunner: true, anonymizerActive: status.enabled && restarted.enabled, nativeUninstallVerified: true, productionDataUntouched: true, runtime: config.runtime }, null, 2));
+  await fs.writeFile(path.join(output, 'installation-verification.json'), JSON.stringify({ installed: true, initialInterface: true, remoteChannelEmbedded: config.feed, updateNotPublished: true, accountCreated: true, sessionRetained: true, authenticatedInterfaceRendered: true, onboardingCompletedThroughUI: true, localCertificateGenerated: true, localCertificateTrusted: true, certificateConsentPreapprovedOnDisposableRunner: true, glinerInstalled: gliner.installed, glinerLocalInference: true, anonymizerActive: status.enabled && restarted.enabled, nativeUninstallVerified: true, productionDataUntouched: true, runtime: config.runtime }, null, 2));
   console.log('FULL INSTALLATION PASS: embedded remote channel, fresh local CA, active proxy, account and restart; no UI update published.');
 } finally {
   if (page && child?.exitCode === null) {
