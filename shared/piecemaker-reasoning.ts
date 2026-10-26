@@ -22,4 +22,6 @@ export type ReasoningSnapshot = {
   reliability: ReasoningPieceReliability[];
   test: ReasoningTestReport | null;
   demo?: boolean;
+  name?: string | null;
+  raisonnements?: string[];
 };

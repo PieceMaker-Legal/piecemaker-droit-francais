@@ -35,7 +35,7 @@ Un `.docx` s’ouvre dans la visionneuse tout seul. Conversion n’ouvre aucun v
 ## DOCX et modèle de raisonnement
 
 Pour les nouveaux documents liés, le modèle reste dans le dossier, par défaut
-`.piecemaker/raisonnement.yaml`. Le DOCX conserve uniquement sa référence relative,
+le raisonnement du dossier dans `.piecemaker/raisonnements/` s'il est unique, sinon celui indiqué par `--modele`. Le DOCX conserve uniquement sa référence relative,
 son empreinte de version et les repères du texte ; aucun code du modèle n’y est
 copié. Si le fichier est absent ou modifié, le contrôle est suspendu. Ne remplacez
 pas l’empreinte pour faire disparaître une alerte : un changement de modèle demande

@@ -125,8 +125,8 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));
   router.use(timesheet);
-  router.use('/reasoning', createReasoningRouter(reasoning, async (cwd, id, quote) => {
-    const info = await reasoning.source(cwd, id);
+  router.use('/reasoning', createReasoningRouter(reasoning, async (cwd, id, quote, name) => {
+    const info = await reasoning.source(cwd, id, name);
     const quotes = [{ quote, verification: { verified: true } }];
     const reference = info.kind === 'decision' ? { kind: 'case' as const, decision_id: id } : info.kind === 'piece' ? { kind: 'document' as const, doc_id: id } : { kind: 'article' as const, article_id: id };
     return citations.save({ sessionId: `raisonnement:${cwd}`, title: info.title, source: info.text, citation: { ref: 1, ...reference, verified: true, quotes }, ranges: locateSourcePassages(info.text, quotes) });

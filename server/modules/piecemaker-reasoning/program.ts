@@ -9,7 +9,7 @@ import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, Reas
 import { assignIds, checkActe } from './acte.js';
 import { and, answer, calculate, compile, evaluate, isLeaf, or, objectiveRoots, decisive, reachableLeaves, runTrials, simulate, structure } from './engine.js';
 import type { Calculation, Facts, Trace } from './engine.js';
-import { parseReasoningDocument, printReasoningDocument, ReasoningSyntaxError, resolveReasoningFile } from './document.js';
+import { listReasoningFiles, parseReasoningDocument, printReasoningDocument, ReasoningSyntaxError, resolveReasoningFile } from './document.js';
 import { canonical, formulaConditions, SIDES, VERBS, formulaNames, formulaNumbers, LiteralError, readReasoning, stripAnnotations } from './format.js';
 import type { Basis, Condition, Foundation, Formula, Measure, Objective, Ref, Target, Trial } from './format.js';
 
@@ -27,7 +27,6 @@ export type ReasoningConnectors = {
 
 export type Person = { label: string; kind: string; siren: string | null; name: string | null; side?: string | null };
 
-export const REASONING_FILE = path.join('.piecemaker', 'raisonnement.yaml');
 
 const LEGACY_TABLES = ['pm_reasoning_items', 'pm_reasoning_models', 'pm_reasoning_results', 'pm_reasoning_nodes', 'pm_reasoning_relations', 'pm_reasoning_links', 'pm_reasoning_theories', 'pm_reasoning_tests', 'pm_reasoning_turns'];
 const emptySnapshot = (): ReasoningSnapshot => ({ revision: 0, updatedAt: null, code: '', annotated: null, issues: [], dismissed: [], reliability: [], test: null });
@@ -684,17 +683,20 @@ export function createReasoningService(getDatabase: () => Database.Database, con
     const db = getDatabase();
     if (!initialized) {
       for (const table of LEGACY_TABLES) db.exec(`DROP TABLE IF EXISTS ${table}`);
-      const columns = db.prepare("SELECT name FROM pragma_table_info('pm_reasoning_programs')").all() as Array<{ name: string }>;
-      if (columns.length && !columns.some((column) => column.name === 'code')) db.exec('DROP TABLE pm_reasoning_programs;');
+      for (const table of ['pm_reasoning_programs', 'pm_reasoning_dismissed']) {
+        const columns = db.prepare(`SELECT name FROM pragma_table_info('${table}')`).all() as Array<{ name: string }>;
+        if (columns.length && !columns.some((column) => column.name === 'name')) db.exec(`DROP TABLE ${table};`);
+      }
       db.exec(`
         CREATE TABLE IF NOT EXISTS pm_reasoning_programs (
-          project_id TEXT PRIMARY KEY REFERENCES projects(project_id) ON DELETE CASCADE,
-          revision INTEGER NOT NULL, code TEXT NOT NULL, snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json))
+          project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE, name TEXT NOT NULL,
+          revision INTEGER NOT NULL, code TEXT NOT NULL, snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json)),
+          PRIMARY KEY(project_id, name)
         );
         CREATE TABLE IF NOT EXISTS pm_reasoning_dismissed (
-          project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+          project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE, name TEXT NOT NULL,
           issue_id TEXT NOT NULL, path TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,
-          PRIMARY KEY(project_id, issue_id)
+          PRIMARY KEY(project_id, name, issue_id)
         );
         CREATE TABLE IF NOT EXISTS pm_reasoning_reliability (
           project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
@@ -729,80 +731,108 @@ export function createReasoningService(getDatabase: () => Database.Database, con
     return row?.nature ?? null;
   };
   const reliability = (id: string): ReasoningPieceReliability[] => (database().prepare('SELECT piece, reliable, at FROM pm_reasoning_reliability WHERE project_id=? ORDER BY piece').all(id) as Array<{ piece: string; reliable: number; at: string }>).map((row) => ({ piece: row.piece, reliable: row.reliable === 1, at: row.at }));
-  const dismissed = (id: string) => database().prepare('SELECT issue_id AS id, path, text, at FROM pm_reasoning_dismissed WHERE project_id=? ORDER BY at').all(id) as ReasoningSnapshot['dismissed'];
-
-  const read = (cwd: string): ReasoningSnapshot => {
-    const id = projectId(cwd);
-    const row = database().prepare('SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=?').get(id) as { snapshot_json: string } | undefined;
+  const dismissed = (id: string, name: string) => database().prepare('SELECT issue_id AS id, path, text, at FROM pm_reasoning_dismissed WHERE project_id=? AND name=? ORDER BY at').all(id, name) as ReasoningSnapshot['dismissed'];
+  const stored = (id: string, name: string): Partial<ReasoningSnapshot> => {
+    const row = database().prepare('SELECT snapshot_json FROM pm_reasoning_programs WHERE project_id=? AND name=?').get(id, name) as { snapshot_json: string } | undefined;
     const parsed = row ? JSON.parse(row.snapshot_json) as Partial<ReasoningSnapshot> : {};
-    const stored = 'annotated' in parsed ? parsed : {};
-    return { ...emptySnapshot(), ...stored, dismissed: dismissed(id), reliability: reliability(id) };
+    return 'annotated' in parsed ? parsed : {};
+  };
+  const named = async (cwd: string, name?: string) => {
+    const found = await resolveReasoningFile(cwd, name);
+    if (!found) throw new TypeError('Aucun raisonnement : écris .piecemaker/raisonnements/<nom>.yaml (nom d’après le sujet, ex. indemnite-de-depart) avec objectifs et les termes, puis relance verifier.');
+    return found;
   };
 
-  const run = async (cwd: string, options: { online: boolean; emit?: (entry: ReasoningLogEntry) => void; simulation?: Trial['faits'] }) => {
+  const read = async (cwd: string, name?: string): Promise<ReasoningSnapshot> => {
     const id = projectId(cwd);
-    const file = await resolveReasoningFile(cwd);
-    const code = await readFile(file, 'utf8').catch(() => null);
-    if (code === null) throw new TypeError('Aucun raisonnement : écris .piecemaker/raisonnement.yaml avec objectifs et les termes, puis relance verifier.');
+    const available = await listReasoningFiles(cwd);
+    const latest = () => [...available].sort((left, right) => String(stored(id, right).updatedAt ?? '').localeCompare(String(stored(id, left).updatedAt ?? '')))[0];
+    const chosen = name ?? latest();
+    const snapshot = chosen ? stored(id, chosen) : {};
+    return { ...emptySnapshot(), ...snapshot, name: chosen ?? null, raisonnements: available, dismissed: chosen ? dismissed(id, chosen) : [], reliability: reliability(id) };
+  };
+
+  const run = async (cwd: string, options: { online: boolean; emit?: (entry: ReasoningLogEntry) => void; simulation?: Trial['faits'] }, name?: string) => {
+    const id = projectId(cwd);
+    const found = await named(cwd, name);
+    const code = await readFile(found.file, 'utf8').catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return null; throw error; });
+    if (code === null) throw new TypeError(`Raisonnement introuvable : .piecemaker/raisonnements/${found.name}.yaml (raisonnements du dossier : ${(await listReasoningFiles(cwd)).join(', ') || 'aucun'}).`);
     const result = await verifyReasoning({
       code, cwd, connectors: cached, ...options,
       reliability: new Map(reliability(id).map((entry) => [entry.piece, entry.reliable])),
       nature: nature(id),
       persons: persons(id),
-      dismissed: new Set(dismissed(id).map((entry) => entry.id)),
+      dismissed: new Set(dismissed(id, found.name).map((entry) => entry.id)),
     });
-    return { id, code, result, file };
+    return { id, code, result, ...found };
   };
 
-  const verify = async (cwd: string, online = true, emit?: (entry: ReasoningLogEntry) => void): Promise<ReasoningSnapshot> => {
+  const verify = async (cwd: string, online = true, emit?: (entry: ReasoningLogEntry) => void, name?: string): Promise<ReasoningSnapshot> => {
     for (const key of sources.keys()) if (key.startsWith(`${cwd}\0`)) sources.delete(key);
-    const { id, code, result, file } = await run(cwd, { online, emit });
+    const { id, code, result, file, name: chosen } = await run(cwd, { online, emit }, name);
     if (result.code !== code) await writeFile(file, result.code, 'utf8');
-    const previous = read(cwd);
+    const previous = await read(cwd, chosen);
     const snapshot: ReasoningSnapshot = { ...previous, revision: previous.revision + 1, updatedAt: new Date().toISOString(), code: result.code, annotated: result.annotated, issues: result.issues, test: { at: new Date().toISOString(), log: result.log } };
-    const { dismissed: _dismissed, reliability: _reliability, ...stored } = snapshot;
-    database().prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET revision=excluded.revision, code=excluded.code, snapshot_json=excluded.snapshot_json').run(id, snapshot.revision, snapshot.code, JSON.stringify(stored));
+    const { dismissed: _dismissed, reliability: _reliability, name: _name, raisonnements: _raisonnements, ...kept } = snapshot;
+    database().prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?,?) ON CONFLICT(project_id, name) DO UPDATE SET revision=excluded.revision, code=excluded.code, snapshot_json=excluded.snapshot_json').run(id, chosen, snapshot.revision, snapshot.code, JSON.stringify(kept));
     return snapshot;
+  };
+
+  const list = async (cwd: string) => {
+    const id = projectId(cwd);
+    const names = await listReasoningFiles(cwd);
+    if (!names.length) return 'Aucun raisonnement dans .piecemaker/raisonnements/.';
+    return names.map((name) => {
+      const snapshot = stored(id, name);
+      const objectifs = ((snapshot.annotated?.objectifs ?? []) as Array<{ objectif?: string; statut?: string }>).map((objective) => `${objective.objectif ?? '?'}${objective.statut ? ` (${objective.statut})` : ''}`);
+      const counts = snapshot.issues ? `${snapshot.issues.filter((issue) => issue.kind === 'erreur').length} erreur(s), ${snapshot.issues.filter((issue) => issue.kind === 'manque').length} manque(s), vérifié le ${String(snapshot.updatedAt).slice(0, 10)}` : 'non vérifié';
+      return `${name} — .piecemaker/raisonnements/${name}.yaml — ${counts}${objectifs.length ? `\n  ${objectifs.join('\n  ')}` : ''}`;
+    }).join('\n');
   };
 
   database();
   return {
     read,
     verify,
-    test: (cwd: string, emit: (entry: ReasoningLogEntry) => void) => verify(cwd, true, emit),
-    async source(cwd: string, id: string): Promise<{ kind: SourceInfo['kind']; title: string; text: string }> {
-      const { code } = read(cwd);
-      if (![`'${id}'`, `"${id}"`, `\`${id}\``].some((quoted) => code.includes(quoted))) throw new TypeError('Source absente du raisonnement.');
+    list,
+    test: (cwd: string, emit: (entry: ReasoningLogEntry) => void, name?: string) => verify(cwd, true, emit, name),
+    async source(cwd: string, id: string, name?: string): Promise<{ kind: SourceInfo['kind']; title: string; text: string }> {
+      const { code } = await read(cwd, name);
+      if (!code.split('\n').some((line) => line.replace(/^\s*-?\s*(?:source|piece):\s*/u, '').replace(/^["']|["']$/gu, '').trim() === id)) throw new TypeError('Source absente du raisonnement.');
       const info = await connectors.source(cwd, id).catch(() => null);
       if (!info) throw new TypeError('Texte de la source indisponible.');
       return { kind: info.kind, title: info.title, text: info.text };
     },
-    async command(cwd: string, input: { commande?: unknown }): Promise<string> {
-      if (input.commande !== undefined && input.commande !== 'verifier') throw new TypeError('Commande : verifier.');
-      return describeReasoning(await verify(cwd));
+    async command(cwd: string, input: { commande?: unknown; raisonnement?: unknown }): Promise<string> {
+      if (input.commande !== undefined && input.commande !== 'verifier' && input.commande !== 'lister') throw new TypeError('Commande : verifier ou lister.');
+      if (input.raisonnement !== undefined && typeof input.raisonnement !== 'string') throw new TypeError('raisonnement : nom du fichier, sans .yaml.');
+      if (input.commande === 'lister') return list(cwd);
+      const snapshot = await verify(cwd, true, undefined, input.raisonnement as string | undefined);
+      return `Raisonnement ${snapshot.name} (.piecemaker/raisonnements/${snapshot.name}.yaml)\n${describeReasoning(snapshot)}`;
     },
-    async simulate(cwd: string, faits: unknown): Promise<Simulation> {
+    async simulate(cwd: string, faits: unknown, name?: string): Promise<Simulation> {
       if (!isObject(faits) || Object.values(faits).some((item) => typeof item !== 'boolean' && typeof item !== 'number' && !(typeof item === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item)))) throw new TypeError('faits : { nom: vrai, faux, nombre ou date AAAA-MM-JJ }.');
-      const { result } = await run(cwd, { online: false, simulation: faits as Trial['faits'] });
+      const { result } = await run(cwd, { online: false, simulation: faits as Trial['faits'] }, name);
       if (!result.simulation) throw new TypeError('Simulation impossible : corrige d’abord les erreurs du raisonnement.');
       return result.simulation;
     },
-    async dismiss(cwd: string, issue: string, restore = false): Promise<ReasoningSnapshot> {
+    async dismiss(cwd: string, issue: string, restore = false, name?: string): Promise<ReasoningSnapshot> {
       const id = projectId(cwd);
-      if (restore) database().prepare('DELETE FROM pm_reasoning_dismissed WHERE project_id=? AND issue_id=?').run(id, issue);
+      const { name: chosen } = await named(cwd, name);
+      if (restore) database().prepare('DELETE FROM pm_reasoning_dismissed WHERE project_id=? AND name=? AND issue_id=?').run(id, chosen, issue);
       else {
-        const found = read(cwd).issues.find((entry) => entry.id === issue);
+        const found = (await read(cwd, chosen)).issues.find((entry) => entry.id === issue);
         if (!found) throw new TypeError('Alerte introuvable.');
-        database().prepare('INSERT OR REPLACE INTO pm_reasoning_dismissed VALUES(?,?,?,?,?)').run(id, issue, found.path, found.text, new Date().toISOString());
+        database().prepare('INSERT OR REPLACE INTO pm_reasoning_dismissed VALUES(?,?,?,?,?,?)').run(id, chosen, issue, found.path, found.text, new Date().toISOString());
       }
-      return verify(cwd, false);
+      return verify(cwd, false, undefined, chosen);
     },
-    async rate(cwd: string, piece: string, reliable: boolean | null): Promise<ReasoningSnapshot> {
+    async rate(cwd: string, piece: string, reliable: boolean | null, name?: string): Promise<ReasoningSnapshot> {
       const id = projectId(cwd);
       if (typeof piece !== 'string' || !piece.trim()) throw new TypeError('Pièce requise.');
       if (reliable === null) database().prepare('DELETE FROM pm_reasoning_reliability WHERE project_id=? AND piece=?').run(id, piece);
       else database().prepare('INSERT OR REPLACE INTO pm_reasoning_reliability VALUES(?,?,?,?)').run(id, piece, reliable ? 1 : 0, new Date().toISOString());
-      return verify(cwd, false);
+      return verify(cwd, false, undefined, name);
     },
   };
 }
