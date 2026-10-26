@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { createContext, SourceTextModule, SyntheticModule } from 'node:vm';
 
 import { CONSENT_EXPLANATION } from './consent.mjs';
 import { IS_MAC, publisherCertPath } from './paths.mjs';
@@ -85,4 +86,35 @@ test('un paramètre RSA manquant est signalé', () => {
   const exported = dotnetExport(authorityOnDisk());
   delete exported.key.InverseQ;
   assert.throws(() => authorityPemFromWindowsExport(exported), /InverseQ/);
+});
+
+test('the first Windows launch loads its own certificate provider before checking and trusting the CA', async () => {
+  const commands = [];
+  const context = createContext({});
+  const capture = (command, args) => {
+    assert.equal(command, 'powershell.exe');
+    const script = args[args.indexOf('-Command') + 1];
+    assert.ok(script.startsWith('Import-Module "$PSHOME/Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1" -ErrorAction Stop;'));
+    commands.push(script);
+    return { code: 0, stdout: script.includes('Import-Certificate') ? '' : 'no', stderr: '' };
+  };
+  const mocks = {
+    'node:fs/promises': { default: { readFile: async () => JSON.stringify({ ca: 'fictitious-thumbprint' }) } },
+    './shell.mjs': { capture, mustCapture: capture, powershell: () => { throw new Error('Unexpected certificate generation'); } },
+    './consent.mjs': { askCertificateConsent: () => true },
+    './ui.mjs': { ui: {} },
+    './paths.mjs': { CA_COMMON_NAME: 'Example CA', PRODUCT_NAME: 'Example', caCertPath: 'C:/Example/ca.crt', caKeyPath: 'C:/Example/ca.key', certsDir: 'C:/Example', publisherCertPath: 'C:/Example/publisher.cer' },
+  };
+  const entry = new SourceTextModule(fs.readFileSync(new URL('./certificates-win32.mjs', import.meta.url), 'utf8'), { context });
+  await entry.link(async specifier => {
+    const values = mocks[specifier] || await import(specifier);
+    return new SyntheticModule(Object.keys(values), function () {
+      for (const [key, value] of Object.entries(values)) this.setExport(key, value);
+    }, { context });
+  });
+  await entry.evaluate();
+  assert.equal(entry.namespace.isCaTrusted(), false);
+  assert.equal(await entry.namespace.trustCertificateAuthority(), true);
+  assert.equal(commands.length, 2);
+  assert.match(commands[1], /Import-Certificate.*CertStoreLocation Cert:/);
 });

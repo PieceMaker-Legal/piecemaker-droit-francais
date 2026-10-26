@@ -34,7 +34,7 @@ const built = await buildDesktopApp(source, { windowsInstaller: true, prepareSta
   await fs.writeFile(packageFile, JSON.stringify(manifest, null, 2));
   await fs.copyFile(path.join(templates, 'main.mjs'), path.join(stage, manifest.main));
   await fs.copyFile(path.join(templates, 'uninstall.mjs'), path.join(stage, 'electron/piecemakerUninstall.js'));
-  await replace(path.join(stage, 'electron-piecemaker/main.js'), 'await installWindowsUpdater({ app, dialog });', 'process.env.PIECEMAKER_DESKTOP_UPDATE_URL = "http://127.0.0.1:9/disabled-validation";');
+  await replace(path.join(stage, 'electron-piecemaker/main.js'), 'await installWindowsUpdater({ app, dialog, LocalServerController });', 'process.env.PIECEMAKER_DESKTOP_UPDATE_URL = "http://127.0.0.1:9/disabled-validation";');
   await replace(path.join(stage, 'server/piecemaker/anonymizer/service.cjs'), "path.join(os.homedir(), '.piecemaker', 'certs')", "path.join(process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker'), 'certs')");
   const compiledService = path.join(stage, 'dist-server/server/piecemaker/anonymizer/service.cjs');
   try {
