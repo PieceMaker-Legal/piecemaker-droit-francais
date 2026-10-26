@@ -88,11 +88,22 @@ export async function verifyReasoning(input: {
   const issues: ReasoningIssue[] = [];
   const log: ReasoningLogEntry[] = [];
   const emit = (entry: ReasoningLogEntry) => { const index = log.findIndex((item) => item.key === entry.key); if (index >= 0) log[index] = entry; else log.push(entry); input.emit?.(entry); };
-  const issueAt = (at: string) => issues.filter((issue) => issue.path === at || issue.path.startsWith(`${at}.`)).map((issue) => issue.text);
+  const within = (path: string, at: string) => path === at || path.startsWith(`${at}.`);
+  const issueAt = (at: string) => issues.filter((issue) => within(issue.path, at) || issue.ailleurs?.some((other) => within(other.path, at))).map((issue) => issue.text);
   let lines = new Map<string, number>();
-  const add = (kind: ReasoningIssue['kind'], at: string, text: string, avocat?: string, cible?: string) => {
+  const causes = new Map<string, ReasoningIssue>();
+  const add = (kind: ReasoningIssue['kind'], at: string, text: string, avocat?: string, cible?: string, cause?: string) => {
     const id = issueId(kind, at, text);
-    if (!issues.some((issue) => issue.id === id)) issues.push({ id, kind, path: at, line: lines.get(at) ?? lines.get(at.replace(/\.[^.[\]]+$/, '')) ?? null, text, ...(avocat ? { avocat, ...(cible ? { cible } : {}) } : {}) });
+    const line = lines.get(at) ?? lines.get(at.replace(/\.[^.[\]]+$/, '')) ?? null;
+    const same = cause ? causes.get(cause) : undefined;
+    if (same) {
+      if (same.path !== at && !same.ailleurs?.some((other) => other.path === at)) same.ailleurs = [...(same.ailleurs ?? []), { path: at, line }];
+      return;
+    }
+    if (issues.some((issue) => issue.id === id)) return;
+    const issue: ReasoningIssue = { id, kind, path: at, line, text, ...(avocat ? { avocat, ...(cible ? { cible } : {}) } : {}) };
+    issues.push(issue);
+    if (cause) causes.set(cause, issue);
   };
 
   let parsed;
@@ -305,7 +316,7 @@ export async function verifyReasoning(input: {
   const validityTerms = new Set(validityRoots.flatMap((name) => [...tree(name)]));
   const citesLaw = (name: string) => occurrences.some(({ at, condition }) => tree(name).has(at.split('.')[0]) && condition.selon.some((_, index) => basisChecks.get(`${at}.selon[${index}]`)?.kind === 'texte'));
   for (const name of new Set(validityRoots)) if (reasoning.terms.has(name) && !citesLaw(name)) add('manque', name, 'la validité s’apprécie au regard du droit applicable : cite dans ce terme le texte qui la fonde (selon: [{ source, citation, vigueur }])', `${human(name)} : le texte qui fonde la validité n’est pas cité.`, name);
-  const declared = (name: string, at: string) => { if (!reasoning.valeurs.has(name)) add('manque', at, `${name} n’est pas déclarée : ajoute valeurs: { ${name}: { valeur, preuve } } (valeur: null si le dossier ne la fixe pas)`, `${human(name)} : cette donnée n’est pas renseignée.`, at.split('.')[0]); };
+  const declared = (name: string, at: string) => { if (!reasoning.valeurs.has(name)) add('manque', at, `${name} n’est pas déclarée : ajoute valeurs: { ${name}: { valeur, preuve } } (valeur: null si le dossier ne la fixe pas)`, `${human(name)} : cette donnée n’est pas renseignée.`, at.split('.')[0], `valeurs.${name}`); };
   for (const { at, condition } of occurrences) {
     const delay = condition.mesure?.delai;
     const amount = condition.mesure?.montant;
@@ -404,7 +415,7 @@ export async function verifyReasoning(input: {
     const au = basis.vigueur?.au;
     if (date && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${date} (${au}) ; cite la version en vigueur à cette date`, `${title} : la version citée n’était pas en vigueur au ${day(date)}.`, `#source:${basis.source}`);
     if (check?.kind === 'texte' && !au) add('manque', `${place}.vigueur`, 'applicabilité dans le temps non établie : ajoute vigueur: { debut, fin, au: \'nom_de_date\' }, la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable', `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
-    else if (check?.kind === 'texte' && !date) add('manque', `${place}.vigueur`, `${au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`);
+    else if (check?.kind === 'texte' && !date) add('manque', `${place}.vigueur`, `${au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`, `valeurs.${au}`);
     return title;
   };
   const applicability = (place: string, basis: Basis, title: string) => {
@@ -801,6 +812,7 @@ export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'issues' | '
     out.push('', `${label} ${index + 1} — ${place}${issue.line ? ` (ligne ${issue.line})` : ''}`);
     out.push(issue.line ? `  ligne ${issue.line} : ${content(issue.line)}` : `  ${!issue.path ? 'porte sur le fichier entier' : /[.[]/.test(issue.path) ? `absent du fichier : à ajouter dans ${issue.path.replace(/(\.[^.[\]]+|\[\d+\])$/, '')}` : 'absent du fichier : clé à ajouter au premier niveau de l’objet'}`);
     out.push(`  ${issue.text}`);
+    if (issue.ailleurs?.length) out.push(`  même cause, aussi : ${issue.ailleurs.map((other) => `${other.path.replace(/\./g, ' › ')}${other.line ? ` (ligne ${other.line})` : ''}`).join(' ; ')}`);
   };
   errors.forEach((issue, index) => block('ERREUR', issue, index));
   gaps.forEach((issue, index) => block('MANQUE', issue, index));
