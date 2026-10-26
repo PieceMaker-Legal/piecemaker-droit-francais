@@ -1,6 +1,6 @@
 ---
 name: piecemaker
-description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, volets, tabular review et liaison DOCX au raisonnement. Use when the user asks about case documents, linked DOCX reasoning, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
+description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, suivi du dossier (échéances), volets, tabular review et liaison DOCX au raisonnement. Use when the user asks about case documents, deadlines or the case follow-up, linked DOCX reasoning, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
 ---
 
 # PieceMaker
@@ -91,6 +91,55 @@ divergence ne permet jamais de tester silencieusement une version différente.
 celle du dossier. Pour un ancien DOCX, il récupère sa copie embarquée. Renommer
 le DOCX dans le dossier, ou déplacer le dossier complet avec son modèle, conserve
 la référence ; déplacer le DOCX seul ne suffit pas pour le vérifier.
+
+## suivi (échéances du dossier)
+
+Le suivi relève les étapes du dossier qu'il ne faut pas manquer ; il ne raisonne pas (c'est le rôle du raisonnement, propre à un acte) et n'est pas une chronologie. Un seul fichier par dossier : `.piecemaker/suivi.yaml`. Il apparaît, avec ceux des autres dossiers, dans l'onglet Échéances.
+
+N'y figurent que :
+- en contentieux, les actes qui ont une valeur procédurale (ceux qui font courir un délai ou fixent une étape) et les échéances qui en découlent ;
+- en contrat, les dates qui ont un lien avec sa validité ou son existence, et les échéances qui en découlent.
+
+Recherche toi-même, avec les outils Légifrance, le texte, la décision ou la clause qui fixe chaque délai et sa manière de le compter : le moteur ne connaît aucune règle de droit, il recalcule et signale ce qui n'est pas justifié.
+
+```yaml
+evenements:
+  nom_de_l_evenement:
+    date: AAAA-MM-JJ
+    preuve:
+      - piece: pieces/…
+        citation: passage exact qui porte la date
+echeances:
+  nom_de_l_echeance:
+    intitule: Ce qu'il faut faire, en clair
+    de: nom_de_l_evenement
+    delai:
+      mois: 1
+    selon:
+      - source: identifiant officiel (LEGIARTI…, JURITEXT…) ou chemin de la pièce pour une clause
+        citation: passage exact qui fixe le délai
+    decompte:
+      depart: exclu
+      report: jour_ouvrable_suivant
+      selon:
+        - source: …
+          citation: passage exact qui fixe ce décompte
+  autre_echeance:
+    intitule: …
+    date: AAAA-MM-JJ
+    preuve:
+      - piece: pieces/…
+        citation: passage exact qui porte la date
+```
+
+- Échéance calculée : `de` (après un événement ou une échéance) ou `avant` (à rebours d'une échéance), `delai` en `jours`, `jours_ouvres`, `mois` ou `ans`, `selon` obligatoire, `decompte` avec `depart` (`exclu` : le jour de départ ne compte pas ; `inclus`), `report` si le terme tombe un samedi, un dimanche ou un jour férié (`jour_ouvrable_suivant`, `jour_ouvrable_precedent`, `aucun`) et son `selon`. `prolongation: { delai, selon }` ajoute un délai supplémentaire justifié.
+- Échéance fixée : `date` et la `preuve` qui la porte (calendrier, ordonnance, avis).
+- Un événement sert à au moins une échéance (`de` / `avant`) ou cite le texte qui lui donne effet (`selon`) ; sinon retire-le.
+- Contrat non signé : `hypothese: true` au lieu de `preuve` ; les échéances qui en partent sont des dates supposées.
+- Accomplissement : `fait: { date, preuve }` ; l'avocat peut aussi la marquer faite dans l'onglet.
+- Ne recopie pas les dates calculées : si tu écris `date` sur une échéance calculée, elle doit égaler le calcul.
+
+`pm suivi verifier` recalcule chaque échéance (calcul affiché pas à pas), relit pièces et sources (identifiant officiel, citation exacte, version en vigueur à la date de départ, historique judiciaire, fiabilité) et ne renvoie que les erreurs et manques, localisés à la ligne. Corrige et relance jusqu'à ne plus avoir d'erreur.
 
 ## sql
 
