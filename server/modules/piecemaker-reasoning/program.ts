@@ -13,7 +13,10 @@ import { parseReasoningDocument, printReasoningDocument, ReasoningSyntaxError, r
 import { canonical, formulaConditions, SIDES, VERBS, formulaNames, formulaNumbers, LiteralError, readReasoning, stripAnnotations } from './format.js';
 import type { Basis, Condition, Foundation, Formula, Measure, Objective, Ref, Target, Trial } from './format.js';
 
-export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null } };
+export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null }; history?: { statut: 'remise en cause' | 'à examiner' | 'non remise en cause'; details: string[] } };
+
+const OFFICIAL_ID = /^(?:(?:LEGIARTI|JORFARTI|KALIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+|CELEX:\S+|ECLI:\S+)$/u;
+const ID_SHAPE = 'LEGIARTI… pour un article, JURITEXT… pour une décision judiciaire, CETATEXT… pour une décision administrative, CONSTEXT… pour une décision du Conseil constitutionnel, CELEX:… ou ECLI:… pour le droit de l’Union, chemin de la pièce pour une clause';
 
 export type ReasoningConnectors = {
   source(cwd: string, id: string): Promise<SourceInfo | null | undefined>;
@@ -193,6 +196,11 @@ export async function verifyReasoning(input: {
   };
   const checkBasisInner = async (at: string, basis: Basis, holder: Record<string, unknown> | null) => {
     const info = await lookup(basis.source);
+    if (info === undefined && !OFFICIAL_ID.test(basis.source)) {
+      add('erreur', `${at}.source`, `source sans identifiant officiel : ${basis.source} ; indique son identifiant (${ID_SHAPE}), trouvé avec les outils Légifrance`, `${basis.source} n’est pas désigné par son identifiant officiel.`, `#source:${basis.source}`);
+      basisChecks.set(at, { kind: null, from: null, to: null });
+      return;
+    }
     if (info === undefined) {
       add('manque', `${at}.source`, `source non vérifiable automatiquement : aucun connecteur pour ${basis.source}`, `${basis.source} n’a pas pu être relu automatiquement : à vérifier vous-même.`, `#source:${basis.source}`);
       basisChecks.set(at, { kind: 'texte', from: basis.vigueur?.debut ?? null, to: basis.vigueur?.fin ?? null });
@@ -202,7 +210,12 @@ export async function verifyReasoning(input: {
     if (info === null) { add('erreur', `${at}.source`, `source introuvable : ${basis.source}`, `La source ${basis.source} est introuvable.`); basisChecks.set(at, { kind: null, from: null, to: null }); return; }
     if (holder) holder.titre = info.title;
     checkCitation(at, holder, info, basis.citation, `#source:${basis.source}`);
-    if (info.kind === 'decision') { basisChecks.set(at, { kind: 'decision', from: null, to: null }); return; }
+    if (info.kind === 'decision') {
+      if (info.history?.statut === 'remise en cause') add('erreur', `${at}.source`, `décision remise en cause par un recours (${info.history.details.join(' ; ')}) : cite la décision rendue sur ce recours`, `${info.title} a été remise en cause par un recours : ${info.history.details.join(' ; ')}.`, `#source:${basis.source}`);
+      else if (info.history?.statut === 'à examiner') add('manque', `${at}.source`, `historique judiciaire à examiner${info.history.details.length ? ` (${info.history.details.join(' ; ')})` : ''} : vérifie qu’aucun recours ne l’a remise en cause`, `${info.title} : l’historique judiciaire est à examiner.`, `#source:${basis.source}`);
+      basisChecks.set(at, { kind: 'decision', from: null, to: null });
+      return;
+    }
     const version = info.validity ? `en vigueur ${info.validity.to ? `du ${day(info.validity.from)} au ${day(info.validity.to)}` : `depuis le ${day(info.validity.from)}`}` : '';
     if (!basis.vigueur && info.kind === 'texte') add('manque', `${at}.vigueur`, `vigueur non renseignée : ajoute vigueur: { debut, fin }${info.validity ? ` (version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'})` : ''}`, `La version applicable de ${info.title} n’est pas précisée${version ? ` (version relue : ${version})` : ''}.`, `#source:${basis.source}`);
     else if (basis.vigueur && info.validity && (basis.vigueur.debut !== info.validity.from || basis.vigueur.fin !== info.validity.to)) add('erreur', `${at}.vigueur`, `vigueur différente de la version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'}`, `${info.title} : la version indiquée ne correspond pas au texte relu (${version}).`, `#source:${basis.source}`);
