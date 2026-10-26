@@ -6,9 +6,14 @@ import { buildVibeModelsEnvironment } from '@/modules/providers/list/mistral/mis
 
 test('Vibe receives the GLM models alongside Mistral Medium without overriding thinking by default', () => {
   const models = JSON.parse(buildVibeModelsEnvironment());
-  assert.deepEqual(Object.keys(models), ['mistral-large-4', 'glm-5.3', 'glm-5.2', 'mistral-medium-3.5']);
+  assert.deepEqual(Object.keys(models), ['mistral-large-4', 'glm-5.3', 'glm-5.2', 'mistral-medium-3.5', 'mistral-small']);
   assert.deepEqual(models['glm-5.3'], { name: 'zai-glm-5-3', provider: 'mistral', alias: 'glm-5.3', display_name: 'Z.ai GLM 5.3' });
   assert.equal(models['mistral-medium-3.5'].thinking, undefined);
+});
+
+test('Vibe receives Mistral Small as mistral-small-latest without any thinking setting', () => {
+  const models = JSON.parse(buildVibeModelsEnvironment('mistral-small', 'high'));
+  assert.deepEqual(models['mistral-small'], { name: 'mistral-small-latest', provider: 'mistral', alias: 'mistral-small', display_name: 'Mistral Small' });
 });
 
 test('the selected effort becomes Vibe thinking only on models with adjustable reasoning', () => {
@@ -20,10 +25,16 @@ test('the selected effort becomes Vibe thinking only on models with adjustable r
 
 test('the curated Mistral catalog lists GLM 5.3 and 5.2 and offers effort on Medium 3.5 only', () => {
   const byValue = Object.fromEntries(MISTRAL_PREDEFINED_MODELS.OPTIONS.map((option) => [option.value, option]));
-  assert.deepEqual(Object.keys(byValue), ['mistral-large-4', 'glm-5.3', 'glm-5.2', 'mistral-medium-3.5', 'local']);
+  assert.deepEqual(Object.keys(byValue), ['mistral-large-4', 'glm-5.3', 'glm-5.2', 'mistral-medium-3.5', 'mistral-small', 'local']);
   assert.deepEqual(byValue['mistral-medium-3.5'].effort?.values.map((value) => value.value), ['none', 'high']);
   assert.equal(byValue['glm-5.3'].effort, undefined);
   assert.equal(MISTRAL_PREDEFINED_MODELS.DEFAULT, 'mistral-medium-3.5');
+});
+
+test('Mistral Small is listed as Mistral Small without reasoning effort', () => {
+  const option = MISTRAL_PREDEFINED_MODELS.OPTIONS.find((candidate) => candidate.value === 'mistral-small');
+  assert.equal(option?.label, 'Mistral Small');
+  assert.equal(option?.effort, undefined);
 });
 
 test('Mistral Large 4 is offered with adjustable effort', () => {

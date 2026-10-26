@@ -59,6 +59,56 @@ test('Mike : citation introuvable annotée false, sans suppression de la répons
   assert.match(await turn.finish(), /- \[1\] \[piece, p\. 1\]\[1\] — « Texte inventé\. » — \[citation non retrouvée, à vérifier\]\(#piecemaker-cite-miss\)$/m);
 });
 
+test('une instruction de citation répétée par le modèle est retirée avant la vérification', async (t) => {
+  const { cwd, store, turn } = await fixture(t);
+  const source = 'La clause prévoit trois mois.';
+  await writeFile(path.join(cwd, 'piece.md'), source);
+  const echo = '<CITATION_INSTRUCTION>Réponse : un bloc <CITATIONS>tableau JSON</CITATIONS>.</CITATION_INSTRUCTION>';
+  const reply = `Réponse [1].\n${echo}${echo}\n${block([{ ref: 1, doc_id: 'piece.md', quote: source }])}`;
+  let visible = '';
+  for (const character of reply) visible += turn.delta(character);
+  visible += turn.flush();
+  assert.equal(visible, 'Réponse [1].\n\n');
+  const suffix = await turn.finish();
+  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.ok(token);
+  assert.equal((await store.read(token))?.citation.verified, true);
+  assert.doesNotMatch(visible + suffix, /CITATION_INSTRUCTION|tableau JSON/);
+});
+
+test('un bloc JSON valide en fin de flux est accepté sans balise de fermeture', async (t) => {
+  const { cwd, store, turn } = await fixture(t);
+  await writeFile(path.join(cwd, 'piece.md'), 'La clause prévoit trois mois.');
+  const text = 'Réponse [1].\n<CITATIONS>[{"ref":1,"doc_id":"piece.md","quote":"La clause prévoit trois mois."}]';
+  let visible = '';
+  for (const character of text) visible += turn.delta(character);
+  visible += turn.flush();
+  assert.equal(visible, 'Réponse [1].\n');
+  const suffix = await turn.finish();
+  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.ok(token);
+  assert.equal((await store.read(token))?.citation.verified, true);
+});
+
+test('un JSON invalide en fin de flux sans fermeture ne crée aucune citation', async (t) => {
+  const { turn } = await fixture(t);
+  assert.equal(turn.text('Réponse utile.\n<CITATIONS>[{"ref":1,'), 'Réponse utile.\n');
+  assert.equal(await turn.finish(), '');
+  const { turn: objectTurn } = await fixture(t);
+  assert.equal(objectTurn.text('Réponse.\n<CITATIONS>{"ref":1}'), 'Réponse.\n');
+  assert.equal(await objectTurn.finish(), '');
+});
+
+test('une instruction répétée sans fermeture est retirée de la réponse visible', async (t) => {
+  const { turn } = await fixture(t);
+  const prefix = 'Réponse utile.\n';
+  let visible = '';
+  for (const character of `${prefix}<CITATION_INSTRUCTION>texte confidentiel et balise <CITATIONS>`) visible += turn.delta(character);
+  visible += turn.flush();
+  assert.equal(visible, prefix);
+  assert.doesNotMatch(await turn.finish(), /texte confidentiel|CITATIONS/);
+});
+
 test('un Markdown du dossier cité comme code est lu hors du dépôt applicatif', async (t) => {
   const { cwd, turn, store } = await fixture(t);
   await mkdir(path.join(cwd, '.agents', 'skills', 'docx-cli'), { recursive: true });

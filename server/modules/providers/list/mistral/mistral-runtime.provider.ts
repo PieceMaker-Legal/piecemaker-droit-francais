@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 
 import crossSpawn from 'cross-spawn';
 
@@ -41,6 +42,14 @@ const notifyRunStoppedForProvider = notifyRunStopped as unknown as (input: RunNo
 const notifyRunFailedForProvider = notifyRunFailed as unknown as (input: RunNotificationInput) => void;
 
 let enabledSkillsWarned = false;
+
+type VibeLaunchCommand = (executable: string) => { executable: string; args: string[] };
+
+let vibeLaunchCommand: VibeLaunchCommand = (executable) => ({ executable, args: [] });
+
+export function setVibeLaunchCommand(build: VibeLaunchCommand): void {
+  vibeLaunchCommand = build;
+}
 
 export function resolveVibeHome(): string {
   const home = process.env.VIBE_HOME?.trim();
@@ -298,10 +307,31 @@ async function spawnVibe(
       try {
         const record = response as { sessionId?: string } | null;
         registerSession(record?.sessionId ?? null);
+        recordVibeMessageTime(response);
+        const streamed = response as { type?: string; id?: string; createdAt?: number; content?: string };
+        if (streamed?.type === 'piecemaker_reasoning') {
+          ws.send(createNormalizedMessage({
+            id: streamed.id,
+            kind: 'thinking',
+            content: streamed.content ?? '',
+            timestamp: new Date(streamed.createdAt!).toISOString(),
+            sessionId: capturedSessionId || sessionId || null,
+            provider: 'mistral',
+          }));
+          return;
+        }
+        if (streamed?.type === 'piecemaker_text_delta' || streamed?.type === 'piecemaker_text_end') {
+          ws.send(createNormalizedMessage({
+            kind: streamed.type === 'piecemaker_text_delta' ? 'stream_delta' : 'stream_end',
+            content: streamed.content ?? '',
+            sessionId: capturedSessionId || sessionId || null,
+            provider: 'mistral',
+          }));
+          return;
+        }
         if (providerSessionId && isReplayedVibeHistoryEntry(response)) {
           return;
         }
-        recordVibeMessageTime(response);
         const normalized = context.normalizeMessage(response, capturedSessionId || sessionId || null);
         for (const msg of normalized) {
           if (planning && msg.kind === 'stream_delta') {
@@ -365,7 +395,7 @@ async function spawnVibe(
       // trailing positional, but the explicit flag form is unambiguous.
       args.push('-p', promptText);
 
-      const env: NodeJS.ProcessEnv = { ...process.env };
+      const env: NodeJS.ProcessEnv = { ...process.env, PYTHONIOENCODING: 'utf-8' };
       if (resolvedModel) {
         env.VIBE_ACTIVE_MODEL = resolvedModel;
       }
@@ -382,7 +412,8 @@ async function spawnVibe(
         }
       }
 
-      vibeProcess = spawnFunction(resolveVibeExecutable(), args, {
+      const streamingCommand = vibeLaunchCommand(resolveVibeExecutable());
+      vibeProcess = spawnFunction(streamingCommand.executable, [...streamingCommand.args, ...args], {
         cwd: workingDir,
         stdio: ['ignore', 'pipe', 'pipe'],
         env,
@@ -391,8 +422,9 @@ async function spawnVibe(
       activeMistralProcesses.set(processKey, vibeProcess);
       vibeProcess.sessionId = processKey;
 
+      const stdoutDecoder = new StringDecoder('utf8');
       vibeProcess.stdout?.on('data', (data: Buffer) => {
-        stdoutLineBuffer += data.toString();
+        stdoutLineBuffer += stdoutDecoder.write(data);
         const completeLines = stdoutLineBuffer.split(/\r?\n/);
         stdoutLineBuffer = completeLines.pop() || '';
 
@@ -407,6 +439,7 @@ async function spawnVibe(
       });
 
       vibeProcess.on('close', async (code) => {
+        stdoutLineBuffer += stdoutDecoder.end();
         const finalSessionId = sessionId || capturedSessionId || processKey;
         activeMistralProcesses.delete(finalSessionId);
         activeMistralProcesses.delete(processKey);
@@ -480,7 +513,23 @@ async function spawnVibe(
         notifyTerminalState({ error });
         reject(error);
       });
-    }).catch(reject);
+    }).catch((error: unknown) => {
+      const finalSessionId = sessionId || capturedSessionId || processKey;
+      activeMistralProcesses.delete(processKey);
+      console.error('[Mistral] Vibe n’a pas pu démarrer :', error);
+      ws.send(createNormalizedMessage({
+        kind: 'error',
+        content: `Mistral Vibe n’a pas pu démarrer : ${error instanceof Error ? error.message : String(error)}`,
+        sessionId: finalSessionId,
+        provider: 'mistral',
+      }));
+      if (!completeSent) {
+        completeSent = true;
+        ws.send(createCompleteMessage({ provider: 'mistral', sessionId: finalSessionId, exitCode: 1 }));
+      }
+      notifyTerminalState({ error });
+      reject(error);
+    });
   });
 }
 

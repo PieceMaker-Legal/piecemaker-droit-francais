@@ -22,6 +22,7 @@ import re
 import sys
 import argparse
 import subprocess
+import tempfile
 from pathlib import Path
 
 from mineru_improved_1 import mineru_available
@@ -177,15 +178,10 @@ def pdf_has_text_layer(pdf_path):
         with open(pdf_path, 'rb') as f:
             reader = PyPDF2.PdfReader(f)
 
-            # Check first 3 pages for text content
-            pages_to_check = min(3, len(reader.pages))
-            for i in range(pages_to_check):
-                text = reader.pages[i].extract_text()
-                # Require at least 50 chars to avoid false positives
-                if text and len(text.strip()) > 50:
-                    return True
-
-            return False  # No substantial text found
+            return bool(reader.pages) and all(
+                text and len(text.strip()) > 50
+                for text in (page.extract_text() for page in reader.pages)
+            )
 
     except Exception as e:
         print(f"⚠️  PDF inspection error: {e}", file=sys.stderr)
@@ -246,12 +242,13 @@ def inspect_file(file_path):
         return 'mineru', 'Unknown format — using MinerU as fallback'
 
 
-def run_markitdown(file_path, output_dir):
+def run_markitdown(file_path, output_dir, output_name=None):
     """Run markitdown conversion.
 
     Args:
         file_path: Path to input file
         output_dir: Directory to save output markdown
+        output_name: Markdown file stem, defaults to the input stem
     """
     if not HAS_MARKITDOWN:
         raise ImportError("Markitdown not installed. Run: pip install markitdown[all]")
@@ -263,7 +260,7 @@ def run_markitdown(file_path, output_dir):
         result = md.convert(file_path)
 
         # Save to output directory
-        output_file = Path(output_dir) / f"{Path(file_path).stem}.md"
+        output_file = Path(output_dir) / f"{output_name or Path(file_path).stem}.md"
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Converting a .md in place would rewrite the source document. The conversion
@@ -285,12 +282,13 @@ def run_markitdown(file_path, output_dir):
         raise
 
 
-def run_mineru(file_path, output_dir):
+def run_mineru(file_path, output_dir, output_name=None):
     """Route to MinerU script.
 
     Args:
         file_path: Path to input file
         output_dir: Directory to save output
+        output_name: Markdown file stem, defaults to the input stem
     """
     mineru_script = Path(__file__).parent / 'mineru_improved_1.py'
 
@@ -299,33 +297,28 @@ def run_mineru(file_path, output_dir):
 
     print(f"🚀 Using MinerU...", file=sys.stderr)
 
-    # Snapshot the directory so normalisation afterwards only touches the Markdown
-    # this run produced — never a pre-existing file that happens to sit in the same
-    # output directory.
-    before = {
-        p: p.stat().st_mtime_ns
-        for p in Path(output_dir).rglob("*.md")
-        if p.is_file()
-    }
+    target = Path(output_dir) / f"{output_name or Path(file_path).stem}.md"
 
-    # Build command
-    args = [sys.executable, str(mineru_script), str(file_path), '-o', str(output_dir)]
+    with tempfile.TemporaryDirectory(prefix='.mineru-', dir=str(output_dir)) as scratch:
+        args = [sys.executable, str(mineru_script), str(file_path), '-o', scratch]
 
-    # Run MinerU (output streams directly to stderr)
-    result = subprocess.run(args, check=False)
+        process = subprocess.Popen(args, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
+        last_line = ''
+        for line in process.stderr:
+            sys.stderr.write(line)
+            sys.stderr.flush()
+            if line.strip():
+                last_line = line.strip()
+        returncode = process.wait()
 
-    if result.returncode != 0:
-        print(f"❌ MinerU failed with exit code {result.returncode}", file=sys.stderr)
-        sys.exit(result.returncode)
+        if returncode != 0:
+            reason = f" : {last_line}" if last_line else ''
+            print(f"❌ MinerU failed with exit code {returncode}{reason}", file=sys.stderr)
+            sys.exit(returncode)
 
-    # MinerU writes its Markdown itself, so normalise afterwards rather than inline —
-    # but only the files it just wrote.
-    for md_path in Path(output_dir).rglob("*.md"):
-        if not md_path.is_file():
-            continue
-        if before.get(md_path) == md_path.stat().st_mtime_ns:
-            continue  # untouched by this run — leave it alone
-        normalize_markdown_file(md_path)
+        os.replace(Path(scratch) / f"{Path(file_path).stem}.md", target)
+
+    normalize_markdown_file(target)
 
 
 def main():
@@ -336,6 +329,8 @@ def main():
     parser.add_argument('-o', '--output', required=True, help='Output directory')
     parser.add_argument('--engine', choices=['auto', 'markitdown', 'mineru'],
                         default='auto', help='Conversion engine (default: auto)')
+    parser.add_argument('--output-name', default=None,
+                        help='Markdown file stem (default: input file stem)')
 
     args = parser.parse_args()
 
@@ -363,9 +358,9 @@ def main():
     # Route to appropriate engine
     try:
         if engine == 'markitdown':
-            run_markitdown(file_path, output_dir)
+            run_markitdown(file_path, output_dir, args.output_name)
         else:  # mineru
-            run_mineru(file_path, output_dir)
+            run_mineru(file_path, output_dir, args.output_name)
     except Exception as e:
         print(f"❌ Conversion failed: {e}", file=sys.stderr)
         sys.exit(1)

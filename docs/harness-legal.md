@@ -29,7 +29,8 @@ Deux points de branchement distincts :
   sur le disque, et que `Download_Query_Results` ne le rend jamais du tout.
 - `server/piecemaker/harness/citation-turn.ts` — comportement de Mike : texte
   diffusé progressivement, bloc `<CITATIONS>` masqué même découpé,
-  vérification mécanique puis fin du tour.
+  vérification mécanique puis fin du tour. Un bloc JSON valide terminé à EOF
+  est aussi accepté si sa balise fermante manque.
   Les décisions viennent seulement des résultats `consulter_decision` de ce
   tour, appariés par `toolId` ; aucun cache global ne les rend vérifiables.
   Les Markdown sont résolus dans le dossier réel de la session, avec contrôle
@@ -54,8 +55,13 @@ Deux points de branchement distincts :
   du navigateur et un nouvel onglet. L'intégration directe testée en iframe
   est refusée par Légifrance (HTTP 403, `X-Frame-Options: SAMEORIGIN`).
 - `server/piecemaker/harness/citation-instructions.ts` — discipline de lecture
-  et format JSON ajoutés aux requêtes de chat Claude/Codex, retirés de l'écho
-  utilisateur et de l'historique affiché. Les commandes slash sont préservées.
+  et format JSON ajoutés aux requêtes de chat Claude/Codex/Mistral, retirés des
+  messages utilisateur et des réponses assistant (flux et historique ; les
+  échos assistant sans balise fermante sont coupés), y compris sous la forme aplatie
+  par `flattenPromptForWindowsShell` que Vibe stocke sous Windows, et en CRLF,
+  ainsi que des titres de session (`normalizeSessionName`) et de la recherche
+  (`session-conversations-search.service.ts`). Les commandes slash sont
+  préservées.
 - `server/piecemaker/harness/flux-sse.cjs` — collecteur du texte visible d'un
   flux SSE (`thinking` et `partial_json` exclus), mémoire bornée.
 - `server/piecemaker/harness/index.cjs` et `verification.cjs` — observateurs
@@ -84,7 +90,9 @@ Deux points de branchement distincts :
   deltas (ni `stream_end` ni message final), la liste est donc ajoutée en
   dernier delta avant `complete`. Vibe nomme les outils
   `legifrance_consulter_decision` (un seul `_`) et porte le résultat sur le
-  `tool_use` (`toolResult`) : les deux formes sont reconnues.
+  `tool_use` (`toolResult`) : les deux formes sont reconnues. Sous Windows,
+  le pont `cmd` conserve les guillemets et chaînages de commandes ; le chemin
+  de Python du venv est ajouté au `PATH`.
 - Dans un `.docx`, l'instruction demande une note de bas de page au lieu de
   `[n]`, et le même bloc `<CITATIONS>` dans le chat (ref = numéro de note) :
   les notes sont donc vérifiées comme le chat. Rien ne contrôle encore que le

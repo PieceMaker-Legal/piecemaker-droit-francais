@@ -51,6 +51,31 @@ test('Express keeps its CommonJS dependency closure physical', async (t) => {
   assert.ok(manifest.build.asarUnpack.includes('node_modules/mime/**'));
 });
 
+test('install scripts run by an external Node only import unpacked files', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pm-unpacked-imports-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({ dependencies: {}, build: { files: [], nsis: {} } }));
+  const { asarUnpack } = (await configureCompactPackage(root)).build;
+  const isUnpacked = (file) => asarUnpack.some((pattern) => (
+    pattern.endsWith('/**') ? file.startsWith(pattern.slice(0, -2)) : file === pattern
+  ));
+  const repoRoot = path.resolve(import.meta.dirname, '../..');
+  const sourceOf = (file) => path.join(repoRoot, file.startsWith('electron-piecemaker/') ? `desktop-bootstrap/overlay/${file}` : file);
+  const pending = ['desktop-bootstrap/lib/finish-install.mjs', 'desktop-bootstrap/lib/prepare-installed.mjs'];
+  const seen = new Set();
+  while (pending.length) {
+    const file = pending.pop();
+    if (seen.has(file)) continue;
+    seen.add(file);
+    assert.ok(isUnpacked(file), `${file} est importé hors Electron mais reste dans app.asar`);
+    const source = await fs.readFile(sourceOf(file), 'utf8');
+    for (const [, specifier] of source.matchAll(/(?:from|import)\s*\(?\s*['"](\.{1,2}\/[^'"]+)['"]/g)) {
+      pending.push(path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier)));
+    }
+  }
+  assert.ok(seen.has('electron-piecemaker/runtime-components.mjs'));
+});
+
 test('MIME stays physical when installed as a direct dependency', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pm-mime-compact-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));

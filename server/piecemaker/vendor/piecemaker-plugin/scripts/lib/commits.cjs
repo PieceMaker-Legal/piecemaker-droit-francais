@@ -22,7 +22,9 @@ const {
   readAnonymizationState,
   stateKey,
 } = require('./anonymization-state.cjs');
+const { conversionFailureOf, readConversionFailures } = require('./conversion-failures.cjs');
 const { formatDurationFr } = require('./session-timing.cjs');
+const { markdownStemCandidates } = require('./markdown-name.cjs');
 
 const fsp = fs.promises;
 
@@ -621,6 +623,7 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
       .map((file) => documentKey(file).replace(/-sensitive-map$/, ''))
   );
   const anonymizationState = readAnonymizationState(root);
+  const conversionFailures = readConversionFailures(root);
   const protection = readProtection(root);
   const originals = [];
   let truncated = false;
@@ -661,11 +664,13 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
       // Un dossier ancien sans manifeste conserve le comportement historique
       // (Markdown présent = converti). Dès qu'une empreinte existe, elle rend un
       // Markdown périmé visible au lieu de le réutiliser silencieusement.
-      const converted = markdownKeys.has(key) && (!stateEntry || isConvertedEntry(stateEntry, stat));
+      const hasMarkdown = markdownStemCandidates(absolute, root).some((stem) => markdownKeys.has(documentKey(`${stem}.md`)));
+      const converted = hasMarkdown && (!stateEntry || isConvertedEntry(stateEntry, stat));
       const scanned = converted && (
         isAnonymizedEntry(stateEntry, stat)
         || scanKeys.has(key)
       );
+      const conversionFailure = converted ? null : conversionFailureOf(conversionFailures, relative);
       originals.push({
         name: entry.name,
         path: relative,
@@ -676,7 +681,8 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
         scanned,
         protected: isProtectedFile(absolute, root, protection),
         resource: isResourceFile(absolute, root, protection),
-        status: converted ? (scanned ? 'ready' : 'awaiting-scan') : 'not-converted',
+        conversionFailure,
+        status: converted ? (scanned ? 'ready' : 'awaiting-scan') : conversionFailure ? 'conversion-failed' : 'not-converted',
       });
     }
   }

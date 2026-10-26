@@ -91,6 +91,7 @@ def bootstrap() -> None:
 
 
 def configure_environment() -> None:
+    os.environ["PYTHONIOENCODING"] = "utf-8"
     if os.environ.get("LEGIFRANCE_ENV_FILE"):
         return
     candidate = Path.home() / ".config" / "mcp-legifrance" / ".env"

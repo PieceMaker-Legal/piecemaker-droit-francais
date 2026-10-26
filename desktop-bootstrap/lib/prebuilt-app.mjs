@@ -25,6 +25,8 @@ export async function verifyBuiltApp(builtApp) {
   for (const relativePath of required) {
     if (!(await exists(path.join(appRoot, relativePath)))) missing.push(relativePath);
   }
+  if (process.platform === 'win32' && !(await exists(path.join(builtApp, 'resources', 'mingit', 'cmd', 'git.exe')))) missing.push('resources/mingit/cmd/git.exe');
+  if (process.platform === 'win32' && !(await exists(path.join(builtApp, 'resources', 'node-shim', 'node.exe')))) missing.push('resources/node-shim/node.exe');
   if (missing.length) throw new Error(`Application construite incomplète — fichiers absents : ${missing.join(', ')}`);
 }
 

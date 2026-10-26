@@ -1,6 +1,7 @@
 /** Arborescence métier partagée par le serveur et les hooks. */
 const fs = require('node:fs');
 const path = require('node:path');
+const { markdownStemCandidates } = require('./markdown-name.cjs');
 
 const CASE_FOLDER_STRUCTURE_KEY = 'caseFolderStructure';
 const CASE_FOLDER_STRUCTURE_VERSION = 1;
@@ -185,7 +186,12 @@ function structuredMarkdownCounterpart(absolutePath, caseRoot, config = {}) {
   if (!relative || relative.startsWith('../')) return null;
   const output = caseConversionOutputDirectory(caseRoot, relative, config);
   if (!output) return null;
-  const stem = path.basename(absolutePath, path.extname(absolutePath));
+  const stems = markdownStemCandidates(absolutePath, caseRoot);
+  for (const candidate of stems) {
+    const markdown = path.join(output, `${candidate}.md`);
+    if (fs.existsSync(markdown)) return { path: markdown, exists: true };
+  }
+  const stem = stems.at(-1);
   const expected = path.join(output, `${stem}.md`);
   if (fs.existsSync(expected)) return { path: expected, exists: true };
   const key = comparableName(stem).replace(/[\s_-]+/g, ' ').trim();

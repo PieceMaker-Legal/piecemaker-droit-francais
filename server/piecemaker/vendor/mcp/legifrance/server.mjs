@@ -27,6 +27,7 @@ const child = spawn(python?.executable || (process.platform === 'win32' ? 'pytho
   windowsHide: true,
   env: {
     ...process.env,
+    PYTHONIOENCODING: 'utf-8',
     PIECEMAKER_HOME: home,
     PIECEMAKER_SHARED_PYTHON: python?.shared ? '1' : '0',
     PYTHONIOENCODING: 'utf-8',

@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
 
 const HARNESS = `
-import json, sys
+import json, os, sys
 from pathlib import Path
 scripts, mineru_state = sys.argv[1], sys.argv[2]
 sys.path.insert(0, scripts)
@@ -17,11 +17,13 @@ pipeline.mineru_available = lambda: mineru_state == "present"
 pipeline.start_scanner_worker = lambda: None
 pipeline.wait_for_worker_ready = lambda *args, **kwargs: True
 converted, scanned = [], []
-def convert(input_file, output_dir, engine=None, mode=None, lang=None):
+def convert(input_file, output_dir, engine=None, mode=None, lang=None, output_name=None):
     converted.append([Path(input_file).name, engine])
-    target = Path(output_dir) / f"{Path(input_file).stem}.md"
+    if Path(input_file).name in os.environ.get("PM_FAIL_FILES", "").split(","):
+        return False, None, "MinerU failed with exit code 1 : Conversion arrêtée : fictif"
+    target = Path(output_dir) / f"{output_name or Path(input_file).stem}.md"
     target.write_text(f"converti par {engine}", encoding="utf-8")
-    return True, str(target)
+    return True, str(target), None
 def scan(worker, md_file, output_dir, *rest):
     scanned.append(Path(md_file).name)
     (Path(output_dir) / f"{Path(md_file).stem}_sensitive_map.json").write_text('{"entities": {}}', encoding="utf-8")
@@ -88,7 +90,7 @@ function caseFolder() {
   };
 }
 
-function runPipeline(python, folder, mineruState, extraArgs) {
+function runPipeline(python, folder, mineruState, extraArgs, failingFiles = []) {
   const files = ['scanne.pdf', 'texte.pdf', path.join('photos', 'recu.png')].map((name) => path.join(folder.root, name));
   const result = spawnSync(python, [
     folder.harness, SCRIPTS_DIR, mineruState,
@@ -98,14 +100,22 @@ function runPipeline(python, folder, mineruState, extraArgs) {
     '--case-root', folder.root,
     '--state-file', folder.stateFile,
     ...extraArgs,
-  ], { cwd: SCRIPTS_DIR, encoding: 'utf8', input: '', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
+  ], {
+    cwd: SCRIPTS_DIR,
+    encoding: 'utf8',
+    input: '',
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1', PM_FAIL_FILES: failingFiles.join(',') },
+  });
   const lines = result.stdout.split(/\r?\n/);
   const marker = (prefix) => {
     const line = lines.find((candidate) => candidate.startsWith(prefix));
     return line ? JSON.parse(line.slice(prefix.length)) : null;
   };
   assert.ok(marker('RESULT:'), result.stderr);
-  return { ...marker('RESULT:'), ocrRequired: marker('OCR_REQUIRED:') };
+  const failed = lines
+    .filter((candidate) => candidate.startsWith('CONVERSION_FAILED:'))
+    .map((candidate) => JSON.parse(candidate.slice('CONVERSION_FAILED:'.length)));
+  return { ...marker('RESULT:'), ocrRequired: marker('OCR_REQUIRED:'), failed, stderr: result.stderr };
 }
 
 function convertedEntries(folder) {
@@ -143,8 +153,40 @@ test('refusé, les scans passent par l’outil standard puis sont reconvertis et
     const installed = runPipeline(python, folder, 'present', ['--ocr-missing', 'ask', '--skip-existing']);
     assert.equal(installed.code, 0);
     assert.deepEqual(installed.converted, [['scanne.pdf', 'auto'], ['recu.png', 'auto']]);
-    assert.deepEqual(installed.scanned, ['scanne.md', 'recu.md']);
+    assert.equal(installed.scanned.length, 2);
+    assert.match(installed.scanned[0], /^scanne-[0-9a-f]{16}\.md$/);
+    assert.match(installed.scanned[1], /^recu-[0-9a-f]{16}\.md$/);
     assert.deepEqual(convertedEntries(folder).map((entry) => entry.ocr || null), [null, null, null]);
+  } finally {
+    fs.rmSync(folder.root, { recursive: true, force: true });
+  }
+});
+
+test('un document qui ne se convertit pas est signalé, sans interrompre le traitement des autres', { skip: !python && 'Python avec pypdf introuvable' }, () => {
+  const folder = caseFolder();
+  try {
+    const run = runPipeline(python, folder, 'present', ['--ocr-missing', 'continue'], ['scanne.pdf']);
+    assert.equal(run.code, 0);
+    assert.deepEqual(run.failed, [{ file: 'scanne.pdf', reason: 'MinerU failed with exit code 1 : Conversion arrêtée : fictif' }]);
+    assert.equal(run.converted.length, 3);
+    assert.equal(run.scanned.length, 2);
+    assert.match(run.scanned[0], /^texte-[0-9a-f]{16}\.md$/);
+    assert.match(run.scanned[1], /^recu-[0-9a-f]{16}\.md$/);
+    assert.doesNotMatch(run.stderr, /All conversions failed/);
+  } finally {
+    fs.rmSync(folder.root, { recursive: true, force: true });
+  }
+});
+
+test('si aucun document ne se convertit, le pipeline se termine normalement et liste chaque échec', { skip: !python && 'Python avec pypdf introuvable' }, () => {
+  const folder = caseFolder();
+  try {
+    const run = runPipeline(python, folder, 'present', ['--ocr-missing', 'continue'], ['scanne.pdf', 'texte.pdf', 'recu.png']);
+    assert.equal(run.code, 0);
+    assert.equal(run.failed.length, 3);
+    assert.deepEqual(run.failed.map((failure) => failure.file).sort(), ['photos/recu.png', 'scanne.pdf', 'texte.pdf'].sort());
+    assert.deepEqual(run.scanned, []);
+    assert.doesNotMatch(run.stderr, /All conversions failed|pipeline aborted/);
   } finally {
     fs.rmSync(folder.root, { recursive: true, force: true });
   }

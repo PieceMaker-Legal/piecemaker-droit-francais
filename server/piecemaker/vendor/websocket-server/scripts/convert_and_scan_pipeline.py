@@ -17,6 +17,7 @@ Progress Format:
     PROGRESS:CONVERT:percentage:current:total    (Phase 1: Converting documents)
     PROGRESS:SCAN:percentage:current:total       (Phase 2: Scanning for PII)
     MAPPING:<json>                               (merged case mapping, written to the database by PieceMaker)
+    CONVERSION_FAILED:<json>                     ({"file", "reason"} per document that could not be converted; the run continues)
 
 Persistent Output Structure:
     {output_dir}/
@@ -29,8 +30,8 @@ created in a private temporary directory, merged into the case mapping sent
 back on stdout, then removed automatically. No mapping file is written.
 
 Exit Codes:
-    0: Success (at least one file fully processed)
-    1: No file could be fully converted and scanned
+    0: Run finished; documents that could not be converted are reported, never abort the run
+    1: Scans ran but none could be merged
 """
 
 import sys
@@ -132,7 +133,7 @@ def wait_for_worker_ready(
     if proc is None:
         return False
 
-    import select
+    import queue
     import threading
     progress_context["event"] = threading.Event()
 
@@ -174,24 +175,32 @@ def wait_for_worker_ready(
     stderr_thread = threading.Thread(target=_stream_stderr, daemon=True)
     stderr_thread.start()
 
+    ready_outcomes = queue.Queue()
+
+    def _read_until_ready():
+        for line in proc.stdout:
+            if line.strip() == "READY":
+                ready_outcomes.put(True)
+                return
+        ready_outcomes.put(False)
+
+    threading.Thread(target=_read_until_ready, daemon=True).start()
+
     start = time.time()
     while time.time() - start < timeout:
         if proc.poll() is not None:
             print(f"⚠️  Scanner worker exited prematurely (exit {proc.returncode})", file=sys.stderr)
             return False
 
-        # TextIOWrapper does not reliably distinguish EAGAIN from EOF when its
-        # descriptor is toggled to non-blocking mode. select() keeps the stream
-        # blocking and reads only after a complete line is available.
         try:
-            readable, _, _ = select.select([proc.stdout], [], [], 0.1)
-            line = proc.stdout.readline() if readable else ""
-        except (IOError, OSError):
-            line = ""
+            outcome = ready_outcomes.get(timeout=0.1)
+        except queue.Empty:
+            continue
 
-        if line.strip() == "READY":
+        if outcome:
             print("✅ Scanner worker ready (models loaded)")
             return True
+        break
 
     # Timeout
     print("⚠️  Scanner worker timed out waiting for READY", file=sys.stderr)
@@ -299,33 +308,55 @@ class PipelineResources:
                 self.scan_workspace.cleanup()
 
 
+def _source_digest(source: str, case_root: str) -> str:
+    resolved = Path(source).resolve()
+    try:
+        key = resolved.relative_to(Path(case_root).resolve()).as_posix()
+    except ValueError:
+        key = resolved.as_posix()
+    return hashlib.sha256(unicodedata.normalize("NFC", key).encode("utf-8")).hexdigest()[:16]
+
+
+def markdown_stems_for_batch(input_files: List[str], case_root: str) -> Dict[str, str]:
+    return {
+        source: f"{Path(source).stem[:80]}-{_source_digest(source, case_root)}"
+        for source in input_files
+    }
+
+
 def convert_file(
     input_file: str,
     output_dir: str,
     engine: Optional[str] = None,
-) -> Tuple[bool, Optional[str]]:
+    output_name: Optional[str] = None,
+) -> Tuple[bool, Optional[str], Optional[str]]:
     """Run smart_converter.py subprocess to convert a file to Markdown with real-time output streaming.
 
     Args:
         input_file: Path to input document
         output_dir: Directory for output markdown
         engine: Conversion engine (auto/markitdown/mineru)
+        output_name: Markdown file stem, defaults to the input stem
 
     Returns:
-        (success, md_path): Tuple of success flag and path to generated .md file
+        (success, md_path, reason): success flag, path to generated .md file, and on
+        failure the last diagnostic line of the converter
     """
     script_dir = Path(__file__).parent
     converter_script = script_dir / "smart_converter.py"
 
     if not converter_script.exists():
         print(f"❌ smart_converter.py not found at {converter_script}", file=sys.stderr)
-        return False, None
+        return False, None, "smart_converter.py introuvable"
 
     # Build command
     cmd = [sys.executable, str(converter_script), input_file, "-o", output_dir]
 
     if engine:
         cmd.extend(["--engine", engine])
+
+    if output_name:
+        cmd.extend(["--output-name", output_name])
 
     try:
         # Run converter with real-time output streaming
@@ -342,6 +373,7 @@ def convert_file(
         os.set_blocking(process.stderr.fileno(), False)
 
         return_code = None
+        last_error = ""
         while return_code is None:
             # Check if process has finished
             return_code = process.poll()
@@ -361,6 +393,8 @@ def convert_file(
                     if not line:
                         break
                     print(line, end="", file=sys.stderr, flush=True)
+                    if line.strip():
+                        last_error = line.strip()
 
             except (IOError, OSError):
                 pass
@@ -376,29 +410,31 @@ def convert_file(
                 print(remaining_stdout, end="", flush=True)
             if remaining_stderr:
                 print(remaining_stderr, end="", file=sys.stderr, flush=True)
+                remaining_lines = [line.strip() for line in remaining_stderr.splitlines() if line.strip()]
+                if remaining_lines:
+                    last_error = remaining_lines[-1]
         except subprocess.TimeoutExpired:
             pass
 
         if return_code != 0:
             print(f"⚠️  Conversion failed with exit code {return_code}", file=sys.stderr)
-            return False, None
+            return False, None, last_error or f"code de sortie {return_code}"
 
         # Determine generated .md file path
-        input_stem = Path(input_file).stem
-        md_path = Path(output_dir) / f"{input_stem}.md"
+        md_path = Path(output_dir) / f"{output_name or Path(input_file).stem}.md"
 
         if not md_path.exists():
             print(f"⚠️  Expected output file not found: {md_path}", file=sys.stderr)
-            return False, None
+            return False, None, "fichier Markdown absent"
 
-        return True, str(md_path)
+        return True, str(md_path), None
 
     except subprocess.TimeoutExpired:
         print(f"❌ Conversion timeout (>10 minutes): {input_file}", file=sys.stderr)
-        return False, None
+        return False, None, "délai dépassé (10 minutes)"
     except Exception as e:
         print(f"❌ Conversion error: {e}", file=sys.stderr)
-        return False, None
+        return False, None, str(e)
 
 
 def read_mapping_seed() -> Dict:
@@ -2135,11 +2171,13 @@ def run_pipeline(resources: PipelineResources):
     print(f"   Engine: {args.engine}")
     print()
 
+    markdown_stems = markdown_stems_for_batch(input_files, state_case_root)
+
     # What is left to do, decided before anything runs: the scanner worker loads
     # ~1.2GB of GLiNER2-PII weights, so it must only start when at least one
     # file actually needs a PII scan.
     def markdown_path(input_file: str) -> Path:
-        return Path(args.output) / f"{Path(input_file).stem}.md"
+        return Path(args.output) / f"{markdown_stems[input_file]}.md"
 
     mineru_ready = args.engine == "mineru" or (args.engine == "auto" and mineru_available())
 
@@ -2193,6 +2231,7 @@ def run_pipeline(resources: PipelineResources):
     md_files = []
     md_sources = {}
     convert_success_count = 0
+    failed_documents = []
 
     for i, input_file in enumerate(input_files, start=1):
         print_progress("CONVERT", i, len(input_files))
@@ -2215,10 +2254,11 @@ def run_pipeline(resources: PipelineResources):
         if without_ocr:
             print("   ⚠️  Scanned document converted without OCR (MinerU not installed): text layer only")
 
-        success, md_path = convert_file(
+        success, md_path, reason = convert_file(
             input_file,
             args.output,
             engine="markitdown" if without_ocr else args.engine,
+            output_name=markdown_stems[input_file],
         )
 
         if success and md_path:
@@ -2230,13 +2270,19 @@ def run_pipeline(resources: PipelineResources):
             )
             convert_success_count += 1
         else:
-            print(f"   ❌ Conversion failed, skipping...")
+            failure = {"file": case_relative_name(input_file), "reason": reason or "conversion échouée"}
+            failed_documents.append(failure)
+            print(f"CONVERSION_FAILED:{json.dumps(failure, ensure_ascii=False)}", flush=True)
+            print(f"   ❌ Conversion failed, skipping: {failure['reason']}")
 
         print()
 
-    if not md_files:
-        print("❌ All conversions failed — pipeline aborted", file=sys.stderr)
-        return 1
+    if failed_documents:
+        print(
+            f"⚠️  {len(failed_documents)} document(s) non converti(s) : le traitement continue avec les autres",
+            file=sys.stderr,
+        )
+        print()
 
     print(
         f"✅ Phase 1 complete: {convert_success_count}/{len(input_files)} files converted"

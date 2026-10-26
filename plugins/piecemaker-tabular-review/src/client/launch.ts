@@ -1,5 +1,5 @@
 import type { Draft, Provider, ReviewDetail, RowRequest, TemplateColumn } from '../shared.js';
-import { COLUMN_FORMATS, hasActions, REVIEW_FOLDER } from '../shared.js';
+import { COLUMN_FORMATS, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, REVIEW_FOLDER } from '../shared.js';
 import type { App, View } from './app.js';
 import { basename, confirmDialog, errorMessage, escapeHtml, toast } from './dom.js';
 import { openDocumentsDrawer } from './documents-drawer.js';
@@ -8,6 +8,7 @@ import type { ModelOption } from './host.js';
 import { nextSort, sortBy, sortButton } from './ordering.js';
 import type { SortState } from './ordering.js';
 import { openQuestionsDrawer } from './questions-drawer.js';
+import { selectMenu } from './select-menu.js';
 
 const PROVIDERS: { value: Provider; label: string }[] = [
   { value: 'claude', label: 'Claude' },
@@ -26,6 +27,8 @@ function filenamePreview(templateName: string, title: string): string {
 
 export function createLaunchView(app: App, draft: Draft, onBack: () => void): View {
   const { project, title } = draft;
+  const initialProvider = draft.provider ?? DEFAULT_PROVIDER;
+  const initialModel = draft.model ?? DEFAULT_MODEL[initialProvider];
   const element = document.createElement('div');
   element.className = 'ptr-launch';
   element.innerHTML = `
@@ -42,8 +45,8 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
     </div>
     <div class="ptr-launch-bar">
       <div class="ptr-launch-controls">
-        <label class="ptr-bar-field"><span class="ptr-bar-label">IA</span><select class="ptr-select" data-provider>${PROVIDERS.map((provider) => `<option value="${provider.value}">${provider.label}</option>`).join('')}</select></label>
-        <label class="ptr-bar-field"><span class="ptr-bar-label">Modèle</span><select class="ptr-select" data-model></select></label>
+        <div class="ptr-bar-field"><span class="ptr-bar-label">IA</span>${selectMenu('IA', 'provider', initialProvider, PROVIDERS)}</div>
+        <div class="ptr-bar-field"><span class="ptr-bar-label">Modèle</span>${selectMenu('Modèle', 'model', initialModel, [{ value: '', label: 'Chargement…' }], true)}</div>
         <label class="ptr-bar-field"><span class="ptr-bar-label" title="Sessions simultanées">En parallèle</span><select class="ptr-select" data-concurrency>${[1, 2, 3, 4, 5, 6, 8].map((value) => `<option value="${value}"${value === 3 ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
         <span data-model-warning></span>
         <span class="ptr-spacer"></span>
@@ -53,8 +56,6 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
     </div>`;
 
   const $ = <T extends HTMLElement>(selector: string) => element.querySelector<T>(selector)!;
-  const providerSelect = $<HTMLSelectElement>('[data-provider]');
-  const modelSelect = $<HTMLSelectElement>('[data-model]');
   const concurrencySelect = $<HTMLSelectElement>('[data-concurrency]');
 
   let columns: TemplateColumn[] = [...draft.columns];
@@ -64,7 +65,9 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
   let protectedProject = true;
   let models: { options: ModelOption[]; cheapest: string } = { options: [], cheapest: '' };
   let launching = false;
-  let preferredModel = draft.model ?? '';
+  let provider = initialProvider;
+  let model = initialModel;
+  let preferredModel = initialModel;
 
   const isSorting = () => hasActions(columns);
 
@@ -96,9 +99,9 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
 
   function renderFooter() {
     $('[data-filename]').textContent = `${REVIEW_FOLDER}/${filenamePreview(templateName, title)}`;
-    $<HTMLButtonElement>('[data-launch]').disabled = launching || !columns.length || !rows.length || !modelSelect.value;
+    $<HTMLButtonElement>('[data-launch]').disabled = launching || !columns.length || !rows.length || !model;
     $<HTMLButtonElement>('[data-launch]').textContent = launching ? 'Lancement…' : 'Lancer l’analyse tabulaire';
-    const costly = modelSelect.value && modelSelect.value !== models.cheapest;
+    const costly = model && model !== models.cheapest;
     $('[data-model-warning]').innerHTML = costly
       ? `<span class="ptr-warning" title="Chaque ligne lance une session IA complète (${rows.length} session${rows.length > 1 ? 's' : ''}).">Modèle coûteux en tokens</span>`
       : '';
@@ -116,19 +119,37 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
   }
 
   async function loadProviderModels() {
-    const provider = providerSelect.value as Provider;
-    modelSelect.innerHTML = '<option value="">Chargement…</option>';
+    const requestedProvider = provider;
+    models = { options: [{ value: '', label: 'Chargement…' }], cheapest: '' };
+    model = '';
+    renderProviderMenus();
     try {
-      models = await loadModels(provider);
+      models = await loadModels(requestedProvider);
     } catch {
-      models = { options: provider === 'claude' ? [{ value: 'haiku', label: 'Haiku' }] : [], cheapest: provider === 'claude' ? 'haiku' : '' };
+      models = { options: requestedProvider === 'claude' ? [{ value: 'haiku', label: 'Haiku' }] : [], cheapest: requestedProvider === 'claude' ? 'haiku' : '' };
     }
-    modelSelect.innerHTML = models.options.length
-      ? models.options.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === models.cheapest ? ' selected' : ''}>${escapeHtml(option.label)}${option.value === models.cheapest ? ' (par défaut, économique)' : ''}</option>`).join('')
-      : '<option value="">Aucun modèle disponible</option>';
-    if (models.options.some((option) => option.value === preferredModel)) modelSelect.value = preferredModel;
+    if (provider !== requestedProvider) return;
+    model = models.options.some((option) => option.value === preferredModel) ? preferredModel : models.cheapest;
     preferredModel = '';
+    renderProviderMenus();
     renderFooter();
+  }
+
+  function renderProviderMenus() {
+    const providerMenu = selectMenu('IA', 'provider', provider, PROVIDERS);
+    element.querySelector<HTMLElement>('[data-choice-menu="provider"]')?.replaceWith(createMenu(providerMenu));
+    const options = models.options.map((option) => ({
+      ...option,
+      label: option.value === models.cheapest ? `${option.label} (par défaut, économique)` : option.label,
+    }));
+    const modelMenu = selectMenu('Modèle', 'model', model, options, !model || !options.length);
+    element.querySelector<HTMLElement>('[data-choice-menu="model"]')?.replaceWith(createMenu(modelMenu));
+  }
+
+  function createMenu(markup: string): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = markup.trim();
+    return wrapper.firstElementChild as HTMLElement;
   }
 
   function addQuestions() {
@@ -161,14 +182,13 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
 
   async function launch() {
     if (!columns.length || !rows.length) return;
-    const provider = providerSelect.value as Provider;
-    const model = modelSelect.value;
     const costly = model !== models.cheapest;
     const sessions = rows.length;
+    const modelLabel = models.options.find((option) => option.value === model)?.label ?? model;
     const confirmed = await confirmDialog(
       app.root,
       'Lancer l’analyse tabulaire ?',
-      `<p>Vous allez lancer <strong>${sessions} session${sessions > 1 ? 's' : ''} IA</strong> (une par ligne) avec <strong>${escapeHtml(provider)} — ${escapeHtml(modelSelect.selectedOptions[0]?.textContent ?? model)}</strong>, chacune pour ${columns.length} question${columns.length > 1 ? 's' : ''}.</p>
+      `<p>Vous allez lancer <strong>${sessions} session${sessions > 1 ? 's' : ''} IA</strong> (une par ligne) avec <strong>${escapeHtml(provider)} — ${escapeHtml(modelLabel)}</strong>, chacune pour ${columns.length} question${columns.length > 1 ? 's' : ''}.</p>
        <p class="ptr-muted">Les documents sont copiés dans « ${escapeHtml(REVIEW_FOLDER)}/docs » du dossier et le résultat est enregistré dans « ${escapeHtml(filenamePreview(templateName, title))} ». Les sessions passent par le proxy d’anonymisation et n’apparaissent pas dans l’historique des sessions.</p>
        ${costly ? '<div class="ptr-warning">Attention : ce modèle consomme beaucoup de tokens.</div>' : ''}`,
       'Lancer',
@@ -215,12 +235,23 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
       persist();
       return;
     }
-    if (target === providerSelect) void loadProviderModels();
-    else if (target === modelSelect) renderFooter();
   });
 
   element.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    const option = target.closest<HTMLButtonElement>('[data-choice-option]');
+    if (option && !option.disabled) {
+      if (option.dataset.choiceOption === 'provider') {
+        provider = option.dataset.value as Provider;
+        preferredModel = '';
+        void loadProviderModels();
+      } else {
+        model = option.dataset.value ?? '';
+        renderProviderMenus();
+        renderFooter();
+      }
+      return;
+    }
     const sortKey = target.closest<HTMLElement>('[data-sort]')?.dataset.sort;
     if (target.closest('[data-back]')) onBack();
     else if (target.closest('[data-launch]')) void launch();
@@ -242,7 +273,6 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
   });
 
   renderAll();
-  if (draft.provider) providerSelect.value = draft.provider;
   void loadProviderModels();
   void app.rpc<{ projects: string[] }>('GET', '/protected-projects').then((result) => {
     protectedProject = result.projects.includes(project);

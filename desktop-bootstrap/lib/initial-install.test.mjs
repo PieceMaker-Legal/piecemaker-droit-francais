@@ -1,11 +1,22 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+
+const require = createRequire(import.meta.url);
+const hasElectronBuilder = (() => {
+  try {
+    require.resolve('builder-util-runtime');
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 test('Windows initial bootstrap uses the verified installer and embedded Node without sources or a system toolchain', { skip: process.platform !== 'win32' }, t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-bootstrap-test-'));
@@ -54,7 +65,7 @@ function Invoke-WebRequest {
 function Wait-Process { param($Id) }
 function Get-ItemProperty {
   param($LiteralPath, $ErrorAction)
-  if ($LiteralPath -ne 'HKCU:\Software\be668065-da35-5797-91d0-75b4725f56f1') { throw "Unexpected registry key: $LiteralPath" }
+  if ($LiteralPath -ne 'HKCU:\\Software\\be668065-da35-5797-91d0-75b4725f56f1') { throw "Unexpected registry key: $LiteralPath" }
   if ($env:FIXTURE_INSTALL_LOCATION) { return @{ InstallLocation = $env:FIXTURE_INSTALL_LOCATION } }
   return $null
 }
@@ -120,7 +131,7 @@ test('the Windows bootstrap shows the Légifrance guide after the first install 
   assert.match(script, /if \(\$args -notcontains '--no-launch'\)/);
 });
 
-test('the Windows bootstrap looks for the app where electron-builder installs it', async () => {
+test('the Windows bootstrap looks for the app where electron-builder installs it', { skip: !hasElectronBuilder && 'electron-builder is not installed' }, async () => {
   const { UUID } = await import('builder-util-runtime');
   const { sanitizeFileName } = await import('builder-util/out/filename.js');
   const script = fs.readFileSync(new URL('../install.ps1', import.meta.url), 'utf8');

@@ -22,7 +22,8 @@ type DossierCase = { path: string; name: string; location: string; registered: b
 type CaseOriginalPiece = {
   name: string;
   path: string;
-  status: 'ready' | 'awaiting-scan' | 'not-converted';
+  status: 'ready' | 'awaiting-scan' | 'not-converted' | 'conversion-failed';
+  conversionFailure?: { reason: string; failedAt: string } | null;
 };
 type StampingPieceResult = {
   pieceNumber: number;
@@ -52,6 +53,7 @@ const STATUS_LABEL: Record<CaseOriginalPiece['status'], string> = {
   ready: '',
   'awaiting-scan': 'Non scannée',
   'not-converted': 'Non convertie',
+  'conversion-failed': 'Échec de conversion',
 };
 
 const STYLE_TEXT = `
@@ -77,6 +79,7 @@ const STYLE_TEXT = `
   .pm-tampon__name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .pm-tampon__name strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pm-tampon__name small { color: hsl(var(--muted-foreground, 220 9% 46%)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pm-tampon__name .pm-tampon__reason { color: hsl(var(--destructive, 0 72% 51%)); }
   .pm-tampon__tag { flex: 0 0 auto; font-size: 11px; color: hsl(var(--muted-foreground, 220 9% 46%)); }
   .pm-tampon__move { flex: 0 0 auto; width: 44px; height: 52px; border: 0; background: transparent; color: inherit; font-size: 18px; cursor: pointer; }
   .pm-tampon__move:disabled { opacity: .25; cursor: default; }
@@ -477,6 +480,9 @@ function renderRow(state: ViewState, piece: CaseOriginalPiece): HTMLElement {
   name.append(element('strong', undefined, piece.name));
   const folder = piece.path.slice(0, Math.max(0, piece.path.length - piece.name.length)).replace(/\/$/, '');
   if (folder) name.append(element('small', undefined, folder));
+  if (piece.status === 'conversion-failed' && piece.conversionFailure?.reason) {
+    name.append(element('small', 'pm-tampon__reason', piece.conversionFailure.reason));
+  }
   toggle.append(element('span', 'pm-tampon__number', selected ? String(index + 1) : ''), name);
   if (STATUS_LABEL[piece.status]) toggle.append(element('span', 'pm-tampon__tag', STATUS_LABEL[piece.status]));
   row.append(toggle);
