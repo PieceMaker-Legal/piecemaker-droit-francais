@@ -1,7 +1,7 @@
 import { AlertTriangle, LogIn } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { VibeInstallNotice } from '@/piecemaker/vibe/VibeInstallNotice';
+import { MistralAccountSettings } from '@/piecemaker/mistral-sdk/MistralAccountSettings';
 import { Badge, Button, LLMProviderLogo } from '@/shared/ui';
 import type { AgentProvider, ProviderAuthStatus, ProviderAuthSubscriptionOverride } from '@/shared/types';
 
@@ -108,6 +108,7 @@ function SubscriptionOverrideNotice({ override }: SubscriptionOverrideNoticeProp
 export default function AccountContent({ agent, authStatus, onLogin }: AccountContentProps) {
   const { t } = useTranslation('settings');
   const config = agentConfig[agent];
+  if (agent === 'mistral') return <MistralAccountSettings />;
 
   return (
     <div className="space-y-6">
@@ -162,8 +163,6 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
           {!authStatus.loading && authStatus.subscriptionOverride && (
             <SubscriptionOverrideNotice override={authStatus.subscriptionOverride} />
           )}
-
-          {agent === 'mistral' && !authStatus.loading && <VibeInstallNotice onInstalled={onLogin} />}
 
           {authStatus.method !== 'api_key' && (
             <div className="border-t border-border/50 pt-4">

@@ -5,6 +5,20 @@ import {
 } from '@/shared/authToken';
 import { IS_PLATFORM } from '@/shared/utils';
 import { readVoiceConfig, voiceConfigHeaders } from '@/shared/voiceConfig';
+import type { MistralSdkAuthStatus } from '@/shared/types';
+
+async function mistralSdkResponse<T>(response: Response): Promise<T> {
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error?.message || payload.error || 'Connexion Mistral indisponible.');
+  return payload as T;
+}
+
+export const mistralSdkApi = {
+  status: () => authenticatedFetch('/api/piecemaker/mistral-sdk/auth').then(mistralSdkResponse<MistralSdkAuthStatus>),
+  login: () => authenticatedFetch('/api/piecemaker/mistral-sdk/auth/login', { method: 'POST' }).then(mistralSdkResponse<{ url: string }>),
+  logout: () => authenticatedFetch('/api/piecemaker/mistral-sdk/auth/logout', { method: 'POST' }).then(mistralSdkResponse<MistralSdkAuthStatus>),
+  check: () => authenticatedFetch('/api/piecemaker/mistral-sdk/auth/check', { method: 'POST' }).then(mistralSdkResponse<{ ok: boolean; response: string }>),
+};
 
 // Headers are a plain record rather than the full `HeadersInit` union so the
 // defaults below can be merged with a caller's headers by spreading.

@@ -39,6 +39,7 @@ import { startRemoteAccess } from './remote/index.js';
 import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
 import { createVibeInstallRouter } from './vibe-install.js';
 import { vibeStreamingCommand } from './mistral-streaming.js';
+import { createMistralSdkAuthRouter } from './mistral-sdk/index.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -128,6 +129,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createOpenPanelsRouter(piecemakerHome()));
   router.use(remoteRouter);
   router.use(createVibeInstallRouter());
+  router.use(createMistralSdkAuthRouter());
   return router;
 }
 export type { PieceMakerRuntimeStatus };
