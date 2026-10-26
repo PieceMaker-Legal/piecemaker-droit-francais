@@ -56,6 +56,5 @@ export function portablePluginRuntime({ applicationRoot, moduleRoots = [], nodeP
     claudePath: null,
     codexPath: null,
     codexLauncher,
-    vibePath: null,
   };
 }

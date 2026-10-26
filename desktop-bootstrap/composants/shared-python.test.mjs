@@ -4,7 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createHost, installRuntimeComponents, scriptsDirectory } from './install.mjs';
-import { sharedPythonMarker, sharedPythonFingerprint, sharedPythonEntrypoints } from './shared-python.mjs';
+import { sharedPythonMarker, sharedPythonFingerprint, sharedPythonEntrypoints, sharedPythonProbe, requirementsForPlatform } from './shared-python.mjs';
+
+test('the managed Python runtime no longer installs or probes the replaced Vibe agent', async () => {
+  for (const [platform, arch] of [['win32', 'x64'], ['darwin', 'arm64']]) {
+    assert.doesNotMatch(await fs.readFile(requirementsForPlatform(platform, arch), 'utf8'), /^mistral-vibe==/m);
+  }
+  assert.doesNotMatch(sharedPythonProbe, /vibe/);
+});
 
 for (const [platform, arch] of [['win32', 'x64'], ['darwin', 'arm64']]) {
   test(`${platform}: managed releases replace legacy Python and reuse the verified runtime without pip`, async t => {

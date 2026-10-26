@@ -469,7 +469,7 @@ export const api = {
   providers: {
     capabilities: () => get('/api/providers/capabilities'),
     authStatus: (provider: string) =>
-      get(`/api/providers/${encodeURIComponent(provider)}/auth/status`),
+      get(provider === 'mistral' ? '/api/piecemaker/mistral-sdk/provider-status' : `/api/providers/${encodeURIComponent(provider)}/auth/status`),
     claudeSettingsPermissions: () => get('/api/providers/claude/settings-permissions'),
 
     models: (provider: string) => get(`/api/providers/${provider}/models`),

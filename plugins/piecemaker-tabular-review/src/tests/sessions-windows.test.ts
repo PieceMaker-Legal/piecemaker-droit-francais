@@ -25,16 +25,16 @@ const NPM_SHIM = [
   '  SET PATHEXT=%PATHEXT:;.JS;=;%',
   ')',
   '',
-  'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\vibe-exemple\\cli.js" %*',
+  'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\codex-exemple\\cli.js" %*',
   '',
 ].join('\r\n');
 
-const FAKE_VIBE = `
+const FAKE_CODEX = `
 let input = '';
 process.stdin.on('data', (chunk) => { input += chunk; });
 process.stdin.on('end', () => {
-  const text = input.includes('Bonjour') && process.argv.includes('--trust') ? 'Réponse exemple' : 'entrée inattendue';
-  process.stdout.write(JSON.stringify([{ type: 'message', role: 'assistant', content: [{ type: 'text', text }] }]));
+  const text = input.includes('Bonjour') && process.argv.includes('--sandbox') ? 'Réponse exemple' : 'entrée inattendue';
+  process.stdout.write(text);
 });
 `;
 
@@ -46,16 +46,16 @@ describe('lancement des CLI installées par npm sous Windows', () => {
   it.skipIf(process.platform !== 'win32')('lance un shim .cmd appelé par son nom nu', async () => {
     const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-shim-'));
     directories.push(bin);
-    fs.mkdirSync(path.join(bin, 'node_modules', 'vibe-exemple'), { recursive: true });
-    fs.writeFileSync(path.join(bin, 'node_modules', 'vibe-exemple', 'cli.js'), FAKE_VIBE);
-    fs.writeFileSync(path.join(bin, 'vibe.cmd'), NPM_SHIM);
+    fs.mkdirSync(path.join(bin, 'node_modules', 'codex-exemple'), { recursive: true });
+    fs.writeFileSync(path.join(bin, 'node_modules', 'codex-exemple', 'cli.js'), FAKE_CODEX);
+    fs.writeFileSync(path.join(bin, 'codex.cmd'), NPM_SHIM);
     const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'));
     environment.Path = bin;
     environment.PIECEMAKER_HOME = bin;
 
     const session = openSession({
-      provider: 'mistral',
-      model: 'mistral-medium-3.5',
+      provider: 'codex',
+      model: 'gpt-5',
       mode: 'inline',
       system: 'Consigne "exemple" & suite\nsur deux lignes',
       readableDirectory: bin,

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 
 import JSZip from 'jszip';
@@ -13,6 +14,14 @@ import { createCitationTurn } from './citation-turn.js';
 import { formatPieceTitle } from './piece-title.js';
 
 const block = (citations: unknown[]) => `<CITATIONS>${JSON.stringify(citations)}</CITATIONS>`;
+
+test('citation parsing repairs a single object without failing the chat or history', () => {
+  const { parseCitationsWithDiagnostics } = createRequire(import.meta.url)('../vendor/piecemaker-plugin/scripts/lib/citations.cjs');
+  const citation = { ref: 1, doc_id: 'notes.md', quote: 'Exemple fictif.' };
+  const result = parseCitationsWithDiagnostics(`<CITATIONS>${JSON.stringify(citation)}</CITATIONS>`);
+  assert.equal(result.normalizedBlock, block([citation]));
+  assert.equal(result.diagnostics.repaired, true);
+});
 
 async function fixture(t: test.TestContext) {
   const cwd = await mkdtemp(path.join(os.tmpdir(), 'pm-citations-'));

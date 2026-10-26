@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { AppError, asyncHandler } from '@/shared/utils.js';
+import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
 import { mistralSdkAuth } from './auth.service.js';
 
@@ -13,6 +13,13 @@ export function createMistralSdkAuthRouter(service = mistralSdkAuth) {
   };
   router.get('/mistral-sdk/auth', asyncHandler(async (request, response) => {
     response.json(service.status(userId(request)));
+  }));
+  router.get('/mistral-sdk/provider-status', asyncHandler(async (request, response) => {
+    const status = service.status(userId(request));
+    response.json(createApiSuccessResponse({
+      provider: 'mistral', installed: true, authenticated: status.authenticated,
+      email: null, method: 'browser', error: status.error,
+    }));
   }));
   router.post('/mistral-sdk/auth/login', asyncHandler(async (request, response) => {
     response.json({ url: await service.startLogin(userId(request)) });

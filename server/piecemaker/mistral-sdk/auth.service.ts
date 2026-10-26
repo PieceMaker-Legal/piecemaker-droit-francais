@@ -1,9 +1,9 @@
-import { Mistral } from '@mistralai/mistralai';
-
 import { credentialsDb } from '@/modules/database/index.js';
 import { AppError } from '@/shared/utils.js';
 
 import { browserLogin } from '../../../scripts/piecemaker/mistral-sdk/browser-login.mjs';
+
+import { createMistralClient } from './client.js';
 
 const CREDENTIAL_TYPE = 'mistral_sdk';
 
@@ -62,18 +62,24 @@ export function createMistralSdkAuthService(
       return this.status(userId);
     },
 
-    async checkConnection(userId: number) {
+    createClient(userId: number) {
       const apiKey = key(userId);
       if (!apiKey) throw new AppError('Connectez-vous à Mistral depuis les paramètres.', { statusCode: 401, code: 'MISTRAL_NOT_CONNECTED' });
-      const client = new Mistral({ apiKey, timeoutMs: 60000 });
+      return createMistralClient(apiKey);
+    },
+
+    async checkConnection(userId: number) {
+      const connection = this.createClient(userId);
       try {
-        const response = await client.chat.complete({
+        const response = await connection.client.chat.complete({
           model: 'mistral-small-latest', maxTokens: 32,
           messages: [{ role: 'user', content: 'Réponds uniquement : Connexion Mistral réussie.' }],
         });
         return { ok: true, response: response.choices?.[0]?.message?.content ?? '' };
       } catch {
         throw new AppError('Mistral n’a pas accepté la demande de vérification. Reconnectez votre compte.', { statusCode: 502, code: 'MISTRAL_CHECK_FAILED' });
+      } finally {
+        await connection.close();
       }
     },
   };

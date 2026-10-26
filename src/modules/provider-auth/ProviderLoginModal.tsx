@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 
 import { StandaloneShell } from '@/modules/standalone-shell';
+import { MistralAccountSettings } from '@/piecemaker/mistral-sdk/MistralAccountSettings';
 import { IS_PLATFORM } from '@/shared/utils';
 import type { LLMProvider } from '@/shared/types';
 
@@ -55,10 +56,6 @@ const getProviderCommand = ({
     return IS_PLATFORM ? 'codex login --device-auth' : 'codex login';
   }
 
-  if (provider === 'mistral') {
-    return 'vibe --setup';
-  }
-
   if (provider === 'opencode') {
     return 'opencode auth login';
   }
@@ -70,7 +67,7 @@ const getProviderTitle = (provider: LLMProvider) => {
   if (provider === 'claude') return 'Claude CLI Login';
   if (provider === 'cursor') return 'Cursor CLI Login';
   if (provider === 'codex') return 'Codex CLI Login';
-  if (provider === 'mistral') return 'Mistral Vibe Login';
+  if (provider === 'mistral') return 'Connexion Mistral';
   if (provider === 'opencode') return 'OpenCode CLI Login';
   return 'Claude CLI Login';
 };
@@ -115,7 +112,9 @@ export default function ProviderLoginModal({
         </div>
 
         <div className="flex-1 overflow-hidden">
-          <StandaloneShell project={DEFAULT_PROJECT_FOR_EMPTY_SHELL} command={command} onComplete={handleComplete} minimal={true} />
+          {provider === 'mistral'
+            ? <div className="h-full overflow-y-auto p-4"><MistralAccountSettings onConnected={() => handleComplete(0)} /></div>
+            : <StandaloneShell project={DEFAULT_PROJECT_FOR_EMPTY_SHELL} command={command} onComplete={handleComplete} minimal={true} />}
         </div>
       </div>
     </div>

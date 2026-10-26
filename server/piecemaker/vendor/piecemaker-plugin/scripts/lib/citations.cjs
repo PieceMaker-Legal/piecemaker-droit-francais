@@ -220,7 +220,7 @@ function parseCitationsWithDiagnostics(text) {
   }
   return {
     citations: parsed.map(normalizeCitation).filter((c) => c !== null),
-    normalizedBlock: repaired ? `${CITATIONS_OPEN}${raw}${CITATIONS_CLOSE_TAG}` : undefined,
+    normalizedBlock: repaired ? `${CITATIONS_OPEN_TAG}${raw}${CITATIONS_CLOSE_TAG}` : undefined,
     diagnostics: { hasBlock: true, rawLength: raw.length, error: null, repaired },
   };
 }

@@ -124,7 +124,7 @@ function locate(command) {
  */
 function serverRuntime(appRoot, portableRuntime) {
   if (portableRuntime) {
-    return { nodePath: null, applicationRoot: null, claudePath: null, codexPath: null, codexLauncher: null, vibePath: null };
+    return { nodePath: null, applicationRoot: null, claudePath: null, codexPath: null, codexLauncher: null };
   }
   const codexLauncher = path.join(appRoot, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
   return {
@@ -133,7 +133,6 @@ function serverRuntime(appRoot, portableRuntime) {
     claudePath: locate('claude'),
     codexPath: locate('codex'),
     codexLauncher: fs.existsSync(codexLauncher) ? codexLauncher : null,
-    vibePath: locate('vibe'),
   };
 }
 

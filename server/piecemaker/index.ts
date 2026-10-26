@@ -6,7 +6,6 @@ import type { Router } from 'express';
 
 import { getConnection, projectsDb } from '@/modules/database/index.js';
 import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
-import { setVibeLaunchCommand } from '@/modules/providers/list/mistral/mistral-runtime.provider.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
@@ -32,14 +31,13 @@ import { createExternalFileRouter, createFileLinksRouter } from './file-links.js
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
 import { createInstitutionalTermsRouter, openInstitutionalTerms } from './institutional-terms.js';
 import { installModelDiscovery } from './model-discovery/index.js';
+import { discoverCodexModels } from './model-discovery/codex-catalog.js';
 import { startProjectRegistry } from './project-registry.js';
 import { createFolderHistory } from './folder-history/history.js';
 import { createOpenPanelRequestsRouter, createOpenPanelsRouter } from './open-panels.js';
 import { startRemoteAccess } from './remote/index.js';
 import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
-import { createVibeInstallRouter } from './vibe-install.js';
-import { vibeStreamingCommand } from './mistral-streaming.js';
-import { createMistralSdkAuthRouter } from './mistral-sdk/index.js';
+import { createMistralSdkAuthRouter, createMistralTabularBridge, installMistralSdk } from './mistral-sdk/index.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -81,13 +79,13 @@ const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
 installCodexPlanRuntime(providerRuntimeService);
-setVibeLaunchCommand(vibeStreamingCommand);
+installMistralSdk(providerRegistry.resolveProvider('mistral'), piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection) });
 const library = await openLibrary(piecemakerHome(), applicationRoot, () => projectsDb.getProjectPaths().map((row) => row.project_path));
 installLibrarySkillVisibility(providerSkillsService, library.store);
 installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
 installSessionProxyRuntime(providerRuntimeService, anonymizer, () => [...projectsDb.getProjectPaths(), ...projectsDb.getArchivedProjectPaths()]);
-installModelDiscovery(providerRegistry);
+installModelDiscovery(providerRegistry, { discoverers: { codex: discoverCodexModels } });
 const timesheet = createTimesheetBackend(piecemakerHome());
 const knowledge = createKnowledgeBackend(applicationRoot);
 const remoteRouter = startRemoteAccess(applicationRoot);
@@ -98,6 +96,7 @@ startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => 
 });
 
 const localRouter = express.Router();
+localRouter.use(createMistralTabularBridge({ ensureProxy, runInProject: (id, run) => anonymizer.runInProject(id, run) }));
 localRouter.use(knowledge.localRouter);
 localRouter.use(createOpenPanelRequestsRouter());
 localRouter.use(createTabularReviewLocalRouter({
@@ -128,7 +127,6 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createShellEnvironmentRouter(shellEnvironment));
   router.use(createOpenPanelsRouter(piecemakerHome()));
   router.use(remoteRouter);
-  router.use(createVibeInstallRouter());
   router.use(createMistralSdkAuthRouter());
   return router;
 }
