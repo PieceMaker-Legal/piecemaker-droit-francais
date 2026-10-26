@@ -1,15 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { mistralSdkApi } from '@/shared/api';
 import type { MistralSdkAuthStatus } from '@/shared/types';
 import { Badge, Button, LLMProviderLogo } from '@/shared/ui';
 
-export function MistralAccountSettings() {
+export function MistralAccountSettings({ onConnected }: { onConnected?: () => void } = {}) {
+  const notified = useRef(false);
   const [status, setStatus] = useState<MistralSdkAuthStatus | null>(null);
   const [busy, setBusy] = useState<'login' | 'logout' | 'check' | null>(null);
   const [error, setError] = useState('');
   const [loginUrl, setLoginUrl] = useState('');
   const [checkResult, setCheckResult] = useState('');
+
+  useEffect(() => {
+    if (status?.authenticated && !notified.current) {
+      notified.current = true;
+      onConnected?.();
+    } else if (status && !status.authenticated) notified.current = false;
+  }, [status, onConnected]);
 
   useEffect(() => {
     let active = true;

@@ -79,7 +79,6 @@ test('builds every plugin, installs them, repairs, removes and keeps user choice
       claudePath: null,
       codexPath: null,
       codexLauncher: null,
-      vibePath: null,
       electronRunAsNode: true,
     };
     const portableData = path.join(work, 'portable-data');

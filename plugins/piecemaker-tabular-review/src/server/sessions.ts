@@ -6,14 +6,13 @@ import path from 'node:path';
 
 import type { Provider } from '../shared.js';
 import { PIECEMAKER_HOME, PLUGIN_HOME, UserError } from './paths.js';
-import { vibeExecutable } from './vibe-executable.js';
+import { mistralConversation } from './mistral-sdk.js';
 
 type Runtime = {
   nodePath?: string;
   claudePath?: string | null;
   codexPath?: string | null;
   codexLauncher?: string | null;
-  vibePath?: string | null;
 };
 
 export type SessionRequest = {
@@ -30,14 +29,6 @@ const INLINE_TIMEOUT_MS = 10 * 60_000;
 const PATH_TIMEOUT_MS = 25 * 60_000;
 const MAX_OUTPUT = 5 * 1024 * 1024;
 const PATH_TOOLS = 'Read,Grep,Glob';
-const VIBE_PATH_TOOLS = ['read_file', 'grep'];
-const VIBE_MODELS = JSON.stringify({
-  'mistral-medium-3.5': { name: 'mistral-vibe-cli-latest', provider: 'mistral', alias: 'mistral-medium-3.5', display_name: 'Mistral Medium 3.5', thinking: 'medium' },
-  'glm-5.3': { name: 'zai-glm-5-3', provider: 'mistral', alias: 'glm-5.3', display_name: 'Z.ai GLM 5.3', thinking: 'medium' },
-  'glm-5.2': { name: 'zai-glm-5-2', provider: 'mistral', alias: 'glm-5.2', display_name: 'Z.ai GLM 5.2', thinking: 'medium' },
-  'mistral-small': { name: 'mistral-small-latest', provider: 'mistral', alias: 'mistral-small', display_name: 'Mistral Small' },
-});
-
 let runtimeCache: Runtime | null = null;
 
 function runtime(): Runtime {
@@ -200,34 +191,6 @@ function codexCommand(request: SessionRequest, directory: string): Command {
   return { command: codexPath || 'codex', args, outputFile };
 }
 
-function vibeCommand(request: SessionRequest, directory: string): Command {
-  const tools = request.mode === 'path' ? VIBE_PATH_TOOLS : ['re:^$'];
-  return {
-    command: vibeExecutable(runtime().vibePath, { environment: request.environment }),
-    args: [
-      '-p',
-      '--output', 'json',
-      '--trust',
-      '--workdir', directory,
-      '--auto-approve',
-      ...tools.flatMap((tool) => ['--enabled-tools', tool]),
-      ...(request.mode === 'path' ? ['--add-dir', request.readableDirectory] : []),
-    ],
-    environment: {
-      VIBE_ACTIVE_MODEL: request.model,
-      VIBE_MODELS,
-      VIBE_SESSION_LOGGING__ENABLED: 'false',
-      VIBE_INCLUDE_PROJECT_CONTEXT: 'false',
-    },
-  };
-}
-
-function vibeAnswer(stdout: string): string {
-  const messages = JSON.parse(stdout) as { type?: string; role?: string; content?: { type?: string; text?: string }[] }[];
-  const answer = messages.filter((message) => message.type === 'message' && message.role === 'assistant').at(-1);
-  return (answer?.content ?? []).filter((part) => part.type === 'text').map((part) => part.text ?? '').join('');
-}
-
 type Pending = {
   resolve(output: string): void;
   reject(error: Error): void;
@@ -319,9 +282,9 @@ function claudeConversation(request: SessionRequest): Conversation {
   };
 }
 
-function runTurn(request: SessionRequest, input: string, name: 'codex' | 'mistral'): Promise<string> {
+function runTurn(request: SessionRequest, input: string, name: 'codex'): Promise<string> {
   const directory = workDirectory();
-  const { command, args, outputFile, environment } = name === 'codex' ? codexCommand(request, directory) : vibeCommand(request, directory);
+  const { command, args, outputFile, environment } = codexCommand(request, directory);
   return new Promise((resolve, reject) => {
     if (request.signal.aborted) {
       reject(new Error('Annulée.'));
@@ -361,14 +324,6 @@ function runTurn(request: SessionRequest, input: string, name: 'codex' | 'mistra
         finish(new Error(`Session ${name} terminée en erreur (code ${code}) : ${(stderr || stdout).trim().slice(-600)}`));
         return;
       }
-      if (name === 'mistral') {
-        try {
-          finish(null, vibeAnswer(stdout));
-        } catch {
-          finish(new Error(`Réponse illisible de la session mistral : ${(stderr || stdout).trim().slice(-600)}`));
-        }
-        return;
-      }
       let output = stdout;
       if (outputFile && fs.existsSync(outputFile)) output = fs.readFileSync(outputFile, 'utf8');
       finish(null, output);
@@ -387,7 +342,7 @@ export function codexTranscript(system: string, turns: { user: string; assistant
   return parts.join('\n\n');
 }
 
-function transcriptConversation(request: SessionRequest, name: 'codex' | 'mistral'): Conversation {
+function transcriptConversation(request: SessionRequest, name: 'codex'): Conversation {
   const turns: { user: string; assistant?: string }[] = [];
   let closed = false;
   return {
@@ -405,5 +360,6 @@ function transcriptConversation(request: SessionRequest, name: 'codex' | 'mistra
 }
 
 export function openSession(request: SessionRequest): Conversation {
+  if (request.provider === 'mistral') return mistralConversation(request);
   return request.provider === 'claude' ? claudeConversation(request) : transcriptConversation(request, request.provider);
 }

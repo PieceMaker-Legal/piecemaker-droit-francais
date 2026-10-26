@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 export const sharedPythonRequirements = fileURLToPath(new URL('./windows-requirements.txt', import.meta.url));
 export const sharedPythonMarker = '.piecemaker-shared-python.json';
-export const sharedPythonProbe = 'import importlib; [importlib.import_module(name) for name in ["markitdown", "pypdf", "torch", "gliner2", "mineru", "mineru_llama_cpp", "onnxruntime", "vibe.cli.launcher", "mistralai_vibe_local_harness.runtime", "requests", "dotenv", "truststore"]]';
+export const sharedPythonProbe = 'import importlib; [importlib.import_module(name) for name in ["markitdown", "pypdf", "torch", "gliner2", "mineru", "mineru_llama_cpp", "onnxruntime", "requests", "dotenv", "truststore"]]';
 export const sharedPythonEntrypoints = `
 import os,stat,sys
 from pathlib import Path
