@@ -97,6 +97,22 @@ test('la vigueur est une condition appréciée à la date que chaque texte dési
   assert.match(texts(await verify(EXAMPLE_CODE.replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', date: { valeur: '2025-06-14' },")), 'erreur').join('\n'), /objectifs\[0\]\.date : clé inconnue date/);
 });
 
+test('en drafting, la version d’un texte s’apprécie à la date du jour, sauf date précisée dans valeurs', async () => {
+  const drafting = EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:");
+  const on = (code: string, today: string) => verifyReasoning({ code, cwd: '/dossier-fictif', connectors: connectors(), reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(), today });
+  const undated = drafting.replaceAll(", au: 'date_de_conclusion_du_contrat'", '');
+  const current = await on(undated, '2026-10-26');
+  assert.doesNotMatch(texts(current, 'manque').join('\n'), /applicabilité dans le temps non établie/);
+  assert.equal(at(current.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
+  assert.match(texts(await on(undated, '2015-06-14'), 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.vigueur : version non applicable : elle n’était pas en vigueur au 2015-06-14 \(date du jour\)/);
+  assert.doesNotMatch(texts(await on(drafting, '2015-06-14'), 'manque').join('\n'), /version non applicable/);
+  const unsigned = drafting.replace(/date_de_conclusion_du_contrat: \{ valeur: '2024-01-15', preuve: \[[^\n]*\] \},/, 'date_de_conclusion_du_contrat: { valeur: null },');
+  assert.notEqual(unsigned, drafting);
+  const open = await on(unsigned, '2026-10-26');
+  assert.doesNotMatch(texts(open, 'manque').join('\n'), /renseigne cette date|version non applicable/);
+  assert.equal(at(open.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
+});
+
 test('l’applicabilité d’un texte est un terme : ses conditions, sourcées et prouvées, décident si le texte s’applique', async () => {
   const unjustified = await verify(EXAMPLE_CODE.replace(", applicabilite: 'applicabilité_de_l_article_1231_5' }] },", " }] },"));
   assert.match(texts(unjustified, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.applicabilite : applicabilité non établie : ajoute applicabilite:/);

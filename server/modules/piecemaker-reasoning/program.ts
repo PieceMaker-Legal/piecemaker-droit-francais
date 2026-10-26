@@ -83,6 +83,7 @@ export async function verifyReasoning(input: {
   online?: boolean;
   emit?: (entry: ReasoningLogEntry) => void;
   simulation?: Trial['faits'];
+  today?: string;
 }): Promise<Verification> {
   const { connectors, cwd } = input;
   const issues: ReasoningIssue[] = [];
@@ -283,9 +284,10 @@ export async function verifyReasoning(input: {
     }
     return sides.get(name)!.every((value) => value === true);
   };
-  const dateOf = (basis: Basis) => { const value = basis.vigueur?.au ? valueOf(basis.vigueur.au) : null; return typeof value === 'string' ? value : null; };
+  const today = input.today ?? new Date().toISOString().slice(0, 10);
+  const dateOf = (basis: Basis, check?: BasisCheck) => { const value = basis.vigueur?.au ? valueOf(basis.vigueur.au) : null; return typeof value === 'string' ? value : reasoning.qualification === 'drafting' && check?.kind === 'texte' ? today : null; };
   const inForceAt = (basis: Basis, check: BasisCheck): ReasoningValue => {
-    const date = dateOf(basis);
+    const date = dateOf(basis, check);
     if (date && check.from) return inForce(date, check.from, check.to);
     return check.kind === 'piece' && !basis.vigueur?.au ? true : null;
   };
@@ -410,11 +412,11 @@ export async function verifyReasoning(input: {
     const check = basisChecks.get(place);
     const source = node(annotated, place);
     const title = String(source?.titre ?? basis.source);
-    const date = dateOf(basis);
+    const date = dateOf(basis, check);
     if (source && check?.kind && check.kind !== 'decision') source.en_vigueur = date && check.from ? inForce(date, check.from, check.to) : null;
     const au = basis.vigueur?.au;
-    if (date && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${date} (${au}) ; cite la version en vigueur à cette date`, `${title} : la version citée n’était pas en vigueur au ${day(date)}.`, `#source:${basis.source}`);
-    if (check?.kind === 'texte' && !au) add('manque', `${place}.vigueur`, 'applicabilité dans le temps non établie : ajoute vigueur: { debut, fin, au: \'nom_de_date\' }, la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable', `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
+    if (date && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${date} (${au && typeof valueOf(au) === 'string' ? au : 'date du jour'}) ; cite la version en vigueur à cette date`, `${title} : la version citée n’était pas en vigueur au ${day(date)}.`, `#source:${basis.source}`);
+    if (check?.kind === 'texte' && !au && !drafting) add('manque', `${place}.vigueur`, 'applicabilité dans le temps non établie : ajoute vigueur: { debut, fin, au: \'nom_de_date\' }, la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable', `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
     else if (check?.kind === 'texte' && !date) add('manque', `${place}.vigueur`, `${au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`, `valeurs.${au}`);
     return title;
   };
