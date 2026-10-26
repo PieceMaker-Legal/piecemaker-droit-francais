@@ -2,13 +2,19 @@ import { createHash } from 'node:crypto';
 import { open, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
+import { parseReasoningDocument } from '../modules/piecemaker-reasoning/document.js';
+
 export type DocxModelReference = { path: string; sha256: string };
 export const modelHash = (code: string) => createHash('sha256').update(code).digest('hex');
+export function parseModel(code: string) {
+  if (/^\s*(?:\{|export\s+default)/u.test(code)) throw new TypeError('Ancien modèle JS : transcris-le dans .piecemaker/raisonnement.yaml, puis prépare à nouveau le document.');
+  return parseReasoningDocument(code).value;
+}
 
 export function validateModelReference(value: unknown): asserts value is DocxModelReference {
   if (!value || typeof value !== 'object' || !('path' in value) || typeof value.path !== 'string' || !value.path || !('sha256' in value) || typeof value.sha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(value.sha256)) throw new TypeError('Référence de modèle invalide.');
   const file = value.path;
-  if (path.posix.isAbsolute(file) || path.win32.isAbsolute(file) || file.includes('\\') || file.split('/').some((part) => !part || part === '.' || part === '..' || /^\.env(?:\.|$)/iu.test(part)) || !file.endsWith('.js')) throw new TypeError('Chemin de modèle relatif au dossier requis.');
+  if (path.posix.isAbsolute(file) || path.win32.isAbsolute(file) || file.includes('\\') || file.split('/').some((part) => !part || part === '.' || part === '..' || /^\.env(?:\.|$)/iu.test(part)) || !file.endsWith('.yaml')) throw new TypeError('Chemin de modèle relatif au dossier requis.');
 }
 
 export async function readReferencedModel(cwd: string, reference: DocxModelReference) {
@@ -16,7 +22,7 @@ export async function readReferencedModel(cwd: string, reference: DocxModelRefer
   if (!cwd) throw new TypeError('Le dossier PieceMaker est requis pour retrouver le modèle externe.');
   const root = await realpath(cwd);
   const file = await realpath(path.resolve(root, reference.path));
-  if (!file.startsWith(root + path.sep) || !file.endsWith('.js') || path.relative(root, file).split(path.sep).some((part) => /^\.env(?:\.|$)/iu.test(part))) throw new TypeError('Le modèle externe doit rester dans le dossier PieceMaker.');
+  if (!file.startsWith(root + path.sep) || !file.endsWith('.yaml') || path.relative(root, file).split(path.sep).some((part) => /^\.env(?:\.|$)/iu.test(part))) throw new TypeError('Le modèle externe doit rester dans le dossier PieceMaker.');
   const handle = await open(file, 'r');
   try {
     if (!(await handle.stat()).isFile()) throw new TypeError('Le modèle externe doit être un fichier.');

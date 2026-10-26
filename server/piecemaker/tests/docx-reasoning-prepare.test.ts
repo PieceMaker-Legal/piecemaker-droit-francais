@@ -207,7 +207,7 @@ test('refuse les champs Word et les ruptures dans le paragraphe d’une valeur',
 });
 
 test('une valeur calculée ne peut pas être liée comme une valeur lue dans le DOCX', async () => {
-  const calculated = code.replace('prix: { valeur: null }', 'prix: { formule: { somme: [1, 2] }, valeur: null }');
+  const calculated = code.replace('  prix:\n    valeur: null', '  prix:\n    formule: { somme: [1, 2] }\n    valeur: null');
   await assert.rejects(prepareDocxReasoning(await plainFixture(), calculated, links), /Variable absente, calculée ou fixée/u);
 });
 

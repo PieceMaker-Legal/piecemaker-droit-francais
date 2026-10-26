@@ -180,10 +180,10 @@ test('GET rejects an unknown project or unsafe path and reports a missing file',
 test('GET tracks the external model independently and PUT preserves a document with an unavailable model', async () => {
   await withDocxServer(async (baseUrl, projectId, projectRoot) => {
     await mkdir(path.join(projectRoot, '.piecemaker'));
-    const modelPath = path.join(projectRoot, '.piecemaker', 'raisonnement.js');
+    const modelPath = path.join(projectRoot, '.piecemaker', 'raisonnement.yaml');
     await writeFile(modelPath, code);
     const bytes = await embedDocxReasoning(await fixture(), {
-      code, bindings, clauses, reference: { path: '.piecemaker/raisonnement.js', sha256: modelHash(code) },
+      code, bindings, clauses, reference: { path: '.piecemaker/raisonnement.yaml', sha256: modelHash(code) },
     });
     const filePath = 'scenario-externe.docx';
     await writeFile(path.join(projectRoot, filePath), bytes);

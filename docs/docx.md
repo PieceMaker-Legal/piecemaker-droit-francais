@@ -81,7 +81,7 @@ au fichier de raisonnement du dossier.
 ## Préparer un document lié et choisir le modèle de référence
 
 Pour les nouveaux documents, **le modèle reste dans le dossier PieceMaker**,
-par défaut `.piecemaker/raisonnement.js`. Le DOCX ne contient pas son code : il
+par défaut `.piecemaker/raisonnement.yaml`, seul format lu. Le DOCX ne contient pas son code : il
 conserve un chemin relatif au dossier, une empreinte SHA-256 de la version liée,
 les balises des valeurs et clauses et leurs empreintes de texte.
 
@@ -112,11 +112,11 @@ fichier JSON, puis utilise :
 pm docx preparer --fichier brouillon.docx --liens liens.json --sortie document-lie.docx
 pm docx verifier --fichier document-lie.docx
 pm docx comparer --fichier document-lie.docx
-pm docx extraire --fichier document-lie.docx --sortie modele-extrait.js
+pm docx extraire --fichier document-lie.docx --sortie modele-extrait.yaml
 ```
 
 Les chemins sont relatifs au dossier de la session ; PieceMaker doit fonctionner.
-`preparer` lit le modèle du dossier par défaut (`--modele autre.js` possible),
+`preparer` lit le modèle du dossier par défaut (`--modele autre.yaml` possible),
 ajoute les balises et la référence sans modifier le texte ni le modèle et ouvre
 le résultat dans le volet Fichiers. Les paragraphes doivent être contigus, dans un même parent ;
 chaque valeur est cherchée uniquement dans sa clause. Une sélection absente ou
