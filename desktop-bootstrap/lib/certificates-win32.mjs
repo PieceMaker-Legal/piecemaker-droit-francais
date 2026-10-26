@@ -31,6 +31,8 @@ async function exists(target) {
   }
 }
 
+const SECURITY_MODULE_IMPORT = 'Import-Module "$PSHOME/Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1" -ErrorAction Stop';
+
 const AUTHORITY_PROVIDER = 'Microsoft Enhanced RSA and AES Cryptographic Provider';
 const RSA_PARAMETERS = ['Modulus', 'Exponent', 'D', 'P', 'Q', 'DP', 'DQ', 'InverseQ'];
 const JWK_FIELDS = { Modulus: 'n', Exponent: 'e', D: 'd', P: 'p', Q: 'q', DP: 'dp', DQ: 'dq', InverseQ: 'qi' };
@@ -72,7 +74,7 @@ function removeFromPersonalStore(thumbprints) {
   if (targets.length === 0) return;
   capture('powershell.exe', [
     '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-    '-Command', targets.map((thumbprint) => `Remove-Item -ErrorAction SilentlyContinue ${quote(`Cert:\\CurrentUser\\My\\${thumbprint}`)}`).join('; '),
+    '-Command', SECURITY_MODULE_IMPORT + '; ' + targets.map((thumbprint) => `Remove-Item -ErrorAction SilentlyContinue ${quote(`Cert:\\CurrentUser\\My\\${thumbprint}`)}`).join('; '),
   ]);
 }
 
@@ -89,6 +91,7 @@ export async function generateCertificates() {
 
   const passphrase = crypto.randomBytes(24).toString('base64url');
   const script = [
+    SECURITY_MODULE_IMPORT,
     '$ErrorActionPreference = "Stop"',
     `$password = ConvertTo-SecureString -String ${quote(passphrase)} -Force -AsPlainText`,
     '$expiry = (Get-Date).AddDays(825)',
@@ -126,7 +129,7 @@ async function readThumbprints() {
 export function isCaTrusted() {
   const result = capture('powershell.exe', [
     '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-    '-Command', `if (Test-Path ${quote(thumbprintsPath)}) { $t = (Get-Content ${quote(thumbprintsPath)} | ConvertFrom-Json).ca; if (Test-Path "Cert:\\CurrentUser\\Root\\$t") { "yes" } else { "no" } } else { "no" }`,
+    '-Command', `${SECURITY_MODULE_IMPORT}; if (Test-Path ${quote(thumbprintsPath)}) { $t = (Get-Content ${quote(thumbprintsPath)} | ConvertFrom-Json).ca; if (Test-Path "Cert:\\CurrentUser\\Root\\$t") { "yes" } else { "no" } } else { "no" }`,
   ]);
   return result.stdout.trim() === 'yes';
 }
@@ -135,6 +138,7 @@ export function importPublisherCertificate(certFile = publisherCertPath) {
   const result = capture('powershell.exe', [
     '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
     '-Command', [
+      SECURITY_MODULE_IMPORT,
       '$ErrorActionPreference = "Stop"',
       `if (-not (Test-Path ${quote(certFile)})) { "missing"; exit 0 }`,
       `$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(${quote(certFile)})`,
@@ -161,6 +165,7 @@ export async function trustCertificateAuthority() {
   mustCapture('powershell.exe', [
     '-NoProfile', '-ExecutionPolicy', 'Bypass',
     '-Command', [
+      SECURITY_MODULE_IMPORT,
       '$ErrorActionPreference = "Stop"',
       ...retired,
       `Import-Certificate -FilePath ${quote(caCertPath)} -CertStoreLocation Cert:\\CurrentUser\\Root | Out-Null`,
@@ -177,6 +182,7 @@ export async function signApplication(appDir) {
   importPublisherCertificate();
   const executable = path.join(appDir, `${PRODUCT_NAME}.exe`);
   const status = powershell([
+    SECURITY_MODULE_IMPORT,
     `$sig = Get-AuthenticodeSignature -FilePath ${quote(executable)}`,
     'if (-not $sig.SignerCertificate) { "NotSigned" } else { [string]$sig.Status }',
   ].join('; '));

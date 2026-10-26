@@ -87,7 +87,7 @@ jobs:
       - name: Verify shared Python and native uninstall contracts
         shell: bash
         run: |
-          node --experimental-vm-modules --test desktop-bootstrap/lib/native-uninstall.test.mjs desktop-bootstrap/composants/shared-python.test.mjs desktop-bootstrap/overlay/electron-piecemaker/shared-python-update.test.mjs
+          node --experimental-vm-modules --test desktop-bootstrap/lib/native-uninstall.test.mjs desktop-bootstrap/lib/certificates-win32.test.mjs desktop-bootstrap/composants/shared-python.test.mjs desktop-bootstrap/overlay/electron-piecemaker/shared-python-update.test.mjs
           python -m unittest discover -s server/piecemaker/vendor/mcp/legifrance/tests -p test_shared_runtime.py
       - name: Configure installer signature
         shell: bash
