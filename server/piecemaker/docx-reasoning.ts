@@ -4,7 +4,8 @@ import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import type { Element as XmlElement, Node as XmlNode } from '@xmldom/xmldom';
 import JSZip from 'jszip';
 
-import { parseLiteral, printLiteral } from '../modules/piecemaker-reasoning/format.js';
+import { printReasoningDocument } from '../modules/piecemaker-reasoning/document.js';
+import { parseLiteral } from '../modules/piecemaker-reasoning/format.js';
 import { verifyReasoning } from '../modules/piecemaker-reasoning/program.js';
 import { isLegalDate } from '../modules/piecemaker-reasoning/legal-period.js';
 
@@ -266,7 +267,7 @@ export async function verifyDocxReasoning(input: Uint8Array, options: Omit<Param
       return tag in state.text ? { kind: 'piece' as const, title: tag, text: state.text[tag] } : null;
     },
   };
-  const verification = await verifyReasoning({ ...options, connectors, code: printLiteral(parsed) });
+  const verification = await verifyReasoning({ ...options, connectors, code: printReasoningDocument(parsed) });
   if (model.version === 2) await resolveReferencedModel(options.cwd, model.reference);
   return { status: 'testé' as const, changed: [], context: [], verification };
 }

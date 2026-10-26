@@ -6,11 +6,15 @@ import test from 'node:test';
 
 import Database from 'better-sqlite3';
 
-import { EXAMPLE_CODE, EXAMPLE_SOURCES, createReasoningService, describeReasoning, verifyReasoning } from '../program.js';
+import { EXAMPLE_SOURCES, createReasoningService, describeReasoning, verifyReasoning as verifyYaml } from '../program.js';
 import type { ReasoningConnectors, SourceInfo } from '../program.js';
 import { addDuration, evaluate } from '../engine.js';
 import { parseLiteral } from '../format.js';
 import type { Formula } from '../format.js';
+import { parseReasoningDocument, printReasoningDocument } from '../document.js';
+import { EXAMPLE_LITERAL as EXAMPLE_CODE, yamlOf } from './fixtures.js';
+
+const verifyReasoning = (input: Parameters<typeof verifyYaml>[0]) => verifyYaml({ ...input, code: yamlOf(input.code) });
 
 const plain = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
@@ -57,7 +61,7 @@ test('l’exemple fictif est à établir et désigne les faits décisifs', async
   assert.equal(at(result.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
   const described = describeReasoning(result);
   assert.match(described, /^0 erreur\(s\), \d+ manque\(s\)\./);
-  assert.match(described, /MANQUE \d+ — grève › si\[0\] › l_une\[0\] \(ligne (\d+)\)\n  ligne \1 : \{ grève_nationale: vrai \},\n  grève_nationale décide de la réponse/);
+  assert.match(described, /MANQUE \d+ — grève › si\[0\] › l_une\[0\] \(ligne (\d+)\)\n  ligne \1 : - grève_nationale: true\n  grève_nationale décide de la réponse/);
   assert.match(described, /MANQUE \d+ — qualification\n  absent du fichier : clé à ajouter au premier niveau de l’objet\n  raisonnement non qualifié/);
   assert.doesNotMatch(described, /Réponses|décisifs :|statut/);
 });
@@ -73,7 +77,7 @@ test('une citation à la ponctuation près est validée et remplacée par l’or
   const comma = await verify(EXAMPLE_CODE.replace('`Sauf inexécution définitive`', '`Sauf, inexécution définitive`'));
   assert.equal(at(comma.annotated, 'pénalité_encourue.si[1].selon[0].corrigee'), true);
   assert.equal(at(comma.annotated, 'pénalité_encourue.si[1].selon[0].citation'), 'Sauf inexécution définitive');
-  assert.match(comma.code, /'Sauf inexécution définitive'/);
+  assert.match(comma.code, /citation: Sauf inexécution définitive\n/);
   const wrong = await verify(EXAMPLE_CODE.replace('`Sauf inexécution définitive`', '`Sauf exécution partielle`'));
   assert.match(texts(wrong, 'erreur').join('\n'), /pénalité_encourue\.si\[1\]\.selon\[0\] : citation introuvable/);
 });
@@ -176,8 +180,8 @@ test('une alerte écartée par l’avocat n’est plus émise, et revient si l�
 test('le service lit le fichier du dossier, corrige les citations, enregistre les décisions de l’avocat', async (t) => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'raisonnement-'));
   fs.mkdirSync(path.join(folder, '.piecemaker'));
-  const file = path.join(folder, '.piecemaker', 'raisonnement.js');
-  fs.writeFileSync(file, EXAMPLE_CODE.replace('`Sauf inexécution définitive`', '`sauf inexécution définitive`'));
+  const file = path.join(folder, '.piecemaker', 'raisonnement.yaml');
+  fs.writeFileSync(file, yamlOf(EXAMPLE_CODE.replace('`Sauf inexécution définitive`', '`sauf inexécution définitive`')));
   const db = new Database(':memory:');
   db.exec('CREATE TABLE projects(project_id TEXT PRIMARY KEY, project_path TEXT);');
   db.prepare('INSERT INTO projects VALUES(?,?)').run('fictif', folder);
@@ -187,7 +191,7 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   assert.equal(service.read(folder).code, '');
   const text = await service.command(folder, { commande: 'verifier' });
   assert.match(text, /^\d+ erreur\(s\), \d+ manque\(s\)/);
-  assert.match(fs.readFileSync(file, 'utf8'), /'Sauf inexécution définitive'/);
+  assert.match(fs.readFileSync(file, 'utf8'), /citation: Sauf inexécution définitive\n/);
   const issue = service.read(folder).issues.find((entry) => entry.kind === 'manque')!;
   assert.equal((await service.dismiss(folder, issue.id)).dismissed.length, 1);
   assert.equal((await service.dismiss(folder, issue.id, true)).dismissed.length, 0);
@@ -200,6 +204,8 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   await assert.rejects(service.simulate(folder, { prix: 'cher' }), /faits/);
   fs.rmSync(file);
   await assert.rejects(service.verify(folder), /Aucun raisonnement/);
+  fs.writeFileSync(path.join(folder, '.piecemaker', 'raisonnement.js'), EXAMPLE_CODE);
+  await assert.rejects(service.verify(folder), /raisonnement\.js n’est plus lu : transcris-le dans \.piecemaker\/raisonnement\.yaml/);
 });
 
 test('le test se déroule ligne par ligne : sources, pièces, faits, termes, hypothèses, réponse', async () => {
@@ -364,7 +370,9 @@ test('en contrat, les faits sont des hypothèses : pas de manque de preuve, mais
 
 test('une clause n’a pas à porter sa vigueur ; le fichier est réécrit dans l’ordre canonique', async () => {
   assert.doesNotMatch(texts(await verify(EXAMPLE_CODE.replaceAll(", vigueur: { debut: '2024-01-15', fin: null }", '')), 'manque').join('\n'), /vigueur non renseignée/);
-  const shuffled = EXAMPLE_CODE.replace('{\n  objectifs:', '{\n  hypotheses: [],\n  objectifs:');
+  const example = parseReasoningDocument(yamlOf(EXAMPLE_CODE)).value as Record<string, unknown>;
+  const shuffled = printReasoningDocument({ hypotheses: example.hypotheses, ...example });
+  assert.ok(shuffled.startsWith('hypotheses:'));
   const result = await verify(shuffled);
   assert.ok(result.code.indexOf('objectifs:') < result.code.indexOf('pénalité_encourue:'));
   assert.ok(result.code.indexOf('pénalité_encourue:') < result.code.indexOf('applicabilité_de_l_article_1231_5:'));

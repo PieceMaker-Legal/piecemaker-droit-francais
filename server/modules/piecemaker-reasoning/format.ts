@@ -56,6 +56,35 @@ export type ControlSlot = keyof typeof CONTROLS;
 export const basisControls = (basis: Basis) => [basis.applicabilite, basis.validite].filter((name): name is string => Boolean(name));
 const CONTROL_PURPOSE: Record<ControlSlot, string> = { applicabilite: 'établit que ce texte s’applique', decompte: 'établit le calcul du délai', validite: 'établit la validité de l’acte ou de la clause', prescription: 'établit que l’action n’est pas prescrite' };
 
+const KEY_HOMES: Record<string, string> = {
+  piece: 'une preuve ou un renvoi', citation: 'une preuve ou une source', source: 'une source de selon', vigueur: 'une source de selon', applicabilite: 'une source de selon', renvoi: 'une source de selon',
+  debut: 'vigueur', fin: 'vigueur', au: 'vigueur', preuve: 'un fondement ou une valeur', selon: 'une condition, un fondement ou une valeur', si: 'un terme ou un fondement', sauf: 'un terme',
+  l_une: 'une condition', delai: 'une condition', montant: 'une condition', decompte: 'une condition', de: 'un délai', a: 'un délai', au_plus: 'un délai ou un montant', au_moins: 'un délai ou un montant',
+  plus_de: 'un montant', moins_de: 'un montant', valeur: 'une valeur ou un montant', formule: 'une valeur', objectif: 'un objectif', obtenir: 'un objectif', écarter: 'un objectif', réduire: 'un objectif', augmenter: 'un objectif',
+  validite: 'une source de selon ou un objectif', prescription: 'un objectif', nom: 'une hypothèse', faits: 'une hypothèse', attendu: 'une hypothèse', true: 'une question établie', false: 'une question établie',
+};
+const ROOT_KEYS = ['qualification', 'objectifs', 'valeurs', 'hypotheses', 'acte'];
+const STRUCTURAL = new Set(['piece', 'citation', 'source', 'vigueur', 'applicabilite', 'renvoi', 'preuve', 'selon', 'si', 'sauf', 'l_une', 'delai', 'montant', 'decompte', 'au_plus', 'au_moins', 'plus_de', 'moins_de', 'valeur', 'formule', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'faits', 'attendu']);
+const folded = (key: string) => key.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const distance = (left: string, right: string) => {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) current[column] = Math.min(previous[column] + 1, current[column - 1] + 1, previous[column - 1] + (left[row - 1] === right[column - 1] ? 0 : 1));
+    previous = current;
+  }
+  return previous[right.length];
+};
+const near = (key: string, candidates: string[]) => candidates.find((candidate) => candidate !== key && distance(folded(key), folded(candidate)) <= (candidate.length >= 7 ? 2 : 1));
+export const unknownKey = (key: string, admitted: string[]) => {
+  const here = `admises ici : ${admitted.join(', ')}`;
+  const intended = near(key, admitted);
+  if (intended) return `clé inconnue ${key} : écris ${intended} (${here})`;
+  if (KEY_HOMES[key]) return `${key} n’a pas sa place ici : c’est une clé d’${KEY_HOMES[key]} ; vérifie son indentation (${here})`;
+  const elsewhere = near(key, Object.keys(KEY_HOMES));
+  return elsewhere ? `clé inconnue ${key} : ${elsewhere} est une clé d’${KEY_HOMES[elsewhere]} ; corrige le nom et vérifie l’indentation (${here})` : `clé inconnue ${key} (${here})`;
+};
+
 export class LiteralError extends Error {
   constructor(message: string, readonly line: number) { super(`ligne ${line} : ${message}`); }
 }
@@ -136,8 +165,8 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     if (!Array.isArray(raw)) { problem(path, 'liste attendue : [{ piece, citation }]'); return []; }
     return raw.flatMap((entry, index) => {
       const at = `${path}[${index}]`;
+      if (isObject(entry)) for (const key of Object.keys(entry)) if (!['piece', 'citation'].includes(key)) problem(`${at}.${key}`, unknownKey(key, ['piece', 'citation']));
       if (!isObject(entry) || !text(entry.piece) || !text(entry.citation)) { problem(at, '{ piece: chemin de la pièce, citation: passage exact } attendu'); return []; }
-      for (const key of Object.keys(entry)) if (!['piece', 'citation'].includes(key)) problem(`${at}.${key}`, `clé inconnue ${key}`);
       return [{ piece: entry.piece as string, citation: entry.citation as string }];
     });
   };
@@ -185,8 +214,8 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     if (!Array.isArray(raw)) { problem(path, 'liste attendue : [{ source, citation, vigueur }]'); return []; }
     return raw.flatMap((entry, index) => {
       const at = `${path}[${index}]`;
+      if (isObject(entry)) for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'validite', 'renvoi'].includes(key)) problem(`${at}.${key}`, key === 'contredit' ? CONTREDIT_REMOVED : unknownKey(key, ['source', 'citation', 'vigueur', 'applicabilite', 'validite', 'renvoi']));
       if (!isObject(entry) || !text(entry.source) || !text(entry.citation)) { problem(at, '{ source: identifiant du texte, de la décision ou chemin de la pièce, citation: passage exact } attendu'); return []; }
-      for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'validite', 'renvoi'].includes(key)) problem(`${at}.${key}`, key === 'contredit' ? CONTREDIT_REMOVED : `clé inconnue ${key}`);
       const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string, renvoi: targets(entry.renvoi, `${at}.renvoi`) };
       if (entry.applicabilite !== undefined) {
         const name = control('applicabilite', entry.applicabilite, `${at}.applicabilite`);
@@ -241,6 +270,8 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     const names = Object.keys(raw).filter((key) => !CONDITION_KEYS.has(key) && key !== 'contredit' && key !== 'preuve');
     const hasChoice = raw.l_une !== undefined;
     if (hasChoice === (names.length > 0)) { problem(path, hasChoice ? 'l_une ne porte pas de nom de condition : retire-le ou mets-le dans l’un des membres' : `${CONDITION_SHAPE} (exactement une clé hors ${[...CONDITION_KEYS].join(', ')})`); return []; }
+    const stray = names.filter((name) => STRUCTURAL.has(name) || near(name, [...CONDITION_KEYS]));
+    if (names.length > 1 && stray.length) { for (const name of stray) problem(`${path}.${name}`, unknownKey(name, [...CONDITION_KEYS])); return []; }
     if (names.length > 1) { problem(path, `une condition porte exactement une clé nom: true|false (trouvé : ${names.join(', ')}) ; ${CONDITION_SHAPE}`); return []; }
     const result: Condition = { selon: bases(raw.selon, `${path}.selon`) };
     if (!hasChoice) {
@@ -270,7 +301,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
 
   const foundation = (raw: unknown, path: string): Foundation[] => {
     if (!isObject(raw)) { problem(path, FOUNDATION_SHAPE); return []; }
-    for (const key of Object.keys(raw)) if (!['preuve', 'selon', 'si'].includes(key)) problem(`${path}.${key}`, key === 'contredit' ? CONTREDIT_REMOVED : `clé inconnue ${key} (admises : preuve, selon, si)`);
+    for (const key of Object.keys(raw)) if (!['preuve', 'selon', 'si'].includes(key)) problem(`${path}.${key}`, key === 'contredit' ? CONTREDIT_REMOVED : unknownKey(key, ['preuve', 'selon', 'si']));
     const result: Foundation = { preuve: refs(raw.preuve, `${path}.preuve`), selon: bases(raw.selon, `${path}.selon`), si: [] };
     if (!result.preuve.length && !result.selon.length) problem(path, FOUNDATION_SHAPE);
     if (raw.si !== undefined) {
@@ -292,7 +323,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
         if (verbs.length !== 1) { problem(at, `${verbs.length ? 'un seul verbe' : 'verbe manquant'} : ${OBJECTIVE_SHAPE}`); return; }
         const effet = entry[verbs[0]];
         if (typeof effet !== 'string' || !IDENTIFIER.test(effet)) { problem(`${at}.${verbs[0]}`, `${verbs[0]} : nom du terme ou du montant visé`); return; }
-        for (const field of Object.keys(entry)) if (!['objectif', ...verbs, 'validite', 'prescription'].includes(field)) problem(`${at}.${field}`, field === 'question' ? 'question s’appelle objectif : le but du client' : field === 'reponse' ? 'reponse est remplacée par le verbe : obtenir | écarter | réduire | augmenter: terme' : `clé inconnue ${field} (admises : objectif, ${Object.keys(VERBS).join(' | ')}, validite, prescription)`);
+        for (const field of Object.keys(entry)) if (!['objectif', ...verbs, 'validite', 'prescription'].includes(field)) problem(`${at}.${field}`, field === 'question' ? 'question s’appelle objectif : le but du client' : field === 'reponse' ? 'reponse est remplacée par le verbe : obtenir | écarter | réduire | augmenter: terme' : unknownKey(field, ['objectif', ...Object.keys(VERBS), 'validite', 'prescription']));
         const objective: Objective = { objectif: entry.objectif as string, effet, verbe: verbs[0] };
         for (const slot of ['validite', 'prescription'] as const) {
           if (entry[slot] === undefined) continue;
@@ -314,7 +345,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
         const at = `valeurs.${name}`;
         const computedOnly = isObject(entry) && entry.valeur === undefined && entry.formule !== undefined;
         if (!IDENTIFIER.test(name) || !isObject(entry) || !(computedOnly || typeof entry.valeur === 'number' || isDate(entry.valeur) || entry.valeur === null)) { problem(at, '{ valeur: \'AAAA-MM-JJ\', nombre ou null si le dossier ne la fixe pas, preuve: [{ piece, citation }] ou selon: [{ source, citation, vigueur }], formule } attendu'); continue; }
-        for (const field of Object.keys(entry)) if (!['valeur', 'preuve', 'selon', 'formule'].includes(field)) problem(`${at}.${field}`, field === 'contredit' ? CONTREDIT_REMOVED : `clé inconnue ${field} (admises : valeur, preuve, selon, formule)`);
+        for (const field of Object.keys(entry)) if (!['valeur', 'preuve', 'selon', 'formule'].includes(field)) problem(`${at}.${field}`, field === 'contredit' ? CONTREDIT_REMOVED : unknownKey(field, ['valeur', 'preuve', 'selon', 'formule']));
         const value: Value = { valeur: computedOnly ? null : entry.valeur as string | number | null, preuve: refs(entry.preuve, `${at}.preuve`), selon: bases(entry.selon, `${at}.selon`) };
         value.selon.forEach((basis, index) => { if (basis.validite) problem(`${at}.selon[${index}].validite`, 'la source d’une valeur est un texte : validite ne s’y place pas'); });
         if (entry.formule !== undefined) {
@@ -344,6 +375,9 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       });
       continue;
     }
+    const rootIntended = near(key, ROOT_KEYS);
+    if (rootIntended) { problem(key, `clé inconnue ${key} : écris ${rootIntended}`); continue; }
+    if (STRUCTURAL.has(key)) { problem(key, `${key} n’a pas sa place au premier niveau : c’est une clé d’${KEY_HOMES[key]} ; vérifie son indentation`); continue; }
     if (!IDENTIFIER.test(key) || RESERVED.has(key)) { problem(key, 'nom de terme invalide'); continue; }
     if (!isObject(raw)) { problem(key, 'un terme est { si: [...], sauf: [...] } ; une question établie est { true: [fondements], false: [fondements] }'); continue; }
     const rule = (raw.si !== undefined || raw.sauf !== undefined);
@@ -351,7 +385,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     if (rule && sided) { problem(key, `${key} mêle si/sauf et true/false : une clé est soit un terme (si, sauf), soit une question établie (true, false)`); continue; }
     const annotations = ['statut', 'decisif', 'erreurs', 'manques', 'en_jeu'];
     if (sided) {
-      for (const name of Object.keys(raw)) if (!SIDES.includes(name as Side) && !annotations.includes(name)) problem(`${key}.${name}`, `clé inconnue ${name} (admises : true, false)`);
+      for (const name of Object.keys(raw)) if (!SIDES.includes(name as Side) && !annotations.includes(name)) problem(`${key}.${name}`, unknownKey(name, [...SIDES]));
       const fondements: Record<Side, Foundation[]> = { true: [], false: [] };
       for (const side of SIDES) {
         const entries = raw[side];
@@ -363,7 +397,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       reasoning.terms.set(key, { si: [], sauf: [], fondements });
       continue;
     }
-    for (const name of Object.keys(raw)) if (!TERM_KEYS.has(name) && !annotations.includes(name)) problem(`${key}.${name}`, `clé inconnue ${name} (admises : si, sauf pour un terme ; true, false pour une question établie)`);
+    for (const name of Object.keys(raw)) if (!TERM_KEYS.has(name) && !annotations.includes(name)) problem(`${key}.${name}`, unknownKey(name, [...TERM_KEYS]));
     const list = (field: 'si' | 'sauf') => {
       const entries = raw[field];
       if (entries === undefined) return [];

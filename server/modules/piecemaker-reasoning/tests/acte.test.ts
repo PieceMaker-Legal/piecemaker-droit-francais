@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { EXAMPLE_CODE, EXAMPLE_SOURCES, verifyReasoning } from '../program.js';
+import { EXAMPLE_SOURCES, verifyReasoning } from '../program.js';
 import { markup, quotations, segments } from '../acte.js';
-import { parseLiteral } from '../format.js';
+import { parseReasoningDocument } from '../document.js';
+import { EXAMPLE_LITERAL as EXAMPLE_CODE, yamlOf } from './fixtures.js';
 
 const ACTE = `  acte: [
     { intitule: \`Faits\`, texte: [\`Le contrat stipule qu’« En cas de retard de livraison », une pénalité est due, et la marchandise a été livrée tardivement : « Livré le 14/06/2025 ».\`] },
@@ -16,7 +17,7 @@ const ACTE = `  acte: [
 const withActe = (acte: string) => EXAMPLE_CODE.replace(/\}\s*$/, `${acte}}\n`);
 
 const verify = (code: string) => verifyReasoning({
-  code, cwd: '/dossier-fictif',
+  code: yamlOf(code), cwd: '/dossier-fictif',
   connectors: {
     source: async (_cwd, id) => (/^LEGIARTI\d+$/.test(id) || id.includes('/') ? EXAMPLE_SOURCES[id] ?? null : undefined),
     match: (text, excerpt) => (text.includes(excerpt) ? excerpt : null),
@@ -29,10 +30,10 @@ const acteIssues = (result: Awaited<ReturnType<typeof verify>>) => result.issues
 
 test('l’acte se range en dernier, reçoit des id et garde un paragraphe par ligne', async () => {
   const result = await verify(withActe(ACTE));
-  const value = parseLiteral(result.code).value as Record<string, any>;
+  const value = parseReasoningDocument(result.code).value as Record<string, any>;
   assert.equal(Object.keys(value).at(-1), 'acte');
   assert.deepEqual(value.acte.map((section: { id: string }) => section.id), ['s1', 's2']);
-  assert.ok(result.code.includes("\n        '**La pénalité est donc due.**',\n"));
+  assert.match(result.code, /\n {6}- "\*\*La pénalité est donc due\.\*\*"$/m);
   assert.deepEqual(acteIssues(result), [
     'manque acte[1].traite : pénalité_encourue est à établir dans le raisonnement : établis-le, ou rédige la section comme une prétention à démontrer',
     'manque acte : obstacle force_majeure_contractuelle non discuté dans l’acte : ajoute traite: \'force_majeure_contractuelle\' à la section qui y répond',

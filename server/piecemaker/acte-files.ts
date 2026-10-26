@@ -27,14 +27,14 @@ async function readModel(root: string): Promise<Raw | null> {
   const file = await resolveReasoningFile(root);
   const code = await readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return null; throw error; });
   if (code === null) return null;
-  const value = stripAnnotations(parseReasoningDocument(code, file.endsWith('.yaml') ? 'yaml' : 'js').value);
+  const value = stripAnnotations(parseReasoningDocument(code).value);
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError('Le raisonnement n’est pas un objet : lance d’abord pm raisonnement verifier.');
   return value as Raw;
 }
 
 const writeModel = async (root: string, value: Raw) => {
   const file = await resolveReasoningFile(root);
-  await writeFile(file, `${printReasoningDocument(value, file.endsWith('.yaml') ? 'yaml' : 'js')}\n`, 'utf8');
+  await writeFile(file, `${printReasoningDocument(value)}\n`, 'utf8');
 };
 const count = (acte: unknown) => flattenActe(acte).reduce((total, entry) => ({ sections: total.sections + 1, paragraphes: total.paragraphes + flatOf(entry).texte.length }), { sections: 0, paragraphes: 0 });
 
