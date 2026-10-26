@@ -1,7 +1,7 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import { isAlias, isMap, isScalar, isSeq, LineCounter, parseDocument, stringify } from 'yaml';
+import { Document, isAlias, isMap, isScalar, isSeq, LineCounter, parseDocument, visit } from 'yaml';
 import type { Node } from 'yaml';
 
 import { LiteralError, parseLiteral, printLiteral } from './format.js';
@@ -42,9 +42,10 @@ export function parseReasoningDocument(text: string, format?: 'js' | 'yaml') {
       }
       if (isMap(node)) {
         const entries = node.items.map((pair) => {
-          if (!isScalar(pair.key) || typeof pair.key.value !== 'string') throw new LiteralError('clé textuelle attendue', line);
+          const booleanKey = isScalar(pair.key) && typeof pair.key.value === 'boolean';
+          if (!isScalar(pair.key) || (typeof pair.key.value !== 'string' && !booleanKey)) throw new LiteralError('clé textuelle attendue', line);
           if (pair.key.comment || pair.key.commentBefore) throw new LiteralError('pas de commentaire : le raisonnement s’écrit uniquement avec ses clés', pair.key.range ? lineCounter.linePos(pair.key.range[0]).line : line);
-          const key = pair.key.value;
+          const key = String(pair.key.value);
           const route = at ? `${at}.${key}` : key;
           const value = convert(pair.value as Node | null, route);
           lines.set(route, pair.key.range ? lineCounter.linePos(pair.key.range[0]).line : line);
@@ -66,5 +67,8 @@ export function parseReasoningDocument(text: string, format?: 'js' | 'yaml') {
 }
 
 export function printReasoningDocument(value: unknown, format: 'js' | 'yaml'): string {
-  return format === 'js' ? printLiteral(value) : stringify(value, { schema: 'core', version: '1.2', lineWidth: 0, blockQuote: 'literal', aliasDuplicateObjects: false }).trimEnd();
+  if (format === 'js') return printLiteral(value);
+  const document = new Document(value, { schema: 'core', version: '1.2', aliasDuplicateObjects: false });
+  visit(document, { Pair(_, pair) { if (isScalar(pair.key) && (pair.key.value === 'true' || pair.key.value === 'false')) pair.key = document.createNode(pair.key.value === 'true'); } });
+  return document.toString({ lineWidth: 0, blockQuote: 'literal' }).trimEnd();
 }

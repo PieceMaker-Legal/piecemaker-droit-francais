@@ -7,11 +7,11 @@ import type Database from 'better-sqlite3';
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningPieceReliability, ReasoningSnapshot, ReasoningStatus, ReasoningValue } from '../../../shared/piecemaker-reasoning.js';
 
 import { assignIds, checkActe } from './acte.js';
-import { and, answer, calculate, compile, evaluate, or, objectiveRoots, decisive, reachableLeaves, runTrials, simulate, structure } from './engine.js';
+import { and, answer, calculate, compile, evaluate, isLeaf, or, objectiveRoots, decisive, reachableLeaves, runTrials, simulate, structure } from './engine.js';
 import type { Calculation, Facts, Trace } from './engine.js';
 import { parseReasoningDocument, printReasoningDocument, resolveReasoningFile } from './document.js';
-import { canonical, formulaConditions, VERBS, formulaNames, formulaNumbers, LiteralError, readReasoning, stripAnnotations } from './format.js';
-import type { Basis, Condition, Formula, Measure, Objective, Ref, Target, Trial } from './format.js';
+import { canonical, formulaConditions, SIDES, VERBS, formulaNames, formulaNumbers, LiteralError, readReasoning, stripAnnotations } from './format.js';
+import type { Basis, Condition, Foundation, Formula, Measure, Objective, Ref, Target, Trial } from './format.js';
 
 export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null } };
 
@@ -32,7 +32,7 @@ const phrase = (name: string) => name.replace(/_/g, ' ').replace(/(^|\s)([cdjlmn
 const human = (name: string) => { const text = phrase(name); return text.charAt(0).toUpperCase() + text.slice(1); };
 const listing = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}` : names.join(''));
 const day = (value: string) => value.split('-').reverse().join('/');
-const ANSWER: Record<ReasoningStatus, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', contesté: 'Contestée' };
+const ANSWER: Record<ReasoningStatus, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', disputé: 'Disputée' };
 const issueId = (kind: string, at: string, text: string) => createHash('sha256').update(`${kind}\0${at}\0${text}`).digest('hex').slice(0, 10);
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const STATUS = (value: ReasoningValue): ReasoningStatus => (value === true ? 'acquis' : value === false ? 'exclu' : 'à établir');
@@ -203,21 +203,26 @@ export async function verifyReasoning(input: {
     occurrences.push({ at, condition });
     condition.l_une?.forEach((member, index) => walk(member, `${at}.l_une[${index}]`));
   };
+  const foundations: Array<{ at: string; name: string; foundation: Foundation }> = [];
   for (const [name, term] of reasoning.terms) {
     term.si.forEach((condition, index) => walk(condition, `${name}.si[${index}]`));
     term.sauf.forEach((condition, index) => walk(condition, `${name}.sauf[${index}]`));
+    for (const side of SIDES) term.fondements?.[side].forEach((foundation, index) => {
+      const place = `${name}.${side}[${index}]`;
+      foundations.push({ at: place, name, foundation });
+      occurrences.push({ at: place, condition: { selon: foundation.selon } });
+      foundation.si.forEach((condition, other) => walk(condition, `${place}.si[${other}]`));
+    });
   }
   const checks: Array<Promise<void>> = [];
   for (const { at, condition } of occurrences) {
     condition.selon.forEach((basis, index) => {
       checks.push(checkBasis(`${at}.selon[${index}]`, basis));
-      basis.contredit.forEach((ref, other) => checks.push(checkRef(`${at}.selon[${index}].contredit[${other}]`, ref)));
       basis.renvoi.forEach((target, other) => checks.push(checkTarget(`${at}.selon[${index}].renvoi[${other}]`, target)));
     });
     if (condition.mesure?.delai && !condition.decompte) add('manque', `${at}.decompte`, `délai sans décompte : ajoute decompte: 'décompte_de_${condition.condition}' et définis ce terme, dont les conditions sourcées établissent la règle de calcul du délai`, `${human(condition.condition!)} : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.`, condition.condition);
-    condition.preuve.forEach((ref, index) => checks.push(checkRef(`${at}.preuve[${index}]`, ref)));
-    condition.contredit.forEach((ref, index) => checks.push(checkRef(`${at}.contredit[${index}]`, ref)));
   }
+  for (const { at, foundation } of foundations) foundation.preuve.forEach((ref, index) => checks.push(checkRef(`${at}.preuve[${index}]`, ref)));
   for (const [name, entry] of reasoning.valeurs) {
     entry.preuve.forEach((ref, index) => checks.push(checkRef(`valeurs.${name}.preuve[${index}]`, ref)));
     entry.selon.forEach((basis, index) => checks.push(checkBasis(`valeurs.${name}.selon[${index}]`, basis)));
@@ -225,19 +230,6 @@ export async function verifyReasoning(input: {
   await Promise.all(checks);
   for (const [name, entry] of reasoning.valeurs) entry.selon.forEach((basis, index) => { if (basisChecks.get(`valeurs.${name}.selon[${index}]`)?.kind === 'piece') add('erreur', `valeurs.${name}.selon[${index}].source`, `${basis.source} est une pièce : une donnée stipulée ou constatée se prouve par preuve: [{ piece, citation }] ; selon cite le texte qui fixe une valeur (taux, seuil, barème)`); });
 
-  const evidence = new Map<string, { pro: boolean; con: boolean }>();
-  for (const { at, condition } of occurrences) {
-    if (!condition.condition || reasoning.terms.has(condition.condition)) continue;
-    const entry = evidence.get(condition.condition) ?? { pro: false, con: false };
-    entry.pro ||= condition.preuve.some((_, index) => verifiedRefs.get(`${at}.preuve[${index}]`));
-    entry.con ||= condition.contredit.some((_, index) => verifiedRefs.get(`${at}.contredit[${index}]`));
-    evidence.set(condition.condition, entry);
-  }
-  const leafValue = (name: string): ReasoningValue => {
-    const entry = evidence.get(name);
-    return !entry || entry.pro === entry.con ? null : entry.pro;
-  };
-  const contested = (name: string) => Boolean(evidence.get(name)?.pro && evidence.get(name)?.con);
   const computing = new Set<string>();
   const stating = new Set<string>();
   const test = compile(reasoning);
@@ -265,10 +257,21 @@ export async function verifyReasoning(input: {
   const valueOf = (name: string): string | number | null => stated(name) ?? computedValue(name);
   const leaf = (name: string): ReasoningValue => {
     const measure = reasoning.computed.get(name);
-    return measure ? calculate(measure, valueOf).value : leafValue(name);
+    return measure ? calculate(measure, valueOf).value : null;
   };
-  const baseFacts: Facts = { leaf, basis: (at, condition, applicable) => basisValue(at, condition, applicable) };
+  const proven = (place: string, count: number) => Array.from({ length: count }, (_, index) => verifiedRefs.get(`${place}.preuve[${index}]`)).some(Boolean);
+  const baseFacts: Facts = { leaf, basis: (at, condition, applicable) => basisValue(at, condition, applicable), proven };
   function holds(name: string): ReasoningValue { return reasoning.terms.has(name) ? test(baseFacts, undefined, [name]).get(name) ?? null : leaf(name); }
+  const sides = new Map<string, ReasoningValue[]>();
+  const disputed = (name: string) => {
+    if (!reasoning.terms.get(name)?.fondements) return false;
+    if (!sides.has(name)) {
+      const trace: Trace = new Map();
+      test(baseFacts, trace, [name]);
+      sides.set(name, [trace.get(`${name}:true`) ?? null, trace.get(`${name}:false`) ?? null]);
+    }
+    return sides.get(name)!.every((value) => value === true);
+  };
   const dateOf = (basis: Basis) => { const value = basis.vigueur?.au ? valueOf(basis.vigueur.au) : null; return typeof value === 'string' ? value : null; };
   const inForceAt = (basis: Basis, check: BasisCheck): ReasoningValue => {
     const date = dateOf(basis);
@@ -278,7 +281,7 @@ export async function verifyReasoning(input: {
 
   const basisValue = (at: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue => {
     if (!condition.selon.length) return true;
-    const checked = condition.selon.map((basis, index) => ({ basis, check: basisChecks.get(`${at}.selon[${index}]`), applicable: basis.contredit.some((_, other) => verifiedRefs.get(`${at}.selon[${index}].contredit[${other}]`)) ? null : applicable[index] }));
+    const checked = condition.selon.map((basis, index) => ({ basis, check: basisChecks.get(`${at}.selon[${index}]`), applicable: applicable[index] }));
     const texts = checked.filter((entry) => entry.check && entry.check.kind !== 'decision');
     if (texts.length) return or(texts.map((entry) => and([inForceAt(entry.basis, entry.check!), entry.applicable])));
     const decisions = checked.filter((entry) => entry.check?.kind === 'decision');
@@ -291,7 +294,7 @@ export async function verifyReasoning(input: {
       found.add(name);
       const term = reasoning.terms.get(name)!;
       const walkCollect = (condition: Condition) => { if (condition.l_une) condition.l_une.forEach(walkCollect); else collect(condition.condition!); };
-      [...term.si, ...term.sauf].forEach(walkCollect);
+      [...term.si, ...term.sauf, ...SIDES.flatMap((side) => (term.fondements?.[side] ?? []).flatMap((entry) => entry.si))].forEach(walkCollect);
     };
     collect(root);
     return found;
@@ -316,12 +319,7 @@ export async function verifyReasoning(input: {
   }
   const drafting = reasoning.qualification === 'drafting';
   const consultation = reasoning.qualification === 'consultation';
-  for (const { at, condition } of occurrences) {
-    condition.selon.forEach((basis, index) => {
-      const place = `${at}.selon[${index}]`;
-      if (basis.contredit.some((_, other) => verifiedRefs.get(`${place}.contredit[${other}]`))) add('manque', `${place}.contredit`, drafting ? 'stipulations contradictoires : à harmoniser dans le projet' : 'règle contredite par une autre stipulation : à trancher', drafting ? 'Deux stipulations du projet se contredisent : à harmoniser.' : 'Deux stipulations se contredisent : la règle applicable est à trancher.', `#source:${basis.source}`);
-    });
-  }
+  for (const name of reasoning.terms.keys()) if (disputed(name)) add('manque', name, `${name} : fondements contraires, à trancher`, `${human(name)} : des fondements contraires sont établis, à trancher.`, name);
   const conditionNames = new Set(occurrences.map(({ condition }) => condition.condition).filter((name): name is string => Boolean(name)));
   for (const [name, entry] of reasoning.valeurs) {
     if (!entry.formule) continue;
@@ -339,7 +337,7 @@ export async function verifyReasoning(input: {
   const vigueurs = new Map<string, ReasoningValue>();
   const decisiveLeaves = new Set<string>();
   const decisiveFor = new Map<string, Objective[]>();
-  const trials = shape.cycles.length ? [] : runTrials(reasoning, test, { leaf: leafValue, value: (name, check) => stated(name, check) ?? computedValue(name) });
+  const trials = shape.cycles.length ? [] : runTrials(reasoning, test, { leaf, proven, value: (name, check) => stated(name, check) ?? computedValue(name) });
   const supposing = (names: string[], roots: string[]) => reasoning.hypotheses.filter((trial, index) => trials[index]?.conforme && names.some((name) => name in trial.faits) && roots.some((root) => root in trial.attendu));
   const bracketed = (names: string[], objective: Objective) => objectiveRoots(objective).some((root) => new Set(supposing(names, [root]).map((trial) => String(trial.attendu[root]))).size > 1);
   const open = (formula: Formula, found: Set<string>, seen: Set<string>) => {
@@ -383,12 +381,12 @@ export async function verifyReasoning(input: {
       return;
     }
     if (!reasoning.terms.has(objective.effet)) return;
-    const facts: Facts = { leaf, basis: (at, condition, applicable) => { const value = basisValue(at, condition, applicable); if (!vigueurs.has(at)) vigueurs.set(at, value); return value; } };
+    const facts: Facts = { leaf, proven, basis: (at, condition, applicable) => { const value = basisValue(at, condition, applicable); if (!vigueurs.has(at)) vigueurs.set(at, value); return value; } };
     const trace: Trace = new Map();
     const value = answer(objective, test(facts, trace, objectiveRoots(objective)));
     for (const [key, item] of trace) if (!statuses.has(key)) statuses.set(key, item);
     const reachable = [...new Set(objectiveRoots(objective).flatMap((root) => [...reachableLeaves(reasoning, root)]))];
-    const unknown = reachable.filter((name) => facts.leaf(name) === null).sort();
+    const unknown = reachable.filter((name) => holds(name) === null).sort();
     const found = value === null ? decisive(test, facts, objective, unknown) : { decisive: [], inPlay: false };
     for (const name of found.decisive) { decisiveLeaves.add(name); decisiveFor.set(name, [...(decisiveFor.get(name) ?? []), objective]); }
     const holder = node(annotated, `objectifs[${index}]`);
@@ -422,15 +420,15 @@ export async function verifyReasoning(input: {
   for (const { at, condition } of occurrences) {
     const holder = node(annotated, at);
     if (!holder) continue;
-    const fact = condition.condition && !reasoning.terms.has(condition.condition) ? condition.condition : null;
-    holder.statut = fact && contested(fact) ? 'contesté' : STATUS(statuses.get(at) ?? null);
+    const fact = condition.condition && isLeaf(reasoning, condition.condition) ? condition.condition : null;
+    holder.statut = fact && disputed(fact) ? 'disputé' : STATUS(statuses.get(at) ?? null);
     const result = condition.mesure ? calculate(condition.mesure, valueOf) : null;
     if (result?.calcul) holder.calcul = result.calcul;
     if (fact && decisiveLeaves.has(fact)) {
       holder.decisif = true;
       if (drafting && result?.missing.length && !(decisiveFor.get(fact) ?? []).some((objective) => bracketed([fact, ...result.missing], objective))) add('manque', at, `${fact} décide de la réponse et dépend de ${result.missing.join(', ')}, que le projet ne fixe pas : fixe ${result.missing.length > 1 ? 'ces valeurs' : 'cette valeur'} dans valeurs, ou ajoute des hypothèses qui montrent quand la réponse change`, `${human(fact)} : la réponse dépend de ${listing(result.missing.map(phrase))}, que le projet ne fixe pas.`, fact);
       if (reasoning.qualification !== 'drafting' && result && !(consultation && (decisiveFor.get(fact) ?? []).some((objective) => bracketed([fact, ...result.missing], objective)))) add('manque', at, `${fact} décide de la réponse : renseigne ${result.missing.join(', ')} dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)${consultation ? ', ou ajoute des hypothèses qui montrent quand la réponse change' : ''}`, `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
-      else if (reasoning.qualification !== 'drafting' && !result) add('manque', at, `${fact} décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
+      else if (reasoning.qualification !== 'drafting' && !result && !disputed(fact)) add('manque', at, reasoning.terms.has(fact) ? `${fact} décide de la réponse : ajoute un fondement (preuve ou selon) sous true ou false de ${fact}` : `${fact} décide de la réponse : ajoute ${fact}: { true: [{ preuve: [{ piece, citation }] }] } (ou false) à la racine, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
     }
     condition.selon.forEach((basis, index) => {
       const place = `${at}.selon[${index}]`;
@@ -447,7 +445,8 @@ export async function verifyReasoning(input: {
   }
   if (!shape.cycles.length) {
     const flipped = (flip: { leaf?: string; at?: string }): Facts => ({
-      leaf: (name) => { const value = leaf(name); return name === flip.leaf && value !== null ? !value : value; },
+      leaf: (name) => { if (name !== flip.leaf) return leaf(name); const value = holds(name); return value !== null ? !value : value; },
+      proven,
       basis: (at, condition, applicable) => { const value = basisValue(at, condition, applicable); return at === flip.at && value !== null ? !value : value; },
     });
     const amountUnder = (name: string, facts: Facts, seen: Set<string>): number | null => {
@@ -470,8 +469,8 @@ export async function verifyReasoning(input: {
       if (gaps[index] === 0) { const holder = node(annotated, `objectifs[${index}]`); if (holder) holder.atteint = true; return; }
       const scope = amountObjective(objective) ? [...new Set(regimes(objective.effet, new Set()))] : objectiveRoots(objective);
       const bases = new Map<string, ReasoningValue>();
-      test({ leaf, basis: (at, condition, applicable) => { const value = basisValue(at, condition, applicable); bases.set(at, value); return value; } }, undefined, scope.filter((name) => reasoning.terms.has(name)));
-      const leaves = [...new Set(scope.flatMap((root) => [...reachableLeaves(reasoning, root)]))].filter((name) => leaf(name) !== null);
+      test({ leaf, proven, basis: (at, condition, applicable) => { const value = basisValue(at, condition, applicable); bases.set(at, value); return value; } }, undefined, scope.filter((name) => reasoning.terms.has(name)));
+      const leaves = [...new Set(scope.flatMap((root) => [...reachableLeaves(reasoning, root)]))].filter((name) => holds(name) !== null);
       const found: string[] = [];
       const places = new Set<string>();
       const flips = [...leaves.map((name) => ({ leaf: name, at: located(name, index) })), ...occurrences.filter(({ at, condition }) => condition.selon.length && bases.has(at) && bases.get(at) !== null).map(({ at, condition }) => ({ basis: condition.condition ?? `l’alternative de ${at.split('.')[0]}`, at }))];
@@ -481,10 +480,10 @@ export async function verifyReasoning(input: {
         if (gap(objective, score(objective, facts)) >= gaps[index]) continue;
         const tension = reasoning.objectifs.filter((other, at) => at !== index && gap(other, score(other, facts)) > gaps[at]).map((other) => other.objectif);
         const name = 'leaf' in flip ? flip.leaf! : flip.basis!;
-        const value = 'leaf' in flip ? leaf(flip.leaf!) : bases.get(flip.at);
+        const value = 'leaf' in flip ? holds(flip.leaf!) : bases.get(flip.at);
         const goal = `l’objectif « ${objective.objectif} »`;
         const advice = 'leaf' in flip
-          ? `${name} ${value ? 'fait obstacle à' : 'manque à'} ${goal} : ${reasoning.computed.has(name) ? 'discute les valeurs du calcul ou la règle qui le fixe' : value ? 'conteste-le (contredit) ou l’interprétation de la règle qui le retient' : 'établis-le par une pièce ou par une autre interprétation de la règle'}, ou cherche une exception (sauf) ou un autre fondement (l_une)`
+          ? `${name} ${value ? 'fait obstacle à' : 'manque à'} ${goal} : ${reasoning.computed.has(name) ? 'discute les valeurs du calcul ou la règle qui le fixe' : value ? 'conteste-le (une pièce sous false) ou l’interprétation de la règle qui le retient' : 'établis-le par une pièce (sous true) ou par une autre interprétation de la règle'}, ou cherche une exception (sauf) ou un autre fondement (l_une)`
           : value ? `la source de ${name} fait obstacle à ${goal} : discute son interprétation, sa version ou son applicabilité, ou cherche une source contraire` : `la source de ${name} ne compte pas alors que ${goal} en dépend : établis sa version et son applicabilité, ou cherche une autre source`;
         add('manque', flip.at, `${advice}${tension.length ? ` ; en tension avec ${tension.map((other) => `l’objectif « ${other} »`).join(', ')} : à arbitrer` : ''}`, `${'leaf' in flip ? human(name) : `La source de ${phrase(name)}`} ${value ? 'fait obstacle à' : 'manque à'} l’objectif : ${objective.objectif}.${tension.length ? ` En tension avec : ${tension.join(' ; ')}.` : ''}`, 'leaf' in flip ? name : undefined);
         places.add(flip.at);
@@ -497,7 +496,7 @@ export async function verifyReasoning(input: {
   }
   for (const [name, entry] of reasoning.valeurs) entry.selon.forEach((basis, index) => applicability(`valeurs.${name}.selon[${index}]`, basis, sourceIssues(`valeurs.${name}.selon[${index}]`, basis)));
   for (const name of reasoning.terms.keys()) if (!statuses.has(name)) statuses.set(name, holds(name));
-  for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = STATUS(statuses.get(name) ?? null); }
+  for (const name of reasoning.terms.keys()) { const holder = node(annotated, name); if (holder) holder.statut = disputed(name) ? 'disputé' : STATUS(statuses.get(name) ?? null); }
   for (const name of reasoning.valeurs.keys()) { const holder = node(annotated, `valeurs.${name}`); if (holder) { holder.statut = valueOf(name) === null ? 'à établir' : 'acquis'; const result = computedValue(name); if (result !== null) holder.calcul = result; } }
   for (const name of [...shape.leaves].sort()) {
     const measure = reasoning.computed.get(name);
@@ -506,11 +505,13 @@ export async function verifyReasoning(input: {
       emit({ key: `fait:${name}`, step: 'fait', status: result.value === null ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: `${explain(measure, result)}${decisiveLeaves.has(name) ? ' · décisif' : ''}` });
       continue;
     }
-    const value = leafValue(name);
-    const cited = (field: 'preuve' | 'contredit') => [...new Set(occurrences.filter((item) => item.condition.condition === name).flatMap((item) => item.condition[field].map((_, index) => `${item.at}.${field}[${index}]`)).filter((at) => verifiedRefs.get(at)).map((at) => node(annotated, at)).filter((ref) => ref?.titre).map((ref) => `${String(ref!.titre)} : « ${String(ref!.citation ?? '')} »`))].join(', ');
-    emit({ key: `fait:${name}`, step: 'fait', status: value === null ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: contested(name) ? 'Contesté : une pièce le prouve, une autre le contredit' : value === true ? `Prouvé par ${cited('preuve')}` : value === false ? `Contredit par ${cited('contredit')}` : `${occurrences.some((item) => item.condition.condition === name && item.condition.preuve.length + item.condition.contredit.length > 0) ? 'Les pièces citées ne l’établissent pas' : 'Aucune pièce citée'}${decisiveLeaves.has(name) ? ' · décisif' : ''}` });
+    const question = reasoning.terms.get(name)?.fondements;
+    const value = question ? holds(name) : null;
+    const cited = (side: 'true' | 'false') => [...new Set(foundations.filter((item) => item.name === name && item.at.startsWith(`${name}.${side}[`)).flatMap((item) => item.foundation.preuve.map((_, index) => `${item.at}.preuve[${index}]`)).filter((at) => verifiedRefs.get(at)).map((at) => node(annotated, at)).filter((ref) => ref?.titre).map((ref) => `${String(ref!.titre)} : « ${String(ref!.citation ?? '')} »`))].join(', ');
+    const proofs = question ? foundations.some((item) => item.name === name && item.foundation.preuve.length > 0) : false;
+    emit({ key: `fait:${name}`, step: 'fait', status: value === null && !disputed(name) ? (decisiveLeaves.has(name) ? 'alerte' : 'neutre') : 'ok', subject: human(name), text: disputed(name) ? 'Disputé : des fondements opposés sont établis' : value === true ? `Prouvé par ${cited('true') || 'le texte cité'}` : value === false ? `Contredit par ${cited('false') || 'le texte cité'}` : `${proofs ? 'Les pièces citées ne l’établissent pas' : 'Aucune pièce citée'}${decisiveLeaves.has(name) ? ' · décisif' : ''}` });
   }
-  for (const name of reasoning.terms.keys()) emit({ key: `terme:${name}`, step: 'condition', status: statuses.get(name) === null || statuses.get(name) === undefined ? 'neutre' : 'ok', subject: human(name), text: ANSWER[STATUS(statuses.get(name) ?? null)] });
+  for (const name of reasoning.terms.keys()) emit({ key: `terme:${name}`, step: 'condition', status: statuses.get(name) === null || statuses.get(name) === undefined ? 'neutre' : 'ok', subject: human(name), text: disputed(name) ? ANSWER.disputé : ANSWER[STATUS(statuses.get(name) ?? null)] });
 
   trials.forEach((result, index) => {
     const holder = node(annotated, `hypotheses[${index}]`);
@@ -552,14 +553,13 @@ export async function verifyReasoning(input: {
       const cite = (items: Array<{ citation?: string }>) => items.forEach((item) => { if (item.citation) pool.push(item.citation, corrections.get(item.citation) ?? item.citation); });
       for (const { at, condition } of occurrences) {
         if (scope && !scope.terms.has(at.split('.')[0]) && !(condition.condition && scope.facts.has(condition.condition))) continue;
-        condition.selon.forEach((basis) => { cite([basis]); cite(basis.renvoi); cite(basis.contredit); });
-        cite(condition.preuve);
-        cite(condition.contredit);
+        condition.selon.forEach((basis) => { cite([basis]); cite(basis.renvoi); });
       }
+      for (const { name, foundation } of foundations) if (!scope || scope.terms.has(name)) cite(foundation.preuve);
       for (const [name, entry] of reasoning.valeurs) if (!scope || scope.values.has(name)) { cite(entry.preuve); cite(entry.selon); }
       return pool;
     };
-    const statusOf = (name: string) => (reasoning.terms.has(name) ? STATUS(statuses.get(name) ?? null) : reasoning.valeurs.has(name) ? (valueOf(name) === null ? 'à établir' : 'acquis') : conditionNames.has(name) ? (contested(name) ? 'contesté' : STATUS(leaf(name))) : null);
+    const statusOf = (name: string) => (reasoning.terms.has(name) ? (disputed(name) ? 'disputé' : STATUS(statuses.get(name) ?? null)) : reasoning.valeurs.has(name) ? (valueOf(name) === null ? 'à établir' : 'acquis') : conditionNames.has(name) ? STATUS(leaf(name)) : null);
     const obstacles = reasoning.objectifs.flatMap((_, index) => (node(annotated, `objectifs[${index}]`)?.obstacles as string[] | undefined) ?? []);
     for (const issue of checkActe(reasoning.acte, {
       known: (name) => reasoning.terms.has(name) || reasoning.valeurs.has(name) || conditionNames.has(name),
@@ -636,7 +636,7 @@ export async function verifyReasoning(input: {
   }
   let simulation: Simulation | undefined;
   if (input.simulation && !shape.cycles.length) {
-    const run = simulate(reasoning, test, { leaf: leafValue, value: (name, check) => stated(name, check) ?? computedValue(name) }, input.simulation);
+    const run = simulate(reasoning, test, { leaf, proven, value: (name, check) => stated(name, check) ?? computedValue(name) }, input.simulation);
     simulation = {
       objectifs: reasoning.objectifs.map((objective) => {
         if (!amountObjective(objective)) return { objectif: objective.objectif, statut: STATUS(answer(objective, run.test(objectiveRoots(objective)))) };
@@ -819,48 +819,50 @@ export const EXAMPLE_CODE = `{
   },
   pénalité_encourue: {
     si: [
-      { condition: 'pénalité_stipulée',
+      { pénalité_stipulée: true,
         selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }] },
       { l_une: [
-          { condition: 'mise_en_demeure', preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: \`vous met en demeure\` }] },
-          { condition: 'inexécution_définitive' },
+          { mise_en_demeure: true },
+          { inexécution_définitive: true },
         ],
         selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }] },
     ],
   },
+  mise_en_demeure: { true: [{ preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: \`vous met en demeure\` }] }] },
   applicabilité_de_l_article_1231_5: {
     si: [
-      { condition: 'contrat_stipulant_une_pénalité',
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`Lorsque le contrat stipule une pénalité\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }],
-        preuve: [{ piece: 'pieces/01_contrat.md', citation: \`une pénalité est due\` }] },
+      { contrat_stipulant_une_pénalité: true,
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`Lorsque le contrat stipule une pénalité\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] },
     ],
   },
+  contrat_stipulant_une_pénalité: { true: [{ preuve: [{ piece: 'pieces/01_contrat.md', citation: \`une pénalité est due\` }] }] },
   pénalité_stipulée: {
     si: [
-      { condition: 'retard_de_livraison',
-        selon: [{ source: 'pieces/01_contrat.md', citation: \`En cas de retard de livraison\`, vigueur: { debut: '2024-01-15', fin: null } }],
-        preuve: [{ piece: 'pieces/05_bon_de_livraison.md', citation: \`Livré le 14/06/2025\` }] },
+      { retard_de_livraison: true,
+        selon: [{ source: 'pieces/01_contrat.md', citation: \`En cas de retard de livraison\`, vigueur: { debut: '2024-01-15', fin: null } }] },
     ],
     sauf: [
-      { condition: 'force_majeure_contractuelle',
+      { force_majeure_contractuelle: true,
         selon: [{ source: 'pieces/01_contrat.md', citation: \`sauf force majeure au sens de l'article 12\`, vigueur: { debut: '2024-01-15', fin: null } }] },
     ],
   },
+  retard_de_livraison: { true: [{ preuve: [{ piece: 'pieces/05_bon_de_livraison.md', citation: \`Livré le 14/06/2025\` }] }] },
   force_majeure_contractuelle: {
     si: [
-      { l_une: [{ condition: 'force_majeure' }, { condition: 'grève' }],
+      { l_une: [{ force_majeure: true }, { grève: true }],
         selon: [{ source: 'pieces/01_contrat.md', citation: \`ainsi que les grèves\`, vigueur: { debut: '2024-01-15', fin: null } }] },
     ],
   },
   grève: {
     si: [
       { l_une: [
-          { condition: 'grève_nationale' },
-          { condition: 'grève_du_secteur', contredit: [{ piece: 'pieces/07_courriel.md', citation: \`mouvement limité à notre atelier\` }] },
+          { grève_nationale: true },
+          { grève_du_secteur: true },
         ],
         selon: [{ source: 'pieces/01_contrat.md', citation: \`grève nationale ou propre au secteur\`, vigueur: { debut: '2024-01-15', fin: null } }] },
     ],
   },
+  grève_du_secteur: { false: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: \`mouvement limité à notre atelier\` }] }] },
   hypotheses: [
     { nom: \`grève nationale : pas de pénalité\`, faits: { retard_de_livraison: vrai, mise_en_demeure: vrai, grève_nationale: vrai }, attendu: { pénalité_encourue: faux } },
   ],

@@ -32,6 +32,7 @@ const verify = (code: string, options: { reliability?: Map<string, boolean>; dis
   dismissed: options.dismissed ?? new Set(),
 });
 
+const withRoots = (code: string, roots: string) => code.replace('\n  hypotheses:', `\n${roots}\n  hypotheses:`);
 const at = (annotated: unknown, route: string) => route.split(/\.|\[|\]/).filter(Boolean).reduce<any>((value, key) => value?.[key], annotated);
 const texts = (result: Awaited<ReturnType<typeof verify>>, kind: 'erreur' | 'manque') => result.issues.filter((issue) => issue.kind === kind).map((issue) => `${issue.path} : ${issue.text}`);
 
@@ -56,17 +57,15 @@ test('l’exemple fictif est à établir et désigne les faits décisifs', async
   assert.equal(at(result.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
   const described = describeReasoning(result);
   assert.match(described, /^0 erreur\(s\), \d+ manque\(s\)\./);
-  assert.match(described, /MANQUE \d+ — grève › si\[0\] › l_une\[0\] \(ligne (\d+)\)\n  ligne \1 : \{ condition: 'grève_nationale' \},\n  grève_nationale décide de la réponse/);
+  assert.match(described, /MANQUE \d+ — grève › si\[0\] › l_une\[0\] \(ligne (\d+)\)\n  ligne \1 : \{ grève_nationale: vrai \},\n  grève_nationale décide de la réponse/);
   assert.match(described, /MANQUE \d+ — qualification\n  absent du fichier : clé à ajouter au premier niveau de l’objet\n  raisonnement non qualifié/);
   assert.doesNotMatch(described, /Réponses|décisifs :|statut/);
 });
 
 test('toutes les feuilles établies : la réponse est acquise ; la preuve de l’exception l’exclut', async () => {
-  const closed = EXAMPLE_CODE
-    .replace("{ condition: 'force_majeure' }", "{ condition: 'force_majeure', contredit: [{ piece: 'pieces/07_courriel.md', citation: `a duré deux jours` }] }")
-    .replace("{ condition: 'grève_nationale' }", "{ condition: 'grève_nationale', contredit: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }");
+  const closed = withRoots(EXAMPLE_CODE, "  force_majeure: { false: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `a duré deux jours` }] }] },\n  grève_nationale: { false: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }] },");
   assert.equal(at((await verify(closed)).annotated, 'objectifs[0].statut'), 'acquis');
-  const excused = EXAMPLE_CODE.replace("{ condition: 'grève_nationale' }", "{ condition: 'grève_nationale', preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }");
+  const excused = withRoots(EXAMPLE_CODE, "  grève_nationale: { true: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }] },");
   assert.equal(at((await verify(excused)).annotated, 'objectifs[0].statut'), 'exclu');
 });
 
@@ -105,11 +104,11 @@ test('l’applicabilité d’un texte est un terme : ses conditions, sourcées e
   assert.doesNotMatch(texts(result, 'manque').join('\n'), /applicabilite/);
   assert.equal(at(result.annotated, 'applicabilité_de_l_article_1231_5.statut'), 'acquis');
   assert.doesNotMatch(texts(result, 'manque').join('\n'), /applicabilité_de_l_article_1231_5 : terme qui ne sert/);
-  const inapplicable = await verify(EXAMPLE_CODE.replace("preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", "contredit: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },"));
+  const inapplicable = await verify(EXAMPLE_CODE.replace('contrat_stipulant_une_pénalité: { true: [', 'contrat_stipulant_une_pénalité: { false: ['));
   assert.equal(at(inapplicable.annotated, 'applicabilité_de_l_article_1231_5.statut'), 'exclu');
   assert.equal(at(inapplicable.annotated, 'pénalité_encourue.si[0].statut'), 'exclu');
   assert.equal(at(inapplicable.annotated, 'objectifs[0].statut'), 'exclu');
-  const unproven = await verify(EXAMPLE_CODE.replace("\n        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", ' },'));
+  const unproven = await verify(EXAMPLE_CODE.replace(/\n  contrat_stipulant_une_pénalité: \{[^\n]*\},/, ''));
   assert.ok(at(unproven.annotated, 'objectifs[0].decisifs').includes('contrat_stipulant_une_pénalité'));
   const errors = texts(await verify(EXAMPLE_CODE.replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", "applicabilite: 'applicabilité_inconnue' }] },").replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", 'applicabilite: `un contrat` }] },')), 'erreur').join('\n');
   assert.match(errors, /selon\[0\]\.applicabilite : terme applicabilité_inconnue non défini/);
@@ -119,8 +118,8 @@ test('l’applicabilité d’un texte est un terme : ses conditions, sourcées e
 test('une condition sans source, un terme non défini, une boucle et un hypothèse non conforme sont des erreurs', async () => {
   const errors = texts(await verify(`{
     objectifs: [{ objectif: \`Objectif fictif\`, obtenir: 'a' }, { objectif: \`Autre objectif\`, obtenir: 'absent' }],
-    a: { si: [{ condition: 'b', selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\` }] }, { condition: 'c' }] },
-    b: { si: [{ condition: 'a', selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\` }] }] },
+    a: { si: [{ b: true, selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\` }] }, { c: true }] },
+    b: { si: [{ a: true, selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\` }] }] },
     hypotheses: [{ nom: \`faux\`, faits: { c: vrai }, attendu: { c: faux } }],
   }`), 'erreur').join('\n');
   assert.match(errors, /a\.si\[1\]\.selon : condition sans source/);
@@ -143,7 +142,7 @@ test('une source d’un autre droit est acceptée mais signalée comme non véri
 test('une pièce non fiable ne prouve rien ; une pièce non évaluée est signalée', async () => {
   const result = await verify(EXAMPLE_CODE, { reliability: new Map([['pieces/06_mise_en_demeure.md', false]]) });
   assert.equal(at(result.annotated, 'pénalité_encourue.si[1].l_une[0].statut'), 'à établir');
-  assert.equal(at(result.annotated, 'pénalité_encourue.si[1].l_une[0].preuve[0].fiable'), false);
+  assert.equal(at(result.annotated, 'mise_en_demeure.true[0].preuve[0].fiable'), false);
   assert.ok(!at(result.annotated, 'bilan.pieces_a_evaluer_par_l_avocat').includes('pieces/06_mise_en_demeure.md'));
   assert.ok(at(result.annotated, 'bilan.pieces_a_evaluer_par_l_avocat').includes('pieces/07_courriel.md'));
 });
@@ -154,7 +153,7 @@ test('une alerte écartée par l’avocat n’est plus émise, et revient si l�
   const dismissed = await verify(EXAMPLE_CODE, { dismissed: new Set([target.id]) });
   assert.equal(at(dismissed.annotated, 'bilan.ecartees'), 1);
   assert.equal(at(dismissed.annotated, 'force_majeure_contractuelle.si[0].l_une[0].manques'), undefined);
-  const changed = await verify(EXAMPLE_CODE.replace("condition: 'force_majeure' }", "condition: 'cas_de_force_majeure' }"), { dismissed: new Set([target.id]) });
+  const changed = await verify(EXAMPLE_CODE.replace("force_majeure: true }", "cas_de_force_majeure: true }"), { dismissed: new Set([target.id]) });
   assert.equal(at(changed.annotated, 'bilan.ecartees'), 0);
 });
 
@@ -231,17 +230,17 @@ const CESSION_CODE = `{
   },
   réduction_due: {
     si: [
-      { condition: 'notification_dans_la_garantie', delai: { de: 'date_de_réalisation', a: 'date_de_notification', au_plus: { ans: 2 } },
+      { notification_dans_la_garantie: true, delai: { de: 'date_de_réalisation', a: 'date_de_notification', au_plus: { ans: 2 } },
         selon: [{ source: 'pieces/02_cession.md', citation: \`deux ans à compter de la réalisation\`, vigueur: { debut: '2022-06-15', fin: null } }],
         decompte: 'décompte_de_la_garantie' },
-      { condition: 'dommage_au_dessus_du_seuil', montant: { valeur: 'montant_du_dommage', plus_de: 3000 },
+      { dommage_au_dessus_du_seuil: true, montant: { valeur: 'montant_du_dommage', plus_de: 3000 },
         selon: [{ source: 'pieces/02_cession.md', citation: \`inférieur ou égal à 3.000 euros\`, vigueur: { debut: '2022-06-15', fin: null } }] },
     ],
   },
   décompte_de_la_garantie: {
-    si: [{ condition: 'délai_de_date_à_date', selon: [{ source: 'pieces/02_cession.md', citation: \`Les délais se calculent de date à date\`, vigueur: { debut: '2022-06-15', fin: null } }],
-      preuve: [{ piece: 'pieces/02_cession.md', citation: \`Les délais se calculent de date à date\` }] }],
+    si: [{ délai_de_date_à_date: true, selon: [{ source: 'pieces/02_cession.md', citation: \`Les délais se calculent de date à date\`, vigueur: { debut: '2022-06-15', fin: null } }] }],
   },
+  délai_de_date_à_date: { true: [{ preuve: [{ piece: 'pieces/02_cession.md', citation: \`Les délais se calculent de date à date\` }] }] },
   hypotheses: [
     { nom: \`notification le jour de l’échéance\`, faits: { délai_de_date_à_date: vrai, date_de_réalisation: '2022-06-15', date_de_notification: '2024-06-15', montant_du_dommage: 45000 }, attendu: { réduction_due: vrai } },
     { nom: \`notification tardive\`, faits: { délai_de_date_à_date: vrai, date_de_réalisation: '2022-06-15', date_de_notification: '2024-06-17', montant_du_dommage: 45000 }, attendu: { réduction_due: faux } },
@@ -272,7 +271,7 @@ test('un délai sans décompte est un manque, sans que le système choisisse la 
   assert.equal(issue.avocat, 'Notification dans la garantie : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.');
   assert.ok(at(result.annotated, 'réduction_due.si[0].manques').some((text: string) => text.startsWith('délai sans décompte : ajoute decompte: \'décompte_de_notification_dans_la_garantie\'')));
   assert.equal(at(result.annotated, 'objectifs[0].statut'), 'acquis');
-  const contradicted = await cession(CESSION_CODE.replace("preuve: [{ piece: 'pieces/02_cession.md', citation: `Les délais se calculent de date à date` }] }],", "contredit: [{ piece: 'pieces/02_cession.md', citation: `Les délais se calculent de date à date` }] }],"));
+  const contradicted = await cession(CESSION_CODE.replace('délai_de_date_à_date: { true: [', 'délai_de_date_à_date: { false: ['));
   assert.equal(at(contradicted.annotated, 'décompte_de_la_garantie.statut'), 'exclu');
   assert.equal(at(contradicted.annotated, 'réduction_due.si[0].statut'), 'exclu');
 });
@@ -292,12 +291,12 @@ test('les durées s’ajoutent au calendrier : fin de mois, année bissextile, j
   assert.equal(addDuration('2025-05-09', { unite: 'jours', nombre: 30 }), '2025-06-08');
 });
 
-test('un délai ou un montant mal écrit, prouvé sur la condition ou appliqué à une valeur du mauvais type est une erreur', async () => {
+test('un délai ou un montant mal écrit, avec une preuve sur la condition ou appliqué à une valeur du mauvais type est une erreur', async () => {
   const errors = texts(await cession(CESSION_CODE
     .replace('au_plus: { ans: 2 }', 'au_plus: { semaines: 2 }')
     .replace("montant: { valeur: 'montant_du_dommage', plus_de: 3000 },", "montant: { valeur: 'date_de_réalisation', plus_de: 3000 }, preuve: [{ piece: 'pieces/08_notification.md', citation: `45.000 euros` }],")), 'erreur').join('\n');
   assert.match(errors, /réduction_due\.si\[0\]\.delai : delai : \{ de: date_de_départ/);
-  assert.match(errors, /un délai ou un montant se calcule : sa preuve se place dans valeurs/);
+  assert.match(errors, /réduction_due\.si\[1\]\.preuve : preuve ne se place plus sur une condition de règle.*pour un délai ou un montant : dans valeurs/);
   assert.match(errors, /valeurs\.date_de_réalisation : date_de_réalisation sert à dommage_au_dessus_du_seuil : un nombre attendu/);
 });
 
@@ -309,7 +308,7 @@ test('le raisonnement se qualifie drafting ou contentieux ; la qualification app
   const litigation = texts(await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'contentieux',\n  objectifs:")), 'manque').join('\n');
   assert.match(litigation, /objectifs\[0\] : contentieux : vérifier la prescription : ajoute prescription:/);
   assert.doesNotMatch(litigation, /vérifier la validité/);
-  const valid = await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:").replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', validite: 'validité_du_contrat',").replace('\n  hypotheses:', "\n  validité_du_contrat: { sauf: [{ condition: 'vice_du_consentement', selon: [{ source: 'pieces/01_contrat.md', citation: `En cas de retard de livraison` }], preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },\n  hypotheses:"));
+  const valid = await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:").replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', validite: 'validité_du_contrat',").replace('\n  hypotheses:', "\n  validité_du_contrat: { sauf: [{ vice_du_consentement: true, selon: [{ source: 'pieces/01_contrat.md', citation: `En cas de retard de livraison` }] }] },\n  vice_du_consentement: { true: [{ preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },\n  hypotheses:"));
   assert.doesNotMatch(texts(valid, 'manque').join('\n'), /vérifier la validité/);
   assert.deepEqual(texts(valid, 'erreur'), []);
   assert.equal(at(valid.annotated, 'validité_du_contrat.statut'), 'exclu');
@@ -361,14 +360,14 @@ test('une clause appelle le contrôle de sa validité, qui s’apprécie au rega
   const result = await verify(EXAMPLE_CODE);
   const manques = texts(result, 'manque').join('\n');
   assert.match(manques, /pénalité_stipulée\.si\[0\]\.selon\[0\]\.validite : validité de la clause non établie : ajoute validite: 'validité_de_la_clause_retard_de_livraison'/);
-  const withValidity = EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_de_la_clause_pénale' }],").replace('\n  hypotheses:', "\n  validité_de_la_clause_pénale: { sauf: [{ condition: 'pénalité_manifestement_excessive', selon: [{ source: 'pieces/01_contrat.md', citation: `ainsi que les grèves` }], preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }] },\n  hypotheses:");
+  const withValidity = EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }] },", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_de_la_clause_pénale' }] },").replace('\n  hypotheses:', "\n  validité_de_la_clause_pénale: { sauf: [{ pénalité_manifestement_excessive: true, selon: [{ source: 'pieces/01_contrat.md', citation: `ainsi que les grèves` }] }] },\n  pénalité_manifestement_excessive: { true: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }] },\n  hypotheses:");
   const valid = await verify(withValidity);
   assert.deepEqual(texts(valid, 'erreur'), []);
   assert.match(texts(valid, 'manque').join('\n'), /validité_de_la_clause_pénale : la validité s’apprécie au regard du droit applicable : cite dans ce terme le texte qui la fonde/);
   assert.equal(at(valid.annotated, 'validité_de_la_clause_pénale.statut'), 'exclu');
   assert.equal(at(valid.annotated, 'pénalité_stipulée.si[0].statut'), 'exclu');
   assert.doesNotMatch(texts(valid, 'manque').join('\n'), /validité_de_la_clause_pénale\.sauf\[0\]\.selon\[0\]\.validite/);
-  const sourced = await verify(withValidity.replace("selon: [{ source: 'pieces/01_contrat.md', citation: `ainsi que les grèves` }], preuve: [{ piece: 'pieces/07_courriel.md'", "selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }], preuve: [{ piece: 'pieces/07_courriel.md'"));
+  const sourced = await verify(withValidity.replace("selon: [{ source: 'pieces/01_contrat.md', citation: `ainsi que les grèves` }] }] },", "selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },"));
   assert.doesNotMatch(texts(sourced, 'manque').join('\n'), /validité_de_la_clause_pénale : la validité s’apprécie/);
   const referring = await verifyReasoning({
     code: EXAMPLE_CODE.replace('citation: `En cas de retard de livraison`', 'citation: `conformément à l’article 1231-5 du Code civil, en cas de retard`'), cwd: '/dossier-fictif',
@@ -390,9 +389,9 @@ test('les données des calculs sont déclarées dans valeurs, prouvées ou laiss
 });
 
 test('une clause a son propre contrôle de validité ; une clause citée pour l’applicabilité n’en réclame pas', async () => {
-  const shared = EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:").replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', validite: 'validité_du_contrat',").replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_du_contrat' }],").replace('\n  hypotheses:', "\n  validité_du_contrat: { si: [{ condition: 'contrat_signé', selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },\n  hypotheses:");
+  const shared = EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:").replace("obtenir: 'pénalité_encourue',", "obtenir: 'pénalité_encourue', validite: 'validité_du_contrat',").replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }] },", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, validite: 'validité_du_contrat' }] },").replace('\n  hypotheses:', "\n  validité_du_contrat: { si: [{ contrat_signé: true, selon: [{ source: 'LEGIARTI000000000005', citation: `Sauf inexécution définitive`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }] },\n  hypotheses:");
   assert.match(texts(await verify(shared), 'erreur').join('\n'), /pénalité_stipulée\.si\[0\]\.selon\[0\]\.validite : validite : validité_du_contrat est le contrôle de validité de l’acte ; une clause a son propre contrôle/);
-  const governed = EXAMPLE_CODE.replace("        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },", "        preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }] },\n      { condition: 'droit_français_choisi', selon: [{ source: 'pieces/01_contrat.md', citation: `Article 1. Grève` }], preuve: [{ piece: 'pieces/01_contrat.md', citation: `Article 1. Grève` }] },");
+  const governed = withRoots(EXAMPLE_CODE.replace("citation: `Lorsque le contrat stipule une pénalité`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] },", "citation: `Lorsque le contrat stipule une pénalité`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] },\n      { droit_français_choisi: true, selon: [{ source: 'pieces/01_contrat.md', citation: `Article 1. Grève` }] },"), "  droit_français_choisi: { true: [{ preuve: [{ piece: 'pieces/01_contrat.md', citation: `Article 1. Grève` }] }] },");
   assert.notEqual(governed, EXAMPLE_CODE);
   const result = await verify(governed);
   assert.deepEqual(texts(result, 'erreur'), []);
@@ -409,13 +408,14 @@ test('drafting : valeur laissée en blanc, renvois, stipulations contradictoires
   const manques = texts(blanks, 'manque').join('\n');
   assert.doesNotMatch(manques, /pénalité_stipulée\.si\[0\]\.selon\[0\] :/);
   assert.doesNotMatch(manques, /prix_unitaire/);
-  const referred = await draft(EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }],", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, renvoi: [{ piece: 'pieces/02_bareme.md', citation: `100 euros par jour` }, { piece: 'pieces/09_annexe_absente.md' }], contredit: [{ piece: 'pieces/01_contrat.md', citation: `Aucune pénalité n'est due` }] }],"));
+  const referred = await draft(EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }] },", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, renvoi: [{ piece: 'pieces/02_bareme.md', citation: `100 euros par jour` }, { piece: 'pieces/09_annexe_absente.md' }] }] },").replace("citation: `Livré le 14/06/2025` }] }] },", "citation: `Livré le 14/06/2025` }] }], false: [{ preuve: [{ piece: 'pieces/01_contrat.md', citation: `Aucune pénalité n'est due` }] }] },"));
   assert.deepEqual(texts(referred, 'erreur'), []);
   const notes = texts(referred, 'manque').join('\n');
   assert.doesNotMatch(notes, /renvoi\[0\]/);
   assert.match(notes, /renvoi\[1\] : le projet renvoie à un élément absent du dossier \(pieces\/09_annexe_absente\.md\)/);
-  assert.match(notes, /pénalité_stipulée\.si\[0\]\.selon\[0\]\.contredit : stipulations contradictoires : à harmoniser dans le projet/);
-  assert.equal(at(referred.annotated, 'pénalité_stipulée.si[0].statut'), 'à établir');
+  assert.match(notes, /retard_de_livraison : retard_de_livraison : fondements contraires, à trancher/);
+  assert.equal(at(referred.annotated, 'pénalité_stipulée.si[0].statut'), 'disputé');
+  assert.equal(at(referred.annotated, 'retard_de_livraison.statut'), 'disputé');
   const litigation = await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'contentieux',\n  objectifs:"));
   assert.doesNotMatch(texts(litigation, 'manque').join('\n'), /laissée en blanc/);
   const priced = await cession(CESSION_CODE.replace("    montant_du_dommage:", "    valeur_d_entreprise: { valeur: 50000, preuve: [{ piece: 'pieces/08_notification.md', citation: `dommage de 45.000 euros` }] },\n    dette_nette: { valeur: 5000, preuve: [{ piece: 'pieces/08_notification.md', citation: `dommage de 45.000 euros` }] },\n    prix_calculé: { formule: { produit: [0.9, { difference: ['valeur_d_entreprise', 'dette_nette'] }] } },\n    prix_stipulé: { valeur: 41000, preuve: [{ piece: 'pieces/08_notification.md', citation: `dommage de 45.000 euros` }], formule: { produit: [0.9, { difference: ['valeur_d_entreprise', 'dette_nette'] }] } },\n    montant_du_dommage:"));
@@ -433,9 +433,11 @@ const FISCAL_SOURCES: Record<string, SourceInfo> = {
 const FISCAL_CODE = `{
   qualification: 'drafting',
   objectifs: [{ objectif: \`Payer le moins d’impôt possible sur la cession de Jean Dupont\`, réduire: 'impôt_dû', validite: 'validité_de_la_cession' }],
-  validité_de_la_cession: { si: [{ condition: 'consentement_des_parties', selon: [{ source: 'LEGIARTI000000000102', citation: \`le consentement des parties\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' }, applicabilite: 'applicabilité_de_l_article_1128' }] }] },
-  applicabilité_de_l_article_1128: { si: [{ condition: 'contrat_de_cession', selon: [{ source: 'LEGIARTI000000000102', citation: \`la validité d’un contrat\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' } }], preuve: [{ piece: 'pieces/projet_cession.md', citation: \`cède ses titres\` }] }] },
-  applicabilité_de_l_article_150: { si: [{ condition: 'cession_par_une_personne_physique', selon: [{ source: 'LEGIARTI000000000101', citation: \`cessions de titres par les personnes physiques\`, vigueur: { debut: '2018-01-01', fin: null, au: 'date_de_cession' } }], preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Jean Dupont, personne physique\` }] }] },
+  validité_de_la_cession: { si: [{ consentement_des_parties: true, selon: [{ source: 'LEGIARTI000000000102', citation: \`le consentement des parties\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' }, applicabilite: 'applicabilité_de_l_article_1128' }] }] },
+  applicabilité_de_l_article_1128: { si: [{ contrat_de_cession: true, selon: [{ source: 'LEGIARTI000000000102', citation: \`la validité d’un contrat\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' } }] }] },
+  contrat_de_cession: { true: [{ preuve: [{ piece: 'pieces/projet_cession.md', citation: \`cède ses titres\` }] }] },
+  applicabilité_de_l_article_150: { si: [{ cession_par_une_personne_physique: true, selon: [{ source: 'LEGIARTI000000000101', citation: \`cessions de titres par les personnes physiques\`, vigueur: { debut: '2018-01-01', fin: null, au: 'date_de_cession' } }] }] },
+  cession_par_une_personne_physique: { true: [{ preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Jean Dupont, personne physique\` }] }] },
   valeurs: {
     date_de_cession: { valeur: '2026-03-01', preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Fait le 01/03/2026\` }] },
     prix_de_cession: { valeur: null },
@@ -478,7 +480,7 @@ test('une question peut appeler un montant : le taux se source par un texte appl
   assert.match(texts(alone, 'manque').join('\n'), /valeurs\.prix_de_cession : impôt_dû dépend de prix_de_cession, que le projet ne fixe pas : fixe-la dans valeurs, ou ajoute une hypothèse/);
   const wrong = await fiscal(FISCAL_CODE.replace('attendu: { impôt_dû: 14300 }', 'attendu: { impôt_dû: 14000 }'));
   assert.match(texts(wrong, 'erreur').join('\n'), /hypotheses\[0\] : hypothèse non conforme : obtenu impôt_dû = 14300/);
-  const hypothetical = await fiscal(FISCAL_CODE.replace(", preuve: [{ piece: 'pieces/projet_cession.md', citation: `Jean Dupont, personne physique` }] }] },", ' }] },').replace('faits: { prix_de_cession: 200000 }', 'faits: { prix_de_cession: 200000, cession_par_une_personne_physique: vrai }'));
+  const hypothetical = await fiscal(FISCAL_CODE.replace(/\n  cession_par_une_personne_physique: \{[^\n]*\},/, '').replace('faits: { prix_de_cession: 200000 }', 'faits: { prix_de_cession: 200000, cession_par_une_personne_physique: vrai }'));
   assert.equal(at(hypothetical.annotated, 'valeurs.taux_forfaitaire.statut'), 'à établir');
   assert.deepEqual(texts(hypothetical, 'erreur'), []);
   const simulated = await fiscal(FISCAL_CODE, { prix_de_cession: 300000 });
@@ -498,8 +500,8 @@ test('drafting : une valeur laissée ouverte n’est un manque que si la répons
   const code = (essais: string) => `{
   qualification: 'drafting',
   objectifs: [{ objectif: \`Obtenir une réduction de prix\`, obtenir: 'réduction_due', validite: 'validité_de_la_cession' }],
-  réduction_due: { si: [{ condition: 'prix_supérieur_au_seuil', montant: { valeur: 'prix_de_cession', plus_de: 'seuil_de_réduction' }, selon: [{ source: 'pieces/projet_cession.md', citation: \`Si le prix excède le seuil\` }] }] },
-  validité_de_la_cession: { si: [{ condition: 'consentement_des_parties', selon: [{ source: 'LEGIARTI000000000102', citation: \`le consentement des parties\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' } }] }] },
+  réduction_due: { si: [{ prix_supérieur_au_seuil: true, montant: { valeur: 'prix_de_cession', plus_de: 'seuil_de_réduction' }, selon: [{ source: 'pieces/projet_cession.md', citation: \`Si le prix excède le seuil\` }] }] },
+  validité_de_la_cession: { si: [{ consentement_des_parties: true, selon: [{ source: 'LEGIARTI000000000102', citation: \`le consentement des parties\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_cession' } }] }] },
   valeurs: {
     date_de_cession: { valeur: '2026-03-01', preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Fait le 01/03/2026\` }] },
     prix_de_cession: { valeur: null },
@@ -529,12 +531,12 @@ test('consultation : des hypothèses lèvent le manque d’une valeur ouverte, p
 });
 
 test('un objectif oriente le raisonnement : le vérificateur désigne ce qui y fait obstacle et les objectifs en tension', async () => {
-  const excused = EXAMPLE_CODE.replace("{ condition: 'grève_nationale' }", "{ condition: 'grève_nationale', preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }");
+  const excused = withRoots(EXAMPLE_CODE, "  grève_nationale: { true: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }] },");
   const sought = await verify(excused);
   assert.equal(at(sought.annotated, 'objectifs[0].atteint'), false);
   assert.ok(at(sought.annotated, 'objectifs[0].obstacles').includes('grève_nationale'));
   const gaps = texts(sought, 'manque').join('\n');
-  assert.match(gaps, /grève\.si\[0\]\.l_une\[0\] : grève_nationale fait obstacle à l’objectif « Obtenir de Société Beta SARL le paiement de la pénalité de retard » : conteste-le \(contredit\)/);
+  assert.match(gaps, /grève\.si\[0\]\.l_une\[0\] : grève_nationale fait obstacle à l’objectif « Obtenir de Société Beta SARL le paiement de la pénalité de retard » : conteste-le \(une pièce sous false\)/);
   assert.match(gaps, /pénalité_stipulée\.sauf\[0\] : la source de force_majeure_contractuelle fait obstacle à l’objectif/);
   const avoided = await verify(excused.replace("obtenir: 'pénalité_encourue'", "écarter: 'pénalité_encourue'"));
   assert.equal(at(avoided.annotated, 'objectifs[0].atteint'), true);
@@ -551,7 +553,8 @@ test('un objectif oriente le raisonnement : le vérificateur désigne ce qui y f
     { objectif: \`Payer le moins d’impôt possible\`, réduire: 'impôt_dû' },
     { objectif: \`Rester dirigeant de Société Exemple SAS\`, obtenir: 'qualité_de_dirigeant' },
   ],
-  qualité_de_dirigeant: { si: [{ condition: 'mandat_social', selon: [{ source: 'pieces/projet_cession.md', citation: \`cède ses titres\` }], preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Jean Dupont, personne physique\` }] }] },
+  qualité_de_dirigeant: { si: [{ mandat_social: true, selon: [{ source: 'pieces/projet_cession.md', citation: \`cède ses titres\` }] }] },
+  mandat_social: { true: [{ preuve: [{ piece: 'pieces/projet_cession.md', citation: \`Jean Dupont, personne physique\` }] }] },
   valeurs: {
     gain: { valeur: 100000, preuve: [{ piece: 'pieces/projet_cession.md', citation: \`acquis pour 100 000 euros\` }] },
     impôt_dû: { formule: { si: 'mandat_social', alors: { produit: ['gain', 0.3] }, sinon: { produit: ['gain', 0.128] } } },
@@ -560,4 +563,124 @@ test('un objectif oriente le raisonnement : le vérificateur désigne ce qui y f
   assert.deepEqual(texts(tension, 'erreur'), []);
   assert.match(texts(tension, 'manque').join('\n'), /qualité_de_dirigeant\.si\[0\] : mandat_social fait obstacle à l’objectif « Payer le moins d’impôt possible » : conteste-le .* ; en tension avec l’objectif « Rester dirigeant de Société Exemple SAS » : à arbitrer/);
   assert.equal(at(tension.annotated, 'objectifs[1].atteint'), true);
+});
+
+const DISPUTED = (code: string) => code.replace("citation: `Livré le 14/06/2025` }] }] },", "citation: `Livré le 14/06/2025` }] }], false: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `a duré deux jours` }] }] },");
+
+test('un fait prouvé sous true et sous false est disputé : statut, manque automatique et doute propagé', async () => {
+  const result = await verify(DISPUTED(EXAMPLE_CODE));
+  assert.deepEqual(texts(result, 'erreur'), []);
+  assert.equal(at(result.annotated, 'retard_de_livraison.statut'), 'disputé');
+  assert.equal(at(result.annotated, 'retard_de_livraison.true[0].statut'), 'acquis');
+  assert.equal(at(result.annotated, 'retard_de_livraison.false[0].statut'), 'acquis');
+  assert.equal(at(result.annotated, 'pénalité_stipulée.si[0].statut'), 'disputé');
+  assert.equal(at(result.annotated, 'objectifs[0].statut'), 'à établir');
+  assert.ok(at(result.annotated, 'objectifs[0].decisifs').includes('retard_de_livraison'));
+  const issue = result.issues.find((entry) => entry.text === 'retard_de_livraison : fondements contraires, à trancher')!;
+  assert.equal(issue.kind, 'manque');
+  assert.equal(issue.path, 'retard_de_livraison');
+  assert.equal(issue.avocat, 'Retard de livraison : des fondements contraires sont établis, à trancher.');
+  assert.doesNotMatch(texts(result, 'manque').join('\n'), /retard_de_livraison décide de la réponse/);
+  assert.match(result.log.find((entry) => entry.key === 'fait:retard_de_livraison')!.text, /^Disputé/);
+  assert.deepEqual(texts(await verify(EXAMPLE_CODE), 'manque').filter((text) => text.includes('fondements contraires')), []);
+});
+
+const LAW = (settled: string) => `{
+  qualification: 'consultation',
+  objectifs: [{ objectif: \`Obtenir un effet fictif\`, obtenir: 'effet_fictif' }],
+  valeurs: {
+    date_de_conclusion_du_contrat: { valeur: '2024-01-15', preuve: [{ piece: 'pieces/01_contrat.md', citation: \`Fait le 15/01/2024\` }] },
+  },
+  effet_fictif: {
+    si: [
+      { question_de_droit: true,
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`Lorsque le contrat stipule une pénalité\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] },
+    ],
+  },
+  question_de_droit: {
+    true: [{ selon: [{ source: 'LEGIARTI000000000005', citation: \`Lorsque le contrat stipule une pénalité\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] }],
+    false: [{ selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }], si: [{ fait_incertain: true }] }],
+  },
+  fait_incertain: ${settled},
+}`;
+const BOTH = "{ true: [{ preuve: [{ piece: 'pieces/05_bon_de_livraison.md', citation: `Livré le 14/06/2025` }] }], false: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `a duré deux jours` }] }] }";
+
+test('une question de droit dont un fondement false dépend d’une condition disputée reste incertaine', async () => {
+  const doubtful = await verify(LAW(BOTH));
+  assert.deepEqual(texts(doubtful, 'erreur'), []);
+  assert.equal(at(doubtful.annotated, 'fait_incertain.statut'), 'disputé');
+  assert.equal(at(doubtful.annotated, 'question_de_droit.true[0].statut'), 'acquis');
+  assert.equal(at(doubtful.annotated, 'question_de_droit.false[0].statut'), 'à établir');
+  assert.equal(at(doubtful.annotated, 'question_de_droit.statut'), 'à établir');
+  assert.equal(at(doubtful.annotated, 'effet_fictif.statut'), 'à établir');
+  assert.equal(at(doubtful.annotated, 'objectifs[0].statut'), 'à établir');
+  assert.doesNotMatch(texts(doubtful, 'manque').join('\n'), /question_de_droit : fondements contraires/);
+  const refuted = await verify(LAW("{ false: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `a duré deux jours` }] }] }"));
+  assert.equal(at(refuted.annotated, 'question_de_droit.false[0].statut'), 'exclu');
+  assert.equal(at(refuted.annotated, 'question_de_droit.statut'), 'acquis');
+  assert.equal(at(refuted.annotated, 'objectifs[0].statut'), 'acquis');
+  const opposed = await verify(LAW("{ true: [{ preuve: [{ piece: 'pieces/05_bon_de_livraison.md', citation: `Livré le 14/06/2025` }] }] }"));
+  assert.equal(at(opposed.annotated, 'question_de_droit.statut'), 'disputé');
+  assert.ok(opposed.issues.some((issue) => issue.kind === 'manque' && issue.text === 'question_de_droit : fondements contraires, à trancher'));
+});
+
+const VOTE = (approval: string) => `{
+  qualification: 'consultation',
+  objectifs: [{ objectif: \`Obtenir le versement de l’indemnité\`, obtenir: 'indemnité_exigible' }],
+  valeurs: {
+    date_de_conclusion_du_contrat: { valeur: '2024-01-15', preuve: [{ piece: 'pieces/01_contrat.md', citation: \`Fait le 15/01/2024\` }] },
+  },
+  indemnité_exigible: {
+    si: [
+      { l_une: [{ indemnité_soumise_au_vote_ex_post: false }, { approbation_ex_post_obtenue: true }],
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`Lorsque le contrat stipule une pénalité\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }] },
+    ],
+  },
+  indemnité_soumise_au_vote_ex_post: ${BOTH},
+  approbation_ex_post_obtenue: { ${approval}: [{ preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: \`vous met en demeure\` }] }] },
+  hypotheses: [
+    { nom: \`soumise au vote\`, faits: { indemnité_soumise_au_vote_ex_post: vrai }, attendu: { indemnité_exigible: faux } },
+    { nom: \`hors du champ du vote\`, faits: { indemnité_soumise_au_vote_ex_post: faux }, attendu: { indemnité_exigible: vrai } },
+  ],
+}`;
+
+test('une alternative entre une question disputée et une approbation établie fausse laisse l’objectif en suspens, la question est décisive et les hypothèses la font basculer', async () => {
+  const result = await verify(VOTE('false'));
+  assert.deepEqual(texts(result, 'erreur'), []);
+  assert.equal(at(result.annotated, 'approbation_ex_post_obtenue.statut'), 'exclu');
+  assert.equal(at(result.annotated, 'indemnité_soumise_au_vote_ex_post.statut'), 'disputé');
+  assert.equal(at(result.annotated, 'indemnité_exigible.si[0].l_une[0].statut'), 'disputé');
+  assert.equal(at(result.annotated, 'indemnité_exigible.si[0].l_une[1].statut'), 'exclu');
+  assert.equal(at(result.annotated, 'objectifs[0].statut'), 'à établir');
+  assert.deepEqual(at(result.annotated, 'objectifs[0].decisifs'), ['indemnité_soumise_au_vote_ex_post']);
+  assert.equal(at(result.annotated, 'indemnité_exigible.si[0].l_une[0].decisif'), true);
+  assert.equal(at(result.annotated, 'bilan.hypotheses'), '2/2');
+  assert.ok(result.issues.some((issue) => issue.kind === 'manque' && issue.text === 'indemnité_soumise_au_vote_ex_post : fondements contraires, à trancher'));
+  const approved = await verify(VOTE('true'));
+  assert.equal(at(approved.annotated, 'objectifs[0].statut'), 'acquis');
+  assert.equal(at(approved.annotated, 'objectifs[0].decisifs'), undefined);
+  const simulated = await verifyReasoning({ code: VOTE('false'), cwd: '/dossier-fictif', connectors: connectors(), reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(), simulation: { indemnité_soumise_au_vote_ex_post: false } });
+  assert.equal(simulated.simulation?.objectifs[0].statut, 'acquis');
+  const inverse = await verifyReasoning({ code: VOTE('false'), cwd: '/dossier-fictif', connectors: connectors(), reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(), simulation: { indemnité_soumise_au_vote_ex_post: true } });
+  assert.equal(inverse.simulation?.objectifs[0].statut, 'exclu');
+  const wrong = await verify(VOTE('false').replace('attendu: { indemnité_exigible: vrai }', 'attendu: { indemnité_exigible: faux }'));
+  assert.match(texts(wrong, 'erreur').join('\n'), /hypotheses\[1\] : hypothèse non conforme : obtenu indemnité_exigible = vrai/);
+});
+
+test('les anciennes écritures sont des erreurs de migration qui disent où écrire', async () => {
+  const errors = async (code: string) => texts(await verify(code), 'erreur').join('\n');
+  assert.match(await errors(EXAMPLE_CODE.replace('{ force_majeure: true }', "{ force_majeure: true, contredit: [{ piece: 'pieces/07_courriel.md', citation: `a duré deux jours` }] }")), /contredit n’existe plus : écris la pièce en preuve sous nom: \{ false: \[\{ preuve/);
+  assert.match(await errors(EXAMPLE_CODE.replace("citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null } }]", "citation: `En cas de retard de livraison`, vigueur: { debut: '2024-01-15', fin: null }, contredit: [{ piece: 'pieces/01_contrat.md', citation: `Aucune pénalité n'est due` }] }]")), /selon\[0\]\.contredit : contredit n’existe plus.*deux fondements de valeurs opposées/);
+  assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', "{ condition: 'pénalité_stipulée',")), /pénalité_encourue\.si\[0\]\.condition : condition: nom n’existe plus : écris pénalité_stipulée: true \(ou pénalité_stipulée: false\)/);
+  assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', "{ pénalité_stipulée: true, preuve: [{ piece: 'pieces/01_contrat.md', citation: `une pénalité est due` }],")), /pénalité_encourue\.si\[0\]\.preuve : preuve ne se place plus sur une condition de règle : place-la sous la valeur qu’elle établit, à la racine/);
+  assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', "{ pénalité_stipulée: `oui`,")), /pénalité_encourue\.si\[0\]\.pénalité_stipulée : pénalité_stipulée : true ou false attendu/);
+  assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', "{ pénalité_stipulée: null,")), /pénalité_stipulée : true ou false attendu/);
+  assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', '{ pénalité_stipulée: true, autre_condition: true,')), /exactement une clé nom: true\|false \(trouvé : pénalité_stipulée, autre_condition\)/);
+  assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', '{')), /pénalité_encourue\.si\[0\] : condition : - nom_de_la_condition: true/);
+  assert.match(await errors(EXAMPLE_CODE.replace("mise_en_demeure: { true: [{ preuve", "mise_en_demeure: { si: [], true: [{ preuve")), /mise_en_demeure mêle si\/sauf et true\/false/);
+  assert.match(await errors(EXAMPLE_CODE.replace("mise_en_demeure: { true: [{ preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },", "mise_en_demeure: { true: [{ si: [{ retard_de_livraison: vrai }] }] },")), /mise_en_demeure\.true\[0\] : fondement : \{ preuve/);
+  assert.match(await errors(EXAMPLE_CODE.replace("mise_en_demeure: { true: [{ preuve", "mise_en_demeure: { true: [{ contredit: [], preuve")), /mise_en_demeure\.true\[0\]\.contredit : contredit n’existe plus/);
+  assert.match(await errors(EXAMPLE_CODE.replace("date_de_conclusion_du_contrat: { valeur: '2024-01-15',", "date_de_conclusion_du_contrat: { valeur: '2024-01-15', contredit: [],")), /valeurs\.date_de_conclusion_du_contrat\.contredit : contredit n’existe plus/);
+  const rewritten = await verify(EXAMPLE_CODE);
+  assert.doesNotMatch(rewritten.code, /contredit|condition:/);
 });
