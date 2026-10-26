@@ -130,6 +130,18 @@ jobs:
       - name: Verify full installation without publishing an update
         shell: bash
         run: node scripts/piecemaker/ui-updates/windows-validation/verify-installed.mjs "$PIECEMAKER_TEST_INSTALLED/PieceMakerValidation.exe"
+      - name: Preserve failed installation diagnostics
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: PieceMaker-Validation-Diagnostics-${{ github.run_number }}
+          path: |
+            ${{ env.PIECEMAKER_TEST_OUTPUT }}/gliner-*.json
+            ${{ env.PIECEMAKER_TEST_OUTPUT }}/interface-diagnostic.json
+            ${{ env.PIECEMAKER_TEST_OUTPUT }}/installation-verification.log
+            ${{ env.PIECEMAKER_TEST_OUTPUT }}/*.png
+          if-no-files-found: warn
+          retention-days: 14
       - name: Create installer checksums
         shell: bash
         run: |
