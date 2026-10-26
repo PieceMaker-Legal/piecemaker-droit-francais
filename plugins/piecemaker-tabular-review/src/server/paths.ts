@@ -37,9 +37,29 @@ export function protectedProjects(): string[] {
 export function assertProject(value: unknown): string {
   if (typeof value !== 'string' || !path.isAbsolute(value)) throw new UserError('Dossier invalide.');
   const project = path.resolve(value);
-  if (!registeredProjects().has(project)) throw new UserError('Ce dossier n’est pas enregistré dans PieceMaker.');
   if (!fs.existsSync(project) || !fs.statSync(project).isDirectory()) throw new UserError('Dossier introuvable sur le disque.');
-  return project;
+  const realProject = fs.realpathSync(project);
+  const registered = [...registeredProjects()].some((entry) => {
+    try {
+      return samePath(fs.realpathSync(entry), realProject);
+    } catch {
+      return false;
+    }
+  });
+  if (!registered) throw new UserError('Ce dossier n’est pas enregistré dans PieceMaker.');
+  return realProject;
+}
+
+function samePath(left: string, right: string): boolean {
+  const normalize = process.platform === 'win32' ? (value: string) => value.toLowerCase() : (value: string) => value;
+  return normalize(path.resolve(left)) === normalize(path.resolve(right));
+}
+
+export function isRealPathInside(parent: string, child: string): boolean {
+  const realParent = fs.realpathSync(parent);
+  const realChild = fs.realpathSync(child);
+  const relative = path.relative(realParent, realChild);
+  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
 export function isInside(parent: string, child: string): boolean {

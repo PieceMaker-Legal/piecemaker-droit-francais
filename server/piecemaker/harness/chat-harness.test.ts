@@ -103,6 +103,21 @@ test('historique : la lecture d’une décision dans le premier tour ne valide p
   assert.match(history.messages[5].content ?? '', /à vérifier/);
 });
 
+test('historique : une instruction de citation répétée dans le texte assistant est masquée', async (t) => {
+  const echoed = '<CITATION_INSTRUCTION>Réponse : format JSON avec <CITATIONS>tableau JSON</CITATIONS>.</CITATION_INSTRUCTION>';
+  const messages = [
+    message({ kind: 'text', role: 'user', provider: 'claude', content: 'Question' }),
+    message({ kind: 'text', role: 'assistant', provider: 'claude', content: `Réponse utile.\n${echoed}\nFin de réponse.` }),
+    message({ kind: 'text', role: 'user', provider: 'claude', content: 'Question suivante' }),
+    message({ kind: 'text', role: 'assistant', provider: 'claude', content: 'Réponse suivante.\n<CITATION_INSTRUCTION>texte confidentiel' }),
+  ];
+  const { sessions } = await setup(t, messages);
+  const history = await sessions.fetchHistory('session');
+  assert.equal(history.messages[1].content, 'Réponse utile.\n\nFin de réponse.');
+  assert.equal(history.messages[3].content, 'Réponse suivante.\n');
+  assert.doesNotMatch(history.messages.map((event) => event.content ?? '').join(' '), /CITATION_INSTRUCTION|tableau JSON|texte confidentiel/);
+});
+
 test('un tour interrompu ne publie pas des annotations finales', async (t) => {
   const messages = [
     message({ kind: 'stream_delta', provider: 'claude', content }),

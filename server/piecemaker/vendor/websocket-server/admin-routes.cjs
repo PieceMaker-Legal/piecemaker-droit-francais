@@ -30,6 +30,7 @@ const {
 } = require('../piecemaker-plugin/scripts/lib/commits.cjs');
 const { listOriginals } = require('./originals-pipeline.cjs');
 const { terminateProcessTree } = require('./process-group.cjs');
+const { claudeExecutable } = require('./claude-executable.cjs');
 const { invalidateOriginals, listOriginalsCached } = require('../../originals-cache.cjs');
 const {
   documentKey,
@@ -175,20 +176,21 @@ function maskSecret(value) {
 }
 
 function captureCommand(command, args = [], timeout = 3000) {
-  const executable = process.platform === 'win32' && !command.endsWith('.exe')
-    ? `${command}.cmd`
-    : command;
-  const result = spawnSync(executable, args, {
+  const executable = command === 'claude'
+    ? claudeExecutable()
+    : process.platform === 'win32' && !command.endsWith('.exe') ? `${command}.cmd` : command;
+  const shell = process.platform === 'win32' && !/\.exe$/i.test(executable);
+  const result = spawnSync(shell && executable.includes(' ') ? `"${executable}"` : executable, args, {
     encoding: 'utf8',
     timeout,
     windowsHide: true,
     // Windows cannot execute a .cmd shim directly. The command and arguments
     // are constants owned by PieceMaker, never values supplied by the browser.
-    shell: process.platform === 'win32',
+    shell,
   });
   return {
     ok: result.status === 0 && !result.error,
-    output: String(result.stdout || result.stderr || '').trim(),
+    output: String(result.stdout || result.stderr || result.error?.message || '').trim(),
   };
 }
 

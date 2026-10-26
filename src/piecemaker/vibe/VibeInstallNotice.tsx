@@ -13,6 +13,7 @@ type NoticeState = 'checking' | 'installed' | 'missing' | 'installing';
 export function VibeInstallNotice({ onInstalled }: VibeInstallNoticeProps) {
   const [state, setState] = useState<NoticeState>('checking');
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -20,6 +21,7 @@ export function VibeInstallNotice({ onInstalled }: VibeInstallNoticeProps) {
       .then((current) => {
         if (!active || !current) return;
         setState(current.installed ? 'installed' : current.installing ? 'installing' : 'missing');
+        if (!current.installed && !current.installing && current.error) setError(current.error);
         if (current.installing) {
           return requestVibeInstall()
             .then(() => { if (active) setState('installed'); })
@@ -36,6 +38,16 @@ export function VibeInstallNotice({ onInstalled }: VibeInstallNoticeProps) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (state !== 'installing') return undefined;
+    const timer = window.setInterval(() => {
+      fetchVibeInstallState()
+        .then((current) => setStep(current?.step ?? null))
+        .catch(() => undefined);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [state]);
 
   if (state === 'checking' || state === 'installed') return null;
 
@@ -57,7 +69,7 @@ export function VibeInstallNotice({ onInstalled }: VibeInstallNoticeProps) {
       <div className="flex items-center justify-between gap-4">
         <div className="text-sm text-violet-700 dark:text-violet-300">
           {state === 'installing'
-            ? 'Installation de Mistral Vibe en cours, cela peut prendre quelques minutes…'
+            ? `Installation de Mistral Vibe en cours, cela peut prendre quelques minutes…${step ? ` (${step})` : ''}`
             : 'Mistral Vibe n’est pas installé sur ce poste. PieceMaker peut l’installer pour vous.'}
         </div>
         <Button

@@ -36,6 +36,8 @@ async function loadEntry(startupError, platform = 'win32', preparationWindow = f
     '../shared/product-config.mjs': { loadProductConfig: () => ({ dataDirectoryName: '.example-app' }) },
     '../electron/uninstallPlan.js': { UNINSTALL_ARGUMENT: '--uninstall' },
     '../electron/localServer.js': { LocalServerController: class {} },
+    './embedded-git.js': { addEmbeddedGit: () => {} },
+    './embedded-node.js': { addEmbeddedNode: () => {} },
     './compact-runtime.mjs': {
       initializeCompactRuntime: async ({ applicationRoot }) => {
         if (preparationWindow) emitWindow('preparation-probe', undefined).piecemakerPreparingRuntime = true;

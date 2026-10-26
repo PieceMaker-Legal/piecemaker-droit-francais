@@ -135,7 +135,12 @@ function sessionScopedEnvironment(environment, sessions) {
       return scoped === undefined ? Reflect.get(target, key) : scoped;
     },
     set(target, key, value) {
-      return Reflect.set(target, key, value);
+      target[key] = value;
+      return true;
+    },
+    deleteProperty(target, key) {
+      delete target[key];
+      return true;
     },
   });
 }

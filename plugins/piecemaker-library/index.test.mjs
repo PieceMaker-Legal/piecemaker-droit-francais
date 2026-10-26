@@ -211,6 +211,42 @@ test('Découvrir lists Mike and accepts a pasted marketplace link', async (t) =>
   assert.equal([...container.querySelectorAll('button')].some((button) => button.textContent === 'acme-plugins'), true);
 });
 
+test('Découvrir registers an unregistered catalogue once, without a second click', async (t) => {
+  const calls = [];
+  const registeredScopes = new Set();
+  const { container } = fixture(t, async (method, path, body) => {
+    calls.push([method, path, body]);
+    if (path.startsWith('/catalog?')) return { entries: [] };
+    if (path.startsWith('/plugin/marketplace/register')) {
+      if (body?.scope === 'legal') throw new Error('spawnSync claude ENOENT');
+      registeredScopes.add(body?.scope);
+      return { ok: true, name: body?.scope };
+    }
+    if (path.startsWith('/plugin/marketplace?')) {
+      const scope = new URLSearchParams(path.split('?')[1]).get('scope');
+      return { registered: registeredScopes.has(scope), plugins: [], marketplaces: [] };
+    }
+    return { plugins: [] };
+  });
+  await settle();
+  container.querySelector('[role=tablist][aria-label="Vue des skills"] [role=tab]:last-child').click();
+  await settle();
+  await settle();
+  const registrations = () => calls.filter(([method, path]) => method === 'POST' && path === '/plugin/marketplace/register').map(([, , body]) => body.scope);
+  assert.deepEqual(registrations(), ['mike']);
+  assert.equal([...container.querySelectorAll('button')].some((button) => button.textContent === 'Rafraîchir le catalogue'), true);
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Legal').click();
+  await settle();
+  await settle();
+  assert.match(container.textContent, /spawnSync claude ENOENT/);
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Mike').click();
+  await settle();
+  [...container.querySelectorAll('button')].find((button) => button.textContent === 'Legal').click();
+  await settle();
+  await settle();
+  assert.deepEqual(registrations(), ['mike', 'legal']);
+});
+
 test('Analyses tabulaires lists library templates and adds Mike tabular reviews', async (t) => {
   const calls = [];
   let templates = [];

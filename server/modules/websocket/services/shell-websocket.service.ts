@@ -6,7 +6,7 @@ import pty, { type IPty } from 'node-pty';
 import { WebSocket, type RawData } from 'ws';
 
 import { getApplicationDataRoot, parseIncomingJsonObject, stripAnsiSequences } from '@/shared/utils.js';
-import { findVibeBinDirectory } from '@/shared/vibe-cli.js';
+import { findVibeBinDirectory, vibeTerminalEnvironment } from '@/shared/vibe-cli.js';
 
 type ShellIncomingMessage = {
   type?: string;
@@ -667,6 +667,7 @@ export function handleShellConnection(
             // Programs that cannot query the terminal (vim, Claude Code's "auto"
             // theme before its OSC 11 reply arrives) read it to pick light or dark.
             ...(colorScheme ? { COLORFGBG: colorScheme === 'light' ? '0;15' : '15;0' } : {}),
+            ...vibeTerminalEnvironment(),
           },
         });
 

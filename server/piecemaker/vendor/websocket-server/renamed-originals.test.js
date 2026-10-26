@@ -14,17 +14,19 @@ const { readProtection, writeProtection } = require('../piecemaker-plugin/script
 const { listOriginals } = require('./originals-pipeline.cjs');
 const { documentIndexFile } = require('./document-index.cjs');
 const { renamePiece } = require('./renamed-originals.cjs');
+const { homonymMarkdownStem } = require('../piecemaker-plugin/scripts/lib/markdown-name.cjs');
 
 const CONVERTED = 'Fichiers convertis PieceMaker';
 const RECEIVED_AT = new Date('2026-01-15T10:00:00Z');
 
-function convertedCase(pieces) {
+function convertedCase(pieces, markdownStemOf = (root, piece) => path.basename(piece, '.pdf')) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'renamed-originals-')));
   fs.mkdirSync(path.join(root, CONVERTED));
   for (const piece of pieces) {
+    fs.mkdirSync(path.dirname(path.join(root, piece)), { recursive: true });
     fs.writeFileSync(path.join(root, piece), `%PDF ${piece}`);
     fs.utimesSync(path.join(root, piece), RECEIVED_AT, RECEIVED_AT);
-    fs.writeFileSync(path.join(root, CONVERTED, `${path.basename(piece, '.pdf')}.md`), `# ${piece}\n`);
+    fs.writeFileSync(path.join(root, CONVERTED, `${markdownStemOf(root, piece)}.md`), `# ${piece}\n`);
   }
   markFilesAnonymized(root, pieces.map((piece) => path.join(root, piece)));
   fs.writeFileSync(documentIndexFile(root), JSON.stringify({
@@ -55,6 +57,28 @@ test('renommer une pièce convertie renomme son Markdown et conserve son état',
     assert.deepStrictEqual(Object.keys(index.documents), [newKey]);
     assert.deepStrictEqual(Object.keys(index.overrides), [newKey]);
     assert.strictEqual(index.revisions[0].documentKey, newKey);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('renommer une pièce homonyme renomme son Markdown suffixé sans toucher à l’autre', async () => {
+  const root = convertedCase(
+    ['Dossier A/exemple.pdf', 'Dossier B/exemple.pdf'],
+    (caseRoot, piece) => homonymMarkdownStem(path.join(caseRoot, piece), caseRoot),
+  );
+  try {
+    await renamePiece(root, 'Dossier A/exemple.pdf', '2024-01-09_Assignation');
+
+    const renamed = path.join(root, 'Dossier A', '2024-01-09_Assignation.pdf');
+    const other = path.join(root, 'Dossier B', 'exemple.pdf');
+    const expected = [
+      `${homonymMarkdownStem(renamed, root)}.md`,
+      `${homonymMarkdownStem(other, root)}.md`,
+    ];
+    assert.deepStrictEqual(fs.readdirSync(path.join(root, CONVERTED)).sort(), expected.sort());
+    assert.ok(fs.existsSync(path.join(root, CONVERTED, expected[0])));
+    assert.ok(fs.existsSync(path.join(root, CONVERTED, expected[1])));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

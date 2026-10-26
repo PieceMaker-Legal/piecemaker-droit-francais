@@ -28,6 +28,8 @@ async function runBuild(platform, downloaded) {
     './windows-update-config.mjs': { configureWindowsUpdates: noop },
     './compact-package.mjs': { pruneDesktopDependencies: async () => [], configureCompactPackage: noop },
     './components-package.mjs': { packageRuntimeComponents: noop },
+    './mingit.mjs': { embedMinGit: noop },
+    './node-shim.mjs': { embedNodeShim: noop },
     './prebuilt-app.mjs': { verifyBuiltApp: noop, verifyMacBundleLinks: noop },
     './paths.mjs': { IS_MAC: platform === 'darwin', PRODUCT_NAME: 'PieceMaker', caCertPath: '', caKeyPath: '', releaseRepo: 'Example/Product', releaseTag: 'fixture' },
   };

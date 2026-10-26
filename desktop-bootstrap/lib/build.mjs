@@ -12,6 +12,8 @@ import { configureWindowsUpdates } from './windows-update-config.mjs';
 import { pruneDesktopDependencies, configureCompactPackage } from './compact-package.mjs';
 import { packageRuntimeComponents } from './components-package.mjs';
 import { verifyBuiltApp, verifyMacBundleLinks } from './prebuilt-app.mjs';
+import { embedMinGit } from './mingit.mjs';
+import { embedNodeShim } from './node-shim.mjs';
 import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath, releaseRepo, releaseTag } from './paths.mjs';
 
 function npmTool(tool) {
@@ -423,6 +425,10 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false, pre
   await embedUiRuntimeConfig(sourceDir, stageDir);
   for (const directory of ['lib', 'composants', 'certs', 'installer-ui']) {
     await fs.cp(path.join(bootstrapRoot, directory), path.join(stageDir, 'desktop-bootstrap', directory), { recursive: true, filter: isShippedFile });
+  }
+  if (process.platform === 'win32') {
+    await embedMinGit(stageDir);
+    await embedNodeShim(stageDir);
   }
   if (process.platform === 'win32' && windowsInstaller) {
     await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));

@@ -16,6 +16,7 @@ import {
   piecemakerVibeDirectory,
   resolveVibeExecutable,
   vibeEnvFilePath,
+  vibeTerminalEnvironment,
   windowsCredentialProbeScript,
   type VibeCliHost,
 } from '@/shared/vibe-cli.js';
@@ -131,15 +132,21 @@ test('the vibe installed by PieceMaker is found in ~/.piecemaker/vibe on macOS a
   );
 });
 
+test('the vibe installed by PieceMaker wins over a vibe installed by hand with uv', () => {
+  const both = {
+    'C:\\Users\\jean\\.local\\bin\\vibe.exe': '',
+    'C:\\Users\\jean\\.piecemaker\\vibe\\Scripts\\vibe.exe': '',
+  };
+  assert.equal(
+    resolveVibeExecutable(fakeHost({ platform: 'win32', env: { UV_TOOL_BIN_DIR: 'C:\\uv' }, files: { ...both, 'C:\\uv\\vibe.exe': '' } }).host),
+    'C:\\Users\\jean\\.piecemaker\\vibe\\Scripts\\vibe.exe',
+  );
+});
+
 test('PIECEMAKER_HOME moves the PieceMaker vibe folder', () => {
   const { host } = fakeHost({ env: { PIECEMAKER_HOME: '/srv/pm' }, files: { '/srv/pm/vibe/bin/vibe': '' } });
   assert.equal(piecemakerVibeDirectory(host), '/srv/pm/vibe');
   assert.equal(findVibeBinDirectory(host), '/srv/pm/vibe/bin');
-});
-
-test('a vibe the user installed with uv wins over the one PieceMaker installed', () => {
-  const { host } = fakeHost({ files: { '/Users/jean/.local/bin/vibe': '', '/Users/jean/.piecemaker/vibe/bin/vibe': '' } });
-  assert.equal(findVibeBinDirectory(host), '/Users/jean/.local/bin');
 });
 
 test('the Windows environment is read without regard to case, as Windows does', () => {
@@ -179,6 +186,26 @@ test('the Vibe .env lives in ~/.vibe, or in VIBE_HOME when it is set', () => {
   assert.equal(vibeEnvFilePath(fakeHost({ env: { VIBE_HOME: '/srv/vibe' } }).host), '/srv/vibe/.env');
   assert.equal(vibeEnvFilePath(fakeHost({ platform: 'win32' }).host), 'C:\\Users\\jean\\.vibe\\.env');
   assert.equal(vibeEnvFilePath(fakeHost({ platform: 'win32', env: { VIBE_HOME: 'D:\\vibe' } }).host), 'D:\\vibe\\.env');
+});
+
+test('on Windows, terminals get a Vibe theme with its own colours while Vibe would pick an ANSI theme', () => {
+  const configFile = 'C:\\Users\\jean\\.vibe\\config.toml';
+  assert.deepEqual(vibeTerminalEnvironment(fakeHost({ platform: 'win32' }).host), { VIBE_THEME: 'textual-dark' });
+  assert.deepEqual(
+    vibeTerminalEnvironment(fakeHost({ platform: 'win32', files: { [configFile]: 'theme = "auto"\n' } }).host),
+    { VIBE_THEME: 'textual-dark' },
+  );
+  assert.deepEqual(
+    vibeTerminalEnvironment(fakeHost({ platform: 'win32', files: { [configFile]: 'theme = "tokyo-night"\n' } }).host),
+    {},
+  );
+  assert.deepEqual(
+    vibeTerminalEnvironment(fakeHost({ platform: 'win32', env: { VIBE_HOME: 'D:\\vibe' }, files: { 'D:\\vibe\\config.toml': "theme = 'nord'\n" } }).host),
+    {},
+  );
+  assert.deepEqual(vibeTerminalEnvironment(fakeHost({ platform: 'win32', env: { VIBE_THEME: 'nord' } }).host), {});
+  assert.deepEqual(vibeTerminalEnvironment(fakeHost({ platform: 'darwin' }).host), {});
+  assert.deepEqual(vibeTerminalEnvironment(fakeHost({ platform: 'linux' }).host), {});
 });
 
 test('every way vibe --setup or a person writes the key in .env is recognised', () => {

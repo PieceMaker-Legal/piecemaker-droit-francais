@@ -4,7 +4,9 @@ import type { App, View } from '../client/app.js';
 import type { Template } from '../shared.js';
 
 vi.mock('../client/host.js', () => ({
-  loadModels: async () => ({ options: [{ value: 'haiku', label: 'Haiku' }], cheapest: 'haiku' }),
+  loadModels: async (provider: string) => provider === 'mistral'
+    ? { options: [{ value: 'mistral-medium-3.5', label: 'Mistral Medium 3.5' }, { value: 'mistral-small', label: 'Mistral Small' }], cheapest: 'mistral-small' }
+    : { options: [{ value: 'haiku', label: 'Haiku' }], cheapest: 'haiku' },
   anonymizationProxyOrigin: async () => 'http://127.0.0.1:1',
   caseFiles: { pieces: async () => [] },
 }));
@@ -85,6 +87,7 @@ describe('nouveau tableau', () => {
     await vi.waitFor(() => expect(rpc).toHaveBeenCalledWith('POST', '/reviews', expect.objectContaining({ templateName: 'Modèle exemple', title: 'Tableau exemple', columns: template.columns })));
     const body = rpc.mock.calls.find((call) => call[1] === '/reviews')![2];
     expect(body.rows).toHaveLength(3);
+    expect(body).toMatchObject({ provider: 'mistral', model: 'mistral-small' });
     const saved = rpc.mock.calls.filter((call) => call[0] === 'PUT' && call[1] === '/drafts').at(-1)![2];
     expect(saved.draft).toMatchObject({ id: 'd1', title: 'Tableau exemple', templateName: 'Modèle exemple' });
     expect(saved.draft.rows).toHaveLength(3);

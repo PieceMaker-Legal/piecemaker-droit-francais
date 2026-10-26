@@ -38,7 +38,7 @@ const configuredPythonPath = () => {
     return null;
   }
 };
-const PYTHON = () => process.env.PYTHON_PATH || configuredPythonPath() || 'python3';
+const PYTHON = () => process.env.PYTHON_PATH || configuredPythonPath() || (process.platform === 'win32' ? 'python' : 'python3');
 const MAX_LOG_LINES = 200;
 const MAX_ERROR_LINES = 12;
 
@@ -222,6 +222,8 @@ function spawnTracked(job, script, args, progressScale = {}, io = {}) {
       env: {
         ...process.env,
         PYTHONUNBUFFERED: '1',
+        PYTHONIOENCODING: 'utf-8',
+        PYTHONUTF8: '1',
         // Le worker et MinerU, enfants de ce process, héritent de la variable.
         PIECEMAKER_TORCH_THREADS: JOB_TORCH_THREADS(),
       },
@@ -260,6 +262,14 @@ function spawnTracked(job, script, args, progressScale = {}, io = {}) {
             io.onOcrRequired?.(JSON.parse(line.slice('OCR_REQUIRED:'.length)));
           } catch (error) {
             errorLines.push(`pièces à OCR illisibles : ${error.message}`);
+          }
+          continue;
+        }
+        if (line.startsWith('CONVERSION_FAILED:')) {
+          try {
+            io.onConversionFailed?.(JSON.parse(line.slice('CONVERSION_FAILED:'.length)));
+          } catch (error) {
+            errorLines.push(`échec de conversion illisible : ${error.message}`);
           }
           continue;
         }
@@ -349,7 +359,7 @@ function spawnTracked(job, script, args, progressScale = {}, io = {}) {
  * `onProgress`, si fourni, est appelé à chaque mise à jour de la progression
  * avec `{ phase, percent, processed, total }`.
  */
-function runManagedPythonJob({ action, script, args, onProgress, signal, input, onMapping, onOcrRequired } = {}) {
+function runManagedPythonJob({ action, script, args, onProgress, signal, input, onMapping, onOcrRequired, onConversionFailed } = {}) {
   if (!['convert', 'anonymize'].includes(action)) throw new Error('Action inconnue.');
   if (!acceptingJobs) throw new Error('Le serveur est en cours d’arrêt : aucun nouveau traitement ne peut démarrer.');
   const job = {
@@ -383,7 +393,7 @@ function runManagedPythonJob({ action, script, args, onProgress, signal, input, 
     if (signal.aborted) abort();
     else signal.addEventListener('abort', abort, { once: true });
   }
-  const run = () => spawnTracked(job, script, args, {}, { input, onMapping, onOcrRequired });
+  const run = () => spawnTracked(job, script, args, {}, { input, onMapping, onOcrRequired, onConversionFailed });
   const descriptor = { job, run };
   const completion = new Promise((resolve, reject) => {
     descriptor.resolve = resolve;
@@ -471,4 +481,5 @@ module.exports = {
   runManagedPythonJob,
   stopOriginalsJobs,
   listOriginals,
+  PYTHON,
 };

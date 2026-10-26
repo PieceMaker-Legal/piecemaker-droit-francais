@@ -26,19 +26,51 @@ export type VibeInstallHost = {
   removeDirectory: (directory: string) => void;
 };
 
-function runCommand(command: string, args: string[], timeoutMs: number): Promise<CommandResult> {
+export function installEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const result: NodeJS.ProcessEnv = { ...env, PIP_DISABLE_PIP_VERSION_CHECK: '1', PYTHONUNBUFFERED: '1' };
+  for (const key of Object.keys(result)) {
+    if (/^https?_proxy$/i.test(key) && /^http:\/\/(127\.0\.0\.1|localhost)[:/]/i.test(result[key] ?? '')) delete result[key];
+  }
+  return result;
+}
+
+function killTree(child: ReturnType<typeof crossSpawn>): void {
+  if (process.platform === 'win32' && child.pid) {
+    crossSpawn.sync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+    return;
+  }
+  child.kill('SIGKILL');
+}
+
+export function runCommand(command: string, args: string[], timeoutMs: number): Promise<CommandResult> {
   return new Promise((resolve) => {
     const child = crossSpawn(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
-      timeout: timeoutMs,
-      env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1', PYTHONUNBUFFERED: '1' },
+      env: installEnvironment(process.env),
     });
     const chunks: Buffer[] = [];
-    child.stdout?.on('data', (chunk: Buffer) => chunks.push(chunk));
-    child.stderr?.on('data', (chunk: Buffer) => chunks.push(chunk));
-    child.on('error', (error) => resolve({ code: 1, output: error.message }));
-    child.on('close', (code) => resolve({ code: code ?? 1, output: Buffer.concat(chunks).toString('utf8') }));
+    let settled = false;
+    const finish = (result: CommandResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      killTree(child);
+      finish({ code: 1, output: `${Buffer.concat(chunks).toString('utf8')}\nDélai dépassé (${Math.round(timeoutMs / 1000)} s) : ${command} ${args.join(' ')}` });
+    }, timeoutMs);
+    const take = (chunk: Buffer) => {
+      chunks.push(chunk);
+      for (const line of chunk.toString('utf8').split(/\r?\n/)) {
+        if (line.trim()) console.log(`[Vibe install] ${line.trim()}`);
+      }
+    };
+    child.stdout?.on('data', take);
+    child.stderr?.on('data', take);
+    child.on('error', (error) => finish({ code: 1, output: error.message }));
+    child.on('close', (code) => finish({ code: code ?? 1, output: Buffer.concat(chunks).toString('utf8') }));
   });
 }
 
@@ -88,6 +120,9 @@ function failureDetail(result: CommandResult): string {
   return lines.slice(-6).join('\n');
 }
 
+let installStep: string | null = null;
+let lastInstallError: string | null = null;
+
 async function performInstall(host: VibeInstallHost): Promise<void> {
   let sharedPython: string | null = null;
   let sharedRuntime = false;
@@ -102,6 +137,7 @@ async function performInstall(host: VibeInstallHost): Promise<void> {
     if (result.code !== 0 || !isVibeInstalled(host.cli)) throw new Error('Le composant Mistral de l’environnement Python commun est indisponible. Réinstallez le composant Python de cette version de PieceMaker.');
     return;
   }
+  installStep = 'Recherche de Python 3.12 ou 3.13';
   const python = await findPython(host);
   if (!python) {
     throw new Error('Python 3.12 ou 3.13 est introuvable sur ce poste : impossible d’installer Mistral Vibe.');
@@ -110,17 +146,20 @@ async function performInstall(host: VibeInstallHost): Promise<void> {
   const executable = host.cli.platform === 'win32' ? 'python.exe' : 'python';
   const venvPython = pathApi(host.cli).join(piecemakerVibeBinDirectory(host.cli), executable);
   host.removeDirectory(directory);
-  const steps: Array<[string, string[], string]> = [
-    [python, ['-m', 'venv', directory], 'La création de l’environnement Python de Vibe a échoué'],
-    [venvPython, ['-m', 'pip', 'install', '--only-binary=:all:', VIBE_PACKAGE], 'Le téléchargement de Mistral Vibe a échoué'],
+  const steps: Array<[string, string[], string, string]> = [
+    [python, ['-m', 'venv', directory], 'La création de l’environnement Python de Vibe a échoué', `Création de l’environnement Python (${python})`],
+    [venvPython, ['-m', 'pip', 'install', '--only-binary=:all:', VIBE_PACKAGE], 'Le téléchargement de Mistral Vibe a échoué', `Téléchargement de ${VIBE_PACKAGE}`],
   ];
-  for (const [command, args, message] of steps) {
+  for (const [command, args, message, step] of steps) {
+    installStep = step;
+    console.log(`[Vibe install] ${step}`);
     const result = await host.run(command, args, INSTALL_TIMEOUT_MS);
     if (result.code !== 0) {
       host.removeDirectory(directory);
       throw new Error(`${message} :\n${failureDetail(result)}`);
     }
   }
+  installStep = 'Vérification du démarrage de Vibe';
   if (!isVibeInstalled(host.cli)) {
     host.removeDirectory(directory);
     throw new Error('Mistral Vibe a été téléchargé mais ne démarre pas.');
@@ -130,8 +169,14 @@ async function performInstall(host: VibeInstallHost): Promise<void> {
 let pendingInstall: Promise<void> | null = null;
 
 export function installVibe(host: VibeInstallHost = currentVibeInstallHost()): Promise<void> {
-  pendingInstall ??= performInstall(host).finally(() => {
+  if (!pendingInstall) lastInstallError = null;
+  pendingInstall ??= performInstall(host).catch((error: unknown) => {
+    lastInstallError = error instanceof Error ? error.message : String(error);
+    console.error(`[Vibe install] ${lastInstallError}`);
+    throw error;
+  }).finally(() => {
     pendingInstall = null;
+    installStep = null;
   });
   return pendingInstall;
 }
@@ -139,7 +184,7 @@ export function installVibe(host: VibeInstallHost = currentVibeInstallHost()): P
 export function createVibeInstallRouter(host: () => VibeInstallHost = currentVibeInstallHost) {
   const router = express.Router();
   router.get('/vibe', (_req: Request, res: Response) => {
-    res.json({ installed: isVibeInstalled(host().cli), installing: pendingInstall !== null });
+    res.json({ installed: isVibeInstalled(host().cli), installing: pendingInstall !== null, step: installStep, error: lastInstallError });
   });
   router.post('/vibe/install', async (_req: Request, res: Response) => {
     try {

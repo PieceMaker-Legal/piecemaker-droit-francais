@@ -1,7 +1,7 @@
 import path from 'node:path';
 
-import type { Draft, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
-import { hasActions } from '../shared.js';
+import type { Draft, Provider, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions } from '../shared.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, readDrafts, upsertDraft } from './drafts.js';
 import { assertProject, UserError } from './paths.js';
@@ -56,6 +56,11 @@ function documentRows(project: string, value: unknown): RowRequest[] {
   return rows;
 }
 
+function resolved(draft: Draft): { provider: Provider; model: string } {
+  const provider = draft.provider ?? DEFAULT_PROVIDER;
+  return { provider, model: draft.model || DEFAULT_MODEL[provider] };
+}
+
 function missing(draft: Draft): string[] {
   const absent: string[] = [];
   if (!draft.columns.length) absent.push('questions');
@@ -67,11 +72,12 @@ function missing(draft: Draft): string[] {
       absent.push(`recherche : ${error instanceof Error ? error.message : String(error)}`);
     }
   } else if (!draft.rows.length) absent.push('documents');
-  if (draft.provider && draft.provider !== 'claude' && !draft.model) absent.push('modele_ia');
+  if (!resolved(draft).model) absent.push('modele_ia');
   return absent;
 }
 
 function draftSummary(draft: Draft) {
+  const { provider, model } = resolved(draft);
   return {
     projet: draft.id,
     nom: draft.title,
@@ -79,8 +85,8 @@ function draftSummary(draft: Draft) {
     ...(draft.templateName ? { modele: draft.templateName } : {}),
     questions: draft.columns.map((column) => column.name),
     ...(draft.mode === 'recherche' ? { recherche: draft.research ?? {} } : { documents: draft.rows.map((row) => row.documents[0]) }),
-    ia: draft.provider ?? 'claude',
-    modele_ia: draft.model ?? (draft.provider && draft.provider !== 'claude' ? '' : 'haiku'),
+    ia: provider,
+    modele_ia: model,
     ...(draft.error ? { erreur: draft.error } : {}),
     a_completer: missing(draft),
   };
@@ -160,7 +166,8 @@ async function launch(project: string, input: Input, launchers: AssistantLaunche
   const draft = findDraft(project, input.projet);
   const absent = missing(draft);
   if (absent.length) throw new UserError(`À compléter avant de lancer : ${absent.join(', ')}.`);
-  const settings = { project, title: draft.title, columns: draft.columns, provider: draft.provider ?? 'claude', model: draft.model ?? 'haiku', concurrency: CONCURRENCY, proxyOrigin: input.proxyOrigin };
+  const { provider, model } = resolved(draft);
+  const settings = { project, title: draft.title, columns: draft.columns, provider, model, concurrency: CONCURRENCY, proxyOrigin: input.proxyOrigin };
   if (draft.mode === 'recherche') {
     const state = startResearch(draft.research);
     watchResearch(state.id, draft, (body) => launchers.launchResearch({ ...settings, ...body }));

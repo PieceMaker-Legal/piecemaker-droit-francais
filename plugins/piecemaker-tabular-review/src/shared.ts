@@ -88,6 +88,10 @@ export const MAX_CITATION_CORRECTIONS = 3;
 
 export type Provider = 'claude' | 'codex' | 'mistral';
 
+export const DEFAULT_PROVIDER: Provider = 'mistral';
+
+export const DEFAULT_MODEL: Record<Provider, string> = { claude: 'haiku', codex: '', mistral: 'mistral-small' };
+
 export type ReviewStatus = 'running' | 'done' | 'partial' | 'cancelled' | 'interrupted';
 
 export type ReviewCategory = 'documents' | 'recherche-juridique' | 'tri-pieces';

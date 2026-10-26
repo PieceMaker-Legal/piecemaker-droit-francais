@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import type { MarkdownDocument } from '../shared.js';
 import { REVIEW_FOLDER } from '../shared.js';
-import { isInside, toPosix, UserError } from './paths.js';
+import { isInside, isRealPathInside, toPosix, UserError } from './paths.js';
 
 const MAX_DOCUMENTS = 5000;
 const MAX_DEPTH = 12;
@@ -47,5 +47,6 @@ export function resolveMarkdownDocument(project: string, relative: unknown): str
   const segments = path.relative(project, absolute).split(path.sep);
   if (segments.some((segment) => segment.startsWith('.')) || segments[0] === REVIEW_FOLDER) throw new UserError(`Document non autorisé : ${relative}`);
   if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) throw new UserError(`Document introuvable : ${relative}`);
-  return absolute;
+  if (!isRealPathInside(project, absolute)) throw new UserError(`Document hors du dossier : ${relative}`);
+  return fs.realpathSync(absolute);
 }

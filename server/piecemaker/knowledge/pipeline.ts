@@ -28,10 +28,12 @@ type OriginalFile = { path: string; resource?: boolean };
 
 type RenamedPiece = { previous: string; current: string; markdown: string | null };
 
-type CasePiece = { path: string; status: string; markdown: string | null };
+type ConversionFailure = { reason: string; failedAt: string };
+
+type CasePiece = { path: string; status: string; markdown: string | null; conversionFailure: ConversionFailure | null };
 
 type OriginalsPipeline = {
-  listOriginals(caseRoot: string): Promise<Array<OriginalFile & { status: string }>>;
+  listOriginals(caseRoot: string): Promise<Array<OriginalFile & { status: string; conversionFailure: ConversionFailure | null }>>;
   runManagedPythonJob(options: {
     action: 'convert' | 'anonymize';
     script: string;
@@ -41,8 +43,11 @@ type OriginalsPipeline = {
     input?: string;
     onMapping?: (mapping: unknown) => void;
     onOcrRequired?: (payload: unknown) => void;
+    onConversionFailed?: (payload: unknown) => void;
   }): Promise<unknown>;
 };
+
+type FailedDocument = { file: string; reason: string };
 
 const require = createRequire(import.meta.url);
 const {
@@ -80,6 +85,19 @@ const { markdownCounterpart } = require(path.join(
   'lib',
   'protection.cjs',
 )) as { markdownCounterpart(filePath: string, caseRoot: string): { path: string; exists: boolean } };
+const { moveConversionFailure, recordConversionOutcome } = require(path.join(
+  findApplicationRoot(getModuleDirectory(import.meta.url)),
+  'server',
+  'piecemaker',
+  'vendor',
+  'piecemaker-plugin',
+  'scripts',
+  'lib',
+  'conversion-failures.cjs',
+)) as {
+  moveConversionFailure(caseRoot: string, previous: string, current: string): void;
+  recordConversionOutcome(caseRoot: string, outcome: { attempted: string[]; failed: FailedDocument[] }): unknown;
+};
 
 function relativeKey(projectPath: string, filePath: string): string {
   const relative = path.relative(projectPath, filePath).split(path.sep).join('/').normalize('NFC');
@@ -143,7 +161,7 @@ function convertedMarkdown(projectPath: string, document: GlinerDocument): strin
   }
 }
 
-function pythonExecutable(explicit: string | undefined): string {
+export function pythonExecutable(explicit: string | undefined): string {
   if (explicit) return explicit;
   const home = process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
   let config: { pythonPath?: unknown; pythonRuntime?: { kind?: unknown } } | null = null;
@@ -160,7 +178,12 @@ function pythonExecutable(explicit: string | undefined): string {
   const candidate = process.platform === 'win32'
     ? path.join(home, 'venv', 'Scripts', 'python.exe')
     : path.join(home, 'venv', 'bin', 'python');
-  return fs.existsSync(candidate) ? candidate : 'python3';
+  if (fs.existsSync(candidate)) return candidate;
+  try {
+    const { pythonPath } = JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8'));
+    if (typeof pythonPath === 'string' && fs.existsSync(pythonPath)) return pythonPath;
+  } catch {}
+  return process.platform === 'win32' ? 'python' : 'python3';
 }
 
 function mappingSeed(projectId: string, store: KnowledgeStore): GlinerMappingDocument {
@@ -191,6 +214,12 @@ function textValue(value: unknown): string {
 function ocrRequiredFiles(payload: unknown): string[] {
   const files = payload && typeof payload === 'object' ? (payload as { files?: unknown }).files : null;
   return Array.isArray(files) ? files.filter((file): file is string => typeof file === 'string') : [];
+}
+
+function conversionFailure(payload: unknown): FailedDocument | null {
+  const record = payload && typeof payload === 'object' ? payload as { file?: unknown; reason?: unknown } : {};
+  if (typeof record.file !== 'string') return null;
+  return { file: record.file, reason: typeof record.reason === 'string' ? record.reason : '' };
 }
 
 async function withPythonPath<T>(pythonPath: string, run: () => Promise<T>): Promise<T> {
@@ -241,6 +270,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       if (!explicitFiles) args.push('--skip-existing');
       let received: GlinerMappingDocument | null = null;
       let ocrRequired: string[] | null = null;
+      const failedDocuments: FailedDocument[] = [];
       try {
         await withPythonPath(pythonExecutable(options.pythonPath), () => runManagedPythonJob({
           action: 'anonymize',
@@ -251,17 +281,26 @@ export function createKnowledgePipeline(options: PipelineOptions) {
           input: JSON.stringify(seed),
           onMapping: (value) => { received = value as GlinerMappingDocument; },
           onOcrRequired: (value) => { ocrRequired = ocrRequiredFiles(value); },
+          onConversionFailed: (value) => {
+            const failure = conversionFailure(value);
+            if (failure) failedDocuments.push(failure);
+          },
         }));
       } catch (error) {
         if (ocrRequired) throw new OcrRequiredError(ocrRequired);
         if (received) persistScanResult({ projectId, mapping: received, documents: [] }, options.store);
         throw error;
       }
+      recordConversionOutcome(projectPath, {
+        attempted: files.map((file) => path.relative(projectPath, file)),
+        failed: failedDocuments,
+      });
+      invalidateOriginals(projectPath);
       const mapping: GlinerMappingDocument = received || seed;
       const documents = documentsFromIndex(projectPath, files, readDocumentIndex(projectPath));
       const scanResult = { projectId, mapping, documents };
       const result = persistScanResult(scanResult, options.store, (document) => convertedMarkdown(projectPath, document));
-      return { ...result, documents: documents.length };
+      return { ...result, documents: documents.length, failedDocuments };
     },
 
     /** Pièces originales du dossier, avec leur statut et leur Markdown converti. */
@@ -271,7 +310,12 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const projectPath = fs.realpathSync(project.project_path);
       return (await listOriginals(projectPath)).map((file) => {
         const markdown = markdownCounterpart(path.join(projectPath, file.path), projectPath);
-        return { path: file.path, status: file.status, markdown: markdown.exists ? path.relative(projectPath, markdown.path).split(path.sep).join('/') : null };
+        return {
+          path: file.path,
+          status: file.status,
+          markdown: markdown.exists ? path.relative(projectPath, markdown.path).split(path.sep).join('/') : null,
+          conversionFailure: file.conversionFailure,
+        };
       });
     },
 
@@ -282,6 +326,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const projectPath = fs.realpathSync(project.project_path);
       const renamed = await renamePiece(projectPath, String(piecePath ?? ''), name, directory);
       if (renamed.current === renamed.previous) return renamed;
+      moveConversionFailure(projectPath, renamed.previous, renamed.current);
       invalidateOriginals(projectPath);
       const fromNodeId = `document:${relativeKey(projectPath, path.join(projectPath, renamed.previous))}`;
       const node = options.store.snapshot(projectId).nodes.find((candidate) => candidate.id === fromNodeId);

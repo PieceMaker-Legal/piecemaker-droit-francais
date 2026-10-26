@@ -181,7 +181,7 @@ def main():
     try:
         output = convert(source, args.output)
     except (MemoryError, RuntimeError) as error:
-        print(str(error), file=sys.stderr)
+        print(f'\n{error}', file=sys.stderr)
         return 1
     print(f'Markdown écrit : {output}', file=sys.stderr)
     return 0

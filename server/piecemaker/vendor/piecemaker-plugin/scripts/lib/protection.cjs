@@ -24,6 +24,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { structuredMarkdownCounterpart } = require('./case-folder-structure.cjs');
+const { markdownStemCandidates } = require('./markdown-name.cjs');
 
 const PROTECTION_DIR = '.piecemaker';
 const PROTECTION_FILE = 'protection.json';
@@ -352,14 +353,15 @@ function isResourceFile(absolutePath, caseRoot, state = null) {
  * de la pièce. À défaut, le chemin attendu rend le refus actionnable.
  */
 function markdownCounterpart(absolutePath, caseRoot) {
-  const stem = path.basename(absolutePath, path.extname(absolutePath));
+  const stems = markdownStemCandidates(absolutePath, caseRoot);
+  const stem = stems.at(-1);
   const structured = structuredMarkdownCounterpart(absolutePath, caseRoot);
   const workspaceMarkdown = path.join(caseRoot, WORKSPACE_SUBDIR, `${stem}.md`);
   const candidates = [
     ...(structured ? [structured.path] : []),
-    workspaceMarkdown,
-    path.join(path.dirname(absolutePath), `${stem}.md`),
-    path.join(caseRoot, `${stem}.md`),
+    ...stems.map((candidate) => path.join(caseRoot, WORKSPACE_SUBDIR, `${candidate}.md`)),
+    ...stems.map((candidate) => path.join(path.dirname(absolutePath), `${candidate}.md`)),
+    ...stems.map((candidate) => path.join(caseRoot, `${candidate}.md`)),
   ];
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) return { path: candidate, exists: true };
