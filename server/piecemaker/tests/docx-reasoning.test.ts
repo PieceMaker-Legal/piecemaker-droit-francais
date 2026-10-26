@@ -144,7 +144,7 @@ test('un DOCX ordinaire n’est jamais déclaré vérifié sans modèle explicit
 });
 
 test('un ancien modèle JS est refusé avec la consigne de le transcrire en YAML', async () => {
-  await assert.rejects(embedDocxReasoning(await fixture(true), { code: "{ objectifs: [{ objectif: 'Établir un fait fictif', obtenir: 'fait' }] }", bindings: [], clauses: [] }), /Ancien modèle JS : transcris-le dans \.piecemaker\/raisonnement\.yaml/);
+  await assert.rejects(embedDocxReasoning(await fixture(true), { code: "{ objectifs: [{ objectif: 'Établir un fait fictif', obtenir: 'fait' }] }", bindings: [], clauses: [] }), /Ancien modèle JS : transcris-le en YAML dans \.piecemaker\/raisonnements\/<nom>\.yaml/);
 });
 
 test('une liaison ne peut pas remplacer un taux fixé par un texte ni un calcul', async () => {

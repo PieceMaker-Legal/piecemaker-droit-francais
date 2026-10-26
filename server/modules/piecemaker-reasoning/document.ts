@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { Document, isAlias, isMap, isScalar, isSeq, LineCounter, parseDocument, visit } from 'yaml';
@@ -10,15 +10,34 @@ export class ReasoningSyntaxError extends LiteralError {
   constructor(readonly problems: LiteralError[]) { super(problems[0].message.replace(/^ligne \d+ : /, ''), problems[0].line); }
 }
 
-export async function resolveReasoningFile(cwd: string): Promise<string> {
-  const yaml = path.join(cwd, '.piecemaker', 'raisonnement.yaml');
-  const legacy = path.join(cwd, '.piecemaker', 'raisonnement.js');
-  const exists = (file: string) => stat(file).then(() => true, (error: NodeJS.ErrnoException) => {
-    if (error.code === 'ENOENT') return false;
+export const REASONING_DIR = path.join('.piecemaker', 'raisonnements');
+const NAME = /^[\p{Ll}\p{N}][\p{Ll}\p{N}-]*$/u;
+const NAME_SHAPE = 'minuscules, chiffres et tirets, d’après le sujet (ex. indemnite-de-depart)';
+
+const exists = (file: string) => stat(file).then(() => true, (error: NodeJS.ErrnoException) => {
+  if (error.code === 'ENOENT') return false;
+  throw error;
+});
+
+export async function listReasoningFiles(cwd: string): Promise<string[]> {
+  const entries = await readdir(path.join(cwd, REASONING_DIR), { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return [];
     throw error;
   });
-  if (!(await exists(yaml)) && await exists(legacy)) throw new TypeError('.piecemaker/raisonnement.js n’est plus lu : transcris-le dans .piecemaker/raisonnement.yaml, puis supprime l’ancien fichier.');
-  return yaml;
+  return entries.filter((entry) => entry.isFile() && entry.name.endsWith('.yaml')).map((entry) => entry.name.slice(0, -'.yaml'.length)).filter((name) => NAME.test(name)).sort();
+}
+
+export async function resolveReasoningFile(cwd: string, name?: string): Promise<{ file: string; name: string } | null> {
+  for (const legacy of ['raisonnement.yaml', 'raisonnement.js']) {
+    if (await exists(path.join(cwd, '.piecemaker', legacy))) throw new TypeError(`.piecemaker/${legacy} n’est plus lu : ${legacy.endsWith('.js') ? 'transcris-le en YAML dans' : 'déplace-le dans'} .piecemaker/raisonnements/<nom>.yaml (${NAME_SHAPE}).`);
+  }
+  if (name !== undefined) {
+    if (!NAME.test(name)) throw new TypeError(`Nom de raisonnement invalide : ${name} (${NAME_SHAPE}).`);
+    return { file: path.join(cwd, REASONING_DIR, `${name}.yaml`), name };
+  }
+  const names = await listReasoningFiles(cwd);
+  if (names.length > 1) throw new TypeError(`Plusieurs raisonnements dans ce dossier : précise lequel avec --raisonnement (${names.join(', ')}).`);
+  return names.length ? { file: path.join(cwd, REASONING_DIR, `${names[0]}.yaml`), name: names[0] } : null;
 }
 
 const LINE = /^(\s*(?:- +)?)([^\s"'#:-][^:]*?):(?: +(.*?))?\s*$/u;

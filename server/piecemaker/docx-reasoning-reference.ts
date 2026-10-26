@@ -7,7 +7,7 @@ import { parseReasoningDocument } from '../modules/piecemaker-reasoning/document
 export type DocxModelReference = { path: string; sha256: string };
 export const modelHash = (code: string) => createHash('sha256').update(code).digest('hex');
 export function parseModel(code: string) {
-  if (/^\s*(?:\{|export\s+default)/u.test(code)) throw new TypeError('Ancien modèle JS : transcris-le dans .piecemaker/raisonnement.yaml, puis prépare à nouveau le document.');
+  if (/^\s*(?:\{|export\s+default)/u.test(code)) throw new TypeError('Ancien modèle JS : transcris-le en YAML dans .piecemaker/raisonnements/<nom>.yaml, puis prépare à nouveau le document.');
   return parseReasoningDocument(code).value;
 }
 

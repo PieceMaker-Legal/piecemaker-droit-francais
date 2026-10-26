@@ -81,7 +81,7 @@ au fichier de raisonnement du dossier.
 ## Préparer un document lié et choisir le modèle de référence
 
 Pour les nouveaux documents, **le modèle reste dans le dossier PieceMaker**,
-par défaut `.piecemaker/raisonnement.yaml`, seul format lu. Le DOCX ne contient pas son code : il
+par défaut le raisonnement du dossier dans `.piecemaker/raisonnements/` s'il est unique (sinon `--modele`), seul format YAML lu. Le DOCX ne contient pas son code : il
 conserve un chemin relatif au dossier, une empreinte SHA-256 de la version liée,
 les balises des valeurs et clauses et leurs empreintes de texte.
 

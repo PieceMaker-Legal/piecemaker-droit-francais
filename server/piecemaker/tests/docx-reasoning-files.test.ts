@@ -49,14 +49,14 @@ async function plainFixture() {
 async function withProject(run: (root: string) => Promise<void>) {
   const parent = await mkdtemp(path.join(tmpdir(), 'docx-reasoning-files-'));
   const root = path.join(parent, 'project');
-  await mkdir(path.join(root, '.piecemaker'), { recursive: true });
+  await mkdir(path.join(root, '.piecemaker', 'raisonnements'), { recursive: true });
   try { await run(root); }
   finally { await rm(parent, { recursive: true, force: true }); }
 }
 
 async function prepareFiles(root: string, file = 'ordinary.docx') {
   await writeFile(path.join(root, file), await plainFixture());
-  await writeFile(path.join(root, '.piecemaker', 'raisonnement.yaml'), code);
+  await writeFile(path.join(root, '.piecemaker', 'raisonnements', 'penalite.yaml'), code);
   await writeFile(path.join(root, 'liens.json'), JSON.stringify(links));
 }
 
@@ -64,7 +64,7 @@ async function withLocalApi(run: (base: string, root: string) => Promise<void>) 
   await withProject(async (root) => {
     await writeFile(path.join(root, 'linked.docx'), await fixture());
     await writeFile(path.join(root, 'ordinary.docx'), await plainFixture());
-    await writeFile(path.join(root, '.piecemaker', 'raisonnement.yaml'), code);
+    await writeFile(path.join(root, '.piecemaker', 'raisonnements', 'penalite.yaml'), code);
     await writeFile(path.join(root, 'liens.json'), JSON.stringify(links));
     const app = express();
     app.use('/api', createDocxReasoningLocalRouter({ getProjectPath: (folder) => folder === root ? root : null }, (request) => request.get('x-test-local') !== 'false'));
@@ -90,16 +90,16 @@ async function post(base: string, body: Record<string, unknown>, local = true) {
 test('prépare vers une nouvelle sortie avec un modèle externe, compare sa référence et extrait son code exact', async () => {
   await withProject(async (root) => {
     await prepareFiles(root);
-    const modelPath = path.join(root, '.piecemaker', 'raisonnement.yaml');
+    const modelPath = path.join(root, '.piecemaker', 'raisonnements', 'penalite.yaml');
     const sourceHash = hash(await readFile(modelPath, 'utf8'));
     const prepared = await runDocxReasoningAction({
       commande: 'preparer', cwd: root, fichier: 'ordinary.docx', liens: 'liens.json', sortie: 'linked.docx',
     });
-    assert.deepEqual(prepared, { fichier: 'linked.docx', canonique: 'dossier', modele: '.piecemaker/raisonnement.yaml', modele_dossier_modifie: false, empreinte_modele: sourceHash });
+    assert.deepEqual(prepared, { fichier: 'linked.docx', canonique: 'dossier', modele: '.piecemaker/raisonnements/penalite.yaml', modele_dossier_modifie: false, empreinte_modele: sourceHash });
     const documentModel = await readDocxReasoning(await readFile(path.join(root, 'linked.docx')));
     assert.equal(documentModel.version, 2);
     assert.equal(documentModel.code, undefined);
-    assert.deepEqual(documentModel.reference, { path: '.piecemaker/raisonnement.yaml', sha256: sourceHash });
+    assert.deepEqual(documentModel.reference, { path: '.piecemaker/raisonnements/penalite.yaml', sha256: sourceHash });
     assert.equal(hash(await readFile(modelPath, 'utf8')), sourceHash);
 
     const same = await runDocxReasoningAction({ commande: 'comparer', cwd: root, fichier: 'linked.docx' });
@@ -186,7 +186,7 @@ test('la route locale vérifie le statut loopback et l’enregistrement du dossi
     assert.equal(prepared.status, 200);
     assert.equal(prepared.body.resultat.fichier, 'api-linked.docx');
     assert.equal(prepared.body.resultat.canonique, 'dossier');
-    assert.equal(prepared.body.resultat.modele, '.piecemaker/raisonnement.yaml');
+    assert.equal(prepared.body.resultat.modele, '.piecemaker/raisonnements/penalite.yaml');
     const apiModel = await readDocxReasoning(await readFile(path.join(root, 'api-linked.docx')));
     assert.equal(apiModel.version, 2);
     assert.equal(apiModel.code, undefined);

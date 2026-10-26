@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'docx', 'acte'];
-const REASONING_COMMANDS = ['verifier'];
+const REASONING_COMMANDS = ['verifier', 'lister'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
@@ -28,20 +28,17 @@ export const HELP = `Usage: pm <outil> [options]
       [--dossier PATH] [--fichier FILE] [--projet ID] [--mode analyse|recherche]
       [--nom TEXT] [--modele ID] [--description TEXT] [--questions JSON]
       [--documents a,b] [--recherche JSON] [--ia claude|codex|mistral] [--modele-ia TEXT]
-  raisonnement ${REASONING_COMMANDS.join('|')}
-      [--question Q1] [--texte TEXT] [--objectif oui|non] [--date NOM] [--nom NOM]
-      [--libelle TEXT] [--regle EXPR] [--role condition|fondement|moyen_adverse]
-      [--source ID|PATH] [--extrait TEXT] [--a-la-date AAAA-MM-JJ] [--type TYPE]
-      [--valeur V] [--piece PATH] [--force-probante FORCE] [--appreciation TEXT]
-      [--vue complete] [--champs TEXT] [--cas TEXT] [--parametres TEXT]
-      [--etiquette NOM] [--exception-de NOM|base] [--etat NOM] [--si EXPR] [--consequence non]
+  raisonnement verifier [--raisonnement NOM]
+  raisonnement lister
+      un fichier par raisonnement : .piecemaker/raisonnements/NOM.yaml ;
+      --raisonnement est requis quand le dossier en compte plusieurs
   docx preparer --fichier FILE.docx --liens FILE.json --sortie FILE.docx [--modele FILE.yaml]
   docx verifier|comparer --fichier FILE.docx [--modele FILE.yaml]
   docx extraire --fichier FILE.docx --sortie FILE.yaml
-      chemins relatifs au dossier ; modèle initial : .piecemaker/raisonnement.yaml
-  acte exporter --sortie FILE.docx [--modele MODELE.docx]
-  acte fusionner|importer --fichier FILE.docx
-      l'acte rédigé vit dans .piecemaker/raisonnement.yaml ; le DOCX en est l'impression
+      chemins relatifs au dossier ; modèle initial : le raisonnement du dossier, s'il est unique
+  acte exporter --sortie FILE.docx [--modele MODELE.docx] [--raisonnement NOM]
+  acte fusionner|importer --fichier FILE.docx [--raisonnement NOM]
+      l'acte rédigé vit dans .piecemaker/raisonnements/NOM.yaml ; le DOCX en est l'impression
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {
@@ -465,7 +462,8 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     const flag = commande === 'exporter' ? 'sortie' : 'fichier';
     if (!flags[flag] || flags[flag] === true) usage(`Indiquez --${flag} FILE.docx.`);
     if (flags.modele === true) usage('Indiquez une valeur pour --modele.');
-    const input = { commande, cwd: path.resolve(resolved), [flag]: String(flags[flag]), ...(flags.modele ? { modele: String(flags.modele) } : {}) };
+    if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
+    const input = { commande, cwd: path.resolve(resolved), [flag]: String(flags[flag]), ...(flags.modele ? { modele: String(flags.modele) } : {}), ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
     const result = await api.acteFn(input);
     const text = typeof result.verification === 'string' ? `${JSON.stringify({ ...result, verification: undefined })}\n${result.verification}` : JSON.stringify(result);
     if (commande !== 'exporter') return withNotice(text, await followPanel(api, { project: input.cwd, tab: 'plugin:piecemaker-raisonnement' }, { cwd: input.cwd, tab: 'plugin:piecemaker-raisonnement' }));
@@ -476,7 +474,8 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   if (tool === 'raisonnement') {
     const commande = positional[1];
     if (!REASONING_COMMANDS.includes(commande)) usage(`raisonnement attend ${REASONING_COMMANDS.join(', ')}.`);
-    const input = { commande, cwd: path.resolve(resolved) };
+    if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
+    const input = { commande, cwd: path.resolve(resolved), ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
     const result = await api.reasoningFn(input);
     const target = { cwd: input.cwd, tab: 'plugin:piecemaker-raisonnement' };
     return withNotice(result, await followPanel(api, { project: input.cwd, tab: target.tab }, target));

@@ -73,7 +73,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-scope aria-label="Objectif" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${[['question', 'Objectif'], ['terme', 'Termes'], ['controle', 'Contrôles'], ['fait', 'Faits'], ['source', 'Sources'], ['piece', 'Pièces']].map(([key, label]) => `<span><i style="background:${COLORS[key]}"></i>${label}</span>`).join('')}<span><i class="is-dashed"></i>À établir</span><span><i class="is-ring"></i>Décisif</span><span>- - sauf</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Objectif, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="acte">Acte</button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${[['question', 'Objectif'], ['terme', 'Termes'], ['controle', 'Contrôles'], ['fait', 'Faits'], ['source', 'Sources'], ['piece', 'Pièces']].map(([key, label]) => `<span><i style="background:${COLORS[key]}"></i>${label}</span>`).join('')}<span><i class="is-dashed"></i>À établir</span><span><i class="is-ring"></i>Décisif</span><span>- - sauf</span></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><svg role="group" aria-label="Objectif, termes et faits"></svg><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-center>Centrer</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le détail"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-graph>Graphe</button><button role="tab" data-tab="detail">Détail</button><button role="tab" data-tab="test">Test</button><button role="tab" data-tab="alertes">Alertes<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-tab="acte">Acte</button><button role="tab" data-tab="code">Code</button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const svg = root.querySelector<SVGSVGElement>('svg')!;
@@ -84,8 +84,11 @@ export function mount(container: HTMLElement, api: Host) {
   const warning = root.querySelector<HTMLElement>('.pmr-warning')!;
   const empty = root.querySelector<HTMLElement>('.pmr-empty')!;
   const picker = root.querySelector<HTMLSelectElement>('[data-scope]')!;
+  const chooser = root.querySelector<HTMLSelectElement>('[data-reasoning]')!;
   let context = api.context;
   let snapshot: ReasoningSnapshot | null = null;
+  let reasoning: string | undefined;
+  const shown = () => snapshot?.name ?? undefined;
   let serialized = '';
   let tab: Tab = 'detail';
   let view: 'graph' | 'panel' = 'panel';
@@ -372,7 +375,7 @@ export function mount(container: HTMLElement, api: Host) {
     const objective = objectives()[scope];
     if (tab === 'test') { paintTest(); return; }
     if (tab === 'acte') { detail.innerHTML = acteBlock(); return; }
-    if (tab === 'code') { detail.innerHTML = snapshot?.code ? `<pre class="pmr-code">${escape(snapshot.code)}</pre>` : '<p class="pmr-muted">Aucun fichier .piecemaker/raisonnement.yaml.</p>'; return; }
+    if (tab === 'code') { detail.innerHTML = snapshot?.code ? `<pre class="pmr-code">${escape(snapshot.code)}</pre>` : '<p class="pmr-muted">Aucun fichier dans .piecemaker/raisonnements/.</p>'; return; }
     if (tab === 'alertes') {
       const dismissed = (snapshot?.issues ?? []).filter((issue) => dismissedIds().has(issue.id));
       const bilan = annotated()?.bilan as Json | undefined;
@@ -411,6 +414,9 @@ export function mount(container: HTMLElement, api: Host) {
     root.dataset.theme = context.theme;
     const list = objectives();
     picker.hidden = list.length < 2;
+    const available = snapshot?.demo ? [] : snapshot?.raisonnements ?? [];
+    chooser.hidden = available.length < 2;
+    chooser.innerHTML = available.map((name) => `<option value="${escape(name)}"${name === snapshot?.name ? ' selected' : ''}>${escape(name)}</option>`).join('');
     picker.innerHTML = list.map((objective, index) => `<option value="${index}"${index === scope ? ' selected' : ''}>${escape(shorten(objective.objectif, 80))}</option>`).join('');
     const count = root.querySelector<HTMLElement>('[data-alerts]')!;
     count.hidden = !visibleIssues().length;
@@ -420,7 +426,7 @@ export function mount(container: HTMLElement, api: Host) {
     root.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => button.setAttribute('aria-selected', String(view === 'panel' && button.dataset.tab === tab)));
     empty.hidden = Boolean(list.length);
     root.querySelector<HTMLElement>('.pmr-legend')!.hidden = !list.length;
-    empty.innerHTML = !context.project ? '<strong>Aucun dossier</strong><p>Ouvrez un dossier pour voir son raisonnement.</p>' : snapshot?.code && !snapshot.annotated ? `<strong>Raisonnement illisible</strong><p>${escape(snapshot.issues.map((issue) => issue.text).join(' · '))}</p>` : '<strong>Pas encore de raisonnement</strong><p>Confiez un objectif juridique à l’agent dans le chat : il transcrit son raisonnement dans .piecemaker/raisonnement.js, que ce volet vérifie et affiche.</p>';
+    empty.innerHTML = !context.project ? '<strong>Aucun dossier</strong><p>Ouvrez un dossier pour voir son raisonnement.</p>' : snapshot?.code && !snapshot.annotated ? `<strong>Raisonnement illisible</strong><p>${escape(snapshot.issues.map((issue) => issue.text).join(' · '))}</p>` : '<strong>Pas encore de raisonnement</strong><p>Confiez un objectif juridique à l’agent dans le chat : il transcrit son raisonnement dans .piecemaker/raisonnements/, un fichier par sujet, que ce volet vérifie et affiche.</p>';
     buildGraph();
     paintDetail();
   };
@@ -438,7 +444,7 @@ export function mount(container: HTMLElement, api: Host) {
   const load = async (example = false) => {
     const request = ++sequence;
     try {
-      const data = await loadReasoning(context.project?.path ?? null, example);
+      const data = await loadReasoning(context.project?.path ?? null, example, reasoning);
       if (!stopped && request === sequence) apply(data);
     } catch (error) { if (!stopped && request === sequence) showError(error); }
   };
@@ -465,7 +471,7 @@ export function mount(container: HTMLElement, api: Host) {
     const open = (path: string, passage?: { quote: string }) => window.dispatchEvent(new CustomEvent('piecemaker:open-in-editor', { detail: { path, ...(passage ? { passage } : {}) } }));
     if (piece || /[/\\]/.test(id) || /\.[a-z0-9]{2,5}$/i.test(id)) { open(`${project.replace(/\/$/, '')}/${id}`, citation ? { quote: citation } : undefined); return; }
     const source = based().find((entry) => entry.source.source === id)?.source;
-    citeSource(project, id, citation).then(({ token }) => open(`piecemaker://citation/${token}/${encodeURIComponent(source ? sourceLabel(source) : id)}`), showError);
+    citeSource(project, id, citation, shown()).then(({ token }) => open(`piecemaker://citation/${token}/${encodeURIComponent(source ? sourceLabel(source) : id)}`), showError);
   };
   const select = (id: string) => { selected = selected === id ? '' : id; tab = 'detail'; if (selected) view = 'panel'; paintGraph(); paint(); };
 
@@ -483,19 +489,19 @@ export function mount(container: HTMLElement, api: Host) {
       busy = true;
       paint();
       const done = (end: () => void) => { finish = () => { finish = null; fresh = null; live = null; end(); busy = false; paint(); }; if (!pacing && !pending.length) finish(); };
-      runTest(project, (entry) => { if (entry.status === 'en cours') return; pending.push(entry); if (!pacing) reveal(); })
+      runTest(project, (entry) => { if (entry.status === 'en cours') return; pending.push(entry); if (!pacing) reveal(); }, shown())
         .then((data) => done(() => apply(data)), (error) => done(() => showError(error)));
     }
     if (button.dataset.select) select(button.dataset.select);
     if (button.dataset.show) show(button.dataset.show, button.dataset.quote);
     if (button.dataset.open) { selected = button.dataset.open; tab = 'detail'; view = 'panel'; paintGraph(); paint(); }
-    if (button.dataset.dismiss && project) act(() => dismissIssue(project, button.dataset.dismiss!, button.hasAttribute('data-restore')));
-    if (button.dataset.rate && project) act(() => ratePiece(project, button.dataset.rate!, button.dataset.value === 'null' ? null : button.dataset.value === 'true'));
+    if (button.dataset.dismiss && project) act(() => dismissIssue(project, button.dataset.dismiss!, button.hasAttribute('data-restore'), shown()));
+    if (button.dataset.rate && project) act(() => ratePiece(project, button.dataset.rate!, button.dataset.value === 'null' ? null : button.dataset.value === 'true', shown()));
     if (button.hasAttribute('data-simulate') && project) {
       const faits = Object.fromEntries(Object.entries(draft).map(([name, raw]) => [name, parseVariable(raw)]).filter(([, item]) => item !== null)) as Record<string, number | string>;
       busy = true;
       paint();
-      simulateReasoning(project, faits).then((result) => { simulated = result; warning.hidden = true; }, showError).finally(() => { busy = false; paint(); });
+      simulateReasoning(project, faits, shown()).then((result) => { simulated = result; warning.hidden = true; }, showError).finally(() => { busy = false; paint(); });
     }
     if (button.hasAttribute('data-simulate-reset')) { draft = {}; simulated = null; paint(); }
     if (button.dataset.zoom) { zoom = Math.max(.1, Math.min(3, zoom * (Number(button.dataset.zoom) > 0 ? 1.2 : 1 / 1.2))); paintGraph(); }
@@ -506,6 +512,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (input) draft[input.dataset.variable!] = input.value;
   });
   picker.addEventListener('change', () => { scope = Number(picker.value); selected = ''; nodes = []; paint(); });
+  chooser.addEventListener('change', () => { reasoning = chooser.value; serialized = ''; scope = 0; selected = ''; nodes = []; draft = {}; simulated = null; void load(); });
 
   const point = (event: PointerEvent) => {
     const transform = svg.getScreenCTM();
@@ -573,7 +580,7 @@ export function mount(container: HTMLElement, api: Host) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = next.project?.path !== context.project?.path;
     context = next;
-    if (changed) { sequence++; snapshot = null; serialized = ''; scope = 0; selected = ''; nodes = []; draft = {}; simulated = null; void load(); }
+    if (changed) { sequence++; snapshot = null; reasoning = undefined; serialized = ''; scope = 0; selected = ''; nodes = []; draft = {}; simulated = null; void load(); }
     paint();
   });
   const poll = () => { if (!stopped) { if (!snapshot?.demo && !busy) void load(); timer = window.setTimeout(poll, 2500); } };

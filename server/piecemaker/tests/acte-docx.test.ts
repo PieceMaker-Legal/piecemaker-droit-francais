@@ -117,11 +117,11 @@ const MODEL = `{
 const fixture = async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'pm-acte-'));
   await mkdir(path.join(root, 'pieces'));
-  await mkdir(path.join(root, '.piecemaker'));
+  await mkdir(path.join(root, '.piecemaker', 'raisonnements'), { recursive: true });
   await writeFile(path.join(root, 'pieces/01_contrat.md'), PIECE);
   await writeFile(path.join(root, 'pieces/02_livraison.md'), 'Bon de livraison. Livré avec trois semaines de retard.');
   const verify = async (cwd: string) => {
-    const file = path.join(cwd, '.piecemaker/raisonnement.yaml');
+    const file = path.join(cwd, '.piecemaker/raisonnements/penalite.yaml');
     const result = await verifyReasoning({
       code: await readFile(file, 'utf8'), cwd,
       connectors: { source: async (_cwd, id) => (id.includes('/') ? { kind: 'piece', title: id, text: await readFile(path.join(cwd, id), 'utf8') } : undefined), match: (text, excerpt) => (text.includes(excerpt) ? excerpt : null), registry: async () => ({ found: true, status: '' }), bodacc: async () => [] },
@@ -135,7 +135,7 @@ const fixture = async () => {
 
 test('importer, exporter, retoucher, fusionner : le raisonnement reste la seule source', async () => {
   const { root, verify } = await fixture();
-  await writeFile(path.join(root, '.piecemaker/raisonnement.yaml'), yamlOf(MODEL));
+  await writeFile(path.join(root, '.piecemaker/raisonnements/penalite.yaml'), yamlOf(MODEL));
   const source = await exportActeDocx([]);
   const existing = await editDocument(source, (xml) => xml.replace('<w:body>', `<w:body>${paragraph('CONCLUSIONS')}${paragraph('I. Sur la pénalité')}${paragraph('Le contrat stipule que « En cas de retard de livraison, une pénalité de mille euros est due ».')}${paragraph('Le juge allouera « une indemnité de deux mille euros ».')}`));
   const zip = await JSZip.loadAsync(existing);
@@ -147,11 +147,11 @@ test('importer, exporter, retoucher, fusionner : le raisonnement reste la seule 
   assert.match(imported.verification, /citation absente du raisonnement : « une indemnité de deux mille euros »/);
   await assert.rejects(runActeAction({ commande: 'exporter', cwd: root, sortie: 'acte.docx' }, verify), /pas imprimable/);
 
-  const stored = parseReasoningDocument(await readFile(path.join(root, '.piecemaker/raisonnement.yaml'), 'utf8')).value as Record<string, any>;
+  const stored = parseReasoningDocument(await readFile(path.join(root, '.piecemaker/raisonnements/penalite.yaml'), 'utf8')).value as Record<string, any>;
   const discussion = stored.acte.find((section: { intitule: string }) => section.intitule === 'I. Sur la pénalité');
   discussion.traite = 'pénalité_due';
   discussion.texte = discussion.texte.map((paragraph: string) => paragraph.replace('Le juge allouera « une indemnité de deux mille euros ».', 'Le juge allouera la pénalité.'));
-  await writeFile(path.join(root, '.piecemaker/raisonnement.yaml'), printReasoningDocument(stored));
+  await writeFile(path.join(root, '.piecemaker/raisonnements/penalite.yaml'), printReasoningDocument(stored));
   const exported = await runActeAction({ commande: 'exporter', cwd: root, sortie: 'acte.docx' }, verify);
   assert.equal(exported.fichier, 'acte.docx');
 
@@ -160,7 +160,7 @@ test('importer, exporter, retoucher, fusionner : le raisonnement reste la seule 
   await assert.rejects(runActeAction({ commande: 'exporter', cwd: root, sortie: 'acte.docx' }, verify), /fusionner/);
   const merged = await runActeAction({ commande: 'fusionner', cwd: root, fichier: 'acte.docx' }, verify);
   assert.equal(merged.rapport.reprises.length, 1);
-  const value = parseReasoningDocument(await readFile(path.join(root, '.piecemaker/raisonnement.yaml'), 'utf8')).value as Record<string, any>;
+  const value = parseReasoningDocument(await readFile(path.join(root, '.piecemaker/raisonnements/penalite.yaml'), 'utf8')).value as Record<string, any>;
   assert.equal(value.pénalité_due.si[0].retard_de_livraison, true);
   assert.deepEqual(value.acte[1].texte.at(-1), 'Le tribunal condamnera la défenderesse au paiement de la pénalité.');
   const again = await runActeAction({ commande: 'exporter', cwd: root, sortie: 'acte.docx' }, verify);
@@ -190,13 +190,13 @@ test('sans contrôles de contenu, les signets suffisent ; sans aucun repère, la
 test('une retouche écartée après fusion ne revient pas et n’empêche pas la réimpression', async () => {
   const { root, verify } = await fixture();
   const model = MODEL.replace(/\}\n$/, "  acte: [{ intitule: 'Sur la pénalité', traite: 'pénalité_due', texte: ['Le retard est établi.'] }],\n}\n");
-  await writeFile(path.join(root, '.piecemaker/raisonnement.yaml'), yamlOf(model));
+  await writeFile(path.join(root, '.piecemaker/raisonnements/penalite.yaml'), yamlOf(model));
   await runActeAction({ commande: 'exporter', cwd: root, sortie: 'acte.docx' }, verify);
   const edited = await editDocument(await readFile(path.join(root, 'acte.docx')), (xml) => xml.replace('</w:sdt>', `</w:sdt>${paragraph('Sur l’aveu', 'Titre1')}${paragraph('Un aveu non prouvé.')}`));
   await writeFile(path.join(root, 'acte.docx'), edited);
   const first = await runActeAction({ commande: 'fusionner', cwd: root, fichier: 'acte.docx' }, verify);
   assert.equal(first.rapport.ajoutees.length, 1);
-  const file = path.join(root, '.piecemaker/raisonnement.yaml');
+  const file = path.join(root, '.piecemaker/raisonnements/penalite.yaml');
   const value = parseReasoningDocument(await readFile(file, 'utf8')).value as Record<string, any>;
   value.acte = value.acte.filter((section: { id: string }) => section.id !== 's2');
   await writeFile(file, printReasoningDocument(value));

@@ -1,30 +1,30 @@
 import type { ReasoningLogEntry, ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
 
-export function loadReasoning(projectPath: string | null, example = false): Promise<ReasoningSnapshot> {
-  return request<ReasoningSnapshot>(`/api/piecemaker/reasoning${example ? '/example' : `?projectPath=${encodeURIComponent(projectPath ?? '')}`}`);
+export function loadReasoning(projectPath: string | null, example = false, raisonnement?: string): Promise<ReasoningSnapshot> {
+  return request<ReasoningSnapshot>(`/api/piecemaker/reasoning${example ? '/example' : `?projectPath=${encodeURIComponent(projectPath ?? '')}${raisonnement ? `&raisonnement=${encodeURIComponent(raisonnement)}` : ''}`}`);
 }
 
-export function citeSource(projectPath: string, source: string, citation: string): Promise<{ token: string }> {
-  return request<{ token: string }>('/api/piecemaker/reasoning/citation', { projectPath, source, citation });
+export function citeSource(projectPath: string, source: string, citation: string, raisonnement?: string): Promise<{ token: string }> {
+  return request<{ token: string }>('/api/piecemaker/reasoning/citation', { projectPath, source, citation, raisonnement });
 }
 
-export function dismissIssue(projectPath: string, id: string, restore = false): Promise<ReasoningSnapshot> {
-  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/dismiss', { projectPath, id, restore });
+export function dismissIssue(projectPath: string, id: string, restore = false, raisonnement?: string): Promise<ReasoningSnapshot> {
+  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/dismiss', { projectPath, id, restore, raisonnement });
 }
 
 export type Simulation = { objectifs: Array<{ objectif: string; statut: string; montant?: number | null }>; valeurs: Record<string, string | number | null> };
 
-export function simulateReasoning(projectPath: string, faits: Record<string, number | string | boolean>): Promise<Simulation> {
-  return request<Simulation>('/api/piecemaker/reasoning/simulate', { projectPath, faits });
+export function simulateReasoning(projectPath: string, faits: Record<string, number | string | boolean>, raisonnement?: string): Promise<Simulation> {
+  return request<Simulation>('/api/piecemaker/reasoning/simulate', { projectPath, faits, raisonnement });
 }
 
-export function ratePiece(projectPath: string, piece: string, reliable: boolean | null): Promise<ReasoningSnapshot> {
-  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/reliability', { projectPath, piece, reliable });
+export function ratePiece(projectPath: string, piece: string, reliable: boolean | null, raisonnement?: string): Promise<ReasoningSnapshot> {
+  return request<ReasoningSnapshot>('/api/piecemaker/reasoning/reliability', { projectPath, piece, reliable, raisonnement });
 }
 
-export async function runTest(projectPath: string, onEntry: (entry: ReasoningLogEntry) => void): Promise<ReasoningSnapshot> {
+export async function runTest(projectPath: string, onEntry: (entry: ReasoningLogEntry) => void, raisonnement?: string): Promise<ReasoningSnapshot> {
   const token = localStorage.getItem('auth-token');
-  const response = await fetch('/api/piecemaker/reasoning/test', { method: 'POST', body: JSON.stringify({ projectPath }), headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' } });
+  const response = await fetch('/api/piecemaker/reasoning/test', { method: 'POST', body: JSON.stringify({ projectPath, raisonnement }), headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' } });
   if (!response.ok || !response.body) throw new Error((await response.json().catch(() => ({})) as { error?: string }).error || `Erreur ${response.status}`);
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = '';

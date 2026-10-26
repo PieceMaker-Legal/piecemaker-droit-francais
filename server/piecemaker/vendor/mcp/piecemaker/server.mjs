@@ -154,7 +154,7 @@ const SQL_DESCRIPTION = [
   "piecemaker_links(project_id, from_node_id, to_node_id, relation) : 'mentions' = la pièce cite l'entité.",
   'piecemaker_citations(project_id, from_node_id, to_node_id, relation, texte, piece_id, source) : extraits qui justifient un lien, autant que voulu ; source = pièce (piece_id) ou référence libre.',
   'Dates automatiques. Renommer une pièce = UPDATE de son label (AAAA-MM-JJ_titre).',
-  "Raisonnement du dossier (lecture seule, écrit par l'outil raisonnement et par l'avocat) : pm_reasoning_programs(project_id, revision, code, snapshot_json) = fichier .piecemaker/raisonnement.yaml vérifié, objet annoté et alertes ; pm_reasoning_dismissed(project_id, issue_id, path, text, at) = alertes écartées par l'avocat ; pm_reasoning_reliability(project_id, piece, reliable, at) = fiabilité des pièces fixée par l'avocat.",
+  "Raisonnement du dossier (lecture seule, écrit par l'outil raisonnement et par l'avocat) : pm_reasoning_programs(project_id, name, revision, code, snapshot_json) = fichier .piecemaker/raisonnements/<name>.yaml vérifié, objet annoté et alertes ; pm_reasoning_dismissed(project_id, name, issue_id, path, text, at) = alertes écartées par l'avocat ; pm_reasoning_reliability(project_id, piece, reliable, at) = fiabilité des pièces fixée par l'avocat.",
 ].join('\n');
 
 /**
@@ -212,10 +212,12 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
 
   server.registerTool('raisonnement', {
     description: [
-      'verifier : vérifie et teste le raisonnement du dossier (.piecemaker/raisonnement.yaml), réécrit le fichier dans son ordre et renvoie ses erreurs et manques, chacun localisé.',
+      'verifier : vérifie et teste un raisonnement du dossier (.piecemaker/raisonnements/<nom>.yaml), réécrit le fichier dans son ordre et renvoie ses erreurs et manques, chacun localisé ; raisonnement est requis quand le dossier en compte plusieurs.',
+      'lister : liste les raisonnements du dossier avec leurs objectifs et leur dernier bilan.',
     ].join('\n'),
     inputSchema: {
-      commande: z.enum(['verifier']),
+      commande: z.enum(['verifier', 'lister']),
+      raisonnement: z.string().optional().describe('Nom du fichier, sans .yaml (ex. indemnite-de-depart).'),
       dossier: DOSSIER_SCHEMA,
     },
     annotations: { title: 'Raisonnement du dossier', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },

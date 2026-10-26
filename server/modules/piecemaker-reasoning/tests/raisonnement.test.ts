@@ -179,20 +179,20 @@ test('une alerte écartée par l’avocat n’est plus émise, et revient si l�
 
 test('le service lit le fichier du dossier, corrige les citations, enregistre les décisions de l’avocat', async (t) => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'raisonnement-'));
-  fs.mkdirSync(path.join(folder, '.piecemaker'));
-  const file = path.join(folder, '.piecemaker', 'raisonnement.yaml');
+  fs.mkdirSync(path.join(folder, '.piecemaker', 'raisonnements'), { recursive: true });
+  const file = path.join(folder, '.piecemaker', 'raisonnements', 'penalite.yaml');
   fs.writeFileSync(file, yamlOf(EXAMPLE_CODE.replace('`Sauf inexécution définitive`', '`sauf inexécution définitive`')));
   const db = new Database(':memory:');
   db.exec('CREATE TABLE projects(project_id TEXT PRIMARY KEY, project_path TEXT);');
   db.prepare('INSERT INTO projects VALUES(?,?)').run('fictif', folder);
   t.after(() => { db.close(); fs.rmSync(folder, { recursive: true, force: true }); });
   const service = createReasoningService(() => db, connectors());
-  db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?)').run('fictif', 3, 'ancien format', JSON.stringify({ code: 'ancien format', questions: [] }));
-  assert.equal(service.read(folder).code, '');
+  db.prepare('INSERT INTO pm_reasoning_programs VALUES(?,?,?,?,?)').run('fictif', 'penalite', 3, 'ancien format', JSON.stringify({ code: 'ancien format', questions: [] }));
+  assert.equal((await service.read(folder)).code, '');
   const text = await service.command(folder, { commande: 'verifier' });
-  assert.match(text, /^\d+ erreur\(s\), \d+ manque\(s\)/);
+  assert.match(text, /^Raisonnement penalite \(\.piecemaker\/raisonnements\/penalite\.yaml\)\n\d+ erreur\(s\), \d+ manque\(s\)/);
   assert.match(fs.readFileSync(file, 'utf8'), /citation: Sauf inexécution définitive\n/);
-  const issue = service.read(folder).issues.find((entry) => entry.kind === 'manque')!;
+  const issue = (await service.read(folder)).issues.find((entry) => entry.kind === 'manque')!;
   assert.equal((await service.dismiss(folder, issue.id)).dismissed.length, 1);
   assert.equal((await service.dismiss(folder, issue.id, true)).dismissed.length, 0);
   assert.equal((await service.rate(folder, 'pieces/06_mise_en_demeure.md', false)).reliability[0].reliable, false);
@@ -203,9 +203,39 @@ test('le service lit le fichier du dossier, corrige les citations, enregistre le
   assert.equal(fs.readFileSync(file, 'utf8'), before);
   await assert.rejects(service.simulate(folder, { prix: 'cher' }), /faits/);
   fs.rmSync(file);
-  await assert.rejects(service.verify(folder), /Aucun raisonnement/);
+  await assert.rejects(service.verify(folder), /Aucun raisonnement : écris \.piecemaker\/raisonnements\/<nom>\.yaml/);
   fs.writeFileSync(path.join(folder, '.piecemaker', 'raisonnement.js'), EXAMPLE_CODE);
-  await assert.rejects(service.verify(folder), /raisonnement\.js n’est plus lu : transcris-le dans \.piecemaker\/raisonnement\.yaml/);
+  await assert.rejects(service.verify(folder), /raisonnement\.js n’est plus lu : transcris-le en YAML dans \.piecemaker\/raisonnements\/<nom>\.yaml/);
+  fs.rmSync(path.join(folder, '.piecemaker', 'raisonnement.js'));
+  fs.writeFileSync(path.join(folder, '.piecemaker', 'raisonnement.yaml'), yamlOf(EXAMPLE_CODE));
+  await assert.rejects(service.verify(folder), /raisonnement\.yaml n’est plus lu : déplace-le dans \.piecemaker\/raisonnements\/<nom>\.yaml/);
+});
+
+test('un dossier tient plusieurs raisonnements, chacun nommé par son fichier, vérifiés et suivis séparément', async (t) => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'raisonnements-'));
+  const directory = path.join(folder, '.piecemaker', 'raisonnements');
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, 'penalite.yaml'), yamlOf(EXAMPLE_CODE));
+  fs.writeFileSync(path.join(directory, 'retard.yaml'), yamlOf(EXAMPLE_CODE.replace('Obtenir de Société Beta SARL le paiement de la pénalité de retard', 'Établir le retard de Société Beta SARL')));
+  const db = new Database(':memory:');
+  db.exec('CREATE TABLE projects(project_id TEXT PRIMARY KEY, project_path TEXT);');
+  db.prepare('INSERT INTO projects VALUES(?,?)').run('fictif', folder);
+  t.after(() => { db.close(); fs.rmSync(folder, { recursive: true, force: true }); });
+  const service = createReasoningService(() => db, connectors());
+  await assert.rejects(service.verify(folder), /Plusieurs raisonnements dans ce dossier : précise lequel avec --raisonnement \(penalite, retard\)/);
+  await assert.rejects(service.verify(folder, true, undefined, 'Pénalité'), /Nom de raisonnement invalide/);
+  await assert.rejects(service.command(folder, { commande: 'verifier', raisonnement: 'absent' }), /Raisonnement introuvable : \.piecemaker\/raisonnements\/absent\.yaml \(raisonnements du dossier : penalite, retard\)/);
+  assert.match(await service.command(folder, { commande: 'lister' }), /^penalite — \.piecemaker\/raisonnements\/penalite\.yaml — non vérifié\nretard — \.piecemaker\/raisonnements\/retard\.yaml — non vérifié$/);
+  const first = await service.verify(folder, true, undefined, 'penalite');
+  assert.equal(first.name, 'penalite');
+  assert.deepEqual(first.raisonnements, ['penalite', 'retard']);
+  const issue = first.issues.find((entry) => entry.kind === 'manque')!;
+  await service.dismiss(folder, issue.id, false, 'penalite');
+  const second = await service.verify(folder, true, undefined, 'retard');
+  assert.equal(second.dismissed.length, 0);
+  assert.equal((await service.read(folder)).name, 'retard');
+  assert.equal((await service.read(folder, 'penalite')).dismissed.length, 1);
+  assert.match(await service.command(folder, { commande: 'lister' }), /penalite — \.piecemaker\/raisonnements\/penalite\.yaml — \d+ erreur\(s\), \d+ manque\(s\), vérifié le \d{4}-\d{2}-\d{2}\n  Obtenir de Société Beta SARL le paiement de la pénalité de retard \(à établir\)\nretard — [^\n]*\n  Établir le retard de Société Beta SARL/);
 });
 
 test('une source porte son identifiant officiel et une décision remise en cause par un recours est signalée', async () => {

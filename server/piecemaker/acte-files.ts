@@ -1,4 +1,4 @@
-import { readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ReasoningSnapshot } from '../../shared/piecemaker-reasoning.js';
@@ -7,7 +7,7 @@ import { describeReasoning, parseReasoningDocument, printReasoningDocument, reso
 import { exportActeDocx, readActeDocx, rebaseActeDocx } from './acte-docx.js';
 import { alreadyMerged, flatOf, flattenActe, mergeActe, rebuildActe } from './acte-merge.js';
 
-type ActeAction = { commande: string; cwd: string; fichier?: string; sortie?: string; modele?: string };
+type ActeAction = { commande: string; cwd: string; fichier?: string; sortie?: string; modele?: string; raisonnement?: string };
 type Verified = Pick<ReasoningSnapshot, 'issues' | 'code'> & { dismissed?: ReasoningSnapshot['dismissed'] };
 type Raw = Record<string, unknown>;
 
@@ -23,8 +23,7 @@ async function resolveDocx(root: string, file: unknown, output = false) {
   return actual;
 }
 
-async function readModel(root: string): Promise<Raw | null> {
-  const file = await resolveReasoningFile(root);
+async function readModel(file: string): Promise<Raw | null> {
   const code = await readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return null; throw error; });
   if (code === null) return null;
   const value = stripAnnotations(parseReasoningDocument(code).value);
@@ -32,20 +31,24 @@ async function readModel(root: string): Promise<Raw | null> {
   return value as Raw;
 }
 
-const writeModel = async (root: string, value: Raw) => {
-  const file = await resolveReasoningFile(root);
+const writeModel = async (file: string, value: Raw) => {
+  await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, `${printReasoningDocument(value)}\n`, 'utf8');
 };
 const count = (acte: unknown) => flattenActe(acte).reduce((total, entry) => ({ sections: total.sections + 1, paragraphes: total.paragraphes + flatOf(entry).texte.length }), { sections: 0, paragraphes: 0 });
 
-export async function runActeAction(input: ActeAction, verify: (cwd: string) => Promise<Verified>) {
+export async function runActeAction(input: ActeAction, check: (cwd: string, name: string) => Promise<Verified>) {
   if (!['exporter', 'fusionner', 'importer'].includes(input?.commande) || typeof input.cwd !== 'string') throw new TypeError('Commande attendue : exporter, fusionner ou importer.');
+  if (input.raisonnement !== undefined && typeof input.raisonnement !== 'string') throw new TypeError('raisonnement : nom du fichier, sans .yaml.');
   const root = await realpath(input.cwd);
+  const found = await resolveReasoningFile(root, input.raisonnement);
+  if (!found) throw new TypeError(input.commande === 'importer' ? 'Aucun raisonnement : indique --raisonnement <nom> pour créer .piecemaker/raisonnements/<nom>.yaml.' : 'Aucun raisonnement : écris .piecemaker/raisonnements/<nom>.yaml.');
+  const verify = (cwd: string) => check(cwd, found.name);
 
   if (input.commande === 'exporter') {
-    if (!(await readModel(root))) throw new TypeError('Aucun raisonnement : écris .piecemaker/raisonnement.yaml.');
+    if (!(await readModel(found.file))) throw new TypeError(`Aucun raisonnement : écris .piecemaker/raisonnements/${found.name}.yaml.`);
     const verified = await verify(root);
-    const model = (await readModel(root))!;
+    const model = (await readModel(found.file))!;
     const entries = flattenActe(model.acte);
     if (!entries.length) throw new TypeError('Le raisonnement ne contient pas d’acte : ajoute acte: [sections].');
     const blocking = verified.issues.filter((issue) => issue.kind === 'erreur' && issue.path.startsWith('acte'));
@@ -75,11 +78,11 @@ export async function runActeAction(input: ActeAction, verify: (cwd: string) => 
   if (input.commande === 'fusionner') {
     const read = await readActeDocx(bytes, 'fusion');
     if (!read.base) throw new TypeError('Ce DOCX n’a pas été produit depuis l’acte : pour reprendre un acte existant, utilise pm acte importer.');
-    const model = await readModel(root);
-    if (!model) throw new TypeError('Aucun raisonnement : le fichier du dossier est introuvable.');
+    const model = await readModel(found.file);
+    if (!model) throw new TypeError(`Aucun raisonnement : .piecemaker/raisonnements/${found.name}.yaml est introuvable.`);
     const merged = await mergeActe(model.acte, read.base, read.sections);
     model.acte = merged.acte;
-    await writeModel(root, model);
+    await writeModel(found.file, model);
     await writeFile(file, await rebaseActeDocx(bytes, read.sections));
     const verified = await verify(root);
     return { rapport: merged.rapport, remarques: read.remarques, verification: describeReasoning(verified) };
@@ -88,10 +91,10 @@ export async function runActeAction(input: ActeAction, verify: (cwd: string) => 
   const read = await readActeDocx(bytes, 'import');
   if ((await readActeDocx(bytes, 'fusion').catch(() => null))?.base) throw new TypeError('Ce DOCX a été produit depuis l’acte : utilise pm acte fusionner.');
   if (!read.sections.length) throw new TypeError('Aucun texte lisible dans ce DOCX.');
-  const model = await readModel(root) ?? {};
+  const model = await readModel(found.file) ?? {};
   if (Array.isArray(model.acte) && model.acte.length) throw new TypeError('Le raisonnement contient déjà un acte : retire acte pour en importer un autre, ou fusionne le DOCX qui en est issu.');
   model.acte = rebuildActe(read.sections.map((section) => ({ raw: { ...(section.intitule ? { intitule: section.intitule } : {}), ...(section.texte.length ? { texte: section.texte } : {}) }, depth: section.depth })));
-  await writeModel(root, model);
+  await writeModel(found.file, model);
   const verified = await verify(root);
   return { ...count(model.acte), remarques: read.remarques, verification: describeReasoning(verified) };
 }
