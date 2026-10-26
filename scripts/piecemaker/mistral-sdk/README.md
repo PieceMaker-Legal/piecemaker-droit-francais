@@ -3,6 +3,14 @@
 Cet essai indépendant utilise `@mistralai/mistralai` sous Node 22 ou supérieur.
 Il ne lance pas Vibe et ne modifie pas ses fichiers, sa configuration ou ses identifiants.
 
+Sur Windows, extraire entièrement l’artefact `Mistral-SDK-Windows-x64`, puis
+double-cliquer sur `Tester-Mistral.cmd`. Node et le SDK sont fournis dans le
+paquet : aucune installation préalable de Python, Node ou PieceMaker n’est requise.
+Le navigateur ouvre la connexion au compte. Après approbation, la console affiche
+la réponse du modèle et reste ouverte pour lire le résultat. `verification.json`
+identifie la révision et les versions testées sur le runner Windows ; il ne
+prétend pas valider une connexion de compte utilisateur sur ce runner.
+
 Depuis le dépôt dont les dépendances sont installées :
 
 ```sh
@@ -29,5 +37,5 @@ Il n’est pas inclus dans les installateurs déjà construits ou en cours de co
 Contrôle sans connexion ni appel au modèle :
 
 ```sh
-node --test scripts/piecemaker/mistral-sdk/browser-login.test.mjs
+node --test scripts/piecemaker/mistral-sdk/*.test.mjs
 ```

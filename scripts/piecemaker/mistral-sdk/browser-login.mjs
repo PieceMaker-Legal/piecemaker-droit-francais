@@ -20,6 +20,11 @@ export async function browserLogin({ fetchImpl = fetch, openBrowser, sleep = ms 
       redirect: 'error',
       signal: AbortSignal.timeout(20000),
     });
+    if (response.status === 429 && !body) {
+      const retryAfter = response.headers.get('retry-after') || '';
+      const delay = /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - now();
+      return { status: 'pending', retryAfterMs: Math.max(30000, Number.isFinite(delay) ? delay : 30000) };
+    }
     if (!response.ok) throw new Error(`Connexion Mistral refusée (HTTP ${response.status}).`);
     return response.json();
   }
@@ -40,7 +45,7 @@ export async function browserLogin({ fetchImpl = fetch, openBrowser, sleep = ms 
       return exchanged.api_key;
     }
     if (result.status !== 'pending') throw new Error('Connexion Mistral refusée ou expirée.');
-    await sleep(3000);
+    await sleep(Math.min(result.retryAfterMs || 3000, deadline - now()));
   }
   throw new Error('Connexion Mistral expirée.');
 }
