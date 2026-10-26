@@ -187,6 +187,16 @@ test('raisonnement transmet la commande et le nom du raisonnement à reasoningFn
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
+test('suivi verifier transmet le dossier à suiviFn', async () => {
+  const calls = [];
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-suivi-'));
+  const deps = { suiviFn: async (input) => { calls.push(input); return 'Suivi du dossier'; } };
+  assert.equal(await run(['suivi', 'verifier'], { cwd: dossier, deps }), 'Suivi du dossier');
+  assert.deepEqual(calls, [{ commande: 'verifier', cwd: path.resolve(dossier) }]);
+  await assert.rejects(run(['suivi', 'lister'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
+  fs.rmSync(dossier, { recursive: true, force: true });
+});
+
 test('sessionDossier suit la session plutôt que le répertoire courant', async () => {
   const lookup = async (id) => ({ 'claude-1': '/dossiers/Dupont', 'thread-1': '/dossiers/Exemple' })[id] ?? null;
   assert.equal(await sessionDossier('/ailleurs', { env: { PIECEMAKER_DOSSIER: '/dossiers/Vibe' }, lookup }), '/dossiers/Vibe');

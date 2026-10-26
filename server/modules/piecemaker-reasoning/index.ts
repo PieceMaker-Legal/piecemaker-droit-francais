@@ -4,3 +4,5 @@ export { listReasoningFiles, parseReasoningDocument, printReasoningDocument, REA
 export { stripAnnotations } from './format.js';
 export { createReasoningRouter, createReasoningLocalRouter } from './routes.js';
 export { readLegalPeriod } from './legal-period.js';
+export { describeSuivi, mentionsDate, readSuivi, SUIVI_FILE, verifySuivi } from './suivi.js';
+export { createSuiviLocalRouter, createSuiviRouter, createSuiviService } from './suivi-service.js';

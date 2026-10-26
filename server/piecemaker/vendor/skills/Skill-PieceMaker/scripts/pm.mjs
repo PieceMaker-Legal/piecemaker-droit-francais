@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'docx', 'acte'];
+const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'suivi', 'docx', 'acte'];
 const REASONING_COMMANDS = ['verifier', 'lister'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
@@ -32,6 +32,8 @@ export const HELP = `Usage: pm <outil> [options]
   raisonnement lister
       un fichier par raisonnement : .piecemaker/raisonnements/NOM.yaml ;
       --raisonnement est requis quand le dossier en compte plusieurs
+  suivi verifier
+      vérifie .piecemaker/suivi.yaml (événements et échéances du dossier)
   docx preparer --fichier FILE.docx --liens FILE.json --sortie FILE.docx [--modele FILE.yaml]
   docx verifier|comparer --fichier FILE.docx [--modele FILE.yaml]
   docx extraire --fichier FILE.docx --sortie FILE.yaml
@@ -196,6 +198,7 @@ async function defaultDeps(cwd) {
     sessionDossier: (cwd) => sessionDossier(cwd, { lookup: client.sessionDossier }),
     sqlFn: client.runSql,
     reasoningFn: client.runReasoning,
+    suiviFn: client.runSuivi,
     docxFn: client.runDocxReasoning,
     acteFn: client.runActe,
     tabularFn: client.runTabularReview,
@@ -479,6 +482,11 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     const result = await api.reasoningFn(input);
     const target = { cwd: input.cwd, tab: 'plugin:piecemaker-raisonnement' };
     return withNotice(result, await followPanel(api, { project: input.cwd, tab: target.tab }, target));
+  }
+
+  if (tool === 'suivi') {
+    if (positional[1] !== 'verifier') usage('suivi attend verifier.');
+    return api.suiviFn({ commande: 'verifier', cwd: path.resolve(resolved) });
   }
 
   usage(`Outil inconnu : ${tool}`);

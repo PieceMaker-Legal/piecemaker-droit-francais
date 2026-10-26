@@ -181,6 +181,12 @@ export async function runReasoning(body) {
   return response.resultat;
 }
 
+export async function runSuivi(body) {
+  await adoptRunningServerPort();
+  const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/suivi`, body, timeout: 180_000 });
+  return response.resultat;
+}
+
 export async function runDocxReasoning(body) {
   await adoptRunningServerPort();
   const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/docx-reasoning`, body, timeout: 180_000 });
