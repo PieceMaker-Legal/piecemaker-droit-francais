@@ -59,6 +59,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
   const [source, setSource] = useState<Awaited<ReturnType<typeof fetchCitationSource>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<string[] | null>(null);
+  const [quoteIndex, setQuoteIndex] = useState(0);
   const passage = useRef<HTMLElement>(null);
   const lawId = source?.citation.decision_id ?? source?.citation.article_id;
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -87,7 +88,7 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
 
   useEffect(() => {
     passage.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [source, blocks]);
+  }, [source, blocks, quoteIndex]);
 
   useEffect(() => {
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
@@ -95,21 +96,26 @@ function CitationPanelContent({ token, onClose }: { token: string; onClose: () =
     return () => document.removeEventListener('keydown', escape);
   }, [onClose]);
 
-  const quote = source?.citation.quotes[0];
+  const quote = source?.citation.quotes[quoteIndex];
   const officialUrl = legifranceQuoteUrl(lawId, quote?.quote);
-  const ranges = (source?.ranges ?? []).filter((range) => range.quoteIndex === 0).sort((a, b) => a.start - b.start);
+  const ranges = (source?.ranges ?? []).filter((range) => range.quoteIndex === quoteIndex).sort((a, b) => a.start - b.start);
 
   return (
     <aside aria-label="Source de la citation" className="flex h-full min-w-0 flex-col bg-background text-foreground">
       <header className="flex items-center gap-2 border-b border-border p-3">
         <h2 className="min-w-0 flex-1 break-words text-sm font-medium">{source?.title ?? 'Source de la citation'}</h2>
-        {officialUrl && <a href={officialUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" aria-label="Ouvrir la source sur Légifrance" className="shrink-0 text-blue-600 dark:text-blue-400"><ExternalLink className="h-4 w-4" /></a>}
+        {officialUrl && <a href={officialUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" aria-label="Ouvrir ce passage sur Légifrance" className="shrink-0 text-blue-600 dark:text-blue-400"><ExternalLink className="h-4 w-4" /></a>}
         <Button ref={closeButton} variant="ghost" size="icon" aria-label="Fermer la source" onClick={onClose}><X className="h-4 w-4" /></Button>
       </header>
       {error && <p role="alert" className="p-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
       {!error && !source && <p role="status" className="p-4 text-sm text-muted-foreground">Chargement de la source…</p>}
+      {quote?.verification?.verified === false && <p role="status" className="px-4 py-2 text-sm text-amber-700 dark:text-amber-300">{source?.sourceOrigin === 'decision-cache' ? 'La citation reste non vérifiée lors de la réponse. Cette copie locale permet de consulter le texte.' : 'Extrait non retrouvé dans le texte source.'}</p>}
       {source && <ScrollArea className="min-h-0 flex-1">{source.source || blocks ? <CitationText source={source.source} ranges={ranges} passage={passage} blocks={blocks} quote={quote?.quote} code={source.citation.kind === 'code'} /> : <div className="p-4 text-sm" aria-label="Texte source">Le texte de cette source n’a pas été lu dans ce tour ou est indisponible.</div>}</ScrollArea>}
-      {source && quote && <section aria-label="Extrait cité" className="border-t border-border px-4 py-3 text-sm"><span className="whitespace-nowrap">Citation 1/{source.citation.quotes.length}</span></section>}
+      {source && quote && <section aria-label="Extrait cité" className="flex items-center gap-2 border-t border-border px-4 py-3 text-sm">
+        <Button variant="ghost" size="icon" aria-label="Extrait précédent" disabled={quoteIndex === 0} onClick={() => setQuoteIndex(index => index - 1)}>‹</Button>
+        <span className="whitespace-nowrap">Citation {quoteIndex + 1}/{source.citation.quotes.length}</span>
+        <Button variant="ghost" size="icon" aria-label="Extrait suivant" disabled={quoteIndex + 1 >= source.citation.quotes.length} onClick={() => setQuoteIndex(index => index + 1)}>›</Button>
+      </section>}
     </aside>
   );
 }

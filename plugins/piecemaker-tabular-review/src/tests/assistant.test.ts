@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-assistant-'));
+const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-assistant-')));
 const project = path.join(home, 'Dossier Exemple');
 vi.stubEnv('HOME', home);
 vi.stubEnv('USERPROFILE', home);

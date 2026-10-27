@@ -24,6 +24,7 @@ from model_config import (  # noqa: E402
     LEGACY_GLINER_MODELS,
     PREFERRED_GLINER_MODEL,
     PREFERRED_GLINER_REVISION,
+    REQUIRED_SNAPSHOT_FILES,
     gliner2_runtime,
     is_model_cached,
     write_refs_main,
@@ -119,6 +120,7 @@ def download_gliner2_model(model_id: str, description: str, force: bool = False)
             revision=PREFERRED_GLINER_REVISION,
             local_files_only=False,
             force_download=force,
+            allow_patterns=list(REQUIRED_SNAPSHOT_FILES),
         )
         write_refs_main(model_id)
 

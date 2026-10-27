@@ -6,10 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const home = vi.hoisted(() => ({ value: '' }));
 
-vi.mock('node:os', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:os')>()),
-  homedir: () => home.value,
-}));
+vi.mock('node:os', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:os')>();
+  return { ...original, default: { ...original, homedir: () => home.value }, homedir: () => home.value };
+});
 
 const directories: string[] = [];
 

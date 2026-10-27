@@ -37,9 +37,11 @@ function onWarmupLine(spin) {
   return (line) => {
     try {
       const parsed = JSON.parse(line);
-      spin.update(truncate(parsed.message || line));
+      if (process.stdout.isTTY) spin.update(truncate(parsed.message || line));
+      else log.info(parsed.message || line);
     } catch {
-      spin.update(truncate(line));
+      if (process.stdout.isTTY) spin.update(truncate(line));
+      else log.info(line);
     }
   };
 }

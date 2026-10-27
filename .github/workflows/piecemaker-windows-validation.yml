@@ -51,12 +51,21 @@ jobs:
             server/piecemaker/anonymizer/hudsucker-proxy/target
             ${{ runner.temp }}/preview-assets
           key: windows-preview-${{ hashFiles('server/piecemaker/anonymizer/hudsucker-proxy/Cargo.lock', 'package-lock.json', 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/requirements.txt', 'desktop-bootstrap/composants/*.mjs', 'desktop-bootstrap/composants/windows-requirements.txt') }}
-      - name: Build Windows anonymization proxy
-        run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
-      - name: Install and compile native SQLite for Electron
+      - name: Validate source before packaging
         shell: bash
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npx --no-install vitest run --maxWorkers=2
+          npm --prefix plugins/piecemaker-tabular-review test -- --maxWorkers=2
+          npx --no-install tsc --noEmit -p plugins/piecemaker-tabular-review/tsconfig.json
+          npx --no-install tsx --tsconfig server/tsconfig.json --test server/piecemaker/mistral-sdk/auth.test.ts server/piecemaker/mistral-sdk/runtime.test.ts server/piecemaker/mistral-sdk/tools.test.ts server/piecemaker/mistral-sdk/tabular.test.ts
+          node --test scripts/piecemaker/ui-updates/sdk-probe.test.mjs server/piecemaker/vendor/installer/lib/step-exit.test.mjs
+      - name: Build Windows anonymization proxy
+        run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
+      - name: Compile native SQLite for Electron
+        shell: bash
+        run: |
           ELECTRON_VERSION="$(node -p "require('./package-lock.json').packages['node_modules/electron'].version")"
           npx electron-rebuild --version "$ELECTRON_VERSION" --arch x64 --only better-sqlite3 --force
           mkdir -p "$PIECEMAKER_PREBUILT_ASSET_DIR"
@@ -89,6 +98,7 @@ jobs:
         run: |
           node --experimental-vm-modules --test desktop-bootstrap/lib/native-uninstall.test.mjs desktop-bootstrap/lib/certificates-win32.test.mjs desktop-bootstrap/composants/shared-python.test.mjs desktop-bootstrap/overlay/electron-piecemaker/shared-python-update.test.mjs
           python -m unittest discover -s server/piecemaker/vendor/mcp/legifrance/tests -p test_shared_runtime.py
+          python -m unittest discover -s server/piecemaker/vendor/websocket-server/scripts -p test_warmup_download.py
       - name: Configure installer signature
         shell: bash
         env:

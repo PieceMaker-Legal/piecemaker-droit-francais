@@ -1631,19 +1631,19 @@ function startInstallJob(repoRoot, component) {
       ...(component === 'mineru' ? { PIECEMAKER_INSTALL_MINERU: '1' } : {}),
     },
   });
-  const tailStderr = [];
+  let outputTail = '';
   const onLine = (chunk) => {
     for (const part of String(chunk).split('\n')) {
       const line = cleanInstallProgressLine(part);
       if (line) job.progress = line;
     }
   };
-  child.stdout.on('data', onLine);
-  child.stderr.on('data', (chunk) => {
+  const captureOutput = (chunk) => {
     onLine(chunk);
-    tailStderr.push(String(chunk));
-    while (tailStderr.join('').length > 4000) tailStderr.shift();
-  });
+    outputTail = `${outputTail}${chunk}`.slice(-8000);
+  };
+  child.stdout.on('data', captureOutput);
+  child.stderr.on('data', captureOutput);
   child.once('error', (error) => {
     job.state = 'failed';
     job.error = error.message;
@@ -1657,7 +1657,7 @@ function startInstallJob(repoRoot, component) {
       job.finishedAt = Date.now();
     } else if (job.state === 'running') {
       job.state = code === 0 ? 'done' : 'failed';
-      if (code !== 0) job.error = cleanInstallProgressLine(tailStderr.join('')) || `L’installateur s’est arrêté avec le code ${code}.`;
+      if (code !== 0) job.error = cleanInstallProgressLine(outputTail) || `L’installateur s’est arrêté avec le code ${code}.`;
       if (code === 0) job.progress = 'Installation terminée.';
       job.finishedAt = Date.now();
     }

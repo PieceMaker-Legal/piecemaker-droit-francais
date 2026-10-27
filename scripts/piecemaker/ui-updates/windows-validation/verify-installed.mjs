@@ -4,6 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { ensureRuntimeComponents } from '../../../../desktop-bootstrap/overlay/electron-piecemaker/runtime-components.mjs';
+import { configureRuntimeEnvironment } from '../../../../desktop-bootstrap/overlay/electron-piecemaker/asar-runtime.mjs';
 
 const executable = path.resolve(process.argv[2]);
 const output = path.resolve(process.env.PIECEMAKER_TEST_OUTPUT);
@@ -19,6 +22,23 @@ assert.equal((await fetch(`${config.feed}/ui-update.json`)).status, 404, 'Step 2
 let child;
 let log = '';
 const clientComponents = path.join(directory, 'components');
+const runtimeManifest = JSON.parse(await fs.readFile(path.join(root, 'runtime-components.json'), 'utf8'));
+const runtime = await ensureRuntimeComponents({
+  manifest: runtimeManifest,
+  cacheRoot: path.join(directory, 'runtime-components'),
+  assetDir: path.join(path.dirname(executable), 'resources', 'validation-assets'),
+});
+const sdkEnvironment = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+configureRuntimeEnvironment({ packedRoot: root.replace(/\.unpacked$/, ''), physicalRoot: root, moduleRoots: runtime.moduleRoots, environment: sdkEnvironment });
+const sdkProbe = pathToFileURL(path.join(root, 'electron-piecemaker/validation-sdk-probe.mjs')).href;
+const sdkVerification = JSON.parse(execFileSync(executable, ['--input-type=module', '-e', `const {verifyMistralSdk}=await import(${JSON.stringify(sdkProbe)});console.log(JSON.stringify(await verifyMistralSdk(${JSON.stringify(root)})));`], {
+  env: sdkEnvironment, encoding: 'utf8', timeout: 30000,
+}));
+assert.equal(sdkVerification.tools, true);
+await fs.writeFile(path.join(output, 'mistral-sdk-verification.json'), JSON.stringify(sdkVerification, null, 2));
+const buildMetadata = JSON.parse(await fs.readFile(path.join(root, 'electron-piecemaker/validation-build.json'), 'utf8'));
+assert.equal(buildMetadata.revision, process.env.GITHUB_SHA);
+assert.equal(buildMetadata.provider, 'mistral-sdk');
 const certificateModule = path.join(root, 'desktop-bootstrap/lib/certificates.mjs');
 execFileSync(executable, ['--input-type=module', '-e', `const {generateCertificates}=await import(${JSON.stringify(new URL('file:///' + certificateModule.replaceAll('\\', '/')).href)});await generateCertificates();`], {
   env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PIECEMAKER_HOME: clientComponents }, stdio: 'inherit', timeout: 120000,
@@ -96,6 +116,15 @@ try {
     return value.success;
   })()`);
   assert.equal(registered, true);
+  const mistralAccount = await evaluate(page, `(async () => {
+    const headers = { Authorization: 'Bearer ' + localStorage.getItem('auth-token') };
+    const status = await fetch('/api/piecemaker/mistral-sdk/provider-status', { headers });
+    const value = await status.json();
+    const check = await fetch('/api/piecemaker/mistral-sdk/auth/check', { method: 'POST', headers });
+    return { statusCode: status.status, installed: value.data?.installed, authenticated: value.data?.authenticated, method: value.data?.method, checkStatus: check.status };
+  })()`);
+  assert.deepEqual(mistralAccount, { statusCode: 200, installed: true, authenticated: false, method: 'browser', checkStatus: 401 });
+  await fs.writeFile(path.join(output, 'mistral-sdk-verification.json'), JSON.stringify({ ...sdkVerification, accountSettingsApi: true, connectionRequired: true }, null, 2));
   await page.call('Page.reload');
   const statusExpression = `(async () => {
     const token = localStorage.getItem('auth-token');
@@ -134,6 +163,7 @@ try {
     const job = state.installation.jobs.find(job => job.component === 'gliner');
     if (job?.state === 'failed') throw new Error(`Automatic GLiNER installation failed: ${job.error}`);
     if (state.component?.installed) { gliner = state.component; break; }
+    if (job?.state === 'done') throw new Error(`GLiNER installation reported success but its library or pinned model is missing: ${job.progress}`);
     if (!job && Date.now() - glinerStarted > 120000) throw new Error('Automatic GLiNER installation did not start.');
     await new Promise(resolve => setTimeout(resolve, 5000));
   }
@@ -153,6 +183,7 @@ try {
     env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
   });
   assert.match(glinerOutput, /GLINER_LOCAL_INFERENCE_PASS/);
+  execFileSync(pythonConfig.pythonPath, ['-m', 'unittest', 'discover', '-s', 'server/piecemaker/vendor/mcp/legifrance/tests', '-p', 'test_justice_maintenance.py'], { stdio: 'inherit', timeout: 30000 });
   await fs.writeFile(path.join(output, 'gliner-verification.json'), JSON.stringify({ installed: gliner.installed, model: gliner.model, localInference: true }, null, 2));
   await fs.writeFile(path.join(output, '01-installed.png'), Buffer.from((await page.call('Page.captureScreenshot')).data, 'base64'));
   const caFile = path.join(directory, 'components/certs/piecemaker-ca.crt');
@@ -180,8 +211,17 @@ try {
   }, 'Native validation uninstaller', 90000);
   assert.equal(await fs.readFile(preserved, 'utf8'), 'untouched');
   await fs.access(path.join(directory, 'app-data/auth.db'));
+  const installerName = (await fs.readdir(output)).find(name => /^PieceMaker-Validation-.*\.exe$/.test(name));
+  assert.ok(installerName, 'Validation installer required for reinstall');
+  execFileSync(path.join(output, installerName), ['/S', `/D=${path.dirname(executable)}`], { stdio: 'inherit', timeout: 120000 });
+  await fs.access(executable);
+  page = await start();
+  await waitFor(() => evaluate(page, 'document.getElementById("root")?.childElementCount > 0 && Boolean(localStorage.getItem("auth-token"))'), 'Authenticated interface after native reinstall');
+  await waitFor(async () => { const value = await evaluate(page, statusExpression); return value.enabled && value.listening; }, 'Proxy after native reinstall');
+  await stop(page);
   await fs.writeFile(path.join(output, 'installation-verification.json'), JSON.stringify({ installed: true, initialInterface: true, remoteChannelEmbedded: config.feed, updateNotPublished: true, accountCreated: true, sessionRetained: true, authenticatedInterfaceRendered: true, onboardingCompletedThroughUI: true, localCertificateGenerated: true, localCertificateTrusted: true, certificateConsentPreapprovedOnDisposableRunner: true, glinerInstalled: gliner.installed, glinerLocalInference: true, anonymizerActive: status.enabled && restarted.enabled, nativeUninstallVerified: true, productionDataUntouched: true, runtime: config.runtime }, null, 2));
-  console.log('FULL INSTALLATION PASS: embedded remote channel, fresh local CA, active proxy, account and restart; no UI update published.');
+  await fs.writeFile(path.join(output, 'reinstallation-verification.json'), JSON.stringify({ nativeReinstall: true, sessionRetained: true, proxyActive: true, productionDataUntouched: await fs.readFile(preserved, 'utf8') === 'untouched' }, null, 2));
+  console.log('FULL INSTALLATION PASS: embedded remote channel, SDK tools, fresh local CA, active proxy, account, restart and native reinstall; no UI update published.');
 } finally {
   if (page && child?.exitCode === null) {
     await evaluate(page, '({url:location.href,text:document.body.innerText,buttons:[...document.querySelectorAll("button")].map(b=>({text:b.innerText,disabled:b.disabled}))})').then((value) => fs.writeFile(path.join(output, 'interface-diagnostic.json'), JSON.stringify(value, null, 2))).catch(() => {});

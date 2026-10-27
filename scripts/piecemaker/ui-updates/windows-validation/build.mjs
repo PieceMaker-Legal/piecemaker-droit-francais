@@ -33,6 +33,10 @@ const built = await buildDesktopApp(source, { windowsInstaller: true, prepareSta
   manifest.build.extraResources = [...(manifest.build.extraResources || []), { from: assets, to: 'validation-assets', filter: ['*.tar.gz', '*.json', '*.sha256', '*.exe', '*.node'] }, { from: path.join(source, 'release/desktop'), to: 'validation-assets', filter: ['piecemaker-runtime-components-*.tar.gz'] }];
   await fs.writeFile(packageFile, JSON.stringify(manifest, null, 2));
   await fs.copyFile(path.join(templates, 'main.mjs'), path.join(stage, manifest.main));
+  await fs.copyFile(path.join(templates, 'sdk-probe.mjs'), path.join(stage, 'electron-piecemaker/validation-sdk-probe.mjs'));
+  const buildMetadata = { revision: process.env.GITHUB_SHA, branch: process.env.GITHUB_REF, version: manifest.version, provider: 'mistral-sdk' };
+  await fs.writeFile(path.join(stage, 'electron-piecemaker/validation-build.json'), JSON.stringify(buildMetadata, null, 2));
+  await fs.writeFile(path.join(output, 'validation-build.json'), JSON.stringify(buildMetadata, null, 2));
   await fs.copyFile(path.join(templates, 'uninstall.mjs'), path.join(stage, 'electron/piecemakerUninstall.js'));
   await replace(path.join(stage, 'electron-piecemaker/main.js'), 'await installWindowsUpdater({ app, dialog, LocalServerController });', 'process.env.PIECEMAKER_DESKTOP_UPDATE_URL = "http://127.0.0.1:9/disabled-validation";');
   await replace(path.join(stage, 'server/piecemaker/anonymizer/service.cjs'), "path.join(os.homedir(), '.piecemaker', 'certs')", "path.join(process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker'), 'certs')");
@@ -66,4 +70,5 @@ const release = path.join(source, 'release/desktop');
 const installer = (await fs.readdir(release)).find((name) => /^PieceMaker-Validation-.*\.exe$/.test(name));
 if (!installer) throw new Error('Full validation installer missing');
 await fs.copyFile(path.join(release, installer), path.join(output, installer));
+await fs.copyFile(path.join(templates, 'README.md'), path.join(output, 'TESTER-WINDOWS.md'));
 console.log(JSON.stringify({ built, installer, output }));
