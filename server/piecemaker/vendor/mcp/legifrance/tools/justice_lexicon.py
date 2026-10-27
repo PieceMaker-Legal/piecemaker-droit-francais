@@ -167,6 +167,11 @@ class JusticeLexiconClient:
             ) from error
 
         body = response.text
+        if re.search(r"(?:site|justice\.fr)\s+(?:est\s+)?en\s+cours\s+de\s+maintenance", body, re.IGNORECASE):
+            raise JusticeLexiconError(
+                "Le lexique officiel justice.fr est temporairement en maintenance. "
+                "Réessayez lorsque le site sera disponible."
+            )
         blocked_markers = (
             "Notre système de sécurité a détecté un comportement suspect",
             "ID de support",

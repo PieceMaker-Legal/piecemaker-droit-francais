@@ -127,12 +127,10 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
   });
 
   const content: ReactNode = <TabContent key={tabKey(active)} props={props} file={active} onClose={() => closeTab(tabKey(active))} />;
-  if (!isSidebar) return content;
-
   if (tabsTarget) {
     return (
       <>
-        {createPortal(<div role="tablist" aria-label="Documents ouverts" className="piecemaker-files-tabs">
+        {isSidebar && createPortal(<div role="tablist" aria-label="Documents ouverts" className="piecemaker-files-tabs">
           {tabs.map((tab) => {
             const key = tabKey(tab);
             const selected = key === tabKey(active);
@@ -156,7 +154,7 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      {tabs.length > 1 && <div role="tablist" aria-label="Documents ouverts" className="flex shrink-0 overflow-x-auto border-b border-border bg-muted/40">
+      {isSidebar && tabs.length > 1 && <div role="tablist" aria-label="Documents ouverts" className="flex shrink-0 overflow-x-auto border-b border-border bg-muted/40">
         {tabs.map((tab) => {
           const key = tabKey(tab);
           const selected = key === tabKey(active);

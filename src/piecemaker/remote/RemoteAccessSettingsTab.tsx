@@ -107,7 +107,7 @@ export function RemoteAccessSettingsTab() {
 
         {tailscale?.installed && !tailscale.running ? <StateLine ok={false}>{t('remote.offline')}</StateLine> : null}
 
-        {tailscale?.running ? (
+        {status && tailscale?.running ? (
           <>
             <StateLine ok>{t('remote.ready', { name: tailscale.dnsName })}</StateLine>
             {status.funnel ? <p className="text-sm text-destructive">{t('remote.funnel')}</p> : null}

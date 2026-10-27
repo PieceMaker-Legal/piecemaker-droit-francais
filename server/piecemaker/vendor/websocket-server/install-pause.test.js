@@ -64,3 +64,13 @@ test('la pause arrête l’installateur et ses téléchargements, la reprise rel
 test('la pause sans installation en cours ne renvoie aucun job', async () => {
   assert.equal(await pauseInstallJobs(), null);
 });
+
+test('une installation en échec conserve aussi le diagnostic écrit sur stdout', async t => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), 'pm-install-error-'));
+  t.after(() => rm(repoRoot, { recursive: true, force: true }));
+  await mkdir(path.join(repoRoot, 'installer', 'bin'), { recursive: true });
+  await writeFile(path.join(repoRoot, 'installer', 'bin', 'piecemaker.mjs'), "console.log('Téléchargement du modèle fictif interrompu');process.exitCode=1;");
+  const job = startInstallJob(repoRoot, 'gliner');
+  await waitFor(() => job.state === 'failed');
+  assert.match(job.error, /modèle fictif interrompu/);
+});

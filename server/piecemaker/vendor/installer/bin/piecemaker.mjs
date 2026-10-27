@@ -717,7 +717,7 @@ async function main() {
     }
     const result = await runStep(step, ctx, 1, 1);
     printSummary([[step, result]]);
-    return result.status === 'failed' ? 1 : 0;
+    return result.status === 'failed' || result.status === 'partial' ? 1 : 0;
   }
 
   if (flags.all || nonInteractive) {

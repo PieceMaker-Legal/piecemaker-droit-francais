@@ -53,6 +53,7 @@ export function PdfPassageViewer({ file, projectId, passage, isSidebar }: PdfPas
   useEffect(() => {
     if (!projectId) return undefined;
     const controller = new AbortController();
+    let loadingTask: ReturnType<Pdfjs['getDocument']> | undefined;
     setLoading(true);
     setError(null);
     void (async () => {
@@ -62,12 +63,10 @@ export function PdfPassageViewer({ file, projectId, passage, isSidebar }: PdfPas
         const buffer = await response.arrayBuffer();
         if (controller.signal.aborted) return;
         const pdfjs = await loadPdfjs();
-        const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
-        if (controller.signal.aborted) {
-          void pdf.destroy();
-          return;
-        }
-        pdfRef.current?.destroy();
+        if (controller.signal.aborted) return;
+        loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+        const pdf = await loadingTask.promise;
+        if (controller.signal.aborted) return;
         pdfRef.current = pdf;
         const found = await findPassagePage(pdf, passage.quote, passage.page);
         if (controller.signal.aborted) return;
@@ -82,7 +81,7 @@ export function PdfPassageViewer({ file, projectId, passage, isSidebar }: PdfPas
     })();
     return () => {
       controller.abort();
-      void pdfRef.current?.destroy();
+      void loadingTask?.destroy();
       pdfRef.current = null;
     };
   }, [file.path, projectId, passage.quote, passage.page, passage.nonce]);

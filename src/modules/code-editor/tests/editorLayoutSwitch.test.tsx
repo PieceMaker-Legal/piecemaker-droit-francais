@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as ReactI18next from 'react-i18next';
 import { test, vi } from 'vitest';
 
 import type { CodeEditorFile } from '@/shared/types';
+
+vi.mock('@/piecemaker/chat/fileRef', () => ({ resolveFileRef: async (path: string) => path }));
+vi.mock('react-i18next', async importOriginal => ({
+  ...await importOriginal<typeof ReactI18next>(),
+  useTranslation: () => ({ t: (key: string, fallback?: unknown) => typeof fallback === 'string' ? fallback : key }),
+}));
 
 /**
  * Regression guard for #870: `EditorSidebar` used to return a different root

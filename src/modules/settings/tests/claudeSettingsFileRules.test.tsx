@@ -86,7 +86,7 @@ describe('Claude permissions: rules from the Claude settings files', () => {
     expect(section.textContent).toContain('on top of the lists above');
     expect(section.textContent).toContain('an ask rule does not prompt for a tool that Allowed Tools already allows');
     expect(section.textContent).toContain('edit them in the files');
-    expect(section.textContent).toContain('.claude/settings.local.json also apply to chats in that project');
+    expect(section.textContent).toContain('.claude/settings.local.json also apply to chats in that case');
     // The CLI drops a project's shared allow rules until the folder is trusted.
     expect(section.textContent).toContain('ignores allow rules in .claude/settings.json until the folder is trusted');
     // A managed file that does not exist is the normal case and stays hidden.
