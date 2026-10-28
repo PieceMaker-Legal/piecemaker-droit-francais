@@ -59,6 +59,7 @@ function findSoffice() {
   const candidates = [
     process.env.SOFFICE_PATH,
     ...(process.platform === 'win32' ? [path.join(path.dirname(process.execPath), 'resources', 'libreoffice', 'program', 'soffice.com')] : []),
+    ...(process.platform === 'darwin' ? [path.resolve(path.dirname(process.execPath), '..', 'Resources', 'libreoffice', 'LibreOffice.app', 'Contents', 'MacOS', 'soffice')] : []),
     '/Applications/LibreOffice.app/Contents/MacOS/soffice',
     'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
     'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',

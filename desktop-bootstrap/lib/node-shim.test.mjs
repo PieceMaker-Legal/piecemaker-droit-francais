@@ -20,9 +20,9 @@ async function fakeApplication(t, executableName) {
   return { root, stageDir, app: path.join(root, `${executableName || 'PieceMaker'}.exe`), shim: path.join(stageDir, NODE_SHIM_DIR, 'node.exe') };
 }
 
-function runningCopies(executable) {
-  const script = `@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${executable}' }).Count`;
-  return Number(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' }).trim());
+function processIsRunning(pid) {
+  try { process.kill(pid, 0); return true; }
+  catch (error) { if (error.code === 'ESRCH') return false; throw error; }
 }
 
 test('ships node.exe as an extra resource next to the app', windows, async (t) => {
@@ -62,18 +62,34 @@ test('node runs the app two levels up as Node with the arguments untouched and r
 test('killing node stops the app process it started', windows, async (t) => {
   const { stageDir, app, shim } = await fakeApplication(t);
   const fixture = path.join(path.dirname(stageDir), 'fixture.cs');
-  await fs.writeFile(fixture, 'class Fixture { static void Main() { System.Threading.Thread.Sleep(30000); } }');
+  const pidFile = path.join(path.dirname(stageDir), 'child.pid');
+  await fs.writeFile(fixture, 'class Fixture { static void Main(string[] args) { System.IO.File.WriteAllText(args[0], System.Diagnostics.Process.GetCurrentProcess().Id.ToString()); System.Threading.Thread.Sleep(30000); } }');
   const compiler = path.join(process.env.SystemRoot, 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
   execFileSync(compiler, ['/nologo', '/target:exe', `/out:${app}`, fixture]);
   await embedNodeShim(stageDir);
 
-  const child = spawn(shim, [], { stdio: 'ignore' });
-  t.after(() => execFileSync('powershell.exe', ['-NoProfile', '-Command', `Get-Process | Where-Object { $_.Path -eq '${app}' } | Stop-Process -Force`]));
-  await setTimeout(1500);
-  assert.equal(runningCopies(app), 1);
+  const child = spawn(shim, [pidFile], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let stderr = '';
+  child.stderr.on('data', data => { stderr += data; });
+  let appPid;
+  t.after(() => {
+    child.kill();
+    if (appPid && processIsRunning(appPid)) process.kill(appPid);
+  });
+  const startupDeadline = Date.now() + 10000;
+  while (Date.now() < startupDeadline) {
+    try { appPid = Number(await fs.readFile(pidFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (Number.isInteger(appPid) && appPid > 0) break;
+    if (child.exitCode !== null) throw new Error(`Le lanceur a quitté avant son enfant : ${stderr}`);
+    await setTimeout(50);
+  }
+  assert.ok(Number.isInteger(appPid) && appPid > 0, `Le processus enfant n'a pas annoncé son PID : ${stderr}`);
+  assert.equal(processIsRunning(appPid), true);
 
+  const exited = once(child, 'exit');
   child.kill();
-  await once(child, 'exit');
-  await setTimeout(500);
-  assert.equal(runningCopies(app), 0);
+  await exited;
+  const shutdownDeadline = Date.now() + 5000;
+  while (processIsRunning(appPid) && Date.now() < shutdownDeadline) await setTimeout(50);
+  assert.equal(processIsRunning(appPid), false);
 });

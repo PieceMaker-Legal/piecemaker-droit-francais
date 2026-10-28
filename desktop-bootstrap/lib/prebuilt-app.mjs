@@ -22,6 +22,7 @@ export async function verifyBuiltApp(builtApp) {
     `server/piecemaker/anonymizer/bin/${binaryName}`,
   ];
   const missing = [];
+  if (IS_MAC && !(await exists(path.join(builtApp, 'Contents', 'Resources', 'libreoffice', 'LibreOffice.app', 'Contents', 'MacOS', 'soffice')))) missing.push('Contents/Resources/libreoffice/LibreOffice.app/Contents/MacOS/soffice');
   for (const relativePath of required) {
     if (!(await exists(path.join(appRoot, relativePath)))) missing.push(relativePath);
   }

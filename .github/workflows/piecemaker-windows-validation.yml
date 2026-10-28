@@ -28,8 +28,8 @@ jobs:
         with:
           node-version: 22
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: node --test server/piecemaker/vendor/installer/lib/libreoffice.test.mjs
-      - run: node scripts/piecemaker/ui-updates/windows-validation/verify-office.mjs
+      - run: node --test server/piecemaker/vendor/installer/lib/libreoffice.test.mjs desktop-bootstrap/lib/node-shim.test.mjs
+      - run: node scripts/piecemaker/verify-office.mjs
   build-test-installer:
     needs: test-libreoffice
     if: github.ref == 'refs/heads/MAJ-continue'

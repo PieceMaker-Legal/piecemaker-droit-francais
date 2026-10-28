@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { log, spinner } from '../lib/ui.mjs';
 import { confirm } from '../lib/prompt.mjs';
 import { commandExists, run, IS_MAC, IS_WINDOWS, REPO_ROOT } from '../lib/platform.mjs';
@@ -139,33 +140,78 @@ export const LIBREOFFICE = {
   sources: 'https://download.documentfoundation.org/libreoffice/src/26.8.1/',
 };
 export const LIBREOFFICE_DIR = 'libreoffice';
+export const LIBREOFFICE_MAC = {
+  arm64: {
+    ...LIBREOFFICE,
+    url: 'https://download.documentfoundation.org/libreoffice/stable/26.8.1/mac/aarch64/LibreOffice_26.8.1_MacOS_aarch64.dmg',
+    sha256: 'ca074e0b13571efb30a31fc531c5f95e997030637325e5d5de92d67aefdf0dfc',
+  },
+  x64: {
+    ...LIBREOFFICE,
+    url: 'https://download.documentfoundation.org/libreoffice/stable/26.8.1/mac/x86_64/LibreOffice_26.8.1_MacOS_x86-64.dmg',
+    sha256: '4c7464313a529e9074400cbcdc894fc40ac4ef9421ded03b16b5a78d12cb155e',
+  },
+};
 
-export async function embedLibreOffice(stageDir, {
-  fetchImpl = fetch,
-  extract = async (archive, destination) => {
+export function libreOfficePackage(platform = process.platform, arch = process.arch) {
+  if (platform === 'win32' && arch === 'x64') return LIBREOFFICE;
+  if (platform === 'darwin' && Object.hasOwn(LIBREOFFICE_MAC, arch)) return LIBREOFFICE_MAC[arch];
+  throw new Error(`LibreOffice embarqué non disponible pour ${platform}/${arch}.`);
+}
+
+async function extractLibreOffice(archive, destination, platform) {
+  if (platform === 'win32') {
     const code = await run(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'msiexec.exe'), ['/a', archive, '/qn', '/norestart', `TARGETDIR=${destination}`], { windowsHide: true });
     if (code !== 0) throw new Error(`Extraction LibreOffice échouée (code ${code}).`);
-  },
+    return;
+  }
+  const mount = await fs.mkdtemp(path.join(os.tmpdir(), 'pm-libreoffice-mount-'));
+  const attached = await run('/usr/bin/hdiutil', ['attach', '-readonly', '-nobrowse', '-mountpoint', mount, archive]);
+  if (attached !== 0) {
+    await fs.rmdir(mount);
+    throw new Error(`Montage LibreOffice échoué (code ${attached}).`);
+  }
+  try {
+    const copied = await run('/usr/bin/ditto', [path.join(mount, 'LibreOffice.app'), path.join(destination, 'LibreOffice.app')]);
+    if (copied !== 0) throw new Error(`Copie LibreOffice échouée (code ${copied}).`);
+  } finally {
+    const detached = await run('/usr/bin/hdiutil', ['detach', mount]);
+    if (detached !== 0) throw new Error(`Démontage LibreOffice échoué (code ${detached}).`);
+    await fs.rmdir(mount);
+  }
+}
+
+export async function embedLibreOffice(stageDir, {
+  platform = process.platform,
+  arch = process.arch,
+  fetchImpl = fetch,
+  extract = extractLibreOffice,
 } = {}) {
-  const response = await fetchImpl(LIBREOFFICE.url);
+  const metadata = libreOfficePackage(platform, arch);
+  const response = await fetchImpl(metadata.url);
   if (!response.ok) throw new Error(`LibreOffice indisponible (HTTP ${response.status}).`);
   const bytes = Buffer.from(await response.arrayBuffer());
-  if (crypto.createHash('sha256').update(bytes).digest('hex') !== LIBREOFFICE.sha256) {
+  if (crypto.createHash('sha256').update(bytes).digest('hex') !== metadata.sha256) {
     throw new Error('LibreOffice : empreinte SHA-256 invalide.');
   }
   const destination = path.join(stageDir, LIBREOFFICE_DIR);
-  const archive = path.join(stageDir, 'libreoffice.msi');
+  const archive = path.join(stageDir, platform === 'darwin' ? 'libreoffice.dmg' : 'libreoffice.msi');
   await fs.rm(destination, { recursive: true, force: true });
   await fs.mkdir(destination, { recursive: true });
   await fs.writeFile(archive, bytes);
   try {
-    await extract(archive, destination);
+    await extract(archive, destination, platform);
   } finally {
     await fs.rm(archive, { force: true });
   }
-  await fs.access(path.join(destination, 'program', 'soffice.com'));
-  await fs.access(path.join(destination, 'program', 'soffice.exe'));
-  await fs.access(path.join(destination, 'LICENSE.html'));
+  if (platform === 'darwin') {
+    await fs.access(path.join(destination, 'LibreOffice.app', 'Contents', 'MacOS', 'soffice'));
+    await fs.access(path.join(destination, 'LibreOffice.app', 'Contents', 'Resources', 'LICENSE.html'));
+  } else {
+    await fs.access(path.join(destination, 'program', 'soffice.com'));
+    await fs.access(path.join(destination, 'program', 'soffice.exe'));
+    await fs.access(path.join(destination, 'LICENSE.html'));
+  }
   await fs.rm(path.join(destination, path.basename(archive)), { force: true });
   await fs.writeFile(path.join(destination, 'PIECEMAKER-SOURCES.txt'), `LibreOffice ${LIBREOFFICE.version}\nDistribution officielle non modifiée.\nSources : ${LIBREOFFICE.sources}\nLicences et notices : fichiers LICENSE et notices fournis dans ce dossier.\nhttps://www.libreoffice.org/licenses/\n`, 'utf8');
   const manifestPath = path.join(stageDir, 'package.json');
