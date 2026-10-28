@@ -19,8 +19,10 @@ export async function embedNodeShim(stageDir) {
 
   const manifestPath = path.join(stageDir, 'package.json');
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  const executableName = `${manifest.build.executableName || manifest.build.productName || 'PieceMaker'}.exe`;
+  await fs.writeFile(path.join(destination, 'application.txt'), executableName, 'utf8');
   const extraResources = (manifest.build.extraResources || []).filter((entry) => entry?.to !== NODE_SHIM_DIR);
   manifest.build.extraResources = [...extraResources, { from: NODE_SHIM_DIR, to: NODE_SHIM_DIR }];
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  ui.detail('Commande node embarquée (PieceMaker.exe en mode Node).');
+  ui.detail(`Commande node embarquée (${executableName} en mode Node).`);
 }

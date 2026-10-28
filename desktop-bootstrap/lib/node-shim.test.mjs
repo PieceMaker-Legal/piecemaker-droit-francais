@@ -11,13 +11,13 @@ import { NODE_SHIM_DIR, embedNodeShim } from './node-shim.mjs';
 
 const windows = { skip: process.platform !== 'win32' };
 
-async function fakeApplication(t) {
+async function fakeApplication(t, executableName) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pm-node-shim-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const stageDir = path.join(root, 'resources');
   await fs.mkdir(stageDir);
-  await fs.writeFile(path.join(stageDir, 'package.json'), JSON.stringify({ build: { files: ['server/**'], extraResources: [{ from: 'mingit', to: 'mingit' }] } }));
-  return { root, stageDir, app: path.join(root, 'PieceMaker.exe'), shim: path.join(stageDir, NODE_SHIM_DIR, 'node.exe') };
+  await fs.writeFile(path.join(stageDir, 'package.json'), JSON.stringify({ build: { executableName, files: ['server/**'], extraResources: [{ from: 'mingit', to: 'mingit' }] } }));
+  return { root, stageDir, app: path.join(root, `${executableName || 'PieceMaker'}.exe`), shim: path.join(stageDir, NODE_SHIM_DIR, 'node.exe') };
 }
 
 function runningCopies(executable) {
@@ -31,7 +31,23 @@ test('ships node.exe as an extra resource next to the app', windows, async (t) =
   await embedNodeShim(stageDir);
   const manifest = JSON.parse(await fs.readFile(path.join(stageDir, 'package.json'), 'utf8'));
   assert.deepEqual(manifest.build.extraResources, [{ from: 'mingit', to: 'mingit' }, { from: NODE_SHIM_DIR, to: NODE_SHIM_DIR }]);
-  assert.deepEqual(await fs.readdir(path.dirname(shim)), ['node.exe']);
+  assert.deepEqual(await fs.readdir(path.dirname(shim)), ['application.txt', 'node.exe']);
+  assert.equal(await fs.readFile(path.join(path.dirname(shim), 'application.txt'), 'utf8'), 'PieceMaker.exe');
+});
+
+test('node uses the final validation executable name and does not require PieceMaker.exe', windows, async (t) => {
+  const { stageDir, shim } = await fakeApplication(t);
+  await embedNodeShim(stageDir);
+  const manifestFile = path.join(stageDir, 'package.json');
+  const manifest = JSON.parse(await fs.readFile(manifestFile, 'utf8'));
+  manifest.build.executableName = 'PieceMakerValidation';
+  await fs.writeFile(manifestFile, JSON.stringify(manifest));
+  await fs.copyFile(path.join(process.env.SystemRoot, 'System32', 'cmd.exe'), path.join(path.dirname(stageDir), 'PieceMakerValidation.exe'));
+  await embedNodeShim(stageDir);
+  const result = spawnSync(shim, ['/d', '/c', 'echo %ELECTRON_RUN_AS_NODE% "two words"& exit 7'], { encoding: 'utf8', windowsVerbatimArguments: true });
+  assert.equal(result.stdout.trim(), '1 "two words"');
+  assert.equal(result.status, 7);
+  assert.equal(await fs.readFile(path.join(path.dirname(shim), 'application.txt'), 'utf8'), 'PieceMakerValidation.exe');
 });
 
 test('node runs the app two levels up as Node with the arguments untouched and returns its exit code', windows, async (t) => {

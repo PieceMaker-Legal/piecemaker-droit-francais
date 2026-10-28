@@ -84,7 +84,8 @@ static class NodeShim
     static int Main()
     {
         TieChildrenToThisProcess();
-        string application = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "PieceMaker.exe"));
+        string executableName = File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "application.txt")).Trim();
+        string application = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", executableName));
         ProcessStartInfo start = new ProcessStartInfo(application, ArgumentsAfterProgram(Environment.CommandLine));
         start.UseShellExecute = false;
         start.EnvironmentVariables["ELECTRON_RUN_AS_NODE"] = "1";

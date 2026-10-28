@@ -16,6 +16,9 @@ const product = JSON.parse(await fs.readFile(path.join(root, 'product.config.jso
 assert.equal(product.appId, 'legal.piecemaker.validation');
 assert.equal(product.dataDirectoryName, '.piecemaker-validation');
 assert.equal(path.basename(executable), 'PieceMakerValidation.exe');
+const nodeShim = path.join(path.dirname(executable), 'resources/node-shim/node.exe');
+const shimExecutable = execFileSync(nodeShim, ['-p', 'process.execPath'], { encoding: 'utf8', timeout: 15000 }).trim();
+assert.equal(path.resolve(shimExecutable).toLowerCase(), executable.toLowerCase());
 const config = JSON.parse(await fs.readFile(path.join(root, 'electron-piecemaker/ui-update-runtime.json')));
 assert.equal(config.feed, `https://github.com/PieceMaker-Legal/piecemaker-droit-francais/releases/download/validation-ui-${config.runtime}`);
 assert.equal((await fetch(`${config.feed}/ui-update.json`)).status, 404, 'Step 2 must not be published yet');
@@ -124,6 +127,15 @@ try {
     return { statusCode: status.status, installed: value.data?.installed, authenticated: value.data?.authenticated, method: value.data?.method, checkStatus: check.status };
   })()`);
   assert.deepEqual(mistralAccount, { statusCode: 200, installed: true, authenticated: false, method: 'browser', checkStatus: 401 });
+  const tabularRpc = await evaluate(page, `(async () => {
+    const response = await fetch('/api/plugins/piecemaker-tabular-review/rpc/templates', {
+      headers: { Authorization: 'Bearer ' + localStorage.getItem('auth-token') },
+    });
+    const value = await response.json();
+    return { status: response.status, templates: Array.isArray(value.templates), error: Boolean(value.error) };
+  })()`);
+  assert.deepEqual(tabularRpc, { status: 200, templates: true, error: false });
+  await fs.writeFile(path.join(output, 'tabular-rpc-verification.json'), JSON.stringify({ nodeShimExecutable: true, tabularRpc }, null, 2));
   await fs.writeFile(path.join(output, 'mistral-sdk-verification.json'), JSON.stringify({ ...sdkVerification, accountSettingsApi: true, connectionRequired: true }, null, 2));
   await page.call('Page.reload');
   const statusExpression = `(async () => {

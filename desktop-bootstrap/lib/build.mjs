@@ -428,7 +428,6 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false, pre
   }
   if (process.platform === 'win32') {
     await embedMinGit(stageDir);
-    await embedNodeShim(stageDir);
   }
   if (process.platform === 'win32' && windowsInstaller) {
     await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));
@@ -465,6 +464,7 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false, pre
 
   ui.step("Construction de l'application Electron…");
   await prepareStage?.(stageDir);
+  if (process.platform === 'win32') await embedNodeShim(stageDir);
   const builderArgs = ['electron-builder', '--projectDir', '.desktop-build/desktop-app', ...(windowsInstaller ? ['--win', 'nsis', '--x64', '--publish', 'never'] : ['--dir'])];
   const signingEnv = { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' };
   if (process.env.CSC_LINK && !process.env.WIN_CSC_LINK) signingEnv.WIN_CSC_LINK = process.env.CSC_LINK;
