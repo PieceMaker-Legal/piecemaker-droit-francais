@@ -1,5 +1,5 @@
 ---
-name: raisonnement-verifie
+name: verifieur-raisonnement
 description: Cadre du raisonnement juridique vérifié de PieceMaker (fichiers .piecemaker/raisonnements/<nom>.yaml, vérificateur, contrôles, volet Raisonnement). Use whenever modifying, reviewing or testing server/modules/piecemaker-reasoning, the agent instruction server/piecemaker/legal-code/instructions.md, or the piecemaker-raisonnement plugin.
 ---
 
