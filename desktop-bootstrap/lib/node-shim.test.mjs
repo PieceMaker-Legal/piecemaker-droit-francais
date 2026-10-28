@@ -61,10 +61,13 @@ test('node runs the app two levels up as Node with the arguments untouched and r
 
 test('killing node stops the app process it started', windows, async (t) => {
   const { stageDir, app, shim } = await fakeApplication(t);
-  await fs.copyFile(path.join(process.env.SystemRoot, 'System32', 'PING.EXE'), app);
+  const fixture = path.join(path.dirname(stageDir), 'fixture.cs');
+  await fs.writeFile(fixture, 'class Fixture { static void Main() { System.Threading.Thread.Sleep(30000); } }');
+  const compiler = path.join(process.env.SystemRoot, 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
+  execFileSync(compiler, ['/nologo', '/target:exe', `/out:${app}`, fixture]);
   await embedNodeShim(stageDir);
 
-  const child = spawn(shim, ['-n', '30', '127.0.0.1'], { stdio: 'ignore' });
+  const child = spawn(shim, [], { stdio: 'ignore' });
   t.after(() => execFileSync('powershell.exe', ['-NoProfile', '-Command', `Get-Process | Where-Object { $_.Path -eq '${app}' } | Stop-Process -Force`]));
   await setTimeout(1500);
   assert.equal(runningCopies(app), 1);
