@@ -157,10 +157,21 @@ jobs:
         run: |
           cd "$PIECEMAKER_TEST_OUTPUT"
           sha256sum *.exe > SHA256SUMS.txt
-      - name: Upload test package only
+      - name: Encrypt the private test package
+        shell: pwsh
+        env:
+          WINDOWS_VALIDATION_PACKAGE_PUBLIC_KEY: ${{ secrets.WINDOWS_VALIDATION_PACKAGE_PUBLIC_KEY }}
+        run: |
+          if(-not $env:WINDOWS_VALIDATION_PACKAGE_PUBLIC_KEY){throw 'Private validation package key is required'}
+          $archive=Join-Path $env:RUNNER_TEMP 'PieceMaker-Validation.zip'
+          Compress-Archive -Path (Join-Path $env:PIECEMAKER_TEST_OUTPUT '*') -DestinationPath $archive
+          node scripts/piecemaker/ui-updates/windows-validation/private-package.mjs encrypt $archive "$archive.enc"
+          if($LASTEXITCODE -ne 0){throw 'Validation package encryption failed'}
+          Remove-Item -LiteralPath $archive
+      - name: Upload encrypted test package only
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: PieceMaker-Validation-Windows-x64-${{ github.run_number }}
-          path: ${{ env.PIECEMAKER_TEST_OUTPUT }}
+          path: ${{ runner.temp }}/PieceMaker-Validation.zip.enc
           if-no-files-found: error
           retention-days: 14
