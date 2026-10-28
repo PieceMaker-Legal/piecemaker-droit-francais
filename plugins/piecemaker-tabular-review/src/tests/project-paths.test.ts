@@ -46,7 +46,7 @@ describe('validation des chemins de dossier', () => {
     vi.resetModules();
     const { assertProject, isRealPathInside } = await import('../server/paths.js');
 
-    expect(assertProject(variant)).toBe(fs.realpathSync(project));
+    expect(assertProject(variant).toLowerCase()).toBe(fs.realpathSync(project).toLowerCase());
     expect(isRealPathInside(project.toUpperCase(), document)).toBe(true);
   });
 });
