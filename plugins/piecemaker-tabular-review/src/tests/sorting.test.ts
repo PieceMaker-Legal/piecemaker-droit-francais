@@ -174,6 +174,7 @@ describe('modèles', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-home-'));
     directories.push(home);
     vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     vi.resetModules();
     const templates = await import('../server/templates.js');
     const file = path.join(home, '.piecemaker', 'tabular-review', 'templates.json');
@@ -191,6 +192,7 @@ describe('modèles', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-home-'));
     directories.push(home);
     vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     vi.resetModules();
     const templates = await import('../server/templates.js');
     const root = path.join(home, '.piecemaker', 'tabular-review');
