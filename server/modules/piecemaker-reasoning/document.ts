@@ -13,7 +13,7 @@ export class ReasoningSyntaxError extends LiteralError {
 
 export const REASONING_DIR = path.join('.piecemaker', 'raisonnements');
 const NAME = /^[\p{Ll}\p{N}][\p{Ll}\p{N}-]*$/u;
-const NAMED_KEY = /^$|(?:^|\.)(?:valeurs|faits|attendu)$|\.(?:si|sauf|l_une)\[\d+\]$/u;
+const NAMED_KEY = /^$|(?:^|\.)(?:valeurs|faits|attendu|evenements|echeances)$|\.(?:si|sauf|l_une)\[\d+\]$/u;
 const NAME_SHAPE = 'minuscules, chiffres et tirets, d’après le sujet (ex. indemnite-de-depart)';
 
 const exists = (file: string) => stat(file).then(() => true, (error: NodeJS.ErrnoException) => {

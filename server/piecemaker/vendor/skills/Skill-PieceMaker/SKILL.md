@@ -104,15 +104,15 @@ Recherche toi-même, avec les outils Légifrance, le texte, la décision ou la c
 
 ```yaml
 evenements:
-  nom_de_l_evenement:
+  nom de l’événement:
     date: AAAA-MM-JJ
     preuve:
       - piece: pieces/…
         citation: passage exact qui porte la date
 echeances:
-  nom_de_l_echeance:
+  nom de l’échéance:
     intitule: Ce qu'il faut faire, en clair
-    de: nom_de_l_evenement
+    de: nom de l’événement
     delai:
       mois: 1
     selon:

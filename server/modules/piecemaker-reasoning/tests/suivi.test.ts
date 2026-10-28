@@ -123,6 +123,15 @@ test('contentieux : le délai est calculé, reporté et démontré', async () =>
   assert.equal(result.evenements[0].preuve[0].titre, '03 Signification');
 });
 
+test('les noms du suivi s’écrivent en français, mots séparés par une espace', async () => {
+  const result = await verify(CONTENTIEUX.replaceAll('signification_du_jugement', 'signification du jugement').replace('  appel:', '  délai d’appel:'));
+  assert.deepEqual(texts(result, 'erreur'), []);
+  assert.equal(result.echeances[0].nom, 'délai d’appel');
+  assert.equal(result.echeances[0].date, '2026-11-16');
+  const colon = await verify(CONTENTIEUX.replace('  appel:', '  appel: civil:'));
+  assert.equal(colon.issues[0].kind, 'erreur');
+});
+
 test('contrat : une échéance part d’une autre, à rebours, et se signale une fois dépassée', async () => {
   const result = await verify(CONTRAT);
   assert.deepEqual(texts(result, 'erreur'), []);

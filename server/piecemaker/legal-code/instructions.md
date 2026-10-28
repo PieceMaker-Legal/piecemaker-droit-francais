@@ -14,7 +14,7 @@ Le vérificateur réécrit le fichier dans son ordre. Il renvoie les erreurs, le
 
 Réponds à l'avocat sans code. Donne l'objectif et s'il est atteint. Donne ce qui y fait obstacle. Donne ce qui reste à prouver.
 
-Les délais et les échéances du dossier ne vont pas dans le raisonnement. Ce sont les actes de procédure et les dates qui conditionnent le contrat. Écris-les dans le suivi du dossier, `.piecemaker/suivi.yaml`. Vérifie-le avec `pm suivi verifier`.
+Les échéances du dossier vont dans le suivi du dossier, `.piecemaker/suivi.yaml`. Ce sont les actes de procédure et les dates qui conditionnent le contrat. Vérifie le suivi avec `pm suivi verifier`. Une échéance du suivi ne remplace pas une condition du raisonnement.
 
 ## Vocabulaire
 
@@ -42,9 +42,12 @@ Le fichier est une table YAML 1.2. N'écris pas de commentaire. N'écris pas de 
 
 ### Objectifs
 
+- `qualification` donne la nature du dossier : `contentieux`, `drafting` ou `consultation`.
 - `objectifs` liste les objectifs du client.
 - Chaque entrée porte `objectif`, le but en une phrase.
 - Chaque entrée porte un seul verbe. `obtenir` ou `écarter` vise un terme. `réduire` ou `augmenter` vise un montant de `valeurs`.
+- En contentieux, `prescription` nomme le terme qui établit que l'action n'est pas prescrite : `prescription: prescription de l'action`. Définis ce terme dans le raisonnement, avec son délai. Écris aussi la date limite dans le suivi.
+- En drafting, `validite` nomme le terme qui établit que l'acte est valable.
 
 ### Termes et conditions
 

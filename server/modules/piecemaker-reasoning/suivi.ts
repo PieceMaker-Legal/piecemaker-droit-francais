@@ -9,6 +9,7 @@ import { parseReasoningDocument, ReasoningSyntaxError } from './document.js';
 import { LiteralError, unknownKey } from './format.js';
 import type { Duration } from './format.js';
 import { isLegalDate } from './legal-period.js';
+import { NAME } from './names.js';
 import { ID_SHAPE, OFFICIAL_ID } from './program.js';
 import type { ReasoningConnectors, SourceInfo } from './program.js';
 
@@ -24,7 +25,6 @@ type Deadline = {
 };
 export type SuiviMark = { date: string; piece: string | null; at: string };
 
-const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
 const UNIT_LABEL: Record<Duration['unite'], string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
 const ROOT_KEYS = ['evenements', 'echeances'];
@@ -94,11 +94,11 @@ export function readSuivi(value: unknown) {
   const named = (raw: unknown, at: string, shape: string) => {
     if (raw === undefined) return true;
     if (!isObject(raw)) { problem(at, shape); return false; }
-    for (const name of Object.keys(raw)) if (!IDENTIFIER.test(name)) problem(`${at}.${name}`, `nom invalide : lettres, chiffres et _ (ex. ${name.replace(/[^\p{L}\p{N}]+/gu, '_')})`);
+    for (const name of Object.keys(raw)) if (!NAME.test(name)) problem(`${at}.${name}`, 'nom en français, mots séparés par une espace (ex. paiement de l’indemnité)');
     return true;
   };
 
-  if (named(value.evenements, 'evenements', 'evenements : { nom_de_l_evenement: { date, preuve } }')) {
+  if (named(value.evenements, 'evenements', 'evenements : { nom de l’événement: { date, preuve } }')) {
     for (const [nom, raw] of Object.entries((value.evenements ?? {}) as Record<string, unknown>)) {
       const at = `evenements.${nom}`;
       if (!isObject(raw)) { problem(at, 'événement : { date: AAAA-MM-JJ, preuve: [{ piece, citation }] }'); continue; }
@@ -110,7 +110,7 @@ export function readSuivi(value: unknown) {
       events.set(nom, { nom, intitule: text(raw.intitule) ? raw.intitule : human(nom), date: when, hypothese: raw.hypothese === true, preuve: proofs(raw.preuve, `${at}.preuve`), selon: sources(raw.selon, `${at}.selon`) });
     }
   }
-  if (named(value.echeances, 'echeances', 'echeances : { nom_de_l_echeance: { intitule, de ou avant, delai, selon, decompte } ou { intitule, date, preuve } }')) {
+  if (named(value.echeances, 'echeances', 'echeances : { nom de l’échéance: { intitule, de ou avant, delai, selon, decompte } ou { intitule, date, preuve } }')) {
     for (const [nom, raw] of Object.entries((value.echeances ?? {}) as Record<string, unknown>)) {
       const at = `echeances.${nom}`;
       if (!isObject(raw)) { problem(at, 'échéance : { intitule, de ou avant, delai, selon, decompte } ou { intitule, date, preuve }'); continue; }
@@ -120,7 +120,7 @@ export function readSuivi(value: unknown) {
       const deadline: Deadline = { nom, intitule: text(raw.intitule) ? raw.intitule : human(nom), preuve: proofs(raw.preuve, `${at}.preuve`), selon: sources(raw.selon, `${at}.selon`) };
       if (raw.date !== undefined) deadline.date = date(raw.date, `${at}.date`);
       for (const link of ['de', 'avant'] as const) if (raw[link] !== undefined) {
-        if (typeof raw[link] === 'string' && IDENTIFIER.test(raw[link] as string)) deadline[link] = raw[link] as string;
+        if (typeof raw[link] === 'string' && NAME.test(raw[link] as string)) deadline[link] = raw[link] as string;
         else problem(`${at}.${link}`, `${link} : nom d’un événement ou d’une échéance`);
       }
       if (raw.de !== undefined && raw.avant !== undefined) problem(at, 'de (après un événement) ou avant (avant une échéance), pas les deux');
