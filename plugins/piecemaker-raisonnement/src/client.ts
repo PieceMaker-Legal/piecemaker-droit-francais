@@ -34,7 +34,7 @@ const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moin
 const inputs = (condition: Json): string[] => condition.delai ? [condition.delai.de, condition.delai.a] : condition.montant ? [condition.montant.valeur, condition.montant.seuil].filter((item) => typeof item === 'string') : [];
 const COLORS: Record<string, string> = { question: '#e2a5c6', terme: '#ba9ce9', controle: '#e0b25c', fait: '#68bea3', source: '#6b9fdb', piece: '#8c96ad' };
 const CONTROL_PREFIXES = ['applicabilité_', 'décompte_', 'validité_', 'prescription_'];
-const isControl = (name: string) => CONTROL_PREFIXES.some((prefix) => name.startsWith(prefix));
+const isControl = (name: string) => CONTROL_PREFIXES.some((prefix) => name.startsWith(prefix) || name.startsWith(`${prefix.slice(0, -1)} `));
 const STATUS: Record<string, string> = { acquis: 'Acquis', exclu: 'Exclu', 'à établir': 'À établir', disputé: 'Disputé' };
 const ANSWER: Record<string, string> = { acquis: 'Oui', exclu: 'Non', 'à établir': 'En suspens', disputé: 'Disputée' };
 const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
@@ -136,9 +136,9 @@ export function mount(container: HTMLElement, api: Host) {
     }
     return found;
   };
-  const issuesOf = (paths: string[]) => (snapshot?.issues ?? []).filter((issue) => paths.some((at) => issue.path === at || issue.path.startsWith(`${at}.`) || issue.path.startsWith(`${at}[`)));
+  const issuesOf = (paths: string[]) => (snapshot?.issues ?? []).filter((issue) => issue.kind !== 'conseil' && paths.some((at) => issue.path === at || issue.path.startsWith(`${at}.`) || issue.path.startsWith(`${at}[`)));
   const dismissedIds = () => new Set((snapshot?.dismissed ?? []).map((entry) => entry.id));
-  const visibleIssues = () => (snapshot?.issues ?? []).filter((issue) => !dismissedIds().has(issue.id));
+  const visibleIssues = () => (snapshot?.issues ?? []).filter((issue) => issue.kind !== 'conseil' && !dismissedIds().has(issue.id));
 
   const cited = (): Cited[] => {
     const found: Cited[] = [];

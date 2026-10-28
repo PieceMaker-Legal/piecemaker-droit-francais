@@ -132,7 +132,7 @@ test('l’applicabilité d’un texte est un terme : ses conditions, sourcées e
   assert.ok(at(unproven.annotated, 'objectifs[0].decisifs').includes('contrat_stipulant_une_pénalité'));
   const errors = texts(await verify(EXAMPLE_CODE.replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", "applicabilite: 'applicabilité_inconnue' }] },").replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", 'applicabilite: `un contrat` }] },')), 'erreur').join('\n');
   assert.match(errors, /selon\[0\]\.applicabilite : terme applicabilité_inconnue non défini/);
-  assert.match(errors, /selon\[0\]\.applicabilite : applicabilite : nom du terme qui établit que ce texte s’applique, commençant par applicabilité_/);
+  assert.match(errors, /selon\[0\]\.applicabilite : applicabilite : le nom commence par « applicabilité » \(ex\. applicabilité de un contrat\)/);
 });
 
 test('une condition sans source, un terme non défini, une boucle et un hypothèse non conforme sont des erreurs', async () => {
@@ -345,7 +345,7 @@ test('une valeur sans pièce laisse le calcul en suspens et devient décisive ; 
   assert.equal(at(unproven.annotated, 'objectifs[0].statut'), 'à établir');
   assert.deepEqual(at(unproven.annotated, 'objectifs[0].decisifs'), ['notification_dans_la_garantie']);
   assert.match(texts(unproven, 'manque').join('\n'), /notification_dans_la_garantie décide de la réponse : renseigne date_de_notification dans valeurs, avec sa preuve/);
-  assert.match(texts(await cession(CESSION_CODE.replace(", a: 'date_de_notification'", '')), 'erreur').join('\n'), /réduction_due\.si\[0\]\.delai : delai : \{ de: date_de_départ, a: date_retenue,/);
+  assert.match(texts(await cession(CESSION_CODE.replace(", a: 'date_de_notification'", '')), 'erreur').join('\n'), /réduction_due\.si\[0\]\.delai : delai : \{ de: date de départ, a: date retenue,/);
 });
 
 test('les durées s’ajoutent au calendrier : fin de mois, année bissextile, jours ouvrés', () => {
@@ -359,7 +359,7 @@ test('un délai ou un montant mal écrit, avec une preuve sur la condition ou ap
   const errors = texts(await cession(CESSION_CODE
     .replace('au_plus: { ans: 2 }', 'au_plus: { semaines: 2 }')
     .replace("montant: { valeur: 'montant_du_dommage', plus_de: 3000 },", "montant: { valeur: 'date_de_réalisation', plus_de: 3000 }, preuve: [{ piece: 'pieces/08_notification.md', citation: `45.000 euros` }],")), 'erreur').join('\n');
-  assert.match(errors, /réduction_due\.si\[0\]\.delai : delai : \{ de: date_de_départ/);
+  assert.match(errors, /réduction_due\.si\[0\]\.delai : delai : \{ de: date de départ/);
   assert.match(errors, /réduction_due\.si\[1\]\.preuve : preuve ne se place plus sur une condition de règle.*pour un délai ou un montant : dans valeurs/);
   assert.match(errors, /valeurs\.date_de_réalisation : date_de_réalisation sert à dommage_au_dessus_du_seuil : un nombre attendu/);
 });
@@ -385,7 +385,7 @@ test('le raisonnement se qualifie drafting ou contentieux ; la qualification app
 
 test('les contrôles portent un nom préfixé, désigné par leur emplacement ; le fichier revient dans l’ordre canonique', async () => {
   const errors = texts(await verify(EXAMPLE_CODE.replaceAll("applicabilite: 'applicabilité_de_l_article_1231_5'", "applicabilite: 'article_1231_5_applicable'")), 'erreur').join('\n');
-  assert.match(errors, /applicabilite : le nom commence par applicabilité_ \(ex\. applicabilité_article_1231_5_applicable\)/);
+  assert.match(errors, /applicabilite : le nom commence par « applicabilité » \(ex\. applicabilité_article_1231_5_applicable\)/);
   assert.match(errors, /applicabilité_de_l_article_1231_5 : applicabilité_de_l_article_1231_5 est un contrôle : désigne-le par applicabilite/);
   assert.match(texts(await verify(EXAMPLE_CODE.replace("au: 'date_de_conclusion_du_contrat' }, applicabilite", "au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_inconnue', autre")), 'erreur').join('\n'), /terme applicabilité_inconnue non défini/);
   const result = await verify(EXAMPLE_CODE);
@@ -754,7 +754,7 @@ test('les anciennes écritures sont des erreurs de migration qui disent où écr
   assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', "{ pénalité_stipulée: `oui`,")), /pénalité_encourue\.si\[0\]\.pénalité_stipulée : pénalité_stipulée : true ou false attendu/);
   assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', "{ pénalité_stipulée: null,")), /pénalité_stipulée : true ou false attendu/);
   assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', '{ pénalité_stipulée: true, autre_condition: true,')), /exactement une clé nom: true\|false \(trouvé : pénalité_stipulée, autre_condition\)/);
-  assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', '{')), /pénalité_encourue\.si\[0\] : condition : - nom_de_la_condition: true/);
+  assert.match(await errors(EXAMPLE_CODE.replace('{ pénalité_stipulée: true,', '{')), /pénalité_encourue\.si\[0\] : condition : - nom de la condition: true/);
   assert.match(await errors(EXAMPLE_CODE.replace("mise_en_demeure: { true: [{ preuve", "mise_en_demeure: { si: [], true: [{ preuve")), /mise_en_demeure mêle si\/sauf et true\/false/);
   assert.match(await errors(EXAMPLE_CODE.replace("mise_en_demeure: { true: [{ preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: `vous met en demeure` }] }] },", "mise_en_demeure: { true: [{ si: [{ retard_de_livraison: vrai }] }] },")), /mise_en_demeure\.true\[0\] : fondement : \{ preuve/);
   assert.match(await errors(EXAMPLE_CODE.replace("mise_en_demeure: { true: [{ preuve", "mise_en_demeure: { true: [{ contredit: [], preuve")), /mise_en_demeure\.true\[0\]\.contredit : contredit n’existe plus/);

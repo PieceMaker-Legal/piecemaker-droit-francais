@@ -11,7 +11,7 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnements/<nom>.ya
 
 - **Une seule source d'instructions** : `server/piecemaker/legal-code/instructions.md`. Elle ne contient que des règles d'écriture génériques et la commande. La skill `piecemaker`, l'outil MCP et le harness des citations ne la répètent pas.
 - **C'est le vérificateur qui conduit l'agent** vers un raisonnement complet et sourcé, par ses manques. Les contrôles, la qualification et leurs conséquences ne sont jamais expliqués dans l'instruction.
-- **Erreur = défaut d'écriture** (syntaxe, citation introuvable, terme non défini, hypothèse non conforme…). **Manque = ce qui reste à établir** ; l'avocat peut l'écarter.
+- **Erreur = défaut d'écriture** (syntaxe, citation introuvable, terme non défini, hypothèse non conforme…). **Manque = ce qui reste à établir** ; l'avocat peut l'écarter. **Conseil = écriture d'un nom à revoir** (même fait sous deux noms, « et »/« ou »/« sauf » dans un nom) : jamais bloquant, absent du bilan, des annotations et du volet, montré à l'agent seulement sans erreur, 5 au plus (`names.ts`).
 - **Générique** : aucune règle ne dépend d'un domaine ou d'un vocabulaire (« annexe », « contrat »…). L'agent déclare, le vérificateur vérifie.
 - **Souplesse** : un manque désigne où se prononcer, jamais quoi répondre. Ne pas pousser le modèle à combler pour combler.
 - **Le raisonnement est orienté par l'objectif** : comme un avocat, l'agent sert l'objectif du client et discute l'interprétation des textes pour l'atteindre. Le vérificateur désigne ce qui y fait obstacle, jamais il ne dispense de preuve ou de citation exacte.
@@ -23,6 +23,7 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnements/<nom>.ya
 
 - `qualification` : `'drafting'` (faits à prévoir), `'contentieux'` ou `'consultation'` (faits à prouver ; la consultation suit les règles du contentieux, sauf la prescription). Non affichée dans le volet.
 - `objectifs: [{ objectif, obtenir | écarter | réduire | augmenter: nom, validite?, prescription? }]` : le but du client et, par un seul verbe, ce qu'il vise : `obtenir`/`écarter` un terme, `réduire`/`augmenter` un montant de `valeurs` (statut + `montant_calcule`). Verbe absent, en double ou inadapté au type = erreur ; les anciennes clés `questions`, `question`, `reponse` = erreurs qui disent quoi renommer. Annotations : `atteint` (vrai/faux, en suspens), `obstacles`.
+- Noms : français courant, mots séparés par une espace (`versement de l'indemnité`), lettres, chiffres, `'`, `.`, `-` admis ; l'ancienne écriture avec `_` reste lue. Pas de double espace ni d'espace finale.
 - Un terme par clé : `{ si: [...], sauf: [...] }` ; `l_une` = une condition suffit. Une condition de règle s'écrit toujours avec sa valeur attendue : `- nom: true` ou `- nom: false` (exactement une clé non réservée, booléenne ; avec au besoin `selon`, `delai`, `montant`, `decompte`) ; elle est remplie si la valeur de `nom` égale la valeur attendue (trois valeurs : `null` reste `null`). L'ancienne forme `condition: nom`, `preuve` ou `contredit` sur une condition de règle sont des erreurs de migration qui disent où écrire.
 - Une question se prouve à la racine : `nom: { true: [fondements], false: [fondements] }` (l'une ou l'autre liste). Fondement = `{ preuve?: [{ piece, citation }], selon?: [sources], si?: [- autre: true] }`, au moins `preuve` ou `selon`. Actif si (une preuve vérifiée ou une source valide, comme pour toute source) et toutes ses conditions `si` remplies ; inactif si l'un est faux ; incertain sinon (le doute se propage : la question reste ouverte). Valeur : actifs seulement côté true → true ; seulement côté false → false ; actifs des deux côtés → `null`, statut `disputé`, manque automatique « fondements contraires, à trancher » ; aucun actif → à établir. Une clé racine ne mêle pas `si`/`sauf` et `true`/`false`. Un nom par question, nommé positivement ; une preuve va sous la valeur qu'elle établit ; le moteur, pas l'agent, repère la contradiction. Les `hypotheses` peuvent fixer une question (`nom: true|false`). `contredit` n'existe plus (condition, source, fondement, valeur : erreur de migration).
 - `selon: [{ source, citation, vigueur: { debut, fin, au }, applicabilite, validite, renvoi }]` : identifiant officiel (LEGIARTI, JURITEXT, CETATEXT…) ou chemin de pièce pour une clause ; citation exacte. `renvoi: [{ piece, citation? }]` = ce à quoi la stipulation renvoie (déclaré par l'agent, quel que soit le mot employé). Une stipulation contraire = deux fondements de valeurs opposées sur la même question.
@@ -45,15 +46,15 @@ Le raisonnement est la seule source de l'acte : la rédaction vit dans la clé `
 
 ## Contrôles (sous-raisonnements)
 
-Termes ordinaires désignés par un emplacement, nommés avec son préfixe (vérifié dans les deux sens). L'élément conditionné ne compte que si le contrôle est acquis.
+Termes ordinaires désignés par un emplacement, nommés avec son préfixe suivi d'une espace ou de `_` (vérifié dans les deux sens). Les noms suggérés suivent l'écriture du fichier : espaces dès qu'un nom en contient une, `_` sinon. L'élément conditionné ne compte que si le contrôle est acquis.
 
 | Emplacement | Sur | Préfixe | Réclamé |
 |---|---|---|---|
-| `applicabilite` | source texte | `applicabilité_` | tout texte, sauf cité dans un arbre d'applicabilité |
-| `validite` | source clause | `validité_` | toute clause, sauf citée dans un arbre de validité ou d'applicabilité ; distinct de la validité de l'acte ; doit citer un texte |
-| `decompte` | délai | `décompte_` | tout délai |
-| `validite` | objectif | `validité_` | drafting (sauf objectif qui porte sur la validité) |
-| `prescription` | objectif | `prescription_` | contentieux seulement ; ailleurs facultatif |
+| `applicabilite` | source texte | `applicabilité` | tout texte, sauf cité dans un arbre d'applicabilité |
+| `validite` | source clause | `validité` | toute clause, sauf citée dans un arbre de validité ou d'applicabilité ; distinct de la validité de l'acte ; doit citer un texte |
+| `decompte` | délai | `décompte` | tout délai |
+| `validite` | objectif | `validité` | drafting (sauf objectif qui porte sur la validité) |
+| `prescription` | objectif | `prescription` | contentieux seulement ; ailleurs facultatif |
 
 Exemptions = garde-fous contre la régression à l'infini (validité → texte → applicabilité → clause sans nouvelle validité).
 

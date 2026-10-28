@@ -5,6 +5,7 @@ import { Document, isAlias, isMap, isScalar, isSeq, LineCounter, parseDocument, 
 import type { Node } from 'yaml';
 
 import { LiteralError } from './format.js';
+import { NAME as TERM_NAME } from './names.js';
 
 export class ReasoningSyntaxError extends LiteralError {
   constructor(readonly problems: LiteralError[]) { super(problems[0].message.replace(/^ligne \d+ : /, ''), problems[0].line); }
@@ -12,6 +13,7 @@ export class ReasoningSyntaxError extends LiteralError {
 
 export const REASONING_DIR = path.join('.piecemaker', 'raisonnements');
 const NAME = /^[\p{Ll}\p{N}][\p{Ll}\p{N}-]*$/u;
+const NAMED_KEY = /^$|(?:^|\.)(?:valeurs|faits|attendu)$|\.(?:si|sauf|l_une)\[\d+\]$/u;
 const NAME_SHAPE = 'minuscules, chiffres et tirets, d’après le sujet (ex. indemnite-de-depart)';
 
 const exists = (file: string) => stat(file).then(() => true, (error: NodeJS.ErrnoException) => {
@@ -139,7 +141,7 @@ export function parseReasoningDocument(text: string) {
         if (pair.key.commentBefore) report(commented(hashLine(keyLine, -1)));
         if (pair.key.comment) report(commented(hashLine(keyLine, 1)));
         const key = String(pair.key.value);
-        if (/\s/u.test(key)) { report(new LiteralError(unquotedColon(rows[keyLine - 1] ?? key), keyLine)); return []; }
+        if (/\s/u.test(key) && !(NAMED_KEY.test(at) && TERM_NAME.test(key))) { report(new LiteralError(unquotedColon(rows[keyLine - 1] ?? key), keyLine)); return []; }
         const route = at ? `${at}.${key}` : key;
         const value = convert(pair.value as Node | null, route);
         lines.set(route, keyLine);
