@@ -28,6 +28,7 @@ function rawHeaders(headers: IncomingHttpHeaders): string {
 }
 
 export function startGateway(targetPort: () => number, ownerLogin: () => string | null): Promise<Gateway> {
+  const connections = new Set<net.Socket>();
   const server = http.createServer((request, response) => {
     if (!isOwner(request.headers, ownerLogin())) {
       response.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Accès réservé au propriétaire de cet ordinateur sur Tailscale.');
@@ -57,8 +58,17 @@ export function startGateway(targetPort: () => number, ownerLogin: () => string 
       upstream.pipe(socket);
       socket.pipe(upstream);
     });
+    connections.add(upstream);
+    upstream.once('close', () => connections.delete(upstream));
     upstream.on('error', () => socket.destroy());
     socket.on('error', () => upstream.destroy());
+    socket.once('close', () => upstream.destroy());
+    upstream.once('close', () => socket.destroy());
+  });
+
+  server.on('connection', (socket) => {
+    connections.add(socket);
+    socket.once('close', () => connections.delete(socket));
   });
 
   return new Promise((resolve, reject) => {
@@ -66,8 +76,8 @@ export function startGateway(targetPort: () => number, ownerLogin: () => string 
     server.listen(0, '127.0.0.1', () => resolve({
       port: (server.address() as AddressInfo).port,
       close: () => new Promise((done) => {
-        server.closeAllConnections();
         server.close(() => done());
+        for (const socket of connections) socket.destroy();
       }),
     }));
   });

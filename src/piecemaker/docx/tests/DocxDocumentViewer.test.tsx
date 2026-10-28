@@ -9,6 +9,8 @@ import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/ut
 import DocxDocumentViewer from '@/piecemaker/docx/DocxDocumentViewer';
 import { api, authenticatedFetch } from '@/shared/api';
 
+const docxSave = vi.hoisted(() => vi.fn<() => Promise<ArrayBuffer>>());
+
 vi.mock('@/shared/api', () => ({
   api: { readFileBlob: vi.fn() },
   authenticatedFetch: vi.fn(),
@@ -52,10 +54,11 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
         onCommentsChange: (comments: { id: number; parentId?: number }[]) => void;
         onCommentsSidebarOpenChange?: (open: boolean) => void;
         renderLogo: () => React.ReactNode;
+        renderTitleBarRight: () => React.ReactNode;
       }
     >((props, ref) => {
       React.useImperativeHandle(ref, () => ({
-        save: async () => new Uint8Array([1, 2, 3]).buffer,
+        save: docxSave,
         getZoom: () => 1,
         getComments: () => [],
         getEditorRef: () => ({
@@ -67,6 +70,7 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
       return (
         <>
           {props.renderLogo()}
+          {props.renderTitleBarRight()}
           <button type="button" onClick={props.onChange}>{props.documentName}</button>
           <button type="button" onClick={() => props.onCommentsChange([{ id: 1 }, { id: 2 }, { id: 3, parentId: 1 }])}>emit-comments</button>
           <span
@@ -91,6 +95,7 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  docxSave.mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
   vi.mocked(api.readFileBlob).mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
   vi.mocked(acceptChangeById).mockImplementation(() => () => true);
@@ -263,4 +268,139 @@ test('rejecting a tracked change applies the revision', async () => {
 
   const rejectedIds = vi.mocked(rejectChangeById).mock.calls.map(([id]) => id);
   assert.ok(rejectedIds.includes(7));
+});
+
+for (const action of ['valider', 'croix']) {
+  test(`${action} targets only the chosen revision when another mark is nearby`, async () => {
+    vi.mocked(authenticatedFetch).mockImplementation(async () => new Response(JSON.stringify({ version: 1 }), { status: 200 }));
+    const view = render(<DocxDocumentViewer file={{ name: 'sample.docx', path: '/case/sample.docx' }} projectId="project-1" isSidebar onClose={() => undefined} />);
+    await screen.findByRole('button', { name: 'sample.docx' });
+    const other = document.createElement('span');
+    other.setAttribute('data-revision-id', '99');
+    view.container.firstElementChild!.appendChild(other);
+    fireEvent.click(screen.getByRole('button', { name: action }));
+    const command = action === 'valider' ? acceptChangeById : rejectChangeById;
+    const ids = vi.mocked(command).mock.calls.map(([id]) => String(id));
+    assert.ok(ids.includes('7'));
+    assert.ok(!ids.includes('99'));
+  });
+}
+
+test('closing before the debounce saves before closing the document', async () => {
+  vi.mocked(authenticatedFetch).mockImplementation(async () => new Response(JSON.stringify({ version: 1 }), { status: 200 }));
+  const onClose = vi.fn();
+  render(<DocxDocumentViewer file={{ name: 'sample.docx', path: '/case/sample.docx' }} projectId="project-1" isSidebar onClose={onClose} />);
+  const editor = await screen.findByRole('button', { name: 'sample.docx' });
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Fermer' })); });
+  assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
+  assert.equal(onClose.mock.calls.length, 1);
+});
+
+test('unmounting with a pending edit still saves its snapshot', async () => {
+  vi.mocked(authenticatedFetch).mockImplementation(async () => new Response(JSON.stringify({ version: 1 }), { status: 200 }));
+  const view = render(<DocxDocumentViewer file={{ name: 'sample.docx', path: '/case/sample.docx' }} projectId="project-1" isSidebar onClose={() => undefined} />);
+  const editor = await screen.findByRole('button', { name: 'sample.docx' });
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  await act(async () => { view.unmount(); });
+  assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
+});
+
+test('an external change keeps the local editor and prevents closing on conflict', async () => {
+  vi.useFakeTimers();
+  let version = 1;
+  vi.mocked(api.readFileBlob).mockResolvedValue({ ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer } as Response);
+  vi.mocked(authenticatedFetch).mockImplementation(async (_url, options) => new Response(JSON.stringify({ version }), { status: options?.method === 'PUT' ? 409 : 200 }));
+  const onClose = vi.fn();
+  render(<DocxDocumentViewer file={{ name: 'sample.docx', path: '/case/sample.docx' }} projectId="project-1" isSidebar onClose={onClose} />);
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  const editor = screen.getByRole('button', { name: 'sample.docx' });
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  version = 2;
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  assert.equal(vi.mocked(api.readFileBlob).mock.calls.length, 1);
+  assert.match(screen.getByRole('alert').textContent ?? '', /modifié ailleurs/);
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Fermer' })); });
+  assert.equal(onClose.mock.calls.length, 0);
+  const put = vi.mocked(authenticatedFetch).mock.calls.find(([, options]) => options?.method === 'PUT');
+  const headers = put?.[1]?.headers;
+  assert.ok(headers);
+  assert.equal((headers as Record<string, string>)['If-Match'], '1');
+});
+
+test('saves are serialized and use the version from the preceding save', async () => {
+  let finishFirst!: (response: Response) => void;
+  const firstPut = new Promise<Response>((resolve) => { finishFirst = resolve; });
+  let writes = 0;
+  vi.mocked(authenticatedFetch).mockImplementation(async (_url, options) => {
+    if (options?.method !== 'PUT') return new Response(JSON.stringify({ version: 1 }), { status: 200 });
+    writes += 1;
+    return writes === 1 ? firstPut : new Response(JSON.stringify({ version: 3 }), { status: 200 });
+  });
+  render(<DocxDocumentViewer file={{ name: 'sample.docx', path: '/case/sample.docx' }} projectId="project-1" isSidebar onClose={() => undefined} />);
+  const editor = await screen.findByRole('button', { name: 'sample.docx' });
+  vi.useFakeTimers();
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+  fireEvent.click(editor);
+  await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+  assert.equal(writes, 1);
+  await act(async () => { finishFirst(new Response(JSON.stringify({ version: 2 }), { status: 200 })); });
+  assert.equal(writes, 2);
+  const puts = vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT');
+  const headers = puts[1][1]?.headers;
+  assert.ok(headers);
+  assert.equal((headers as Record<string, string>)['If-Match'], '2');
+});
+
+for (const resolution of ['Recharger la version du disque', 'Enregistrer ma version']) {
+  test(`a Word conflict can be resolved with ${resolution}`, async () => {
+    vi.mocked(api.readFileBlob).mockResolvedValue({ ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer } as Response);
+    let reads = 0;
+    vi.mocked(authenticatedFetch).mockImplementation(async (_url, options) => {
+      if (options?.method !== 'PUT') return new Response(JSON.stringify({ version: ++reads === 1 ? 1 : 2 }), { status: 200 });
+      const expected = (options.headers as Record<string, string>)['If-Match'];
+      return new Response(JSON.stringify({ version: 3 }), { status: expected === '2' ? 200 : 409 });
+    });
+    const onClose = vi.fn();
+    render(<DocxDocumentViewer file={{ name: 'sample.docx', path: '/case/sample.docx' }} projectId="project-1" isSidebar onClose={onClose} />);
+    const editor = await screen.findByRole('button', { name: 'sample.docx' });
+    vi.useFakeTimers();
+    fireEvent.pointerDown(editor);
+    fireEvent.click(editor);
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    assert.ok(screen.getByRole('alert'));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: resolution })); });
+    assert.equal(screen.queryByRole('alert'), null);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Fermer' })); });
+    assert.equal(onClose.mock.calls.length, 1);
+  });
+}
+
+test('leaving the page warns only while Word has unsaved changes', async () => {
+  vi.mocked(authenticatedFetch).mockImplementation(async (_url, options) => new Response(JSON.stringify({ version: options?.method === 'PUT' ? 2 : 1 }), { status: 200 }));
+  const view = render(<DocxDocumentViewer file={{ name: 'sample.docx', path: '/case/sample.docx' }} projectId="project-1" isSidebar onClose={() => undefined} />);
+  const editor = await screen.findByRole('button', { name: 'sample.docx' });
+  const clean = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(clean);
+  assert.equal(clean.defaultPrevented, false);
+  vi.useFakeTimers();
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  const dirty = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(dirty);
+  assert.equal(dirty.defaultPrevented, true);
+  await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+  const saved = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(saved);
+  assert.equal(saved.defaultPrevented, false);
+  view.unmount();
+  const closed = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(closed);
+  assert.equal(closed.defaultPrevented, false);
 });
