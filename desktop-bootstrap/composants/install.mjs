@@ -360,8 +360,9 @@ async function installPrebuiltPython({ layout, host, env, scriptsDir, output, pl
 }
 
 export function supersededPythonDirectories(layout, runtimeNames, keptPythons) {
-  const kept = keptPythons.filter(Boolean).map(python => path.resolve(python));
-  const inUse = directory => kept.some(python => python === directory || python.startsWith(`${directory}${path.sep}`));
+  const comparable = target => (process.platform === 'win32' ? path.resolve(target).toLowerCase() : path.resolve(target));
+  const kept = keptPythons.filter(Boolean).map(comparable);
+  const inUse = directory => kept.some(python => python === comparable(directory) || python.startsWith(`${comparable(directory)}${path.sep}`));
   const runtimes = runtimeNames.map(name => path.join(layout.root, 'runtime-python', name));
   const legacy = inUse(layout.venvDir) || inUse(layout.pythonDir) ? [] : [layout.venvDir, layout.pythonDir];
   return [...runtimes, ...legacy].filter(directory => !inUse(directory));
