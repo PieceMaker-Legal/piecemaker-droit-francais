@@ -27,6 +27,7 @@ export async function verifyBuiltApp(builtApp) {
   }
   if (process.platform === 'win32' && !(await exists(path.join(builtApp, 'resources', 'mingit', 'cmd', 'git.exe')))) missing.push('resources/mingit/cmd/git.exe');
   if (process.platform === 'win32' && !(await exists(path.join(builtApp, 'resources', 'node-shim', 'node.exe')))) missing.push('resources/node-shim/node.exe');
+  if (process.platform === 'win32' && !(await exists(path.join(builtApp, 'resources', 'libreoffice', 'program', 'soffice.com')))) missing.push('resources/libreoffice/program/soffice.com');
   if (missing.length) throw new Error(`Application construite incomplète — fichiers absents : ${missing.join(', ')}`);
 }
 

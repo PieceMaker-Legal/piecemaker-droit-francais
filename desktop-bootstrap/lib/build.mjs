@@ -14,6 +14,7 @@ import { packageRuntimeComponents } from './components-package.mjs';
 import { verifyBuiltApp, verifyMacBundleLinks } from './prebuilt-app.mjs';
 import { embedMinGit } from './mingit.mjs';
 import { embedNodeShim } from './node-shim.mjs';
+import { embedLibreOffice } from '../../server/piecemaker/vendor/installer/steps/10-libreoffice.mjs';
 import { IS_MAC, PRODUCT_NAME, caCertPath, caKeyPath, releaseRepo, releaseTag } from './paths.mjs';
 
 function npmTool(tool) {
@@ -428,6 +429,7 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false, pre
   }
   if (process.platform === 'win32') {
     await embedMinGit(stageDir);
+    await embedLibreOffice(stageDir);
   }
   if (process.platform === 'win32' && windowsInstaller) {
     await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));

@@ -32,6 +32,12 @@ const runtime = await ensureRuntimeComponents({
   assetDir: path.join(path.dirname(executable), 'resources', 'validation-assets'),
 });
 const sdkEnvironment = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+const officeOutput = execFileSync(executable, ['--test', path.resolve('server/piecemaker/stamping.test.js')], {
+  env: { ...sdkEnvironment, PIECEMAKER_STAMP_APP_ROOT: root, PIECEMAKER_STAMP_OFFICE: '1', SOFFICE_PATH: '' },
+  encoding: 'utf8', timeout: 180000,
+});
+console.log(officeOutput);
+await fs.writeFile(path.join(output, 'office-verification.json'), JSON.stringify({ bundledLibreOffice: true, wordToPdf: true, excelToPdf: true, stamping: true, originalsPreserved: true }, null, 2));
 configureRuntimeEnvironment({ packedRoot: root.replace(/\.unpacked$/, ''), physicalRoot: root, moduleRoots: runtime.moduleRoots, environment: sdkEnvironment });
 const sdkProbe = pathToFileURL(path.join(root, 'electron-piecemaker/validation-sdk-probe.mjs')).href;
 const sdkVerification = JSON.parse(execFileSync(executable, ['--input-type=module', '-e', `const {verifyMistralSdk}=await import(${JSON.stringify(sdkProbe)});console.log(JSON.stringify(await verifyMistralSdk(${JSON.stringify(root)})));`], {
