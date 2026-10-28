@@ -11,7 +11,8 @@ import { createMistralTools } from './tools.js';
 
 test('MCP stdio discovery, invocation and skill masking use the enabled workspace configuration', async t => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'mistral-tools-test-'));
-  t.after(() => fs.rm(home, { recursive: true, force: true }));
+  let close = async () => {};
+  t.after(async () => { await close(); await fs.rm(home, { recursive: true, force: true }); });
   const skillPath = path.join(home, 'SKILL.md');
   await fs.writeFile(skillPath, 'Instructions fictives ZETABIO.');
   t.mock.method(providerSkillsService, 'listProviderSkills', async () => [
@@ -33,7 +34,7 @@ await server.connect(new StdioServerTransport());
     fixture: { command: process.execPath, args: [server] }, disabled: { command: 'does-not-exist', disabled: true },
   } }));
   const toolbox = await createMistralTools(home, [{ name: 'disabled-skill' }], AbortSignal.timeout(20000), home);
-  t.after(() => toolbox.close());
+  close = toolbox.close;
   assert.ok(toolbox.tools.has('mcp__fixture__echo'));
   assert.equal(toolbox.tools.get('mcp__fixture__echo')?.readOnly, true);
   assert.ok((await toolbox.tools.get('mcp__fixture__echo')!.execute({ value: 'ZETABIO' })).includes('MCP-ZETABIO'));

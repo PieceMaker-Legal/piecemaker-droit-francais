@@ -51,19 +51,28 @@ jobs:
             server/piecemaker/anonymizer/hudsucker-proxy/target
             ${{ runner.temp }}/preview-assets
           key: windows-preview-${{ hashFiles('server/piecemaker/anonymizer/hudsucker-proxy/Cargo.lock', 'package-lock.json', 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/requirements.txt', 'desktop-bootstrap/composants/*.mjs', 'desktop-bootstrap/composants/windows-requirements.txt') }}
-      - name: Validate source before packaging
+      - name: Install dependencies for source validation
         shell: bash
-        env:
-          CLOUDCLI_HOME: ${{ runner.temp }}/validation-source-data
-          DATABASE_PATH: ${{ runner.temp }}/validation-source-data/auth.db
+        timeout-minutes: 10
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm rebuild better-sqlite3
+      - name: Validate frontend and plugin before packaging
+        shell: bash
+        timeout-minutes: 10
+        run: |
           npm run typecheck
           npx --no-install vitest run --maxWorkers=2
           npm --prefix plugins/piecemaker-tabular-review test -- --maxWorkers=2
           npx --no-install tsc --noEmit -p plugins/piecemaker-tabular-review/tsconfig.json
-          npx --no-install tsx --tsconfig server/tsconfig.json --test server/piecemaker/mistral-sdk/auth.test.ts server/piecemaker/mistral-sdk/runtime.test.ts server/piecemaker/mistral-sdk/tools.test.ts server/piecemaker/mistral-sdk/tabular.test.ts
+      - name: Validate SDK tools and installation contracts
+        shell: bash
+        timeout-minutes: 5
+        env:
+          CLOUDCLI_HOME: ${{ runner.temp }}/validation-source-data
+          DATABASE_PATH: ${{ runner.temp }}/validation-source-data/auth.db
+        run: |
+          npx --no-install tsx --tsconfig server/tsconfig.json --test --test-timeout=120000 server/piecemaker/mistral-sdk/auth.test.ts server/piecemaker/mistral-sdk/runtime.test.ts server/piecemaker/mistral-sdk/tools.test.ts server/piecemaker/mistral-sdk/tabular.test.ts
           node --test scripts/piecemaker/ui-updates/windows-validation/sdk-probe.test.mjs server/piecemaker/vendor/installer/lib/step-exit.test.mjs
       - name: Build Windows anonymization proxy
         run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
