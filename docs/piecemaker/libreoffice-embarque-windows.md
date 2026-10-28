@@ -53,7 +53,13 @@ Cette étape doit réussir avant de construire l'installateur complet.
 Après installation NSIS, le même test exécute le Node de l'application et les
 routes réellement installées, sans `SOFFICE_PATH`, pour vérifier la détection
 du moteur embarqué. La preuve est écrite dans `office-verification.json`.
-Ces contrôles natifs et la taille finale restent en attente au moment de ce commit.
+La taille finale et le contrôle après installation NSIS restent en attente.
+
+Le [contrôle natif Windows du commit a6e5fc8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/actions/runs/40712916939/job/122903039549)
+a réussi le 28 octobre 2026 : MSI officiel téléchargé, empreinte vérifiée,
+image administrative extraite, DOCX et XLSX convertis puis tamponnés avec
+les PDF, image et Markdown fictifs ; numéros et intégrité des originaux vérifiés.
+Les deux tests de packaging réussissent également.
 
 Le [rapport Tampon initial](tampon-windows-2026-10-28.md) décrit le constat
 antérieur : LibreOffice absent de l'ancien EXE Validation. Les nouveaux fichiers
