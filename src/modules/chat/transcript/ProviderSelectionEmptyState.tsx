@@ -24,6 +24,7 @@ import {
 } from "@/shared/ui";
 import ModelGroupList, { type ModelGroup } from "@/modules/chat/composer/ModelGroupList";
 import ModelLibraryPanel from "@/modules/chat/modals/ModelLibraryPanel";
+import { LegalCodeIntro } from "@/piecemaker/legal-code";
 import { writeSelectedProvider } from '@/shared/selectedProvider';
 
 const PROVIDER_META: { id: LLMProvider; name: string }[] = [
@@ -332,6 +333,7 @@ export default function ProviderSelectionEmptyState({
               }}
             />
           </p>
+          <LegalCodeIntro />
 
           {provider && tasksEnabled && isTaskMasterInstalled && (
             <div className="mt-5">

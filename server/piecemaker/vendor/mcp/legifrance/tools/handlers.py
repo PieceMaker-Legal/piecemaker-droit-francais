@@ -20,6 +20,7 @@ from tools.decision_history import (
     HistoriqueError,
     build_decision_history,
     render_markdown as render_historique,
+    render_controle,
 )
 from config.mcp_definitions import INITIALIZE_INSTRUCTIONS
 LEGIFRANCE_BASE_URL = "https://www.legifrance.gouv.fr"
@@ -295,6 +296,8 @@ def handle_consulter_decision(args: Dict[str, Any], user_id: str) -> Dict[str, A
         summary_parts.append(texte)
         summary_parts.append(f"")
         summary_parts.append(f"Lien: {LEGIFRANCE_BASE_URL}/juri/id/{text_id}")
+        controle = render_controle(text_id)
+        summary_parts.append(controle)
 
         summary = "\n".join(summary_parts)
 
@@ -315,7 +318,8 @@ def handle_consulter_decision(args: Dict[str, Any], user_id: str) -> Dict[str, A
                 f"Nature: {nature}",
                 f"Lien: {LEGIFRANCE_BASE_URL}/juri/id/{text_id}",
                 f"",
-                "Le texte intégral est joint comme ressource MCP."
+                "Le texte intégral est joint comme ressource MCP.",
+                controle,
             ])
 
             return create_response(

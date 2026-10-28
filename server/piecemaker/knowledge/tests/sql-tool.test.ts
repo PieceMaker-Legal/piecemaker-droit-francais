@@ -7,7 +7,21 @@ import test from 'node:test';
 import Database from 'better-sqlite3';
 
 import { KnowledgeStore } from '../../../../plugins/piecemaker-dossier/src/knowledge.js';
+import { createReasoningService } from '@/modules/piecemaker-reasoning/index.js';
 import { createSqlTool } from '../sql-tool.js';
+
+test('le raisonnement est lisible par dossier() et ses tables sont protégées des écritures SQL', async () => {
+  await withFixture(async (context) => {
+    const service = createReasoningService(() => context.appDb, { source: async () => undefined, match: () => null, registry: async () => ({ found: false, status: '' }), bodacc: async () => [] });
+    fs.mkdirSync(path.join(context.roots.one, '.piecemaker', 'raisonnements'), { recursive: true });
+    fs.writeFileSync(path.join(context.roots.one, '.piecemaker', 'raisonnements', 'penalite.yaml'), 'objectifs:\n  - objectif: Établir que la société fictive est cotée\n    obtenir: cotee\ncotee:\n  si:\n    - titres_admis: true\n      selon:\n        - source: CELEX:00000\n          citation: texte fictif\n');
+    await service.verify(context.roots.one, false);
+    assert.match(await context.run('SELECT code FROM pm_reasoning_programs WHERE project_id=dossier()'), /titres_admis/);
+    await assert.rejects(context.run('DELETE FROM pm_reasoning_programs'), /lecture SQL uniquement/);
+    await assert.rejects(context.run("INSERT INTO pm_reasoning_dismissed VALUES(dossier(),'penalite','x','','','')"), /lecture SQL uniquement/);
+    await assert.rejects(context.run("INSERT INTO pm_reasoning_reliability VALUES(dossier(),'pieces/a.md',1,'')"), /lecture SQL uniquement/);
+  });
+});
 
 const PROJECT_ONE = 'a1b2c3d4-aaaa-4000-8000-000000000001';
 const PROJECT_TWO = '3f2a9c11-bbbb-4000-8000-000000000002';
