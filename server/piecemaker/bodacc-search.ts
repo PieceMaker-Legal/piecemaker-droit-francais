@@ -183,10 +183,14 @@ function filterFamilies(result: BodaccSearchResult, requestedFamilies: string[] 
   return { ...result, total: annonces.length, annonces, alertes: result.alertes.filter((alert) => (alert.toLocaleLowerCase().includes('procedure') && families.includes('collective')) || (alert.toLocaleLowerCase().includes('radiation') && families.includes('radiation'))) };
 }
 
-async function searchBodacc(siren: string, siret: string, requestedFamilies: string[] | null): Promise<BodaccSearchResult> {
+export async function searchBodacc(siren: string, siret: string, requestedFamilies: string[] | null): Promise<BodaccSearchResult> {
   const normalized = normalizedSiren(siren, siret);
   const response = await mcpCall('Tracking_BODACC', { siren: normalized, type_recherche: 'historique' });
   return filterFamilies(readHistory(resultContent(response), normalized), requestedFamilies);
+}
+
+export async function legifranceText(tool: string, argumentsValue: Record<string, string>): Promise<string> {
+  return resultContent(await mcpCall(tool, argumentsValue)).map((entry) => entry.text ?? entry.resource?.text ?? '').join('\n');
 }
 
 const oneLine = (value: string) => value.replace(/\s*[\r\n]+\s*/g, ' ').trim();

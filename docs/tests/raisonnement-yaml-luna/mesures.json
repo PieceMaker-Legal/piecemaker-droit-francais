@@ -1,0 +1,1258 @@
+{
+  "js": {
+    "runs": [
+      {
+        "observation": "001",
+        "started": "2026-10-25T22:42:53.035Z",
+        "finished": "2026-10-25T22:42:53.061Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 17,
+        "gaps": 11
+      },
+      {
+        "observation": "002",
+        "started": "2026-10-25T22:43:33.248Z",
+        "finished": "2026-10-25T22:43:33.281Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 2,
+        "gaps": 20
+      },
+      {
+        "observation": "003",
+        "started": "2026-10-25T22:43:56.754Z",
+        "finished": "2026-10-25T22:43:56.789Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 11,
+        "gaps": 21
+      },
+      {
+        "observation": "004",
+        "started": "2026-10-25T22:44:10.221Z",
+        "finished": "2026-10-25T22:44:10.258Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 9,
+        "gaps": 21
+      },
+      {
+        "observation": "005",
+        "started": "2026-10-25T22:44:19.737Z",
+        "finished": "2026-10-25T22:44:19.763Z",
+        "domain": "acte",
+        "command": "exporter",
+        "errors": 9,
+        "gaps": 21
+      },
+      {
+        "observation": "006",
+        "started": "2026-10-25T22:44:23.583Z",
+        "finished": "2026-10-25T22:44:23.617Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 28
+      },
+      {
+        "observation": "007",
+        "started": "2026-10-25T22:44:26.679Z",
+        "finished": "2026-10-25T22:44:26.712Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 28
+      },
+      {
+        "observation": "008",
+        "started": "2026-10-25T22:44:36.054Z",
+        "finished": "2026-10-25T22:44:36.078Z",
+        "domain": "acte",
+        "command": "exporter",
+        "errors": 1,
+        "gaps": 28
+      },
+      {
+        "observation": "009",
+        "started": "2026-10-25T22:45:00.380Z",
+        "finished": "2026-10-25T22:45:00.414Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 25
+      },
+      {
+        "observation": "010",
+        "started": "2026-10-25T22:45:09.114Z",
+        "finished": "2026-10-25T22:45:09.138Z",
+        "domain": "acte",
+        "command": "exporter",
+        "errors": 0,
+        "gaps": 25
+      },
+      {
+        "observation": "011",
+        "started": "2026-10-25T22:47:55.911Z",
+        "finished": "2026-10-25T22:47:55.945Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 25
+      },
+      {
+        "observation": "012",
+        "started": "2026-10-25T22:48:25.391Z",
+        "finished": "2026-10-25T22:48:25.431Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 4
+      },
+      {
+        "observation": "013",
+        "started": "2026-10-25T22:48:46.540Z",
+        "finished": "2026-10-25T22:48:46.578Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 2
+      },
+      {
+        "observation": "014",
+        "started": "2026-10-25T22:48:54.576Z",
+        "finished": "2026-10-25T22:48:54.614Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 2
+      },
+      {
+        "observation": "015",
+        "started": "2026-10-25T22:49:24.600Z",
+        "finished": "2026-10-25T22:49:24.646Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 5
+      },
+      {
+        "observation": "016",
+        "started": "2026-10-25T22:49:54.195Z",
+        "finished": "2026-10-25T22:49:54.233Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 5
+      },
+      {
+        "observation": "017",
+        "started": "2026-10-25T22:50:16.777Z",
+        "finished": "2026-10-25T22:50:16.810Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 8
+      },
+      {
+        "observation": "018",
+        "started": "2026-10-25T22:50:53.429Z",
+        "finished": "2026-10-25T22:50:53.471Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 5,
+        "gaps": 15
+      },
+      {
+        "observation": "019",
+        "started": "2026-10-25T22:51:25.303Z",
+        "finished": "2026-10-25T22:51:25.346Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 5,
+        "gaps": 20
+      },
+      {
+        "observation": "020",
+        "started": "2026-10-25T22:51:49.346Z",
+        "finished": "2026-10-25T22:51:49.383Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 2,
+        "gaps": 21
+      },
+      {
+        "observation": "021",
+        "started": "2026-10-25T22:52:11.759Z",
+        "finished": "2026-10-25T22:52:11.798Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 16
+      },
+      {
+        "observation": "022",
+        "started": "2026-10-25T22:52:25.162Z",
+        "finished": "2026-10-25T22:52:25.201Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 2,
+        "gaps": 5
+      },
+      {
+        "observation": "023",
+        "started": "2026-10-25T22:52:35.135Z",
+        "finished": "2026-10-25T22:52:35.185Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 2
+      },
+      {
+        "observation": "024",
+        "started": "2026-10-25T22:52:42.457Z",
+        "finished": "2026-10-25T22:52:42.501Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 7
+      },
+      {
+        "observation": "025",
+        "started": "2026-10-25T22:52:55.399Z",
+        "finished": "2026-10-25T22:52:55.441Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 5
+      },
+      {
+        "observation": "026",
+        "started": "2026-10-25T22:53:08.574Z",
+        "finished": "2026-10-25T22:53:08.617Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 4
+      },
+      {
+        "observation": "027",
+        "started": "2026-10-25T22:53:14.999Z",
+        "finished": "2026-10-25T22:53:15.042Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 4
+      },
+      {
+        "observation": "028",
+        "started": "2026-10-25T22:53:15.381Z",
+        "finished": "2026-10-25T22:53:15.411Z",
+        "domain": "acte",
+        "command": "exporter",
+        "errors": 0,
+        "gaps": 4
+      },
+      {
+        "observation": "029",
+        "started": "2026-10-25T22:53:24.950Z",
+        "finished": "2026-10-25T22:53:24.993Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 4
+      },
+      {
+        "observation": "030",
+        "started": "2026-10-25T22:53:30.199Z",
+        "finished": "2026-10-25T22:53:30.241Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 4
+      },
+      {
+        "observation": "031",
+        "started": "2026-10-25T22:53:54.853Z",
+        "finished": "2026-10-25T22:53:54.896Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 5
+      },
+      {
+        "observation": "032",
+        "started": "2026-10-25T22:54:05.101Z",
+        "finished": "2026-10-25T22:54:05.132Z",
+        "domain": "acte",
+        "command": "exporter",
+        "errors": 0,
+        "gaps": 5
+      }
+    ],
+    "final": {
+      "issues": [
+        {
+          "id": "88ec962aab",
+          "kind": "manque",
+          "path": "créance_factures_exigible.sauf[0]",
+          "line": 54,
+          "text": "exception_d_inexécution_suffisamment_grave décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc",
+          "avocat": "Exception d’inexécution suffisamment grave : aucune pièce ne l’établit, alors que la réponse en dépend.",
+          "cible": "exception_d_inexécution_suffisamment_grave"
+        },
+        {
+          "id": "47dcf80209",
+          "kind": "manque",
+          "path": "prescription_de_la_créance_factures.si[0]",
+          "line": 211,
+          "text": "action_engagée_dans_les_cinq_ans décide de la réponse : renseigne date_de_l_action dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)",
+          "avocat": "Action engagée dans les cinq ans : date de l’action n’est pas établi par une pièce, alors que la réponse en dépend.",
+          "cible": "action_engagée_dans_les_cinq_ans"
+        },
+        {
+          "id": "8941894ec0",
+          "kind": "manque",
+          "path": "prescription_de_l_indemnité_de_recouvrement.si[0]",
+          "line": 250,
+          "text": "action_engagée_dans_les_cinq_ans décide de la réponse : renseigne date_de_l_action dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)",
+          "avocat": "Action engagée dans les cinq ans : date de l’action n’est pas établi par une pièce, alors que la réponse en dépend.",
+          "cible": "action_engagée_dans_les_cinq_ans"
+        },
+        {
+          "id": "e1c680a210",
+          "kind": "manque",
+          "path": "acte[2].traite",
+          "line": 357,
+          "text": "créance_factures_exigible est à établir dans le raisonnement : établis-le, ou rédige la section comme une prétention à démontrer",
+          "avocat": "La section « Discussion — créance de factures » développe un point à établir : créance factures exigible."
+        },
+        {
+          "id": "9bdbafc5c8",
+          "kind": "manque",
+          "path": "acte[5].traite",
+          "line": 382,
+          "text": "exception_d_inexécution_suffisamment_grave est à établir dans le raisonnement : établis-le, ou rédige la section comme une prétention à démontrer",
+          "avocat": "La section « Réponse à l'exception d'inexécution » développe un point à établir : exception d’inexécution suffisamment grave."
+        }
+      ],
+      "objectifs": [
+        {
+          "objectif": "Obtenir la condamnation de Société Beta SARL au paiement des factures F-2025-014 et F-2025-021",
+          "obtenir": "créance_factures_exigible",
+          "validite": "validité_de_l_objectif_de_paiement",
+          "prescription": "prescription_de_la_créance_factures",
+          "statut": "à établir",
+          "decisifs": [
+            "action_engagée_dans_les_cinq_ans",
+            "exception_d_inexécution_suffisamment_grave"
+          ],
+          "atteint": null
+        },
+        {
+          "objectif": "Obtenir l'indemnité forfaitaire pour frais de recouvrement de 40 euros par facture impayée",
+          "obtenir": "indemnité_de_recouvrement_due",
+          "validite": "validité_de_l_objectif_d_indemnité",
+          "prescription": "prescription_de_l_indemnité_de_recouvrement",
+          "statut": "à établir",
+          "decisifs": [
+            "action_engagée_dans_les_cinq_ans"
+          ],
+          "atteint": null
+        }
+      ],
+      "hypotheses": [
+        {
+          "nom": "Hypothèse où la défense de gravité ne serait pas établie",
+          "faits": {
+            "contrat_de_fourniture_formé": true,
+            "obligation_de_paiement": true,
+            "créance_justifiée_et_non_payée": true,
+            "réclamation_de_conformité_tardive": true,
+            "exception_d_inexécution_suffisamment_grave": false
+          },
+          "attendu": {
+            "créance_factures_exigible": true
+          },
+          "obtenu": {
+            "créance_factures_exigible": true
+          },
+          "conforme": true
+        },
+        {
+          "nom": "Deux factures professionnelles échues et impayées",
+          "faits": {
+            "retard_de_paiement_de_factures_professionnelles": true,
+            "montant_forfaitaire_de_quarante_euros_par_facture": true
+          },
+          "attendu": {
+            "indemnité_de_recouvrement_due": true
+          },
+          "obtenu": {
+            "indemnité_de_recouvrement_due": true
+          },
+          "conforme": true
+        }
+      ],
+      "valeurs": {
+        "montant_facture_014": {
+          "valeur": 12000,
+          "preuve": [
+            {
+              "piece": "pieces/02_facture_F-2025-014.md",
+              "citation": "Montant TTC : 12 000,00 euros.",
+              "titre": "pieces/02_facture_F-2025-014.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "montant_facture_021": {
+          "valeur": 8400,
+          "preuve": [
+            {
+              "piece": "pieces/03_facture_F-2025-021.md",
+              "citation": "Montant TTC : 8 400,00 euros.",
+              "titre": "pieces/03_facture_F-2025-021.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "montant_total_factures": {
+          "valeur": 20400,
+          "formule": {
+            "somme": [
+              "montant_facture_014",
+              "montant_facture_021"
+            ]
+          },
+          "preuve": [
+            {
+              "piece": "pieces/07_releve_de_compte.md",
+              "citation": "Solde débiteur : 20 400,00 euros.",
+              "titre": "pieces/07_releve_de_compte.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis",
+          "calcul": 20400
+        },
+        "montant_indemnité_par_facture": {
+          "valeur": 40,
+          "selon": [
+            {
+              "source": "LEGIARTI000000000104",
+              "citation": "Le montant de l'indemnité forfaitaire pour frais de recouvrement prévue au II de l'article L. 441-10 est fixé à 40 euros.",
+              "vigueur": {
+                "debut": "2019-04-26",
+                "fin": null,
+                "au": "date_d_échéance"
+              },
+              "applicabilite": "applicabilité_de_l_article_d",
+              "titre": "Code de commerce, article D. 441-5",
+              "en_vigueur": true
+            }
+          ],
+          "statut": "acquis"
+        },
+        "nombre_factures_impayées": {
+          "valeur": 2,
+          "preuve": [
+            {
+              "piece": "pieces/07_releve_de_compte.md",
+              "citation": "Factures F-2025-014 et F-2025-021 : aucun règlement reçu.",
+              "titre": "pieces/07_releve_de_compte.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "montant_total_indemnité": {
+          "valeur": 80,
+          "formule": {
+            "produit": [
+              "montant_indemnité_par_facture",
+              "nombre_factures_impayées"
+            ]
+          },
+          "preuve": [
+            {
+              "piece": "pieces/07_releve_de_compte.md",
+              "citation": "Factures F-2025-014 et F-2025-021 : aucun règlement reçu.",
+              "titre": "pieces/07_releve_de_compte.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis",
+          "calcul": 80
+        },
+        "date_du_contrat": {
+          "valeur": "2024-01-10",
+          "preuve": [
+            {
+              "piece": "pieces/01_contrat_cadre.md",
+              "citation": "Fait à Lyon le 10 janvier 2024.",
+              "titre": "pieces/01_contrat_cadre.md",
+              "nature": "contrat",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "date_de_facture": {
+          "valeur": "2025-03-03",
+          "preuve": [
+            {
+              "piece": "pieces/02_facture_F-2025-014.md",
+              "citation": "Émise par Société Exemple SAS à Société Beta SARL le 3 mars 2025.",
+              "titre": "pieces/02_facture_F-2025-014.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "date_d_échéance": {
+          "valeur": "2025-04-02",
+          "preuve": [
+            {
+              "piece": "pieces/02_facture_F-2025-014.md",
+              "citation": "Échéance : 2 avril 2025.",
+              "titre": "pieces/02_facture_F-2025-014.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "date_d_échéance_facture_014": {
+          "valeur": "2025-04-02",
+          "preuve": [
+            {
+              "piece": "pieces/02_facture_F-2025-014.md",
+              "citation": "Échéance : 2 avril 2025.",
+              "titre": "pieces/02_facture_F-2025-014.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "date_de_l_action": {
+          "valeur": null,
+          "preuve": [],
+          "statut": "à établir"
+        },
+        "date_de_réception_avril": {
+          "valeur": "2025-04-05",
+          "preuve": [
+            {
+              "piece": "pieces/04_bon_de_livraison_avril.md",
+              "citation": "Marchandise reçue le 5 avril 2025 par Société Beta SARL.",
+              "titre": "pieces/04_bon_de_livraison_avril.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        }
+      },
+      "bytes": 23106,
+      "lines": 409,
+      "sha256": "c611725d7cbe62c17bfdb3a81dbee8bae1751f4d1e74d4a167d75ef1b5ccaad6",
+      "sections": 8,
+      "paragraphs": 19,
+      "document": [
+        {
+          "id": "s1",
+          "depth": 0,
+          "texte": [
+            "Tribunal de commerce de Lyon",
+            "Pour Société Exemple SAS, demanderesse, contre Société Beta SARL, défenderesse."
+          ],
+          "intitule": "Conclusions en demande"
+        },
+        {
+          "id": "s2",
+          "depth": 0,
+          "texte": [
+            "Société Exemple SAS et Société Beta SARL ont conclu un contrat-cadre de fourniture le 10 janvier 2024. Les factures sont payables à trente jours de leur date d'émission.",
+            "Société Exemple SAS a émis la facture F-2025-014, d'un montant de 12 000 euros TTC, le 3 mars 2025, échéance au 2 avril 2025, puis la facture F-2025-021, d'un montant de 8 400 euros TTC, le 2 avril 2025, échéance au 2 mai 2025.",
+            "La livraison d'avril a été reçue le 5 avril 2025 sans réserve. Le seul courriel de réclamation produit date du 30 mai 2025. Société Beta SARL y allègue des défauts d'usinage et annonce la suspension du paiement de la seconde facture.",
+            "Par lettre recommandée du 20 juin 2025, reçue le 23 juin, Société Exemple SAS a mis en demeure Société Beta SARL de régler 20 400 euros. Le relevé de compte au 1er septembre 2025 constate que les deux factures restent impayées."
+          ],
+          "intitule": "Faits et procédure"
+        },
+        {
+          "id": "s3",
+          "depth": 0,
+          "texte": [
+            "Le contrat prévoit le paiement des factures à trente jours de leur émission. Les factures établissent les créances de 12 000 euros et de 8 400 euros, soit 20 400 euros au total.",
+            "En application de l'article 1353 du Code civil, Société Exemple SAS justifie les factures et leur échéance. Le relevé constate l'absence de règlement. Il appartient à Société Beta SARL, si elle se prétend libérée, d'établir le paiement ou une autre cause d'extinction. Aucune pièce ne justifie un paiement."
+          ],
+          "intitule": "Discussion — créance de factures"
+        },
+        {
+          "id": "s7",
+          "depth": 0,
+          "texte": [
+            "La livraison d'avril a été reçue le 5 avril 2025 sans réserve. Le seul courriel de réclamation versé au dossier date du 30 mai 2025, au-delà du délai contractuel de huit jours. La clause du contrat prévoit qu'à défaut de réclamation dans ce délai, les produits sont réputés acceptés sans réserve."
+          ],
+          "intitule": "Délai de réclamation contractuel"
+        },
+        {
+          "id": "s9",
+          "depth": 0,
+          "texte": [
+            "Les parties ont conclu le contrat de fourniture le 10 janvier 2024. L'article 1219 du Code civil, en vigueur à la date de la livraison d'avril, peut être invoqué entre elles si les conditions qu'il prévoit sont réunies. La seule allégation de défauts ne suffit pas à établir leur gravité."
+          ],
+          "intitule": "Champ d'application de l'exception d'inexécution"
+        },
+        {
+          "id": "s8",
+          "depth": 0,
+          "texte": [
+            "Le contrat prévoit une réclamation écrite dans les huit jours de la livraison, à défaut de quoi les produits sont réputés acceptés sans réserve. La livraison a été reçue le 5 avril 2025 sans réserve. Le seul courriel de réclamation produit date du 30 mai 2025, après le délai contractuel.",
+            "Société Beta SARL allègue des défauts d'usinage et annonce suspendre le règlement. Cette allégation ne constitue pas à elle seule un constat technique et aucune pièce n'établit la gravité des défauts. L'article 1219 du Code civil permet de suspendre le paiement seulement si l'inexécution de l'autre partie est suffisamment grave. Sur les pièces produites, le bien-fondé de cette exception demeure contesté et devra être apprécié par le tribunal."
+          ],
+          "intitule": "Réponse à l'exception d'inexécution"
+        },
+        {
+          "id": "s5",
+          "depth": 0,
+          "texte": [
+            "Les deux factures professionnelles sont échues et impayées. L'article L. 441-10 du Code de commerce prévoit de plein droit une indemnité forfaitaire en cas de retard de paiement ; l'article D. 441-5 en fixe le montant à 40 euros.",
+            "Société Exemple SAS sollicite 40 euros pour chacune des deux factures, soit 80 euros au total."
+          ],
+          "intitule": "Indemnité forfaitaire pour frais de recouvrement"
+        },
+        {
+          "id": "s6",
+          "depth": 0,
+          "texte": [
+            "Il est demandé au tribunal de commerce de Lyon de :",
+            "— condamner Société Beta SARL à payer à Société Exemple SAS 12 000 euros TTC au titre de la facture F-2025-014 ;",
+            "— condamner Société Beta SARL à payer à Société Exemple SAS 8 400 euros TTC au titre de la facture F-2025-021 ;",
+            "— condamner Société Beta SARL à payer à Société Exemple SAS 80 euros au titre des indemnités forfaitaires de recouvrement, soit 40 euros par facture impayée ;",
+            "— condamner Société Beta SARL aux dépens."
+          ],
+          "intitule": "Par ces motifs"
+        }
+      ]
+    },
+    "sameObject": {
+      "js": {
+        "bytes": 23105,
+        "lines": 409
+      },
+      "yaml": {
+        "bytes": 21993,
+        "lines": 445
+      }
+    }
+  },
+  "yaml": {
+    "runs": [
+      {
+        "observation": "001",
+        "started": "2026-10-25T22:43:07.854Z",
+        "finished": "2026-10-25T22:43:07.874Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 0
+      },
+      {
+        "observation": "002",
+        "started": "2026-10-25T22:43:15.062Z",
+        "finished": "2026-10-25T22:43:15.083Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 0
+      },
+      {
+        "observation": "003",
+        "started": "2026-10-25T22:43:19.276Z",
+        "finished": "2026-10-25T22:43:19.323Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 47,
+        "gaps": 9
+      },
+      {
+        "observation": "004",
+        "started": "2026-10-25T22:44:07.454Z",
+        "finished": "2026-10-25T22:44:07.476Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 0
+      },
+      {
+        "observation": "005",
+        "started": "2026-10-25T22:44:09.772Z",
+        "finished": "2026-10-25T22:44:09.829Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 13,
+        "gaps": 24
+      },
+      {
+        "observation": "006",
+        "started": "2026-10-25T22:45:18.236Z",
+        "finished": "2026-10-25T22:45:18.286Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 3,
+        "gaps": 23
+      },
+      {
+        "observation": "007",
+        "started": "2026-10-25T22:45:23.585Z",
+        "finished": "2026-10-25T22:45:23.623Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 23
+      },
+      {
+        "observation": "008",
+        "started": "2026-10-25T22:45:31.060Z",
+        "finished": "2026-10-25T22:45:31.108Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 22
+      },
+      {
+        "observation": "009",
+        "started": "2026-10-25T22:46:07.881Z",
+        "finished": "2026-10-25T22:46:07.907Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 0
+      },
+      {
+        "observation": "010",
+        "started": "2026-10-25T22:46:10.958Z",
+        "finished": "2026-10-25T22:46:10.983Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 0
+      },
+      {
+        "observation": "011",
+        "started": "2026-10-25T22:46:21.875Z",
+        "finished": "2026-10-25T22:46:21.961Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 2,
+        "gaps": 22
+      },
+      {
+        "observation": "012",
+        "started": "2026-10-25T22:46:50.572Z",
+        "finished": "2026-10-25T22:46:50.655Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 2,
+        "gaps": 3
+      },
+      {
+        "observation": "013",
+        "started": "2026-10-25T22:47:08.649Z",
+        "finished": "2026-10-25T22:47:08.741Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 2
+      },
+      {
+        "observation": "014",
+        "started": "2026-10-25T22:47:20.554Z",
+        "finished": "2026-10-25T22:47:20.647Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 5
+      },
+      {
+        "observation": "015",
+        "started": "2026-10-25T22:47:34.135Z",
+        "finished": "2026-10-25T22:47:34.229Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 2
+      },
+      {
+        "observation": "016",
+        "started": "2026-10-25T22:47:42.148Z",
+        "finished": "2026-10-25T22:47:42.241Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 1
+      },
+      {
+        "observation": "017",
+        "started": "2026-10-25T22:47:43.854Z",
+        "finished": "2026-10-25T22:47:43.922Z",
+        "domain": "acte",
+        "command": "exporter",
+        "errors": 0,
+        "gaps": 1
+      },
+      {
+        "observation": "018",
+        "started": "2026-10-25T22:48:45.283Z",
+        "finished": "2026-10-25T22:48:45.362Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 5
+      },
+      {
+        "observation": "019",
+        "started": "2026-10-25T22:48:57.357Z",
+        "finished": "2026-10-25T22:48:57.454Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 5
+      },
+      {
+        "observation": "020",
+        "started": "2026-10-25T22:49:21.233Z",
+        "finished": "2026-10-25T22:49:21.329Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 5
+      },
+      {
+        "observation": "021",
+        "started": "2026-10-25T22:49:58.033Z",
+        "finished": "2026-10-25T22:49:58.134Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 6
+      },
+      {
+        "observation": "022",
+        "started": "2026-10-25T22:50:05.018Z",
+        "finished": "2026-10-25T22:50:05.118Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 1,
+        "gaps": 7
+      },
+      {
+        "observation": "023",
+        "started": "2026-10-25T22:50:11.690Z",
+        "finished": "2026-10-25T22:50:11.789Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 5
+      },
+      {
+        "observation": "024",
+        "started": "2026-10-25T22:50:26.899Z",
+        "finished": "2026-10-25T22:50:27.000Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 5
+      },
+      {
+        "observation": "025",
+        "started": "2026-10-25T22:50:34.838Z",
+        "finished": "2026-10-25T22:50:34.913Z",
+        "domain": "acte",
+        "command": "exporter",
+        "errors": 0,
+        "gaps": 5
+      },
+      {
+        "observation": "026",
+        "started": "2026-10-25T22:50:38.859Z",
+        "finished": "2026-10-25T22:50:38.960Z",
+        "domain": "raisonnement",
+        "command": "verifier",
+        "errors": 0,
+        "gaps": 5
+      }
+    ],
+    "final": {
+      "issues": [
+        {
+          "id": "10842442b3",
+          "kind": "manque",
+          "path": "suspension_du_paiement_justifiée.si[1]",
+          "line": 160,
+          "text": "inexécution_de_société_exemple décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc",
+          "avocat": "Inexécution de société exemple : aucune pièce ne l’établit, alors que la réponse en dépend.",
+          "cible": "inexécution_de_société_exemple"
+        },
+        {
+          "id": "2061004abf",
+          "kind": "manque",
+          "path": "suspension_du_paiement_justifiée.si[2]",
+          "line": 169,
+          "text": "inexécution_suffisamment_grave décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc",
+          "avocat": "Inexécution suffisamment grave : aucune pièce ne l’établit, alors que la réponse en dépend.",
+          "cible": "inexécution_suffisamment_grave"
+        },
+        {
+          "id": "c4abc407b4",
+          "kind": "manque",
+          "path": "prescription_de_la_créance.si[1]",
+          "line": 313,
+          "text": "action_engagée_dans_les_cinq_ans décide de la réponse : renseigne date_de_saisine dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)",
+          "avocat": "Action engagée dans les cinq ans : date de saisine n’est pas établi par une pièce, alors que la réponse en dépend.",
+          "cible": "action_engagée_dans_les_cinq_ans"
+        },
+        {
+          "id": "1071d2a55f",
+          "kind": "manque",
+          "path": "acte[0].sections[1].sections[0].traite",
+          "line": 472,
+          "text": "factures_impayées est à établir dans le raisonnement : établis-le, ou rédige la section comme une prétention à démontrer",
+          "avocat": "La section « Sur le paiement des factures » développe un point à établir : factures impayées."
+        },
+        {
+          "id": "65acd648a2",
+          "kind": "manque",
+          "path": "acte[0].sections[1].sections[2].traite",
+          "line": 485,
+          "text": "indemnité_forfaitaire_due est à établir dans le raisonnement : établis-le, ou rédige la section comme une prétention à démontrer",
+          "avocat": "La section « Sur l'indemnité forfaitaire pour frais de recouvrement » développe un point à établir : indemnité forfaitaire due."
+        }
+      ],
+      "objectifs": [
+        {
+          "objectif": "Obtenir la condamnation de Société Beta SARL au paiement des factures F-2025-014 et F-2025-021",
+          "obtenir": "factures_impayées",
+          "prescription": "prescription_de_la_créance",
+          "statut": "à établir",
+          "decisifs": [
+            "action_engagée_dans_les_cinq_ans",
+            "inexécution_de_société_exemple",
+            "inexécution_suffisamment_grave"
+          ],
+          "atteint": null
+        },
+        {
+          "objectif": "Obtenir l'indemnité forfaitaire pour frais de recouvrement de 40 euros par facture impayée",
+          "obtenir": "indemnité_forfaitaire_due",
+          "prescription": "prescription_de_la_créance",
+          "statut": "à établir",
+          "decisifs": [
+            "action_engagée_dans_les_cinq_ans",
+            "inexécution_de_société_exemple",
+            "inexécution_suffisamment_grave"
+          ],
+          "atteint": null
+        }
+      ],
+      "hypotheses": [
+        {
+          "nom": "hypothèse conditionnelle où aucune inexécution du fournisseur n'est établie",
+          "faits": {
+            "facture_014_échue": true,
+            "facture_021_échue": true,
+            "aucun_paiement_reçu": true,
+            "inexécution_de_société_exemple": false,
+            "inexécution_suffisamment_grave": false
+          },
+          "attendu": {
+            "factures_impayées": true
+          },
+          "obtenu": {
+            "factures_impayées": true
+          },
+          "conforme": true
+        },
+        {
+          "nom": "hypothèse conditionnelle où une inexécution suffisamment grave est établie",
+          "faits": {
+            "inexécution_de_société_exemple": true,
+            "inexécution_suffisamment_grave": true
+          },
+          "attendu": {
+            "suspension_du_paiement_justifiée": true
+          },
+          "obtenu": {
+            "suspension_du_paiement_justifiée": true
+          },
+          "conforme": true
+        }
+      ],
+      "valeurs": {
+        "date_de_conclusion": {
+          "valeur": "2024-01-10",
+          "preuve": [
+            {
+              "piece": "pieces/01_contrat_cadre.md",
+              "citation": "Fait à Lyon le 10 janvier 2024.",
+              "titre": "pieces/01_contrat_cadre.md",
+              "nature": "contrat",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "date_du_relevé_de_compte": {
+          "valeur": "2025-09-01",
+          "preuve": [
+            {
+              "piece": "pieces/07_releve_de_compte.md",
+              "citation": "Relevé de compte client au 1er septembre 2025",
+              "titre": "pieces/07_releve_de_compte.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "date_de_saisine": {
+          "valeur": null,
+          "statut": "à établir"
+        },
+        "date_de_livraison_avril": {
+          "valeur": "2025-04-05",
+          "preuve": [
+            {
+              "piece": "pieces/04_bon_de_livraison_avril.md",
+              "citation": "Marchandise reçue le 5 avril 2025 par Société Beta SARL.",
+              "titre": "pieces/04_bon_de_livraison_avril.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "date_de_réclamation": {
+          "valeur": "2025-05-30",
+          "preuve": [
+            {
+              "piece": "pieces/05_courriel_reclamation.md",
+              "citation": "Courriel du 30 mai 2025",
+              "titre": "pieces/05_courriel_reclamation.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "date_d_échéance_facture_014": {
+          "valeur": "2025-04-02",
+          "preuve": [
+            {
+              "piece": "pieces/02_facture_F-2025-014.md",
+              "citation": "Échéance : 2 avril 2025.",
+              "titre": "pieces/02_facture_F-2025-014.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "date_d_échéance_facture_021": {
+          "valeur": "2025-05-02",
+          "preuve": [
+            {
+              "piece": "pieces/03_facture_F-2025-021.md",
+              "citation": "Échéance : 2 mai 2025.",
+              "titre": "pieces/03_facture_F-2025-021.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "montant_facture_014": {
+          "valeur": 12000,
+          "preuve": [
+            {
+              "piece": "pieces/02_facture_F-2025-014.md",
+              "citation": "Montant TTC : 12 000,00 euros.",
+              "titre": "pieces/02_facture_F-2025-014.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "montant_facture_021": {
+          "valeur": 8400,
+          "preuve": [
+            {
+              "piece": "pieces/03_facture_F-2025-021.md",
+              "citation": "Montant TTC : 8 400,00 euros.",
+              "titre": "pieces/03_facture_F-2025-021.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "montant_total_des_factures": {
+          "valeur": 20400,
+          "formule": {
+            "somme": [
+              "montant_facture_014",
+              "montant_facture_021"
+            ]
+          },
+          "preuve": [
+            {
+              "piece": "pieces/02_facture_F-2025-014.md",
+              "citation": "Montant TTC : 12 000,00 euros.",
+              "titre": "pieces/02_facture_F-2025-014.md",
+              "fiable": null
+            },
+            {
+              "piece": "pieces/03_facture_F-2025-021.md",
+              "citation": "Montant TTC : 8 400,00 euros.",
+              "titre": "pieces/03_facture_F-2025-021.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis",
+          "calcul": 20400
+        },
+        "nombre_de_factures_impayées": {
+          "valeur": 2,
+          "preuve": [
+            {
+              "piece": "pieces/07_releve_de_compte.md",
+              "citation": "Factures F-2025-014 et F-2025-021 : aucun règlement reçu.",
+              "titre": "pieces/07_releve_de_compte.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis"
+        },
+        "montant_indemnité_unitaire": {
+          "valeur": 40,
+          "selon": [
+            {
+              "source": "LEGIARTI000000000104",
+              "citation": "Le montant de l'indemnité forfaitaire pour frais de recouvrement prévue au II de l'article L. 441-10 est fixé à 40 euros.",
+              "vigueur": {
+                "debut": "2019-04-26",
+                "fin": null,
+                "au": "date_d_échéance_facture_014"
+              },
+              "applicabilite": "applicabilité_de_l_article_d_441_5",
+              "titre": "Code de commerce, article D. 441-5",
+              "en_vigueur": true
+            }
+          ],
+          "statut": "acquis"
+        },
+        "montant_indemnité_due": {
+          "valeur": 80,
+          "formule": {
+            "produit": [
+              "nombre_de_factures_impayées",
+              "montant_indemnité_unitaire"
+            ]
+          },
+          "preuve": [
+            {
+              "piece": "pieces/02_facture_F-2025-014.md",
+              "citation": "Facture n° F-2025-014",
+              "titre": "pieces/02_facture_F-2025-014.md",
+              "fiable": null
+            },
+            {
+              "piece": "pieces/03_facture_F-2025-021.md",
+              "citation": "Facture n° F-2025-021",
+              "titre": "pieces/03_facture_F-2025-021.md",
+              "fiable": null
+            }
+          ],
+          "statut": "acquis",
+          "calcul": 80
+        }
+      },
+      "bytes": 23025,
+      "lines": 493,
+      "sha256": "ce8e4d6e972f619864ea775841fd502693a652fce6f4abfdf423742b4d4e1ce4",
+      "sections": 7,
+      "paragraphs": 15,
+      "document": [
+        {
+          "id": "s1",
+          "depth": 0,
+          "texte": [
+            "À Monsieur le Président et Mesdames et Messieurs les juges composant le tribunal de commerce de Lyon.",
+            "Pour Société Exemple SAS, demanderesse, contre Société Beta SARL, défenderesse."
+          ],
+          "intitule": "Conclusions en demande de Société Exemple SAS contre Société Beta SARL"
+        },
+        {
+          "id": "s2",
+          "depth": 1,
+          "texte": [
+            "Société Exemple SAS et Société Beta SARL ont conclu un contrat-cadre de fourniture le 10 janvier 2024. Les factures émises entre elles sont payables à trente jours à compter de leur date d'émission.",
+            "Société Exemple SAS a émis la facture F-2025-014 le 3 mars 2025, d'un montant de 12 000 euros, échue le 2 avril 2025, puis la facture F-2025-021 le 2 avril 2025, d'un montant de 8 400 euros, échue le 2 mai 2025.",
+            "La marchandise de la livraison d'avril a été reçue par Société Beta SARL le 5 avril 2025 sans réserve. Société Beta SARL a adressé une réclamation écrite le 30 mai 2025, alléguant des défauts d'usinage et annonçant la suspension du paiement de la facture F-2025-021.",
+            "Par lettre recommandée du 20 juin 2025, reçue le 23 juin 2025, Société Exemple SAS a mis en demeure Société Beta SARL de payer 20 400 euros au titre des deux factures. Le relevé arrêté au 1er septembre 2025 constate qu'aucun règlement n'a été reçu."
+          ],
+          "intitule": "Faits et procédure"
+        },
+        {
+          "id": "s3",
+          "depth": 1,
+          "texte": [],
+          "intitule": "Discussion"
+        },
+        {
+          "id": "s4",
+          "depth": 2,
+          "texte": [
+            "Les parties sont liées par un contrat-cadre qui prévoit le paiement des factures à trente jours de leur émission. La facture F-2025-014, d'un montant de 12 000 euros, et la facture F-2025-021, d'un montant de 8 400 euros, sont échues.",
+            "Le relevé de compte établit qu'aucun règlement n'a été reçu et que le solde débiteur est de 20 400 euros. Société Beta SARL doit donc être condamnée à payer le principal total des deux factures."
+          ],
+          "intitule": "Sur le paiement des factures"
+        },
+        {
+          "id": "s5",
+          "depth": 2,
+          "texte": [
+            "Le contrat prévoit que toute réclamation de conformité doit être formulée par écrit dans les huit jours de la livraison ; à défaut, les produits sont réputés acceptés sans réserve.",
+            "La livraison a été reçue le 5 avril 2025 sans réserve. La réclamation écrite n'a été formulée que le 30 mai 2025, au-delà du délai contractuel de huit jours.",
+            "Le courriel établit que Société Beta SARL a allégué des défauts d'usinage et suspendu le règlement de la facture F-2025-021 ; il ne prouve pas à lui seul que les pièces étaient défectueuses. Le dossier ne contient aucun constat, expertise ou autre pièce établissant une inexécution de Société Exemple SAS ni sa gravité. La suspension au regard de l'article 1219 du code civil n'est donc pas établie par les éléments produits."
+          ],
+          "intitule": "Sur la contestation de la livraison d'avril"
+        },
+        {
+          "id": "s6",
+          "depth": 2,
+          "texte": [
+            "Les deux factures professionnelles échues sont demeurées impayées. En application de l'article L. 441-10 du code de commerce, une indemnité forfaitaire de 40 euros est due de plein droit pour chaque facture impayée.",
+            "La somme demandée à ce titre s'élève à 80 euros, soit 40 euros pour chacune des deux factures."
+          ],
+          "intitule": "Sur l'indemnité forfaitaire pour frais de recouvrement"
+        },
+        {
+          "id": "s7",
+          "depth": 1,
+          "texte": [
+            "Condamner Société Beta SARL à payer à Société Exemple SAS la somme de 20 400 euros au titre des factures F-2025-014 et F-2025-021.",
+            "Condamner Société Beta SARL à payer à Société Exemple SAS la somme de 80 euros au titre des indemnités forfaitaires pour frais de recouvrement."
+          ],
+          "intitule": "Par ces motifs"
+        }
+      ]
+    },
+    "sameObject": {
+      "js": {
+        "bytes": 24266,
+        "lines": 444
+      },
+      "yaml": {
+        "bytes": 23024,
+        "lines": 493
+      }
+    }
+  }
+}

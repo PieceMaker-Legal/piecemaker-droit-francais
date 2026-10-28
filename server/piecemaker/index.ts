@@ -4,7 +4,8 @@ import path from 'path';
 
 import type { Router } from 'express';
 
-import { getConnection, projectsDb } from '@/modules/database/index.js';
+import { getConnection, projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { createReasoningLocalRouter, createReasoningRouter, createReasoningService, createSuiviLocalRouter, createSuiviRouter, createSuiviService } from '@/modules/piecemaker-reasoning/index.js';
 import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
@@ -19,14 +20,21 @@ import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
 import { createPieceTitleResolver } from './harness/piece-title.js';
+import { locateSourcePassages } from './harness/source-passages.js';
+import { installLegalCodeHarness } from './legal-code/legal-code-harness.js';
 import { openLibrary, installLibraryRuntime, installLibrarySkillVisibility } from './library/index.js';
 import { createKnowledgeBackend } from './knowledge/index.js';
 import { declarePieceMakerServer } from './mcp-declaration.js';
 import { declareBundledSkills } from './skill-declaration.js';
 import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
+import { isLoopback } from './knowledge/local-routes.js';
+import { createReasoningConnectors } from './reasoning-connectors.js';
+import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
+import { createDocxReasoningLocalRouter } from './docx-reasoning-local.js';
+import { createActeLocalRouter } from './acte-local.js';
 import { createExternalFileRouter, createFileLinksRouter } from './file-links.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
 import { createInstitutionalTermsRouter, openInstitutionalTerms } from './institutional-terms.js';
@@ -78,9 +86,13 @@ const { createAnonymizerService } = createRequire(import.meta.url)(path.join(app
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
+const reasoningConnectors = createReasoningConnectors();
+const reasoning = createReasoningService(getConnection, reasoningConnectors);
+const suivi = createSuiviService(getConnection, reasoningConnectors);
 installCodexPlanRuntime(providerRuntimeService);
 installMistralSdk(providerRegistry.resolveProvider('mistral'), piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection) });
+installLegalCodeHarness({ runtime: providerRuntimeService, sessions: sessionsService, applicationRoot });
 const library = await openLibrary(piecemakerHome(), applicationRoot, () => projectsDb.getProjectPaths().map((row) => row.project_path));
 installLibrarySkillVisibility(providerSkillsService, library.store);
 installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
@@ -98,6 +110,11 @@ startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => 
 const localRouter = express.Router();
 localRouter.use(createMistralTabularBridge({ ensureProxy, runInProject: (id, run) => anonymizer.runInProject(id, run) }));
 localRouter.use(knowledge.localRouter);
+localRouter.use(createReasoningLocalRouter(reasoning, isLoopback));
+localRouter.use(createSuiviLocalRouter(suivi, isLoopback));
+localRouter.use(createDocxReasoningLocalRouter(projectsDb, isLoopback));
+localRouter.use(createActeLocalRouter(reasoning, isLoopback));
+localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
 localRouter.use(createTabularReviewLocalRouter({
   proxyOrigin: () => {
@@ -113,9 +130,17 @@ export function createPieceMakerLocalRouter() {
 export function createPieceMakerRouter(options: { getRuntimeStatus?: () => PieceMakerRuntimeStatus } = {}) {
   const router = vendor.createPieceMakerRouter({ ...options, anonymizer, publishProjects });
   router.use(createCitationsRouter(citations, (id) => {
+    if (id.startsWith('raisonnement:')) return projectsDb.getProjectPaths().some((row) => row.project_path === id.slice('raisonnement:'.length));
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));
   router.use(timesheet);
+  router.use('/reasoning', createReasoningRouter(reasoning, async (cwd, id, quote, name) => {
+    const info = await reasoning.source(cwd, id, name);
+    const quotes = [{ quote, verification: { verified: true } }];
+    const reference = info.kind === 'decision' ? { kind: 'case' as const, decision_id: id } : info.kind === 'piece' ? { kind: 'document' as const, doc_id: id } : { kind: 'article' as const, article_id: id };
+    return citations.save({ sessionId: `raisonnement:${cwd}`, title: info.title, source: info.text, citation: { ref: 1, ...reference, verified: true, quotes }, ranges: locateSourcePassages(info.text, quotes) });
+  }));
+  router.use('/suivi', createSuiviRouter(suivi));
   router.use('/library', library.router);
   router.use(knowledge.router);
   router.use(createCompanySearchRouter());

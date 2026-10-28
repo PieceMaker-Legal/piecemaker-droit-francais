@@ -826,3 +826,47 @@ def render_markdown(historique):
             "à la décision de départ. Seul le relevé des décisions citantes est exploitable."
         )
     return "\n".join(lignes)
+
+
+SOLUTION_REMISE_EN_CAUSE = re.compile(r"cassation|annul|infirm|r[ée]form", re.I)
+SOLUTION_SANS_EFFET = re.compile(r"rejet|irrecevab|non-lieu|d[ée]sistement|d[ée]ch[ée]ance|non-admission", re.I)
+RECOURS = ("pourvoi en cassation contre cette décision", "recours (appel) contre cette décision")
+
+
+def controle_historique(historique):
+    """
+    Contrôle statique d'une décision citée comme fondement : une décision
+    frappée d'un recours qui l'a cassée, annulée ou infirmée est « remise en
+    cause » ; un recours sans solution lisible ou un relevé tronqué est « à
+    examiner ». Les décisions postérieures qui la citent sont seulement listées.
+    """
+    seed = historique["seed"]
+    noeuds = {n["id"]: n for n in historique["fil"]}
+    date_seed = (noeuds.get(seed) or {}).get("date") or ""
+    statut = "à examiner" if historique["telemetrie"]["tronque"] else "non remise en cause"
+    lignes = []
+    for lien in historique["liens"]:
+        if lien["de"] != seed or lien["relation"] not in RECOURS:
+            continue
+        recours = noeuds.get(lien["vers"]) or {}
+        solution = recours.get("solution") or ""
+        if SOLUTION_REMISE_EN_CAUSE.search(solution) and not SOLUTION_SANS_EFFET.search(solution):
+            statut = "remise en cause"
+        elif not SOLUTION_SANS_EFFET.search(solution) and statut != "remise en cause":
+            statut = "à examiner"
+        lignes.append(f"- Recours {lien['vers']} du {recours.get('date') or '?'} ({recours.get('juridiction') or '?'})"
+                      + (f" — Solution : {solution}" if solution else ""))
+    for citation in historique.get("citations") or []:
+        if date_seed and citation["date"] and citation["date"] > date_seed:
+            lignes.append(f"- Citée postérieurement par {citation['id']} du {citation['date']} ({citation['juridiction'] or '?'})"
+                          + (f" — Solution : {citation['solution']}" if citation["solution"] else ""))
+    return statut, lignes
+
+
+def render_controle(text_id, client=None):
+    try:
+        statut, lignes = controle_historique(build_decision_history(
+            {"text_id": text_id, "max_decisions": 6, "max_api_calls": 40, "max_citations": 10}, client))
+    except Exception as erreur:
+        statut, lignes = "à examiner", [f"- Contrôle impossible : {erreur}"]
+    return "\n".join(["", "HISTORIQUE JUDICIAIRE (contrôle automatique)", f"Historique: {statut}", *lignes])

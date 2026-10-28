@@ -6,6 +6,7 @@ import { cn } from '@/shared/utils';
 import type { LLMProvider, Project, ProjectSession, SessionWithProvider, SidebarSessionSelection } from '@/shared/types';
 import SidebarSessionItem from '@/modules/sidebar/SidebarSessionItem';
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
+import { LegalCodeButton } from '@/piecemaker/legal-code';
 
 type SidebarProjectSessionsProps = {
   project: Project;
@@ -148,6 +149,7 @@ export default function SidebarProjectSessions({
           {t('sessions.newSession')}
         </Button>
       )}
+      <div className={cn(isCompact && 'px-3')}><LegalCodeButton project={project} onNewSession={onNewSession} /></div>
 
       {(isSelecting || (initialSessionsLoaded && selectableSessionIds.length > 0)) && (
         <div className={cn('space-y-1', isCompact && 'px-3')}>

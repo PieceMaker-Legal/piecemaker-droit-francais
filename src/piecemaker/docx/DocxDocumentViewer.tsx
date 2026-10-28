@@ -9,6 +9,7 @@ import fr from '@eigenpal/docx-editor-i18n/fr';
 import './docxDocumentViewer.css';
 
 import { useAuth } from '@/modules/auth';
+import { DocxReasoningStatus, useDocxReasoning } from '@/modules/docx-reasoning';
 import { useCitationPassage } from '@/piecemaker/citations/citationPassage';
 import { clearDocxCitationHighlight, highlightCitationInDocx } from '@/piecemaker/citations/docxPassage';
 import { api, authenticatedFetch } from '@/shared/api';
@@ -176,12 +177,15 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const lastLayoutRef = useRef('');
   const zoomAtClickRef = useRef(1);
   const versionRef = useRef<number | null>(null);
+  const modelVersionRef = useRef<string | null>(null);
   const userEditingRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const savingRef = useRef(false);
   const savePromiseRef = useRef(Promise.resolve(true));
   const editVersionRef = useRef(0);
   const savedEditVersionRef = useRef(0);
+  const documentEpochRef = useRef(0);
+  const loadingEpochRef = useRef<number | null>(null);
   const resolvedPathRef = useRef(file.path);
   const [loaded, setLoaded] = useState<{ buffer: ArrayBuffer; version: number; filePath: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -192,8 +196,10 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const passage = useCitationPassage(file.path);
   const commentsOpenFromClickRef = useRef(false);
   const [revisionHint, setRevisionHint] = useState<{ x: number; y: number } | null>(null);
+  const { state: reasoningState, reset: resetReasoning, dirty: markReasoningDirty, begin: beginReasoning, publish: publishReasoning, failed: failReasoning, check: checkReasoning } = useDocxReasoning();
 
   const fetchVersion = useCallback(async () => {
+    const epoch = documentEpochRef.current;
     const requestVersion = (filePath: string) => {
       const query = new URLSearchParams({ projectId: projectId ?? '', path: filePath });
       return authenticatedFetch(`/api/piecemaker/docx-document/version?${query}`);
@@ -208,59 +214,86 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       }
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    resolvedPathRef.current = filePath;
-    return { filePath, version: ((await response.json()) as { version: number }).version };
+    if (epoch === documentEpochRef.current) resolvedPathRef.current = filePath;
+    const current = (await response.json()) as { version: number; reasoningVersion?: string | null };
+    return { filePath, version: current.version, reasoningVersion: current.reasoningVersion ?? null };
   }, [projectId]);
 
   const load = useCallback(async (discardChanges = false) => {
     if (!projectId) return;
-    const { filePath, version } = await fetchVersion();
-    const response = await api.readFileBlob(projectId, filePath);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const buffer = await response.arrayBuffer();
-    if (!discardChanges && editVersionRef.current !== savedEditVersionRef.current) {
-      setConflict(true);
-      return;
+    const epoch = documentEpochRef.current;
+    if (loadingEpochRef.current === epoch) return;
+    loadingEpochRef.current = epoch;
+    try {
+      const { filePath, version, reasoningVersion } = await fetchVersion();
+      if (epoch !== documentEpochRef.current) return;
+      const response = await api.readFileBlob(projectId, filePath);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const buffer = await response.arrayBuffer();
+      if (epoch !== documentEpochRef.current) return;
+      if (!discardChanges && editVersionRef.current !== savedEditVersionRef.current) {
+        setConflict(true);
+        return;
+      }
+      resetReasoning();
+      if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      userEditingRef.current = false;
+      editVersionRef.current = 0;
+      savedEditVersionRef.current = 0;
+      savePromiseRef.current = Promise.resolve(true);
+      setConflict(false);
+      versionRef.current = version;
+      modelVersionRef.current = reasoningVersion;
+      setError(null);
+      setLoaded({ buffer, version, filePath });
+      void checkReasoning(projectId, filePath, version);
+    } finally {
+      if (loadingEpochRef.current === epoch) loadingEpochRef.current = null;
     }
-    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = null;
-    userEditingRef.current = false;
-    editVersionRef.current = 0;
-    savedEditVersionRef.current = 0;
-    savePromiseRef.current = Promise.resolve(true);
-    setConflict(false);
-    versionRef.current = version;
-    setError(null);
-    setLoaded({ buffer, version, filePath });
-  }, [fetchVersion, projectId]);
+  }, [checkReasoning, fetchVersion, projectId, resetReasoning]);
 
   useEffect(() => {
+    const epoch = ++documentEpochRef.current;
     resolvedPathRef.current = file.path;
     versionRef.current = null;
+    modelVersionRef.current = null;
     const openedAt = Date.now();
     const missing = (error: unknown) => error instanceof Error && /HTTP 404/.test(error.message);
     load().catch((loadError: unknown) => {
+      if (epoch !== documentEpochRef.current) return;
       if (missing(loadError)) return;
       setError(String(loadError));
     });
     const poll = window.setInterval(() => {
       if (savingRef.current) return;
       fetchVersion()
-        .then(({ version }) => {
-          if (savingRef.current || version === versionRef.current) return;
-          if (editVersionRef.current !== savedEditVersionRef.current) setConflict(true);
-          else return load();
+        .then(({ version, reasoningVersion }) => {
+          if (epoch !== documentEpochRef.current || savingRef.current) return;
+          if (version !== versionRef.current) {
+            if (editVersionRef.current !== savedEditVersionRef.current) setConflict(true);
+            else return load();
+            return;
+          }
+          if (reasoningVersion !== modelVersionRef.current) {
+            modelVersionRef.current = reasoningVersion;
+            markReasoningDirty();
+            if (saveTimerRef.current === null && projectId) void checkReasoning(projectId, resolvedPathRef.current, version);
+          }
         })
         .catch(() => {
+          if (epoch !== documentEpochRef.current) return;
           if (versionRef.current !== null || Date.now() - openedAt < MISSING_FILE_MS) return;
           setError(`Fichier introuvable : ${file.path}`);
         });
     }, VERSION_POLL_MS);
     return () => {
+      documentEpochRef.current += 1;
+      resetReasoning();
       window.clearInterval(poll);
       if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     };
-  }, [fetchVersion, file.path, load]);
+  }, [checkReasoning, fetchVersion, file.path, load, markReasoningDirty, projectId, resetReasoning]);
 
   const save = useCallback((): Promise<boolean> => {
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
@@ -270,6 +303,8 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     const editor = editorRef.current;
     if (!editor) return Promise.resolve(false);
     const filePath = resolvedPathRef.current;
+    const epoch = documentEpochRef.current;
+    const ticket = beginReasoning();
     savingRef.current = true;
     const snapshot = editor.save();
     void snapshot.catch(() => {});
@@ -286,23 +321,30 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
         });
         if (response.status === 409) {
           setConflict(true);
+          markReasoningDirty();
           return false;
         }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        versionRef.current = ((await response.json()) as { version: number }).version;
+        const saved = (await response.json()) as { version: number; reasoning: unknown; reasoningVersion?: string | null };
+        if (epoch === documentEpochRef.current && filePath === resolvedPathRef.current) {
+          versionRef.current = saved.version;
+          modelVersionRef.current = saved.reasoningVersion ?? null;
+        }
         savedEditVersionRef.current = editVersion;
         setConflict(false);
         setError(null);
+        publishReasoning(ticket, saved.reasoning);
         return true;
       } catch (saveError) {
-        setError(String(saveError));
+        if (epoch === documentEpochRef.current) setError(String(saveError));
+        failReasoning(ticket, saveError);
         return false;
       }
     });
     savePromiseRef.current = operation;
     void operation.then(() => { if (savePromiseRef.current === operation) savingRef.current = false; });
     return operation;
-  }, [projectId]);
+  }, [beginReasoning, failReasoning, markReasoningDirty, projectId, publishReasoning]);
 
   const flush = useCallback(async () => {
     do {
@@ -327,9 +369,10 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const scheduleSave = useCallback(() => {
     if (!userEditingRef.current) return;
     editVersionRef.current += 1;
+    markReasoningDirty();
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => { void save(); }, SAVE_DEBOUNCE_MS);
-  }, [save]);
+  }, [markReasoningDirty, save]);
 
   const close = async () => { if (await flush()) onClose(); };
 
@@ -491,6 +534,9 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
         <button type="button" onClick={() => { void overwriteExternal(); }} className="underline">Enregistrer ma version</button>
       </div>}
       {error && <p className="border-b border-border px-3 py-1.5 text-xs text-destructive">{error}</p>}
+      <DocxReasoningStatus state={reasoningState} onCheck={() => {
+        if (projectId && versionRef.current !== null) void checkReasoning(projectId, resolvedPathRef.current, versionRef.current);
+      }} />
       {loaded ? (
         <DocxEditor
           key={loaded.version}

@@ -1,0 +1,8 @@
+{
+  "name": "@piecemaker/reasoning-yaml-experiment",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "yaml": "2.9.1"
+  }
+}

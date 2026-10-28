@@ -6,7 +6,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { CASSATION_MATIERES, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES, VOLETS } from '../../../mcp/piecemaker/volets.mjs';
-import { findVendor, parseArgv, run } from './pm.mjs';
+import { findVendor, parseArgv, run, sessionDossier } from './pm.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -169,4 +169,39 @@ test('conversion lance le CLI piecemaker', async () => {
     args: ['conversion', '--json', '--case', '/tmp/affaire', 'contrat.pdf', '--force'],
     cwd: '/tmp/affaire',
   });
+});
+
+test('raisonnement transmet la commande et le nom du raisonnement à reasoningFn', async () => {
+  const calls = [];
+  const panels = [];
+  const deps = { reasoningFn: async (input) => { calls.push(input); return 'Raisonnement penalite'; }, openPanel: async (request) => { panels.push(request); return {}; } };
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-raisonnement-'));
+  const result = await run(['raisonnement', 'verifier', '--raisonnement', 'penalite'], { cwd: dossier, deps });
+  assert.equal(result, 'Raisonnement penalite\nVisible : Raisonnement.');
+  assert.deepEqual(panels, [{ project: path.resolve(dossier), tab: 'plugin:piecemaker-raisonnement' }]);
+  assert.deepEqual(calls[0], { commande: 'verifier', cwd: path.resolve(dossier), raisonnement: 'penalite' });
+  await run(['raisonnement', 'lister'], { cwd: dossier, deps });
+  assert.deepEqual(calls[1], { commande: 'lister', cwd: path.resolve(dossier) });
+  await assert.rejects(run(['raisonnement', 'inconnue'], { cwd: dossier, deps }));
+  await assert.rejects(run(['raisonnement', 'verifier', '--raisonnement'], { cwd: dossier, deps }));
+  fs.rmSync(dossier, { recursive: true, force: true });
+});
+
+test('suivi verifier transmet le dossier à suiviFn', async () => {
+  const calls = [];
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-suivi-'));
+  const deps = { suiviFn: async (input) => { calls.push(input); return 'Suivi du dossier'; } };
+  assert.equal(await run(['suivi', 'verifier'], { cwd: dossier, deps }), 'Suivi du dossier');
+  assert.deepEqual(calls, [{ commande: 'verifier', cwd: path.resolve(dossier) }]);
+  await assert.rejects(run(['suivi', 'lister'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
+  fs.rmSync(dossier, { recursive: true, force: true });
+});
+
+test('sessionDossier suit la session plutôt que le répertoire courant', async () => {
+  const lookup = async (id) => ({ 'claude-1': '/dossiers/Dupont', 'thread-1': '/dossiers/Exemple' })[id] ?? null;
+  assert.equal(await sessionDossier('/ailleurs', { env: { PIECEMAKER_DOSSIER: '/dossiers/Vibe' }, lookup }), '/dossiers/Vibe');
+  assert.equal(await sessionDossier('/ailleurs', { env: { CLAUDE_CODE_SESSION_ID: 'claude-1' }, lookup }), '/dossiers/Dupont');
+  assert.equal(await sessionDossier('/ailleurs', { env: { CODEX_THREAD_ID: 'thread-1' }, lookup }), '/dossiers/Exemple');
+  assert.equal(await sessionDossier('/ailleurs', { env: { CLAUDE_CODE_SESSION_ID: 'inconnue' }, lookup }), '/ailleurs');
+  assert.equal(await sessionDossier('/ailleurs', { env: { CLAUDE_CODE_SESSION_ID: 'claude-1' }, lookup: async () => { throw new Error('hors ligne'); } }), '/ailleurs');
 });

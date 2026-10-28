@@ -25,7 +25,7 @@ function publishOpenPanels(file, project, entry) {
 test('les outils exposés sont afficher, chronologie, conversion, sql et tabular_review, sans renommage', async () => {
   const { client, close } = await connect({ sqlFn: async () => '' });
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'chronologie', 'conversion', 'sql', 'tabular_review']);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'chronologie', 'conversion', 'raisonnement', 'sql', 'suivi', 'tabular_review']);
   const sql = tools.find((tool) => tool.name === 'sql');
   assert.deepEqual(Object.keys(sql.inputSchema.properties), ['requete']);
   assert.deepEqual(sql.annotations, {
@@ -36,8 +36,9 @@ test('les outils exposés sont afficher, chronologie, conversion, sql et tabular
     openWorldHint: false,
   });
   assert.ok(sql.description.startsWith('SQL libre (SQLite) sur la base PieceMaker ; noms réels masqués.\n'));
-  assert.ok(sql.description.endsWith('Renommer une pièce = UPDATE de son label (AAAA-MM-JJ_titre).'));
-  assert.equal(sql.description.split('\n').length, 6);
+  assert.ok(sql.description.includes('\nDates automatiques. Renommer une pièce = UPDATE de son label (AAAA-MM-JJ_titre).\n'));
+  assert.ok(sql.description.endsWith('échéances marquées faites par l\'avocat.'));
+  assert.equal(sql.description.split('\n').length, 8);
   await close();
 });
 
