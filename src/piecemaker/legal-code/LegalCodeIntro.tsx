@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 
-import { useProjectMainState } from '@/modules/project-workspace/context/ProjectsStateContext';
+import { useOptionalProjectMainState } from '@/modules/project-workspace/context/ProjectsStateContext';
 
 import { cancelLegalCode, readLegalCodeStart, subscribeToLegalCode } from './legalCode';
 
@@ -13,9 +13,9 @@ const STEPS = [
 ];
 
 export function LegalCodeIntro() {
-  const { selectedProject, newSessionTrigger } = useProjectMainState();
+  const project = useOptionalProjectMainState();
   const start = useSyncExternalStore(subscribeToLegalCode, readLegalCodeStart);
-  const active = Boolean(start) && start?.projectId === selectedProject?.projectId && start?.trigger === newSessionTrigger;
+  const active = Boolean(start) && Boolean(project) && start?.projectId === project?.selectedProject?.projectId && start?.trigger === project?.newSessionTrigger;
 
   useEffect(() => {
     if (start && !active) cancelLegalCode();

@@ -1,6 +1,6 @@
 import { Scale } from 'lucide-react';
 
-import { useProjectMainState } from '@/modules/project-workspace/context/ProjectsStateContext';
+import { useOptionalProjectMainState } from '@/modules/project-workspace/context/ProjectsStateContext';
 import type { Project } from '@/shared/types';
 
 import { startLegalCode } from './legalCode';
@@ -11,7 +11,7 @@ type LegalCodeButtonProps = {
 };
 
 export function LegalCodeButton({ project, onNewSession }: LegalCodeButtonProps) {
-  const { newSessionTrigger } = useProjectMainState();
+  const newSessionTrigger = useOptionalProjectMainState()?.newSessionTrigger ?? 0;
 
   return (
     <button

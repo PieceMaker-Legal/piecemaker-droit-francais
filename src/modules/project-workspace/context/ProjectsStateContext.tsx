@@ -177,6 +177,10 @@ export function useProjectMainState(): ProjectMainState {
   return useRequiredProjectContext(useContext(ProjectMainContext), 'useProjectMainState');
 }
 
+export function useOptionalProjectMainState(): ProjectMainState | null {
+  return useContext(ProjectMainContext);
+}
+
 export function useProjectCommandState(): ProjectCommandState {
   return useRequiredProjectContext(useContext(ProjectCommandContext), 'useProjectCommandState');
 }
