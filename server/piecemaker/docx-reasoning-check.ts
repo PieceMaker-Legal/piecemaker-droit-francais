@@ -14,7 +14,7 @@ export async function checkDocxReasoning(input: Uint8Array, cwd = '') {
     if (!result.verification) return { status: 'review' as const, changed: result.changed, context: result.context, sources: 'offline' as const };
     return {
       status: 'tested' as const,
-      issues: result.verification.issues.map(({ kind, path, text }) => ({ kind, path, text })),
+      issues: result.verification.issues.filter((issue) => issue.kind !== 'conseil').map(({ kind, path, text }) => ({ kind, path, text })),
       objectives: result.verification.annotated?.objectifs,
       sources: 'offline' as const,
     };

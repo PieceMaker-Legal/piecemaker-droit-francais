@@ -2,6 +2,8 @@ import { parseExpressionAt } from 'acorn';
 
 import { readActe } from './acte.js';
 import type { Section } from './acte.js';
+import { CONTROLS, isControlName, NAME } from './names.js';
+import type { ControlSlot } from './names.js';
 
 export type Ref = { piece: string; citation: string };
 export type Target = { piece: string; citation?: string };
@@ -36,14 +38,14 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const RESERVED = new Set(['objectifs', 'questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification', 'acte', 'true', 'false']);
 const TERM_KEYS = new Set(['si', 'sauf']);
 const CONDITION_KEYS = new Set(['l_une', 'delai', 'montant', 'selon', 'decompte']);
-const CONDITION_SHAPE = 'condition : - nom_de_la_condition: true (ou false), avec au besoin selon, delai, montant, decompte ; ou - l_une: [conditions]';
+const CONDITION_SHAPE = 'condition : - nom de la condition: true (ou false), avec au besoin selon, delai, montant, decompte ; ou - l_une: [conditions]';
 const FOUNDATION_SHAPE = 'fondement : { preuve: [{ piece, citation }], selon: [{ source, citation }], si: [- nom: true] } avec au moins preuve ou selon';
 const CONTREDIT_REMOVED = 'contredit n’existe plus : écris la pièce en preuve sous nom: { false: [{ preuve: [{ piece, citation }] }] } ; pour une clause contraire, deux fondements de valeurs opposées (true et false) sur la même question';
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
 const BOUNDS = ['au_plus', 'au_moins'] as const;
 const COMPARISONS = ['plus_de', 'au_moins', 'moins_de', 'au_plus'] as const;
-const DELAY_SHAPE = 'delai : { de: date_de_départ, a: date_retenue, au_plus ou au_moins: { jours | jours_ouvres | mois | ans: nombre } }';
-const AMOUNT_SHAPE = 'montant : { valeur: montant_du_dossier, plus_de | au_moins | moins_de | au_plus: nombre ou autre montant }';
+const DELAY_SHAPE = 'delai : { de: date de départ, a: date retenue, au_plus ou au_moins: { jours | jours_ouvres | mois | ans: nombre } }';
+const AMOUNT_SHAPE = 'montant : { valeur: montant du dossier, plus_de | au_moins | moins_de | au_plus: nombre ou autre montant }';
 const isDate = (value: unknown): value is string => typeof value === 'string' && DATE.test(value);
 const OBJECTIVE_SHAPE = 'objectifs: [{ objectif: le but du client, obtenir | écarter: terme (vrai/faux) ou réduire | augmenter: montant de valeurs }] attendu';
 const FORMULA_SHAPE = `formule : { ${OPERATIONS.join(' | ')}: [termes] } (arrondi: [montant, décimales]), { bareme: { assiette, tranches: [{ jusqu_a, taux }, …, { taux }] } } ou { si: terme, alors, sinon } ; un terme est un nombre, un nom de valeur ou une formule`;
@@ -51,8 +53,8 @@ export const operands = (formula: Formula): Operand[] => (formula.operation === 
 export const formulaNames = (formula: Formula): string[] => operands(formula).flatMap((item) => (typeof item === 'string' ? [item] : typeof item === 'number' ? [] : formulaNames(item)));
 export const formulaNumbers = (formula: Formula): number[] => operands(formula).flatMap((item, index) => (typeof item === 'number' ? (formula.operation === 'arrondi' && index === 1 ? [] : [item]) : typeof item === 'string' ? [] : formulaNumbers(item)));
 export const formulaConditions = (formula: Formula): string[] => [...(formula.operation === 'si' ? [formula.condition] : []), ...operands(formula).flatMap((item) => (typeof item === 'object' ? formulaConditions(item) : []))];
-export const CONTROLS = { applicabilite: 'applicabilité_', decompte: 'décompte_', validite: 'validité_', prescription: 'prescription_' } as const;
-export type ControlSlot = keyof typeof CONTROLS;
+export { CONTROLS };
+export type { ControlSlot };
 export const basisControls = (basis: Basis) => [basis.applicabilite, basis.validite].filter((name): name is string => Boolean(name));
 const CONTROL_PURPOSE: Record<ControlSlot, string> = { applicabilite: 'établit que ce texte s’applique', decompte: 'établit le calcul du délai', validite: 'établit la validité de l’acte ou de la clause', prescription: 'établit que l’action n’est pas prescrite' };
 
@@ -153,8 +155,8 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
   const dated: Array<{ at: string; name: string }> = [];
   const controls: Array<{ slot: ControlSlot; name: string; at: string }> = [];
   const control = (slot: ControlSlot, raw: unknown, at: string): string | undefined => {
-    if (typeof raw !== 'string' || !IDENTIFIER.test(raw)) { problem(at, `${slot} : nom du terme qui ${CONTROL_PURPOSE[slot]}, commençant par ${CONTROLS[slot]}`); return undefined; }
-    if (!raw.startsWith(CONTROLS[slot])) { problem(at, `${slot} : le nom commence par ${CONTROLS[slot]} (ex. ${CONTROLS[slot]}${raw})`); return undefined; }
+    if (typeof raw !== 'string' || !NAME.test(raw)) { problem(at, `${slot} : nom du terme qui ${CONTROL_PURPOSE[slot]}, commençant par « ${CONTROLS[slot]} »`); return undefined; }
+    if (!isControlName(raw, slot)) { problem(at, `${slot} : le nom commence par « ${CONTROLS[slot]} » (ex. ${raw.includes('_') && !raw.includes(' ') ? `${CONTROLS[slot]}_${raw}` : `${CONTROLS[slot]} de ${raw}`})`); return undefined; }
     controls.push({ slot, name: raw, at });
     return raw;
   };
@@ -181,10 +183,10 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     });
   };
 
-  const operand = (item: unknown, path: string): Operand | null => (typeof item === 'number' ? item : typeof item === 'string' && IDENTIFIER.test(item) ? item : formula(item, path));
+  const operand = (item: unknown, path: string): Operand | null => (typeof item === 'number' ? item : typeof item === 'string' && NAME.test(item) ? item : formula(item, path));
   const formula = (raw: unknown, path: string): Formula | null => {
     if (isObject(raw) && raw.si !== undefined) {
-      if (typeof raw.si !== 'string' || !IDENTIFIER.test(raw.si) || raw.alors === undefined || raw.sinon === undefined || Object.keys(raw).some((key) => !['si', 'alors', 'sinon'].includes(key))) { problem(path, FORMULA_SHAPE); return null; }
+      if (typeof raw.si !== 'string' || !NAME.test(raw.si) || raw.alors === undefined || raw.sinon === undefined || Object.keys(raw).some((key) => !['si', 'alors', 'sinon'].includes(key))) { problem(path, FORMULA_SHAPE); return null; }
       const alors = operand(raw.alors, `${path}.alors`);
       const sinon = operand(raw.sinon, `${path}.sinon`);
       return alors === null || sinon === null ? null : { operation: 'si', condition: raw.si, alors, sinon };
@@ -227,12 +229,12 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       }
       if (entry.vigueur !== undefined) {
         const vigueur = entry.vigueur;
-        if (!isObject(vigueur) || typeof vigueur.debut !== 'string' || !DATE.test(vigueur.debut) || !(vigueur.fin === null || vigueur.fin === undefined || (typeof vigueur.fin === 'string' && DATE.test(vigueur.fin))) || Object.keys(vigueur).some((key) => !['debut', 'fin', 'au'].includes(key))) problem(`${at}.vigueur`, 'vigueur : { debut: \'AAAA-MM-JJ\', fin: \'AAAA-MM-JJ\' ou null, au: date_de_valeurs }');
+        if (!isObject(vigueur) || typeof vigueur.debut !== 'string' || !DATE.test(vigueur.debut) || !(vigueur.fin === null || vigueur.fin === undefined || (typeof vigueur.fin === 'string' && DATE.test(vigueur.fin))) || Object.keys(vigueur).some((key) => !['debut', 'fin', 'au'].includes(key))) problem(`${at}.vigueur`, 'vigueur : { debut: \'AAAA-MM-JJ\', fin: \'AAAA-MM-JJ\' ou null, au: date de valeurs }');
         else {
           basis.vigueur = { debut: vigueur.debut, fin: (vigueur.fin as string | null | undefined) ?? null };
           if (vigueur.au !== undefined) {
-            if (typeof vigueur.au === 'string' && IDENTIFIER.test(vigueur.au)) { basis.vigueur.au = vigueur.au; dated.push({ at: `${at}.vigueur.au`, name: vigueur.au }); }
-            else problem(`${at}.vigueur.au`, 'au : nom d’une date de valeurs (ex. date_de_conclusion_du_contrat)');
+            if (typeof vigueur.au === 'string' && NAME.test(vigueur.au)) { basis.vigueur.au = vigueur.au; dated.push({ at: `${at}.vigueur.au`, name: vigueur.au }); }
+            else problem(`${at}.vigueur.au`, 'au : nom d’une date de valeurs (ex. date de conclusion du contrat)');
           }
         }
       }
@@ -247,7 +249,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       const bounds = isObject(delay) ? BOUNDS.filter((key) => delay[key] !== undefined) : [];
       const duration = bounds.length === 1 && isObject((delay as Record<string, unknown>)[bounds[0]]) ? Object.entries((delay as Record<string, Record<string, unknown>>)[bounds[0]]) : [];
       const [unit, count] = duration[0] ?? [];
-      if (!isObject(delay) || typeof delay.de !== 'string' || !IDENTIFIER.test(delay.de) || typeof delay.a !== 'string' || !IDENTIFIER.test(delay.a) || Object.keys(delay).some((key) => !['de', 'a', ...BOUNDS].includes(key))
+      if (!isObject(delay) || typeof delay.de !== 'string' || !NAME.test(delay.de) || typeof delay.a !== 'string' || !NAME.test(delay.a) || Object.keys(delay).some((key) => !['de', 'a', ...BOUNDS].includes(key))
         || bounds.length !== 1 || duration.length !== 1 || !(UNITS as readonly string[]).includes(unit) || !Number.isInteger(count) || (count as number) < 0) { problem(`${path}.delai`, DELAY_SHAPE); return null; }
       return { delai: { de: delay.de, a: delay.a, borne: bounds[0], duree: { unite: unit as Duration['unite'], nombre: count as number } } };
     }
@@ -255,8 +257,8 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       const amount = raw.montant;
       const comparisons = isObject(amount) ? COMPARISONS.filter((key) => amount[key] !== undefined) : [];
       const threshold = isObject(amount) && comparisons.length === 1 ? amount[comparisons[0]] : undefined;
-      if (!isObject(amount) || typeof amount.valeur !== 'string' || !IDENTIFIER.test(amount.valeur) || Object.keys(amount).some((key) => !['valeur', ...COMPARISONS].includes(key))
-        || comparisons.length !== 1 || !(typeof threshold === 'number' || (typeof threshold === 'string' && IDENTIFIER.test(threshold)))) { problem(`${path}.montant`, AMOUNT_SHAPE); return null; }
+      if (!isObject(amount) || typeof amount.valeur !== 'string' || !NAME.test(amount.valeur) || Object.keys(amount).some((key) => !['valeur', ...COMPARISONS].includes(key))
+        || comparisons.length !== 1 || !(typeof threshold === 'number' || (typeof threshold === 'string' && NAME.test(threshold)))) { problem(`${path}.montant`, AMOUNT_SHAPE); return null; }
       return { montant: { valeur: amount.valeur, comparaison: comparisons[0], seuil: threshold as number | string } };
     }
     return null;
@@ -264,7 +266,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
 
   const condition = (raw: unknown, path: string, nested: boolean): Condition[] => {
     if (!isObject(raw)) { problem(path, CONDITION_SHAPE); return []; }
-    if (raw.condition !== undefined) { problem(`${path}.condition`, `condition: nom n’existe plus : écris ${typeof raw.condition === 'string' && IDENTIFIER.test(raw.condition) ? `${raw.condition}: true (ou ${raw.condition}: false)` : 'nom: true (ou nom: false)'}, la valeur attendue de la condition`); return []; }
+    if (raw.condition !== undefined) { problem(`${path}.condition`, `condition: nom n’existe plus : écris ${typeof raw.condition === 'string' && NAME.test(raw.condition) ? `${raw.condition}: true (ou ${raw.condition}: false)` : 'nom: true (ou nom: false)'}, la valeur attendue de la condition`); return []; }
     if (raw.contredit !== undefined) problem(`${path}.contredit`, CONTREDIT_REMOVED);
     if (raw.preuve !== undefined) problem(`${path}.preuve`, 'preuve ne se place plus sur une condition de règle : place-la sous la valeur qu’elle établit, à la racine : nom: { true: [{ preuve: [{ piece, citation }] }] } (pour un délai ou un montant : dans valeurs)');
     const names = Object.keys(raw).filter((key) => !CONDITION_KEYS.has(key) && key !== 'contredit' && key !== 'preuve');
@@ -277,7 +279,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     if (!hasChoice) {
       const name = names[0];
       const expected = raw[name];
-      if (!IDENTIFIER.test(name)) { problem(`${path}.${name}`, 'terme en minuscules, lettres, chiffres et _ (ex. retard_de_livraison)'); return []; }
+      if (!NAME.test(name)) { problem(`${path}.${name}`, 'nom en français, mots séparés par une espace (ex. retard de livraison)'); return []; }
       if (typeof expected !== 'boolean') { problem(`${path}.${name}`, `${name} : true ou false attendu, la valeur que la règle exige de ${name} (${name}: true ou ${name}: false)`); return []; }
       result.condition = name;
       result.attendu = expected;
@@ -322,7 +324,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
         const verbs = (Object.keys(VERBS) as Verb[]).filter((verb) => entry[verb] !== undefined);
         if (verbs.length !== 1) { problem(at, `${verbs.length ? 'un seul verbe' : 'verbe manquant'} : ${OBJECTIVE_SHAPE}`); return; }
         const effet = entry[verbs[0]];
-        if (typeof effet !== 'string' || !IDENTIFIER.test(effet)) { problem(`${at}.${verbs[0]}`, `${verbs[0]} : nom du terme ou du montant visé`); return; }
+        if (typeof effet !== 'string' || !NAME.test(effet)) { problem(`${at}.${verbs[0]}`, `${verbs[0]} : nom du terme ou du montant visé`); return; }
         for (const field of Object.keys(entry)) if (!['objectif', ...verbs, 'validite', 'prescription'].includes(field)) problem(`${at}.${field}`, field === 'question' ? 'question s’appelle objectif : le but du client' : field === 'reponse' ? 'reponse est remplacée par le verbe : obtenir | écarter | réduire | augmenter: terme' : unknownKey(field, ['objectif', ...Object.keys(VERBS), 'validite', 'prescription']));
         const objective: Objective = { objectif: entry.objectif as string, effet, verbe: verbs[0] };
         for (const slot of ['validite', 'prescription'] as const) {
@@ -344,7 +346,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       for (const [name, entry] of Object.entries(raw)) {
         const at = `valeurs.${name}`;
         const computedOnly = isObject(entry) && entry.valeur === undefined && entry.formule !== undefined;
-        if (!IDENTIFIER.test(name) || !isObject(entry) || !(computedOnly || typeof entry.valeur === 'number' || isDate(entry.valeur) || entry.valeur === null)) { problem(at, '{ valeur: \'AAAA-MM-JJ\', nombre ou null si le dossier ne la fixe pas, preuve: [{ piece, citation }] ou selon: [{ source, citation, vigueur }], formule } attendu'); continue; }
+        if (!NAME.test(name) || !isObject(entry) || !(computedOnly || typeof entry.valeur === 'number' || isDate(entry.valeur) || entry.valeur === null)) { problem(at, '{ valeur: \'AAAA-MM-JJ\', nombre ou null si le dossier ne la fixe pas, preuve: [{ piece, citation }] ou selon: [{ source, citation, vigueur }], formule } attendu'); continue; }
         for (const field of Object.keys(entry)) if (!['valeur', 'preuve', 'selon', 'formule'].includes(field)) problem(`${at}.${field}`, field === 'contredit' ? CONTREDIT_REMOVED : unknownKey(field, ['valeur', 'preuve', 'selon', 'formule']));
         const value: Value = { valeur: computedOnly ? null : entry.valeur as string | number | null, preuve: refs(entry.preuve, `${at}.preuve`), selon: bases(entry.selon, `${at}.selon`) };
         value.selon.forEach((basis, index) => { if (basis.validite) problem(`${at}.selon[${index}].validite`, 'la source d’une valeur est un texte : validite ne s’y place pas'); });
@@ -378,7 +380,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     const rootIntended = near(key, ROOT_KEYS);
     if (rootIntended) { problem(key, `clé inconnue ${key} : écris ${rootIntended}`); continue; }
     if (STRUCTURAL.has(key)) { problem(key, `${key} n’a pas sa place au premier niveau : c’est une clé d’${KEY_HOMES[key]} ; vérifie son indentation`); continue; }
-    if (!IDENTIFIER.test(key) || RESERVED.has(key)) { problem(key, 'nom de terme invalide'); continue; }
+    if (!NAME.test(key) || RESERVED.has(key)) { problem(key, RESERVED.has(key) ? 'nom réservé : choisis un autre nom de terme' : 'nom de terme invalide : mots en français séparés par une espace (ex. pénalité due)'); continue; }
     if (!isObject(raw)) { problem(key, 'un terme est { si: [...], sauf: [...] } ; une question établie est { true: [fondements], false: [fondements] }'); continue; }
     const rule = (raw.si !== undefined || raw.sauf !== undefined);
     const sided = raw.true !== undefined || raw.false !== undefined;
@@ -418,7 +420,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
   }
   for (const { at, name } of dated) if (reasoning.valeurs.has(name) && reasoning.valeurs.get(name)!.valeur !== null && !isDate(reasoning.valeurs.get(name)!.valeur)) problem(`valeurs.${name}`, `${name} sert à ${at} : une date 'AAAA-MM-JJ' attendue`);
   for (const name of reasoning.terms.keys()) {
-    const slot = (Object.keys(CONTROLS) as ControlSlot[]).find((key) => name.startsWith(CONTROLS[key]));
+    const slot = (Object.keys(CONTROLS) as ControlSlot[]).find((key) => isControlName(name, key));
     if (slot && !controls.some((entry) => entry.slot === slot && entry.name === name)) problem(name, `${name} est un contrôle : désigne-le par ${slot}: '${name}' ${slot === 'applicabilite' ? 'sur la source' : slot === 'decompte' ? 'sur le délai' : slot === 'validite' ? 'sur l’objectif ou la clause' : 'sur l’objectif'} qu’il conditionne`);
   }
   for (const { slot, name, at } of controls) if (!reasoning.terms.has(name)) problem(at, `terme ${name} non défini : écris ${name}: { si: [...] }, le terme qui ${CONTROL_PURPOSE[slot]}`);

@@ -11,6 +11,7 @@ import { and, answer, calculate, compile, evaluate, isLeaf, or, objectiveRoots, 
 import type { Calculation, Facts, Trace } from './engine.js';
 import { listReasoningFiles, parseReasoningDocument, printReasoningDocument, ReasoningSyntaxError, resolveReasoningFile } from './document.js';
 import { canonical, formulaConditions, SIDES, VERBS, formulaNames, formulaNumbers, LiteralError, readReasoning, stripAnnotations } from './format.js';
+import { adviseNames, derivedName, isControlName } from './names.js';
 import type { Basis, Condition, Foundation, Formula, Measure, Objective, Ref, Target, Trial } from './format.js';
 
 export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null }; history?: { statut: 'remise en cause' | 'à examiner' | 'non remise en cause'; details: string[] } };
@@ -43,8 +44,9 @@ const UNIT: Record<string, string> = { jours: 'jours', jours_ouvres: 'jours ouvr
 const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moins', moins_de: 'moins de', au_plus: 'au plus' };
 const amount = (value: string | number) => (typeof value === 'number' ? value.toLocaleString('fr-FR') : phrase(value));
 const ANCHORED = /\.(piece|source|vigueur|obtenir|écarter|réduire|augmenter|decompte|applicabilite|validite|prescription)$/;
-const applicabilityName = (title: string) => {
+const applicabilityName = (title: string, spaced: boolean) => {
   const article = /article\s+(\S+)/i.exec(title);
+  if (spaced) return `applicabilité de ${article ? `l'article ${article[1]}` : title.toLowerCase().replace(/[^\p{L}\p{N}'’.-]+/gu, ' ').trim().slice(0, 50).trim()}`;
   return `applicabilité_de_${(article ? `l_article_${article[1]}` : title).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 50)}`;
 };
 
@@ -71,7 +73,7 @@ function node(root: Record<string, unknown>, at: string): Record<string, unknown
 export type Simulation = { objectifs: Array<{ objectif: string; statut: ReasoningStatus; montant?: number | null }>; valeurs: Record<string, string | number | null> };
 export type Verification = { annotated: Record<string, unknown> | null; issues: ReasoningIssue[]; code: string; log: ReasoningLogEntry[]; simulation?: Simulation };
 const shown = (value: ReasoningValue | number | string) => (value === null ? 'à établir' : typeof value === 'boolean' ? (value ? 'vrai' : 'faux') : String(value));
-const told = (name: string, value: ReasoningValue | number | string) => `${phrase(name)} ${value === null ? 'reste en suspens' : typeof value === 'boolean' ? (value ? 'est acquis' : 'est exclu') : `vaut ${typeof value === 'number' ? value.toLocaleString('fr-FR') : value}`}`;
+const told = (name: string, value: ReasoningValue | number | string) => `${human(name)} : ${value === null ? 'en suspens' : typeof value === 'boolean' ? (value ? 'acquis' : 'exclu') : typeof value === 'number' ? value.toLocaleString('fr-FR') : value}`;
 
 export async function verifyReasoning(input: {
   code: string;
@@ -127,6 +129,9 @@ export async function verifyReasoning(input: {
 
   const shape = structure(reasoning);
   for (const cycle of shape.cycles) add('erreur', cycle.split(' → ')[0], `boucle : ${cycle}`);
+  const named = [...reasoning.terms.keys(), ...reasoning.valeurs.keys(), ...[...reasoning.terms.values()].flatMap((term) => [...term.si, ...term.sauf].flatMap(function names(condition: Condition): string[] { return condition.l_une ? condition.l_une.flatMap(names) : [condition.condition!]; }))];
+  const spaced = named.some((name) => name.includes(' '));
+  for (const { name, text } of adviseNames(named)) add('conseil', reasoning.terms.has(name) ? name : reasoning.valeurs.has(name) ? `valeurs.${name}` : '', text);
   const amountObjective = (objective: Objective) => !reasoning.terms.has(objective.effet) && reasoning.valeurs.has(objective.effet);
   reasoning.objectifs.forEach((objective, index) => {
     const at = `objectifs[${index}].${objective.verbe}`;
@@ -137,8 +142,8 @@ export async function verifyReasoning(input: {
   if (!reasoning.qualification) add('manque', 'qualification', 'raisonnement non qualifié : ajoute qualification: \'drafting\', \'contentieux\' ou \'consultation\'', 'Le raisonnement n’est pas qualifié : drafting, contentieux ou consultation.');
   reasoning.objectifs.forEach((objective, index) => {
     if (reasoning.qualification === 'drafting' && !reasoning.hypotheses.some((trial) => objectiveRoots(objective).some((name) => name in trial.attendu))) add('manque', `objectifs[${index}]`, `objectif sans hypothèse : ajoute dans hypotheses un cas dont attendu porte sur ${objective.effet}`, 'Aucune hypothèse ne vérifie cet objectif.');
-    if (reasoning.qualification === 'contentieux' && !objective.prescription && !objective.effet.startsWith('prescription_')) add('manque', `objectifs[${index}]`, `${reasoning.qualification} : vérifier la prescription : ajoute prescription: \'prescription_de_…\' sur l’objectif et définis ce terme`, 'Prescription à vérifier.');
-    if (reasoning.qualification === 'drafting' && !objective.validite && !objective.effet.startsWith('validité_')) add('manque', `objectifs[${index}]`, 'drafting : vérifier la validité : ajoute validite: \'validité_de_…\' sur l’objectif et définis ce terme', 'Validité à vérifier.');
+    if (reasoning.qualification === 'contentieux' && !objective.prescription && !isControlName(objective.effet, 'prescription')) add('manque', `objectifs[${index}]`, `${reasoning.qualification} : vérifier la prescription : ajoute prescription: \'${derivedName('prescription', '…', spaced)}\' sur l’objectif et définis ce terme`, 'Prescription à vérifier.');
+    if (reasoning.qualification === 'drafting' && !objective.validite && !isControlName(objective.effet, 'validite')) add('manque', `objectifs[${index}]`, `drafting : vérifier la validité : ajoute validite: '${derivedName('validité', '…', spaced)}' sur l’objectif et définis ce terme`, 'Validité à vérifier.');
   });
   const roots = new Set(reasoning.objectifs.flatMap(objectiveRoots));
   for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, 'terme qui ne sert à aucun objectif : rattache-le comme condition ou ajoute l’objectif qu’il sert');
@@ -244,7 +249,7 @@ export async function verifyReasoning(input: {
       checks.push(checkBasis(`${at}.selon[${index}]`, basis));
       basis.renvoi.forEach((target, other) => checks.push(checkTarget(`${at}.selon[${index}].renvoi[${other}]`, target)));
     });
-    if (condition.mesure?.delai && !condition.decompte) add('manque', `${at}.decompte`, `délai sans décompte : ajoute decompte: 'décompte_de_${condition.condition}' et définis ce terme, dont les conditions sourcées établissent la règle de calcul du délai`, `${human(condition.condition!)} : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.`, condition.condition);
+    if (condition.mesure?.delai && !condition.decompte) add('manque', `${at}.decompte`, `délai sans décompte : ajoute decompte: '${derivedName('décompte', condition.condition!, spaced)}' et définis ce terme, dont les conditions sourcées établissent la règle de calcul du délai`, `${human(condition.condition!)} : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.`, condition.condition);
   }
   for (const { at, foundation } of foundations) foundation.preuve.forEach((ref, index) => checks.push(checkRef(`${at}.preuve[${index}]`, ref)));
   for (const [name, entry] of reasoning.valeurs) {
@@ -435,7 +440,7 @@ export async function verifyReasoning(input: {
   const applicability = (place: string, basis: Basis, title: string) => {
     if (basisChecks.get(place)?.kind !== 'texte') return;
     controlSlots.push(basis.applicabilite ?? null);
-    if (!basis.applicabilite) add('manque', `${place}.applicabilite`, `applicabilité non établie : ajoute applicabilite: '${applicabilityName(title)}' et définis ce terme, dont les conditions établissent que ce texte s’applique au dossier`, `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
+    if (!basis.applicabilite) add('manque', `${place}.applicabilite`, `applicabilité non établie : ajoute applicabilite: '${applicabilityName(title, spaced)}' et définis ce terme, dont les conditions établissent que ce texte s’applique au dossier`, `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
   };
   for (const objective of reasoning.objectifs) {
     if (reasoning.qualification === 'drafting' || objective.validite) controlSlots.push(objective.validite ?? null);
@@ -461,9 +466,9 @@ export async function verifyReasoning(input: {
       const title = sourceIssues(place, basis);
       const exempt = applicabilityTerms.has(at.split('.')[0]);
       const clauseExempt = validityTerms.has(at.split('.')[0]) || applicabilityTerms.has(at.split('.')[0]);
-      if (basis.validite && actValidities.has(basis.validite)) add('erreur', `${place}.validite`, `validite : ${basis.validite} est le contrôle de validité de l’acte ; une clause a son propre contrôle (ex. validité_de_la_clause_${condition.condition ?? at.split('.')[0]})`);
+      if (basis.validite && actValidities.has(basis.validite)) add('erreur', `${place}.validite`, `validite : ${basis.validite} est le contrôle de validité de l’acte ; une clause a son propre contrôle (ex. ${derivedName('validité', `la clause ${condition.condition ?? at.split('.')[0]}`, spaced)})`);
       if (check?.kind === 'piece' && !clauseExempt) controlSlots.push(basis.validite ?? null);
-      if (check?.kind === 'piece' && !basis.validite && !clauseExempt) add('manque', `${place}.validite`, `validité de la clause non établie : ajoute validite: 'validité_de_la_clause_${condition.condition ?? at.split('.')[0]}' et définis ce terme, dont les conditions établissent que la clause est valable au regard du droit applicable`, `${title} : la validité de la clause n’est pas établie.`, `#source:${basis.source}`);
+      if (check?.kind === 'piece' && !basis.validite && !clauseExempt) add('manque', `${place}.validite`, `validité de la clause non établie : ajoute validite: '${derivedName('validité', `la clause ${condition.condition ?? at.split('.')[0]}`, spaced)}' et définis ce terme, dont les conditions établissent que la clause est valable au regard du droit applicable`, `${title} : la validité de la clause n’est pas établie.`, `#source:${basis.source}`);
       if (check?.kind === 'piece' && /\b(code|cgi|loi n|ordonnance n|décret n)/i.test(basis.citation) && /\barticles?\b/i.test(basis.citation) && !condition.selon.some((_, other) => basisChecks.get(`${at}.selon[${other}]`)?.kind === 'texte')) add('manque', place, 'la clause renvoie à un texte de loi : ajoute ce texte à selon (source, citation, vigueur)', `${title} : la clause renvoie à un texte de loi qui n’est pas cité.`, `#source:${basis.source}`);
       if (!exempt) applicability(place, basis, title);
     });
@@ -620,7 +625,7 @@ export async function verifyReasoning(input: {
     }
   }
 
-  const visible = issues.filter((issue) => !input.dismissed.has(issue.id));
+  const visible = issues.filter((issue) => !input.dismissed.has(issue.id) && issue.kind !== 'conseil');
   for (const issue of visible) {
     const holder = issue.path ? node(annotated, issue.path.replace(ANCHORED, '')) : null;
     const key = issue.kind === 'erreur' ? 'erreurs' : 'manques';
@@ -634,7 +639,7 @@ export async function verifyReasoning(input: {
     manques: visible.filter((issue) => issue.kind === 'manque').length,
     ...(controlSlots.length ? { controles: `${distinctControls.filter((name) => statuses.get(name) === true).length}/${distinctControls.length + controlSlots.filter((name) => !name).length} établis` } : {}),
     ...(trials.length ? { hypotheses: `${trials.filter((trial) => trial.conforme).length}/${trials.length}` } : {}),
-    ecartees: issues.length - visible.length,
+    ecartees: issues.filter((issue) => issue.kind !== 'conseil').length - visible.length,
     ...(general.length ? { alertes: general.map((issue) => `${issue.path ? `${issue.path} : ` : ''}${issue.text}`) } : {}),
     ...(unrated.length ? { pieces_a_evaluer_par_l_avocat: unrated } : {}),
     ...(registre.length ? { registre } : {}),
@@ -848,8 +853,9 @@ export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'issues' | '
   };
   const errors = issues.filter((issue) => issue.kind === 'erreur');
   const gaps = issues.filter((issue) => issue.kind === 'manque');
-  if (!errors.length && !gaps.length) return 'Aucune erreur, aucun manque. Le raisonnement a été réécrit dans son ordre.';
-  const out = [`${errors.length} erreur(s), ${gaps.length} manque(s). Le raisonnement a été réécrit dans son ordre : les lignes ci-dessous s’y rapportent.`];
+  const advice = errors.length ? [] : issues.filter((issue) => issue.kind === 'conseil').slice(0, 5);
+  if (!errors.length && !gaps.length && !advice.length) return 'Aucune erreur, aucun manque. Le raisonnement a été réécrit dans son ordre.';
+  const out = [`${errors.length} erreur(s), ${gaps.length} manque(s)${advice.length ? `, ${advice.length} conseil(s) d’écriture` : ''}. Le raisonnement a été réécrit dans son ordre : les lignes ci-dessous s’y rapportent.`];
   const block = (label: string, issue: ReasoningIssue, index: number) => {
     const place = issue.path ? issue.path.replace(/\./g, ' › ') : 'fichier';
     out.push('', `${label} ${index + 1} — ${place}${issue.line ? ` (ligne ${issue.line})` : ''}`);
@@ -859,6 +865,7 @@ export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'issues' | '
   };
   errors.forEach((issue, index) => block('ERREUR', issue, index));
   gaps.forEach((issue, index) => block('MANQUE', issue, index));
+  advice.forEach((issue, index) => block('CONSEIL', issue, index));
   return out.join('\n');
 }
 

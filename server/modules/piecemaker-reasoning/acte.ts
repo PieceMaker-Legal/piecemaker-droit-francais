@@ -1,9 +1,10 @@
+import { NAME } from './names.js';
+
 export type Conflict = { sur: 'intitule' | 'texte' | 'section'; modele: string[]; avocat: string[] };
 export type Section = { id?: string; intitule?: string; traite: string[]; texte: string[]; conflit: Conflict[]; sections: Section[] };
 export type Located = { section: Section; at: string; depth: number; traite: string[] };
 export type Segment = { text: string; gras: boolean; italique: boolean };
 
-const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 const SECTION_ID = /^s\d+$/;
 const SECTION_KEYS = new Set(['id', 'intitule', 'traite', 'texte', 'conflit', 'sections']);
 const SECTION_SHAPE = 'section : { intitule, traite: terme, condition ou valeur développé, texte: [paragraphes], sections: [...] }';
@@ -30,7 +31,7 @@ export function readActe(raw: unknown): { sections: Section[]; problems: Array<{
     }
     if (entry.traite !== undefined) {
       const names = typeof entry.traite === 'string' ? [entry.traite] : entry.traite;
-      if (!strings(names) || !names.length || names.some((name) => !IDENTIFIER.test(name))) problem(`${at}.traite`, 'traite : nom du terme, de la condition ou de la valeur que la section développe, ou liste de noms');
+      if (!strings(names) || !names.length || names.some((name) => !NAME.test(name))) problem(`${at}.traite`, 'traite : nom du terme, de la condition ou de la valeur que la section développe, ou liste de noms');
       else result.traite = names;
     }
     if (entry.texte !== undefined) {
