@@ -71,3 +71,13 @@ puis conversation et appel d'outil. Aucun jeton réel n'est inclus dans ce rappo
 
 L'EXE déjà installé contient toujours l'ancien frontend. Ce commit source ne
 modifie pas automatiquement l'installation locale et ne publie pas de release.
+
+## Résultat CI du correctif
+
+Le [parcours Windows du commit 6090ebc](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/actions/runs/40707544786)
+a réussi les étapes « Validate frontend and plugin before packaging »
+(TypeScript, suite Vitest et contrôles du plugin) et « Validate SDK tools and
+installation contracts ». Le contrôle GitHub des données réelles est également
+réussi. La fabrication et les contrôles de l'installateur sont encore en cours
+au moment de cet ajout ; le résultat du clic réel et de l'autorisation Mistral
+sur le poste utilisateur n'est pas encore validé.
