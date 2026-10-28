@@ -30,6 +30,7 @@ async function runBuild(platform, downloaded) {
     './components-package.mjs': { packageRuntimeComponents: noop },
     './mingit.mjs': { embedMinGit: noop },
     './node-shim.mjs': { embedNodeShim: noop },
+    '../../server/piecemaker/vendor/installer/steps/10-libreoffice.mjs': { embedLibreOffice: noop },
     './prebuilt-app.mjs': { verifyBuiltApp: noop, verifyMacBundleLinks: noop },
     './paths.mjs': { IS_MAC: platform === 'darwin', PRODUCT_NAME: 'PieceMaker', caCertPath: '', caKeyPath: '', releaseRepo: 'Example/Product', releaseTag: 'fixture' },
   };
