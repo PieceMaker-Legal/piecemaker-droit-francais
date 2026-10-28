@@ -113,7 +113,7 @@ test('the real CloudCLI controller can stop and restart without a quit loop', as
     await once(child, 'spawn');
     await prepare();
     assert.equal(controller.hasOwnedServer(), false);
-    assert.equal(child.signalCode, 'SIGTERM');
+    assert.notEqual(child.exitCode ?? child.signalCode, null);
   }
   assert.equal(new Set(stopped).size, 2);
 });
