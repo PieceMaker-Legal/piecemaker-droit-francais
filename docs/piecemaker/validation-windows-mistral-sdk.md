@@ -12,7 +12,7 @@ Le parcours utilise `.github/workflows/piecemaker-windows-validation.yml`, sur `
 
 Le précédent contrôle Windows trouvait GLiNER absent après une installation déclarée terminée. Une étape partielle renvoie désormais un échec au serveur ; son diagnostic stdout est conservé avec stderr. Les messages de téléchargement restent visibles sans terminal interactif. Le téléchargement GLiNER est limité aux fichiers du checkpoint épinglé.
 
-Ces corrections ne constituent pas une preuve d’installation GLiNER sur Windows : le nouveau parcours CI doit encore charger le modèle local et exécuter une inférence. Un modèle absent bloque la mise à disposition du paquet.
+La présence du modèle ne suffit pas : le parcours CI doit charger le modèle local et exécuter une inférence. Un modèle absent bloque la mise à disposition du paquet.
 
 La CI a également reproduit un arrêt du téléchargement sur une console Windows cp1252 : les pictogrammes du journal causaient une `UnicodeEncodeError`. Le journal remplace maintenant les caractères non représentables, sans interrompre le téléchargement. Un test reproduit cette console sans forcer UTF‑8 dans la CI.
 
@@ -33,3 +33,11 @@ La connexion Pro ou Team avec un compte réel reste une vérification manuelle s
 Sur Mac, sans build de l’application : 989 tests frontend passent ; 58 tests du plugin passent et 7 sont réservés à d’autres environnements. Les contrôles TypeScript frontend, backend et plugin passent. Les tests ciblés couvrent aussi l’échec d’installation partielle, la conservation du diagnostic, les fichiers de modèle épinglés et le chargement du SDK avec un appel d’outil fictif.
 
 Justice.fr répond par une page de maintenance au moment du contrôle. Le dictionnaire signale maintenant cette indisponibilité temporaire explicitement ; aucune définition n’est inventée pour contourner l’arrêt du service externe.
+
+## Validation Windows du 28 octobre 2026
+
+Le [parcours Windows complet](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/actions/runs/40665519742) réussit pour le commit `86d9a6cf8b124ece75ad4d971b2ff24e4271b7a7`, version applicative `2.0.54` : 989 tests frontend, 61 tests du plugin et 11 tests SDK passent. Quatre tests du plugin sont réservés à d’autres environnements.
+
+L’installateur signé passe l’installation NSIS, le premier démarrage, les paramètres Mistral, l’aller-retour d’outil SDK sans compte réel, le chargement GLiNER avec inférence locale, le proxy actif, la conservation de session, la désinstallation et la réinstallation. Les rapports `gliner-verification.json`, `mistral-sdk-verification.json`, `installation-verification.json` et `reinstallation-verification.json` sont inclus dans le paquet chiffré.
+
+L’artefact `PieceMaker-Validation-Windows-x64-26` contient uniquement l’archive chiffrée. Le paquet est récupéré et déchiffré localement ; son empreinte SHA-256 est vérifiée. Aucune release, publication npm ou mise à jour utilisateur n’est déclenchée. La connexion Pro ou Team avec le compte du testeur reste à effectuer sur son Windows depuis les paramètres.
