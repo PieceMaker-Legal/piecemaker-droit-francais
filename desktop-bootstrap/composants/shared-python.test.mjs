@@ -99,6 +99,12 @@ test('the legacy venv survives while it is the previous interpreter', () => {
   assert.deepEqual(supersededPythonDirectories(layout, ['a'.repeat(24), 'c'.repeat(24)], [current, legacy]), [path.join('/donnees', 'runtime-python', 'c'.repeat(24))]);
 });
 
+test('Windows keeps the configured interpreter whatever the path casing', { skip: process.platform !== 'win32' }, () => {
+  const layout = componentLayout({ PIECEMAKER_HOME: 'c:\\Donnees' }, 'c:\\Users\\ada');
+  const current = path.join('C:\\DONNEES', 'runtime-python', 'a'.repeat(24), 'python', 'python.exe');
+  assert.deepEqual(supersededPythonDirectories(layout, ['a'.repeat(24)], [current]).filter(directory => directory.includes('runtime-python')), []);
+});
+
 async function launcherFixture(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'pm-entrypoints-test-')));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
