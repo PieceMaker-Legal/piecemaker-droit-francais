@@ -128,7 +128,8 @@ export async function verifyReasoning(input: {
   const annotated = stripped;
 
   const shape = structure(reasoning);
-  for (const cycle of shape.cycles) add('erreur', cycle.split(' → ')[0], `boucle : ${cycle}`);
+  const controlLoop = (cycle: string) => { const control = cycle.split(' → ').find((name) => isControlName(name)); return control ? ` ; les sources citées dans ${control} n’ont besoin ni d’applicabilite ni de validite : retire celle qui renvoie à ${control}` : ''; };
+  for (const cycle of shape.cycles) add('erreur', cycle.split(' → ')[0], `boucle : ${cycle}${controlLoop(cycle)}`);
   const named = [...reasoning.terms.keys(), ...reasoning.valeurs.keys(), ...[...reasoning.terms.values()].flatMap((term) => [...term.si, ...term.sauf].flatMap(function names(condition: Condition): string[] { return condition.l_une ? condition.l_une.flatMap(names) : [condition.condition!]; }))];
   const spaced = named.some((name) => name.includes(' '));
   for (const { name, text } of adviseNames(named)) add('conseil', reasoning.terms.has(name) ? name : reasoning.valeurs.has(name) ? `valeurs.${name}` : '', text);
