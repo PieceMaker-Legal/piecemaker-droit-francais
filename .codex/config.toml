@@ -5,3 +5,10 @@ args = [
 ]
 enabled = true
 default_tools_approval_mode = "approve"
+
+[plugins."ponytail@piecemaker-codex"]
+enabled = true
+
+[marketplaces.piecemaker-codex]
+source_type = "local"
+source = "/Users/tsardet/Documents/GitHub/piecemaker-droit-francais"
