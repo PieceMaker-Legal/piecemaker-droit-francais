@@ -53,8 +53,12 @@ jobs:
           key: windows-preview-${{ hashFiles('server/piecemaker/anonymizer/hudsucker-proxy/Cargo.lock', 'package-lock.json', 'server/piecemaker/vendor/websocket-server/scripts/presidio-gliner/requirements.txt', 'desktop-bootstrap/composants/*.mjs', 'desktop-bootstrap/composants/windows-requirements.txt') }}
       - name: Validate source before packaging
         shell: bash
+        env:
+          CLOUDCLI_HOME: ${{ runner.temp }}/validation-source-data
+          DATABASE_PATH: ${{ runner.temp }}/validation-source-data/auth.db
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
+          npm rebuild better-sqlite3
           npm run typecheck
           npx --no-install vitest run --maxWorkers=2
           npm --prefix plugins/piecemaker-tabular-review test -- --maxWorkers=2
