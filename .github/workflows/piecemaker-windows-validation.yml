@@ -73,7 +73,7 @@ jobs:
           DATABASE_PATH: ${{ runner.temp }}/validation-source-data/auth.db
         run: |
           npx --no-install tsx --tsconfig server/tsconfig.json --test --test-timeout=120000 server/piecemaker/mistral-sdk/auth.test.ts server/piecemaker/mistral-sdk/runtime.test.ts server/piecemaker/mistral-sdk/tools.test.ts server/piecemaker/mistral-sdk/tabular.test.ts
-          node --test scripts/piecemaker/ui-updates/windows-validation/sdk-probe.test.mjs server/piecemaker/vendor/installer/lib/step-exit.test.mjs
+          node --test scripts/piecemaker/ui-updates/windows-validation/sdk-probe.test.mjs server/piecemaker/vendor/installer/lib/step-exit.test.mjs server/piecemaker/stamping.test.js
       - name: Build Windows anonymization proxy
         run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
       - name: Compile native SQLite for Electron
