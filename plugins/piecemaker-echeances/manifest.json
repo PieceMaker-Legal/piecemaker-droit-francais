@@ -1,0 +1,14 @@
+{
+  "name": "piecemaker-echeances",
+  "displayName": "Échéances",
+  "version": "0.1.0",
+  "description": "Échéances et dates de procédure ou de contrat de tous les dossiers, calculées et justifiées.",
+  "icon": "icon.svg",
+  "type": "module",
+  "slot": "tab",
+  "entry": "dist/index.js",
+  "permissions": [],
+  "piecemakerSources": {
+    "index": "src/client.ts"
+  }
+}
