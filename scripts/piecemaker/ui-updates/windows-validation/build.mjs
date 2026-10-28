@@ -29,6 +29,7 @@ const built = await buildDesktopApp(source, { windowsInstaller: true, prepareSta
   const packageFile = path.join(stage, 'package.json');
   const manifest = JSON.parse(await fs.readFile(packageFile));
   manifest.main = 'electron-piecemaker/validation-main.mjs';
+  manifest.build.asarUnpack.push('electron-piecemaker/validation-sdk-probe.mjs', 'electron-piecemaker/validation-build.json');
   Object.assign(manifest.build, { appId: product.appId, productName: product.name, executableName: product.shortName, artifactName: 'PieceMaker-Validation-${version}-win-${arch}.${ext}', extraMetadata: { ...manifest.build.extraMetadata, main: manifest.main } });
   manifest.build.extraResources = [...(manifest.build.extraResources || []), { from: assets, to: 'validation-assets', filter: ['*.tar.gz', '*.json', '*.sha256', '*.exe', '*.node'] }, { from: path.join(source, 'release/desktop'), to: 'validation-assets', filter: ['piecemaker-runtime-components-*.tar.gz'] }];
   await fs.writeFile(packageFile, JSON.stringify(manifest, null, 2));
