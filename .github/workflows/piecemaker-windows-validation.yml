@@ -60,7 +60,7 @@ jobs:
           npm --prefix plugins/piecemaker-tabular-review test -- --maxWorkers=2
           npx --no-install tsc --noEmit -p plugins/piecemaker-tabular-review/tsconfig.json
           npx --no-install tsx --tsconfig server/tsconfig.json --test server/piecemaker/mistral-sdk/auth.test.ts server/piecemaker/mistral-sdk/runtime.test.ts server/piecemaker/mistral-sdk/tools.test.ts server/piecemaker/mistral-sdk/tabular.test.ts
-          node --test scripts/piecemaker/ui-updates/sdk-probe.test.mjs server/piecemaker/vendor/installer/lib/step-exit.test.mjs
+          node --test scripts/piecemaker/ui-updates/windows-validation/sdk-probe.test.mjs server/piecemaker/vendor/installer/lib/step-exit.test.mjs
       - name: Build Windows anonymization proxy
         run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml
       - name: Compile native SQLite for Electron
