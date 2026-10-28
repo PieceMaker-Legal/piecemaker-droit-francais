@@ -22,6 +22,8 @@ Sur la machine Windows jetable, elle contrôle le serveur installé, le SDK emba
 
 Le paquet final contient le `.exe`, ses sommes de contrôle, l’identifiant de commit, les rapports de vérification et `TESTER-WINDOWS.md`. Il n’est publié comme artefact de test qu’après les contrôles. En cas d’échec, les diagnostics sont conservés séparément.
 
+Le dépôt étant public, le paquet est chiffré en AES-256-GCM avec une clé enveloppée par RSA-OAEP avant son dépôt comme artefact. La CI reçoit seulement la clé publique via `WINDOWS_VALIDATION_PACKAGE_PUBLIC_KEY`. La clé privée reste hors du dépôt, sur le Mac de test. Aucun installateur utilisable n’est accessible aux utilisateurs. Après téléchargement, déchiffrer l’archive avec `node scripts/piecemaker/ui-updates/windows-validation/private-package.mjs decrypt paquet.zip.enc paquet.zip chemin/cle-privee.pem`.
+
 La connexion Pro ou Team avec un compte réel reste une vérification manuelle sur le poste Windows ; aucune clé réelle n’est utilisée par la CI.
 
 ## Validation locale
