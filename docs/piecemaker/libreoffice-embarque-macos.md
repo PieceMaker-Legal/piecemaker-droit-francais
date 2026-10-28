@@ -33,8 +33,14 @@ de construction macOS existant. Il ne publie pas de release. Les paquets de
 production gardent la chaîne de signature et de distribution existante.
 
 Les tests locaux de sélection d'architecture et de packaging passent sur Windows.
-Les contrôles natifs macOS restent en attente au moment du commit ; ils ne
-constituent pas encore une validation d'un `.app` final signé et installé.
+Le [contrôle natif Mac Intel](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/actions/runs/40744364252/job/123014091378)
+réussit pour le commit `bfb375d` : téléchargement vérifié du DMG officiel,
+copie du bundle, contrôle des liens, conversions Word/Excel et tamponnage
+depuis une arborescence d'application déplacée, sans `SOFFICE_PATH`.
+Le contrôle Apple Silicon reste en file d'attente GitHub, sans runner attribué
+au moment de cet ajout. La validation du moteur et du lanceur Windows réussit
+également dans le workflow associé. Ces tests ne constituent pas une validation
+d'un `.app` final signé et installé.
 
 Le test de durée de vie du lanceur Node Windows utilise désormais un PID annoncé
 par son propre processus témoin. Il ne dépend plus du comptage PowerShell qui
