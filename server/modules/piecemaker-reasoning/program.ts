@@ -433,7 +433,7 @@ export async function verifyReasoning(input: {
     if (source && check?.kind && check.kind !== 'decision') source.en_vigueur = date && check.from ? inForce(date, check.from, check.to) : null;
     const au = basis.vigueur?.au;
     if (date && source?.en_vigueur === false) add('manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${date} (${au && typeof valueOf(au) === 'string' ? au : 'date du jour'}) ; cite la version en vigueur à cette date`, `${title} : la version citée n’était pas en vigueur au ${day(date)}.`, `#source:${basis.source}`);
-    if (check?.kind === 'texte' && !au && !drafting) add('manque', `${place}.vigueur`, 'applicabilité dans le temps non établie : ajoute vigueur: { debut, fin, au: \'nom_de_date\' }, la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable', `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
+    if (check?.kind === 'texte' && !au && !drafting) add('manque', `${place}.vigueur`, `applicabilité dans le temps non établie : ajoute vigueur: { debut, fin, au: '${spaced ? 'nom de la date' : 'nom_de_date'}' }, la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable`, `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
     else if (check?.kind === 'texte' && !date) add('manque', `${place}.vigueur`, `${au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`, `valeurs.${au}`);
     return title;
   };
