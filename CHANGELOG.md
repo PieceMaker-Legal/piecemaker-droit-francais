@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.56](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.55...v2.0.56) (2026-10-28)
+
+### Tests
+
+* **desktop:** accepter l'arrêt Windows sans signal dans le test de mise à jour ([f052c41](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f052c4183e6c1112383d2b719f88005dae60a4c0))
+
 ## [2.0.55](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.54...v2.0.55) (2026-10-28)
 
 ### New Features
