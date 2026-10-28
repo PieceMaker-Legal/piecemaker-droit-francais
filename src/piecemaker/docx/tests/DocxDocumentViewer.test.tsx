@@ -3,11 +3,12 @@ import { readFileSync } from 'node:fs';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, test, vi } from 'vitest';
-
 import { acceptChangeById, rejectChangeById } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
+
 import DocxDocumentViewer from '@/piecemaker/docx/DocxDocumentViewer';
 import { api, authenticatedFetch } from '@/shared/api';
+import { checkDocxDocumentReasoning } from '@/modules/docx-reasoning/api';
 
 const docxSave = vi.hoisted(() => vi.fn<() => Promise<ArrayBuffer>>());
 
@@ -15,6 +16,8 @@ vi.mock('@/shared/api', () => ({
   api: { readFileBlob: vi.fn() },
   authenticatedFetch: vi.fn(),
 }));
+
+vi.mock('@/modules/docx-reasoning/api', () => ({ checkDocxDocumentReasoning: vi.fn() }));
 
 vi.mock('@/shared/context/ThemeContext', () => ({
   useTheme: () => ({ isDarkMode: false }),
@@ -97,6 +100,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   docxSave.mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+  vi.mocked(checkDocxDocumentReasoning).mockResolvedValue({ version: 1, reasoning: { status: 'unlinked' } });
   vi.mocked(api.readFileBlob).mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
   vi.mocked(acceptChangeById).mockImplementation(() => () => true);
   vi.mocked(rejectChangeById).mockImplementation(() => () => true);
@@ -403,4 +407,201 @@ test('leaving the page warns only while Word has unsaved changes', async () => {
   const closed = new Event('beforeunload', { cancelable: true });
   window.dispatchEvent(closed);
   assert.equal(closed.defaultPrevented, false);
+});
+
+test('un DOCX lié est contrôlé à l’ouverture puis après sa sauvegarde automatique', async () => {
+  vi.mocked(checkDocxDocumentReasoning).mockResolvedValue({ version: 1, reasoning: { status: 'tested', issues: [] } });
+  vi.mocked(authenticatedFetch).mockImplementation(async (_url, options) => new Response(JSON.stringify(options?.method === 'PUT'
+    ? { version: 2, reasoning: { status: 'review', changed: ['pm:clause-fictive'], context: [{ tag: 'pm:clause-fictive', text: 'Nouvelle clause fictive.' }] } }
+    : { version: 1 }), { status: 200 }));
+  render(<DocxDocumentViewer file={{ name: 'contrat-fictif.docx', path: 'contrat-fictif.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  const editor = await screen.findByRole('button', { name: 'contrat-fictif.docx' });
+  await screen.findByText('Test local exécuté');
+  assert.deepEqual(vi.mocked(checkDocxDocumentReasoning).mock.calls[0], ['projet-fictif', 'contrat-fictif.docx']);
+  vi.useFakeTimers();
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  assert.match(screen.getByRole('status').textContent ?? '', /vérification à actualiser/);
+  await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+  assert.equal(screen.getByRole('status').textContent, 'Raisonnement à revoir');
+  assert.equal(screen.getByText('Nouvelle clause fictive.').textContent, 'Nouvelle clause fictive.');
+  assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
+  assert.equal(vi.mocked(checkDocxDocumentReasoning).mock.calls.length, 1);
+});
+
+test('une modification externe rechargée déclenche aussi un nouveau contrôle', async () => {
+  let version = 1;
+  vi.mocked(checkDocxDocumentReasoning).mockImplementation(async () => ({ version, reasoning: { status: 'tested', issues: [] } }));
+  vi.mocked(authenticatedFetch).mockImplementation(async () => new Response(JSON.stringify({ version }), { status: 200 }));
+  vi.mocked(api.readFileBlob).mockImplementation(async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+  vi.useFakeTimers();
+  render(<DocxDocumentViewer file={{ name: 'contrat-fictif.docx', path: 'contrat-fictif.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  assert.equal(screen.getByRole('status').textContent, 'Test local exécuté');
+  version = 2;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  assert.equal(vi.mocked(api.readFileBlob).mock.calls.length, 2);
+  assert.equal(vi.mocked(checkDocxDocumentReasoning).mock.calls.length, 2);
+  assert.equal(screen.getByRole('status').textContent, 'Test local exécuté');
+});
+
+test('une erreur de contrôle ne transforme pas une sauvegarde réussie en erreur d’écriture', async () => {
+  vi.mocked(checkDocxDocumentReasoning).mockResolvedValue({ version: 1, reasoning: { status: 'tested', issues: [] } });
+  vi.mocked(authenticatedFetch).mockImplementation(async (_url, options) => new Response(JSON.stringify(options?.method === 'PUT'
+    ? { version: 2, reasoning: { status: 'error', message: 'Liaison fictive manquante.' } }
+    : { version: 1 }), { status: 200 }));
+  render(<DocxDocumentViewer file={{ name: 'contrat-fictif.docx', path: 'contrat-fictif.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  const editor = await screen.findByRole('button', { name: 'contrat-fictif.docx' });
+  await screen.findByText('Test local exécuté');
+  vi.useFakeTimers();
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+  assert.equal(screen.getByRole('status').textContent, 'Vérification impossible');
+  assert.equal(screen.queryByText(/HTTP 500/), null);
+});
+
+test('une lecture tardive de l’ancien document est ignorée après le changement de fichier', async () => {
+  let resolveOldBlob!: (response: Response) => void;
+  let markOldReadStarted!: () => void;
+  let markNewReadStarted!: () => void;
+  const oldBlob = new Promise<Response>((resolve) => { resolveOldBlob = resolve; });
+  const oldReadStarted = new Promise<void>((resolve) => { markOldReadStarted = resolve; });
+  const newReadStarted = new Promise<void>((resolve) => { markNewReadStarted = resolve; });
+  vi.mocked(authenticatedFetch).mockImplementation(async () => new Response(JSON.stringify({ version: 1 }), { status: 200 }));
+  vi.mocked(api.readFileBlob).mockImplementation(async (_projectId, filePath) => {
+    if (filePath === 'ancien.docx') {
+      markOldReadStarted();
+      return oldBlob;
+    }
+    markNewReadStarted();
+    return new Response(new Uint8Array([4, 5, 6]), { status: 200 });
+  });
+  vi.mocked(checkDocxDocumentReasoning).mockImplementation(async (_projectId, filePath) => ({
+    version: 1,
+    reasoning: { status: 'tested', issues: [{ kind: 'manque', text: filePath }] },
+  }));
+
+  const view = render(<DocxDocumentViewer file={{ name: 'ancien.docx', path: 'ancien.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  await oldReadStarted;
+  view.rerender(<DocxDocumentViewer file={{ name: 'nouveau.docx', path: 'nouveau.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  await newReadStarted;
+  resolveOldBlob(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+  await act(async () => { await oldBlob; await newReadStarted; await Promise.resolve(); });
+
+  await screen.findByRole('button', { name: 'nouveau.docx' });
+  assert.deepEqual(vi.mocked(checkDocxDocumentReasoning).mock.calls, [['projet-fictif', 'nouveau.docx']]);
+  assert.equal(screen.queryByRole('button', { name: 'ancien.docx' }), null);
+  assert.equal(screen.queryByText('ancien.docx'), null);
+});
+
+test('une lecture DOCX lente ne lance pas de chargements concurrents à chaque cycle du poll', async () => {
+  let version = 1;
+  let resolveBlob!: (response: Response) => void;
+  const pendingBlob = new Promise<Response>((resolve) => { resolveBlob = resolve; });
+  vi.mocked(authenticatedFetch).mockImplementation(async () => new Response(JSON.stringify({ version }), { status: 200 }));
+  vi.mocked(api.readFileBlob).mockImplementation(async () => pendingBlob);
+  vi.mocked(checkDocxDocumentReasoning).mockResolvedValue({ version: 1, reasoning: { status: 'tested', issues: [] } });
+  vi.useFakeTimers();
+
+  render(<DocxDocumentViewer file={{ name: 'lent.docx', path: 'lent.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  assert.equal(vi.mocked(api.readFileBlob).mock.calls.length, 1);
+  version = 2;
+  await act(async () => { await vi.advanceTimersByTimeAsync(2100); });
+
+  assert.equal(vi.mocked(api.readFileBlob).mock.calls.length, 1);
+  assert.equal(vi.mocked(checkDocxDocumentReasoning).mock.calls.length, 0);
+  resolveBlob(new Response(new Uint8Array([7, 8, 9]), { status: 200 }));
+  await act(async () => { await pendingBlob; await Promise.resolve(); });
+  assert.equal(vi.mocked(checkDocxDocumentReasoning).mock.calls.length, 1);
+});
+
+test('les sauvegardes automatiques sont sérialisées et le dernier contrôle reste affiché', async () => {
+  let resolveFirstPut!: (response: Response) => void;
+  const firstPut = new Promise<Response>((resolve) => { resolveFirstPut = resolve; });
+  vi.mocked(authenticatedFetch).mockImplementation(async (_url, options) => {
+    if (options?.method === 'PUT') {
+      const putCount = vi.mocked(authenticatedFetch).mock.calls.filter(([, request]) => request?.method === 'PUT').length;
+      if (putCount === 1) return firstPut;
+      return new Response(JSON.stringify({
+        version: 3,
+        reasoning: { status: 'review', changed: ['pm:clause-fictive'], context: [{ tag: 'pm:clause-fictive', text: 'Dernière retouche fictive.' }] },
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ version: 1 }), { status: 200 });
+  });
+  vi.useFakeTimers();
+  render(<DocxDocumentViewer file={{ name: 'contrat-fictif.docx', path: 'contrat-fictif.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  const editor = screen.getByRole('button', { name: 'contrat-fictif.docx' });
+
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+  assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
+
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+  assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
+
+  resolveFirstPut(new Response(JSON.stringify({ version: 2, reasoning: { status: 'tested', issues: [] } }), { status: 200 }));
+  await act(async () => {
+    await firstPut;
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 2);
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  assert.equal(screen.getByRole('status').textContent, 'Raisonnement à revoir');
+  assert.equal(screen.getByText('Dernière retouche fictive.').textContent, 'Dernière retouche fictive.');
+});
+
+
+test('un changement du modèle relance le contrôle sans recharger le DOCX', async () => {
+  let reasoningVersion = 'modele-initial';
+  vi.mocked(authenticatedFetch).mockImplementation(async () => new Response(JSON.stringify({ version: 1, reasoningVersion }), { status: 200 }));
+  vi.mocked(checkDocxDocumentReasoning).mockImplementation(async () => ({
+    version: 1, reasoning: reasoningVersion === 'modele-initial'
+      ? { status: 'tested', issues: [] }
+      : { status: 'error', message: 'Modèle externe modifié.' },
+  }));
+  vi.useFakeTimers();
+  render(<DocxDocumentViewer file={{ name: 'scenario-externe.docx', path: 'scenario-externe.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  assert.equal(screen.getByRole('status').textContent, 'Test local exécuté');
+  reasoningVersion = 'modele-modifie';
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  assert.equal(screen.getByRole('status').textContent, 'Vérification impossible');
+  assert.equal(screen.getByText('Modèle externe modifié.').textContent, 'Modèle externe modifié.');
+  assert.equal(vi.mocked(api.readFileBlob).mock.calls.length, 1);
+  assert.equal(vi.mocked(checkDocxDocumentReasoning).mock.calls.length, 2);
+});
+
+test('un changement du modèle pendant une retouche conserve sa sauvegarde programmée', async () => {
+  let reasoningVersion = 'modele-initial';
+  vi.mocked(authenticatedFetch).mockImplementation(async (_url, options) => new Response(JSON.stringify({
+    version: options?.method === 'PUT' ? 2 : 1, reasoningVersion,
+    reasoning: { status: 'error', message: 'Modèle externe modifié.' },
+  }), { status: 200 }));
+  vi.mocked(checkDocxDocumentReasoning).mockResolvedValue({ version: 1, reasoning: { status: 'tested', issues: [] } });
+  vi.useFakeTimers();
+  render(<DocxDocumentViewer file={{ name: 'scenario-externe.docx', path: 'scenario-externe.docx' }} projectId="projet-fictif" isSidebar onClose={() => undefined} />);
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  const editor = screen.getByRole('button', { name: 'scenario-externe.docx' });
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  reasoningVersion = 'modele-modifie';
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  assert.match(screen.getByRole('status').textContent ?? '', /vérification à actualiser/);
+  assert.equal(vi.mocked(checkDocxDocumentReasoning).mock.calls.length, 1);
+  assert.equal(vi.mocked(api.readFileBlob).mock.calls.length, 1);
+  await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+  assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
+  assert.equal(screen.getByRole('status').textContent, 'Vérification impossible');
 });

@@ -1,0 +1,382 @@
+<title>Langage contrôlé Legal Code</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Fiche technique au format planche : six cartouches lettrés A–F et un cartouche de titre, comme la fiche ASD-STE100. */
+:root {
+  --paper: #ffffff;
+  --ground: #eef0f2;
+  --ink: #16191d;
+  --muted: #5d6670;
+  --rule: #23272c;
+  --hair: #d4d9de;
+  --wash: #f4f6f8;
+  --blue: #1f5fa8;
+  --blue-wash: #dce8f5;
+  --red: #c1272d;
+  --amber: #8a5a00;
+  --amber-wash: #fbefd6;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --cond: "IBM Plex Sans Condensed", "Arial Narrow", "IBM Plex Sans", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15181c; --ground: #0d0f12; --ink: #e6e9ec; --muted: #9aa4ae; --rule: #8b949e; --hair: #2e343b; --wash: #1c2126;
+    --blue: #7fb2ec; --blue-wash: #1d3047; --red: #ff7b7f; --amber: #f0b54a; --amber-wash: #3a2c10; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15181c; --ground: #0d0f12; --ink: #e6e9ec; --muted: #9aa4ae; --rule: #8b949e; --hair: #2e343b; --wash: #1c2126;
+  --blue: #7fb2ec; --blue-wash: #1d3047; --red: #ff7b7f; --amber: #f0b54a; --amber-wash: #3a2c10; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font: 400 13px/1.45 var(--sans); }
+.sheet { max-width: 1480px; margin: 0 auto; padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 18px; }
+.row { display: grid; gap: 18px; align-items: start; }
+.row.top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, .85fr); }
+.row.bottom { grid-template-columns: minmax(0, 1.5fr) minmax(0, .8fr) minmax(0, .85fr); }
+.stack { display: grid; gap: 18px; min-width: 0; }
+@media (max-width: 1180px) { .row.top, .row.bottom { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .row.top > :nth-child(2), .row.bottom > :first-child { grid-column: 1 / -1; } }
+@media (max-width: 720px) { .row.top, .row.bottom { grid-template-columns: minmax(0, 1fr); } }
+
+.panel { background: var(--paper); border: 1.5px solid var(--rule); min-width: 0; }
+.panel > header { display: flex; align-items: stretch; border-bottom: 1.5px solid var(--rule); }
+.panel .letter { width: 30px; display: grid; place-items: center; background: var(--rule); color: var(--paper); font: 600 13px var(--cond); flex: none; }
+.panel h2 { margin: 0; padding: 7px 12px; font: 600 16px/1.2 var(--cond); flex: 1; text-wrap: balance; }
+.panel .ref { padding: 9px 12px 0; font: 400 10.5px var(--mono); color: var(--muted); letter-spacing: .02em; white-space: nowrap; }
+.body { padding: 14px; }
+.foot { border-top: 1px solid var(--hair); padding: 10px 14px; font-size: 11.5px; color: var(--muted); display: grid; gap: 3px; }
+.mono { font-family: var(--mono); }
+.label { font: 400 10.5px var(--mono); color: var(--muted); letter-spacing: .03em; }
+.ok { color: var(--blue); }
+.no { color: var(--red); }
+.warn { color: var(--amber); }
+.scroll { overflow-x: auto; }
+
+/* A */
+.tree { display: grid; gap: 14px; }
+.root-box { justify-self: center; text-align: center; border: 1.5px solid var(--rule); background: var(--blue-wash); padding: 7px 26px; }
+.root-box b { display: block; font: 600 17px var(--cond); }
+.root-box span { font-size: 11.5px; color: var(--muted); }
+.parts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; position: relative; padding-top: 16px; }
+.parts::before { content: ""; position: absolute; top: 0; left: 25%; right: 25%; height: 16px; border: 1.5px solid var(--rule); border-bottom: 0; }
+.parts::after { content: ""; position: absolute; top: -14px; left: 50%; height: 14px; border-left: 1.5px solid var(--rule); }
+.part-title { border: 1.5px solid var(--rule); text-align: center; padding: 6px; font: 600 13.5px var(--cond); }
+.branches { list-style: none; margin: 8px 0 0 12px; padding: 0 0 0 0; border-left: 1px solid var(--muted); display: grid; gap: 7px; }
+.branches li { position: relative; padding-left: 14px; font-size: 12.5px; }
+.branches li::before { content: ""; position: absolute; left: 0; top: .72em; width: 10px; border-top: 1px solid var(--muted); }
+.branches .num { font: 400 10.5px var(--mono); color: var(--muted); margin-right: 6px; }
+.branches small { display: block; color: var(--muted); font-size: 11px; }
+.note-box { margin-top: 10px; background: var(--wash); border: 1px solid var(--hair); padding: 8px 10px; font-size: 12px; }
+.note-box small { display: block; color: var(--muted); font-size: 11px; }
+
+/* B */
+.case { padding-block: 12px; border-bottom: 1px solid var(--hair); }
+.case:first-child { padding-top: 0; }
+.case:last-child { border-bottom: 0; padding-bottom: 0; }
+.case h3 { margin: 0 0 8px; font: 600 12.5px var(--sans); }
+.orig { font-size: 13px; }
+.line { font: 400 14.5px/1.4 var(--mono); display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: .6em; row-gap: 4px; }
+.seg { display: inline-flex; flex-direction: column; align-items: stretch; }
+.seg > i { font-style: normal; white-space: nowrap; }
+.seg > u { text-decoration: none; height: 6px; border: 1px solid var(--blue); border-top: 0; margin-top: 2px; }
+.seg > em { font: 400 10.5px/1.25 var(--sans); color: var(--blue); text-align: center; margin-top: 2px; max-width: 13em; align-self: center; }
+.seg.bad > u { border-color: var(--red); }
+.seg.bad > em { color: var(--red); }
+.meta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 8px; font: 400 10.5px var(--mono); color: var(--muted); }
+pre.yaml { margin: 0; font: 400 12.5px/1.5 var(--mono); background: var(--wash); border: 1px solid var(--hair); padding: 8px 10px; overflow-x: auto; }
+pre.yaml .k { color: var(--blue); }
+pre.yaml .c { color: var(--muted); }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; font: 400 10.5px var(--mono); color: var(--muted); letter-spacing: .03em; padding: 7px 10px; border-bottom: 1.5px solid var(--rule); white-space: nowrap; }
+td { padding: 7px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+tbody tr:nth-child(even) td { background: var(--wash); }
+td.word { font-family: var(--mono); white-space: nowrap; }
+td.ex { font-family: var(--mono); font-size: 11.5px; }
+.st { white-space: nowrap; font-weight: 500; }
+.st::before { margin-right: 5px; }
+.st.ok::before { content: "✓"; }
+.st.no::before { content: "✕"; }
+.chip { display: inline-block; font: 500 10px var(--mono); padding: 1px 5px; border: 1px solid currentColor; white-space: nowrap; }
+.chip.now { color: var(--blue); }
+.chip.conseil { color: var(--amber); background: var(--amber-wash); border-color: transparent; }
+.chip.rien { color: var(--muted); }
+.chip.new { color: var(--red); }
+.group td { background: var(--paper) !important; font: 600 11px var(--cond); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding-top: 12px; }
+
+/* E */
+.limits { display: grid; gap: 14px; }
+.limit-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; font-weight: 500; }
+.limit-head .max { font: 500 11px var(--mono); color: var(--blue); white-space: nowrap; }
+.scale { position: relative; height: 26px; margin-top: 4px; }
+.scale .bar { position: absolute; left: 0; right: 0; top: 4px; height: 9px; border: 1px solid var(--hair); background: var(--wash); }
+.scale .fill { position: absolute; left: 0; top: 4px; height: 9px; background: var(--blue-wash); border: 1px solid var(--blue); }
+.scale .mark { position: absolute; top: 0; height: 17px; border-left: 2px solid var(--blue); }
+.scale .seen { position: absolute; top: 2px; height: 13px; border-left: 2px dashed var(--amber); }
+.scale .ticks { position: absolute; left: 0; right: 0; top: 15px; display: flex; justify-content: space-between; font: 400 9px var(--mono); color: var(--muted); }
+.limit small { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }
+.bullets { margin: 0; padding: 12px 14px 12px 30px; border-top: 1px solid var(--hair); display: grid; gap: 4px; font-size: 12px; list-style: square; }
+
+/* F */
+.timeline { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; padding-top: 4px; }
+.timeline::before { content: ""; position: absolute; left: 10%; right: 10%; top: 36px; border-top: 1.5px solid var(--rule); }
+.event { text-align: center; position: relative; }
+.event b { display: block; font: 600 14px var(--cond); }
+.event .dot { width: 11px; height: 11px; border: 1.5px solid var(--rule); border-radius: 50%; background: var(--paper); margin: 7px auto 8px; position: relative; }
+.event.next .dot { border-style: dashed; border-color: var(--red); }
+.event span { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; }
+.event.next b { color: var(--red); }
+.title-block { display: grid; grid-template-columns: 1fr 1fr; }
+.title-block > div { padding: 7px 12px; border-bottom: 1px solid var(--rule); }
+.title-block > div:nth-child(odd):not(.wide) { border-right: 1px solid var(--rule); }
+.title-block .wide { grid-column: 1 / -1; }
+.title-block .v { font-weight: 500; font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.title-block .wide .v { font: 600 17px var(--cond); }
+.title-block > div:last-child, .title-block > div:nth-last-child(2) { border-bottom: 0; }
+
+/* G */
+.verdict { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.verdict > div { padding: 12px 14px; border-right: 1px solid var(--hair); display: grid; gap: 6px; align-content: start; }
+.verdict > div:last-child { border-right: 0; }
+.verdict h3 { margin: 0; font: 600 13px var(--cond); }
+.verdict p { margin: 0; font-size: 12px; }
+.verdict .num { font: 500 22px var(--cond); font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) { .verdict { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .verdict > div { border-bottom: 1px solid var(--hair); } }
+@media (max-width: 520px) { .verdict { grid-template-columns: minmax(0, 1fr); } .timeline { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 14px; } .timeline::before { display: none; } .parts { grid-template-columns: 1fr; } .parts::before, .parts::after { display: none; } }
+</style>
+
+<main class="sheet">
+  <div class="row top">
+    <section class="panel">
+      <header><span class="letter">A</span><h2>Structure du langage</h2><span class="ref">consigne Legal Code</span></header>
+      <div class="body tree">
+        <div class="root-box"><b>Legal Code</b><span>raisonnement.yaml en français contrôlé</span></div>
+        <div class="parts">
+          <div>
+            <div class="part-title">Partie 1 : Règles d’écriture</div>
+            <ul class="branches">
+              <li><span class="num">§1</span>Méthode</li>
+              <li><span class="num">§2</span>Vocabulaire</li>
+              <li><span class="num">§3</span>Noms</li>
+              <li><span class="num">§4</span>Objectifs</li>
+              <li><span class="num">§5</span>Termes et conditions</li>
+              <li><span class="num">§6</span>Sources</li>
+              <li><span class="num">§7</span>Questions et fondements</li>
+              <li><span class="num">§8</span>Délais, montants, valeurs</li>
+              <li><span class="num">§9</span>Hypothèses et acte</li>
+            </ul>
+          </div>
+          <div>
+            <div class="part-title">Partie 2 : Dictionnaire</div>
+            <ul class="branches">
+              <li>Mots-clés<small>≈ 65 clés YAML, un seul sens chacune</small></li>
+              <li>Mots outils approuvés<small>≈ 20 mots qui relient les mots d’un nom</small></li>
+              <li>Mots outils interdits<small>≈ 15 mots, chacun avec la clé qui le remplace</small></li>
+              <li>Mots du dossier<small>tirés des sources et des pièces citées</small></li>
+            </ul>
+            <div class="note-box">Trois listes fermées et une liste ouverte<small>La liste ouverte se construit seule, à partir du dossier. Le vérificateur reste générique.</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="foot">La partie 1 existe : instructions.md. La partie 2 est la proposition de cette fiche.</div>
+    </section>
+
+    <section class="panel">
+      <header><span class="letter">B</span><h2>Anatomie d’une condition</h2><span class="ref">exemples annotés</span></header>
+      <div class="body">
+        <div class="case">
+          <div class="label">Nom d’origine, non conforme : mots interdits en rouge</div>
+          <div class="line orig" style="margin-top:6px">
+            <span class="seg bad"><i>aucun</i><u></u><em>négation</em></span>
+            <span class="seg"><i>paiement reçu</i></span>
+            <span class="seg bad"><i>et</i><u></u><em>deux faits</em></span>
+            <span class="seg"><i>facture échue</i></span>
+            <span class="seg bad"><i>dans les trente jours</i><u></u><em>durée écrite dans le nom</em></span>
+          </div>
+        </div>
+        <div class="case">
+          <h3>1 Conditions réécrites (un fait par nom)</h3>
+<pre class="yaml"><span class="k">si</span>:
+  - facture 014 échue: <span class="k">true</span>
+    <span class="k">delai</span>: { <span class="k">de</span>: date d'émission, <span class="k">a</span>: date d'échéance, <span class="k">au_plus</span>: { <span class="k">jours</span>: 30 } }
+  - paiement reçu: <span class="k">false</span>
+paiement reçu:
+  <span class="k">false</span>:
+    - <span class="k">preuve</span>: [{ <span class="k">piece</span>: pieces/04_releve.md, <span class="k">citation</span>: Solde dû }]</pre>
+          <div class="line" style="margin-top:10px">
+            <span class="seg"><i>facture 014</i><u></u><em>mot du dossier, numéro de pièce</em></span>
+            <span class="seg"><i>échue</i><u></u><em>participe passé</em></span>
+            <span class="seg"><i>paiement reçu: false</i><u></u><em>nom positif ; la règle exige false</em></span>
+          </div>
+          <div class="meta"><span>« et » devient deux entrées sous si</span><span>« aucun » devient la valeur false</span><span>« dans les trente jours » devient delai</span></div>
+        </div>
+        <div class="case">
+          <h3>2 Exception</h3>
+<pre class="yaml"><span class="k">sauf</span>:
+  - force majeure: <span class="k">true</span>
+    <span class="k">selon</span>: [{ <span class="k">source</span>: pieces/01_contrat.md, <span class="k">citation</span>: sauf force majeure }]</pre>
+          <div class="meta"><span class="ok">Exception fondée sur la règle citée</span><span class="no">Une contradiction devient deux fondements, sous true et sous false, jamais un sauf</span></div>
+        </div>
+        <div class="case">
+          <h3>3 Réponse à l’avocat (phrase libre, hors fichier)</h3>
+          <div class="line">
+            <span class="seg"><i>La facture 014 est échue.</i><u></u><em>présent</em></span>
+            <span class="seg"><i>Aucun paiement n’est prouvé.</i><u></u><em>la négation est admise ici</em></span>
+            <span class="seg"><i>L’objectif est atteint.</i><u></u><em>conclusion</em></span>
+          </div>
+          <div class="meta"><span>14 mots, 3 phrases ; limite 20 mots par phrase</span><span>Sans code, sans nom de clé</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header><span class="letter">C</span><h2>Formes des noms</h2><span class="ref">§3 Noms</span></header>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Forme</th><th>Exemple</th><th>Statut</th></tr></thead>
+          <tbody>
+            <tr><td>Nom + participe passé</td><td class="ex">mise en demeure reçue</td><td class="st ok">Approuvé</td></tr>
+            <tr><td>Nom d’action</td><td class="ex">résiliation</td><td class="st ok">Approuvé</td></tr>
+            <tr><td>Nom + complément</td><td class="ex">date de livraison</td><td class="st ok">Approuvé</td></tr>
+            <tr><td>Nom + numéro de pièce</td><td class="ex">facture 014 échue</td><td class="st ok">Approuvé</td></tr>
+            <tr><td>Contrôle préfixé</td><td class="ex">applicabilité de l’article 1219</td><td class="st ok">Approuvé</td></tr>
+            <tr><td>Ancienne forme avec _</td><td class="ex">mise_en_demeure_reçue</td><td class="st ok">Lu</td></tr>
+            <tr><td>Négation</td><td class="ex">aucun paiement reçu</td><td class="st no">Non approuvé</td></tr>
+            <tr><td>Deux faits liés</td><td class="ex">livraison reçue et conforme</td><td class="st no">Non approuvé</td></tr>
+            <tr><td>Durée ou seuil</td><td class="ex">retard de plus de 30 jours</td><td class="st no">Non approuvé</td></tr>
+            <tr><td>Verbe conjugué</td><td class="ex">le client a payé</td><td class="st no">Non approuvé</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot"><span>Un nom est un groupe nominal. La phrase complète va dans la réponse ou dans l’acte.</span><span>Verbes d’objectif : obtenir, écarter, réduire, augmenter. Aucun autre.</span></div>
+    </section>
+  </div>
+
+  <div class="row bottom">
+    <section class="panel">
+      <header><span class="letter">D</span><h2>Entrées du dictionnaire</h2><span class="ref">partie 2</span></header>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Mot (nature)</th><th>Statut</th><th>Sens ou alternative</th><th>Exemple approuvé</th><th>Non approuvé</th><th>Aujourd’hui</th></tr></thead>
+          <tbody>
+            <tr class="group"><td colspan="6">Mots-clés</td></tr>
+            <tr><td class="word">si (clé)</td><td class="st ok">Approuvé</td><td>Conditions toutes requises</td><td class="ex">si: [mise en demeure reçue: true]</td><td class="ex no">si dans une formule ⚠</td><td><span class="chip now">erreur</span></td></tr>
+            <tr><td class="word">sauf (clé)</td><td class="st ok">Approuvé</td><td>Exception fondée sur la règle citée</td><td class="ex">sauf: [force majeure: true]</td><td class="ex no">sauf: [preuve contraire: true]</td><td><span class="chip now">erreur</span></td></tr>
+            <tr><td class="word">true, false (clé)</td><td class="st ok">Approuvé</td><td>Valeur exigée d’une condition ; à la racine, fondements de chaque réponse</td><td class="ex">paiement reçu: {false: [{preuve: …}]}</td><td class="ex no">paiement reçu: {non: …}</td><td><span class="chip now">erreur</span></td></tr>
+            <tr><td class="word">contredit (clé)</td><td class="st no">Non approuvé</td><td>FALSE : fondement sous la valeur opposée</td><td class="ex">autorisation obtenue: {false: [{preuve: …}]}</td><td class="ex no">contredit: [{piece, citation}]</td><td><span class="chip now">erreur</span></td></tr>
+            <tr><td class="word">condition (clé)</td><td class="st no">Non approuvé</td><td>NOM: TRUE ou NOM: FALSE</td><td class="ex">- mise en demeure reçue: true</td><td class="ex no">- condition: mise en demeure reçue</td><td><span class="chip now">erreur</span></td></tr>
+            <tr><td class="word">valeur (clé)</td><td class="st ok">Approuvé</td><td>La date ou le montant lui-même</td><td class="ex">valeurs: {date de livraison: {valeur: 2025-06-14}}</td><td class="ex no">montant: {valeur: date …} ⚠</td><td><span class="chip now">erreur</span></td></tr>
+            <tr><td class="word">montants (clé)</td><td class="st no">Non approuvé</td><td>MONTANT, clé inconnue</td><td class="ex">montant: {valeur, plus_de: 3000}</td><td class="ex no">montants: …</td><td><span class="chip now">erreur</span></td></tr>
+            <tr class="group"><td colspan="6">Mots outils dans un nom</td></tr>
+            <tr><td class="word">de, du, des (prép.)</td><td class="st ok">Approuvé</td><td>Relie deux mots d’un même fait</td><td class="ex">date de livraison</td><td class="ex">–</td><td><span class="chip rien">rien</span></td></tr>
+            <tr><td class="word">et (conj.)</td><td class="st no">Non approuvé</td><td>SI : deux conditions</td><td class="ex">si: [livraison reçue: true, livraison conforme: true]</td><td class="ex no">livraison reçue et conforme</td><td><span class="chip conseil">conseil</span></td></tr>
+            <tr><td class="word">ou (conj.)</td><td class="st no">Non approuvé</td><td>L_UNE</td><td class="ex">l_une: [force majeure: true, grève nationale: true]</td><td class="ex no">force majeure ou grève</td><td><span class="chip conseil">conseil</span></td></tr>
+            <tr><td class="word">sauf (prép.)</td><td class="st no">Non approuvé</td><td>SAUF (la clé)</td><td class="ex">sauf: [force majeure: true]</td><td class="ex no">pénalité due sauf force majeure</td><td><span class="chip conseil">conseil</span></td></tr>
+            <tr><td class="word">si, lorsque (conj.)</td><td class="st no">Non approuvé</td><td>SI (la clé)</td><td class="ex">si: [retard constaté: true]</td><td class="ex no">pénalité si retard</td><td><span class="chip rien">rien</span></td></tr>
+            <tr><td class="word">aucun, non, pas (nég.)</td><td class="st no">Non approuvé</td><td>Nom positif + valeur FALSE</td><td class="ex">- paiement reçu: false</td><td class="ex no">aucun paiement reçu</td><td><span class="chip rien">rien</span></td></tr>
+            <tr><td class="word">dans … jours, avant, après</td><td class="st no">Non approuvé</td><td>DELAI</td><td class="ex">delai: {de, a, au_plus: {jours: 8}}</td><td class="ex no">réclamation dans les huit jours</td><td><span class="chip rien">rien</span></td></tr>
+            <tr><td class="word">plus de, moins de</td><td class="st no">Non approuvé</td><td>MONTANT</td><td class="ex">montant: {valeur, plus_de: 3000}</td><td class="ex no">créance de plus de 3000 euros</td><td><span class="chip rien">rien</span></td></tr>
+            <tr><td class="word">prouvé, établi (adj.)</td><td class="st no">Non approuvé</td><td>PREUVE, sous la valeur qu’elle établit</td><td class="ex">livraison reçue: {true: [{preuve: …}]}</td><td class="ex no">livraison prouvée</td><td><span class="chip rien">rien</span></td></tr>
+            <tr><td class="word">éventuel, supposé (adj.)</td><td class="st no">Non approuvé</td><td>HYPOTHESES</td><td class="ex">hypotheses: [{faits: {retard: true}}]</td><td class="ex no">retard éventuel</td><td><span class="chip rien">rien</span></td></tr>
+            <tr class="group"><td colspan="6">Mots du dossier</td></tr>
+            <tr><td class="word">échue (adj.)</td><td class="st ok">Approuvé</td><td>Le mot figure dans une pièce citée</td><td class="ex">facture 014 échue</td><td class="ex">–</td><td><span class="chip rien">rien</span></td></tr>
+            <tr><td class="word">défaillance (n.)</td><td class="st no">Non approuvé</td><td>Absent des sources et des pièces : reprends le mot du texte, INEXÉCUTION</td><td class="ex">inexécution suffisamment grave</td><td class="ex no">défaillance grave</td><td><span class="chip rien">rien</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="foot"><span>Convention : l’alternative approuvée est en MAJUSCULES, comme dans STE. ⚠ = un mot-clé à deux sens, à renommer pour respecter « un mot, un sens ».</span><span>« Aujourd’hui » : ce que le vérificateur fait déjà. Proposition : tout mot hors dictionnaire devient une erreur.</span></div>
+    </section>
+
+    <section class="panel">
+      <header><span class="letter">E</span><h2>Limites d’écriture</h2><span class="ref">valeurs maximales</span></header>
+      <div class="body limits">
+        <div class="limit">
+          <div class="limit-head"><span>Phrase de la consigne</span><span class="max">max 20 mots</span></div>
+          <div class="scale"><div class="bar"></div><div class="fill" style="width:27.7%"></div><div class="mark" style="left:66.6%"></div><div class="ticks"><span>0</span><span>10</span><span>20</span><span>30</span></div></div>
+          <small>Mesuré : 8,3 mots en moyenne, aucune au-delà</small>
+        </div>
+        <div class="limit">
+          <div class="limit-head"><span>Mots dans un nom</span><span class="max">max 6 mots (proposé)</span></div>
+          <div class="scale"><div class="bar"></div><div class="fill" style="width:41%"></div><div class="mark" style="left:60%"></div><div class="seen" style="left:70%"></div><div class="ticks"><span>0</span><span>5</span><span>10</span></div></div>
+          <small>Banc Luna : 4,1 en moyenne, 7 au plus (trait orange)</small>
+        </div>
+        <div class="limit">
+          <div class="limit-head"><span>Faits dans un nom</span><span class="max">max 1</span></div>
+          <div class="scale"><div class="bar"></div><div class="fill" style="width:33.3%"></div><div class="mark" style="left:33.3%"></div><div class="ticks"><span>0</span><span>1</span><span>2</span><span>3</span></div></div>
+        </div>
+        <div class="limit">
+          <div class="limit-head"><span>Verbes dans un objectif</span><span class="max">max 1</span></div>
+          <div class="scale"><div class="bar"></div><div class="fill" style="width:33.3%"></div><div class="mark" style="left:33.3%"></div><div class="ticks"><span>0</span><span>1</span><span>2</span><span>3</span></div></div>
+        </div>
+        <div class="limit">
+          <div class="limit-head"><span>Conseils par vérification</span><span class="max">max 5</span></div>
+          <div class="scale"><div class="bar"></div><div class="fill" style="width:50%"></div><div class="mark" style="left:50%"></div><div class="ticks"><span>0</span><span>5</span><span>10</span></div></div>
+        </div>
+      </div>
+      <ul class="bullets">
+        <li>Donne toujours le même nom au même fait.</li>
+        <li>Une citation reprend le passage exact.</li>
+        <li>N’écris pas de commentaire dans le fichier.</li>
+        <li>Écris true ou false. Écris null pour une valeur ouverte.</li>
+        <li>Un fait affirmé et nié : deux fondements, sous true et sous false.</li>
+      </ul>
+    </section>
+
+    <div class="stack">
+      <section class="panel">
+        <header><span class="letter">F</span><h2>Historique</h2></header>
+        <div class="body">
+          <div class="timeline">
+            <div class="event"><b>16 oct.</b><div class="dot"></div><span>Programme exécutable du dossier</span></div>
+            <div class="event"><b>18 oct.</b><div class="dot"></div><span>Consigne Legal Code, raisonnement Catala</span></div>
+            <div class="event"><b>25 oct.</b><div class="dot"></div><span>Raisonnement en YAML, banc Luna</span></div>
+            <div class="event"><b>26 oct.</b><div class="dot"></div><span>Conditions true/false, fin de contredit</span></div>
+            <div class="event"><b>28 oct.</b><div class="dot"></div><span>Noms en français, conseils, style STE</span></div>
+            <div class="event next"><b>Ensuite</b><div class="dot"></div><span>Dictionnaire, erreurs hors liste</span></div>
+          </div>
+          <p class="label" style="margin:14px 0 0">Modèle : ASD-STE100 Issue 9 (2025), langue contrôlée de la maintenance aéronautique.</p>
+        </div>
+      </section>
+      <section class="panel title-block">
+        <div class="wide"><div class="label">Titre</div><div class="v">Legal Code : langage contrôlé du raisonnement</div></div>
+        <div><div class="label">Spécification</div><div class="v mono">raisonnements/&lt;nom&gt;.yaml</div></div>
+        <div><div class="label">Vérificateur</div><div class="v mono">pm raisonnement verifier</div></div>
+        <div><div class="label">Modèle d’origine</div><div class="v">ASD-STE100</div></div>
+        <div><div class="label">Lecteurs</div><div class="v">Agent, avocat</div></div>
+        <div><div class="label">Source</div><div class="v mono">legal-code/instructions.md</div></div>
+        <div><div class="label">Feuille</div><div class="v">1 sur 1</div></div>
+      </section>
+    </div>
+  </div>
+
+  <section class="panel">
+    <header><span class="letter">G</span><h2>Notre dictionnaire : hors liste, erreur</h2><span class="ref">mesuré sur le banc Luna</span></header>
+    <div class="verdict">
+      <div>
+        <h3>1 Mots-clés</h3>
+        <div class="num ok">déjà</div>
+        <p>Une clé inconnue est déjà une erreur, et condition et contredit ont leur message de migration. Il reste deux clés à plusieurs sens : si et valeur.</p>
+      </div>
+      <div>
+        <h3>2 Mots outils approuvés</h3>
+        <div class="num">≈ 20</div>
+        <p>Liste fermée et fixe : de, du, des, la, le, les, l’, d’, à, au, aux, en, par, pour, sur, un, une, sans, entre, contre. Générique, sans vocabulaire juridique.</p>
+      </div>
+      <div>
+        <h3>3 Mots outils interdits</h3>
+        <div class="num no">3 erreurs</div>
+        <p>Sur le fichier Luna final : « aucun paiement reçu » et deux durées écrites « dans les … jours/ans ». « dans le commerce » reste admis : seul « dans » suivi d’une durée est visé. Chaque erreur nomme la clé qui remplace le mot.</p>
+      </div>
+      <div>
+        <h3>4 Mots du dossier</h3>
+        <div class="num warn">82 %</div>
+        <p>Des 125 mots pleins des noms Luna, 103 figurent dans les citations. Les 22 autres (échue, impayées, délai…) sont à chercher dans le texte entier des sources et des pièces. À mesurer avant d’en faire une erreur.</p>
+      </div>
+    </div>
+  </section>
+</main>

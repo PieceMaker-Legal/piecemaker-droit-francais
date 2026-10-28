@@ -1,0 +1,13 @@
+0 erreur(s), 3 manque(s). .piecemaker/raisonnement.js a été réécrit dans son ordre : les lignes ci-dessous s’y rapportent.
+
+MANQUE 1 — paiement_de_l_indemnité › si[4] › l_une[0] (ligne 34)
+  ligne 34 : { condition: 'le_juge_retient_que_le_droit_contractuel_deja_approuve_est_hors_du_vote_ex_post',
+  le_juge_retient_que_le_droit_contractuel_deja_approuve_est_hors_du_vote_ex_post décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc
+
+MANQUE 2 — engagement_contractuel_opposable › si[2] (ligne 72)
+  ligne 72 : { condition: 'dupont_n_a_pas_participe_a_la_deliberation_du_conseil',
+  dupont_n_a_pas_participe_a_la_deliberation_du_conseil décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc
+
+MANQUE 3 — indemnite_non_dissuasive_au_regard_de_la_situation_financiere_de_la_societe › si[1] (ligne 108)
+  ligne 108 : { condition: 'absence_d_atteinte_majeure_a_l_equilibre_financier_de_la_societe',
+  absence_d_atteinte_majeure_a_l_equilibre_financier_de_la_societe décide de la réponse : ajoute preuve ou contredit, ou précise ce terme par son propre bloc

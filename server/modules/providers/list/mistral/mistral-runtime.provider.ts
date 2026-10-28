@@ -399,6 +399,7 @@ async function spawnVibe(
       if (resolvedModel) {
         env.VIBE_ACTIVE_MODEL = resolvedModel;
       }
+      env.PIECEMAKER_DOSSIER = workingDir;
       env.VIBE_MODELS = buildVibeModelsEnvironment(resolvedModel ?? undefined, resolvedEffort);
       const disabledSkills = buildVibeDisabledSkills(libraryDisabledSkills, process.env.VIBE_DISABLED_SKILLS);
       if (disabledSkills) {

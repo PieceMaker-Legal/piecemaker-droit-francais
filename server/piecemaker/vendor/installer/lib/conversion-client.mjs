@@ -107,7 +107,7 @@ export async function adoptRunningServerPort({ markerPath, markerPaths, reachabl
   return appServerPort();
 }
 
-function requestJson({ method, path, body }) {
+function requestJson({ method, path, body, timeout = 30_000 }) {
   const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
   return new Promise((resolve, reject) => {
     const request = http.request(
@@ -116,7 +116,7 @@ function requestJson({ method, path, body }) {
         port: appServerPort(),
         path,
         method,
-        timeout: 30_000,
+        timeout,
         headers: {
           Accept: 'application/json',
           ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': payload.length } : {}),
@@ -173,6 +173,36 @@ export async function runSql({ requete, cwd }) {
     body: { requete, ...(cwd ? { cwd } : {}) },
   });
   return response.resultat;
+}
+
+export async function runReasoning(body) {
+  await adoptRunningServerPort();
+  const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/reasoning`, body, timeout: 180_000 });
+  return response.resultat;
+}
+
+export async function runSuivi(body) {
+  await adoptRunningServerPort();
+  const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/suivi`, body, timeout: 180_000 });
+  return response.resultat;
+}
+
+export async function runDocxReasoning(body) {
+  await adoptRunningServerPort();
+  const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/docx-reasoning`, body, timeout: 180_000 });
+  return response.resultat;
+}
+
+export async function runActe(body) {
+  await adoptRunningServerPort();
+  const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/acte`, body, timeout: 180_000 });
+  return response.resultat;
+}
+
+export async function sessionDossier(session) {
+  await adoptRunningServerPort();
+  const response = await requestJson({ method: 'GET', path: `${LOCAL_BASE}/session-dossier?${new URLSearchParams({ session })}`, timeout: 5_000 });
+  return response.dossier || null;
 }
 
 export async function runTabularReview(body) {
