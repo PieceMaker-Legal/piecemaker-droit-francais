@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import express, { type Request, type Response } from 'express';
+
+import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 type McpContent = {
   type?: string;
@@ -53,41 +54,11 @@ const BODACC_FAMILY_CODES = new Set([
 
 const MCP_TIMEOUT_MS = 45_000;
 
-function collectLauncherCandidates(): string[] {
-  const candidates: string[] = [];
-  const addRoot = (root: string | undefined) => {
-    if (root) candidates.push(path.join(root, 'scripts', 'launcher.py'));
-  };
-  addRoot(process.env.LEGIFRANCE_MCP_ROOT);
-  if (process.env.LEGIFRANCE_MCP_LAUNCHER) candidates.push(process.env.LEGIFRANCE_MCP_LAUNCHER);
-  const pluginConfigPath = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
-  if (existsSync(pluginConfigPath)) {
-    try {
-      const configuration = JSON.parse(readFileSync(pluginConfigPath, 'utf8')) as { plugins?: Record<string, Array<{ installPath?: string }>> };
-      for (const [plugin, installations] of Object.entries(configuration.plugins || {})) {
-        if (!plugin.includes('mcp-legifrance')) continue;
-        for (const installation of installations) addRoot(installation.installPath);
-      }
-    } catch {
-      return candidates;
-    }
-  }
-  const versionsRoot = path.join(os.homedir(), '.claude', 'plugins', 'cache', 'mcp-legifrance', 'piecemaker');
-  if (existsSync(versionsRoot)) {
-    for (const version of readdirSync(versionsRoot).sort().reverse()) addRoot(path.join(versionsRoot, version));
-  }
-  return [...new Set(candidates)];
-}
-
-function resolveLauncher(): string {
-  const launcher = collectLauncherCandidates().find((candidate) => existsSync(candidate));
-  if (!launcher) throw new Error('Le lanceur du serveur MCP Légifrance est introuvable.');
-  return launcher;
-}
+const LEGIFRANCE_SERVER = path.join(findApplicationRoot(getModuleDirectory(import.meta.url)), 'server', 'piecemaker', 'vendor', 'mcp', 'legifrance', 'server.mjs');
 
 function mcpCall(tool: string, argumentsValue: Record<string, string>): Promise<McpMessage> {
   return new Promise((resolve, reject) => {
-    const processHandle = spawn(process.env.PYTHON_PATH || 'python3', [resolveLauncher()], {
+    const processHandle = spawn(process.execPath, [LEGIFRANCE_SERVER], {
       env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
       stdio: ['pipe', 'pipe', 'pipe'],
     });

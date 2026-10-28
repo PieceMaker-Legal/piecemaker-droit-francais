@@ -123,6 +123,8 @@ if ($args -notcontains '--build-from-source') {
         Fail "Preparation initiale interrompue (code $($prepareProcess.ExitCode))."
       }
     } finally { $env:ELECTRON_RUN_AS_NODE = $previousRunAsNode }
+    foreach ($stale in @('prebuilt', 'src', 'toolchain')) { Remove-Item -LiteralPath (Join-Path $bootstrapHome $stale) -Recurse -Force -ErrorAction SilentlyContinue }
+    Get-ChildItem -LiteralPath $bootstrapHome -Filter 'piecemaker-droit-francais-desktop-*-win-x64.exe' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
     if ($args -notcontains '--no-launch') {
       if ($args -contains '--no-progress' -or $env:PIECEMAKER_NO_PROGRESS -eq '1') {
         Start-Process -FilePath $executable

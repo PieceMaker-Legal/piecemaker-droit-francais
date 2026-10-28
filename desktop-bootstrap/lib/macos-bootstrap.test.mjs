@@ -66,12 +66,24 @@ test('verified Mac bundle uses its embedded Node and shipped installer without s
   assert.match(executed, /PieceMaker.app\n.*desktop-bootstrap\/lib\/install.mjs\n--no-launch\n--no-certificate\n--no-progress\n/s);
   const requests = await fs.readFile(log, 'utf8');
   assert.doesNotMatch(requests, /codeload|nodejs/);
-  assert.deepEqual(await fs.readdir(path.join(home, 'prebuilt/fixture-bootstrap')), ['historical']);
+  assert.deepEqual(await fs.readdir(path.join(home, 'prebuilt/fixture-bootstrap')), []);
+});
+
+test('successful Mac install removes downloads left by earlier versions', mac, async (t) => {
+  const { home, run } = await fixture(t);
+  for (const stale of ['prebuilt/v0.0.1/archive', 'src/v0.0.1/node_modules', 'toolchain/node-v22.0.0-darwin-arm64/bin']) {
+    await fs.mkdir(path.join(home, stale), { recursive: true });
+  }
+  assert.equal(run().status, 0);
+  assert.deepEqual((await fs.readdir(home)).sort(), ['prebuilt']);
+  assert.deepEqual(await fs.readdir(path.join(home, 'prebuilt')), ['fixture-bootstrap']);
 });
 
 test('failed embedded preparation preserves its exit code and removes only its transaction', mac, async (t) => {
   const { home, run } = await fixture(t, { exitCode: 7 });
+  await fs.mkdir(path.join(home, 'src/v0.0.1'), { recursive: true });
   assert.equal(run().status, 7);
+  assert.deepEqual(await fs.readdir(path.join(home, 'src')), ['v0.0.1']);
   assert.deepEqual(await fs.readdir(path.join(home, 'prebuilt/fixture-bootstrap')), ['historical']);
 });
 
