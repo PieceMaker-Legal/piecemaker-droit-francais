@@ -4,7 +4,7 @@
 
 Les nouveaux paquets Windows et macOS Apple Silicon construisent désormais un environnement Python commun à partir des verrous `desktop-bootstrap/composants/windows-requirements.txt` et `macos-arm64-requirements.txt` : conversion, GLiNER, MinerU et Légifrance. Mistral utilise le [SDK JavaScript et la connexion des paramètres](mistral-sdk.md) ; Vibe n’est plus demandé par ces verrous. Les bibliothèques sont préparées en CI ; les poids des modèles restent téléchargés séparément à la demande. Cette archive sera plus volumineuse que l'ancien socle de conversion seul ; aucun gain de temps de première installation n'est encore mesuré.
 
-La release fournit une empreinte des requirements dans `python-runtime.json` et dans le runtime. L'installation vérifie les marqueurs, les imports et l'archive avant de sélectionner le nouveau Python dans la configuration. Un ancien Python fonctionnel ne suffit pas à éviter la migration : les empreintes des requirements et de l’archive attendues par l’application sont comparées, y compris pour un changement d’interpréteur à dépendances identiques. Windows effectue aussi ce contrôle au démarrage ; macOS le fait lors du passage par le bootstrap d’installation ou de mise à jour. Les anciens dossiers sont conservés, sans suppression automatique d'environnements personnels ou non attribués.
+La release fournit une empreinte des requirements dans `python-runtime.json` et dans le runtime. L'installation vérifie les marqueurs, les imports et l'archive avant de sélectionner le nouveau Python dans la configuration. Un ancien Python fonctionnel ne suffit pas à éviter la migration : les empreintes des requirements et de l’archive attendues par l’application sont comparées, y compris pour un changement d’interpréteur à dépendances identiques. Windows effectue aussi ce contrôle au démarrage ; macOS le fait lors du passage par le bootstrap d’installation ou de mise à jour. Une fois le nouveau Python enregistré, seuls restent ce runtime et celui qu'utilisait la version précédente : les runtimes plus anciens de `runtime-python/`, ainsi que l'ancien `venv` et son `python` de base, sont supprimés dès qu'ils ne sont plus l'un des deux. Rien n'est supprimé hors du dossier des composants.
 
 Légifrance utilise l'environnement commun sans créer son propre venv. Les actions GLiNER/MinerU n'installent ni ne désinstallent de bibliothèques dans ce runtime : elles agissent sur les modèles. Une bibliothèque manquante demande une réinstallation du composant de cette release. Le bootstrap macOS Apple Silicon récupère les métadonnées propres à sa plateforme, puis utilise le même installateur d’archive vérifiée que Windows. Le développement et macOS Intel conservent leur parcours historique ; le verrou Windows ne leur est pas appliqué. Le nouvel environnement commun Intel n’est pas qualifié.
 
@@ -179,8 +179,11 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
 
 Les étapes 4 à 8 et 11 sont idempotentes : sources, Node, venv et modèles déjà
 présents sont réutilisés, et un certificat encore valide n'est pas régénéré.
-Le parcours Mac précompilé retire uniquement sa transaction après le retour de
-la préparation ; les anciens dossiers de sources et de caches sont conservés.
+Après une installation réussie, le bootstrap retire les téléchargements des versions
+précédentes : sur Mac précompilé et sur Windows, `bootstrap/src`, `bootstrap/toolchain`,
+`bootstrap/prebuilt` (hors transaction en cours) et, sous Windows, les installateurs
+`.exe` ; dans le repli historique Mac, les sources des autres versions. Un échec
+ne retire que la transaction.
 
 **Dossier courant.** L'installateur ne s'exécute jamais depuis le dossier qu'il
 hérite : lancé par la mise à jour intégrée, ce dossier est celui de

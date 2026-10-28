@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { createHost, installRuntimeComponents, scriptsDirectory } from './install.mjs';
+import { componentLayout, createHost, installRuntimeComponents, scriptsDirectory, supersededPythonDirectories } from './install.mjs';
 import { sharedPythonMarker, sharedPythonFingerprint, sharedPythonEntrypoints, sharedPythonProbe, requirementsForPlatform } from './shared-python.mjs';
 
 test('the managed Python runtime no longer installs or probes the replaced Vibe agent', async () => {
@@ -56,6 +56,48 @@ for (const [platform, arch] of [['win32', 'x64'], ['darwin', 'arm64']]) {
     assert.deepEqual(JSON.parse(await fs.readFile(path.join(home, 'config.json'))), config);
   });
 }
+
+test('installing a runtime removes older runtimes and the legacy venv but keeps the previous one', async t => {
+  const platform = process.platform === 'win32' ? 'win32' : 'darwin';
+  const arch = platform === 'win32' ? 'x64' : 'arm64';
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pm-prune-test-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const source = path.join(root, 'source');
+  const home = path.join(root, 'home');
+  const scripts = scriptsDirectory(source);
+  const runtimeBin = hash => path.join(home, 'runtime-python', hash.slice(0, 24), 'python', ...(platform === 'win32' ? ['python.exe'] : ['bin', 'python3']));
+  const sha256 = 'a'.repeat(64);
+  const requirementsSha256 = await sharedPythonFingerprint(platform, arch);
+  const python = runtimeBin(sha256);
+  const previous = runtimeBin('b'.repeat(64));
+  const older = runtimeBin('c'.repeat(64));
+  for (const interpreter of [python, previous, older]) {
+    await fs.mkdir(path.dirname(interpreter), { recursive: true });
+    await fs.writeFile(interpreter, '');
+  }
+  await fs.writeFile(path.join(path.dirname(python), sharedPythonMarker), JSON.stringify({ format: 1, requirementsSha256 }));
+  await fs.mkdir(path.join(home, 'venv', 'bin'), { recursive: true });
+  await fs.mkdir(path.join(home, 'python'), { recursive: true });
+  await fs.mkdir(scripts, { recursive: true });
+  await fs.writeFile(path.join(scripts, 'requirements.txt'), 'markitdown');
+  await fs.writeFile(path.join(scripts, 'warmup.py'), '');
+  await fs.writeFile(path.join(home, 'config.json'), JSON.stringify({ pythonPath: previous }));
+  const host = createHost();
+  host.fetch = () => { throw new Error('Unexpected download'); };
+  host.run = async () => ({ code: 0, stdout: JSON.stringify({ dependencies: { markitdown: true, pypdf: true } }), stderr: '' });
+  const metadata = { repository: 'example/example', releaseTag: 'v1.0.0', assetName: `piecemaker-python-${platform}-${arch}.tar.gz`, sha256, requirementsSha256 };
+  await installRuntimeComponents({ sourceDir: source, env: { PIECEMAKER_HOME: home }, host, platform, arch, requirePrebuilt: true, runtimeMetadata: metadata, output: { step() {}, ok() {} } });
+  assert.deepEqual((await fs.readdir(path.join(home, 'runtime-python'))).sort(), ['a'.repeat(24), 'b'.repeat(24)]);
+  await assert.rejects(fs.access(path.join(home, 'venv')));
+  await assert.rejects(fs.access(path.join(home, 'python')));
+});
+
+test('the legacy venv survives while it is the previous interpreter', () => {
+  const layout = componentLayout({ PIECEMAKER_HOME: '/donnees' }, '/Users/ada');
+  const current = path.join('/donnees', 'runtime-python', 'a'.repeat(24), 'python', 'bin', 'python3');
+  const legacy = path.join('/donnees', 'venv', 'bin', 'python');
+  assert.deepEqual(supersededPythonDirectories(layout, ['a'.repeat(24), 'c'.repeat(24)], [current, legacy]), [path.join('/donnees', 'runtime-python', 'c'.repeat(24))]);
+});
 
 async function launcherFixture(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'pm-entrypoints-test-')));

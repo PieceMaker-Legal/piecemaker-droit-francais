@@ -97,8 +97,11 @@ if [ "$STATUS" = 200 ]; then
   if [ -f "$APP_ROOT/desktop-bootstrap/lib/install.mjs" ]; then
     export PIECEMAKER_SRC_DIR="$APP_ROOT"
     export PIECEMAKER_PREBUILT_APP_PATH="$BUNDLE"
-    ELECTRON_RUN_AS_NODE=1 "$BUNDLE/Contents/MacOS/PieceMaker" "$APP_ROOT/desktop-bootstrap/lib/install.mjs" "$@"
-    exit "$?"
+    ELECTRON_RUN_AS_NODE=1 "$BUNDLE/Contents/MacOS/PieceMaker" "$APP_ROOT/desktop-bootstrap/lib/install.mjs" "$@" || exit "$?"
+    rm -rf "$BOOTSTRAP_HOME/src" "$BOOTSTRAP_HOME/toolchain"
+    find "$BOOTSTRAP_HOME/prebuilt" -mindepth 1 -maxdepth 1 ! -name "$TAG" -exec rm -rf {} +
+    find "$PREBUILT_DIR" -mindepth 1 -maxdepth 1 ! -path "$TRANSACTION" -exec rm -rf {} +
+    exit 0
   fi
   say "Cette ancienne application ne livre pas ses scripts de préparation — reprise du bootstrap historique."
 elif [ "$STATUS" != 404 ]; then
@@ -154,3 +157,4 @@ if [ -d "$SRC_DIR/node_modules/better-sqlite3" ]; then
 fi
 
 "$NODE_BIN" "$SRC_DIR/desktop-bootstrap/lib/install.mjs" "$@"
+find "$BOOTSTRAP_HOME/src" -mindepth 1 -maxdepth 1 ! -name "$TAG" -exec rm -rf {} +

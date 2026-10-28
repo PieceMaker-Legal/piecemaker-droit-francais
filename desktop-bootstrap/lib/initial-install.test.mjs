@@ -26,7 +26,7 @@ test('Windows initial bootstrap uses the verified installer and embedded Node wi
   fs.mkdirSync(scripts, { recursive: true });
   fs.copyFileSync(process.execPath, path.join(app, 'PieceMaker.exe'));
   const report = path.join(root, 'preparation.json');
-  fs.writeFileSync(path.join(scripts, 'prepare-installed.mjs'), `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(report)}, JSON.stringify({args:process.argv.slice(2),runAsNode:process.env.ELECTRON_RUN_AS_NODE,root:process.env.PIECEMAKER_SRC_DIR,assets:process.env.PIECEMAKER_PREBUILT_ASSET_DIR}));`);
+  fs.writeFileSync(path.join(scripts, 'prepare-installed.mjs'), `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(report)}, JSON.stringify({args:process.argv.slice(2),runAsNode:process.env.ELECTRON_RUN_AS_NODE,root:process.env.PIECEMAKER_SRC_DIR,assets:process.env.PIECEMAKER_PREBUILT_ASSET_DIR,prefetched:fs.readdirSync(process.env.PIECEMAKER_PREBUILT_ASSET_DIR)}));`);
   const hash = crypto.createHash('sha256').update('fixture-installer').digest('hex');
   const pythonHash = crypto.createHash('sha256').update('fixture-python').digest('hex');
   const componentHash = crypto.createHash('sha256').update('fixture-components').digest('hex');
@@ -108,10 +108,8 @@ if ($env:ELECTRON_RUN_AS_NODE -ne 'original') { throw 'RunAsNode environment was
   assert.equal(prepared.root, path.join(app, 'resources/app.asar.unpacked'));
   const prefetched = path.join(root, 'bootstrap/prebuilt/v2.0.37');
   assert.equal(prepared.assets, prefetched);
-  assert.equal(fs.readFileSync(path.join(prefetched, 'piecemaker-python-win32-x64.tar.gz'), 'utf8'), 'fixture-python');
-  assert.equal(fs.readFileSync(path.join(prefetched, `piecemaker-runtime-components-win32-x64-${componentHash}.tar.gz`), 'utf8'), 'fixture-components');
-  assert.equal(fs.existsSync(path.join(prefetched, glinerName)), false);
-  assert.equal(fs.existsSync(path.join(root, 'bootstrap/src')), false);
+  assert.deepEqual(prepared.prefetched.sort(), ['piecemaker-python-win32-x64.tar.gz', `piecemaker-runtime-components-win32-x64-${componentHash}.tar.gz`]);
+  assert.deepEqual(fs.readdirSync(path.join(root, 'bootstrap')).filter(name => /prebuilt|src|toolchain|\.exe$/.test(name)), []);
   fs.unlinkSync(report);
   const relocated = path.join(root, 'elsewhere/PieceMaker');
   fs.cpSync(app, relocated, { recursive: true });

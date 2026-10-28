@@ -147,6 +147,13 @@ export function createHost() {
     async rm(target) {
       await fs.rm(target, { recursive: true, force: true });
     },
+    async list(target) {
+      try {
+        return await fs.readdir(target);
+      } catch {
+        return [];
+      }
+    },
     run: spawnCommand,
     fetch: globalThis.fetch,
   };
@@ -352,6 +359,23 @@ async function installPrebuiltPython({ layout, host, env, scriptsDir, output, pl
   };
 }
 
+export function supersededPythonDirectories(layout, runtimeNames, keptPythons) {
+  const kept = keptPythons.filter(Boolean).map(python => path.resolve(python));
+  const inUse = directory => kept.some(python => python === directory || python.startsWith(`${directory}${path.sep}`));
+  const runtimes = runtimeNames.map(name => path.join(layout.root, 'runtime-python', name));
+  const legacy = inUse(layout.venvDir) || inUse(layout.pythonDir) ? [] : [layout.venvDir, layout.pythonDir];
+  return [...runtimes, ...legacy].filter(directory => !inUse(directory));
+}
+
+async function removeSupersededPythons(host, layout, keptPythons) {
+  const names = await host.list(path.join(layout.root, 'runtime-python'));
+  for (const directory of supersededPythonDirectories(layout, names, keptPythons)) {
+    try {
+      await host.rm(directory);
+    } catch {}
+  }
+}
+
 export async function buildPortablePython({ sourceDir, root, archive, platform = process.platform, arch = process.arch, host = createHost(), output = log }) {
   const requirements = requirementsForPlatform(platform, arch);
   const layout = componentLayout({ PIECEMAKER_COMPONENTS_HOME: root }, root);
@@ -409,6 +433,7 @@ export async function installRuntimeComponents({
       requirementsForPlatform(platform, arch);
       const paths = await installPrebuiltPython({ layout, host, env, scriptsDir, output, platform, arch, metadata });
       await host.writeFile(layout.configFile, `${JSON.stringify(mergeRuntimeConfig(configured, paths), null, 2)}\n`);
+      await removeSupersededPythons(host, layout, [paths.pythonPath, configured.pythonPath]);
       output.ok('Composants Python precompiles installes.');
       python = paths.pythonPath;
     }
