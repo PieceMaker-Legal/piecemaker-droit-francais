@@ -122,14 +122,22 @@ export async function verifyReasoning(input: {
   if (isObject(stripped)) assignIds(stripped.acte);
   const { reasoning, problems } = readReasoning(stripped);
   const ordered = isObject(stripped) ? printReasoningDocument(canonical(stripped, reasoning)) : null;
-  if (ordered) lines = parseReasoningDocument(ordered).lines;
+  const reread = ordered ? parseReasoningDocument(ordered) : null;
+  if (reread) lines = reread.lines;
   for (const entry of problems) add('erreur', entry.path, entry.text, entry.avocat, entry.cible);
   if (!isObject(stripped)) return { annotated: null, issues, code: input.code, log };
   const annotated = stripped;
 
   const shape = structure(reasoning);
   const controlLoop = (cycle: string) => { const control = cycle.split(' → ').find((name) => isControlName(name)); return control ? ` ; les sources citées dans ${control} n’ont besoin ni d’applicabilite ni de validite : retire celle qui renvoie à ${control}` : ''; };
-  for (const cycle of shape.cycles) add('erreur', cycle.split(' → ')[0], `boucle : ${cycle}${controlLoop(cycle)}`);
+  const loopKey = (cycle: string) => {
+    const steps = cycle.split(' → ');
+    const index = steps.findIndex((name, at) => at > 0 && isControlName(name));
+    if (index < 1 || !isObject(reread?.value)) return null;
+    const [from, control] = [steps[index - 1], steps[index]];
+    return [...lines.keys()].find((route) => route.startsWith(`${from}.`) && /\.(?:applicabilite|validite|decompte)$/u.test(route) && node(reread.value as Record<string, unknown>, route.slice(0, route.lastIndexOf('.')))?.[route.slice(route.lastIndexOf('.') + 1)] === control) ?? null;
+  };
+  for (const cycle of shape.cycles) add('erreur', loopKey(cycle) ?? cycle.split(' → ')[0], `boucle : ${cycle}${controlLoop(cycle)}`);
   const named = [...reasoning.terms.keys(), ...reasoning.valeurs.keys(), ...[...reasoning.terms.values()].flatMap((term) => [...term.si, ...term.sauf].flatMap(function names(condition: Condition): string[] { return condition.l_une ? condition.l_une.flatMap(names) : [condition.condition!]; }))];
   const spaced = named.some((name) => name.includes(' '));
   for (const { name, text } of adviseNames(named)) add('conseil', reasoning.terms.has(name) ? name : reasoning.valeurs.has(name) ? `valeurs.${name}` : '', text);
@@ -448,6 +456,10 @@ export async function verifyReasoning(input: {
     if (reasoning.qualification === 'contentieux' || objective.prescription) controlSlots.push(objective.prescription ?? null);
   }
   for (const { condition } of occurrences) if (condition.mesure?.delai) controlSlots.push(condition.decompte ?? null);
+  const groundsOpen = (fact: string) => {
+    const pending = [...new Set(SIDES.flatMap((side) => (reasoning.terms.get(fact)?.fondements?.[side] ?? []).flatMap((entry) => entry.si.flatMap(function names(condition: Condition): string[] { return condition.l_une ? condition.l_une.flatMap(names) : [condition.condition!]; }))))].filter((name) => holds(name) === null);
+    return pending.length ? `${fact} décide de la réponse : ses fondements dépendent de ${pending.join(', ')}, à établir ; établis ${pending.length > 1 ? 'ces questions' : 'cette question'} plutôt que d’ajouter un fondement` : `${fact} décide de la réponse : aucun de ses fondements n’est établi ; vérifie leurs citations et, pour chaque texte, son applicabilité et sa vigueur`;
+  };
   for (const { at, condition } of occurrences) {
     const holder = node(annotated, at);
     if (!holder) continue;
@@ -459,7 +471,7 @@ export async function verifyReasoning(input: {
       holder.decisif = true;
       if (drafting && result?.missing.length && !(decisiveFor.get(fact) ?? []).some((objective) => bracketed([fact, ...result.missing], objective))) add('manque', at, `${fact} décide de la réponse et dépend de ${result.missing.join(', ')}, que le projet ne fixe pas : fixe ${result.missing.length > 1 ? 'ces valeurs' : 'cette valeur'} dans valeurs, ou ajoute des hypothèses qui montrent quand la réponse change`, `${human(fact)} : la réponse dépend de ${listing(result.missing.map(phrase))}, que le projet ne fixe pas.`, fact);
       if (reasoning.qualification !== 'drafting' && result && !(consultation && (decisiveFor.get(fact) ?? []).some((objective) => bracketed([fact, ...result.missing], objective)))) add('manque', at, `${fact} décide de la réponse : renseigne ${result.missing.join(', ')} dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)${consultation ? ', ou ajoute des hypothèses qui montrent quand la réponse change' : ''}`, `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
-      else if (reasoning.qualification !== 'drafting' && !result && !disputed(fact)) add('manque', at, reasoning.terms.has(fact) ? `${fact} décide de la réponse : ajoute un fondement (preuve ou selon) sous true ou false de ${fact}` : `${fact} décide de la réponse : ajoute ${fact}: { true: [{ preuve: [{ piece, citation }] }] } (ou false) à la racine, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
+      else if (reasoning.qualification !== 'drafting' && !result && !disputed(fact)) add('manque', at, reasoning.terms.get(fact)?.fondements ? groundsOpen(fact) : reasoning.terms.has(fact) ? `${fact} décide de la réponse : ajoute un fondement (preuve ou selon) sous true ou false de ${fact}` : `${fact} décide de la réponse : ajoute ${fact}: { true: [{ preuve: [{ piece, citation }] }] } (ou false) à la racine, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
     }
     condition.selon.forEach((basis, index) => {
       const place = `${at}.selon[${index}]`;

@@ -134,7 +134,7 @@ test('l’applicabilité d’un texte est un terme : ses conditions, sourcées e
   assert.match(errors, /selon\[0\]\.applicabilite : terme applicabilité_inconnue non défini/);
   assert.match(errors, /selon\[0\]\.applicabilite : applicabilite : le nom commence par « applicabilité » \(ex\. applicabilité de un contrat\)/);
   const selfLoop = texts(await verify(EXAMPLE_CODE.replace("`Lorsque le contrat stipule une pénalité`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }", "`Lorsque le contrat stipule une pénalité`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }")), 'erreur').join('\n');
-  assert.match(selfLoop, /boucle : applicabilité_de_l_article_1231_5 → applicabilité_de_l_article_1231_5 ; les sources citées dans applicabilité_de_l_article_1231_5 n’ont besoin ni d’applicabilite ni de validite : retire celle qui renvoie à applicabilité_de_l_article_1231_5/);
+  assert.match(selfLoop, /applicabilité_de_l_article_1231_5\.si\[\d\]\.selon\[0\]\.applicabilite : boucle : applicabilité_de_l_article_1231_5 → applicabilité_de_l_article_1231_5 ; les sources citées dans applicabilité_de_l_article_1231_5 n’ont besoin ni d’applicabilite ni de validite : retire celle qui renvoie à applicabilité_de_l_article_1231_5/);
 });
 
 test('une condition sans source, un terme non défini, une boucle et un hypothèse non conforme sont des erreurs', async () => {
@@ -695,6 +695,7 @@ test('une question de droit dont un fondement false dépend d’une condition di
   assert.equal(at(doubtful.annotated, 'effet_fictif.statut'), 'à établir');
   assert.equal(at(doubtful.annotated, 'objectifs[0].statut'), 'à établir');
   assert.doesNotMatch(texts(doubtful, 'manque').join('\n'), /question_de_droit : fondements contraires/);
+  assert.match(texts(doubtful, 'manque').join('\n'), /question_de_droit décide de la réponse : ses fondements dépendent de fait_incertain, à établir/);
   const refuted = await verify(LAW("{ false: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `a duré deux jours` }] }] }"));
   assert.equal(at(refuted.annotated, 'question_de_droit.false[0].statut'), 'exclu');
   assert.equal(at(refuted.annotated, 'question_de_droit.statut'), 'acquis');
