@@ -31,18 +31,15 @@ export function MistralAccountSettings({ onConnected }: { onConnected?: () => vo
 
   const pending = status?.loginState === 'pending';
   const connect = async () => {
-    const popup = window.open('about:blank', '_blank');
-    if (popup) popup.opener = null;
     setBusy('login');
     setError('');
     setCheckResult('');
     try {
       const { url } = await mistralSdkApi.login();
       setLoginUrl(url);
-      if (popup) popup.location.href = url;
+      window.open(url, '_blank', 'noopener,noreferrer');
       setStatus(await mistralSdkApi.status());
     } catch (cause) {
-      popup?.close();
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally { setBusy(null); }
   };
