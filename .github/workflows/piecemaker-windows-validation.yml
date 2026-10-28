@@ -102,7 +102,7 @@ jobs:
           key: ${{ steps.component-cache.outputs.cache-primary-key }}
       - name: Test UI updates and Windows file-lock recovery
         shell: bash
-        run: node --test desktop-bootstrap/overlay/electron-piecemaker/ui-updates/*.test.mjs scripts/piecemaker/ui-updates/*.test.mjs desktop-bootstrap/lib/ui-updates.test.mjs
+        run: node --test desktop-bootstrap/overlay/electron-piecemaker/ui-updates/*.test.mjs scripts/piecemaker/ui-updates/*.test.mjs desktop-bootstrap/lib/ui-updates.test.mjs desktop-bootstrap/lib/node-shim.test.mjs
       - name: Verify active proxy environment writes
         shell: bash
         run: npx --no-install tsx --tsconfig server/tsconfig.json --test server/piecemaker/anonymizer/session-runtime.test.ts
