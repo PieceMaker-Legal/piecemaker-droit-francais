@@ -133,6 +133,8 @@ test('l’applicabilité d’un texte est un terme : ses conditions, sourcées e
   const errors = texts(await verify(EXAMPLE_CODE.replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", "applicabilite: 'applicabilité_inconnue' }] },").replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", 'applicabilite: `un contrat` }] },')), 'erreur').join('\n');
   assert.match(errors, /selon\[0\]\.applicabilite : terme applicabilité_inconnue non défini/);
   assert.match(errors, /selon\[0\]\.applicabilite : applicabilite : le nom commence par « applicabilité » \(ex\. applicabilité de un contrat\)/);
+  const selfLoop = texts(await verify(EXAMPLE_CODE.replace("`Lorsque le contrat stipule une pénalité`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }", "`Lorsque le contrat stipule une pénalité`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }")), 'erreur').join('\n');
+  assert.match(selfLoop, /boucle : applicabilité_de_l_article_1231_5 → applicabilité_de_l_article_1231_5 ; les sources citées dans applicabilité_de_l_article_1231_5 n’ont besoin ni d’applicabilite ni de validite : retire celle qui renvoie à applicabilité_de_l_article_1231_5/);
 });
 
 test('une condition sans source, un terme non défini, une boucle et un hypothèse non conforme sont des erreurs', async () => {
