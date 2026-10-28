@@ -10,7 +10,7 @@ Légifrance utilise l'environnement commun sans créer son propre venv. Les acti
 
 Sur macOS, les commandes sont également régénérées dans `bin/` après déplacement. L’archive Python est construite avec les liens déréférencés : le contrôle d’extraction continue de refuser les liens et les chemins sortant de `python/`. Le bootstrap prépare Python avant de remplacer l’application existante. Le workflow `piecemaker-macos-python.yml`, appelé par `release.yml`, construit et vérifie l’archive native ARM64 ; la publication npm et GitHub attend aussi ce résultat. Aucun nouveau serveur, installateur Electron ou fichier CloudCLI n’est ajouté.
 
-Les commandes Python Windows sont régénérées après extraction pour pointer sur l'interpréteur installé, et le vérificateur du paquet lance réellement `vibe.exe --version` depuis le dossier déplacé. Aucune installation pip n'est exécutée sur le poste pour cette préparation.
+Les commandes Python Windows sont régénérées après extraction pour pointer sur l'interpréteur installé. Aucune installation pip n'est exécutée sur le poste pour cette préparation.
 
 Le bouton de désinstallation Windows lance le désinstalleur NSIS fourni par electron-builder ; il ne supprime plus directement l'application avec PowerShell. Il reste sur l'application si le désinstalleur est absent ou ne démarre pas. Les données, modèles, certificats et composants externes sont conservés par ce parcours natif ; il ne constitue pas encore une purge des anciennes installations. Les textes de confirmation reflètent cette conservation. La politique de rétention des caches et le nettoyage fondé sur la propriété restent à traiter séparément.
 

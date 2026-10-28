@@ -2,7 +2,6 @@ import type { IProvider } from '@/shared/interfaces.js';
 import type { ProviderModelsDefinition } from '@/shared/types.js';
 
 import { discoverCodexModels } from './codex-catalog.js';
-import { discoverMistralModels } from './mistral-catalog.js';
 
 type Discover = (timeoutMs: number) => Promise<ProviderModelsDefinition>;
 
@@ -21,7 +20,6 @@ type ModelDiscoveryOptions = {
 
 const DEFAULT_DISCOVERERS: Record<string, Discover> = {
   codex: discoverCodexModels,
-  mistral: discoverMistralModels,
 };
 
 export function installModelDiscovery(registry: ProviderLookup, options: ModelDiscoveryOptions = {}) {
