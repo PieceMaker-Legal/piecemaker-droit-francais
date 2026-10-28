@@ -16,7 +16,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test-libreoffice:
+    if: github.ref == 'refs/heads/MAJ-continue'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node --test server/piecemaker/vendor/installer/lib/libreoffice.test.mjs
+      - run: node scripts/piecemaker/ui-updates/windows-validation/verify-office.mjs
   build-test-installer:
+    needs: test-libreoffice
     if: github.ref == 'refs/heads/MAJ-continue'
     runs-on: windows-latest
     timeout-minutes: 90
@@ -102,7 +117,7 @@ jobs:
           key: ${{ steps.component-cache.outputs.cache-primary-key }}
       - name: Test UI updates and Windows file-lock recovery
         shell: bash
-        run: node --test desktop-bootstrap/overlay/electron-piecemaker/ui-updates/*.test.mjs scripts/piecemaker/ui-updates/*.test.mjs desktop-bootstrap/lib/ui-updates.test.mjs desktop-bootstrap/lib/node-shim.test.mjs
+        run: node --test desktop-bootstrap/overlay/electron-piecemaker/ui-updates/*.test.mjs scripts/piecemaker/ui-updates/*.test.mjs desktop-bootstrap/lib/ui-updates.test.mjs desktop-bootstrap/lib/node-shim.test.mjs server/piecemaker/vendor/installer/lib/libreoffice.test.mjs
       - name: Verify active proxy environment writes
         shell: bash
         run: npx --no-install tsx --tsconfig server/tsconfig.json --test server/piecemaker/anonymizer/session-runtime.test.ts

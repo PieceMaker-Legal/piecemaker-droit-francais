@@ -6,12 +6,30 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 
-const require = createRequire(import.meta.url);
+const applicationRoot = process.env.PIECEMAKER_STAMP_APP_ROOT;
+const require = createRequire(applicationRoot ? path.join(applicationRoot, 'package.json') : import.meta.url);
 const express = require('express');
 const { PDFDocument, PDFName, decodePDFRawStream } = require('pdf-lib');
-const { createStampingRouter } = require('./vendor/websocket-server/stamping-routes.cjs');
+const { createStampingRouter } = require(applicationRoot ? path.join(applicationRoot, 'server/piecemaker/vendor/websocket-server/stamping-routes.cjs') : './vendor/websocket-server/stamping-routes.cjs');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0ioAAAAASUVORK5CYII=', 'base64');
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+
+async function officeFixtures(folder) {
+  const JSZip = require('jszip');
+  const word = new JSZip();
+  word.file('[Content_Types].xml', '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  word.file('_rels/.rels', '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  word.file('word/document.xml', '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Document fictif ZETABIO</w:t></w:r></w:p></w:body></w:document>');
+  const excel = new JSZip();
+  excel.file('[Content_Types].xml', '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
+  excel.file('_rels/.rels', '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+  excel.file('xl/workbook.xml', '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Exemple" sheetId="1" r:id="rId1"/></sheets></workbook>');
+  excel.file('xl/_rels/workbook.xml.rels', '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
+  excel.file('xl/worksheets/sheet1.xml', '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>ZETABIO</t></is></c></row></sheetData></worksheet>');
+  fs.writeFileSync(path.join(folder, 'preuve.docx'), await word.generateAsync({ type: 'nodebuffer' }));
+  fs.writeFileSync(path.join(folder, 'tableau.xlsx'), await excel.generateAsync({ type: 'nodebuffer' }));
+  return ['preuve.docx', 'tableau.xlsx'];
+}
 
 test('stamp routes save a stamp, create numbered PDFs and retain the original documents', async t => {
   const root = fs.mkdtempSync(path.join(process.cwd(), '.stamp-test-'));
@@ -58,10 +76,11 @@ test('stamp routes save a stamp, create numbered PDFs and retain the original do
   fs.writeFileSync(path.join(folder, 'note.md'), 'Document fictif : ZETABIO.');
   fs.writeFileSync(path.join(folder, 'image.png'), png);
   const pieces = ['preuve.pdf', 'note.md', 'image.png'];
+  if (process.env.PIECEMAKER_STAMP_OFFICE === '1') pieces.push(...await officeFixtures(folder));
   const hashes = pieces.map(file => hash(path.join(folder, file)));
   const stamped = await request('/stamping', { documentId: 'dossier-exemple', folder, pieces });
   assert.equal(stamped.status, 200);
-  assert.deepEqual(stamped.body.summary, { total: 3, success: 3, failure: 0 });
+  assert.deepEqual(stamped.body.summary, { total: pieces.length, success: pieces.length, failure: 0 });
   assert.deepEqual(stamped.body.results.map(item => item.id), pieces);
   for (let index = 0; index < pieces.length; index++) {
     const output = path.join(folder, 'Pièces tamponnées', `Pièce n°${index + 1}.pdf`);

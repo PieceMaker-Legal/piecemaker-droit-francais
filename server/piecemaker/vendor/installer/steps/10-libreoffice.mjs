@@ -13,6 +13,9 @@
  */
 
 import { createRequire } from 'node:module';
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { log, spinner } from '../lib/ui.mjs';
 import { confirm } from '../lib/prompt.mjs';
 import { commandExists, run, IS_MAC, IS_WINDOWS, REPO_ROOT } from '../lib/platform.mjs';
@@ -127,4 +130,48 @@ export async function check() {
     status: 'failed',
     note: 'LibreOffice introuvable — les pièces Excel et Word ne pourront pas être converties en PDF pour le tamponnage.',
   };
+}
+
+export const LIBREOFFICE = {
+  version: '26.8.1.1',
+  url: 'https://download.documentfoundation.org/libreoffice/stable/26.8.1/win/x86_64/LibreOffice_26.8.1_Win_x86-64.msi',
+  sha256: 'c6298b10cfa1748bcbedad94c62ce771e240e5021bfd6d7a967cd571b04b5312',
+  sources: 'https://download.documentfoundation.org/libreoffice/src/26.8.1/',
+};
+export const LIBREOFFICE_DIR = 'libreoffice';
+
+export async function embedLibreOffice(stageDir, {
+  fetchImpl = fetch,
+  extract = async (archive, destination) => {
+    const code = await run(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'msiexec.exe'), ['/a', archive, '/qn', '/norestart', `TARGETDIR=${destination}`], { windowsHide: true });
+    if (code !== 0) throw new Error(`Extraction LibreOffice échouée (code ${code}).`);
+  },
+} = {}) {
+  const response = await fetchImpl(LIBREOFFICE.url);
+  if (!response.ok) throw new Error(`LibreOffice indisponible (HTTP ${response.status}).`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (crypto.createHash('sha256').update(bytes).digest('hex') !== LIBREOFFICE.sha256) {
+    throw new Error('LibreOffice : empreinte SHA-256 invalide.');
+  }
+  const destination = path.join(stageDir, LIBREOFFICE_DIR);
+  const archive = path.join(stageDir, 'libreoffice.msi');
+  await fs.rm(destination, { recursive: true, force: true });
+  await fs.mkdir(destination, { recursive: true });
+  await fs.writeFile(archive, bytes);
+  try {
+    await extract(archive, destination);
+  } finally {
+    await fs.rm(archive, { force: true });
+  }
+  await fs.access(path.join(destination, 'program', 'soffice.com'));
+  await fs.access(path.join(destination, 'program', 'soffice.exe'));
+  await fs.access(path.join(destination, 'LICENSE.html'));
+  await fs.rm(path.join(destination, path.basename(archive)), { force: true });
+  await fs.writeFile(path.join(destination, 'PIECEMAKER-SOURCES.txt'), `LibreOffice ${LIBREOFFICE.version}\nDistribution officielle non modifiée.\nSources : ${LIBREOFFICE.sources}\nLicences et notices : fichiers LICENSE et notices fournis dans ce dossier.\nhttps://www.libreoffice.org/licenses/\n`, 'utf8');
+  const manifestPath = path.join(stageDir, 'package.json');
+  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+  const resources = (manifest.build.extraResources || []).filter(entry => entry?.to !== LIBREOFFICE_DIR);
+  manifest.build.extraResources = [...resources, { from: LIBREOFFICE_DIR, to: LIBREOFFICE_DIR }];
+  await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  log.detail(`LibreOffice ${LIBREOFFICE.version} embarqué pour la conversion PDF.`);
 }
