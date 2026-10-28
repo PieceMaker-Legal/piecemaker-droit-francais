@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { VIBE_REASONING_EFFORT } from '@/modules/providers/list/mistral/mistral-vibe-models.js';
 import type { ProviderModelsDefinition } from '@/shared/types.js';
 
 import { listCodexModels } from './codex-catalog.js';
 import { installModelDiscovery } from './index.js';
-import { listVibeModels } from './mistral-catalog.js';
 
 const curatedCatalog: ProviderModelsDefinition = { OPTIONS: [{ value: 'curated', label: 'Curated' }], DEFAULT: 'curated' };
 const catalogOf = (model: string): ProviderModelsDefinition => ({ OPTIONS: [{ value: model, label: model }], DEFAULT: model });
@@ -106,31 +104,6 @@ test('maps codex model/list pages to options with their reasoning efforts', asyn
   });
 });
 
-test('maps vibe config/read models to their aliases with effort where reasoning is adjustable', async () => {
-  const catalog = await listVibeModels(async (method) => {
-    assert.equal(method, 'config/read');
-    return {
-      config: {
-        activeModel: { alias: 'devstral-small' },
-        defaultModelAlias: 'mistral-medium-3.5',
-        models: [
-          { name: 'mistral-vibe-cli-latest', alias: 'mistral-medium-3.5', displayName: 'Mistral Medium 3.5' },
-          { name: 'devstral-small-latest', alias: 'devstral-small', displayName: 'devstral-small' },
-        ],
-      },
-    };
-  });
-
-  assert.deepEqual(catalog, {
-    OPTIONS: [
-      { value: 'mistral-medium-3.5', label: 'Mistral Medium 3.5', description: 'mistral-vibe-cli-latest', effort: VIBE_REASONING_EFFORT },
-      { value: 'devstral-small', label: 'devstral-small', description: 'devstral-small-latest' },
-    ],
-    DEFAULT: 'devstral-small',
-  });
-});
-
 test('rejects an empty catalog so the curated one is served instead', async () => {
   await assert.rejects(listCodexModels(async () => ({ data: [], nextCursor: null })), /listed no models/);
-  await assert.rejects(listVibeModels(async () => ({ config: { models: [] } })), /listed no models/);
 });
