@@ -61,7 +61,8 @@ def log_json(message: str, level: str = "info", **extra):
 
 def log_plain(message: str):
     """Log plain text for CLI usage"""
-    print(message, flush=True)
+    encoding = sys.stdout.encoding or "utf-8"
+    print(message.encode(encoding, errors="replace").decode(encoding), flush=True)
 
 
 # ============================================================================

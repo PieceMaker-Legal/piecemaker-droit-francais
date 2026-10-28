@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import os
 from pathlib import Path
 import sys
@@ -9,6 +10,14 @@ from unittest.mock import Mock, patch
 
 
 class WarmupDownloadTests(unittest.TestCase):
+    def test_windows_console_encoding_does_not_interrupt_download(self):
+        snapshot = Mock()
+        warmup = self.load_warmup(snapshot)
+        terminal = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+        with tempfile.TemporaryDirectory() as root, patch.dict(os.environ, {"HF_HUB_CACHE": root}), patch.dict(sys.modules, {"huggingface_hub": SimpleNamespace(snapshot_download=snapshot)}), patch("sys.stdout", terminal):
+            self.assertTrue(warmup.download_gliner2_model(warmup.PREFERRED_GLINER_MODEL, "Modèle fictif"))
+        snapshot.assert_called_once()
+
     def load_warmup(self, snapshot):
         spec = importlib.util.spec_from_file_location("warmup_download_test", Path(__file__).with_name("warmup.py"))
         module = importlib.util.module_from_spec(spec)

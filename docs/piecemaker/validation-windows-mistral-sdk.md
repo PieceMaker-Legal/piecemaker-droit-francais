@@ -14,6 +14,8 @@ Le précédent contrôle Windows trouvait GLiNER absent après une installation 
 
 Ces corrections ne constituent pas une preuve d’installation GLiNER sur Windows : le nouveau parcours CI doit encore charger le modèle local et exécuter une inférence. Un modèle absent bloque la mise à disposition du paquet.
 
+La CI a également reproduit un arrêt du téléchargement sur une console Windows cp1252 : les pictogrammes du journal causaient une `UnicodeEncodeError`. Le journal remplace maintenant les caractères non représentables, sans interrompre le téléchargement. Un test reproduit cette console sans forcer UTF‑8 dans la CI.
+
 ## Contrôles et livrables
 
 Avant le packaging, la CI vérifie les types, les tests frontend, les tests du plugin et les tests SDK des outils, permissions, skills et conversations. Elle construit ensuite les composants et le paquet NSIS.
