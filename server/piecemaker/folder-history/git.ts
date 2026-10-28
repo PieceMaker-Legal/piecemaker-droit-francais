@@ -23,6 +23,8 @@ const CONFIG = [
   '-c', 'core.quotepath=false',
   '-c', 'core.untrackedCache=true',
   '-c', 'core.preloadIndex=true',
+  '-c', 'maintenance.autoDetach=false',
+  '-c', 'gc.autoDetach=false',
 ];
 
 const LOW_PRIORITY = 10;

@@ -28,7 +28,7 @@ test('bundledClaudeExecutable returns null when the Claude desktop bundle is abs
 });
 
 test('runClaudeCommand reports the spawn error instead of an empty failure', () => {
-  const result = runClaudeCommand('pm-fictitious-cli-absent', ['plugin', 'marketplace', 'add', 'acme/plugins']);
+  const result = runClaudeCommand(path.join(os.tmpdir(), 'pm-fictitious-cli-absent'), ['plugin', 'marketplace', 'add', 'acme/plugins']);
 
   assert.equal(result.ok, false);
   assert.equal(result.status, null);
