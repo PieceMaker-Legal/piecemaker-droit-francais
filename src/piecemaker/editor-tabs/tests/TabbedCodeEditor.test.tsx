@@ -1,21 +1,27 @@
-import { createRef } from 'react';
+import { createRef, useContext, useEffect } from 'react';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorSidebar } from '@/modules/code-editor';
 import TabbedCodeEditor from '@/piecemaker/editor-tabs/TabbedCodeEditor';
 import { citationPath, identityPath, openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 import { usePiecemakerEditorBridge } from '@/piecemaker/editor-tabs/usePiecemakerEditorBridge';
+import { DocxSaveContext } from '@/piecemaker/docx/pendingSaves';
 import workspaceMainSource from '@/modules/project-workspace/WorkspaceMain.tsx?raw';
 import type { CodeEditorFile } from '@/shared/types';
 
 vi.mock('@/modules/code-editor/CodeEditor', () => ({
-  default: ({ file, onClose }: { file: CodeEditorFile; onClose: () => void }) => (
-    <section data-testid="code-editor" data-path={file.path}><button onClick={onClose}>Fermer le fichier</button></section>
-  ),
+  default: function MockCodeEditor({ file, onClose }: { file: CodeEditorFile; onClose: () => void }) {
+    const registerSave = useContext(DocxSaveContext);
+    useEffect(() => {
+      if (file.name.endsWith('.docx')) return registerSave?.(saveDocx);
+    }, [file.name, registerSave]);
+    return <section data-testid="code-editor" data-path={file.path}><button onClick={onClose}>Fermer le fichier</button></section>;
+  },
 }));
 
-const { resolveFileRef } = vi.hoisted(() => ({
+const { resolveFileRef, saveDocx } = vi.hoisted(() => ({
+  saveDocx: vi.fn<() => Promise<boolean>>(),
   resolveFileRef: vi.fn(async (path: string) => (path.includes('disparu') ? null : `/reel${path}`)),
 }));
 
@@ -32,9 +38,78 @@ const file = (path: string): CodeEditorFile => ({ name: path.split('/').pop() ??
 const tabs = () => screen.queryAllByRole('tab').map((tab) => tab.textContent);
 const shown = async () => (await screen.findByTestId('code-editor')).dataset.path;
 
+beforeEach(() => { saveDocx.mockReset().mockResolvedValue(true); });
 afterEach(() => { vi.restoreAllMocks(); resolveFileRef.mockClear(); });
 
 describe('onglets de l’éditeur latéral', () => {
+  it('attend la sauvegarde Word avant de fermer un onglet', async () => {
+    const onClose = vi.fn();
+    render(<TabbedCodeEditor file={file('/dossier/note.docx')} onClose={onClose} isSidebar />);
+    await shown();
+    let finish!: (saved: boolean) => void;
+    saveDocx.mockImplementation(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer le fichier' }));
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => { finish(true); });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('un conflit Word empêche de fermer le document ou d’en ouvrir un autre', async () => {
+    const onClose = vi.fn();
+    const first = file('/dossier/note.docx');
+    const view = render(<TabbedCodeEditor file={first} onClose={onClose} isSidebar />);
+    await shown();
+    saveDocx.mockResolvedValue(false);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Fermer le fichier' })); });
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => { view.rerender(<TabbedCodeEditor file={file('/dossier/plan.md')} onClose={onClose} isSidebar />); });
+    expect(await shown()).toBe('/reel/dossier/note.docx');
+  });
+
+  it('un conflit Word dans un autre panneau ne bloque pas un éditeur texte', async () => {
+    const closeWord = vi.fn();
+    const closeText = vi.fn();
+    render(<TabbedCodeEditor file={file('/dossier/note.docx')} onClose={closeWord} isSidebar />);
+    await screen.findByTestId('code-editor');
+    await act(async () => { render(<TabbedCodeEditor file={file('/dossier/notes.md')} onClose={closeText} isSidebar />); });
+    saveDocx.mockResolvedValue(false);
+    const buttons = screen.getAllByRole('button', { name: 'Fermer le fichier' });
+    await act(async () => { fireEvent.click(buttons[1]); });
+    expect(closeText).toHaveBeenCalledOnce();
+    expect(saveDocx).not.toHaveBeenCalled();
+    expect(closeWord).not.toHaveBeenCalled();
+  });
+
+  it('fermer deux onglets pendant une sauvegarde ne réouvre pas le premier', async () => {
+    const onClose = vi.fn();
+    const view = render(<TabbedCodeEditor file={file('/dossier/a.md')} onClose={onClose} isSidebar />);
+    await shown();
+    view.rerender(<TabbedCodeEditor file={file('/dossier/b.docx')} onClose={onClose} isSidebar />);
+    await shown();
+    let finish!: (saved: boolean) => void;
+    const waiting = new Promise<boolean>((resolve) => { finish = resolve; });
+    saveDocx.mockReturnValue(waiting);
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer b.docx' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer a.md' }));
+    await act(async () => { finish(true); });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('ouvrir un fichier puis fermer un onglet pendant la sauvegarde conserve le nouveau fichier', async () => {
+    const view = render(<TabbedCodeEditor file={file('/dossier/a.md')} onClose={vi.fn()} isSidebar />);
+    await shown();
+    view.rerender(<TabbedCodeEditor file={file('/dossier/b.docx')} onClose={vi.fn()} isSidebar />);
+    await shown();
+    let finish!: (saved: boolean) => void;
+    const waiting = new Promise<boolean>((resolve) => { finish = resolve; });
+    saveDocx.mockReturnValue(waiting);
+    view.rerender(<TabbedCodeEditor file={file('/dossier/c.md')} onClose={vi.fn()} isSidebar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer b.docx' }));
+    await act(async () => { finish(true); });
+    expect(tabs()).toEqual(['a.md', 'c.md']);
+    expect(await shown()).toBe('/reel/dossier/c.md');
+  });
+
   it('garde chaque fichier ouvert dans un onglet, bascule de l’un à l’autre et referme le panneau avec le dernier', async () => {
     const onClose = vi.fn();
     const first = file('/dossier/notes.md');

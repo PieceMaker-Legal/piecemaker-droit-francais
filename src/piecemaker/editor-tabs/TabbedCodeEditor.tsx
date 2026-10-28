@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
@@ -6,6 +6,7 @@ import { X } from 'lucide-react';
 import CodeEditor from '@/modules/code-editor/CodeEditor';
 import { setActiveDocument } from '@/modules/piecemaker-context-suggestions';
 import { resolveFileRef } from '@/piecemaker/chat/fileRef';
+import { DocxSaveContext } from '@/piecemaker/docx';
 import { CitationPanel } from '@/piecemaker/citations/CitationPanel';
 import { FileDocumentEditor } from '@/piecemaker/editor-tabs/FileDocumentEditor';
 import { IdentityTab } from '@/piecemaker/editor-tabs/IdentityTab';
@@ -87,14 +88,34 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
   const [openedFile, setOpenedFile] = useState(file);
   const [tabs, setTabs] = useState<CodeEditorFile[]>([file]);
   const [activeKey, setActiveKey] = useState(tabKey(file));
+  const pendingSave = useRef<(() => Promise<boolean>) | null>(null);
+  const tabsRef = useRef(tabs);
+  const activeKeyRef = useRef(activeKey);
+  const registerSave = useCallback((save: () => Promise<boolean>) => {
+    pendingSave.current = save;
+    return () => { if (pendingSave.current === save) pendingSave.current = null; };
+  }, []);
 
-  if (openedFile !== file) {
-    setOpenedFile(file);
-    setTabs((current) => current.some((tab) => tabKey(tab) === tabKey(file))
-      ? current.map((tab) => tabKey(tab) === tabKey(file) ? file : tab)
-      : [...current, file]);
-    setActiveKey(tabKey(file));
-  }
+  useEffect(() => {
+    if (openedFile === file) return;
+    let live = true;
+    const open = async () => {
+      const saving = pendingSave.current?.();
+      if (saving && !await saving) return;
+      if (!live) return;
+      setOpenedFile(file);
+      const current = tabsRef.current;
+      const next = current.some((tab) => tabKey(tab) === tabKey(file))
+        ? current.map((tab) => tabKey(tab) === tabKey(file) ? file : tab)
+        : [...current, file];
+      tabsRef.current = next;
+      setTabs(next);
+      activeKeyRef.current = tabKey(file);
+      setActiveKey(tabKey(file));
+    };
+    void open();
+    return () => { live = false; };
+  }, [file, openedFile]);
 
   const active = tabs.find((tab) => tabKey(tab) === activeKey) ?? tabs[tabs.length - 1];
   const activeDocument = isSidebar && !parseEditorPanel(active.path) ? active.path : null;
@@ -104,15 +125,33 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
     return () => setActiveDocument(null);
   }, [activeDocument]);
 
-  const closeTab = (key: string) => {
-    const index = tabs.findIndex((tab) => tabKey(tab) === key);
-    const remaining = tabs.filter((tab) => tabKey(tab) !== key);
+  const selectTab = async (key: string) => {
+    if (key === activeKey) return;
+    const saving = pendingSave.current?.();
+    if (saving && !await saving) return;
+    activeKeyRef.current = key;
+    setActiveKey(key);
+  };
+
+  const closeTab = async (key: string) => {
+    if (key === tabKey(active)) {
+      const saving = pendingSave.current?.();
+      if (saving && !await saving) return;
+    }
+    const current = tabsRef.current;
+    const index = current.findIndex((tab) => tabKey(tab) === key);
+    if (index < 0) return;
+    const remaining = current.filter((tab) => tabKey(tab) !== key);
+    tabsRef.current = remaining;
     if (!remaining.length) {
       onClose();
       return;
     }
     setTabs(remaining);
-    if (key === tabKey(active)) setActiveKey(tabKey(remaining[Math.max(0, index - 1)]));
+    if (key === activeKeyRef.current) {
+      activeKeyRef.current = tabKey(remaining[Math.max(0, index - 1)]);
+      setActiveKey(activeKeyRef.current);
+    }
   };
 
   useEffect(() => {
@@ -126,7 +165,7 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
     return () => window.removeEventListener(CLOSE_IN_EDITOR_EVENT, closeRequested);
   });
 
-  const content: ReactNode = <TabContent key={tabKey(active)} props={props} file={active} onClose={() => closeTab(tabKey(active))} />;
+  const content: ReactNode = <DocxSaveContext.Provider value={registerSave}><TabContent key={tabKey(active)} props={props} file={active} onClose={() => { void closeTab(tabKey(active)); }} /></DocxSaveContext.Provider>;
   if (tabsTarget) {
     return (
       <>
@@ -137,7 +176,7 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
             const label = tabLabel(tab);
             return (
               <div key={key} className="piecemaker-files-tab" data-selected={selected}>
-                <button type="button" role="tab" aria-selected={selected} title={label} onClick={() => setActiveKey(key)} onAuxClick={(event) => { if (event.button === 1) closeTab(key); }}>
+                <button type="button" role="tab" aria-selected={selected} title={label} onClick={() => { void selectTab(key); }} onAuxClick={(event) => { if (event.button === 1) closeTab(key); }}>
                   {label}
                 </button>
                 <button type="button" aria-label={`Fermer ${label}`} onClick={() => closeTab(key)}>
@@ -161,7 +200,7 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
           const label = tabLabel(tab);
           return (
             <div key={key} className={`group flex max-w-56 shrink-0 items-center border-r border-border ${selected ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-background/60'}`}>
-              <button type="button" role="tab" aria-selected={selected} title={label} className="min-w-0 truncate py-1.5 pl-3 pr-1 text-xs" onClick={() => setActiveKey(key)} onAuxClick={(event) => { if (event.button === 1) closeTab(key); }}>
+              <button type="button" role="tab" aria-selected={selected} title={label} className="min-w-0 truncate py-1.5 pl-3 pr-1 text-xs" onClick={() => { void selectTab(key); }} onAuxClick={(event) => { if (event.button === 1) closeTab(key); }}>
                 {label}
               </button>
               <button type="button" aria-label={`Fermer ${label}`} className="mr-1 rounded p-0.5 opacity-60 hover:bg-accent hover:opacity-100" onClick={() => closeTab(key)}>

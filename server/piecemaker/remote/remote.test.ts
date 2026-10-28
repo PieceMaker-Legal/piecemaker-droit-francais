@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -292,4 +293,26 @@ test('la passerelle relaie HTTP et WebSocket du propriétaire et refuse les autr
     upstream.closeAllConnections();
     await new Promise((resolve) => upstream.close(resolve));
   }
+});
+
+test('closing the gateway disconnects active WebSockets and finishes', { timeout: 3000 }, async t => {
+  const upstream = http.createServer();
+  const sockets = new WebSocketServer({ server: upstream });
+  sockets.on('connection', socket => socket.on('message', data => socket.send(data)));
+  upstream.listen(0, '127.0.0.1');
+  await once(upstream, 'listening');
+  const gateway = await startGateway(() => (upstream.address() as AddressInfo).port, () => OWNER);
+  const socket = new WebSocket(`ws://127.0.0.1:${gateway.port}/ws`, { headers: { 'Tailscale-User-Login': OWNER } });
+  t.after(async () => {
+    socket.terminate();
+    for (const client of sockets.clients) client.terminate();
+    await gateway.close();
+    sockets.close();
+    await new Promise<void>(resolve => upstream.close(() => resolve()));
+  });
+  await once(socket, 'open');
+  const disconnected = once(socket, 'close');
+  await gateway.close();
+  await disconnected;
+  assert.equal(socket.readyState, WebSocket.CLOSED);
 });

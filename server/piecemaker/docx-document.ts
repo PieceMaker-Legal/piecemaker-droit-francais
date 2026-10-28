@@ -3,7 +3,7 @@ import path from 'path';
 import express, { type Request, type Response } from 'express';
 
 import { projectsDb } from '@/modules/database/index.js';
-import { readDocxDocumentVersion, saveDocxDocument } from '@/modules/piecemaker-docx/index.js';
+import { DocxDocumentConflictError, readDocxDocumentVersion, saveDocxDocument } from '@/modules/piecemaker-docx/index.js';
 
 import { externalRegularFile } from './file-links.js';
 
@@ -36,10 +36,14 @@ export function createDocxDocumentRouter() {
     if (!filePath || !Buffer.isBuffer(request.body) || request.body.length === 0) {
       return response.status(400).json({ error: 'Invalid docx payload' });
     }
+    const expectedVersion = request.get('If-Match');
+    if (expectedVersion !== undefined && (!expectedVersion.trim() || !Number.isFinite(Number(expectedVersion)))) {
+      return response.status(400).json({ error: 'Invalid document version' });
+    }
     try {
-      response.json({ version: await saveDocxDocument(filePath, request.body) });
+      response.json({ version: await saveDocxDocument(filePath, request.body, expectedVersion === undefined ? undefined : Number(expectedVersion)) });
     } catch (error) {
-      response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+      response.status(error instanceof DocxDocumentConflictError ? 409 : 500).json({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 

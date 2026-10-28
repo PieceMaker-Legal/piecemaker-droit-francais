@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import { acceptChange, acceptChangeById, rejectChange, rejectChangeById } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
@@ -12,6 +12,7 @@ import { useAuth } from '@/modules/auth';
 import { useCitationPassage } from '@/piecemaker/citations/citationPassage';
 import { clearDocxCitationHighlight, highlightCitationInDocx } from '@/piecemaker/citations/docxPassage';
 import { api, authenticatedFetch } from '@/shared/api';
+import { DocxSaveContext } from '@/piecemaker/docx/pendingSaves';
 import { useTheme } from '@/shared/context/ThemeContext';
 import type { CodeEditorFile } from '@/shared/types';
 
@@ -84,31 +85,6 @@ function collectEntryTargets(entry: TrackedChangeEntry, ids: Set<number | string
   addRevisionId(entry.insertionRevisionId, ids);
   for (const id of entry.coalescedRevisionIds ?? []) addRevisionId(id, ids);
   if (entry.to > entry.from) ranges.push({ from: entry.from, to: entry.to });
-}
-
-function collectRevisionIdsFromSelection(view: EditorView, into: Set<number | string>) {
-  const { $from } = view.state.selection;
-  const marks = [
-    ...(view.state.storedMarks ?? []),
-    ...$from.marks(),
-    ...($from.nodeAfter?.marks ?? []),
-    ...($from.nodeBefore?.marks ?? []),
-  ];
-  for (const mark of marks) {
-    if (mark.type.name === 'insertion' || mark.type.name === 'deletion') addRevisionId(mark.attrs.revisionId, into);
-  }
-}
-
-function collectRevisionTargetsFromCard(card: Element, container: HTMLElement, ids: Set<number | string>, ranges: TrackedChangeRange[]) {
-  const cardRect = card.getBoundingClientRect();
-  for (const mark of container.querySelectorAll<HTMLElement>('[data-revision-id]')) {
-    const rect = mark.getBoundingClientRect();
-    if (rect.bottom < cardRect.top - 24 || rect.top > cardRect.bottom + 24) continue;
-    addRevisionId(mark.getAttribute('data-revision-id'), ids);
-    const from = Number(mark.dataset.pmStart);
-    const to = Number(mark.dataset.pmEnd);
-    if (Number.isFinite(from) && Number.isFinite(to) && to > from) ranges.push({ from, to });
-  }
 }
 
 function quotedCardSnippets(card: Element) {
@@ -194,6 +170,7 @@ function decodeDocumentPath(filePath: string): string {
 export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose }: DocxDocumentViewerProps) {
   const { isDarkMode } = useTheme();
   const { user } = useAuth();
+  const registerSave = useContext(DocxSaveContext);
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastLayoutRef = useRef('');
@@ -202,9 +179,13 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const userEditingRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const savingRef = useRef(false);
+  const savePromiseRef = useRef(Promise.resolve(true));
+  const editVersionRef = useRef(0);
+  const savedEditVersionRef = useRef(0);
   const resolvedPathRef = useRef(file.path);
   const [loaded, setLoaded] = useState<{ buffer: ArrayBuffer; version: number; filePath: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
@@ -231,15 +212,23 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     return { filePath, version: ((await response.json()) as { version: number }).version };
   }, [projectId]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (discardChanges = false) => {
     if (!projectId) return;
     const { filePath, version } = await fetchVersion();
     const response = await api.readFileBlob(projectId, filePath);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const buffer = await response.arrayBuffer();
+    if (!discardChanges && editVersionRef.current !== savedEditVersionRef.current) {
+      setConflict(true);
+      return;
+    }
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = null;
     userEditingRef.current = false;
+    editVersionRef.current = 0;
+    savedEditVersionRef.current = 0;
+    savePromiseRef.current = Promise.resolve(true);
+    setConflict(false);
     versionRef.current = version;
     setError(null);
     setLoaded({ buffer, version, filePath });
@@ -257,7 +246,11 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     const poll = window.setInterval(() => {
       if (savingRef.current) return;
       fetchVersion()
-        .then(({ version }) => { if (!savingRef.current && version !== versionRef.current) return load(); })
+        .then(({ version }) => {
+          if (savingRef.current || version === versionRef.current) return;
+          if (editVersionRef.current !== savedEditVersionRef.current) setConflict(true);
+          else return load();
+        })
         .catch(() => {
           if (versionRef.current !== null || Date.now() - openedAt < MISSING_FILE_MS) return;
           setError(`Fichier introuvable : ${file.path}`);
@@ -269,32 +262,89 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     };
   }, [fetchVersion, file.path, load]);
 
-  const save = useCallback(async () => {
+  const save = useCallback((): Promise<boolean> => {
+    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = null;
-    const buffer = await editorRef.current?.save();
-    if (!buffer) return;
+    const editVersion = editVersionRef.current;
+    if (editVersion === savedEditVersionRef.current) return savePromiseRef.current;
+    const editor = editorRef.current;
+    if (!editor) return Promise.resolve(false);
+    const filePath = resolvedPathRef.current;
     savingRef.current = true;
-    try {
-      const documentQuery = new URLSearchParams({ projectId: projectId ?? '', path: resolvedPathRef.current });
-      const response = await authenticatedFetch(`/api/piecemaker/docx-document?${documentQuery}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': DOCX_MIME_TYPE },
-        body: buffer,
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      versionRef.current = ((await response.json()) as { version: number }).version;
-    } catch (saveError) {
-      setError(String(saveError));
-    } finally {
-      savingRef.current = false;
-    }
+    const snapshot = editor.save();
+    void snapshot.catch(() => {});
+    const operation = savePromiseRef.current.then(async () => {
+      if (editVersion <= savedEditVersionRef.current) return true;
+      try {
+        const buffer = await snapshot;
+        if (!buffer) throw new Error('Le document ne peut pas être enregistré.');
+        const documentQuery = new URLSearchParams({ projectId: projectId ?? '', path: filePath });
+        const response = await authenticatedFetch(`/api/piecemaker/docx-document?${documentQuery}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': DOCX_MIME_TYPE, 'If-Match': String(versionRef.current) },
+          body: buffer,
+        });
+        if (response.status === 409) {
+          setConflict(true);
+          return false;
+        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        versionRef.current = ((await response.json()) as { version: number }).version;
+        savedEditVersionRef.current = editVersion;
+        setConflict(false);
+        setError(null);
+        return true;
+      } catch (saveError) {
+        setError(String(saveError));
+        return false;
+      }
+    });
+    savePromiseRef.current = operation;
+    void operation.then(() => { if (savePromiseRef.current === operation) savingRef.current = false; });
+    return operation;
   }, [projectId]);
+
+  const flush = useCallback(async () => {
+    do {
+      if (!await save()) return false;
+    } while (editVersionRef.current !== savedEditVersionRef.current);
+    return true;
+  }, [save]);
+
+  useEffect(() => registerSave?.(flush), [flush, registerSave]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!savingRef.current && editVersionRef.current === savedEditVersionRef.current) return;
+      event.preventDefault();
+      event.returnValue = true;
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, []);
+  useLayoutEffect(() => () => { void save(); }, [save]);
 
   const scheduleSave = useCallback(() => {
     if (!userEditingRef.current) return;
+    editVersionRef.current += 1;
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => { void save(); }, SAVE_DEBOUNCE_MS);
   }, [save]);
+
+  const close = async () => { if (await flush()) onClose(); };
+
+  const reloadExternal = async () => {
+    if (!window.confirm('Abandonner vos modifications locales et recharger le document du disque ?')) return;
+    try { await savePromiseRef.current; await load(true); } catch (loadError) { setError(String(loadError)); }
+  };
+
+  const overwriteExternal = async () => {
+    if (!window.confirm('Remplacer la version du disque par vos modifications locales ?')) return;
+    try {
+      versionRef.current = (await fetchVersion()).version;
+      await save();
+    } catch (saveError) { setError(String(saveError)); }
+  };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -351,14 +401,12 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     const container = event.currentTarget as HTMLElement;
     const ids = new Set<number | string>();
     const ranges: TrackedChangeRange[] = [];
-    for (const view of views) {
-      collectRevisionIdsFromSelection(view, ids);
-      const { entries } = extractTrackedChanges(view.state);
-      const entry = matchTrackedChangeEntry(card, container, entries);
-      if (entry) collectEntryTargets(entry, ids, ranges);
-    }
-    collectRevisionTargetsFromCard(card, container, ids, ranges);
-    if (!applyTrackedChangeCommand(views, action, ids, ranges)) return;
+    const targets = views.flatMap((view) => extractTrackedChanges(view.state).entries.map((entry) => ({ view, entry })));
+    const entry = matchTrackedChangeEntry(card, container, targets.map((target) => target.entry));
+    const owner = targets.find((target) => target.entry === entry);
+    if (!entry || !owner) return;
+    collectEntryTargets(entry, ids, ranges);
+    if (!applyTrackedChangeCommand([owner.view], action, ids, ranges)) return;
     userEditingRef.current = true;
     editor?.relayout();
     scheduleSave();
@@ -437,6 +485,11 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       onPointerMoveCapture={handlePointerMove}
       onPointerOutCapture={handlePointerOut}
     >
+      {conflict && <div role="alert" className="border-b border-border px-3 py-2 text-sm">
+        <p>Le document a été modifié ailleurs. Vos modifications restent dans l’éditeur.</p>
+        <button type="button" onClick={() => { void reloadExternal(); }} className="mr-3 underline">Recharger la version du disque</button>
+        <button type="button" onClick={() => { void overwriteExternal(); }} className="underline">Enregistrer ma version</button>
+      </div>}
       {error && <p className="border-b border-border px-3 py-1.5 text-xs text-destructive">{error}</p>}
       {loaded ? (
         <DocxEditor
@@ -463,7 +516,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
             </div>
           )}
           renderTitleBarRight={() => (
-            <button type="button" onClick={onClose} className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted" aria-label="Fermer">✕</button>
+            <button type="button" onClick={() => { void close(); }} className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted" aria-label="Fermer">✕</button>
           )}
           style={{ flex: 1, minHeight: 0 }}
         />

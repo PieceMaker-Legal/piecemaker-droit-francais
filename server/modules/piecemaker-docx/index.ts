@@ -1,1 +1,1 @@
-export { readDocxDocumentVersion, saveDocxDocument } from './docx-document.service.js';
+export { DocxDocumentConflictError, readDocxDocumentVersion, saveDocxDocument } from './docx-document.service.js';
