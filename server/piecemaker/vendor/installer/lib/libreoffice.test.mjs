@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { embedLibreOffice, LIBREOFFICE, LIBREOFFICE_DIR } from '../steps/10-libreoffice.mjs';
+import { embedLibreOffice, libreOfficePackage, LIBREOFFICE, LIBREOFFICE_MAC, LIBREOFFICE_DIR } from '../steps/10-libreoffice.mjs';
 
 async function stage(t) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pm-libreoffice-'));
@@ -17,6 +17,7 @@ test('rejects a modified LibreOffice MSI before extraction', async t => {
   const directory = await stage(t);
   let extracted = false;
   await assert.rejects(embedLibreOffice(directory, {
+    platform: 'win32', arch: 'x64',
     fetchImpl: async () => new Response('not the official MSI'),
     extract: async () => { extracted = true; },
   }), /SHA-256/);
@@ -31,6 +32,7 @@ test('packages the complete extracted runtime with notices and without a second 
   LIBREOFFICE.sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
   t.after(() => { LIBREOFFICE.sha256 = previous; });
   const options = {
+    platform: 'win32', arch: 'x64',
     fetchImpl: async () => new Response(bytes),
     extract: async (_archive, destination) => {
       await fs.mkdir(path.join(destination, 'program'), { recursive: true });
@@ -49,3 +51,40 @@ test('packages the complete extracted runtime with notices and without a second 
   await assert.rejects(fs.access(path.join(directory, 'libreoffice.msi')));
   await assert.rejects(fs.access(path.join(directory, LIBREOFFICE_DIR, 'libreoffice.msi')));
 });
+
+test('selects native LibreOffice packages and rejects unsupported architectures', () => {
+  assert.equal(libreOfficePackage('win32', 'x64'), LIBREOFFICE);
+  assert.equal(libreOfficePackage('darwin', 'arm64'), LIBREOFFICE_MAC.arm64);
+  assert.equal(libreOfficePackage('darwin', 'x64'), LIBREOFFICE_MAC.x64);
+  assert.notEqual(LIBREOFFICE_MAC.arm64.sha256, LIBREOFFICE_MAC.x64.sha256);
+  assert.throws(() => libreOfficePackage('darwin', 'ia32'), /non disponible/);
+});
+
+for (const arch of ['arm64', 'x64']) {
+  test(`packages the complete macOS ${arch} app and retains its executable mode`, async t => {
+    const directory = await stage(t);
+    const bytes = Buffer.from(`fictitious ${arch} DMG`);
+    const metadata = LIBREOFFICE_MAC[arch];
+    const previous = metadata.sha256;
+    metadata.sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    t.after(() => { metadata.sha256 = previous; });
+    await embedLibreOffice(directory, {
+      platform: 'darwin', arch,
+      fetchImpl: async url => { assert.equal(url, metadata.url); return new Response(bytes); },
+      extract: async (_archive, destination, platform) => {
+        assert.equal(platform, 'darwin');
+        const app = path.join(destination, 'LibreOffice.app', 'Contents');
+        await fs.mkdir(path.join(app, 'MacOS'), { recursive: true });
+        await fs.mkdir(path.join(app, 'Resources'));
+        await fs.writeFile(path.join(app, 'MacOS', 'soffice'), 'fixture', { mode: 0o755 });
+        await fs.writeFile(path.join(app, 'Resources', 'LICENSE.html'), 'fictitious license fixture');
+      },
+    });
+    const binary = path.join(directory, LIBREOFFICE_DIR, 'LibreOffice.app', 'Contents', 'MacOS', 'soffice');
+    await fs.access(binary);
+    if (process.platform !== 'win32') assert.equal((await fs.stat(binary)).mode & 0o111, 0o111);
+    await assert.rejects(fs.access(path.join(directory, 'libreoffice.dmg')));
+    const manifest = JSON.parse(await fs.readFile(path.join(directory, 'package.json'), 'utf8'));
+    assert.equal(manifest.build.extraResources.filter(entry => entry.to === LIBREOFFICE_DIR).length, 1);
+  });
+}

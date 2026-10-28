@@ -1,0 +1,44 @@
+name: PieceMaker LibreOffice macOS
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+  push:
+    branches: [MAJ-continue]
+    paths:
+      - 'server/piecemaker/vendor/installer/steps/10-libreoffice.mjs'
+      - 'server/piecemaker/vendor/installer/lib/libreoffice.test.mjs'
+      - 'server/piecemaker/vendor/websocket-server/lib/office-to-pdf.cjs'
+      - 'server/piecemaker/stamping.test.js'
+      - 'desktop-bootstrap/lib/build.mjs'
+      - 'desktop-bootstrap/lib/prebuilt-app.mjs'
+      - 'scripts/piecemaker/verify-office.mjs'
+      - '.github/workflows/piecemaker-libreoffice-macos.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-libreoffice:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node --test server/piecemaker/vendor/installer/lib/libreoffice.test.mjs
+      - run: node scripts/piecemaker/verify-office.mjs

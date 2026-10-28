@@ -429,8 +429,8 @@ export async function buildDesktopApp(sourceDir, { windowsInstaller = false, pre
   }
   if (process.platform === 'win32') {
     await embedMinGit(stageDir);
-    await embedLibreOffice(stageDir);
   }
+  if (process.platform === 'win32' || IS_MAC) await embedLibreOffice(stageDir);
   if (process.platform === 'win32' && windowsInstaller) {
     await fs.copyFile(path.join(process.env.PIECEMAKER_PREBUILT_ASSET_DIR, 'python-runtime.json'), path.join(stageDir, 'python-runtime.json'));
     const manifestPath = path.join(stageDir, 'package.json');

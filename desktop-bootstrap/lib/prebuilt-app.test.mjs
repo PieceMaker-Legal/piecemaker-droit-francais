@@ -29,6 +29,7 @@ async function fixture(t) {
   });
   for (const relative of [
     'Contents/MacOS/PieceMaker',
+    'Contents/Resources/libreoffice/LibreOffice.app/Contents/MacOS/soffice',
     'Contents/Resources/app/dist-server/server/index.js',
     'Contents/Resources/app/server/piecemaker/vendor/websocket-server/originals-pipeline.cjs',
     'Contents/Resources/app/server/piecemaker/anonymizer/bin/piecemaker-hudsucker',
