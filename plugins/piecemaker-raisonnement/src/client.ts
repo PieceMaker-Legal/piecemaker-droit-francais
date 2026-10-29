@@ -394,10 +394,13 @@ export function mount(container: HTMLElement, api: Host) {
   };
 
   const issueList = (list: ReasoningIssue[], restore = false, inGraph = false) => {
-    const dismiss = (issue: ReasoningIssue) => (snapshot?.demo ? '' : `<button data-dismiss="${escape(issue.id)}"${restore ? ' data-restore' : ' title="L’alerte quitte le compteur et va dans « Ignorées par vous », où vous pouvez la rétablir."'}>${restore ? 'Rétablir' : 'Ignorer'}</button>`);
+    const twins = (issue: ReasoningIssue) => issue.avocat ? (snapshot?.issues ?? []).filter((other) => other.kind === issue.kind && other.avocat === issue.avocat && dismissedIds().has(other.id) === restore) : [issue];
+    const dismiss = (...issues: ReasoningIssue[]) => (snapshot?.demo ? '' : `<button data-dismiss="${escape([...new Set(issues.flatMap(twins).map((issue) => issue.id))].join(' '))}"${restore ? ' data-restore' : ' title="L’alerte quitte le compteur et va dans « Ignorées par vous », où vous pouvez la rétablir."'}>${restore ? 'Rétablir' : 'Ignorer'}</button>`);
     const technical = (issue: ReasoningIssue) => `<code>${escape(issue.text)} · ${escape(issue.path || 'fichier')}${issue.line ? ` · ligne ${issue.line}` : ''}</code>`;
     const open = (target: string) => /^#(piece|source):/.test(target) ? `<button data-show="${escape(target)}">${target.startsWith('#piece:') ? 'Ouvrir la pièce' : 'Ouvrir le texte'}</button>` : inGraph ? '' : `<button data-select="${escape(target)}">Voir dans le graphe</button>`;
-    const readable = list.filter((issue) => issue.avocat).map((issue) => `<div class="pmr-issue">${pill(issue.kind === 'erreur' ? 'exclu' : 'à établir', issue.kind === 'erreur' ? 'À corriger' : 'À compléter')}<div class="pmr-issue-body"><p>${escape(issue.avocat)}</p><details><summary>Détail technique</summary>${technical(issue)}</details></div><span class="pmr-decision">${issue.cible ? open(issue.cible) : ''}${dismiss(issue)}</span></div>`);
+    const groups = new Map<string, ReasoningIssue[]>();
+    for (const issue of list.filter((issue) => issue.avocat)) groups.set(`${issue.kind}\0${issue.avocat}`, [...groups.get(`${issue.kind}\0${issue.avocat}`) ?? [], issue]);
+    const readable = [...groups.values()].map((same) => { const [issue] = same; return `<div class="pmr-issue">${pill(issue.kind === 'erreur' ? 'exclu' : 'à établir', issue.kind === 'erreur' ? 'À corriger' : 'À compléter')}<div class="pmr-issue-body"><p>${escape(issue.avocat)}</p><details><summary>Détail technique</summary>${same.map(technical).join('<br>')}</details></div><span class="pmr-decision">${issue.cible ? open(issue.cible) : ''}${dismiss(...same)}</span></div>`; });
     const drafting = list.filter((issue) => !issue.avocat);
     const agent = drafting.length ? `<div class="pmr-issue">${pill('exclu', 'Rédaction')}<div class="pmr-issue-body"><p>${plural(drafting.length, 'défaut')} d’écriture du raisonnement. Rien à décider : demandez à l’agent de relancer la vérification, il les corrigera.</p><details><summary>Détail technique</summary>${drafting.map((issue) => `<p>${technical(issue)} ${dismiss(issue)}</p>`).join('')}</details></div></div>` : '';
     return readable.join('') + agent;
@@ -573,7 +576,7 @@ export function mount(container: HTMLElement, api: Host) {
     }
     if (button.dataset.select) reach(button.dataset.select);
     if (button.dataset.show) show(button.dataset.show, button.dataset.quote);
-    if (button.dataset.dismiss && project) act(() => dismissIssue(project, button.dataset.dismiss!, button.hasAttribute('data-restore'), shown()));
+    if (button.dataset.dismiss && project) act(() => button.dataset.dismiss!.split(' ').reduce((done, id) => done.then(() => dismissIssue(project, id, button.hasAttribute('data-restore'), shown())), Promise.resolve(snapshot!)));
     if (button.dataset.rate && project) act(() => ratePiece(project, button.dataset.rate!, button.dataset.value === 'null' ? null : button.dataset.value === 'true', shown()));
     if (button.dataset.zoom) {
       const next = Math.max(.2, Math.min(2.5, zoom * (Number(button.dataset.zoom) > 0 ? 1.2 : 1 / 1.2)));
