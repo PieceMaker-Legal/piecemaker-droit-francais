@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'suivi', 'docx', 'acte'];
-const REASONING_COMMANDS = ['verifier', 'lister'];
+const REASONING_COMMANDS = ['consignes', 'verifier', 'lister'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
@@ -28,6 +28,8 @@ export const HELP = `Usage: pm <outil> [options]
       [--dossier PATH] [--fichier FILE] [--projet ID] [--mode analyse|recherche]
       [--nom TEXT] [--modele ID] [--description TEXT] [--questions JSON]
       [--documents a,b] [--recherche JSON] [--ia claude|codex|mistral] [--modele-ia TEXT]
+  raisonnement consignes
+      règles d'écriture du raisonnement : à lire avant de l'écrire ou de le compléter
   raisonnement verifier [--raisonnement NOM]
   raisonnement lister
       un fichier par raisonnement : .piecemaker/raisonnements/NOM.yaml ;
@@ -198,6 +200,7 @@ async function defaultDeps(cwd) {
     sessionDossier: (cwd) => sessionDossier(cwd, { lookup: client.sessionDossier }),
     sqlFn: client.runSql,
     reasoningFn: client.runReasoning,
+    reasoningInstructions: () => fs.readFileSync(path.join(vendor, '..', 'legal-code', 'instructions.md'), 'utf8'),
     suiviFn: client.runSuivi,
     docxFn: client.runDocxReasoning,
     acteFn: client.runActe,
@@ -477,6 +480,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   if (tool === 'raisonnement') {
     const commande = positional[1];
     if (!REASONING_COMMANDS.includes(commande)) usage(`raisonnement attend ${REASONING_COMMANDS.join(', ')}.`);
+    if (commande === 'consignes') return api.reasoningInstructions();
     if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
     const input = { commande, cwd: path.resolve(resolved), ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
     const result = await api.reasoningFn(input);

@@ -182,6 +182,8 @@ test('raisonnement transmet la commande et le nom du raisonnement à reasoningFn
   assert.deepEqual(calls[0], { commande: 'verifier', cwd: path.resolve(dossier), raisonnement: 'penalite' });
   await run(['raisonnement', 'lister'], { cwd: dossier, deps });
   assert.deepEqual(calls[1], { commande: 'lister', cwd: path.resolve(dossier) });
+  assert.equal(await run(['raisonnement', 'consignes'], { cwd: dossier, deps: { ...deps, reasoningInstructions: () => 'Règles.' } }), 'Règles.');
+  assert.equal(calls.length, 2);
   await assert.rejects(run(['raisonnement', 'inconnue'], { cwd: dossier, deps }));
   await assert.rejects(run(['raisonnement', 'verifier', '--raisonnement'], { cwd: dossier, deps }));
   fs.rmSync(dossier, { recursive: true, force: true });
