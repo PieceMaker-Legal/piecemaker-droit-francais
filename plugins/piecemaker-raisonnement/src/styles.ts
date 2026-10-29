@@ -32,10 +32,10 @@ export const STYLES = `
 .pmr-wires{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
 .pmr-wire{fill:none;stroke-width:1.6;opacity:.75;transition:opacity .15s}.pmr-wire.is-sauf{stroke-dasharray:6 4}.pmr-wire.is-lit{opacity:1;stroke-width:2.2}.pmr-wire.is-dim,.pmr-wire-label.is-dim{opacity:.12}
 .pmr-wire-label{fill:var(--muted);font-size:10px;font-style:italic;paint-order:stroke;stroke:var(--bg);stroke-width:3px}
-.pmr-box{--kind:#8c96ad;position:absolute;display:flex;gap:10px;align-items:flex-start;width:max-content;max-width:250px;min-width:150px;padding:10px 12px;border:1.5px solid color-mix(in srgb,var(--kind) 70%,transparent);border-radius:14px;background:color-mix(in srgb,var(--kind) 8%,var(--surface));box-shadow:0 1px 3px rgb(15 23 42 / .08);cursor:pointer;outline:none;transition:opacity .15s,box-shadow .15s}
+.pmr-box{--kind:#8c96ad;position:absolute;display:flex;gap:10px;align-items:flex-start;width:max-content;max-width:280px;min-width:170px;padding:10px 12px;border:1.5px solid color-mix(in srgb,var(--kind) 70%,transparent);border-radius:14px;background:color-mix(in srgb,var(--kind) 8%,var(--surface));box-shadow:0 1px 3px rgb(15 23 42 / .08);cursor:pointer;outline:none;transition:opacity .15s,box-shadow .15s}
 .pmr-box:hover{box-shadow:0 2px 10px rgb(15 23 42 / .14)}.pmr-box:focus-visible,.pmr-box.is-selected{box-shadow:0 0 0 3px color-mix(in srgb,var(--kind) 35%,transparent)}.pmr-box.is-dim{opacity:.22}
 .pmr-box.is-uncertain{border-style:dashed}.pmr-box.is-excluded{opacity:.7}.pmr-box.is-excluded strong{text-decoration:line-through;text-decoration-color:var(--ko-soft)}
-.pmr-question{--kind:#d9779f;max-width:340px}.pmr-terme{--kind:#3b82f6}.pmr-controle{--kind:#d99a2b}.pmr-fait{--kind:#2f9e7c}.pmr-conclusion{--kind:#14a3a0;max-width:300px}
+.pmr-question{--kind:#d9779f;max-width:420px}.pmr-terme{--kind:#3b82f6}.pmr-controle{--kind:#d99a2b}.pmr-fait{--kind:#2f9e7c}.pmr-conclusion{--kind:#14a3a0;max-width:300px}
 .pmr-icon{flex:0 0 26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:color-mix(in srgb,var(--kind) 18%,transparent);color:var(--kind);font-size:14px}
 .pmr-box-body{min-width:0;display:flex;flex-direction:column;gap:3px}
 .pmr-kind{font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--kind)}
@@ -47,10 +47,11 @@ export const STYLES = `
 .pmr .pmr-chip.is-piece{color:var(--text);background:color-mix(in srgb,#8c96ad 14%,var(--surface));border-color:color-mix(in srgb,#8c96ad 40%,transparent)}
 .pmr .pmr-chip.is-against{color:var(--ko);border-color:color-mix(in srgb,var(--ko-soft) 70%,transparent);border-style:dashed}
 .pmr[data-theme=dark] .pmr-chip.is-source{color:#b7aefa}
-.pmr-terme,.pmr-controle{max-width:330px}
+.pmr-terme,.pmr-controle{max-width:400px;min-width:260px}.pmr-fait.is-ko{--kind:#c45b5b}.pmr-fait.is-warn{--kind:#d99a2b;border-style:dashed}.pmr-fait.is-ok{border-width:2px}
+.pmr-then{display:block;margin-top:2px;padding-top:6px;border-top:1px solid color-mix(in srgb,var(--kind) 25%,transparent)}.pmr-then:before{content:'⇒ ';color:var(--kind)}
 .pmr-law{display:flex;flex-direction:column;gap:6px;margin-top:4px}
-.pmr-rule{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:6px 8px;border-radius:9px;background:color-mix(in srgb,var(--surface) 75%,transparent);border:1px solid var(--border)}
-.pmr-rule q{color:var(--muted);font-size:10.5px;font-style:italic;line-height:1.4}
+.pmr-rule{display:flex;flex-direction:column;align-items:flex-start;gap:4px}.pmr-rule+.pmr-rule{margin-top:6px}.pmr-rule .pmr-chip{font-size:11.5px;font-weight:600;white-space:normal;text-align:left}
+.pmr-rule q{color:var(--text);font-family:var(--editorial);font-size:13px;line-height:1.4}
 .pmr-conds{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:2px;width:100%}
 .pmr-conds ul{list-style:none;margin:2px 0 0;padding:0 0 0 4px;display:flex;flex-direction:column;gap:2px}
 .pmr-conds li{display:flex;align-items:flex-start;gap:5px;font-size:11.5px;line-height:1.4;color:var(--text)}
