@@ -108,7 +108,7 @@ test('en drafting, la version d’un texte s’apprécie à la date du jour, sau
   const current = await on(undated, '2026-10-26');
   assert.doesNotMatch(texts(current, 'manque').join('\n'), /applicabilité dans le temps non établie/);
   assert.equal(at(current.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
-  assert.match(texts(await on(undated, '2015-06-14'), 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.vigueur : version non applicable : elle n’était pas en vigueur au 2015-06-14 \(date du jour\)/);
+  assert.match(texts(await on(undated, '2015-06-14'), 'erreur').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.vigueur : version non applicable : elle n’était pas en vigueur au 2015-06-14 \(date du jour\)/);
   assert.doesNotMatch(texts(await on(drafting, '2015-06-14'), 'manque').join('\n'), /version non applicable/);
   const unsigned = drafting.replace(/date_de_conclusion_du_contrat: \{ valeur: '2024-01-15', preuve: \[[^\n]*\] \},/, 'date_de_conclusion_du_contrat: { valeur: null },');
   assert.notEqual(unsigned, drafting);
@@ -117,8 +117,25 @@ test('en drafting, la version d’un texte s’apprécie à la date du jour, sau
   assert.equal(at(open.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
 });
 
+test('hors drafting, la version d’un texte s’applique selon la règle d’application dans le temps, citée et établie par une pièce', async () => {
+  const consultation = EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'consultation',\n  objectifs:");
+  const result = await verify(consultation);
+  assert.doesNotMatch(texts(result, 'manque').join('\n'), /\.version :|^version_de_l_article_1231_5 :/m);
+  assert.equal(at(result.annotated, 'version_de_l_article_1231_5.statut'), 'acquis');
+  const missing = await verify(consultation.replaceAll(", version: 'version_de_l_article_1231_5'", ''));
+  assert.match(texts(missing, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.version : version applicable non établie : ajoute version: 'version_de_l_article_1231_5'/);
+  assert.equal(at(missing.annotated, 'pénalité_encourue.si[0].selon[0].en_vigueur'), true);
+  const unsourced = await verify(consultation.replace(/\n {4}si: \[\n {6}\{ contrat_conclu_après_le_1er_octobre_2016: true,\n[^\n]*\n {4}\],/, "\n    si: [{ contrat_conclu_après_le_1er_octobre_2016: true }],"));
+  assert.match(texts(unsourced, 'manque').join('\n'), /version_de_l_article_1231_5 : la version applicable dépend de la règle d’application dans le temps : cite dans ce terme le texte qui la fixe/);
+  const unproven = await verify(consultation.replace("contrat_conclu_après_le_1er_octobre_2016: { true: [{ preuve: [{ piece: 'pieces/01_contrat.md', citation: `Fait le 15/01/2024` }] }] },", ''));
+  assert.equal(at(unproven.annotated, 'version_de_l_article_1231_5.statut'), 'à établir');
+  assert.equal(at(unproven.annotated, 'pénalité_encourue.statut'), 'à établir');
+  const drafting = await verify(EXAMPLE_CODE.replace('{\n  objectifs:', "{\n  qualification: 'drafting',\n  objectifs:").replaceAll(", version: 'version_de_l_article_1231_5'", ''));
+  assert.doesNotMatch(texts(drafting, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.version :/);
+});
+
 test('l’applicabilité d’un texte est un terme : ses conditions, sourcées et prouvées, décident si le texte s’applique', async () => {
-  const unjustified = await verify(EXAMPLE_CODE.replace(", applicabilite: 'applicabilité_de_l_article_1231_5' }] },", " }] },"));
+  const unjustified = await verify(EXAMPLE_CODE.replace(", applicabilite: 'applicabilité_de_l_article_1231_5', version", ", version"));
   assert.match(texts(unjustified, 'manque').join('\n'), /pénalité_encourue\.si\[0\]\.selon\[0\]\.applicabilite : applicabilité non établie : ajoute applicabilite:/);
   const result = await verify(EXAMPLE_CODE);
   assert.doesNotMatch(texts(result, 'manque').join('\n'), /applicabilite/);
@@ -130,11 +147,11 @@ test('l’applicabilité d’un texte est un terme : ses conditions, sourcées e
   assert.equal(at(inapplicable.annotated, 'objectifs[0].statut'), 'exclu');
   const unproven = await verify(EXAMPLE_CODE.replace(/\n  contrat_stipulant_une_pénalité: \{[^\n]*\},/, ''));
   assert.ok(at(unproven.annotated, 'objectifs[0].decisifs').includes('contrat_stipulant_une_pénalité'));
-  const errors = texts(await verify(EXAMPLE_CODE.replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", "applicabilite: 'applicabilité_inconnue' }] },").replace("applicabilite: 'applicabilité_de_l_article_1231_5' }] },", 'applicabilite: `un contrat` }] },')), 'erreur').join('\n');
+  const errors = texts(await verify(EXAMPLE_CODE.replace("applicabilite: 'applicabilité_de_l_article_1231_5', version", "applicabilite: 'applicabilité_inconnue', version").replace("applicabilite: 'applicabilité_de_l_article_1231_5', version", 'applicabilite: `un contrat`, version')), 'erreur').join('\n');
   assert.match(errors, /selon\[0\]\.applicabilite : terme applicabilité_inconnue non défini/);
   assert.match(errors, /selon\[0\]\.applicabilite : applicabilite : le nom commence par « applicabilité » \(ex\. applicabilité de un contrat\)/);
   const selfLoop = texts(await verify(EXAMPLE_CODE.replace("`Lorsque le contrat stipule une pénalité`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' } }", "`Lorsque le contrat stipule une pénalité`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }")), 'erreur').join('\n');
-  assert.match(selfLoop, /applicabilité_de_l_article_1231_5\.si\[\d\]\.selon\[0\]\.applicabilite : boucle : applicabilité_de_l_article_1231_5 → applicabilité_de_l_article_1231_5 ; les sources citées dans applicabilité_de_l_article_1231_5 n’ont besoin ni d’applicabilite ni de validite : retire celle qui renvoie à applicabilité_de_l_article_1231_5/);
+  assert.match(selfLoop, /applicabilité_de_l_article_1231_5\.si\[\d\]\.selon\[0\]\.applicabilite : boucle : applicabilité_de_l_article_1231_5 → applicabilité_de_l_article_1231_5 ; les sources citées dans applicabilité_de_l_article_1231_5 n’ont besoin ni d’applicabilite, ni de version, ni de validite : retire celle qui renvoie à applicabilité_de_l_article_1231_5/);
 });
 
 test('une condition sans source, un terme non défini, une boucle et un hypothèse non conforme sont des erreurs', async () => {
@@ -340,6 +357,8 @@ test('un délai sans décompte est un manque, sans que le système choisisse la 
   const contradicted = await cession(CESSION_CODE.replace('délai_de_date_à_date: { true: [', 'délai_de_date_à_date: { false: ['));
   assert.equal(at(contradicted.annotated, 'décompte_de_la_garantie.statut'), 'exclu');
   assert.equal(at(contradicted.annotated, 'réduction_due.si[0].statut'), 'exclu');
+  const unfounded = await cession(CESSION_CODE.replace(/\n  décompte_de_la_garantie: \{[\s\S]*?\n  \},/, "\n  décompte_de_la_garantie: { true: [{ preuve: [{ piece: 'pieces/02_cession.md', citation: `Les délais se calculent de date à date` }] }] },"));
+  assert.match(texts(unfounded, 'manque').join('\n'), /décompte_de_la_garantie : le délai se fonde sur une règle : cite dans ce terme le texte ou la clause qui fixe le délai/);
 });
 
 test('une valeur sans pièce laisse le calcul en suspens et devient décisive ; un délai sans date retenue est une erreur', async () => {
@@ -395,8 +414,8 @@ test('les contrôles portent un nom préfixé, désigné par leur emplacement ; 
   assert.deepEqual(keys.slice(0, 3), ['bilan', 'objectifs', 'pénalité_encourue']);
   assert.ok(keys.indexOf('applicabilité_de_l_article_1231_5') > keys.indexOf('grève'));
   assert.deepEqual(keys.slice(-2), ['valeurs', 'hypotheses']);
-  assert.deepEqual(Object.keys(at(result.annotated, 'pénalité_encourue.si[0].selon[0]')).slice(0, 5), ['source', 'citation', 'vigueur', 'applicabilite', 'titre']);
-  assert.equal(at(result.annotated, 'bilan.controles'), '1/5 établis');
+  assert.deepEqual(Object.keys(at(result.annotated, 'pénalité_encourue.si[0].selon[0]')).slice(0, 6), ['source', 'citation', 'vigueur', 'applicabilite', 'version', 'titre']);
+  assert.equal(at(result.annotated, 'bilan.controles'), '2/6 établis');
 });
 
 test('en contrat, les faits sont des hypothèses : pas de manque de preuve, mais chaque question a son hypothèse, et les hypothèses reprennent les faits établis', async () => {
@@ -571,7 +590,8 @@ test('une question peut appeler un montant : le taux se source par un texte appl
   const unsourced = await fiscal(FISCAL_CODE.replace(", applicabilite: 'applicabilité_de_l_article_150' }] },\n    impôt_dû", " }] },\n    impôt_dû").replace(/\n {6}selon: \[\{ source: 'LEGIARTI000000000101', citation: `une contribution de 3 %`[^\n]*\] \},/, ' },'));
   const gaps = texts(unsourced, 'manque').join('\n');
   assert.match(gaps, /valeurs\.taux_forfaitaire\.selon\[0\]\.applicabilite : applicabilité non établie/);
-  assert.match(gaps, /valeurs\.impôt_dû : nombres écrits dans la formule \(50000, 0, 0\.03\)/);
+  assert.match(gaps, /valeurs\.gain_net : mode de calcul sans règle : cite la clause \(preuve\) ou le texte \(selon\) qui fixe ce calcul$/m);
+  assert.match(gaps, /valeurs\.impôt_dû : mode de calcul sans règle : cite la clause \(preuve\) ou le texte \(selon\) qui fixe ce calcul et les nombres écrits dans la formule \(50000, 0, 0\.03\)/);
   const misplaced = await fiscal(FISCAL_CODE.replace("taux_forfaitaire: { valeur: 0.128, selon: [{ source: 'LEGIARTI000000000101', citation: `imposé au taux de 12,8 %`", "taux_forfaitaire: { valeur: 0.128, selon: [{ source: 'pieces/projet_cession.md', citation: `Prix : [●] euros`"));
   assert.match(texts(misplaced, 'erreur').join('\n'), /valeurs\.taux_forfaitaire\.selon\[0\]\.source : pieces\/projet_cession\.md est une pièce/);
 });

@@ -210,7 +210,7 @@ export function mount(container: HTMLElement, api: Host) {
       if (!levels.has(name)) order.push(name);
       levels.set(name, level);
       for (const entry of list.filter((item) => item.parent === name)) { visit(entry.condition.condition, level + 1); if (typeof entry.condition.decompte === 'string') visit(entry.condition.decompte, level + 2); }
-      for (const group of groups().filter((item) => item.parent === name)) for (const source of [group.condition, ...(group.condition.l_une ?? [])].flatMap((condition: Json) => condition.selon ?? [])) for (const control of [source.applicabilite, source.validite]) if (typeof control === 'string') visit(control, level + 1);
+      for (const group of groups().filter((item) => item.parent === name)) for (const source of [group.condition, ...(group.condition.l_une ?? [])].flatMap((condition: Json) => condition.selon ?? [])) for (const control of [source.applicabilite, source.version, source.validite]) if (typeof control === 'string') visit(control, level + 1);
     };
     const node = (id: string, label: string, status: string, kind: Kind, decisive = false): GraphNode => ({ id, label, status, kind, decisive, sources: [], pieces: [], x: 0, y: 0, w: 0, h: 0 });
     visit(objective[verb(objective)], 1);
@@ -240,7 +240,7 @@ export function mount(container: HTMLElement, api: Host) {
       const target = byId.get(entry.target);
       if (!target) continue;
       if (!target.sources.some((source) => source.source === entry.source.source)) target.sources.push(entry.source);
-      for (const control of [entry.source.applicabilite, entry.source.validite]) if (typeof control === 'string' && control !== entry.target && levels.has(control) && !edges.some((edge) => edge.from === control && edge.to === entry.target)) edges.push({ from: control, to: entry.target, link: 'si' });
+      for (const control of [entry.source.applicabilite, entry.source.version, entry.source.validite]) if (typeof control === 'string' && control !== entry.target && levels.has(control) && !edges.some((edge) => edge.from === control && edge.to === entry.target)) edges.push({ from: control, to: entry.target, link: 'si' });
     }
     for (const entry of cited()) { const target = byId.get(entry.target); if (target && !target.pieces.some((item) => item.piece.piece === entry.piece.piece)) target.pieces.push(entry); }
     for (const item of nodes.filter((entry) => entry.kind !== 'question' && entry.kind !== 'conclusion' && !edges.some((edge) => edge.from === entry.id))) edges.push({ from: item.id, to: '#conclusion', link: 'si' });
@@ -256,7 +256,7 @@ export function mount(container: HTMLElement, api: Host) {
     const chips = [...new Map(sources.map((source) => [source.source, source])).values()].map(sourceChip);
     const quotes = [...new Set(sources.map((source) => String(source.citation ?? '')).filter(Boolean))].map((text) => `<q>${escape(shorten(text, 240))}</q>`);
     const owned = members.filter((member) => steps.some((step) => step.id === member.condition)).map((member) => `<span class="pmr-needs">${stepRef(member.condition)}</span>`);
-    const controls = [...new Set(sources.flatMap((source) => [source.applicabilite, source.validite]).concat(members.map((member) => member.decompte)).filter((name): name is string => typeof name === 'string' && steps.some((step) => step.id === name)))].map((name) => `<span class="pmr-needs is-control">${name.startsWith('décompte') ? 'Décompte' : name.startsWith('validité') ? 'Valable si' : 'Applicable si'} : ${stepRef(name)}</span>`);
+    const controls = [...new Set(sources.flatMap((source) => [source.applicabilite, source.version, source.validite]).concat(members.map((member) => member.decompte)).filter((name): name is string => typeof name === 'string' && steps.some((step) => step.id === name)))].map((name) => `<span class="pmr-needs is-control">${name.startsWith('décompte') ? 'Décompte' : name.startsWith('validité') ? 'Valable si' : name.startsWith('version') ? 'Version applicable si' : 'Applicable si'} : ${stepRef(name)}</span>`);
     const fill = met(condition);
     const tone = link === 'sauf' ? { acquis: 'ko', exclu: 'ok' }[fill] ?? 'warn' : TONE[fill] ?? 'warn';
     const label = link === 'sauf' ? { ok: 'Exception écartée', ko: 'Exception établie' }[tone] ?? 'À établir' : { ok: 'Remplie', ko: 'Non remplie' }[tone] ?? 'À établir';

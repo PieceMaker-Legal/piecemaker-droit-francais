@@ -1,8 +1,8 @@
 export const NAME = /^[\p{L}_][\p{L}\p{N}_'’.-]*(?: [\p{L}\p{N}_'’.-]+)*$/u;
 
-export const CONTROLS = { applicabilite: 'applicabilité', decompte: 'décompte', validite: 'validité', prescription: 'prescription' } as const;
+export const CONTROLS = { applicabilite: 'applicabilité', version: 'version', decompte: 'décompte', validite: 'validité', prescription: 'prescription' } as const;
 export type ControlSlot = keyof typeof CONTROLS;
-export const isControlName = (name: string, slot?: ControlSlot) => (slot ? [CONTROLS[slot]] : Object.values(CONTROLS)).some((stem) => name.startsWith(`${stem} `) || name.startsWith(`${stem}_`));
+export const isControlName = (name: string, slot?: ControlSlot) => (slot ? [CONTROLS[slot]] : Object.values(CONTROLS)).some((stem) => name.replace(/_/g, ' ').startsWith(`${stem} `));
 
 const LINKS: Record<string, string> = { et: 'Écris deux conditions sous si.', ou: 'Écris les deux faits sous l_une.', sauf: 'Écris l’exception sous sauf.' };
 const STOP = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'l', 'd', 'à', 'a', 'au', 'aux', 'en', 'dans', 'par', 'pour', 'sur', 'un', 'une']);
@@ -23,7 +23,7 @@ export function adviseNames(names: string[]): Array<{ name: string; text: string
   }
   for (const [index, first] of unique.entries()) {
     for (const second of unique.slice(index + 1)) {
-      if (isControlName(first) !== isControlName(second)) continue;
+      if ((Object.keys(CONTROLS) as ControlSlot[]).some((slot) => isControlName(first, slot) !== isControlName(second, slot))) continue;
       const [small, large] = [stems(first), stems(second)].sort((x, y) => x.size - y.size);
       const shared = [...small].every((item) => large.has(item));
       if (shared && (large.size === small.size || (small.size >= 3 && large.size === small.size + 1))) advice.push({ name: second, text: `« ${first} » et « ${second} » désignent peut-être le même fait. Si oui, garde un seul nom.` });

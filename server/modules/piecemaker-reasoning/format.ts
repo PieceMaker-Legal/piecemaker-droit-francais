@@ -7,7 +7,7 @@ import type { ControlSlot } from './names.js';
 
 export type Ref = { piece: string; citation: string };
 export type Target = { piece: string; citation?: string };
-export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null; au?: string }; applicabilite?: string; validite?: string; renvoi: Target[] };
+export type Basis = { source: string; citation: string; vigueur?: { debut: string; fin: string | null; au?: string }; applicabilite?: string; version?: string; validite?: string; renvoi: Target[] };
 export type Duration = { unite: 'jours' | 'jours_ouvres' | 'mois' | 'ans'; nombre: number };
 export type Measure = {
   delai?: { de: string; a: string; borne: 'au_plus' | 'au_moins'; duree: Duration };
@@ -55,18 +55,18 @@ export const formulaNumbers = (formula: Formula): number[] => operands(formula).
 export const formulaConditions = (formula: Formula): string[] => [...(formula.operation === 'si' ? [formula.condition] : []), ...operands(formula).flatMap((item) => (typeof item === 'object' ? formulaConditions(item) : []))];
 export { CONTROLS };
 export type { ControlSlot };
-export const basisControls = (basis: Basis) => [basis.applicabilite, basis.validite].filter((name): name is string => Boolean(name));
-const CONTROL_PURPOSE: Record<ControlSlot, string> = { applicabilite: 'établit que ce texte s’applique', decompte: 'établit le calcul du délai', validite: 'établit la validité de l’acte ou de la clause', prescription: 'établit que l’action n’est pas prescrite' };
+export const basisControls = (basis: Basis) => [basis.applicabilite, basis.version, basis.validite].filter((name): name is string => Boolean(name));
+const CONTROL_PURPOSE: Record<ControlSlot, string> = { applicabilite: 'établit que ce texte s’applique', version: 'établit, par la règle d’application dans le temps, que cette version s’applique au dossier', decompte: 'établit le calcul du délai', validite: 'établit la validité de l’acte ou de la clause', prescription: 'établit que l’action n’est pas prescrite' };
 
 const KEY_HOMES: Record<string, string> = {
-  piece: 'une preuve ou un renvoi', citation: 'une preuve ou une source', source: 'une source de selon', vigueur: 'une source de selon', applicabilite: 'une source de selon', renvoi: 'une source de selon',
+  piece: 'une preuve ou un renvoi', citation: 'une preuve ou une source', source: 'une source de selon', vigueur: 'une source de selon', applicabilite: 'une source de selon', version: 'une source de selon', renvoi: 'une source de selon',
   debut: 'vigueur', fin: 'vigueur', au: 'vigueur', preuve: 'un fondement ou une valeur', selon: 'une condition, un fondement ou une valeur', si: 'un terme ou un fondement', sauf: 'un terme',
   l_une: 'une condition', delai: 'une condition', montant: 'une condition', decompte: 'une condition', de: 'un délai', a: 'un délai', au_plus: 'un délai ou un montant', au_moins: 'un délai ou un montant',
   plus_de: 'un montant', moins_de: 'un montant', valeur: 'une valeur ou un montant', formule: 'une valeur', objectif: 'un objectif', obtenir: 'un objectif', écarter: 'un objectif', réduire: 'un objectif', augmenter: 'un objectif',
   validite: 'une source de selon ou un objectif', prescription: 'un objectif', nom: 'une hypothèse', faits: 'une hypothèse', attendu: 'une hypothèse', true: 'une question établie', false: 'une question établie',
 };
 const ROOT_KEYS = ['qualification', 'objectifs', 'valeurs', 'hypotheses', 'acte'];
-const STRUCTURAL = new Set(['piece', 'citation', 'source', 'vigueur', 'applicabilite', 'renvoi', 'preuve', 'selon', 'si', 'sauf', 'l_une', 'delai', 'montant', 'decompte', 'au_plus', 'au_moins', 'plus_de', 'moins_de', 'valeur', 'formule', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'faits', 'attendu']);
+const STRUCTURAL = new Set(['piece', 'citation', 'source', 'vigueur', 'applicabilite', 'version', 'renvoi', 'preuve', 'selon', 'si', 'sauf', 'l_une', 'delai', 'montant', 'decompte', 'au_plus', 'au_moins', 'plus_de', 'moins_de', 'valeur', 'formule', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'faits', 'attendu']);
 const folded = (key: string) => key.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 const distance = (left: string, right: string) => {
   let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
@@ -156,7 +156,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
   const controls: Array<{ slot: ControlSlot; name: string; at: string }> = [];
   const control = (slot: ControlSlot, raw: unknown, at: string): string | undefined => {
     if (typeof raw !== 'string' || !NAME.test(raw)) { problem(at, `${slot} : nom du terme qui ${CONTROL_PURPOSE[slot]}, commençant par « ${CONTROLS[slot]} »`); return undefined; }
-    if (!isControlName(raw, slot)) { problem(at, `${slot} : le nom commence par « ${CONTROLS[slot]} » (ex. ${raw.includes('_') && !raw.includes(' ') ? `${CONTROLS[slot]}_${raw}` : `${CONTROLS[slot]} de ${raw}`})`); return undefined; }
+    if (!isControlName(raw, slot)) { problem(at, `${slot} : le nom commence par « ${CONTROLS[slot]} » (ex. ${raw.includes('_') && !raw.includes(' ') ? `${CONTROLS[slot].replace(/ /g, '_')}_${raw}` : `${CONTROLS[slot]} de ${raw}`})`); return undefined; }
     controls.push({ slot, name: raw, at });
     return raw;
   };
@@ -216,12 +216,16 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     if (!Array.isArray(raw)) { problem(path, 'liste attendue : [{ source, citation, vigueur }]'); return []; }
     return raw.flatMap((entry, index) => {
       const at = `${path}[${index}]`;
-      if (isObject(entry)) for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'validite', 'renvoi'].includes(key)) problem(`${at}.${key}`, key === 'contredit' ? CONTREDIT_REMOVED : unknownKey(key, ['source', 'citation', 'vigueur', 'applicabilite', 'validite', 'renvoi']));
+      if (isObject(entry)) for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'version', 'validite', 'renvoi'].includes(key)) problem(`${at}.${key}`, key === 'contredit' ? CONTREDIT_REMOVED : unknownKey(key, ['source', 'citation', 'vigueur', 'applicabilite', 'version', 'validite', 'renvoi']));
       if (!isObject(entry) || !text(entry.source) || !text(entry.citation)) { problem(at, '{ source: identifiant du texte, de la décision ou chemin de la pièce, citation: passage exact } attendu'); return []; }
       const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string, renvoi: targets(entry.renvoi, `${at}.renvoi`) };
       if (entry.applicabilite !== undefined) {
         const name = control('applicabilite', entry.applicabilite, `${at}.applicabilite`);
         if (name) basis.applicabilite = name;
+      }
+      if (entry.version !== undefined) {
+        const name = control('version', entry.version, `${at}.version`);
+        if (name) basis.version = name;
       }
       if (entry.validite !== undefined) {
         const name = control('validite', entry.validite, `${at}.validite`);
@@ -422,7 +426,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
   for (const { at, name } of dated) if (reasoning.valeurs.has(name) && reasoning.valeurs.get(name)!.valeur !== null && !isDate(reasoning.valeurs.get(name)!.valeur)) problem(`valeurs.${name}`, `${name} sert à ${at} : une date 'AAAA-MM-JJ' attendue`);
   for (const name of reasoning.terms.keys()) {
     const slot = (Object.keys(CONTROLS) as ControlSlot[]).find((key) => isControlName(name, key));
-    if (slot && !controls.some((entry) => entry.slot === slot && entry.name === name)) problem(name, `${name} est un contrôle : désigne-le par ${slot}: '${name}' ${slot === 'applicabilite' ? 'sur la source' : slot === 'decompte' ? 'sur le délai' : slot === 'validite' ? 'sur l’objectif ou la clause' : 'sur l’objectif'} qu’il conditionne`);
+    if (slot && !controls.some((entry) => entry.slot === slot && entry.name === name)) problem(name, `${name} est un contrôle : désigne-le par ${slot}: '${name}' ${slot === 'applicabilite' || slot === 'version' ? 'sur la source' : slot === 'decompte' ? 'sur le délai' : slot === 'validite' ? 'sur l’objectif ou la clause' : 'sur l’objectif'} qu’il conditionne`);
   }
   for (const { slot, name, at } of controls) if (!reasoning.terms.has(name)) problem(at, `terme ${name} non défini : écris ${name}: { si: [...] }, le terme qui ${CONTROL_PURPOSE[slot]}`);
   const reaches = (origin: string, current: string, seen: Set<string>): boolean => {
@@ -441,7 +445,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
 
 const ANNOTATIONS = new Set(['bilan', 'montant_calcule', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'atteint', 'obstacles', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul']);
 
-const KEY_ORDER = ['qualification', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'true', 'false', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'but', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'sauf', 'nom', 'faits', 'attendu', 'id', 'intitule', 'traite', 'conflit', 'sur', 'modele', 'avocat', 'texte', 'sections'];
+const KEY_ORDER = ['qualification', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'true', 'false', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'but', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'version', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'sauf', 'nom', 'faits', 'attendu', 'id', 'intitule', 'traite', 'conflit', 'sur', 'modele', 'avocat', 'texte', 'sections'];
 const rank = (key: string) => { const at = KEY_ORDER.indexOf(key); return at < 0 ? KEY_ORDER.length : at; };
 const ordered = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(ordered);
@@ -462,6 +466,7 @@ export function canonical(annotated: Record<string, unknown>, reasoning: Reasoni
     const bases = (list: Basis[]) => {
       for (const basis of list) {
         if (basis.applicabilite) pending.push({ slot: 'applicabilite', name: basis.applicabilite });
+        if (basis.version) pending.push({ slot: 'version', name: basis.version });
         if (basis.validite) pending.push({ slot: 'validite', name: basis.validite });
       }
     };
