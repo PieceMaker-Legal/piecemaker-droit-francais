@@ -247,11 +247,12 @@ export function mount(container: HTMLElement, api: Host) {
   };
 
   const sourceChip = (source: Json) => `<button class="pmr-chip is-source${source.en_vigueur === false ? ' is-against' : ''}" data-show="#source:${escape(source.source)}" data-quote="${escape(source.citation ?? '')}" title="${escape(String(source.titre ?? source.source))}">§ ${escape(sourceName(source))}</button>`;
-  const law = (term: Json) => {
-    const sources = ruling(term);
-    return [...new Set(sources.map((source) => source.source))].map((name) => {
-      const quotes = [...new Set(sources.filter((source) => source.source === name && source.citation).map((source) => String(source.citation)))];
-      return `<div class="pmr-rule">${sourceChip(sources.find((source) => source.source === name)!)}${quotes.map((quote) => `<q>${escape(shorten(quote, 240))}</q>`).join('')}</div>`;
+  const law = (name: string) => {
+    const clauses = (['si', 'sauf'] as const).flatMap((link) => (terms()[name]?.[link] ?? []).flatMap((condition: Json, index: number) => [{ condition, link, port: Array.isArray(condition.l_une) ? `#ou:${name}.${link}[${index}]` : String(condition.condition) }, ...(condition.l_une ?? []).map((member: Json) => ({ condition: member, link, port: String(member.condition) }))]))
+      .flatMap(({ condition, link, port }) => (condition.selon ?? []).map((source: Json) => ({ source, link, port, label: Array.isArray(condition.l_une) ? 'L’une des conditions' : human(String(condition.condition)) })));
+    return [...new Set(clauses.map((clause) => clause.source.source))].map((id) => {
+      const mine = clauses.filter((clause) => clause.source.source === id);
+      return `<div class="pmr-rule">${sourceChip(mine[0].source)}<div class="pmr-clauses">${mine.map((clause) => `<div class="pmr-clause" data-port="${escape(clause.port)}">${clause.source.citation ? `<q>${escape(shorten(String(clause.source.citation), 240))}</q>` : ''}<span class="pmr-needs">${clause.link === 'sauf' ? 'Sauf : ' : ''}${escape(clause.label)}</span></div>`).join('')}</div></div>`;
     }).join('');
   };
 
@@ -286,14 +287,14 @@ export function mount(container: HTMLElement, api: Host) {
     const occurrence = occurrences().find((entry) => entry.condition.condition === node.id);
     const fill = occurrence ? met(occurrence.condition) : node.status;
     const tone = occurrence?.path.includes('.sauf[') ? { acquis: 'ko', exclu: 'ok' }[fill] ?? 'warn' : TONE[fill] ?? 'warn';
-    const rules = term && !facts && node.kind !== 'fait' ? law(term) : '';
+    const rules = term && !facts && node.kind !== 'fait' ? law(node.id) : '';
     const status = node.kind === 'fait' ? pill({ ok: 'acquis', ko: 'exclu' }[tone] ?? 'à établir', { ok: 'Condition remplie', ko: 'Condition non remplie' }[tone] ?? 'À établir') : pill(node.status, STATUS[node.status] ?? 'À établir');
     const body = node.kind === 'question'
       ? `<span class="pmr-kind">${kind}</span><strong class="pmr-editorial">${escape(node.label)}</strong>`
       : node.kind === 'conclusion'
         ? `<span class="pmr-kind">${kind}</span><strong>Réponse : ${escape(node.label)}</strong>${decisifs.length ? `<p class="pmr-sub">Dépend de : ${decisifs.map((name) => escape(human(name))).join(', ')}</p>` : ''}${verdict()}`
         : rules
-          ? `${rules}<strong class="pmr-then">${escape(node.label)}</strong><div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`
+          ? `<strong class="pmr-ruled">${escape(node.label)}</strong><div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>${rules}`
           : `<span class="pmr-kind">${kind}</span><strong>${escape(node.label)}</strong>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`;
     const uncertain = ['terme', 'controle', 'conclusion'].includes(node.kind) && ['à établir', 'disputé'].includes(node.status);
     return `<div class="pmr-box pmr-${node.kind}${state}${node.kind === 'fait' ? ` is-${tone}` : ''}${uncertain ? ' is-uncertain' : ''}${(node.kind === 'fait' ? fill : node.status) === 'exclu' && node.kind !== 'question' ? ' is-excluded' : ''}" data-id="${escape(node.id)}" data-node="${escape(node.id)}" tabindex="0" role="button" aria-label="${escape(`${kind} : ${node.label}`)}"><span class="pmr-icon" aria-hidden="true">${icon}</span><div class="pmr-box-body">${body}</div>${mark ? `<span class="pmr-test is-${mark}" title="${mark === 'ok' ? 'Vérifié par le test' : 'Alerte : voir le test'}">${MARK[mark]}</span>` : ''}</div>`;
@@ -326,7 +327,15 @@ export function mount(container: HTMLElement, api: Host) {
   const layoutGraph = (refit = false) => {
     if (!canvas.clientWidth || !nodes.length) return;
     const byId = new Map(nodes.map((node) => [node.id, node]));
-    stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => { const node = byId.get(element.dataset.id!); if (node) { node.w = element.offsetWidth; node.h = element.offsetHeight; } });
+    const ports = new Map<string, { dx: number; bottom: number }>();
+    stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => {
+      const node = byId.get(element.dataset.id!);
+      if (!node) return;
+      node.w = element.offsetWidth;
+      node.h = element.offsetHeight;
+      element.querySelectorAll<HTMLElement>('[data-port]').forEach((port) => { if (!ports.has(`${node.id}\n${port.dataset.port}`)) ports.set(`${node.id}\n${port.dataset.port}`, { dx: port.offsetLeft + port.offsetWidth / 2 - node.w / 2, bottom: port.offsetTop + port.offsetHeight }); });
+    });
+    const anchor = (node: GraphNode, other: string) => node.x + (ports.get(`${node.id}\n${other}`)?.dx ?? 0);
     const inner = edges.filter((edge) => edge.to !== '#conclusion');
     const ruled = new Set(inner.map((edge) => edge.to));
     const upper = (node: GraphNode) => node.kind !== 'question' && node.kind !== 'conclusion' && (node.kind !== 'fait' || ruled.has(node.id));
@@ -345,7 +354,7 @@ export function mount(container: HTMLElement, api: Host) {
     const wired = [...nodes.filter((node) => layer.get(node.id) === 1).map((node): Edge => ({ from: node.id, to: '#question', link: 'si' })), ...edges];
     for (let level = 0; level <= deepest; level++) {
       const wanted = new Map(nodes.filter((node) => layer.get(node.id) === level).map((node) => {
-        const targets = wired.filter((edge) => edge.from === node.id || edge.to === node.id).map((edge) => byId.get(edge.from === node.id ? edge.to : edge.from)!).filter((other) => layer.get(other.id)! < level).map((other) => other.x);
+        const targets = wired.filter((edge) => edge.from === node.id || edge.to === node.id).map((edge) => byId.get(edge.from === node.id ? edge.to : edge.from)!).filter((other) => layer.get(other.id)! < level).map((other) => anchor(other, node.id));
         return [node, level === 0 ? 0 : targets.length ? targets.reduce((sum, x) => sum + x, 0) / targets.length : Infinity] as const;
       }));
       const row = [...wanted.keys()].sort((a, b) => wanted.get(a)! - wanted.get(b)!);
@@ -366,7 +375,7 @@ export function mount(container: HTMLElement, api: Host) {
     const wires = wired.map((edge) => {
       const [a, b] = [byId.get(edge.from), byId.get(edge.to)].sort((one, other) => (layer.get(one?.id ?? '') ?? 0) - (layer.get(other?.id ?? '') ?? 0));
       if (!a || !b) return '';
-      const x1 = a.x, y1 = a.y + a.h, x2 = b.x, y2 = b.y - 2, bend = Math.min(y2 - y1, ROW * 1.5) / 2;
+      const x1 = anchor(a, b.id), y1 = a.y + (ports.get(`${a.id}\n${b.id}`)?.bottom ?? a.h), x2 = b.x, y2 = b.y - 2, bend = Math.min(y2 - y1, ROW * 1.5) / 2;
       const hidden = waiting.has(edge.from) || waiting.has(edge.to) ? ' is-waiting' : '';
       return `<path class="pmr-wire${edge.link === 'sauf' ? ' is-sauf' : ''}${hidden}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" stroke="${COLORS[a.kind]}" marker-end="url(#pmr-arrow-${a.kind})" d="M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}"/>${edge.link === 'sauf' ? `<text class="pmr-wire-label${hidden}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" x="${x2 + 6}" y="${y2 - bend / 2}">sauf</text>` : ''}`;
     }).join('');
