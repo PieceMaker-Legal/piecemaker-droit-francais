@@ -419,7 +419,7 @@ export async function verifyReasoning(input: {
         if (isValue && reasoning.valeurs.get(name)!.selon.length && reasoning.valeurs.get(name)!.valeur !== null) { add('manque', at, `${objective.effet} dépend de ${name}, dont la source n’est pas acquise : établis sa vigueur à la date et son applicabilité`, `${human(objective.effet)} dépend de ${phrase(name)}, dont le texte n’est pas encore établi comme applicable.`); continue; }
         const covered = supposing([name], [objective.effet]).length > 0;
         if (name === objective.effet) {
-          if (!((drafting || consultation) && covered)) add('manque', at, `le but ${name} n’est pas renseigné : donne dans valeurs sa formule, avec le texte qui la fixe (selon), ou son montant, avec sa preuve (pièce) ou sa source (selon : texte)${drafting || consultation ? `, ou ajoute des hypothèses qui donnent le montant attendu de ${name}` : ''}`, `Le but ${phrase(name)} n’est pas renseigné : ni formule ni montant.`);
+          if (!((drafting || consultation) && covered)) add('manque', at, `but non renseigné. Écris sa formule et son texte (selon), ou son montant et sa preuve (pièce ou selon)${drafting || consultation ? `, ou des hypothèses avec le montant attendu` : ''}.`, `Le but ${phrase(name)} n’a ni formule ni montant.`);
           continue;
         }
         const supposed = `ajoute une hypothèse qui la suppose (faits) et donne le montant attendu de ${objective.effet}`;
