@@ -423,6 +423,24 @@ export function mount(container: HTMLElement, api: Host) {
     const own = (id: string) => entries.filter((entry) => entry.key === `terme:${id}` || entry.key === `fait:${id}`);
     const unplaced = (list: ReasoningIssue[]) => list.filter((issue) => !placed.has(issue.id) && placed.add(issue.id));
     const feeds = (child: string, parent: string) => edges.some((edge) => edge.from === child && (edge.to === parent || (edge.to.startsWith('#ou:') && edges.some((up) => up.from === edge.to && up.to === parent))));
+    const steps = nodes.filter((node) => node.kind === 'terme' || node.kind === 'controle');
+    const named = (id: string) => {
+      const index = steps.findIndex((step) => step.id === id);
+      return `<button class="pmr-link" data-select="${escape(id)}">${escape(nodes.find((item) => item.id === id)?.label ?? id)}</button>${index < 0 ? '' : ` (étape ${index + 1})`}`;
+    };
+    const namedGroup = (id: string) => id.startsWith('#ou:') ? `au choix : ${edges.filter((edge) => edge.to === id && edge.link === 'l_une').map((edge) => named(edge.from)).join(' ou ')}` : named(id);
+    const rule = (node: GraphNode) => {
+      const direct = edges.filter((edge) => edge.to === node.id);
+      const into = [...direct, ...direct.filter((edge) => edge.from.startsWith('#ou:')).flatMap((group) => edges.filter((edge) => edge.to === group.from && edge.link !== 'l_une').map((edge) => ({ ...edge, link: group.link })))];
+      const needs = into.filter((edge) => edge.link !== 'sauf').map((edge) => namedGroup(edge.from));
+      const unless = into.filter((edge) => edge.link === 'sauf').map((edge) => namedGroup(edge.from));
+      const serves = edges.filter((edge) => edge.from === node.id).flatMap((edge) => edge.to.startsWith('#ou:') ? edges.filter((up) => up.from === edge.to).map((up) => up.to) : [edge.to]).map((id) => id === '#conclusion' ? 'la réponse' : named(id));
+      const list = (items: string[]) => `<ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>`;
+      const when = needs.length ? `<p>Remplie si :</p>${list(needs)}` : '';
+      const except = unless.length ? `<p>Sauf :</p>${list(unless)}` : '';
+      const why = serves.length ? `<p>Sert à établir ${serves.join(' et ')}.</p>` : '';
+      return when || except || why ? `<div class="pmr-phase-rule">${why}${when}${except}</div>` : '';
+    };
     const stage = (node: GraphNode) => {
       const mine = entriesOf(node);
       const facts = nodes.filter((child) => child.kind === 'fait' && feeds(child.id, node.id)).map((child) => ({ child, head: own(child.id), proofs: entriesOf(child).filter((entry) => (entry.step === 'source' || entry.step === 'pièce') && !mine.some((other) => other.key === entry.key)), issues: issuesFor(child) }));
@@ -436,18 +454,18 @@ export function mount(container: HTMLElement, api: Host) {
       const pieces = rows(mine.filter((entry) => entry.step === 'pièce'));
       facts.forEach((fact) => fact.head.forEach((entry) => used.add(entry.key)));
       const proved = facts.map((fact) => `<div class="pmr-fact">${rows(fact.head.length ? fact.head.slice(0, 1) : [{ key: `fait:${fact.child.id}`, step: 'fait', status: 'neutre', subject: fact.child.label, text: 'Pas encore testé' }])}${fact.proofs.length ? `<div class="pmr-proofs">${rows(fact.proofs)}</div>` : ''}</div>`).join('');
-      return `<section class="pmr-phase" data-status="${status}"><header><span class="pmr-step">Étape</span><button class="pmr-link" data-select="${escape(node.id)}"><strong>${escape(node.label)}</strong></button><span class="pmr-phase-state">${escape(head[0]?.text ?? '')}</span></header>${issues.length ? issueList(unplaced(issues), false, true) : ''}${law ? `<h5>Droit</h5>${law}` : ''}${proved || pieces ? `<h5>Faits et pièces</h5>${pieces}${proved}` : ''}</section>`;
+      return `<section class="pmr-phase" data-status="${status}"><header><span class="pmr-step">Étape ${steps.indexOf(node) + 1}</span><button class="pmr-link" data-select="${escape(node.id)}"><strong>${escape(node.label)}</strong></button><span class="pmr-phase-state">${escape(head[0]?.text ?? '')}</span></header>${rule(node)}${issues.length ? issueList(unplaced(issues), false, true) : ''}${law ? `<h5>Droit</h5>${law}` : ''}${proved || pieces ? `<h5>Faits et pièces</h5>${pieces}${proved}` : ''}</section>`;
     };
     const alerts = entries.filter((entry) => entry.status === 'alerte').length;
     const run = `<div class="pmr-run"><button class="pmr-primary" data-run-test${live || busy || !context.project ? ' disabled' : ''}>${live ? 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</span>` : ''}</div>`;
     const answer = rows(entries.filter((entry) => entry.step === 'réponse'));
-    const stages = nodes.filter((node) => node.kind === 'terme' || node.kind === 'controle').map(stage).join('');
+    const stages = steps.map(stage).join('');
     const trials = rows(entries.filter((entry) => entry.step === 'essai'));
     const rest = rows(entries.filter((entry) => !used.has(entry.key)));
     const loose = visibleIssues().filter((issue) => !placed.has(issue.id) && !issue.path.startsWith('hypotheses'));
     const tested = visibleIssues().filter((issue) => issue.path.startsWith('hypotheses'));
     const dismissed = (snapshot?.issues ?? []).filter((issue) => dismissedIds().has(issue.id));
-    detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${answer ? `<section class="pmr-part">${answer}</section>` : ''}${loose.length ? `<section class="pmr-part"><h4>À corriger</h4>${issueList(loose)}</section>` : ''}${stages ? `<section class="pmr-part"><h4>Étapes du raisonnement</h4>${stages}</section>` : ''}${trials || tested.length ? `<section class="pmr-part"><h4>Hypothèses</h4>${issueList(tested, false, true)}${trials}</section>` : ''}${rest ? `<section class="pmr-part"><h4>Autres vérifications</h4>${rest}</section>` : ''}${dismissed.length ? `<details class="pmr-part"><summary class="pmr-muted">Ignorées par vous (${dismissed.length})</summary>${issueList(dismissed, true)}</details>` : ''}`;
+    detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${answer ? `<section class="pmr-part">${answer}</section>` : ''}${loose.length ? `<section class="pmr-part"><h4>À corriger</h4>${issueList(loose)}</section>` : ''}${stages ? `<section class="pmr-part"><h4>Étapes du raisonnement</h4><p class="pmr-muted">La réponse dépend de l’étape 1. Chaque étape est remplie quand ses conditions le sont : une condition est un fait prouvé par une pièce, ou une autre étape.</p>${stages}</section>` : ''}${trials || tested.length ? `<section class="pmr-part"><h4>Hypothèses</h4>${issueList(tested, false, true)}${trials}</section>` : ''}${rest ? `<section class="pmr-part"><h4>Autres vérifications</h4>${rest}</section>` : ''}${dismissed.length ? `<details class="pmr-part"><summary class="pmr-muted">Ignorées par vous (${dismissed.length})</summary>${issueList(dismissed, true)}</details>` : ''}`;
   };
 
   const paintView = () => {
