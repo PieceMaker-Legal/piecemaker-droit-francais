@@ -418,6 +418,10 @@ export async function verifyReasoning(input: {
         const at = isValue ? `valeurs.${name}` : `objectifs[${index}]`;
         if (isValue && reasoning.valeurs.get(name)!.selon.length && reasoning.valeurs.get(name)!.valeur !== null) { add('manque', at, `${objective.effet} dépend de ${name}, dont la source n’est pas acquise : établis sa vigueur à la date et son applicabilité`, `${human(objective.effet)} dépend de ${phrase(name)}, dont le texte n’est pas encore établi comme applicable.`); continue; }
         const covered = supposing([name], [objective.effet]).length > 0;
+        if (name === objective.effet) {
+          if (!((drafting || consultation) && covered)) add('manque', at, `le but ${name} n’est pas renseigné : donne dans valeurs sa formule, avec le texte qui la fixe (selon), ou son montant, avec sa preuve (pièce) ou sa source (selon : texte)${drafting || consultation ? `, ou ajoute des hypothèses qui donnent le montant attendu de ${name}` : ''}`, `Le but ${phrase(name)} n’est pas renseigné : ni formule ni montant.`);
+          continue;
+        }
         const supposed = `ajoute une hypothèse qui la suppose (faits) et donne le montant attendu de ${objective.effet}`;
         if (drafting && !covered) add('manque', at, `${objective.effet} dépend de ${name}, que le projet ne fixe pas : ${isValue ? 'fixe-la dans valeurs, ou ' : ''}${supposed}`, `${human(objective.effet)} dépend de ${phrase(name)}, que le projet ne fixe pas.`, isValue ? undefined : name);
         if (!drafting && !(consultation && covered)) add('manque', at, isValue ? `${objective.effet} dépend de ${name} : renseigne-la dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)${consultation ? `, ou ${supposed}` : ''}` : `${objective.effet} dépend de ${name} : établis ce point (preuve, ou ses propres conditions)${consultation ? `, ou ${supposed}` : ''}`, `${human(objective.effet)} dépend de ${phrase(name)}, qui n’est pas établi.`, isValue ? undefined : name);
