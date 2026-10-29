@@ -102,6 +102,7 @@ export function mount(container: HTMLElement, api: Host) {
   let shape = '';
   let nodes: GraphNode[] = [];
   let edges: Edge[] = [];
+  let steps: GraphNode[] = [];
   let zoom = 1;
   let pan = { x: 0, y: 0 };
   let drag: { id: string; x: number; y: number; moved: boolean } | null = null;
@@ -196,6 +197,7 @@ export function mount(container: HTMLElement, api: Host) {
   const buildGraph = () => {
     nodes = [];
     edges = [];
+    steps = [];
     const objective = objectives()[scope];
     if (!objective) return;
     const all = terms();
@@ -244,6 +246,8 @@ export function mount(container: HTMLElement, api: Host) {
     const leaves = nodes.filter((item) => item.kind === 'fait' && !ruled.has(item.id));
     for (const item of leaves.length ? leaves : nodes.filter((entry) => entry.id === objective[verb(objective)])) edges.push({ from: item.id, to: '#conclusion', link: 'si' });
     if (selected && !byId.has(selected)) selected = '';
+    const layer = layering();
+    steps = nodes.filter((item) => item.kind === 'terme' || item.kind === 'controle').reverse().sort((one, other) => layer.get(other.id)! - layer.get(one.id)!);
   };
 
   const sourceChip = (source: Json) => `<button class="pmr-chip is-source${source.en_vigueur === false ? ' is-against' : ''}" data-show="#source:${escape(source.source)}" data-quote="${escape(source.citation ?? '')}" title="${escape(String(source.titre ?? source.source))}">§ ${escape(sourceName(source))}</button>`;
@@ -288,16 +292,36 @@ export function mount(container: HTMLElement, api: Host) {
     const fill = occurrence ? met(occurrence.condition) : node.status;
     const tone = occurrence?.path.includes('.sauf[') ? { acquis: 'ko', exclu: 'ok' }[fill] ?? 'warn' : TONE[fill] ?? 'warn';
     const rules = term && !facts && node.kind !== 'fait' ? law(node.id) : '';
+    const numbered = steps.includes(node) ? `<span class="pmr-kind">Étape ${steps.indexOf(node) + 1}${node.kind === 'controle' ? ` · ${kind}` : ''}</span>` : '';
     const status = node.kind === 'fait' ? pill({ ok: 'acquis', ko: 'exclu' }[tone] ?? 'à établir', { ok: 'Condition remplie', ko: 'Condition non remplie' }[tone] ?? 'À établir') : pill(node.status, STATUS[node.status] ?? 'À établir');
     const body = node.kind === 'question'
       ? `<span class="pmr-kind">${kind}</span><strong class="pmr-editorial">${escape(node.label)}</strong>`
       : node.kind === 'conclusion'
         ? `<span class="pmr-kind">${kind}</span><strong>Réponse : ${escape(node.label)}</strong>${decisifs.length ? `<p class="pmr-sub">Dépend de : ${decisifs.map((name) => escape(human(name))).join(', ')}</p>` : ''}${verdict()}`
         : rules
-          ? `<strong class="pmr-ruled">${escape(node.label)}</strong><div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>${rules}`
-          : `<span class="pmr-kind">${kind}</span><strong>${escape(node.label)}</strong>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`;
+          ? `${numbered}<strong class="pmr-ruled">${escape(node.label)}</strong><div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>${rules}`
+          : `${numbered || `<span class="pmr-kind">${kind}</span>`}<strong>${escape(node.label)}</strong>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`;
     const uncertain = ['terme', 'controle', 'conclusion'].includes(node.kind) && ['à établir', 'disputé'].includes(node.status);
     return `<div class="pmr-box pmr-${node.kind}${state}${node.kind === 'fait' ? ` is-${tone}` : ''}${uncertain ? ' is-uncertain' : ''}${(node.kind === 'fait' ? fill : node.status) === 'exclu' && node.kind !== 'question' ? ' is-excluded' : ''}" data-id="${escape(node.id)}" data-node="${escape(node.id)}" tabindex="0" role="button" aria-label="${escape(`${kind} : ${node.label}`)}"><span class="pmr-icon" aria-hidden="true">${icon}</span><div class="pmr-box-body">${body}</div>${mark ? `<span class="pmr-test is-${mark}" title="${mark === 'ok' ? 'Vérifié par le test' : 'Alerte : voir le test'}">${MARK[mark]}</span>` : ''}</div>`;
+  };
+
+  const layering = () => {
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const inner = edges.filter((edge) => edge.to !== '#conclusion');
+    const ruled = new Set(inner.map((edge) => edge.to));
+    const upper = (node: GraphNode) => node.kind !== 'question' && node.kind !== 'conclusion' && (node.kind !== 'fait' || ruled.has(node.id));
+    const layer = new Map([['#question', 0]]);
+    for (const node of nodes) if (upper(node) && !inner.some((edge) => edge.from === node.id)) layer.set(node.id, 1);
+    for (let pass = 0; pass < nodes.length; pass++) {
+      let changed = false;
+      for (const edge of inner) { const above = layer.get(edge.to); if (above !== undefined && above < nodes.length && upper(byId.get(edge.from)!) && above + 1 > (layer.get(edge.from) ?? 0)) { layer.set(edge.from, above + 1); changed = true; } }
+      if (!changed) break;
+    }
+    for (const node of nodes) if (upper(node) && !layer.has(node.id)) layer.set(node.id, 1);
+    const facts = Math.max(...layer.values()) + 1;
+    for (const node of nodes) if (node.kind !== 'conclusion' && !layer.has(node.id)) layer.set(node.id, facts);
+    layer.set('#conclusion', Math.max(...layer.values()) + 1);
+    return layer;
   };
 
   const transform = () => { stage.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`; };
@@ -336,21 +360,8 @@ export function mount(container: HTMLElement, api: Host) {
       element.querySelectorAll<HTMLElement>('[data-port]').forEach((port) => { if (!ports.has(`${node.id}\n${port.dataset.port}`)) ports.set(`${node.id}\n${port.dataset.port}`, { dx: port.offsetLeft + port.offsetWidth / 2 - node.w / 2, bottom: port.offsetTop + port.offsetHeight }); });
     });
     const anchor = (node: GraphNode, other: string) => node.x + (ports.get(`${node.id}\n${other}`)?.dx ?? 0);
-    const inner = edges.filter((edge) => edge.to !== '#conclusion');
-    const ruled = new Set(inner.map((edge) => edge.to));
-    const upper = (node: GraphNode) => node.kind !== 'question' && node.kind !== 'conclusion' && (node.kind !== 'fait' || ruled.has(node.id));
-    const layer = new Map([['#question', 0]]);
-    for (const node of nodes) if (upper(node) && !inner.some((edge) => edge.from === node.id)) layer.set(node.id, 1);
-    for (let pass = 0; pass < nodes.length; pass++) {
-      let changed = false;
-      for (const edge of inner) { const above = layer.get(edge.to); if (above !== undefined && above < nodes.length && upper(byId.get(edge.from)!) && above + 1 > (layer.get(edge.from) ?? 0)) { layer.set(edge.from, above + 1); changed = true; } }
-      if (!changed) break;
-    }
-    for (const node of nodes) if (upper(node) && !layer.has(node.id)) layer.set(node.id, 1);
-    const facts = Math.max(...layer.values()) + 1;
-    for (const node of nodes) if (node.kind !== 'conclusion' && !layer.has(node.id)) layer.set(node.id, facts);
-    const deepest = Math.max(...layer.values()) + 1;
-    layer.set('#conclusion', deepest);
+    const layer = layering();
+    const deepest = layer.get('#conclusion')!;
     const wired = [...nodes.filter((node) => layer.get(node.id) === 1).map((node): Edge => ({ from: node.id, to: '#question', link: 'si' })), ...edges];
     for (let level = 0; level <= deepest; level++) {
       const wanted = new Map(nodes.filter((node) => layer.get(node.id) === level).map((node) => {
@@ -426,7 +437,6 @@ export function mount(container: HTMLElement, api: Host) {
     const own = (id: string) => entries.filter((entry) => entry.key === `terme:${id}` || entry.key === `fait:${id}`);
     const unplaced = (list: ReasoningIssue[]) => list.filter((issue) => !placed.has(issue.id) && placed.add(issue.id));
     const feeds = (child: string, parent: string) => edges.some((edge) => edge.from === child && (edge.to === parent || (edge.to.startsWith('#ou:') && edges.some((up) => up.from === edge.to && up.to === parent))));
-    const steps = nodes.filter((node) => node.kind === 'terme' || node.kind === 'controle').reverse();
     const named = (id: string) => {
       const index = steps.findIndex((step) => step.id === id);
       return `<button class="pmr-link" data-select="${escape(id)}">${escape(nodes.find((item) => item.id === id)?.label ?? id)}</button>${index < 0 ? '' : ` (étape ${index + 1})`}`;
