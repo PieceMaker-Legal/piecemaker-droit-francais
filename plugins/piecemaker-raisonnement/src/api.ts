@@ -4,6 +4,12 @@ export function loadReasoning(projectPath: string | null, example = false, raiso
   return request<ReasoningSnapshot>(`/api/piecemaker/reasoning${example ? '/example' : `?projectPath=${encodeURIComponent(projectPath ?? '')}${raisonnement ? `&raisonnement=${encodeURIComponent(raisonnement)}` : ''}`}`);
 }
 
+export type Simulation = { objectifs: Array<{ objectif: string; statut: string; montant?: number | null }>; valeurs: Record<string, string | number | null>; termes: Record<string, string> };
+
+export function simulateReasoning(projectPath: string | null, faits: Record<string, boolean>, example = false, raisonnement?: string): Promise<Simulation> {
+  return request<Simulation>(`/api/piecemaker/reasoning/${example ? 'example/' : ''}simulate`, example ? { faits } : { projectPath, faits, raisonnement });
+}
+
 export function citeSource(projectPath: string, source: string, citation: string, raisonnement?: string): Promise<{ token: string }> {
   return request<{ token: string }>('/api/piecemaker/reasoning/citation', { projectPath, source, citation, raisonnement });
 }

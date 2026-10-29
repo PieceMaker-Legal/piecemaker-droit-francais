@@ -742,6 +742,8 @@ test('une alternative entre une question disputée et une approbation établie f
   assert.equal(at(approved.annotated, 'objectifs[0].decisifs'), undefined);
   const simulated = await verifyReasoning({ code: VOTE('false'), cwd: '/dossier-fictif', connectors: connectors(), reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(), simulation: { indemnité_soumise_au_vote_ex_post: false } });
   assert.equal(simulated.simulation?.objectifs[0].statut, 'acquis');
+  assert.equal(simulated.simulation?.termes.indemnité_exigible, 'acquis');
+  assert.equal(simulated.simulation?.termes.indemnité_soumise_au_vote_ex_post, 'exclu');
   const inverse = await verifyReasoning({ code: VOTE('false'), cwd: '/dossier-fictif', connectors: connectors(), reliability: new Map(), nature: () => null, persons: [], dismissed: new Set(), simulation: { indemnité_soumise_au_vote_ex_post: true } });
   assert.equal(inverse.simulation?.objectifs[0].statut, 'exclu');
   const wrong = await verify(VOTE('false').replace('attendu: { indemnité_exigible: vrai }', 'attendu: { indemnité_exigible: faux }'));

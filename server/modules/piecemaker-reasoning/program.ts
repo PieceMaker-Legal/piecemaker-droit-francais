@@ -70,7 +70,7 @@ function node(root: Record<string, unknown>, at: string): Record<string, unknown
   return isObject(current) ? current : null;
 }
 
-export type Simulation = { objectifs: Array<{ objectif: string; statut: ReasoningStatus; montant?: number | null }>; valeurs: Record<string, string | number | null> };
+export type Simulation = { objectifs: Array<{ objectif: string; statut: ReasoningStatus; montant?: number | null }>; valeurs: Record<string, string | number | null>; termes: Record<string, ReasoningStatus> };
 export type Verification = { annotated: Record<string, unknown> | null; issues: ReasoningIssue[]; code: string; log: ReasoningLogEntry[]; simulation?: Simulation };
 const shown = (value: ReasoningValue | number | string) => (value === null ? 'à établir' : typeof value === 'boolean' ? (value ? 'vrai' : 'faux') : String(value));
 const told = (name: string, value: ReasoningValue | number | string) => `${human(name)} : ${value === null ? 'en suspens' : typeof value === 'boolean' ? (value ? 'acquis' : 'exclu') : typeof value === 'number' ? value.toLocaleString('fr-FR') : value}`;
@@ -686,6 +686,7 @@ export async function verifyReasoning(input: {
         return { objectif: objective.objectif, statut: typeof montant === 'number' ? STATUS(checked) : 'à établir', montant: typeof montant === 'number' ? montant : null };
       }),
       valeurs: Object.fromEntries([...reasoning.valeurs.keys()].map((name) => [name, run.value(name)])),
+      termes: Object.fromEntries([...[...shape.leaves].filter((name) => !reasoning.terms.has(name)).map((name) => [name, STATUS(run.leaf(name))] as const), ...[...run.test([...reasoning.terms.keys()])].map(([name, value]) => [name, STATUS(value)] as const)]),
     };
   }
   return { annotated: { bilan, ...canonical(annotated, reasoning) }, issues, code, log, ...(simulation ? { simulation } : {}) };
@@ -1000,7 +1001,7 @@ export const EXAMPLE_SOURCES: Record<string, SourceInfo> = {
   'pieces/07_courriel.md': { kind: 'piece', title: 'Courriel (fictif)', text: 'Le mouvement limité à notre atelier a duré deux jours.' },
 };
 
-export async function reasoningExample(): Promise<ReasoningSnapshot> {
+export async function reasoningExample(simulation?: Trial['faits']) {
   const result = await verifyReasoning({
     code: EXAMPLE_CODE, cwd: '',
     connectors: {
@@ -1012,6 +1013,7 @@ export async function reasoningExample(): Promise<ReasoningSnapshot> {
     reliability: new Map(), nature: () => null,
     persons: [{ label: 'Société Beta SARL', kind: 'company', name: null, siren: null }],
     dismissed: new Set(),
+    ...(simulation ? { simulation } : {}),
   });
-  return { ...emptySnapshot(), code: result.code, annotated: result.annotated, issues: result.issues, test: { at: new Date().toISOString(), log: result.log }, demo: true };
+  return { ...emptySnapshot(), code: result.code, annotated: result.annotated, issues: result.issues, test: { at: new Date().toISOString(), log: result.log }, demo: true, ...(result.simulation ? { simulation: result.simulation } : {}) };
 }

@@ -15,6 +15,7 @@ export function createReasoningRouter(service: ReturnType<typeof createReasoning
     } catch (error) { fail(response, error); }
   };
   router.get('/example', (_request, response) => { reasoningExample().then((snapshot) => response.json(snapshot), (error: unknown) => fail(response, error)); });
+  router.post('/example/simulate', express.json(), (request, response) => { reasoningExample(request.body?.faits ?? {}).then((snapshot) => response.json(snapshot.simulation), (error: unknown) => fail(response, error)); });
   router.get('/', handle((body) => service.read(body.projectPath as string, body.raisonnement as string | undefined)));
   router.post('/citation', express.json(), handle(async (body) => {
     if (typeof body.source !== 'string' || typeof body.citation !== 'string') throw new TypeError('source et citation requis.');
