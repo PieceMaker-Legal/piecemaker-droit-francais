@@ -49,7 +49,7 @@ export const STYLES = `
 .pmr-terme,.pmr-controle{max-width:400px;min-width:260px}.pmr-fait.is-ko{--kind:#c45b5b}.pmr-fait.is-warn{--kind:#d99a2b;border-style:dashed}.pmr-fait.is-ok{border-width:2px}
 .pmr-then{display:block;margin-top:2px;padding-top:6px;border-top:1px solid color-mix(in srgb,var(--kind) 25%,transparent)}.pmr-then:before{content:'⇒ ';color:var(--kind)}
 .pmr-law{display:flex;flex-direction:column;gap:6px;margin-top:4px}
-.pmr-loi{--kind:#3b82f6;max-width:340px;min-width:220px}.pmr-loi.is-ko{--kind:#c45b5b}.pmr-loi.is-warn{border-style:dashed}.pmr-loi .pmr-chip{font-size:11px;font-weight:600;white-space:normal;text-align:left}
+.pmr-loi{--kind:#3b82f6;max-width:340px;min-width:220px}.pmr-loi.pmr-regle{--kind:#8b5cf6}.pmr-loi.is-ko{--kind:#c45b5b}.pmr-loi.is-warn{border-style:dashed}.pmr-loi .pmr-chip{font-size:11px;font-weight:600;white-space:normal;text-align:left}
 .pmr-aim{margin:2px 0 0;color:var(--text);font-size:11.5px;line-height:1.4}
 .pmr-needs{font-size:11px;font-weight:600;color:var(--muted)}.pmr-needs:before{content:'→ '}.pmr-needs .pmr-link{padding:0;height:auto;border:0;background:none;box-shadow:none;color:var(--kind);font:inherit;text-align:left;cursor:pointer}.pmr-needs .pmr-link:hover{text-decoration:underline}.pmr-ruled{display:block;font-size:13.5px}
 .pmr-loi q{color:var(--text);font-family:var(--editorial);font-size:13px;line-height:1.4}
