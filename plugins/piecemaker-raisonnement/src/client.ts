@@ -388,7 +388,21 @@ export function mount(container: HTMLElement, api: Host) {
     return layer;
   };
 
-  const transform = () => { stage.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`; };
+  const bound = (value: number, low: number, high: number, size: number) => {
+    const start = 20 - low * zoom, end = size - 20 - high * zoom;
+    return Math.min(Math.max(start, end), Math.max(Math.min(start, end), value));
+  };
+  const transform = () => {
+    const placed = cells.filter((cell) => cell.w);
+    const aside = stage.querySelector<HTMLElement>('.pmr-note');
+    if (placed.length) {
+      const left = Math.min(...placed.map((node) => node.x - node.w / 2)), top = Math.min(...placed.map((node) => node.y));
+      const right = Math.max(...placed.map((node) => node.x + node.w / 2), aside ? aside.offsetLeft + aside.offsetWidth : -Infinity);
+      const bottom = Math.max(...placed.map((node) => node.y + node.h), aside ? aside.offsetTop + aside.offsetHeight : -Infinity);
+      pan = { x: bound(pan.x, left, right, canvas.clientWidth), y: bound(pan.y, top, bottom, canvas.clientHeight - 44) };
+    }
+    stage.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
+  };
   const fitGraph = () => {
     const placed = cells.filter((cell) => cell.w);
     if (!placed.length) return;
