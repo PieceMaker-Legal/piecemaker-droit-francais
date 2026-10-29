@@ -417,15 +417,37 @@ export function mount(container: HTMLElement, api: Host) {
   const paintTest = () => {
     const entries = log();
     const view = (entry: ReasoningLogEntry) => `<li class="pmr-entry${fresh?.key === entry.key ? fresh.added ? ' is-new' : ' is-updated' : ''}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(entry.status === 'ok' && entry.step === 'source' ? 'Source vérifiée' : entry.status === 'ok' && entry.step === 'pièce' ? 'Pièce et citation vérifiées' : STEP[entry.step])}</span>${subject(entry)}</div><span class="pmr-entry-text">${escape(entry.text)}</span>${rating(entry)}</li>`;
-    const part = (title: string, lead: string, steps: ReasoningLogEntry['step'][]) => {
-      const list = entries.filter((entry) => steps.includes(entry.step));
-      return list.length ? `<section class="pmr-part"><h4>${title}</h4><p class="pmr-lead">${lead}</p><ol class="pmr-log" aria-live="polite">${list.map(view).join('')}</ol></section>` : '';
+    const used = new Set<string>();
+    const placed = new Set<string>();
+    const rows = (list: ReasoningLogEntry[]) => { list.forEach((entry) => used.add(entry.key)); return list.length ? `<ol class="pmr-log" aria-live="polite">${list.map(view).join('')}</ol>` : ''; };
+    const own = (id: string) => entries.filter((entry) => entry.key === `terme:${id}` || entry.key === `fait:${id}`);
+    const unplaced = (list: ReasoningIssue[]) => list.filter((issue) => !placed.has(issue.id) && placed.add(issue.id));
+    const feeds = (child: string, parent: string) => edges.some((edge) => edge.from === child && (edge.to === parent || (edge.to.startsWith('#ou:') && edges.some((up) => up.from === edge.to && up.to === parent))));
+    const stage = (node: GraphNode) => {
+      const mine = entriesOf(node);
+      const facts = nodes.filter((child) => child.kind === 'fait' && feeds(child.id, node.id)).map((child) => ({ child, head: own(child.id), proofs: entriesOf(child).filter((entry) => (entry.step === 'source' || entry.step === 'pièce') && !mine.some((other) => other.key === entry.key)), issues: issuesFor(child) }));
+      const issues = [...issuesFor(node), ...facts.flatMap((fact) => fact.issues)];
+      const all = [...mine, ...facts.flatMap((fact) => [...fact.head, ...fact.proofs])];
+      if (!all.length && !issues.length) return '';
+      const head = own(node.id);
+      const status = issues.length || all.some((entry) => entry.status === 'alerte') ? 'alerte' : all.some((entry) => entry.status === 'en cours') ? 'en cours' : !head.length ? 'neutre' : node.status === 'acquis' ? 'ok' : node.status === 'exclu' ? 'neutre' : 'attente';
+      head.forEach((entry) => used.add(entry.key));
+      const law = rows(mine.filter((entry) => entry.step === 'source' && ruling(terms()[node.id]).some((source) => entry.key.startsWith(`source:${source.source}:`))));
+      const pieces = rows(mine.filter((entry) => entry.step === 'pièce'));
+      facts.forEach((fact) => fact.head.forEach((entry) => used.add(entry.key)));
+      const proved = facts.map((fact) => `<div class="pmr-fact">${rows(fact.head.length ? fact.head.slice(0, 1) : [{ key: `fait:${fact.child.id}`, step: 'fait', status: 'neutre', subject: fact.child.label, text: 'Pas encore testé' }])}${fact.proofs.length ? `<div class="pmr-proofs">${rows(fact.proofs)}</div>` : ''}</div>`).join('');
+      return `<section class="pmr-phase" data-status="${status}"><header><span class="pmr-step">Étape</span><button class="pmr-link" data-select="${escape(node.id)}"><strong>${escape(node.label)}</strong></button><span class="pmr-phase-state">${escape(head[0]?.text ?? '')}</span></header>${issues.length ? issueList(unplaced(issues), false, true) : ''}${law ? `<h5>Droit</h5>${law}` : ''}${proved || pieces ? `<h5>Faits et pièces</h5>${pieces}${proved}` : ''}</section>`;
     };
     const alerts = entries.filter((entry) => entry.status === 'alerte').length;
     const run = `<div class="pmr-run"><button class="pmr-primary" data-run-test${live || busy || !context.project ? ' disabled' : ''}>${live ? 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</span>` : ''}</div>`;
-    const issues = visibleIssues();
+    const answer = rows(entries.filter((entry) => entry.step === 'réponse'));
+    const stages = nodes.filter((node) => node.kind === 'terme' || node.kind === 'controle').map(stage).join('');
+    const trials = rows(entries.filter((entry) => entry.step === 'essai'));
+    const rest = rows(entries.filter((entry) => !used.has(entry.key)));
+    const loose = visibleIssues().filter((issue) => !placed.has(issue.id) && !issue.path.startsWith('hypotheses'));
+    const tested = visibleIssues().filter((issue) => issue.path.startsWith('hypotheses'));
     const dismissed = (snapshot?.issues ?? []).filter((issue) => dismissedIds().has(issue.id));
-    detail.innerHTML = `${run}${issues.length ? `<section class="pmr-part"><h4>À corriger</h4><p class="pmr-lead">Erreurs et manques relevés dans le raisonnement.</p>${issueList(issues)}</section>` : ''}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${part('1. En droit', 'Chaque source relue, sa citation et sa version applicable.', ['source'])}${part('2. En fait', 'Les pièces relues et les faits qu’elles établissent.', ['pièce', 'fait', 'registre'])}${part('3. Conclusion', 'Les étapes du raisonnement, les hypothèses et la réponse.', ['condition', 'essai', 'réponse'])}${dismissed.length ? `<details class="pmr-part"><summary class="pmr-muted">Ignorées par vous (${dismissed.length})</summary>${issueList(dismissed, true)}</details>` : ''}`;
+    detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${answer ? `<section class="pmr-part">${answer}</section>` : ''}${loose.length ? `<section class="pmr-part"><h4>À corriger</h4>${issueList(loose)}</section>` : ''}${stages ? `<section class="pmr-part"><h4>Étapes du raisonnement</h4>${stages}</section>` : ''}${trials || tested.length ? `<section class="pmr-part"><h4>Hypothèses</h4>${issueList(tested, false, true)}${trials}</section>` : ''}${rest ? `<section class="pmr-part"><h4>Autres vérifications</h4>${rest}</section>` : ''}${dismissed.length ? `<details class="pmr-part"><summary class="pmr-muted">Ignorées par vous (${dismissed.length})</summary>${issueList(dismissed, true)}</details>` : ''}`;
   };
 
   const paintView = () => {
