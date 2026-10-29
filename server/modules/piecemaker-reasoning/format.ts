@@ -24,7 +24,7 @@ export type Condition = { condition?: string; attendu?: boolean; l_une?: Conditi
 export const SIDES = ['true', 'false'] as const;
 export type Side = typeof SIDES[number];
 export type Foundation = { preuve: Ref[]; selon: Basis[]; si: Condition[] };
-export type Term = { si: Condition[]; sauf: Condition[]; fondements?: Record<Side, Foundation[]> };
+export type Term = { si: Condition[]; sauf: Condition[]; fondements?: Record<Side, Foundation[]>; but?: string };
 export const VERBS = { obtenir: 'terme', écarter: 'terme', réduire: 'montant', augmenter: 'montant' } as const;
 export type Verb = keyof typeof VERBS;
 export type Objective = { objectif: string; effet: string; verbe: Verb; validite?: string; prescription?: string };
@@ -399,14 +399,15 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       reasoning.terms.set(key, { si: [], sauf: [], fondements });
       continue;
     }
-    for (const name of Object.keys(raw)) if (!TERM_KEYS.has(name) && !annotations.includes(name)) problem(`${key}.${name}`, unknownKey(name, [...TERM_KEYS]));
+    for (const name of Object.keys(raw)) if (!TERM_KEYS.has(name) && name !== 'but' && !annotations.includes(name)) problem(`${key}.${name}`, unknownKey(name, [...TERM_KEYS, 'but']));
+    if (raw.but !== undefined && !text(raw.but)) problem(`${key}.but`, 'but de l’étape : une phrase courte disant ce que l’étape cherche à démontrer');
     const list = (field: 'si' | 'sauf') => {
       const entries = raw[field];
       if (entries === undefined) return [];
       if (!Array.isArray(entries)) { problem(`${key}.${field}`, 'liste de conditions attendue'); return []; }
       return entries.flatMap((entry, index) => condition(entry, `${key}.${field}[${index}]`, false));
     };
-    const term = { si: list('si'), sauf: list('sauf') };
+    const term = { si: list('si'), sauf: list('sauf'), ...(text(raw.but) ? { but: (raw.but as string).trim() } : {}) };
     if (!term.si.length && !term.sauf.length) problem(key, 'terme sans condition : ajoute si: [...] (ou true: / false: pour établir une question)');
     reasoning.terms.set(key, term);
   }
@@ -440,7 +441,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
 
 const ANNOTATIONS = new Set(['bilan', 'montant_calcule', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'atteint', 'obstacles', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul']);
 
-const KEY_ORDER = ['qualification', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'true', 'false', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'sauf', 'nom', 'faits', 'attendu', 'id', 'intitule', 'traite', 'conflit', 'sur', 'modele', 'avocat', 'texte', 'sections'];
+const KEY_ORDER = ['qualification', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'true', 'false', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'but', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'sauf', 'nom', 'faits', 'attendu', 'id', 'intitule', 'traite', 'conflit', 'sur', 'modele', 'avocat', 'texte', 'sections'];
 const rank = (key: string) => { const at = KEY_ORDER.indexOf(key); return at < 0 ? KEY_ORDER.length : at; };
 const ordered = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(ordered);

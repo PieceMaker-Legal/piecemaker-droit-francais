@@ -12,6 +12,7 @@ type Cited = { piece: Json; target: string; against: boolean };
 type Based = { source: Json; target: string };
 type GraphNode = { id: string; label: string; status: string; kind: Kind; decisive: boolean; sources: Json[]; pieces: Cited[]; x: number; y: number; w: number; h: number };
 type Edge = { from: string; to: string; link: Occurrence['link'] };
+type Cell = { id: string; ref: string; parent: string; column: number; kind: Kind; x: number; y: number; w: number; h: number };
 
 const RESERVED = new Set(['bilan', 'objectifs', 'hypotheses', 'valeurs']);
 const CONDITION_ANNOTATIONS = new Set(['l_une', 'delai', 'montant', 'selon', 'decompte', 'statut', 'decisif', 'erreurs', 'manques', 'calcul']);
@@ -104,6 +105,8 @@ export function mount(container: HTMLElement, api: Host) {
   let nodes: GraphNode[] = [];
   let edges: Edge[] = [];
   let steps: GraphNode[] = [];
+  let cells: Cell[] = [];
+  let ties: Edge[] = [];
   let zoom = 1;
   let pan = { x: 0, y: 0 };
   let drag: { id: string; x: number; y: number; moved: boolean } | null = null;
@@ -250,13 +253,19 @@ export function mount(container: HTMLElement, api: Host) {
   };
 
   const sourceChip = (source: Json) => `<button class="pmr-chip is-source${source.en_vigueur === false ? ' is-against' : ''}" data-show="#source:${escape(source.source)}" data-quote="${escape(source.citation ?? '')}" title="${escape(String(source.titre ?? source.source))}">§ ${escape(sourceName(source))}</button>`;
-  const law = (name: string) => {
-    const clauses = (['si', 'sauf'] as const).flatMap((link) => (terms()[name]?.[link] ?? []).flatMap((condition: Json) => [{ condition, link }, ...(condition.l_une ?? []).map((member: Json) => ({ condition: member, link }))]))
-      .flatMap(({ condition, link }) => (condition.selon ?? []).map((source: Json) => ({ source, link, label: Array.isArray(condition.l_une) ? 'L’une des conditions' : human(String(condition.condition)) })));
-    return [...new Set(clauses.map((clause) => clause.source.source))].map((id) => {
-      const mine = clauses.filter((clause) => clause.source.source === id);
-      return `<div class="pmr-rule">${sourceChip(mine[0].source)}<div class="pmr-clauses">${mine.map((clause) => `<div class="pmr-clause">${clause.source.citation ? `<q>${escape(shorten(String(clause.source.citation), 240))}</q>` : ''}<span class="pmr-needs">${clause.link === 'sauf' ? 'Sauf : ' : ''}${escape(clause.label)}</span></div>`).join('')}</div></div>`;
-    }).join('');
+  const stepRef = (id: string) => `<button class="pmr-link" data-select="${escape(id)}">Étape ${steps.findIndex((step) => step.id === id) + 1} · ${escape(nodes.find((node) => node.id === id)?.label ?? human(id))}</button>`;
+  const clause = (path: string, link: Occurrence['link'], condition: Json, members: Json[]) => {
+    const sources = [condition, ...(members.length > 1 ? members : [])].flatMap((item: Json) => item.selon ?? []) as Json[];
+    const chips = [...new Map(sources.map((source) => [source.source, source])).values()].map(sourceChip);
+    const quotes = [...new Set(sources.map((source) => String(source.citation ?? '')).filter(Boolean))].map((text) => `<q>${escape(shorten(text, 240))}</q>`);
+    const owned = members.filter((member) => steps.some((step) => step.id === member.condition)).map((member) => `<span class="pmr-needs">${stepRef(member.condition)}</span>`);
+    const controls = [...new Set(sources.flatMap((source) => [source.applicabilite, source.validite]).concat(members.map((member) => member.decompte)).filter((name): name is string => typeof name === 'string' && steps.some((step) => step.id === name)))].map((name) => `<span class="pmr-needs is-control">${name.startsWith('décompte') ? 'Décompte' : name.startsWith('validité') ? 'Valable si' : 'Applicable si'} : ${stepRef(name)}</span>`);
+    const fill = met(condition);
+    const tone = link === 'sauf' ? { acquis: 'ko', exclu: 'ok' }[fill] ?? 'warn' : TONE[fill] ?? 'warn';
+    const label = link === 'sauf' ? { ok: 'Exception écartée', ko: 'Exception établie' }[tone] ?? 'À établir' : { ok: 'Remplie', ko: 'Non remplie' }[tone] ?? 'À établir';
+    const title = `${link === 'sauf' ? 'Sauf' : 'Si'}${members.length > 1 ? ' l’une des conditions' : ''}`;
+    const owner = path.split('.')[0];
+    return `<div class="pmr-box pmr-loi is-${tone}${waiting.has(owner) ? ' is-waiting' : ''}" data-id="#clause:${escape(path)}" data-node="${escape(owner)}" tabindex="0" role="button" aria-label="${escape(`${title} : ${quotes.length ? sources[0].citation : ''}`)}"><div class="pmr-box-body"><span class="pmr-kind">${title}</span>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}${quotes.join('')}${owned.join('')}${controls.join('')}<div class="pmr-foot">${pill({ ok: 'acquis', ko: 'exclu' }[tone] ?? 'à établir', label)}</div></div></div>`;
   };
 
   const verdict = () => {
@@ -270,14 +279,13 @@ export function mount(container: HTMLElement, api: Host) {
     const issues = issuesFor(node);
     const lines = entries.map((entry) => `<li data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div><div class="pmr-entry-head"><span class="pmr-step">${escape(STEP[entry.step])}</span>${subject(entry, node.id)}</div><p>${escape(entry.text)}</p>${rating(entry)}</div></li>`);
     const empty = snapshot?.test ? 'Le test n’a rien vérifié sur cet élément.' : 'Pas encore vérifié : lancez le test.';
-    return `<aside class="pmr-note" style="left:${node.x + node.w / 2 + 18}px;top:${node.y}px"><span class="pmr-kind">Vérification</span>${issues.length ? issueList(issues, false, true) : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${issues.length || lines.length ? '' : `<p class="pmr-muted">${empty}</p>`}</aside>`;
+    return `<aside class="pmr-note" style="left:${Math.max(node.x + node.w / 2, ...cells.map((cell) => cell.x + cell.w / 2)) + 18}px;top:${node.y}px"><span class="pmr-kind">Vérification</span>${issues.length ? issueList(issues, false, true) : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${issues.length || lines.length ? '' : `<p class="pmr-muted">${empty}</p>`}</aside>`;
   };
 
-  const box = (node: GraphNode) => {
+  const box = (node: GraphNode, id = node.id, own?: { condition: Json; sauf: boolean }) => {
     const arriving = Boolean(live && fresh?.added && entriesOf(node).some((entry) => entry.key === fresh!.key));
     const state = `${waiting.has(node.id) ? ' is-waiting' : ''}${arriving ? ' is-arriving' : ''}`;
-    if (node.kind === 'ou') return `<div class="pmr-box pmr-ou${state}" data-id="${escape(node.id)}">L’une des conditions</div>`;
-    const [kind, icon] = KINDS[node.kind];
+    const [kind, icon] = KINDS[node.kind as Exclude<Kind, 'ou'>];
     const objective = objectives()[scope] ?? {};
     const mark = testMark(node);
     const term = terms()[node.id];
@@ -288,20 +296,19 @@ export function mount(container: HTMLElement, api: Host) {
     ];
     const decisifs = Array.isArray(objective.decisifs) ? objective.decisifs as string[] : [];
     const occurrence = occurrences().find((entry) => entry.condition.condition === node.id);
-    const fill = occurrence ? met(occurrence.condition) : node.status;
-    const tone = occurrence?.path.includes('.sauf[') ? { acquis: 'ko', exclu: 'ok' }[fill] ?? 'warn' : TONE[fill] ?? 'warn';
-    const rules = term && !facts && node.kind !== 'fait' ? law(node.id) : '';
+    const fill = own ? met(own.condition) : occurrence ? met(occurrence.condition) : node.status;
+    const tone = (own ? own.sauf : occurrence?.path.includes('.sauf[')) ? { acquis: 'ko', exclu: 'ok' }[fill] ?? 'warn' : TONE[fill] ?? 'warn';
     const numbered = steps.includes(node) ? `<span class="pmr-kind">Étape ${steps.indexOf(node) + 1}${node.kind === 'controle' ? ` · ${kind}` : ''}</span>` : '';
     const status = node.kind === 'fait' ? pill({ ok: 'acquis', ko: 'exclu' }[tone] ?? 'à établir', { ok: 'Condition remplie', ko: 'Condition non remplie' }[tone] ?? 'À établir') : pill(node.status, STATUS[node.status] ?? 'À établir');
     const body = node.kind === 'question'
       ? `<span class="pmr-kind">${kind}</span><strong class="pmr-editorial">${escape(node.label)}</strong>`
       : node.kind === 'conclusion'
         ? `<span class="pmr-kind">${kind}</span><strong>Réponse : ${escape(node.label)}</strong>${decisifs.length ? `<p class="pmr-sub">Dépend de : ${decisifs.map((name) => escape(human(name))).join(', ')}</p>` : ''}${verdict()}`
-        : rules
-          ? `${numbered}<strong class="pmr-ruled">${escape(node.label)}</strong><div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>${rules}`
-          : `${numbered || `<span class="pmr-kind">${kind}</span>`}<strong>${escape(node.label)}</strong>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`;
+        : numbered
+          ? `${numbered}<strong class="pmr-ruled">${escape(node.label)}</strong>${typeof term?.but === 'string' ? `<p class="pmr-aim">${escape(term.but)}</p>` : ''}<div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`
+          : `<span class="pmr-kind">${kind}</span><strong>${escape(node.label)}</strong>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`;
     const uncertain = ['terme', 'controle', 'conclusion'].includes(node.kind) && ['à établir', 'disputé'].includes(node.status);
-    return `<div class="pmr-box pmr-${node.kind}${state}${node.kind === 'fait' ? ` is-${tone}` : ''}${uncertain ? ' is-uncertain' : ''}${(node.kind === 'fait' ? fill : node.status) === 'exclu' && node.kind !== 'question' ? ' is-excluded' : ''}" data-id="${escape(node.id)}" data-node="${escape(node.id)}" tabindex="0" role="button" aria-label="${escape(`${kind} : ${node.label}`)}"><span class="pmr-icon" aria-hidden="true">${icon}</span><div class="pmr-box-body">${body}</div>${mark ? `<span class="pmr-test is-${mark}" title="${mark === 'ok' ? 'Vérifié par le test' : 'Alerte : voir le test'}">${MARK[mark]}</span>` : ''}</div>`;
+    return `<div class="pmr-box pmr-${node.kind}${state}${node.kind === 'fait' ? ` is-${tone}` : ''}${uncertain ? ' is-uncertain' : ''}${(node.kind === 'fait' ? fill : node.status) === 'exclu' && node.kind !== 'question' ? ' is-excluded' : ''}" data-id="${escape(id)}" data-node="${escape(node.id)}" tabindex="0" role="button" aria-label="${escape(`${kind} : ${node.label}`)}"><span class="pmr-icon" aria-hidden="true">${icon}</span><div class="pmr-box-body">${body}</div>${mark ? `<span class="pmr-test is-${mark}" title="${mark === 'ok' ? 'Vérifié par le test' : 'Alerte : voir le test'}">${MARK[mark]}</span>` : ''}</div>`;
   };
 
   const layering = () => {
@@ -325,7 +332,7 @@ export function mount(container: HTMLElement, api: Host) {
 
   const transform = () => { stage.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`; };
   const fitGraph = () => {
-    const placed = nodes.filter((node) => node.w);
+    const placed = cells.filter((cell) => cell.w);
     if (!placed.length) return;
     const minX = Math.min(...placed.map((node) => node.x - node.w / 2)), maxX = Math.max(...placed.map((node) => node.x + node.w / 2));
     const minY = Math.min(...placed.map((node) => node.y)), maxY = Math.max(...placed.map((node) => node.y + node.h));
@@ -343,68 +350,43 @@ export function mount(container: HTMLElement, api: Host) {
     const target = !live && nodes.find((node) => node.id === selected && node.kind !== 'ou');
     if (target) stage.insertAdjacentHTML('beforeend', note(target));
     const members = selected ? branch(selected).add('#question') : null;
-    stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => { element.classList.toggle('is-selected', element.dataset.id === selected); element.classList.toggle('is-dim', Boolean(members && !members.has(element.dataset.id!))); });
+    stage.querySelectorAll<HTMLElement>('[data-node]').forEach((element) => { element.classList.toggle('is-selected', element.dataset.node === selected); element.classList.toggle('is-dim', Boolean(members && !members.has(element.dataset.node!))); });
     stage.querySelectorAll<SVGElement>('[data-from]').forEach((element) => { const lit = Boolean(members?.has(element.dataset.from!) && members.has(element.dataset.to!)); element.classList.toggle('is-lit', lit); element.classList.toggle('is-dim', Boolean(members && !lit)); });
   };
 
   const layoutGraph = (refit = false) => {
-    if (!canvas.clientWidth || !nodes.length) return;
-    const byId = new Map(nodes.map((node) => [node.id, node]));
+    if (!canvas.clientWidth || !cells.length) return;
+    const byCell = new Map(cells.map((cell) => [cell.id, cell]));
     stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => {
-      const node = byId.get(element.dataset.id!);
-      if (!node) return;
-      node.w = element.offsetWidth;
-      node.h = element.offsetHeight;
+      const cell = byCell.get(element.dataset.id!);
+      if (!cell) return;
+      cell.w = element.offsetWidth;
+      cell.h = element.offsetHeight;
     });
-    const column = new Map<string, number>();
-    const row = new Map<string, number>();
-    const kids = new Map<string, GraphNode[]>();
-    const roots: GraphNode[] = [];
-    const beside = (node: GraphNode, depth: number) => {
-      for (const edge of edges.filter((item) => item.to === node.id)) {
-        const child = byId.get(edge.from)!;
-        if (column.has(child.id) || child.kind !== 'fait') continue;
-        column.set(child.id, depth);
-        row.set(child.id, roots.length - 1);
-        kids.set(node.id, [...kids.get(node.id) ?? [], child]);
-        beside(child, depth + 1);
-      }
-    };
-    const root = (node: GraphNode) => { column.set(node.id, 0); roots.push(node); row.set(node.id, roots.length - 1); beside(node, 1); };
-    root(byId.get('#question')!);
-    for (const step of steps) {
-      for (const edge of edges.filter((item) => item.to === step.id && item.from.startsWith('#ou:') && !column.has(item.from))) root(byId.get(edge.from)!);
-      root(step);
-    }
-    nodes.filter((node) => node.kind !== 'conclusion').forEach((node) => { if (!column.has(node.id)) root(node); });
-    root(byId.get('#conclusion')!);
-    const widths: number[] = [];
-    for (const node of nodes) widths[column.get(node.id)!] = Math.max(widths[column.get(node.id)!] ?? 0, node.w);
-    const lefts = widths.map((_, index) => widths.slice(0, index).reduce((sum, width) => sum + width + SIDE, 0));
-    for (const node of nodes) { const index = column.get(node.id)!; node.x = index ? lefts[index] + node.w / 2 : widths[0] / 2; }
-    const settle = (node: GraphNode, y: number): number => {
-      node.y = y;
+    const widths = [0, 1, 2].map((index) => Math.max(0, ...cells.filter((cell) => cell.column === index).map((cell) => cell.w)));
+    const lefts = [0, widths[0] + SIDE, widths[0] + widths[1] + 2 * SIDE];
+    const place = (cell: Cell, y: number) => { cell.y = y; cell.x = cell.column ? lefts[cell.column] + cell.w / 2 : widths[0] / 2; };
+    const settle = (cell: Cell, y: number): number => {
+      place(cell, y);
       let next = y;
-      for (const child of kids.get(node.id) ?? []) next = settle(child, next) + STACK;
-      return Math.max(y + node.h, next - STACK);
+      for (const child of cells.filter((item) => item.parent === cell.id)) next = settle(child, next) + STACK;
+      return Math.max(y + cell.h, next - STACK);
     };
     let top = 0;
-    for (const node of roots) top = settle(node, top) + ROW;
-    stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => { const node = byId.get(element.dataset.id!); if (node) { element.style.left = `${node.x - node.w / 2}px`; element.style.top = `${node.y}px`; } });
+    for (const cell of cells.filter((item) => !item.parent)) top = settle(cell, top) + ROW;
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const seen = new Set<string>();
+    for (const cell of cells) { const node = byId.get(cell.ref); if (node && !seen.has(cell.ref)) { seen.add(cell.ref); Object.assign(node, { x: cell.x, y: cell.y, w: cell.w, h: cell.h }); } }
+    stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => { const cell = byCell.get(element.dataset.id!); if (cell) { element.style.left = `${cell.x - cell.w / 2}px`; element.style.top = `${cell.y}px`; } });
     const markers = Object.entries(COLORS).map(([kind, color]) => `<marker id="pmr-arrow-${kind}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="${color}"/></marker>`).join('');
-    const wires = edges.map((edge) => {
-      const a = byId.get(edge.from), b = byId.get(edge.to);
-      if (!a || !b) return '';
-      const across = a.x - a.w / 2 > b.x + b.w / 2;
-      const far = !across && column.get(a.id) === 0 && column.get(b.id) === 0 && row.get(b.id)! - row.get(a.id)! > 1;
-      const [x1, y1, x2, y2] = across
-        ? [a.x - a.w / 2, a.y + Math.min(a.h / 2, 22), b.x + b.w / 2 + 2, Math.min(Math.max(a.y + Math.min(a.h / 2, 22), b.y + 14), b.y + b.h - 14)]
-        : far ? [a.x - a.w / 2, a.y + a.h / 2, b.x - b.w / 2 - 2, b.y + 22] : [a.x, a.y + a.h, b.x, b.y - 2];
-      const bend = Math.max(Math.abs(across ? x1 - x2 : y2 - y1) / 2, 24);
-      const outer = Math.min(...roots.slice(row.get(a.id), row.get(b.id)! + 1).map((node) => node.x - node.w / 2)) - 32 - 12 * (row.get(b.id)! - row.get(a.id)!);
-      const d = across ? `M${x1} ${y1} C${x1 - bend} ${y1} ${x2 + bend} ${y2} ${x2} ${y2}` : far ? `M${x1} ${y1} C${outer} ${y1} ${outer} ${y2} ${x2} ${y2}` : `M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}`;
-      const hidden = waiting.has(edge.from) || waiting.has(edge.to) ? ' is-waiting' : '';
-      return `<path class="pmr-wire${edge.link === 'sauf' ? ' is-sauf' : ''}${hidden}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" stroke="${COLORS[a.kind]}" marker-end="url(#pmr-arrow-${a.kind})" d="${d}"/>${edge.link === 'sauf' ? `<text class="pmr-wire-label${hidden}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" x="${(x1 + x2) / 2 + 6}" y="${(y1 + y2) / 2 - 4}">sauf</text>` : ''}`;
+    const wires = ties.map((tie) => {
+      const a = byCell.get(tie.from)!, b = byCell.get(tie.to)!;
+      const down = a.column === b.column;
+      const [x1, y1, x2, y2] = down ? [a.x, a.y + a.h, b.x, b.y - 2] : [a.x + a.w / 2, a.y + Math.min(a.h / 2, 22), b.x - b.w / 2 - 2, b.y + Math.min(b.h / 2, 22)];
+      const bend = Math.max(Math.abs(down ? y2 - y1 : x2 - x1) / 2, 18);
+      const d = down ? `M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}` : `M${x1} ${y1} C${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}`;
+      const hidden = waiting.has(a.ref) || waiting.has(b.ref) ? ' is-waiting' : '';
+      return `<path class="pmr-wire${tie.link === 'sauf' ? ' is-sauf' : ''}${hidden}" data-from="${escape(a.ref)}" data-to="${escape(b.ref)}" stroke="${COLORS[a.kind]}" marker-end="url(#pmr-arrow-${a.kind})" d="${d}"/>`;
     }).join('');
     stage.querySelector('svg')!.innerHTML = `<defs>${markers}</defs>${wires}`;
     const key = nodes.map((node) => node.id).join('|');
@@ -413,10 +395,43 @@ export function mount(container: HTMLElement, api: Host) {
     transform();
     highlight();
   };
+  const plan = () => {
+    cells = [];
+    ties = [];
+    const parts: string[] = [];
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    if (!byId.has('#question')) return '';
+    const add = (id: string, ref: string, parent: string, column: number, kind: Kind, html: string) => { cells.push({ id, ref, parent, column, kind, x: 0, y: 0, w: 0, h: 0 }); parts.push(html); };
+    const spine = (node: GraphNode) => {
+      const last = cells.filter((cell) => !cell.parent).pop();
+      add(node.id, node.id, '', 0, node.kind, box(node));
+      if (last) ties.push({ from: last.id, to: node.id, link: 'si' });
+    };
+    spine(byId.get('#question')!);
+    for (const step of steps) {
+      spine(step);
+      for (const group of groups().filter((item) => item.parent === step.id)) {
+        const link = group.path.includes('.sauf[') ? 'sauf' : 'si';
+        const members: Json[] = Array.isArray(group.condition.l_une) ? group.condition.l_une : [group.condition];
+        const facts = members.filter((member) => byId.has(member.condition) && !steps.some((other) => other.id === member.condition));
+        const ruled = members.length > 1 || facts.length < members.length || [group.condition, ...members].some((item) => item.selon?.length || typeof item.decompte === 'string');
+        const anchor = ruled ? `#clause:${group.path}` : step.id;
+        if (ruled) { add(anchor, step.id, step.id, 1, 'terme', clause(group.path, link, group.condition, members)); ties.push({ from: step.id, to: anchor, link }); }
+        facts.forEach((member, index) => {
+          const id = `#fait:${group.path}:${index}`;
+          add(id, member.condition, anchor, ruled ? 2 : 1, 'fait', box(byId.get(member.condition)!, id, { condition: member, sauf: link === 'sauf' }));
+          ties.push({ from: anchor, to: id, link: ruled ? 'si' : link });
+        });
+      }
+    }
+    for (const node of nodes.filter((item) => !['question', 'conclusion', 'ou'].includes(item.kind) && !cells.some((cell) => cell.ref === item.id))) spine(node);
+    spine(byId.get('#conclusion')!);
+    return parts.join('');
+  };
   const paintGraph = () => {
     waiting = waitingIds();
     stage.classList.toggle('is-following', Boolean(live));
-    stage.innerHTML = `<svg class="pmr-wires" aria-hidden="true"></svg>${nodes.map(box).join('')}`;
+    stage.innerHTML = `<svg class="pmr-wires" aria-hidden="true"></svg>${plan()}`;
     layoutGraph();
   };
 

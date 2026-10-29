@@ -156,6 +156,7 @@ export async function verifyReasoning(input: {
   });
   const roots = new Set(reasoning.objectifs.flatMap(objectiveRoots));
   for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, 'terme qui ne sert à aucun objectif : rattache-le comme condition ou ajoute l’objectif qu’il sert');
+  for (const [name, term] of reasoning.terms) if (!term.fondements && !term.but) add('conseil', `${name}.but`, `étape sans but : ajoute but: '…' sous ${name}, une phrase courte disant ce que l’étape cherche à démontrer`, `${human(name)} : le but de l’étape n’est pas expliqué.`, name);
 
   const sources = new Map<string, Promise<SourceInfo | null | undefined>>();
   const lookup = (id: string) => {
@@ -893,6 +894,7 @@ valeurs:
       - piece: pieces/01_contrat.md
         citation: Fait le 15/01/2024
 pénalité_encourue:
+  but: Établir que la pénalité de retard est due par le débiteur mis en demeure
   si:
     - pénalité_stipulée: true
       selon:
@@ -920,6 +922,7 @@ mise_en_demeure:
         - piece: pieces/06_mise_en_demeure.md
           citation: vous met en demeure
 applicabilité_de_l_article_1231_5:
+  but: Montrer que l'article 1231-5 s'applique à ce contrat
   si:
     - contrat_stipulant_une_pénalité: true
       selon:
@@ -935,6 +938,7 @@ contrat_stipulant_une_pénalité:
         - piece: pieces/01_contrat.md
           citation: une pénalité est due
 pénalité_stipulée:
+  but: Montrer que le contrat prévoit la pénalité pour ce retard
   si:
     - retard_de_livraison: true
       selon:
@@ -957,6 +961,7 @@ retard_de_livraison:
         - piece: pieces/05_bon_de_livraison.md
           citation: Livré le 14/06/2025
 force_majeure_contractuelle:
+  but: Vérifier si la force majeure du contrat écarte la pénalité
   si:
     - l_une:
         - force_majeure: true
@@ -968,6 +973,7 @@ force_majeure_contractuelle:
             debut: 2024-01-15
             fin: null
 grève:
+  but: Vérifier si une grève visée par le contrat est survenue
   si:
     - l_une:
         - grève_nationale: true
