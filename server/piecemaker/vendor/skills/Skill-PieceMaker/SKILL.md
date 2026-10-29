@@ -1,6 +1,6 @@
 ---
 name: piecemaker
-description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, suivi du dossier (échéances), volets, tabular review et liaison DOCX au raisonnement. Use when the user asks about case documents, deadlines or the case follow-up, linked DOCX reasoning, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
+description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, suivi du dossier (échéances), raisonnement juridique (écrire, compléter, vérifier, consulter le volet Raisonnement), volets, tabular review et liaison DOCX au raisonnement. Use when the user asks about case documents, deadlines or the case follow-up, the legal reasoning (raisonnement) or its panel, linked DOCX reasoning, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
 ---
 
 # PieceMaker
@@ -91,6 +91,14 @@ divergence ne permet jamais de tester silencieusement une version différente.
 celle du dossier. Pour un ancien DOCX, il récupère sa copie embarquée. Renommer
 le DOCX dans le dossier, ou déplacer le dossier complet avec son modèle, conserve
 la référence ; déplacer le DOCX seul ne suffit pas pour le vérifier.
+
+## raisonnement
+
+Le raisonnement juridique du dossier vit dans `.piecemaker/raisonnements/<nom>.yaml`. Le volet Raisonnement le montre à l'avocat.
+
+1. Avant d'écrire ou de compléter un raisonnement, lancez `pm raisonnement consignes`. Suivez ces règles.
+2. `pm raisonnement lister` montre les raisonnements du dossier, avec leurs objectifs et leur dernier bilan.
+3. `pm raisonnement verifier --raisonnement <nom>` vérifie le fichier, le réécrit et ouvre le volet. Corrigez et relancez jusqu'à zéro erreur.
 
 ## suivi (échéances du dossier)
 
