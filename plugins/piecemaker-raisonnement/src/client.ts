@@ -68,7 +68,8 @@ const amountText = (value: unknown) => (typeof value === 'number' ? value.toLoca
 const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
 const STEP: Record<ReasoningLogEntry['step'], string> = { source: 'Source', pièce: 'Pièce', fait: 'Fait', condition: 'Étape', essai: 'Hypothèse', registre: 'Partie', réponse: 'Réponse' };
 const MET: Record<string, string> = { acquis: '✓', exclu: '✗', 'à établir': '?', disputé: '?' };
-const GAP = 32;
+const SIDE = 72;
+const STACK = 14;
 const ROW = 64;
 const cleanups = new WeakMap<HTMLElement, () => void>();
 
@@ -242,9 +243,7 @@ export function mount(container: HTMLElement, api: Host) {
       for (const control of [entry.source.applicabilite, entry.source.validite]) if (typeof control === 'string' && control !== entry.target && levels.has(control) && !edges.some((edge) => edge.from === control && edge.to === entry.target)) edges.push({ from: control, to: entry.target, link: 'si' });
     }
     for (const entry of cited()) { const target = byId.get(entry.target); if (target && !target.pieces.some((item) => item.piece.piece === entry.piece.piece)) target.pieces.push(entry); }
-    const ruled = new Set(edges.map((edge) => edge.to));
-    const leaves = nodes.filter((item) => item.kind === 'fait' && !ruled.has(item.id));
-    for (const item of leaves.length ? leaves : nodes.filter((entry) => entry.id === objective[verb(objective)])) edges.push({ from: item.id, to: '#conclusion', link: 'si' });
+    for (const item of nodes.filter((entry) => entry.kind !== 'question' && entry.kind !== 'conclusion' && !edges.some((edge) => edge.from === entry.id))) edges.push({ from: item.id, to: '#conclusion', link: 'si' });
     if (selected && !byId.has(selected)) selected = '';
     const layer = layering();
     steps = nodes.filter((item) => item.kind === 'terme' || item.kind === 'controle').reverse().sort((one, other) => layer.get(other.id)! - layer.get(one.id)!);
@@ -252,11 +251,11 @@ export function mount(container: HTMLElement, api: Host) {
 
   const sourceChip = (source: Json) => `<button class="pmr-chip is-source${source.en_vigueur === false ? ' is-against' : ''}" data-show="#source:${escape(source.source)}" data-quote="${escape(source.citation ?? '')}" title="${escape(String(source.titre ?? source.source))}">§ ${escape(sourceName(source))}</button>`;
   const law = (name: string) => {
-    const clauses = (['si', 'sauf'] as const).flatMap((link) => (terms()[name]?.[link] ?? []).flatMap((condition: Json, index: number) => [{ condition, link, port: Array.isArray(condition.l_une) ? `#ou:${name}.${link}[${index}]` : String(condition.condition) }, ...(condition.l_une ?? []).map((member: Json) => ({ condition: member, link, port: String(member.condition) }))]))
-      .flatMap(({ condition, link, port }) => (condition.selon ?? []).map((source: Json) => ({ source, link, port, label: Array.isArray(condition.l_une) ? 'L’une des conditions' : human(String(condition.condition)) })));
+    const clauses = (['si', 'sauf'] as const).flatMap((link) => (terms()[name]?.[link] ?? []).flatMap((condition: Json) => [{ condition, link }, ...(condition.l_une ?? []).map((member: Json) => ({ condition: member, link }))]))
+      .flatMap(({ condition, link }) => (condition.selon ?? []).map((source: Json) => ({ source, link, label: Array.isArray(condition.l_une) ? 'L’une des conditions' : human(String(condition.condition)) })));
     return [...new Set(clauses.map((clause) => clause.source.source))].map((id) => {
       const mine = clauses.filter((clause) => clause.source.source === id);
-      return `<div class="pmr-rule">${sourceChip(mine[0].source)}<div class="pmr-clauses">${mine.map((clause) => `<div class="pmr-clause" data-port="${escape(clause.port)}">${clause.source.citation ? `<q>${escape(shorten(String(clause.source.citation), 240))}</q>` : ''}<span class="pmr-needs">${clause.link === 'sauf' ? 'Sauf : ' : ''}${escape(clause.label)}</span></div>`).join('')}</div></div>`;
+      return `<div class="pmr-rule">${sourceChip(mine[0].source)}<div class="pmr-clauses">${mine.map((clause) => `<div class="pmr-clause">${clause.source.citation ? `<q>${escape(shorten(String(clause.source.citation), 240))}</q>` : ''}<span class="pmr-needs">${clause.link === 'sauf' ? 'Sauf : ' : ''}${escape(clause.label)}</span></div>`).join('')}</div></div>`;
     }).join('');
   };
 
@@ -351,44 +350,61 @@ export function mount(container: HTMLElement, api: Host) {
   const layoutGraph = (refit = false) => {
     if (!canvas.clientWidth || !nodes.length) return;
     const byId = new Map(nodes.map((node) => [node.id, node]));
-    const ports = new Map<string, { dx: number; bottom: number }>();
     stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => {
       const node = byId.get(element.dataset.id!);
       if (!node) return;
       node.w = element.offsetWidth;
       node.h = element.offsetHeight;
-      element.querySelectorAll<HTMLElement>('[data-port]').forEach((port) => { if (!ports.has(`${node.id}\n${port.dataset.port}`)) ports.set(`${node.id}\n${port.dataset.port}`, { dx: port.offsetLeft + port.offsetWidth / 2 - node.w / 2, bottom: port.offsetTop + port.offsetHeight }); });
     });
-    const anchor = (node: GraphNode, other: string) => node.x + (ports.get(`${node.id}\n${other}`)?.dx ?? 0);
-    const layer = layering();
-    const deepest = layer.get('#conclusion')!;
-    const wired = [...nodes.filter((node) => layer.get(node.id) === 1).map((node): Edge => ({ from: node.id, to: '#question', link: 'si' })), ...edges];
-    for (let level = 0; level <= deepest; level++) {
-      const wanted = new Map(nodes.filter((node) => layer.get(node.id) === level).map((node) => {
-        const targets = wired.filter((edge) => edge.from === node.id || edge.to === node.id).map((edge) => byId.get(edge.from === node.id ? edge.to : edge.from)!).filter((other) => layer.get(other.id)! < level).map((other) => anchor(other, node.id));
-        return [node, level === 0 ? 0 : targets.length ? targets.reduce((sum, x) => sum + x, 0) / targets.length : Infinity] as const;
-      }));
-      const row = [...wanted.keys()].sort((a, b) => wanted.get(a)! - wanted.get(b)!);
-      let cursor = -Infinity;
-      for (const node of row) { const goal = wanted.get(node)!; node.x = Math.max(Number.isFinite(goal) ? goal : cursor + node.w / 2, cursor + node.w / 2); cursor = node.x + node.w / 2 + GAP; }
-      const placed = row.filter((node) => Number.isFinite(wanted.get(node)!));
-      const excess = placed.length ? placed.reduce((sum, node) => sum + node.x - wanted.get(node)!, 0) / placed.length / 2 : 0;
-      row.forEach((node) => { node.x -= excess; });
+    const column = new Map<string, number>();
+    const row = new Map<string, number>();
+    const kids = new Map<string, GraphNode[]>();
+    const roots: GraphNode[] = [];
+    const beside = (node: GraphNode, depth: number) => {
+      for (const edge of edges.filter((item) => item.to === node.id)) {
+        const child = byId.get(edge.from)!;
+        if (column.has(child.id) || child.kind !== 'fait') continue;
+        column.set(child.id, depth);
+        row.set(child.id, roots.length - 1);
+        kids.set(node.id, [...kids.get(node.id) ?? [], child]);
+        beside(child, depth + 1);
+      }
+    };
+    const root = (node: GraphNode) => { column.set(node.id, 0); roots.push(node); row.set(node.id, roots.length - 1); beside(node, 1); };
+    root(byId.get('#question')!);
+    for (const step of steps) {
+      for (const edge of edges.filter((item) => item.to === step.id && item.from.startsWith('#ou:') && !column.has(item.from))) root(byId.get(edge.from)!);
+      root(step);
     }
+    nodes.filter((node) => node.kind !== 'conclusion').forEach((node) => { if (!column.has(node.id)) root(node); });
+    root(byId.get('#conclusion')!);
+    const widths: number[] = [];
+    for (const node of nodes) widths[column.get(node.id)!] = Math.max(widths[column.get(node.id)!] ?? 0, node.w);
+    const lefts = widths.map((_, index) => widths.slice(0, index).reduce((sum, width) => sum + width + SIDE, 0));
+    for (const node of nodes) { const index = column.get(node.id)!; node.x = index ? lefts[index] + node.w / 2 : widths[0] / 2; }
+    const settle = (node: GraphNode, y: number): number => {
+      node.y = y;
+      let next = y;
+      for (const child of kids.get(node.id) ?? []) next = settle(child, next) + STACK;
+      return Math.max(y + node.h, next - STACK);
+    };
     let top = 0;
-    for (let level = 0; level <= deepest; level++) {
-      const row = nodes.filter((node) => layer.get(node.id) === level);
-      row.forEach((node) => { node.y = top; });
-      top += Math.max(0, ...row.map((node) => node.h)) + ROW;
-    }
+    for (const node of roots) top = settle(node, top) + ROW;
     stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => { const node = byId.get(element.dataset.id!); if (node) { element.style.left = `${node.x - node.w / 2}px`; element.style.top = `${node.y}px`; } });
     const markers = Object.entries(COLORS).map(([kind, color]) => `<marker id="pmr-arrow-${kind}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="${color}"/></marker>`).join('');
-    const wires = wired.map((edge) => {
-      const [a, b] = [byId.get(edge.from), byId.get(edge.to)].sort((one, other) => (layer.get(one?.id ?? '') ?? 0) - (layer.get(other?.id ?? '') ?? 0));
+    const wires = edges.map((edge) => {
+      const a = byId.get(edge.from), b = byId.get(edge.to);
       if (!a || !b) return '';
-      const x1 = anchor(a, b.id), y1 = a.y + (ports.get(`${a.id}\n${b.id}`)?.bottom ?? a.h), x2 = b.x, y2 = b.y - 2, bend = Math.min(y2 - y1, ROW * 1.5) / 2;
+      const across = a.x - a.w / 2 > b.x + b.w / 2;
+      const far = !across && column.get(a.id) === 0 && column.get(b.id) === 0 && row.get(b.id)! - row.get(a.id)! > 1;
+      const [x1, y1, x2, y2] = across
+        ? [a.x - a.w / 2, a.y + Math.min(a.h / 2, 22), b.x + b.w / 2 + 2, Math.min(Math.max(a.y + Math.min(a.h / 2, 22), b.y + 14), b.y + b.h - 14)]
+        : far ? [a.x - a.w / 2, a.y + a.h / 2, b.x - b.w / 2 - 2, b.y + 22] : [a.x, a.y + a.h, b.x, b.y - 2];
+      const bend = Math.max(Math.abs(across ? x1 - x2 : y2 - y1) / 2, 24);
+      const outer = Math.min(...roots.slice(row.get(a.id), row.get(b.id)! + 1).map((node) => node.x - node.w / 2)) - 32 - 12 * (row.get(b.id)! - row.get(a.id)!);
+      const d = across ? `M${x1} ${y1} C${x1 - bend} ${y1} ${x2 + bend} ${y2} ${x2} ${y2}` : far ? `M${x1} ${y1} C${outer} ${y1} ${outer} ${y2} ${x2} ${y2}` : `M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}`;
       const hidden = waiting.has(edge.from) || waiting.has(edge.to) ? ' is-waiting' : '';
-      return `<path class="pmr-wire${edge.link === 'sauf' ? ' is-sauf' : ''}${hidden}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" stroke="${COLORS[a.kind]}" marker-end="url(#pmr-arrow-${a.kind})" d="M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}"/>${edge.link === 'sauf' ? `<text class="pmr-wire-label${hidden}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" x="${x2 + 6}" y="${y2 - bend / 2}">sauf</text>` : ''}`;
+      return `<path class="pmr-wire${edge.link === 'sauf' ? ' is-sauf' : ''}${hidden}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" stroke="${COLORS[a.kind]}" marker-end="url(#pmr-arrow-${a.kind})" d="${d}"/>${edge.link === 'sauf' ? `<text class="pmr-wire-label${hidden}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" x="${(x1 + x2) / 2 + 6}" y="${(y1 + y2) / 2 - 4}">sauf</text>` : ''}`;
     }).join('');
     stage.querySelector('svg')!.innerHTML = `<defs>${markers}</defs>${wires}`;
     const key = nodes.map((node) => node.id).join('|');
