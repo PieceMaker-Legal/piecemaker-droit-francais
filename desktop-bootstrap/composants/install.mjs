@@ -270,7 +270,11 @@ async function installBundledPython(host, layout, platform, arch, output) {
   if (!triple) throw new Error(`Architecture non prise en charge : ${platform}/${arch}.`);
   output.step(`Téléchargement de Python 3.${BUNDLED_PYTHON_MINOR} (${triple})…`);
   const response = await host.fetch(PYTHON_RELEASE_API, {
-    headers: { 'User-Agent': 'PieceMaker', Accept: 'application/vnd.github+json' },
+    headers: {
+      'User-Agent': 'PieceMaker',
+      Accept: 'application/vnd.github+json',
+      ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+    },
   });
   if (!response.ok) throw new Error(`Impossible de trouver une distribution Python (${response.status}).`);
   const asset = selectPythonAsset((await response.json()).assets, platform, arch);

@@ -41,6 +41,7 @@ jobs:
       - name: Build and verify relocated macOS Python
         run: node desktop-bootstrap/composants/build-release.mjs "$RUNNER_TEMP/python-assets"
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           PIECEMAKER_TAG: ${{ inputs.tag }}
           PIECEMAKER_REPO: ${{ github.repository }}
 
