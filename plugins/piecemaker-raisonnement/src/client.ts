@@ -266,7 +266,7 @@ export function mount(container: HTMLElement, api: Host) {
     const issues = issuesFor(node);
     const lines = entries.map((entry) => `<li data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div><div class="pmr-entry-head"><span class="pmr-step">${escape(STEP[entry.step])}</span>${subject(entry, node.id)}</div><p>${escape(entry.text)}</p>${rating(entry)}</div></li>`);
     const empty = snapshot?.test ? 'Le test n’a rien vérifié sur cet élément.' : 'Pas encore vérifié : lancez le test.';
-    return `<aside class="pmr-note" style="left:${node.x + node.w / 2 + 18}px;top:${node.y}px"><span class="pmr-kind">Vérification</span>${issues.length ? issueList(issues) : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${issues.length || lines.length ? '' : `<p class="pmr-muted">${empty}</p>`}</aside>`;
+    return `<aside class="pmr-note" style="left:${node.x + node.w / 2 + 18}px;top:${node.y}px"><span class="pmr-kind">Vérification</span>${issues.length ? issueList(issues, false, true) : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${issues.length || lines.length ? '' : `<p class="pmr-muted">${empty}</p>`}</aside>`;
   };
 
   const box = (node: GraphNode) => {
@@ -384,10 +384,10 @@ export function mount(container: HTMLElement, api: Host) {
     layoutGraph();
   };
 
-  const issueList = (list: ReasoningIssue[], restore = false) => {
+  const issueList = (list: ReasoningIssue[], restore = false, inGraph = false) => {
     const dismiss = (issue: ReasoningIssue) => (snapshot?.demo ? '' : `<button data-dismiss="${escape(issue.id)}"${restore ? ' data-restore' : ''}>${restore ? 'Rétablir' : 'Écarter'}</button>`);
     const technical = (issue: ReasoningIssue) => `<code>${escape(issue.text)} · ${escape(issue.path || 'fichier')}${issue.line ? ` · ligne ${issue.line}` : ''}</code>`;
-    const open = (target: string) => /^#(piece|source):/.test(target) ? `<button data-show="${escape(target)}">${target.startsWith('#piece:') ? 'Ouvrir la pièce' : 'Ouvrir le texte'}</button>` : `<button data-select="${escape(target)}">Voir dans le graphe</button>`;
+    const open = (target: string) => /^#(piece|source):/.test(target) ? `<button data-show="${escape(target)}">${target.startsWith('#piece:') ? 'Ouvrir la pièce' : 'Ouvrir le texte'}</button>` : inGraph ? '' : `<button data-select="${escape(target)}">Voir dans le graphe</button>`;
     const readable = list.filter((issue) => issue.avocat).map((issue) => `<div class="pmr-issue">${pill(issue.kind === 'erreur' ? 'exclu' : 'à établir', issue.kind === 'erreur' ? 'À corriger' : 'À compléter')}<div class="pmr-issue-body"><p>${escape(issue.avocat)}</p><details><summary>Détail technique</summary>${technical(issue)}</details></div><span class="pmr-decision">${issue.cible ? open(issue.cible) : ''}${dismiss(issue)}</span></div>`);
     const drafting = list.filter((issue) => !issue.avocat);
     const agent = drafting.length ? `<div class="pmr-issue">${pill('exclu', 'Rédaction')}<div class="pmr-issue-body"><p>${plural(drafting.length, 'défaut')} d’écriture du raisonnement. Rien à décider : demandez à l’agent de relancer la vérification, il les corrigera.</p><details><summary>Détail technique</summary>${drafting.map((issue) => `<p>${technical(issue)} ${dismiss(issue)}</p>`).join('')}</details></div></div>` : '';
