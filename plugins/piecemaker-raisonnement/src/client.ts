@@ -231,11 +231,13 @@ export function mount(container: HTMLElement, api: Host) {
     };
     const node = (id: string, label: string, status: string, kind: Kind, decisive = false): GraphNode => ({ id, label, status, kind, decisive, sources: [], pieces: [], x: 0, y: 0, w: 0, h: 0 });
     const calculations: string[] = [];
+    const reckoned = new Set<string>();
     const reckon = (name: string, level: number) => {
-      if (calculations.includes(name)) return;
-      calculations.push(name);
+      if (reckoned.has(name)) return;
+      reckoned.add(name);
       for (const mention of mentions(formulaOf(name))) if (formulaOf(mention)) reckon(mention, level + 1); else if (all[mention]) visit(mention, level + 1);
       for (const source of [name, ...inputsOf(name)].flatMap((item) => values()[item]?.selon ?? [])) for (const control of [source.applicabilite, source.version, source.validite]) if (typeof control === 'string') visit(control, level + 1);
+      calculations.push(name);
     };
     const target = objective[verb(objective)];
     if (formulaOf(target)) reckon(target, 1); else visit(target, 1);
@@ -566,18 +568,6 @@ export function mount(container: HTMLElement, api: Host) {
       if (last) ties.push({ from: last.id, to: node.id, link: 'si' });
     };
     spine(byId.get('#question')!);
-    for (const node of nodes.filter((item) => item.kind === 'calcul')) {
-      spine(node);
-      const name = node.id.slice(CALCUL.length);
-      const anchor = `#regle:${name}`;
-      add(anchor, node.id, node.id, 1, 'calcul', rule(name));
-      ties.push({ from: node.id, to: anchor, link: 'si' });
-      for (const item of inputsOf(name)) {
-        const id = `#valeur:${name}:${item}`;
-        add(id, node.id, anchor, 2, 'fait', given(item, name));
-        ties.push({ from: anchor, to: id, link: 'si' });
-      }
-    }
     for (const step of steps) {
       spine(step);
       for (const group of groups().filter((item) => item.parent === step.id)) {
@@ -592,6 +582,18 @@ export function mount(container: HTMLElement, api: Host) {
           add(id, member.condition, anchor, ruled ? 2 : 1, 'fait', box(byId.get(member.condition)!, id, { condition: member, sauf: link === 'sauf' }), { path: group.path, link, member });
           ties.push({ from: anchor, to: id, link: ruled ? 'si' : link });
         });
+      }
+    }
+    for (const node of nodes.filter((item) => item.kind === 'calcul')) {
+      spine(node);
+      const name = node.id.slice(CALCUL.length);
+      const anchor = `#regle:${name}`;
+      add(anchor, node.id, node.id, 1, 'calcul', rule(name));
+      ties.push({ from: node.id, to: anchor, link: 'si' });
+      for (const item of inputsOf(name)) {
+        const id = `#valeur:${name}:${item}`;
+        add(id, node.id, anchor, 2, 'fait', given(item, name));
+        ties.push({ from: anchor, to: id, link: 'si' });
       }
     }
     for (const node of nodes.filter((item) => !['question', 'conclusion', 'ou'].includes(item.kind) && !cells.some((cell) => cell.ref === item.id))) spine(node);
