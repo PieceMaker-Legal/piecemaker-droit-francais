@@ -67,7 +67,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${(['question', 'terme', 'controle', 'fait', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-simulation" hidden></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le test"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Test<span class="pmr-count" data-alerts hidden></span></button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-simulation" hidden></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'terme', 'controle', 'fait', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le test"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Test<span class="pmr-count" data-alerts hidden></span></button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const stage = root.querySelector<HTMLElement>('.pmr-stage')!;
@@ -107,6 +107,7 @@ export function mount(container: HTMLElement, api: Host) {
   let assumed: Record<string, boolean> = {};
   let simulated: Simulation | null = null;
   let simulating = 0;
+  let legend = false;
 
   const annotated = () => (snapshot?.annotated ?? null) as Json | null;
   const values = () => (annotated()?.valeurs ?? {}) as Record<string, Json>;
@@ -406,7 +407,9 @@ export function mount(container: HTMLElement, api: Host) {
     count.textContent = String(alerts);
     paintView();
     empty.hidden = Boolean(list.length);
-    root.querySelector<HTMLElement>('.pmr-legend')!.hidden = !list.length;
+    root.querySelector<HTMLElement>('.pmr-legend')!.hidden = !legend || !list.length;
+    root.querySelector<HTMLElement>('[data-legend]')!.setAttribute('aria-pressed', String(legend));
+    root.querySelector<HTMLElement>('.pmr-head')!.hidden = picker.hidden && chooser.hidden;
     empty.innerHTML = !context.project ? '<strong>Aucun dossier</strong><p>Ouvrez un dossier pour voir son raisonnement.</p>' : snapshot?.code && !snapshot.annotated ? `<strong>Raisonnement illisible</strong><p>${escape(snapshot.issues.map((issue) => issue.text).join(' · '))}</p>` : '<strong>Pas encore de raisonnement</strong><p>Confiez un objectif juridique à l’agent dans le chat : il transcrit son raisonnement dans .piecemaker/raisonnements/, un fichier par sujet, que ce volet vérifie et affiche.</p>';
     buildGraph();
     paintGraph();
@@ -435,10 +438,10 @@ export function mount(container: HTMLElement, api: Host) {
     if (scope >= objectives().length) scope = 0;
     if (Object.keys(assumed).length) simulate(); else paint();
   };
-  const load = async (example = false) => {
+  const load = async () => {
     const request = ++sequence;
     try {
-      const data = await loadReasoning(context.project?.path ?? null, example, reasoning);
+      const data = await loadReasoning(context.project?.path ?? null, false, reasoning);
       if (!stopped && request === sequence) apply(data);
     } catch (error) { if (!stopped && request === sequence) showError(error); }
   };
@@ -483,8 +486,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (!button) return;
     const project = context.project?.path;
     if (button.dataset.view) { view = button.dataset.view as View; paintView(); }
-    if (button.hasAttribute('data-demo')) { assumed = {}; simulated = null; paintBanner(); serialized = ''; selected = ''; scope = 0; shape = ''; void load(!snapshot?.demo); }
-    if (button.hasAttribute('data-refresh')) { serialized = ''; void load(Boolean(snapshot?.demo)); }
+    if (button.hasAttribute('data-legend')) { legend = !legend; paint(); }
     if (button.hasAttribute('data-run-test') && project && !live) {
       live = [];
       pending = [];
