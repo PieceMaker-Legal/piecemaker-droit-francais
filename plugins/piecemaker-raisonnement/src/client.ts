@@ -1,6 +1,5 @@
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
-import { citeSource, dismissIssue, loadReasoning, ratePiece, runTest, simulateReasoning } from './api.js';
-import type { Simulation } from './api.js';
+import { citeSource, dismissIssue, loadReasoning, ratePiece, runTest } from './api.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
@@ -79,7 +78,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-simulation" hidden></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i style="background:${COLORS.fait}"></i>Fait prouvé</span><span><i style="background:#c45b5b"></i>Fait contraire</span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le test"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Test<span class="pmr-count" data-alerts hidden></span></button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i style="background:${COLORS.fait}"></i>Fait prouvé</span><span><i style="background:#c45b5b"></i>Fait contraire</span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le test"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Test<span class="pmr-count" data-alerts hidden></span></button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const stage = root.querySelector<HTMLElement>('.pmr-stage')!;
@@ -89,7 +88,6 @@ export function mount(container: HTMLElement, api: Host) {
   const split = root.querySelector<HTMLElement>('.pmr-split')!;
   const warning = root.querySelector<HTMLElement>('.pmr-warning')!;
   const empty = root.querySelector<HTMLElement>('.pmr-empty')!;
-  const banner = root.querySelector<HTMLElement>('.pmr-simulation')!;
   const picker = root.querySelector<HTMLSelectElement>('[data-scope]')!;
   const chooser = root.querySelector<HTMLSelectElement>('[data-reasoning]')!;
   let context = api.context;
@@ -116,9 +114,6 @@ export function mount(container: HTMLElement, api: Host) {
   let stopped = false;
   let timer = 0;
   let sequence = 0;
-  let assumed: Record<string, boolean> = {};
-  let simulated: Simulation | null = null;
-  let simulating = 0;
   let legend = false;
 
   const annotated = () => (snapshot?.annotated ?? null) as Json | null;
@@ -150,18 +145,14 @@ export function mount(container: HTMLElement, api: Host) {
   const dismissedIds = () => new Set((snapshot?.dismissed ?? []).map((entry) => entry.id));
   const visibleIssues = () => (snapshot?.issues ?? []).filter((issue) => issue.kind !== 'conseil' && !dismissedIds().has(issue.id));
   const log = () => live ?? snapshot?.test?.log ?? [];
-  const statusOf = (name: string, fallback: string) => simulated?.termes[name] ?? fallback;
   const met = (condition: Json): string => {
     if (Array.isArray(condition.l_une)) {
       const members = condition.l_une.map(met);
       return members.includes('acquis') ? 'acquis' : members.every((status: string) => status === 'exclu') ? 'exclu' : 'à établir';
     }
-    const value = simulated?.termes[condition.condition];
-    if (!value) return condition.statut ?? 'à établir';
-    if (value !== 'acquis' && value !== 'exclu') return 'à établir';
-    return (value === 'acquis') === (condition.attendu !== false) ? 'acquis' : 'exclu';
+    return condition.statut ?? 'à établir';
   };
-  const answerOf = (objective: Json) => simulated?.objectifs[scope]?.statut ?? objective.statut ?? 'à établir';
+  const answerOf = (objective: Json) => objective.statut ?? 'à établir';
 
   const cited = (): Cited[] => {
     const found: Cited[] = [];
@@ -211,13 +202,13 @@ export function mount(container: HTMLElement, api: Host) {
     visit(objective[verb(objective)], 1);
     for (const control of [objective.validite, objective.prescription]) if (typeof control === 'string') visit(control, 1);
     const answered = answerOf(objective);
-    const amount = simulated ? simulated.objectifs[scope]?.montant : objective.montant_calcule;
+    const amount = objective.montant_calcule;
     nodes.push(node('#question', objective.objectif, answered, 'question'));
     nodes.push(node('#conclusion', 'montant_calcule' in objective ? amountText(amount) : ANSWER[answered] ?? 'En suspens', answered, 'conclusion'));
     for (const name of order) {
       const occurrence = list.find((item) => item.condition.condition === name);
       const term = all[name];
-      nodes.push(node(name, human(name), statusOf(name, term ? term.statut ?? 'à établir' : occurrence?.condition.statut ?? 'à établir'), term ? (isControl(name) ? 'controle' : term.true || term.false ? 'fait' : 'terme') : 'fait', Boolean(occurrence?.condition.decisif)));
+      nodes.push(node(name, human(name), term ? term.statut ?? 'à établir' : occurrence?.condition.statut ?? 'à établir', term ? (isControl(name) ? 'controle' : term.true || term.false ? 'fait' : 'terme') : 'fait', Boolean(occurrence?.condition.decisif)));
     }
     for (const entry of list) if (typeof entry.condition.decompte === 'string' && levels.has(entry.condition.decompte) && levels.has(entry.condition.condition)) edges.push({ from: entry.condition.decompte, to: entry.condition.condition, link: 'si' });
     for (const group of groups().filter((entry) => levels.has(entry.parent))) {
@@ -252,7 +243,6 @@ export function mount(container: HTMLElement, api: Host) {
       return `<div class="pmr-rule">${sourceChip(sources.find((source) => source.source === name)!)}${quotes.map((quote) => `<q>${escape(shorten(quote, 240))}</q>`).join('')}</div>`;
     }).join('');
   };
-  const toggles = (name: string) => `<div class="pmr-assume" role="group" aria-label="Simuler ce fait">${([['true', 'Vrai'], ['false', 'Faux'], ['', 'Dossier']] as const).map(([value, label]) => `<button data-assume="${escape(name)}" data-value="${value}" aria-pressed="${value === '' ? !(name in assumed) : assumed[name] === (value === 'true')}">${label}</button>`).join('')}</div>`;
 
   const box = (node: GraphNode) => {
     if (node.kind === 'ou') return `<div class="pmr-box pmr-ou" data-id="${escape(node.id)}">L’une des conditions</div>`;
@@ -267,7 +257,7 @@ export function mount(container: HTMLElement, api: Host) {
     ];
     const decisifs = Array.isArray(objective.decisifs) ? objective.decisifs as string[] : [];
     const occurrence = occurrences().find((entry) => entry.condition.condition === node.id);
-    const fill = node.id in assumed ? (assumed[node.id] ? 'acquis' : 'exclu') : occurrence ? met(occurrence.condition) : node.status;
+    const fill = occurrence ? met(occurrence.condition) : node.status;
     const tone = occurrence?.path.includes('.sauf[') ? { acquis: 'ko', exclu: 'ok' }[fill] ?? 'warn' : TONE[fill] ?? 'warn';
     const rules = term && !facts && node.kind !== 'fait' ? law(term) : '';
     const status = node.kind === 'fait' ? pill({ ok: 'acquis', ko: 'exclu' }[tone] ?? 'à établir', { ok: 'Condition remplie', ko: 'Condition non remplie' }[tone] ?? 'À établir') : pill(node.status, STATUS[node.status] ?? 'À établir');
@@ -277,7 +267,7 @@ export function mount(container: HTMLElement, api: Host) {
         ? `<span class="pmr-kind">${kind}</span><strong>Réponse : ${escape(node.label)}</strong>${decisifs.length ? `<p class="pmr-sub">Dépend de : ${decisifs.map((name) => escape(human(name))).join(', ')}</p>` : ''}`
         : rules
           ? `${rules}<strong class="pmr-then">${escape(node.label)}</strong><div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`
-          : `<span class="pmr-kind">${kind}</span><strong>${escape(node.label)}</strong>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}${node.id in assumed ? '<span class="pmr-pill pmr-accent">supposé</span>' : ''}</div>${facts ? toggles(node.id) : ''}`;
+          : `<span class="pmr-kind">${kind}</span><strong>${escape(node.label)}</strong>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`;
     const uncertain = ['terme', 'controle', 'conclusion'].includes(node.kind) && ['à établir', 'disputé'].includes(node.status);
     return `<div class="pmr-box pmr-${node.kind}${node.kind === 'fait' ? ` is-${tone}` : ''}${uncertain ? ' is-uncertain' : ''}${(node.kind === 'fait' ? fill : node.status) === 'exclu' && node.kind !== 'question' ? ' is-excluded' : ''}" data-id="${escape(node.id)}" data-node="${escape(node.id)}" tabindex="0" role="button" aria-label="${escape(`${kind} : ${node.label}`)}"><span class="pmr-icon" aria-hidden="true">${icon}</span><div class="pmr-box-body">${body}</div>${mark ? `<span class="pmr-test is-${mark}" title="${mark === 'ok' ? 'Vérifié par le test' : 'Alerte : voir le test'}">${MARK[mark]}</span>` : ''}</div>`;
   };
@@ -425,18 +415,6 @@ export function mount(container: HTMLElement, api: Host) {
     paintTest();
   };
 
-  const paintBanner = () => {
-    const count = Object.keys(assumed).length;
-    banner.hidden = !count;
-    banner.innerHTML = count ? `<strong>Simulation</strong><span>${plural(count, 'fait')} supposé${count > 1 ? 's' : ''} : ${Object.entries(assumed).map(([name, value]) => `${escape(human(name))} = ${value ? 'vrai' : 'faux'}`).join(' · ')}</span><button data-reset>Revenir au dossier</button>` : '';
-  };
-  const simulate = () => {
-    const request = ++simulating;
-    paintBanner();
-    if (!Object.keys(assumed).length) { simulated = null; paint(); return; }
-    simulateReasoning(context.project?.path ?? null, assumed, Boolean(snapshot?.demo), shown())
-      .then((result) => { if (!stopped && request === simulating) { simulated = result; warning.hidden = true; paint(); } }, showError);
-  };
   const showError = (error: unknown) => { warning.hidden = false; warning.textContent = error instanceof Error ? error.message : String(error); };
   const apply = (data: ReasoningSnapshot) => {
     const next = JSON.stringify(data);
@@ -445,7 +423,7 @@ export function mount(container: HTMLElement, api: Host) {
     serialized = next;
     snapshot = data;
     if (scope >= objectives().length) scope = 0;
-    if (Object.keys(assumed).length) simulate(); else paint();
+    paint();
   };
   const load = async () => {
     const request = ++sequence;
@@ -505,12 +483,6 @@ export function mount(container: HTMLElement, api: Host) {
       runTest(project, (entry) => { if (entry.status === 'en cours') return; pending.push(entry); if (!pacing) reveal(); }, shown())
         .then((data) => done(() => apply(data)), (error) => done(() => showError(error)));
     }
-    if (button.dataset.assume !== undefined) {
-      const name = button.dataset.assume;
-      if (button.dataset.value === '') delete assumed[name]; else assumed = { ...assumed, [name]: button.dataset.value === 'true' };
-      simulate();
-    }
-    if (button.hasAttribute('data-reset')) { assumed = {}; simulate(); }
     if (button.dataset.select) reach(button.dataset.select);
     if (button.dataset.show) show(button.dataset.show, button.dataset.quote);
     if (button.dataset.dismiss && project) act(() => dismissIssue(project, button.dataset.dismiss!, button.hasAttribute('data-restore'), shown()));
@@ -524,7 +496,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (button.hasAttribute('data-center')) { fitGraph(); transform(); }
   });
   picker.addEventListener('change', () => { scope = Number(picker.value); selected = ''; paint(); });
-  chooser.addEventListener('change', () => { assumed = {}; simulated = null; paintBanner(); reasoning = chooser.value; serialized = ''; scope = 0; selected = ''; void load(); });
+  chooser.addEventListener('change', () => { reasoning = chooser.value; serialized = ''; scope = 0; selected = ''; void load(); });
 
   canvas.addEventListener('pointerdown', (event) => {
     if ((event.target as Element).closest('button') || event.button !== 0) return;
@@ -590,7 +562,7 @@ export function mount(container: HTMLElement, api: Host) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = next.project?.path !== context.project?.path;
     context = next;
-    if (changed) { sequence++; assumed = {}; simulated = null; paintBanner(); snapshot = null; reasoning = undefined; serialized = ''; scope = 0; selected = ''; shape = ''; void load(); }
+    if (changed) { sequence++; snapshot = null; reasoning = undefined; serialized = ''; scope = 0; selected = ''; shape = ''; void load(); }
     paint();
   });
   const poll = () => { if (!stopped) { if (!snapshot?.demo && !busy) void load(); timer = window.setTimeout(poll, 2500); } };
