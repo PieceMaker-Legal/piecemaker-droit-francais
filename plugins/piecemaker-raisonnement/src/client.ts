@@ -264,12 +264,9 @@ export function mount(container: HTMLElement, api: Host) {
   const note = (node: GraphNode) => {
     const entries = entriesOf(node).filter((entry) => entry.status !== 'en cours');
     const issues = issuesFor(node);
-    const lines = [
-      ...issues.map((issue) => `<li data-status="alerte">${pill(issue.kind === 'erreur' ? 'exclu' : 'à établir', issue.kind === 'erreur' ? 'Erreur' : 'Manque')}<span>${escape(issue.avocat ?? issue.text)}</span></li>`),
-      ...entries.map((entry) => `<li data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><span><b>${escape(STEP[entry.step])}</b> ${escape(entry.text)}</span></li>`),
-    ];
+    const lines = entries.map((entry) => `<li data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div><div class="pmr-entry-head"><span class="pmr-step">${escape(STEP[entry.step])}</span>${subject(entry, node.id)}</div><p>${escape(entry.text)}</p>${rating(entry)}</div></li>`);
     const empty = snapshot?.test ? 'Le test n’a rien vérifié sur cet élément.' : 'Pas encore vérifié : lancez le test.';
-    return `<aside class="pmr-note" style="left:${node.x + node.w / 2 + 18}px;top:${node.y}px"><span class="pmr-kind">Vérification</span>${lines.length ? `<ul>${lines.join('')}</ul>` : `<p class="pmr-muted">${empty}</p>`}</aside>`;
+    return `<aside class="pmr-note" style="left:${node.x + node.w / 2 + 18}px;top:${node.y}px"><span class="pmr-kind">Vérification</span>${issues.length ? issueList(issues) : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${issues.length || lines.length ? '' : `<p class="pmr-muted">${empty}</p>`}</aside>`;
   };
 
   const box = (node: GraphNode) => {
@@ -397,19 +394,19 @@ export function mount(container: HTMLElement, api: Host) {
     return readable.join('') + agent;
   };
 
+  const rating = (entry: ReasoningLogEntry) => {
+    if (snapshot?.demo || entry.step !== 'pièce' || entry.status === 'en cours') return '';
+    const file = entry.key.split(':')[1];
+    const reliable = cited().find((item) => item.piece.piece === file)?.piece.fiable;
+    return `<span class="pmr-decision"><button data-rate="${escape(file)}" data-value="true"${reliable === true ? ' disabled' : ''}>Fiable</button><button data-rate="${escape(file)}" data-value="false"${reliable === false ? ' disabled' : ''}>Non fiable</button>${reliable === null || reliable === undefined ? '' : `<button data-rate="${escape(file)}" data-value="null">Annuler</button>`}</span>`;
+  };
+  const subject = (entry: ReasoningLogEntry, self = '') => {
+    if ((entry.step === 'source' || entry.step === 'pièce') && entry.status !== 'en cours') return `<button class="pmr-link" data-show="#${entry.step === 'source' ? 'source' : 'piece'}:${escape(entry.key.split(':')[1])}" data-quote="${escape(entry.key.split(':').slice(2).join(':'))}"><strong>${escape(entry.subject)}</strong></button>`;
+    const name = /^(fait|terme):(.+)$/.exec(entry.key)?.[2];
+    return name && name !== self && nodes.some((node) => node.id === name) ? `<button class="pmr-link" data-select="${escape(name)}"><strong>${escape(entry.subject)}</strong></button>` : `<strong>${escape(entry.subject)}</strong>`;
+  };
   const paintTest = () => {
     const entries = log();
-    const rating = (entry: ReasoningLogEntry) => {
-      if (snapshot?.demo || entry.step !== 'pièce' || entry.status === 'en cours') return '';
-      const file = entry.key.split(':')[1];
-      const reliable = cited().find((item) => item.piece.piece === file)?.piece.fiable;
-      return `<span class="pmr-decision"><button data-rate="${escape(file)}" data-value="true"${reliable === true ? ' disabled' : ''}>Fiable</button><button data-rate="${escape(file)}" data-value="false"${reliable === false ? ' disabled' : ''}>Non fiable</button>${reliable === null || reliable === undefined ? '' : `<button data-rate="${escape(file)}" data-value="null">Annuler</button>`}</span>`;
-    };
-    const subject = (entry: ReasoningLogEntry) => {
-      if ((entry.step === 'source' || entry.step === 'pièce') && entry.status !== 'en cours') return `<button class="pmr-link" data-show="#${entry.step === 'source' ? 'source' : 'piece'}:${escape(entry.key.split(':')[1])}" data-quote="${escape(entry.key.split(':').slice(2).join(':'))}"><strong>${escape(entry.subject)}</strong></button>`;
-      const name = /^(fait|terme):(.+)$/.exec(entry.key)?.[2];
-      return name && nodes.some((node) => node.id === name) ? `<button class="pmr-link" data-select="${escape(name)}"><strong>${escape(entry.subject)}</strong></button>` : `<strong>${escape(entry.subject)}</strong>`;
-    };
     const view = (entry: ReasoningLogEntry) => `<li class="pmr-entry${fresh?.key === entry.key ? fresh.added ? ' is-new' : ' is-updated' : ''}" data-step="${escape(entry.step)}" data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div class="pmr-entry-head"><span class="pmr-step">${escape(entry.status === 'ok' && entry.step === 'source' ? 'Source vérifiée' : entry.status === 'ok' && entry.step === 'pièce' ? 'Pièce et citation vérifiées' : STEP[entry.step])}</span>${subject(entry)}</div><span class="pmr-entry-text">${escape(entry.text)}</span>${rating(entry)}</li>`;
     const part = (title: string, lead: string, steps: ReasoningLogEntry['step'][]) => {
       const list = entries.filter((entry) => steps.includes(entry.step));
@@ -540,6 +537,12 @@ export function mount(container: HTMLElement, api: Host) {
   picker.addEventListener('change', () => { scope = Number(picker.value); selected = ''; paint(); });
   chooser.addEventListener('change', () => { reasoning = chooser.value; serialized = ''; scope = 0; selected = ''; void load(); });
 
+  root.addEventListener('pointerdown', (event) => {
+    const target = event.target as Element;
+    if (!selected || target.closest('.pmr-note, [data-node]') || (canvas.contains(target) && !target.closest('button'))) return;
+    selected = '';
+    highlight();
+  });
   canvas.addEventListener('pointerdown', (event) => {
     if ((event.target as Element).closest('button, .pmr-note') || event.button !== 0) return;
     drag = { id: (event.target as Element).closest<HTMLElement>('[data-node]')?.dataset.node ?? '', x: event.clientX, y: event.clientY, moved: false };
@@ -567,6 +570,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (id && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(id); }
   });
   canvas.addEventListener('wheel', (event) => {
+    if ((event.target as Element).closest('.pmr-note')) return;
     event.preventDefault();
     if (!event.ctrlKey && !event.metaKey) { pan = { x: pan.x - event.deltaX, y: pan.y - event.deltaY }; transform(); return; }
     const box = canvas.getBoundingClientRect(), x = event.clientX - box.left, y = event.clientY - box.top;
