@@ -12,7 +12,9 @@ type Cited = { piece: Json; target: string; against: boolean };
 type Based = { source: Json; target: string };
 type GraphNode = { id: string; label: string; status: string; kind: Kind; decisive: boolean; sources: Json[]; pieces: Cited[]; x: number; y: number; w: number; h: number };
 type Edge = { from: string; to: string; link: Occurrence['link'] };
-type Cell = { id: string; ref: string; parent: string; column: number; kind: Kind; x: number; y: number; w: number; h: number };
+type Cell = { id: string; ref: string; parent: string; column: number; kind: Kind; x: number; y: number; w: number; h: number; path?: string; link?: 'si' | 'sauf'; member?: Json };
+type Item = { key: string; status: string; html: string };
+type Part = { cell: string; kind: string; title: string; nature: string; items: Item[] };
 
 const RESERVED = new Set(['bilan', 'objectifs', 'hypotheses', 'valeurs']);
 const CONDITION_ANNOTATIONS = new Set(['l_une', 'delai', 'montant', 'selon', 'decompte', 'statut', 'decisif', 'erreurs', 'manques', 'calcul']);
@@ -80,14 +82,11 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i style="background:${COLORS.fait}"></i>Fait prouvé</span><span><i style="background:#c45b5b"></i>Fait contraire</span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button><button class="pmr-primary" data-run-test>Lancer le test</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le test"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Test<span class="pmr-count" data-alerts hidden></span></button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><div class="pmr-tabs" role="tablist" aria-label="Vue"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Vue écrite<span class="pmr-count" data-alerts hidden></span></button></div><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i style="background:${COLORS.fait}"></i>Fait prouvé</span><span><i style="background:#c45b5b"></i>Fait contraire</span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button><button class="pmr-primary" data-run-test>Lancer le test</button></div></div><div class="pmr-inspector"><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const stage = root.querySelector<HTMLElement>('.pmr-stage')!;
   const detail = root.querySelector<HTMLElement>('.pmr-detail')!;
-  const workspace = root.querySelector<HTMLElement>('.pmr-workspace')!;
-  const inspector = root.querySelector<HTMLElement>('.pmr-inspector')!;
-  const split = root.querySelector<HTMLElement>('.pmr-split')!;
   const warning = root.querySelector<HTMLElement>('.pmr-warning')!;
   const empty = root.querySelector<HTMLElement>('.pmr-empty')!;
   const picker = root.querySelector<HTMLSelectElement>('[data-scope]')!;
@@ -100,6 +99,8 @@ export function mount(container: HTMLElement, api: Host) {
   let view: View = 'graph';
   let scope = 0;
   let selected = '';
+  let selectedCell = '';
+  let described = '';
   let focusing = '';
   let shape = '';
   let nodes: GraphNode[] = [];
@@ -109,13 +110,13 @@ export function mount(container: HTMLElement, api: Host) {
   let ties: Edge[] = [];
   let zoom = 1;
   let pan = { x: 0, y: 0 };
-  let drag: { id: string; x: number; y: number; moved: boolean } | null = null;
+  let drag: { id: string; cell: string; x: number; y: number; moved: boolean } | null = null;
   let busy = false;
+  let running = false;
   let live: ReasoningLogEntry[] | null = null;
-  let pending: ReasoningLogEntry[] = [];
+  let played: Set<string> | null = null;
   let fresh: { key: string; added: boolean } | null = null;
   let pacing = 0;
-  let finish: (() => void) | null = null;
   let stopped = false;
   let timer = 0;
   let sequence = 0;
@@ -149,6 +150,7 @@ export function mount(container: HTMLElement, api: Host) {
   const issuesOf = (paths: string[]) => (snapshot?.issues ?? []).filter((issue) => issue.kind !== 'conseil' && paths.some((at) => issue.path === at || issue.path.startsWith(`${at}.`) || issue.path.startsWith(`${at}[`)));
   const dismissedIds = () => new Set((snapshot?.dismissed ?? []).map((entry) => entry.id));
   const visibleIssues = () => (snapshot?.issues ?? []).filter((issue) => issue.kind !== 'conseil' && !dismissedIds().has(issue.id));
+  const full = () => (snapshot?.test?.log ?? []).filter((entry) => entry.status !== 'en cours');
   const log = () => live ?? snapshot?.test?.log ?? [];
   const met = (condition: Json): string => {
     if (Array.isArray(condition.l_une)) {
@@ -190,13 +192,7 @@ export function mount(container: HTMLElement, api: Host) {
     const mine = entriesOf(node);
     return (!live && issuesFor(node).length) || mine.some((entry) => entry.status === 'alerte') ? 'alerte' : mine.some((entry) => entry.status === 'ok') ? 'ok' : '';
   };
-  const waitingIds = () => {
-    if (!live) return new Set<string>();
-    const shown = new Set(nodes.filter((node) => node.kind === 'question' || (node.kind !== 'ou' && entriesOf(node).length)).map((node) => node.id));
-    for (const node of nodes) if (node.kind === 'ou' && edges.some((edge) => edge.to === node.id && shown.has(edge.from))) shown.add(node.id);
-    return new Set(nodes.filter((node) => !shown.has(node.id)).map((node) => node.id));
-  };
-  let waiting = new Set<string>();
+  const hidden = (cell: string) => Boolean(played && !played.has(cell));
 
   const buildGraph = () => {
     nodes = [];
@@ -247,7 +243,7 @@ export function mount(container: HTMLElement, api: Host) {
     }
     for (const entry of cited()) { const target = byId.get(entry.target); if (target && !target.pieces.some((item) => item.piece.piece === entry.piece.piece)) target.pieces.push(entry); }
     for (const item of nodes.filter((entry) => entry.kind !== 'question' && entry.kind !== 'conclusion' && !edges.some((edge) => edge.from === entry.id))) edges.push({ from: item.id, to: '#conclusion', link: 'si' });
-    if (selected && !byId.has(selected)) selected = '';
+    if (selected && !byId.has(selected)) { selected = ''; selectedCell = ''; }
     const layer = layering();
     steps = nodes.filter((item) => item.kind === 'terme' || item.kind === 'controle').reverse().sort((one, other) => layer.get(other.id)! - layer.get(one.id)!);
   };
@@ -265,7 +261,8 @@ export function mount(container: HTMLElement, api: Host) {
     const label = link === 'sauf' ? { ok: 'Exception écartée', ko: 'Exception établie' }[tone] ?? 'À établir' : { ok: 'Remplie', ko: 'Non remplie' }[tone] ?? 'À établir';
     const title = `${link === 'sauf' ? 'Sauf' : 'Si'}${members.length > 1 ? ' l’une des conditions' : ''}`;
     const owner = path.split('.')[0];
-    return `<div class="pmr-box pmr-loi is-${tone}${waiting.has(owner) ? ' is-waiting' : ''}" data-id="#clause:${escape(path)}" data-node="${escape(owner)}" tabindex="0" role="button" aria-label="${escape(`${title} : ${quotes.length ? sources[0].citation : ''}`)}"><div class="pmr-box-body"><span class="pmr-kind">${title}</span>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}${quotes.join('')}${owned.join('')}${controls.join('')}<div class="pmr-foot">${pill({ ok: 'acquis', ko: 'exclu' }[tone] ?? 'à établir', label)}</div></div></div>`;
+    const id = `#clause:${path}`;
+    return `<div class="pmr-box pmr-loi is-${tone}${hidden(id) ? ' is-waiting' : ''}${played && fresh?.key === id ? ' is-arriving' : ''}" data-id="${escape(id)}" data-node="${escape(owner)}" tabindex="0" role="button" aria-label="${escape(`${title} : ${quotes.length ? sources[0].citation : ''}`)}"><div class="pmr-box-body"><span class="pmr-kind">${title}</span>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}${quotes.join('')}${owned.join('')}${controls.join('')}<div class="pmr-foot">${pill({ ok: 'acquis', ko: 'exclu' }[tone] ?? 'à établir', label)}</div></div></div>`;
   };
 
   const verdict = () => {
@@ -274,17 +271,78 @@ export function mount(container: HTMLElement, api: Host) {
     const alerts = log().filter((entry) => entry.status === 'alerte').length;
     return `<div class="pmr-verdict"><span class="pmr-kind">Résultat du test</span><p>${escape(answer.text)}</p>${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</div>`;
   };
-  const note = (node: GraphNode) => {
-    const entries = entriesOf(node).filter((entry) => entry.status !== 'en cours');
-    const issues = issuesFor(node);
-    const lines = entries.map((entry) => `<li data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><div><div class="pmr-entry-head"><span class="pmr-step">${escape(STEP[entry.step])}</span>${subject(entry, node.id)}</div><p>${escape(entry.text)}</p>${rating(entry)}</div></li>`);
-    const empty = snapshot?.test ? 'Le test n’a rien vérifié sur cet élément.' : 'Pas encore vérifié : lancez le test.';
-    return `<aside class="pmr-note" style="left:${Math.max(node.x + node.w / 2, ...cells.map((cell) => cell.x + cell.w / 2)) + 18}px;top:${node.y}px"><span class="pmr-kind">Vérification</span>${issues.length ? issueList(issues, false, true) : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${issues.length || lines.length ? '' : `<p class="pmr-muted">${empty}</p>`}</aside>`;
+  const judged = (entry: ReasoningLogEntry): [string, string] => {
+    if (entry.step === 'source' || entry.step === 'pièce') return entry.status === 'ok' ? ['acquis', 'Vérifié'] : entry.status === 'alerte' ? ['exclu', 'Erreur'] : ['à établir', 'Non vérifiable'];
+    if (entry.step === 'fait') return entry.status === 'ok' ? ['acquis', 'Établi'] : entry.status === 'alerte' ? ['exclu', 'Manque décisif'] : ['à établir', 'Manque'];
+    return entry.status === 'alerte' ? ['exclu', 'Erreur'] : entry.status === 'ok' ? ['acquis', 'Calculé'] : ['à établir', 'À établir'];
+  };
+  const line = (key: string, status: string, head: string, text: string, extra = '') => ({ key, status, html: `<li data-status="${escape(status)}"${fresh?.key === key ? ' class="is-new"' : ''}><span class="pmr-mark" aria-hidden="true">${{ ok: '✓', alerte: '!', erreur: '!' }[status] ?? '?'}</span><div><div class="pmr-entry-head">${head}</div><p>${escape(text)}</p>${extra}</div></li>` });
+  const entryItem = (entry: ReasoningLogEntry, self = '') => { const [tone, label] = judged(entry); return line(entry.key, entry.status, `${pill(tone, label)}<span class="pmr-step">${escape(STEP[entry.step])}</span>${subject(entry, self)}`, entry.text, rating(entry)); };
+  const issueItem = (issue: ReasoningIssue): Item => ({ key: `issue:${issue.id}`, status: issue.kind === 'erreur' ? 'erreur' : 'manque', html: `<li class="is-issue${fresh?.key === `issue:${issue.id}` ? ' is-new' : ''}">${issueList([issue], false, true)}</li>` });
+  const lookupEntry = (prefix: string, citation: unknown) => { const found = full().filter((entry) => entry.key.startsWith(prefix)); return found.find((entry) => entry.key === `${prefix}${citation}`) ?? (found.length === 1 ? found[0] : found.find((entry) => String(citation ?? '').startsWith(entry.key.slice(prefix.length)))); };
+  const absent = (key: string, what: string, text: string) => line(key, 'neutre', `${pill('à établir', 'Non vérifié')}<span class="pmr-step">${escape(what)}</span>`, text);
+  const sourceItems = (sources: Json[], owner: string) => [...new Map(sources.map((source) => [`${source.source}:${source.citation}`, source])).values()].flatMap((source) => {
+    const entry = lookupEntry(`source:${source.source}:`, source.citation);
+    return entry ? [entryItem(entry)] : snapshot?.test ? [absent(`absent:${owner}:${source.source}`, 'Source', `${sourceName(source)} : le test n’a pas consulté ce texte.`)] : [];
+  });
+  const pieceItems = (pieces: Cited[], owner: string) => pieces.flatMap((cited) => {
+    const entry = lookupEntry(`piece:${cited.piece.piece}:`, cited.piece.citation);
+    return entry ? [entryItem(entry)] : snapshot?.test ? [absent(`absent:${owner}:${cited.piece.piece}`, 'Pièce', `${cited.piece.titre ?? basename(cited.piece.piece)} : le test n’a pas relu cette pièce.`)] : [];
+  });
+  const open = (list: ReasoningIssue[]) => list.filter((issue) => !dismissedIds().has(issue.id)).map(issueItem);
+  const lawPart = (cell: Cell): Part => {
+    const group = groups().find((item) => item.path === cell.path)!;
+    const members: Json[] = Array.isArray(group.condition.l_une) ? group.condition.l_une : [group.condition];
+    const sources = [group.condition, ...(members.length > 1 ? members : [])].flatMap((item: Json) => item.selon ?? []) as Json[];
+    const fill = met(group.condition);
+    const sauf = cell.link === 'sauf';
+    const result = sauf ? { acquis: 'Exception établie : ses faits sont prouvés.', exclu: 'Exception écartée : un de ses faits est contredit.' }[fill] : { acquis: 'Condition remplie : ses faits sont établis.', exclu: 'Condition non remplie : un de ses faits est contredit.' }[fill];
+    const state = line(`état:${cell.path}`, result ? 'ok' : 'neutre', `${pill(result ? 'acquis' : 'à établir', result ? 'Calculé' : 'À établir')}<span class="pmr-step">Condition</span>`, result ?? 'À établir : un fait reste à prouver.');
+    return { cell: cell.id, kind: `Condition · ${sauf ? 'Sauf' : 'Si'}${members.length > 1 ? ' l’une des conditions' : ''}`, title: sources.length ? [...new Set(sources.map(sourceName))].join(', ') : 'Sans texte cité', nature: sources.length ? 'Le test consulte le texte officiel : il vérifie qu’il existe, qu’il contient la citation et qu’il est en vigueur. Il calcule ensuite si la condition est remplie.' : 'Aucun texte n’est cité pour cette condition : le test calcule seulement si elle est remplie.', items: [...open(issuesOf([cell.path!])), ...sourceItems(sources, cell.id), state] };
+  };
+  const factPart = (cell: Cell): Part => {
+    const node = nodes.find((item) => item.id === cell.ref)!;
+    const term = terms()[node.id];
+    const sources = sides.flatMap((side) => term?.[side] ?? []).flatMap((entry: Json) => entry.selon ?? []) as Json[];
+    const entry = full().find((item) => item.key === `fait:${node.id}`);
+    const result = entry ? [entryItem(entry, node.id)] : snapshot?.test ? [absent(`absent:${cell.id}`, 'Fait', 'Le test n’a pas évalué ce fait.')] : [];
+    return { cell: cell.id, kind: 'Fait', title: node.label, nature: node.pieces.length ? 'Le test ouvre chaque pièce citée et y cherche la citation. Le fait est établi si une pièce fiable la contient.' : sources.length ? 'Le fait repose sur un texte : le test vérifie ce texte et sa citation.' : 'Aucune pièce ni aucun texte n’est cité : le fait ne peut pas être établi.', items: [...open(issuesFor(node)), ...(node.pieces.length || sources.length ? [] : [line(`sans-preuve:${cell.id}`, 'manque', `${pill('à établir', 'Manque')}<span class="pmr-step">Preuve</span>`, 'Aucune pièce citée pour prouver ce fait.')]), ...pieceItems(node.pieces, cell.id), ...sourceItems(sources, cell.id), ...result] };
+  };
+  const stepPart = (cell: Cell): Part => {
+    const node = nodes.find((item) => item.id === cell.ref)!;
+    const inner = groups().filter((group) => group.parent === node.id).map((group) => group.path);
+    const entry = full().find((item) => item.key === `terme:${node.id}`);
+    const result = entry ? [entryItem(entry, node.id)] : snapshot?.test ? [absent(`absent:${cell.id}`, 'Étape', 'Le test n’a pas calculé cette étape.')] : [];
+    return { cell: cell.id, kind: `Étape ${steps.indexOf(node) + 1}`, title: node.label, nature: 'Le test calcule l’étape : elle est remplie si toutes ses conditions « si » le sont et qu’aucune exception « sauf » n’est établie.', items: [...open(issuesOf([node.id]).filter((issue) => !inner.some((path) => issue.path === path || issue.path.startsWith(`${path}.`)))), ...result] };
+  };
+  const answerPart = (cell: Cell): Part => {
+    const entry = full().find((item) => item.key === `réponse:${scope}`);
+    return { cell: cell.id, kind: 'Réponse', title: nodes.find((item) => item.id === '#conclusion')?.label ?? '', nature: 'Le test déduit la réponse des étapes : elle n’est acquise que si les étapes décisives le sont.', items: entry ? [entryItem(entry)] : [] };
+  };
+  const sections = (id: string): Part[] => {
+    const cell = cells.find((item) => item.id === id);
+    if (!cell || cell.kind === 'question') return [];
+    if (cell.kind === 'conclusion') return [answerPart(cell)];
+    if (cell.member) return [factPart(cell)];
+    if (cell.path) return [lawPart(cell)];
+    if (cell.kind === 'fait') return [factPart(cell)];
+    const below = cells.filter((item) => item.parent === cell.id || cells.some((parent) => parent.id === item.parent && parent.parent === cell.id));
+    return [stepPart(cell), ...below.map((item) => item.member ? factPart(item) : lawPart(item))];
+  };
+  const tally = (items: Item[]) => items.some((item) => ['alerte', 'erreur'].includes(item.status)) ? pill('exclu', 'Erreur') : items.some((item) => ['neutre', 'manque'].includes(item.status)) ? pill('à établir', 'Incomplet') : items.length ? pill('acquis', 'Vérifié') : '';
+  const note = (cell: Cell) => {
+    const parts = sections(cell.id).filter((part) => !hidden(part.cell));
+    if (!parts.length) return '';
+    const body = parts.map((part) => {
+      const items = part.items.filter((item) => !played || played.has(item.key));
+      return `<section class="pmr-note-part${fresh?.key === part.cell ? ' is-new' : ''}${part.cell === described ? ' is-described' : ''}" data-cell="${escape(part.cell)}"><header><span class="pmr-kind">${escape(part.kind)}</span>${tally(items)}</header><strong>${escape(part.title)}</strong><p class="pmr-nature">${escape(part.nature)}</p>${items.length ? `<ul>${items.map((item) => item.html).join('')}</ul>` : part.items.length ? '' : `<p class="pmr-muted">${snapshot?.test ? 'Rien à vérifier ici.' : 'Pas encore vérifié.'}</p>`}</section>`;
+    }).join('');
+    const anchor = cells.find((item) => item.id === described) ?? cell;
+    return `<aside class="pmr-note" style="left:${anchor.x + anchor.w / 2 + 48}px;top:${anchor.y}px"><span class="pmr-kind">Vérification</span>${snapshot?.test ? '' : '<p class="pmr-muted">Test pas encore lancé : seuls les calculs et les défauts d’écriture sont affichés.</p>'}${body}</aside>`;
   };
 
   const box = (node: GraphNode, id = node.id, own?: { condition: Json; sauf: boolean }) => {
-    const arriving = Boolean(live && fresh?.added && entriesOf(node).some((entry) => entry.key === fresh!.key));
-    const state = `${waiting.has(node.id) ? ' is-waiting' : ''}${arriving ? ' is-arriving' : ''}`;
+    const state = `${hidden(id) ? ' is-waiting' : ''}${played && fresh?.key === id ? ' is-arriving' : ''}`;
     const [kind, icon] = KINDS[node.kind as Exclude<Kind, 'ou'>];
     const objective = objectives()[scope] ?? {};
     const mark = testMark(node);
@@ -345,11 +403,25 @@ export function mount(container: HTMLElement, api: Host) {
     if (!node) return;
     pan = { x: canvas.clientWidth / 2 - node.x * zoom, y: canvas.clientHeight / 2 - (node.y + node.h / 2) * zoom };
   };
+  const tether = (aside: HTMLElement | null | undefined) => {
+    const card = cells.find((item) => item.id === described);
+    if (!aside || !card) return;
+    const part = aside.querySelector<HTMLElement>(`[data-cell="${CSS.escape(described)}"]`);
+    const top = aside.offsetTop, bottom = top + aside.offsetHeight;
+    const y = Math.min(bottom - 14, Math.max(top + 14, top + (part ? part.offsetTop - aside.scrollTop + 18 : 18)));
+    const from = { x: card.x + card.w / 2, y: card.y + card.h / 2 }, to = aside.offsetLeft;
+    stage.insertAdjacentHTML('beforeend', `<svg class="pmr-wires pmr-tether" aria-hidden="true"><path d="M${from.x} ${from.y} C${from.x + 40} ${from.y} ${to - 40} ${y} ${to} ${y}"/><circle cx="${from.x}" cy="${from.y}" r="3.5"/></svg>`);
+  };
   const highlight = () => {
-    stage.querySelector('.pmr-note')?.remove();
-    const target = !live && nodes.find((node) => node.id === selected && node.kind !== 'ou');
-    if (target) stage.insertAdjacentHTML('beforeend', note(target));
-    const members = selected ? branch(selected).add('#question') : null;
+    stage.querySelectorAll('.pmr-note, .pmr-tether').forEach((element) => element.remove());
+    const cell = cells.find((item) => item.id === selectedCell);
+    if (cell) stage.insertAdjacentHTML('beforeend', note(cell));
+    const aside = stage.querySelector<HTMLElement>('.pmr-note');
+    const newest = aside?.querySelector<HTMLElement>('.is-new:last-of-type, li.is-new');
+    if (aside && newest) aside.scrollTop = Math.max(0, newest.offsetTop + newest.offsetHeight - aside.clientHeight + 8);
+    tether(aside);
+    stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => element.classList.toggle('is-described', Boolean(aside) && element.dataset.id === described));
+    const members = selected && !played ? branch(selected).add('#question') : null;
     stage.querySelectorAll<HTMLElement>('[data-node]').forEach((element) => { element.classList.toggle('is-selected', element.dataset.node === selected); element.classList.toggle('is-dim', Boolean(members && !members.has(element.dataset.node!))); });
     stage.querySelectorAll<SVGElement>('[data-from]').forEach((element) => { const lit = Boolean(members?.has(element.dataset.from!) && members.has(element.dataset.to!)); element.classList.toggle('is-lit', lit); element.classList.toggle('is-dim', Boolean(members && !lit)); });
   };
@@ -385,8 +457,7 @@ export function mount(container: HTMLElement, api: Host) {
       const [x1, y1, x2, y2] = down ? [a.x, a.y + a.h, b.x, b.y - 2] : [a.x + a.w / 2, a.y + Math.min(a.h / 2, 22), b.x - b.w / 2 - 2, b.y + Math.min(b.h / 2, 22)];
       const bend = Math.max(Math.abs(down ? y2 - y1 : x2 - x1) / 2, 18);
       const d = down ? `M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}` : `M${x1} ${y1} C${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}`;
-      const hidden = waiting.has(a.ref) || waiting.has(b.ref) ? ' is-waiting' : '';
-      return `<path class="pmr-wire${tie.link === 'sauf' ? ' is-sauf' : ''}${hidden}" data-from="${escape(a.ref)}" data-to="${escape(b.ref)}" stroke="${COLORS[a.kind]}" marker-end="url(#pmr-arrow-${a.kind})" d="${d}"/>`;
+      return `<path class="pmr-wire${tie.link === 'sauf' ? ' is-sauf' : ''}${hidden(a.id) || hidden(b.id) ? ' is-waiting' : ''}" data-from="${escape(a.ref)}" data-to="${escape(b.ref)}" stroke="${COLORS[a.kind]}" marker-end="url(#pmr-arrow-${a.kind})" d="${d}"/>`;
     }).join('');
     stage.querySelector('svg')!.innerHTML = `<defs>${markers}</defs>${wires}`;
     const key = nodes.map((node) => node.id).join('|');
@@ -401,7 +472,7 @@ export function mount(container: HTMLElement, api: Host) {
     const parts: string[] = [];
     const byId = new Map(nodes.map((node) => [node.id, node]));
     if (!byId.has('#question')) return '';
-    const add = (id: string, ref: string, parent: string, column: number, kind: Kind, html: string) => { cells.push({ id, ref, parent, column, kind, x: 0, y: 0, w: 0, h: 0 }); parts.push(html); };
+    const add = (id: string, ref: string, parent: string, column: number, kind: Kind, html: string, extra: Partial<Cell> = {}) => { cells.push({ id, ref, parent, column, kind, x: 0, y: 0, w: 0, h: 0, ...extra }); parts.push(html); };
     const spine = (node: GraphNode) => {
       const last = cells.filter((cell) => !cell.parent).pop();
       add(node.id, node.id, '', 0, node.kind, box(node));
@@ -416,10 +487,10 @@ export function mount(container: HTMLElement, api: Host) {
         const facts = members.filter((member) => byId.has(member.condition) && !steps.some((other) => other.id === member.condition));
         const ruled = members.length > 1 || facts.length < members.length || [group.condition, ...members].some((item) => item.selon?.length || typeof item.decompte === 'string');
         const anchor = ruled ? `#clause:${group.path}` : step.id;
-        if (ruled) { add(anchor, step.id, step.id, 1, 'terme', clause(group.path, link, group.condition, members)); ties.push({ from: step.id, to: anchor, link }); }
+        if (ruled) { add(anchor, step.id, step.id, 1, 'terme', clause(group.path, link, group.condition, members), { path: group.path, link }); ties.push({ from: step.id, to: anchor, link }); }
         facts.forEach((member, index) => {
           const id = `#fait:${group.path}:${index}`;
-          add(id, member.condition, anchor, ruled ? 2 : 1, 'fait', box(byId.get(member.condition)!, id, { condition: member, sauf: link === 'sauf' }));
+          add(id, member.condition, anchor, ruled ? 2 : 1, 'fait', box(byId.get(member.condition)!, id, { condition: member, sauf: link === 'sauf' }), { path: group.path, link, member });
           ties.push({ from: anchor, to: id, link: ruled ? 'si' : link });
         });
       }
@@ -429,8 +500,7 @@ export function mount(container: HTMLElement, api: Host) {
     return parts.join('');
   };
   const paintGraph = () => {
-    waiting = waitingIds();
-    stage.classList.toggle('is-following', Boolean(live));
+    stage.classList.toggle('is-following', Boolean(played));
     stage.innerHTML = `<svg class="pmr-wires" aria-hidden="true"></svg>${plan()}`;
     layoutGraph();
   };
@@ -442,7 +512,7 @@ export function mount(container: HTMLElement, api: Host) {
     const open = (target: string) => /^#(piece|source):/.test(target) ? `<button data-show="${escape(target)}">${target.startsWith('#piece:') ? 'Ouvrir la pièce' : 'Ouvrir le texte'}</button>` : inGraph ? '' : `<button data-select="${escape(target)}">Voir dans le graphe</button>`;
     const groups = new Map<string, ReasoningIssue[]>();
     for (const issue of list.filter((issue) => issue.avocat)) groups.set(`${issue.kind}\0${issue.avocat}`, [...groups.get(`${issue.kind}\0${issue.avocat}`) ?? [], issue]);
-    const readable = [...groups.values()].map((same) => { const [issue] = same; return `<div class="pmr-issue">${pill(issue.kind === 'erreur' ? 'exclu' : 'à établir', issue.kind === 'erreur' ? 'À corriger' : 'À compléter')}<div class="pmr-issue-body"><p>${escape(issue.avocat)}</p><details><summary>Détail technique</summary>${same.map(technical).join('<br>')}</details></div><span class="pmr-decision">${issue.cible ? open(issue.cible) : ''}${dismiss(...same)}</span></div>`; });
+    const readable = [...groups.values()].map((same) => { const [issue] = same; return `<div class="pmr-issue">${pill(issue.kind === 'erreur' ? 'exclu' : 'à établir', issue.kind === 'erreur' ? 'Erreur · à corriger' : 'Manque · à compléter')}<div class="pmr-issue-body"><p>${escape(issue.avocat)}</p><details><summary>Détail technique</summary>${same.map(technical).join('<br>')}</details></div><span class="pmr-decision">${issue.cible ? open(issue.cible) : ''}${dismiss(...same)}</span></div>`; });
     const drafting = list.filter((issue) => !issue.avocat);
     const agent = drafting.length ? `<div class="pmr-issue">${pill('exclu', 'Rédaction')}<div class="pmr-issue-body"><p>${plural(drafting.length, 'défaut')} d’écriture du raisonnement. Rien à décider : demandez à l’agent de relancer la vérification, il les corrigera.</p><details><summary>Détail technique</summary>${drafting.map((issue) => `<p>${technical(issue)} ${dismiss(issue)}</p>`).join('')}</details></div></div>` : '';
     return readable.join('') + agent;
@@ -501,7 +571,7 @@ export function mount(container: HTMLElement, api: Host) {
       return `<section class="pmr-phase" data-status="${status}"><header><span class="pmr-step">Étape ${steps.indexOf(node) + 1}</span><button class="pmr-link" data-select="${escape(node.id)}"><strong>${escape(node.label)}</strong></button><span class="pmr-phase-state">${escape(head[0]?.text ?? '')}</span></header>${rule(node)}${issues.length ? issueList(unplaced(issues), false, true) : ''}${law ? `<h5>Droit</h5>${law}` : ''}${proved || pieces ? `<h5>Faits et pièces</h5>${pieces}${proved}` : ''}</section>`;
     };
     const alerts = entries.filter((entry) => entry.status === 'alerte').length;
-    const run = `<div class="pmr-run"><button class="pmr-primary" data-run-test${live || busy || !context.project ? ' disabled' : ''}>${live ? 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</span>` : ''}</div>`;
+    const run = `<div class="pmr-run"><button class="pmr-primary" data-run-test${running || busy || !context.project ? ' disabled' : ''}>${running ? played ? 'Déroulé du test…' : 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</span>` : ''}</div>`;
     const answer = rows(entries.filter((entry) => entry.step === 'réponse'));
     const stages = steps.map(stage).join('');
     const trials = rows(entries.filter((entry) => entry.step === 'essai'));
@@ -525,8 +595,8 @@ export function mount(container: HTMLElement, api: Host) {
     chooser.innerHTML = available.map((name) => `<option value="${escape(name)}"${name === snapshot?.name ? ' selected' : ''}>${escape(name)}</option>`).join('');
     picker.innerHTML = list.map((objective, index) => `<option value="${index}"${index === scope ? ' selected' : ''}>${escape(shorten(objective.objectif, 80))}</option>`).join('');
     const launcher = root.querySelector<HTMLButtonElement>('.pmr-tools [data-run-test]')!;
-    launcher.disabled = Boolean(live || busy || !context.project || !list.length);
-    launcher.textContent = live ? 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test';
+    launcher.disabled = Boolean(running || busy || !context.project || !list.length);
+    launcher.textContent = running ? played ? 'Déroulé du test…' : 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test';
     const count = root.querySelector<HTMLElement>('[data-alerts]')!;
     const alerts = visibleIssues().length + log().filter((entry) => entry.status === 'alerte').length;
     count.hidden = !alerts;
@@ -535,7 +605,6 @@ export function mount(container: HTMLElement, api: Host) {
     empty.hidden = Boolean(list.length);
     root.querySelector<HTMLElement>('.pmr-legend')!.hidden = !legend || !list.length;
     root.querySelector<HTMLElement>('[data-legend]')!.setAttribute('aria-pressed', String(legend));
-    root.querySelector<HTMLElement>('.pmr-head')!.hidden = picker.hidden && chooser.hidden;
     empty.innerHTML = !context.project ? '<strong>Aucun dossier</strong><p>Ouvrez un dossier pour voir son raisonnement.</p>' : snapshot?.code && !snapshot.annotated ? `<strong>Raisonnement illisible</strong><p>${escape(snapshot.issues.map((issue) => issue.text).join(' · '))}</p>` : '<strong>Pas encore de raisonnement</strong><p>Confiez un objectif juridique à l’agent dans le chat : il transcrit son raisonnement dans .piecemaker/raisonnements/, un fichier par sujet, que ce volet vérifie et affiche.</p>';
     buildGraph();
     paintGraph();
@@ -564,18 +633,55 @@ export function mount(container: HTMLElement, api: Host) {
     paint();
     run().then(apply, showError).finally(() => { busy = false; paint(); });
   };
-  const reveal = () => {
-    const entry = pending.shift();
-    if (!entry || !live) { pacing = 0; finish?.(); return; }
-    const index = live.findIndex((item) => item.key === entry.key);
-    if (index >= 0) live[index] = entry; else live.push(entry);
-    fresh = { key: entry.key, added: index < 0 };
-    paintTest();
-    paintGraph();
-    const target = nodes.find((node) => touches(node, entry));
-    if (target) { center(target.id); transform(); }
-    detail.querySelector('.is-new, .is-updated')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    pacing = window.setTimeout(reveal, index < 0 ? 420 : 160);
+  const follow = (cell: Cell) => {
+    const spine = cells.find((item) => item.id === selectedCell) ?? cell;
+    const aside = stage.querySelector<HTMLElement>('.pmr-note');
+    const right = aside ? aside.offsetLeft + aside.offsetWidth : cell.x + cell.w / 2;
+    const bottom = Math.max(cell.y + cell.h, spine.y + spine.h, aside ? aside.offsetTop + aside.offsetHeight : 0);
+    const fit = (low: number, high: number, size: number) => (size - (high - low) * zoom) / 2 - low * zoom;
+    const width = canvas.clientWidth - 40, height = canvas.clientHeight - 100;
+    const left = [spine.x - spine.w / 2, cell.x - cell.w / 2].find((edge) => (right - edge) * zoom <= width);
+    const top = Math.min(spine.y, cell.y);
+    pan = { x: left === undefined ? canvas.clientWidth - 20 - right * zoom : fit(left, right, canvas.clientWidth), y: (bottom - top) * zoom <= height ? fit(top, bottom, canvas.clientHeight - 44) : 40 - top * zoom };
+    transform();
+  };
+  const script = () => {
+    const actions: Array<{ spine: Cell; cell: Cell; key: string }> = [];
+    const seen = new Set<string>();
+    const push = (spine: Cell, cell: Cell, key: string) => { if (!seen.has(key)) { seen.add(key); actions.push({ spine, cell, key }); } };
+    for (const spine of cells.filter((cell) => !cell.parent)) {
+      push(spine, spine, spine.id);
+      const parts = sections(spine.id);
+      for (const part of parts.filter((item) => item.cell !== spine.id)) {
+        const cell = cells.find((item) => item.id === part.cell)!;
+        push(spine, cell, cell.id);
+        part.items.forEach((item) => push(spine, cell, item.key));
+      }
+      parts.filter((item) => item.cell === spine.id).forEach((part) => part.items.forEach((item) => push(spine, spine, item.key)));
+    }
+    return actions;
+  };
+  const replay = () => {
+    played = new Set();
+    live = [];
+    paint();
+    const logged = new Set(full().map((entry) => entry.key));
+    const actions = script().filter((action) => view === 'graph' || logged.has(action.key));
+    const tick = () => {
+      const action = actions.shift();
+      if (!action || stopped) { pacing = 0; played = null; live = null; fresh = null; running = false; busy = false; paint(); return; }
+      played!.add(action.key);
+      live = full().filter((entry) => played!.has(entry.key));
+      fresh = { key: action.key, added: true };
+      selected = action.spine.ref;
+      selectedCell = action.spine.id;
+      described = action.cell.id;
+      paintTest();
+      paintGraph();
+      if (view === 'graph') follow(action.cell); else root.querySelector('.pmr-inspector .is-new')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      pacing = window.setTimeout(tick, 1000);
+    };
+    tick();
   };
   const show = (target: string, quote?: string) => {
     const project = context.project?.path;
@@ -588,9 +694,17 @@ export function mount(container: HTMLElement, api: Host) {
     const source = based().find((entry) => entry.source.source === id)?.source;
     citeSource(project, id, citation, shown()).then(({ token }) => open(`piecemaker://citation/${token}/${encodeURIComponent(source ? sourceLabel(source) : id)}`), showError);
   };
-  const select = (id: string) => { selected = selected === id ? '' : id; highlight(); };
+  const select = (id: string, cell: string) => {
+    if (selectedCell === cell) { selected = ''; selectedCell = ''; } else { selected = id; selectedCell = cell; }
+    described = selectedCell;
+    highlight();
+    const chosen = cells.find((item) => item.id === selectedCell);
+    if (chosen) follow(chosen);
+  };
   const reach = (id: string) => {
     selected = id;
+    selectedCell = cells.find((cell) => cell.ref === id)?.id ?? id;
+    described = selectedCell;
     const hidden = view !== 'graph' && !canvas.clientWidth;
     view = 'graph';
     paintView();
@@ -603,17 +717,14 @@ export function mount(container: HTMLElement, api: Host) {
     const project = context.project?.path;
     if (button.dataset.view) { view = button.dataset.view as View; paintView(); }
     if (button.hasAttribute('data-legend')) { legend = !legend; paint(); }
-    if (button.hasAttribute('data-run-test') && project && !live) {
-      live = [];
-      pending = [];
+    if (button.hasAttribute('data-run-test') && project && !running) {
+      running = true;
       busy = true;
       selected = '';
-      view = 'graph';
+      selectedCell = '';
       paint();
-      const done = (end: () => void) => { finish = () => { finish = null; fresh = null; live = null; end(); busy = false; paint(); }; if (!pacing && !pending.length) finish(); };
-      if (snapshot?.demo) { pending = [...snapshot.test?.log ?? []]; done(() => {}); reveal(); return; }
-      runTest(project, (entry) => { if (entry.status === 'en cours') return; pending.push(entry); if (!pacing) reveal(); }, shown())
-        .then((data) => done(() => apply(data)), (error) => done(() => showError(error)));
+      if (snapshot?.demo) { replay(); return; }
+      runTest(project, () => {}, shown()).then((data) => { apply(data); replay(); }, (error) => { running = false; busy = false; showError(error); paint(); });
     }
     if (button.dataset.select) reach(button.dataset.select);
     if (button.dataset.show) show(button.dataset.show, button.dataset.quote);
@@ -627,18 +738,20 @@ export function mount(container: HTMLElement, api: Host) {
     }
     if (button.hasAttribute('data-center')) { fitGraph(); transform(); }
   });
-  picker.addEventListener('change', () => { scope = Number(picker.value); selected = ''; paint(); });
-  chooser.addEventListener('change', () => { reasoning = chooser.value; serialized = ''; scope = 0; selected = ''; void load(); });
+  picker.addEventListener('change', () => { scope = Number(picker.value); selected = ''; selectedCell = ''; paint(); });
+  chooser.addEventListener('change', () => { reasoning = chooser.value; serialized = ''; scope = 0; selected = ''; selectedCell = ''; void load(); });
 
   root.addEventListener('pointerdown', (event) => {
     const target = event.target as Element;
     if (!selected || target.closest('.pmr-note, [data-node]') || (canvas.contains(target) && !target.closest('button'))) return;
     selected = '';
+    selectedCell = '';
     highlight();
   });
   canvas.addEventListener('pointerdown', (event) => {
     if ((event.target as Element).closest('button, .pmr-note') || event.button !== 0) return;
-    drag = { id: (event.target as Element).closest<HTMLElement>('[data-node]')?.dataset.node ?? '', x: event.clientX, y: event.clientY, moved: false };
+    const element = (event.target as Element).closest<HTMLElement>('[data-node]');
+    drag = { id: element?.dataset.node ?? '', cell: element?.dataset.id ?? '', x: event.clientX, y: event.clientY, moved: false };
     canvas.setPointerCapture(event.pointerId);
   });
   canvas.addEventListener('pointermove', (event) => {
@@ -653,14 +766,14 @@ export function mount(container: HTMLElement, api: Host) {
     transform();
   });
   canvas.addEventListener('pointerup', (event) => {
-    if (drag && !drag.moved) { if (drag.id) select(drag.id); else if (selected) { selected = ''; highlight(); } }
+    if (drag && !drag.moved) { if (drag.id) select(drag.id, drag.cell); else if (selected) { selected = ''; selectedCell = ''; highlight(); } }
     drag = null;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
   });
   canvas.addEventListener('pointercancel', () => { drag = null; });
   stage.addEventListener('keydown', (event) => {
-    const id = (event.target as Element).closest<HTMLElement>('[data-node]')?.dataset.node;
-    if (id && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(id); }
+    const element = (event.target as Element).closest<HTMLElement>('[data-node]');
+    if (element && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(element.dataset.node!, element.dataset.id!); }
   });
   canvas.addEventListener('wheel', (event) => {
     if ((event.target as Element).closest('.pmr-note')) return;
@@ -673,35 +786,12 @@ export function mount(container: HTMLElement, api: Host) {
     transform();
   }, { passive: false });
 
-  const wide = () => getComputedStyle(workspace).flexDirection === 'row';
-  const share = (value: number) => {
-    const bounded = Math.min(0.85, Math.max(0.15, value));
-    inspector.style.flex = `0 0 ${bounded * 100}%`;
-    inspector.style.maxHeight = 'none';
-    split.setAttribute('aria-valuenow', String(Math.round(bounded * 100)));
-    try { localStorage.setItem('pmr-split-colonnes', String(bounded)); } catch {}
-  };
-  try { const saved = Number(localStorage.getItem('pmr-split-colonnes')); if (saved) share(saved); } catch {}
-  split.addEventListener('pointerdown', (event) => { split.setPointerCapture(event.pointerId); split.classList.add('is-dragging'); event.preventDefault(); });
-  split.addEventListener('pointermove', (event) => {
-    if (!split.hasPointerCapture(event.pointerId)) return;
-    const box = workspace.getBoundingClientRect();
-    share(wide() ? (box.right - event.clientX) / box.width : (box.bottom - event.clientY) / box.height);
-  });
-  split.addEventListener('pointerup', (event) => { split.releasePointerCapture(event.pointerId); split.classList.remove('is-dragging'); });
-  split.addEventListener('keydown', (event) => {
-    const step = { ArrowUp: 0.05, ArrowLeft: 0.05, ArrowDown: -0.05, ArrowRight: -0.05 }[event.key];
-    if (!step) return;
-    event.preventDefault();
-    share(inspector.getBoundingClientRect()[wide() ? 'width' : 'height'] / workspace.getBoundingClientRect()[wide() ? 'width' : 'height'] + step);
-  });
-
   const resize = new ResizeObserver(() => layoutGraph(!focusing));
   resize.observe(canvas);
   const unsubscribe = api.onContextChange((next) => {
     const changed = next.project?.path !== context.project?.path;
     context = next;
-    if (changed) { sequence++; snapshot = null; reasoning = undefined; serialized = ''; scope = 0; selected = ''; shape = ''; void load(); }
+    if (changed) { sequence++; snapshot = null; reasoning = undefined; serialized = ''; scope = 0; selected = ''; selectedCell = ''; shape = ''; void load(); }
     paint();
   });
   const poll = () => { if (!stopped) { if (!snapshot?.demo && !busy) void load(); timer = window.setTimeout(poll, 2500); } };
