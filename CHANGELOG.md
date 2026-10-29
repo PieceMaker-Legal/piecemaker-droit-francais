@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.58](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.57...v2.0.58) (2026-10-29)
+
+### Bug Fixes
+
+* **desktop:** déclarer yaml dans les dépendances ([898d6e9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/898d6e9f3bed86bfcc01d7c76b1e8254b4975c1b))
+
 ## [2.0.57](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.56...v2.0.57) (2026-10-29)
 
 ### Bug Fixes
