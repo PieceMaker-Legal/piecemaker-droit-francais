@@ -197,7 +197,7 @@ export function simulate(reasoning: Reasoning, test: Test, known: Known, faits: 
     computing.delete(name);
     return result;
   }
-  return { test: (names: string[]) => test(facts, undefined, names), value };
+  return { test: (names: string[]) => test(facts, undefined, names), value, leaf: facts.leaf };
 }
 
 export function runTrials(reasoning: Reasoning, test: Test, known: Known = { leaf: () => null, value: () => null }) {
