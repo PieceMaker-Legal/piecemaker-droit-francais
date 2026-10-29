@@ -15,12 +15,12 @@ export const EXAMPLE_LITERAL = `{
     but: \`Établir que la pénalité de retard est due par le débiteur mis en demeure\`,
     si: [
       { pénalité_stipulée: true,
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }] },
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`la pénalité n'est encourue que lorsque le débiteur est mis en demeure\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5', version: 'version_de_l_article_1231_5' }] },
       { l_une: [
           { mise_en_demeure: true },
           { inexécution_définitive: true },
         ],
-        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5' }] },
+        selon: [{ source: 'LEGIARTI000000000005', citation: \`Sauf inexécution définitive\`, vigueur: { debut: '2016-10-01', fin: null, au: 'date_de_conclusion_du_contrat' }, applicabilite: 'applicabilité_de_l_article_1231_5', version: 'version_de_l_article_1231_5' }] },
     ],
   },
   mise_en_demeure: { true: [{ preuve: [{ piece: 'pieces/06_mise_en_demeure.md', citation: \`vous met en demeure\` }] }] },
@@ -32,6 +32,14 @@ export const EXAMPLE_LITERAL = `{
     ],
   },
   contrat_stipulant_une_pénalité: { true: [{ preuve: [{ piece: 'pieces/01_contrat.md', citation: \`une pénalité est due\` }] }] },
+  version_de_l_article_1231_5: {
+    but: \`Montrer que la version de 2016 s'applique à ce contrat\`,
+    si: [
+      { contrat_conclu_après_le_1er_octobre_2016: true,
+        selon: [{ source: 'LEGIARTI000000000009', citation: \`Les contrats conclus avant cette date demeurent soumis à la loi ancienne\`, vigueur: { debut: '2016-02-11', fin: null, au: 'date_de_conclusion_du_contrat' } }] },
+    ],
+  },
+  contrat_conclu_après_le_1er_octobre_2016: { true: [{ preuve: [{ piece: 'pieces/01_contrat.md', citation: \`Fait le 15/01/2024\` }] }] },
   pénalité_stipulée: {
     but: \`Montrer que le contrat prévoit la pénalité pour ce retard\`,
     si: [
