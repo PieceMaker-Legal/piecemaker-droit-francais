@@ -110,7 +110,7 @@ export function mount(container: HTMLElement, api: Host) {
   let ties: Edge[] = [];
   let zoom = 1;
   let pan = { x: 0, y: 0 };
-  let drag: { id: string; cell: string; x: number; y: number; moved: boolean } | null = null;
+  let drag: { id: string; cell: string; chip?: HTMLElement; x: number; y: number; moved: boolean } | null = null;
   let busy = false;
   let running = false;
   let live: ReasoningLogEntry[] | null = null;
@@ -783,7 +783,8 @@ export function mount(container: HTMLElement, api: Host) {
   canvas.addEventListener('pointerdown', (event) => {
     if ((event.target as Element).closest('button, .pmr-note') || event.button !== 0) return;
     const element = (event.target as Element).closest<HTMLElement>('[data-node]');
-    drag = { id: element?.dataset.node ?? '', cell: element?.dataset.id ?? '', x: event.clientX, y: event.clientY, moved: false };
+    const chips = element?.querySelectorAll<HTMLElement>('[data-show]');
+    drag = { id: element?.dataset.node ?? '', cell: element?.dataset.id ?? '', chip: chips?.length === 1 ? chips[0] : undefined, x: event.clientX, y: event.clientY, moved: false };
     canvas.setPointerCapture(event.pointerId);
   });
   canvas.addEventListener('pointermove', (event) => {
@@ -798,6 +799,7 @@ export function mount(container: HTMLElement, api: Host) {
     transform();
   });
   canvas.addEventListener('pointerup', (event) => {
+    if (drag && !drag.moved && drag.chip) show(drag.chip.dataset.show!, drag.chip.dataset.quote);
     if (drag && !drag.moved) { if (drag.id) select(drag.id, drag.cell); else if (selected) { selected = ''; selectedCell = ''; highlight(); } }
     drag = null;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
