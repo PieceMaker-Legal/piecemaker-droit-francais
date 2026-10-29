@@ -78,7 +78,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i style="background:${COLORS.fait}"></i>Fait prouvé</span><span><i style="background:#c45b5b"></i>Fait contraire</span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le test"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Test<span class="pmr-count" data-alerts hidden></span></button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i style="background:${COLORS.fait}"></i>Fait prouvé</span><span><i style="background:#c45b5b"></i>Fait contraire</span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button><button class="pmr-primary" data-run-test>Lancer le test</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le test"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Test<span class="pmr-count" data-alerts hidden></span></button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const stage = root.querySelector<HTMLElement>('.pmr-stage')!;
@@ -174,13 +174,24 @@ export function mount(container: HTMLElement, api: Host) {
     walk(id, false);
     return found;
   };
-  const testMark = (node: GraphNode) => {
-    const prefixes = [...node.sources.map((source) => `source:${source.source}:`), ...node.pieces.map((entry) => `piece:${entry.piece.piece}:`)];
-    const mine = log().filter((entry) => entry.key === `terme:${node.id}` || entry.key === `fait:${node.id}` || (node.kind === 'conclusion' && entry.key === `réponse:${scope}`) || prefixes.some((prefix) => entry.key.startsWith(prefix)));
-    const paths = node.kind === 'conclusion' || node.kind === 'question' ? [] : [node.id, ...occurrences().filter((entry) => entry.condition.condition === node.id).map((entry) => entry.path)];
-    const flagged = issuesOf(paths).some((issue) => !dismissedIds().has(issue.id));
-    return flagged || mine.some((entry) => entry.status === 'alerte') ? 'alerte' : mine.some((entry) => entry.status === 'ok') ? 'ok' : '';
+  const ruling = (term: Json | undefined) => (['si', 'sauf'] as const).flatMap((link) => term?.[link] ?? []).flatMap((condition: Json) => [condition, ...(condition.l_une ?? [])]).flatMap((item: Json) => item.selon ?? []) as Json[];
+  const touches = (node: GraphNode, entry: ReasoningLogEntry) => {
+    const prefixes = [...node.sources, ...(node.kind === 'fait' ? [] : ruling(terms()[node.id]))].map((source) => `source:${source.source}:`).concat(node.pieces.map((item) => `piece:${item.piece.piece}:`));
+    return entry.key === `terme:${node.id}` || entry.key === `fait:${node.id}` || (node.kind === 'conclusion' && entry.key === `réponse:${scope}`) || prefixes.some((prefix) => entry.key.startsWith(prefix));
   };
+  const entriesOf = (node: GraphNode) => log().filter((entry) => touches(node, entry));
+  const issuesFor = (node: GraphNode) => issuesOf(node.kind === 'conclusion' || node.kind === 'question' ? [] : [node.id, ...occurrences().filter((entry) => entry.condition.condition === node.id).map((entry) => entry.path)]).filter((issue) => !dismissedIds().has(issue.id));
+  const testMark = (node: GraphNode) => {
+    const mine = entriesOf(node);
+    return (!live && issuesFor(node).length) || mine.some((entry) => entry.status === 'alerte') ? 'alerte' : mine.some((entry) => entry.status === 'ok') ? 'ok' : '';
+  };
+  const waitingIds = () => {
+    if (!live) return new Set<string>();
+    const shown = new Set(nodes.filter((node) => node.kind === 'question' || (node.kind !== 'ou' && entriesOf(node).length)).map((node) => node.id));
+    for (const node of nodes) if (node.kind === 'ou' && edges.some((edge) => edge.to === node.id && shown.has(edge.from))) shown.add(node.id);
+    return new Set(nodes.filter((node) => !shown.has(node.id)).map((node) => node.id));
+  };
+  let waiting = new Set<string>();
 
   const buildGraph = () => {
     nodes = [];
@@ -237,15 +248,34 @@ export function mount(container: HTMLElement, api: Host) {
 
   const sourceChip = (source: Json) => `<button class="pmr-chip is-source${source.en_vigueur === false ? ' is-against' : ''}" data-show="#source:${escape(source.source)}" data-quote="${escape(source.citation ?? '')}" title="${escape(String(source.titre ?? source.source))}">§ ${escape(sourceName(source))}</button>`;
   const law = (term: Json) => {
-    const sources = (['si', 'sauf'] as const).flatMap((link) => term[link] ?? []).flatMap((condition: Json) => [condition, ...(condition.l_une ?? [])]).flatMap((item: Json) => item.selon ?? []) as Json[];
+    const sources = ruling(term);
     return [...new Set(sources.map((source) => source.source))].map((name) => {
       const quotes = [...new Set(sources.filter((source) => source.source === name && source.citation).map((source) => String(source.citation)))];
       return `<div class="pmr-rule">${sourceChip(sources.find((source) => source.source === name)!)}${quotes.map((quote) => `<q>${escape(shorten(quote, 240))}</q>`).join('')}</div>`;
     }).join('');
   };
 
+  const verdict = () => {
+    const answer = log().find((entry) => entry.key === `réponse:${scope}`);
+    if (!answer) return '';
+    const alerts = log().filter((entry) => entry.status === 'alerte').length;
+    return `<div class="pmr-verdict"><span class="pmr-kind">Résultat du test</span><p>${escape(answer.text)}</p>${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</div>`;
+  };
+  const note = (node: GraphNode) => {
+    const entries = entriesOf(node).filter((entry) => entry.status !== 'en cours');
+    const issues = issuesFor(node);
+    const lines = [
+      ...issues.map((issue) => `<li data-status="alerte">${pill(issue.kind === 'erreur' ? 'exclu' : 'à établir', issue.kind === 'erreur' ? 'Erreur' : 'Manque')}<span>${escape(issue.avocat ?? issue.text)}</span></li>`),
+      ...entries.map((entry) => `<li data-status="${escape(entry.status)}"><span class="pmr-mark" aria-hidden="true">${MARK[entry.status]}</span><span><b>${escape(STEP[entry.step])}</b> ${escape(entry.text)}</span></li>`),
+    ];
+    const empty = snapshot?.test ? 'Le test n’a rien vérifié sur cet élément.' : 'Pas encore vérifié : lancez le test.';
+    return `<aside class="pmr-note" style="left:${node.x + node.w / 2 + 18}px;top:${node.y}px"><span class="pmr-kind">Vérification</span>${lines.length ? `<ul>${lines.join('')}</ul>` : `<p class="pmr-muted">${empty}</p>`}</aside>`;
+  };
+
   const box = (node: GraphNode) => {
-    if (node.kind === 'ou') return `<div class="pmr-box pmr-ou" data-id="${escape(node.id)}">L’une des conditions</div>`;
+    const arriving = Boolean(live && fresh?.added && entriesOf(node).some((entry) => entry.key === fresh!.key));
+    const state = `${waiting.has(node.id) ? ' is-waiting' : ''}${arriving ? ' is-arriving' : ''}`;
+    if (node.kind === 'ou') return `<div class="pmr-box pmr-ou${state}" data-id="${escape(node.id)}">L’une des conditions</div>`;
     const [kind, icon] = KINDS[node.kind];
     const objective = objectives()[scope] ?? {};
     const mark = testMark(node);
@@ -264,12 +294,12 @@ export function mount(container: HTMLElement, api: Host) {
     const body = node.kind === 'question'
       ? `<span class="pmr-kind">${kind}</span><strong class="pmr-editorial">${escape(node.label)}</strong>`
       : node.kind === 'conclusion'
-        ? `<span class="pmr-kind">${kind}</span><strong>Réponse : ${escape(node.label)}</strong>${decisifs.length ? `<p class="pmr-sub">Dépend de : ${decisifs.map((name) => escape(human(name))).join(', ')}</p>` : ''}`
+        ? `<span class="pmr-kind">${kind}</span><strong>Réponse : ${escape(node.label)}</strong>${decisifs.length ? `<p class="pmr-sub">Dépend de : ${decisifs.map((name) => escape(human(name))).join(', ')}</p>` : ''}${verdict()}`
         : rules
           ? `${rules}<strong class="pmr-then">${escape(node.label)}</strong><div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`
           : `<span class="pmr-kind">${kind}</span><strong>${escape(node.label)}</strong>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${status}${node.decisive ? '<span class="pmr-pill pmr-accent">décisif</span>' : ''}</div>`;
     const uncertain = ['terme', 'controle', 'conclusion'].includes(node.kind) && ['à établir', 'disputé'].includes(node.status);
-    return `<div class="pmr-box pmr-${node.kind}${node.kind === 'fait' ? ` is-${tone}` : ''}${uncertain ? ' is-uncertain' : ''}${(node.kind === 'fait' ? fill : node.status) === 'exclu' && node.kind !== 'question' ? ' is-excluded' : ''}" data-id="${escape(node.id)}" data-node="${escape(node.id)}" tabindex="0" role="button" aria-label="${escape(`${kind} : ${node.label}`)}"><span class="pmr-icon" aria-hidden="true">${icon}</span><div class="pmr-box-body">${body}</div>${mark ? `<span class="pmr-test is-${mark}" title="${mark === 'ok' ? 'Vérifié par le test' : 'Alerte : voir le test'}">${MARK[mark]}</span>` : ''}</div>`;
+    return `<div class="pmr-box pmr-${node.kind}${state}${node.kind === 'fait' ? ` is-${tone}` : ''}${uncertain ? ' is-uncertain' : ''}${(node.kind === 'fait' ? fill : node.status) === 'exclu' && node.kind !== 'question' ? ' is-excluded' : ''}" data-id="${escape(node.id)}" data-node="${escape(node.id)}" tabindex="0" role="button" aria-label="${escape(`${kind} : ${node.label}`)}"><span class="pmr-icon" aria-hidden="true">${icon}</span><div class="pmr-box-body">${body}</div>${mark ? `<span class="pmr-test is-${mark}" title="${mark === 'ok' ? 'Vérifié par le test' : 'Alerte : voir le test'}">${MARK[mark]}</span>` : ''}</div>`;
   };
 
   const transform = () => { stage.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`; };
@@ -288,6 +318,9 @@ export function mount(container: HTMLElement, api: Host) {
     pan = { x: canvas.clientWidth / 2 - node.x * zoom, y: canvas.clientHeight / 2 - (node.y + node.h / 2) * zoom };
   };
   const highlight = () => {
+    stage.querySelector('.pmr-note')?.remove();
+    const target = !live && nodes.find((node) => node.id === selected && node.kind !== 'ou');
+    if (target) stage.insertAdjacentHTML('beforeend', note(target));
     const members = selected ? branch(selected).add('#question') : null;
     stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => { element.classList.toggle('is-selected', element.dataset.id === selected); element.classList.toggle('is-dim', Boolean(members && !members.has(element.dataset.id!))); });
     stage.querySelectorAll<SVGElement>('[data-from]').forEach((element) => { const lit = Boolean(members?.has(element.dataset.from!) && members.has(element.dataset.to!)); element.classList.toggle('is-lit', lit); element.classList.toggle('is-dim', Boolean(members && !lit)); });
@@ -337,7 +370,8 @@ export function mount(container: HTMLElement, api: Host) {
       const [a, b] = [byId.get(edge.from), byId.get(edge.to)].sort((one, other) => (layer.get(one?.id ?? '') ?? 0) - (layer.get(other?.id ?? '') ?? 0));
       if (!a || !b) return '';
       const x1 = a.x, y1 = a.y + a.h, x2 = b.x, y2 = b.y - 2, bend = Math.min(y2 - y1, ROW * 1.5) / 2;
-      return `<path class="pmr-wire${edge.link === 'sauf' ? ' is-sauf' : ''}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" stroke="${COLORS[a.kind]}" marker-end="url(#pmr-arrow-${a.kind})" d="M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}"/>${edge.link === 'sauf' ? `<text class="pmr-wire-label" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" x="${x2 + 6}" y="${y2 - bend / 2}">sauf</text>` : ''}`;
+      const hidden = waiting.has(edge.from) || waiting.has(edge.to) ? ' is-waiting' : '';
+      return `<path class="pmr-wire${edge.link === 'sauf' ? ' is-sauf' : ''}${hidden}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" stroke="${COLORS[a.kind]}" marker-end="url(#pmr-arrow-${a.kind})" d="M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}"/>${edge.link === 'sauf' ? `<text class="pmr-wire-label${hidden}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" x="${x2 + 6}" y="${y2 - bend / 2}">sauf</text>` : ''}`;
     }).join('');
     stage.querySelector('svg')!.innerHTML = `<defs>${markers}</defs>${wires}`;
     const key = nodes.map((node) => node.id).join('|');
@@ -347,6 +381,8 @@ export function mount(container: HTMLElement, api: Host) {
     highlight();
   };
   const paintGraph = () => {
+    waiting = waitingIds();
+    stage.classList.toggle('is-following', Boolean(live));
     stage.innerHTML = `<svg class="pmr-wires" aria-hidden="true"></svg>${nodes.map(box).join('')}`;
     layoutGraph();
   };
@@ -380,9 +416,7 @@ export function mount(container: HTMLElement, api: Host) {
       return list.length ? `<section class="pmr-part"><h4>${title}</h4><p class="pmr-lead">${lead}</p><ol class="pmr-log" aria-live="polite">${list.map(view).join('')}</ol></section>` : '';
     };
     const alerts = entries.filter((entry) => entry.status === 'alerte').length;
-    const run = snapshot?.demo
-      ? '<div class="pmr-run"><span class="pmr-muted">Exemple fictif : test simulé.</span></div>'
-      : `<div class="pmr-run"><button class="pmr-primary" data-run-test${live || busy || !context.project ? ' disabled' : ''}>${live ? 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</span>` : ''}</div>`;
+    const run = `<div class="pmr-run"><button class="pmr-primary" data-run-test${live || busy || !context.project ? ' disabled' : ''}>${live ? 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</span>` : ''}</div>`;
     const issues = visibleIssues();
     const dismissed = (snapshot?.issues ?? []).filter((issue) => dismissedIds().has(issue.id));
     detail.innerHTML = `${run}${issues.length ? `<section class="pmr-part"><h4>À corriger</h4><p class="pmr-lead">Erreurs et manques relevés dans le raisonnement.</p>${issueList(issues)}</section>` : ''}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${part('1. En droit', 'Chaque source relue, sa citation et sa version applicable.', ['source'])}${part('2. En fait', 'Les pièces relues et les faits qu’elles établissent.', ['pièce', 'fait', 'registre'])}${part('3. Conclusion', 'Les étapes du raisonnement, les hypothèses et la réponse.', ['condition', 'essai', 'réponse'])}${dismissed.length ? `<details class="pmr-part"><summary class="pmr-muted">Écartées par vous (${dismissed.length})</summary>${issueList(dismissed, true)}</details>` : ''}`;
@@ -400,6 +434,9 @@ export function mount(container: HTMLElement, api: Host) {
     chooser.hidden = available.length < 2;
     chooser.innerHTML = available.map((name) => `<option value="${escape(name)}"${name === snapshot?.name ? ' selected' : ''}>${escape(name)}</option>`).join('');
     picker.innerHTML = list.map((objective, index) => `<option value="${index}"${index === scope ? ' selected' : ''}>${escape(shorten(objective.objectif, 80))}</option>`).join('');
+    const launcher = root.querySelector<HTMLButtonElement>('.pmr-tools [data-run-test]')!;
+    launcher.disabled = Boolean(live || busy || !context.project || !list.length);
+    launcher.textContent = live ? 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test';
     const count = root.querySelector<HTMLElement>('[data-alerts]')!;
     const alerts = visibleIssues().length + log().filter((entry) => entry.status === 'alerte').length;
     count.hidden = !alerts;
@@ -445,6 +482,8 @@ export function mount(container: HTMLElement, api: Host) {
     fresh = { key: entry.key, added: index < 0 };
     paintTest();
     paintGraph();
+    const target = nodes.find((node) => touches(node, entry));
+    if (target) { center(target.id); transform(); }
     detail.querySelector('.is-new, .is-updated')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     pacing = window.setTimeout(reveal, index < 0 ? 420 : 160);
   };
@@ -478,8 +517,11 @@ export function mount(container: HTMLElement, api: Host) {
       live = [];
       pending = [];
       busy = true;
+      selected = '';
+      view = 'graph';
       paint();
       const done = (end: () => void) => { finish = () => { finish = null; fresh = null; live = null; end(); busy = false; paint(); }; if (!pacing && !pending.length) finish(); };
+      if (snapshot?.demo) { pending = [...snapshot.test?.log ?? []]; done(() => {}); reveal(); return; }
       runTest(project, (entry) => { if (entry.status === 'en cours') return; pending.push(entry); if (!pacing) reveal(); }, shown())
         .then((data) => done(() => apply(data)), (error) => done(() => showError(error)));
     }
@@ -499,7 +541,7 @@ export function mount(container: HTMLElement, api: Host) {
   chooser.addEventListener('change', () => { reasoning = chooser.value; serialized = ''; scope = 0; selected = ''; void load(); });
 
   canvas.addEventListener('pointerdown', (event) => {
-    if ((event.target as Element).closest('button') || event.button !== 0) return;
+    if ((event.target as Element).closest('button, .pmr-note') || event.button !== 0) return;
     drag = { id: (event.target as Element).closest<HTMLElement>('[data-node]')?.dataset.node ?? '', x: event.clientX, y: event.clientY, moved: false };
     canvas.setPointerCapture(event.pointerId);
   });
