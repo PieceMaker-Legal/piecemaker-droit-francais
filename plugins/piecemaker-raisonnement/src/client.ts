@@ -282,6 +282,23 @@ export function mount(container: HTMLElement, api: Host) {
   };
 
   const sourceChip = (source: Json) => `<button class="pmr-chip is-source${source.en_vigueur === false ? ' is-against' : ''}" data-show="#source:${escape(source.source)}" data-quote="${escape(source.citation ?? '')}" title="${escape(String(source.titre ?? source.source))}">§ ${escape(sourceName(source))}</button>`;
+  const pieceChip = (entry: Cited) => `<button class="pmr-chip is-piece${entry.against ? ' is-against' : ''}" data-show="#piece:${escape(entry.piece.piece)}" title="${escape(`${entry.against ? 'Contredit par' : 'Prouvé par'} ${entry.piece.titre ?? entry.piece.piece}\n« ${entry.piece.citation ?? ''} »`)}">${escape(shorten(String(entry.piece.titre ?? basename(entry.piece.piece)), 40))}</button>`;
+  const proofs = (name: string): Cited[] => (values()[name]?.preuve ?? []).map((piece: Json) => ({ piece, target: name, against: false }));
+  const rule = (name: string) => {
+    const id = `#regle:${name}`;
+    const sources = (values()[name]?.selon ?? []) as Json[];
+    const chips = [...new Map(sources.map((source) => [source.source, source])).values()].map(sourceChip);
+    const quotes = [...new Set(sources.map((source) => String(source.citation ?? '')).filter(Boolean))].map((text) => `<q>${escape(shorten(text, 240))}</q>`);
+    const uses = [...new Set(mentions(formulaOf(name)))].map((mention) => formulaOf(mention) ? `<span class="pmr-needs"><button class="pmr-link" data-select="${escape(`${CALCUL}${mention}`)}">Calcul · ${escape(human(mention))}</button></span>` : steps.some((step) => step.id === mention) ? `<span class="pmr-needs">Si : ${stepRef(mention)}</span>` : '').filter(Boolean);
+    return `<div class="pmr-box pmr-loi pmr-regle${sources.length ? '' : ' is-warn'}${hidden(id) ? ' is-waiting' : ''}${played && fresh?.key === id ? ' is-arriving' : ''}" data-id="${escape(id)}" data-node="${escape(`${CALCUL}${name}`)}" tabindex="0" role="button" aria-label="${escape(`Règle de calcul : ${human(name)}`)}"><div class="pmr-box-body"><span class="pmr-kind">Règle de calcul</span>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}${quotes.join('')}<p class="pmr-formula">${escape(human(name))} = ${escape(spelled(formulaOf(name)))}</p>${uses.join('')}${sources.length ? '' : `<div class="pmr-foot">${pill('à établir', 'Sans texte cité')}</div>`}</div></div>`;
+  };
+  const given = (name: string, owner: string) => {
+    const id = `#valeur:${owner}:${name}`;
+    const entry = values()[name] ?? {};
+    const status = entry.statut ?? 'à établir';
+    const chips = [...proofs(name).map(pieceChip), ...(entry.selon ?? []).map(sourceChip)];
+    return `<div class="pmr-box pmr-fait is-${TONE[status] ?? 'warn'}${hidden(id) ? ' is-waiting' : ''}${played && fresh?.key === id ? ' is-arriving' : ''}" data-id="${escape(id)}" data-node="${escape(`${CALCUL}${owner}`)}" tabindex="0" role="button" aria-label="${escape(`Fait : ${human(name)}`)}"><span class="pmr-icon" aria-hidden="true">●</span><div class="pmr-box-body"><span class="pmr-kind">Fait</span><strong>${escape(human(name))} : ${escape(amountText(entry.valeur))}</strong>${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${pill(status, status === 'acquis' ? 'Prouvé' : STATUS[status] ?? 'À établir')}</div></div></div>`;
+  };
   const stepRef = (id: string) => `<button class="pmr-link" data-select="${escape(id)}">Étape ${steps.findIndex((step) => step.id === id) + 1} · ${escape(nodes.find((node) => node.id === id)?.label ?? human(id))}</button>`;
   const clause = (path: string, link: Occurrence['link'], condition: Json, members: Json[]) => {
     const sources = [condition, ...(members.length > 1 ? members : [])].flatMap((item: Json) => item.selon ?? []) as Json[];
@@ -354,7 +371,17 @@ export function mount(container: HTMLElement, api: Host) {
     const result = values()[name]?.calcul;
     const done = typeof result === 'number';
     const state = line(`calcul:${name}`, done ? 'ok' : 'neutre', `${pill(done ? 'acquis' : 'à établir', done ? 'Calculé' : 'À calculer')}<span class="pmr-step">Calcul</span>`, done ? `${node.label} = ${amountText(result)}` : 'Une valeur manque pour faire le calcul.');
-    return { cell: cell.id, kind: 'Calcul', title: node.label, nature: 'Le moteur applique la formule aux valeurs prouvées par les pièces. Le test vérifie les textes qui fondent la formule et ses valeurs.', items: [...open(issuesOf([`valeurs.${name}`, ...inputsOf(name).map((item) => `valeurs.${item}`)])), ...pieceItems(node.pieces, cell.id), ...sourceItems(node.sources, cell.id), state] };
+    return { cell: cell.id, kind: 'Calcul', title: node.label, nature: 'Le moteur applique la règle de calcul aux faits prouvés.', items: [...open(issuesOf([`valeurs.${name}`]).filter((issue) => !issue.path.startsWith(`valeurs.${name}.selon`))), state] };
+  };
+  const rulePart = (cell: Cell): Part => {
+    const name = cell.ref.slice(CALCUL.length);
+    const sources = (values()[name]?.selon ?? []) as Json[];
+    return { cell: cell.id, kind: 'Règle de calcul', title: sources.length ? [...new Set(sources.map(sourceName))].join(', ') : 'Sans texte cité', nature: sources.length ? 'Le test consulte le texte officiel : il vérifie qu’il existe, qu’il contient la citation et qu’il est en vigueur.' : 'Aucun texte ne fonde cette formule.', items: [...open(issuesOf([`valeurs.${name}.selon`])), ...sourceItems(sources, cell.id)] };
+  };
+  const valuePart = (cell: Cell): Part => {
+    const name = cell.id.split(':').slice(2).join(':');
+    const entry = values()[name] ?? {};
+    return { cell: cell.id, kind: 'Fait', title: `${human(name)} : ${amountText(entry.valeur)}`, nature: proofs(name).length ? 'Le test ouvre chaque pièce citée et y cherche la citation.' : (entry.selon ?? []).length ? 'La valeur repose sur un texte : le test vérifie ce texte et sa citation.' : 'Aucune pièce ni aucun texte n’est cité : la valeur ne peut pas être établie.', items: [...open(issuesOf([`valeurs.${name}`])), ...pieceItems(proofs(name), cell.id), ...sourceItems(entry.selon ?? [], cell.id)] };
   };
   const answerPart = (cell: Cell): Part => {
     const entry = full().find((item) => item.key === `réponse:${scope}`);
@@ -364,7 +391,9 @@ export function mount(container: HTMLElement, api: Host) {
     const cell = cells.find((item) => item.id === id);
     if (!cell || cell.kind === 'question') return [];
     if (cell.kind === 'conclusion') return [answerPart(cell)];
-    if (cell.kind === 'calcul') return [calculPart(cell)];
+    if (cell.id.startsWith('#regle:')) return [rulePart(cell)];
+    if (cell.id.startsWith('#valeur:')) return [valuePart(cell)];
+    if (cell.kind === 'calcul') return [calculPart(cell), ...cells.filter((item) => item.ref === cell.id && item.id !== cell.id).map((item) => item.id.startsWith('#regle:') ? rulePart(item) : valuePart(item))];
     if (cell.member) return [factPart(cell)];
     if (cell.path) return [lawPart(cell)];
     if (cell.kind === 'fait') return [factPart(cell)];
@@ -391,9 +420,8 @@ export function mount(container: HTMLElement, api: Host) {
     const term = terms()[node.id];
     const facts = node.kind === 'fait' && !(term?.si?.length || term?.sauf?.length);
     const chips = [
-      ...(node.kind === 'calcul' ? [...new Map(node.sources.map((source) => [source.source, source])).values()] : []).map(sourceChip),
       ...(facts ? sides.flatMap((side) => term?.[side] ?? []).flatMap((entry: Json) => entry.selon ?? []) : []).map(sourceChip),
-      ...node.pieces.map((entry) => `<button class="pmr-chip is-piece${entry.against ? ' is-against' : ''}" data-show="#piece:${escape(entry.piece.piece)}" title="${escape(`${entry.against ? 'Contredit par' : 'Prouvé par'} ${entry.piece.titre ?? entry.piece.piece}\n« ${entry.piece.citation ?? ''} »`)}">${escape(shorten(String(entry.piece.titre ?? basename(entry.piece.piece)), 40))}</button>`),
+      ...(node.kind === 'calcul' ? [] : node.pieces.map(pieceChip)),
     ];
     const decisifs = Array.isArray(objective.decisifs) ? objective.decisifs as string[] : [];
     const occurrence = occurrences().find((entry) => entry.condition.condition === node.id);
@@ -404,7 +432,7 @@ export function mount(container: HTMLElement, api: Host) {
     const body = node.kind === 'question'
       ? `<span class="pmr-kind">${kind}</span><strong class="pmr-editorial">${escape(node.label)}</strong>`
       : node.kind === 'calcul'
-        ? `<span class="pmr-kind">${kind}</span><strong>${escape(node.label)}</strong><p class="pmr-formula">= ${escape(spelled(formulaOf(node.id.slice(CALCUL.length))))}</p>${inputsOf(node.id.slice(CALCUL.length)).map((item) => `<p class="pmr-sub">${escape(human(item))} : <b>${escape(amountText(values()[item]?.valeur))}</b></p>`).join('')}${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${pill(node.status, typeof values()[node.id.slice(CALCUL.length)]?.calcul === 'number' ? `= ${amountText(values()[node.id.slice(CALCUL.length)].calcul)}` : 'À calculer')}</div>`
+        ? `<span class="pmr-kind">${kind}</span><strong>${escape(node.label)}</strong><div class="pmr-foot">${pill(node.status, typeof values()[node.id.slice(CALCUL.length)]?.calcul === 'number' ? `= ${amountText(values()[node.id.slice(CALCUL.length)].calcul)}` : 'À calculer')}</div>`
       : node.kind === 'conclusion'
         ? `<span class="pmr-kind">${kind}</span><strong>Réponse : ${escape(node.label)}</strong>${decisifs.length ? `<p class="pmr-sub">Dépend de : ${decisifs.map((name) => escape(human(name))).join(', ')}</p>` : ''}${verdict()}`
         : numbered
@@ -538,7 +566,18 @@ export function mount(container: HTMLElement, api: Host) {
       if (last) ties.push({ from: last.id, to: node.id, link: 'si' });
     };
     spine(byId.get('#question')!);
-    for (const node of nodes.filter((item) => item.kind === 'calcul')) spine(node);
+    for (const node of nodes.filter((item) => item.kind === 'calcul')) {
+      spine(node);
+      const name = node.id.slice(CALCUL.length);
+      const anchor = `#regle:${name}`;
+      add(anchor, node.id, node.id, 1, 'calcul', rule(name));
+      ties.push({ from: node.id, to: anchor, link: 'si' });
+      for (const item of inputsOf(name)) {
+        const id = `#valeur:${name}:${item}`;
+        add(id, node.id, anchor, 2, 'fait', given(item, name));
+        ties.push({ from: anchor, to: id, link: 'si' });
+      }
+    }
     for (const step of steps) {
       spine(step);
       for (const group of groups().filter((item) => item.parent === step.id)) {
