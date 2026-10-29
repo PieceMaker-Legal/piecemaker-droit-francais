@@ -7,7 +7,7 @@ type Host = { readonly context: Context; onContextChange(callback: (context: Con
 type View = 'graph' | 'test';
 type Json = Record<string, any>;
 type Occurrence = { path: string; parent: string; link: 'si' | 'sauf' | 'l_une'; condition: Json };
-type Kind = 'question' | 'terme' | 'controle' | 'fait' | 'ou' | 'conclusion';
+type Kind = 'question' | 'calcul' | 'terme' | 'controle' | 'fait' | 'ou' | 'conclusion';
 type Cited = { piece: Json; target: string; against: boolean };
 type Based = { source: Json; target: string };
 type GraphNode = { id: string; label: string; status: string; kind: Kind; decisive: boolean; sources: Json[]; pieces: Cited[]; x: number; y: number; w: number; h: number };
@@ -33,8 +33,8 @@ const readableTerm = (term: Json): Json => ({
 const sides = ['true', 'false'] as const;
 const VERBS: Record<string, string> = { obtenir: 'Obtenir', écarter: 'Écarter', réduire: 'Réduire', augmenter: 'Augmenter' };
 const inputs = (condition: Json): string[] => condition.delai ? [condition.delai.de, condition.delai.a] : condition.montant ? [condition.montant.valeur, condition.montant.seuil].filter((item) => typeof item === 'string') : [];
-const COLORS: Record<string, string> = { question: '#d9779f', terme: '#3b82f6', controle: '#d99a2b', fait: '#2f9e7c', ou: '#8c96ad', conclusion: '#14a3a0' };
-const KINDS: Record<Exclude<Kind, 'ou'>, [string, string]> = { question: ['Objectif', '◎'], terme: ['Droit', '⚖'], controle: ['Contrôle', '◆'], fait: ['Fait', '●'], conclusion: ['Conclusion', '✓'] };
+const COLORS: Record<string, string> = { question: '#d9779f', calcul: '#8b5cf6', terme: '#3b82f6', controle: '#d99a2b', fait: '#2f9e7c', ou: '#8c96ad', conclusion: '#14a3a0' };
+const KINDS: Record<Exclude<Kind, 'ou'>, [string, string]> = { question: ['Objectif', '◎'], calcul: ['Calcul', '∑'], terme: ['Droit', '⚖'], controle: ['Contrôle', '◆'], fait: ['Fait', '●'], conclusion: ['Conclusion', '✓'] };
 const CONTROL_PREFIXES = ['applicabilité_', 'décompte_', 'validité_', 'prescription_'];
 const isControl = (name: string) => CONTROL_PREFIXES.some((prefix) => name.startsWith(prefix) || name.startsWith(`${prefix.slice(0, -1)} `));
 const STATUS: Record<string, string> = { acquis: 'Acquis', exclu: 'Exclu', 'à établir': 'À établir', disputé: 'Disputé' };
@@ -68,6 +68,21 @@ const shorten = (text: string, length: number) => (text.length > length ? `${tex
 const pill = (status: string, label = status) => `<span class="pmr-pill pmr-${TONE[status] ?? 'muted'}">${escape(label)}</span>`;
 const date = (value: unknown) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : 'toujours en vigueur');
 const amountText = (value: unknown) => (typeof value === 'number' ? value.toLocaleString('fr-FR') : typeof value === 'string' ? date(value) : 'à calculer');
+const SIGNS: Record<string, string> = { somme: ' + ', difference: ' − ', produit: ' × ', quotient: ' ÷ ' };
+const CALCUL = '#calcul:';
+const mentions = (part: unknown): string[] => typeof part === 'string' ? [part] : Array.isArray(part) ? part.flatMap(mentions) : part && typeof part === 'object' ? Object.values(part).flatMap(mentions) : [];
+const spelled = (part: unknown, nested = false): string => {
+  if (typeof part === 'number') return part.toLocaleString('fr-FR');
+  if (typeof part === 'string') return human(part).replace(/^./, (char) => char.toLowerCase());
+  if (!part || typeof part !== 'object') return '';
+  const formula = part as Json;
+  if ('si' in formula) return `si ${spelled(formula.si)} : ${spelled(formula.alors)} ; sinon : ${spelled(formula.sinon)}`;
+  if (formula.bareme) return `barème(${spelled(formula.bareme.assiette)})`;
+  const [operation, terms] = Object.entries(formula)[0] ?? [];
+  const list = (Array.isArray(terms) ? terms : [terms]).map((item) => spelled(item, true));
+  if (SIGNS[operation]) return nested ? `(${list.join(SIGNS[operation])})` : list.join(SIGNS[operation]);
+  return `${operation}(${list.join(', ')})`;
+};
 const MARK: Record<ReasoningLogEntry['status'], string> = { ok: '✓', alerte: '!', neutre: '', 'en cours': '' };
 const STEP: Record<ReasoningLogEntry['step'], string> = { source: 'Source', pièce: 'Pièce', fait: 'Fait', condition: 'Étape', essai: 'Hypothèse', registre: 'Partie', réponse: 'Réponse' };
 const MET: Record<string, string> = { acquis: '✓', exclu: '✗', 'à établir': '?', disputé: '?' };
@@ -82,7 +97,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><div class="pmr-tabs" role="tablist" aria-label="Vue"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Vue écrite<span class="pmr-count" data-alerts hidden></span></button></div><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i style="background:${COLORS.fait}"></i>Fait prouvé</span><span><i style="background:#c45b5b"></i>Fait contraire</span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button><button class="pmr-primary" data-run-test>Lancer le test</button></div></div><div class="pmr-inspector"><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><div class="pmr-tabs" role="tablist" aria-label="Vue"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Vue écrite<span class="pmr-count" data-alerts hidden></span></button></div><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'calcul', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i style="background:${COLORS.fait}"></i>Fait prouvé</span><span><i style="background:#c45b5b"></i>Fait contraire</span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button><button class="pmr-primary" data-run-test>Lancer le test</button></div></div><div class="pmr-inspector"><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const stage = root.querySelector<HTMLElement>('.pmr-stage')!;
@@ -161,6 +176,8 @@ export function mount(container: HTMLElement, api: Host) {
     return condition.statut ?? 'à établir';
   };
   const answerOf = (objective: Json) => objective.statut ?? 'à établir';
+  const formulaOf = (name: string) => values()[name]?.formule as Json | undefined;
+  const inputsOf = (name: string) => [...new Set(mentions(formulaOf(name)))].filter((item) => item in values() && !formulaOf(item));
 
   const cited = (): Cited[] => {
     const found: Cited[] = [];
@@ -213,12 +230,27 @@ export function mount(container: HTMLElement, api: Host) {
       for (const group of groups().filter((item) => item.parent === name)) for (const source of [group.condition, ...(group.condition.l_une ?? [])].flatMap((condition: Json) => condition.selon ?? [])) for (const control of [source.applicabilite, source.version, source.validite]) if (typeof control === 'string') visit(control, level + 1);
     };
     const node = (id: string, label: string, status: string, kind: Kind, decisive = false): GraphNode => ({ id, label, status, kind, decisive, sources: [], pieces: [], x: 0, y: 0, w: 0, h: 0 });
-    visit(objective[verb(objective)], 1);
+    const calculations: string[] = [];
+    const reckon = (name: string, level: number) => {
+      if (calculations.includes(name)) return;
+      calculations.push(name);
+      for (const mention of mentions(formulaOf(name))) if (formulaOf(mention)) reckon(mention, level + 1); else if (all[mention]) visit(mention, level + 1);
+      for (const source of [name, ...inputsOf(name)].flatMap((item) => values()[item]?.selon ?? [])) for (const control of [source.applicabilite, source.version, source.validite]) if (typeof control === 'string') visit(control, level + 1);
+    };
+    const target = objective[verb(objective)];
+    if (formulaOf(target)) reckon(target, 1); else visit(target, 1);
     for (const control of [objective.validite, objective.prescription]) if (typeof control === 'string') visit(control, 1);
     const answered = answerOf(objective);
     const amount = objective.montant_calcule;
     nodes.push(node('#question', objective.objectif, answered, 'question'));
     nodes.push(node('#conclusion', 'montant_calcule' in objective ? amountText(amount) : ANSWER[answered] ?? 'En suspens', answered, 'conclusion'));
+    for (const name of calculations) {
+      const calculation = node(`${CALCUL}${name}`, human(name), values()[name].statut ?? 'à établir', 'calcul');
+      calculation.sources = [name, ...inputsOf(name)].flatMap((item) => values()[item]?.selon ?? []);
+      calculation.pieces = inputsOf(name).flatMap((item) => (values()[item]?.preuve ?? []).map((piece: Json) => ({ piece, target: calculation.id, against: false })));
+      nodes.push(calculation);
+      for (const mention of new Set(mentions(formulaOf(name)))) if (formulaOf(mention) || levels.has(mention)) edges.push({ from: formulaOf(mention) ? `${CALCUL}${mention}` : mention, to: calculation.id, link: 'si' });
+    }
     for (const name of order) {
       const occurrence = list.find((item) => item.condition.condition === name);
       const term = all[name];
@@ -316,6 +348,14 @@ export function mount(container: HTMLElement, api: Host) {
     const result = entry ? [entryItem(entry, node.id)] : snapshot?.test ? [absent(`absent:${cell.id}`, 'Étape', 'Le test n’a pas calculé cette étape.')] : [];
     return { cell: cell.id, kind: `Étape ${steps.indexOf(node) + 1}`, title: node.label, nature: 'Le test calcule l’étape : elle est remplie si toutes ses conditions « si » le sont et qu’aucune exception « sauf » n’est établie.', items: [...open(issuesOf([node.id]).filter((issue) => !inner.some((path) => issue.path === path || issue.path.startsWith(`${path}.`)))), ...result] };
   };
+  const calculPart = (cell: Cell): Part => {
+    const node = nodes.find((item) => item.id === cell.ref)!;
+    const name = node.id.slice(CALCUL.length);
+    const result = values()[name]?.calcul;
+    const done = typeof result === 'number';
+    const state = line(`calcul:${name}`, done ? 'ok' : 'neutre', `${pill(done ? 'acquis' : 'à établir', done ? 'Calculé' : 'À calculer')}<span class="pmr-step">Calcul</span>`, done ? `${node.label} = ${amountText(result)}` : 'Une valeur manque pour faire le calcul.');
+    return { cell: cell.id, kind: 'Calcul', title: node.label, nature: 'Le moteur applique la formule aux valeurs prouvées par les pièces. Le test vérifie les textes qui fondent la formule et ses valeurs.', items: [...open(issuesOf([`valeurs.${name}`, ...inputsOf(name).map((item) => `valeurs.${item}`)])), ...pieceItems(node.pieces, cell.id), ...sourceItems(node.sources, cell.id), state] };
+  };
   const answerPart = (cell: Cell): Part => {
     const entry = full().find((item) => item.key === `réponse:${scope}`);
     return { cell: cell.id, kind: 'Réponse', title: nodes.find((item) => item.id === '#conclusion')?.label ?? '', nature: 'Le test déduit la réponse des étapes : elle n’est acquise que si les étapes décisives le sont.', items: entry ? [entryItem(entry)] : [] };
@@ -324,6 +364,7 @@ export function mount(container: HTMLElement, api: Host) {
     const cell = cells.find((item) => item.id === id);
     if (!cell || cell.kind === 'question') return [];
     if (cell.kind === 'conclusion') return [answerPart(cell)];
+    if (cell.kind === 'calcul') return [calculPart(cell)];
     if (cell.member) return [factPart(cell)];
     if (cell.path) return [lawPart(cell)];
     if (cell.kind === 'fait') return [factPart(cell)];
@@ -350,6 +391,7 @@ export function mount(container: HTMLElement, api: Host) {
     const term = terms()[node.id];
     const facts = node.kind === 'fait' && !(term?.si?.length || term?.sauf?.length);
     const chips = [
+      ...(node.kind === 'calcul' ? [...new Map(node.sources.map((source) => [source.source, source])).values()] : []).map(sourceChip),
       ...(facts ? sides.flatMap((side) => term?.[side] ?? []).flatMap((entry: Json) => entry.selon ?? []) : []).map(sourceChip),
       ...node.pieces.map((entry) => `<button class="pmr-chip is-piece${entry.against ? ' is-against' : ''}" data-show="#piece:${escape(entry.piece.piece)}" title="${escape(`${entry.against ? 'Contredit par' : 'Prouvé par'} ${entry.piece.titre ?? entry.piece.piece}\n« ${entry.piece.citation ?? ''} »`)}">${escape(shorten(String(entry.piece.titre ?? basename(entry.piece.piece)), 40))}</button>`),
     ];
@@ -361,6 +403,8 @@ export function mount(container: HTMLElement, api: Host) {
     const status = node.kind === 'fait' ? pill({ ok: 'acquis', ko: 'exclu' }[tone] ?? 'à établir', { ok: 'Condition remplie', ko: 'Condition non remplie' }[tone] ?? 'À établir') : pill(node.status, STATUS[node.status] ?? 'À établir');
     const body = node.kind === 'question'
       ? `<span class="pmr-kind">${kind}</span><strong class="pmr-editorial">${escape(node.label)}</strong>`
+      : node.kind === 'calcul'
+        ? `<span class="pmr-kind">${kind}</span><strong>${escape(node.label)}</strong><p class="pmr-formula">= ${escape(spelled(formulaOf(node.id.slice(CALCUL.length))))}</p>${inputsOf(node.id.slice(CALCUL.length)).map((item) => `<p class="pmr-sub">${escape(human(item))} : <b>${escape(amountText(values()[item]?.valeur))}</b></p>`).join('')}${chips.length ? `<div class="pmr-chips">${chips.join('')}</div>` : ''}<div class="pmr-foot">${pill(node.status, typeof values()[node.id.slice(CALCUL.length)]?.calcul === 'number' ? `= ${amountText(values()[node.id.slice(CALCUL.length)].calcul)}` : 'À calculer')}</div>`
       : node.kind === 'conclusion'
         ? `<span class="pmr-kind">${kind}</span><strong>Réponse : ${escape(node.label)}</strong>${decisifs.length ? `<p class="pmr-sub">Dépend de : ${decisifs.map((name) => escape(human(name))).join(', ')}</p>` : ''}${verdict()}`
         : numbered
@@ -494,6 +538,7 @@ export function mount(container: HTMLElement, api: Host) {
       if (last) ties.push({ from: last.id, to: node.id, link: 'si' });
     };
     spine(byId.get('#question')!);
+    for (const node of nodes.filter((item) => item.kind === 'calcul')) spine(node);
     for (const step of steps) {
       spine(step);
       for (const group of groups().filter((item) => item.parent === step.id)) {
