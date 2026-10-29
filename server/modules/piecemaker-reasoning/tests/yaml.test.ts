@@ -131,7 +131,7 @@ test('le vérificateur rend toutes les fautes de syntaxe d’un coup, chacune av
 test('une clé mal placée ou mal orthographiée est nommée avec sa place ou sa bonne graphie', async () => {
   const at = async (code: string) => (await verify(code)).issues.filter((issue) => issue.kind === 'erreur').map((issue) => `${issue.path} : ${issue.text}`).join('\n');
   const head = 'objectifs:\n  - objectif: Obtenir un effet fictif\n    obtenir: effet\n';
-  assert.match(await at(`${head}effet:\n  si:\n    - fait: true\n  selon:\n    - source: LEGIARTI000000000001\n      citation: Règle\n`), /effet\.selon : selon n’a pas sa place ici : c’est une clé d’une condition, un fondement ou une valeur ; vérifie son indentation \(admises ici : si, sauf\)/);
+  assert.match(await at(`${head}effet:\n  si:\n    - fait: true\n  selon:\n    - source: LEGIARTI000000000001\n      citation: Règle\n`), /effet\.selon : selon n’a pas sa place ici : c’est une clé d’une condition, un fondement ou une valeur ; vérifie son indentation \(admises ici : si, sauf, but\)/);
   assert.match(await at(`${head}effet:\n  si:\n    - fait: true\n      seleon:\n        - source: LEGIARTI000000000001\n          citation: Règle\n`), /effet\.si\[0\]\.seleon : clé inconnue seleon : écris selon/);
   assert.match(await at(`${head}hypothèses: []\n`), /hypothèses : clé inconnue hypothèses : écris hypotheses/);
   assert.match(await at(`${head}effet:\n  si:\n    - fait: true\nselon: []\n`), /selon : selon n’a pas sa place au premier niveau : c’est une clé d’une condition, un fondement ou une valeur ; vérifie son indentation/);
