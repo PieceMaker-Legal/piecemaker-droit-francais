@@ -627,6 +627,9 @@ test('consultation : des hypothèses lèvent le manque d’une valeur ouverte, p
   assert.doesNotMatch(texts(covered, 'manque').join('\n'), /dépend de prix_de_cession/);
   const bare = await consult(FISCAL_CODE.replace(/ {2}hypotheses: \[[^\n]*\],\n/, ''));
   assert.match(texts(bare, 'manque').join('\n'), /valeurs\.prix_de_cession : impôt_dû dépend de prix_de_cession : renseigne-la dans valeurs, avec sa preuve \(pièce\) ou sa source \(selon : texte\), ou ajoute une hypothèse/);
+  const goalless = texts(await consult(FISCAL_CODE.replace(/ {2}hypotheses: \[[^\n]*\],\n/, '').replace(/ {4}impôt_dû: \{ formule:[^\n]*\n[^\n]*\n/, '    impôt_dû: { valeur: null },\n')), 'manque').join('\n');
+  assert.match(goalless, /valeurs\.impôt_dû : le but impôt_dû n’est pas renseigné : donne dans valeurs sa formule/);
+  assert.doesNotMatch(goalless, /impôt_dû dépend de impôt_dû/);
   assert.match(texts(await fiscal(FISCAL_CODE.replace('  hypotheses: [', '  essais: [')), 'erreur').join('\n'), /essais : la clé essais s’appelle hypotheses/);
 });
 
