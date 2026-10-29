@@ -31,6 +31,7 @@ test('ajoute les instructions au premier message Legal Code et les masque Ã  lâ€
   await runtime.run('claude', 'La clause est-elle valable ?', { legalCode: true, cwd: '/dossiers/Dupont c Exemple' }, writer);
   assert.match(calls[0], /Tu es Legal Code\./);
   assert.match(calls[0], /--dossier "\/dossiers\/Dupont c Exemple"/);
+  assert.ok(calls[0].includes(`"${path.join('/dossiers/Dupont c Exemple', '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm')}"`));
   assert.equal(sent[0].content, 'La clause est-elle valable ?');
   const history = await sessions.fetchHistory('s1', {});
   assert.equal(history.messages[0].content, 'La clause est-elle valable ?');
