@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.57](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.56...v2.0.57) (2026-10-29)
+
+### Bug Fixes
+
+* **installation:** comparer les chemins Python sans casse sous Windows ([a93384a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a93384a730c2386afa8410b91b4ea1382cbcbc17))
+
 ## [2.0.56](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.55...v2.0.56) (2026-10-28)
 
 ### Tests
