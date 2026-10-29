@@ -3,6 +3,50 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.0.59](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.58...v2.0.59) (2026-10-29)
+
+### New Features
+
+* **piecemaker:** raisonnement accessible hors Legal Code ([d8a4152](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d8a4152f60ae7e3e7f2daf75dd0ef9c48ddfbb6b))
+* **raisonnement:** bouton Ignorer au lieu d'Écarter, avec info-bulle ([6e42243](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6e42243dc604731b8cb18faa4f56cea133404b16))
+* **raisonnement:** carte de vérification interactive ([06c4023](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/06c4023343b03de0aba4ebc231d50d9087993df7))
+* **raisonnement:** cases du graphe numérotées comme les étapes du test ([2b41420](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2b41420f4890b4f5e6cad13bbbbd9dc87836f0b0))
+* **raisonnement:** chaque calcul du graphe montre sa règle de calcul et les faits qu'elle utilise ([97159ca](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/97159ca19b010f021237dbd89dac8b0ba53cffe7))
+* **raisonnement:** contrôle version hors drafting, règle exigée pour décompte et formule ([41bc8fd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/41bc8fdf15c0b632ba822bb0f0ec2e37e3f27bcd))
+* **raisonnement:** déplacement du graphe borné à l'organigramme et à sa vérification ([4078f2d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4078f2de36085f91ee4caf83910d2dc54ff513ed))
+* **raisonnement:** droit applicable et simulation dans l'organigramme ([236e1e1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/236e1e1cedd7b07ec61208b1f9443a2afe8923ae))
+* **raisonnement:** essai du test dans l'organigramme ([46370cf](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/46370cf177bd7f8953b1ea4fe30860ae4f9e38e0))
+* **raisonnement:** étapes avec leur but, conditions du texte et faits à droite ([7b5eebe](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7b5eebe6ad71b744196b1a7ef3cfd1409267e6c7))
+* **raisonnement:** étapes numérotées avec leurs conditions dans la vue Test ([156800d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/156800d4811edcb643e5be633089f2a7a7c9fe17))
+* **raisonnement:** graphe en colonne d'étapes, faits à droite de leur étape ([0e351f6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0e351f618828bc1622606a6256113c29737820b1))
+* **raisonnement:** le graphe dessine les calculs d'un objectif chiffré ([0abfe07](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0abfe079e4d27fc602c3229407ef88b21be357f6))
+* **raisonnement:** organigramme droit, faits puis conclusion ([ea677f1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ea677f10976939da6687f2864bb8b613a695796c))
+* **raisonnement:** organigramme lisible, sources en nom complet ([6c2e4d5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6c2e4d5a380c32255a6ee96c0edd9d74175c42ef))
+* **raisonnement:** pas de lien vers le graphe dans la carte de vérification ([5c5608c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5c5608c5965b350b98db2e6b59825f9c12d57003))
+* **raisonnement:** retirer l'en-tête et replier la légende ([8779554](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8779554ccacf71123b1fe27708341c14f517270d))
+* **raisonnement:** retirer la simulation du volet ([2c0f374](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2c0f374c6713c4a1d37cc7930030da64cff62a0f))
+* **raisonnement:** sous-cartes par condition dans la carte d'un article ([da31d3c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/da31d3c486805f91c4f0a9824073b31004367294))
+* **raisonnement:** test déroulé élément par élément dans la vue écrite, sans toucher au graphe ([637533e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/637533e4049cb04af00895ff42a26b59f61cd37c))
+* **raisonnement:** vérification par carte, test déroulé pas à pas, bascule graphe / vue écrite ([a029cd0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a029cd0b0d81dd3e115a0685ea2b4e40d93eaef1))
+* **raisonnement:** volet réduit à l'organigramme et au test ([914d9c9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/914d9c917e178112e09415db4c4375de0900dec0))
+* **raisonnement:** vue Test des faits vers la réponse ([c617a46](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c617a4690df6a725bd7dda64df90ab8d5ae2ed48))
+* **raisonnement:** vue Test organisée par étapes, avec droit et pièces ([950dd37](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/950dd378f9fd207aef8de69c90dbfd7f226b9832))
+
+### Bug Fixes
+
+* **legal-code:** donner à l'agent le chemin de pm du dossier ([084cd0e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/084cd0e8077992c7aabd271d9d69fbc10cf53126))
+* **raisonnement:** la conclusion n'est verte que si tout ce qui y mène est acquis ([8955399](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8955399be7e27af7e065ce2173c56c8d0230dd00))
+* **raisonnement:** le bouton Ignorer écarte toutes les alertes au même texte ([60acc14](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/60acc14e2c3d500b5a3e755788529a45e347640c))
+* **raisonnement:** le graphe place les calculs après les étapes, chacun après ceux qu'il utilise ([e00b1b1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e00b1b107cf3dc4fb95a40bfe21a28115f6c17b5))
+* **raisonnement:** message du but non renseigné raccourci, phrases courtes ([b47f4e4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b47f4e41b62af7c2d9e2b281e0113b21806e0058))
+* **raisonnement:** sous-cartes détachées du bord bas de la carte d'un article ([7d4a507](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7d4a507559ffdefa5a61cde11c681e5344ad34fc))
+* **raisonnement:** un but chiffré sans formule ni montant est signalé comme but non renseigné ([8279d0d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8279d0d5832bbcce95f410527e2c8ac0d926a2d2))
+* **raisonnement:** un clic sur une case citant une seule source ou pièce ouvre sa citation ([10a71ee](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/10a71ee21daa4ad8e5daf088a59c437827b4391d))
+
+### Styling
+
+* **legal-code:** reprendre l'icône du Raisonnement ([5962fe4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5962fe4bcc775d17ffc9e485bc6799ff00c38498))
+
 ## [2.0.58](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.57...v2.0.58) (2026-10-29)
 
 ### Bug Fixes
