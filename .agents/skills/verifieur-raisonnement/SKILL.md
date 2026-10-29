@@ -31,7 +31,7 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnements/<nom>.ya
 - `formule` calcule un montant (sans valeur prouvée, la formule le donne ; avec, les deux doivent concorder) : `somme | difference | produit | quotient | minimum | maximum: [termes]`, `arrondi: [montant, décimales]`, `bareme: { assiette, tranches: [{ jusqu_a, taux }, …, { taux }] }` (progressif), `{ si: terme, alors, sinon }` (montant selon un régime ; terme à trois valeurs). Nombres écrits dans une formule sans `preuve` ni `selon` = manque.
 - `hypotheses: [{ nom, faits, attendu }]` : cas supposés que le moteur rejoue (l'ancienne clé `essais` est une erreur qui demande de la renommer) ; un fait absent reprend sa valeur établie ; `attendu` porte sur un terme (vrai/faux) ou un montant (nombre). Une hypothèse non conforme est une erreur : le raisonnement ne dit pas ce que l'agent conclut.
 - Variables : une valeur ouverte (`null`) n'est signalée que si une réponse en dépend (fait décisif calculé, ou opérande d'un montant-réponse). En drafting et en consultation, le manque se lève en fixant la valeur ou par des hypothèses qui la supposent : pour un terme, des hypothèses conformes donnant des résultats différents (la bascule) ; pour un montant, une hypothèse conforme qui donne le montant attendu. En contentieux, seule la preuve le lève. Un fait vrai/faux décisif sans pièce n'est jamais levé par une hypothèse hors drafting. Aucune détection textuelle des blancs.
-- Simulation (volet, onglet Détail de l'objectif) : l'avocat modifie les valeurs, `POST /reasoning/simulate` rejoue le raisonnement hors ligne (sources en cache du dernier test), rien n'est écrit.
+- Simulation (`POST /reasoning/simulate`) : rejoue le raisonnement hors ligne avec des valeurs modifiées (sources en cache du dernier test), rien n'est écrit. Le volet ne l'expose plus.
 
 ## L'acte rédigé (`acte`)
 
@@ -85,7 +85,7 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 | `server/piecemaker/acte-docx.ts` | export et lecture DOCX (contrôles de contenu, base de fusion, import) |
 | `server/piecemaker/acte-merge.ts` | fusion à trois voies (`git merge-file`) |
 | `server/piecemaker/acte-files.ts`, `acte-local.ts` | commandes `pm acte` |
-| `plugins/piecemaker-raisonnement/src/client.ts` | volet (onglet Acte) |
+| `plugins/piecemaker-raisonnement/src/client.ts` | volet : organigramme du raisonnement et test |
 
 ## Tester
 
