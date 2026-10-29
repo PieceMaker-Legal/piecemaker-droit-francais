@@ -32,7 +32,7 @@ const sides = ['true', 'false'] as const;
 const VERBS: Record<string, string> = { obtenir: 'Obtenir', écarter: 'Écarter', réduire: 'Réduire', augmenter: 'Augmenter' };
 const inputs = (condition: Json): string[] => condition.delai ? [condition.delai.de, condition.delai.a] : condition.montant ? [condition.montant.valeur, condition.montant.seuil].filter((item) => typeof item === 'string') : [];
 const COLORS: Record<string, string> = { question: '#d9779f', terme: '#3b82f6', controle: '#d99a2b', fait: '#2f9e7c', ou: '#8c96ad', conclusion: '#14a3a0' };
-const KINDS: Record<Exclude<Kind, 'ou'>, [string, string]> = { question: ['Objectif', '◎'], terme: ['Étape', '⚖'], controle: ['Contrôle', '◆'], fait: ['Fait', '●'], conclusion: ['Conclusion', '✓'] };
+const KINDS: Record<Exclude<Kind, 'ou'>, [string, string]> = { question: ['Objectif', '◎'], terme: ['Règle', '⚖'], controle: ['Contrôle', '◆'], fait: ['Fait', '●'], conclusion: ['Conclusion', '✓'] };
 const CONTROL_PREFIXES = ['applicabilité_', 'décompte_', 'validité_', 'prescription_'];
 const isControl = (name: string) => CONTROL_PREFIXES.some((prefix) => name.startsWith(prefix) || name.startsWith(`${prefix.slice(0, -1)} `));
 const STATUS: Record<string, string> = { acquis: 'Acquis', exclu: 'Exclu', 'à établir': 'À établir', disputé: 'Disputé' };
@@ -67,7 +67,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${(['question', 'fait', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-simulation" hidden></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le test"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Test<span class="pmr-count" data-alerts hidden></span></button></div><div class="pmr-detail"></div></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><strong>Raisonnement</strong><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select><button data-demo>Exemple fictif</button><button data-refresh aria-label="Actualiser">↻</button></header><div class="pmr-legend">${(['question', 'terme', 'controle', 'fait', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-simulation" hidden></div><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-tools"><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button></div></div><div class="pmr-split" role="separator" tabindex="0" aria-label="Redimensionner le graphe et le test"></div><div class="pmr-inspector"><div class="pmr-tabs" role="tablist"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Test<span class="pmr-count" data-alerts hidden></span></button></div><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const stage = root.querySelector<HTMLElement>('.pmr-stage')!;
@@ -206,8 +206,6 @@ export function mount(container: HTMLElement, api: Host) {
       const term = all[name];
       nodes.push(node(name, human(name), statusOf(name, term ? term.statut ?? 'à établir' : occurrence?.condition.statut ?? 'à établir'), term ? (isControl(name) ? 'controle' : term.true || term.false ? 'fait' : 'terme') : 'fait', Boolean(occurrence?.condition.decisif)));
     }
-    edges.push({ from: objective[verb(objective)], to: '#conclusion', link: 'si' });
-    for (const control of [objective.validite, objective.prescription]) if (typeof control === 'string' && levels.has(control)) edges.push({ from: control, to: '#conclusion', link: 'si' });
     for (const entry of list) if (typeof entry.condition.decompte === 'string' && levels.has(entry.condition.decompte) && levels.has(entry.condition.condition)) edges.push({ from: entry.condition.decompte, to: entry.condition.condition, link: 'si' });
     for (const group of groups().filter((entry) => levels.has(entry.parent))) {
       const link = group.path.includes('.sauf[') ? 'sauf' : 'si';
@@ -227,6 +225,9 @@ export function mount(container: HTMLElement, api: Host) {
       for (const control of [entry.source.applicabilite, entry.source.validite]) if (typeof control === 'string' && control !== entry.target && levels.has(control) && !edges.some((edge) => edge.from === control && edge.to === entry.target)) edges.push({ from: control, to: entry.target, link: 'si' });
     }
     for (const entry of cited()) { const target = byId.get(entry.target); if (target && !target.pieces.some((item) => item.piece.piece === entry.piece.piece)) target.pieces.push(entry); }
+    const ruled = new Set(edges.map((edge) => edge.to));
+    const leaves = nodes.filter((item) => item.kind === 'fait' && !ruled.has(item.id));
+    for (const item of leaves.length ? leaves : nodes.filter((entry) => entry.id === objective[verb(objective)])) edges.push({ from: item.id, to: '#conclusion', link: 'si' });
     if (selected && !byId.has(selected)) selected = '';
   };
 
@@ -296,18 +297,26 @@ export function mount(container: HTMLElement, api: Host) {
     if (!canvas.clientWidth || !nodes.length) return;
     const byId = new Map(nodes.map((node) => [node.id, node]));
     stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => { const node = byId.get(element.dataset.id!); if (node) { node.w = element.offsetWidth; node.h = element.offsetHeight; } });
-    const depth = new Map([['#conclusion', 0]]);
+    const inner = edges.filter((edge) => edge.to !== '#conclusion');
+    const ruled = new Set(inner.map((edge) => edge.to));
+    const upper = (node: GraphNode) => node.kind !== 'question' && node.kind !== 'conclusion' && (node.kind !== 'fait' || ruled.has(node.id));
+    const layer = new Map([['#question', 0]]);
+    for (const node of nodes) if (upper(node) && !inner.some((edge) => edge.from === node.id)) layer.set(node.id, 1);
     for (let pass = 0; pass < nodes.length; pass++) {
       let changed = false;
-      for (const edge of edges) { const below = depth.get(edge.to); if (below !== undefined && below + 1 > (depth.get(edge.from) ?? -1) && below < nodes.length) { depth.set(edge.from, below + 1); changed = true; } }
+      for (const edge of inner) { const above = layer.get(edge.to); if (above !== undefined && above < nodes.length && upper(byId.get(edge.from)!) && above + 1 > (layer.get(edge.from) ?? 0)) { layer.set(edge.from, above + 1); changed = true; } }
       if (!changed) break;
     }
-    for (const node of nodes) if (node.kind !== 'question' && !depth.has(node.id)) depth.set(node.id, 0);
-    const deepest = Math.max(...depth.values());
+    for (const node of nodes) if (upper(node) && !layer.has(node.id)) layer.set(node.id, 1);
+    const facts = Math.max(...layer.values()) + 1;
+    for (const node of nodes) if (node.kind !== 'conclusion' && !layer.has(node.id)) layer.set(node.id, facts);
+    const deepest = Math.max(...layer.values()) + 1;
+    layer.set('#conclusion', deepest);
+    const wired = [...nodes.filter((node) => layer.get(node.id) === 1).map((node): Edge => ({ from: node.id, to: '#question', link: 'si' })), ...edges];
     for (let level = 0; level <= deepest; level++) {
-      const wanted = new Map(nodes.filter((node) => depth.get(node.id) === level).map((node) => {
-        const targets = edges.filter((edge) => edge.from === node.id && (depth.get(edge.to) ?? Infinity) < level).map((edge) => byId.get(edge.to)!.x);
-        return [node, node.id === '#conclusion' ? 0 : targets.length ? targets.reduce((sum, x) => sum + x, 0) / targets.length : Infinity] as const;
+      const wanted = new Map(nodes.filter((node) => layer.get(node.id) === level).map((node) => {
+        const targets = wired.filter((edge) => edge.from === node.id || edge.to === node.id).map((edge) => byId.get(edge.from === node.id ? edge.to : edge.from)!).filter((other) => layer.get(other.id)! < level).map((other) => other.x);
+        return [node, level === 0 ? 0 : targets.length ? targets.reduce((sum, x) => sum + x, 0) / targets.length : Infinity] as const;
       }));
       const row = [...wanted.keys()].sort((a, b) => wanted.get(a)! - wanted.get(b)!);
       let cursor = -Infinity;
@@ -316,21 +325,16 @@ export function mount(container: HTMLElement, api: Host) {
       const excess = placed.length ? placed.reduce((sum, node) => sum + node.x - wanted.get(node)!, 0) / placed.length / 2 : 0;
       row.forEach((node) => { node.x -= excess; });
     }
-    const question = byId.get('#question')!;
-    const summit = nodes.filter((node) => depth.get(node.id) === deepest);
-    question.x = summit.reduce((sum, node) => sum + node.x, 0) / summit.length;
-    question.y = 0;
-    const wired = [...edges, ...nodes.filter((node) => depth.get(node.id) === deepest).map((node): Edge => ({ from: '#question', to: node.id, link: 'si' }))];
-    let top = question.h + ROW;
-    for (let level = deepest; level >= 0; level--) {
-      const row = nodes.filter((node) => depth.get(node.id) === level);
+    let top = 0;
+    for (let level = 0; level <= deepest; level++) {
+      const row = nodes.filter((node) => layer.get(node.id) === level);
       row.forEach((node) => { node.y = top; });
       top += Math.max(0, ...row.map((node) => node.h)) + ROW;
     }
     stage.querySelectorAll<HTMLElement>('[data-id]').forEach((element) => { const node = byId.get(element.dataset.id!); if (node) { element.style.left = `${node.x - node.w / 2}px`; element.style.top = `${node.y}px`; } });
     const markers = Object.entries(COLORS).map(([kind, color]) => `<marker id="pmr-arrow-${kind}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="${color}"/></marker>`).join('');
     const wires = wired.map((edge) => {
-      const a = byId.get(edge.from), b = byId.get(edge.to);
+      const [a, b] = [byId.get(edge.from), byId.get(edge.to)].sort((one, other) => (layer.get(one?.id ?? '') ?? 0) - (layer.get(other?.id ?? '') ?? 0));
       if (!a || !b) return '';
       const x1 = a.x, y1 = a.y + a.h, x2 = b.x, y2 = b.y - 2, bend = Math.min(y2 - y1, ROW * 1.5) / 2;
       return `<path class="pmr-wire${edge.link === 'sauf' ? ' is-sauf' : ''}" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" stroke="${COLORS[a.kind]}" marker-end="url(#pmr-arrow-${a.kind})" d="M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}"/>${edge.link === 'sauf' ? `<text class="pmr-wire-label" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" x="${x2 + 6}" y="${y2 - bend / 2}">sauf</text>` : ''}`;
