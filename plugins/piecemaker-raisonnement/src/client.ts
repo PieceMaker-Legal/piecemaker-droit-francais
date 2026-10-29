@@ -117,6 +117,7 @@ export function mount(container: HTMLElement, api: Host) {
   let played: Set<string> | null = null;
   let fresh: { key: string; added: boolean } | null = null;
   let pacing = 0;
+  let unrolling = false;
   let stopped = false;
   let timer = 0;
   let sequence = 0;
@@ -585,7 +586,7 @@ export function mount(container: HTMLElement, api: Host) {
       return `<section class="pmr-phase" data-status="${status}"><header><span class="pmr-step">Étape ${steps.indexOf(node) + 1}</span><button class="pmr-link" data-select="${escape(node.id)}"><strong>${escape(node.label)}</strong></button><span class="pmr-phase-state">${escape(head[0]?.text ?? '')}</span></header>${rule(node)}${issues.length ? issueList(unplaced(issues), false, true) : ''}${law ? `<h5>Droit</h5>${law}` : ''}${proved || pieces ? `<h5>Faits et pièces</h5>${pieces}${proved}` : ''}</section>`;
     };
     const alerts = entries.filter((entry) => entry.status === 'alerte').length;
-    const run = `<div class="pmr-run"><button class="pmr-primary" data-run-test${running || busy || !context.project ? ' disabled' : ''}>${running ? played ? 'Déroulé du test…' : 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</span>` : ''}</div>`;
+    const run = `<div class="pmr-run"><button class="pmr-primary" data-run-test${running || busy || !context.project ? ' disabled' : ''}>${running ? played || unrolling ? 'Déroulé du test…' : 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test'}</button>${snapshot?.test && !live && !unrolling ? `<span class="pmr-muted">${escape(new Date(snapshot.test.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</span>` : ''}${entries.length && !live && !unrolling ? `<span class="pmr-tally">${pill(alerts ? 'exclu' : 'acquis', alerts ? plural(alerts, 'alerte') : 'aucune alerte')}</span>` : ''}</div>`;
     const answer = rows(entries.filter((entry) => entry.step === 'réponse'));
     const stages = steps.map(stage).join('');
     const trials = rows(entries.filter((entry) => entry.step === 'essai'));
@@ -610,7 +611,7 @@ export function mount(container: HTMLElement, api: Host) {
     picker.innerHTML = list.map((objective, index) => `<option value="${index}"${index === scope ? ' selected' : ''}>${escape(shorten(objective.objectif, 80))}</option>`).join('');
     const launcher = root.querySelector<HTMLButtonElement>('.pmr-tools [data-run-test]')!;
     launcher.disabled = Boolean(running || busy || !context.project || !list.length);
-    launcher.textContent = running ? played ? 'Déroulé du test…' : 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test';
+    launcher.textContent = running ? played || unrolling ? 'Déroulé du test…' : 'Test en cours…' : snapshot?.test ? 'Relancer le test' : 'Lancer le test';
     const count = root.querySelector<HTMLElement>('[data-alerts]')!;
     const alerts = visibleIssues().length + log().filter((entry) => entry.status === 'alerte').length;
     count.hidden = !alerts;
@@ -679,8 +680,7 @@ export function mount(container: HTMLElement, api: Host) {
     played = new Set();
     live = [];
     paint();
-    const logged = new Set(full().map((entry) => entry.key));
-    const actions = script().filter((action) => view === 'graph' || logged.has(action.key));
+    const actions = script();
     const tick = () => {
       const action = actions.shift();
       if (!action || stopped) { pacing = 0; played = null; live = null; fresh = null; running = false; busy = false; paint(); return; }
@@ -692,7 +692,24 @@ export function mount(container: HTMLElement, api: Host) {
       described = action.cell.id;
       paintTest();
       paintGraph();
-      if (view === 'graph') follow(action.cell); else root.querySelector('.pmr-inspector .is-new')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      follow(action.cell);
+      pacing = window.setTimeout(tick, 1000);
+    };
+    tick();
+  };
+  const unroll = () => {
+    unrolling = true;
+    paintTest();
+    const units = '.pmr-part > h4, .pmr-part > p, .pmr-part > summary, .pmr-phase > header, .pmr-phase-rule, .pmr-phase > h5, .pmr-issue, .pmr-entry';
+    const queue = [...detail.querySelectorAll<HTMLElement>(units)];
+    detail.querySelectorAll<HTMLElement>(`${units}, .pmr-part, .pmr-phase, .pmr-log, .pmr-fact, .pmr-proofs`).forEach((element) => element.classList.add('is-pending'));
+    const tick = () => {
+      const unit = queue.shift();
+      if (!unit || stopped) { pacing = 0; unrolling = false; running = false; busy = false; paint(); return; }
+      detail.querySelectorAll('.is-new').forEach((element) => element.classList.remove('is-new'));
+      for (let element: HTMLElement | null = unit; element && element !== detail; element = element.parentElement) element.classList.remove('is-pending');
+      unit.classList.add('is-new');
+      unit.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       pacing = window.setTimeout(tick, 1000);
     };
     tick();
@@ -737,8 +754,9 @@ export function mount(container: HTMLElement, api: Host) {
       selected = '';
       selectedCell = '';
       paint();
-      if (snapshot?.demo) { replay(); return; }
-      runTest(project, () => {}, shown()).then((data) => { apply(data); replay(); }, (error) => { running = false; busy = false; showError(error); paint(); });
+      const unfold = view === 'graph' ? replay : unroll;
+      if (snapshot?.demo) { unfold(); return; }
+      runTest(project, () => {}, shown()).then((data) => { apply(data); unfold(); }, (error) => { running = false; busy = false; showError(error); paint(); });
     }
     if (button.dataset.select) reach(button.dataset.select);
     if (button.dataset.show) show(button.dataset.show, button.dataset.quote);
