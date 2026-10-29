@@ -423,7 +423,7 @@ export function mount(container: HTMLElement, api: Host) {
     const own = (id: string) => entries.filter((entry) => entry.key === `terme:${id}` || entry.key === `fait:${id}`);
     const unplaced = (list: ReasoningIssue[]) => list.filter((issue) => !placed.has(issue.id) && placed.add(issue.id));
     const feeds = (child: string, parent: string) => edges.some((edge) => edge.from === child && (edge.to === parent || (edge.to.startsWith('#ou:') && edges.some((up) => up.from === edge.to && up.to === parent))));
-    const steps = nodes.filter((node) => node.kind === 'terme' || node.kind === 'controle');
+    const steps = nodes.filter((node) => node.kind === 'terme' || node.kind === 'controle').reverse();
     const named = (id: string) => {
       const index = steps.findIndex((step) => step.id === id);
       return `<button class="pmr-link" data-select="${escape(id)}">${escape(nodes.find((item) => item.id === id)?.label ?? id)}</button>${index < 0 ? '' : ` (étape ${index + 1})`}`;
@@ -438,8 +438,8 @@ export function mount(container: HTMLElement, api: Host) {
       const list = (items: string[]) => `<ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>`;
       const when = needs.length ? `<p>Remplie si :</p>${list(needs)}` : '';
       const except = unless.length ? `<p>Sauf :</p>${list(unless)}` : '';
-      const why = serves.length ? `<p>Sert à établir ${serves.join(' et ')}.</p>` : '';
-      return when || except || why ? `<div class="pmr-phase-rule">${why}${when}${except}</div>` : '';
+      const why = `<p>Sert à établir ${serves.length ? serves.join(' et ') : 'la réponse'}.</p>`;
+      return `<div class="pmr-phase-rule">${when}${except}${why}</div>`;
     };
     const stage = (node: GraphNode) => {
       const mine = entriesOf(node);
@@ -465,7 +465,7 @@ export function mount(container: HTMLElement, api: Host) {
     const loose = visibleIssues().filter((issue) => !placed.has(issue.id) && !issue.path.startsWith('hypotheses'));
     const tested = visibleIssues().filter((issue) => issue.path.startsWith('hypotheses'));
     const dismissed = (snapshot?.issues ?? []).filter((issue) => dismissedIds().has(issue.id));
-    detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${answer ? `<section class="pmr-part">${answer}</section>` : ''}${loose.length ? `<section class="pmr-part"><h4>À corriger</h4>${issueList(loose)}</section>` : ''}${stages ? `<section class="pmr-part"><h4>Étapes du raisonnement</h4><p class="pmr-muted">La réponse dépend de l’étape 1. Chaque étape est remplie quand ses conditions le sont : une condition est un fait prouvé par une pièce, ou une autre étape.</p>${stages}</section>` : ''}${trials || tested.length ? `<section class="pmr-part"><h4>Hypothèses</h4>${issueList(tested, false, true)}${trials}</section>` : ''}${rest ? `<section class="pmr-part"><h4>Autres vérifications</h4>${rest}</section>` : ''}${dismissed.length ? `<details class="pmr-part"><summary class="pmr-muted">Ignorées par vous (${dismissed.length})</summary>${issueList(dismissed, true)}</details>` : ''}`;
+    detail.innerHTML = `${run}${entries.length ? '' : '<p class="pmr-muted">Le test relit chaque source et chaque pièce, puis exécute le raisonnement sur le dossier.</p>'}${loose.length ? `<section class="pmr-part"><h4>À corriger</h4>${issueList(loose)}</section>` : ''}${stages ? `<section class="pmr-part"><h4>Étapes du raisonnement</h4><p class="pmr-muted">Le raisonnement part des faits et monte, étape par étape, jusqu’à la réponse. Chaque étape est remplie quand ses conditions le sont : une condition est un fait prouvé par une pièce, ou une étape précédente.</p>${stages}</section>` : ''}${answer ? `<section class="pmr-part"><h4>Réponse</h4>${answer}</section>` : ''}${trials || tested.length ? `<section class="pmr-part"><h4>Hypothèses</h4>${issueList(tested, false, true)}${trials}</section>` : ''}${rest ? `<section class="pmr-part"><h4>Autres vérifications</h4>${rest}</section>` : ''}${dismissed.length ? `<details class="pmr-part"><summary class="pmr-muted">Ignorées par vous (${dismissed.length})</summary>${issueList(dismissed, true)}</details>` : ''}`;
   };
 
   const paintView = () => {
