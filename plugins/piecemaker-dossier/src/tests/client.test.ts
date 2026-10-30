@@ -27,23 +27,36 @@ beforeEach(() => {
 
 afterEach(() => { unmount(container); dom.window.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-describe('Index', () => {
-  it('opens the tabular index of the case from the button', async () => {
+describe('Chronologie', () => {
+  it('shows the index in the dossier without opening the tabular analysis', async () => {
     vi.stubGlobal('Event', dom.window.Event);
-    const tab = dom.window.document.createElement('button');
-    tab.setAttribute('role', 'tab');
-    tab.setAttribute('aria-label', 'Analyse Tabulaire');
-    const opened = vi.fn();
-    tab.addEventListener('click', opened);
-    dom.window.document.body.append(tab);
     const shown = vi.fn();
     dom.window.addEventListener('piecemaker:tabular-review-show', shown);
+    (dom.window as unknown as Record<string, unknown>).__piecemakerDossierView = 'chronology';
+    vi.spyOn(knowledgeApi, 'graph').mockResolvedValue({ ...graph, nodes: [{ projectId: graph.projectId, id: 'doc', kind: 'document', label: 'Contrat', aliases: [], data: {}, date: '2024-03-05', createdAt: '', updatedAt: '' }] } as never);
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => undefined, rpc: vi.fn(), openFileInEditor: vi.fn() } as never);
-    await vi.waitFor(() => expect(container.querySelector('[data-action="open-index"]')).not.toBeNull());
-    container.querySelector<HTMLElement>('[data-action="open-index"]')!.click();
-    expect((dom.window as unknown as Record<string, unknown>).__piecemakerTabularReviewShow).toEqual({ project: '/dossier-exemple', index: true });
-    expect(opened).toHaveBeenCalledOnce();
-    expect(shown).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(container.querySelector('.pmd-chronology-table')).not.toBeNull());
+    expect(container.querySelector('[data-action="chronology-tabular"]')).toBeNull();
+    expect(shown).not.toHaveBeenCalled();
+  });
+});
+
+describe('Nature du document', () => {
+  it('changes the nature from the pill without opening the document', async () => {
+    vi.stubGlobal('Event', dom.window.Event);
+    (dom.window as unknown as Record<string, unknown>).__piecemakerDossierView = 'chronology';
+    vi.spyOn(knowledgeApi, 'graph').mockResolvedValue({ ...graph, nodes: [{ projectId: graph.projectId, id: 'doc', kind: 'document', label: 'Contrat', aliases: [], data: { nature: 'contrat', localisation: 'Paris' }, date: '2024-03-05', createdAt: '', updatedAt: '' }], links: [] });
+    const update = vi.spyOn(knowledgeApi, 'update').mockResolvedValue(undefined as never);
+    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => undefined });
+    await vi.waitFor(() => expect(container.querySelector('[data-edit-nature]')).not.toBeNull());
+    container.querySelector<HTMLElement>('[data-edit-nature]')!.click();
+    const select = container.querySelector<HTMLSelectElement>('[data-nature-select]')!;
+    select.click();
+    expect(container.querySelector('.pmd-modal')).toBeNull();
+    select.value = 'facture';
+    select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(update.mock.calls[0][1]).toEqual([{ op: 'upsertNode', node: expect.objectContaining({ id: 'doc', date: '2024-03-05', data: { nature: 'facture', localisation: 'Paris' } }) }]);
   });
 });
 

@@ -293,9 +293,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
     }
     const target = volet === 'tabular-review'
       ? { tab: 'plugin:piecemaker-tabular-review', review: review ? path.basename(review) : undefined }
-      : volet === 'index'
-        ? { tab: 'plugin:piecemaker-tabular-review', view: 'index' }
-        : { tab: 'plugin:piecemaker-dossier', view: 'general' };
+      : { tab: 'plugin:piecemaker-dossier', view: volet === 'index' ? 'chronology' : 'general' };
     const requestTarget = { cwd: process.cwd(), ...target };
     const alreadyOpen = await waitForOpenPanel(requestTarget, openPanelsPath, 0);
     const opened = alreadyOpen || await openPanelAndWait({ project: process.cwd(), ...target }, openPanelsTimeoutMs, openPanelsPath);
@@ -304,8 +302,8 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
   });
 
   server.registerTool('chronologie', {
-    description: 'Dates et libellés des pièces du dossier, en base. Ouvre l’index du dossier à côté du chat. '
-      + 'Ne lit pas les pièces et ne change pas les cellules de l’index : pour la lecture intégrale de toutes les pièces, avec chronologie et tri, utiliser tabular_review, action index. '
+    description: 'Dates et libellés des pièces du dossier, affichés à l’avocat dans le volet Dossier. '
+      + 'Ne lit pas les pièces : pour la lecture intégrale de toutes les pièces, avec chronologie et tri, utiliser tabular_review, action index. '
       + 'lister : id, date, libellé et nature de chaque pièce, par date. '
       + 'modifier : change la date (AAAA-MM-JJ, vide pour l’effacer) ou le libellé d’une pièce ; '
       + 'changer le libellé (AAAA-MM-JJ_titre) renomme aussi le fichier.',
@@ -405,7 +403,9 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
         return { content: [{ type: 'text', text: `Analyse affichée dans le volet Tabular Review. Contenu : « ${REVIEW_FOLDER}/${name} ».` }] };
       }
       const result = await tabularFn({ ...input, ...(fichier ? { fichier } : {}), action, project: resolved });
-      if (action === 'index' || (action === 'preparer' && result.fichier)) {
+      if (action === 'index') {
+        await openPanelAndWait({ project: resolved, tab: 'plugin:piecemaker-dossier', view: 'chronology' }, openPanelsTimeoutMs, openPanelsPath);
+      } else if (action === 'preparer' && result.fichier) {
         await openPanelAndWait({ project: resolved, tab: 'plugin:piecemaker-tabular-review', review: result.fichier, draft: result.projet }, openPanelsTimeoutMs, openPanelsPath);
       }
       return { content: [{ type: 'text', text: Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result) }] };

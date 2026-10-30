@@ -162,10 +162,10 @@ test('afficher vérifie le fichier et, sans cible, liste les volets ouverts', as
   const missing = await client.callTool({ name: 'afficher', arguments: { fichier: 'absent.docx' } });
   assert.equal(missing.isError, true);
   publishOpenPanels(openPanelsPath, process.cwd(), {
-    panels: ['plugin:piecemaker-tabular-review'],
+    panels: ['plugin:piecemaker-dossier'],
     document: null,
-    focus: { 'plugin:piecemaker-tabular-review': { view: 'index' } },
-    last: { kind: 'panel', tab: 'plugin:piecemaker-tabular-review' },
+    focus: { 'plugin:piecemaker-dossier': { view: 'chronology' } },
+    last: { kind: 'panel', tab: 'plugin:piecemaker-dossier' },
   });
   const panel = await client.callTool({ name: 'afficher', arguments: { volet: 'index' } });
   assert.deepEqual(panel.content, [{ type: 'text', text: 'Volet affiché : index' }]);
@@ -185,12 +185,12 @@ test('volets_ouverts décrit les volets du dossier de la session', async () => {
     '/dossiers/Dupont': {
       panels: ['plugin:piecemaker-dossier', 'plugin:piecemaker-tabular-review'],
       document: null,
-      focus: { 'plugin:piecemaker-dossier': { view: 'general' }, 'plugin:piecemaker-tabular-review': { file: '/dossiers/Dupont/Tabular Review/baux.json' } },
+      focus: { 'plugin:piecemaker-dossier': { view: 'chronology' }, 'plugin:piecemaker-tabular-review': { file: '/dossiers/Dupont/Tabular Review/baux.json' } },
       last: { kind: 'panel', tab: 'plugin:piecemaker-tabular-review' },
     },
   }));
   assert.equal(describeOpenPanels('/dossiers/Dupont/Actes', file), [
-    'Volets ouverts, dans l’ordre d’ouverture : Dossier (vue générale) ; Analyse tabulaire (fichier : Tabular Review/baux.json).',
+    'Volets ouverts, dans l’ordre d’ouverture : Dossier (index) ; Analyse tabulaire (fichier : Tabular Review/baux.json).',
     'Document affiché : aucun.',
     'Dernier ouvert, celui que l’avocat regarde : Analyse tabulaire (fichier : Tabular Review/baux.json).',
   ].join('\n'));

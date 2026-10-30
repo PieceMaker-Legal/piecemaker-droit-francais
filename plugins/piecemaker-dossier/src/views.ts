@@ -3,7 +3,7 @@ import { nodePosition } from './party-codes.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
 import type { CompanySearchResult, ScanJob } from './api.js';
 
-export type Tab = 'general';
+export type Tab = 'general' | 'chronology';
 export type BodaccScanState = {
   status: 'idle' | 'loading' | 'error';
   error?: string;
@@ -137,6 +137,7 @@ const bodaccSearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'general', label: 'Parties', icon: folderTreeIcon },
+  { id: 'chronology', label: 'Index', icon: calendarClockIcon },
 ];
 
 export function scanPercentLabel(job: ScanJob): string {
@@ -169,7 +170,6 @@ export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null,
     <div class="pmd-header">
       <div class="pmd-tabs" role="tablist">
         ${TABS.map(({ id, label, icon }) => `<button type="button" class="pmd-tab piecemaker-button piecemaker-button--sm" role="tab" data-tab="${id}" aria-selected="${active === id}" tabindex="${active === id ? 0 : -1}">${icon}<span>${label}</span></button>`).join('')}
-        <button type="button" class="pmd-tab piecemaker-button piecemaker-button--sm" role="tab" data-action="open-index" aria-selected="false" tabindex="-1" title="Ouvrir l’index du dossier dans l’analyse tabulaire">${calendarClockIcon}<span>Index</span></button>
         <button class="pmd-button pmd-agents-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="agents"><span>▤</span> Agents.md</button>
       </div>
       <div class="pmd-scan-status" data-ready="${scanned || mappingCount > 0}" data-scanning="${scanning}">
@@ -270,11 +270,20 @@ export function mappingView(data: ViewData): string {
 }
 
 export const PIECE_NATURES = ['assignation', 'conclusions', 'requête', 'courrier', 'courriel', 'mise en demeure', 'contrat', 'facture', 'devis', 'attestation', 'jugement', 'arrêt', 'ordonnance', 'procès-verbal', 'constat', 'expertise', 'statuts de société', 'extrait Kbis', 'relevé bancaire', 'acte notarié', 'bordereau de pièces'];
+export const CUSTOM_NATURE = '__piecemaker_custom_nature__';
 
 export function natureOptionsMarkup(nature: string): string {
   return [...new Set([nature, ...PIECE_NATURES].filter(Boolean))]
     .sort((left, right) => left.localeCompare(right, 'fr', { sensitivity: 'base' }))
     .map((value) => `<option value="${escapeHtml(value)}" ${value === nature ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
+}
+
+export function natureSelectMarkup(node: KnowledgeNode): string {
+  return `<select class="pmd-nature-select" data-nature-select="${escapeHtml(node.id)}" aria-label="Nature de ${escapeHtml(node.label)}"><option value="">— Aucune —</option>${natureOptionsMarkup(textValue(node.data.nature))}<option value="${CUSTOM_NATURE}">Autre type…</option></select>`;
+}
+
+export function natureInputMarkup(nodeId: string): string {
+  return `<input class="pmd-nature-select" data-nature-input="${escapeHtml(nodeId)}" aria-label="Type de pièce personnalisé" placeholder="Saisissez le type de pièce">`;
 }
 
 /** Nom proposé `AAAA-MM-JJ_<Type>[ - <lieu>]`, vide tant que la date ou le type manque. */
@@ -284,4 +293,62 @@ export function proposedPieceName(date: string, nature: string, localisation: st
   const place = localisation.trim();
   const title = `${type.charAt(0).toLocaleUpperCase('fr')}${type.slice(1)}${place && !/\b[A-Z][A-Z_]*_\d+\b/.test(place) ? ` - ${place}` : ''}`;
   return `${date}_${title.replace(/[\\/:*?"<>|]/g, '-')}`;
+}
+
+function chronologyDateLabel(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+}
+
+function chronologyFields(node: KnowledgeNode): { label: string; value: string }[] {
+  const fields = Array.isArray(node.data.fields) ? node.data.fields : [];
+  return fields.filter((field): field is { label: string; value: string } => Boolean(field) && typeof field === 'object' && typeof (field as { label?: unknown }).label === 'string' && typeof (field as { value?: unknown }).value === 'string');
+}
+
+const MENTION_FIELD = /^(siren|siret)$/i;
+
+function chronologyMentions(node: KnowledgeNode, related: KnowledgeNode[]): string[] {
+  const mentions = [...new Set([...related.map((entry) => entry.label), textValue(node.data.localisation)].filter(Boolean))];
+  const identifiers = chronologyFields(node).filter((field) => MENTION_FIELD.test(field.label) && field.value && !mentions.includes(field.value));
+  return [...mentions, ...identifiers.map((field) => `${field.label} ${field.value}`)];
+}
+
+function chronologyFolder(node: KnowledgeNode, projectPath: string): string {
+  const current = textValue(node.data.path).replace(/\\/g, '/');
+  const root = projectPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const relative = root && current.startsWith(`${root}/`) ? current.slice(root.length + 1) : current;
+  return relative.includes('/') ? relative.slice(0, relative.lastIndexOf('/')) : '';
+}
+
+function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string): string {
+  const related = links
+    .filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id))
+    .map((link) => byId.get(link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId))
+    .filter((entry): entry is KnowledgeNode => Boolean(entry && entry.kind !== 'document'));
+  const date = dateFor(node);
+  const fields = chronologyFields(node);
+  const fieldCells = fieldLabels.map((label) => `<td>${escapeHtml(fields.find((field) => field.label === label)?.value ?? '')}</td>`).join('');
+  const nature = textValue(node.data.nature);
+  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(node.label)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td><td>${escapeHtml(chronologyFolder(node, projectPath) || 'Non classé')}</td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
+}
+
+function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string): string {
+  if (!nodes.length) return '<div class="pmd-empty">Aucun document indexé.</div>';
+  const fieldLabels = [...new Set(nodes.flatMap((node) => chronologyFields(node).map((field) => field.label)))].filter((label) => !MENTION_FIELD.test(label));
+  const heading = (label: string) => `<th scope="col">${escapeHtml(label)}</th>`;
+  return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${['Document', 'Date', 'Mentions'].map(heading).join('')}<th scope="col">Classement</th>${fieldLabels.map(heading).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links, projectPath)).join('')}</tbody></table></div>`;
+}
+
+export function chronologyView(data: ViewData, projectPath = ''): string {
+  const documents = data.graph.nodes.filter((node) => node.kind === 'document');
+  const dated = documents
+    .filter((node) => Boolean(dateFor(node)))
+    .sort((left, right) => dateFor(left).localeCompare(dateFor(right)) || left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
+  const undated = documents
+    .filter((node) => !dateFor(node))
+    .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
+  const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
+  return `
+    <div class="pmd-toolbar"><div class="pmd-subtitle">Classés du plus ancien au plus récent</div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
+    ${chronologyTable([...dated, ...undated], byId, data.graph.links, projectPath)}`;
 }

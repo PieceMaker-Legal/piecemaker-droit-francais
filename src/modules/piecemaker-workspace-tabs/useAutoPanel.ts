@@ -18,6 +18,8 @@ const MAX_AGE_MS = 120_000;
 const DOSSIER_TAB: AppTab = 'plugin:piecemaker-dossier';
 const TABULAR_REVIEW_TAB: AppTab = 'plugin:piecemaker-tabular-review';
 const TAMPON_TAB: AppTab = 'plugin:piecemaker-tampon';
+const DOSSIER_VIEW_EVENT = 'piecemaker:dossier-view';
+const DOSSIER_VIEW_KEY = '__piecemakerDossierView';
 const TABULAR_REVIEW_SHOW_EVENT = 'piecemaker:tabular-review-show';
 const TABULAR_REVIEW_SHOW_KEY = '__piecemakerTabularReviewShow';
 const TAMPON_SHOW_EVENT = 'piecemaker:tampon-show';
@@ -40,11 +42,9 @@ function show(target: AutoPanelTarget, state: AutoPanelState, toolId: string) {
   } else if (target.kind === 'plan') {
     showPlan(target.plan, toolId || state.sessionId || 'session');
   } else if (target.kind === 'dossier') {
+    pending[DOSSIER_VIEW_KEY] = target.view;
     state.openTab(DOSSIER_TAB);
-  } else if (target.kind === 'index') {
-    pending[TABULAR_REVIEW_SHOW_KEY] = { project: state.projectPath, index: true };
-    state.openTab(TABULAR_REVIEW_TAB);
-    window.dispatchEvent(new Event(TABULAR_REVIEW_SHOW_EVENT));
+    window.dispatchEvent(new Event(DOSSIER_VIEW_EVENT));
   } else if (target.kind === 'tampon') {
     pending[TAMPON_SHOW_KEY] = { project: state.projectPath };
     state.openTab(TAMPON_TAB);
@@ -104,10 +104,7 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
             openInEditor(request.document);
             handled = true;
           } else if (request.tab === DOSSIER_TAB) {
-            show({ kind: 'dossier' }, state.current, request.id);
-            handled = true;
-          } else if (request.tab === TABULAR_REVIEW_TAB && request.view === 'index') {
-            show({ kind: 'index' }, state.current, request.id);
+            show({ kind: 'dossier', view: request.view === 'chronology' ? 'chronology' : 'general' }, state.current, request.id);
             handled = true;
           } else if (request.tab === TABULAR_REVIEW_TAB) {
             show({ kind: 'tabular-review', review: request.review ?? null, ...(request.draft ? { draft: request.draft } : {}) }, state.current, request.id);

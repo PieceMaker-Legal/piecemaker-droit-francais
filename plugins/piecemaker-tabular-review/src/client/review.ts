@@ -5,13 +5,11 @@ import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadB
 import { anonymizationProxyOrigin, caseFiles, loadModels } from './host.js';
 import type { ModelOption } from './host.js';
 import { openDocumentsDrawer } from './documents-drawer.js';
-import { CUSTOM_NATURE, natureField, nodeOfRow } from './nature.js';
-import type { DocumentNode } from './nature.js';
 import { nextSort, sortBy, sortButton } from './ordering.js';
 import type { SortState } from './ordering.js';
 import { openQuestionsDrawer } from './questions-drawer.js';
 import { actionValue, classifiedFolder, newNotes, newPieces, pieceOf, plannedChange, targetPath } from './sorting.js';
-import type { CasePiece, PlannedChange } from './sorting.js';
+import type { PlannedChange } from './sorting.js';
 import { selectMenu } from './select-menu.js';
 
 const POLL_INTERVAL = 2500;
@@ -110,8 +108,6 @@ export function createReviewView(app: App, project: string, file: string, onBack
   let researchTimer = 0;
   let questionDrafts: Record<string, string> = {};
   let sort: SortState = null;
-  let natures: { pieces: CasePiece[]; nodes: DocumentNode[] } | null = null;
-  let natureEdit: { id: string; custom: boolean } | null = null;
 
   async function loadChoiceModels(provider: Provider) {
     models = { provider, options: [], cheapest: '' };
@@ -256,7 +252,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
             <thead><tr><th scope="col"><div class="ptr-th-sortable"><span>${research ? 'Décision' : 'Document'}</span>${sortButton(sort, 'label', 'document')}</div></th>${review.columns.map(columnHeading).join('')}<th scope="col" class="ptr-add-col"><button type="button" class="ptr-add" data-add-questions title="Ajouter des questions (colonnes)">+ Question</button>${research || classification ? '' : ' <button type="button" class="ptr-add" data-add-classification title="Ajouter la colonne de classement dans l’arborescence du dossier">+ Classement</button>'}</th></tr></thead>
             <tbody>${sortBy(review.rows, sort, (row, key) => key === 'label' ? row.label : review.cells[row.id]?.[key.slice(1)]?.summary ?? '').map((row) => `
               <tr>
-                <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${natureMarkup(row)}${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${(sorting && row.piece) || classifiedFolder(review, row) ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>
+                <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${(sorting && row.piece) || classifiedFolder(review, row) ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>
                 ${review.columns.map((column) => {
                   const cell = review.cells[row.id]?.[String(column.index)];
                   const isSelected = selected?.row === row.id && selected.column === column.index;
@@ -303,7 +299,6 @@ export function createReviewView(app: App, project: string, file: string, onBack
       if (!detail && isCaseIndex(next.review)) {
         const date = next.review.columns.find((column) => column.format === 'date');
         if (date) sort = { key: `c${date.index}`, direction: 1 };
-        void loadNatures();
       }
       detail = next;
       render();
@@ -414,31 +409,6 @@ export function createReviewView(app: App, project: string, file: string, onBack
     await action(async () => {
       applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/research', { project, file, filters: { dateDebut: start, dateFin: end, sources } }));
     });
-  }
-
-  function natureMarkup(row: ReviewRow): string {
-    const node = natures && nodeOfRow(row, natures.pieces, natures.nodes, project);
-    return node ? natureField(node, natureEdit?.id === node.id ? natureEdit : null) : '';
-  }
-
-  async function loadNatures() {
-    try {
-      const id = await projectId();
-      const [pieces, nodes] = await Promise.all([caseFiles.pieces(id), caseFiles.documentNodes(id)]);
-      natures = { pieces, nodes };
-      if (!destroyed) render();
-    } catch (error) {
-      toast(app.root, errorMessage(error), 'error');
-    }
-  }
-
-  async function saveNature(nodeId: string, nature: string) {
-    const node = natures?.nodes.find((entry) => entry.id === nodeId);
-    natureEdit = null;
-    if (!node) return;
-    await caseFiles.saveNature(await projectId(), node, nature);
-    node.data = { ...node.data, nature: nature || null };
-    render();
   }
 
   async function projectId(): Promise<string> {
@@ -594,21 +564,6 @@ export function createReviewView(app: App, project: string, file: string, onBack
 
   element.addEventListener('change', (event) => {
     const target = event.target as HTMLElement;
-    const natureNode = target.dataset.natureSelect ?? target.dataset.natureInput;
-    if (natureNode) {
-      const value = (target as HTMLInputElement).value.trim();
-      if (value === CUSTOM_NATURE) {
-        natureEdit = { id: natureNode, custom: true };
-        render();
-        element.querySelector<HTMLElement>('[data-nature-input]')?.focus();
-      } else if (!value && target.dataset.natureInput) {
-        natureEdit = null;
-        render();
-      } else {
-        void saveNature(natureNode, value).catch((error) => toast(app.root, errorMessage(error), 'error'));
-      }
-      return;
-    }
     if (target.matches('[data-column-prompt], [data-column-title]')) {
       const index = target.dataset.columnPrompt ?? target.dataset.columnTitle ?? '';
       const prompt = element.querySelector<HTMLTextAreaElement>(`[data-column-prompt="${index}"]`)?.value ?? '';
@@ -641,14 +596,6 @@ export function createReviewView(app: App, project: string, file: string, onBack
 
   element.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    if (target.closest('[data-nature-select],[data-nature-input]')) return;
-    const editNature = target.closest<HTMLElement>('[data-edit-nature]');
-    if (editNature || natureEdit) {
-      natureEdit = editNature ? { id: editNature.dataset.editNature ?? '', custom: false } : null;
-      render();
-      element.querySelector<HTMLElement>('[data-nature-select]')?.focus();
-      if (editNature) return;
-    }
     const option = target.closest<HTMLButtonElement>('[data-choice-option]');
     if (option && !option.disabled && choice) {
       if (option.dataset.choiceOption === 'provider') {

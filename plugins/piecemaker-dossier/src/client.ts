@@ -1,10 +1,10 @@
 import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
-import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
+import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { escapeHtml, generalView, mappingView, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
+import { CUSTOM_NATURE, chronologyView, escapeHtml, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
 import type { BodaccScanState, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -24,12 +24,18 @@ type PluginApi = {
 
 const PANEL_FOCUS_EVENT = 'piecemaker:panel-focus';
 const KNOWLEDGE_SCAN_EVENT = 'piecemaker:knowledge-scan-job';
-const TABULAR_SHOW_KEY = '__piecemakerTabularReviewShow';
-const TABULAR_SHOW_EVENT = 'piecemaker:tabular-review-show';
-const TABULAR_TAB_LABEL = 'Analyse Tabulaire';
+const VIEW_EVENT = 'piecemaker:dossier-view';
+const VIEW_KEY = '__piecemakerDossierView';
 const SCAN_POLL_INTERVAL_MS = 1000;
 const VERSION_POLL_INTERVAL_MS = 5000;
 const viewCache = new Map<string, ViewData>();
+
+function takeRequestedView(): Tab | null {
+  const pending = window as Window & { [VIEW_KEY]?: unknown };
+  const view = pending[VIEW_KEY];
+  delete pending[VIEW_KEY];
+  return view === 'general' || view === 'chronology' ? view : null;
+}
 
 export function mount(container: HTMLElement, api: PluginApi): void {
   const style = document.createElement('style');
@@ -39,7 +45,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   root.style.position = 'relative';
   container.replaceChildren(style, root);
   let context = api.context;
-  const active: Tab = 'general';
+  let active: Tab = takeRequestedView() ?? 'general';
   let data: ViewData | null = null;
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
@@ -204,6 +210,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     await load();
   };
 
+  const renamePiece = async (piecePath: string, name: string) => {
+    if (!context.project) return;
+    viewCache.delete(context.project.name);
+    await knowledgeApi.rename(context.project.name, piecePath, name);
+    await load();
+  };
+
   const deleteNode = async (nodeId: string): Promise<boolean> => {
     const node = data?.graph.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) return false;
@@ -322,13 +335,48 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (!content) return;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
     else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
-    else content.innerHTML = generalView(data, tiersCollapsed, scanJob, bodaccStates);
+    else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
+  };
+
+  const saveNature = async (nodeId: string, nature: string) => {
+    const node = data?.graph.nodes.find((entry) => entry.id === nodeId);
+    if (!node) return;
+    await save([{ op: 'upsertNode', node: { id: node.id, kind: 'document', label: node.label, aliases: node.aliases, data: { ...node.data, nature: nature || null }, date: node.date } }]);
   };
 
   const bindOnce = () => {
+    root.addEventListener('change', (event) => {
+      const field = event.target as HTMLInputElement;
+      const nodeId = field.dataset?.natureSelect ?? field.dataset?.natureInput;
+      if (!nodeId) return;
+      const value = field.value.trim();
+      if (value === CUSTOM_NATURE) {
+        field.parentElement!.innerHTML = natureInputMarkup(nodeId);
+        root.querySelector<HTMLElement>('[data-nature-input]')?.focus();
+        return;
+      }
+      if (!value && field.dataset.natureInput) {
+        paintContent();
+        return;
+      }
+      void saveNature(nodeId, value).catch(showError);
+    });
     root.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
       if (target.closest('.pmd-modal')) return;
+      if (target.closest('[data-nature-select],[data-nature-input]')) return;
+      if (root.querySelector('[data-nature-select],[data-nature-input]')) {
+        paintContent();
+        return;
+      }
+      const editNature = target.closest<HTMLElement>('[data-edit-nature]');
+      if (editNature) {
+        const node = data?.graph.nodes.find((entry) => entry.id === editNature.dataset.editNature);
+        if (!node) return;
+        editNature.parentElement!.innerHTML = natureSelectMarkup(node);
+        root.querySelector<HTMLElement>('[data-nature-select]')?.focus();
+        return;
+      }
       const nodeMenu = target.closest<HTMLElement>('[data-node-menu]');
       if (nodeMenu) {
         const menu = nodeMenu.parentElement?.querySelector<HTMLElement>('.pmd-profile-menu');
@@ -337,6 +385,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         return;
       }
       closeOpenMenus();
+      const tab = target.closest<HTMLElement>('[data-tab]');
+      if (tab?.dataset.tab) {
+        active = tab.dataset.tab as Tab;
+        paintTabs();
+        paintContent();
+        return;
+      }
       const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
       if (action === 'company-search') {
         const button = target.closest<HTMLElement>('[data-scan-company]');
@@ -391,17 +446,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       if (action === 'refresh') {
         if (context.project) viewCache.delete(context.project.name);
         void load();
-        return;
-      }
-      if (action === 'open-index') {
-        const tab = Array.from(document.querySelectorAll<HTMLElement>('[role="tab"]')).find((element) => element.getAttribute('aria-label') === TABULAR_TAB_LABEL);
-        if (!context.project || !tab) {
-          showError('Le volet Analyse Tabulaire n’est pas disponible.');
-          return;
-        }
-        (window as Window & { [TABULAR_SHOW_KEY]?: unknown })[TABULAR_SHOW_KEY] = { project: context.project.path, index: true };
-        tab.click();
-        window.dispatchEvent(new Event(TABULAR_SHOW_EVENT));
         return;
       }
       if (action === 'toggle-tiers') {
@@ -492,6 +536,17 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         const nodeId = deleteTrigger.dataset.deleteNode;
         if (nodeId) void deleteNode(nodeId).catch(showError);
         return;
+      }
+      const editDocument = target.closest<HTMLElement>('[data-edit-document]');
+      if (editDocument) {
+        const node = data?.graph.nodes.find((entry) => entry.id === editDocument.dataset.editDocument);
+        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece);
+        return;
+      }
+      const openDocument = target.closest<HTMLElement>('[data-open-document]');
+      if (openDocument) {
+        const node = data?.graph.nodes.find((entry) => entry.id === openDocument.dataset.openDocument);
+        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece);
       }
     });
     root.addEventListener('dragstart', (event) => {
@@ -600,6 +655,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     void load();
   };
   const versionTimer = window.setInterval(() => void refreshWhenChanged(), VERSION_POLL_INTERVAL_MS);
+  const showRequestedView = () => {
+    const view = takeRequestedView();
+    if (!view) return;
+    active = view;
+    render();
+  };
+  window.addEventListener(VIEW_EVENT, showRequestedView);
+
   render();
   void load();
   void resumeScan();
@@ -621,6 +684,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     unsubscribe();
     compactWorkspace.removeEventListener('change', syncTiersWithWorkspaceWidth);
     window.clearInterval(versionTimer);
+    window.removeEventListener(VIEW_EVENT, showRequestedView);
   };
 }
 

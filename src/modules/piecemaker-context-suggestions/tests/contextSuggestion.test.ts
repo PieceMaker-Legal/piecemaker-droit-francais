@@ -44,14 +44,14 @@ describe('question proposée selon le dernier volet ouvert', () => {
     expect(question()).toBeNull();
   });
 
-  it('cible l’index et le tableau affichés par les plugins', () => {
+  it('cible la chronologie et le tableau affichés par les plugins', () => {
     start();
     syncPanels(PROJECT, ['plugin:piecemaker-dossier']);
     expect(question()).toBeNull();
+    focus({ tab: 'plugin:piecemaker-dossier', view: 'chronology' });
+    expect(question()).toBe('Vérifie l’index du dossier : dates manquantes, incohérences et trous.');
     syncPanels(PROJECT, ['plugin:piecemaker-dossier', 'plugin:piecemaker-tabular-review']);
     expect(question()).toBe('Prépare une analyse tabulaire des documents du dossier.');
-    focus({ tab: 'plugin:piecemaker-tabular-review', file: `${PROJECT}/Tabular Review/index.json`, view: 'index' });
-    expect(question()).toBe('Vérifie l’index du dossier : dates manquantes, incohérences et trous.');
     focus({ tab: 'plugin:piecemaker-tabular-review', file: `${PROJECT}/Tabular Review/baux.json` });
     expect(question()).toBe('Analyse le tableau @"Tabular Review/baux.json" : quelles lignes méritent mon attention ?');
   });
@@ -59,9 +59,9 @@ describe('question proposée selon le dernier volet ouvert', () => {
   it('ne vole pas le premier plan quand un plugin republie le même état', () => {
     start();
     syncPanels(PROJECT, ['plugin:piecemaker-dossier']);
-    focus({ tab: 'plugin:piecemaker-dossier', view: 'general' });
+    focus({ tab: 'plugin:piecemaker-dossier', view: 'chronology' });
     syncPanels(PROJECT, ['plugin:piecemaker-dossier', 'files']);
-    focus({ tab: 'plugin:piecemaker-dossier', view: 'general' });
+    focus({ tab: 'plugin:piecemaker-dossier', view: 'chronology' });
     expect(question()).toBe('Propose-moi une réorganisation de mes documents en dossiers clairs.');
   });
 });

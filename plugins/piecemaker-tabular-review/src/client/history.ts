@@ -1,5 +1,5 @@
 import type { Draft, ReviewCategory, ReviewSummary } from '../shared.js';
-import { CATEGORY_LABELS, DEFAULT_MODEL, DEFAULT_PROVIDER, reviewStatusLabel } from '../shared.js';
+import { CATEGORY_LABELS, DEFAULT_MODEL, DEFAULT_PROVIDER, isCaseIndex, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, formatDate, toast } from './dom.js';
 import type { HostProject } from './host.js';
@@ -99,7 +99,7 @@ export function createHistoryView(app: App): View {
         app.rpc<{ drafts: Draft[] }>('POST', '/drafts/list', { projects: selected }).catch(() => ({ drafts: [] })),
       ]);
       if (current !== request || destroyed) return;
-      reviews = [...drafts.drafts.map(draftEntry), ...result.reviews];
+      reviews = [...drafts.drafts.map(draftEntry), ...result.reviews].filter((entry) => !isCaseIndex(entry));
       render();
     } catch (error) {
       if (current !== request || destroyed) return;
