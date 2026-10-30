@@ -49,7 +49,7 @@ describe('question proposée selon le dernier volet ouvert', () => {
     syncPanels(PROJECT, ['plugin:piecemaker-dossier']);
     expect(question()).toBeNull();
     focus({ tab: 'plugin:piecemaker-dossier', view: 'chronology' });
-    expect(question()).toBe('Vérifie la chronologie du dossier : dates manquantes, incohérences et trous.');
+    expect(question()).toBe('Vérifie l’index du dossier : dates manquantes, incohérences et trous.');
     syncPanels(PROJECT, ['plugin:piecemaker-dossier', 'plugin:piecemaker-tabular-review']);
     expect(question()).toBe('Prépare une analyse tabulaire des documents du dossier.');
     focus({ tab: 'plugin:piecemaker-tabular-review', file: `${PROJECT}/Tabular Review/baux.json` });

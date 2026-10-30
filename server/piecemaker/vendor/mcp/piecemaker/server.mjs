@@ -155,7 +155,7 @@ const SQL_DESCRIPTION = [
   'piecemaker_citations(project_id, from_node_id, to_node_id, relation, texte, piece_id, source) : extraits qui justifient un lien, autant que voulu ; source = pièce (piece_id) ou référence libre.',
   'Dates automatiques. Renommer une pièce = UPDATE de son label (AAAA-MM-JJ_titre).',
   "Raisonnement du dossier (lecture seule, écrit par l'outil raisonnement et par l'avocat) : pm_reasoning_programs(project_id, name, revision, code, snapshot_json) = fichier .piecemaker/raisonnements/<name>.yaml vérifié, objet annoté et alertes ; pm_reasoning_dismissed(project_id, name, issue_id, path, text, at) = alertes écartées par l'avocat ; pm_reasoning_reliability(project_id, piece, reliable, at) = fiabilité des pièces fixée par l'avocat.",
-  "Suivi du dossier (lecture seule) : pm_suivi(project_id, revision, code, snapshot_json) = fichier .piecemaker/suivi.json vérifié, échéances calculées et alertes ; pm_suivi_faits(project_id, echeance, date, piece, at) = échéances marquées faites par l'avocat.",
+  "Suivi du dossier (lecture seule) : pm_suivi(project_id, fichier, revision, code, snapshot_json) = fichier .piecemaker/<nom>-suivi.json vérifié, échéances calculées et alertes ; pm_suivi_faits(project_id, fichier, echeance, date, piece, at) = échéances marquées faites par l'avocat.",
 ].join('\n');
 
 /**
@@ -232,9 +232,10 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
   });
 
   server.registerTool('suivi', {
-    description: 'verifier : vérifie le suivi du dossier (.piecemaker/suivi.json : matter, événements qui font courir un délai, échéances fixées ou calculées), recalcule chaque échéance et renvoie ses erreurs et manques, chacun localisé. lire et ecrire : lit ou écrit un document du tableau des dossiers (Matter board), par exemple projects/cabinet/requests/<id> ou projects/cabinet/docs/<id>/text.',
+    description: 'verifier : vérifie un suivi du dossier (.piecemaker/<nom>-suivi.json : matter, événements qui font courir un délai, échéances fixées ou calculées), recalcule chaque échéance et renvoie ses erreurs et manques, chacun localisé. lire et ecrire : lit ou écrit un document du tableau des dossiers (Matter board), par exemple projects/cabinet/requests/<id> ou projects/cabinet/docs/<id>/text.',
     inputSchema: {
       commande: z.enum(['verifier', 'lire', 'ecrire']),
+      suivi: z.string().optional().describe('Fichier à vérifier (ex. appel-suivi.json), requis quand le dossier compte plusieurs suivis.'),
       chemin: z.string().optional().describe('Chemin du document du tableau, pour lire et ecrire.'),
       donnees: z.record(z.string(), z.unknown()).optional().describe('Objet JSON à écrire, pour ecrire.'),
       dossier: DOSSIER_SCHEMA,
@@ -302,7 +303,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
 
   server.registerTool('chronologie', {
     description: 'Dates et libellés des pièces du dossier, affichés à l’avocat dans le volet Dossier. '
-      + 'Ne lit pas les pièces : pour la lecture intégrale de toutes les pièces, avec chronologie et tri, utiliser tabular_review, action inventaire. '
+      + 'Ne lit pas les pièces : pour la lecture intégrale de toutes les pièces, avec chronologie et tri, utiliser tabular_review, action index. '
       + 'lister : id, date, libellé et nature de chaque pièce, par date. '
       + 'modifier : change la date (AAAA-MM-JJ, vide pour l’effacer) ou le libellé d’une pièce ; '
       + 'changer le libellé (AAAA-MM-JJ_titre) renomme aussi le fichier.',
@@ -336,15 +337,15 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       + 'documents : documents analysables. modeles : liste, ou questions d’un modele. enregistrer_modele : crée, ou modifie modele. '
       + 'preparer : crée ou complète (projet) un projet, que l’avocat vérifie et lance. '
       + 'lancer : seulement sur accord explicite de l’avocat dans le chat. '
-      + 'inventaire : retrouve et affiche l’inventaire intégral des pièces, la seule analyse qui lit toutes les pièces du dossier, une ligne par pièce (date, événement, importance, secret professionnel, classement), pour la chronologie et le tri ; préparée si besoin ; ne jamais en créer une autre. '
-      + 'preparer renvoie cette analyse si on lui demande un inventaire intégral, une chronologie ou un tri. '
+      + 'index : retrouve et affiche l’index du dossier, la seule analyse qui lit toutes les pièces du dossier, une ligne par pièce (date, événement, importance, secret professionnel, classement), pour la chronologie et le tri ; préparée si besoin ; ne jamais en créer une autre. '
+      + 'preparer renvoie cette analyse si on lui demande un index, une lecture intégrale, une chronologie ou un tri. '
       + 'lire : colonnes, lignes et réponses de fichier. '
       + 'colonnes : ajoute (sans colonne), modifie ou supprime (colonne, supprimer) les colonnes de fichier. '
-      + 'classement : ajoute à l’inventaire intégral (fichier) la colonne qui classe chaque document dans l’arborescence du dossier. '
+      + 'classement : ajoute à l’index (fichier) la colonne qui classe chaque document dans l’arborescence du dossier. '
       + 'arborescence : lit, ou remplace avec dossiers, l’arborescence ; aucun fichier n’est déplacé, l’avocat applique dans le volet. '
       + 'relancer : seulement sur accord explicite de l’avocat ; analyse les nouveaux documents Markdown de fichier.',
     inputSchema: {
-      action: z.enum(['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'inventaire', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer']),
+      action: z.enum(['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'index', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer']),
       dossier: DOSSIER_SCHEMA,
       fichier: z.string().optional(),
       projet: z.string().optional().describe('Id d’un projet non lancé.'),
@@ -402,7 +403,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
         return { content: [{ type: 'text', text: `Analyse affichée dans le volet Tabular Review. Contenu : « ${REVIEW_FOLDER}/${name} ».` }] };
       }
       const result = await tabularFn({ ...input, ...(fichier ? { fichier } : {}), action, project: resolved });
-      if (action === 'inventaire' || (action === 'preparer' && result.fichier)) {
+      if (action === 'index' || (action === 'preparer' && result.fichier)) {
         await openPanelAndWait({ project: resolved, tab: 'plugin:piecemaker-tabular-review', review: result.fichier, draft: result.projet }, openPanelsTimeoutMs, openPanelsPath);
       }
       return { content: [{ type: 'text', text: Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result) }] };

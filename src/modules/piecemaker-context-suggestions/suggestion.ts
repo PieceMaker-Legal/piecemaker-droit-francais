@@ -19,7 +19,7 @@ export function suggestQuestion(context: WorkspaceContext): string | null {
     case 'files':
       return 'Propose-moi une réorganisation de mes documents en dossiers clairs.';
     case 'plugin:piecemaker-dossier':
-      return focus?.view === 'chronology' ? 'Vérifie la chronologie du dossier : dates manquantes, incohérences et trous.' : null;
+      return focus?.view === 'chronology' ? 'Vérifie l’index du dossier : dates manquantes, incohérences et trous.' : null;
     case 'plugin:piecemaker-tabular-review':
       return focus?.file
         ? `Analyse le tableau ${mention(focus.file, project)} : quelles lignes méritent mon attention ?`

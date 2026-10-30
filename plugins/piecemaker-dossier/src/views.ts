@@ -137,7 +137,7 @@ const bodaccSearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'general', label: 'Parties', icon: folderTreeIcon },
-  { id: 'chronology', label: 'Chronologie', icon: calendarClockIcon },
+  { id: 'chronology', label: 'Index', icon: calendarClockIcon },
 ];
 
 export function scanPercentLabel(job: ScanJob): string {

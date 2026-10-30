@@ -326,12 +326,20 @@ export type RunRequest = {
   proxyOrigin: string;
 };
 
-export const INVENTORY_TEMPLATE_NAME = 'Inventaire intégral des pièces';
-export const LEGACY_INVENTORY_NAME = 'Chronologie';
+export const INDEX_TEMPLATE_NAME = 'Index';
+export const LEGACY_INDEX_NAME = 'Chronologie';
 
-export function isInventory(entry: { title: string; templateName: string; category?: unknown; mode?: unknown }): boolean {
+export function withIndexName<T extends { title: string; templateName: string }>(entry: T): T {
+  return {
+    ...entry,
+    title: entry.title === LEGACY_INDEX_NAME ? INDEX_TEMPLATE_NAME : entry.title,
+    templateName: entry.templateName === LEGACY_INDEX_NAME ? INDEX_TEMPLATE_NAME : entry.templateName,
+  };
+}
+
+export function isCaseIndex(entry: { title: string; templateName: string; category?: unknown; mode?: unknown }): boolean {
   if (entry.category === 'recherche-juridique' || entry.mode === 'recherche') return false;
-  return [entry.templateName, entry.title].some((name) => name === INVENTORY_TEMPLATE_NAME || name === LEGACY_INVENTORY_NAME);
+  return [entry.templateName, entry.title].some((name) => name === INDEX_TEMPLATE_NAME || name === LEGACY_INDEX_NAME);
 }
 
 export const OPEN_EVENT = 'piecemaker:tabular-review-open';

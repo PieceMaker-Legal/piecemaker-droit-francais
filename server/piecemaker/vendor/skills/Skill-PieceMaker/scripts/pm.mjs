@@ -9,8 +9,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'suivi', 'docx', 'acte'];
 const REASONING_COMMANDS = ['consignes', 'verifier', 'lister'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
-const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'inventaire', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer'];
-const REVIEW_FOLLOWED = ['inventaire', 'colonnes', 'classement', 'arborescence', 'relancer'];
+const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'index', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer'];
+const REVIEW_FOLLOWED = ['index', 'colonnes', 'classement', 'arborescence', 'relancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
 const BOOLEAN_FLAGS = new Set(['force', 'fermer']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
@@ -35,8 +35,9 @@ export const HELP = `Usage: pm <outil> [options]
   raisonnement lister
       un fichier par raisonnement : .piecemaker/raisonnements/NOM.yaml ;
       --raisonnement est requis quand le dossier en compte plusieurs
-  suivi verifier
-      vérifie .piecemaker/suivi.json (matter, événements et échéances du dossier)
+  suivi verifier [--suivi FICHIER]
+      vérifie un suivi : .piecemaker/<nom>-suivi.json (matter, événements et échéances) ;
+      --suivi est requis quand le dossier en compte plusieurs (ex. appel-suivi.json)
   suivi lire <chemin>
       lit un document du tableau des dossiers (ex. projects/cabinet/requests)
   suivi ecrire <chemin> --json '{...}'
@@ -511,7 +512,8 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       return api.suiviFn({ commande: 'ecrire', chemin: positional[2], donnees, cwd: path.resolve(resolved) });
     }
     if (positional[1] !== 'verifier') usage('suivi attend verifier, lire ou ecrire.');
-    return api.suiviFn({ commande: 'verifier', cwd: path.resolve(resolved) });
+    if (flags.suivi === true) usage('Indiquez une valeur pour --suivi.');
+    return api.suiviFn({ commande: 'verifier', cwd: path.resolve(resolved), ...(flags.suivi ? { suivi: String(flags.suivi) } : {}) });
   }
 
   usage(`Outil inconnu : ${tool}`);

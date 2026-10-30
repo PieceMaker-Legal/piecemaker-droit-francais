@@ -277,9 +277,9 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }
   }
 
-  async function openInventory(project: string) {
+  async function openCaseIndex(project: string) {
     try {
-      const { fichier, projet } = await app.rpc<{ fichier?: string; projet?: string }>('POST', '/assistant', { action: 'inventaire', project });
+      const { fichier, projet } = await app.rpc<{ fichier?: string; projet?: string }>('POST', '/assistant', { action: 'index', project });
       if (fichier) app.openReview(project, fichier);
       else if (projet) await openDraftById(project, projet);
     } catch (error) {
@@ -291,7 +291,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     const request = takeShowRequest();
     if (!request) return;
     if (request.project && request.chronology) {
-      void openInventory(request.project);
+      void openCaseIndex(request.project);
       return;
     }
     if (request.project && request.draft) {
@@ -312,7 +312,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   });
 
   showTab('history');
-  if (initialRequest?.project && initialRequest.chronology) void openInventory(initialRequest.project);
+  if (initialRequest?.project && initialRequest.chronology) void openCaseIndex(initialRequest.project);
   else if (initialRequest?.project && initialRequest.draft) void openDraftById(initialRequest.project, initialRequest.draft);
   else if (initialRequest?.project && initialRequest.review) app.openReview(initialRequest.project, initialRequest.review);
   else if (!initialRequest?.project) {

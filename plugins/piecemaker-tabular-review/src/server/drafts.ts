@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Draft, RowRequest, TemplateColumn } from '../shared.js';
+import { withIndexName } from '../shared.js';
 import { assertProject, PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 
 const DRAFTS_FILE = path.join(PLUGIN_HOME, 'drafts.json');
@@ -22,7 +23,7 @@ function saveDrafts(drafts: Draft[], file: string): void {
 
 export function listDrafts(projects: string[], file = DRAFTS_FILE): Draft[] {
   const wanted = new Set(projects);
-  return readDrafts(file).filter((draft) => wanted.has(draft.project));
+  return readDrafts(file).filter((draft) => wanted.has(draft.project)).map(withIndexName);
 }
 
 function kept(input: Record<string, unknown>, previous: Draft | undefined): Partial<Draft> {

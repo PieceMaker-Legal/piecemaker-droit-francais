@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Cell, Provider, Review, ReviewDetail, ReviewDocument, ReviewRow, ReviewStatus, ReviewSummary, RowRequest, Template } from '../shared.js';
-import { DOCS_FOLDER, emptyColumns, hasActions, isInventory, lastSearchDate, reviewCategory } from '../shared.js';
+import { DOCS_FOLDER, emptyColumns, hasActions, isCaseIndex, lastSearchDate, reviewCategory, withIndexName } from '../shared.js';
 import { resolveMarkdownDocument } from './documents.js';
 import { assertReviewFile, docsDirectory, documentPath, isInside, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
 import { MAX_COLUMNS, normalizeColumn } from './templates.js';
@@ -113,7 +113,7 @@ function buildRows(project: string, rows: RowRequest[], sorting: boolean, copies
 export function createReview(project: string, template: Template, title: string, rows: RowRequest[], settings: ReviewSettings): { file: string; review: Review; created: boolean } {
   const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 120) : '';
   if (!cleanTitle) throw new UserError('Donnez un nom à l’analyse tabulaire.');
-  const existing = isInventory({ title: cleanTitle, templateName: template.name }) ? listReviews([project], () => false).find(isInventory) : undefined;
+  const existing = isCaseIndex({ title: cleanTitle, templateName: template.name }) ? listReviews([project], () => false).find(isCaseIndex) : undefined;
   if (existing) return { file: existing.file, review: readReview(project, existing.file), created: false };
   if (!Array.isArray(rows) || !rows.length) throw new UserError('Sélectionnez au moins un document.');
   if (rows.length > MAX_ROWS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_ROWS} lignes.`);
@@ -142,7 +142,7 @@ export function createReview(project: string, template: Template, title: string,
 export function readReview(project: string, file: string): Review {
   const target = assertReviewFile(project, file);
   try {
-    return JSON.parse(fs.readFileSync(target, 'utf8')) as Review;
+    return withIndexName(JSON.parse(fs.readFileSync(target, 'utf8')) as Review);
   } catch {
     throw new UserError(`Analyse tabulaire illisible : ${file}`);
   }

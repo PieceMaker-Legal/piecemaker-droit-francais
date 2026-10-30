@@ -33,14 +33,14 @@ afterAll(() => {
 });
 
 describe('outil tabular_review', () => {
-  it('prépare l’inventaire intégral du dossier puis retrouve le même projet', async () => {
+  it('prépare l’index du dossier puis retrouve le même projet', async () => {
     const run = launchers();
-    const first = await assistant({ action: 'inventaire', project }, run) as { projet: string };
+    const first = await assistant({ action: 'index', project }, run) as { projet: string };
     const listed = await assistant({ action: 'lister', project }, run) as { projets: { projet: string; nom: string; documents: string[]; questions: string[] }[] };
     const draft = listed.projets.find((entry) => entry.projet === first.projet);
-    expect(draft).toMatchObject({ nom: 'Inventaire intégral des pièces', questions: ['Date', 'Événement', 'Importance', 'Secret professionnel', 'Classement'] });
+    expect(draft).toMatchObject({ nom: 'Index', questions: ['Date', 'Événement', 'Importance', 'Secret professionnel', 'Classement'] });
     expect(draft?.documents).toContain('Pièces/courrier.md');
-    expect(await assistant({ action: 'inventaire', project }, run)).toEqual({ projet: first.projet });
+    expect(await assistant({ action: 'index', project }, run)).toEqual({ projet: first.projet });
     const { deleteDraft } = await import('../server/drafts.js');
     deleteDraft(first.projet);
   });

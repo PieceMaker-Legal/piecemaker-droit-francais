@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ColumnAction, ColumnFormat, Template, TemplateColumn } from '../shared.js';
-import { COLUMN_ACTIONS, COLUMN_FORMATS, INVENTORY_TEMPLATE_NAME, LEGACY_INVENTORY_NAME } from '../shared.js';
+import { COLUMN_ACTIONS, COLUMN_FORMATS, INDEX_TEMPLATE_NAME, LEGACY_INDEX_NAME } from '../shared.js';
 import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 
 const TEMPLATES_FILE = path.join(PLUGIN_HOME, 'templates.json');
@@ -27,8 +27,8 @@ export const SORTING_TEMPLATE: TemplateSeed = {
   ],
 };
 
-export const INVENTORY_TEMPLATE: TemplateSeed = {
-  name: INVENTORY_TEMPLATE_NAME,
+export const INDEX_TEMPLATE: TemplateSeed = {
+  name: INDEX_TEMPLATE_NAME,
   description: 'Lecture intégrale de toutes les pièces du dossier : une ligne par pièce, classée par date. Ajoutez vos colonnes avec « + Question ».',
   columns: [
     column('Date', 'Quelle est la date de l’événement principal rapporté par le document ? À défaut, donne la date du document.', 'date'),
@@ -83,7 +83,7 @@ export const DEFAULT_TEMPLATES: TemplateSeed[] = [
 
 // Modèles ajoutés après la première installation : proposés une seule fois,
 // puis libres d'être modifiés ou supprimés.
-const LATER_SEEDS: Record<string, TemplateSeed> = { 'tri-pieces': SORTING_TEMPLATE, chronologie: INVENTORY_TEMPLATE };
+const LATER_SEEDS: Record<string, TemplateSeed> = { 'tri-pieces': SORTING_TEMPLATE, chronologie: INDEX_TEMPLATE };
 
 function seeded(seeds: TemplateSeed[]): Template[] {
   const now = new Date().toISOString();
@@ -105,7 +105,7 @@ function libraryTemplates(own: Template[]): Template[] {
 
 export function readTemplates(): Template[] {
   const own = readOwnTemplates();
-  return [...own, ...libraryTemplates(own)].map((template) => (template.name === LEGACY_INVENTORY_NAME ? { ...template, name: INVENTORY_TEMPLATE_NAME, description: INVENTORY_TEMPLATE.description } : template));
+  return [...own, ...libraryTemplates(own)].map((template) => (template.name === LEGACY_INDEX_NAME ? { ...template, name: INDEX_TEMPLATE_NAME, description: INDEX_TEMPLATE.description } : template));
 }
 
 function readOwnTemplates(): Template[] {
