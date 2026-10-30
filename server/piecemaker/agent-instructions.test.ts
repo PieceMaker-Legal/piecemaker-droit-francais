@@ -71,7 +71,15 @@ test('never overwrites an existing AGENTS.md', () => withProject(async (root) =>
   assert.equal(await read(root, 'AGENTS.md'), 'parties, juridiction, échéances\n');
 }));
 
-test('leaves the shared import out of an AGENTS.md moved from CLAUDE.md', () => withProject(async (root) => {
+test('updates the old suivi rule in an existing AGENTS.md and nothing else', () => withProject(async (root) => {
+  const oldRule = '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans le suivi du dossier, .piecemaker/suivi.yaml, vérifié par pm suivi verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans l’onglet Échéances.';
+  await writeFile(path.join(root, 'AGENTS.md'), `Ma règle sur suivi.yaml\n${oldRule}\n`);
+  await ensureAgentInstructionFiles(root, SHARED);
+  const rule = agentInstructionsTemplate().split('\n').at(-1);
+  assert.equal(await readFile(path.join(root, 'AGENTS.md'), 'utf8'), `Ma règle sur suivi.yaml\n${rule}\n`);
+}));
+
+test('leaves the shared import out of an AGENTS.md moved from CLAUDE.md',() => withProject(async (root) => {
   await writeFile(path.join(root, 'CLAUDE.md'), `@${SHARED}\n\nconsignes du dossier\n`);
   assert.deepEqual(await ensureAgentInstructionFiles(root, SHARED), ['AGENTS.md']);
   assert.equal(await read(root, 'AGENTS.md'), '\nconsignes du dossier\n');

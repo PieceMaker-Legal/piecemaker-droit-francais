@@ -30,7 +30,7 @@ Les sources passent par les mêmes connecteurs que le raisonnement (Légifrance,
 ## Service, commandes, onglet
 
 - `suivi-service.ts` : tables `pm_suivi(project_id, revision, code, snapshot_json)` et `pm_suivi_faits(project_id, echeance, date, piece, at)` ; la lecture revérifie quand le fichier a changé (empreinte sha256).
-- `suivi-board.ts` : présente chaque dossier au tableau comme `projects/cabinet/matters/dossier-<sha16>`. Les autres documents (tableau, étapes, activité, demandes, documents déposés) vont dans la table `pm_board_docs(path, data_json)`.
+- `suivi-board.ts` : présente chaque dossier qui a un `suivi.json` au tableau comme `projects/cabinet/matters/dossier-<sha16>`. Un dossier sans ce fichier n'y figure pas. Le serveur et la page refusent tout ajout manuel de dossier. Les autres documents (tableau, étapes, activité, demandes, documents déposés) vont dans la table `pm_board_docs(path, data_json)`.
 - Écriture depuis le tableau : `matter` va dans le fichier. Une date vérifiée va dans `evenements` ou `echeances`. Une case cochée va dans `pm_suivi_faits`. Une suppression de dossier renomme le fichier en `suivi.json.supprime`.
 - Routes `/api/piecemaker/suivi` (`GET /`, `GET /tous`, `POST /verify`), `/api/piecemaker/suivi/board` (`GET ?rev=`, `POST { op, path, data, base }`) et route locale `/suivi` pour `pm suivi verifier|lire|ecrire` et l'outil MCP `suivi`.
 - Onglet `plugins/piecemaker-echeances` : un bandeau (erreurs, manques, dates à établir, Revérifier, Ouvrir le dossier) et le Matter board dans une iframe Blob. `src/board-shim.ts` remplace `window.claude.use('db')` par ces routes, avec relecture toutes les 2 s tant que la page est visible.
@@ -43,7 +43,7 @@ Les sources passent par les mêmes connecteurs que le raisonnement (Légifrance,
 node scripts/piecemaker/adapter-matter-board.mjs <page-source.html> plugins/piecemaker-echeances/board/index.html
 ```
 
-Le script retire le bloc de coût, remplace les notes pour Claude par des renvois à `pm suivi` et à la skill piecemaker, ajoute la lecture des dates écrites en français et traduit l'interface avec la table `scripts/piecemaker/matter-board-fr.mjs`. Chaque motif doit être unique, sinon le script échoue. Une entrée de la table déclare son nombre d'occurrences. Les valeurs stockées (`status`, `kind`, `role`) restent en anglais. La page n'a pas de licence publiée : l'utilisateur a décidé de l'intégrer et assume ce point. `manifest.piecemakerAssets` la fait copier par la chaîne de plugins (`docs/plugins.md`).
+Le script retire le bloc de coût et l'ajout de dossiers ou de tableaux, remplace les notes pour Claude par des renvois à `pm suivi` et à la skill piecemaker, ajoute la lecture des dates écrites en français et traduit l'interface avec la table `scripts/piecemaker/matter-board-fr.mjs`. Chaque motif doit être unique, sinon le script échoue. Une entrée de la table déclare son nombre d'occurrences. Les valeurs stockées (`status`, `kind`, `role`) restent en anglais. La page n'a pas de licence publiée : l'utilisateur a décidé de l'intégrer et assume ce point. `manifest.piecemakerAssets` la fait copier par la chaîne de plugins (`docs/plugins.md`).
 
 ## Limites
 

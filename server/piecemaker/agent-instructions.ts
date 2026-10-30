@@ -25,6 +25,12 @@ const importsAgents = (content: string) => AGENTS_IMPORT_LINE.test(content);
 const hasLine = (content: string, line: string) => content.split(/\r?\n/).includes(line);
 const withoutLine = (content: string, line: string) => content.split('\n').filter((current) => current.replace(/\r$/, '') !== line).join('\n');
 
+const SUIVI_RULE = '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans le suivi du dossier, .piecemaker/suivi.json, vérifié par pm suivi verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans le Matter board de l’onglet Échéances, qui lit ces fichiers : un dossier sans suivi.json n’y figure pas.';
+const OLD_SUIVI_RULES = [
+  '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans le suivi du dossier, .piecemaker/suivi.yaml, vérifié par pm suivi verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans l’onglet Échéances.',
+  '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans le suivi du dossier, .piecemaker/suivi.json, vérifié par pm suivi verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans le Matter board de l’onglet Échéances.',
+];
+
 export function agentInstructionsTemplate(): string {
   return [
   'Tu es un assistant juridique. Voici les règles :',
@@ -32,9 +38,15 @@ export function agentInstructionsTemplate(): string {
   '2° Instructions générales: Au début de chaque session, lis ~/.piecemaker/custom/perso.md. Ce fichier, hors dépôt, contient les instructions générales de l’utilisateur, son arborescence habituelle dans ses dossiers, ses méthodes de travail. S’il manque, propose de le créer ; il commence toujours par la mention « Pour remplir ce document, lire @cold-start-interview.md ». Maintiens-le lorsque l’utilisateur précise ou modifie une consigne générale. 200 lignes max, synthétique.',
   '3° Arborescence: Respecte arborescence convenue dans perso.md. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.',
   '4° Suivi projets: Pour chaque projet demandé par l’utilisateur, crée puis maintiens un fichier Markdown servant de mémoire. Un projet correspond à un acte précis et identifié : jeu de conclusions, contrat, etc. Référence sa mémoire dans ce document avec son chemin et sa date de dernière mise à jour. Son frontmatter YAML indique le template utilisé, les échéances et l’étape en cours.',
-  '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans le suivi du dossier, .piecemaker/suivi.json, vérifié par pm suivi verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans le Matter board de l’onglet Échéances.',
+  SUIVI_RULE,
 ].join('\n');
 }
+
+const refreshSuiviRule = async (agentsPath: string) => {
+  const content = await readFile(agentsPath, 'utf8');
+  const next = content.split('\n').map((line) => (OLD_SUIVI_RULES.includes(line.replace(/\r$/, '')) ? SUIVI_RULE + (line.endsWith('\r') ? '\r' : '') : line)).join('\n');
+  if (next !== content) await writeFile(agentsPath, next);
+};
 
 export async function ensureAgentInstructionFiles(projectRoot: string, sharedInstructionsFile: string): Promise<string[]> {
   const claudePath = path.join(projectRoot, CLAUDE_FILE);
@@ -49,6 +61,7 @@ export async function ensureAgentInstructionFiles(projectRoot: string, sharedIns
   } else if (hasClaude && (await lstat(agentsPath)).isSymbolicLink() && (await realpath(claudePath)) === (await realpath(agentsPath))) {
     return [];
   }
+  if (hasAgents) await refreshSuiviRule(agentsPath);
   const claudeImports = `${AGENTS_IMPORT}\n${sharedImport}\n`;
   const nextClaudeContent = claudeContent === null || !claudeImportsAgents
     ? claudeImports

@@ -30,6 +30,7 @@ const merge = (into: Json, patch: Json) => {
 };
 const parseRaw = (code: string): Json | null => { try { const value: unknown = JSON.parse(code); return isObject(value) ? value : null; } catch { return null; } };
 const isDeadline = (entry: SuiviEvent | SuiviDeadline): entry is SuiviDeadline => 'fait' in entry;
+const isMatterDoc = (docPath: string) => docPath.startsWith(MATTERS) && !docPath.slice(MATTERS.length).includes('/');
 
 export const dossierMatterId = (projectPath: string) => `dossier-${sha(path.resolve(projectPath)).slice(0, 16)}`;
 
@@ -92,7 +93,7 @@ export function createBoardService(getDatabase: () => Database.Database, suivi: 
   const rootOf = (docPath: string) => suivi.projects().find((project) => `${MATTERS}${dossierMatterId(project.project_path)}` === docPath)?.project_path ?? null;
 
   const build = async () => {
-    const docs: Record<string, Json> = central();
+    const docs: Record<string, Json> = Object.fromEntries(Object.entries(central()).filter(([docPath]) => !isMatterDoc(docPath)));
     for (const dossier of await suivi.all()) docs[`${MATTERS}${dossierMatterId(dossier.projectPath)}`] = projectMatter(dossierMatterId(dossier.projectPath), dossier.nom, dossier.snapshot);
     return { rev: sha(JSON.stringify(docs)), docs };
   };
@@ -137,6 +138,7 @@ export function createBoardService(getDatabase: () => Database.Database, suivi: 
     if (op !== 'delete' && !isObject(data)) throw new TypeError('Données : objet attendu.');
     const root = rootOf(docPath);
     if (root) return writeMatter(root, op as string, data as Json | undefined, Array.isArray(base) ? base : undefined);
+    if (isMatterDoc(docPath) && op !== 'delete') throw new TypeError(`Un dossier vient de son ${SUIVI_FILE} : il ne s'ajoute pas au tableau.`);
     if (op === 'delete') { database.prepare('DELETE FROM pm_board_docs WHERE path=?').run(docPath); return; }
     const existing = central()[docPath];
     if (op === 'update' && !existing) throw new TypeError(`Document absent : ${docPath}`);

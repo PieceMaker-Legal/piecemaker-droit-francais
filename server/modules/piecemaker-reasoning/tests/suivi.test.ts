@@ -341,6 +341,16 @@ test('supprimer le dossier du board met le fichier de côté et un set le restau
   assert.ok(raw().echeances.appel);
 });
 
+test('le board ne montre que les dossiers ayant un suivi et refuse tout ajout manuel', async () => {
+  const { board, db, matterPath } = boardFixture();
+  const orphan = 'projects/cabinet/matters/affaire-manuelle';
+  assert.equal((await board.current()).docs[matterPath], undefined);
+  await assert.rejects(board.write('set', orphan, { name: 'Affaire manuelle' }), /ne s'ajoute pas/);
+  await assert.rejects(board.command({ commande: 'ecrire', chemin: orphan, donnees: { name: 'Affaire manuelle' } }), /ne s'ajoute pas/);
+  db.prepare('INSERT INTO pm_board_docs VALUES(?,?)').run(orphan, JSON.stringify({ name: 'Ancienne affaire manuelle' }));
+  assert.equal((await board.current()).docs[orphan], undefined);
+});
+
 test('un suivi illisible ne bloque ni le board ni les autres écritures, et n’est jamais écrasé', async () => {
   const { file, board, matterPath, matter } = boardFixture();
   fs.writeFileSync(file, '{ "evenements": ');
