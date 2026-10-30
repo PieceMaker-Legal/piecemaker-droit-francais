@@ -9,9 +9,11 @@ function numberOf(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+const isoDate = (value: string) => value.trim().replace(/^(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1');
+
 export function compareValues(left: string, right: string): number {
-  const a = left.trim();
-  const b = right.trim();
+  const a = isoDate(left);
+  const b = isoDate(right);
   if (!a || !b) return a ? -1 : b ? 1 : 0;
   const x = numberOf(a);
   const y = numberOf(b);

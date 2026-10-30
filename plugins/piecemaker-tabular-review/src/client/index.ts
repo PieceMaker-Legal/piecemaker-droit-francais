@@ -35,15 +35,15 @@ const mounted = new WeakMap<HTMLElement, Mounted>();
 
 type PendingWindow = Window & { [PENDING_TARGET_KEY]?: unknown; [PENDING_SHOW_KEY]?: unknown };
 
-type ShowRequest = { project: string | null; review: string | null; draft: string | null };
+type ShowRequest = { project: string | null; review: string | null; draft: string | null; chronology: boolean };
 
 function takeShowRequest(): ShowRequest | null {
   const pending = window as PendingWindow;
-  const request = pending[PENDING_SHOW_KEY] as { project?: unknown; review?: unknown; draft?: unknown } | undefined;
+  const request = pending[PENDING_SHOW_KEY] as { project?: unknown; review?: unknown; draft?: unknown; chronology?: unknown } | undefined;
   delete pending[PENDING_SHOW_KEY];
   if (!request || typeof request !== 'object') return null;
   const text = (value: unknown) => typeof value === 'string' && value ? value : null;
-  return { project: text(request.project), review: text(request.review), draft: text(request.draft) };
+  return { project: text(request.project), review: text(request.review), draft: text(request.draft), chronology: request.chronology === true };
 }
 
 export function mount(container: HTMLElement, api: PluginApi): void {
@@ -277,9 +277,23 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }
   }
 
+  async function openChronology(project: string) {
+    try {
+      const { fichier, projet } = await app.rpc<{ fichier?: string; projet?: string }>('POST', '/assistant', { action: 'chronologie', project });
+      if (fichier) app.openReview(project, fichier);
+      else if (projet) await openDraftById(project, projet);
+    } catch (error) {
+      toast(root, errorMessage(error), 'error');
+    }
+  }
+
   const onShow = () => {
     const request = takeShowRequest();
     if (!request) return;
+    if (request.project && request.chronology) {
+      void openChronology(request.project);
+      return;
+    }
     if (request.project && request.draft) {
       void openDraftById(request.project, request.draft);
       return;
@@ -298,7 +312,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   });
 
   showTab('history');
-  if (initialRequest?.project && initialRequest.draft) void openDraftById(initialRequest.project, initialRequest.draft);
+  if (initialRequest?.project && initialRequest.chronology) void openChronology(initialRequest.project);
+  else if (initialRequest?.project && initialRequest.draft) void openDraftById(initialRequest.project, initialRequest.draft);
   else if (initialRequest?.project && initialRequest.review) app.openReview(initialRequest.project, initialRequest.review);
   else if (!initialRequest?.project) {
     const target = app.takeTargetProject();

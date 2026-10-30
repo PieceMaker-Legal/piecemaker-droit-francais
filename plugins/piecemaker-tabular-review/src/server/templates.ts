@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ColumnAction, ColumnFormat, Template, TemplateColumn } from '../shared.js';
-import { COLUMN_ACTIONS, COLUMN_FORMATS } from '../shared.js';
+import { CHRONOLOGY_TEMPLATE_NAME, COLUMN_ACTIONS, COLUMN_FORMATS } from '../shared.js';
 import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 
 const TEMPLATES_FILE = path.join(PLUGIN_HOME, 'templates.json');
@@ -24,6 +24,17 @@ export const SORTING_TEMPLATE: TemplateSeed = {
     column('Parties', 'Quelles sont les parties concernées par la pièce ?', 'list'),
     action('Nouveau nom', 'Propose le nom de fichier de la pièce, sans extension, au format AAAA-MM-JJ_<type de pièce> <précisions utiles : juridiction, parties, objet>, par exemple « 2024-01-09_Jugement du Tribunal judiciaire de Paris - Société A c- Société B ». N’utilise aucun des caractères / \\ : * ? " < > | (écris « c- » pour « contre »). Réponds par le nom seul. Si la date de la pièce est introuvable, réponds « Non trouvé ».', 'rename'),
     action('Dossier cible', 'Dans quel sous-dossier du dossier faut-il ranger cette pièce ? Réponds par un chemin relatif seul, avec « / » entre les niveaux (par exemple « Procédure/Jugements »). Réponds « Non trouvé » si la pièce doit rester où elle est.', 'move'),
+  ],
+};
+
+export const CHRONOLOGY_TEMPLATE: TemplateSeed = {
+  name: CHRONOLOGY_TEMPLATE_NAME,
+  description: 'Chronologie des faits : une ligne par pièce, classée par date. Ajoutez vos colonnes avec « + Question ».',
+  columns: [
+    column('Date', 'Quelle est la date de l’événement principal rapporté par le document ? À défaut, donne la date du document.', 'date'),
+    column('Événement', 'Décris en une phrase ce qui s’est passé : qui a fait quoi. Rapporte les faits sans les qualifier.'),
+    column('Importance', 'Quelle est l’importance de cet événement pour le dossier ? Clé : il prouve ou contredit un fait décisif. Utile : il éclaire le contexte ou soutient un argument secondaire. Contexte : il complète seulement le récit. En cas de doute, choisis le niveau inférieur.', 'tags', ['Clé', 'Utile', 'Contexte']),
+    column('Secret professionnel', 'Le document est-il une consultation ou une correspondance entre un avocat et son client, ou entre avocats, susceptible d’être couverte par le secret professionnel ?', 'yes_no'),
   ],
 };
 
@@ -72,7 +83,7 @@ export const DEFAULT_TEMPLATES: TemplateSeed[] = [
 
 // Modèles ajoutés après la première installation : proposés une seule fois,
 // puis libres d'être modifiés ou supprimés.
-const LATER_SEEDS: Record<string, TemplateSeed> = { 'tri-pieces': SORTING_TEMPLATE };
+const LATER_SEEDS: Record<string, TemplateSeed> = { 'tri-pieces': SORTING_TEMPLATE, chronologie: CHRONOLOGY_TEMPLATE };
 
 function seeded(seeds: TemplateSeed[]): Template[] {
   const now = new Date().toISOString();

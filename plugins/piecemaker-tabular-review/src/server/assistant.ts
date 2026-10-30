@@ -1,13 +1,13 @@
 import path from 'node:path';
 
 import type { Draft, Provider, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions } from '../shared.js';
+import { CHRONOLOGY_TEMPLATE_NAME, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, isChronology } from '../shared.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, readDrafts, upsertDraft } from './drafts.js';
 import { assertProject, UserError } from './paths.js';
 import { researchState, startResearch, validateFilters } from './research.js';
 import { listReviews } from './reviews.js';
-import { normalizeColumn, readTemplates, upsertTemplate } from './templates.js';
+import { CHRONOLOGY_TEMPLATE, normalizeColumn, readTemplates, upsertTemplate } from './templates.js';
 
 type Input = Record<string, unknown>;
 
@@ -125,6 +125,16 @@ function prepare(project: string, input: Input) {
   return draftSummary(draft);
 }
 
+function chronology(project: string, launchers: AssistantLaunchers) {
+  const review = listReviews([project], launchers.isRunning).find(isChronology);
+  if (review) return { fichier: review.file };
+  const draft = listDrafts([project]).find(isChronology);
+  if (draft) return { projet: draft.id };
+  const columns = readTemplates().find((entry) => entry.name === CHRONOLOGY_TEMPLATE_NAME)?.columns ?? CHRONOLOGY_TEMPLATE.columns;
+  const created = upsertDraft({ project, title: CHRONOLOGY_TEMPLATE_NAME, templateName: CHRONOLOGY_TEMPLATE_NAME, columns, rows: documentRows(project, ['']) });
+  return { projet: created.id };
+}
+
 function saveTemplate(input: Input) {
   const previous = input.modele ? findTemplate(input.modele) : null;
   const saved = upsertTemplate({
@@ -198,5 +208,6 @@ export async function assistant(body: Input, launchers: AssistantLaunchers): Pro
   if (action === 'documents') return listMarkdownDocuments(project).map((document) => document.path);
   if (action === 'preparer') return prepare(project, body);
   if (action === 'lancer') return launch(project, body, launchers);
+  if (action === 'chronologie') return chronology(project, launchers);
   throw new UserError(`Action inconnue : ${action}`);
 }
