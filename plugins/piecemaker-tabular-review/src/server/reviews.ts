@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Cell, Provider, Review, ReviewDetail, ReviewDocument, ReviewRow, ReviewStatus, ReviewSummary, RowRequest, Template } from '../shared.js';
-import { DOCS_FOLDER, emptyColumns, hasActions, lastSearchDate, reviewCategory } from '../shared.js';
+import { DOCS_FOLDER, emptyColumns, hasActions, isChronology, lastSearchDate, reviewCategory } from '../shared.js';
 import { resolveMarkdownDocument } from './documents.js';
 import { assertReviewFile, docsDirectory, documentPath, isInside, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
 import { MAX_COLUMNS, normalizeColumn } from './templates.js';
@@ -110,9 +110,11 @@ function buildRows(project: string, rows: RowRequest[], sorting: boolean, copies
   });
 }
 
-export function createReview(project: string, template: Template, title: string, rows: RowRequest[], settings: ReviewSettings): { file: string; review: Review } {
+export function createReview(project: string, template: Template, title: string, rows: RowRequest[], settings: ReviewSettings): { file: string; review: Review; created: boolean } {
   const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 120) : '';
   if (!cleanTitle) throw new UserError('Donnez un nom à l’analyse tabulaire.');
+  const existing = isChronology({ title: cleanTitle, templateName: template.name }) ? listReviews([project], () => false).find(isChronology) : undefined;
+  if (existing) return { file: existing.file, review: readReview(project, existing.file), created: false };
   if (!Array.isArray(rows) || !rows.length) throw new UserError('Sélectionnez au moins un document.');
   if (rows.length > MAX_ROWS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_ROWS} lignes.`);
   const sorting = hasActions(template.columns);
@@ -134,7 +136,7 @@ export function createReview(project: string, template: Template, title: string,
     rows: reviewRows,
     cells: {},
   };
-  return { file: writeNewReview(project, review), review };
+  return { file: writeNewReview(project, review), review, created: true };
 }
 
 export function readReview(project: string, file: string): Review {

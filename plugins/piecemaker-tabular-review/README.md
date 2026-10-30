@@ -18,6 +18,8 @@ Plugin CloudCLI d'analyse tabulaire de documents : une ligne par document (ou gr
 
 L'outil MCP `tabular_review` (serveur `piecemaker`) passe par la route locale `POST /api/piecemaker/local/tabular-review` du serveur PieceMaker, qui la transmet à `POST /assistant` du plugin. Actions : `lister` (analyses et projets non lancés du dossier), `ouvrir`, `documents` (documents Markdown analysables), `modeles`, `enregistrer_modele` (crée, ou modifie un modèle existant), `preparer` (crée ou complète un projet non lancé, en mode analyse ou recherche : nom, questions ou modèle, documents ou dossiers entiers, requête et filtres de recherche, IA), `lancer`. Le projet préparé s'ouvre dans le volet, pré-rempli ; l'avocat le vérifie et le lance, ou l'IA le lance si l'avocat le lui demande dans le chat. En mode recherche, `lancer` lance la recherche, puis la revue à la fin du téléchargement ; un échec est noté dans le projet. Le tri des pièces reste préparé par l'avocat dans le volet.
 
+Un dossier n'a qu'une seule chronologie, qui porte aussi le classement. L'action `chronologie` la retrouve ou la prépare, `lister` la signale (`chronologie: true`) et `preparer` la renvoie si on lui demande une chronologie ou un tri. `createReview` ouvre l'analyse existante au lieu d'en créer une seconde, depuis le volet comme depuis l'agent. Une analyse déjà en double n'est ni fusionnée ni supprimée : la plus récente sert de référence.
+
 ## Recherche juridique
 
 L'écran **Recherche juridique** (bouton « + Nouvelle recherche ») construit une review à partir d'une recherche jurisprudentielle Légifrance et Judilibre au lieu des documents du dossier : une ligne par décision, une colonne par question annoncée.

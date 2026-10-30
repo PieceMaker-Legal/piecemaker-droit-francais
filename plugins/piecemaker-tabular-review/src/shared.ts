@@ -328,7 +328,8 @@ export type RunRequest = {
 
 export const CHRONOLOGY_TEMPLATE_NAME = 'Chronologie';
 
-export function isChronology(entry: { title: string; templateName: string }): boolean {
+export function isChronology(entry: { title: string; templateName: string; category?: unknown; mode?: unknown }): boolean {
+  if (entry.category === 'recherche-juridique' || entry.mode === 'recherche') return false;
   return entry.templateName === CHRONOLOGY_TEMPLATE_NAME || entry.title === CHRONOLOGY_TEMPLATE_NAME;
 }
 

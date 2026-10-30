@@ -88,7 +88,6 @@ describe('outil tabular_review', () => {
   it('refuse un document inconnu et le tri des pièces', async () => {
     const run = launchers();
     await expect(assistant({ action: 'preparer', project, nom: 'X', documents: ['Absent/'] }, run)).rejects.toThrow('Aucun document Markdown pour « Absent/ »');
-    await expect(assistant({ action: 'preparer', project, nom: 'X', modele: 'Tri des pièces' }, run)).rejects.toThrow('Tri des pièces');
     expect(await assistant({ action: 'documents', project }, run)).toEqual(['Pièces/Contrats/avenant.md', 'Pièces/Contrats/bail.md', 'Pièces/courrier.md']);
   });
 });

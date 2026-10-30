@@ -49,7 +49,8 @@ async function createAndLaunch(body: Body) {
   const template = Array.isArray(request.columns) ? normalizeTemplate({ name: request.templateName || 'Questions personnalisées', columns: request.columns }) : findTemplate(request.templateId);
   const settings = { provider: assertProvider(request.provider), model: assertModel(request.model), concurrency: concurrency(request.concurrency) };
   const environment = await launchEnvironment(request.proxyOrigin);
-  const { file, review } = createReview(project, template, request.title, request.rows, settings);
+  const { file, review, created } = createReview(project, template, request.title, request.rows, settings);
+  if (!created) return reviewDetail(project, file, isRunning(project, file));
   await queueTasks(project, file, review.rows.map((row) => ({ rowId: row.id })), settings.concurrency, environment);
   return reviewDetail(project, file, isRunning(project, file));
 }

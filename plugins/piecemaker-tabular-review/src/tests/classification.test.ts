@@ -15,7 +15,8 @@ vi.stubEnv('USERPROFILE', home);
 
 const { assistant } = await import('../server/assistant.js');
 const { readClassification, saveClassification } = await import('../server/classification.js');
-const { appendRows, readReview } = await import('../server/reviews.js');
+const { appendRows, createReview, listReviews, readReview } = await import('../server/reviews.js');
+const { deleteDraft, listDrafts } = await import('../server/drafts.js');
 
 const launchers = () => ({
   isRunning: () => false,
@@ -126,6 +127,73 @@ describe('effet du classement', () => {
     const note = { path: 'Notes/libre.md', name: 'libre', size: 1, updatedAt: '' };
     const converted = { path: 'Fichiers convertis PieceMaker/bail.md', name: 'bail', size: 1, updatedAt: '' };
     expect(newNotes(review, [note, converted] as never, pieces)).toEqual([note]);
+  });
+});
+
+describe('une seule chronologie par dossier', () => {
+  const settings = { provider: 'claude' as const, model: 'haiku', concurrency: 1 };
+  const template = { id: 't', name: 'Chronologie', description: '', updatedAt: '', columns: [{ name: 'Date', prompt: 'Date ?', format: 'date' as const }] };
+  const rows = [{ label: 'bail', documents: ['Notes/bail.md'] }];
+  const dossier = path.join(home, 'Dossier Unique');
+  const fichiers = () => listReviews([dossier], () => false).map((review) => review.file);
+
+  beforeAll(() => {
+    fs.mkdirSync(path.join(dossier, 'Notes'), { recursive: true });
+    fs.writeFileSync(path.join(dossier, 'Notes', 'bail.md'), '# Bail');
+    fs.writeFileSync(path.join(home, '.piecemaker', 'projects.json'), JSON.stringify({ sources: { test: [project, dossier] } }));
+  });
+
+  it.each([
+    [{ modele: 'Chronologie' }],
+    [{ modele: 'Tri des pièces' }],
+    [{ nom: 'Chronologie des faits', documents: ['Notes'], questions: [{ nom: 'Date', consigne: 'Date ?' }] }],
+    [{ nom: 'Tri des pièces', documents: ['Notes'] }],
+  ])('preparer %j ne crée pas de second projet', async (demande) => {
+    const run = launchers();
+    const unique = await assistant({ action: 'chronologie', project: dossier }, run) as { projet: string };
+    const reponse = await assistant({ action: 'preparer', project: dossier, ...demande }, run) as { projet: string; suite: string };
+    expect(reponse.projet).toBe(unique.projet);
+    expect(reponse.suite).toContain('Une seule analyse');
+    expect(listDrafts([dossier])).toHaveLength(1);
+    deleteDraft(unique.projet);
+  });
+
+  it('garde le classement et le nom quand l’agent complète le projet', async () => {
+    const run = launchers();
+    const unique = await assistant({ action: 'chronologie', project: dossier }, run) as { projet: string };
+    const complete = await assistant({ action: 'preparer', project: dossier, projet: unique.projet, nom: 'Autre', questions: [{ nom: 'Montant', consigne: 'Quel montant ?' }] }, run) as { nom: string; questions: string[]; chronologie: boolean };
+    expect(complete).toMatchObject({ nom: 'Chronologie', questions: ['Montant', 'Classement'], chronologie: true });
+    deleteDraft(unique.projet);
+  });
+
+  it('laisse les analyses classiques et les recherches indépendantes', async () => {
+    const run = launchers();
+    const classique = await assistant({ action: 'preparer', project: dossier, nom: 'Baux', documents: ['Notes'], questions: [{ nom: 'Prix', consigne: 'Quel prix ?' }] }, run) as { projet: string; chronologie?: boolean };
+    const recherche = await assistant({ action: 'preparer', project: dossier, mode: 'recherche', nom: 'Chronologie de la jurisprudence', questions: [{ nom: 'Solution', consigne: 'Quelle solution ?' }] }, run) as { projet: string; chronologie?: boolean };
+    expect(classique.chronologie).toBeUndefined();
+    expect(recherche.chronologie).toBeUndefined();
+    expect(listDrafts([dossier])).toHaveLength(2);
+    deleteDraft(classique.projet);
+    deleteDraft(recherche.projet);
+  });
+
+  it('ne crée jamais une seconde analyse et retrouve la première', async () => {
+    const premiere = createReview(dossier, template, 'Chronologie', rows, settings);
+    const seconde = createReview(dossier, template, 'Chronologie', rows, settings);
+    const autreNom = createReview(dossier, template, 'Faits du dossier', rows, settings);
+    expect([premiere.created, seconde.created, autreNom.created]).toEqual([true, false, false]);
+    expect(fichiers()).toEqual([premiere.file]);
+    const run = launchers();
+    expect(await assistant({ action: 'chronologie', project: dossier }, run)).toEqual({ fichier: premiere.file });
+    expect(await assistant({ action: 'preparer', project: dossier, modele: 'Chronologie' }, run)).toMatchObject({ fichier: premiere.file });
+    const listed = await assistant({ action: 'lister', project: dossier }, run) as { analyses: { fichier: string; chronologie?: boolean }[] };
+    expect(listed.analyses).toEqual([expect.objectContaining({ fichier: premiere.file, chronologie: true })]);
+  });
+
+  it('crée une analyse classique à côté de la chronologie, sans classement pour l’agent', async () => {
+    const classique = createReview(dossier, { ...template, name: 'Analyse de contrat' }, 'Baux', rows, settings);
+    expect(classique.created).toBe(true);
+    await expect(assistant({ action: 'classement', project: dossier, fichier: classique.file }, launchers())).rejects.toThrow('chronologie');
   });
 });
 

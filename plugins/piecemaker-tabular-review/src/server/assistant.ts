@@ -22,6 +22,8 @@ export type AssistantLaunchers = {
 const RESEARCH_POLL_MS = 1000;
 const RESEARCH_RUNNING = new Set(['counting', 'listing', 'downloading']);
 const CONCURRENCY = 3;
+const CHRONOLOGY_REQUEST = /chronolog|tri des pi[eè]ces/i;
+const SINGLE_CHRONOLOGY = 'Une seule analyse gère la chronologie et le tri du dossier : complétez celle-ci.';
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
@@ -83,6 +85,7 @@ function draftSummary(draft: Draft) {
   return {
     projet: draft.id,
     nom: draft.title,
+    ...(isChronology(draft) ? { chronologie: true } : {}),
     mode: draft.mode ?? 'analyse',
     ...(draft.templateName ? { modele: draft.templateName } : {}),
     questions: draft.columns.map((column) => column.name),
@@ -95,7 +98,7 @@ function draftSummary(draft: Draft) {
 }
 
 function reviewSummary(review: ReviewSummary) {
-  return { fichier: review.file, nom: review.title, categorie: review.category, statut: review.status, lignes: `${review.doneCount}/${review.rowCount}`, date: review.createdAt };
+  return { fichier: review.file, nom: review.title, ...(isChronology(review) ? { chronologie: true } : {}), categorie: review.category, statut: review.status, lignes: `${review.doneCount}/${review.rowCount}`, date: review.createdAt };
 }
 
 function findDraft(project: string, id: unknown): Draft {
@@ -104,18 +107,22 @@ function findDraft(project: string, id: unknown): Draft {
   return draft;
 }
 
-function prepare(project: string, input: Input) {
+async function prepare(project: string, input: Input, launchers: AssistantLaunchers) {
   const previous = input.projet ? findDraft(project, input.projet) : undefined;
   const mode = input.mode === 'recherche' || (input.mode === undefined && previous?.mode === 'recherche') ? 'recherche' : undefined;
   const template = input.modele ? findTemplate(input.modele) : null;
+  const chronological = previous && isChronology(previous);
+  const wantsChronology = !mode && (template?.name === CHRONOLOGY_TEMPLATE_NAME || (template && hasActions(template.columns)) || CHRONOLOGY_REQUEST.test(text(input.nom)));
+  if (wantsChronology && !chronological) return { ...await chronology(project, launchers), suite: SINGLE_CHRONOLOGY };
   const questions = input.questions === undefined ? null : columns(input.questions);
-  const nextColumns = template || questions ? [...(template?.columns ?? []), ...(questions ?? [])] : previous?.columns ?? [];
+  const chosenColumns = template || questions ? [...(template?.columns ?? []), ...(questions ?? [])] : previous?.columns ?? [];
+  const nextColumns = chronological && !classifyColumn(chosenColumns) ? [...chosenColumns, classificationColumn(readClassification(project))] : chosenColumns;
   if (hasActions(nextColumns)) throw new UserError('Tri des pièces : l’avocat le prépare depuis le volet Tabular Review.');
   const draft = upsertDraft({
     id: previous?.id,
     project,
-    title: text(input.nom) || previous?.title,
-    templateName: template?.name ?? (questions ? '' : previous?.templateName ?? ''),
+    title: chronological ? previous.title : text(input.nom) || previous?.title,
+    templateName: chronological ? previous.templateName : template?.name ?? (questions ? '' : previous?.templateName ?? ''),
     columns: nextColumns,
     rows: !mode && input.documents !== undefined ? documentRows(project, input.documents) : mode ? [] : previous?.rows ?? [],
     mode,
@@ -293,13 +300,14 @@ export async function assistant(body: Input, launchers: AssistantLaunchers): Pro
     };
   }
   if (action === 'documents') return listMarkdownDocuments(project).map((document) => document.path);
-  if (action === 'preparer') return prepare(project, body);
+  if (action === 'preparer') return prepare(project, body, launchers);
   if (action === 'lancer') return launch(project, body, launchers);
   if (action === 'chronologie') return chronology(project, launchers);
   if (action === 'lire') return readOut(project, reviewName(project, body.fichier), launchers);
   if (action === 'colonnes') return editColumns(project, body, launchers);
   if (action === 'classement') {
     const file = reviewName(project, body.fichier);
+    if (!isChronology(readReview(project, file))) throw new UserError('Le classement du dossier appartient à la chronologie : utilisez l’action chronologie.');
     await addClassification(project, file);
     return readOut(project, file, launchers);
   }

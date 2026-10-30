@@ -450,9 +450,10 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       return withNotice(text, await followPanel(api, { project, tab: target.tab, review, draft }, target));
     }
     if (action === 'lister' || action === 'preparer' || action === 'lancer') {
+      const review = action === 'preparer' && result?.fichier ? String(result.fichier) : undefined;
       const draft = result && typeof result === 'object' && result.projet ? String(result.projet) : '';
-      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', draft: draft || undefined };
-      return withNotice(text, await followPanel(api, { project, tab: target.tab, draft: target.draft }, target));
+      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review, draft: draft || undefined };
+      return withNotice(text, await followPanel(api, { project, tab: target.tab, review, draft: target.draft }, target));
     }
     return text;
   }
