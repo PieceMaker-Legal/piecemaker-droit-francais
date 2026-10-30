@@ -23,7 +23,7 @@ Le geste ouvre le volet tout seul : `sql` (écriture), `chronologie`, `tabular_r
 | `pm afficher` | lire les volets déjà ouverts |
 | `pm afficher --fichier PATH` | pointer ce fichier |
 | `pm afficher --volet dossier` | pointer Dossier, vue générale |
-| `pm afficher --volet index` | pointer Dossier, dates des pièces (pour lire toutes les pièces : `pm tabular_review index`) |
+| `pm afficher --volet index` | ouvrir l’index du dossier dans l’analyse tabulaire, sans le lancer (`pm tabular_review index` s’il faut le préparer) |
 | `pm afficher --volet tabular-review` | pointer Analyse tabulaire (sans reset) |
 | `pm afficher --volet tabular-review --review FICHIER.json` | pointer cette analyse |
 | `pm afficher --volet tampon` | pointer Bordereau |
@@ -216,7 +216,7 @@ pm conversion --force contrat.pdf
 
 ## chronologie
 
-Dates et libellés des pièces en base. Ne lit pas les pièces : pour cela, voir l’index dans `tabular_review`. `lister` : id, date, libellé, nature. `modifier` : date (`AAAA-MM-JJ`, vide pour l’effacer) et/ou libellé (renomme le fichier). `--dossier NOM` = un autre dossier.
+Dates et libellés des pièces en base. Ne lit pas les pièces et ne change pas les cellules de l’index : pour cela, voir l’index dans `tabular_review`. `lister` : id, date, libellé, nature. `modifier` : date (`AAAA-MM-JJ`, vide pour l’effacer) et/ou libellé (renomme le fichier). `--dossier NOM` = un autre dossier.
 
 ```
 pm chronologie lister

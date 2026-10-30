@@ -283,7 +283,8 @@ async function confirmClose(api, request, target) {
 function voletTarget(cwd, volet, review) {
   if (volet === 'tampon') return { cwd, tab: 'plugin:piecemaker-tampon' };
   if (volet === 'tabular-review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
-  return { cwd, tab: 'plugin:piecemaker-dossier', view: volet === 'index' ? 'chronology' : 'general' };
+  if (volet === 'index') return { cwd, tab: 'plugin:piecemaker-tabular-review', view: 'index' };
+  return { cwd, tab: 'plugin:piecemaker-dossier', view: 'general' };
 }
 
 function panelNoticeLabel(target) {
@@ -291,20 +292,17 @@ function panelNoticeLabel(target) {
   if (target.tab === 'plugin:piecemaker-tampon') return 'Bordereau';
   if (target.tab === 'plugin:piecemaker-raisonnement') return 'Raisonnement';
   if (target.tab === 'plugin:piecemaker-tabular-review') {
+    if (target.view === 'index') return 'Analyse tabulaire (index)';
     if (target.draft) return `Analyse tabulaire (projet ${target.draft})`;
     if (target.review) return `Analyse tabulaire (${target.review})`;
     return 'Analyse tabulaire';
   }
-  return target.view === 'chronology' ? 'Dossier (index)' : 'Dossier (vue générale)';
+  return 'Dossier (vue générale)';
 }
 
 function sqlPanelTarget(query, cwd) {
   if (!NODE_WRITE.test(query)) return null;
-  return {
-    cwd,
-    tab: 'plugin:piecemaker-dossier',
-    view: DOCUMENT_COLUMNS.test(query) ? 'chronology' : 'general',
-  };
+  return voletTarget(cwd, DOCUMENT_COLUMNS.test(query) ? 'index' : 'dossier');
 }
 
 function asText(result) {
@@ -407,7 +405,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       }),
       cwd,
     });
-    const target = { cwd: resolved, tab: 'plugin:piecemaker-dossier', view: 'chronology' };
+    const target = voletTarget(resolved, 'index');
     return withNotice(result, await followPanel(api, { project: resolved, tab: target.tab, view: target.view }, target));
   }
 

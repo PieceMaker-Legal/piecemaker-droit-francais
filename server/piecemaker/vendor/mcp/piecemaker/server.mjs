@@ -293,7 +293,9 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
     }
     const target = volet === 'tabular-review'
       ? { tab: 'plugin:piecemaker-tabular-review', review: review ? path.basename(review) : undefined }
-      : { tab: 'plugin:piecemaker-dossier', view: volet === 'index' ? 'chronology' : 'general' };
+      : volet === 'index'
+        ? { tab: 'plugin:piecemaker-tabular-review', view: 'index' }
+        : { tab: 'plugin:piecemaker-dossier', view: 'general' };
     const requestTarget = { cwd: process.cwd(), ...target };
     const alreadyOpen = await waitForOpenPanel(requestTarget, openPanelsPath, 0);
     const opened = alreadyOpen || await openPanelAndWait({ project: process.cwd(), ...target }, openPanelsTimeoutMs, openPanelsPath);
@@ -302,8 +304,8 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
   });
 
   server.registerTool('chronologie', {
-    description: 'Dates et libellés des pièces du dossier, affichés à l’avocat dans le volet Dossier. '
-      + 'Ne lit pas les pièces : pour la lecture intégrale de toutes les pièces, avec chronologie et tri, utiliser tabular_review, action index. '
+    description: 'Dates et libellés des pièces du dossier, en base. Ouvre l’index du dossier à côté du chat. '
+      + 'Ne lit pas les pièces et ne change pas les cellules de l’index : pour la lecture intégrale de toutes les pièces, avec chronologie et tri, utiliser tabular_review, action index. '
       + 'lister : id, date, libellé et nature de chaque pièce, par date. '
       + 'modifier : change la date (AAAA-MM-JJ, vide pour l’effacer) ou le libellé d’une pièce ; '
       + 'changer le libellé (AAAA-MM-JJ_titre) renomme aussi le fichier.',

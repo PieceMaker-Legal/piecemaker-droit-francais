@@ -8,7 +8,7 @@ import { deleteDraft, listDrafts, readDrafts, upsertDraft } from './drafts.js';
 import { assertProject, assertReviewFile, UserError } from './paths.js';
 import { researchState, startResearch, validateFilters } from './research.js';
 import { deriveStatus, listReviews, readReview, updateReview } from './reviews.js';
-import { INDEX_TEMPLATE, MAX_COLUMNS, normalizeColumn, readTemplates, upsertTemplate } from './templates.js';
+import { INDEX_TEMPLATE, MAX_COLUMNS, MENTIONS_COLUMN, normalizeColumn, readTemplates, upsertTemplate } from './templates.js';
 
 type Input = Record<string, unknown>;
 
@@ -147,7 +147,7 @@ async function caseIndex(project: string, launchers: AssistantLaunchers) {
     return { projet: draft.id };
   }
   const columns = readTemplates().find((entry) => entry.name === INDEX_TEMPLATE_NAME)?.columns ?? INDEX_TEMPLATE.columns;
-  const created = upsertDraft({ project, title: INDEX_TEMPLATE_NAME, templateName: INDEX_TEMPLATE_NAME, columns: [...columns, classification], rows: documentRows(project, ['']) });
+  const created = upsertDraft({ project, title: INDEX_TEMPLATE_NAME, templateName: INDEX_TEMPLATE_NAME, columns: [...columns, ...(columns.some((entry) => entry.name === MENTIONS_COLUMN.name) ? [] : [MENTIONS_COLUMN]), classification], rows: documentRows(project, ['']) });
   return { projet: created.id };
 }
 

@@ -27,6 +27,8 @@ export const SORTING_TEMPLATE: TemplateSeed = {
   ],
 };
 
+export const MENTIONS_COLUMN = column('Mentions', 'Quelles personnes, sociétés, lieux et numéros d’identification (SIREN, SIRET) le document mentionne-t-il ?', 'list');
+
 export const INDEX_TEMPLATE: TemplateSeed = {
   name: INDEX_TEMPLATE_NAME,
   description: 'Lecture intégrale de toutes les pièces du dossier : une ligne par pièce, classée par date. Ajoutez vos colonnes avec « + Question ».',
@@ -35,6 +37,7 @@ export const INDEX_TEMPLATE: TemplateSeed = {
     column('Événement', 'Décris en une phrase ce qui s’est passé : qui a fait quoi. Rapporte les faits sans les qualifier.'),
     column('Importance', 'Quelle est l’importance de cet événement pour le dossier ? Clé : il prouve ou contredit un fait décisif. Utile : il éclaire le contexte ou soutient un argument secondaire. Contexte : il complète seulement le récit. En cas de doute, choisis le niveau inférieur.', 'tags', ['Clé', 'Utile', 'Contexte']),
     column('Secret professionnel', 'Le document est-il une consultation ou une correspondance entre un avocat et son client, ou entre avocats, susceptible d’être couverte par le secret professionnel ?', 'yes_no'),
+    MENTIONS_COLUMN,
   ],
 };
 

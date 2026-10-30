@@ -25,6 +25,7 @@ vi.mock('@/modules/plugins', () => ({
     { name: 'example', displayName: 'Exemple', enabled: true },
     { name: 'other', displayName: 'Autre', enabled: true },
     { name: 'piecemaker-dossier', displayName: 'Dossier', enabled: true },
+    { name: 'piecemaker-tabular-review', displayName: 'Analyse tabulaire', enabled: true },
   ] }),
   PluginTabContent: ({ pluginName }: { pluginName: string }) => {
     const viewer = useContext(WorkspaceViewerContext);
@@ -126,18 +127,18 @@ it('ouvre le .docx dès que l’agent l’écrit, sans attendre un afficher', ()
   expect(opened).toEqual(['bonjour.docx']);
 });
 
-it('ouvre le volet Dossier sur la chronologie quand le LLM appelle l’outil chronologie', () => {
+it('ouvre l’index dans l’analyse tabulaire quand le LLM appelle l’outil chronologie', () => {
   render(<Harness />);
-  const viewRequests: unknown[] = [];
-  const recordView = () => viewRequests.push((window as unknown as Record<string, unknown>).__piecemakerDossierView);
-  window.addEventListener('piecemaker:dossier-view', recordView);
+  const showRequests: unknown[] = [];
+  const recordShow = () => showRequests.push((window as unknown as Record<string, unknown>).__piecemakerTabularReviewShow);
+  window.addEventListener('piecemaker:tabular-review-show', recordShow);
   act(() => {
     for (const listener of socket.listeners) listener({ kind: 'tool_use', toolId: 'outil-1', toolName: 'mcp__piecemaker__chronologie', toolInput: { action: 'lister' } });
   });
-  window.removeEventListener('piecemaker:dossier-view', recordView);
-  expect(screen.getByLabelText('Contenu piecemaker-dossier')).toBeTruthy();
+  window.removeEventListener('piecemaker:tabular-review-show', recordShow);
+  expect(screen.getByLabelText('Contenu piecemaker-tabular-review')).toBeTruthy();
   expect(screen.getByTestId('main').textContent).toBe('chat');
-  expect(viewRequests).toEqual(['chronology']);
+  expect(showRequests).toEqual([expect.objectContaining({ index: true })]);
 });
 
 it('permet de redimensionner le dock au clavier', () => {

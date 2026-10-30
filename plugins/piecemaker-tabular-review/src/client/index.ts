@@ -35,15 +35,15 @@ const mounted = new WeakMap<HTMLElement, Mounted>();
 
 type PendingWindow = Window & { [PENDING_TARGET_KEY]?: unknown; [PENDING_SHOW_KEY]?: unknown };
 
-type ShowRequest = { project: string | null; review: string | null; draft: string | null; chronology: boolean };
+type ShowRequest = { project: string | null; review: string | null; draft: string | null; index: boolean };
 
 function takeShowRequest(): ShowRequest | null {
   const pending = window as PendingWindow;
-  const request = pending[PENDING_SHOW_KEY] as { project?: unknown; review?: unknown; draft?: unknown; chronology?: unknown } | undefined;
+  const request = pending[PENDING_SHOW_KEY] as { project?: unknown; review?: unknown; draft?: unknown; index?: unknown } | undefined;
   delete pending[PENDING_SHOW_KEY];
   if (!request || typeof request !== 'object') return null;
   const text = (value: unknown) => typeof value === 'string' && value ? value : null;
-  return { project: text(request.project), review: text(request.review), draft: text(request.draft), chronology: request.chronology === true };
+  return { project: text(request.project), review: text(request.review), draft: text(request.draft), index: request.index === true };
 }
 
 export function mount(container: HTMLElement, api: PluginApi): void {
@@ -156,14 +156,17 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     },
   };
 
+  let caseIndexFile: string | null = null;
+
   function backToHistory() {
     closeReview();
     showTab('history');
     focusTable(null);
   }
 
-  function focusTable(file: string | null) {
-    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-tabular-review', file } }));
+  function focusTable(file: string | null, view?: 'index') {
+    const index = view ?? (file && file === caseIndexFile ? 'index' : undefined);
+    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-tabular-review', file, ...(index ? { view: index } : {}) } }));
   }
 
   function showPage(view: View) {
@@ -280,8 +283,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   async function openCaseIndex(project: string) {
     try {
       const { fichier, projet } = await app.rpc<{ fichier?: string; projet?: string }>('POST', '/assistant', { action: 'index', project });
+      caseIndexFile = fichier ? `${project}/${REVIEW_FOLDER}/${fichier}` : null;
       if (fichier) app.openReview(project, fichier);
-      else if (projet) await openDraftById(project, projet);
+      else if (projet) {
+        await openDraftById(project, projet);
+        focusTable(null, 'index');
+      }
     } catch (error) {
       toast(root, errorMessage(error), 'error');
     }
@@ -290,7 +297,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const onShow = () => {
     const request = takeShowRequest();
     if (!request) return;
-    if (request.project && request.chronology) {
+    if (request.project && request.index) {
       void openCaseIndex(request.project);
       return;
     }
@@ -312,7 +319,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   });
 
   showTab('history');
-  if (initialRequest?.project && initialRequest.chronology) void openCaseIndex(initialRequest.project);
+  if (initialRequest?.project && initialRequest.index) void openCaseIndex(initialRequest.project);
   else if (initialRequest?.project && initialRequest.draft) void openDraftById(initialRequest.project, initialRequest.draft);
   else if (initialRequest?.project && initialRequest.review) app.openReview(initialRequest.project, initialRequest.review);
   else if (!initialRequest?.project) {

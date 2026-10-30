@@ -1,12 +1,11 @@
 import { planCall } from '@/piecemaker/editor-tabs/planCalls';
 import type { PlanCall } from '@/piecemaker/editor-tabs/planCalls';
 
-export type DossierView = 'general' | 'chronology';
-
 export type AutoPanelTarget =
   | { kind: 'file'; path: string }
   | { kind: 'plan'; plan: PlanCall }
-  | { kind: 'dossier'; view: DossierView }
+  | { kind: 'dossier' }
+  | { kind: 'index' }
   | { kind: 'tabular-review'; review: string | null; draft?: string; awaitDraft?: true }
   | { kind: 'tampon' };
 
@@ -56,10 +55,12 @@ export function panelShowDecision(target: AutoPanelTarget, snapshot: PanelSnapsh
     return snapshot.panels.includes('plugin:piecemaker-tampon') ? 'skip' : 'apply';
   }
   if (target.kind === 'dossier') {
-    if (!snapshot.panels.includes('plugin:piecemaker-dossier')) return 'apply';
-    return snapshot.focus['plugin:piecemaker-dossier']?.view === target.view ? 'skip' : 'apply';
+    return snapshot.panels.includes('plugin:piecemaker-dossier') ? 'skip' : 'apply';
   }
   const tab = 'plugin:piecemaker-tabular-review';
+  if (target.kind === 'index') {
+    return snapshot.panels.includes(tab) && snapshot.focus[tab]?.view === 'index' ? 'skip' : 'apply';
+  }
   const open = snapshot.panels.includes(tab);
   const current = snapshot.focus[tab]?.file;
   const wanted = target.review || target.draft || '';
@@ -92,15 +93,15 @@ function docxTarget(command: string): AutoPanelTarget | null {
 
 function sqlTarget(query: string): AutoPanelTarget | null {
   if (!NODE_WRITE.test(query)) return null;
-  return { kind: 'dossier', view: DOCUMENT_COLUMNS.test(query) ? 'chronology' : 'general' };
+  return DOCUMENT_COLUMNS.test(query) ? { kind: 'index' } : { kind: 'dossier' };
 }
 
 function showTarget(input: Input): AutoPanelTarget | null {
   if (input.fermer === true || input.fermer === 'true') return null;
   const file = text(input.fichier);
   if (file) return { kind: 'file', path: file };
-  if (input.volet === 'index') return { kind: 'dossier', view: 'chronology' };
-  if (input.volet === 'dossier') return { kind: 'dossier', view: 'general' };
+  if (input.volet === 'index') return { kind: 'index' };
+  if (input.volet === 'dossier') return { kind: 'dossier' };
   if (input.volet === 'tampon') return { kind: 'tampon' };
   if (input.volet === 'tabular-review') return { kind: 'tabular-review', review: text(input.review) ? baseName(text(input.review)) : null };
   return null;
@@ -129,7 +130,7 @@ function tabularReviewTarget(input: Input): AutoPanelTarget | null {
 
 function pieceMakerTarget(tool: string, input: Input): AutoPanelTarget | null {
   if (tool === 'afficher') return showTarget(input);
-  if (tool === 'chronologie') return { kind: 'dossier', view: 'chronology' };
+  if (tool === 'chronologie') return { kind: 'index' };
   if (tool === 'tabular_review') return tabularReviewTarget(input);
   if (tool === 'sql') return sqlTarget(text(input.requete));
   return null;
@@ -178,7 +179,7 @@ function pieceMakerCliTarget(command: string): AutoPanelTarget | null {
   const { flags, rest } = flagMap(argv.slice(script + 1));
   const tool = rest[0];
   if (tool === 'afficher') return showTarget(flags);
-  if (tool === 'chronologie') return { kind: 'dossier', view: 'chronology' };
+  if (tool === 'chronologie') return { kind: 'index' };
   if (tool === 'tabular_review') return tabularReviewTarget({ ...flags, action: rest[1] });
   if (tool === 'sql') return sqlTarget(text(flags.requete) || rest.slice(1).join(' '));
   return null;

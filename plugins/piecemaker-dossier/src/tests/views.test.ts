@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { chronologyView, citationListMarkup, generalView, mappingView, proposedPieceName, shell } from '../views.js';
+import { citationListMarkup, generalView, mappingView, proposedPieceName, shell } from '../views.js';
 import type { KnowledgeSnapshot } from '../types.js';
 
 const snapshot: KnowledgeSnapshot = {
@@ -21,40 +21,6 @@ const snapshot: KnowledgeSnapshot = {
   mappings: [],
   citations: [],
 };
-
-describe('chronology document cards', () => {
-  it('marks the whole document event as an editor trigger', () => {
-    const html = chronologyView({
-      graph: snapshot,
-    });
-
-    expect(html).toContain('data-open-document="doc"');
-    expect(html).toContain('aria-label="Modifier Contrat"');
-  });
-
-  it('reads the date of a document from its doc_date column', () => {
-    const html = chronologyView({ graph: { ...snapshot, nodes: [
-      { id: 'dated', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: {}, date: '2024-03-05', createdAt: '', updatedAt: '' },
-      { id: 'undated', projectId: 'project-1', kind: 'document', label: 'Facture.pdf', aliases: [], data: { date_non_reconnue: '5 mars 2024' }, date: null, createdAt: '', updatedAt: '' },
-    ], links: [] } } as never);
-    expect(html).toContain('data-dated="true"');
-    expect(html).toContain('Date non renseignée');
-    expect(html.match(/data-dated="true"/g)).toHaveLength(1);
-  });
-
-  it('shows the documents as a table, with the tabular analysis button and custom fields as columns', () => {
-    const html = chronologyView({ graph: { ...snapshot, nodes: [
-      { id: 'dated', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: { fields: [{ label: 'Montant', value: '1 000 €' }] }, date: '2024-03-05', createdAt: '', updatedAt: '' },
-      { id: 'client', projectId: 'project-1', kind: 'company', label: 'Société Exemple SAS', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
-    ], links: [{ projectId: 'project-1', fromNodeId: 'dated', toNodeId: 'client', relation: 'mentions', data: {} }] } } as never);
-    expect(html).toContain('<table class="pmd-chronology-table">');
-    expect(html).toContain('data-action="chronology-tabular"');
-    expect(html).toContain('<th scope="col">Montant</th>');
-    expect(html).toContain('<td>1 000 €</td>');
-    expect(html).toContain('Société Exemple SAS');
-    expect(html).toContain('05/03/2024');
-  });
-});
 
 describe('BODACC on designated parties', () => {
   it('offers identity and BODACC actions only on designated company parties', () => {
@@ -222,7 +188,7 @@ describe('scan status badge', () => {
     expect(html).toContain('class="pmd-status-label" data-action="mapping"');
     expect(html).not.toContain('role="progressbar"');
     expect(html).toContain('data-tab="general"');
-    expect(html).toContain('data-tab="chronology"');
+    expect(html).toContain('data-action="open-index"');
     expect(html).not.toContain('data-tab="scan"');
   });
 
@@ -257,25 +223,6 @@ describe('piece names', () => {
   it('proposes nothing without a date or a type', () => {
     expect(proposedPieceName('', 'jugement', '')).toBe('');
     expect(proposedPieceName('2024-01-09', ' ', '')).toBe('');
-  });
-
-  it('leaves the name of a piece unjudged in the chronology', () => {
-    const html = chronologyView({ graph: { ...snapshot, nodes: [
-      { id: 'a', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
-    ], links: [] } } as never);
-    expect(html).not.toContain('Nom non conforme');
-  });
-
-  it('puts the name first, the nature as a pill, and the place and SIREN in the mentions', () => {
-    const html = chronologyView({ graph: { ...snapshot, nodes: [
-      { id: 'a', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: { nature: 'contrat', localisation: 'Paris', fields: [{ label: 'SIREN', value: '123456789' }, { label: 'Montant', value: '1 000 €' }] }, date: null, createdAt: '', updatedAt: '' },
-    ], links: [] } } as never);
-    expect(html.match(/<th scope="col">[^<]*<\/th>/g)).toEqual(['<th scope="col">Document</th>', '<th scope="col">Date</th>', '<th scope="col">Mentions</th>', '<th scope="col">Montant</th>']);
-    expect(html).toContain('data-action="chronology-tabular" title="Choisir l’arborescence et classer dans l’analyse tabulaire"');
-    expect(html).toContain('<td>Non classé</td>');
-    expect(html).toMatch(/data-edit-nature="a"[^>]*>contrat<\/button>/);
-    expect(html).toContain('<span class="pmd-badge">Paris</span>');
-    expect(html).toContain('<span class="pmd-badge">SIREN 123456789</span>');
   });
 });
 

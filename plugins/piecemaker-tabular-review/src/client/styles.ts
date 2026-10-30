@@ -113,6 +113,12 @@ blockquote.ptr-citation-quote{margin:8px 0;padding-left:8px;border-left:3px soli
 .ptr-md code{font-size:12px}
 .ptr-flag{display:inline-block;flex-shrink:0;width:9px;height:9px;margin-top:4px;border-radius:9999px}
 .ptr-row-label{font-weight:600;word-break:break-word}
+.ptr-nature{margin-top:4px}
+.ptr-nature-pill{display:inline-block;max-width:100%;box-sizing:border-box;border:1px solid var(--ptr-border);border-radius:4px;background:transparent;color:inherit;padding:1px 6px;font:inherit;font-size:11px;cursor:pointer}
+.ptr-nature-pill[data-empty=true]{color:var(--ptr-muted)}
+.ptr-nature-pill::after{content:"▾";margin-left:4px;color:var(--ptr-muted)}
+.ptr-nature-pill:hover{border-color:var(--ptr-muted)}
+.ptr-nature-field{max-width:100%;box-sizing:border-box;border:1px solid var(--ptr-border);border-radius:4px;background:var(--ptr-surface);color:inherit;padding:2px 6px;font:inherit;font-size:11px}
 .ptr-row-status{margin-top:3px;font-size:11px;color:var(--ptr-muted);word-break:break-word}
 .ptr-row-status.ptr-status-error{color:var(--ptr-danger)}
 .ptr-spinner{display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-right-color:transparent;border-radius:9999px;animation:ptr-spin .8s linear infinite;vertical-align:-1px}

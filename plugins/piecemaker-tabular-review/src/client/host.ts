@@ -1,4 +1,5 @@
 import type { Provider } from '../shared.js';
+import type { DocumentNode } from './nature.js';
 import type { CasePiece, Pseudonym } from './sorting.js';
 
 export type PluginContext = {
@@ -92,6 +93,13 @@ export const caseFiles = {
     const graph = await hostJson<{ nodes: { id: string; label: string }[]; mappings: { nodeId: string; real: string; masked: string }[] }>(`${KNOWLEDGE}/graph?projectId=${encodeURIComponent(projectId)}`);
     const labels = new Map(graph.nodes.map((node) => [node.id, node.label]));
     return graph.mappings.map((mapping) => ({ masked: mapping.masked, real: labels.get(mapping.nodeId) || mapping.real }));
+  },
+  async documentNodes(projectId: string): Promise<DocumentNode[]> {
+    const graph = await hostJson<{ nodes: (DocumentNode & { kind: string })[] }>(`${KNOWLEDGE}/graph?projectId=${encodeURIComponent(projectId)}`);
+    return graph.nodes.filter((node) => node.kind === 'document');
+  },
+  saveNature(projectId: string, node: DocumentNode, nature: string) {
+    return hostJson(`${KNOWLEDGE}/update`, { projectId, operations: [{ op: 'upsertNode', node: { id: node.id, kind: 'document', label: node.label, aliases: node.aliases, data: { ...node.data, nature: nature || null }, date: node.date } }] });
   },
   rename(projectId: string, piece: string, name: string | undefined, directory: string | undefined) {
     return hostJson<{ previous: string; current: string; markdown: string | null }>(`${KNOWLEDGE}/rename`, { projectId, path: piece, name, directory });
