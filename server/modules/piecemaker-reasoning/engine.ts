@@ -177,13 +177,13 @@ export function calculate(measure: Measure, lookup: Lookup): Calculation {
   return { value, missing, calcul: { montant: amount, seuil: threshold } };
 }
 
-export type Known = { leaf(name: string): ReasoningValue; value(name: string, holds?: Holds): string | number | null; proven?(path: string, count: number): boolean };
+export type Known = { leaf(name: string): ReasoningValue; value(name: string, holds?: Holds): string | number | null; proven?(path: string, count: number): boolean; supported?(path: string): boolean };
 
 export function simulate(reasoning: Reasoning, test: Test, known: Known, faits: Trial['faits']) {
   const computing = new Set<string>();
   const facts: Facts = {
     leaf: (name) => { const item = faits[name]; if (typeof item === 'boolean') return item; const measure = reasoning.computed.get(name); return measure ? calculate(measure, value).value : known.leaf(name); },
-    basis: (_path, _condition, applicable) => (applicable.length ? or(applicable) : true),
+    basis: (at, _condition, applicable) => known.supported?.(at) === false ? null : (applicable.length ? or(applicable) : true),
     proven: known.proven,
   };
   const holds: Holds = (name) => (reasoning.terms.has(name) ? test(facts, undefined, [name]).get(name) ?? null : facts.leaf(name));
