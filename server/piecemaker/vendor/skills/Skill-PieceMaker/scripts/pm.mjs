@@ -9,7 +9,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'suivi', 'docx', 'acte'];
 const REASONING_COMMANDS = ['consignes', 'verifier', 'lister'];
 const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
-const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer'];
+const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'chronologie', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer'];
+const REVIEW_FOLLOWED = ['chronologie', 'colonnes', 'classement', 'arborescence', 'relancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
 const BOOLEAN_FLAGS = new Set(['force', 'fermer']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
@@ -431,12 +432,19 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       modele: flags.modele !== true ? flags.modele : undefined,
       description: flags.description !== true ? flags.description : undefined,
       questions: parseJson(flags.questions, 'questions'),
+      dossiers: parseJson(flags.dossiers, 'dossiers'),
       documents,
       recherche: parseJson(flags.recherche, 'recherche'),
       ia: flags.ia !== true ? flags.ia : undefined,
       modele_ia: flags.modele_ia !== true ? flags.modele_ia : undefined,
     });
     const text = Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result);
+    if (REVIEW_FOLLOWED.includes(action)) {
+      const review = result?.fichier ? String(result.fichier) : undefined;
+      const draft = result?.projet ? String(result.projet) : undefined;
+      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review, draft };
+      return withNotice(text, await followPanel(api, { project, tab: target.tab, review, draft }, target));
+    }
     if (action === 'lister' || action === 'preparer' || action === 'lancer') {
       const draft = result && typeof result === 'object' && result.projet ? String(result.projet) : '';
       const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', draft: draft || undefined };

@@ -332,9 +332,15 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       + `ouvrir : affiche une analyse (fichier ; contenu dans « ${REVIEW_FOLDER}/<fichier> ») ou un projet. `
       + 'documents : documents analysables. modeles : liste, ou questions d’un modele. enregistrer_modele : crée, ou modifie modele. '
       + 'preparer : crée ou complète (projet) un projet, que l’avocat vérifie et lance. '
-      + 'lancer : seulement sur accord explicite de l’avocat dans le chat.',
+      + 'lancer : seulement sur accord explicite de l’avocat dans le chat. '
+      + 'chronologie : affiche l’analyse chronologique du dossier, préparée si besoin. '
+      + 'lire : colonnes, lignes et réponses de fichier. '
+      + 'colonnes : ajoute (sans colonne), modifie ou supprime (colonne, supprimer) les colonnes de fichier. '
+      + 'classement : ajoute à fichier la colonne qui classe chaque document dans l’arborescence du dossier. '
+      + 'arborescence : lit, ou remplace avec dossiers, l’arborescence ; aucun fichier n’est déplacé, l’avocat applique dans le volet. '
+      + 'relancer : seulement sur accord explicite de l’avocat ; analyse les nouveaux documents Markdown de fichier.',
     inputSchema: {
-      action: z.enum(['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer']),
+      action: z.enum(['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'chronologie', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer']),
       dossier: DOSSIER_SCHEMA,
       fichier: z.string().optional(),
       projet: z.string().optional().describe('Id d’un projet non lancé.'),
@@ -344,10 +350,13 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       description: z.string().optional(),
       questions: z.array(z.object({
         nom: z.string().optional(),
-        consigne: z.string(),
+        consigne: z.string().optional().describe('Obligatoire pour une nouvelle question.'),
         format: z.enum(COLUMN_FORMATS).optional(),
         etiquettes: z.array(z.string()).optional(),
+        colonne: z.number().int().optional().describe('colonnes : numéro donné par lire, pour modifier ou supprimer.'),
+        supprimer: z.boolean().optional(),
       })).optional().describe('Avec modele dans preparer : ajoutées à ses questions.'),
+      dossiers: z.array(z.object({ nom: z.string(), explication: z.string().optional() })).optional().describe('arborescence : remplace la liste. Un « / » crée un sous-dossier.'),
       documents: z.array(z.string()).optional().describe('Chemins relatifs de documents ou de dossiers (tous leurs documents).'),
       recherche: z.object({
         query: z.string(),
@@ -388,7 +397,10 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
         if (input.projet) return { content: [{ type: 'text', text: `Projet affiché dans le volet Tabular Review : ${input.projet}` }] };
         return { content: [{ type: 'text', text: `Analyse affichée dans le volet Tabular Review. Contenu : « ${REVIEW_FOLDER}/${name} ».` }] };
       }
-      const result = await tabularFn({ ...input, action, project: resolved });
+      const result = await tabularFn({ ...input, ...(fichier ? { fichier } : {}), action, project: resolved });
+      if (action === 'chronologie') {
+        await openPanelAndWait({ project: resolved, tab: 'plugin:piecemaker-tabular-review', review: result.fichier, draft: result.projet }, openPanelsTimeoutMs, openPanelsPath);
+      }
       return { content: [{ type: 'text', text: Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result) }] };
     } catch (error) {
       return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };

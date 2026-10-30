@@ -15,6 +15,7 @@ const launchers = () => ({
   isRunning: () => false,
   launchAnalysis: vi.fn(async (body: Record<string, unknown>) => ({ project, file: `${String(body.title)}.json`, status: 'running' as const, review: {} as never })),
   launchResearch: vi.fn(async () => ({ project, file: 'r.json', status: 'running' as const, review: {} as never })),
+  appendDocuments: vi.fn(async () => ({ project, file: 'r.json', status: 'running' as const, review: {} as never })),
 });
 
 beforeAll(() => {
@@ -37,7 +38,7 @@ describe('outil tabular_review', () => {
     const first = await assistant({ action: 'chronologie', project }, run) as { projet: string };
     const listed = await assistant({ action: 'lister', project }, run) as { projets: { projet: string; nom: string; documents: string[]; questions: string[] }[] };
     const draft = listed.projets.find((entry) => entry.projet === first.projet);
-    expect(draft).toMatchObject({ nom: 'Chronologie', questions: ['Date', 'Événement', 'Importance', 'Secret professionnel'] });
+    expect(draft).toMatchObject({ nom: 'Chronologie', questions: ['Date', 'Événement', 'Importance', 'Secret professionnel', 'Classement'] });
     expect(draft?.documents).toContain('Pièces/courrier.md');
     expect(await assistant({ action: 'chronologie', project }, run)).toEqual({ projet: first.projet });
     const { deleteDraft } = await import('../server/drafts.js');

@@ -1,5 +1,5 @@
-import type { Cell, ColumnAction, Review, ReviewRow } from '../shared.js';
-import { isCellFilled, NOT_FOUND_SUMMARY, REVIEW_FOLDER } from '../shared.js';
+import type { Cell, ColumnAction, MarkdownDocument, Review, ReviewRow } from '../shared.js';
+import { classifyColumn, isCellFilled, NOT_FOUND_SUMMARY, REVIEW_FOLDER } from '../shared.js';
 
 /** Code d'anonymisation → nom réel, tiré du graphe du dossier. */
 export type Pseudonym = { masked: string; real: string };
@@ -34,18 +34,33 @@ function columnValue(review: Review, row: ReviewRow, action: ColumnAction): stri
   return column ? actionValue(review.cells[row.id]?.[String(column.index)]) : '';
 }
 
-/** Changement à appliquer à une ligne de tri, ou `null` s'il n'y a rien à faire. */
-export function plannedChange(review: Review, row: ReviewRow, pseudonyms: Pseudonym[]): PlannedChange | null {
-  if (!row.piece) return null;
-  const extension = row.piece.match(/\.[^./]+$/)?.[0] ?? '';
+export function classifiedFolder(review: Review, row: ReviewRow): string {
+  const value = columnValue(review, row, 'classify').normalize('NFC').toLowerCase();
+  return classifyColumn(review.columns)?.tags?.find((tag) => tag.normalize('NFC').toLowerCase() === value) ?? '';
+}
+
+export function pieceOf(row: ReviewRow, pieces: CasePiece[]): string | undefined {
+  if (row.piece) return row.piece;
+  const source = row.documents[0]?.source.normalize('NFC');
+  return pieces.find((piece) => piece.markdown?.normalize('NFC') === source)?.path;
+}
+
+/** Changement à appliquer à une ligne, ou `null` s'il n'y a rien à faire. */
+export function plannedChange(review: Review, row: ReviewRow, pseudonyms: Pseudonym[], pieces: CasePiece[] = []): PlannedChange | null {
+  const piece = pieceOf(row, pieces);
+  if (!piece) return null;
+  const extension = piece.match(/\.[^./]+$/)?.[0] ?? '';
   const rawName = depseudonymize(columnValue(review, row, 'rename'), pseudonyms);
   const name = extension && rawName.toLowerCase().endsWith(extension.toLowerCase()) ? rawName.slice(0, -extension.length) : rawName;
-  const directory = depseudonymize(columnValue(review, row, 'move'), pseudonyms).replace(/^\/+|\/+$/g, '');
-  const currentName = row.piece.split('/').pop()!.slice(0, extension ? -extension.length : undefined);
-  const currentDirectory = row.piece.includes('/') ? row.piece.slice(0, row.piece.lastIndexOf('/')) : '';
-  const change: PlannedChange = { row, piece: row.piece };
+  const classified = classifiedFolder(review, row);
+  const directory = classified || depseudonymize(columnValue(review, row, 'move'), pseudonyms).replace(/^\/+|\/+$/g, '');
+  const currentName = piece.split('/').pop()!.slice(0, extension ? -extension.length : undefined);
+  const currentDirectory = piece.includes('/') ? piece.slice(0, piece.lastIndexOf('/')) : '';
+  const inPlace = currentDirectory.normalize('NFC') === directory.normalize('NFC')
+    || Boolean(classified) && currentDirectory.normalize('NFC').startsWith(`${classified.normalize('NFC')}/`);
+  const change: PlannedChange = { row, piece };
   if (name && name !== currentName) change.name = name;
-  if (directory && directory !== currentDirectory) change.directory = directory;
+  if (directory && !inPlace) change.directory = directory;
   return change.name || change.directory ? change : null;
 }
 
@@ -57,8 +72,18 @@ export function targetPath(change: PlannedChange): string {
   return `${directory ? `${directory}/` : ''}${name}${extension}`;
 }
 
-/** Pièces du dossier absentes du tri, hors exports des analyses tabulaires. */
+function knownPaths(review: Review): Set<string> {
+  return new Set(review.rows.flatMap((row) => [...(row.piece ? [row.piece] : []), ...row.documents.map((document) => document.source)]));
+}
+
+/** Pièces du dossier absentes de la revue, hors exports des analyses tabulaires. */
 export function newPieces(review: Review, pieces: CasePiece[]): CasePiece[] {
-  const known = new Set(review.rows.map((row) => row.piece));
-  return pieces.filter((piece) => !known.has(piece.path) && piece.path.split('/')[0] !== REVIEW_FOLDER);
+  const known = knownPaths(review);
+  return pieces.filter((piece) => !known.has(piece.path) && !(piece.markdown && known.has(piece.markdown)) && piece.path.split('/')[0] !== REVIEW_FOLDER);
+}
+
+export function newNotes(review: Review, documents: MarkdownDocument[], pieces: CasePiece[]): MarkdownDocument[] {
+  const known = knownPaths(review);
+  const converted = new Set(pieces.map((piece) => piece.markdown));
+  return documents.filter((document) => !known.has(document.path) && !converted.has(document.path));
 }

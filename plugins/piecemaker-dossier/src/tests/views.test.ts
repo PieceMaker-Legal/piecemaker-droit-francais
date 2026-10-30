@@ -271,6 +271,8 @@ describe('piece names', () => {
       { id: 'a', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: { nature: 'contrat', localisation: 'Paris', fields: [{ label: 'SIREN', value: '123456789' }, { label: 'Montant', value: '1 000 €' }] }, date: null, createdAt: '', updatedAt: '' },
     ], links: [] } } as never);
     expect(html.match(/<th scope="col">[^<]*<\/th>/g)).toEqual(['<th scope="col">Document</th>', '<th scope="col">Date</th>', '<th scope="col">Mentions</th>', '<th scope="col">Montant</th>']);
+    expect(html).toContain('data-action="chronology-tabular" title="Choisir l’arborescence et classer dans l’analyse tabulaire"');
+    expect(html).toContain('<td>Non classé</td>');
     expect(html).toMatch(/data-edit-nature="a"[^>]*>contrat<\/button>/);
     expect(html).toContain('<span class="pmd-badge">Paris</span>');
     expect(html).toContain('<span class="pmd-badge">SIREN 123456789</span>');

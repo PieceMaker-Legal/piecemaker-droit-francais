@@ -207,6 +207,9 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-chronology-date{color:var(--pmd-muted);white-space:nowrap}
 .pmd-chronology-table th:first-child,.pmd-chronology-name{position:sticky;left:0;min-width:240px;max-width:320px;border-right:1px solid var(--pmd-border)}
 .pmd-chronology-table th:first-child{z-index:3}
+.pmd-chronology-heading{all:unset;cursor:pointer;white-space:nowrap}
+.pmd-chronology-heading:hover{text-decoration:underline}
+.pmd-chronology-heading:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 .pmd-chronology-name{z-index:1;background:var(--pmd-surface)}
 .pmd-chronology-row:hover .pmd-chronology-name{background:var(--pmd-soft)}
 .pmd-chronology-table .pmd-badge{display:inline-block}

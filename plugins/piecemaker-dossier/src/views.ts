@@ -313,7 +313,14 @@ function chronologyMentions(node: KnowledgeNode, related: KnowledgeNode[]): stri
   return [...mentions, ...identifiers.map((field) => `${field.label} ${field.value}`)];
 }
 
-function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
+function chronologyFolder(node: KnowledgeNode, projectPath: string): string {
+  const current = textValue(node.data.path).replace(/\\/g, '/');
+  const root = projectPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const relative = root && current.startsWith(`${root}/`) ? current.slice(root.length + 1) : current;
+  return relative.includes('/') ? relative.slice(0, relative.lastIndexOf('/')) : '';
+}
+
+function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string): string {
   const related = links
     .filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id))
     .map((link) => byId.get(link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId))
@@ -322,17 +329,17 @@ function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<str
   const fields = chronologyFields(node);
   const fieldCells = fieldLabels.map((label) => `<td>${escapeHtml(fields.find((field) => field.label === label)?.value ?? '')}</td>`).join('');
   const nature = textValue(node.data.nature);
-  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(node.label)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
+  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(node.label)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td><td>${escapeHtml(chronologyFolder(node, projectPath) || 'Non classé')}</td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
 }
 
-function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
+function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string): string {
   if (!nodes.length) return '<div class="pmd-empty">Aucun document indexé.</div>';
   const fieldLabels = [...new Set(nodes.flatMap((node) => chronologyFields(node).map((field) => field.label)))].filter((label) => !MENTION_FIELD.test(label));
-  const headings = ['Document', 'Date', 'Mentions', ...fieldLabels];
-  return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${headings.map((heading) => `<th scope="col">${escapeHtml(heading)}</th>`).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links)).join('')}</tbody></table></div>`;
+  const heading = (label: string) => `<th scope="col">${escapeHtml(label)}</th>`;
+  return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${['Document', 'Date', 'Mentions'].map(heading).join('')}<th scope="col"><button type="button" class="pmd-chronology-heading" data-action="chronology-tabular" title="Choisir l’arborescence et classer dans l’analyse tabulaire">Classement ▾</button></th>${fieldLabels.map(heading).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links, projectPath)).join('')}</tbody></table></div>`;
 }
 
-export function chronologyView(data: ViewData): string {
+export function chronologyView(data: ViewData, projectPath = ''): string {
   const documents = data.graph.nodes.filter((node) => node.kind === 'document');
   const dated = documents
     .filter((node) => Boolean(dateFor(node)))
@@ -343,5 +350,5 @@ export function chronologyView(data: ViewData): string {
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
   return `
     <div class="pmd-toolbar"><div class="pmd-subtitle">Classés du plus ancien au plus récent</div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="chronology-tabular" title="Analyser ces documents dans un tableau et y ajouter des colonnes">Analyse tabulaire</button></div>
-    ${chronologyTable([...dated, ...undated], byId, data.graph.links)}`;
+    ${chronologyTable([...dated, ...undated], byId, data.graph.links, projectPath)}`;
 }

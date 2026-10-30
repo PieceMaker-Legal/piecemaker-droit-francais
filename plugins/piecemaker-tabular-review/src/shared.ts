@@ -3,7 +3,7 @@ export type Flag = 'green' | 'yellow' | 'red' | 'grey';
 export type ColumnFormat = 'text' | 'list' | 'date' | 'amount' | 'yes_no' | 'tags';
 
 /** Colonne dont la réponse s'applique à la pièce : la renommer ou la ranger dans un sous-dossier. */
-export type ColumnAction = 'rename' | 'move' | 'custom';
+export type ColumnAction = 'rename' | 'move' | 'custom' | 'classify';
 
 export const COLUMN_ACTIONS: { value: ColumnAction; label: string }[] = [
   { value: 'rename', label: 'Renommer la pièce' },
@@ -19,6 +19,30 @@ export type TemplateColumn = {
   action?: ColumnAction;
   customAction?: string;
 };
+
+export type ClassificationFolder = { name: string; explanation: string };
+
+export const DEFAULT_CLASSIFICATION: ClassificationFolder[] = [
+  { name: 'Projets', explanation: 'Documents de travail.' },
+  { name: 'Pièces', explanation: 'Tous les documents qui sont à la base du dossier.' },
+  { name: 'Archives', explanation: 'Documents à ne plus utiliser, projets abandonnés.' },
+  { name: 'Notes et recherches', explanation: 'Notes et recherches.' },
+];
+
+export function classificationColumn(folders: ClassificationFolder[], name = 'Classement'): TemplateColumn {
+  const lines = folders.map((folder) => `- ${folder.name}${folder.explanation ? ` : ${folder.explanation}` : ''}`);
+  return {
+    name,
+    prompt: `Dans quel dossier de l’arborescence faut-il classer ce document ? Choisis un seul dossier et réponds par son nom exact.\n${lines.join('\n')}`,
+    format: 'tags',
+    tags: folders.map((folder) => folder.name),
+    action: 'classify',
+  };
+}
+
+export function classifyColumn<T extends TemplateColumn>(columns: T[]): T | undefined {
+  return columns.find((column) => column.action === 'classify');
+}
 
 export type Template = {
   id: string;

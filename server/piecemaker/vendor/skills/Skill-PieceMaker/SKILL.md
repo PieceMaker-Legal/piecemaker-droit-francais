@@ -189,7 +189,7 @@ pm chronologie modifier --piece doc:1 --date 2024-03-01 --libelle 2024-03-01_Let
 
 ## tabular_review
 
-`lancer` seulement si l’avocat l’a demandé.
+`lancer` et `relancer` seulement si l’avocat l’a demandé.
 
 ```
 pm tabular_review lister
@@ -200,9 +200,21 @@ pm tabular_review modeles [--modele ID]
 pm tabular_review enregistrer_modele --nom TEXT --questions JSON [--modele ID]
 pm tabular_review preparer --mode analyse|recherche --nom TEXT [--projet ID] [--modele ID] [--description TEXT] [--questions JSON] [--documents a,b] [--recherche JSON]
 pm tabular_review lancer --projet ID [--ia claude|codex|mistral] [--modele-ia TEXT]
+pm tabular_review chronologie
+pm tabular_review lire --fichier analyse.json
+pm tabular_review colonnes --fichier analyse.json --questions JSON
+pm tabular_review classement --fichier analyse.json
+pm tabular_review arborescence [--dossiers JSON]
+pm tabular_review relancer --fichier analyse.json
 ```
 
 `--questions` JSON : `[{nom, consigne, format, etiquettes}]`. `format` : `text` `list` `date` `amount` `yes_no` `tags`.
+
+`colonnes` : sans `colonne`, ajoute une question ; avec `colonne` (numéro donné par `lire`), modifie la question ou la supprime avec `supprimer: true`. Les cellules déjà remplies gardent leur réponse.
+
+`classement` ajoute la colonne qui classe chaque document dans l’arborescence du dossier. `arborescence --dossiers` remplace cette arborescence : `[{nom, explication}]`, un « / » crée un sous-dossier. Sans `.piecemaker/arborescence.json`, la base est Projets, Pièces, Archives, Notes et recherches.
+
+Aucune de ces actions ne déplace de fichier : l’avocat applique le classement depuis le volet, après confirmation. `relancer` analyse les nouveaux documents Markdown : lancez `pm conversion` avant pour les pièces non converties.
 
 `--recherche` JSON : `query`, `sources` (`cassation` `appel` `conseil_etat` `caa` `premiere_instance`), `matieres` (cassation : `CIVIL` `COMMERCIAL` `PENAL` `SOCIAL`), `publicationBulletin` (`TOUS` `PUBLIE` `INEDIT`), `sieges`, `publicationConseilEtat` (`TOUS` `PUBLIE` `NON_PUBLIE`), `villesCaa`, `publicationCaa` (`TOUS` `PUBLIE` `NON_PUBLIE`), `typesPremiereInstance` (`TRIBUNAL_JUDICIAIRE` `TRIBUNAL_GRANDE_INSTANCE` `TRIBUNAL_INSTANCE` `TRIBUNAL_COMMERCE` `CONSEIL_PRUDHOMMES` `TRIBUNAL_CORRECTIONNEL` `TRIBUNAL_SECURITE_SOCIALE` `TRIBUNAL_BAUX_RURAUX` `JURIDICTION_PROXIMITE` `OUTRE_MER` `TRIBUNAL_CONFLITS`), `dateDebut`, `dateFin`, `dispositifOnly`.
 

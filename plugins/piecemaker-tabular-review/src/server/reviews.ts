@@ -95,7 +95,7 @@ function buildRows(project: string, rows: RowRequest[], sorting: boolean, copies
     return {
       label: typeof row.label === 'string' ? row.label.trim().slice(0, 200) : '',
       sources: documents.map((document) => resolveMarkdownDocument(project, document)),
-      ...(sorting ? { piece: piecePath(row.piece) } : {}),
+      ...(sorting || row.piece ? { piece: piecePath(row.piece) } : {}),
     };
   });
   return resolvedRows.map(({ label, sources, piece }) => {
@@ -221,9 +221,9 @@ export async function saveQuestion(project: string, file: string, column: unknow
 export function markApplied(project: string, file: string, rowId: unknown, current: unknown, markdown: unknown): Promise<Review> {
   return updateReview(project, file, (review) => {
     const row = review.rows.find((entry) => entry.id === rowId);
-    if (!row?.piece) throw new UserError('Ligne de tri introuvable.');
+    if (!row) throw new UserError('Ligne introuvable.');
     const next = piecePath(current);
-    row.applied = { at: new Date().toISOString(), from: row.piece };
+    row.applied = { at: new Date().toISOString(), from: row.piece ?? row.documents[0]?.source ?? next };
     row.piece = next;
     row.label = path.posix.basename(next, path.posix.extname(next));
     if (typeof markdown === 'string' && markdown && row.documents[0]) row.documents[0].source = markdown;

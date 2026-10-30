@@ -153,7 +153,7 @@ export function normalizeColumn(value: unknown): TemplateColumn {
   if (!name || !prompt) throw new UserError('Chaque question doit avoir un titre et une consigne.');
   const format = COLUMN_FORMATS.some((entry) => entry.value === input.format) ? input.format as ColumnFormat : 'text';
   const tags = Array.isArray(input.tags) ? input.tags.map((tag) => text(tag, 60)).filter(Boolean).slice(0, 30) : [];
-  const action = COLUMN_ACTIONS.some((entry) => entry.value === input.action) ? input.action as ColumnAction : undefined;
+  const action = input.action === 'classify' || COLUMN_ACTIONS.some((entry) => entry.value === input.action) ? input.action as ColumnAction : undefined;
   const customAction = text(input.customAction, 4000);
   if (action === 'custom' && !customAction) throw new UserError('Décrivez l’action personnalisée.');
   return { name, prompt, format, ...(format === 'tags' && tags.length ? { tags } : {}), ...(action ? { action } : {}), ...(action === 'custom' ? { customAction } : {}) };

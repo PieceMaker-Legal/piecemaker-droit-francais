@@ -1,13 +1,14 @@
 import path from 'node:path';
 
 import type { Draft, Provider, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
-import { CHRONOLOGY_TEMPLATE_NAME, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, isChronology } from '../shared.js';
+import { CHRONOLOGY_TEMPLATE_NAME, classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, isChronology, reviewCategory } from '../shared.js';
+import { addClassification, readClassification, saveClassification } from './classification.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, readDrafts, upsertDraft } from './drafts.js';
-import { assertProject, UserError } from './paths.js';
+import { assertProject, assertReviewFile, UserError } from './paths.js';
 import { researchState, startResearch, validateFilters } from './research.js';
-import { listReviews } from './reviews.js';
-import { CHRONOLOGY_TEMPLATE, normalizeColumn, readTemplates, upsertTemplate } from './templates.js';
+import { deriveStatus, listReviews, readReview, updateReview } from './reviews.js';
+import { CHRONOLOGY_TEMPLATE, MAX_COLUMNS, normalizeColumn, readTemplates, upsertTemplate } from './templates.js';
 
 type Input = Record<string, unknown>;
 
@@ -15,6 +16,7 @@ export type AssistantLaunchers = {
   isRunning(project: string, file: string): boolean;
   launchAnalysis(body: Input): Promise<ReviewDetail>;
   launchResearch(body: Input): Promise<ReviewDetail>;
+  appendDocuments(body: Input): Promise<ReviewDetail>;
 };
 
 const RESEARCH_POLL_MS = 1000;
@@ -125,14 +127,99 @@ function prepare(project: string, input: Input) {
   return draftSummary(draft);
 }
 
-function chronology(project: string, launchers: AssistantLaunchers) {
+async function chronology(project: string, launchers: AssistantLaunchers) {
   const review = listReviews([project], launchers.isRunning).find(isChronology);
-  if (review) return { fichier: review.file };
+  if (review) {
+    await addClassification(project, review.file);
+    return { fichier: review.file };
+  }
+  const classification = classificationColumn(readClassification(project));
   const draft = listDrafts([project]).find(isChronology);
-  if (draft) return { projet: draft.id };
+  if (draft) {
+    if (!classifyColumn(draft.columns)) upsertDraft({ ...draft, columns: [...draft.columns, classification] });
+    return { projet: draft.id };
+  }
   const columns = readTemplates().find((entry) => entry.name === CHRONOLOGY_TEMPLATE_NAME)?.columns ?? CHRONOLOGY_TEMPLATE.columns;
-  const created = upsertDraft({ project, title: CHRONOLOGY_TEMPLATE_NAME, templateName: CHRONOLOGY_TEMPLATE_NAME, columns, rows: documentRows(project, ['']) });
+  const created = upsertDraft({ project, title: CHRONOLOGY_TEMPLATE_NAME, templateName: CHRONOLOGY_TEMPLATE_NAME, columns: [...columns, classification], rows: documentRows(project, ['']) });
   return { projet: created.id };
+}
+
+function reviewName(project: string, value: unknown): string {
+  const file = path.basename(text(value));
+  assertReviewFile(project, file);
+  return file;
+}
+
+function readOut(project: string, file: string, launchers: AssistantLaunchers) {
+  const review = readReview(project, file);
+  return {
+    fichier: file,
+    nom: review.title,
+    categorie: reviewCategory(review),
+    statut: deriveStatus(review, launchers.isRunning(project, file)),
+    colonnes: review.columns.map((column) => ({ colonne: column.index, ...question(column), ...(column.action ? { action: column.action } : {}) })),
+    lignes: review.rows.map((row) => ({
+      ligne: row.id,
+      document: row.label,
+      sources: row.documents.map((document) => document.source),
+      statut: row.status,
+      ...(row.piece ? { piece: row.piece } : {}),
+      reponses: Object.fromEntries(review.columns.map((column) => [column.index, review.cells[row.id]?.[String(column.index)]?.summary ?? ''])),
+    })),
+  };
+}
+
+async function editColumns(project: string, input: Input, launchers: AssistantLaunchers) {
+  const file = reviewName(project, input.fichier);
+  if (launchers.isRunning(project, file)) throw new UserError('Attendez la fin de l’analyse pour modifier ses colonnes.');
+  if (!Array.isArray(input.questions) || !input.questions.length) throw new UserError('questions : liste attendue.');
+  await updateReview(project, file, (review) => {
+    for (const raw of input.questions as Input[]) {
+      const entry = raw ?? {};
+      if (entry.colonne === undefined) {
+        if (review.columns.length >= MAX_COLUMNS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_COLUMNS} questions.`);
+        const index = Math.max(-1, ...review.columns.map((column) => column.index)) + 1;
+        review.columns.push({ index, ...columns([entry])[0] });
+        continue;
+      }
+      const position = review.columns.findIndex((column) => column.index === Number(entry.colonne));
+      if (position < 0) throw new UserError(`Colonne introuvable : ${String(entry.colonne)}`);
+      const target = review.columns[position];
+      if (entry.supprimer === true) {
+        review.columns.splice(position, 1);
+        for (const cells of Object.values(review.cells)) delete cells[String(target.index)];
+        continue;
+      }
+      if (target.action === 'classify' && (entry.consigne !== undefined || entry.format !== undefined || entry.etiquettes !== undefined)) {
+        throw new UserError('Le classement suit l’arborescence : modifiez-la avec l’action arborescence.');
+      }
+      review.columns[position] = {
+        index: target.index,
+        ...normalizeColumn({ ...target, name: text(entry.nom) || target.name, prompt: text(entry.consigne) || target.prompt, format: entry.format ?? target.format, tags: entry.etiquettes ?? target.tags }),
+      };
+    }
+  });
+  return readOut(project, file, launchers);
+}
+
+async function classificationTree(project: string, input: Input) {
+  const folders = input.dossiers === undefined
+    ? readClassification(project)
+    : await saveClassification(project, Array.isArray(input.dossiers) ? input.dossiers.map((entry: Input) => ({ name: entry?.nom, explanation: entry?.explication })) : input.dossiers);
+  return { dossiers: folders.map((folder) => ({ nom: folder.name, explication: folder.explanation })) };
+}
+
+async function relaunch(project: string, input: Input, launchers: AssistantLaunchers) {
+  const file = reviewName(project, input.fichier);
+  const review = readReview(project, file);
+  if (reviewCategory(review) !== 'documents') throw new UserError('Seule une analyse de documents se relance ici : le tri et la recherche ont leur propre bouton dans le volet.');
+  const known = new Set(review.rows.flatMap((row) => row.documents.map((document) => document.source)));
+  const rows = listMarkdownDocuments(project)
+    .filter((document) => !known.has(document.path))
+    .map((document) => ({ label: path.posix.basename(document.path, '.md'), documents: [document.path] }));
+  if (!rows.length) return { fichier: file, ajoutes: 0 };
+  const detail = await launchers.appendDocuments({ project, file, rows, proxyOrigin: input.proxyOrigin });
+  return { fichier: file, ajoutes: rows.length, statut: detail.status };
 }
 
 function saveTemplate(input: Input) {
@@ -209,5 +296,14 @@ export async function assistant(body: Input, launchers: AssistantLaunchers): Pro
   if (action === 'preparer') return prepare(project, body);
   if (action === 'lancer') return launch(project, body, launchers);
   if (action === 'chronologie') return chronology(project, launchers);
+  if (action === 'lire') return readOut(project, reviewName(project, body.fichier), launchers);
+  if (action === 'colonnes') return editColumns(project, body, launchers);
+  if (action === 'classement') {
+    const file = reviewName(project, body.fichier);
+    await addClassification(project, file);
+    return readOut(project, file, launchers);
+  }
+  if (action === 'arborescence') return classificationTree(project, body);
+  if (action === 'relancer') return relaunch(project, body, launchers);
   throw new UserError(`Action inconnue : ${action}`);
 }

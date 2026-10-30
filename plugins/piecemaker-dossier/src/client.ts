@@ -338,7 +338,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (!content) return;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
     else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
-    else content.innerHTML = active === 'chronology' ? chronologyView(data) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
+    else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
   };
 
   const saveNature = async (nodeId: string, nature: string) => {
