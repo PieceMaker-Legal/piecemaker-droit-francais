@@ -167,8 +167,8 @@ test('afficher vérifie le fichier et, sans cible, liste les volets ouverts', as
     focus: { 'plugin:piecemaker-dossier': { view: 'chronology' } },
     last: { kind: 'panel', tab: 'plugin:piecemaker-dossier' },
   });
-  const panel = await client.callTool({ name: 'afficher', arguments: { volet: 'chronologie' } });
-  assert.deepEqual(panel.content, [{ type: 'text', text: 'Volet affiché : chronologie' }]);
+  const panel = await client.callTool({ name: 'afficher', arguments: { volet: 'index' } });
+  assert.deepEqual(panel.content, [{ type: 'text', text: 'Volet affiché : index' }]);
   const nothing = await client.callTool({ name: 'afficher', arguments: {} });
   assert.equal(nothing.isError, undefined);
   assert.equal(nothing.structuredContent.code, 'listed');
@@ -190,7 +190,7 @@ test('volets_ouverts décrit les volets du dossier de la session', async () => {
     },
   }));
   assert.equal(describeOpenPanels('/dossiers/Dupont/Actes', file), [
-    'Volets ouverts, dans l’ordre d’ouverture : Dossier (chronologie) ; Analyse tabulaire (fichier : Tabular Review/baux.json).',
+    'Volets ouverts, dans l’ordre d’ouverture : Dossier (index) ; Analyse tabulaire (fichier : Tabular Review/baux.json).',
     'Document affiché : aucun.',
     'Dernier ouvert, celui que l’avocat regarde : Analyse tabulaire (fichier : Tabular Review/baux.json).',
   ].join('\n'));

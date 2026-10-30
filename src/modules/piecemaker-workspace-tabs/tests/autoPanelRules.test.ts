@@ -65,17 +65,17 @@ describe('autoPanelTarget', () => {
 
   it('obéit à afficher', () => {
     expect(autoPanelTarget('mcp__piecemaker__afficher', { fichier: 'Pièces/contrat.pdf' })).toEqual({ kind: 'file', path: 'Pièces/contrat.pdf' });
-    expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'chronologie' })).toEqual({ kind: 'dossier', view: 'chronology' });
+    expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'index' })).toEqual({ kind: 'dossier', view: 'chronology' });
     expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'dossier' })).toEqual({ kind: 'dossier', view: 'general' });
     expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'tabular-review', review: 'revue.json' })).toEqual({ kind: 'tabular-review', review: 'revue.json' });
     expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'tampon' })).toEqual({ kind: 'tampon' });
-    expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'chronologie', fermer: true })).toBeNull();
+    expect(autoPanelTarget('mcp__piecemaker__afficher', { volet: 'index', fermer: true })).toBeNull();
     expect(autoPanelTarget('mcp__piecemaker__afficher', {})).toBeNull();
   });
 
   it('ouvre les volets depuis le script Skill-PieceMaker', () => {
     expect(autoPanelTarget('Bash', { command: '.agents/skills/Skill-PieceMaker/scripts/pm afficher --fichier Pièces/contrat.pdf' })).toEqual({ kind: 'file', path: 'Pièces/contrat.pdf' });
-    expect(autoPanelTarget('run_terminal_command', { command: "scripts/pm afficher --volet chronologie" })).toEqual({ kind: 'dossier', view: 'chronology' });
+    expect(autoPanelTarget('run_terminal_command', { command: "scripts/pm afficher --volet index" })).toEqual({ kind: 'dossier', view: 'chronology' });
     expect(autoPanelTarget('Bash', { command: 'scripts/pm afficher --volet dossier' })).toEqual({ kind: 'dossier', view: 'general' });
     expect(autoPanelTarget('Bash', { command: 'scripts/pm chronologie lister' })).toEqual({ kind: 'dossier', view: 'chronology' });
     expect(autoPanelTarget('Bash', { command: 'scripts/pm tabular_review ouvrir --fichier "Tabular Review/26-10-11 - Analyse.json"' })).toEqual({ kind: 'tabular-review', review: '26-10-11 - Analyse.json' });
@@ -83,7 +83,7 @@ describe('autoPanelTarget', () => {
     expect(autoPanelTarget('Bash', { command: 'node .agents/skills/Skill-PieceMaker/scripts/pm.mjs afficher --fichier Pièces/contrat.pdf' })).toEqual({ kind: 'file', path: 'Pièces/contrat.pdf' });
     expect(autoPanelTarget('Bash', { command: 'scripts/pm conversion --force' })).toBeNull();
     expect(autoPanelTarget('Bash', { command: 'scripts/pm afficher --volet tampon' })).toEqual({ kind: 'tampon' });
-    expect(autoPanelTarget('Bash', { command: 'scripts/pm afficher --fermer --volet chronologie' })).toBeNull();
+    expect(autoPanelTarget('Bash', { command: 'scripts/pm afficher --fermer --volet index' })).toBeNull();
     expect(autoPanelTarget('Bash', { command: ['/bin/zsh', '-lc', '.agents/skills/Skill-PieceMaker/scripts/pm tabular_review lister'] })).toEqual({ kind: 'tabular-review', review: null });
     expect(autoPanelTarget('Bash', { command: "/bin/zsh -lc '.agents/skills/Skill-PieceMaker/scripts/pm tabular_review lister'" })).toEqual({ kind: 'tabular-review', review: null });
     expect(autoPanelTarget('exec', { cmd: 'scripts/pm afficher --volet tampon' })).toEqual({ kind: 'tampon' });

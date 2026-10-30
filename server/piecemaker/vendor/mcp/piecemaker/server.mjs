@@ -252,7 +252,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
 
   server.registerTool('afficher', {
     description: 'Affiche à l’avocat, dans un volet de PieceMaker à côté du chat, un fichier du dossier '
-      + '(fichier), la vue générale ou la chronologie du dossier, ou une tabular review. '
+      + '(fichier), la vue générale ou l’index du dossier, ou une tabular review. '
       + 'Sans cible, liste les volets ouverts. Une cible déjà affichée est un succès et est signalée comme telle.',
     outputSchema: {
       success: z.boolean(),
@@ -293,7 +293,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
     }
     const target = volet === 'tabular-review'
       ? { tab: 'plugin:piecemaker-tabular-review', review: review ? path.basename(review) : undefined }
-      : { tab: 'plugin:piecemaker-dossier', view: volet === 'chronologie' ? 'chronology' : 'general' };
+      : { tab: 'plugin:piecemaker-dossier', view: volet === 'index' ? 'chronology' : 'general' };
     const requestTarget = { cwd: process.cwd(), ...target };
     const alreadyOpen = await waitForOpenPanel(requestTarget, openPanelsPath, 0);
     const opened = alreadyOpen || await openPanelAndWait({ project: process.cwd(), ...target }, openPanelsTimeoutMs, openPanelsPath);

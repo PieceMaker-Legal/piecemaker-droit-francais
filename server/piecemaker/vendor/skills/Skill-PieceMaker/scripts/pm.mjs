@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'suivi', 'docx', 'acte'];
 const REASONING_COMMANDS = ['consignes', 'verifier', 'lister'];
-const VOLETS = ['dossier', 'chronologie', 'tabular-review', 'tampon'];
+const VOLETS = ['dossier', 'index', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'index', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer'];
 const REVIEW_FOLLOWED = ['index', 'colonnes', 'classement', 'arborescence', 'relancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
@@ -283,7 +283,7 @@ async function confirmClose(api, request, target) {
 function voletTarget(cwd, volet, review) {
   if (volet === 'tampon') return { cwd, tab: 'plugin:piecemaker-tampon' };
   if (volet === 'tabular-review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
-  return { cwd, tab: 'plugin:piecemaker-dossier', view: volet === 'chronologie' ? 'chronology' : 'general' };
+  return { cwd, tab: 'plugin:piecemaker-dossier', view: volet === 'index' ? 'chronology' : 'general' };
 }
 
 function panelNoticeLabel(target) {
@@ -295,7 +295,7 @@ function panelNoticeLabel(target) {
     if (target.review) return `Analyse tabulaire (${target.review})`;
     return 'Analyse tabulaire';
   }
-  return target.view === 'chronology' ? 'Dossier (chronologie)' : 'Dossier (vue générale)';
+  return target.view === 'chronology' ? 'Dossier (index)' : 'Dossier (vue générale)';
 }
 
 function sqlPanelTarget(query, cwd) {

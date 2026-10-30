@@ -49,7 +49,7 @@ test('sql et chronologie passent par sqlFn', async () => {
   assert.match(written, /^ok\nDéjà visible : Dossier \(vue générale\)\.\n?$/);
   const chrono = await run(['chronologie', 'modifier', '--piece', 'doc:1', '--date', '2024-03-01'], { deps });
   assert.equal(calls[2].requete, 'SQL:modifier:doc:1:2024-03-01');
-  assert.match(chrono, /visible : Dossier \(chronologie\)\./i);
+  assert.match(chrono, /visible : Dossier \(index\)\./i);
 });
 
 test('afficher vérifie le fichier, liste les volets et ouvre une cible', async () => {
@@ -70,7 +70,7 @@ test('afficher vérifie le fichier, liste les volets et ouvre une cible', async 
   );
   assert.equal(opened[0].tab, 'files');
   await assert.rejects(() => run(['afficher', '--fichier', 'absent.docx'], { deps }), /introuvable/);
-  assert.equal(await run(['afficher', '--volet', 'chronologie'], { deps }), 'Volet affiché : chronologie');
+  assert.equal(await run(['afficher', '--volet', 'index'], { deps }), 'Volet affiché : index');
   assert.equal(opened[1].view, 'chronology');
   assert.equal(await run(['afficher', '--volet', 'tampon'], { deps }), 'Volet affiché : tampon');
   assert.equal(opened[2].tab, 'plugin:piecemaker-tampon');
@@ -91,9 +91,9 @@ test('afficher --fermer ferme le volet sans le rouvrir', async () => {
       throw new Error('ne doit pas ouvrir');
     },
   };
-  assert.equal(await run(['afficher', '--fermer', '--volet', 'chronologie'], { deps }), 'Fermé : chronologie');
+  assert.equal(await run(['afficher', '--fermer', '--volet', 'index'], { deps }), 'Fermé : index');
   assert.equal(closed[0].tab, 'plugin:piecemaker-dossier');
-  assert.equal(await run(['afficher', '--fermer', '--volet', 'chronologie'], { deps }), 'Déjà fermé : chronologie');
+  assert.equal(await run(['afficher', '--fermer', '--volet', 'index'], { deps }), 'Déjà fermé : index');
 });
 
 test('tabular_review ouvre localement et transmet le reste', async () => {

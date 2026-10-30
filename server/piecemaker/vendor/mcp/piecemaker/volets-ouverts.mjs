@@ -13,7 +13,7 @@ const LABELS = {
   'plugin:piecemaker-timesheet': 'Timesheet',
 };
 
-const VIEWS = { chronology: 'chronologie', general: 'vue générale' };
+const VIEWS = { chronology: 'index', general: 'vue générale' };
 
 export const openPanelsFile = (home = process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker')) => path.join(home, 'volets-ouverts.json');
 

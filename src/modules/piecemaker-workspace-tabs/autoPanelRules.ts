@@ -99,7 +99,7 @@ function showTarget(input: Input): AutoPanelTarget | null {
   if (input.fermer === true || input.fermer === 'true') return null;
   const file = text(input.fichier);
   if (file) return { kind: 'file', path: file };
-  if (input.volet === 'chronologie') return { kind: 'dossier', view: 'chronology' };
+  if (input.volet === 'index') return { kind: 'dossier', view: 'chronology' };
   if (input.volet === 'dossier') return { kind: 'dossier', view: 'general' };
   if (input.volet === 'tampon') return { kind: 'tampon' };
   if (input.volet === 'tabular-review') return { kind: 'tabular-review', review: text(input.review) ? baseName(text(input.review)) : null };
