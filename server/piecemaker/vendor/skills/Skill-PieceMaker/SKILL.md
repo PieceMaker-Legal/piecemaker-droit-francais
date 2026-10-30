@@ -102,7 +102,7 @@ Le raisonnement juridique du dossier vit dans `.piecemaker/raisonnements/<nom>.y
 
 ## suivi (échéances du dossier)
 
-Le suivi relève les étapes du dossier qu'il ne faut pas manquer ; il ne raisonne pas (c'est le rôle du raisonnement, propre à un acte) et n'est pas une chronologie. Un seul fichier par dossier : `.piecemaker/suivi.json`. Il alimente le Matter board de l'onglet Échéances, qui montre tous les dossiers. Les données restent sur le poste.
+Le suivi relève les étapes du dossier qu'il ne faut pas manquer ; il ne raisonne pas (c'est le rôle du raisonnement, propre à un acte) et n'est pas une chronologie. Un seul fichier par dossier : `.piecemaker/suivi.json`. Il alimente le Matter board de l'onglet Suivi des dossiers, qui montre tous les dossiers. Les données restent sur le poste.
 
 N'y figurent que :
 - en contentieux, les actes qui ont une valeur procédurale (ceux qui font courir un délai ou fixent une étape) et les échéances qui en découlent ;

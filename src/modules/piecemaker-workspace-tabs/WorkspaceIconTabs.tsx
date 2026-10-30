@@ -1,4 +1,4 @@
-import { Folder, GitBranch, MessageSquare, type LucideIcon } from 'lucide-react';
+import { Folder, MessageSquare, type LucideIcon } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -41,7 +41,6 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab }: WorkspaceIconTabs
     { id: 'chat' as AppTab, label: t('tabs.chat'), icon: MessageSquare },
     { id: 'files' as AppTab, label: t('tabs.files'), icon: Folder },
     ...plugins.filter((plugin) => plugin.enabled && plugin.name !== 'piecemaker-library').map(pluginTab),
-    { id: 'git' as AppTab, label: t('tabs.git'), icon: GitBranch },
     ...plugins.filter((plugin) => plugin.enabled && plugin.name === 'piecemaker-library').map(pluginTab),
   ];
 

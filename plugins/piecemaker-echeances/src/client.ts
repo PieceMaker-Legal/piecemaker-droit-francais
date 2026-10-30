@@ -39,7 +39,7 @@ export function mount(container: HTMLElement, api: Host) {
   style.textContent = STYLES;
   const root = document.createElement('section');
   root.className = 'pme piecemaker-ui';
-  root.setAttribute('aria-label', 'Échéances des dossiers');
+  root.setAttribute('aria-label', 'Suivi des dossiers');
   const band = document.createElement('div');
   band.className = 'pme-band';
   const frame = document.createElement('iframe');

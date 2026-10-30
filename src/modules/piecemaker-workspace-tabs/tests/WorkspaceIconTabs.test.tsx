@@ -49,7 +49,8 @@ it('conserve le branchement PieceMaker lors des merges upstream', () => {
 
 it('affiche uniquement les icônes et révèle leur nom au survol', async () => {
   render(<WorkspaceIconTabs activeTab="files" setActiveTab={vi.fn()} shouldShowTasksTab shouldShowBrowserTab />);
-  expect(screen.getAllByRole('tab')).toHaveLength(4);
+  expect(screen.getAllByRole('tab')).toHaveLength(3);
+  expect(screen.queryByRole('tab', { name: 'tabs.git' })).toBeNull();
   const files = screen.getByRole('tab', { name: 'tabs.files' });
   expect(files.textContent).toBe('');
   expect(files.getAttribute('aria-selected')).toBe('true');
@@ -69,7 +70,7 @@ it('place le surplus dans le menu et conserve l’onglet actif visible après re
   expect(setActiveTab).toHaveBeenCalledWith('files');
   width = 400;
   act(() => resize());
-  expect(screen.getAllByRole('tab')).toHaveLength(4);
+  expect(screen.getAllByRole('tab')).toHaveLength(3);
   fireEvent.click(screen.getByRole('button', { name: 'tabs.more' }));
   expect(screen.queryAllByRole('menuitem')).toHaveLength(1);
   expect(screen.getByRole('menuitem', { name: /Actualiser PieceMaker/ })).toBeTruthy();
@@ -122,6 +123,6 @@ it('ferme un volet ouvert quand on clique à nouveau sur son icône', () => {
   fireEvent.click(screen.getByRole('tab', { name: 'tabs.files' }));
   expect(close).toHaveBeenCalledWith('files');
   expect(setActiveTab).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('tab', { name: 'tabs.git' }));
-  expect(setActiveTab).toHaveBeenCalledWith('git');
+  fireEvent.click(screen.getByRole('tab', { name: 'Exemple' }));
+  expect(setActiveTab).toHaveBeenCalledWith('plugin:example');
 });
