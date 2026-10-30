@@ -541,7 +541,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     openQuestionsDrawer(app, async ({ columns }) => {
       let latest: ReviewDetail | null = null;
       for (const column of columns) latest = await app.rpc<ReviewDetail>('POST', '/reviews/column', { project, file, prompt: column.prompt, title: column.name, format: column.format, tags: column.tags });
-      if (latest) applyDetail(latest);
+      if (latest) { applyDetail(latest); render(); }
       toast(app.root, `${plural(columns.length, 'question ajoutée', 'questions ajoutées')} : lancez ${columns.length > 1 ? 'chaque colonne' : 'la colonne'} avec ▶.`);
     });
   }

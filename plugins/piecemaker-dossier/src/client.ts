@@ -1,3 +1,4 @@
+import { openIndexAnalysis } from './index-analysis.js';
 import { editClassification } from './classification.js';
 import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
@@ -48,6 +49,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let context = api.context;
   let active: Tab = takeRequestedView() ?? 'general';
   let data: ViewData | null = null;
+  let closeIndexAnalysis: (() => void) | null = null;
   let chronologySort: ChronologySort = { column: 'date', direction: 'ascending' };
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
@@ -402,6 +404,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         return;
       }
       const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
+      if (action === 'index-analysis' && context.project) {
+        const button = target.closest<HTMLButtonElement>('button')!;
+        button.disabled = true;
+        void openIndexAnalysis(root, api, () => { closeIndexAnalysis = null; void load(); }).then((dispose) => { closeIndexAnalysis = dispose; }).catch(showError).finally(() => { button.disabled = false; });
+        return;
+      }
       if (action === 'edit-tree' && context.project) {
         void editClassification(root, context.project.path).catch(showError);
         return;
@@ -684,6 +692,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     const changedTheme = next.theme !== context.theme;
     context = next;
     if (changedProject) {
+      closeIndexAnalysis?.();
+      closeIndexAnalysis = null;
       data = null;
       scanJob = null;
       bodaccStates.clear();
@@ -694,6 +704,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }
   });
   (container as HTMLElement & { pmdUnsubscribe?: () => void }).pmdUnsubscribe = () => {
+    closeIndexAnalysis?.();
     unsubscribe();
     compactWorkspace.removeEventListener('change', syncTiersWithWorkspaceWidth);
     window.clearInterval(versionTimer);

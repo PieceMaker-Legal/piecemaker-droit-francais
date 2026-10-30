@@ -2,6 +2,9 @@ import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { knowledgeApi } from '../api.js';
 import { mount, unmount } from '../client.js';
+import { openIndexAnalysis } from '../index-analysis.js';
+
+vi.mock('../index-analysis.js', () => ({ openIndexAnalysis: vi.fn(async () => vi.fn()) }));
 import type { KnowledgeSnapshot } from '../types.js';
 
 let dom: JSDOM;
@@ -28,7 +31,7 @@ beforeEach(() => {
 afterEach(() => { unmount(container); dom.window.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('Chronologie', () => {
-  it('shows the index in the dossier without opening the tabular analysis', async () => {
+  it('opens the existing index analysis from Dossier without switching tabs', async () => {
     vi.stubGlobal('Event', dom.window.Event);
     const shown = vi.fn();
     dom.window.addEventListener('piecemaker:tabular-review-show', shown);
@@ -37,6 +40,10 @@ describe('Chronologie', () => {
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => undefined, rpc: vi.fn(), openFileInEditor: vi.fn() } as never);
     await vi.waitFor(() => expect(container.querySelector('.pmd-chronology-table')).not.toBeNull());
     expect(container.querySelector('[data-action="chronology-tabular"]')).toBeNull();
+    expect(shown).not.toHaveBeenCalled();
+    container.querySelector<HTMLButtonElement>('[data-action="index-analysis"]')!.click();
+    await vi.waitFor(() => expect(openIndexAnalysis).toHaveBeenCalledOnce());
+    expect(openIndexAnalysis).toHaveBeenCalledWith(expect.any(dom.window.HTMLElement), expect.objectContaining({ context: expect.objectContaining({ project: { name: graph.projectId, path: '/dossier-exemple' } }) }), expect.any(Function));
     expect(shown).not.toHaveBeenCalled();
   });
 });

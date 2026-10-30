@@ -87,6 +87,8 @@ export type ClassificationFolder = { name: string; explanation: string };
 
 const CLASSIFICATION_BASE = '/api/plugins/piecemaker-tabular-review/rpc';
 
+export const tabularReviewRpc = (method: string, path: string, body?: unknown) => request(CLASSIFICATION_BASE, path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+
 export const classificationApi = {
   read: (project: string) => request<{ folders: ClassificationFolder[] }>(CLASSIFICATION_BASE, `/classification?project=${encodeURIComponent(project)}`),
   save: (project: string, folders: ClassificationFolder[]) => request(CLASSIFICATION_BASE, '/classification', { method: 'PUT', body: JSON.stringify({ project, folders }) }),

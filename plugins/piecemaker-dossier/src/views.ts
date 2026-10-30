@@ -360,6 +360,6 @@ export function chronologyView(data: ViewData, projectPath = '', sort: Chronolog
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
   const label = { document: 'Document', date: 'Date', classification: 'Classement' }[sort.column];
   return `
-    <div class="pmd-toolbar"><div class="pmd-subtitle">Tri : ${label} ${sort.direction === 'ascending' ? '↑' : '↓'}</div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
+    <div class="pmd-toolbar"><div class="pmd-subtitle">Tri : ${label} ${sort.direction === 'ascending' ? '↑' : '↓'}</div><span class="pmd-spacer"></span><button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-action="index-analysis">Analyse tabulaire</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
     ${chronologyTable(documents, byId, data.graph.links, projectPath, sort)}`;
 }

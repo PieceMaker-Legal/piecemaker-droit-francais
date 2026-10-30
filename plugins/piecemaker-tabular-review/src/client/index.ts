@@ -46,7 +46,7 @@ function takeShowRequest(): ShowRequest | null {
   return { project: text(request.project), review: text(request.review), draft: text(request.draft) };
 }
 
-export function mount(container: HTMLElement, api: PluginApi): void {
+export function mount(container: HTMLElement, api: PluginApi, index?: { project: string; onBack(): void }): void {
   unmount(container);
   const style = document.createElement('style');
   style.textContent = PLUGIN_STYLES;
@@ -157,13 +157,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   };
 
   function backToHistory() {
+    if (index) { index.onBack(); return; }
     closeReview();
     showTab('history');
     focusTable(null);
   }
 
   function focusTable(file: string | null) {
-    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-tabular-review', file } }));
+    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: index ? { tab: 'plugin:piecemaker-dossier', view: 'chronology' } : { tab: 'plugin:piecemaker-tabular-review', file } }));
   }
 
   function showPage(view: View) {
@@ -262,6 +263,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   root.querySelector('[data-home]')!.addEventListener('click', () => showTab('history'));
 
   const onOpen = () => {
+    if (index) return;
     showTab('history');
     app.newTable(app.takeTargetProject());
   };
@@ -271,13 +273,26 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       const { drafts } = await app.rpc<{ drafts: Draft[] }>('POST', '/drafts/list', { projects: [project] });
       const draft = drafts.find((entry) => entry.id === id);
       if (draft) app.openDraft(draft);
+      else if (index) toast(root, 'Le projet d’Index est introuvable.', 'error');
       else showTab('history');
     } catch (error) {
       toast(root, errorMessage(error), 'error');
     }
   }
 
+  async function openCaseIndex(project: string) {
+    try {
+      const { fichier, projet } = await app.rpc<{ fichier?: string; projet?: string }>('POST', '/assistant', { action: 'index', project });
+      if (!container.contains(root)) return;
+      if (fichier) app.openReview(project, fichier);
+      else if (projet) await openDraftById(project, projet);
+    } catch (error) {
+      toast(root, errorMessage(error), 'error');
+    }
+  }
+
   const onShow = () => {
+    if (index) return;
     const request = takeShowRequest();
     if (!request) return;
     if (request.project && request.draft) {
@@ -292,15 +307,16 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     showTab('history');
   };
   window.addEventListener(SHOW_EVENT, onShow);
-  const initialRequest = takeShowRequest();
+  const initialRequest = index ? null : takeShowRequest();
   const stopContext = api.onContextChange((context) => {
     root.dataset.theme = context.theme;
   });
 
-  showTab('history');
+  if (index) void openCaseIndex(index.project);
+  else showTab('history');
   if (initialRequest?.project && initialRequest.draft) void openDraftById(initialRequest.project, initialRequest.draft);
   else if (initialRequest?.project && initialRequest.review) app.openReview(initialRequest.project, initialRequest.review);
-  else if (!initialRequest?.project) {
+  else if (!index && !initialRequest?.project) {
     const target = app.takeTargetProject();
     if (target) app.newTable(target);
   }

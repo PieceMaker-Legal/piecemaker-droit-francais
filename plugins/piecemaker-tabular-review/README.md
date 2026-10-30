@@ -20,6 +20,8 @@ L'outil MCP `tabular_review` (serveur `piecemaker`) passe par la route locale `P
 
 Un dossier n'a qu'un seul index : l'analyse qui lit toutes les pièces, une ligne par pièce, pour la chronologie et le classement. Il s'affiche seulement dans le volet Dossier, lu en base SQLite ; l'historique de ce volet le masque. L'action `index` le retrouve ou le prépare, `lister` le signale (`index: true`) et `preparer` le renvoie si on lui demande un index, une lecture intégrale, une chronologie ou un tri. Une analyse ou un modèle nommé « Chronologie » reste reconnu et s'affiche « Index ». `createReview` ouvre l'analyse existante au lieu d'en créer une seconde, depuis le volet comme depuis l'agent. Une analyse déjà en double n'est ni fusionnée ni supprimée : la plus récente sert de référence.
 
+Dans Dossier → Index, le bouton « Analyse tabulaire » ouvre le lancement ou l’analyse existante dans le volet Dossier. « + Question » ajoute une colonne avant ou après le lancement. La flèche de retour retrouve le tableau SQLite.
+
 ## Recherche juridique
 
 L'écran **Recherche juridique** (bouton « + Nouvelle recherche ») construit une review à partir d'une recherche jurisprudentielle Légifrance et Judilibre au lieu des documents du dossier : une ligne par décision, une colonne par question annoncée.
