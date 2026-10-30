@@ -172,7 +172,9 @@ export async function appendRows(project: string, file: string, rows: RowRequest
     if (category === 'recherche-juridique') throw new UserError('Une recherche juridique ne reçoit pas de documents.');
     const sorting = category === 'tri-pieces';
     const known = new Set(review.rows.map((row) => row.piece));
-    const fresh = buildRows(project, sorting ? rows.filter((row) => !known.has(row.piece)) : rows, sorting);
+    const documentsKey = (documents: string[]) => JSON.stringify([...documents].sort());
+    const knownDocuments = new Set(review.rows.map((row) => documentsKey(row.documents.map((document) => document.source))));
+    const fresh = buildRows(project, sorting ? rows.filter((row) => !known.has(row.piece)) : rows.filter((row) => !knownDocuments.has(documentsKey(row.documents))), sorting);
     if (review.rows.length + fresh.length > MAX_ROWS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_ROWS} lignes.`);
     review.rows.push(...fresh);
     added = fresh.map((row) => row.id);

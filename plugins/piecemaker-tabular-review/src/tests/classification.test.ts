@@ -15,6 +15,7 @@ vi.stubEnv('USERPROFILE', home);
 
 const { assistant } = await import('../server/assistant.js');
 const { readClassification, saveClassification } = await import('../server/classification.js');
+const { appendRows, readReview } = await import('../server/reviews.js');
 
 const launchers = () => ({
   isRunning: () => false,
@@ -107,6 +108,15 @@ describe('effet du classement', () => {
     const review = reviewOf('Archives');
     const row = { ...review.rows[0], piece: 'Archives/2023/bail.pdf' };
     expect(plannedChange(review, row, [], pieces)).toBeNull();
+  });
+
+  it('n’ajoute pas deux fois le même document, même si deux ajouts se chevauchent', async () => {
+    writeReview('doublon.json');
+    const rows = [{ label: 'nouveau', documents: ['Notes/nouveau.md'] }];
+    const [first, second] = await Promise.all([appendRows(project, 'doublon.json', rows), appendRows(project, 'doublon.json', rows)]);
+    expect([first.length, second.length]).toEqual([1, 0]);
+    expect(await appendRows(project, 'doublon.json', [{ label: 'bail', documents: ['Notes/bail.md'] }])).toEqual([]);
+    expect(readReview(project, 'doublon.json').rows.map((row) => row.label)).toEqual(['bail', 'nouveau']);
   });
 
   it('repère les nouveaux documents par leur Markdown', () => {
