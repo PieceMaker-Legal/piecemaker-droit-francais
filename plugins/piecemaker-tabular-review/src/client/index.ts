@@ -277,9 +277,9 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }
   }
 
-  async function openChronology(project: string) {
+  async function openInventory(project: string) {
     try {
-      const { fichier, projet } = await app.rpc<{ fichier?: string; projet?: string }>('POST', '/assistant', { action: 'chronologie', project });
+      const { fichier, projet } = await app.rpc<{ fichier?: string; projet?: string }>('POST', '/assistant', { action: 'inventaire', project });
       if (fichier) app.openReview(project, fichier);
       else if (projet) await openDraftById(project, projet);
     } catch (error) {
@@ -291,7 +291,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     const request = takeShowRequest();
     if (!request) return;
     if (request.project && request.chronology) {
-      void openChronology(request.project);
+      void openInventory(request.project);
       return;
     }
     if (request.project && request.draft) {
@@ -312,7 +312,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   });
 
   showTab('history');
-  if (initialRequest?.project && initialRequest.chronology) void openChronology(initialRequest.project);
+  if (initialRequest?.project && initialRequest.chronology) void openInventory(initialRequest.project);
   else if (initialRequest?.project && initialRequest.draft) void openDraftById(initialRequest.project, initialRequest.draft);
   else if (initialRequest?.project && initialRequest.review) app.openReview(initialRequest.project, initialRequest.review);
   else if (!initialRequest?.project) {

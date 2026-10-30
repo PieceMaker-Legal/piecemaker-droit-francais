@@ -1,14 +1,14 @@
 import path from 'node:path';
 
 import type { Draft, Provider, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
-import { CHRONOLOGY_TEMPLATE_NAME, classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, isChronology, reviewCategory } from '../shared.js';
+import { classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, INVENTORY_TEMPLATE_NAME, isInventory, LEGACY_INVENTORY_NAME, reviewCategory } from '../shared.js';
 import { addClassification, readClassification, saveClassification } from './classification.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, readDrafts, upsertDraft } from './drafts.js';
 import { assertProject, assertReviewFile, UserError } from './paths.js';
 import { researchState, startResearch, validateFilters } from './research.js';
 import { deriveStatus, listReviews, readReview, updateReview } from './reviews.js';
-import { CHRONOLOGY_TEMPLATE, MAX_COLUMNS, normalizeColumn, readTemplates, upsertTemplate } from './templates.js';
+import { INVENTORY_TEMPLATE, MAX_COLUMNS, normalizeColumn, readTemplates, upsertTemplate } from './templates.js';
 
 type Input = Record<string, unknown>;
 
@@ -22,8 +22,8 @@ export type AssistantLaunchers = {
 const RESEARCH_POLL_MS = 1000;
 const RESEARCH_RUNNING = new Set(['counting', 'listing', 'downloading']);
 const CONCURRENCY = 3;
-const CHRONOLOGY_REQUEST = /chronolog|tri des pi[eè]ces/i;
-const SINGLE_CHRONOLOGY = 'Une seule analyse gère la chronologie et le tri du dossier : complétez celle-ci.';
+const INVENTORY_REQUEST = /chronolog|tri des pi[eè]ces|inventaire (int[eé]gral|des pi[eè]ces|du dossier)|(scan|revue|lecture) int[eé]grale?/i;
+const SINGLE_INVENTORY = 'Une seule analyse lit toutes les pièces du dossier, pour la chronologie et le tri : complétez celle-ci.';
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
@@ -85,7 +85,7 @@ function draftSummary(draft: Draft) {
   return {
     projet: draft.id,
     nom: draft.title,
-    ...(isChronology(draft) ? { chronologie: true } : {}),
+    ...(isInventory(draft) ? { inventaire: true } : {}),
     mode: draft.mode ?? 'analyse',
     ...(draft.templateName ? { modele: draft.templateName } : {}),
     questions: draft.columns.map((column) => column.name),
@@ -98,7 +98,7 @@ function draftSummary(draft: Draft) {
 }
 
 function reviewSummary(review: ReviewSummary) {
-  return { fichier: review.file, nom: review.title, ...(isChronology(review) ? { chronologie: true } : {}), categorie: review.category, statut: review.status, lignes: `${review.doneCount}/${review.rowCount}`, date: review.createdAt };
+  return { fichier: review.file, nom: review.title, ...(isInventory(review) ? { inventaire: true } : {}), categorie: review.category, statut: review.status, lignes: `${review.doneCount}/${review.rowCount}`, date: review.createdAt };
 }
 
 function findDraft(project: string, id: unknown): Draft {
@@ -110,19 +110,19 @@ function findDraft(project: string, id: unknown): Draft {
 async function prepare(project: string, input: Input, launchers: AssistantLaunchers) {
   const previous = input.projet ? findDraft(project, input.projet) : undefined;
   const mode = input.mode === 'recherche' || (input.mode === undefined && previous?.mode === 'recherche') ? 'recherche' : undefined;
-  const template = input.modele ? findTemplate(input.modele) : null;
-  const chronological = previous && isChronology(previous);
-  const wantsChronology = !mode && (template?.name === CHRONOLOGY_TEMPLATE_NAME || (template && hasActions(template.columns)) || CHRONOLOGY_REQUEST.test(text(input.nom)));
-  if (wantsChronology && !chronological) return { ...await chronology(project, launchers), suite: SINGLE_CHRONOLOGY };
+  const template = input.modele ? findTemplate(input.modele === LEGACY_INVENTORY_NAME ? INVENTORY_TEMPLATE_NAME : input.modele) : null;
+  const inventoried = previous && isInventory(previous);
+  const wantsInventory = !mode && (template?.name === INVENTORY_TEMPLATE_NAME || (template && hasActions(template.columns)) || INVENTORY_REQUEST.test(text(input.nom)));
+  if (wantsInventory && !inventoried) return { ...await inventory(project, launchers), suite: SINGLE_INVENTORY };
   const questions = input.questions === undefined ? null : columns(input.questions);
   const chosenColumns = template || questions ? [...(template?.columns ?? []), ...(questions ?? [])] : previous?.columns ?? [];
-  const nextColumns = chronological && !classifyColumn(chosenColumns) ? [...chosenColumns, classificationColumn(readClassification(project))] : chosenColumns;
+  const nextColumns = inventoried && !classifyColumn(chosenColumns) ? [...chosenColumns, classificationColumn(readClassification(project))] : chosenColumns;
   if (hasActions(nextColumns)) throw new UserError('Tri des pièces : l’avocat le prépare depuis le volet Tabular Review.');
   const draft = upsertDraft({
     id: previous?.id,
     project,
-    title: chronological ? previous.title : text(input.nom) || previous?.title,
-    templateName: chronological ? previous.templateName : template?.name ?? (questions ? '' : previous?.templateName ?? ''),
+    title: inventoried ? previous.title : text(input.nom) || previous?.title,
+    templateName: inventoried ? previous.templateName : template?.name ?? (questions ? '' : previous?.templateName ?? ''),
     columns: nextColumns,
     rows: !mode && input.documents !== undefined ? documentRows(project, input.documents) : mode ? [] : previous?.rows ?? [],
     mode,
@@ -134,20 +134,20 @@ async function prepare(project: string, input: Input, launchers: AssistantLaunch
   return draftSummary(draft);
 }
 
-async function chronology(project: string, launchers: AssistantLaunchers) {
-  const review = listReviews([project], launchers.isRunning).find(isChronology);
+async function inventory(project: string, launchers: AssistantLaunchers) {
+  const review = listReviews([project], launchers.isRunning).find(isInventory);
   if (review) {
     await addClassification(project, review.file);
     return { fichier: review.file };
   }
   const classification = classificationColumn(readClassification(project));
-  const draft = listDrafts([project]).find(isChronology);
+  const draft = listDrafts([project]).find(isInventory);
   if (draft) {
     if (!classifyColumn(draft.columns)) upsertDraft({ ...draft, columns: [...draft.columns, classification] });
     return { projet: draft.id };
   }
-  const columns = readTemplates().find((entry) => entry.name === CHRONOLOGY_TEMPLATE_NAME)?.columns ?? CHRONOLOGY_TEMPLATE.columns;
-  const created = upsertDraft({ project, title: CHRONOLOGY_TEMPLATE_NAME, templateName: CHRONOLOGY_TEMPLATE_NAME, columns: [...columns, classification], rows: documentRows(project, ['']) });
+  const columns = readTemplates().find((entry) => entry.name === INVENTORY_TEMPLATE_NAME)?.columns ?? INVENTORY_TEMPLATE.columns;
+  const created = upsertDraft({ project, title: INVENTORY_TEMPLATE_NAME, templateName: INVENTORY_TEMPLATE_NAME, columns: [...columns, classification], rows: documentRows(project, ['']) });
   return { projet: created.id };
 }
 
@@ -302,12 +302,12 @@ export async function assistant(body: Input, launchers: AssistantLaunchers): Pro
   if (action === 'documents') return listMarkdownDocuments(project).map((document) => document.path);
   if (action === 'preparer') return prepare(project, body, launchers);
   if (action === 'lancer') return launch(project, body, launchers);
-  if (action === 'chronologie') return chronology(project, launchers);
+  if (action === 'inventaire') return inventory(project, launchers);
   if (action === 'lire') return readOut(project, reviewName(project, body.fichier), launchers);
   if (action === 'colonnes') return editColumns(project, body, launchers);
   if (action === 'classement') {
     const file = reviewName(project, body.fichier);
-    if (!isChronology(readReview(project, file))) throw new UserError('Le classement du dossier appartient à la chronologie : utilisez l’action chronologie.');
+    if (!isInventory(readReview(project, file))) throw new UserError('Le classement du dossier appartient à l’inventaire intégral : utilisez l’action inventaire.');
     await addClassification(project, file);
     return readOut(project, file, launchers);
   }

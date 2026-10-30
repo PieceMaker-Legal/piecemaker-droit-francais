@@ -302,7 +302,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
 
   server.registerTool('chronologie', {
     description: 'Dates et libellés des pièces du dossier, affichés à l’avocat dans le volet Dossier. '
-      + 'Ce n’est pas l’analyse chronologique : pour elle et pour le tri, utiliser tabular_review, action chronologie. '
+      + 'Ne lit pas les pièces : pour la lecture intégrale de toutes les pièces, avec chronologie et tri, utiliser tabular_review, action inventaire. '
       + 'lister : id, date, libellé et nature de chaque pièce, par date. '
       + 'modifier : change la date (AAAA-MM-JJ, vide pour l’effacer) ou le libellé d’une pièce ; '
       + 'changer le libellé (AAAA-MM-JJ_titre) renomme aussi le fichier.',
@@ -336,15 +336,15 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       + 'documents : documents analysables. modeles : liste, ou questions d’un modele. enregistrer_modele : crée, ou modifie modele. '
       + 'preparer : crée ou complète (projet) un projet, que l’avocat vérifie et lance. '
       + 'lancer : seulement sur accord explicite de l’avocat dans le chat. '
-      + 'chronologie : retrouve et affiche la seule analyse qui gère la chronologie et le tri du dossier, préparée si besoin ; ne jamais en créer une autre. '
-      + 'preparer renvoie cette analyse si on lui demande une chronologie ou un tri. '
+      + 'inventaire : retrouve et affiche l’inventaire intégral des pièces, la seule analyse qui lit toutes les pièces du dossier, une ligne par pièce (date, événement, importance, secret professionnel, classement), pour la chronologie et le tri ; préparée si besoin ; ne jamais en créer une autre. '
+      + 'preparer renvoie cette analyse si on lui demande un inventaire intégral, une chronologie ou un tri. '
       + 'lire : colonnes, lignes et réponses de fichier. '
       + 'colonnes : ajoute (sans colonne), modifie ou supprime (colonne, supprimer) les colonnes de fichier. '
-      + 'classement : ajoute à la chronologie (fichier) la colonne qui classe chaque document dans l’arborescence du dossier. '
+      + 'classement : ajoute à l’inventaire intégral (fichier) la colonne qui classe chaque document dans l’arborescence du dossier. '
       + 'arborescence : lit, ou remplace avec dossiers, l’arborescence ; aucun fichier n’est déplacé, l’avocat applique dans le volet. '
       + 'relancer : seulement sur accord explicite de l’avocat ; analyse les nouveaux documents Markdown de fichier.',
     inputSchema: {
-      action: z.enum(['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'chronologie', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer']),
+      action: z.enum(['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'inventaire', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer']),
       dossier: DOSSIER_SCHEMA,
       fichier: z.string().optional(),
       projet: z.string().optional().describe('Id d’un projet non lancé.'),
@@ -402,7 +402,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
         return { content: [{ type: 'text', text: `Analyse affichée dans le volet Tabular Review. Contenu : « ${REVIEW_FOLDER}/${name} ».` }] };
       }
       const result = await tabularFn({ ...input, ...(fichier ? { fichier } : {}), action, project: resolved });
-      if (action === 'chronologie' || (action === 'preparer' && result.fichier)) {
+      if (action === 'inventaire' || (action === 'preparer' && result.fichier)) {
         await openPanelAndWait({ project: resolved, tab: 'plugin:piecemaker-tabular-review', review: result.fichier, draft: result.projet }, openPanelsTimeoutMs, openPanelsPath);
       }
       return { content: [{ type: 'text', text: Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result) }] };

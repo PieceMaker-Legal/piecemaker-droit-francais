@@ -326,11 +326,12 @@ export type RunRequest = {
   proxyOrigin: string;
 };
 
-export const CHRONOLOGY_TEMPLATE_NAME = 'Chronologie';
+export const INVENTORY_TEMPLATE_NAME = 'Inventaire intégral des pièces';
+export const LEGACY_INVENTORY_NAME = 'Chronologie';
 
-export function isChronology(entry: { title: string; templateName: string; category?: unknown; mode?: unknown }): boolean {
+export function isInventory(entry: { title: string; templateName: string; category?: unknown; mode?: unknown }): boolean {
   if (entry.category === 'recherche-juridique' || entry.mode === 'recherche') return false;
-  return entry.templateName === CHRONOLOGY_TEMPLATE_NAME || entry.title === CHRONOLOGY_TEMPLATE_NAME;
+  return [entry.templateName, entry.title].some((name) => name === INVENTORY_TEMPLATE_NAME || name === LEGACY_INVENTORY_NAME);
 }
 
 export const OPEN_EVENT = 'piecemaker:tabular-review-open';

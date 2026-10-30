@@ -170,6 +170,20 @@ describe('modèles', () => {
     expect(() => normalizeColumn({ name: 'Objet', prompt: 'Identifier l’objet.', action: 'custom', customAction: ' ' })).toThrow('Décrivez l’action personnalisée.');
   });
 
+  it('renomme le modèle Chronologie déjà installé sans en proposer un second', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-home-'));
+    directories.push(home);
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
+    vi.resetModules();
+    const templates = await import('../server/templates.js');
+    const root = path.join(home, '.piecemaker', 'tabular-review');
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, 'templates.json'), JSON.stringify({ version: 1, seeds: ['tri-pieces', 'chronologie'], templates: [{ id: 'a', name: 'Chronologie', description: '', columns: [{ name: 'Date', prompt: 'Date ?', format: 'date' }] }] }));
+
+    expect(templates.readTemplates().map((template) => template.name)).toEqual(['Inventaire intégral des pièces']);
+  });
+
   it('propose une seule fois le modèle « Tri des pièces » à une installation existante', async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-home-'));
     directories.push(home);
@@ -182,10 +196,10 @@ describe('modèles', () => {
     fs.writeFileSync(file, JSON.stringify({ version: 1, templates: [{ id: 'a', name: 'Ancien', description: '', columns: [{ name: 'Q', prompt: 'Q ?', format: 'text' }] }] }));
 
     const first = templates.readTemplates();
-    expect(first.map((template) => template.name)).toEqual(['Ancien', 'Tri des pièces', 'Chronologie']);
+    expect(first.map((template) => template.name)).toEqual(['Ancien', 'Tri des pièces', 'Inventaire intégral des pièces']);
     templates.deleteTemplate(first[1].id);
 
-    expect(templates.readTemplates().map((template) => template.name)).toEqual(['Ancien', 'Chronologie']);
+    expect(templates.readTemplates().map((template) => template.name)).toEqual(['Ancien', 'Inventaire intégral des pièces']);
   });
 
   it('propose les analyses tabulaires de la Bibliothèque, remplacées par leur version modifiée et retirées à la suppression', async () => {
