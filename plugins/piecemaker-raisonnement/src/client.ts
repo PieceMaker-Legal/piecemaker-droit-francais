@@ -358,7 +358,7 @@ export function mount(container: HTMLElement, api: Host) {
     const sources = sides.flatMap((side) => term?.[side] ?? []).flatMap((entry: Json) => entry.selon ?? []) as Json[];
     const entry = full().find((item) => item.key === `fait:${node.id}`);
     const result = entry ? [entryItem(entry, node.id)] : snapshot?.test ? [absent(`absent:${cell.id}`, 'Fait', 'Le test n’a pas évalué ce fait.')] : [];
-    return { cell: cell.id, kind: 'Fait', title: node.label, nature: node.pieces.length ? 'Le test ouvre chaque pièce citée et y cherche la citation. Le fait est établi si une pièce fiable la contient.' : sources.length ? 'Le fait repose sur un texte : le test vérifie ce texte et sa citation.' : 'Aucune pièce ni aucun texte n’est cité : le fait ne peut pas être établi.', items: [...open(issuesFor(node)), ...(node.pieces.length || sources.length ? [] : [line(`sans-preuve:${cell.id}`, 'manque', `${pill('à établir', 'Manque')}<span class="pmr-step">Preuve</span>`, 'Aucune pièce citée pour prouver ce fait.')]), ...pieceItems(node.pieces, cell.id), ...sourceItems(sources, cell.id), ...result] };
+    return { cell: cell.id, kind: 'Fait', title: node.label, nature: node.pieces.length ? 'Le test ouvre chaque pièce citée et y cherche la citation. Le fait est établi si une pièce citée la contient.' : sources.length ? 'Le fait repose sur un texte : le test vérifie ce texte et sa citation.' : 'Aucune pièce ni aucun texte n’est cité : le fait ne peut pas être établi.', items: [...open(issuesFor(node)), ...(node.pieces.length || sources.length ? [] : [line(`sans-preuve:${cell.id}`, 'manque', `${pill('à établir', 'Manque')}<span class="pmr-step">Preuve</span>`, 'Aucune pièce citée pour prouver ce fait.')]), ...pieceItems(node.pieces, cell.id), ...sourceItems(sources, cell.id), ...result] };
   };
   const stepPart = (cell: Cell): Part => {
     const node = nodes.find((item) => item.id === cell.ref)!;
@@ -623,7 +623,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (snapshot?.demo || entry.step !== 'pièce' || entry.status === 'en cours') return '';
     const file = entry.key.split(':')[1];
     const reliable = cited().find((item) => item.piece.piece === file)?.piece.fiable;
-    return `<span class="pmr-decision"><button data-rate="${escape(file)}" data-value="true"${reliable === true ? ' disabled' : ''}>Fiable</button><button data-rate="${escape(file)}" data-value="false"${reliable === false ? ' disabled' : ''}>Non fiable</button>${reliable === null || reliable === undefined ? '' : `<button data-rate="${escape(file)}" data-value="null">Annuler</button>`}</span>`;
+    return `<span class="pmr-decision"><button data-rate="${escape(file)}" data-value="${reliable === true ? 'null' : 'true'}" aria-pressed="${reliable === true}"${reliable === true ? ' class="is-validated" title="Cliquer pour annuler la validation."' : ''}>${reliable === true ? 'Validé' : 'Valider'}</button></span>`;
   };
   const subject = (entry: ReasoningLogEntry, self = '') => {
     if ((entry.step === 'source' || entry.step === 'pièce') && entry.status !== 'en cours') return `<button class="pmr-link" data-show="#${entry.step === 'source' ? 'source' : 'piece'}:${escape(entry.key.split(':')[1])}" data-quote="${escape(entry.key.split(':').slice(2).join(':'))}"><strong>${escape(entry.subject)}</strong></button>`;

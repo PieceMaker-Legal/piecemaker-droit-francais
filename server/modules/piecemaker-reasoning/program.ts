@@ -193,7 +193,7 @@ export async function verifyReasoning(input: {
     const personnes = input.persons.filter((person) => cited.includes(person.label)).map((person) => person.label);
     if (holder) Object.assign(holder, { titre: info.title, ...(nature ? { nature } : {}), fiable: reliable ?? null, ...(personnes.length ? { personnes } : {}) });
     verifiedRefs.set(at, ok && reliable !== false);
-    emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: ok && reliable !== false ? 'ok' : 'alerte', subject: info.title, text: !ok ? `Citation introuvable : « ${ref.citation} »` : reliable === false ? 'Pièce marquée non fiable : ignorée' : `« ${String(holder?.citation ?? ref.citation)} »${reliable === undefined ? ' · fiabilité à évaluer' : ''}` });
+    emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: ok && reliable !== false ? 'ok' : 'alerte', subject: info.title, text: !ok ? `Citation introuvable : « ${ref.citation} »` : reliable === false ? 'Pièce marquée non fiable : ignorée' : `« ${String(holder?.citation ?? ref.citation)} »${reliable === undefined ? ' · à valider' : ''}` });
   };
 
   type BasisCheck = { kind: SourceInfo['kind'] | null; from: string | null; to: string | null };
