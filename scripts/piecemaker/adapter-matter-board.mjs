@@ -90,6 +90,8 @@ once("if (r.view === 'new' && !A.mayWrite()) r = { view: 'home' };", '\n', "if (
 once('</title>', '\n', '</title><style>#btn-add,#new-board,#new-board-first,#proj-back,#proj-name,#proj-name-input,.home__head,#projects{display:none!important}.proj__head{grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:"title actions"!important}#proj-buttons,#p-more{display:inline-flex;flex:none;align-items:center;gap:2px}#proj-buttons .btn{gap:4px;white-space:nowrap}#proj-buttons[hidden],#p-more[hidden]{display:none}#p-close{flex:none}@media (max-width:900px){#proj-buttons .proj-button-label{display:none}#proj-buttons .btn{width:var(--cds-h-control-sm);padding-inline:0}}</style>');
 once("    const can = A.canWrite(), closed = m.status === 'closed', today = A.today(), dated", '\n', "    const can = A.canWrite(), closed = m.status === 'closed';");
 once("      dated && A.calendarOn() ? { label: 'Ajouter à '", "      can ? { label: 'Modifier les détails'", '');
+once("const bar = $('#askbar'), open = state.requests.filter((x) => x.status === 'open'), r = open[0] || state.requests.find((x) => x.status === 'done') || null;", ' shownAsk = r;', "const bar = $('#askbar'), r = state.requests.find((x) => x.status === 'done') || null;");
+once("$('#askbar-text').textContent = done ? 'Claude : ' + (r.result || 'Terminé.') : 'En attente de Claude : '", '\n', "$('#askbar-text').textContent = 'Claude : ' + (r.result || 'Terminé.');");
 for (const [traduit, nom] of [['Calendrier', 'Calendar'], ['Tableur', 'Spreadsheet'], ['Modifier', 'Edit']]) s = s.replaceAll(`icon: '${traduit}'`, `icon: '${nom}'`).replaceAll(`icon('${traduit}')`, `icon('${nom}')`);
 fs.mkdirSync(to.slice(0, to.lastIndexOf('/')), { recursive: true });
 fs.writeFileSync(to, s);

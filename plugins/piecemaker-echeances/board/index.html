@@ -6575,11 +6575,11 @@ window.__pdfjsWorkerSource = "/* pdf.js 4.10.38 (legacy build), Apache-2.0, http
   let shownAsk = null;
   A.renderAsk = function () {
     roomLabels();
-    const bar = $('#askbar'), open = state.requests.filter((x) => x.status === 'open'), r = open[0] || state.requests.find((x) => x.status === 'done') || null; shownAsk = r;
+    const bar = $('#askbar'), r = state.requests.find((x) => x.status === 'done') || null; shownAsk = r;
     bar.hidden = !r || state.route !== 'project' || MB.ui.isOpen($('#prompt-scrim')); if (!r) return;
     const done = r.status === 'done'; bar.dataset.state = done ? 'done' : 'open'; $('#askbar-icon').dataset.icon = done ? 'CheckCircle' : 'Clock';
     // the result is a session's own words: text, like anything else that was stored
-    $('#askbar-text').textContent = done ? 'Claude : ' + (r.result || 'Terminé.') : 'En attente de Claude : ' + asked(r) + (open.length > 1 ? ' (et ' + plural(open.length - 1, 'more request') + ')' : '');
+    $('#askbar-text').textContent = 'Claude : ' + (r.result || 'Terminé.');
     $('#askbar-copy').hidden = done || !promptFor[r.kind] || !A.canCowork(promptFor[r.kind]) || !A.canWrite(); $('#askbar-dismiss').hidden = !A.canWrite(); $('#askbar-dismiss').textContent = done ? 'Ignorer' : 'Annuler la demande';
   };
 

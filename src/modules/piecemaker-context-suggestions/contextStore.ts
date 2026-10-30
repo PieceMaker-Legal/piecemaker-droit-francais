@@ -1,6 +1,7 @@
 import type { AppTab } from '@/shared/types';
 
 export const PANEL_FOCUS_EVENT = 'piecemaker:panel-focus';
+export const COMPOSER_INSERT_EVENT = 'piecemaker:composer-insert';
 
 export type PanelFocus = { view?: string; file?: string | null; label?: string };
 

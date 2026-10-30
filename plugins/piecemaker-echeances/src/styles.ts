@@ -9,6 +9,7 @@ export const STYLES = `
 .pme *{box-sizing:border-box}
 .pme-band:empty{display:none}
 .pme-band{flex:none;max-height:40%;overflow:auto;padding:6px 16px;border-bottom:1px solid var(--border)}
+.pme-prompt{float:right;margin-left:8px}
 .pme-band summary{cursor:pointer;color:var(--muted)}
 .pme-band summary.pme-erreur{color:var(--ko)}
 .pme-band ul{margin:4px 0;padding:0;list-style:none}

@@ -177,6 +177,14 @@ Le tableau peut te transmettre une demande : un texte qui cite `projects/cabinet
 
 `pm suivi ecrire` fusionne les objets et remplace les listes entières : envoie la liste complète. L'outil MCP `suivi` offre les mêmes commandes (`commande` : `verifier`, `lire`, `ecrire`).
 
+### État des dossiers
+
+Quand l'avocat demande un état des dossiers :
+
+1. Lis tous les dossiers du tableau : `pm suivi lire projects/cabinet/matters`.
+2. Rédige un document Word avec la skill `docx-cli` : d'abord ce qui demande attention, puis un court paragraphe par dossier ouvert (étape, responsable, prochaine action et sa date, prochaines dates clés).
+3. Omets ce que la fiche ne dit pas. Ne modifie aucun suivi.
+
 ## sql
 
 Noms réels masqués. `dossier()` = affaire courante ; `dossier('nom ou id')` = une autre.

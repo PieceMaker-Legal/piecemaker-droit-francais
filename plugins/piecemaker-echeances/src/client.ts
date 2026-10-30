@@ -7,6 +7,7 @@ type Context = { theme: 'dark' | 'light'; project: { name: string; path: string 
 type Host = { readonly context: Context; onContextChange(callback: (context: Context) => void): () => void };
 
 const REFRESH_MS = 5000;
+const REPORT_PROMPT = 'Rédige un état des dossiers : d’abord ce qui demande attention, puis un court paragraphe par dossier ouvert.';
 const cleanups = new WeakMap<HTMLElement, () => void>();
 
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
@@ -31,7 +32,7 @@ const bandHtml = (dossiers: SuiviDossier[], open: boolean) => {
   const gaps = dossiers.reduce((sum, dossier) => sum + issuesOf(dossier, 'manque').length, 0);
   const pending = dossiers.reduce((sum, dossier) => sum + undated(dossier).length, 0);
   const counts = [plural(dossiers.length, 'dossier'), errors ? plural(errors, 'erreur') : '', gaps ? `${plural(gaps, 'point')} à compléter` : '', pending ? `${plural(pending, 'date')} à établir` : ''].filter(Boolean).join(' · ');
-  return `<details data-band${open ? ' open' : ''}><summary class="${errors ? 'pme-erreur' : ''}">${escape(counts)}</summary><ul class="pme-dossiers">${dossiers.map(dossierHtml).join('')}</ul></details>`;
+  return `<button type="button" class="pme-prompt" data-prompt title="${escape(REPORT_PROMPT)}">Rédiger un état des dossiers</button><details data-band${open ? ' open' : ''}><summary class="${errors ? 'pme-erreur' : ''}">${escape(counts)}</summary><ul class="pme-dossiers">${dossiers.map(dossierHtml).join('')}</ul></details>`;
 };
 
 export function mount(container: HTMLElement, api: Host) {
@@ -69,6 +70,7 @@ export function mount(container: HTMLElement, api: Host) {
   band.addEventListener('click', (event) => {
     const button = (event.target as HTMLElement).closest('button');
     if (!button) return;
+    if ('prompt' in button.dataset) window.dispatchEvent(new CustomEvent('piecemaker:composer-insert', { detail: { text: REPORT_PROMPT } }));
     if (button.dataset.verify) {
       button.disabled = true;
       void verifySuivi(button.dataset.verify, button.dataset.suivi ?? '').then(refresh).catch(() => undefined).finally(() => { button.disabled = false; });

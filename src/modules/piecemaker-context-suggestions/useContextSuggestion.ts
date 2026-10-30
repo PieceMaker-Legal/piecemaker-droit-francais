@@ -3,7 +3,7 @@ import type { KeyboardEvent } from 'react';
 
 import { usePaletteOps } from '@/modules/command-palette';
 import { useOpenWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';
-import { readWorkspaceContext, subscribeWorkspaceContext, syncPanels } from '@/modules/piecemaker-context-suggestions/contextStore';
+import { COMPOSER_INSERT_EVENT, readWorkspaceContext, subscribeWorkspaceContext, syncPanels } from '@/modules/piecemaker-context-suggestions/contextStore';
 import { publishWorkspaceContext } from '@/modules/piecemaker-context-suggestions/publishContext';
 import { suggestQuestion } from '@/modules/piecemaker-context-suggestions/suggestion';
 
@@ -21,6 +21,14 @@ export function useContextSuggestion({ projectPath, input, placeholder, onKeyDow
 
   useEffect(() => syncPanels(projectPath, panels ?? []), [projectPath, panels]);
   useEffect(() => publishWorkspaceContext(context), [context]);
+  useEffect(() => {
+    const insert = (event: Event) => {
+      const { text } = (event as CustomEvent<{ text?: unknown }>).detail ?? {};
+      if (typeof text === 'string' && text) insertComposerText(text);
+    };
+    window.addEventListener(COMPOSER_INSERT_EVENT, insert);
+    return () => window.removeEventListener(COMPOSER_INSERT_EVENT, insert);
+  }, [insertComposerText]);
 
   const question = input ? null : suggestQuestion(context);
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
