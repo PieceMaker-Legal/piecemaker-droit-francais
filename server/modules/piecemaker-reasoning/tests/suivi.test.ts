@@ -5,11 +5,13 @@ import path from 'node:path';
 import test from 'node:test';
 
 import Database from 'better-sqlite3';
+import { parse } from 'yaml';
 
 import { closed, shift } from '../calendar.js';
 import type { ReasoningConnectors, SourceInfo } from '../program.js';
+import { createBoardService, dossierMatterId } from '../suivi-board.js';
 import { createSuiviService } from '../suivi-service.js';
-import { mentionsDate, verifySuivi } from '../suivi.js';
+import { mentionsDate, suiviDateId, verifySuivi } from '../suivi.js';
 
 const SOURCES: Record<string, SourceInfo> = {
   LEGIARTI000000000101: { kind: 'texte', title: 'Code fictif, article 10', text: 'Le délai pour former appel est d’un mois à compter de la signification du jugement.', validity: { from: '2000-01-01', to: null } },
@@ -88,10 +90,12 @@ echeances:
           citation: le terme se décomptant de date à date
 `;
 
-const verify = (code: string, options: { today?: string; marks?: Map<string, { date: string; piece: string | null; at: string }>; reliability?: Map<string, boolean> } = {}) => verifySuivi({
+const toJson = (fixture: string) => JSON.stringify(parse(fixture), null, 2);
+const verifyRaw = (code: string, options: { today?: string; marks?: Map<string, { date: string; piece: string | null; at: string }>; reliability?: Map<string, boolean> } = {}) => verifySuivi({
   code, cwd: '/dossier-fictif', connectors, reliability: options.reliability ?? new Map(), marks: options.marks ?? new Map(), today: options.today ?? '2026-10-26',
 });
-const texts = (result: Awaited<ReturnType<typeof verify>>, kind: 'erreur' | 'manque') => result.issues.filter((issue) => issue.kind === kind).map((issue) => `${issue.path} : ${issue.text}`);
+const verify = (fixture: string, options: Parameters<typeof verifyRaw>[1] = {}) => verifyRaw(toJson(fixture), options);
+const texts = (result: Awaited<ReturnType<typeof verifyRaw>>, kind: 'erreur' | 'manque') => result.issues.filter((issue) => issue.kind === kind).map((issue) => `${issue.path} : ${issue.text}`);
 
 test('le calendrier reporte le terme et connaît les jours fériés', () => {
   assert.equal(closed('2026-11-14'), 'samedi');
@@ -128,7 +132,7 @@ test('les noms du suivi s’écrivent en français, mots séparés par une espac
   assert.deepEqual(texts(result, 'erreur'), []);
   assert.equal(result.echeances[0].nom, 'délai d’appel');
   assert.equal(result.echeances[0].date, '2026-11-16');
-  const colon = await verify(CONTENTIEUX.replace('  appel:', '  appel: civil:'));
+  const colon = await verify(CONTENTIEUX.replace('  appel:', '  "appel: civil":'));
   assert.equal(colon.issues[0].kind, 'erreur');
 });
 
@@ -203,9 +207,11 @@ test('les sources sont relues : identifiant officiel, citation, version en vigue
 test('syntaxe et clés : le suivi signale les fautes de frappe et de structure', async () => {
   const typo = await verify(CONTENTIEUX.replace('    decompte:', '    decomte:'));
   assert.match(texts(typo, 'erreur')[0], /^echeances\.appel\.decomte : clé inconnue decomte : écris decompte/);
-  const broken = await verify('evenements:\n  a:\n    date: 2026-01-01\n   preuve: []\n');
+  const broken = await verifyRaw('{\n  "evenements": {\n    "a": 1,\n  }\n}\n');
   assert.equal(broken.issues[0].kind, 'erreur');
   assert.equal(broken.issues[0].line, 4);
+  const duplicate = await verifyRaw('{\n  "evenements": {},\n  "evenements": {}\n}\n');
+  assert.equal(duplicate.issues[0].line, 3);
   const loop = await verify(`echeances:
   a:
     intitule: A
@@ -232,7 +238,7 @@ test('le service garde le suivi par dossier, le relit s’il change et enregistr
   assert.equal((await service.read(root)).absent, true);
   await assert.rejects(service.verify(root), /Aucun suivi/);
   fs.mkdirSync(path.join(root, '.piecemaker'));
-  fs.writeFileSync(path.join(root, '.piecemaker', 'suivi.yaml'), CONTRAT);
+  fs.writeFileSync(path.join(root, '.piecemaker', 'suivi.json'), toJson(CONTRAT));
   const first = await service.read(root);
   assert.equal(first.revision, 1);
   assert.equal((await service.read(root)).revision, 1);
@@ -241,11 +247,115 @@ test('le service garde le suivi par dossier, le relit s’il change et enregistr
   await assert.rejects(service.mark(root, 'inconnue', {}), /introuvable/);
   const restored = await service.mark(root, 'denonciation', { annuler: true });
   assert.equal(restored.echeances.find((deadline) => deadline.nom === 'denonciation')!.fait, null);
-  fs.writeFileSync(path.join(root, '.piecemaker', 'suivi.yaml'), CONTENTIEUX);
+  fs.writeFileSync(path.join(root, '.piecemaker', 'suivi.json'), toJson(CONTENTIEUX));
   const all = await service.all();
   assert.equal(all.length, 1);
   assert.equal(all[0].nom, 'Dupont c. Exemple');
   assert.equal(all[0].session, 's2');
   assert.equal(all[0].snapshot.echeances[0].nom, 'appel');
   assert.match(await service.command(root, { commande: 'verifier' }), /16\/11\/2026 — Interjeter appel \(appel\) — à venir/);
+});
+
+const boardFixture = () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'board-'));
+  fs.mkdirSync(path.join(root, '.piecemaker'));
+  const db = new Database(':memory:');
+  db.exec("CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT UNIQUE, custom_project_name TEXT, isStarred BOOLEAN DEFAULT 0, isArchived BOOLEAN DEFAULT 0);");
+  db.prepare('INSERT INTO projects (project_id, project_path, custom_project_name) VALUES (?,?,?)').run('p1', root, 'Dupont c. Exemple');
+  const service = createSuiviService(() => db, connectors);
+  const board = createBoardService(() => db, service);
+  const file = path.join(root, '.piecemaker', 'suivi.json');
+  const matterPath = `projects/cabinet/matters/${dossierMatterId(root)}`;
+  const raw = () => JSON.parse(fs.readFileSync(file, 'utf8'));
+  const matter = async () => (await board.current()).docs[matterPath] as { name: string; client?: string; keyDates: Array<Record<string, unknown>> };
+  return { root, db, service, board, file, matterPath, raw, matter };
+};
+
+test('un ancien suivi.yaml devient suivi.json sans perdre le fichier d’origine', async () => {
+  const { root, service, file, raw } = boardFixture();
+  fs.writeFileSync(path.join(root, '.piecemaker', 'suivi.yaml'), CONTENTIEUX);
+  assert.equal((await service.read(root)).echeances[0].date, '2026-11-16');
+  assert.equal(raw().evenements.signification_du_jugement.date, '2026-10-14');
+  assert.ok(fs.existsSync(`${file.replace('.json', '.yaml')}.migre`));
+  assert.ok(!fs.existsSync(file.replace('.json', '.yaml')));
+});
+
+test('le board affiche les dates calculées, sans les recopier dans le fichier', async () => {
+  const { file, matter, raw, board, matterPath } = boardFixture();
+  fs.writeFileSync(file, toJson(CONTENTIEUX));
+  const first = await matter();
+  assert.equal(first.name, 'Dupont c. Exemple');
+  const appel = first.keyDates.find((date) => date.label === 'Interjeter appel')!;
+  assert.equal(appel.date, '2026-11-16');
+  assert.equal(appel.id, suiviDateId('appel'));
+  assert.equal(appel.done, false);
+  assert.match(String(appel.source), /vérifiée/);
+  await board.write('update', matterPath, { client: 'Société Exemple SAS', nextStep: 'Relire le jugement' });
+  assert.equal((await matter()).client, 'Société Exemple SAS');
+  assert.equal(raw().matter.keyDates, undefined);
+  assert.ok(raw().echeances.appel);
+});
+
+test('une case cochée sur le board marque l’échéance et se décoche', async () => {
+  const { file, matter, board, matterPath, service, root } = boardFixture();
+  fs.writeFileSync(file, toJson(CONTENTIEUX));
+  const dates = (await matter()).keyDates;
+  const base = dates.map((date) => date.id);
+  const checked = dates.map((date) => (date.label === 'Interjeter appel' ? { ...date, done: true } : date));
+  await board.write('update', matterPath, { keyDates: checked }, base);
+  assert.equal((await service.read(root)).echeances[0].fait?.par, 'avocat');
+  assert.equal((await matter()).keyDates.find((date) => date.label === 'Interjeter appel')!.done, true);
+  await board.write('update', matterPath, { keyDates: dates }, base);
+  assert.equal((await service.read(root)).echeances[0].fait, null);
+});
+
+test('une date retirée sur le board est supprimée, pas celle ajoutée entre-temps par l’agent', async () => {
+  const { file, matter, board, matterPath, raw } = boardFixture();
+  fs.writeFileSync(file, toJson(CONTENTIEUX));
+  const dates = (await matter()).keyDates;
+  const seen = dates.map((date) => date.id).filter((id) => id !== suiviDateId('appel'));
+  await board.write('update', matterPath, { keyDates: dates.filter((date) => date.id !== suiviDateId('appel')) }, seen);
+  assert.ok(raw().echeances.appel);
+  await board.write('update', matterPath, { keyDates: dates.filter((date) => date.id !== suiviDateId('appel')) }, dates.map((date) => date.id));
+  assert.equal(raw().echeances.appel, undefined);
+});
+
+test('une date saisie à la main est conservée et signalée à justifier', async () => {
+  const { file, matter, board, matterPath, service, root } = boardFixture();
+  fs.writeFileSync(file, toJson(CONTENTIEUX));
+  const dates = (await matter()).keyDates;
+  await board.write('update', matterPath, { keyDates: [...dates, { id: 'manuelle-1', label: 'Rendez-vous', date: '2026-12-01', kind: 'other' }] }, dates.map((date) => date.id));
+  assert.ok((await matter()).keyDates.some((date) => date.id === 'manuelle-1' && date.label === 'Rendez-vous'));
+  assert.ok((await service.read(root)).issues.some((issue) => issue.kind === 'manque' && issue.path.startsWith('matter.keyDates')));
+});
+
+test('supprimer le dossier du board met le fichier de côté et un set le restaure', async () => {
+  const { file, board, matterPath, matter, raw } = boardFixture();
+  fs.writeFileSync(file, toJson(CONTENTIEUX));
+  await matter();
+  await board.write('delete', matterPath, undefined);
+  assert.ok(!fs.existsSync(file));
+  assert.ok(fs.existsSync(`${file}.supprime`));
+  assert.equal((await board.current()).docs[matterPath], undefined);
+  await board.write('set', matterPath, { name: 'Dupont c. Exemple' });
+  assert.ok(raw().echeances.appel);
+});
+
+test('un suivi illisible ne bloque ni le board ni les autres écritures, et n’est jamais écrasé', async () => {
+  const { file, board, matterPath, matter } = boardFixture();
+  fs.writeFileSync(file, '{ "evenements": ');
+  assert.equal((await matter()).name, 'Dupont c. Exemple');
+  await assert.rejects(board.write('update', matterPath, { client: 'Société Exemple SAS' }), /illisible/);
+  assert.equal(fs.readFileSync(file, 'utf8'), '{ "evenements": ');
+});
+
+test('les autres documents du board restent dans la base et l’agent y accède', async () => {
+  const { board, db } = boardFixture();
+  assert.equal(((await board.current()).docs['c4lSample/state'] as { dismissed: boolean }).dismissed, true);
+  await board.command({ commande: 'ecrire', chemin: 'projects/cabinet/requests/r1', donnees: { status: 'open', instructions: 'Ajouter un dossier' } });
+  await board.command({ commande: 'ecrire', chemin: 'projects/cabinet/requests/r1', donnees: { status: 'done' } });
+  const read = JSON.parse(await board.command({ commande: 'lire', chemin: 'projects/cabinet/requests' }));
+  assert.deepEqual(read.r1, { status: 'done', instructions: 'Ajouter un dossier' });
+  assert.equal((db.prepare('SELECT count(*) AS n FROM pm_board_docs').get() as { n: number }).n, 3);
+  await assert.rejects(board.write('set', '../sortie', {}), /Chemin invalide/);
 });

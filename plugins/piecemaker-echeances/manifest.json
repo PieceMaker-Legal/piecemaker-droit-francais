@@ -8,6 +8,7 @@
   "slot": "tab",
   "entry": "dist/index.js",
   "permissions": [],
+  "piecemakerAssets": ["board/index.html"],
   "piecemakerSources": {
     "index": "src/client.ts"
   }

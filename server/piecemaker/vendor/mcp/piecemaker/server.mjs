@@ -155,7 +155,7 @@ const SQL_DESCRIPTION = [
   'piecemaker_citations(project_id, from_node_id, to_node_id, relation, texte, piece_id, source) : extraits qui justifient un lien, autant que voulu ; source = pièce (piece_id) ou référence libre.',
   'Dates automatiques. Renommer une pièce = UPDATE de son label (AAAA-MM-JJ_titre).',
   "Raisonnement du dossier (lecture seule, écrit par l'outil raisonnement et par l'avocat) : pm_reasoning_programs(project_id, name, revision, code, snapshot_json) = fichier .piecemaker/raisonnements/<name>.yaml vérifié, objet annoté et alertes ; pm_reasoning_dismissed(project_id, name, issue_id, path, text, at) = alertes écartées par l'avocat ; pm_reasoning_reliability(project_id, piece, reliable, at) = fiabilité des pièces fixée par l'avocat.",
-  "Suivi du dossier (lecture seule) : pm_suivi(project_id, revision, code, snapshot_json) = fichier .piecemaker/suivi.yaml vérifié, échéances calculées et alertes ; pm_suivi_faits(project_id, echeance, date, piece, at) = échéances marquées faites par l'avocat.",
+  "Suivi du dossier (lecture seule) : pm_suivi(project_id, revision, code, snapshot_json) = fichier .piecemaker/suivi.json vérifié, échéances calculées et alertes ; pm_suivi_faits(project_id, echeance, date, piece, at) = échéances marquées faites par l'avocat.",
 ].join('\n');
 
 /**
@@ -232,9 +232,11 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
   });
 
   server.registerTool('suivi', {
-    description: 'verifier : vérifie le suivi du dossier (.piecemaker/suivi.yaml : événements qui font courir un délai, échéances fixées ou calculées), recalcule chaque échéance et renvoie ses erreurs et manques, chacun localisé.',
+    description: 'verifier : vérifie le suivi du dossier (.piecemaker/suivi.json : matter, événements qui font courir un délai, échéances fixées ou calculées), recalcule chaque échéance et renvoie ses erreurs et manques, chacun localisé. lire et ecrire : lit ou écrit un document du tableau des dossiers (Matter board), par exemple projects/cabinet/requests/<id> ou projects/cabinet/docs/<id>/text.',
     inputSchema: {
-      commande: z.enum(['verifier']),
+      commande: z.enum(['verifier', 'lire', 'ecrire']),
+      chemin: z.string().optional().describe('Chemin du document du tableau, pour lire et ecrire.'),
+      donnees: z.record(z.string(), z.unknown()).optional().describe('Objet JSON à écrire, pour ecrire.'),
       dossier: DOSSIER_SCHEMA,
     },
     annotations: { title: 'Suivi du dossier', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },

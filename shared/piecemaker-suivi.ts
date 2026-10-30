@@ -11,6 +11,7 @@ export type SuiviDone = { date: string; preuve: SuiviProof[]; par: 'fichier' | '
 export type SuiviDeadline = {
   nom: string;
   intitule: string;
+  kind: string;
   date: string | null;
   calcul: string[];
   fixe: boolean;

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type Database from 'better-sqlite3';
@@ -7,14 +7,15 @@ import express from 'express';
 
 import type { SuiviDossier, SuiviSnapshot } from '../../../shared/piecemaker-suivi.js';
 
+import { parseReasoningDocument } from './document.js';
 import { isLegalDate } from './legal-period.js';
 import type { ReasoningConnectors, SourceInfo } from './program.js';
-import { describeSuivi, SUIVI_FILE, verifySuivi } from './suivi.js';
+import { describeSuivi, SUIVI_FILE, SUIVI_LEGACY_FILE, verifySuivi } from './suivi.js';
 import type { SuiviMark } from './suivi.js';
 
 const empty = (): SuiviSnapshot => ({ revision: 0, updatedAt: null, code: '', hash: null, evenements: [], echeances: [], issues: [] });
 const hashOf = (code: string) => createHash('sha256').update(code).digest('hex');
-const MISSING = 'Aucun suivi : écris .piecemaker/suivi.yaml (evenements et echeances), puis relance verifier.';
+const MISSING = 'Aucun suivi : écris .piecemaker/suivi.json (matter, evenements et echeances), puis relance verifier.';
 
 export function createSuiviService(getDatabase: () => Database.Database, connectors: ReasoningConnectors) {
   let initialized = false;
@@ -53,7 +54,20 @@ export function createSuiviService(getDatabase: () => Database.Database, connect
     const row = database().prepare('SELECT snapshot_json FROM pm_suivi WHERE project_id=?').get(id) as { snapshot_json: string } | undefined;
     return row ? { ...empty(), ...JSON.parse(row.snapshot_json) as SuiviSnapshot } : empty();
   };
-  const fileOf = async (root: string) => readFile(path.join(root, SUIVI_FILE), 'utf8').catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return null; throw error; });
+  const readOrNull = (file: string) => readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return null; throw error; });
+  const fileOf = async (root: string) => {
+    const code = await readOrNull(path.join(root, SUIVI_FILE));
+    if (code !== null) return code;
+    const legacy = await readOrNull(path.join(root, SUIVI_LEGACY_FILE));
+    if (legacy === null) return null;
+    let parsed;
+    try { parsed = parseReasoningDocument(legacy).value as Record<string, unknown> | null; } catch (error) { throw new TypeError(`${SUIVI_LEGACY_FILE} illisible, migration impossible : ${error instanceof Error ? error.message : 'erreur de lecture'}`); }
+    const migrated = `${JSON.stringify({ matter: {}, evenements: parsed?.evenements ?? {}, echeances: parsed?.echeances ?? {} }, null, 2)}\n`;
+    await writeFile(path.join(root, `${SUIVI_FILE}.tmp`), migrated);
+    await rename(path.join(root, `${SUIVI_FILE}.tmp`), path.join(root, SUIVI_FILE));
+    await rename(path.join(root, SUIVI_LEGACY_FILE), path.join(root, `${SUIVI_LEGACY_FILE}.migre`));
+    return migrated;
+  };
 
   const sources = new Map<string, Promise<SourceInfo | null | undefined>>();
   const cached: ReasoningConnectors = { ...connectors, source: (cwd, id) => { const key = `${cwd}\0${id}`; if (!sources.has(key)) sources.set(key, connectors.source(cwd, id)); return sources.get(key)!; } };
@@ -82,7 +96,7 @@ export function createSuiviService(getDatabase: () => Database.Database, connect
     const sessions = database().prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sessions'").get() ? database().prepare('SELECT session_id FROM sessions WHERE project_path=? AND (isArchived IS NULL OR isArchived = 0) ORDER BY updated_at DESC LIMIT 1') : null;
     const found: SuiviDossier[] = [];
     for (const project of projects()) {
-      if (await fileOf(project.project_path) === null) continue;
+      if (await fileOf(project.project_path).catch(() => '') === null) continue;
       const snapshot = await read(project.project_path).catch((error: unknown) => ({ ...empty(), issues: [{ id: 'lecture', kind: 'erreur' as const, path: '', line: null, text: error instanceof Error ? error.message : 'Suivi illisible.' }] }));
       const session = (sessions?.get(project.project_path) as { session_id: string } | undefined)?.session_id ?? null;
       found.push({ projectPath: project.project_path, nom: project.custom_project_name || path.basename(project.project_path), session, snapshot });
@@ -105,6 +119,7 @@ export function createSuiviService(getDatabase: () => Database.Database, connect
 
   database();
   return {
+    projects,
     read,
     verify,
     all,
@@ -129,20 +144,16 @@ export function createSuiviRouter(service: ReturnType<typeof createSuiviService>
   router.get('/tous', handle(() => service.all(), false));
   router.get('/', handle((body) => service.read(body.projectPath as string)));
   router.post('/verify', express.json(), handle((body) => service.verify(body.projectPath as string)));
-  router.post('/fait', express.json(), handle((body) => {
-    if (typeof body.echeance !== 'string') throw new TypeError('echeance requise.');
-    return service.mark(body.projectPath as string, body.echeance, body);
-  }));
   return router;
 }
 
-export function createSuiviLocalRouter(service: ReturnType<typeof createSuiviService>, isLoopback: (request: express.Request) => boolean) {
+export function createSuiviLocalRouter(service: ReturnType<typeof createSuiviService>, isLoopback: (request: express.Request) => boolean, board: { command(input: Record<string, unknown>): Promise<string> }) {
   const router = express.Router();
   router.post('/suivi', express.json(), (request, response) => {
     if (!isLoopback(request)) { response.status(403).json({ erreur: 'Réservé aux appels locaux.' }); return; }
     const { cwd, ...input } = request.body ?? {};
     if (typeof cwd !== 'string' || !cwd) { response.status(400).json({ erreur: 'cwd requis.' }); return; }
-    service.command(cwd, input).then((resultat) => response.json({ resultat }), (error: unknown) => response.status(400).json({ erreur: error instanceof Error ? error.message : 'Commande impossible.' }));
+    (input.commande === 'lire' || input.commande === 'ecrire' ? board.command(input) : service.command(cwd, input)).then((resultat) => response.json({ resultat }), (error: unknown) => response.status(400).json({ erreur: error instanceof Error ? error.message : 'Commande impossible.' }));
   });
   return router;
 }

@@ -195,6 +195,11 @@ test('suivi verifier transmet le dossier à suiviFn', async () => {
   const deps = { suiviFn: async (input) => { calls.push(input); return 'Suivi du dossier'; } };
   assert.equal(await run(['suivi', 'verifier'], { cwd: dossier, deps }), 'Suivi du dossier');
   assert.deepEqual(calls, [{ commande: 'verifier', cwd: path.resolve(dossier) }]);
+  await run(['suivi', 'lire', 'projects/cabinet/requests'], { cwd: dossier, deps });
+  assert.deepEqual(calls[1], { commande: 'lire', chemin: 'projects/cabinet/requests', cwd: path.resolve(dossier) });
+  await run(['suivi', 'ecrire', 'projects/cabinet/requests/r1', '--json', '{"status":"done"}'], { cwd: dossier, deps });
+  assert.deepEqual(calls[2], { commande: 'ecrire', chemin: 'projects/cabinet/requests/r1', donnees: { status: 'done' }, cwd: path.resolve(dossier) });
+  await assert.rejects(run(['suivi', 'ecrire', 'projects/cabinet/requests/r1'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
   await assert.rejects(run(['suivi', 'lister'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
   fs.rmSync(dossier, { recursive: true, force: true });
 });

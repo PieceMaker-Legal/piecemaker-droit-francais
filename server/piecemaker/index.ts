@@ -5,7 +5,7 @@ import path from 'path';
 import type { Router } from 'express';
 
 import { getConnection, projectsDb, sessionsDb } from '@/modules/database/index.js';
-import { createReasoningLocalRouter, createReasoningRouter, createReasoningService, createSuiviLocalRouter, createSuiviRouter, createSuiviService } from '@/modules/piecemaker-reasoning/index.js';
+import { createBoardRouter, createBoardService, createReasoningLocalRouter, createReasoningRouter, createReasoningService, createSuiviLocalRouter, createSuiviRouter, createSuiviService } from '@/modules/piecemaker-reasoning/index.js';
 import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
@@ -98,6 +98,7 @@ const citationReview = createReasoningReview(applicationRoot, {
 const reasoningConnectors = { ...createReasoningConnectors(), review: citationReview.review };
 const reasoning = createReasoningService(getConnection, reasoningConnectors);
 const suivi = createSuiviService(getConnection, reasoningConnectors);
+const board = createBoardService(getConnection, suivi);
 installCodexPlanRuntime(providerRuntimeService);
 installMistralSdk(providerRegistry.resolveProvider('mistral'), piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection) });
@@ -121,7 +122,7 @@ localRouter.use(createMistralTabularBridge({ ensureProxy, runInProject: (id, run
 localRouter.use(knowledge.localRouter);
 localRouter.use('/reasoning', express.json(), citationReview.scope(true));
 localRouter.use(createReasoningLocalRouter(reasoning, isLoopback));
-localRouter.use(createSuiviLocalRouter(suivi, isLoopback));
+localRouter.use(createSuiviLocalRouter(suivi, isLoopback, board));
 localRouter.use(createDocxReasoningLocalRouter(projectsDb, isLoopback));
 localRouter.use(createActeLocalRouter(reasoning, isLoopback));
 localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
@@ -150,6 +151,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
     const reference = info.kind === 'decision' ? { kind: 'case' as const, decision_id: id } : info.kind === 'piece' ? { kind: 'document' as const, doc_id: id } : { kind: 'article' as const, article_id: id };
     return citations.save({ sessionId: `raisonnement:${cwd}`, title: info.title, source: info.text, citation: { ref: 1, ...reference, verified: true, quotes }, ranges: locateSourcePassages(info.text, quotes) });
   }));
+  router.use('/suivi/board', createBoardRouter(board));
   router.use('/suivi', createSuiviRouter(suivi));
   router.use('/library', library.router);
   router.use(knowledge.router);

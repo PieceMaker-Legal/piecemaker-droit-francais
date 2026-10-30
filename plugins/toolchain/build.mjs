@@ -67,6 +67,9 @@ export function validatePlugin({ id, directory, manifest }) {
     }
   }
   if (manifest.icon && !fs.existsSync(path.join(directory, manifest.icon))) errors.push(`icône introuvable (${manifest.icon})`);
+  for (const asset of manifest.piecemakerAssets ?? []) {
+    if (path.isAbsolute(asset) || asset.split('/').includes('..') || !fs.existsSync(path.join(directory, asset))) errors.push(`piecemakerAssets : fichier introuvable (${asset})`);
+  }
   if (errors.length) throw new Error(`${id} : ${errors.join(' ; ')}`);
 }
 
@@ -92,6 +95,10 @@ async function compilePlugin(esbuild, appRoot, plugin, output) {
   }
   fs.copyFileSync(path.join(directory, 'manifest.json'), path.join(output, 'manifest.json'));
   if (manifest.icon) fs.copyFileSync(path.join(directory, manifest.icon), path.join(output, manifest.icon));
+  for (const asset of manifest.piecemakerAssets ?? []) {
+    fs.mkdirSync(path.dirname(path.join(output, asset)), { recursive: true });
+    fs.copyFileSync(path.join(directory, asset), path.join(output, asset));
+  }
   if (manifest.server) {
     fs.copyFileSync(path.join(TOOLCHAIN, 'launcher.mjs'), path.join(output, SERVER_ENTRY));
     fs.copyFileSync(path.join(TOOLCHAIN, 'runtime.mjs'), path.join(output, 'runtime.mjs'));

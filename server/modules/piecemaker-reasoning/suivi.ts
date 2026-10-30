@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
+import { isMap, isSeq, LineCounter, parseDocument } from 'yaml';
+import type { Scalar } from 'yaml';
+
 import type { ReasoningIssue } from '../../../shared/piecemaker-reasoning.js';
 import type { SuiviBasis, SuiviDeadline, SuiviDone, SuiviEvent, SuiviProof, SuiviSnapshot } from '../../../shared/piecemaker-suivi.js';
 
 import { addDays, closed, nextOpen, shift, weekday } from './calendar.js';
-import { parseReasoningDocument, ReasoningSyntaxError } from './document.js';
 import { LiteralError, unknownKey } from './format.js';
 import type { Duration } from './format.js';
 import { isLegalDate } from './legal-period.js';
@@ -13,23 +15,25 @@ import { NAME } from './names.js';
 import { ID_SHAPE, OFFICIAL_ID } from './program.js';
 import type { ReasoningConnectors, SourceInfo } from './program.js';
 
-export const SUIVI_FILE = path.join('.piecemaker', 'suivi.yaml');
+export const SUIVI_FILE = path.join('.piecemaker', 'suivi.json');
+export const SUIVI_LEGACY_FILE = path.join('.piecemaker', 'suivi.yaml');
 
 type Proof = { piece: string; citation: string };
 type Source = { source: string; citation: string };
 type Count = { depart?: 'exclu' | 'inclus'; report?: 'jour_ouvrable_suivant' | 'jour_ouvrable_precedent' | 'aucun'; selon: Source[] };
 type Event = { nom: string; intitule: string; date: string; hypothese: boolean; preuve: Proof[]; selon: Source[] };
 type Deadline = {
-  nom: string; intitule: string; date?: string; preuve: Proof[]; de?: string; avant?: string; delai?: Duration;
+  nom: string; intitule: string; kind?: string; date?: string; preuve: Proof[]; de?: string; avant?: string; delai?: Duration;
   prolongation?: { delai: Duration; selon: Source[] }; selon: Source[]; decompte?: Count; fait?: { date: string; preuve: Proof[] };
 };
 export type SuiviMark = { date: string; piece: string | null; at: string };
 
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
 const UNIT_LABEL: Record<Duration['unite'], string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
-const ROOT_KEYS = ['evenements', 'echeances'];
+const ROOT_KEYS = ['matter', 'evenements', 'echeances'];
+const KINDS = ['limitation', 'hearing', 'filing', 'other'];
 const EVENT_KEYS = ['intitule', 'date', 'preuve', 'hypothese', 'selon'];
-const DEADLINE_KEYS = ['intitule', 'date', 'preuve', 'de', 'avant', 'delai', 'prolongation', 'selon', 'decompte', 'fait'];
+const DEADLINE_KEYS = ['intitule', 'kind', 'date', 'preuve', 'de', 'avant', 'delai', 'prolongation', 'selon', 'decompte', 'fait'];
 const COUNT_KEYS = ['depart', 'report', 'selon'];
 const DEPARTS = ['exclu', 'inclus'];
 const REPORTS = ['jour_ouvrable_suivant', 'jour_ouvrable_precedent', 'aucun'];
@@ -46,6 +50,8 @@ const span = ({ unite, nombre }: Duration) => `${nombre} ${nombre === 1 ? ONE[un
 const fold = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ');
 const issueId = (kind: string, at: string, message: string) => createHash('sha256').update(`suivi\0${kind}\0${at}\0${message}`).digest('hex').slice(0, 10);
 
+export const suiviDateId = (nom: string) => `d-${createHash('sha256').update(nom).digest('hex').slice(0, 16)}`;
+
 export function mentionsDate(citation: string, date: string) {
   const [year, month, dayOfMonth] = date.split('-');
   const d = Number(dayOfMonth), m = Number(month);
@@ -55,13 +61,42 @@ export function mentionsDate(citation: string, date: string) {
   return folded.includes(date) || numeric.test(folded) || written.test(folded);
 }
 
+export function parseSuiviFile(code: string) {
+  let value: unknown;
+  try { value = JSON.parse(code); } catch (error) {
+    const message = error instanceof Error ? error.message : 'JSON illisible';
+    const position = /position (\d+)/.exec(message);
+    throw new LiteralError(`JSON illisible : ${message.replace(/ in JSON at position.*$/, '')}`, code.slice(0, position ? Number(position[1]) : code.length).split('\n').length);
+  }
+  const counter = new LineCounter();
+  const document = parseDocument(code, { lineCounter: counter, uniqueKeys: true });
+  const duplicate = document.errors.find((issue) => issue.code === 'DUPLICATE_KEY');
+  if (duplicate) throw new LiteralError('clé en double : réunis les deux blocs sous une seule clé', counter.linePos(duplicate.pos[0]).line);
+  const lines = new Map<string, number>();
+  const walk = (node: unknown, at: string) => {
+    if (isMap(node)) for (const pair of node.items) {
+      const key = pair.key as Scalar;
+      const route = at ? `${at}.${String(key.value)}` : String(key.value);
+      lines.set(route, counter.linePos(key.range![0]).line);
+      walk(pair.value, route);
+    } else if (isSeq(node)) node.items.forEach((item, index) => {
+      const route = `${at}[${index}]`;
+      const start = (item as Scalar | null)?.range?.[0];
+      if (start !== undefined) lines.set(route, counter.linePos(start).line);
+      walk(item, route);
+    });
+  };
+  walk(document.contents, '');
+  return { value, lines };
+}
+
 export function readSuivi(value: unknown) {
   const problems: Array<{ path: string; text: string }> = [];
   const problem = (at: string, message: string) => { problems.push({ path: at, text: message }); };
   const events = new Map<string, Event>();
   const deadlines = new Map<string, Deadline>();
   if (value === null || value === undefined) return { events, deadlines, problems };
-  if (!isObject(value)) { problem('', 'le suivi est un objet { evenements: {...}, echeances: {...} }'); return { events, deadlines, problems }; }
+  if (!isObject(value)) { problem('', 'le suivi est un objet { matter: {...}, evenements: {...}, echeances: {...} }'); return { events, deadlines, problems }; }
   for (const key of Object.keys(value)) if (!ROOT_KEYS.includes(key)) problem(key, unknownKey(key, ROOT_KEYS));
 
   const keys = (raw: Record<string, unknown>, at: string, admitted: string[]) => { for (const key of Object.keys(raw)) if (!admitted.includes(key)) problem(`${at}.${key}`, unknownKey(key, admitted)); };
@@ -91,6 +126,7 @@ export function readSuivi(value: unknown) {
     return { unite: entries[0][0] as Duration['unite'], nombre: entries[0][1] as number };
   };
   const date = (raw: unknown, at: string) => { if (isLegalDate(raw)) return raw; problem(at, 'date AAAA-MM-JJ attendue'); return undefined; };
+  if (value.matter !== undefined && !isObject(value.matter)) problem('matter', 'matter : objet { name, client, practiceArea, stage, summary, parties, nextStep }');
   const named = (raw: unknown, at: string, shape: string) => {
     if (raw === undefined) return true;
     if (!isObject(raw)) { problem(at, shape); return false; }
@@ -118,6 +154,7 @@ export function readSuivi(value: unknown) {
       if (events.has(nom)) problem(at, `${nom} est déjà un événement : donne un autre nom à l’échéance`);
       if (!text(raw.intitule)) problem(`${at}.intitule`, 'intitule : ce qu’il faut faire, en clair (ex. Déposer les conclusions)');
       const deadline: Deadline = { nom, intitule: text(raw.intitule) ? raw.intitule : human(nom), preuve: proofs(raw.preuve, `${at}.preuve`), selon: sources(raw.selon, `${at}.selon`) };
+      if (raw.kind !== undefined) { if (KINDS.includes(raw.kind as string)) deadline.kind = raw.kind as string; else problem(`${at}.kind`, `kind : ${KINDS.join(', ')}`); }
       if (raw.date !== undefined) deadline.date = date(raw.date, `${at}.date`);
       for (const link of ['de', 'avant'] as const) if (raw[link] !== undefined) {
         if (typeof raw[link] === 'string' && NAME.test(raw[link] as string)) deadline[link] = raw[link] as string;
@@ -184,10 +221,9 @@ export async function verifySuivi(input: {
   };
 
   let parsed;
-  try { parsed = parseReasoningDocument(input.code); } catch (error) {
+  try { parsed = parseSuiviFile(input.code); } catch (error) {
     if (!(error instanceof LiteralError)) throw error;
-    const found = error instanceof ReasoningSyntaxError ? error.problems : [error];
-    return { evenements: [], echeances: [], issues: found.map((problem) => ({ id: issueId('erreur', '', problem.message), kind: 'erreur', path: '', line: problem.line, text: problem.message })) };
+    return { evenements: [], echeances: [], issues: [{ id: issueId('erreur', '', error.message), kind: 'erreur', path: '', line: error.line, text: error.message }] };
   }
   lines = parsed.lines;
   const { events, deadlines, problems } = readSuivi(parsed.value);
@@ -238,6 +274,10 @@ export async function verifySuivi(input: {
     return { date: term, calcul: steps, suppose: origin.suppose, base: origin.date };
   };
   for (const nom of deadlines.keys()) compute(nom);
+
+  const typedDates = isObject(parsed.value) && isObject(parsed.value.matter) && Array.isArray(parsed.value.matter.keyDates) ? parsed.value.matter.keyDates : [];
+  const verifiedIds = new Set([...events.keys(), ...deadlines.keys()].map(suiviDateId));
+  typedDates.forEach((entry, index) => { if (isObject(entry) && !verifiedIds.has(entry.id as string)) add('manque', `matter.keyDates[${index}]`, `date saisie sans justification : ${String(entry.label ?? entry.date)} ; reprends-la dans evenements ou echeances, avec sa preuve`, `${String(entry.label ?? entry.date)} : date saisie à la main, non vérifiée.`); });
 
   for (const event of events.values()) {
     const at = `evenements.${event.nom}`;
@@ -321,7 +361,7 @@ export async function verifySuivi(input: {
     const fait: SuiviDone | null = deadline.fait ? { date: deadline.fait.date, preuve: proofView(deadline.fait.preuve), par: 'fichier' } : mark ? { date: mark.date, preuve: [], par: 'avocat', piece: mark.piece, at: mark.at } : null;
     const at = `echeances.${deadline.nom}`;
     return {
-      nom: deadline.nom, intitule: deadline.intitule, date: result.date, calcul: result.calcul, fixe: !deadline.delai, suppose: result.suppose,
+      nom: deadline.nom, intitule: deadline.intitule, kind: deadline.kind ?? 'other', date: result.date, calcul: result.calcul, fixe: !deadline.delai, suppose: result.suppose,
       preuve: proofView(deadline.preuve), selon: sourceView([...deadline.selon, ...(deadline.prolongation?.selon ?? [])]), decompte: sourceView(deadline.decompte?.selon ?? []),
       fait, erreurs: counted(at, 'erreur'), manques: counted(at, 'manque'),
     };

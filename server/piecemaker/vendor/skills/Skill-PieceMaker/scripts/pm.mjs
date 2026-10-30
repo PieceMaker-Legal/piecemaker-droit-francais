@@ -36,7 +36,11 @@ export const HELP = `Usage: pm <outil> [options]
       un fichier par raisonnement : .piecemaker/raisonnements/NOM.yaml ;
       --raisonnement est requis quand le dossier en compte plusieurs
   suivi verifier
-      vérifie .piecemaker/suivi.yaml (événements et échéances du dossier)
+      vérifie .piecemaker/suivi.json (matter, événements et échéances du dossier)
+  suivi lire <chemin>
+      lit un document du tableau des dossiers (ex. projects/cabinet/requests)
+  suivi ecrire <chemin> --json '{...}'
+      écrit un document du tableau des dossiers
   docx preparer --fichier FILE.docx --liens FILE.json --sortie FILE.docx [--modele FILE.yaml]
   docx verifier|comparer --fichier FILE.docx [--modele FILE.yaml]
   docx extraire --fichier FILE.docx --sortie FILE.yaml
@@ -497,7 +501,15 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   }
 
   if (tool === 'suivi') {
-    if (positional[1] !== 'verifier') usage('suivi attend verifier.');
+    if (positional[1] === 'lire' || positional[1] === 'ecrire') {
+      if (!positional[2]) usage(`suivi ${positional[1]} attend un chemin.`);
+      if (positional[1] === 'lire') return api.suiviFn({ commande: 'lire', chemin: positional[2], cwd: path.resolve(resolved) });
+      if (!flags.json || flags.json === true) usage('suivi ecrire attend --json.');
+      let donnees;
+      try { donnees = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
+      return api.suiviFn({ commande: 'ecrire', chemin: positional[2], donnees, cwd: path.resolve(resolved) });
+    }
+    if (positional[1] !== 'verifier') usage('suivi attend verifier, lire ou ecrire.');
     return api.suiviFn({ commande: 'verifier', cwd: path.resolve(resolved) });
   }
 

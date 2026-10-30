@@ -40,6 +40,7 @@ plugins/piecemaker-<nom>/
 - `piecemakerSources.index` (obligatoire) : l'onglet, compilé pour le navigateur vers `dist/index.js`. Il exporte `mount(container, api)` / `unmount(container)`.
 - `piecemakerSources.server` (facultatif) : le serveur, compilé pour Node vers `dist/server.mjs`. Présent ⇔ `"server": "launcher.mjs"` ; le lanceur est fourni par la chaîne, jamais par le plugin.
 - Toute autre clé `k` : injection compilée vers `dist/k.js` ; `piecemakerInjections` doit lister exactement ces fichiers.
+- `piecemakerAssets` (facultatif) : fichiers statiques du plugin, chemins relatifs, copiés tels quels et servis par `/api/plugins/<nom>/assets/<chemin>`.
 - Monter `version` à chaque changement visible ; l'installation, elle, se fie à l'empreinte du contenu compilé, pas à la version.
 - Un serveur lit `../runtime.json` (relatif à `dist/server.mjs`) : `nodePath`, `applicationRoot`, `databasePath`, `secret`, `claudePath`, `codexPath`, `codexLauncher`, `vibePath`. Il refuse toute requête dont l'en-tête `x-plugin-secret-access` ne vaut pas `secret`. Un module natif (`better-sqlite3`) se charge depuis l'application : `createRequire(path.join(runtime.applicationRoot, 'package.json'))`.
 - Un état persistant va **hors** du dossier du plugin (`~/.piecemaker/<plugin>`, base de l'hôte…) : ce dossier est remplacé à chaque mise à jour.
