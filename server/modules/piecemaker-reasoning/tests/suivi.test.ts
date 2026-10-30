@@ -280,6 +280,51 @@ test('un ancien suivi.yaml devient suivi.json sans perdre le fichier d’origine
   assert.ok(!fs.existsSync(file.replace('.json', '.yaml')));
 });
 
+test('plusieurs <nom>-suivi.json : une carte par fichier, des échéances faites séparées', async () => {
+  const { root, file, service, board, matterPath } = boardFixture();
+  const appel = path.join(root, '.piecemaker', 'appel-suivi.json');
+  fs.writeFileSync(file, toJson(CONTENTIEUX));
+  fs.writeFileSync(appel, toJson(CONTENTIEUX));
+  const appelPath = `projects/cabinet/matters/${dossierMatterId(root, 'appel-suivi.json')}`;
+  assert.deepEqual((await service.all()).map((dossier) => [dossier.fichier, dossier.nom]), [['suivi.json', 'Dupont c. Exemple'], ['appel-suivi.json', 'Dupont c. Exemple — appel']]);
+  const { docs } = await board.current();
+  assert.ok(docs[matterPath] && docs[appelPath]);
+  await service.mark(root, 'appel', {}, 'appel-suivi.json');
+  assert.equal((await service.read(root)).echeances[0].fait, null);
+  assert.equal((await service.read(root, 'appel-suivi.json')).echeances[0].fait?.par, 'avocat');
+  await assert.rejects(service.command(root, { commande: 'verifier' }), /Plusieurs suivis.*suivi\.json, appel-suivi\.json/);
+  assert.match(await service.command(root, { commande: 'verifier', suivi: 'appel-suivi.json' }), /appel-suivi\.json/);
+  await assert.rejects(service.command(root, { commande: 'verifier', suivi: '../sortie-suivi.json' }), /nom de fichier/);
+  await board.write('update', appelPath, { client: 'Société Exemple SAS' });
+  assert.equal(JSON.parse(fs.readFileSync(appel, 'utf8')).matter.client, 'Société Exemple SAS');
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).matter, undefined);
+  await board.write('delete', appelPath, undefined);
+  assert.ok(fs.existsSync(`${appel}.supprime`));
+  await board.write('set', appelPath, { name: 'Appel' });
+  assert.ok(fs.existsSync(appel));
+});
+
+test('la base existante garde les suivis et les échéances faites, et le tableau perd le nom Cabinet', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'board-'));
+  fs.mkdirSync(path.join(root, '.piecemaker'));
+  fs.writeFileSync(path.join(root, '.piecemaker', 'suivi.json'), toJson(CONTENTIEUX));
+  const db = new Database(':memory:');
+  db.exec(`CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT UNIQUE, custom_project_name TEXT, isStarred BOOLEAN DEFAULT 0, isArchived BOOLEAN DEFAULT 0);
+    CREATE TABLE pm_suivi (project_id TEXT PRIMARY KEY NOT NULL, revision INTEGER NOT NULL, code TEXT NOT NULL, snapshot_json TEXT NOT NULL);
+    CREATE TABLE pm_suivi_faits (project_id TEXT NOT NULL, echeance TEXT NOT NULL, date TEXT NOT NULL, piece TEXT, at TEXT NOT NULL, PRIMARY KEY(project_id, echeance));
+    CREATE TABLE pm_board_docs (path TEXT PRIMARY KEY NOT NULL, data_json TEXT NOT NULL);`);
+  db.prepare('INSERT INTO projects (project_id, project_path) VALUES (?,?)').run('p1', root);
+  db.prepare("INSERT INTO pm_suivi VALUES ('p1', 7, 'ancien', '{}')").run();
+  db.prepare("INSERT INTO pm_suivi_faits VALUES ('p1', 'appel', '2026-10-20', NULL, '2026-10-20T10:00:00Z')").run();
+  db.prepare("INSERT INTO pm_board_docs VALUES ('projects/cabinet', ?)").run(JSON.stringify({ _id: 'cabinet', name: 'Cabinet', people: ['p'] }));
+  const service = createSuiviService(() => db, connectors);
+  const board = createBoardService(() => db, service);
+  const snapshot = await service.read(root);
+  assert.equal(snapshot.revision, 1);
+  assert.equal(snapshot.echeances[0].fait?.par, 'avocat');
+  assert.deepEqual((await board.current()).docs['projects/cabinet'], { _id: 'cabinet', name: 'Dossiers', people: ['p'] });
+});
+
 test('le board affiche les dates calculées, sans les recopier dans le fichier', async () => {
   const { file, matter, raw, board, matterPath } = boardFixture();
   fs.writeFileSync(file, toJson(CONTENTIEUX));

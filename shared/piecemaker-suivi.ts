@@ -36,4 +36,4 @@ export type SuiviSnapshot = {
   absent?: boolean;
 };
 
-export type SuiviDossier = { projectPath: string; nom: string; session: string | null; snapshot: SuiviSnapshot };
+export type SuiviDossier = { projectPath: string; fichier: string; nom: string; session: string | null; snapshot: SuiviSnapshot };

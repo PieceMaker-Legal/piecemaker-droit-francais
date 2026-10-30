@@ -6,8 +6,8 @@ export function loadAll(): Promise<SuiviDossier[]> {
   return request<SuiviDossier[]>('/api/piecemaker/suivi/tous');
 }
 
-export function verifySuivi(projectPath: string): Promise<SuiviSnapshot> {
-  return request<SuiviSnapshot>('/api/piecemaker/suivi/verify', { projectPath });
+export function verifySuivi(projectPath: string, suivi: string): Promise<SuiviSnapshot> {
+  return request<SuiviSnapshot>('/api/piecemaker/suivi/verify', { projectPath, suivi });
 }
 
 export async function loadBoardPage(): Promise<string> {

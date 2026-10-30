@@ -18,7 +18,7 @@ const dossierHtml = (dossier: SuiviDossier) => {
   const issues = dossier.snapshot.issues.filter((issue) => issue.kind === 'erreur' || issue.kind === 'manque');
   return `<li class="pme-dossier">
     <div class="pme-dossier-head"><strong>${escape(dossier.nom)}</strong>
-      <button type="button" data-verify="${escape(dossier.projectPath)}">Revérifier</button>
+      <button type="button" data-verify="${escape(dossier.projectPath)}" data-suivi="${escape(dossier.fichier)}">Revérifier</button>
       ${dossier.session ? `<button type="button" data-open="${escape(dossier.session)}">Ouvrir le dossier</button>` : ''}
     </div>
     ${issues.length ? `<ul>${issues.map((issue) => `<li class="pme-${issue.kind}">${escape(issue.avocat ?? issue.text)}</li>`).join('')}</ul>` : ''}
@@ -54,7 +54,7 @@ export function mount(container: HTMLElement, api: Host) {
   let pageUrl = '';
   const refresh = async () => {
     const dossiers = await loadAll();
-    const signature = JSON.stringify(dossiers.map((dossier) => [dossier.projectPath, dossier.nom, dossier.session, dossier.snapshot.issues, undated(dossier).map((deadline) => deadline.intitule)]));
+    const signature = JSON.stringify(dossiers.map((dossier) => [dossier.projectPath, dossier.fichier, dossier.nom, dossier.session, dossier.snapshot.issues, undated(dossier).map((deadline) => deadline.intitule)]));
     if (signature === last) return;
     last = signature;
     band.innerHTML = dossiers.length ? bandHtml(dossiers, open) : '';
@@ -71,7 +71,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (!button) return;
     if (button.dataset.verify) {
       button.disabled = true;
-      void verifySuivi(button.dataset.verify).then(refresh).catch(() => undefined).finally(() => { button.disabled = false; });
+      void verifySuivi(button.dataset.verify, button.dataset.suivi ?? '').then(refresh).catch(() => undefined).finally(() => { button.disabled = false; });
     }
     if (button.dataset.open) {
       window.history.pushState({}, '', `/session/${button.dataset.open}`);

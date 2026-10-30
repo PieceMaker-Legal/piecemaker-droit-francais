@@ -1,6 +1,6 @@
 # Suivi du dossier
 
-Le suivi relève les étapes d'un dossier qu'il ne faut pas manquer. Il se distingue du raisonnement : le raisonnement réfléchit dans un acte (`.piecemaker/raisonnements/<nom>.yaml`, plusieurs par dossier), le suivi liste les dates qui comptent pour le dossier (`.piecemaker/suivi.json`, un seul). Ce n'est pas une chronologie : n'y entrent que les actes à valeur procédurale (contentieux) et les dates liées à la validité du contrat (contrat), avec les échéances qui en découlent.
+Le suivi relève les étapes d'un dossier qu'il ne faut pas manquer. Il se distingue du raisonnement : le raisonnement réfléchit dans un acte (`.piecemaker/raisonnements/<nom>.yaml`, plusieurs par dossier), le suivi liste les dates qui comptent pour le dossier (`.piecemaker/<nom>-suivi.json`, un fichier par acte ou procédure suivi, `suivi.json` reste valide). Ce n'est pas une chronologie : n'y entrent que les actes à valeur procédurale (contentieux) et les dates liées à la validité du contrat (contrat), avec les échéances qui en découlent.
 
 ## Fichier
 
@@ -29,9 +29,9 @@ Les sources passent par les mêmes connecteurs que le raisonnement (Légifrance,
 
 ## Service, commandes, onglet
 
-- `suivi-service.ts` : tables `pm_suivi(project_id, revision, code, snapshot_json)` et `pm_suivi_faits(project_id, echeance, date, piece, at)` ; la lecture revérifie quand le fichier a changé (empreinte sha256).
-- `suivi-board.ts` : présente chaque dossier qui a un `suivi.json` au tableau comme `projects/cabinet/matters/dossier-<sha16>`. Un dossier sans ce fichier n'y figure pas. Le serveur et la page refusent tout ajout manuel de dossier. Les autres documents (tableau, étapes, activité, demandes, documents déposés) vont dans la table `pm_board_docs(path, data_json)`.
-- Écriture depuis le tableau : `matter` va dans le fichier. Une date vérifiée va dans `evenements` ou `echeances`. Une case cochée va dans `pm_suivi_faits`. Une suppression de dossier renomme le fichier en `suivi.json.supprime`.
+- `suivi-service.ts` : tables `pm_suivi(project_id, fichier, revision, code, snapshot_json)` et `pm_suivi_faits(project_id, fichier, echeance, date, piece, at)`, créées et migrées au démarrage (l'ancienne ligne devient `fichier = suivi.json`) ; la lecture revérifie quand le fichier a changé (empreinte sha256).
+- `suivi-board.ts` : présente chaque fichier de suivi au tableau unique « Dossiers » comme `projects/cabinet/matters/dossier-<sha16>`. Un dossier sans fichier de suivi n'y figure pas. La page ouvre directement ce tableau et affiche ses actions en boutons. Le serveur et la page refusent tout ajout manuel de dossier. Les autres documents (tableau, étapes, activité, demandes, documents déposés) vont dans la table `pm_board_docs(path, data_json)`.
+- Écriture depuis le tableau : `matter` va dans le fichier. Une date vérifiée va dans `evenements` ou `echeances`. Une case cochée va dans `pm_suivi_faits`. Une suppression de carte renomme le fichier en `<fichier>.supprime`.
 - Routes `/api/piecemaker/suivi` (`GET /`, `GET /tous`, `POST /verify`), `/api/piecemaker/suivi/board` (`GET ?rev=`, `POST { op, path, data, base }`) et route locale `/suivi` pour `pm suivi verifier|lire|ecrire` et l'outil MCP `suivi`.
 - Onglet Suivi des dossiers (`plugins/piecemaker-echeances`) : un bandeau (erreurs, manques, dates à établir, Revérifier, Ouvrir le dossier) et le Matter board dans une iframe Blob. `src/board-shim.ts` remplace `window.claude.use('db')` par ces routes, avec relecture toutes les 2 s tant que la page est visible.
 

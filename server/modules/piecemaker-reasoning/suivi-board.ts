@@ -7,13 +7,14 @@ import express from 'express';
 
 import type { SuiviDeadline, SuiviEvent, SuiviSnapshot } from '../../../shared/piecemaker-suivi.js';
 
-import { SUIVI_FILE, suiviDateId } from './suivi.js';
+import { SUIVI_NAME, suiviDateId, suiviPath } from './suivi.js';
 import type { createSuiviService } from './suivi-service.js';
 
 type Json = Record<string, unknown>;
 type Suivi = ReturnType<typeof createSuiviService>;
 
 const BOARD = 'cabinet';
+const BOARD_NAME = 'Dossiers';
 const MATTERS = `projects/${BOARD}/matters/`;
 const DELETED_SUFFIX = '.supprime';
 const KEPT_DATE_FIELDS = ['confirmed', 'phase', 'page', 'docId'];
@@ -32,7 +33,7 @@ const parseRaw = (code: string): Json | null => { try { const value: unknown = J
 const isDeadline = (entry: SuiviEvent | SuiviDeadline): entry is SuiviDeadline => 'fait' in entry;
 const isMatterDoc = (docPath: string) => docPath.startsWith(MATTERS) && !docPath.slice(MATTERS.length).includes('/');
 
-export const dossierMatterId = (projectPath: string) => `dossier-${sha(path.resolve(projectPath)).slice(0, 16)}`;
+export const dossierMatterId = (projectPath: string, fichier = SUIVI_NAME) => `dossier-${sha(fichier === SUIVI_NAME ? path.resolve(projectPath) : `${path.resolve(projectPath)}\0${fichier}`).slice(0, 16)}`;
 
 const deadlineSource = (deadline: SuiviDeadline) => {
   const state = deadline.erreurs ? `${deadline.erreurs} erreur(s)` : deadline.manques ? `${deadline.manques} point(s) à compléter` : 'vérifiée';
@@ -85,36 +86,42 @@ export function createBoardService(getDatabase: () => Database.Database, suivi: 
   const database = getDatabase();
   database.exec('CREATE TABLE IF NOT EXISTS pm_board_docs (path TEXT PRIMARY KEY NOT NULL, data_json TEXT NOT NULL CHECK(json_valid(data_json)))');
   const seed = database.prepare('INSERT OR IGNORE INTO pm_board_docs VALUES(?,?)');
-  seed.run(`projects/${BOARD}`, JSON.stringify({ _id: BOARD, name: 'Cabinet', createdBy: null, createdAt: Date.now(), updatedAt: Date.now(), people: [] }));
+  seed.run(`projects/${BOARD}`, JSON.stringify({ _id: BOARD, name: BOARD_NAME, createdBy: null, createdAt: Date.now(), updatedAt: Date.now(), people: [] }));
+  database.prepare("UPDATE pm_board_docs SET data_json=json_set(data_json, '$.name', ?) WHERE path=?").run(BOARD_NAME, `projects/${BOARD}`);
   seed.run('c4lSample/state', JSON.stringify({ dismissed: true }));
 
   const central = () => Object.fromEntries((database.prepare('SELECT path, data_json FROM pm_board_docs').all() as Array<{ path: string; data_json: string }>).map((row) => [row.path, JSON.parse(row.data_json) as Json]));
   const save = database.prepare('INSERT INTO pm_board_docs VALUES(?,?) ON CONFLICT(path) DO UPDATE SET data_json=excluded.data_json');
-  const rootOf = (docPath: string) => suivi.projects().find((project) => `${MATTERS}${dossierMatterId(project.project_path)}` === docPath)?.project_path ?? null;
+  const targetOf = async (docPath: string) => {
+    if (!isMatterDoc(docPath)) return null;
+    for (const { project_path: root } of suivi.projects()) {
+      for (const fichier of [SUIVI_NAME, ...await suivi.files(root, true)]) if (`${MATTERS}${dossierMatterId(root, fichier)}` === docPath) return { root, fichier };
+    }
+    return null;
+  };
 
   const build = async () => {
     const docs: Record<string, Json> = Object.fromEntries(Object.entries(central()).filter(([docPath]) => !isMatterDoc(docPath)));
-    for (const dossier of await suivi.all()) docs[`${MATTERS}${dossierMatterId(dossier.projectPath)}`] = projectMatter(dossierMatterId(dossier.projectPath), dossier.nom, dossier.snapshot);
+    for (const dossier of await suivi.all()) { const id = dossierMatterId(dossier.projectPath, dossier.fichier); docs[`${MATTERS}${id}`] = projectMatter(id, dossier.nom, dossier.snapshot); }
     return { rev: sha(JSON.stringify(docs)), docs };
   };
   let building: ReturnType<typeof build> | null = null;
   const current = () => { building ??= build().finally(() => { building = null; }); return building; };
 
-  const writeFileAtomic = async (root: string, raw: Json) => {
-    const file = path.join(root, SUIVI_FILE);
+  const writeFileAtomic = async (file: string, raw: Json) => {
     await writeFile(`${file}.tmp`, `${JSON.stringify(raw, null, 2)}\n`);
     await rename(`${file}.tmp`, file);
   };
-  const writeMatter = async (root: string, op: string, data: Json | undefined, base: unknown[] | undefined) => {
-    const file = path.join(root, SUIVI_FILE);
+  const writeMatter = async ({ root, fichier }: { root: string; fichier: string }, op: string, data: Json | undefined, base: unknown[] | undefined) => {
+    const file = path.join(root, suiviPath(fichier));
     if (op === 'delete') { await rename(file, `${file}${DELETED_SUFFIX}`); return; }
     if (op === 'set') await rename(`${file}${DELETED_SUFFIX}`, file).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; });
-    const code = await readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT' && op === 'set') return '{}'; if (error.code === 'ENOENT') throw new TypeError(`Aucun ${SUIVI_FILE} pour ce dossier.`); throw error; });
+    const code = await readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT' && op === 'set') return '{}'; if (error.code === 'ENOENT') throw new TypeError(`Aucun ${suiviPath(fichier)} pour ce dossier.`); throw error; });
     const raw = parseRaw(code);
-    if (!raw) throw new TypeError(`${SUIVI_FILE} illisible : corrige le fichier avant de modifier ce dossier.`);
+    if (!raw) throw new TypeError(`${suiviPath(fichier)} illisible : corrige le fichier avant de modifier ce dossier.`);
     raw.evenements ??= {};
     raw.echeances ??= {};
-    const snapshot = await suivi.read(root).catch(() => null);
+    const snapshot = await suivi.read(root, fichier).catch(() => null);
     const { _id: _ignored, ...fields } = data ?? {};
     const matter: Json = op === 'set' ? fields : merge(isObject(raw.matter) ? raw.matter : {}, fields);
     const marks = [];
@@ -125,8 +132,8 @@ export function createBoardService(getDatabase: () => Database.Database, suivi: 
     }
     raw.matter = matter;
     const ordered = { matter: raw.matter, evenements: raw.evenements, echeances: raw.echeances };
-    await writeFileAtomic(root, ordered);
-    for (const { echeance, ...mark } of marks) await suivi.mark(root, echeance, mark).catch(() => undefined);
+    await writeFileAtomic(file, ordered);
+    for (const { echeance, ...mark } of marks) await suivi.mark(root, echeance, mark, fichier).catch(() => undefined);
   };
 
   let queue: Promise<unknown> = Promise.resolve();
@@ -136,9 +143,9 @@ export function createBoardService(getDatabase: () => Database.Database, suivi: 
     if (typeof docPath !== 'string' || !/^[A-Za-z0-9][^\0]*$/.test(docPath) || docPath.includes('..')) throw new TypeError('Chemin invalide.');
     if (!['set', 'update', 'delete'].includes(op as string)) throw new TypeError('Opération : set, update ou delete.');
     if (op !== 'delete' && !isObject(data)) throw new TypeError('Données : objet attendu.');
-    const root = rootOf(docPath);
-    if (root) return writeMatter(root, op as string, data as Json | undefined, Array.isArray(base) ? base : undefined);
-    if (isMatterDoc(docPath) && op !== 'delete') throw new TypeError(`Un dossier vient de son ${SUIVI_FILE} : il ne s'ajoute pas au tableau.`);
+    const matter = await targetOf(docPath);
+    if (matter) return writeMatter(matter, op as string, data as Json | undefined, Array.isArray(base) ? base : undefined);
+    if (isMatterDoc(docPath) && op !== 'delete') throw new TypeError("Un dossier vient de son fichier de suivi : il ne s'ajoute pas au tableau.");
     if (op === 'delete') { database.prepare('DELETE FROM pm_board_docs WHERE path=?').run(docPath); return; }
     const existing = central()[docPath];
     if (op === 'update' && !existing) throw new TypeError(`Document absent : ${docPath}`);
@@ -161,7 +168,7 @@ export function createBoardService(getDatabase: () => Database.Database, suivi: 
       if (input.commande === 'lire') return JSON.stringify(await read(input.chemin), null, 2);
       const data = parseRaw(typeof input.donnees === 'string' ? input.donnees : JSON.stringify(input.donnees ?? null));
       if (!data) throw new TypeError('donnees : objet JSON attendu.');
-      const exists = rootOf(input.chemin) !== null || central()[input.chemin] !== undefined;
+      const exists = await targetOf(input.chemin) !== null || central()[input.chemin] !== undefined;
       await write(exists ? 'update' : 'set', input.chemin, data);
       return `Écrit : ${input.chemin}`;
     },

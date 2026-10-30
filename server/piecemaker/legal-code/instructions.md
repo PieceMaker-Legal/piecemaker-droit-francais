@@ -14,7 +14,7 @@ Le vérificateur réécrit le fichier dans son ordre. Il renvoie les erreurs, le
 
 Réponds à l'avocat sans code. Donne l'objectif et s'il est atteint. Donne ce qui y fait obstacle. Donne ce qui reste à prouver.
 
-Les échéances du dossier vont dans le suivi du dossier, `.piecemaker/suivi.json`, affiché sur le Matter board de l'onglet Suivi des dossiers. Ce sont les actes de procédure et les dates qui conditionnent le contrat. Vérifie le suivi avec `pm suivi verifier`. Une échéance du suivi ne remplace pas une condition du raisonnement.
+Les échéances du dossier vont dans un suivi, `.piecemaker/<nom>-suivi.json` (un fichier par acte ou procédure suivi), affiché sur le Matter board de l'onglet Suivi des dossiers. Ce sont les actes de procédure et les dates qui conditionnent le contrat. Vérifie le suivi avec `pm suivi verifier`, avec `--suivi <fichier>` quand le dossier en compte plusieurs. Une échéance du suivi ne remplace pas une condition du raisonnement.
 
 ## Vocabulaire
 

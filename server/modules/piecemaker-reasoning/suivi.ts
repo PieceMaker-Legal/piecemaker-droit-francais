@@ -17,6 +17,11 @@ import type { ReasoningConnectors, SourceInfo } from './program.js';
 
 export const SUIVI_FILE = path.join('.piecemaker', 'suivi.json');
 export const SUIVI_LEGACY_FILE = path.join('.piecemaker', 'suivi.yaml');
+export const SUIVI_NAME = 'suivi.json';
+export const suiviPath = (fichier: unknown) => {
+  if (typeof fichier !== 'string' || !/^(?:[^/\\\0]+-)?suivi\.json$/.test(fichier)) throw new TypeError('Suivi : nom de fichier attendu, suivi.json ou <nom>-suivi.json.');
+  return path.join('.piecemaker', fichier);
+};
 
 type Proof = { piece: string; citation: string };
 type Source = { source: string; citation: string };
