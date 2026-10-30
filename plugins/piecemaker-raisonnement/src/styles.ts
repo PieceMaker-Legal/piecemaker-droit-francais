@@ -84,6 +84,7 @@ export const STYLES = `
 .pmr-pill.pmr-muted{border-color:var(--border);background:var(--soft)}
 .pmr-detail .pmr-link{height:auto;border:0;box-shadow:none;background:none;backdrop-filter:none;padding:0 2px;color:var(--accent);font-weight:500;text-decoration:underline;text-underline-offset:2px;white-space:normal;text-align:left;display:inline;line-height:inherit;font-size:inherit}
 .pmr-decision{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.pmr-decision button.is-validated{border-color:color-mix(in srgb,var(--ok-soft) 60%,transparent);background:color-mix(in srgb,var(--ok-soft) 22%,var(--surface));color:var(--ok)}
 .pmr-run{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .pmr-tally{display:flex;gap:6px;margin-left:auto}
 .pmr-log{position:relative;list-style:none;margin:0;padding:0 0 0 22px}
