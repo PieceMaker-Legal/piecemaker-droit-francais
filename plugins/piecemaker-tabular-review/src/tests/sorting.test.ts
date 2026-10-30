@@ -182,10 +182,10 @@ describe('modèles', () => {
     fs.writeFileSync(file, JSON.stringify({ version: 1, templates: [{ id: 'a', name: 'Ancien', description: '', columns: [{ name: 'Q', prompt: 'Q ?', format: 'text' }] }] }));
 
     const first = templates.readTemplates();
-    expect(first.map((template) => template.name)).toEqual(['Ancien', 'Tri des pièces']);
+    expect(first.map((template) => template.name)).toEqual(['Ancien', 'Tri des pièces', 'Chronologie']);
     templates.deleteTemplate(first[1].id);
 
-    expect(templates.readTemplates().map((template) => template.name)).toEqual(['Ancien']);
+    expect(templates.readTemplates().map((template) => template.name)).toEqual(['Ancien', 'Chronologie']);
   });
 
   it('propose les analyses tabulaires de la Bibliothèque, remplacées par leur version modifiée et retirées à la suppression', async () => {
@@ -197,7 +197,7 @@ describe('modèles', () => {
     const templates = await import('../server/templates.js');
     const root = path.join(home, '.piecemaker', 'tabular-review');
     fs.mkdirSync(path.join(root, 'library'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'templates.json'), JSON.stringify({ version: 1, seeds: ['tri-pieces'], templates: [{ id: 'a', name: 'Ancien', description: '', columns: [{ name: 'Q', prompt: 'Q ?', format: 'text' }] }] }));
+    fs.writeFileSync(path.join(root, 'templates.json'), JSON.stringify({ version: 1, seeds: ['tri-pieces', 'chronologie'], templates: [{ id: 'a', name: 'Ancien', description: '', columns: [{ name: 'Q', prompt: 'Q ?', format: 'text' }] }] }));
     const library = { id: 'mike-bail-exemple', name: 'Revue de bail exemple', description: '', columns: [{ name: 'Loyer', prompt: 'Quel est le loyer ?', format: 'amount' }] };
     fs.writeFileSync(path.join(root, 'library', 'mike-bail-exemple.json'), JSON.stringify(library));
     fs.writeFileSync(path.join(root, 'library', 'illisible.json'), '{');

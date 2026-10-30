@@ -41,6 +41,19 @@ describe('chronology document cards', () => {
     expect(html).toContain('Date non renseignée');
     expect(html.match(/data-dated="true"/g)).toHaveLength(1);
   });
+
+  it('shows the documents as a table, with the tabular analysis button and custom fields as columns', () => {
+    const html = chronologyView({ graph: { ...snapshot, nodes: [
+      { id: 'dated', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: { fields: [{ label: 'Montant', value: '1 000 €' }] }, date: '2024-03-05', createdAt: '', updatedAt: '' },
+      { id: 'client', projectId: 'project-1', kind: 'company', label: 'Société Exemple SAS', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
+    ], links: [{ projectId: 'project-1', fromNodeId: 'dated', toNodeId: 'client', relation: 'mentions', data: {} }] } } as never);
+    expect(html).toContain('<table class="pmd-chronology-table">');
+    expect(html).toContain('data-action="chronology-tabular"');
+    expect(html).toContain('<th scope="col">Montant</th>');
+    expect(html).toContain('<td>1 000 €</td>');
+    expect(html).toContain('Société Exemple SAS');
+    expect(html).toContain('05/03/2024');
+  });
 });
 
 describe('BODACC on designated parties', () => {

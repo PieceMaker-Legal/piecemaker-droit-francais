@@ -290,32 +290,27 @@ function chronologyDateLabel(value: string): string {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
 }
 
-function chronologyFields(node: KnowledgeNode): string {
+function chronologyFields(node: KnowledgeNode): { label: string; value: string }[] {
   const fields = Array.isArray(node.data.fields) ? node.data.fields : [];
-  const entries = fields.filter((field): field is { label: string; value: string } => Boolean(field) && typeof field === 'object' && typeof (field as { label?: unknown }).label === 'string' && typeof (field as { value?: unknown }).value === 'string');
-  return entries.length ? `<dl class="pmd-document-fields">${entries.map((field) => `<div><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`).join('')}</dl>` : '';
+  return fields.filter((field): field is { label: string; value: string } => Boolean(field) && typeof field === 'object' && typeof (field as { label?: unknown }).label === 'string' && typeof (field as { value?: unknown }).value === 'string');
 }
 
-function chronologyEvent(node: KnowledgeNode, dated: boolean, byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
+function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
   const related = links
     .filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id))
     .map((link) => byId.get(link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId))
     .filter((entry): entry is KnowledgeNode => Boolean(entry && entry.kind !== 'document'));
-  const nature = textValue(node.data.nature);
-  const localisation = textValue(node.data.localisation);
-  return `<article class="pmd-chronology-event" data-dated="${dated}" data-open-document="${escapeHtml(node.id)}"><div class="pmd-chronology-marker" aria-hidden="true"></div><div class="pmd-chronology-date">${escapeHtml(dated ? chronologyDateLabel(dateFor(node)) : 'Date non renseignée')}</div><div class="pmd-chronology-document pmd-card"><div class="pmd-card-head"><div class="pmd-document-heading"><div class="pmd-card-title">${escapeHtml(node.label)}${isConformingPieceName(node.label) ? '' : ' <span class="pmd-badge pmd-badge-muted">Nom non conforme</span>'}</div><div class="pmd-document-meta">${escapeHtml(nature || 'Type non renseigné')}${localisation ? ` · ${escapeHtml(localisation)}` : ''}</div></div><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></div>${chronologyFields(node)}<div class="pmd-document-related"><span class="pmd-document-related-label">Mentions</span><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('') || '<span class="pmd-badge pmd-badge-muted">Aucune personne liée</span>'}</div></div></div></article>`;
+  const date = dateFor(node);
+  const fields = chronologyFields(node);
+  const fieldCells = fieldLabels.map((label) => `<td>${escapeHtml(fields.find((field) => field.label === label)?.value ?? '')}</td>`).join('');
+  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}"><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><span class="pmd-card-title">${escapeHtml(node.label)}</span>${isConformingPieceName(node.label) ? '' : ' <span class="pmd-badge pmd-badge-muted">Nom non conforme</span>'}</td><td>${escapeHtml(textValue(node.data.nature))}</td><td>${escapeHtml(textValue(node.data.localisation))}</td><td><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('')}</div></td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
 }
 
-function chronologySection(title: string, hint: string, nodes: KnowledgeNode[], dated: boolean, byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
-  if (!nodes.length) return '';
-  const heading = title ? `<div class="pmd-chronology-section-heading"><div><h3 class="piecemaker-display">${title}</h3><p>${hint}</p></div><span class="pmd-section-count">${nodes.length}</span></div>` : '';
-  return `<section class="pmd-chronology-section">${heading}<div class="pmd-timeline">${nodes.map((node) => chronologyEvent(node, dated, byId, links)).join('')}</div></section>`;
-}
-
-function renderChronologySections(dated: KnowledgeNode[], undated: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[] = []): string {
-  const total = dated.length + undated.length;
-  if (!total) return '<div class="pmd-empty">Aucun document indexé.</div>';
-  return `${chronologySection('', '', dated, true, byId, links)}${chronologySection('Documents sans date', 'À compléter depuis la fiche de la pièce', undated, false, byId, links)}`;
+function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
+  if (!nodes.length) return '<div class="pmd-empty">Aucun document indexé.</div>';
+  const fieldLabels = [...new Set(nodes.flatMap((node) => chronologyFields(node).map((field) => field.label)))];
+  const headings = ['Date', 'Document', 'Nature', 'Localisation', 'Mentions', ...fieldLabels];
+  return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${headings.map((heading) => `<th scope="col">${escapeHtml(heading)}</th>`).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links)).join('')}</tbody></table></div>`;
 }
 
 export function chronologyView(data: ViewData): string {
@@ -328,6 +323,6 @@ export function chronologyView(data: ViewData): string {
     .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
   return `
-    <div class="pmd-toolbar"><div class="pmd-subtitle">Classés du plus ancien au plus récent</div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
-    ${renderChronologySections(dated, undated, byId, data.graph.links)}`;
+    <div class="pmd-toolbar"><div class="pmd-subtitle">Classés du plus ancien au plus récent</div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="chronology-tabular" title="Analyser ces documents dans un tableau et y ajouter des colonnes">Analyse tabulaire</button></div>
+    ${chronologyTable([...dated, ...undated], byId, data.graph.links)}`;
 }

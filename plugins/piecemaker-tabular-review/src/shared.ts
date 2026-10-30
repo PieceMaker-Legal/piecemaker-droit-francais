@@ -302,6 +302,12 @@ export type RunRequest = {
   proxyOrigin: string;
 };
 
+export const CHRONOLOGY_TEMPLATE_NAME = 'Chronologie';
+
+export function isChronology(entry: { title: string; templateName: string }): boolean {
+  return entry.templateName === CHRONOLOGY_TEMPLATE_NAME || entry.title === CHRONOLOGY_TEMPLATE_NAME;
+}
+
 export const OPEN_EVENT = 'piecemaker:tabular-review-open';
 export const PENDING_TARGET_KEY = '__piecemakerTabularReviewTarget';
 export const SHOW_EVENT = 'piecemaker:tabular-review-show';

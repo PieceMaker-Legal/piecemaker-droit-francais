@@ -27,6 +27,28 @@ beforeEach(() => {
 
 afterEach(() => { unmount(container); dom.window.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+describe('Chronologie', () => {
+  it('opens the tabular analysis of the case from the button', async () => {
+    vi.stubGlobal('Event', dom.window.Event);
+    const tab = dom.window.document.createElement('button');
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-label', 'Analyse Tabulaire');
+    const opened = vi.fn();
+    tab.addEventListener('click', opened);
+    dom.window.document.body.append(tab);
+    const shown = vi.fn();
+    dom.window.addEventListener('piecemaker:tabular-review-show', shown);
+    (dom.window as unknown as Record<string, unknown>).__piecemakerDossierView = 'chronology';
+    vi.spyOn(knowledgeApi, 'graph').mockResolvedValue({ ...graph, nodes: [{ projectId: graph.projectId, id: 'doc', kind: 'document', label: 'Contrat', aliases: [], data: {}, date: '2024-03-05', createdAt: '', updatedAt: '' }] } as never);
+    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => undefined, rpc: vi.fn(), openFileInEditor: vi.fn() } as never);
+    await vi.waitFor(() => expect(container.querySelector('[data-action="chronology-tabular"]')).not.toBeNull());
+    container.querySelector<HTMLElement>('[data-action="chronology-tabular"]')!.click();
+    expect((dom.window as unknown as Record<string, unknown>).__piecemakerTabularReviewShow).toEqual({ project: '/dossier-exemple', chronology: true });
+    expect(opened).toHaveBeenCalledOnce();
+    expect(shown).toHaveBeenCalledOnce();
+  });
+});
+
 describe('Dossier edit action', () => {
   it.each(['profile', 'mapping'])('opens the viewer from the %s menu', async (source) => {
     const openFileInEditor = vi.fn();

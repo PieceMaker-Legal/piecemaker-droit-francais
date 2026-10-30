@@ -32,6 +32,18 @@ afterAll(() => {
 });
 
 describe('outil tabular_review', () => {
+  it('prépare la chronologie du dossier puis retrouve le même projet', async () => {
+    const run = launchers();
+    const first = await assistant({ action: 'chronologie', project }, run) as { projet: string };
+    const listed = await assistant({ action: 'lister', project }, run) as { projets: { projet: string; nom: string; documents: string[]; questions: string[] }[] };
+    const draft = listed.projets.find((entry) => entry.projet === first.projet);
+    expect(draft).toMatchObject({ nom: 'Chronologie', questions: ['Date', 'Événement', 'Importance', 'Secret professionnel'] });
+    expect(draft?.documents).toContain('Pièces/courrier.md');
+    expect(await assistant({ action: 'chronologie', project }, run)).toEqual({ projet: first.projet });
+    const { deleteDraft } = await import('../server/drafts.js');
+    deleteDraft(first.projet);
+  });
+
   it('prépare une analyse depuis un dossier de documents puis la lance', async () => {
     const run = launchers();
     const prepared = await assistant({ action: 'preparer', project, nom: 'Baux', documents: ['Pièces/Contrats/'], questions: [{ consigne: 'Quelle est la durée du bail ?' }] }, run) as Record<string, unknown>;

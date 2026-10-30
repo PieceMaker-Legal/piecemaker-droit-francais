@@ -26,6 +26,9 @@ const PANEL_FOCUS_EVENT = 'piecemaker:panel-focus';
 const KNOWLEDGE_SCAN_EVENT = 'piecemaker:knowledge-scan-job';
 const VIEW_EVENT = 'piecemaker:dossier-view';
 const VIEW_KEY = '__piecemakerDossierView';
+const TABULAR_SHOW_KEY = '__piecemakerTabularReviewShow';
+const TABULAR_SHOW_EVENT = 'piecemaker:tabular-review-show';
+const TABULAR_TAB_LABEL = 'Analyse Tabulaire';
 const SCAN_POLL_INTERVAL_MS = 1000;
 const VERSION_POLL_INTERVAL_MS = 5000;
 const viewCache = new Map<string, ViewData>();
@@ -411,6 +414,17 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       if (action === 'refresh') {
         if (context.project) viewCache.delete(context.project.name);
         void load();
+        return;
+      }
+      if (action === 'chronology-tabular') {
+        const tab = Array.from(document.querySelectorAll<HTMLElement>('[role="tab"]')).find((element) => element.getAttribute('aria-label') === TABULAR_TAB_LABEL);
+        if (!context.project || !tab) {
+          showError('Le volet Analyse Tabulaire n’est pas disponible.');
+          return;
+        }
+        (window as Window & { [TABULAR_SHOW_KEY]?: unknown })[TABULAR_SHOW_KEY] = { project: context.project.path, chronology: true };
+        tab.click();
+        window.dispatchEvent(new Event(TABULAR_SHOW_EVENT));
         return;
       }
       if (action === 'toggle-tiers') {

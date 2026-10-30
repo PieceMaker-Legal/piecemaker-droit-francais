@@ -9,6 +9,10 @@ describe('tri des colonnes', () => {
     expect(sorted(['Bail', '10 000 €', 'arrêt', '2 mois', '1 500,50 €', 'Zèbre'])).toEqual(['2 mois', '1 500,50 €', '10 000 €', 'arrêt', 'Bail', 'Zèbre']);
   });
 
+  it('trie les dates JJ/MM/AAAA dans l’ordre chronologique', () => {
+    expect(sorted(['05/03/2024', '28/01/2023', '01/12/2024'])).toEqual(['28/01/2023', '05/03/2024', '01/12/2024']);
+  });
+
   it('inverse l’ordre en gardant les cellules vides à la fin', () => {
     expect(sorted(['b', '', '3', 'a'], -1)).toEqual(['b', 'a', '3', '']);
     expect(sorted(['b', '', '3', 'a'])).toEqual(['3', 'a', 'b', '']);

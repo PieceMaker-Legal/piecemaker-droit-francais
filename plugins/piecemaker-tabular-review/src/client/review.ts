@@ -1,5 +1,5 @@
 import type { Cell, CitationSource, ExportFormat, ExportResult, Provider, Review, ResearchState, ReviewDetail, ReviewRow } from '../shared.js';
-import { CATEGORY_LABELS, citationIssue, defaultUpdateSince, emptyColumns, FLAG_LABELS, isCellFilled, MAX_CITATION_CORRECTIONS, RESEARCH_SOURCES, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
+import { CATEGORY_LABELS, citationIssue, defaultUpdateSince, emptyColumns, FLAG_LABELS, isCellFilled, isChronology, MAX_CITATION_CORRECTIONS, RESEARCH_SOURCES, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, openModal, renderMarkdown, toast } from './dom.js';
 import { anonymizationProxyOrigin, caseFiles, loadModels } from './host.js';
@@ -277,6 +277,10 @@ export function createReviewView(app: App, project: string, file: string, onBack
     try {
       const next = await app.rpc<ReviewDetail>('GET', `/reviews/item?project=${encodeURIComponent(project)}&file=${encodeURIComponent(file)}`);
       if (destroyed) return;
+      if (!detail && isChronology(next.review)) {
+        const date = next.review.columns.find((column) => column.format === 'date');
+        if (date) sort = { key: `c${date.index}`, direction: 1 };
+      }
       detail = next;
       render();
     } catch (error) {
