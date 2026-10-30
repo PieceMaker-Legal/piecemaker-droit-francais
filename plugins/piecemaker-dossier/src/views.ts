@@ -269,11 +269,21 @@ export function mappingView(data: ViewData): string {
   }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-save-mapping>✓ Enregistrer le mapping</button></div></div>`;
 }
 
-const PIECE_NAME = /^\d{4}-\d{2}-\d{2}_\S/;
+export const PIECE_NATURES = ['assignation', 'conclusions', 'requête', 'courrier', 'courriel', 'mise en demeure', 'contrat', 'facture', 'devis', 'attestation', 'jugement', 'arrêt', 'ordonnance', 'procès-verbal', 'constat', 'expertise', 'statuts de société', 'extrait Kbis', 'relevé bancaire', 'acte notarié', 'bordereau de pièces'];
+export const CUSTOM_NATURE = '__piecemaker_custom_nature__';
 
-/** Vrai pour une pièce nommée `AAAA-MM-JJ_<titre>`, extension mise à part. */
-export function isConformingPieceName(label: string): boolean {
-  return PIECE_NAME.test(label.replace(/\.[^.]+$/, ''));
+export function natureOptionsMarkup(nature: string): string {
+  return [...new Set([nature, ...PIECE_NATURES].filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, 'fr', { sensitivity: 'base' }))
+    .map((value) => `<option value="${escapeHtml(value)}" ${value === nature ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
+}
+
+export function natureSelectMarkup(node: KnowledgeNode): string {
+  return `<select class="pmd-nature-select" data-nature-select="${escapeHtml(node.id)}" aria-label="Nature de ${escapeHtml(node.label)}"><option value="">— Aucune —</option>${natureOptionsMarkup(textValue(node.data.nature))}<option value="${CUSTOM_NATURE}">Autre type…</option></select>`;
+}
+
+export function natureInputMarkup(nodeId: string): string {
+  return `<input class="pmd-nature-select" data-nature-input="${escapeHtml(nodeId)}" aria-label="Type de pièce personnalisé" placeholder="Saisissez le type de pièce">`;
 }
 
 /** Nom proposé `AAAA-MM-JJ_<Type>[ - <lieu>]`, vide tant que la date ou le type manque. */
@@ -295,6 +305,14 @@ function chronologyFields(node: KnowledgeNode): { label: string; value: string }
   return fields.filter((field): field is { label: string; value: string } => Boolean(field) && typeof field === 'object' && typeof (field as { label?: unknown }).label === 'string' && typeof (field as { value?: unknown }).value === 'string');
 }
 
+const MENTION_FIELD = /^(siren|siret)$/i;
+
+function chronologyMentions(node: KnowledgeNode, related: KnowledgeNode[]): string[] {
+  const mentions = [...new Set([...related.map((entry) => entry.label), textValue(node.data.localisation)].filter(Boolean))];
+  const identifiers = chronologyFields(node).filter((field) => MENTION_FIELD.test(field.label) && field.value && !mentions.includes(field.value));
+  return [...mentions, ...identifiers.map((field) => `${field.label} ${field.value}`)];
+}
+
 function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
   const related = links
     .filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id))
@@ -303,13 +321,14 @@ function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<str
   const date = dateFor(node);
   const fields = chronologyFields(node);
   const fieldCells = fieldLabels.map((label) => `<td>${escapeHtml(fields.find((field) => field.label === label)?.value ?? '')}</td>`).join('');
-  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}"><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><span class="pmd-card-title">${escapeHtml(node.label)}</span>${isConformingPieceName(node.label) ? '' : ' <span class="pmd-badge pmd-badge-muted">Nom non conforme</span>'}</td><td>${escapeHtml(textValue(node.data.nature))}</td><td>${escapeHtml(textValue(node.data.localisation))}</td><td><div class="pmd-badges">${related.map((entry) => `<span class="pmd-badge">${escapeHtml(entry.label)}</span>`).join('')}</div></td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
+  const nature = textValue(node.data.nature);
+  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(node.label)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
 }
 
 function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[]): string {
   if (!nodes.length) return '<div class="pmd-empty">Aucun document indexé.</div>';
-  const fieldLabels = [...new Set(nodes.flatMap((node) => chronologyFields(node).map((field) => field.label)))];
-  const headings = ['Date', 'Document', 'Nature', 'Localisation', 'Mentions', ...fieldLabels];
+  const fieldLabels = [...new Set(nodes.flatMap((node) => chronologyFields(node).map((field) => field.label)))].filter((label) => !MENTION_FIELD.test(label));
+  const headings = ['Document', 'Date', 'Mentions', ...fieldLabels];
   return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${headings.map((heading) => `<th scope="col">${escapeHtml(heading)}</th>`).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links)).join('')}</tbody></table></div>`;
 }
 

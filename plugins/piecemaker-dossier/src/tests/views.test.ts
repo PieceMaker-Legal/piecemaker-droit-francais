@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { chronologyView, citationListMarkup, generalView, isConformingPieceName, mappingView, proposedPieceName, shell } from '../views.js';
+import { chronologyView, citationListMarkup, generalView, mappingView, proposedPieceName, shell } from '../views.js';
 import type { KnowledgeSnapshot } from '../types.js';
 
 const snapshot: KnowledgeSnapshot = {
@@ -244,12 +244,6 @@ describe('scan status badge', () => {
 });
 
 describe('piece names', () => {
-  it('recognises the AAAA-MM-JJ_titre naming rule', () => {
-    expect(isConformingPieceName('2024-01-09_Jugement du Tribunal judiciaire de Paris.pdf')).toBe(true);
-    expect(isConformingPieceName('Contrat.pdf')).toBe(false);
-    expect(isConformingPieceName('2024-01-09_.pdf')).toBe(false);
-  });
-
   it('proposes a name from the date, the type and the place', () => {
     expect(proposedPieceName('2024-01-09', 'jugement', 'Tribunal judiciaire de Paris')).toBe('2024-01-09_Jugement - Tribunal judiciaire de Paris');
     expect(proposedPieceName('2023-05-12', 'contrat', '')).toBe('2023-05-12_Contrat');
@@ -265,12 +259,21 @@ describe('piece names', () => {
     expect(proposedPieceName('2024-01-09', ' ', '')).toBe('');
   });
 
-  it('flags a non-conforming piece in the chronology', () => {
+  it('leaves the name of a piece unjudged in the chronology', () => {
     const html = chronologyView({ graph: { ...snapshot, nodes: [
       { id: 'a', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
-      { id: 'b', projectId: 'project-1', kind: 'document', label: '2024-01-09_Jugement.pdf', aliases: [], data: {}, date: null, createdAt: '', updatedAt: '' },
     ], links: [] } } as never);
-    expect(html.match(/Nom non conforme/g)).toHaveLength(1);
+    expect(html).not.toContain('Nom non conforme');
+  });
+
+  it('puts the name first, the nature as a pill, and the place and SIREN in the mentions', () => {
+    const html = chronologyView({ graph: { ...snapshot, nodes: [
+      { id: 'a', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: { nature: 'contrat', localisation: 'Paris', fields: [{ label: 'SIREN', value: '123456789' }, { label: 'Montant', value: '1 000 €' }] }, date: null, createdAt: '', updatedAt: '' },
+    ], links: [] } } as never);
+    expect(html.match(/<th scope="col">[^<]*<\/th>/g)).toEqual(['<th scope="col">Document</th>', '<th scope="col">Date</th>', '<th scope="col">Mentions</th>', '<th scope="col">Montant</th>']);
+    expect(html).toMatch(/data-edit-nature="a"[^>]*>contrat<\/button>/);
+    expect(html).toContain('<span class="pmd-badge">Paris</span>');
+    expect(html).toContain('<span class="pmd-badge">SIREN 123456789</span>');
   });
 });
 
