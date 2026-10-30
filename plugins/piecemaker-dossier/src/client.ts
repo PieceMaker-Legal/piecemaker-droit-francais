@@ -4,7 +4,7 @@ import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, 
 import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { chronologyView, escapeHtml, generalView, mappingView, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
+import { CUSTOM_NATURE, chronologyView, escapeHtml, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
 import type { BodaccScanState, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -341,10 +341,45 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     else content.innerHTML = active === 'chronology' ? chronologyView(data) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
   };
 
+  const saveNature = async (nodeId: string, nature: string) => {
+    const node = data?.graph.nodes.find((entry) => entry.id === nodeId);
+    if (!node) return;
+    await save([{ op: 'upsertNode', node: { id: node.id, kind: 'document', label: node.label, aliases: node.aliases, data: { ...node.data, nature: nature || null }, date: node.date } }]);
+  };
+
   const bindOnce = () => {
+    root.addEventListener('change', (event) => {
+      const field = event.target as HTMLInputElement;
+      const nodeId = field.dataset?.natureSelect ?? field.dataset?.natureInput;
+      if (!nodeId) return;
+      const value = field.value.trim();
+      if (value === CUSTOM_NATURE) {
+        field.parentElement!.innerHTML = natureInputMarkup(nodeId);
+        root.querySelector<HTMLElement>('[data-nature-input]')?.focus();
+        return;
+      }
+      if (!value && field.dataset.natureInput) {
+        paintContent();
+        return;
+      }
+      void saveNature(nodeId, value).catch(showError);
+    });
     root.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
       if (target.closest('.pmd-modal')) return;
+      if (target.closest('[data-nature-select],[data-nature-input]')) return;
+      if (root.querySelector('[data-nature-select],[data-nature-input]')) {
+        paintContent();
+        return;
+      }
+      const editNature = target.closest<HTMLElement>('[data-edit-nature]');
+      if (editNature) {
+        const node = data?.graph.nodes.find((entry) => entry.id === editNature.dataset.editNature);
+        if (!node) return;
+        editNature.parentElement!.innerHTML = natureSelectMarkup(node);
+        root.querySelector<HTMLElement>('[data-nature-select]')?.focus();
+        return;
+      }
       const nodeMenu = target.closest<HTMLElement>('[data-node-menu]');
       if (nodeMenu) {
         const menu = nodeMenu.parentElement?.querySelector<HTMLElement>('.pmd-profile-menu');
