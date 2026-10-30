@@ -12,6 +12,7 @@ import type { Calculation, Facts, Trace } from './engine.js';
 import { listReasoningFiles, parseReasoningDocument, printReasoningDocument, ReasoningSyntaxError, resolveReasoningFile } from './document.js';
 import { canonical, formulaConditions, SIDES, VERBS, formulaNames, formulaNumbers, LiteralError, readReasoning, stripAnnotations } from './format.js';
 import { adviseNames, derivedName, isControlName } from './names.js';
+import { verifyCitationLinks } from './citation-review.js';
 import type { Basis, Condition, Foundation, Formula, Measure, Objective, Ref, Target, Trial } from './format.js';
 
 export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null }; history?: { statut: 'remise en cause' | 'à examiner' | 'non remise en cause'; details: string[] } };
@@ -24,6 +25,13 @@ export type ReasoningConnectors = {
   match(text: string, excerpt: string): string | null;
   registry(query: { siren: string | null; name: string | null }): Promise<{ found: boolean; status: string }>;
   bodacc(siren: string): Promise<string[]>;
+  review?: (input: {
+    cwd: string;
+    affirmations: Array<{ emplacement: string; type: 'règle' | 'fondement' | 'valeur'; affirmation: string; citations: Array<{ source: string; citation: string }> }>;
+    sources: Array<{ source: string; texte: string }>;
+    contexte: unknown;
+    online: boolean;
+  }) => Promise<unknown>;
 };
 
 export type Person = { label: string; kind: string; siren: string | null; name: string | null; side?: string | null };
@@ -269,6 +277,15 @@ export async function verifyReasoning(input: {
   await Promise.all(checks);
   for (const [name, entry] of reasoning.valeurs) entry.selon.forEach((basis, index) => { if (basisChecks.get(`valeurs.${name}.selon[${index}]`)?.kind === 'piece') add('erreur', `valeurs.${name}.selon[${index}].source`, `${basis.source} est une pièce : une donnée stipulée ou constatée se prouve par preuve: [{ piece, citation }] ; selon cite le texte qui fixe une valeur (taux, seuil, barème)`); });
 
+  const correspondences = await verifyCitationLinks({ cwd, reasoning, contexte: canonical(stripAnnotations(annotated) as Record<string, unknown>, reasoning), connectors, lookup, corrections, online: input.online !== false, readable: !issues.some((issue) => issue.kind === 'erreur') });
+  for (const [place, result] of correspondences) {
+    const holder = node(annotated, place);
+    if (holder) holder.correspondance = result;
+    if (result.reponse !== 'validé') add(result.reponse === 'non validé' ? 'erreur' : 'manque', place, `correspondance citation–affirmation : ${result.reponse} — ${result.explication}`, result.explication);
+    emit({ key: `correspondance:${place}`, step: 'source', status: result.reponse === 'validé' ? 'ok' : result.reponse === 'non validé' ? 'alerte' : 'neutre', subject: place, text: `${result.reponse} — ${result.explication}` });
+  }
+  const supported = (place: string) => !correspondences.has(place) || correspondences.get(place)!.reponse === 'validé';
+
   const computing = new Set<string>();
   const stating = new Set<string>();
   const test = compile(reasoning);
@@ -279,7 +296,7 @@ export async function verifyReasoning(input: {
   });
   const stated = (name: string, check: (name: string) => ReasoningValue = holds) => {
     const entry = reasoning.valeurs.get(name);
-    if (!entry || entry.valeur === null || stating.has(name)) return null;
+    if (!entry || entry.valeur === null || stating.has(name) || !supported(`valeurs.${name}`)) return null;
     stating.add(name);
     const proven = entry.preuve.some((_, index) => verifiedRefs.get(`valeurs.${name}.preuve[${index}]`)) || sourced(name, check);
     stating.delete(name);
@@ -298,7 +315,7 @@ export async function verifyReasoning(input: {
     const measure = reasoning.computed.get(name);
     return measure ? calculate(measure, valueOf).value : null;
   };
-  const proven = (place: string, count: number) => Array.from({ length: count }, (_, index) => verifiedRefs.get(`${place}.preuve[${index}]`)).some(Boolean);
+  const proven = (place: string, count: number) => supported(place) && Array.from({ length: count }, (_, index) => verifiedRefs.get(`${place}.preuve[${index}]`)).some(Boolean);
   const baseFacts: Facts = { leaf, basis: (at, condition, applicable) => basisValue(at, condition, applicable), proven };
   function holds(name: string): ReasoningValue { return reasoning.terms.has(name) ? test(baseFacts, undefined, [name]).get(name) ?? null : leaf(name); }
   const sides = new Map<string, ReasoningValue[]>();
@@ -320,6 +337,7 @@ export async function verifyReasoning(input: {
   };
 
   const basisValue = (at: string, condition: Condition, applicable: ReasoningValue[]): ReasoningValue => {
+    if (!supported(at)) return null;
     if (!condition.selon.length) return true;
     const checked = condition.selon.map((basis, index) => ({ basis, check: basisChecks.get(`${at}.selon[${index}]`), applicable: applicable[index] }));
     const texts = checked.filter((entry) => entry.check && entry.check.kind !== 'decision');
@@ -381,7 +399,7 @@ export async function verifyReasoning(input: {
   const vigueurs = new Map<string, ReasoningValue>();
   const decisiveLeaves = new Set<string>();
   const decisiveFor = new Map<string, Objective[]>();
-  const trials = shape.cycles.length ? [] : runTrials(reasoning, test, { leaf, proven, value: (name, check) => stated(name, check) ?? computedValue(name) });
+  const trials = shape.cycles.length ? [] : runTrials(reasoning, test, { leaf, proven, supported, value: (name, check) => stated(name, check) ?? computedValue(name) });
   const supposing = (names: string[], roots: string[]) => reasoning.hypotheses.filter((trial, index) => trials[index]?.conforme && names.some((name) => name in trial.faits) && roots.some((root) => root in trial.attendu));
   const bracketed = (names: string[], objective: Objective) => objectiveRoots(objective).some((root) => new Set(supposing(names, [root]).map((trial) => String(trial.attendu[root]))).size > 1);
   const open = (formula: Formula, found: Set<string>, seen: Set<string>) => {
@@ -689,7 +707,7 @@ export async function verifyReasoning(input: {
   }
   let simulation: Simulation | undefined;
   if (input.simulation && !shape.cycles.length) {
-    const run = simulate(reasoning, test, { leaf, proven, value: (name, check) => stated(name, check) ?? computedValue(name) }, input.simulation);
+    const run = simulate(reasoning, test, { leaf, proven, supported, value: (name, check) => stated(name, check) ?? computedValue(name) }, input.simulation);
     simulation = {
       objectifs: reasoning.objectifs.map((objective) => {
         if (!amountObjective(objective)) return { objectif: objective.objectif, statut: STATUS(answer(objective, run.test(objectiveRoots(objective)))) };
@@ -801,6 +819,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   const verify = async (cwd: string, online = true, emit?: (entry: ReasoningLogEntry) => void, name?: string): Promise<ReasoningSnapshot> => {
     for (const key of sources.keys()) if (key.startsWith(`${cwd}\0`)) sources.delete(key);
     const { id, code, result, file, name: chosen } = await run(cwd, { online, emit }, name);
+    if (await readFile(file, 'utf8') !== code) throw new Error('Le raisonnement a été modifié pendant la vérification : relance-la sur la version actuelle.');
     if (result.code !== code) await writeFile(file, result.code, 'utf8');
     const previous = await read(cwd, chosen);
     const snapshot: ReasoningSnapshot = { ...previous, revision: previous.revision + 1, updatedAt: new Date().toISOString(), code: result.code, annotated: result.annotated, issues: result.issues, test: { at: new Date().toISOString(), log: result.log } };

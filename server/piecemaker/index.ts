@@ -14,7 +14,7 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
 import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
-import { installSessionProxyRuntime } from './anonymizer/session-runtime.js';
+import { installSessionProxyRuntime, projectOfDirectory } from './anonymizer/session-runtime.js';
 import { installCodexPlanRuntime } from './codex-plan.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
@@ -30,6 +30,7 @@ import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
 import { isLoopback } from './knowledge/local-routes.js';
 import { createReasoningConnectors } from './reasoning-connectors.js';
+import { createReasoningReview } from './reasoning-review.js';
 import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
@@ -86,7 +87,15 @@ const { createAnonymizerService } = createRequire(import.meta.url)(path.join(app
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
-const reasoningConnectors = createReasoningConnectors();
+const citationReview = createReasoningReview(applicationRoot, {
+  ensureProxy,
+  runInCase: (cwd, run) => {
+    const projectId = projectOfDirectory(cwd, projectsDb.getProjectPaths());
+    if (!projectId) throw new Error('Dossier de vérification non enregistré.');
+    return anonymizer.runInProject(projectId, run);
+  },
+});
+const reasoningConnectors = { ...createReasoningConnectors(), review: citationReview.review };
 const reasoning = createReasoningService(getConnection, reasoningConnectors);
 const suivi = createSuiviService(getConnection, reasoningConnectors);
 installCodexPlanRuntime(providerRuntimeService);
@@ -110,6 +119,7 @@ startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => 
 const localRouter = express.Router();
 localRouter.use(createMistralTabularBridge({ ensureProxy, runInProject: (id, run) => anonymizer.runInProject(id, run) }));
 localRouter.use(knowledge.localRouter);
+localRouter.use('/reasoning', express.json(), citationReview.scope(true));
 localRouter.use(createReasoningLocalRouter(reasoning, isLoopback));
 localRouter.use(createSuiviLocalRouter(suivi, isLoopback));
 localRouter.use(createDocxReasoningLocalRouter(projectsDb, isLoopback));
@@ -134,7 +144,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));
   router.use(timesheet);
-  router.use('/reasoning', createReasoningRouter(reasoning, async (cwd, id, quote, name) => {
+  router.use('/reasoning', express.json(), citationReview.scope(false), createReasoningRouter(reasoning, async (cwd, id, quote, name) => {
     const info = await reasoning.source(cwd, id, name);
     const quotes = [{ quote, verification: { verified: true } }];
     const reference = info.kind === 'decision' ? { kind: 'case' as const, decision_id: id } : info.kind === 'piece' ? { kind: 'document' as const, doc_id: id } : { kind: 'article' as const, article_id: id };
