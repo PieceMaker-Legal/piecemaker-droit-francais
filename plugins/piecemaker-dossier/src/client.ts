@@ -1,3 +1,4 @@
+import { editClassification } from './classification.js';
 import { knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
@@ -5,7 +6,7 @@ import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
 import { CUSTOM_NATURE, chronologyView, escapeHtml, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
-import type { BodaccScanState, Tab, ViewData } from './views.js';
+import type { BodaccScanState, ChronologySort, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
 import type { PartySide } from './party-codes.js';
@@ -47,6 +48,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let context = api.context;
   let active: Tab = takeRequestedView() ?? 'general';
   let data: ViewData | null = null;
+  let chronologySort: ChronologySort = { column: 'date', direction: 'ascending' };
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
   const bodaccStates = new Map<string, BodaccScanState>();
@@ -335,7 +337,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (!content) return;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
     else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
-    else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
+    else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path, chronologySort) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
   };
 
   const saveNature = async (nodeId: string, nature: string) => {
@@ -392,7 +394,18 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         paintContent();
         return;
       }
+      const sort = target.closest<HTMLElement>('[data-sort]')?.dataset.sort;
+      if (sort === 'document' || sort === 'date' || sort === 'classification') {
+        chronologySort = { column: sort, direction: chronologySort.column === sort && chronologySort.direction === 'ascending' ? 'descending' : 'ascending' };
+        paintContent();
+        root.querySelector<HTMLElement>(`[data-sort="${sort}"]`)?.focus();
+        return;
+      }
       const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
+      if (action === 'edit-tree' && context.project) {
+        void editClassification(root, context.project.path).catch(showError);
+        return;
+      }
       if (action === 'company-search') {
         const button = target.closest<HTMLElement>('[data-scan-company]');
         const companyId = button?.dataset.scanCompany || '';

@@ -1,3 +1,4 @@
+import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
 import { chronologyView, citationListMarkup, generalView, mappingView, proposedPieceName, shell } from '../views.js';
@@ -270,7 +271,8 @@ describe('piece names', () => {
     const html = chronologyView({ graph: { ...snapshot, nodes: [
       { id: 'a', projectId: 'project-1', kind: 'document', label: 'Contrat.pdf', aliases: [], data: { nature: 'contrat', localisation: 'Paris', fields: [{ label: 'SIREN', value: '123456789' }, { label: 'Montant', value: '1 000 €' }] }, date: null, createdAt: '', updatedAt: '' },
     ], links: [] } } as never);
-    expect(html.match(/<th scope="col">[^<]*<\/th>/g)).toEqual(['<th scope="col">Document</th>', '<th scope="col">Date</th>', '<th scope="col">Mentions</th>', '<th scope="col">Classement</th>', '<th scope="col">Montant</th>']);
+    const table = JSDOM.fragment(html);
+    expect(Array.from(table.querySelectorAll('th'), (cell) => cell.textContent?.replace(/[↑↓↕▾]/g, '').trim())).toEqual(['Document', 'Date', 'Mentions', 'Classement', 'Montant', 'Modifier']);
     expect(html).toContain('<td>Non classé</td>');
     expect(html).toMatch(/data-edit-nature="a"[^>]*>contrat<\/button>/);
     expect(html).toContain('<span class="pmd-badge">Paris</span>');

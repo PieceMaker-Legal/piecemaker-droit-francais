@@ -332,23 +332,34 @@ function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<str
   return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(node.label)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td><td>${escapeHtml(chronologyFolder(node, projectPath) || 'Non classé')}</td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
 }
 
-function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string): string {
+export type ChronologySort = { column: 'document' | 'date' | 'classification'; direction: 'ascending' | 'descending' };
+
+function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string, sort: ChronologySort): string {
   if (!nodes.length) return '<div class="pmd-empty">Aucun document indexé.</div>';
   const fieldLabels = [...new Set(nodes.flatMap((node) => chronologyFields(node).map((field) => field.label)))].filter((label) => !MENTION_FIELD.test(label));
   const heading = (label: string) => `<th scope="col">${escapeHtml(label)}</th>`;
-  return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${['Document', 'Date', 'Mentions'].map(heading).join('')}<th scope="col">Classement</th>${fieldLabels.map(heading).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links, projectPath)).join('')}</tbody></table></div>`;
+  const sortHeading = (label: string, column: ChronologySort['column']) => {
+    const direction = sort.column === column ? sort.direction : 'none';
+    const arrow = direction === 'none' ? '↕' : direction === 'ascending' ? '↑' : '↓';
+    const edit = column === 'classification' ? '<button type="button" class="pmd-chronology-heading" data-action="edit-tree" title="Organiser l’arborescence du dossier">Classement ▾</button> ' : '';
+    return `<th scope="col" aria-sort="${direction}">${edit}<button type="button" class="pmd-chronology-heading" data-sort="${column}" aria-label="Trier par ${label.toLowerCase()}">${edit ? '' : label + ' '}${arrow}</button></th>`;
+  };
+  return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${sortHeading('Document', 'document')}${sortHeading('Date', 'date')}${heading('Mentions')}${sortHeading('Classement', 'classification')}${fieldLabels.map(heading).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links, projectPath)).join('')}</tbody></table></div>`;
 }
 
-export function chronologyView(data: ViewData, projectPath = ''): string {
-  const documents = data.graph.nodes.filter((node) => node.kind === 'document');
-  const dated = documents
-    .filter((node) => Boolean(dateFor(node)))
-    .sort((left, right) => dateFor(left).localeCompare(dateFor(right)) || left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
-  const undated = documents
-    .filter((node) => !dateFor(node))
-    .sort((left, right) => left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }));
+export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }): string {
+  const value = (node: KnowledgeNode) => sort.column === 'date' ? dateFor(node) : sort.column === 'classification' ? chronologyFolder(node, projectPath) : node.label;
+  const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
+  const documents = data.graph.nodes.filter((node) => node.kind === 'document').sort((left, right) => {
+    const a = value(left);
+    const b = value(right);
+    if (Boolean(a) !== Boolean(b)) return a ? -1 : 1;
+    const comparison = collator.compare(a, b) || collator.compare(left.label, right.label);
+    return sort.direction === 'ascending' ? comparison : -comparison;
+  });
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
+  const label = { document: 'Document', date: 'Date', classification: 'Classement' }[sort.column];
   return `
-    <div class="pmd-toolbar"><div class="pmd-subtitle">Classés du plus ancien au plus récent</div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
-    ${chronologyTable([...dated, ...undated], byId, data.graph.links, projectPath)}`;
+    <div class="pmd-toolbar"><div class="pmd-subtitle">Tri : ${label} ${sort.direction === 'ascending' ? '↑' : '↓'}</div><span class="pmd-spacer"></span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
+    ${chronologyTable(documents, byId, data.graph.links, projectPath, sort)}`;
 }
