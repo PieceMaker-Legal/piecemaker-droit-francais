@@ -14,7 +14,7 @@ L’application PieceMaker doit tourner. `pm` vise le dossier de la session, mê
 
 ## Volets (interface à côté du chat)
 
-Le geste ouvre le volet tout seul : `sql` (écriture), `tabular_review` (lister, preparer, lancer, ouvrir), `tabular_review_index`, un `.docx` écrit ou édité, un tamponnage, `raisonnement` (volet Raisonnement du dossier). Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
+Le geste ouvre le volet tout seul : `sql` (écriture), `tabular_review` (lister, preparer, lancer, ouvrir), `tabular_review_index`, un `.docx` écrit ou édité, `raisonnement` (volet Raisonnement du dossier). Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
 
 `afficher` sert à lire, pointer ou fermer.
 
@@ -215,6 +215,14 @@ pm conversion --force contrat.pdf
 ```
 
 Sans MinerU, le Markdown d’un scan est vide ou presque : signalez-le, n’en concluez pas que la pièce est vide.
+
+## Bordereau
+
+Écrivez l’ordre des pièces dans `.piecemaker/last-stamping.json`, avec les chemins relatifs au dossier. Lancez ensuite `pm afficher --volet tampon`. L’avocat vérifie l’ordre et clique sur « Tamponner ». Un chemin inconnu est ignoré.
+
+```json
+{ "results": [{ "id": "contrat.pdf" }, { "id": "Courriers/mise-en-demeure.pdf" }] }
+```
 
 ## Historique du dossier
 

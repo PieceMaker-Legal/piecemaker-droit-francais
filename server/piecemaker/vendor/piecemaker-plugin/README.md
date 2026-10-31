@@ -11,10 +11,6 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
 - **Skills** (`skills/`) :
   - `style-redaction-cabinet` — rédaction/relecture de documents juridiques
     français, citations sourcées via legifrance (MCP).
-  - `tamponnage` — tampon du cabinet et tamponnage numéroté des pièces d'un
-    bordereau : conversion de l'original en PDF (LibreOffice pour Excel/Word,
-    `pdf-lib` pour images et texte), tampon puis renommage « Pièce n°N » dans
-    le sous-dossier « Pièces tamponnées » de chaque dossier juridique.
 - **Agents** (`agents/`) :
   - `analyste-pieces` — synthèse structurée d'une pièce du dossier.
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
