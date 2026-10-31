@@ -35,6 +35,7 @@ test('installe docx-cli et style-redaction-cabinet dans .agents/skills et les re
   assert.match(fs.readFileSync(skillPath(folder, 'style-redaction-cabinet'), 'utf8'), /^---\nname: style-redaction-cabinet\n/);
   assert.match(fs.readFileSync(skillPath(folder, 'Skill-PieceMaker'), 'utf8'), /^---\nname: piecemaker\n/);
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')), true);
+  assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'references', 'suivi.md')), true);
   const pmCli = path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm');
   assert.equal(fs.existsSync(pmCli), true);
   assert.equal((fs.statSync(pmCli).mode & 0o111) !== 0, true);

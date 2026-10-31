@@ -127,7 +127,7 @@ le résultat dans le volet Fichiers. Les paragraphes doivent être contigus, dan
 chaque valeur est cherchée uniquement dans sa clause. Une sélection absente ou
 ambiguë, une révision en attente, un champ Word dynamique ou une structure non
 prise en charge provoque un refus. Les styles des segments de texte sont conservés.
-Le format JSON et son exemple figurent dans le skill `Skill-PieceMaker`.
+Le format JSON et son exemple figurent dans `references/docx-lie.md` du skill `Skill-PieceMaker`.
 
 `verifier` exécute le contrôle local du DOCX, sans LLM, sans changer ses octets et
 en lisant le modèle référencé dans le dossier. `comparer` confronte son empreinte
