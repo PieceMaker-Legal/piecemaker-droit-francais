@@ -168,10 +168,8 @@ server/**/tests/file-tree-outside-*/
 opencode.json
 CLAUDE.md
 .vibe/config.toml
-.vibe/agents/jurisprudence-scanner.toml
 .vibe/agents/analyste-pieces.toml
 .codex/config.toml
-.codex/agents/jurisprudence-scanner.toml
 .codex/agents/analyste-pieces.toml
 .agents/skills/Skill-PieceMaker
 .agents/skills/recherche-juridique/SKILL.md
