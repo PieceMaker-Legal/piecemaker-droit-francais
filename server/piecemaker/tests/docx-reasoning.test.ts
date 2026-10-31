@@ -160,7 +160,7 @@ test('la qualification contentieux appelle encore la prescription, même depuis 
   assert.ok(result.verification?.issues.some((issue) => issue.text.includes('prescription')));
 });
 
-test('docx-cli 0.24 conserve les métadonnées mais ne retrouve pas le champ imbriqué', { skip: !docxVersion.startsWith('docx 0.24.') }, async () => {
+test('docx-cli 0.28 conserve les métadonnées mais ne retrouve pas le champ imbriqué', { skip: !docxVersion.startsWith('docx 0.28.') }, async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'pm-docx-cli-'));
   try {
     const file = path.join(directory, 'contrat-fictif.docx');

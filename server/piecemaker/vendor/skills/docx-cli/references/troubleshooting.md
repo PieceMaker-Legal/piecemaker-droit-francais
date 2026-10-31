@@ -2,15 +2,16 @@
 
 ## `docx: command not found`
 
-The binary isn't on PATH. Install it — prefer npm (no shell piping):
+The binary isn't on PATH. Install it. The simplest path is npm, if Bun is available:
 
 ```sh
 bun add -g bun-docx      # or: npm install -g bun-docx   (needs Bun >= 1.3)
 ```
 
-No Bun? Run `sh scripts/bootstrap.sh` — it pins to the latest release, downloads
+No Bun? Run `sh SKILL_DIR/scripts/bootstrap.sh` (the folder containing SKILL.md) — it pins to the latest release, downloads
 the prebuilt binary, and verifies its SHA-256 against the release's published
-`SHA256SUMS` before installing (and self-updates a stale install).
+`SHA256SUMS` before installing (and, run again, updates a stale install — unless an admin
+set `DOCX_CLI_VERSION` or `DOCX_CLI_NO_UPDATE=1`, which keep the present binary).
 
 It **refuses to install** rather than skip verification, so it aborts if the
 machine has no `sha256sum`, `shasum`, or `openssl`, if the release publishes no
@@ -21,6 +22,33 @@ case. It also aborts — loudly, naming the culprit — when the install lands b
 It installs to `~/.local/bin/docx` by default. Make sure that directory is on
 your `PATH` (`export PATH="$HOME/.local/bin:$PATH"`). Set `PREFIX=/usr/local/bin`
 before the install to choose another location.
+
+## macOS kills the standalone binary at startup
+
+An invalid code signature can cause a startup kill (reported for v0.25.0 on
+macOS 27). Verify the actual standalone executable, not a version-manager shim:
+
+```sh
+# For a mise-managed installation:
+codesign --verify --strict --verbose=2 "$(mise which docx)"
+# For a standalone binary directly on PATH (not a shim):
+codesign --verify --strict --verbose=2 "$(command -v docx)"
+```
+
+With Bun installed, the package is a fallback. Run its explicit path so an
+older mise installation or shim earlier on PATH cannot shadow it:
+
+```sh
+bun add -g bun-docx
+"$(bun pm bin -g)/docx" --version
+```
+
+Use that explicit path for subsequent commands, or adjust PATH and check
+`command -v docx` before using the bare command. A binary that cannot start
+cannot run `docx upgrade`; reinstall externally when a fixed release is available.
+The updated release workflow ad-hoc signs and verifies macOS binaries before
+generating `SHA256SUMS`; existing release assets are unchanged. Ad-hoc signing
+does not provide Developer ID identity or Apple notarization.
 
 ## `docx render` fails or hangs
 
