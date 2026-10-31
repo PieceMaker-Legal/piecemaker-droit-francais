@@ -48,7 +48,6 @@ function waitForOutput(child, needle, timeoutMs) {
 async function startHudsuckerSession({
   databasePath,
   upstreamPort,
-  harness = null,
   hosts = ['api.anthropic.com', 'api.openai.com', 'chatgpt.com', 'api.mistral.ai'],
   directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-hudsucker-')),
 } = {}) {
@@ -58,7 +57,7 @@ async function startHudsuckerSession({
   }
   const ca = makeCertificateAuthority(directory);
   const dictionary = createSqliteDictionaryLoader({ databasePath });
-  const bridge = await startRewriterBridge({ dictionary, harness });
+  const bridge = await startRewriterBridge({ dictionary });
   const upstreamMap = hosts.map((host) => `${host}=127.0.0.1:${upstreamPort}`).join(',');
   const child = spawn(binary, [
     '--listen', '127.0.0.1:0',

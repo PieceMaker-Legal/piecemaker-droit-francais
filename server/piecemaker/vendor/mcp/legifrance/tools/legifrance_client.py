@@ -6,6 +6,7 @@
 import requests
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
+from tools import decision_cache
 from config.settings import (
     LEGIFRANCE_CLIENT_ID,
     LEGIFRANCE_CLIENT_SECRET,
@@ -383,7 +384,11 @@ class LegifranceClient:
             "textId": text_id
         }
         
-        return self._request("/consult/juri", payload)
+        def decrire(reponse):
+            texte = reponse.get("text") or {}
+            return texte.get("titre"), texte.get("texte")
+
+        return decision_cache.obtenir(text_id, lambda: self._request("/consult/juri", payload), decrire)
     
     def get_article(self, article_id: str) -> Dict[str, Any]:
         """

@@ -198,7 +198,7 @@ function createAnonymizerService({ homeDir, userHome = os.homedir(), logger = co
     const hosts = [...new Set([...INTERCEPTED_HOSTS, new URL(upstream).hostname])];
 
     try {
-      bridge = await startRewriterWorker({ databasePath, homeDir, token });
+      bridge = await startRewriterWorker({ databasePath, token });
     } catch (error) {
       state.reason = `listen_failed: ${error.message}`;
       logger.warn?.(`[piecemaker] réécriture PII non démarrée : ${error.message}`);

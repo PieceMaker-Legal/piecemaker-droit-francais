@@ -17,6 +17,7 @@ import {
   researchCriteria,
   reviewCategory,
 } from '../shared.js';
+import { withDecisionCache } from './decision-cache.js';
 import { decisionRecord, importance } from './decisions.js';
 import type { DecisionRecord } from './decisions.js';
 import { judgeZone } from './dispositif.js';
@@ -25,7 +26,7 @@ import { countJudilibre, fetchOfficial, JUDILIBRE_LINK, judilibrePlan, jurisdict
 import type { JudilibreHit, JudilibrePlan, OfficialDecision } from './judilibre.js';
 import { AccessDenied, createLegifranceApi, legifranceCredentials } from './legifrance.js';
 import type { LegifranceApi } from './legifrance.js';
-import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
+import { PIECEMAKER_HOME, PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 import { clausesMatch, matchIndex, parseQuery } from './query.js';
 import type { Criterion, ParsedQuery } from './query.js';
 import type { ReviewSettings } from './reviews.js';
@@ -77,7 +78,7 @@ function defaultApi(): LegifranceApi {
   const credentials = legifranceCredentials();
   if (!credentials) throw new UserError('Identifiants Légifrance absents : renseignez LEGIFRANCE_CLIENT_ID et LEGIFRANCE_CLIENT_SECRET dans ~/.config/mcp-legifrance/.env (installation PieceMaker, étape Légifrance).');
   const key = `${credentials.id}\u0000${credentials.secret}\u0000${credentials.sandbox}`;
-  if (sharedApi?.key !== key) sharedApi = { key, api: createLegifranceApi(credentials) };
+  if (sharedApi?.key !== key) sharedApi = { key, api: withDecisionCache(createLegifranceApi(credentials), path.join(PIECEMAKER_HOME, 'decisions')) };
   return sharedApi.api;
 }
 

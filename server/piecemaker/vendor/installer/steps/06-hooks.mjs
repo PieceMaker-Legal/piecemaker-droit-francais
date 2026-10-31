@@ -1,5 +1,5 @@
 /**
- * Étape 06 — hooks Claude Code (protection des pièces, recherche, documents IA).
+ * Étape 06 — hooks Claude Code (protection des pièces, documents IA).
  *
  * Prouve que chaque script tourne proprement en lui envoyant une charge
  * utile synthétique sur stdin — le contrat exact qu'utilise Claude Code (voir
@@ -29,7 +29,7 @@ const {
 export const meta = {
   id: '06-hooks',
   label: 'Hooks Claude Code (protection des pièces)',
-  description: 'Configure les garde-fous et les hooks de recherche et de classement des documents IA',
+  description: 'Configure les garde-fous et le hook de classement des documents IA',
 };
 
 const PLUGIN_ROOT = path.join(REPO_ROOT, 'piecemaker-plugin');

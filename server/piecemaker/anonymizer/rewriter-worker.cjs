@@ -7,12 +7,10 @@ const CLOSE_TIMEOUT_MS = 2000;
 function runInsideWorker() {
   const { createSqliteDictionaryLoader } = require('./sqlite-dictionary.cjs');
   const { startRewriterBridge } = require('./rewriter-bridge.cjs');
-  const { createHarnessJuridique } = require('../harness/index.cjs');
 
   const dictionary = createSqliteDictionaryLoader({ databasePath: workerData.databasePath });
-  const harness = createHarnessJuridique({ homeDir: workerData.homeDir, verifyResponses: false });
 
-  startRewriterBridge({ dictionary, harness, token: workerData.token }).then((bridge) => {
+  startRewriterBridge({ dictionary, token: workerData.token }).then((bridge) => {
     let published = '';
     const publishStats = () => {
       const snapshot = JSON.stringify(bridge.stats);
@@ -37,9 +35,9 @@ function runInsideWorker() {
   });
 }
 
-function startRewriterWorker({ databasePath, homeDir, token = null }) {
+function startRewriterWorker({ databasePath, token = null }) {
   const worker = new Worker(path.join(__dirname, 'rewriter-worker.cjs'), {
-    workerData: { databasePath, homeDir, token },
+    workerData: { databasePath, token },
     env: SHARE_ENV,
   });
   const stats = { requests: 0, anonymized: 0, deanonymized: 0, failures: 0, lastError: null };

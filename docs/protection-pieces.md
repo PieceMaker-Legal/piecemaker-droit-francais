@@ -147,8 +147,7 @@ Ce qu'il ne peut pas faire : empêcher. Une pièce lue localement ne lui parvien
 qu'**au tour suivant**, dans le rappel de l'historique, sous forme de bloc
 `tool_result` — à ce moment elle est déjà dans le transcript et à l'écran. De
 plus, le chemin du fichier vit dans le bloc d'appel et le contenu dans le bloc
-de résultat ; leur appariement n'existe aujourd'hui que pour
-`consulter_decision` (`harness/decisions.cjs`).
+de résultat ; le proxy n'apparie jamais ces deux blocs.
 
 **Rien dans `anonymizer/` ni `harness/` ne consulte `protection.json` ni le
 drapeau de levée.** Le seul filtre du proxy est le dictionnaire lu dans `auth.db`
@@ -156,9 +155,8 @@ drapeau de levée.** Le seul filtre du proxy est le dictionnaire lu dans `auth.d
 voulait un jour y ajouter un caviardage des pièces protégées — notamment pour
 couvrir Codex —, la mécanique de substitution existe déjà et est générique
 (`anonymizer/rewrite.cjs`, y compris pour un motif fragmenté entre deltas SSE) ;
-mais cela heurterait l'invariant de transparence octet pour octet affirmé et
-testé par `proxy-harness.test.js`, et devrait se rejouer à chaque tour puisque
-le `tool_result` demeure dans l'historique.
+mais cela devrait se rejouer à chaque tour puisque le `tool_result` demeure
+dans l'historique.
 
 ## 3. MXC — le confinement système
 

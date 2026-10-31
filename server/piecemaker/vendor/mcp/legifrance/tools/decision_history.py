@@ -50,6 +50,7 @@ import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
 
+from tools import decision_cache
 from tools.legifrance_client import legifrance_client as _client_par_defaut
 from tools.query_parser import parse_query
 
@@ -863,10 +864,19 @@ def controle_historique(historique):
     return statut, lignes
 
 
+def _rendu_controle(statut, lignes):
+    return "\n".join(["", "HISTORIQUE JUDICIAIRE (contrôle automatique)", f"Historique: {statut}", *lignes])
+
+
 def render_controle(text_id, client=None):
+    deja_fait = decision_cache.controle_du_jour(text_id)
+    if deja_fait:
+        return deja_fait
     try:
         statut, lignes = controle_historique(build_decision_history(
             {"text_id": text_id, "max_decisions": 6, "max_api_calls": 40, "max_citations": 10}, client))
     except Exception as erreur:
-        statut, lignes = "à examiner", [f"- Contrôle impossible : {erreur}"]
-    return "\n".join(["", "HISTORIQUE JUDICIAIRE (contrôle automatique)", f"Historique: {statut}", *lignes])
+        return _rendu_controle("à examiner", [f"- Contrôle impossible : {erreur}"])
+    rendu = _rendu_controle(statut, lignes)
+    decision_cache.memoriser_controle(text_id, rendu)
+    return rendu

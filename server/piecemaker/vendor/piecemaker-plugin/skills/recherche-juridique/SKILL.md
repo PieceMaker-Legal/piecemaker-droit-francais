@@ -24,7 +24,7 @@ effectivement disponibles, puis le format exact que le vérificateur accepte.
 | `Search_Jurisprudence` | Seul outil de recherche jurisprudentielle. Interroge en un appel Légifrance et Judilibre, fusionne les doublons et trie du plus récent au plus ancien. `query` et `juridictions` obligatoires (`cassation`, `appel`, `premiere_instance`, `conseil_etat`, `caa`). `matiere` obligatoire pour `cassation` (`CIVIL`, `COMMERCIAL`, `PENAL`, `SOCIAL`), `types_premiere_instance` obligatoire pour `premiere_instance`. Filtres facultatifs : `sources`, `publication_cassation`, `sieges_appel`, `villes_caa`, `publication_recueil`, `date_debut`, `date_fin`. |
 | `Search_Code` | Recherche dans les codes juridiques français (Code civil, Code du travail…) — référence d'article exacte (`L. 1235-3`), mots-clés ou expression exacte. Renvoie les identifiants `LEGIARTI…` des articles trouvés. |
 | `consulter_article` | Texte intégral et vigueur d'une version précise d'article, à partir de son identifiant `LEGIARTI…` rendu par `Search_Code`. |
-| `consulter_decision` | Rapatrie le texte intégral d'une décision à partir de son identifiant Légifrance (`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux). **Rapatrie le texte intégral et le met en cache** (voir plus bas) — c'est le moyen normal de lire une décision avant de la citer. |
+| `consulter_decision` | Rapatrie le texte intégral d'une décision à partir de son identifiant Légifrance (`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux). C'est le seul moyen de lire une décision avant de la citer. **Une décision déjà téléchargée ne coûte aucun appel à l'API** (voir plus bas). |
 | `Historique_Judiciaire` | Rend pour une décision (`JURITEXT…`, `CETATEXT…`) son historique procédural et le relevé des décisions qui la citent. |
 | `Tracking_BODACC` | Situation d'une entreprise (procédures collectives) via son SIREN — hors jurisprudence, utile pour qualifier une partie. |
 | `dictionnaire_juridique` | Définition d'un terme du lexique juridique officiel de justice.fr. |
@@ -50,24 +50,18 @@ existe dans les deux bases), la copie lue par l'IA (`documents[0].copy`, sous
 `Tabular Review/docs/`) et les réponses par question
 (`cells[ligne][colonne].summary`, `.citations`).
 
-### Le fait décisif : seuls deux chemins rendent une citation vérifiable
+### Le fait décisif : une seule voie rend une citation de décision vérifiable
 
-Le vérificateur ne peut confirmer une citation que si le texte de sa source
-est quelque part sur disque :
+Le vérificateur ne confirme une décision que si `consulter_decision` l'a rendue
+**dans ce tour**. Les résultats de `Search_Jurisprudence` et les copies d'une
+analyse tabulaire (`Tabular Review/docs/`) servent à trier et à comprendre, pas
+à citer.
 
-- **Analyse tabulaire en mode recherche** : la copie Markdown de chaque
-  décision (`Tabular Review/docs/`) est indexée sous son identifiant —
-  vérifiable. Cette copie ne contient que la **partie retenue** (motifs et
-  dispositif quand « Dispositif uniquement » est coché) : un extrait pris
-  ailleurs dans la décision exige `consulter_decision`.
-- **`consulter_decision`** renvoie le texte intégral dans sa réponse d'outil ;
-  le harnais de citations (`harness/decisions.cjs`) le capte au passage et l'écrit dans
-  `~/.piecemaker/decisions/<id>.json` — vérifiable.
-
-**Conséquence pratique** : les résultats de `Search_Jurisprudence` (titre,
-analyse, extraits) servent à trier. Dès qu'une décision doit être citée, il
-faut d'abord la lire avec `consulter_decision` (ou dans la copie d'une analyse
-tabulaire en mode recherche).
+**Conséquence pratique** : avant de citer une décision, appeler
+`consulter_decision`, même si elle sort d'une analyse tabulaire ou a déjà été
+lue. Toutes les décisions téléchargées sont gardées dans
+`~/.piecemaker/decisions/<id>.json`, par le MCP et par l'analyse tabulaire :
+cet appel ne sollicite alors pas l'API. Ne pas l'économiser.
 
 ## Déroulé de recherche
 
@@ -79,8 +73,7 @@ tabulaire en mode recherche).
    date, extraits) — sans lire chaque décision en entier.
 3. **Lecture** des seules décisions/articles retenus comme potentiellement
    cite-worthy : `consulter_decision` (jurisprudence) ou `consulter_article`
-   (texte de loi), ou relecture de la copie d'une analyse tabulaire en mode
-   recherche déjà faite (`Tabular Review/docs/`).
+   (texte de loi).
    Ne lire que ce qui sera effectivement cité ou a de bonnes chances de l'être
    — pas systématiquement tout ce qui est remonté par la recherche large.
 4. **Citation** : une fois la décision ou l'article lu dans ce tour, en extraire
@@ -126,9 +119,8 @@ prend l'une des trois formes suivantes.
 
 Identifie la décision par `decision_id` — l'identifiant Légifrance
 (`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux) rendu par
-`Search_Jurisprudence`, lu avec `consulter_decision`, ou l'identifiant rendu par
-une analyse tabulaire en mode recherche (champ `decision` de la ligne), lu dans
-la copie `Tabular Review/docs/` de cette analyse.
+`Search_Jurisprudence` ou par une analyse tabulaire en mode recherche (champ
+`decision` de la ligne), lu avec `consulter_decision` dans ce tour.
 
 ```json
 {
@@ -241,7 +233,7 @@ retombe sur un tableau `quotes` d'un seul élément :
 
 1. Parse le bloc `<CITATIONS>` du dernier message.
 2. Pour chaque citation, résout sa source réelle — texte de la décision
-   (analyse tabulaire en mode recherche ou `consulter_decision` de ce tour),
+   (`consulter_decision` de ce tour),
    de l'article, ou pièce Markdown du dossier.
 3. Localise mécaniquement chaque extrait dans ce texte. Un extrait qui a
    légèrement dérivé (espace, casse, ponctuation) est **corrigé

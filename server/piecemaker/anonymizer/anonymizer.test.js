@@ -68,12 +68,11 @@ function startUpstream(respond) {
 
 let activeCa = null;
 
-async function withProxy(homeDir, respond, run, { harness } = {}) {
+async function withProxy(homeDir, respond, run) {
   const upstream = await startUpstream(respond);
   const session = await startHudsuckerSession({
     databasePath: path.join(homeDir, 'auth.db'),
     upstreamPort: upstream.port,
-    harness,
   });
   activeCa = session.caFile;
   try {

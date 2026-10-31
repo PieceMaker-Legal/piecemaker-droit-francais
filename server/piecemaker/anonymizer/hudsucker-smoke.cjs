@@ -243,7 +243,7 @@ async function runHudsuckerSmokeTest({ binary: requestedBinary = defaultBinary()
     }
     const ca = fs.readFileSync(authority.cert);
 
-    bridge = await startRewriterWorker({ databasePath: mappingDatabase(directory), homeDir: directory, token: SESSION_TOKEN });
+    bridge = await startRewriterWorker({ databasePath: mappingDatabase(directory), token: SESSION_TOKEN });
     upstream = await startUpstream();
 
     const logs = { text: '' };

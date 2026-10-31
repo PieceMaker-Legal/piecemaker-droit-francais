@@ -219,8 +219,6 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><th>Hook</th><th>Moment</th><th>Outils visés</th></tr>
         <tr><td><code>protect-originals</code></td><td>avant</td><td><code>Read|Grep|Glob|Bash</code></td></tr>
         <tr><td><code>guard-secrets</code></td><td>avant</td><td>global, hors plugin</td></tr>
-        <tr><td><code>track-legifrance-reads</code></td><td>après</td><td><code>Read</code></td></tr>
-        <tr><td><code>compile-recherche</code></td><td>après</td><td><code>Write</code></td></tr>
         <tr><td><code>classify-ai-documents</code></td><td>après</td><td><code>Write|Bash</code></td></tr>
       </table></div>
       <p style="margin-top:12px">Codex reçoit la protection des pièces. Mistral exécute <code>protect-originals</code> et <code>guard-secrets</code> avant ses outils intégrés.</p>
@@ -267,10 +265,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
     <section class="card wide">
       <h2>Écarts restants</h2>
-      <ul>
-        <li><strong>Code résiduel.</strong> <code>handlers.py</code> garde <code>Build_Research_Corpus</code>, absent du registre. Le hook <code>track-legifrance-reads</code> dépend du marqueur que ce corpus écrit.</li>
-      </ul>
-      <p>Les écarts sur <code class="c-skill">recherche-juridique</code>, <code class="c-skill">legal-code</code>, <code>suivi</code>, <code>FILE.yaml</code> et <code>verificateur-anonymisation</code> sont corrigés. Les liens morts sont retirés de cette copie.</p>
+      <p>Les écarts sur <code class="c-skill">recherche-juridique</code>, <code class="c-skill">legal-code</code>, <code>suivi</code>, <code>FILE.yaml</code> et <code>verificateur-anonymisation</code> sont corrigés. Les liens morts sont retirés de cette copie. <code>Build_Research_Corpus</code> et les hooks de recherche sont supprimés. Aucun écart connu ne reste.</p>
+      <p style="margin-top:12px"><code>consulter_decision</code> et l'analyse tabulaire partagent le cache <code>~/.piecemaker/decisions/</code> : une décision déjà téléchargée ne sollicite plus l'API.</p>
     </section>
   </div>
 </div>

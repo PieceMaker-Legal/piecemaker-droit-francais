@@ -1,5 +1,7 @@
+import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -63,6 +65,13 @@ def plan(requete="contrat"):
 
 
 class LimiteResultatsTests(unittest.TestCase):
+    def setUp(self):
+        dossier = tempfile.TemporaryDirectory()
+        self.addCleanup(dossier.cleanup)
+        environnement = mock.patch.dict(os.environ, {"PIECEMAKER_HOME": dossier.name})
+        environnement.start()
+        self.addCleanup(environnement.stop)
+
     def test_les_doublons_entre_sources_ne_comptent_pas(self):
         client = ClientSimule(
             [decision_legifrance(r) for r in range(1, 301)],

@@ -3,7 +3,6 @@ const http = require('node:http');
 
 const { anonymize, deanonymize, resolveContext } = require('./dictionary.cjs');
 const { createSseRewriter, rewriteJsonBody } = require('./rewrite.cjs');
-const { createCollecteurTexte } = require('../harness/flux-sse.cjs');
 
 const MAX_BODY = 64 * 1024 * 1024;
 
@@ -47,46 +46,6 @@ function sessionProject(request, token) {
   }
 }
 
-function observeRequest(harness, body, contentType, provider) {
-  if (!harness) return;
-  try {
-    harness.observerRequete(body, contentType, { session: provider });
-  } catch {
-    // une observation ne doit pas empêcher le relais
-  }
-}
-
-function observeResponse(harness, text, provider) {
-  if (!harness) return;
-  try {
-    Promise.resolve(harness.observerReponse(text, { session: provider })).catch(() => {});
-  } catch {
-    // une observation ne doit pas empêcher le relais
-  }
-}
-
-function assistantText(raw) {
-  try {
-    const parsed = JSON.parse(raw.toString('utf8'));
-    if (Array.isArray(parsed?.content)) {
-      return parsed.content
-        .filter((block) => block?.type === 'text' && typeof block.text === 'string')
-        .map((block) => block.text)
-        .join('');
-    }
-    if (Array.isArray(parsed?.output)) {
-      return parsed.output
-        .flatMap((item) => (Array.isArray(item?.content) ? item.content : []))
-        .filter((block) => block?.type === 'output_text' && typeof block.text === 'string')
-        .map((block) => block.text)
-        .join('');
-    }
-  } catch {
-    return '';
-  }
-  return '';
-}
-
 function ssePayloads(tail) {
   return String(tail || '')
     .split('\n')
@@ -95,12 +54,11 @@ function ssePayloads(tail) {
     .filter((line) => line && line !== '[DONE]');
 }
 
-function startRewriterBridge({ dictionary, harness = null, token = null }) {
+function startRewriterBridge({ dictionary, token = null }) {
   const sessions = new Map();
   const stats = { requests: 0, anonymized: 0, deanonymized: 0, failures: 0, lastError: null };
 
   const server = http.createServer((request, response) => {
-    const provider = header(request, 'x-piecemaker-provider') || 'claude';
     const projectId = sessionProject(request, token);
     const current = () => dictionary.get();
     const outbound = () => (dictionary.getForOutbound ? dictionary.getForOutbound() : dictionary.get());
@@ -114,7 +72,6 @@ function startRewriterBridge({ dictionary, harness = null, token = null }) {
     if (request.method === 'POST' && request.url === '/v1/request') {
       readBody(request).then((body) => {
         stats.requests += 1;
-        const contentType = header(request, 'content-type') || 'application/json';
         const dict = outbound();
         const context = dict.empty ? null : resolveContext(dict, { projectId, text: body.toString('utf8') });
         const rewritten = !body.length || dict.empty
@@ -123,7 +80,6 @@ function startRewriterBridge({ dictionary, harness = null, token = null }) {
         if (!rewritten.equals(body)) stats.anonymized += 1;
         response.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': rewritten.length });
         response.end(rewritten);
-        setImmediate(() => observeRequest(harness, body, contentType, provider));
       }).catch((error) => {
         stats.failures += 1;
         stats.lastError = error.message;
@@ -140,7 +96,6 @@ function startRewriterBridge({ dictionary, harness = null, token = null }) {
           ? body
           : Buffer.from(rewriteJsonBody(body, (text) => deanonymize(text, dict, { projectId })), 'utf8');
         if (!rewritten.equals(body)) stats.deanonymized += 1;
-        observeResponse(harness, assistantText(rewritten), provider);
         response.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': rewritten.length });
         response.end(rewritten);
       }).catch((error) => {
@@ -155,7 +110,6 @@ function startRewriterBridge({ dictionary, harness = null, token = null }) {
     if (request.method === 'POST' && request.url === '/v1/sse') {
       const dict = current();
       const rewriter = createSseRewriter((text) => deanonymize(text, dict, { projectId }));
-      const collecteur = createCollecteurTexte();
       response.writeHead(200, {
         'content-type': 'text/event-stream',
         'cache-control': 'no-cache',
@@ -166,17 +120,12 @@ function startRewriterBridge({ dictionary, harness = null, token = null }) {
         const out = rewriter.push(chunk);
         if (!out) return;
         response.write(out);
-        collecteur.push(out);
       });
       request.on('end', () => {
         const tail = rewriter.end();
-        if (tail) {
-          response.write(tail);
-          collecteur.push(tail);
-        }
+        if (tail) response.write(tail);
         stats.deanonymized += 1;
         response.end();
-        observeResponse(harness, collecteur.texte(), provider);
       });
       request.on('error', () => response.end());
       return;
@@ -193,7 +142,6 @@ function startRewriterBridge({ dictionary, harness = null, token = null }) {
           const rewritten = dict.empty ? text : rewriteJsonBody(text, (value) => anonymize(value, dict, context));
           response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
           response.end(rewritten);
-          setImmediate(() => observeRequest(harness, body, 'application/json', provider));
           return;
         }
         const dict = current();

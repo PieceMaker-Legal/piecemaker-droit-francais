@@ -15,7 +15,6 @@ from tools.legifrance_client import legifrance_client, est_date_absente
 from tools.bodacc_client import bodacc_client
 from tools.justice_lexicon import JusticeLexiconError, justice_lexicon_client
 from tools.code_parser import parse_code_query
-from tools.research_corpus import build_research_corpus
 from tools.decision_history import (
     HistoriqueError,
     build_decision_history,
@@ -689,44 +688,6 @@ def handle_search_code(args: Dict[str, Any], user_id: str) -> Dict[str, Any]:
 # ROUTER PRINCIPAL
 # ============================================================================
 
-def handle_build_research_corpus(args: Dict[str, Any], user_id: str) -> Dict[str, Any]:
-    """Fige et télécharge un corpus exhaustif, puis prépare les lots de cartographie."""
-    try:
-        info = build_research_corpus(args)
-    except ValueError as e:
-        return create_response(f"❌ {e}", is_error=True)
-
-    truncated_note = (
-        "\n⚠️ Le manifeste est tronqué par au moins un plafond explicite. "
-        "Augmentez le plafond ou resserrez les requêtes avant toute conclusion."
-        if info["truncated"] else ""
-    )
-    summary = (
-        "**📚 CORPUS JURISPRUDENTIEL EXHAUSTIF PRÉPARÉ**\n\n"
-        f"**Question:** {info['question']}\n"
-        f"**Formulation:** {info['query']}\n"
-        f"**Décisions identifiées (dédupliquées):** {info['identified']}\n"
-        f"**Textes intégraux téléchargés et scannés:** {info['scanned']}\n"
-        f"**Échecs:** {info['failed']}\n"
-        f"**Décisions à revoir par modèle économique:** {info['model_reviewed']}\n"
-        f"**Lots à cartographier:** {info['batches']}\n"
-        f"**Entrée LLM estimée:** {info['tokens_input_estimated']:,} tokens "
-        f"({info['token_estimation_method']}; ce n'est pas un relevé fournisseur)\n"
-        f"{truncated_note}\n\n"
-        f"**Dossier:** {info['folder']}\n"
-        f"**Rapport Markdown attendu après validation:** {info['report']}\n"
-        f"**Plan des lots:** {info['batch_plan']}\n"
-        f"**Télémétrie:** {info['telemetry']}\n\n"
-        "Traitez chaque fichier `batches/lot-*.md` et écrivez exactement une "
-        "fiche JSON par décision dans le fichier `cards/lot-*.jsonl` correspondant. "
-        "Exécutez ensuite `python3 recompile_research.py .` depuis le dossier. "
-        "Toutes les décisions doivent "
-        "recevoir une fiche du modèle, y compris celles qui ne sont finalement pas "
-        "pertinentes pour la question."
-    )
-    return create_response(summary)
-
-
 def handle_historique_judiciaire(args: Dict[str, Any], user_id: str) -> Dict[str, Any]:
     """Reconstitue le fil procédural d'une décision (judiciaire ou administratif)."""
     try:
@@ -755,7 +716,6 @@ TOOL_HANDLERS = {
     "connexion": handle_connexion,
     "Search_Jurisprudence": handle_recherche_jurisprudence,
     "Search_Code": handle_search_code,
-    "Build_Research_Corpus": handle_build_research_corpus,
     "Historique_Judiciaire": handle_historique_judiciaire,
     "dictionnaire_juridique": handle_dictionnaire_juridique,
 

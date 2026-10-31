@@ -21,18 +21,22 @@ Deux points de branchement distincts :
   modifié. Le terminal PTY brut n'est pas une conversation structurée : cette
   visionneuse et ces annotations concernent le chat, pas son affichage ANSI.
 
-- `server/piecemaker/harness/decisions.cjs` — repère les résultats d'outil
-  `consulter_decision` (appariement `tool_use_id` côté Anthropic, `call_id` côté
-  Responses, le nom d'outil ne vivant que sur le bloc d'appel) et écrit le texte
-  intégral dans `~/.piecemaker/decisions/<id>.json`. Nécessaire parce que
-  `consulter_decision` ne rend le texte intégral que dans son résultat, jamais
-  sur le disque.
+- **Cache des décisions** `~/.piecemaker/decisions/<id>.json` — un seul cache,
+  écrit là où les décisions sont téléchargées : `tools/decision_cache.py` dans
+  le MCP Légifrance (Claude, Codex, Mistral) et `decision-cache.ts` dans
+  l'analyse tabulaire. Il garde la réponse brute de `/consult/juri` ou de
+  Judilibre `/decision`, sans expiration, jamais les erreurs ni les textes vides.
+  Une entrée sans réponse brute est retéléchargée puis remplacée. Le contrôle
+  d'historique de `consulter_decision` y est gardé pour la journée. Les
+  recherches et les articles restent en direct : leur résultat peut changer.
+- `server/piecemaker/harness/decisions.cjs` — extrait le texte intégral et le
+  titre d'un résultat `consulter_decision` ou `consulter_article`.
 - `server/piecemaker/harness/citation-turn.ts` — comportement de Mike : texte
   diffusé progressivement, bloc `<CITATIONS>` masqué même découpé,
   vérification mécanique puis fin du tour. Un bloc JSON valide terminé à EOF
   est aussi accepté si sa balise fermante manque.
   Les décisions viennent seulement des résultats `consulter_decision` de ce
-  tour, appariés par `toolId` ; aucun cache global ne les rend vérifiables.
+  tour, appariés par `toolId` ; le cache évite l'appel API, pas cet appel d'outil.
   Les Markdown sont résolus dans le dossier réel de la session, avec contrôle
   des liens symboliques et lecture mémoïsée par tour. Les moteurs de parsing
   et de vérification vendorisés restent inchangés.
@@ -62,14 +66,6 @@ Deux points de branchement distincts :
   ainsi que des titres de session (`normalizeSessionName`) et de la recherche
   (`session-conversations-search.service.ts`). Les commandes slash sont
   préservées.
-- `server/piecemaker/harness/flux-sse.cjs` — collecteur du texte visible d'un
-  flux SSE (`thinking` et `partial_json` exclus), mémoire bornée.
-- `server/piecemaker/harness/index.cjs` et `verification.cjs` — observateurs
-  historiques conservés et testés. Dans l'application, le proxy garde la
-  capture des décisions mais reçoit `verifyResponses: false` : la vérification
-  et le journal appartiennent désormais au harnais de chat, qui connaît le
-  tour et le dossier. `PIECEMAKER_CITATIONS=off` concerne ces observateurs
-  historiques, pas le harnais de chat.
 - Liste **Sources** en fin de réponse (`finish` de `citation-turn.ts`), une
   ligne par citation, dérivée de la seule sortie du vérifieur (inchangé) :
   `[n]`, titre lié au panneau, extraits vérifiés entre guillemets. Titre d'une
@@ -98,18 +94,8 @@ Deux points de branchement distincts :
   les notes sont donc vérifiées comme le chat. Rien ne contrôle encore que le
   texte de la note égale l'extrait vérifié.
 
-Invariants tenus par les tests (`harness.test.js`, `proxy-harness.test.js`) :
-
-- **Espace en clair.** L'observation porte sur le corps client *avant*
-  anonymisation et sur le texte livré au client *après* ré-identification. Le
-  cache de décisions contient donc du texte réel, dans la même forme que celui
-  qu'écrit le hook de PieceMaker-Installer : les deux installations partagent
-  `~/.piecemaker/decisions/` au lieu de le dupliquer.
-- **Transparence stricte.** Ce qui est livré au client est octet pour octet
-  identique avec et sans harnais. Les trois chemins de retour sont couverts :
-  SSE dé-anonymisé, JSON complet, et le `pipe` du mapping vide.
-- `harness` est absent par défaut de `createAnonymizerProxy` : sans lui, le
-  proxy se comporte exactement comme avant.
+Le proxy d'anonymisation n'observe plus rien : il réécrit le trafic et ne touche
+ni au cache ni aux citations.
 
 **Comme Mike, ce harnais annote, il ne bloque pas la prose déjà diffusée.** Un
 extrait corrigé reçoit le texte exact ; un extrait introuvable reste visible

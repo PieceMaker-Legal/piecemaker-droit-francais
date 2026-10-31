@@ -162,6 +162,13 @@ export function similar(left: Set<string>, right: Set<string>): boolean {
   return union > 0 && shared / union >= SIMILARITY;
 }
 
+export function officialTitle(decision: Json, fallback: string): string {
+  const date = formatDate(decision.decision_date);
+  const place = clean(decision.location) || clean(decision.jurisdiction);
+  const number = clean(decision.number) || (Array.isArray(decision.numbers) ? clean(decision.numbers[0]) : '');
+  return [place, date ? longDate(date) : '', number].filter(Boolean).join(', ') || fallback;
+}
+
 export function officialDecision(entry: Pick<Listed, 'id' | 'title' | 'source'>, decision: Json): OfficialDecision {
   const text = typeof decision.text === 'string' ? decision.text : '';
   const date = formatDate(decision.decision_date);
@@ -174,7 +181,7 @@ export function officialDecision(entry: Pick<Listed, 'id' | 'title' | 'source'>,
   return {
     record: {
       id: entry.id,
-      title: [place, date ? longDate(date) : '', number].filter(Boolean).join(', ') || entry.title,
+      title: officialTitle(decision, entry.title),
       source: entry.source,
       date,
       formation: clean(decision.formation),

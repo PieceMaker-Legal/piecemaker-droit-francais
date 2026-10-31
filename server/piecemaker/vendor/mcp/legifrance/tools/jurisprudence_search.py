@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from itertools import product
 from typing import Any, Dict, List, Optional, Tuple
 
+from tools import decision_cache
 from tools.legifrance_client import JudilibreError, borne_haute_reelle, est_date_absente, legifrance_client
 from tools.query_parser import QueryCriteria, normalize_article_reference, parse_query
 
@@ -622,7 +623,11 @@ def titre_judilibre(decision: Dict[str, Any], defaut: str) -> str:
 
 
 def decision_judilibre(client: Any, identifiant: str) -> Dict[str, Any]:
-    return client.judilibre("/decision", [("id", identifiant), ("resolve_references", "true")])
+    return decision_cache.obtenir(
+        identifiant,
+        lambda: client.judilibre("/decision", [("id", identifiant), ("resolve_references", "true")]),
+        lambda decision: (titre_judilibre(decision, identifiant), decision.get("text")),
+    )
 
 
 def _compter(client: Any, plan: Dict[str, Any], etat: Dict[str, Any]) -> List[Dict[str, Any]]:

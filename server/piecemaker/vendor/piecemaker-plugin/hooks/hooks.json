@@ -13,24 +13,6 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/track-legifrance-reads.mjs\""
-          }
-        ]
-      },
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/compile-recherche.mjs\""
-          }
-        ]
-      },
-      {
         "matcher": "Write|Bash",
         "hooks": [
           {
