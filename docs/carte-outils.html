@@ -71,7 +71,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
   <figure>
     <div class="map">
-      <svg viewBox="0 0 1180 996" role="img" aria-label="Le moteur passe par le proxy pour parler au modèle. Il appelle le MCP legifrance sans hook. Il lit les skills piecemaker et docx-cli, sources des commandes pm et docx, puis les lance par Bash sous le contrôle des hooks. Il lance aussi les sous-agents sous ce contrôle. Le MCP piecemaker est retiré par défaut.">
+      <svg viewBox="0 0 1180 940" role="img" aria-label="Le moteur passe par le proxy pour parler au modèle. Il appelle le MCP legifrance sans hook. Il lit les skills piecemaker et docx-cli, sources des commandes pm et docx, puis les lance par Bash sous le contrôle des hooks. Il lance aussi les sous-agents sous ce contrôle. Le MCP piecemaker est retiré par défaut.">
         <defs>
           <marker id="n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#8c8c93"/></marker>
           <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7ea2ff"/></marker>
@@ -101,7 +101,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-note" x="506" y="71">Sans proxy, les sessions lancées par le serveur échouent :</text>
         <text class="t-note" x="506" y="88">elles ne continuent jamais sans filtre.</text>
 
-        <rect x="16" y="128" width="120" height="852" rx="16" fill="#202024" stroke="rgba(255,255,255,.2)"/>
+        <rect x="16" y="128" width="120" height="796" rx="16" fill="#202024" stroke="rgba(255,255,255,.2)"/>
         <text class="t-eng" x="76" y="164" text-anchor="middle">Claude</text>
         <text class="t-eng" x="76" y="188" text-anchor="middle">Codex</text>
         <text class="t-eng" x="76" y="212" text-anchor="middle">Mistral</text>
@@ -113,26 +113,26 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <g stroke="#4ade80" stroke-width="1.5">
           <line x1="136" y1="401" x2="287" y2="401" marker-end="url(#s)"/>
           <line x1="136" y1="616" x2="287" y2="616" marker-end="url(#s)"/>
-          <line x1="136" y1="748" x2="287" y2="748" marker-end="url(#s)"/>
+          <line x1="136" y1="720" x2="287" y2="720" marker-end="url(#s)"/>
         </g>
-        <line x1="136" y1="858" x2="287" y2="858" stroke="#b794ff" stroke-width="1.5" marker-end="url(#v)"/>
-        <line x1="136" y1="944" x2="287" y2="944" stroke="#7ea2ff" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#m)"/>
+        <line x1="136" y1="802" x2="287" y2="802" stroke="#b794ff" stroke-width="1.5" marker-end="url(#v)"/>
+        <line x1="136" y1="888" x2="287" y2="888" stroke="#7ea2ff" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#m)"/>
         <text class="t-mcp t-arrow" x="212" y="178" text-anchor="middle">appel MCP</text>
         <text class="t-skill-c t-arrow" x="168" y="393" text-anchor="middle">lit, Bash</text>
         <text class="t-skill-c t-arrow" x="168" y="608" text-anchor="middle">lit, Bash</text>
-        <text class="t-skill-c t-arrow" x="168" y="740" text-anchor="middle">lit, agit</text>
-        <text class="t-agent t-arrow" x="168" y="850" text-anchor="middle">Agent</text>
-        <text class="t-mcp t-arrow" x="212" y="936" text-anchor="middle">MCP</text>
+        <text class="t-skill-c t-arrow" x="168" y="712" text-anchor="middle">lit, agit</text>
+        <text class="t-agent t-arrow" x="168" y="794" text-anchor="middle">Agent</text>
+        <text class="t-mcp t-arrow" x="212" y="880" text-anchor="middle">MCP</text>
 
-        <rect x="200" y="258" width="32" height="636" rx="10" fill="#2a2213" stroke="#f5b13d"/>
-        <text class="t-hook" transform="translate(220 576) rotate(-90)" text-anchor="middle">Hooks : contrôle avant et après l'outil</text>
+        <rect x="200" y="258" width="32" height="580" rx="10" fill="#2a2213" stroke="#f5b13d"/>
+        <text class="t-hook" transform="translate(220 548) rotate(-90)" text-anchor="middle">Hooks : contrôle avant et après l'outil</text>
 
         <rect x="290" y="128" width="874" height="116" rx="14" fill="#141c30" stroke="#7ea2ff"/>
         <rect x="290" y="258" width="874" height="286" rx="14" fill="#10241a" stroke="#4ade80"/>
         <rect x="290" y="558" width="874" height="116" rx="14" fill="#10241a" stroke="#4ade80"/>
-        <rect x="290" y="688" width="874" height="120" rx="14" fill="#10241a" stroke="#4ade80"/>
-        <rect x="290" y="822" width="874" height="72" rx="14" fill="#1e1730" stroke="#b794ff"/>
-        <rect x="290" y="908" width="874" height="72" rx="14" fill="none" stroke="#7ea2ff" stroke-dasharray="5 4"/>
+        <rect x="290" y="688" width="874" height="64" rx="14" fill="#10241a" stroke="#4ade80"/>
+        <rect x="290" y="766" width="874" height="72" rx="14" fill="#1e1730" stroke="#b794ff"/>
+        <rect x="290" y="852" width="874" height="72" rx="14" fill="none" stroke="#7ea2ff" stroke-dasharray="5 4"/>
 
         <text class="t-title t-mcp" x="306" y="154">MCP legifrance</text>
         <text class="t-note" x="306" y="172">stdio, déclaré par dossier</text>
@@ -183,20 +183,20 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-mono" x="560" y="648">docx tasks | raw · track-changes on off list accept reject apply</text>
         <text class="t-mono" x="560" y="666">docx comments add | list | reply | resolve | delete</text>
 
-        <text class="t-name t-skill-c" x="306" y="752">ajout-de-fonctionnalites</text>
-        <text class="t-mono" x="560" y="752">~/.claude/skills · ~/.piecemaker/{templates,custom}</text>
+        <text class="t-name t-skill-c" x="306" y="724">ajout-de-fonctionnalites</text>
+        <text class="t-mono" x="560" y="724">~/.claude/skills · ~/.piecemaker/{templates,custom}</text>
 
-        <text class="t-title t-agent" x="306" y="852">Sous-agents</text>
-        <text class="t-note" x="306" y="872">déclarés pour Claude, sans skill</text>
-        <text class="t-name t-agent" x="560" y="862">analyste-pieces</text><text class="t-mono" x="730" y="862">sonnet · Read Grep Glob Bash</text>
+        <text class="t-title t-agent" x="306" y="796">Sous-agents</text>
+        <text class="t-note" x="306" y="816">déclarés pour Claude, sans skill</text>
+        <text class="t-name t-agent" x="560" y="806">analyste-pieces</text><text class="t-mono" x="730" y="806">sonnet · Read Grep Glob Bash</text>
 
-        <text class="t-title t-mcp" x="306" y="938">MCP piecemaker</text>
-        <text class="t-note" x="306" y="958">retiré par défaut, remplacé par pm</text>
-        <text class="t-off" x="560" y="936">conversion · sql · raisonnement · suivi</text>
-        <text class="t-off" x="560" y="956">afficher · tabular_review · tabular_review_index</text>
+        <text class="t-title t-mcp" x="306" y="882">MCP piecemaker</text>
+        <text class="t-note" x="306" y="902">retiré par défaut, remplacé par pm</text>
+        <text class="t-off" x="560" y="880">conversion · sql · raisonnement · suivi</text>
+        <text class="t-off" x="560" y="900">afficher · tabular_review · tabular_review_index</text>
       </svg>
     </div>
-    <figcaption>La ligne Légifrance ne traverse pas la bande des hooks : leurs filtres visent <code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Bash</code> et <code>Write</code>, pas les outils MCP. Le moteur va chercher le skill : le skill n'appelle ni le moteur ni un outil. Les commandes <code>docx</code> viennent de <code>docx --help</code>, version 0.24.0.</figcaption>
+    <figcaption>La ligne Légifrance ne traverse pas la bande des hooks : leurs filtres visent <code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Bash</code> et <code>Write</code>, pas les outils MCP. Le moteur va chercher le skill : le skill n'appelle ni le moteur ni un outil. Les commandes <code>docx</code> viennent de <code>docx --help</code>, version 0.28.0.</figcaption>
   </figure>
 
   <div class="cards">
