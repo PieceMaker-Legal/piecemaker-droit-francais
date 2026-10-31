@@ -21,7 +21,7 @@ class WarmupDownloadTests(unittest.TestCase):
     def load_warmup(self, snapshot):
         spec = importlib.util.spec_from_file_location("warmup_download_test", Path(__file__).with_name("warmup.py"))
         module = importlib.util.module_from_spec(spec)
-        with patch.dict(sys.modules, {"mineru_improved_1": SimpleNamespace(mineru_available=lambda: False), "huggingface_hub": SimpleNamespace(snapshot_download=snapshot)}):
+        with patch.dict(sys.modules, {"huggingface_hub": SimpleNamespace(snapshot_download=snapshot)}):
             spec.loader.exec_module(module)
         return module
 

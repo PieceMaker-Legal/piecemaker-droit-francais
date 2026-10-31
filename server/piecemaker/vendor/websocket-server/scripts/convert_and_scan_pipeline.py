@@ -11,7 +11,7 @@ Usage:
 Options:
     -o, --output DIR       Output directory for all generated files
     --database PATH        PieceMaker database; codes held by every case are reserved
-    --engine ENGINE        Conversion engine: auto|markitdown|mineru (default: auto)
+    --engine ENGINE        Conversion engine: auto|markitdown|small (default: auto)
 
 Progress Format:
     PROGRESS:CONVERT:percentage:current:total    (Phase 1: Converting documents)
@@ -49,7 +49,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Set
 
-from smart_converter import mineru_available, needs_ocr
+from smart_converter import ocr_available, needs_ocr
 from legal_forms import (
     _FORM_NATIONALITY,
     cluster_indexes_by_stem,
@@ -335,7 +335,7 @@ def convert_file(
     Args:
         input_file: Path to input document
         output_dir: Directory for output markdown
-        engine: Conversion engine (auto/markitdown/mineru)
+        engine: Conversion engine (auto/markitdown/small)
         output_name: Markdown file stem, defaults to the input stem
 
     Returns:
@@ -2097,7 +2097,7 @@ def run_pipeline(resources: PipelineResources):
     )
     parser.add_argument(
         "--engine",
-        choices=["auto", "markitdown", "mineru"],
+        choices=["auto", "markitdown", "small", "mineru"],
         default="auto",
         help="Conversion engine (default: auto)",
     )
@@ -2106,7 +2106,7 @@ def run_pipeline(resources: PipelineResources):
         choices=["ask", "continue"],
         default="continue",
         help=(
-            "When scanned documents need OCR but MinerU is not installed: 'ask' stops before "
+            "When scanned documents need OCR but PP-OCRv6 Small is not installed: 'ask' stops before "
             "any work and prints OCR_REQUIRED:<json>; 'continue' converts them from their text layer only"
         ),
     )
@@ -2179,7 +2179,7 @@ def run_pipeline(resources: PipelineResources):
     def markdown_path(input_file: str) -> Path:
         return Path(args.output) / f"{markdown_stems[input_file]}.md"
 
-    mineru_ready = args.engine == "mineru" or (args.engine == "auto" and mineru_available())
+    ocr_ready = args.engine in ("small", "mineru") or (args.engine == "auto" and ocr_available())
 
     def converted_without_ocr(input_file: str) -> bool:
         entry = source_state_entry(anonymization_state, input_file, state_case_root) or {}
@@ -2188,7 +2188,7 @@ def run_pipeline(resources: PipelineResources):
     def markdown_is_reusable(input_file: str) -> bool:
         if not markdown_path(input_file).exists():
             return False
-        if mineru_ready and converted_without_ocr(input_file):
+        if ocr_ready and converted_without_ocr(input_file):
             return False
         state_entry = source_state_entry(anonymization_state, input_file, state_case_root)
         return state_entry is None or source_is_converted(anonymization_state, input_file, state_case_root)
@@ -2200,8 +2200,8 @@ def run_pipeline(resources: PipelineResources):
             return Path(input_file).name
 
     conversions = [f for f in input_files if not (args.skip_existing and markdown_is_reusable(f))]
-    ocr_fallback = set() if mineru_ready else {f for f in conversions if needs_ocr(f)}
-    reconverted_with_ocr = {f for f in conversions if mineru_ready and converted_without_ocr(f)}
+    ocr_fallback = set() if ocr_ready else {f for f in conversions if needs_ocr(f)}
+    reconverted_with_ocr = {f for f in conversions if ocr_ready and converted_without_ocr(f)}
 
     if ocr_fallback and args.engine == "auto" and args.ocr_missing == "ask":
         files = sorted(case_relative_name(f) for f in ocr_fallback)
@@ -2252,7 +2252,7 @@ def run_pipeline(resources: PipelineResources):
         print(f"📄 [{i}/{len(input_files)}] Converting: {Path(input_file).name}")
         without_ocr = input_file in ocr_fallback
         if without_ocr:
-            print("   ⚠️  Scanned document converted without OCR (MinerU not installed): text layer only")
+            print("   ⚠️  Scanned document converted without OCR (PP-OCRv6 Small not installed): text layer only")
 
         success, md_path, reason = convert_file(
             input_file,

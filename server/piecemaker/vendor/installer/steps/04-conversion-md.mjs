@@ -2,9 +2,9 @@
  * Step 04 — document-to-Markdown conversion pipeline.
  *
  * smart_converter.py (websocket-server/scripts/) auto-routes between
- * markitdown (fast text extraction) and MinerU (OCR, for scanned PDFs and
- * images). markitdown/pypdf come from requirements.txt (step 03); MinerU is
- * a separate, heavy, optional install offered here.
+ * markitdown (fast text extraction) and PP-OCRv6 Small (OCR, for scanned PDFs and
+ * images). markitdown/pypdf come from requirements.txt (step 03); PP-OCRv6 Small is
+ * downloaded separately from the Python libraries.
  */
 
 import fs from 'node:fs';
@@ -18,51 +18,37 @@ import { writeEnv } from '../lib/state.mjs';
 export const meta = {
   id: '04-conversion-md',
   label: 'Conversion de documents en Markdown',
-  description: 'Vérifie markitdown/pypdf et propose MinerU pour les PDF scannés',
+  description: 'Vérifie markitdown/pypdf et propose PP-OCRv6 Small pour les PDF scannés',
 };
 
 const SCRIPTS_DIR = path.join(REPO_ROOT, 'websocket-server', 'scripts');
 const SMART_CONVERTER = path.join(SCRIPTS_DIR, 'smart_converter.py');
-const MINERU_SPEC = 'mineru==4.0.11';
-const MINERU_MODEL_DIRS = ['MinerU-4_models_onnx', 'MinerU2.5-Pro-2605-1.2B-GGUF'];
+const OCR_MODELS = path.join(SCRIPTS_DIR, 'ocr_small_models.py');
 
-function venvScript(vp, name) {
-  return path.join(vp.binDir, process.platform === 'win32' ? `${name}.exe` : name);
-}
-
-function mineruModelsReady() {
-  const modelsRoot = path.join(process.env.MINERU_HOME || path.join(os.homedir(), '.mineru'), 'models');
-  return MINERU_MODEL_DIRS.every((name) => fs.existsSync(path.join(modelsRoot, name)));
-}
-
-async function installMineru(vp, sharedPython = false) {
-  if (!sharedPython) {
-    const spin = spinner('Installation de MinerU...');
-    const installed = await run(vp.python, ['-m', 'pip', 'install', MINERU_SPEC, '-r', path.join(SCRIPTS_DIR, 'requirements.txt')], {
-      cwd: os.homedir(),
-      onLine: (line) => spin.update(line.slice(0, 100)),
-    });
-    if (installed !== 0) {
-      spin.fail('Échec de l\'installation de MinerU');
+async function installSmall(vp, sharedPython = false) {
+  const probe = ['-c', 'import importlib.util; assert all(importlib.util.find_spec(name) for name in ("paddleocr", "onnxruntime", "pypdfium2", "psutil"))'];
+  if (sharedPython) {
+    if (runCapture(vp.python, probe).code !== 0) {
+      log.error('Composant Small absent de l’environnement Python commun : installez les composants de cette version.');
       return false;
     }
-    spin.succeed('MinerU installé');
-  } else if (runCapture(vp.python, ['-c', 'import mineru, mineru_llama_cpp']).code !== 0) {
-    log.error('Composant MinerU absent de l’environnement Python commun : réinstallez les composants de cette version.');
-    return false;
+  } else {
+    const installed = await run(vp.python, ['-m', 'pip', 'install', '-r', path.join(SCRIPTS_DIR, 'requirements.txt')], {
+      cwd: os.homedir(),
+      onLine: (line) => log.info(line),
+    });
+    if (installed !== 0) return false;
   }
-  if (mineruModelsReady()) return true;
-  const models = spinner('Téléchargement des modèles MinerU...');
-  const downloaded = await run(venvScript(vp, 'mineru-models-download'), ['--tier', 'standard', '--small-backend', 'onnx', '--vlm-engine', 'llama-cpp', '-s', 'huggingface'], {
+  const models = spinner('Téléchargement des modèles PP-OCRv6 Small…');
+  const downloaded = await run(vp.python, [OCR_MODELS, '--download'], {
     cwd: os.homedir(),
-    env: { ...process.env, MINERU_MODEL_SOURCE: 'huggingface' },
-    onLine: (line) => models.update(line.slice(0, 100)),
+    onLine: (line) => models.update(line.slice(0, 150)),
   });
   if (downloaded !== 0) {
-    models.fail('Échec du téléchargement des modèles MinerU');
+    models.fail('Échec du téléchargement de Small');
     return false;
   }
-  models.succeed('Modèles MinerU téléchargés');
+  models.succeed('PP-OCRv6 Small est prêt');
   return true;
 }
 
@@ -129,21 +115,19 @@ export async function install(ctx) {
   writeEnv({ SMART_CONVERTER_PATH: SMART_CONVERTER });
   log.ok(`SMART_CONVERTER_PATH enregistré : ${SMART_CONVERTER}`);
 
-  // 2. Optional MinerU install — heavy (PyTorch-class deps), only needed for
-  // scanned PDFs / images that have no extractable text layer.
-  const mineruRequested = process.env.PIECEMAKER_INSTALL_MINERU === '1';
-  const wantMineru = mineruRequested || await confirm(
-    'Installer MinerU (OCR pour PDF scannés et images) ? Optionnel, volumineux (plusieurs centaines de Mo à quelques Go de dépendances).',
+  const smallRequested = process.env.PIECEMAKER_INSTALL_OCR_SMALL === '1' || process.env.PIECEMAKER_INSTALL_MINERU === '1';
+  const wantSmall = smallRequested || await confirm(
+    'Installer PP-OCRv6 Small (OCR pour PDF scannés et images) ? Optionnel, modèles de 31 Mo, exécutés sur CPU.',
     false
   );
-  let mineruNote = '';
-  if (wantMineru) {
-    if (!(await installMineru(vp, ctx.config.pythonRuntime?.kind === 'shared'))) {
-      if (mineruRequested) return { status: 'failed', note: 'MinerU n\'a pas pu être installé.' };
-      mineruNote = ' MinerU n\'a pas pu être installé automatiquement — consultez sa documentation pour l\'installer manuellement.';
+  let smallNote = '';
+  if (wantSmall) {
+    if (!(await installSmall(vp, ctx.config.pythonRuntime?.kind === 'shared'))) {
+      if (smallRequested) return { status: 'failed', note: 'PP-OCRv6 Small n\'a pas pu être installé.' };
+      smallNote = ' PP-OCRv6 Small n\'a pas pu être installé automatiquement — consultez sa documentation pour l\'installer manuellement.';
     }
   } else {
-    log.info('MinerU non installé — les PDF scannés et images ne pourront pas être convertis (OCR).');
+    log.info('PP-OCRv6 Small non installé — les PDF scannés et images ne pourront pas être convertis (OCR).');
   }
 
   // 3. Smoke test: convert a throwaway .txt file end-to-end.
@@ -159,8 +143,8 @@ export async function install(ctx) {
   spin.succeed('Conversion de test réussie');
 
   return {
-    status: wantMineru && mineruNote ? 'partial' : 'done',
-    note: mineruNote.trim(),
+    status: wantSmall && smallNote ? 'partial' : 'done',
+    note: smallNote.trim(),
   };
 }
 
@@ -176,10 +160,10 @@ export async function check(ctx) {
   if (importCheck.code !== 0) {
     return { status: 'failed', note: 'markitdown ou pypdf non installés.' };
   }
-  // MinerU is optional (OCR only) — its absence does not degrade the status.
-  const mineruAvailable = runCapture(vp.python, ['-c', 'import mineru, mineru_llama_cpp']).code === 0 && mineruModelsReady();
+  // PP-OCRv6 Small is optional (OCR only) — its absence does not degrade the status.
+  const smallAvailable = runCapture(vp.python, [OCR_MODELS]).code === 0;
   return {
     status: 'done',
-    note: mineruAvailable ? '' : 'MinerU non installé (optionnel — nécessaire seulement pour l\'OCR des PDF scannés).',
+    note: smallAvailable ? '' : 'PP-OCRv6 Small non installé (optionnel — nécessaire seulement pour l\'OCR des PDF scannés).',
   };
 }

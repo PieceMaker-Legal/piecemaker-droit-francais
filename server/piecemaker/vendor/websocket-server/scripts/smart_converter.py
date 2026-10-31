@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Smart Document Converter — Auto-routes to markitdown or MinerU
+Smart Document Converter — Auto-routes to markitdown or PP-OCRv6 Small
 
-Automatically detects whether a document needs OCR (MinerU) or can be
+Automatically detects whether a document needs OCR (PP-OCRv6 Small) or can be
 processed with fast text extraction (markitdown).
 
 Detection strategy:
-- Images (JPG, PNG, etc.) → MinerU (OCR required)
-- Scanned PDFs (no text layer) → MinerU (OCR required)
+- Images (JPG, PNG, etc.) → PP-OCRv6 Small (OCR required)
+- Scanned PDFs (no text layer) → PP-OCRv6 Small (OCR required)
 - Text-layer PDFs → markitdown (fast extraction)
 - Office docs (DOCX, PPTX, XLSX) → markitdown (native support)
 
 Usage:
-    python3 smart_converter.py input.pdf -o output_dir [--engine auto|markitdown|mineru]
+    python3 smart_converter.py input.pdf -o output_dir [--engine auto|markitdown|small]
     python3 smart_converter.py input.docx -o output_dir
     python3 smart_converter.py image.jpg -o output_dir
 """
@@ -25,7 +25,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from mineru_improved_1 import mineru_available
+from ocr_small_models import ocr_available
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.gif'}
 
@@ -162,7 +162,7 @@ try:
     HAS_MARKITDOWN = True
 except ImportError:
     HAS_MARKITDOWN = False
-    print("⚠️  Markitdown not installed — all files will route to MinerU", file=sys.stderr)
+    print("⚠️  Markitdown not installed — all files will route to PP-OCRv6 Small", file=sys.stderr)
 
 
 def pdf_has_text_layer(pdf_path):
@@ -196,9 +196,9 @@ def needs_ocr(file_path):
 
 
 def ocr_engine(reason):
-    if HAS_MARKITDOWN and not mineru_available():
-        return 'markitdown', f'{reason}, but MinerU is not installed — text layer only'
-    return 'mineru', reason
+    if HAS_MARKITDOWN and not ocr_available():
+        return 'markitdown', f'{reason}, but PP-OCRv6 Small is not installed — text layer only'
+    return 'small', reason
 
 
 def inspect_file(file_path):
@@ -209,20 +209,20 @@ def inspect_file(file_path):
     """
     ext = Path(file_path).suffix.lower()
 
-    # Images always need OCR → MinerU
+    # Images always need OCR → PP-OCRv6 Small
     if ext in IMAGE_EXTENSIONS:
         return ocr_engine('Image file requires OCR')
 
     # Office docs have native text → markitdown
     if ext in ['.docx', '.pptx', '.xlsx', '.xls', '.doc', '.ppt']:
         if not HAS_MARKITDOWN:
-            return 'mineru', 'Markitdown unavailable — using MinerU'
+            return 'small', 'Markitdown unavailable — using PP-OCRv6 Small'
         return 'markitdown', 'Office document with native text'
 
     # PDFs need text layer inspection
     if ext == '.pdf':
         if not HAS_MARKITDOWN:
-            return 'mineru', 'Markitdown unavailable — using MinerU'
+            return 'small', 'Markitdown unavailable — using PP-OCRv6 Small'
 
         if pdf_has_text_layer(file_path):
             return 'markitdown', 'PDF has extractable text layer'
@@ -232,14 +232,14 @@ def inspect_file(file_path):
     # HTML, TXT, etc. — try markitdown
     if ext in ['.html', '.htm', '.txt', '.md', '.csv']:
         if not HAS_MARKITDOWN:
-            return 'mineru', 'Markitdown unavailable — using MinerU'
+            return 'small', 'Markitdown unavailable — using PP-OCRv6 Small'
         return 'markitdown', f'Text-based format ({ext})'
 
     # Default to markitdown (handles many formats)
     if HAS_MARKITDOWN:
         return 'markitdown', f'Attempting text extraction for {ext}'
     else:
-        return 'mineru', 'Unknown format — using MinerU as fallback'
+        return 'small', 'Unknown format — using PP-OCRv6 Small as fallback'
 
 
 def run_markitdown(file_path, output_dir, output_name=None):
@@ -282,25 +282,25 @@ def run_markitdown(file_path, output_dir, output_name=None):
         raise
 
 
-def run_mineru(file_path, output_dir, output_name=None):
-    """Route to MinerU script.
+def run_small(file_path, output_dir, output_name=None):
+    """Route to PP-OCRv6 Small script.
 
     Args:
         file_path: Path to input file
         output_dir: Directory to save output
         output_name: Markdown file stem, defaults to the input stem
     """
-    mineru_script = Path(__file__).parent / 'mineru_improved_1.py'
+    ocr_script = Path(__file__).parent / 'ocr_small.py'
 
-    if not mineru_script.exists():
-        raise FileNotFoundError(f"MinerU script not found: {mineru_script}")
+    if not ocr_script.exists():
+        raise FileNotFoundError(f"PP-OCRv6 Small script not found: {ocr_script}")
 
-    print(f"🚀 Using MinerU...", file=sys.stderr)
+    print(f"🚀 Using PP-OCRv6 Small...", file=sys.stderr)
 
     target = Path(output_dir) / f"{output_name or Path(file_path).stem}.md"
 
-    with tempfile.TemporaryDirectory(prefix='.mineru-', dir=str(output_dir)) as scratch:
-        args = [sys.executable, str(mineru_script), str(file_path), '-o', scratch]
+    with tempfile.TemporaryDirectory(prefix='.small-', dir=str(output_dir)) as scratch:
+        args = [sys.executable, str(ocr_script), str(file_path), '-o', scratch]
 
         process = subprocess.Popen(args, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
         last_line = ''
@@ -313,7 +313,7 @@ def run_mineru(file_path, output_dir, output_name=None):
 
         if returncode != 0:
             reason = f" : {last_line}" if last_line else ''
-            print(f"❌ MinerU failed with exit code {returncode}{reason}", file=sys.stderr)
+            print(f"❌ PP-OCRv6 Small failed with exit code {returncode}{reason}", file=sys.stderr)
             sys.exit(returncode)
 
         os.replace(Path(scratch) / f"{Path(file_path).stem}.md", target)
@@ -323,11 +323,11 @@ def run_mineru(file_path, output_dir, output_name=None):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Smart Document Converter — auto-routes to markitdown or MinerU'
+        description='Smart Document Converter — auto-routes to markitdown or PP-OCRv6 Small'
     )
     parser.add_argument('file', help='Input file to convert')
     parser.add_argument('-o', '--output', required=True, help='Output directory')
-    parser.add_argument('--engine', choices=['auto', 'markitdown', 'mineru'],
+    parser.add_argument('--engine', choices=['auto', 'markitdown', 'small', 'mineru'],
                         default='auto', help='Conversion engine (default: auto)')
     parser.add_argument('--output-name', default=None,
                         help='Markdown file stem (default: input file stem)')
@@ -351,16 +351,16 @@ def main():
     elif args.engine == 'markitdown':
         engine = 'markitdown'
         print(f"⚡ Force using markitdown (user override)", file=sys.stderr)
-    else:  # mineru
-        engine = 'mineru'
-        print(f"🔬 Force using MinerU (user override)", file=sys.stderr)
+    else:
+        engine = 'small'
+        print(f"🔬 Force using PP-OCRv6 Small (user override)", file=sys.stderr)
 
     # Route to appropriate engine
     try:
         if engine == 'markitdown':
             run_markitdown(file_path, output_dir, args.output_name)
-        else:  # mineru
-            run_mineru(file_path, output_dir, args.output_name)
+        else:
+            run_small(file_path, output_dir, args.output_name)
     except Exception as e:
         print(f"❌ Conversion failed: {e}", file=sys.stderr)
         sys.exit(1)

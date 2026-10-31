@@ -53,7 +53,7 @@ besoin — par `server/piecemaker/vendor/installer/bin/piecemaker.mjs --step
 `04-conversion-md`, `12-mcp-piecemaker`,
 `07-legifrance`. `03-python-gliner` y tourne avec `PIECEMAKER_SKIP_MODELS=1` :
 le venv et les bibliothèques sont installés, pas le modèle GLiNER2-PII ;
-`04-conversion-md` n'installe pas MinerU. Ces modèles locaux se téléchargent
+`04-conversion-md` ne télécharge pas les modèles Small pendant cet amorçage. Ces modèles locaux se téléchargent
 automatiquement à l'ouverture de l'application. L'icône en haut à gauche
 (avec un point bleu pendant la préparation) et le bouton de l'onglet Dossier
 ouvrent le suivi « Système de pseudonymisation ». Explicitement exclues :

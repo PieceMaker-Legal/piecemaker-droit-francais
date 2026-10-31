@@ -29,7 +29,7 @@ from model_config import (  # noqa: E402
     is_model_cached,
     write_refs_main,
 )
-from mineru_improved_1 import mineru_available  # noqa: E402
+from ocr_small_models import ocr_available  # noqa: E402
 
 
 # ============================================================================
@@ -168,16 +168,16 @@ def download_model(model_key: str, force: bool = False) -> bool:
 # ============================================================================
 
 
-def check_mineru() -> bool:
-    """Verify the mineru package is importable and runnable"""
-    if mineru_available():
-        log_json("MinerU available", tool="mineru", available=True)
-        log_plain("✅ MinerU available")
+def check_ocr() -> bool:
+    """Verify the Small OCR runtime and pinned models are available"""
+    if ocr_available():
+        log_json("PP-OCRv6 Small available", tool="ocr", available=True)
+        log_plain("✅ PP-OCRv6 Small available")
         return True
     log_json(
-        "MinerU not installed", tool="mineru", available=False, level="warning"
+        "PP-OCRv6 Small not installed", tool="ocr", available=False, level="warning"
     )
-    log_plain("⚠️  MinerU not installed (pip install 'mineru==4.0.11')")
+    log_plain("⚠️  PP-OCRv6 Small not installed (installer le modèle OCR dans les réglages)")
     return False
 
 
@@ -261,7 +261,7 @@ def run_warmup(
 
     # Check tools
     log_plain("🔧 Checking external tools...")
-    results["tools"]["mineru"] = check_mineru()
+    results["tools"]["ocr"] = check_ocr()
     log_plain("")
 
     # Summary
@@ -313,8 +313,7 @@ def get_status() -> Dict:
         except ImportError:
             status["dependencies"][pkg] = False
 
-    # Check mineru
-    status["tools"]["mineru"] = mineru_available()
+    status["tools"]["ocr"] = ocr_available()
 
     # Overall ready status: migration obligatoire, le cache historique ne rend
     # jamais l'anonymisation opérationnelle à lui seul.

@@ -9,8 +9,8 @@ import '@/modules/pseudonymization/pseudonymization.css';
 
 const MODELS: { id: PseudonymizationModelId; name: string; label: string; description: string; icon: typeof FileText }[] = [
   {
-    id: 'mineru', name: 'MinerU', label: 'Rendre vos documents lisibles', icon: FileText,
-    description: 'Vos documents sont convertis en fichiers Markdown, un format texte facile à lire et à analyser. MinerU reconnaît le texte des scans et des photos, et restitue leur mise en page et leurs tableaux.',
+    id: 'mineru', name: 'PP-OCRv6 Small', label: 'Rendre vos documents lisibles', icon: FileText,
+    description: 'Vos documents sont convertis en fichiers Markdown, un format texte facile à lire et à analyser. PP-OCRv6 Small lit les scans et les photos. Les coordonnées du texte servent ensuite à reconstituer les lignes et les tableaux.',
   },
   {
     id: 'gliner', name: 'GLiNER', label: 'Repérer les informations sensibles', icon: ScanSearch,

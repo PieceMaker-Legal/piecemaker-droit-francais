@@ -20,7 +20,7 @@ flowchart TD
   API --> LIST["listOriginals — pièces récursives"]
   LIST --> LOCK["runManagedPythonJob — un GLiNER à la fois"]
   LOCK --> PY["convert_and_scan_pipeline.py"]
-  PY --> MD["smart_converter.py — markitdown / MinerU"]
+  PY --> MD["smart_converter.py — markitdown / Small"]
   PY --> SCAN["scanner_worker.py — GLiNER2-PII"]
   SCAN --> IDX[".piecemaker/document-index.json — pièces et codes cités"]
   IDX --> SQL
@@ -56,32 +56,17 @@ retraitement de ces pièces.
 `runManagedPythonJob` lance `convert_and_scan_pipeline.py` (exclusivité GLiNER,
 budget RAM, nice, timeout).
 
-- Phase CONVERT : `smart_converter.py` (`auto` → markitdown si couche texte,
-  MinerU sinon).
-- MinerU absent : avant tout traitement (GLiNER non chargé), le pipeline
-  repère les pièces à convertir sans couche texte (PDF scannés, images).
-  Lancé avec `--ocr-missing ask` (fenêtre d'anonymisation, onglet Dossier), il
-  s'arrête en code 3 et émet `OCR_REQUIRED:{"files":[…]}` ; le travail passe
-  à l'état `ocr-required` et l'interface ouvre `OcrDecisionDialog` : installer
-  MinerU (`POST /configuration/install`, étape 04 avec
-  `PIECEMAKER_INSTALL_MINERU=1`, puis relance en `ask`) ou continuer sans OCR
-  (relance en `continue`). En `continue` (défaut, CLI compris), ces pièces
-  passent par markitdown et leur entrée `converted` porte `"ocr": "missing"` ;
-  dès que MinerU est disponible, elles sont reconverties puis réanalysées au
-  lancement suivant. MinerU est détecté par ses paquets (`mineru`,
-  `mineru_llama_cpp`) dans le venv qui exécute le pipeline.
-- MinerU 4 (`mineru_improved_1.py`) : niveau `standard`, un seul modèle de
-  lecture, MinerU2.5-Pro (GGUF via llama.cpp), avec ses petits modules ONNX de
-  mise en page et d'OCR. Le PDF est découpé en PDF d'une page, et chaque page
-  est convertie dans son propre sous-processus, avec un moteur bridé :
-  1 requête à la fois, contexte de 8192, 4 threads, CPU seul, fenêtre d'une
-  page. Le superviseur mesure l'empreinte mémoire réelle du sous-processus
-  (`phys_footprint` sous macOS, qui compte aussi la mémoire compressée ;
-  la RSS ailleurs). Il le tue au-delà de 35 % de la RAM totale
-  (`PIECEMAKER_MINERU_RAM_BYTES`) ou si la mémoire libre du poste passe sous
-  5 % (`PIECEMAKER_MINERU_FREE_FLOOR_BYTES`). Le sous-processus d'une page
-  s'arrête de lui-même si son superviseur disparaît. Mesure sur une page
-  scannée fictive, Mac de 8 Go : pic de 2,0 Go, environ 60 s par page.
+- Phase CONVERT : `smart_converter.py` conserve MarkItDown pour les documents textuels et utilise PP-OCRv6 Small pour les scans et images.
+- Small absent : `--ocr-missing ask` s'arrête avant de charger GLiNER, avec le code 3 et `OCR_REQUIRED:{"files":[…]}`.
+  La boîte de dialogue propose l'installation, puis reprend le traitement.
+  Le choix « Continuer sans OCR » conserve le marquage `"ocr": "missing"`.
+  Les pièces concernées sont reconverties et réanalysées lorsque Small est disponible.
+- Small utilise ONNX Runtime sur CPU, deux threads et un sous-processus par page.
+  Les PDF sont rendus à 300 DPI. Les coordonnées du JSON servent à reconstruire le Markdown avant le scan GLiNER.
+  Le superviseur arrête la page au-delà de 35 % de la RAM ou sous 10 % de mémoire disponible, avec un minimum de 512 Mio.
+  L'échec conserve le Markdown antérieur. Détails, modèles épinglés et limites : [OCR Small](ocr-small.md).
+- L'identifiant historique `mineru` des routes de configuration et l'ancien argument `--engine mineru` restent acceptés ; ils désignent Small.
+  L'installation utilise désormais `PIECEMAKER_INSTALL_OCR_SMALL=1` et ne lance plus MinerU.
 - Phase SCAN : `scanner_worker.py` charge GLiNER2-PII (`fastino/gliner2-privacy-filter-PII-multi`, commit `59894c087cb2923b01f337d4ee72f6ff84d5bdd6`) **une fois** depuis le dossier snapshot du cache Hub,
   puis scanne chaque Markdown (protocole JSON-line). Les cartes brutes
   (`*_sensitive_map.json`) restent dans un répertoire temporaire et sont

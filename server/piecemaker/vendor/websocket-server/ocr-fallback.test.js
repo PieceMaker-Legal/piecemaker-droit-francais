@@ -13,14 +13,14 @@ from pathlib import Path
 scripts, mineru_state = sys.argv[1], sys.argv[2]
 sys.path.insert(0, scripts)
 import convert_and_scan_pipeline as pipeline
-pipeline.mineru_available = lambda: mineru_state == "present"
+pipeline.ocr_available = lambda: mineru_state == "present"
 pipeline.start_scanner_worker = lambda: None
 pipeline.wait_for_worker_ready = lambda *args, **kwargs: True
 converted, scanned = [], []
 def convert(input_file, output_dir, engine=None, mode=None, lang=None, output_name=None):
     converted.append([Path(input_file).name, engine])
     if Path(input_file).name in os.environ.get("PM_FAIL_FILES", "").split(","):
-        return False, None, "MinerU failed with exit code 1 : Conversion arrêtée : fictif"
+        return False, None, "Small failed with exit code 1 : Conversion arrêtée : fictif"
     target = Path(output_dir) / f"{output_name or Path(input_file).stem}.md"
     target.write_text(f"converti par {engine}", encoding="utf-8")
     return True, str(target), None
@@ -124,7 +124,7 @@ function convertedEntries(folder) {
 
 const python = pythonWithPypdf();
 
-test('sans MinerU, le mode « ask » s’arrête avant toute conversion et nomme les seules pièces scannées', { skip: !python && 'Python avec pypdf introuvable' }, () => {
+test('sans Small, le mode « ask » s’arrête avant toute conversion et nomme les seules pièces scannées', { skip: !python && 'Python avec pypdf introuvable' }, () => {
   const folder = caseFolder();
   try {
     const run = runPipeline(python, folder, 'absent', ['--ocr-missing', 'ask']);
@@ -137,7 +137,7 @@ test('sans MinerU, le mode « ask » s’arrête avant toute conversion et nomme
   }
 });
 
-test('refusé, les scans passent par l’outil standard puis sont reconvertis et réanalysés une fois MinerU installé', { skip: !python && 'Python avec pypdf introuvable' }, () => {
+test('refusé, les scans passent par l’outil standard puis sont reconvertis et réanalysés une fois Small installé', { skip: !python && 'Python avec pypdf introuvable' }, () => {
   const folder = caseFolder();
   try {
     const refused = runPipeline(python, folder, 'absent', ['--ocr-missing', 'continue', '--skip-existing']);
@@ -167,7 +167,7 @@ test('un document qui ne se convertit pas est signalé, sans interrompre le trai
   try {
     const run = runPipeline(python, folder, 'present', ['--ocr-missing', 'continue'], ['scanne.pdf']);
     assert.equal(run.code, 0);
-    assert.deepEqual(run.failed, [{ file: 'scanne.pdf', reason: 'MinerU failed with exit code 1 : Conversion arrêtée : fictif' }]);
+    assert.deepEqual(run.failed, [{ file: 'scanne.pdf', reason: 'Small failed with exit code 1 : Conversion arrêtée : fictif' }]);
     assert.equal(run.converted.length, 3);
     assert.equal(run.scanned.length, 2);
     assert.match(run.scanned[0], /^texte-[0-9a-f]{16}\.md$/);

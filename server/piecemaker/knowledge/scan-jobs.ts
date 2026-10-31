@@ -15,7 +15,7 @@ export class OcrRequiredError extends Error {
   readonly files: string[];
 
   constructor(files: string[]) {
-    super('Pièces scannées : MinerU (OCR) n’est pas installé.');
+    super('Pièces scannées : PP-OCRv6 Small (OCR) n’est pas installé.');
     this.files = files;
   }
 }

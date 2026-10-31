@@ -131,7 +131,7 @@ export function OcrDecisionDialog() {
           <div className="space-y-2 px-5 py-4 text-sm">
             <p className="flex items-center gap-2 font-medium">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              Installation de MinerU…
+              Installation de PP-OCRv6 Small…
             </p>
             <p className="truncate text-xs text-muted-foreground" title={installation.progress}>{installation.progress}</p>
             <p className="text-xs text-muted-foreground">
@@ -142,17 +142,17 @@ export function OcrDecisionDialog() {
           <div className="space-y-4 px-5 py-4 text-sm">
             <p>
               {files.length} pièce{plural ? 's' : ''} de {projectNames} {plural ? 'sont des scans' : 'est un scan'} : le texte
-              n’y est qu’une image (PDF sans texte ou photo). Pour le lire, PieceMaker utilise MinerU, un moteur de
-              reconnaissance de caractères (OCR) qui fonctionne entièrement sur ce poste. MinerU n’est pas installé.
+              n’y est qu’une image (PDF sans texte ou photo). Pour le lire, PieceMaker utilise PP-OCRv6 Small, un moteur de
+              reconnaissance de caractères (OCR) qui fonctionne entièrement sur ce poste. PP-OCRv6 Small n’est pas installé.
             </p>
             <ul className="max-h-32 space-y-0.5 overflow-y-auto rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground">
               {listedFiles.map((file) => <li key={file} className="truncate" title={file}>{file}</li>)}
               {files.length > listedFiles.length && <li>… et {files.length - listedFiles.length} autre(s)</li>}
             </ul>
             <div className="space-y-1">
-              <p className="font-medium">Installer MinerU</p>
+              <p className="font-medium">Installer PP-OCRv6 Small</p>
               <p className="text-xs text-muted-foreground">
-                Téléchargement de plusieurs Go (bibliothèques et modèles) : de quelques minutes à une demi-heure selon
+                Téléchargement des modèles (environ 31 Mo), puis lecture sur ce poste. La durée dépend de
                 la connexion. L’anonymisation reprend ensuite d’elle-même, avec la lecture des scans.
               </p>
             </div>
@@ -162,11 +162,11 @@ export function OcrDecisionDialog() {
                 Les pièces scannées sont converties avec l’outil standard (MarkItDown), qui ne lit que le texte déjà
                 présent dans un fichier. Pour un scan, le résultat est vide ou presque : l’IA ne pourra pas lire ces
                 pièces et l’anonymisation n’y trouvera rien à masquer. Les autres pièces sont traitées normalement. Si
-                MinerU est installé plus tard, ces pièces seront reconverties à la prochaine anonymisation.
+                PP-OCRv6 Small est installé plus tard, ces pièces seront reconverties à la prochaine anonymisation.
               </p>
             </div>
             {installation.phase === 'failed' && (
-              <p className="text-xs text-destructive" role="alert">L’installation de MinerU a échoué : {installation.error}</p>
+              <p className="text-xs text-destructive" role="alert">L’installation de PP-OCRv6 Small a échoué : {installation.error}</p>
             )}
             {launchError && <p className="text-xs text-destructive" role="alert">{launchError}</p>}
           </div>
@@ -179,7 +179,7 @@ export function OcrDecisionDialog() {
               <Button variant="ghost" disabled={launching} onClick={() => void continueWithoutOcr()}>Continuer sans OCR</Button>
               <Button disabled={launching} onClick={() => void installAndResume()}>
                 {launching && <Loader2 className="h-4 w-4 animate-spin" />}
-                {installation.phase === 'failed' ? 'Réessayer l’installation' : 'Installer MinerU'}
+                {installation.phase === 'failed' ? 'Réessayer l’installation' : 'Installer PP-OCRv6 Small'}
               </Button>
             </>
           )}

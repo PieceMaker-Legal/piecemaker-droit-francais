@@ -14,7 +14,7 @@ const runningGliner = { id: 'job-gliner', component: 'gliner', state: 'running',
 const pausedGliner = { ...runningGliner, state: 'paused' };
 
 function serverState(glinerInstalled: boolean, jobs: unknown[], busy: boolean, paused: boolean) {
-  api.status.mockResolvedValue({ components: { gliner: { name: 'GLiNER2-PII', installed: glinerInstalled }, mineru: { name: 'MinerU · OCR', installed: true } } });
+  api.status.mockResolvedValue({ components: { gliner: { name: 'GLiNER2-PII', installed: glinerInstalled }, mineru: { name: 'PP-OCRv6 Small · OCR', installed: true } } });
   api.jobs.mockResolvedValue({ jobs, busy, paused });
 }
 

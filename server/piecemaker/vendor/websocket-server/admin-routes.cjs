@@ -668,9 +668,15 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
   const glinerReady = fs.existsSync(path.join(glinerDir, 'scanner_worker.py'))
     && hasPackage('gliner2')
     && glinerModelReady;
-  const mineruModels = path.join(process.env.MINERU_HOME || path.join(userHome, '.mineru'), 'models');
-  const mineruReady = hasPackage('mineru') && hasPackage('mineru_llama_cpp')
-    && ['MinerU-4_models_onnx', 'MinerU2.5-Pro-2605-1.2B-GGUF'].every((name) => fs.existsSync(path.join(mineruModels, name)));
+  const ocrCheckpoints = readJson(path.join(repoRoot, 'websocket-server', 'scripts', 'ocr-small-checkpoints.json'), { models: [] });
+  const smallReady = ['paddleocr', 'onnxruntime', 'pypdfium2', 'psutil'].every(hasPackage) && ocrCheckpoints.models.length === 2
+    && ocrCheckpoints.models.every((model) => {
+      const snapshot = path.join(huggingFaceHubCache, `models--${model.modelId.replace('/', '--')}`, 'snapshots', model.revision);
+      const marker = readJson(path.join(snapshot, '.piecemaker-ocr-small.json'), {});
+      return marker.modelId === model.modelId && marker.revision === model.revision && model.files.every((file) => {
+        try { return fs.statSync(path.join(snapshot, file.path)).size === file.size; } catch { return false; }
+      });
+    });
   const folders = listProjectCases().map((entry) => ({
     id: entry.id,
     name: entry.name,
@@ -721,10 +727,10 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
         engine: 'torch',
       },
       mineru: {
-        name: 'MinerU · OCR',
-        installed: mineruReady,
+        name: 'PP-OCRv6 Small · OCR',
+        installed: smallReady,
         optional: true,
-        summary: mineruReady
+        summary: smallReady
           ? 'OCR local · PDF scannés et images'
           : 'Optionnel · non installé',
       },
@@ -1626,7 +1632,7 @@ function startInstallJob(repoRoot, component) {
       PIECEMAKER_YES: '1',
       PIECEMAKER_SKIP_MODELS: '',
       NO_COLOR: '1',
-      ...(component === 'mineru' ? { PIECEMAKER_INSTALL_MINERU: '1' } : {}),
+      ...(component === 'mineru' ? { PIECEMAKER_INSTALL_OCR_SMALL: '1' } : {}),
     },
   });
   let outputTail = '';

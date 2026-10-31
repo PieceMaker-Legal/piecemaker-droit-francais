@@ -1,5 +1,7 @@
 # Faisabilité d'un environnement Python commun — 22 octobre 2026
 
+Depuis le 31 octobre 2026, [PP-OCRv6 Small remplace MinerU](../../ocr-small.md) dans le convertisseur et les nouveaux verrous Python. Les mesures historiques ci-dessous restent datées.
+
 La branche `MAJ-continue` utilise les verrous issus de cette étude pour construire les nouveaux runtimes Windows et macOS Apple Silicon. L'état de l'intégration et ses limites sont décrits dans [l'installation Electron](../../installation-app-electron.md). Les résultats ci-dessous restent ceux de l'étude de résolution, distincts d'une validation du paquet Windows modifié.
 
 Le pin applicatif est depuis passé à **Vibe 3.0.2** : les verrous actuels contiennent 200 paquets Windows et 197 macOS ARM64. Le [complément Mistral 3](../mistral-vibe-3.md) détaille les adaptations et les essais réels. Les calculs et tableaux historiques ci-dessous restent ceux de Vibe 2.25.0.

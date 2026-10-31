@@ -2,11 +2,11 @@
 
 ## Évolution sur MAJ-continue : Python commun et désinstallation native
 
-Les nouveaux paquets Windows et macOS Apple Silicon construisent désormais un environnement Python commun à partir des verrous `desktop-bootstrap/composants/windows-requirements.txt` et `macos-arm64-requirements.txt` : conversion, GLiNER, MinerU et Légifrance. Mistral utilise le [SDK JavaScript et la connexion des paramètres](mistral-sdk.md) ; Vibe n’est plus demandé par ces verrous. Les bibliothèques sont préparées en CI ; les poids des modèles restent téléchargés séparément à la demande. Cette archive sera plus volumineuse que l'ancien socle de conversion seul ; aucun gain de temps de première installation n'est encore mesuré.
+Les nouveaux paquets Windows et macOS Apple Silicon construisent désormais un environnement Python commun à partir des verrous `desktop-bootstrap/composants/windows-requirements.txt` et `macos-arm64-requirements.txt` : conversion, GLiNER, PP-OCRv6 Small et Légifrance. Mistral utilise le [SDK JavaScript et la connexion des paramètres](mistral-sdk.md) ; Vibe n’est plus demandé par ces verrous. Les bibliothèques sont préparées en CI ; les poids des modèles restent téléchargés séparément à la demande. Cette archive sera plus volumineuse que l'ancien socle de conversion seul ; aucun gain de temps de première installation n'est encore mesuré.
 
 La release fournit une empreinte des requirements dans `python-runtime.json` et dans le runtime. L'installation vérifie les marqueurs, les imports et l'archive avant de sélectionner le nouveau Python dans la configuration. Un ancien Python fonctionnel ne suffit pas à éviter la migration : les empreintes des requirements et de l’archive attendues par l’application sont comparées, y compris pour un changement d’interpréteur à dépendances identiques. Windows effectue aussi ce contrôle au démarrage ; macOS le fait lors du passage par le bootstrap d’installation ou de mise à jour. Une fois le nouveau Python enregistré, seuls restent ce runtime et celui qu'utilisait la version précédente : les runtimes plus anciens de `runtime-python/`, ainsi que l'ancien `venv` et son `python` de base, sont supprimés dès qu'ils ne sont plus l'un des deux. Rien n'est supprimé hors du dossier des composants.
 
-Légifrance utilise l'environnement commun sans créer son propre venv. Les actions GLiNER/MinerU n'installent ni ne désinstallent de bibliothèques dans ce runtime : elles agissent sur les modèles. Une bibliothèque manquante demande une réinstallation du composant de cette release. Le bootstrap macOS Apple Silicon récupère les métadonnées propres à sa plateforme, puis utilise le même installateur d’archive vérifiée que Windows. Le développement et macOS Intel conservent leur parcours historique ; le verrou Windows ne leur est pas appliqué. Le nouvel environnement commun Intel n’est pas qualifié.
+Légifrance utilise l'environnement commun sans créer son propre venv. Les actions GLiNER/Small n'installent ni ne désinstallent de bibliothèques dans ce runtime : elles agissent sur les modèles. Une bibliothèque manquante demande une réinstallation du composant de cette release. Le bootstrap macOS Apple Silicon récupère les métadonnées propres à sa plateforme, puis utilise le même installateur d’archive vérifiée que Windows. Le développement et macOS Intel conservent leur parcours historique ; le verrou Windows ne leur est pas appliqué. Le nouvel environnement commun Intel n’est pas qualifié.
 
 Sur macOS, les commandes sont également régénérées dans `bin/` après déplacement. L’archive Python est construite avec les liens déréférencés : le contrôle d’extraction continue de refuser les liens et les chemins sortant de `python/`. Le bootstrap prépare Python avant de remplacer l’application existante. Le workflow `piecemaker-macos-python.yml`, appelé par `release.yml`, construit et vérifie l’archive native ARM64 ; la publication npm et GitHub attend aussi ce résultat. Aucun nouveau serveur, installateur Electron ou fichier CloudCLI n’est ajouté.
 
@@ -172,7 +172,7 @@ Python dédié et le venv ; par défaut ils restent dans `PIECEMAKER_HOME`),
 11. **Composants Python, préparés avant l’étape 9 sur Mac** — les nouvelles
    releases ARM64 installent l’archive Python commune vérifiée avant de
    remplacer l’application. Le repli Intel conserve son venv historique.
-   Les modèles GLiNER et MinerU restent distincts des bibliothèques et sont
+   Les modèles GLiNER et Small restent distincts des bibliothèques et sont
    téléchargés à la demande, avec suivi dans « Système de pseudonymisation ».
 12. **Lancement** de l'application, au clic sur « Ouvrir PieceMaker » dans la
     fenêtre d'installation (automatique sans fenêtre).
@@ -276,8 +276,7 @@ si tout passe, 1 sinon.
   `encoder_config/config.json`), chargé depuis
   `snapshots/<revision>/` avec `local_files_only`.
 
-MinerU 4 (`mineru==4.0.11`, modèle MinerU2.5-Pro en GGUF et modules ONNX de
-mise en page et d'OCR) et GLiNER sont téléchargés automatiquement à
+PP-OCRv6 Small (deux modèles ONNX épinglés, environ 31 Mo) et GLiNER sont téléchargés automatiquement à
 l'ouverture de PieceMaker s'ils manquent, sans fenêtre automatique. Une icône
 en haut à gauche porte un point bleu tant que la préparation n'est pas terminée.
 Elle ouvre « Système de pseudonymisation » : rôle des outils, progression et
@@ -289,7 +288,8 @@ de les supprimer ou de les réinstaller (routes
 
 `<destination>` est `PIECEMAKER_COMPONENTS_HOME`, ou `PIECEMAKER_HOME` si cette
 variable est absente. Elle ne contient que l'interpréteur et le venv. Les
-poids GLiNER restent dans le cache Hugging Face, et ceux de MinerU dans `~/.mineru/models`.
+poids GLiNER et Small restent dans le cache Hugging Face. Les anciens modèles MinerU ne sont pas supprimés automatiquement.
+Le [parcours OCR Small](ocr-small.md) décrit les contrôles et les limites du remplacement.
 Le chemin du venv est enregistré dans `config.json` (`pythonPath`, `venvPath`) :
 c'est ce fichier que l'application lit. Déplacer le dossier de code ne demande
 que la ligne qui l'importe dans `desktop-bootstrap/lib/install.mjs` — il

@@ -14,25 +14,6 @@ test('la suppression de GLiNER vise les dépôts du modèle dans le cache Huggin
   assert.ok(targets.every((target) => path.basename(target).startsWith('models--')));
 });
 
-test('la suppression de MinerU suit mineru.json sans sortir du dossier personnel', () => {
-  const targets = localModelRemovalTargets('mineru', {
-    userHome: '/Users/ada',
-    env: { HF_HUB_CACHE: '/Users/ada/hub' },
-    mineruConfig: {
-      'models-dir': {
-        pipeline: '/Users/ada/autre/models--opendatalab--PDF-Extract-Kit-1.0/snapshots/abc',
-        vlm: '/opt/partage/models--opendatalab--MinerU/snapshots/def',
-      },
-    },
-  });
-  assert.deepStrictEqual(targets.sort(), [
-    path.join('/Users/ada', 'autre', 'models--opendatalab--PDF-Extract-Kit-1.0'),
-    path.join('/Users/ada', 'hub', 'models--opendatalab--PDF-Extract-Kit-1.0'),
-    path.join('/Users/ada', 'mineru.json'),
-    path.join('/Users/ada', '.mineru'),
-  ].sort());
-});
-
 test('un composant inconnu est refusé', () => {
   assert.throws(() => localModelRemovalTargets('ollama', { userHome: '/Users/ada', env: {} }), /inconnu/);
 });
@@ -53,18 +34,25 @@ test('supprime le modèle GLiNER du cache sans toucher au reste', async () => {
   }
 });
 
-test('supprimer les modèles MinerU ne désinstalle aucun paquet du Python commun', async () => {
-  const userHome = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-models-'));
-  const homeDir = path.join(userHome, 'components');
-  fs.mkdirSync(homeDir);
-  const python = path.join(homeDir, 'python.exe');
-  fs.writeFileSync(python, '');
-  fs.writeFileSync(path.join(homeDir, 'config.json'), JSON.stringify({ pythonPath: python, pythonRuntime: { kind: 'shared' } }));
-  fs.mkdirSync(path.join(userHome, '.mineru'));
+test('supprime seulement le snapshot Small provisionné, sans toucher aux autres modèles ni au Python', async () => {
+  const userHome = fs.mkdtempSync(path.join(os.tmpdir(), 'small-models-'));
+  const hub = path.join(userHome, 'hub');
+  const checkpoints = require('./vendor/websocket-server/scripts/ocr-small-checkpoints.json').models;
+  const snapshots = checkpoints.map(model => path.join(hub, `models--${model.modelId.replace('/', '--')}`, 'snapshots', model.revision));
+  const preserved = path.join(hub, 'models--PaddlePaddle--PP-OCRv6_small_det_onnx', 'snapshots', 'other-revision');
+  const python = path.join(userHome, 'python');
+  fs.writeFileSync(python, 'interpreter');
+  fs.mkdirSync(preserved, { recursive: true });
   try {
-    await removeLocalModel('mineru', { homeDir, userHome, env: {} });
-    assert.strictEqual(fs.existsSync(python), true);
-    assert.strictEqual(fs.existsSync(path.join(userHome, '.mineru')), false);
+    for (const snapshot of snapshots) fs.mkdirSync(snapshot, { recursive: true });
+    await assert.rejects(removeLocalModel('mineru', { userHome, env: { HF_HUB_CACHE: hub } }), /partagé/);
+    for (const [index, snapshot] of snapshots.entries()) {
+      fs.writeFileSync(path.join(snapshot, '.piecemaker-ocr-small.json'), JSON.stringify({ modelId: checkpoints[index].modelId, revision: checkpoints[index].revision }));
+    }
+    await removeLocalModel('mineru', { userHome, env: { HF_HUB_CACHE: hub } });
+    assert.ok(snapshots.every(snapshot => !fs.existsSync(snapshot)));
+    assert.ok(fs.existsSync(preserved));
+    assert.strictEqual(fs.readFileSync(python, 'utf8'), 'interpreter');
   } finally {
     fs.rmSync(userHome, { recursive: true, force: true });
   }

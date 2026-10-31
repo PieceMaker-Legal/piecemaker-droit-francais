@@ -65,17 +65,17 @@ it('explique les deux choix et relance sans OCR quand l’installation est refus
   expect(getTrackedAnonymizationJobs().map((entry) => entry.projectPath)).toEqual(['/cabinet/a']);
 });
 
-it('installe MinerU puis relance l’anonymisation avec OCR', async () => {
+it('installe PP-OCRv6 Small puis relance l’anonymisation avec OCR', async () => {
   pmPost.mockImplementation((path: string, body: { projectId: string }) => (path === '/knowledge/scan'
     ? scanResponse(body)
-    : Promise.resolve({ job: { id: 'install-1', component: 'mineru', state: 'running', progress: 'Collecting mineru', error: '' } })));
+    : Promise.resolve({ job: { id: 'install-1', component: 'mineru', state: 'running', progress: 'Téléchargement de Small', error: '' } })));
   pmGet.mockResolvedValue({ job: { id: 'install-1', component: 'mineru', state: 'done', progress: 'Installation terminée.', error: '' } });
   render(<OcrDecisionDialog />);
   announce();
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Installer MinerU' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Installer PP-OCRv6 Small' }));
 
-  expect(await screen.findByText('Collecting mineru')).toBeTruthy();
+  expect(await screen.findByText('Téléchargement de Small')).toBeTruthy();
   expect(pmPost).toHaveBeenCalledWith('/configuration/install', { component: 'mineru' });
   await waitFor(() => expect(scanBodies()).toEqual([{ projectId: 'dossier-a', ocrMissing: 'ask' }]), { timeout: 4000 });
   expect(pmGet).toHaveBeenCalledWith('/configuration/install', { id: 'install-1' });
@@ -88,9 +88,9 @@ it('laisse le choix de continuer sans OCR quand l’installation échoue', async
   render(<OcrDecisionDialog />);
   announce();
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Installer MinerU' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Installer PP-OCRv6 Small' }));
 
-  expect(await screen.findByText('L’installation de MinerU a échoué : pas de réseau')).toBeTruthy();
+  expect(await screen.findByText('L’installation de PP-OCRv6 Small a échoué : pas de réseau')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Réessayer l’installation' })).toBeTruthy();
   expect(scanBodies()).toEqual([]);
 
