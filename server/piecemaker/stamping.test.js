@@ -10,7 +10,7 @@ const applicationRoot = process.env.PIECEMAKER_STAMP_APP_ROOT;
 const require = createRequire(applicationRoot ? path.join(applicationRoot, 'package.json') : import.meta.url);
 const express = require('express');
 const { PDFDocument, PDFName, decodePDFRawStream } = require('pdf-lib');
-const { createStampingRouter } = require(applicationRoot ? path.join(applicationRoot, 'server/piecemaker/vendor/websocket-server/stamping-routes.cjs') : './vendor/websocket-server/stamping-routes.cjs');
+const { createStampingLocalRouter, createStampingRouter } = require(applicationRoot ? path.join(applicationRoot, 'server/piecemaker/vendor/websocket-server/stamping-routes.cjs') : './vendor/websocket-server/stamping-routes.cjs');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0ioAAAAASUVORK5CYII=', 'base64');
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
@@ -36,7 +36,6 @@ test('stamp routes save a stamp, create numbered PDFs and retain the original do
   const home = path.join(root, 'components');
   const folder = path.join(root, 'Dossier Exemple');
   const previousHome = process.env.PIECEMAKER_HOME;
-  const previousPort = process.env.PIECEMAKER_APP_PORT;
   fs.mkdirSync(home);
   fs.mkdirSync(folder);
   process.env.PIECEMAKER_HOME = home;
@@ -44,21 +43,20 @@ test('stamp routes save a stamp, create numbered PDFs and retain the original do
   const app = express();
   app.use(express.json({ limit: '2mb' }));
   app.use('/api/piecemaker', createStampingRouter({ homeDir: home }));
+  app.use('/local', createStampingLocalRouter({ homeDir: home, isLoopback: () => true }));
+  app.use('/distant', createStampingLocalRouter({ homeDir: home, isLoopback: () => false }));
   const server = http.createServer(app);
   t.after(async () => {
     await new Promise(resolve => server.close(resolve));
     if (previousHome === undefined) delete process.env.PIECEMAKER_HOME;
     else process.env.PIECEMAKER_HOME = previousHome;
-    if (previousPort === undefined) delete process.env.PIECEMAKER_APP_PORT;
-    else process.env.PIECEMAKER_APP_PORT = previousPort;
     fs.rmSync(root, { recursive: true, force: true });
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  process.env.PIECEMAKER_APP_PORT = String(server.address().port);
   const base = `http://127.0.0.1:${server.address().port}/api/piecemaker`;
-  const request = async (route, body, method = body === undefined ? 'GET' : 'POST') => {
+  const request = async (route, body) => {
     const response = await fetch(base + route, {
-      method, headers: { 'Content-Type': 'application/json' },
+      method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     return { status: response.status, body: await response.json() };
@@ -78,7 +76,7 @@ test('stamp routes save a stamp, create numbered PDFs and retain the original do
   const pieces = ['preuve.pdf', 'note.md', 'image.png'];
   if (process.env.PIECEMAKER_STAMP_OFFICE === '1') pieces.push(...await officeFixtures(folder));
   const hashes = pieces.map(file => hash(path.join(folder, file)));
-  const stamped = await request('/stamping', { documentId: 'dossier-exemple', folder, pieces });
+  const stamped = await request('/stamping', { folder, pieces });
   assert.equal(stamped.status, 200);
   assert.deepEqual(stamped.body.summary, { total: pieces.length, success: pieces.length, failure: 0 });
   assert.deepEqual(stamped.body.results.map(item => item.id), pieces);
@@ -93,12 +91,19 @@ test('stamp routes save a stamp, create numbered PDFs and retain the original do
     assert.match(text, new RegExp(`<${Buffer.from(String(index + 1)).toString('hex')}> Tj`));
     assert.equal(hash(path.join(folder, pieces[index])), hashes[index]);
   }
-  const last = await request(`/stamping/last?documentId=dossier-exemple&folder=${encodeURIComponent(folder)}`);
+  const last = await request(`/stamping/last?folder=${encodeURIComponent(folder)}`);
   assert.equal(last.status, 200);
   assert.deepEqual(last.body.results, stamped.body.results);
-  const rejected = await request('/stamping', { documentId: 'dossier-exemple', folder, pieces: ['../absent.pdf'] });
+  const rejected = await request('/stamping', { folder, pieces: ['../absent.pdf'] });
   assert.equal(rejected.body.summary.failure, 1);
   assert.equal(rejected.body.results[0].success, false);
-  assert.equal((await request('/tampon/delete', undefined, 'DELETE')).status, 200);
-  assert.equal((await request('/tampon/load')).status, 404);
+
+  const post = (scope) => fetch(`http://127.0.0.1:${server.address().port}/${scope}/stamping`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder, pieces: ['note.md'] }),
+  });
+  assert.equal((await post('distant')).status, 403);
+  const local = await post('local');
+  assert.equal(local.status, 200);
+  assert.equal((await local.json()).results[0].outputFileName, 'Pièce n°1.pdf');
 });

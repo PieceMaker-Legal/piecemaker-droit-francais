@@ -110,7 +110,7 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
             show({ kind: 'tabular-review', review: request.review ?? null, ...(request.draft ? { draft: request.draft } : {}) }, state.current, request.id);
             handled = true;
           } else if (request.tab === TAMPON_TAB) {
-            show({ kind: 'tampon' }, state.current, request.id);
+            show({ kind: 'tampon', reload: true }, state.current, request.id);
             handled = true;
           }
           if (handled) await acknowledgeWorkspacePanel(projectPath, request.id);

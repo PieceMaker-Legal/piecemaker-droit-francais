@@ -10,7 +10,6 @@ const {
   resolveCaseReference,
   validateSelectedCaseFolder,
 } = require('./case-registry.cjs');
-const { stampedPiecesDirectory } = require('./lib/stamping.cjs');
 const {
   COMMIT_USER_NAME_KEY,
   caseOverview,
@@ -1444,45 +1443,6 @@ function finishAdminTiming(res, metric, startedAt, details = {}) {
   }
 }
 
-/**
- * Dossiers tamponnables : un par `compilation_dossier_<documentId>.json` écrit
- * dans le dossier de sortie (voir server.cjs). `folder` est le dossier de
- * travail (celui du document Word), où les pièces tamponnées sont écrites dans
- * le sous-dossier « Pièces tamponnées ». Seules les métadonnées utiles au bordereau sont
- * renvoyées — jamais `texte_integral`, qui contient les pièces en clair.
- */
-// Les pièces à tamponner ne viennent plus d'un `compilation_dossier_*.json`
-// (produit par l'ancien chargement de dossier depuis Word) : la logique s'appuie
-// désormais sur les dossiers juridiques enregistrés, quelle que soit leur place
-// dans l'arborescence. Chaque dossier expose ses pièces originales — tout fichier
-// qui n'est ni `.md` ni `.json` —, identifiées par leur chemin relatif au dossier.
-async function listDossiers(repoRoot, homeDir) {
-  const dossiers = [];
-  for (const entry of listProjectCases()) {
-    let originals;
-    try {
-      originals = await listOriginals(entry.root);
-    } catch {
-      // Dossier déplacé/illisible pendant l'inventaire : on l'omet simplement.
-      continue;
-    }
-    if (!originals.length) continue;
-    dossiers.push({
-      documentId: entry.id,
-      informations: { intitule: entry.name },
-      folder: entry.root,
-      stampedDir: stampedPiecesDirectory(entry.root),
-      documents: originals.map((file) => ({
-        id: file.path,
-        filename: file.path,
-        type_document: (file.extension || '').replace(/^\./, '').toUpperCase(),
-        date_document: '',
-      })),
-    });
-  }
-  return dossiers;
-}
-
 const REVEAL_TARGETS = new Set(['files', 'terminal']);
 
 /**
@@ -2155,17 +2115,6 @@ function createAdminRouter({
     }
   });
 
-  router.get('/dossiers', async (req, res) => {
-    try {
-      res.json({
-        dossiers: await listDossiers(repoRoot, homeDir),
-        tamponConfigured: fs.existsSync(path.join(homeDir, 'tampon.png')),
-      });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
   router.get('/repository', async (req, res) => {
     const startedAt = performance.now();
     try {
@@ -2495,7 +2444,6 @@ module.exports = {
   installedPluginSkills,
   reapplyDeletedOfficialSkills,
   isLocalOrigin,
-  listDossiers,
   listManagedFiles,
   listMarketplaceConnectors,
   listPluginComponents,

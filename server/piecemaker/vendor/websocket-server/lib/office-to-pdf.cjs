@@ -1,5 +1,5 @@
 /**
- * Conversion d'une pièce vers PDF, préalable au tamponnage (`/api/stamping`).
+ * Conversion d'une pièce vers PDF, préalable au tamponnage (`/api/piecemaker/stamping`).
  *
  * Les formats bureautiques (Excel en tête) passent par LibreOffice en mode
  * headless — c'est l'outil retenu par les skills documentaires officielles

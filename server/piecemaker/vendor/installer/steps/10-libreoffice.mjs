@@ -2,7 +2,7 @@
  * Step 10 — LibreOffice, moteur de conversion des pièces vers PDF.
  *
  * Une pièce Excel ou Word doit être en PDF avant d'être tamponnée
- * (`POST /api/stamping` → `websocket-server/lib/office-to-pdf.cjs`). Les
+ * (`POST /api/piecemaker/stamping` → `websocket-server/lib/office-to-pdf.cjs`). Les
  * images et le texte brut sont rendus par `pdf-lib`, sans dépendance ; les
  * formats bureautiques exigent LibreOffice en mode headless, comme le font
  * les skills documentaires officielles d'Anthropic (`anthropics/skills`).

@@ -77,6 +77,34 @@ test('afficher vérifie le fichier, liste les volets et ouvre une cible', async 
   assert.equal(opened[2].tab, 'plugin:piecemaker-tampon');
 });
 
+test('bordereau tamponne dans l’ordre, liste les échecs et recharge le volet ouvert', async () => {
+  const calls = [];
+  const opened = [];
+  const deps = {
+    stampFn: async (body) => {
+      calls.push(body);
+      return {
+        message: 'Tamponnage terminé : 1 pièce(s) traitée(s), 1 erreur(s).',
+        results: [
+          { pieceNumber: 1, filename: 'contrat.pdf', success: true },
+          { pieceNumber: 2, filename: 'absent.pdf', success: false, error: 'Fichier introuvable : absent.pdf' },
+        ],
+      };
+    },
+    waitPanel: async () => true,
+    openPanel: async (body) => {
+      opened.push(body);
+      return { id: '1' };
+    },
+  };
+  const output = await run(['bordereau', 'contrat.pdf', 'absent.pdf'], { deps });
+  assert.deepEqual(calls[0], { folder: process.cwd(), pieces: ['contrat.pdf', 'absent.pdf'] });
+  assert.match(output, /^Pièce n°1 : contrat\.pdf\nPièce n°2 : ÉCHEC, Fichier introuvable : absent\.pdf\n/);
+  assert.match(output, /Déjà visible : Bordereau\./);
+  assert.deepEqual(opened, [{ project: process.cwd(), tab: 'plugin:piecemaker-tampon' }]);
+  await assert.rejects(() => run(['bordereau'], { deps }), /Indiquez les pièces/);
+});
+
 test('afficher --fermer ferme le volet sans le rouvrir', async () => {
   const closed = [];
   const open = new Set(['plugin:piecemaker-dossier']);

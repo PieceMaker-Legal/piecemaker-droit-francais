@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'afficher', 'tabular_review', 'tabular_review_index', 'raisonnement', 'suivi'];
+const TOOLS = ['conversion', 'sql', 'bordereau', 'afficher', 'tabular_review', 'tabular_review_index', 'raisonnement', 'suivi'];
 const REASONING_COMMANDS = ['consignes', 'verifier', 'lister'];
 const VOLETS = ['dossier', 'index', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer'];
@@ -21,6 +21,8 @@ export const HELP = `Usage: pm <outil> [options]
 
   conversion [--dossier PATH] [--force] [pièce…]
   sql [--dossier PATH] [--requete SQL]
+  bordereau [--dossier PATH] <pièce…>
+      tamponne les pièces dans cet ordre : Pièces tamponnées/Pièce n°N.pdf
   afficher [--fichier PATH] [--volet ${VOLETS.join('|')}] [--review FILE]
       sans cible : liste les volets ouverts
       --fermer : ferme le fichier ou le volet
@@ -204,6 +206,7 @@ async function defaultDeps(cwd) {
     reasoningInstructions: () => fs.readFileSync(path.join(vendor, '..', 'legal-code', 'instructions.md'), 'utf8'),
     suiviFn: client.runSuivi,
     tabularFn: client.runTabularReview,
+    stampFn: client.runStamping,
     execFn: (args, dir) => spawnPiecemaker(cliPath, args, dir),
     chronologieSql: volets.chronologieSql,
     reviewFile: volets.reviewFile,
@@ -367,6 +370,18 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     if (!target) return result;
     const request = { project: resolved, tab: target.tab, view: target.view };
     return withNotice(result, await followPanel(api, request, target));
+  }
+
+  if (tool === 'bordereau') {
+    const pieces = positional.slice(1);
+    if (!pieces.length) usage('Indiquez les pièces dans l’ordre du bordereau.');
+    const project = path.resolve(resolved);
+    const { results, message } = await api.stampFn({ folder: project, pieces });
+    const lines = results.map((entry) => `Pièce n°${entry.pieceNumber} : ${entry.success ? entry.filename : `ÉCHEC, ${entry.error}`}`);
+    const target = voletTarget(project, 'tampon');
+    const request = { project, tab: target.tab };
+    if (await api.waitPanel(target, 0)) await api.openPanel(request);
+    return withNotice([...lines, message].join('\n'), await followPanel(api, request, target));
   }
 
   if (tool === 'afficher') {

@@ -20,7 +20,7 @@ const { publishProjectSource } = require('./vendor/piecemaker-plugin/scripts/lib
 const protectionLibrary = require('./vendor/piecemaker-plugin/scripts/lib/protection.cjs');
 const { createProtectionBypassRouter } = require('./protection/routes.cjs');
 const { createActivationRouter } = require('./activation/index.cjs');
-const { createStampingRouter } = require('./vendor/websocket-server/stamping-routes.cjs');
+const { createStampingLocalRouter, createStampingRouter } = require('./vendor/websocket-server/stamping-routes.cjs');
 const { findSoffice } = require('./vendor/websocket-server/lib/office-to-pdf.cjs');
 
 /**
@@ -103,4 +103,8 @@ function createPieceMakerRouter({ getRuntimeStatus = defaultRuntimeStatus, anony
   return router;
 }
 
-module.exports = { createPieceMakerRouter, piecemakerHome, publishProjectSource, stopOriginalsJobs, VENDOR_ROOT };
+function createPieceMakerStampingLocalRouter(isLoopback) {
+  return createStampingLocalRouter({ homeDir: piecemakerHome(), isLoopback });
+}
+
+module.exports = { createPieceMakerRouter, createPieceMakerStampingLocalRouter, piecemakerHome, publishProjectSource, stopOriginalsJobs, VENDOR_ROOT };

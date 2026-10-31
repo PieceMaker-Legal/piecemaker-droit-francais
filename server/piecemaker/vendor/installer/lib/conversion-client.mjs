@@ -199,6 +199,11 @@ export async function runTabularReview(body) {
   return response.resultat;
 }
 
+export async function runStamping(body) {
+  await adoptRunningServerPort();
+  return requestJson({ method: 'POST', path: `${LOCAL_BASE}/stamping`, body, timeout: 600_000 });
+}
+
 export async function requestPanelOpen(body) {
   await adoptRunningServerPort();
   return requestJson({ method: 'POST', path: `${LOCAL_BASE}/open-panel`, body });

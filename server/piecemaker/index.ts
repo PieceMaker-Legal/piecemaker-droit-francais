@@ -66,6 +66,7 @@ type PieceMakerRuntimeStatus = {
 
 type PieceMakerVendorModule = {
   createPieceMakerRouter(options?: { getRuntimeStatus?: () => PieceMakerRuntimeStatus; anonymizer?: unknown; publishProjects?: () => void }): Router;
+  createPieceMakerStampingLocalRouter(isLoopback: (request: express.Request) => boolean): express.Router;
   piecemakerHome(): string;
   publishProjectSource(sourceId: string, folders: string[] | null, anonymizedFolders?: string[]): void;
   stopOriginalsJobs(): Promise<void>;
@@ -123,6 +124,7 @@ localRouter.use(createReasoningLocalRouter(reasoning, isLoopback));
 localRouter.use(createSuiviLocalRouter(suivi, isLoopback, board));
 localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
+localRouter.use(vendor.createPieceMakerStampingLocalRouter(isLoopback));
 localRouter.use(createTabularReviewLocalRouter({
   proxyOrigin: () => {
     const status = anonymizer.status() as { enabled?: boolean; listening?: boolean; origin?: string | null };

@@ -97,6 +97,12 @@ describe('autoPanelTarget', () => {
 });
 
 describe('panelShowDecision', () => {
+  it('recharge le Bordereau ouvert seulement à la demande de pm bordereau', () => {
+    const open = { document: null, panels: ['plugin:piecemaker-tampon'], focus: {} };
+    expect(panelShowDecision({ kind: 'tampon' }, open)).toBe('skip');
+    expect(panelShowDecision({ kind: 'tampon', reload: true }, open)).toBe('apply');
+  });
+
   const empty = { panels: [], document: null, focus: {} };
 
   it('n’écrase pas une analyse tabulaire plus précise', () => {

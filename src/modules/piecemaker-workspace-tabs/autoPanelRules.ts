@@ -8,7 +8,7 @@ export type AutoPanelTarget =
   | { kind: 'plan'; plan: PlanCall }
   | { kind: 'dossier'; view: DossierView }
   | { kind: 'tabular-review'; review: string | null; draft?: string; awaitDraft?: true }
-  | { kind: 'tampon' };
+  | { kind: 'tampon'; reload?: boolean };
 
 export type PanelSnapshot = {
   panels: readonly string[];
@@ -53,7 +53,7 @@ export function panelShowDecision(target: AutoPanelTarget, snapshot: PanelSnapsh
   }
   if (target.kind === 'plan') return 'apply';
   if (target.kind === 'tampon') {
-    return snapshot.panels.includes('plugin:piecemaker-tampon') ? 'skip' : 'apply';
+    return !target.reload && snapshot.panels.includes('plugin:piecemaker-tampon') ? 'skip' : 'apply';
   }
   if (target.kind === 'dossier') {
     if (!snapshot.panels.includes('plugin:piecemaker-dossier')) return 'apply';

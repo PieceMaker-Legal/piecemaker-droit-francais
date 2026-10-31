@@ -36,7 +36,7 @@ archivé. Pour un DOCX explicitement déprotégé, une représentation textuelle
 normalisée et compressée permet d’afficher un vrai diff ; le texte d’une pièce
 protégée n’est jamais extrait. Les restaurations n’écrasent aucun DOCX.
 L’historique, les restaurations et l’état de protection GLiNER sont accessibles
-dans l’interface locale `/admin/`.
+dans l’interface locale.
 
 ## Installation locale
 

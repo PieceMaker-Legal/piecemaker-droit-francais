@@ -34,7 +34,6 @@ type StampingPieceResult = {
 };
 type StampingResponse = {
   success: true;
-  legacy?: boolean;
   message: string;
   results: StampingPieceResult[];
 };
@@ -284,7 +283,7 @@ async function loadPieces(state: ViewState, legalCase: DossierCase): Promise<voi
   render(state);
   const [originals, last] = await Promise.allSettled([
     request<{ folder: { originals?: CaseOriginalPiece[] } }>('GET', `/repository/case?case=${encodeURIComponent(legalCase.path)}`),
-    request<StampingResponse>('GET', `/stamping/last?documentId=${encodeURIComponent(legalCase.path)}&folder=${encodeURIComponent(legalCase.location)}`),
+    request<StampingResponse>('GET', `/stamping/last?folder=${encodeURIComponent(legalCase.location)}`),
   ]);
   if (!isCurrent()) return;
   if (originals.status === 'fulfilled') {
@@ -295,9 +294,10 @@ async function loadPieces(state: ViewState, legalCase: DossierCase): Promise<voi
   } else {
     state.originalsError = messageOf(originals.reason);
   }
-  if (last.status === 'fulfilled' && !last.value.legacy && state.selectedOrder.length === 0) {
+  if (last.status === 'fulfilled' && state.selectedOrder.length === 0) {
     const known = new Set((state.originals ?? []).map((piece) => piece.path));
     state.selectedOrder = last.value.results.map((entry) => entry.id).filter((id) => known.has(id));
+    state.runResult = last.value;
   } else if (last.status === 'rejected' && statusOf(last.reason) !== 404) {
     state.runError = messageOf(last.reason);
   }
@@ -314,7 +314,6 @@ function stampPieces(state: ViewState): void {
   render(state);
   void request<StampingResponse>('POST', '/stamping', {
     pieces: state.selectedOrder,
-    documentId: legalCase.path,
     folder: legalCase.location,
   }).then((response) => {
     state.runResult = response;

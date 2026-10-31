@@ -1,6 +1,6 @@
 ---
 name: piecemaker
-description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, index des pièces, suivi du dossier (échéances), raisonnement juridique (écrire, compléter, vérifier, consulter le volet Raisonnement), volets et tabular review. Use when the user asks about case documents, deadlines or the case follow-up, the legal reasoning (raisonnement) or its panel, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
+description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, index des pièces, suivi du dossier (échéances), raisonnement juridique (écrire, compléter, vérifier, consulter le volet Raisonnement), bordereau et tampon, volets et tabular review. Use when the user asks about case documents, deadlines or the case follow-up, the legal reasoning (raisonnement) or its panel, the chronology, SQL on the dossier, converting pieces, stamping or numbering pieces, opening or closing a panel, or a tabular review.
 ---
 
 # PieceMaker
@@ -23,11 +23,11 @@ Avant d'utiliser un de ces outils, lisez sa référence dans `<cette-skill>/refe
 | Analyse de pièces, recherche de jurisprudence | `pm tabular_review` | `tabular.md` |
 | Lecture de toutes les pièces, chronologie, tri, dates des pièces | `pm tabular_review_index` | `index.md` |
 | Lire, pointer ou fermer un volet | `pm afficher` | `volets.md` |
-| Préparer un bordereau | `.piecemaker/last-stamping.json` | `bordereau.md` |
+| Tamponner et numéroter les pièces, bordereau | `pm bordereau` | `bordereau.md` |
 
 ## Volets
 
-Le geste ouvre le volet tout seul : `sql` (écriture), `tabular_review` (lister, preparer, lancer, ouvrir), `tabular_review_index`, un `.docx` écrit ou édité, `raisonnement` (volet Raisonnement du dossier). Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
+Le geste ouvre le volet tout seul : `sql` (écriture), `tabular_review` (lister, preparer, lancer, ouvrir), `tabular_review_index`, un `.docx` écrit ou édité, `raisonnement` (volet Raisonnement du dossier), `bordereau`. Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
 
 Un `.docx` s’ouvre dans la visionneuse tout seul. Conversion n’ouvre aucun volet.
 
