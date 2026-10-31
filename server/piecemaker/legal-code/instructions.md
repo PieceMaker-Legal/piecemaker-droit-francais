@@ -99,19 +99,6 @@ Le fichier est une table YAML 1.2. N'écris pas de commentaire. N'écris pas de 
 
 - `hypotheses` liste des cas supposés. Chaque cas donne des faits (true, false, dates, montants) et le résultat attendu (true, false ou montant).
 
-### Acte
-
-- Rédige l'acte seulement si on te le demande. Écris-le dans `acte`, dans ce même fichier. Jamais ailleurs.
-- Forme : `acte: [{ intitule, traite, texte: [paragraphes], sections: [...] }]`, dans l'ordre où l'acte se lit.
-- `traite` nomme le terme, la condition ou la valeur que la section développe. Une section de faits ou de demandes peut s'en passer.
-- Écris un paragraphe par élément de `texte`. `**gras**` et `*italique*` sont admis.
-- Tout passage entre « » reprend une citation du raisonnement sur ce que la section traite.
-- N'écris pas les `id`. Le vérificateur les attribue.
-- Une section `conflit` porte une retouche de l'avocat à trancher. Reporte la version retenue dans `texte`. Retire ensuite `conflit`.
-- `pm acte exporter --sortie fichier.docx --raisonnement <nom>` imprime l'acte.
-- `pm acte fusionner --fichier fichier.docx --raisonnement <nom>` reprend dans `acte` les retouches de l'avocat faites dans ce DOCX.
-- `pm acte importer --fichier fichier.docx --raisonnement <nom>` reprend un acte rédigé ailleurs. Transcris ensuite son raisonnement et ses `traite`.
-
 ## Exemple
 
 ```yaml
@@ -180,10 +167,4 @@ hypotheses:
       date de livraison: 2025-05-22
     attendu:
       pénalité due: false
-acte:
-  - intitule: Sur la pénalité de retard
-    traite: pénalité due
-    texte:
-      - Le contrat impose une « livraison sous trente jours ».
-      - "Société Beta SARL a été mise en demeure : le courrier « vous met en demeure »."
 ```

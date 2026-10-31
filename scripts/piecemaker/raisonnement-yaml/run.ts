@@ -3,7 +3,6 @@ import path from 'node:path';
 
 import { describeReasoning, parseReasoningDocument, verifyReasoning } from '../../../server/modules/piecemaker-reasoning/index.js';
 import type { ReasoningConnectors, SourceInfo } from '../../../server/modules/piecemaker-reasoning/index.js';
-import { runActeAction } from '../../../server/piecemaker/acte-files.js';
 
 const [folder, format, domain, command, ...options] = process.argv.slice(2);
 if (!folder || !['js', 'yaml'].includes(format)) throw new TypeError('Dossier et format js ou yaml requis.');
@@ -49,12 +48,9 @@ const verify = async () => {
 };
 if (domain === 'raisonnement' && command === 'verifier') {
   console.log(describeReasoning(await verify()));
-} else if (domain === 'acte' && ['exporter', 'fusionner', 'importer'].includes(command)) {
-  const option = (name: string) => { const at = options.indexOf(name); return at < 0 ? undefined : options[at + 1]; };
-  console.log(JSON.stringify(await runActeAction({ cwd: root, commande: command, sortie: option('--sortie'), fichier: option('--fichier'), modele: option('--modele') }, verify), null, 2));
 } else if (domain === 'raisonnement' && command === 'inspecter') {
   const document = parseReasoningDocument(await readFile(file, 'utf8'), selected);
   console.log(JSON.stringify(document.value, null, 2));
 } else {
-  throw new TypeError('pm raisonnement verifier ou pm acte exporter/fusionner/importer attendu.');
+  throw new TypeError('pm raisonnement verifier attendu.');
 }

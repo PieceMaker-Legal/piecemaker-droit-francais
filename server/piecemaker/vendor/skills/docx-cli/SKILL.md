@@ -42,8 +42,6 @@ sans attendre qu’on vous le demande. Après le succès de la commande `docx` :
 
 `FICHIER` est le même chemin que celui que vous venez d’écrire.
 
-Pour lier un DOCX à un raisonnement, ou contrôler un DOCX lié : `pm docx`, voir le skill `piecemaker`.
-
 ## 1. The contract is `--help` — start there
 
 The help text is authoritative and versioned with the binary. This skill is thin

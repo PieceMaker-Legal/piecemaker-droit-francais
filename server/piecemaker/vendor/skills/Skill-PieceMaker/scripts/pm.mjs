@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'afficher', 'tabular_review', 'tabular_review_index', 'raisonnement', 'suivi', 'docx', 'acte'];
+const TOOLS = ['conversion', 'sql', 'afficher', 'tabular_review', 'tabular_review_index', 'raisonnement', 'suivi'];
 const REASONING_COMMANDS = ['consignes', 'verifier', 'lister'];
 const VOLETS = ['dossier', 'index', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer'];
@@ -44,13 +44,6 @@ export const HELP = `Usage: pm <outil> [options]
       lit un document du tableau des dossiers (ex. projects/cabinet/requests)
   suivi ecrire <chemin> --json '{...}'
       écrit un document du tableau des dossiers
-  docx preparer --fichier FILE.docx --liens FILE.json --sortie FILE.docx [--modele FILE.yaml]
-  docx verifier|comparer --fichier FILE.docx [--modele FILE.yaml]
-  docx extraire --fichier FILE.docx --sortie FILE.yaml
-      chemins relatifs au dossier ; modèle initial : le raisonnement du dossier, s'il est unique
-  acte exporter --sortie FILE.docx [--modele MODELE.docx] [--raisonnement NOM]
-  acte fusionner|importer --fichier FILE.docx [--raisonnement NOM]
-      l'acte rédigé vit dans .piecemaker/raisonnements/NOM.yaml ; le DOCX en est l'impression
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {
@@ -210,8 +203,6 @@ async function defaultDeps(cwd) {
     reasoningFn: client.runReasoning,
     reasoningInstructions: () => fs.readFileSync(path.join(vendor, '..', 'legal-code', 'instructions.md'), 'utf8'),
     suiviFn: client.runSuivi,
-    docxFn: client.runDocxReasoning,
-    acteFn: client.runActe,
     tabularFn: client.runTabularReview,
     execFn: (args, dir) => spawnPiecemaker(cliPath, args, dir),
     chronologieSql: volets.chronologieSql,
@@ -470,38 +461,6 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       return withNotice(text, await followPanel(api, { project, tab: target.tab, review, draft: target.draft }, target));
     }
     return text;
-  }
-
-  if (tool === 'docx') {
-    const commande = positional[1];
-    if (!['preparer', 'verifier', 'comparer', 'extraire'].includes(commande)) usage('docx attend preparer, verifier, comparer ou extraire.');
-    if (!flags.fichier || flags.fichier === true) usage('Indiquez --fichier FILE.docx.');
-    if (commande === 'preparer' && (!flags.liens || flags.liens === true)) usage('Indiquez --liens FILE.json.');
-    if (['preparer', 'extraire'].includes(commande) && (!flags.sortie || flags.sortie === true)) usage('Indiquez une nouvelle --sortie.');
-    const input = { commande, cwd: path.resolve(resolved), fichier: String(flags.fichier) };
-    for (const flag of ['liens', 'sortie', 'modele']) if (flags[flag] !== undefined) {
-      if (flags[flag] === true) usage(`Indiquez une valeur pour --${flag}.`);
-      input[flag] = String(flags[flag]);
-    }
-    const result = await api.docxFn(input);
-    if (commande !== 'preparer') return JSON.stringify(result);
-    const document = path.resolve(input.cwd, result.fichier);
-    return withNotice(JSON.stringify(result), await followPanel(api, { project: input.cwd, tab: 'files', document }, { cwd: input.cwd, tab: 'files', document }));
-  }
-
-  if (tool === 'acte') {
-    const commande = positional[1];
-    if (!['exporter', 'fusionner', 'importer'].includes(commande)) usage('acte attend exporter, fusionner ou importer.');
-    const flag = commande === 'exporter' ? 'sortie' : 'fichier';
-    if (!flags[flag] || flags[flag] === true) usage(`Indiquez --${flag} FILE.docx.`);
-    if (flags.modele === true) usage('Indiquez une valeur pour --modele.');
-    if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
-    const input = { commande, cwd: path.resolve(resolved), [flag]: String(flags[flag]), ...(flags.modele ? { modele: String(flags.modele) } : {}), ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
-    const result = await api.acteFn(input);
-    const text = typeof result.verification === 'string' ? `${JSON.stringify({ ...result, verification: undefined })}\n${result.verification}` : JSON.stringify(result);
-    if (commande !== 'exporter') return withNotice(text, await followPanel(api, { project: input.cwd, tab: 'plugin:piecemaker-raisonnement' }, { cwd: input.cwd, tab: 'plugin:piecemaker-raisonnement' }));
-    const document = path.resolve(input.cwd, result.fichier);
-    return withNotice(text, await followPanel(api, { project: input.cwd, tab: 'files', document }, { cwd: input.cwd, tab: 'files', document }));
   }
 
   if (tool === 'raisonnement') {

@@ -1,6 +1,6 @@
 ---
 name: piecemaker
-description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, index des pièces, suivi du dossier (échéances), raisonnement juridique (écrire, compléter, vérifier, consulter le volet Raisonnement), volets, tabular review et liaison DOCX au raisonnement. Use when the user asks about case documents, deadlines or the case follow-up, the legal reasoning (raisonnement) or its panel, linked DOCX reasoning, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
+description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, index des pièces, suivi du dossier (échéances), raisonnement juridique (écrire, compléter, vérifier, consulter le volet Raisonnement), volets et tabular review. Use when the user asks about case documents, deadlines or the case follow-up, the legal reasoning (raisonnement) or its panel, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
 ---
 
 # PieceMaker
@@ -20,7 +20,6 @@ Avant d'utiliser un de ces outils, lisez sa référence dans `<cette-skill>/refe
 | --- | --- | --- |
 | Échéances, fiche `matter` | `pm suivi` | `suivi.md` |
 | Demande transmise par le tableau, état des dossiers | `pm suivi lire`, `pm suivi ecrire` | `tableau.md` |
-| Lier un DOCX existant à un raisonnement | `pm docx` | `docx-lie.md` |
 | Analyse de pièces, recherche de jurisprudence | `pm tabular_review` | `tabular.md` |
 | Lecture de toutes les pièces, chronologie, tri, dates des pièces | `pm tabular_review_index` | `index.md` |
 | Lire, pointer ou fermer un volet | `pm afficher` | `volets.md` |
