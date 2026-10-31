@@ -13,6 +13,7 @@ from tools.query_parser import QueryCriteria, normalize_article_reference, parse
 
 
 LIMITE_RESULTATS = 500
+PLAFOND_JUDILIBRE = 1000
 LEGIFRANCE_PAGE = 100
 JUDILIBRE_PAGE = 50
 MAX_REQUETES_JUDILIBRE = 32
@@ -702,7 +703,9 @@ def collecter(plan: Dict[str, Any], client: Any = None) -> Dict[str, Any]:
         for e in etapes
     ]
     total = sum((e["legifrance"] or 0) + (e["judilibre"] or 0) for e in etapes)
-    if total > LIMITE_RESULTATS:
+    total_legifrance = sum(e["legifrance"] or 0 for e in etapes)
+    total_judilibre = sum(e["judilibre"] or 0 for e in etapes)
+    if total_legifrance > LIMITE_RESULTATS or total_judilibre > PLAFOND_JUDILIBRE:
         raise RechercheTropLarge(total, comptes)
 
     legifrance: List[Dict[str, Any]] = []
@@ -731,7 +734,7 @@ def collecter(plan: Dict[str, Any], client: Any = None) -> Dict[str, Any]:
                                 vus.add(resultat["id"])
                                 resultat["clauses"] = etape["criteres"].clauses
                                 judilibre.append(resultat)
-                        if len(lot) < JUDILIBRE_PAGE or not reponse.get("next_page"):
+                        if not lot or not reponse.get("next_page"):
                             break
                         page += 1
             except Exception as erreur:
@@ -746,6 +749,10 @@ def collecter(plan: Dict[str, Any], client: Any = None) -> Dict[str, Any]:
             fusionnees += 1
         else:
             restants.append(resultat)
+
+    decisions = len(legifrance) + len(restants)
+    if decisions > LIMITE_RESULTATS:
+        raise RechercheTropLarge(decisions, comptes)
 
     ecartees = 0
     a_controler = [r for r in restants if a_verifier(r["clauses"])]

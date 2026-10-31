@@ -103,7 +103,7 @@ MCP_TOOLS = [
             "fusionne les doublons (même juridiction, même date, même numéro). Légifrance n'a plus de "
             "décisions de cours d'appel depuis 2023 ni de première instance depuis 2024 : Judilibre "
             "les fournit. Le Conseil d'État et les CAA ne sont que dans Légifrance. Au-delà de 500 "
-            "résultats cumulés, la recherche est refusée. Les résultats sont triés du plus récent au "
+            "décisions après fusion des doublons, la recherche est refusée. Les résultats sont triés du plus récent au "
             "plus ancien ; `consulter_decision` lit ensuite un identifiant Légifrance ou Judilibre."
         ),
         "inputSchema": {

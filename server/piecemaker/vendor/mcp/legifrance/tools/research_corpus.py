@@ -102,7 +102,7 @@ def _collect(client: Any, args: Dict[str, Any], query: str) -> Tuple[Dict[str, A
         raise ValueError(str(error))
     except recherche.RechercheTropLarge as too_broad:
         raise ValueError(
-            f"La formulation produit {too_broad.total} résultats cumulés pour les juridictions "
+            f"La formulation produit {too_broad.total} résultats pour les juridictions "
             f"demandées, au-delà de la limite absolue de {MAX_CUMULATIVE_RESULTS}. "
             "Aucun téléchargement n'a été lancé. Reformulez avec des guillemets pour une expression "
             "exacte, des mots juridiques choisis et les opérateurs ET/OU ; incluez si possible "
