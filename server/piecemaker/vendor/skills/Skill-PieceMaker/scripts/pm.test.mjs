@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import * as volets from '../../../mcp/piecemaker/volets.mjs';
 import { CASSATION_MATIERES, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES, VOLETS } from '../../../mcp/piecemaker/volets.mjs';
 import { findVendor, parseArgv, run, sessionDossier } from './pm.mjs';
 
@@ -19,7 +20,7 @@ test('parseArgv sépare drapeaux, booléens et positionnels', () => {
     flags: { force: true },
     positional: ['conversion', 'contrat.pdf'],
   });
-  assert.equal(parseArgv(['index', 'modifier', '--date', '']).flags.date, '');
+  assert.equal(parseArgv(['tabular_review_index', 'modifier', '--date', '']).flags.date, '');
   assert.equal(parseArgv(['--help']).flags.help, true);
 });
 
@@ -33,7 +34,7 @@ test('findVendor résout le vendor voisin et PIECEMAKER_VENDOR', () => {
   fs.rmSync(isolated, { recursive: true, force: true });
 });
 
-test('sql et index passent par sqlFn', async () => {
+test('sql et tabular_review_index passent par sqlFn', async () => {
   const calls = [];
   const deps = {
     sqlFn: async (input) => {
@@ -47,7 +48,7 @@ test('sql et index passent par sqlFn', async () => {
   assert.deepEqual(calls[0], { requete: 'SELECT label FROM piecemaker_nodes', cwd: process.cwd() });
   const written = await run(['sql', '--requete', "UPDATE piecemaker_nodes SET label='x' WHERE id='p:1'"], { deps });
   assert.match(written, /^ok\nDéjà visible : Dossier \(vue générale\)\.\n?$/);
-  const chrono = await run(['index', 'modifier', '--piece', 'doc:1', '--date', '2024-03-01'], { deps });
+  const chrono = await run(['tabular_review_index', 'modifier', '--piece', 'doc:1', '--date', '2024-03-01'], { deps });
   assert.equal(calls[2].requete, 'SQL:modifier:doc:1:2024-03-01');
   assert.match(chrono, /visible : Dossier \(index\)\./i);
 });
@@ -103,6 +104,7 @@ test('tabular_review ouvre localement et transmet le reste', async () => {
   const calls = [];
   const opened = [];
   const deps = {
+    refuseIndex: volets.refuseIndex,
     reviewFile: (root, fichier) => {
       const name = path.basename(String(fichier ?? ''));
       if (!fs.existsSync(path.join(root, 'Tabular Review', name))) throw new Error(`introuvable : ${name}`);
@@ -129,15 +131,44 @@ test('tabular_review ouvre localement et transmet le reste', async () => {
   ], { deps });
   assert.match(prepared, /"projet":"p-1"/);
   assert.match(prepared, /visible : Analyse tabulaire/i);
-  assert.deepEqual(calls[0].recherche, { query: 'faute', sources: ['cassation'] });
+  assert.deepEqual(calls.find((call) => call.action === 'preparer').recherche, { query: 'faute', sources: ['cassation'] });
   assert.equal(await run(['tabular_review', 'documents', '--dossier', dossier], { deps }), 'Pièces/bail.md');
   fs.rmSync(dossier, { recursive: true, force: true });
+});
+
+test('tabular_review_index garde l’index dans l’onglet Dossier', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-skill-index-'));
+  const calls = [];
+  const opened = [];
+  const deps = {
+    tabularIndex: volets.tabularIndex,
+    refuseIndex: volets.refuseIndex,
+    waitPanel: async () => opened.length > 0,
+    openPanel: async (body) => {
+      opened.push(body);
+      return { id: '1' };
+    },
+    tabularFn: async (input) => {
+      calls.push(input);
+      if (input.action === 'index') return { fichier: 'index.json' };
+      if (input.action === 'lister') return { analyses: [{ fichier: 'index.json', index: true }] };
+      return { ok: true };
+    },
+  };
+  const read = await run(['tabular_review_index', 'lire', '--dossier', dossier], { deps });
+  assert.equal(calls.at(-1).fichier, 'index.json');
+  assert.equal(opened[0].tab, 'plugin:piecemaker-dossier');
+  assert.equal(opened[0].view, 'chronology');
+  assert.match(read, /visible : Dossier \(index\)\./i);
+  await assert.rejects(() => run(['tabular_review_index', 'lancer', '--dossier', dossier], { deps }), /déjà lancé/);
+  await assert.rejects(() => run(['tabular_review', 'relancer', '--fichier', 'Tabular Review/index.json', '--dossier', dossier], { deps }), /onglet Dossier/);
+  await assert.rejects(() => run(['tabular_review', 'classement', '--dossier', dossier], { deps }), /action connue/);
 });
 
 test('SKILL.md documente toute la surface d’interface', () => {
   const skill = fs.readFileSync(path.join(HERE, '..', 'SKILL.md'), 'utf8');
   const required = [
-    'conversion', 'sql', 'afficher', 'index', 'tabular_review',
+    'conversion', 'sql', 'afficher', 'tabular_review', 'tabular_review_index',
     '--fichier', '--volet', '--review', '--fermer', '--force', '--requete', '--dossier',
     'Visible',
     'lister', 'modifier', '--piece', '--date', '--libelle',

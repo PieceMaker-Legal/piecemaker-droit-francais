@@ -23,7 +23,7 @@ const RESEARCH_POLL_MS = 1000;
 const RESEARCH_RUNNING = new Set(['counting', 'listing', 'downloading']);
 const CONCURRENCY = 3;
 const INDEX_REQUEST = /chronolog|tri des pi[eè]ces|^index$|(index|inventaire) (des pi[eè]ces|du dossier)|inventaire int[eé]gral|(scan|revue|lecture) int[eé]grale?/i;
-const SINGLE_INDEX = 'Une seule analyse lit toutes les pièces du dossier, pour la chronologie et le tri : complétez celle-ci.';
+const SINGLE_INDEX = 'Une seule analyse lit toutes les pièces du dossier, pour la chronologie et le tri : complétez-la avec tabular_review_index, elle s’affiche dans l’onglet Dossier.';
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
@@ -113,7 +113,7 @@ async function prepare(project: string, input: Input, launchers: AssistantLaunch
   const template = input.modele ? findTemplate(input.modele === LEGACY_INDEX_NAME ? INDEX_TEMPLATE_NAME : input.modele) : null;
   const indexed = previous && isCaseIndex(previous);
   const wantsIndex = !mode && (template?.name === INDEX_TEMPLATE_NAME || (template && hasActions(template.columns)) || INDEX_REQUEST.test(text(input.nom)));
-  if (wantsIndex && !indexed) return { ...await caseIndex(project, launchers), suite: SINGLE_INDEX };
+  if (wantsIndex && !indexed) return { ...await caseIndex(project, launchers), index: true, suite: SINGLE_INDEX };
   const questions = input.questions === undefined ? null : columns(input.questions);
   const chosenColumns = template || questions ? [...(template?.columns ?? []), ...(questions ?? [])] : previous?.columns ?? [];
   const nextColumns = indexed && !classifyColumn(chosenColumns) ? [...chosenColumns, classificationColumn(readClassification(project))] : chosenColumns;
@@ -307,7 +307,7 @@ export async function assistant(body: Input, launchers: AssistantLaunchers): Pro
   if (action === 'colonnes') return editColumns(project, body, launchers);
   if (action === 'classement') {
     const file = reviewName(project, body.fichier);
-    if (!isCaseIndex(readReview(project, file))) throw new UserError('Le classement du dossier appartient à l’index : utilisez l’action index.');
+    if (!isCaseIndex(readReview(project, file))) throw new UserError('Le classement du dossier appartient à l’index : utilisez tabular_review_index.');
     await addClassification(project, file);
     return readOut(project, file, launchers);
   }

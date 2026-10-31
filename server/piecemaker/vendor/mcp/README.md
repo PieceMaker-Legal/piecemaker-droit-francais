@@ -7,7 +7,8 @@ l’enregistrement Claude en portée utilisateur.
 
 - `piecemaker` (`piecemaker/server.mjs`) — conservé pour un client MCP
   sans shell ; plus déclaré par défaut. `conversion`, `sql`, `afficher`,
-  `index`, `tabular_review`.
+  `tabular_review`,
+  `tabular_review_index`.
 - `legifrance` (`legifrance/server.mjs`) — runtime Python vendu
   (`mcp_stdio_server.py`), venv isolé dans `~/.piecemaker/mcp-legifrance/`.
   Identifiants PISTE : `~/.config/mcp-legifrance/.env`. Déclaré aussi dans

@@ -6,11 +6,12 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'afficher', 'index', 'tabular_review', 'raisonnement', 'suivi', 'docx', 'acte'];
+const TOOLS = ['conversion', 'sql', 'afficher', 'tabular_review', 'tabular_review_index', 'raisonnement', 'suivi', 'docx', 'acte'];
 const REASONING_COMMANDS = ['consignes', 'verifier', 'lister'];
 const VOLETS = ['dossier', 'index', 'tabular-review', 'tampon'];
-const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'index', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer'];
-const REVIEW_FOLLOWED = ['index', 'colonnes', 'classement', 'arborescence', 'relancer'];
+const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer'];
+const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
+const INDEX_ACTIONS = ['lister', 'modifier', 'ouvrir', 'preparer', 'lancer', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer'];
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
 const BOOLEAN_FLAGS = new Set(['force', 'fermer']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
@@ -23,9 +24,10 @@ export const HELP = `Usage: pm <outil> [options]
   afficher [--fichier PATH] [--volet ${VOLETS.join('|')}] [--review FILE]
       sans cible : liste les volets ouverts
       --fermer : ferme le fichier ou le volet
-  index lister [--dossier NOM]
-  index modifier --piece ID [--date AAAA-MM-JJ] [--libelle TEXT] [--dossier NOM]
   tabular_review ${REVIEW_ACTIONS.join('|')}
+  tabular_review_index ${INDEX_ACTIONS.join('|')}
+      toujours dans l’onglet Dossier ; fichier et projet déduits
+      lister [--dossier NOM] ; modifier --piece ID [--date AAAA-MM-JJ] [--libelle TEXT] [--dossier NOM]
       [--dossier PATH] [--fichier FILE] [--projet ID] [--mode analyse|recherche]
       [--nom TEXT] [--modele ID] [--description TEXT] [--questions JSON]
       [--documents a,b] [--recherche JSON] [--ia claude|codex|mistral] [--modele-ia TEXT]
@@ -214,6 +216,8 @@ async function defaultDeps(cwd) {
     execFn: (args, dir) => spawnPiecemaker(cliPath, args, dir),
     chronologieSql: volets.chronologieSql,
     reviewFile: volets.reviewFile,
+    tabularIndex: volets.tabularIndex,
+    refuseIndex: volets.refuseIndex,
     describePanels: (dir) => panels.describeOpenPanels(dir, panelsPath),
     exists: (file) => fs.existsSync(file),
     openPanel: (body) => client.requestPanelOpen(body),
@@ -322,6 +326,25 @@ async function followPanel(api, request, target) {
   return alreadyOpen ? `Déjà visible : ${label}.` : `Visible : ${label}.`;
 }
 
+function reviewInput(flags) {
+  return {
+    fichier: flags.fichier !== true ? flags.fichier : undefined,
+    projet: flags.projet !== true ? flags.projet : undefined,
+    mode: flags.mode !== true ? flags.mode : undefined,
+    nom: flags.nom !== true ? flags.nom : undefined,
+    modele: flags.modele !== true ? flags.modele : undefined,
+    description: flags.description !== true ? flags.description : undefined,
+    questions: parseJson(flags.questions, 'questions'),
+    dossiers: parseJson(flags.dossiers, 'dossiers'),
+    documents: flags.documents && flags.documents !== true
+      ? String(flags.documents).split(',').map((item) => item.trim()).filter(Boolean)
+      : undefined,
+    recherche: parseJson(flags.recherche, 'recherche'),
+    ia: flags.ia !== true ? flags.ia : undefined,
+    modele_ia: flags.modele_ia !== true ? flags.modele_ia : undefined,
+  };
+}
+
 export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   const { flags, positional } = parseArgv(argv);
   if (flags.help && !positional.length) return HELP;
@@ -394,27 +417,31 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     return alreadyOpen ? `Déjà affiché : ${label}` : `Volet affiché : ${label}`;
   }
 
-  if (tool === 'index') {
+  if (tool === 'tabular_review_index') {
     const action = positional[1];
-    if (action !== 'lister' && action !== 'modifier') usage('index attend lister ou modifier.');
-    const result = await api.sqlFn({
-      requete: api.chronologieSql({
-        action,
-        dossier: flags.dossier && flags.dossier !== true ? flags.dossier : undefined,
-        piece: flags.piece,
-        date: flags.date === true ? undefined : flags.date,
-        libelle: flags.libelle === true ? undefined : flags.libelle,
-      }),
-      cwd,
-    });
-    const target = { cwd: resolved, tab: 'plugin:piecemaker-dossier', view: 'chronology' };
-    return withNotice(result, await followPanel(api, { project: resolved, tab: target.tab, view: target.view }, target));
+    if (!INDEX_ACTIONS.includes(action)) usage('tabular_review_index attend une action connue.');
+    const project = path.resolve(resolved);
+    const target = voletTarget(project, 'index');
+    const result = action === 'lister' || action === 'modifier'
+      ? await api.sqlFn({
+        requete: api.chronologieSql({
+          action,
+          dossier: flags.dossier && flags.dossier !== true ? flags.dossier : undefined,
+          piece: flags.piece,
+          date: flags.date === true ? undefined : flags.date,
+          libelle: flags.libelle === true ? undefined : flags.libelle,
+        }),
+        cwd,
+      })
+      : JSON.stringify(await api.tabularIndex(api.tabularFn, { ...reviewInput(flags), action, project }));
+    return withNotice(result, await followPanel(api, { project, ...target }, target));
   }
 
   if (tool === 'tabular_review') {
     const action = positional[1];
     if (!REVIEW_ACTIONS.includes(action)) usage('tabular_review attend une action connue.');
     const project = path.resolve(resolved);
+    await api.refuseIndex(api.tabularFn, project, { fichier: flags.fichier, projet: flags.projet });
     if (action === 'ouvrir') {
       const draft = flags.projet && flags.projet !== true ? String(flags.projet) : '';
       const name = draft ? undefined : api.reviewFile(project, flags.fichier);
@@ -424,27 +451,9 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
       if (draft) return notice;
       return withNotice(`Analyse affichée dans le volet Tabular Review. Contenu : « Tabular Review/${name} ».`, notice);
     }
-    const documents = flags.documents && flags.documents !== true
-      ? String(flags.documents).split(',').map((item) => item.trim()).filter(Boolean)
-      : undefined;
-    const result = await api.tabularFn({
-      action,
-      project,
-      fichier: flags.fichier !== true ? flags.fichier : undefined,
-      projet: flags.projet !== true ? flags.projet : undefined,
-      mode: flags.mode !== true ? flags.mode : undefined,
-      nom: flags.nom !== true ? flags.nom : undefined,
-      modele: flags.modele !== true ? flags.modele : undefined,
-      description: flags.description !== true ? flags.description : undefined,
-      questions: parseJson(flags.questions, 'questions'),
-      dossiers: parseJson(flags.dossiers, 'dossiers'),
-      documents,
-      recherche: parseJson(flags.recherche, 'recherche'),
-      ia: flags.ia !== true ? flags.ia : undefined,
-      modele_ia: flags.modele_ia !== true ? flags.modele_ia : undefined,
-    });
+    const result = await api.tabularFn({ ...reviewInput(flags), action, project });
     const text = Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result);
-    if (action === 'index' || action === 'classement' || action === 'arborescence') {
+    if (result?.index) {
       const target = voletTarget(project, 'index');
       return withNotice(text, await followPanel(api, { project, ...target }, target));
     }

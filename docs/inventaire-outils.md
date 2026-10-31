@@ -32,11 +32,11 @@ flowchart LR
   M -. retiré par défaut .-> R[MCP piecemaker]
 
   L --> L1[Search_* par juridiction, Search_Code<br/>consulter_article, consulter_decision<br/>Historique_Judiciaire, Tracking_BODACC<br/>dictionnaire_juridique]
-  PM --> PM1[conversion, sql, afficher, index<br/>raisonnement, suivi, docx, acte<br/>tabular_review]
+  PM --> PM1[conversion, sql, afficher, tabular_review_index<br/>raisonnement, suivi, docx, acte<br/>tabular_review]
   D --> D1[create, read, find, insert, replace, edit, delete<br/>outline, wc, diff, render, validate, info, upgrade<br/>styles, sections, lists, tables, headers, footers<br/>footnotes, endnotes, images, hyperlinks, code, equations, tasks<br/>track-changes, comments, raw]
   O --> O1[POST /api/stamping, /api/tampon/*<br/>git log, show, diff<br/>~/.claude/skills, ~/.piecemaker/templates<br/>~/.piecemaker/custom/perso.md]
   A --> A1[analyste-pieces, jurisprudence-scanner]
-  R --> R1[conversion, sql, raisonnement, suivi<br/>afficher, index, tabular_review]
+  R --> R1[conversion, sql, raisonnement, suivi<br/>afficher, tabular_review, tabular_review_index]
 ```
 
 Le canal Légifrance ne passe pas par les hooks : leurs filtres visent `Read`, `Grep`, `Glob`, `Bash` et `Write`, pas les outils MCP.
@@ -46,7 +46,7 @@ Le canal Légifrance ne passe pas par les hooks : leurs filtres visent `Read`, `
 | Serveur | État | Source | Outils |
 |---|---|---|---|
 | `legifrance` | déclaré dans chaque dossier | `server/piecemaker/vendor/mcp/legifrance/config/mcp_definitions.py` | `Search_Cour_Cassation`, `Search_Cour_Appel`, `Search_Conseil_Etat`, `Search_CAA`, `Search_Premiere_Instance`, `Search_Code`, `consulter_article`, `consulter_decision`, `Historique_Judiciaire`, `Tracking_BODACC`, `dictionnaire_juridique` |
-| `piecemaker` | retiré par défaut (`RETIRED_SERVERS`), gardé pour un client MCP sans shell | `server/piecemaker/vendor/mcp/piecemaker/server.mjs` | `conversion`, `sql`, `raisonnement`, `suivi`, `afficher`, `index`, `tabular_review` |
+| `piecemaker` | retiré par défaut (`RETIRED_SERVERS`), gardé pour un client MCP sans shell | `server/piecemaker/vendor/mcp/piecemaker/server.mjs` | `conversion`, `sql`, `raisonnement`, `suivi`, `afficher`, `tabular_review`, `tabular_review_index` |
 
 La déclaration par dossier se fait dans `server/piecemaker/mcp-declaration.ts`.
 
@@ -61,20 +61,20 @@ Point d'entrée de l'assistant : `server/piecemaker/vendor/skills/Skill-PieceMak
 | `pm conversion` | `[pièce…]`, `--dossier`, `--force` |
 | `pm sql` | `--requete`, `--dossier` |
 | `pm afficher` | `--fichier`, `--volet dossier\|index\|tabular-review\|tampon`, `--review`, `--fermer` |
-| `pm index` | `lister`, `modifier` |
 | `pm raisonnement` | `consignes`, `verifier`, `lister` |
 | `pm suivi` | `verifier`, `lire`, `ecrire` |
 | `pm docx` | `preparer`, `verifier`, `comparer`, `extraire` |
 | `pm acte` | `exporter`, `fusionner`, `importer` |
-| `pm tabular_review` | `lister`, `ouvrir`, `documents`, `modeles`, `enregistrer_modele`, `preparer`, `lancer`, `index`, `lire`, `colonnes`, `classement`, `arborescence`, `relancer` |
+| `pm tabular_review` | `lister`, `ouvrir`, `documents`, `modeles`, `enregistrer_modele`, `preparer`, `lancer`, `lire`, `colonnes`, `relancer` |
+| `pm tabular_review_index` | `ouvrir`, `preparer`, `lancer`, `lire`, `colonnes`, `classement`, `arborescence`, `relancer`, `lister`, `modifier` |
 
-Le volet `chronologie` s'appelle désormais `index`. La commande `pm index` porte le même nom.
+L'index est une tabular review. `pm tabular_review_index` reprend ses sous-commandes, déduit le fichier et le projet, et affiche toujours l'index dans l'onglet Dossier. `pm tabular_review` refuse le fichier et le projet de l'index.
 
 | Commande | Effet | Lit les pièces |
 |---|---|---|
 | `pm afficher --volet index` | ouvre l'onglet Index du volet Dossier | non |
-| `pm tabular_review index` | retrouve ou prépare l'unique analyse de toutes les pièces, puis l'ouvre dans le volet Dossier | oui, au lancement |
-| `pm index lister\|modifier` | lit ou modifie les dates et les libellés des pièces en base | non |
+| `pm tabular_review_index ouvrir` | retrouve ou prépare l'unique analyse de toutes les pièces, puis l'ouvre dans le volet Dossier | oui, au lancement |
+| `pm tabular_review_index lister\|modifier` | lit ou modifie les dates et les libellés des pièces en base | non |
 
 La commande `piecemaker` est un lanceur pour le développeur, pas un outil de l'assistant : `docs/cli-piecemaker.md`.
 

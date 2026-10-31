@@ -47,8 +47,8 @@ describe('autoPanelTarget', () => {
   });
 
   it('suit les outils PieceMaker quel que soit le préfixe du fournisseur', () => {
-    expect(autoPanelTarget('mcp__piecemaker__index', { action: 'lister' })).toEqual({ kind: 'dossier', view: 'chronology' });
-    expect(autoPanelTarget('piecemaker.index', {})).toEqual({ kind: 'dossier', view: 'chronology' });
+    expect(autoPanelTarget('mcp__piecemaker__tabular_review_index', { action: 'lister' })).toEqual({ kind: 'dossier', view: 'chronology' });
+    expect(autoPanelTarget('piecemaker.tabular_review_index', {})).toEqual({ kind: 'dossier', view: 'chronology' });
     expect(autoPanelTarget('mcp__piecemaker__tabular_review', { action: 'preparer' })).toEqual({ kind: 'tabular-review', review: null, awaitDraft: true });
     expect(autoPanelTarget('mcp__piecemaker__tabular_review', { action: 'preparer', projet: 'p-1' })).toEqual({ kind: 'tabular-review', review: null, draft: 'p-1' });
     expect(autoPanelTarget('mcp__piecemaker__tabular_review', { action: 'ouvrir', projet: 'p-1' })).toEqual({ kind: 'tabular-review', review: null, draft: 'p-1' });
@@ -61,6 +61,7 @@ describe('autoPanelTarget', () => {
     expect(draftFromResult('{"projet":"3f2a-b1","nom":"Exemple"}')).toBe('3f2a-b1');
     expect(draftFromResult([{ type: 'text', text: '{"projet":"p-2"}' }])).toBe('p-2');
     expect(draftFromResult('Action inconnue')).toBeNull();
+    expect(draftFromResult('{"projet":"p-3","index":true}')).toBeNull();
   });
 
   it('obéit à afficher', () => {
@@ -77,7 +78,7 @@ describe('autoPanelTarget', () => {
     expect(autoPanelTarget('Bash', { command: '.agents/skills/Skill-PieceMaker/scripts/pm afficher --fichier Pièces/contrat.pdf' })).toEqual({ kind: 'file', path: 'Pièces/contrat.pdf' });
     expect(autoPanelTarget('run_terminal_command', { command: "scripts/pm afficher --volet index" })).toEqual({ kind: 'dossier', view: 'chronology' });
     expect(autoPanelTarget('Bash', { command: 'scripts/pm afficher --volet dossier' })).toEqual({ kind: 'dossier', view: 'general' });
-    expect(autoPanelTarget('Bash', { command: 'scripts/pm index lister' })).toEqual({ kind: 'dossier', view: 'chronology' });
+    expect(autoPanelTarget('Bash', { command: 'scripts/pm tabular_review_index lire' })).toEqual({ kind: 'dossier', view: 'chronology' });
     expect(autoPanelTarget('Bash', { command: 'scripts/pm tabular_review ouvrir --fichier "Tabular Review/26-10-11 - Analyse.json"' })).toEqual({ kind: 'tabular-review', review: '26-10-11 - Analyse.json' });
     expect(autoPanelTarget('Bash', { command: "scripts/pm sql --requete \"UPDATE piecemaker_nodes SET doc_date='2024-03-01' WHERE id='doc:1'\"" })).toEqual({ kind: 'dossier', view: 'chronology' });
     expect(autoPanelTarget('Bash', { command: 'node .agents/skills/Skill-PieceMaker/scripts/pm.mjs afficher --fichier Pièces/contrat.pdf' })).toEqual({ kind: 'file', path: 'Pièces/contrat.pdf' });

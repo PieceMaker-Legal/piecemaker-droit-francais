@@ -22,10 +22,10 @@ function publishOpenPanels(file, project, entry) {
   }, 20);
 }
 
-test('les outils exposés sont afficher, conversion, index, sql et tabular_review, sans renommage', async () => {
+test('les outils exposés sont afficher, conversion, sql, tabular_review et tabular_review_index, sans renommage', async () => {
   const { client, close } = await connect({ sqlFn: async () => '' });
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'conversion', 'index', 'raisonnement', 'sql', 'suivi', 'tabular_review']);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'conversion', 'raisonnement', 'sql', 'suivi', 'tabular_review', 'tabular_review_index']);
   const sql = tools.find((tool) => tool.name === 'sql');
   assert.deepEqual(Object.keys(sql.inputSchema.properties), ['requete']);
   assert.deepEqual(sql.annotations, {
@@ -69,10 +69,37 @@ test('sql rend l’erreur du serveur comme erreur MCP', async () => {
   await close();
 });
 
-test('index liste les pièces du dossier courant par date', async () => {
+test('tabular_review_index déduit le fichier et s’affiche dans l’onglet Dossier', async () => {
+  const calls = [];
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-mcp-index-'));
+  const tabularFn = async (input) => {
+    calls.push(input);
+    return input.action === 'index' ? { fichier: 'index.json' } : { ok: true };
+  };
+  const { client, close } = await connect({ sqlFn: async () => '', tabularFn, openPanelsPath: path.join(dossier, 'volets.json'), openPanelsTimeoutMs: 1 });
+  const result = await client.callTool({ name: 'tabular_review_index', arguments: { action: 'lire', dossier } });
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(calls.map((call) => [call.action, call.fichier]), [['index', undefined], ['lire', 'index.json']]);
+  const refused = await client.callTool({ name: 'tabular_review_index', arguments: { action: 'lancer', dossier } });
+  assert.equal(refused.isError, true);
+  assert.match(refused.content[0].text, /déjà lancé/);
+  await close();
+});
+
+test('tabular_review refuse le fichier de l’index', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-mcp-index-'));
+  const tabularFn = async () => ({ analyses: [{ fichier: 'index.json', index: true }] });
+  const { client, close } = await connect({ sqlFn: async () => '', tabularFn });
+  const refused = await client.callTool({ name: 'tabular_review', arguments: { action: 'relancer', dossier, fichier: 'Tabular Review/index.json' } });
+  assert.equal(refused.isError, true);
+  assert.match(refused.content[0].text, /onglet Dossier/);
+  await close();
+});
+
+test('tabular_review_index liste les pièces du dossier courant par date', async () => {
   const calls = [];
   const { client, close } = await connect({ sqlFn: async (input) => { calls.push(input); return 'id\tdate'; } });
-  const result = await client.callTool({ name: 'index', arguments: { action: 'lister' } });
+  const result = await client.callTool({ name: 'tabular_review_index', arguments: { action: 'lister' } });
   assert.equal(result.isError, undefined);
   assert.equal(calls[0].cwd, process.cwd());
   assert.match(calls[0].requete, /^SELECT id, doc_date AS date, label AS libelle/);
@@ -80,21 +107,21 @@ test('index liste les pièces du dossier courant par date', async () => {
   await close();
 });
 
-test('index modifie la date et le libellé en échappant les valeurs', async () => {
+test('tabular_review_index modifie la date et le libellé en échappant les valeurs', async () => {
   const calls = [];
   const { client, close } = await connect({ sqlFn: async (input) => { calls.push(input); return '1 ligne(s) modifiée(s)'; } });
-  await client.callTool({ name: 'index', arguments: { action: 'modifier', dossier: "Société Exemple", piece: "doc:l'acte", date: '2024-03-01', libelle: "2024-03-01_Lettre d'Exemple" } });
+  await client.callTool({ name: 'tabular_review_index', arguments: { action: 'modifier', dossier: "Société Exemple", piece: "doc:l'acte", date: '2024-03-01', libelle: "2024-03-01_Lettre d'Exemple" } });
   assert.equal(calls[0].requete, "UPDATE piecemaker_nodes SET doc_date = '2024-03-01', label = '2024-03-01_Lettre d''Exemple' WHERE project_id = dossier('Société Exemple') AND kind = 'document' AND id = 'doc:l''acte'");
-  await client.callTool({ name: 'index', arguments: { action: 'modifier', piece: 'doc:1', date: '' } });
+  await client.callTool({ name: 'tabular_review_index', arguments: { action: 'modifier', piece: 'doc:1', date: '' } });
   assert.equal(calls[1].requete, "UPDATE piecemaker_nodes SET doc_date = NULL WHERE project_id = dossier() AND kind = 'document' AND id = 'doc:1'");
   await close();
 });
 
-test('index refuse une modification incomplète ou une date mal formée sans appeler SQL', async () => {
+test('tabular_review_index refuse une modification incomplète ou une date mal formée sans appeler SQL', async () => {
   const calls = [];
   const { client, close } = await connect({ sqlFn: async (input) => { calls.push(input); return ''; } });
   for (const args of [{ action: 'modifier', date: '2024-03-01' }, { action: 'modifier', piece: 'doc:1' }, { action: 'modifier', piece: 'doc:1', date: '01/03/2024' }]) {
-    const result = await client.callTool({ name: 'index', arguments: args });
+    const result = await client.callTool({ name: 'tabular_review_index', arguments: args });
     assert.equal(result.isError, true);
   }
   assert.equal(calls.length, 0);
@@ -137,12 +164,13 @@ test('tabular_review ouvre localement et confie le reste au serveur PieceMaker',
   assert.equal(missing.isError, true);
   const prepared = await client.callTool({ name: 'tabular_review', arguments: { action: 'preparer', dossier, mode: 'recherche', nom: 'Faute grave', recherche: { query: 'faute', sources: ['cassation'] } } });
   assert.equal(prepared.content[0].text, '{"projet":"p-1"}');
-  assert.deepEqual(calls[0], { action: 'preparer', project: dossier, mode: 'recherche', nom: 'Faute grave', recherche: { query: 'faute', sources: ['cassation'] } });
+  const sent = calls.filter((call) => call.action !== 'lister');
+  assert.deepEqual(sent[0], { action: 'preparer', project: dossier, mode: 'recherche', nom: 'Faute grave', recherche: { query: 'faute', sources: ['cassation'] } });
   const documents = await client.callTool({ name: 'tabular_review', arguments: { action: 'documents', dossier } });
   assert.equal(documents.content[0].text, 'Pièces/bail.md\nPièces/avenant.md');
   const launched = await client.callTool({ name: 'tabular_review', arguments: { action: 'lancer', dossier, projet: 'p-1' } });
   assert.equal(launched.isError, true);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.filter((call) => call.action !== 'lister').length, 3);
   await close();
   fs.rmSync(dossier, { recursive: true, force: true });
 });

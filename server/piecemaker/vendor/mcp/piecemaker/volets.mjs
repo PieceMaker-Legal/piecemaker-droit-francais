@@ -31,6 +31,27 @@ export function chronologieSql({ action, dossier, piece, date, libelle }) {
   return `UPDATE piecemaker_nodes SET ${changes.join(', ')} WHERE project_id = ${scope} AND kind = 'document' AND id = ${literal(String(piece).trim())}`;
 }
 
+export async function tabularIndex(tabularFn, { action, project, ...input }) {
+  if (action === 'arborescence') return tabularFn({ ...input, action, project });
+  const found = await tabularFn({ action: 'index', project });
+  if (action === 'ouvrir') return found;
+  if (action === 'preparer' || action === 'lancer') {
+    if (!found.projet) throw new Error('L’index est déjà lancé : utilisez colonnes pour ses questions, ou relancer pour les nouvelles pièces.');
+    return tabularFn({ ...input, action, project, projet: found.projet });
+  }
+  if (!found.fichier) throw new Error('L’index n’est pas encore lancé : lancez-le avec lancer, sur accord de l’avocat.');
+  return tabularFn({ ...input, action, project, fichier: found.fichier });
+}
+
+export async function refuseIndex(tabularFn, project, { fichier, projet }) {
+  const name = typeof fichier === 'string' ? path.basename(fichier.trim()) : '';
+  const draft = typeof projet === 'string' ? projet.trim() : '';
+  if (!name && !draft) return;
+  const { analyses = [], projets = [] } = await tabularFn({ action: 'lister', project });
+  const isIndex = [...analyses, ...projets].some((entry) => entry.index && ((name && entry.fichier === name) || (draft && entry.projet === draft)));
+  if (isIndex) throw new Error('L’index du dossier s’affiche toujours dans l’onglet Dossier : utilisez tabular_review_index.');
+}
+
 export function reviewFile(dossier, fichier) {
   const name = path.basename(String(fichier ?? '').trim());
   if (!name.endsWith('.json')) throw new Error('Indiquez le fichier JSON de la review (colonne fichier de « lister »).');

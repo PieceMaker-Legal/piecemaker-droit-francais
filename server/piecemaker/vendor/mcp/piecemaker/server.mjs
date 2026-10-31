@@ -22,7 +22,7 @@ import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import fs from 'node:fs';
 import { panelRequestCompleted, requestPanelOpen, runReasoning, runSql, runSuivi, runTabularReview } from '../../installer/lib/conversion-client.mjs';
-import { CASSATION_MATIERES, chronologieSql, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES, REVIEW_FOLDER, reviewFile, VOLETS } from './volets.mjs';
+import { CASSATION_MATIERES, chronologieSql, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, refuseIndex, RESEARCH_SOURCES, REVIEW_FOLDER, reviewFile, tabularIndex, VOLETS } from './volets.mjs';
 import { describeOpenPanels, listOpenPanels, openPanelsFile, waitForOpenPanel } from './volets-ouverts.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -142,6 +142,17 @@ export function conversionArgs({ dossier, pieces, force }) {
 export function resolveDossier(dossier) {
   return dossier && String(dossier).trim() ? dossier : process.cwd();
 }
+
+const QUESTIONS_SCHEMA = z.array(z.object({
+  nom: z.string().optional(),
+  consigne: z.string().optional().describe('Obligatoire pour une nouvelle question.'),
+  format: z.enum(COLUMN_FORMATS).optional(),
+  etiquettes: z.array(z.string()).optional(),
+  colonne: z.number().int().optional().describe('colonnes : numéro donné par lire, pour modifier ou supprimer.'),
+  supprimer: z.boolean().optional(),
+})).optional().describe('Avec modele dans preparer : ajoutées à ses questions.');
+
+const DOSSIERS_SCHEMA = z.array(z.object({ nom: z.string(), explication: z.string().optional() })).optional().describe('arborescence : remplace la liste. Un « / » crée un sous-dossier.');
 
 const DOSSIER_SCHEMA = z.string()
   .optional()
@@ -301,35 +312,6 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
     return afficherResult({ success: true, alreadyOpen, code: alreadyOpen ? 'already_open' : 'opened', message: `${alreadyOpen ? 'Déjà affiché' : 'Volet affiché'} : ${volet}${review ? ` (${path.basename(review)})` : ''}`, panels: listOpenPanels() });
   });
 
-  server.registerTool('index', {
-    description: 'Dates et libellés des pièces du dossier, affichés à l’avocat dans le volet Dossier. '
-      + 'Ne lit pas les pièces : pour la lecture intégrale de toutes les pièces, avec chronologie et tri, utiliser tabular_review, action index. '
-      + 'lister : id, date, libellé et nature de chaque pièce, par date. '
-      + 'modifier : change la date (AAAA-MM-JJ, vide pour l’effacer) ou le libellé d’une pièce ; '
-      + 'changer le libellé (AAAA-MM-JJ_titre) renomme aussi le fichier.',
-    inputSchema: {
-      action: z.enum(['lister', 'modifier']),
-      dossier: z.string().optional().describe('Nom ou début d’id d’un autre dossier. Par défaut, le dossier de la session.'),
-      piece: z.string().optional().describe('Id de la pièce à modifier (colonne id de lister).'),
-      date: z.string().optional(),
-      libelle: z.string().optional(),
-    },
-    annotations: {
-      title: 'Index du dossier',
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  }, async (input) => {
-    try {
-      const resultat = await sqlFn({ requete: chronologieSql(input), cwd: process.cwd() });
-      return { content: [{ type: 'text', text: resultat }] };
-    } catch (error) {
-      return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
-    }
-  });
-
   server.registerTool('tabular_review', {
     description: 'Tabular reviews du dossier, affichées à l’avocat dans le volet Tabular Review. '
       + 'lister : analyses et projets non lancés. '
@@ -337,15 +319,12 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       + 'documents : documents analysables. modeles : liste, ou questions d’un modele. enregistrer_modele : crée, ou modifie modele. '
       + 'preparer : crée ou complète (projet) un projet, que l’avocat vérifie et lance. '
       + 'lancer : seulement sur accord explicite de l’avocat dans le chat. '
-      + 'index : retrouve et affiche l’index du dossier, la seule analyse qui lit toutes les pièces du dossier, une ligne par pièce (date, événement, importance, secret professionnel, classement), pour la chronologie et le tri ; préparée si besoin ; ne jamais en créer une autre. '
-      + 'preparer renvoie cette analyse si on lui demande un index, une lecture intégrale, une chronologie ou un tri. '
+      + 'L’index du dossier a son propre outil, tabular_review_index : les actions sur son fichier ou son projet sont refusées ici, et preparer le renvoie si on lui demande un index, une lecture intégrale, une chronologie ou un tri. '
       + 'lire : colonnes, lignes et réponses de fichier. '
       + 'colonnes : ajoute (sans colonne), modifie ou supprime (colonne, supprimer) les colonnes de fichier. '
-      + 'classement : ajoute à l’index (fichier) la colonne qui classe chaque document dans l’arborescence du dossier. '
-      + 'arborescence : lit, ou remplace avec dossiers, l’arborescence ; aucun fichier n’est déplacé, l’avocat applique dans le volet. '
       + 'relancer : seulement sur accord explicite de l’avocat ; analyse les nouveaux documents Markdown de fichier.',
     inputSchema: {
-      action: z.enum(['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'index', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer']),
+      action: z.enum(['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer']),
       dossier: DOSSIER_SCHEMA,
       fichier: z.string().optional(),
       projet: z.string().optional().describe('Id d’un projet non lancé.'),
@@ -353,15 +332,8 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       nom: z.string().optional(),
       modele: z.string().optional().describe('Id ou nom d’un modèle.'),
       description: z.string().optional(),
-      questions: z.array(z.object({
-        nom: z.string().optional(),
-        consigne: z.string().optional().describe('Obligatoire pour une nouvelle question.'),
-        format: z.enum(COLUMN_FORMATS).optional(),
-        etiquettes: z.array(z.string()).optional(),
-        colonne: z.number().int().optional().describe('colonnes : numéro donné par lire, pour modifier ou supprimer.'),
-        supprimer: z.boolean().optional(),
-      })).optional().describe('Avec modele dans preparer : ajoutées à ses questions.'),
-      dossiers: z.array(z.object({ nom: z.string(), explication: z.string().optional() })).optional().describe('arborescence : remplace la liste. Un « / » crée un sous-dossier.'),
+      questions: QUESTIONS_SCHEMA,
+      dossiers: DOSSIERS_SCHEMA,
       documents: z.array(z.string()).optional().describe('Chemins relatifs de documents ou de dossiers (tous leurs documents).'),
       recherche: z.object({
         query: z.string(),
@@ -390,6 +362,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
   }, async ({ action, dossier, fichier, ...input }) => {
     const resolved = path.resolve(resolveDossier(dossier));
     try {
+      await refuseIndex(tabularFn, resolved, { fichier, projet: input.projet });
       if (action === 'ouvrir') {
         const name = input.projet ? undefined : reviewFile(resolved, fichier);
         const opened = await openPanelAndWait({
@@ -403,12 +376,56 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
         return { content: [{ type: 'text', text: `Analyse affichée dans le volet Tabular Review. Contenu : « ${REVIEW_FOLDER}/${name} ».` }] };
       }
       const result = await tabularFn({ ...input, ...(fichier ? { fichier } : {}), action, project: resolved });
-      if (action === 'index') {
+      if (result.index) {
         await openPanelAndWait({ project: resolved, tab: 'plugin:piecemaker-dossier', view: 'chronology' }, openPanelsTimeoutMs, openPanelsPath);
       } else if (action === 'preparer' && result.fichier) {
         await openPanelAndWait({ project: resolved, tab: 'plugin:piecemaker-tabular-review', review: result.fichier, draft: result.projet }, openPanelsTimeoutMs, openPanelsPath);
       }
       return { content: [{ type: 'text', text: Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result) }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
+    }
+  });
+
+  server.registerTool('tabular_review_index', {
+    description: 'Index du dossier : la tabular review unique qui lit toutes les pièces, une ligne par pièce (date, événement, importance, secret professionnel, classement), pour la chronologie et le tri. '
+      + 'Elle reprend les actions de tabular_review, mais s’affiche toujours dans l’onglet Dossier, jamais dans le volet Tabular Review ; fichier et projet sont déduits ; ne jamais en créer une autre. '
+      + 'ouvrir : retrouve et affiche l’index, préparé si besoin. preparer : complète le projet (questions, documents). '
+      + 'lancer et relancer : seulement sur accord explicite de l’avocat dans le chat ; relancer analyse les nouveaux documents Markdown. '
+      + 'lire : colonnes, lignes et réponses. colonnes : ajoute (sans colonne), modifie ou supprime (colonne, supprimer). '
+      + 'classement : ajoute la colonne qui classe chaque document dans l’arborescence du dossier. '
+      + 'arborescence : lit, ou remplace avec dossiers, l’arborescence ; aucun fichier n’est déplacé, l’avocat applique dans le volet. '
+      + 'lister : id, date, libellé et nature de chaque pièce en base, par date ; ne lit pas les pièces. '
+      + 'modifier : change la date (AAAA-MM-JJ, vide pour l’effacer) ou le libellé d’une pièce ; changer le libellé (AAAA-MM-JJ_titre) renomme aussi le fichier.',
+    inputSchema: {
+      action: z.enum(['lister', 'modifier', 'ouvrir', 'preparer', 'lancer', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer']),
+      dossier: z.string().optional().describe('Nom ou début d’id d’un autre dossier. Par défaut, le dossier de la session.'),
+      piece: z.string().optional().describe('Id de la pièce à modifier (colonne id de lister).'),
+      date: z.string().optional(),
+      libelle: z.string().optional(),
+      questions: QUESTIONS_SCHEMA,
+      dossiers: DOSSIERS_SCHEMA,
+      documents: z.array(z.string()).optional().describe('Chemins relatifs de documents ou de dossiers (tous leurs documents).'),
+      ia: z.enum(['claude', 'codex', 'mistral']).optional(),
+      modele_ia: z.string().optional(),
+    },
+    annotations: {
+      title: 'Index du dossier',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  }, async ({ action, dossier, piece, date, libelle, ...input }) => {
+    try {
+      if (action === 'lister' || action === 'modifier') {
+        const resultat = await sqlFn({ requete: chronologieSql({ action, dossier, piece, date, libelle }), cwd: process.cwd() });
+        return { content: [{ type: 'text', text: resultat }] };
+      }
+      const project = path.resolve(resolveDossier(dossier));
+      const result = await tabularIndex(tabularFn, { ...input, action, project });
+      await openPanelAndWait({ project, tab: 'plugin:piecemaker-dossier', view: 'chronology' }, openPanelsTimeoutMs, openPanelsPath);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     } catch (error) {
       return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
     }

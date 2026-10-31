@@ -116,6 +116,7 @@ const DRAFT_ID = /"projet":"([\w-]{1,80})"/;
 
 export function draftFromResult(content: unknown): string | null {
   const value = Array.isArray(content) ? content.map((entry) => text((entry as Input | null)?.text)).join('\n') : text(content);
+  if (/"index":true/.test(value)) return null;
   return DRAFT_ID.exec(value)?.[1] ?? null;
 }
 
@@ -129,7 +130,7 @@ function tabularReviewTarget(input: Input): AutoPanelTarget | null {
 
 function pieceMakerTarget(tool: string, input: Input): AutoPanelTarget | null {
   if (tool === 'afficher') return showTarget(input);
-  if (tool === 'index') return { kind: 'dossier', view: 'chronology' };
+  if (tool === 'tabular_review_index') return { kind: 'dossier', view: 'chronology' };
   if (tool === 'tabular_review') return tabularReviewTarget(input);
   if (tool === 'sql') return sqlTarget(text(input.requete));
   return null;
@@ -178,7 +179,7 @@ function pieceMakerCliTarget(command: string): AutoPanelTarget | null {
   const { flags, rest } = flagMap(argv.slice(script + 1));
   const tool = rest[0];
   if (tool === 'afficher') return showTarget(flags);
-  if (tool === 'index') return { kind: 'dossier', view: 'chronology' };
+  if (tool === 'tabular_review_index') return { kind: 'dossier', view: 'chronology' };
   if (tool === 'tabular_review') return tabularReviewTarget({ ...flags, action: rest[1] });
   if (tool === 'sql') return sqlTarget(text(flags.requete) || rest.slice(1).join(' '));
   return null;

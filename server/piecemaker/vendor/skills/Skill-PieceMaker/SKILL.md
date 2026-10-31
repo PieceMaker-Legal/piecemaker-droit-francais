@@ -14,7 +14,7 @@ L’application PieceMaker doit tourner. `pm` vise le dossier de la session, mê
 
 ## Volets (interface à côté du chat)
 
-Le geste ouvre le volet tout seul : `sql` (écriture), `index`, `tabular_review` (lister, preparer, lancer, ouvrir), un `.docx` écrit ou édité, un tamponnage, `raisonnement` (volet Raisonnement du dossier). Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
+Le geste ouvre le volet tout seul : `sql` (écriture), `tabular_review` (lister, preparer, lancer, ouvrir), `tabular_review_index`, un `.docx` écrit ou édité, un tamponnage, `raisonnement` (volet Raisonnement du dossier). Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
 
 `afficher` sert à lire, pointer ou fermer.
 
@@ -23,7 +23,7 @@ Le geste ouvre le volet tout seul : `sql` (écriture), `index`, `tabular_review`
 | `pm afficher` | lire les volets déjà ouverts |
 | `pm afficher --fichier PATH` | pointer ce fichier |
 | `pm afficher --volet dossier` | pointer Dossier, vue générale |
-| `pm afficher --volet index` | pointer Dossier, dates des pièces (pour lire toutes les pièces : `pm tabular_review index`) |
+| `pm afficher --volet index` | pointer Dossier, dates des pièces (pour lire toutes les pièces : `pm tabular_review_index ouvrir`) |
 | `pm afficher --volet tabular-review` | pointer Analyse tabulaire (sans reset) |
 | `pm afficher --volet tabular-review --review FICHIER.json` | pointer cette analyse |
 | `pm afficher --volet tampon` | pointer Bordereau |
@@ -214,20 +214,11 @@ pm conversion
 pm conversion --force contrat.pdf
 ```
 
-## index
-
-Dates et libellés des pièces en base. Ne lit pas les pièces : pour cela, voir `pm tabular_review index`. `lister` : id, date, libellé, nature. `modifier` : date (`AAAA-MM-JJ`, vide pour l’effacer) et/ou libellé (renomme le fichier). `--dossier NOM` = un autre dossier.
-
-```
-pm index lister
-pm index modifier --piece doc:1 --date 2024-03-01 --libelle 2024-03-01_Lettre
-```
-
 ## tabular_review
 
 `lancer` et `relancer` seulement si l’avocat l’a demandé.
 
-**Index du dossier : une seule analyse par dossier lit toutes les pièces, une ligne par pièce, pour la chronologie et le tri.** `pm tabular_review index` la retrouve, ou la prépare si elle manque, et ouvre l’index dans le volet Dossier : il ne s’affiche jamais dans le volet Tabular Review. `lister` la signale par `index: true`. N’en créez jamais une autre : `preparer` renvoie cette analyse si on lui demande un index, une lecture intégrale, une chronologie ou un tri. Complétez-la avec `colonnes`, `arborescence` et `relancer`. Les analyses classiques (contrats, jurisprudence, recherche) restent séparées et ne portent pas de classement du dossier.
+L’index du dossier a sa propre commande : `tabular_review_index`. `tabular_review` refuse son fichier et son projet. `lister` le signale par `index: true`. `preparer` le renvoie si on lui demande un index, une lecture intégrale, une chronologie ou un tri. Les analyses classiques (contrats, jurisprudence, recherche) restent séparées et ne portent pas de classement du dossier.
 
 ```
 pm tabular_review lister
@@ -238,11 +229,8 @@ pm tabular_review modeles [--modele ID]
 pm tabular_review enregistrer_modele --nom TEXT --questions JSON [--modele ID]
 pm tabular_review preparer --mode analyse|recherche --nom TEXT [--projet ID] [--modele ID] [--description TEXT] [--questions JSON] [--documents a,b] [--recherche JSON]
 pm tabular_review lancer --projet ID [--ia claude|codex|mistral] [--modele-ia TEXT]
-pm tabular_review index
 pm tabular_review lire --fichier analyse.json
 pm tabular_review colonnes --fichier analyse.json --questions JSON
-pm tabular_review classement --fichier analyse.json
-pm tabular_review arborescence [--dossiers JSON]
 pm tabular_review relancer --fichier analyse.json
 ```
 
@@ -250,9 +238,35 @@ pm tabular_review relancer --fichier analyse.json
 
 `colonnes` : sans `colonne`, ajoute une question ; avec `colonne` (numéro donné par `lire`), modifie la question ou la supprime avec `supprimer: true`. Les cellules déjà remplies gardent leur réponse.
 
-`classement` ajoute à l’index la colonne qui classe chaque document dans l’arborescence du dossier. `arborescence --dossiers` remplace cette arborescence : `[{nom, explication}]`, un « / » crée un sous-dossier. Sans `.piecemaker/arborescence.json`, la base est Projets, Pièces, Archives, Notes et recherches.
-
-Aucune de ces actions ne déplace de fichier : l’avocat applique le classement depuis le volet, après confirmation. `relancer` analyse les nouveaux documents Markdown : lancez `pm conversion` avant pour les pièces non converties.
+`relancer` analyse les nouveaux documents Markdown : lancez `pm conversion` avant pour les pièces non converties.
 
 `--recherche` JSON : `query`, `sources` (`cassation` `appel` `conseil_etat` `caa` `premiere_instance`), `matieres` (cassation : `CIVIL` `COMMERCIAL` `PENAL` `SOCIAL`), `publicationBulletin` (`TOUS` `PUBLIE` `INEDIT`), `sieges`, `publicationConseilEtat` (`TOUS` `PUBLIE` `NON_PUBLIE`), `villesCaa`, `publicationCaa` (`TOUS` `PUBLIE` `NON_PUBLIE`), `typesPremiereInstance` (`TRIBUNAL_JUDICIAIRE` `TRIBUNAL_GRANDE_INSTANCE` `TRIBUNAL_INSTANCE` `TRIBUNAL_COMMERCE` `CONSEIL_PRUDHOMMES` `TRIBUNAL_CORRECTIONNEL` `TRIBUNAL_SECURITE_SOCIALE` `TRIBUNAL_BAUX_RURAUX` `JURIDICTION_PROXIMITE` `OUTRE_MER` `TRIBUNAL_CONFLITS`), `dateDebut`, `dateFin`, `dispositifOnly`.
 
+## tabular_review_index
+
+**L’index du dossier est une tabular review : une seule par dossier lit toutes les pièces, une ligne par pièce, pour la chronologie et le tri.** La commande reprend les sous-commandes de `tabular_review`, avec trois différences :
+
+- l’index s’affiche toujours dans l’onglet Dossier, jamais dans le volet Tabular Review ;
+- le fichier et le projet sont déduits : n’indiquez ni `--fichier` ni `--projet` ;
+- n’en créez jamais un autre.
+
+`lancer` et `relancer` seulement si l’avocat l’a demandé.
+
+```
+pm tabular_review_index ouvrir
+pm tabular_review_index preparer [--questions JSON] [--documents a,b]
+pm tabular_review_index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
+pm tabular_review_index lire
+pm tabular_review_index colonnes --questions JSON
+pm tabular_review_index classement
+pm tabular_review_index arborescence [--dossiers JSON]
+pm tabular_review_index relancer
+pm tabular_review_index lister [--dossier NOM]
+pm tabular_review_index modifier --piece doc:1 --date 2024-03-01 --libelle 2024-03-01_Lettre
+```
+
+`ouvrir` retrouve l’index, ou le prépare s’il manque. `preparer` et `lancer` valent avant le lancement ; `lire`, `colonnes`, `classement` et `relancer` valent après.
+
+`classement` ajoute la colonne qui classe chaque document dans l’arborescence du dossier. `arborescence --dossiers` remplace cette arborescence : `[{nom, explication}]`, un « / » crée un sous-dossier. Sans `.piecemaker/arborescence.json`, la base est Projets, Pièces, Archives, Notes et recherches. Aucune de ces actions ne déplace de fichier : l’avocat applique le classement depuis le volet, après confirmation.
+
+`lister` et `modifier` portent sur les dates et les libellés des pièces en base, et ne lisent pas les pièces. `lister` : id, date, libellé, nature. `modifier` : date (`AAAA-MM-JJ`, vide pour l’effacer) et/ou libellé (renomme le fichier). `--dossier NOM` = un autre dossier.
