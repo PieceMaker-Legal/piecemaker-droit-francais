@@ -1,16 +1,13 @@
 /**
- * Migration — restes de l'ancien serveur MCP Légifrance local.
+ * Migration — restes des anciens serveurs MCP Légifrance.
  *
- * Avant l'extraction du runtime vers PieceMaker-Legal/mcp-legifrance, le
- * serveur vivait dans ce dépôt et tournait en service launchd HTTP local. Sur
- * une machine déjà installée, cet agent survit à la mise à jour : `KeepAlive`
- * le relance toutes les 5 s sur un script désormais absent, ce qui recrée sans
- * fin le dossier de runtime supprimé et gonfle un journal d'erreurs de
- * plusieurs mégaoctets.
+ * Un ancien serveur tournait en service launchd HTTP local. Sur une machine déjà
+ * installée, cet agent survit à la mise à jour : `KeepAlive` le relance toutes
+ * les 5 s sur un script désormais absent, ce qui recrée sans fin le dossier de
+ * runtime supprimé et gonfle un journal d'erreurs de plusieurs mégaoctets.
  *
- * Ce nettoyage vit dans son propre module plutôt que dans l'étape 07 : l'étape
- * ne doit décrire que le plugin autonome, et rien d'autre ne doit laisser
- * croire que le runtime habite encore le dépôt.
+ * Un autre passait par le plugin Claude `piecemaker@mcp-legifrance`. Le seul
+ * serveur est désormais `server/piecemaker/vendor/mcp/legifrance`.
  */
 
 import fs from 'node:fs';
@@ -21,6 +18,8 @@ import { log } from './ui.mjs';
 import { runCapture } from './platform.mjs';
 
 export const LEGACY_SERVICE_LABEL = 'com.piecemaker.mcp-legifrance-local';
+const EXTERNAL_PLUGIN = 'piecemaker@mcp-legifrance';
+const EXTERNAL_MARKETPLACE = 'mcp-legifrance';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -68,5 +67,19 @@ export function removeLegacyLegifranceService({
   if (removed.length) {
     logger.detail(`Ancien serveur MCP Légifrance local nettoyé : ${removed.join(', ')}.`);
   }
+  return removed;
+}
+
+export function removeExternalLegifrancePlugin({ capture = runCapture, logger = log } = {}) {
+  const removed = [];
+  const parsed = (result) => {
+    if (result.code !== 0) return [];
+    try { return JSON.parse(result.stdout); } catch { return []; }
+  };
+  if (parsed(capture('claude', ['plugin', 'list', '--json'])).some?.((plugin) => plugin.id === EXTERNAL_PLUGIN)
+    && capture('claude', ['plugin', 'uninstall', EXTERNAL_PLUGIN]).code === 0) removed.push(EXTERNAL_PLUGIN);
+  if (parsed(capture('claude', ['plugin', 'marketplace', 'list', '--json'])).some?.((marketplace) => marketplace.name === EXTERNAL_MARKETPLACE)
+    && capture('claude', ['plugin', 'marketplace', 'remove', EXTERNAL_MARKETPLACE]).code === 0) removed.push(EXTERNAL_MARKETPLACE);
+  if (removed.length) logger.info(`Ancien plugin Légifrance retiré : ${removed.join(', ')}`);
   return removed;
 }

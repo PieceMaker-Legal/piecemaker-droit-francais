@@ -263,6 +263,7 @@ test('une source porte son identifiant officiel et une décision remise en cause
   const run = (source: string, sources: Record<string, SourceInfo>) => verifyReasoning({ code: code(source), cwd: '/dossier-fictif', connectors: connectors(sources), reliability: new Map(), nature: () => null, persons: [], dismissed: new Set() });
   assert.match(texts(await run('Cass. com., 3 mai 2023', {}), 'erreur').join('\n'), /effet\.si\[0\]\.selon\[0\]\.source : source sans identifiant officiel : Cass\. com\., 3 mai 2023 ; indique son identifiant \(LEGIARTI… pour un article, JURITEXT… pour une décision judiciaire/);
   assert.match(texts(await run('CELEX:00000X0000', {}), 'manque').join('\n'), /source non vérifiable automatiquement : aucun connecteur pour CELEX:00000X0000/);
+  assert.deepEqual(texts(await run('0123456789abcdef01234567', {}), 'erreur'), []);
   assert.deepEqual(texts(await run('JURITEXT000000000001', decision({ statut: 'non remise en cause', details: [] })), 'erreur'), []);
   const quashed = await run('JURITEXT000000000001', decision({ statut: 'remise en cause', details: ['Recours JURITEXT000000000002 du 2021-03-04 (Cour de cassation) — Solution : Cassation'] }));
   assert.match(texts(quashed, 'erreur').join('\n'), /effet\.si\[0\]\.selon\[0\]\.source : décision remise en cause par un recours \(Recours JURITEXT000000000002 du 2021-03-04 \(Cour de cassation\) — Solution : Cassation\) : cite la décision rendue sur ce recours/);

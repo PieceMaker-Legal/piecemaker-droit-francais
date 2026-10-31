@@ -22,7 +22,6 @@ const GITHUB_SHORTHAND = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:@[A-Za-z0-9._/-]+)
 const PLUGIN_ID = /^[a-zA-Z0-9_-]+@[a-zA-Z0-9_.-]+$/;
 
 export const KNOWN_MARKETPLACES: Record<string, { name: string; slug: string }> = {
-  piecemaker: { name: 'mcp-legifrance', slug: 'PieceMaker-Legal/mcp-legifrance' },
   legal: { name: 'claude-for-legal', slug: 'anthropics/claude-for-legal' },
   official: { name: 'claude-plugins-official', slug: 'anthropics/claude-plugins-official' },
   mike: { name: 'mike-workflows', slug: 'Open-Legal-Products/mike-workflows' },
@@ -89,7 +88,6 @@ function marketplacePackageKinds(userHome: string, marketplaceName: string, plug
     if (fs.existsSync(path.join(root, 'agents'))) kinds.add('agent');
   }
   if (Array.isArray(entry?.skills) && entry.skills.length) kinds.add('skill');
-  if (marketplaceName === 'mcp-legifrance') kinds.add('connector');
   return [...kinds];
 }
 
@@ -241,7 +239,6 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
       const plugins = catalog.plugins
         .map((plugin: { id: string; name: string; description?: string }) => ({
           ...plugin,
-          name: plugin.id === 'piecemaker@mcp-legifrance' ? 'MCP Légifrance' : plugin.name,
           installed: Boolean(registry[plugin.id]),
           kinds: marketplacePackageKinds(userHome, marketplace.name, plugin, registry),
         }))

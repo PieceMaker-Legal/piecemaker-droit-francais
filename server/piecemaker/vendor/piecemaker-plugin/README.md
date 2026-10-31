@@ -85,5 +85,6 @@ Le runtime est embarqué dans `server/piecemaker/vendor/mcp/legifrance/` et
 déclaré dans chaque dossier (`legifrance`, y compris `.mcp.json` pour Claude).
 Le venv isolé vit dans `~/.piecemaker/mcp-legifrance/`. Les identifiants PISTE
 sont lus dans `~/.config/mcp-legifrance/.env` (0600). L'étape `07-legifrance`
-configure encore ces clés ; le plugin marketplace Claude n'est plus requis
-pour l'application de bureau.
+prépare le venv, configure ces clés et retire l'ancien plugin Claude. Ce serveur
+est le seul serveur Légifrance ; `Search_Jurisprudence` interroge Légifrance et
+Judilibre.

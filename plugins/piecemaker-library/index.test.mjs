@@ -162,7 +162,7 @@ test('each section switches between personal items and its filtered marketplace'
   const { container } = fixture(t, async (method, path) => {
     calls.push([method, path]);
     if (path.startsWith('/catalog?')) return { entries: [] };
-    if (path.includes('scope=piecemaker&kind=connector')) return { registered: true, plugins: [{ id: 'piecemaker@mcp-legifrance', name: 'MCP Légifrance', description: 'Droit français' }] };
+    if (path.includes('scope=mike&kind=connector')) return { registered: true, plugins: [{ id: 'exemple@mike-workflows', name: 'Connecteur exemple', description: 'Droit français' }] };
     if (path.startsWith('/plugin/marketplace?')) return { registered: true, plugins: [] };
     return { plugins: [] };
   });
@@ -179,8 +179,8 @@ test('each section switches between personal items and its filtered marketplace'
   assert.deepEqual([...views.querySelectorAll('[role=tab]')].map((button) => button.textContent), ['Mes connecteurs', 'Découvrir']);
   views.querySelector('[role=tab]:last-child').click();
   await settle();
-  assert.match(container.textContent, /MCP Légifrance/);
-  assert.equal(calls.some(([, path]) => path.includes('scope=piecemaker&kind=connector')), true);
+  assert.match(container.textContent, /Connecteur exemple/);
+  assert.equal(calls.some(([, path]) => path.includes('scope=mike&kind=connector')), true);
 });
 
 test('Découvrir lists Mike and accepts a pasted marketplace link', async (t) => {

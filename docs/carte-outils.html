@@ -206,8 +206,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         </g>
         <rect x="690" y="880" width="474" height="72" rx="14" fill="none" stroke="#5e5e65" stroke-dasharray="5 4"/>
 
-        <text class="t-mono" x="704" y="152">Search_Cour_Cassation · Search_Cour_Appel · Search_Conseil_Etat</text>
-        <text class="t-mono" x="704" y="172">Search_CAA · Search_Premiere_Instance · Search_Code</text>
+        <text class="t-mono" x="704" y="152">Search_Jurisprudence</text>
+        <text class="t-mono" x="704" y="172">Search_Code</text>
         <text class="t-mono" x="704" y="192">consulter_article · consulter_decision</text>
         <text class="t-mono" x="704" y="212">Historique_Judiciaire · Tracking_BODACC</text>
         <text class="t-mono" x="704" y="232">dictionnaire_juridique</text>
@@ -318,7 +318,6 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     <section class="card wide">
       <h2>Écarts restants</h2>
       <ul>
-        <li><strong>Deux serveurs Légifrance.</strong> Les dossiers déclarent le serveur embarqué, avec cinq outils <code>Search_*</code> par juridiction. L'étape <code>07-legifrance</code> de l'installateur vise le plugin externe <code>piecemaker@mcp-legifrance</code>, qui expose <code>Search_Jurisprudence</code>.</li>
         <li><strong>Code résiduel.</strong> <code>handlers.py</code> garde <code>Build_Research_Corpus</code>, absent du registre. Le hook <code>track-legifrance-reads</code> dépend du marqueur que ce corpus écrit.</li>
       </ul>
       <p>Les écarts sur <code>recherche-juridique</code>, <code>legal-code</code>, <code>suivi</code>, <code>FILE.yaml</code> et <code>verificateur-anonymisation</code> sont corrigés. Les liens morts sont retirés de cette copie.</p>

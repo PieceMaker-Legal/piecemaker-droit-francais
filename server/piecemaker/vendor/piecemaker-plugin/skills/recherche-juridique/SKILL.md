@@ -21,22 +21,17 @@ effectivement disponibles, puis le format exact que le vérificateur accepte.
 
 | Outil | Rôle |
 | --- | --- |
-| `Search_Cour_Cassation` | Cour de cassation. `matiere` obligatoire (`CIVIL`, `COMMERCIAL`, `PENAL`, `SOCIAL`). Filtre de publication au Bulletin et dates. |
-| `Search_Cour_Appel` | Cours d'appel. Filtre par ville (`APPEL_SIEGE_APPEL`) et dates. Aucun filtre de matière : ciblez-la par mots-clés ou article. |
-| `Search_Conseil_Etat` | Conseil d'État. Filtre recueil Lebon (`PUBLICATION_RECUEIL`) et dates. |
-| `Search_CAA` | Cours administratives d'appel. Filtre par ville (`CAA_VILLE`), recueil Lebon et dates. |
-| `Search_Premiere_Instance` | Première instance, environ 2 000 décisions. `PREMIER_DEGRE_TYPE_JURIDICTION` obligatoire. Filtre de dates. |
+| `Search_Jurisprudence` | Seul outil de recherche jurisprudentielle. Interroge en un appel Légifrance et Judilibre, fusionne les doublons et trie du plus récent au plus ancien. `query` et `juridictions` obligatoires (`cassation`, `appel`, `premiere_instance`, `conseil_etat`, `caa`). `matiere` obligatoire pour `cassation` (`CIVIL`, `COMMERCIAL`, `PENAL`, `SOCIAL`), `types_premiere_instance` obligatoire pour `premiere_instance`. Filtres facultatifs : `sources`, `publication_cassation`, `sieges_appel`, `villes_caa`, `publication_recueil`, `date_debut`, `date_fin`. |
 | `Search_Code` | Recherche dans les codes juridiques français (Code civil, Code du travail…) — référence d'article exacte (`L. 1235-3`), mots-clés ou expression exacte. Renvoie les identifiants `LEGIARTI…` des articles trouvés. |
 | `consulter_article` | Texte intégral et vigueur d'une version précise d'article, à partir de son identifiant `LEGIARTI…` rendu par `Search_Code`. |
-| `consulter_decision` | Rapatrie le texte intégral d'une décision à partir de son identifiant Légifrance (`JURITEXT…`, `CETATEXT…`). **Rapatrie le texte intégral et le met en cache** (voir plus bas) — c'est le moyen normal de lire une décision avant de la citer. |
+| `consulter_decision` | Rapatrie le texte intégral d'une décision à partir de son identifiant Légifrance (`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux). **Rapatrie le texte intégral et le met en cache** (voir plus bas) — c'est le moyen normal de lire une décision avant de la citer. |
 | `Historique_Judiciaire` | Rend pour une décision (`JURITEXT…`, `CETATEXT…`) son historique procédural et le relevé des décisions qui la citent. |
 | `Tracking_BODACC` | Situation d'une entreprise (procédures collectives) via son SIREN — hors jurisprudence, utile pour qualifier une partie. |
 | `dictionnaire_juridique` | Définition d'un terme du lexique juridique officiel de justice.fr. |
 
-Les cinq outils `Search_*` de jurisprudence interrogent Légifrance avec la même
-requête (guillemets, `ET`, `OU`, parenthèses, articles). Au-delà de 500 résultats,
-la recherche est refusée. Seule l'analyse tabulaire en mode recherche interroge
-aussi Judilibre.
+`Search_Jurisprudence` applique la même requête aux deux bases (guillemets, `ET`,
+`OU`, parenthèses, articles). Au-delà de 500 résultats, la recherche est refusée.
+Judilibre ne couvre que l'ordre judiciaire.
 
 ## Recherche large : l'analyse tabulaire en mode recherche
 
@@ -69,14 +64,14 @@ est quelque part sur disque :
   le harnais de citations (`harness/decisions.cjs`) le capte au passage et l'écrit dans
   `~/.piecemaker/decisions/<id>.json` — vérifiable.
 
-**Conséquence pratique** : les résultats des outils `Search_*` (titre,
+**Conséquence pratique** : les résultats de `Search_Jurisprudence` (titre,
 analyse, extraits) servent à trier. Dès qu'une décision doit être citée, il
 faut d'abord la lire avec `consulter_decision` (ou dans la copie d'une analyse
 tabulaire en mode recherche).
 
 ## Déroulé de recherche
 
-1. **Recherche large** avec l'outil `Search_*` de chaque juridiction visée
+1. **Recherche large** avec `Search_Jurisprudence`, sur les juridictions visées
    (ou, pour une question de droit qui mérite un balayage systématique plutôt
    qu'une requête isolée, l'analyse tabulaire en mode recherche préparée
    pour l'avocat). Pour un texte de loi, `Search_Code`.
@@ -130,10 +125,10 @@ prend l'une des trois formes suivantes.
 ### Forme « jurisprudence » (`kind: "case"`)
 
 Identifie la décision par `decision_id` — l'identifiant Légifrance
-(`JURITEXT…`, `CETATEXT…`) rendu par un outil `Search_*`, lu avec
-`consulter_decision`, ou l'identifiant rendu par une analyse tabulaire en mode
-recherche (champ `decision` de la ligne, Légifrance ou Judilibre à 24 caractères
-hexadécimaux), lu dans la copie `Tabular Review/docs/` de cette analyse.
+(`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux) rendu par
+`Search_Jurisprudence`, lu avec `consulter_decision`, ou l'identifiant rendu par
+une analyse tabulaire en mode recherche (champ `decision` de la ligne), lu dans
+la copie `Tabular Review/docs/` de cette analyse.
 
 ```json
 {
@@ -261,7 +256,7 @@ citation si elle ne peut pas être justifiée par une source effectivement lue.
 ## Ce qu'il ne faut pas faire
 
 - Ne jamais citer une décision connue uniquement par un résultat de
-  `Search_*` sans l'avoir d'abord lue avec `consulter_decision`.
+  `Search_Jurisprudence` sans l'avoir d'abord lue avec `consulter_decision`.
 - Ne jamais paraphraser un extrait pour qu'il « sonne » comme la source — le
   vérificateur tolère l'espace/la casse/la ponctuation, pas le sens.
 - Ne jamais laisser un `ref` sauter un numéro ou repartir en désordre.

@@ -350,7 +350,7 @@ export function mount(container, api) {
     nav.setAttribute('role', 'tablist');
     nav.setAttribute('aria-label', 'Bibliothèque');
     for (const [key, label] of [['connectors', 'Connecteurs'], ['skill', 'Skills'], ['plugin', 'Plugins'], ['agent', 'Agents'], ['tabular', 'Analyses tabulaires']]) {
-      const item = button(label, () => { tab = key; view = 'mine'; scope = key === 'connectors' ? 'piecemaker' : 'mike'; search = ''; void load(); });
+      const item = button(label, () => { tab = key; view = 'mine'; scope = 'mike'; search = ''; void load(); });
       item.setAttribute('role', 'tab');
       item.setAttribute('aria-selected', String(tab === key));
       nav.append(item);
@@ -398,7 +398,7 @@ export function mount(container, api) {
       if (view === 'discover') {
         const scopes = element('div', undefined, 'pills');
         const knownScopes = tab === 'connectors'
-          ? [['piecemaker', 'PieceMaker'], ['mike', 'Mike'], ['legal', 'Legal'], ['official', 'Officiel Anthropic']]
+          ? [['mike', 'Mike'], ['legal', 'Legal'], ['official', 'Officiel Anthropic']]
           : tab === 'tabular'
             ? [['mike', 'Mike']]
             : [['mike', 'Mike'], ['legal', 'Legal'], ['official', 'Officiel Anthropic']];

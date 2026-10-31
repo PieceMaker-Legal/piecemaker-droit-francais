@@ -17,8 +17,8 @@ import type { Basis, Condition, Foundation, Formula, Measure, Objective, Ref, Ta
 
 export type SourceInfo = { kind: 'texte' | 'decision' | 'piece'; title: string; text: string; validity?: { from: string; to: string | null }; history?: { statut: 'remise en cause' | 'à examiner' | 'non remise en cause'; details: string[] } };
 
-export const OFFICIAL_ID = /^(?:(?:LEGIARTI|JORFARTI|KALIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+|CELEX:\S+|ECLI:\S+)$/u;
-export const ID_SHAPE = 'LEGIARTI… pour un article, JURITEXT… pour une décision judiciaire, CETATEXT… pour une décision administrative, CONSTEXT… pour une décision du Conseil constitutionnel, CELEX:… ou ECLI:… pour le droit de l’Union, chemin de la pièce pour une clause';
+export const OFFICIAL_ID = /^(?:(?:LEGIARTI|JORFARTI|KALIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+|[0-9a-f]{24}|CELEX:\S+|ECLI:\S+)$/u;
+export const ID_SHAPE = 'LEGIARTI… pour un article, JURITEXT… pour une décision judiciaire, 24 caractères hexadécimaux pour une décision Judilibre, CETATEXT… pour une décision administrative, CONSTEXT… pour une décision du Conseil constitutionnel, CELEX:… ou ECLI:… pour le droit de l’Union, chemin de la pièce pour une clause';
 
 export type ReasoningConnectors = {
   source(cwd: string, id: string): Promise<SourceInfo | null | undefined>;

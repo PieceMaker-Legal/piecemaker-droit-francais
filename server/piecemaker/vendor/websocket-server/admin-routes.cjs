@@ -272,7 +272,6 @@ const GITHUB_MARKETPLACE_SHORTHAND = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:@[A-Za
 const MARKETPLACE_SCOPES = {
   legal: { name: LEGAL_MARKETPLACE_NAME, slug: LEGAL_MARKETPLACE_SLUG },
   official: { name: OFFICIAL_MARKETPLACE_NAME, slug: OFFICIAL_MARKETPLACE_SLUG },
-  piecemaker: { name: 'mcp-legifrance', slug: 'PieceMaker-Legal/mcp-legifrance' },
   mike: { name: MIKE_MARKETPLACE_NAME, slug: MIKE_MARKETPLACE_SLUG },
 };
 function parseMarketplaceSource(raw) {
@@ -614,17 +613,16 @@ async function configurationOverview({ repoRoot, homeDir, userHome, getRuntimeSt
   const claudeAssetsReady = claudeAssets.length > 0 && claudeAssets.every((asset) =>
     ['linked', 'copied'].includes(claudeAssetStatus(repoRoot, userHome, asset)?.state));
   const hooksRegistered = claudeHooksStatus(repoRoot, userHome).ok;
-  const claudeSettings = readJson(path.join(userHome, '.claude', 'settings.json'), {});
-  const legifrancePluginEnabled = claudeSettings.enabledPlugins?.['piecemaker@mcp-legifrance'] === true;
+  const legifranceServerReady = fs.existsSync(path.join(repoRoot, 'mcp', 'legifrance', 'server.mjs'));
   let nodePtyReady = false;
   try { nodePtyReady = Boolean(require.resolve('node-pty')); } catch { /* dépendance optionnelle */ }
 
   const mcpItems = [
     {
       name: 'Légifrance',
-      installed: legifrancePluginEnabled,
+      installed: legifranceServerReady,
       configured: Boolean(env.LEGIFRANCE_CLIENT_ID && env.LEGIFRANCE_CLIENT_SECRET),
-      detail: 'Plugin autonome PieceMaker-Legal/mcp-legifrance via les API officielles PISTE.',
+      detail: 'Serveur embarqué via les API officielles PISTE (Légifrance et Judilibre).',
     },
   ];
   const models = await ollamaState(fetchImpl);
