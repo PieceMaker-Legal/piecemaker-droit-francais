@@ -11,7 +11,7 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
 - **Skills** (`skills/`) :
   - `conversion-md` — conversion de documents en Markdown
     (`smart_converter.py`, markitdown/MinerU).
-  - `redaction-juridique` — rédaction/relecture de documents juridiques
+  - `style-redaction-cabinet` — rédaction/relecture de documents juridiques
     français, citations sourcées via legifrance (MCP).
   - `tamponnage` — tampon du cabinet et tamponnage numéroté des pièces d'un
     bordereau : conversion de l'original en PDF (LibreOffice pour Excel/Word,

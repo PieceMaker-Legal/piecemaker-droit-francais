@@ -8,7 +8,7 @@ import test from 'node:test';
 import { declareBundledSkills } from './skill-declaration.js';
 
 const DOCX_LINKS = ['.claude/skills/docx-cli', '.cursor/skills/docx-cli', '.opencode/skills/docx-cli', '.grok/skills/docx-cli'];
-const REDACTION_LINKS = ['.claude/skills/redaction-juridique', '.cursor/skills/redaction-juridique', '.opencode/skills/redaction-juridique', '.grok/skills/redaction-juridique'];
+const STYLE_LINKS = ['.claude/skills/style-redaction-cabinet', '.cursor/skills/style-redaction-cabinet', '.opencode/skills/style-redaction-cabinet', '.grok/skills/style-redaction-cabinet'];
 const PIECEMAKER_LINKS = ['.claude/skills/Skill-PieceMaker', '.cursor/skills/Skill-PieceMaker', '.opencode/skills/Skill-PieceMaker', '.grok/skills/Skill-PieceMaker'];
 
 function temporaryFolder() {
@@ -27,19 +27,19 @@ function assertLinked(folder: string, slug: string, links: string[]) {
   }
 }
 
-test('installe docx-cli et redaction-juridique dans .agents/skills et les relie aux providers', () => {
+test('installe docx-cli et style-redaction-cabinet dans .agents/skills et les relie aux providers', () => {
   const folder = temporaryFolder();
   declareBundledSkills(folder);
   assert.match(fs.readFileSync(skillPath(folder, 'docx-cli'), 'utf8'), /^---\nname: docx-cli\n/);
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'docx-cli', 'scripts', 'bootstrap.sh')), true);
-  assert.match(fs.readFileSync(skillPath(folder, 'redaction-juridique'), 'utf8'), /^---\nname: redaction-juridique\n/);
+  assert.match(fs.readFileSync(skillPath(folder, 'style-redaction-cabinet'), 'utf8'), /^---\nname: style-redaction-cabinet\n/);
   assert.match(fs.readFileSync(skillPath(folder, 'Skill-PieceMaker'), 'utf8'), /^---\nname: piecemaker\n/);
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')), true);
   const pmCli = path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm');
   assert.equal(fs.existsSync(pmCli), true);
   assert.equal((fs.statSync(pmCli).mode & 0o111) !== 0, true);
   assertLinked(folder, 'docx-cli', DOCX_LINKS);
-  assertLinked(folder, 'redaction-juridique', REDACTION_LINKS);
+  assertLinked(folder, 'style-redaction-cabinet', STYLE_LINKS);
   assertLinked(folder, 'Skill-PieceMaker', PIECEMAKER_LINKS);
 });
 
@@ -63,7 +63,7 @@ test('une copie personnelle n’est pas écrasée', () => {
   declareBundledSkills(folder);
   assert.equal(fs.readFileSync(skill, 'utf8'), '---\nname: docx-cli\ndescription: perso\n---\n');
   assert.equal(fs.existsSync(path.join(folder, '.claude', 'skills', 'docx-cli')), false);
-  assert.match(fs.readFileSync(skillPath(folder, 'redaction-juridique'), 'utf8'), /^---\nname: redaction-juridique\n/);
+  assert.match(fs.readFileSync(skillPath(folder, 'style-redaction-cabinet'), 'utf8'), /^---\nname: style-redaction-cabinet\n/);
 });
 
 test('une copie encore identique au dernier bundle est mise à jour', () => {
@@ -82,6 +82,38 @@ test('une copie encore identique au dernier bundle est mise à jour', () => {
   assert.match(content, /^---\nname: docx-cli\n/);
   assert.equal(content.includes('description: ancien'), false);
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'docx-cli', 'scripts', 'bootstrap.sh')), true);
+});
+
+function declareRetiredSkill(folder: string, content: string) {
+  const skill = skillPath(folder, 'redaction-juridique');
+  fs.mkdirSync(path.dirname(skill), { recursive: true });
+  fs.writeFileSync(skill, content);
+  fs.mkdirSync(path.join(folder, '.claude', 'skills'), { recursive: true });
+  fs.symlinkSync(path.join('..', '..', '.agents', 'skills', 'redaction-juridique'), path.join(folder, '.claude', 'skills', 'redaction-juridique'), 'dir');
+  const marker = path.join(folder, '.piecemaker', 'bundled-skills.json');
+  fs.mkdirSync(path.dirname(marker), { recursive: true });
+  fs.writeFileSync(marker, `${JSON.stringify({
+    'redaction-juridique': { '.agents/skills/redaction-juridique/SKILL.md': createHash('sha256').update('---\nname: redaction-juridique\n---\n').digest('hex') },
+  }, null, 2)}\n`);
+  return marker;
+}
+
+test('une copie intacte de l’ancien skill est retirée', () => {
+  const folder = temporaryFolder();
+  const marker = declareRetiredSkill(folder, '---\nname: redaction-juridique\n---\n');
+  declareBundledSkills(folder);
+  assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'redaction-juridique')), false);
+  assert.equal(fs.existsSync(path.join(folder, '.claude', 'skills', 'redaction-juridique')), false);
+  assert.equal('redaction-juridique' in JSON.parse(fs.readFileSync(marker, 'utf8')), false);
+  assert.match(fs.readFileSync(skillPath(folder, 'style-redaction-cabinet'), 'utf8'), /^---\nname: style-redaction-cabinet\n/);
+});
+
+test('une copie modifiée de l’ancien skill est conservée', () => {
+  const folder = temporaryFolder();
+  const marker = declareRetiredSkill(folder, '---\nname: redaction-juridique\ndescription: perso\n---\n');
+  declareBundledSkills(folder);
+  assert.equal(fs.existsSync(skillPath(folder, 'redaction-juridique')), true);
+  assert.equal('redaction-juridique' in JSON.parse(fs.readFileSync(marker, 'utf8')), false);
 });
 
 test('un répertoire à la place d’un lien provider est remplacé', () => {

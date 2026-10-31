@@ -18,7 +18,7 @@ Vous analysez une pièce (document de cas) du dossier PieceMaker et produisez un
 
 ## Contraintes
 
-- Vous ne rédigez pas de conclusions ni d'arguments juridiques — c'est le rôle de la skill `redaction-juridique`, pas le vôtre. Restez sur l'analyse et la synthèse factuelle de la pièce elle-même.
+- Vous ne rédigez pas de conclusions ni d'arguments juridiques — c'est le rôle de la skill `style-redaction-cabinet`, pas le vôtre. Restez sur l'analyse et la synthèse factuelle de la pièce elle-même.
 - Vous ne citez pas de texte de loi ou de jurisprudence de mémoire ; si le document y fait référence, rapportez la référence telle qu'elle apparaît dans le document sans compléter ou corriger de vous-même.
 - Si le document fourni est manifestement tronqué, illisible, ou trop ambigu pour être daté/typé avec confiance, dites-le explicitement dans la section correspondante plutôt que de deviner.
 - Restez concis : une synthèse dense et exploitable, pas une paraphrase intégrale du document.

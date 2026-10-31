@@ -12,9 +12,11 @@ const MARKER = '.piecemaker/bundled-skills.json';
 
 const BUNDLED_SKILLS = [
   { slug: 'docx-cli', segments: ['vendor', 'skills', 'docx-cli'] },
-  { slug: 'redaction-juridique', segments: ['vendor', 'piecemaker-plugin', 'skills', 'redaction-juridique'] },
+  { slug: 'style-redaction-cabinet', segments: ['vendor', 'piecemaker-plugin', 'skills', 'style-redaction-cabinet'] },
   { slug: 'Skill-PieceMaker', segments: ['vendor', 'skills', 'Skill-PieceMaker'] },
 ] as const;
+
+const RETIRED_BUNDLED_SKILLS = ['redaction-juridique'];
 
 type BundledSkill = (typeof BUNDLED_SKILLS)[number];
 
@@ -65,6 +67,12 @@ function writeMarker(workspace: string, slug: string, files: Record<string, stri
   const temporary = `${filename}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(temporary, filename);
+}
+
+function removeFromMarker(workspace: string, slug: string) {
+  const filename = path.join(workspace, MARKER);
+  const { [slug]: _removed, ...next } = JSON.parse(fs.readFileSync(filename, 'utf8'));
+  fs.writeFileSync(filename, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
 }
 
 function hashesEqual(left: Record<string, string>, right: Record<string, string>) {
@@ -119,7 +127,25 @@ function declareSkill(workspace: string, skill: BundledSkill): void {
   ensureExecutableCli(dest);
 }
 
+function retireSkill(workspace: string, slug: string): void {
+  const previousFiles = readMarker(workspace, slug);
+  if (!previousFiles) return;
+  const dest = path.join(workspace, '.agents', 'skills', slug);
+  const unchanged = fs.existsSync(dest) && hashesEqual(previousFiles, workspaceHashes(slug, walkFiles(dest)));
+  if (unchanged) {
+    prepareWorkspaceInstallation(workspace, { id: `bundled:${slug}`, kind: 'skill', name: slug, slug, files: previousFiles, skipClaude: false }, null).commit();
+  }
+  removeFromMarker(workspace, slug);
+}
+
 export function declareBundledSkills(workspace: string): void {
+  for (const slug of RETIRED_BUNDLED_SKILLS) {
+    try {
+      retireSkill(workspace, slug);
+    } catch (error) {
+      console.warn(`[piecemaker] retrait du skill ${slug} impossible dans ${workspace} : ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   for (const skill of BUNDLED_SKILLS) {
     try {
       declareSkill(workspace, skill);

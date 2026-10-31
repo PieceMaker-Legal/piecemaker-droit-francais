@@ -173,8 +173,8 @@ async function embedRuntimeAssets(sourceDir, stageDir) {
   const legifrance = path.join(to, 'vendor', 'mcp', 'legifrance', 'server.mjs');
   const docxCli = path.join(to, 'vendor', 'skills', 'docx-cli', 'SKILL.md');
   const pieceMakerSkill = path.join(to, 'vendor', 'skills', 'Skill-PieceMaker', 'SKILL.md');
-  const redactionFrom = path.join(from, 'vendor', 'piecemaker-plugin', 'skills', 'redaction-juridique');
-  const redactionTo = path.join(to, 'vendor', 'piecemaker-plugin', 'skills', 'redaction-juridique');
+  const redactionFrom = path.join(from, 'vendor', 'piecemaker-plugin', 'skills', 'style-redaction-cabinet');
+  const redactionTo = path.join(to, 'vendor', 'piecemaker-plugin', 'skills', 'style-redaction-cabinet');
   if (!(await exists(probe))) {
     throw new Error(`Ressources PieceMaker incomplètes — ${probe} est absent.`);
   }
