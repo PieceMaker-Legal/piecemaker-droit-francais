@@ -172,7 +172,6 @@ CLAUDE.md
 .codex/config.toml
 .codex/agents/analyste-pieces.toml
 .agents/skills/Skill-PieceMaker
-.agents/skills/recherche-juridique/SKILL.md
 .agents/skills/docx-cli/SKILL.md
 .agents/skills/docx-cli/scripts/install.sh
 .agents/skills/docx-cli/scripts/bootstrap.sh

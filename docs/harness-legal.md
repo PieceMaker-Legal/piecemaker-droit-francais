@@ -103,5 +103,5 @@ avec un avertissement, jamais avec un faux surlignage. Un tour interrompu ne
 publie pas d'annotations finales. L'ancien hook Stop `verify-citations.mjs` est
 retiré : `DEPRECATED_HOOKS` de `websocket-server/claude-hooks.cjs`.
 
-Le déroulé de recherche et le format exact du bloc `<CITATIONS>` sont décrits
-dans le skill vendu `server/piecemaker/vendor/piecemaker-plugin/skills/recherche-juridique/SKILL.md`.
+Le format exact du bloc `<CITATIONS>` est injecté à chaque tour par
+`server/piecemaker/harness/citation-instructions.ts`.

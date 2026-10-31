@@ -1,6 +1,6 @@
 ---
 name: style-redaction-cabinet
-description: "Appliquer le style de rédaction du cabinet à tout e-mail, citation, assignation, mise en demeure, conclusions en défense ou conclusions d'appel, avec les modèles Word du cabinet et la skill `recherche-juridique` pour les citations. À utiliser dès qu'il faut rédiger, réviser ou relire un acte de procédure, un courrier, un e-mail ou un document juridique français."
+description: "Appliquer le style de rédaction du cabinet à tout e-mail, citation, assignation, mise en demeure, conclusions en défense ou conclusions d'appel, avec les modèles Word du cabinet. À utiliser dès qu'il faut rédiger, réviser ou relire un acte de procédure, un courrier, un e-mail ou un document juridique français."
 ---
 
 # Style rédaction cabinet

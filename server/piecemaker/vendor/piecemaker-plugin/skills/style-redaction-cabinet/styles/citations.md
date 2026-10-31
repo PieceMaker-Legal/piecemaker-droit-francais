@@ -1,7 +1,7 @@
 # Style : citations
 
 Ces règles s'appliquent à tous les actes. Les autres fichiers de style renvoient ici.
-Pour vérifier une citation avant de l'écrire, utilise la skill `recherche-juridique`.
+Pour vérifier une citation avant de l'écrire, lis sa source avec `consulter_article` ou `consulter_decision`.
 
 ## Règles générales
 
@@ -41,4 +41,4 @@ Pour vérifier une citation avant de l'écrire, utilise la skill `recherche-juri
 
 - Graphie des chambres : « Cass. civ. 1ère » ou « Cass. Civ. 1re ». Une autre graphie a été relevée dans une source : « Cass. Civ. 1re, 15 janvier 2020, n° 18-23.456, publié au Bulletin ». Cet exemple n'est pas vérifié : ne le reprends pas comme décision réelle.
 - Aucune table d'abréviations par chambre n'a été trouvée. « Cass. com. » n'apparaît dans aucune source lue.
-- La skill `recherche-juridique` fixe 25 mots maximum par extrait du bloc `<CITATIONS>`. La limite de 15 mots ci-dessus concerne la citation courte dans le texte de l'acte. Confirme avec l'avocat si les deux limites doivent être harmonisées.
+- Le harnais de citations fixe 25 mots maximum par extrait du bloc `<CITATIONS>`. La limite de 15 mots ci-dessus concerne la citation courte dans le texte de l'acte. Confirme avec l'avocat si les deux limites doivent être harmonisées.
