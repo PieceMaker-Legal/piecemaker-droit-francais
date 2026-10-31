@@ -2,7 +2,7 @@
 
 Cette carte réunit les serveurs MCP, les skills, les outils et les commandes de l'assistant. Le détail de chaque fonction reste dans sa propre doc.
 
-Le moteur lit un skill, puis appelle un outil. Un skill ne lance rien : il dit au moteur quoi appeler.
+Le moteur lit un skill, puis appelle un outil. Le skill n'appelle ni le moteur ni un outil.
 
 ```mermaid
 flowchart LR
@@ -17,10 +17,10 @@ flowchart LR
   P[Proxy hudsucker] --> API[API du modèle]
   H{{Hooks<br/>avant et après l'outil}}
 
-  S1 -. lit .-> M
-  S2 -. lit .-> M
-  S3 -. lit .-> M
-  S4 -. lit .-> M
+  M -. lit .-> S1
+  M -. lit .-> S2
+  M -. lit .-> S3
+  M -. lit .-> S4
   M -- pseudonymise --> P
 
   M -- appel MCP --> L[MCP legifrance<br/>stdio, 11 outils]
@@ -33,8 +33,8 @@ flowchart LR
 
   L --> L1[Search_* par juridiction, Search_Code<br/>consulter_article, consulter_decision<br/>Historique_Judiciaire, Tracking_BODACC<br/>dictionnaire_juridique]
   PM --> PM1[conversion, sql, afficher, chronologie<br/>raisonnement, suivi, docx, acte<br/>tabular_review]
-  D --> D1[read, find, replace, edit, wc, outline, diff<br/>track-changes, comments<br/>create, render, info, validate, styles, raw]
-  O --> O1[POST /api/stamping, /api/tampon/*<br/>git log, show, diff<br/>/skills /templates /perso /custom]
+  D --> D1[create, read, find, insert, replace, edit, delete<br/>outline, wc, diff, render, validate, info, upgrade<br/>styles, sections, lists, tables, headers, footers<br/>footnotes, endnotes, images, hyperlinks, code, equations, tasks<br/>track-changes, comments, raw]
+  O --> O1[POST /api/stamping, /api/tampon/*<br/>git log, show, diff<br/>~/.claude/skills, ~/.piecemaker/templates<br/>~/.piecemaker/custom/perso.md]
   A --> A1[analyste-pieces, jurisprudence-scanner]
   R --> R1[conversion, sql, raisonnement, suivi<br/>afficher, chronologie, tabular_review]
 ```
@@ -68,6 +68,14 @@ Point d'entrée de l'assistant : `server/piecemaker/vendor/skills/Skill-PieceMak
 | `pm acte` | `exporter`, `fusionner`, `importer` |
 | `pm tabular_review` | `lister`, `ouvrir`, `documents`, `modeles`, `enregistrer_modele`, `preparer`, `lancer`, `index`, `lire`, `colonnes`, `classement`, `arborescence`, `relancer` |
 
+Le volet `chronologie` s'appelle désormais `index`. La commande `pm chronologie` a gardé son nom.
+
+| Commande | Effet | Lit les pièces |
+|---|---|---|
+| `pm afficher --volet index` | ouvre l'onglet Index du volet Dossier | non |
+| `pm tabular_review index` | retrouve ou prépare l'unique analyse de toutes les pièces, puis l'ouvre dans le volet Dossier | oui, au lancement |
+| `pm chronologie lister\|modifier` | lit ou modifie les dates et les libellés des pièces en base | non |
+
 La commande `piecemaker` est un lanceur pour le développeur, pas un outil de l'assistant : `docs/cli-piecemaker.md`.
 
 ## Skills
@@ -82,13 +90,13 @@ La commande `piecemaker` est un lanceur pour le développeur, pas un outil de l'
 | `conversion-md` | idem | assistant | `pm conversion` |
 | `tamponnage` | idem | assistant | `POST /api/stamping`, `/api/tampon/*` |
 | `historique-dossier` | idem | assistant | `git log`, `git show`, `git diff` |
-| `ajout-de-fonctionnalites` | idem | assistant | `/skills`, `/templates`, `/perso`, `/custom` |
+| `ajout-de-fonctionnalites` | idem | assistant | `~/.claude/skills`, `~/.piecemaker/templates`, `~/.piecemaker/custom/perso.md` |
 | `verifieur-raisonnement` | `.agents/skills/` | développeur | `pm raisonnement`, `pm acte` |
 | `backend-module-standards` | `.agents/skills/` | développeur | aucun |
 | `frontend-module-standards` | `.agents/skills/` | développeur | aucun |
 | `electron-cloudcli` | `.agents/skills/` | développeur | aucun |
 
-`server/piecemaker/skill-declaration.ts` déclare `docx-cli`, `redaction-juridique` et `Skill-PieceMaker` dans chaque dossier. L'installateur enregistre les autres skills de `piecemaker-plugin` dans `~/.claude` et `~/.codex/skills`.
+`server/piecemaker/skill-declaration.ts` déclare `docx-cli`, `redaction-juridique` et `Skill-PieceMaker` dans chaque dossier. L'installateur enregistre les autres skills de `piecemaker-plugin` dans `~/.claude` et `~/.codex/skills`. Mistral lit `~/.vibe/skills` et `~/.agents/skills`, mais l'installateur n'y écrit rien.
 
 ## Sous-agents
 
@@ -115,6 +123,7 @@ Codex reçoit la protection des pièces dans `~/.codex/hooks.json`. Mistral exé
 |---|---|---|---|
 | MCP `legifrance` | `.mcp.json` | `.codex/config.toml` | `.vibe/config.toml` |
 | Skills du dossier | `.claude/skills` | `.agents/skills` | `.agents/skills`, outil `skill` |
+| Sous-agents | `~/.claude` | `.codex/agents`, depuis la Bibliothèque seulement | `.vibe/agents`, depuis la Bibliothèque seulement |
 | `pm`, `docx` | Bash | Bash | Bash |
 
 Cursor, OpenCode et Grok reçoivent aussi la déclaration du MCP `legifrance` et les liens des skills.
@@ -125,4 +134,4 @@ Les plugins de `plugins/` servent l'avocat et ne déclarent aucun outil IA : `pi
 
 ## Maintenance
 
-Mettez à jour ce fichier quand un outil, un skill ou une commande change. Les sources de référence sont `mcp_definitions.py`, `server.mjs`, `pm.mjs` et les `SKILL.md`.
+Mettez à jour ce fichier quand un outil, un skill ou une commande change. Les sources de référence sont `mcp_definitions.py`, `server.mjs`, `pm.mjs`, `docx --help` (version 0.24.0) et les `SKILL.md`.
