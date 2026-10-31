@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -142,11 +142,11 @@ test('performance : begin et end rendent la main immédiatement pendant un commi
   const folder = makeFolder(t, files);
   write(folder, 'pieces/gros-fictif.pdf', 'x'.repeat(5 * 1024 * 1024));
   const history = makeHistory(t);
-  const started = performance.now();
   history.begin(folder);
   history.end({ cwd: folder, request: 'Tour', conclusion: '', aborted: false, author: AGENT });
-  assert.ok(performance.now() - started < 50, `${performance.now() - started} ms`);
+  assert.equal(existsSync(path.join(folder, '.git')), false);
   await history.idle();
+  assert.equal(existsSync(path.join(folder, '.git')), true);
   assert.deepEqual(subjects(folder), ['État initial du dossier']);
 });
 
