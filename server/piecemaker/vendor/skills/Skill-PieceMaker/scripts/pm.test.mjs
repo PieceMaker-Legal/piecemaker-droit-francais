@@ -166,7 +166,9 @@ test('tabular_review_index garde l’index dans l’onglet Dossier', async () =>
 });
 
 test('SKILL.md documente toute la surface d’interface', () => {
-  const skill = fs.readFileSync(path.join(HERE, '..', 'SKILL.md'), 'utf8');
+  const references = path.join(HERE, '..', 'references');
+  const skill = [path.join(HERE, '..', 'SKILL.md'), ...fs.readdirSync(references).map((name) => path.join(references, name))]
+    .map((file) => fs.readFileSync(file, 'utf8')).join('\n');
   const required = [
     'conversion', 'sql', 'afficher', 'tabular_review', 'tabular_review_index',
     '--fichier', '--volet', '--review', '--fermer', '--force', '--requete', '--dossier',

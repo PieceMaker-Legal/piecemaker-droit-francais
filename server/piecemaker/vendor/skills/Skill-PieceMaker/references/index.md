@@ -1,12 +1,9 @@
 # tabular_review_index
 
-**L’index du dossier est une tabular review : une seule par dossier lit toutes les pièces, une ligne par pièce, pour la chronologie et le tri.** La commande reprend les sous-commandes de `tabular_review`, avec trois différences :
+**L’index du dossier est une tabular review : une seule par dossier lit toutes les pièces, une ligne par pièce, pour la chronologie et le tri.** La commande reprend les sous-commandes de `tabular_review`, avec deux différences :
 
 - l’index s’affiche toujours dans l’onglet Dossier, jamais dans le volet Tabular Review ;
-- le fichier et le projet sont déduits : n’indiquez ni `--fichier` ni `--projet` ;
-- n’en créez jamais un autre.
-
-`lancer` et `relancer` seulement si l’avocat l’a demandé.
+- le fichier et le projet sont déduits : n’indiquez ni `--fichier` ni `--projet`.
 
 ```
 pm tabular_review_index ouvrir

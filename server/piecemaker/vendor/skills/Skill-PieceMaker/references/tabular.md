@@ -1,9 +1,5 @@
 # tabular_review
 
-`lancer` et `relancer` seulement si l’avocat l’a demandé.
-
-L’index du dossier a sa propre commande : `tabular_review_index`. `tabular_review` refuse son fichier et son projet. `lister` le signale par `index: true`. `preparer` le renvoie si on lui demande un index, une lecture intégrale, une chronologie ou un tri. Les analyses classiques (contrats, jurisprudence, recherche) restent séparées et ne portent pas de classement du dossier.
-
 ```
 pm tabular_review lister
 pm tabular_review ouvrir --fichier "Tabular Review/analyse.json"

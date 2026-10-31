@@ -5,7 +5,7 @@ le raisonnement du dossier dans `.piecemaker/raisonnements/` s'il est unique, si
 son empreinte de version et les repères du texte ; aucun code du modèle n’y est
 copié. Si le fichier est absent ou modifié, le contrôle est suspendu. Ne remplacez
 pas l’empreinte pour faire disparaître une alerte : un changement de modèle demande
-un réexamen. Un DOCX lié à un ancien modèle JS est refusé : transcrire le modèle en YAML, puis préparer à nouveau le document.
+un réexamen.
 
 ```sh
 pm docx preparer --fichier projet.docx --liens liens.json --sortie projet-lie.docx
@@ -16,9 +16,7 @@ pm docx extraire --fichier projet-lie.docx --sortie modele-extrait.yaml
 
 Tous les chemins sont relatifs au dossier de la session (`--dossier` pour changer
 de dossier). `--modele FILE.yaml` choisit le fichier du modèle dans le dossier pour
-la préparation ou une autre source de comparaison. Les sorties doivent être nouvelles : aucun fichier existant n’est
-écrasé. Préparer un DOCX déjà lié est refusé pour ne pas remplacer sa référence ni
-effacer la trace d’une retouche. `preparer` ouvre le document produit dans le volet.
+la préparation ou une autre source de comparaison. `preparer` ouvre le document produit dans le volet.
 
 Lisez d’abord le DOCX avec `docx read`. Dans `liens.json`, désignez les passages
 déjà rédigés par leurs paragraphes et les valeurs par leur texte exact. Les
@@ -41,9 +39,7 @@ Exemple minimal pour un modèle qui déclare déjà la variable `prix` :
 Une clause peut couvrir plusieurs paragraphes contigus dans le même parent,
 notamment une cellule de tableau. Une valeur peut traverser plusieurs runs de
 mise en forme dans un paragraphe. Types : `nombre`, `pourcentage` avec `%`, `date`
-ISO. Aucune règle ou formule du modèle n’est modifiée. Un texte absent, ambigu,
-des sélections qui se chevauchent, des révisions non résolues ou une valeur Word
-dynamique sont refusés ; précisez la sélection au lieu de deviner. La préparation
+ISO. Aucune règle ou formule du modèle n’est modifiée. La préparation
 conserve le texte et la mise en forme, et écrit une copie liée au fichier externe.
 
 `verifier` est local et ne réécrit rien : sources externes, parties et fiabilité
