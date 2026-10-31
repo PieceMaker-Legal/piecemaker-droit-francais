@@ -214,6 +214,12 @@ pm conversion
 pm conversion --force contrat.pdf
 ```
 
+Sans MinerU, le Markdown d’un scan est vide ou presque : signalez-le, n’en concluez pas que la pièce est vide.
+
+## Historique du dossier
+
+Le dossier est un dépôt Git local. PieceMaker commite seul à la fin du tour : ne commitez pas. Consultez et restaurez avec `git log`, `git show`, `git diff` et `git restore --source <sha> -- FICHIER`. N’utilisez ni `reset`, `rebase`, `switch`, `stash`, `clean`, ni remote.
+
 ## tabular_review
 
 `lancer` et `relancer` seulement si l’avocat l’a demandé.

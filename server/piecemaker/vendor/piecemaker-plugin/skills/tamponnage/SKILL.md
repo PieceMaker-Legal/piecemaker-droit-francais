@@ -113,7 +113,7 @@ LibreOffice est installé à un emplacement non standard. `GET /api/admin/status
 expose `libreOffice: false` dans ce cas, et l'onglet « Tampon et pièces » de
 l'administration affiche l'avertissement.
 
-Deux règles constantes : `smart_converter.py` (skill `conversion-md`) produit
+Deux règles constantes : `pm conversion` produit
 du **Markdown**, pas du PDF — il n'intervient pas ici ; et on ne tamponne
 jamais le `.md` d'une pièce, le bordereau doit renvoyer au document d'origine.
 

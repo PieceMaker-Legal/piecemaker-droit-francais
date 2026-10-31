@@ -41,7 +41,7 @@ Toute erreur est loguée puis ignorée (fail-open).
 
 ## Retour arrière par l'IA
 
-L'IA utilise Git en shell, sans outil MCP. La skill `historique-dossier` (`vendor/piecemaker-plugin/skills/`) lui indique `git log`, `git diff`, `git show <sha>:fichier.md` et `git restore --source <sha> -- fichier`. Elle lui interdit `reset`, `rebase`, `switch`, `stash`, `clean`, les commits manuels et tout remote.
+L'IA utilise Git en shell, sans outil MCP. Le skill `piecemaker` lui indique `git log`, `git show`, `git diff` et `git restore --source <sha> -- fichier`. Il lui interdit `reset`, `rebase`, `switch`, `stash`, `clean`, les commits manuels et tout remote.
 
 Dans un dossier au bouclier vert, `protect-originals.mjs` refuse les commandes Git qui feraient sortir le contenu d'un objet :
 - les sous-commandes `cat-file`, `archive`, `bundle`, `fast-export` et `format-patch` ;
