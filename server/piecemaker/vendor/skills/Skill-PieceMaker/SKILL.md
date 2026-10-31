@@ -45,11 +45,11 @@ un réexamen. Un DOCX lié à un ancien modèle JS est refusé : transcrire le m
 pm docx preparer --fichier projet.docx --liens liens.json --sortie projet-lie.docx
 pm docx verifier --fichier projet-lie.docx
 pm docx comparer --fichier projet-lie.docx
-pm docx extraire --fichier projet-lie.docx --sortie modele-extrait.js
+pm docx extraire --fichier projet-lie.docx --sortie modele-extrait.yaml
 ```
 
 Tous les chemins sont relatifs au dossier de la session (`--dossier` pour changer
-de dossier). `--modele FILE.js` choisit le fichier du modèle dans le dossier pour
+de dossier). `--modele FILE.yaml` choisit le fichier du modèle dans le dossier pour
 la préparation ou une autre source de comparaison. Les sorties doivent être nouvelles : aucun fichier existant n’est
 écrasé. Préparer un DOCX déjà lié est refusé pour ne pas remplacer sa référence ni
 effacer la trace d’une retouche. `preparer` ouvre le document produit dans le volet.

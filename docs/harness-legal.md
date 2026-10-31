@@ -26,7 +26,7 @@ Deux points de branchement distincts :
   Responses, le nom d'outil ne vivant que sur le bloc d'appel) et écrit le texte
   intégral dans `~/.piecemaker/decisions/<id>.json`. Nécessaire parce que
   `consulter_decision` ne rend le texte intégral que dans son résultat, jamais
-  sur le disque, et que `Download_Query_Results` ne le rend jamais du tout.
+  sur le disque.
 - `server/piecemaker/harness/citation-turn.ts` — comportement de Mike : texte
   diffusé progressivement, bloc `<CITATIONS>` masqué même découpé,
   vérification mécanique puis fin du tour. Un bloc JSON valide terminé à EOF
@@ -114,8 +114,8 @@ Invariants tenus par les tests (`harness.test.js`, `proxy-harness.test.js`) :
 **Comme Mike, ce harnais annote, il ne bloque pas la prose déjà diffusée.** Un
 extrait corrigé reçoit le texte exact ; un extrait introuvable reste visible
 avec un avertissement, jamais avec un faux surlignage. Un tour interrompu ne
-publie pas d'annotations finales. Le hook Stop de PieceMaker-Installer est un
-mécanisme distinct et peut toujours s'appliquer si l'utilisateur l'a installé.
+publie pas d'annotations finales. L'ancien hook Stop `verify-citations.mjs` est
+retiré : `DEPRECATED_HOOKS` de `websocket-server/claude-hooks.cjs`.
 
 Le déroulé de recherche et le format exact du bloc `<CITATIONS>` sont décrits
 dans le skill vendu `server/piecemaker/vendor/piecemaker-plugin/skills/recherche-juridique/SKILL.md`.

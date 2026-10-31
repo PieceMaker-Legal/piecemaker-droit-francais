@@ -1,6 +1,6 @@
 # Outil `sql`
 
-Un seul outil MCP, `sql`, donne à Claude, Codex et Vibe un accès SQL libre à la
+Un seul outil, `sql` (commande `pm sql`), donne à Claude, Codex et Vibe un accès SQL libre à la
 base PieceMaker (`auth.db`) : chronologie, personnes, mentions, citations,
 renommage des pièces. Il remplace l'outil MCP `renommage` (la commande
 `piecemaker renommage` reste). `conversion` reste à part : c'est un traitement,

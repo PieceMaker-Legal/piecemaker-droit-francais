@@ -1,19 +1,18 @@
 ---
 name: recherche-juridique
-description: "Rechercher un texte de loi ou une jurisprudence via le serveur MCP Légifrance et produire des citations vérifiables (bloc <CITATIONS>) pour une réponse ou un acte PieceMaker. À utiliser dès qu'un texte de loi, un article ou une décision doit être cité — jamais de mémoire. Le hook Stop `verify-citations.mjs` bloque le tour si une citation ne se retrouve pas mot pour mot dans une source réellement lue."
+description: "Rechercher un texte de loi ou une jurisprudence via le serveur MCP Légifrance et produire des citations vérifiables (bloc <CITATIONS>) pour une réponse ou un acte PieceMaker. À utiliser dès qu'un texte de loi, un article ou une décision doit être cité — jamais de mémoire. Le harnais de citations signale toute citation qui ne se retrouve pas mot pour mot dans une source lue dans le tour."
 ---
 
 # Recherche juridique et citations vérifiables
 
 ## Ce que ce skill garantit
 
-**Une citation n'est acceptée que si elle a été lue dans ce tour, mot pour
-mot.** Le hook Stop `verify-citations.mjs` relit chaque citation du bloc
-`<CITATIONS>` produit en fin de réponse, la localise mécaniquement dans le
-texte source réel, et bloque le tour si l'une d'elles est introuvable — même
-approximativement. Ce n'est jamais un jugement du modèle : c'est une
-recherche de sous-chaîne, tolérante aux espaces/casse/ponctuation mais pas au
-sens. Une citation reformulée, résumée ou inventée est rejetée.
+**Une citation n'est vérifiée que si sa source a été lue dans ce tour, mot pour
+mot.** À la fin du tour, le harnais de citations relit chaque citation du bloc
+`<CITATIONS>` et la localise mécaniquement dans le texte source réel. Ce n'est
+jamais un jugement du modèle : c'est une recherche de sous-chaîne, tolérante aux
+espaces, à la casse et à la ponctuation, pas au sens. Une citation introuvable
+reste visible avec l'avertissement « citation non retrouvée, à vérifier ».
 
 Ce skill décrit le déroulé de recherche avec les outils Légifrance
 effectivement disponibles, puis le format exact que le vérificateur accepte.
@@ -22,11 +21,22 @@ effectivement disponibles, puis le format exact que le vérificateur accepte.
 
 | Outil | Rôle |
 | --- | --- |
-| `Search_Jurisprudence` | Seul outil de recherche jurisprudentielle : interroge en un appel Légifrance et Judilibre pour la Cour de cassation, les cours d'appel, la première instance, le Conseil d'État et les CAA, avec les mêmes filtres (`matiere` obligatoire en cassation, publication, villes, `types_premiere_instance` obligatoire en première instance, recueil Lebon, dates) et la même requête (guillemets, `ET`, `OU`, parenthèses, articles). Les doublons Légifrance/Judilibre sont fusionnés ; au-delà de 500 résultats cumulés, la recherche est refusée. |
+| `Search_Cour_Cassation` | Cour de cassation. `matiere` obligatoire (`CIVIL`, `COMMERCIAL`, `PENAL`, `SOCIAL`). Filtre de publication au Bulletin et dates. |
+| `Search_Cour_Appel` | Cours d'appel. Filtre par ville (`APPEL_SIEGE_APPEL`) et dates. Aucun filtre de matière : ciblez-la par mots-clés ou article. |
+| `Search_Conseil_Etat` | Conseil d'État. Filtre recueil Lebon (`PUBLICATION_RECUEIL`) et dates. |
+| `Search_CAA` | Cours administratives d'appel. Filtre par ville (`CAA_VILLE`), recueil Lebon et dates. |
+| `Search_Premiere_Instance` | Première instance, environ 2 000 décisions. `PREMIER_DEGRE_TYPE_JURIDICTION` obligatoire. Filtre de dates. |
 | `Search_Code` | Recherche dans les codes juridiques français (Code civil, Code du travail…) — référence d'article exacte (`L. 1235-3`), mots-clés ou expression exacte. Renvoie les identifiants `LEGIARTI…` des articles trouvés. |
 | `consulter_article` | Texte intégral et vigueur d'une version précise d'article, à partir de son identifiant `LEGIARTI…` rendu par `Search_Code`. |
-| `consulter_decision` | Rapatrie le texte intégral d'une décision à partir de son identifiant Légifrance (`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux). **Rapatrie le texte intégral et le met en cache** (voir plus bas) — c'est le moyen normal de lire une décision avant de la citer. |
+| `consulter_decision` | Rapatrie le texte intégral d'une décision à partir de son identifiant Légifrance (`JURITEXT…`, `CETATEXT…`). **Rapatrie le texte intégral et le met en cache** (voir plus bas) — c'est le moyen normal de lire une décision avant de la citer. |
+| `Historique_Judiciaire` | Rend pour une décision (`JURITEXT…`, `CETATEXT…`) son historique procédural et le relevé des décisions qui la citent. |
 | `Tracking_BODACC` | Situation d'une entreprise (procédures collectives) via son SIREN — hors jurisprudence, utile pour qualifier une partie. |
+| `dictionnaire_juridique` | Définition d'un terme du lexique juridique officiel de justice.fr. |
+
+Les cinq outils `Search_*` de jurisprudence interrogent Légifrance avec la même
+requête (guillemets, `ET`, `OU`, parenthèses, articles). Au-delà de 500 résultats,
+la recherche est refusée. Seule l'analyse tabulaire en mode recherche interroge
+aussi Judilibre.
 
 ## Recherche large : l'analyse tabulaire en mode recherche
 
@@ -34,13 +44,12 @@ Pour une question de droit qui mérite un balayage systématique plutôt qu'une
 requête isolée, l'**analyse tabulaire en mode recherche** : une formulation
 Légifrance et Judilibre, mêmes filtres et même syntaxe que les outils
 Légifrance, au plus 500 décisions, une ligne par décision et une colonne par
-question. La préparer avec l'outil `tabular_review` (`preparer`, `mode`
-`recherche`) : nom, requête et filtres, questions ou `modele`, IA. Le
+question. La préparer avec `pm tabular_review preparer --mode recherche` : nom, requête et filtres, questions ou `modele`, IA. Le
 formulaire rempli s'affiche à l'avocat, qui vérifie et lance. `lancer`
 seulement si l'avocat l'a demandé dans le chat.
 
-Une fois la revue faite, la lire avec l'outil `tabular_review` (`lister`, puis
-`ouvrir`) : le fichier `Tabular Review/<fichier>.json` donne, pour chaque
+Une fois la revue faite, la lire avec `pm tabular_review lister`, puis
+`ouvrir` : le fichier `Tabular Review/<fichier>.json` donne, pour chaque
 ligne, l'identifiant de la décision (`decision`, et `aliases` quand elle
 existe dans les deux bases), la copie lue par l'IA (`documents[0].copy`, sous
 `Tabular Review/docs/`) et les réponses par question
@@ -57,17 +66,17 @@ est quelque part sur disque :
   dispositif quand « Dispositif uniquement » est coché) : un extrait pris
   ailleurs dans la décision exige `consulter_decision`.
 - **`consulter_decision`** renvoie le texte intégral dans sa réponse d'outil ;
-  le hook `decision-cache.mjs` le capte au passage et l'écrit dans
+  le harnais de citations (`harness/decisions.cjs`) le capte au passage et l'écrit dans
   `~/.piecemaker/decisions/<id>.json` — vérifiable.
 
-**Conséquence pratique** : les résultats de `Search_Jurisprudence` (titre,
+**Conséquence pratique** : les résultats des outils `Search_*` (titre,
 analyse, extraits) servent à trier. Dès qu'une décision doit être citée, il
 faut d'abord la lire avec `consulter_decision` (ou dans la copie d'une analyse
 tabulaire en mode recherche).
 
 ## Déroulé de recherche
 
-1. **Recherche large** avec `Search_Jurisprudence` sur les juridictions visées
+1. **Recherche large** avec l'outil `Search_*` de chaque juridiction visée
    (ou, pour une question de droit qui mérite un balayage systématique plutôt
    qu'une requête isolée, l'analyse tabulaire en mode recherche préparée
    pour l'avocat). Pour un texte de loi, `Search_Code`.
@@ -121,10 +130,10 @@ prend l'une des trois formes suivantes.
 ### Forme « jurisprudence » (`kind: "case"`)
 
 Identifie la décision par `decision_id` — l'identifiant Légifrance
-(`JURITEXT…`, `CETATEXT…`) ou Judilibre (24 caractères hexadécimaux) tel que
-rendu par `Search_Jurisprudence` ou par une analyse tabulaire en mode recherche
-(champ `decision` de la ligne), et lu avec `consulter_decision` (ou dans la
-copie `Tabular Review/docs/` de cette analyse).
+(`JURITEXT…`, `CETATEXT…`) rendu par un outil `Search_*`, lu avec
+`consulter_decision`, ou l'identifiant rendu par une analyse tabulaire en mode
+recherche (champ `decision` de la ligne, Légifrance ou Judilibre à 24 caractères
+hexadécimaux), lu dans la copie `Tabular Review/docs/` de cette analyse.
 
 ```json
 {
@@ -231,30 +240,28 @@ retombe sur un tableau `quotes` d'un seul élément :
 { "ref": 6, "doc_id": "pieces/mise-en-demeure.md", "page": 1, "quote": "je vous mets en demeure de régulariser sous huitaine" }
 ```
 
-## Ce que fait le vérificateur, et quoi faire quand il bloque
+## Ce que fait le vérificateur, et quoi faire quand il signale une citation
 
-À l'arrêt du tour, `verify-citations.mjs` :
+À la fin du tour, le harnais de citations :
 
 1. Parse le bloc `<CITATIONS>` du dernier message.
-2. Pour chaque citation, résout sa source réelle — texte intégral de la
-   décision (analyse tabulaire en mode recherche ou cache
-   `consulter_decision`) ou
-   pièce Markdown du dossier.
+2. Pour chaque citation, résout sa source réelle — texte de la décision
+   (analyse tabulaire en mode recherche ou `consulter_decision` de ce tour),
+   de l'article, ou pièce Markdown du dossier.
 3. Localise mécaniquement chaque extrait dans ce texte. Un extrait qui a
    légèrement dérivé (espace, casse, ponctuation) est **corrigé
    automatiquement** avec l'extrait source exact — ce n'est pas une faute.
-4. Un extrait introuvable, même tolérant, **bloque le tour** : la réponse
-   liste chaque citation fautive avec son identifiant et le motif (source
-   inconnue, source illisible, ou introuvable dans la source).
+4. Un extrait introuvable reste affiché avec l'avertissement « citation non
+   retrouvée, à vérifier ». Le harnais ne bloque pas la réponse déjà diffusée.
 
-Quand ça arrive : soit relire la source exacte et reprendre le texte réel de
-l'extrait fautif (jamais le reformuler pour le faire passer), soit retirer la
+Pour éviter cet avertissement : relire la source exacte et reprendre le texte
+réel de l'extrait (jamais le reformuler pour le faire passer), ou retirer la
 citation si elle ne peut pas être justifiée par une source effectivement lue.
 
 ## Ce qu'il ne faut pas faire
 
 - Ne jamais citer une décision connue uniquement par un résultat de
-  `Search_Jurisprudence` sans l'avoir d'abord lue avec `consulter_decision`.
+  `Search_*` sans l'avoir d'abord lue avec `consulter_decision`.
 - Ne jamais paraphraser un extrait pour qu'il « sonne » comme la source — le
   vérificateur tolère l'espace/la casse/la ponctuation, pas le sens.
 - Ne jamais laisser un `ref` sauter un numéro ou repartir en désordre.

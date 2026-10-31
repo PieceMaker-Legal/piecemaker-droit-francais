@@ -18,9 +18,9 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
     `pdf-lib` pour images et texte), tampon puis renommage « Pièce n°N » dans
     le sous-dossier « Pièces tamponnées » de chaque dossier juridique.
 - **Agents** (`agents/`) :
-  - `verificateur-anonymisation` — audit lecture seule avant sortie de
-    cabinet, confirme l'absence de PII résiduelle.
-  - `analyste-piece` — synthèse structurée d'une pièce du dossier.
+  - `analyste-pieces` — synthèse structurée d'une pièce du dossier.
+  - `jurisprudence-scanner` — fiche JSON de pertinence d'une décision déjà
+    téléchargée.
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).

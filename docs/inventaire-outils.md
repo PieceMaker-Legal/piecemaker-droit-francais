@@ -50,9 +50,11 @@ Le canal Légifrance ne passe pas par les hooks : leurs filtres visent `Read`, `
 
 La déclaration par dossier se fait dans `server/piecemaker/mcp-declaration.ts`.
 
+L'étape `07-legifrance` de l'installateur vise un autre serveur, le plugin `piecemaker@mcp-legifrance` : son dépôt est externe, et il expose `Search_Jurisprudence` à la place des cinq outils par juridiction. Ce tableau décrit le serveur embarqué.
+
 ## Commande `pm`
 
-Point d'entrée de l'assistant : `.agents/skills/Skill-PieceMaker/scripts/pm.mjs`. Le serveur PieceMaker doit tourner.
+Point d'entrée de l'assistant : `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/pm.mjs`, copié dans `.agents/skills/` de chaque dossier. Le serveur PieceMaker doit tourner.
 
 | Commande | Sous-commandes ou options |
 |---|---|
@@ -72,12 +74,12 @@ La commande `piecemaker` est un lanceur pour le développeur, pas un outil de l'
 
 | Skill | Source | Public | Appelle |
 |---|---|---|---|
-| `piecemaker` | `.agents/skills/Skill-PieceMaker/` | assistant | `pm` |
-| `docx-cli` | `.agents/skills/docx-cli/` | assistant | `docx` |
+| `piecemaker` | `server/piecemaker/vendor/skills/Skill-PieceMaker/` | assistant | `pm` |
+| `docx-cli` | `server/piecemaker/vendor/skills/docx-cli/` | assistant | `docx` |
 | `redaction-juridique` | `server/piecemaker/vendor/piecemaker-plugin/skills/` | assistant | `docx` |
-| `legal-code` | `.agents/skills/legal-code/` | assistant, session `/legal-code` | `raisonnement`, `sql` |
-| `recherche-juridique` | `server/piecemaker/vendor/piecemaker-plugin/skills/` | assistant | MCP `legifrance`, `tabular_review` |
-| `conversion-md` | idem | assistant | `conversion` |
+| `legal-code` | `.agents/skills/legal-code/` | assistant, session `/legal-code` | `pm raisonnement`, `pm sql` |
+| `recherche-juridique` | `server/piecemaker/vendor/piecemaker-plugin/skills/` | assistant | MCP `legifrance`, `pm tabular_review` |
+| `conversion-md` | idem | assistant | `pm conversion` |
 | `tamponnage` | idem | assistant | `POST /api/stamping`, `/api/tampon/*` |
 | `historique-dossier` | idem | assistant | `git log`, `git show`, `git diff` |
 | `ajout-de-fonctionnalites` | idem | assistant | `/skills`, `/templates`, `/perso`, `/custom` |

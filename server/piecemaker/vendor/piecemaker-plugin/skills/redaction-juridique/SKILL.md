@@ -61,7 +61,7 @@ Ces templates peuvent être déplacés vers `~/.piecemaker/templates/` pour un e
    source des placeholders : ne charger ni fichier JSON compagnon, ni ordre ou
    consigne de placeholder stocké hors du document.
 5. **Citer via `recherche-juridique`** : toute référence à un texte de loi ou à une décision insérée dans `{{DISCUSSION}}` / `{{DISCUSSION_APPEL}}` / `{{DISCUSSION_ASSIGNATION}}` / `{{DISPOSITIF*}}` doit d'abord être vérifiée avec cette skill — jamais citée de mémoire.
-6. **Anonymiser avant toute sortie externe** du document rédigé — anonymisation depuis l'administration (« Anonymiser & mapper »), puis vérification par l'agent `verificateur-anonymisation` avant envoi.
+6. **Anonymiser avant toute sortie externe** du document rédigé — anonymisation depuis l'administration (« Anonymiser & mapper »), puis relecture du résultat avant envoi.
 
 ## Règles qui s'appliquent toujours
 
