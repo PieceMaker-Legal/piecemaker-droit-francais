@@ -585,6 +585,14 @@ Légifrance, `healthcheck` Judilibre ; le message d'échec dit laquelle des troi
 Légifrance, la Tabular Review et le MCP Légifrance. Déjà présents, le guide est
 remplacé par une confirmation (« Remplacer les identifiants »).
 
+Si les identifiants restent absents (« Je le ferai plus tard »), le MCP Légifrance
+n'expose qu'un seul outil, `connexion`, dont la description porte ce guide. L'assistant
+guide l'utilisateur. L'outil lit le Client ID puis le Client Secret dans le
+presse-papiers : les valeurs n'entrent jamais dans la conversation. Il applique la même
+vérification, écrit le même fichier, puis le serveur envoie
+`notifications/tools/list_changed`. Une fois les clés présentes, `connexion` n'est plus
+exposé (`tools/connexion_piste.py`).
+
 Le guide ne bloque pas l'installation, qui se poursuit pendant que
 l'utilisateur le remplit. Une fois l'installation terminée, la fenêtre reste
 ouverte tant que les identifiants ne sont ni enregistrés ni reportés (« Je le

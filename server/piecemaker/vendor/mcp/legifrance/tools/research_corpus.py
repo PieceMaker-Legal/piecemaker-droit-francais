@@ -97,7 +97,7 @@ def _clean_query(args: Dict[str, Any]) -> str:
 def _collect(client: Any, args: Dict[str, Any], query: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     try:
         plan = recherche.preparer({**args, "query": query}, dates_par_defaut=False)
-        return plan, recherche.collecter(plan, client)
+        return plan, recherche.collecter(plan, client, refuser_si_trop_large=True)
     except recherche.RechercheInvalide as error:
         raise ValueError(str(error))
     except recherche.RechercheTropLarge as too_broad:

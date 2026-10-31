@@ -12,8 +12,8 @@ INITIALIZE_INSTRUCTIONS = (
     "une alternative ; les parenthèses regroupent les alternatives. Exemple : \"société anonyme\" "
     "ET \"révocation\" ET (\"dirigeant\" OU \"mandataire social\"). Si l’utilisateur indique "
     "un article, inclus-le obligatoirement dans la requête et adapte les dates de recherche à la "
-    "version applicable de ce texte. Au-delà de 500 résultats, la recherche est refusée pour "
-    "manque de contexte. En cas d’incertitude sur les faits utiles ou le droit applicable, "
+    "version applicable de ce texte. Au-delà de 500 résultats, un avertissement signale le "
+    "manque de contexte : resserre alors la requête. En cas d’incertitude sur les faits utiles ou le droit applicable, "
     "demande une clarification."
 )
 
@@ -90,6 +90,57 @@ Chaque famille est etendue aux libelles reels de la facette Legifrance PREMIER_D
     }
 }
 
+INSTRUCTIONS_CONNEXION = (
+    "Les identifiants PISTE sont absents : la recherche juridique n'est pas disponible. "
+    "Propose à l'utilisateur de le guider avec l'outil `connexion`."
+)
+
+OUTIL_CONNEXION = {
+    "name": "connexion",
+    "description": """Connecte le serveur à Légifrance et JUDILIBRE avec des identifiants PISTE. Guide l'utilisateur étape par étape, une étape à la fois. PISTE est le portail officiel de l'État qui donne accès à ces bases. Le compte est gratuit.
+
+Ne demande jamais le Client ID ni le Client Secret dans la conversation. Si l'utilisateur les colle quand même, dis-lui de ne pas le refaire et de les copier seulement dans le presse-papiers.
+
+1. Créer le compte : https://piste.gouv.fr/registration
+- Indiquer un nom et un e-mail. Cet e-mail sera l'identifiant.
+- Choisir un mot de passe.
+- Laisser « Code de l'organisation » vide : le compte est rattaché à « Universelle », qui donne accès à Légifrance et JUDILIBRE.
+- Cocher « J'accepte les termes des CGU », passer la vérification, cliquer sur « S'inscrire ».
+- Ouvrir l'e-mail PISTE, activer le compte, puis se connecter : https://piste.gouv.fr/se-connecter
+
+2. Accepter les conditions d'utilisation : https://piste.gouv.fr/apimgt/consentement-cgu-api
+- Dans « Recherche », taper Légifrance et cocher la ligne PROD.
+- Recommencer avec JUDILIBRE et cocher sa ligne PROD.
+- Cliquer sur « Valider mes choix CGU ».
+
+3. Créer une application : https://piste.gouv.fr/apps
+- Cliquer sur « Créer une application », laisser l'environnement PRODUCTION, puis valider.
+- Renseigner au minimum un nom au choix, l'e-mail, le nom du cabinet et le nom du responsable.
+- Dans « Sélectionner les API », cocher la colonne « Souscrite » pour JUDILIBRE et Légifrance. Si une case est grisée, revenir à l'étape 2.
+- Enregistrer l'application.
+- Ignorer l'application APP_SANDBOX_… créée automatiquement : ses identifiants ne fonctionnent pas avec les vraies bases.
+
+4. Transmettre les identifiants par le presse-papiers
+- Dans https://piste.gouv.fr/apps, ouvrir l'application créée, section « Identifiants Oauth ».
+- Demander à l'utilisateur de copier le Client ID et de le confirmer, puis appeler cet outil avec etape=client_id.
+- Demander à l'utilisateur de cliquer sur « Consulter le secret », de copier le Client Secret et de le confirmer, puis appeler cet outil avec etape=client_secret.
+
+L'outil lit le presse-papiers de cet ordinateur, vérifie les identifiants auprès de PISTE et les enregistre dans un fichier local. Il ne renvoie jamais leur valeur. Après la connexion, les outils de recherche remplacent cet outil.""",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "etape": {
+                "type": "string",
+                "enum": ["client_id", "client_secret"],
+                "description": "Identifiant que l'utilisateur vient de copier dans le presse-papiers."
+            }
+        },
+        "required": ["etape"],
+        "additionalProperties": False
+    },
+    "annotations": {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
+}
+
 MCP_TOOLS = [
 # ============================================================================
     # OUTILS RECHERCHE JURISPRUDENCE - VERSION OPTIMISÉE
@@ -103,7 +154,7 @@ MCP_TOOLS = [
             "fusionne les doublons (même juridiction, même date, même numéro). Légifrance n'a plus de "
             "décisions de cours d'appel depuis 2023 ni de première instance depuis 2024 : Judilibre "
             "les fournit. Le Conseil d'État et les CAA ne sont que dans Légifrance. Au-delà de 500 "
-            "décisions après fusion des doublons, la recherche est refusée. Les résultats sont triés du plus récent au "
+            "décisions après fusion des doublons, seules les 500 mieux classées sont rendues, avec un avertissement. Les résultats sont triés du plus récent au "
             "plus ancien ; `consulter_decision` lit ensuite un identifiant Légifrance ou Judilibre."
         ),
         "inputSchema": {

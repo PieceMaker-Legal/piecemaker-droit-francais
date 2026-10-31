@@ -1,9 +1,11 @@
 from pathlib import Path
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from tools import handlers
 from tools import jurisprudence_search as recherche
 
 
@@ -84,27 +86,49 @@ class LimiteResultatsTests(unittest.TestCase):
         collecte = recherche.collecter(plan(), client)
         self.assertEqual(len(collecte["resultats"]), 46)
 
-    def test_plus_de_500_decisions_distinctes_sont_refusees_sans_lire_les_textes(self):
+    def test_plus_de_500_decisions_distinctes_donnent_un_avertissement_et_500_resultats(self):
         client = ClientSimule(
             [decision_legifrance(r) for r in range(1, 301)],
             [decision_judilibre(r, annee="23") for r in range(1, 301)],
         )
-        with self.assertRaises(recherche.RechercheTropLarge) as refus:
-            recherche.collecter(plan('"clause pénale"'), client)
-        self.assertEqual(refus.exception.total, 600)
-        self.assertEqual(client.lectures, 0)
+        collecte = recherche.collecter(plan('"clause pénale"'), client)
+        self.assertEqual(len(collecte["resultats"]), 500)
+        self.assertLessEqual(client.lectures, 500)
+        self.assertTrue(any("Plus de 500" in a for a in collecte["avertissements"]))
 
-    def test_legifrance_seul_au_dela_de_500_est_refuse_sans_liste(self):
+    def test_les_decisions_gardees_sont_les_mieux_classees(self):
+        client = ClientSimule(
+            [decision_legifrance(r) for r in range(1, 301)],
+            [decision_judilibre(r, annee="23") for r in range(1, 301)],
+        )
+        rangs = [r["rang"] for r in recherche.collecter(plan(), client)["resultats"]]
+        self.assertEqual(max(rangs), 250)
+
+    def test_legifrance_au_dela_de_500_est_liste_avec_un_avertissement(self):
+        client = ClientSimule([decision_legifrance(r) for r in range(1, 601)], total_judilibre=0)
+        collecte = recherche.collecter(plan(), client)
+        self.assertEqual(len(collecte["resultats"]), 500)
+        self.assertEqual(len(collecte["avertissements"]), 1)
+
+    def test_judilibre_au_dela_du_plafond_est_liste_avec_un_avertissement(self):
+        client = ClientSimule(judilibre=[decision_judilibre(r) for r in range(1, 1201)])
+        collecte = recherche.collecter(plan(), client)
+        self.assertEqual(len(collecte["resultats"]), 500)
+        self.assertLessEqual(client.listes_judilibre, recherche.PLAFOND_JUDILIBRE // recherche.JUDILIBRE_PAGE)
+        self.assertEqual(len(collecte["avertissements"]), 1)
+
+    def test_le_corpus_reste_refuse_sans_liste_au_dela_de_500(self):
         client = ClientSimule(total_legifrance=501, total_judilibre=0)
         with self.assertRaises(recherche.RechercheTropLarge):
-            recherche.collecter(plan(), client)
+            recherche.collecter(plan(), client, refuser_si_trop_large=True)
         self.assertEqual(client.listes_legifrance, 0)
 
-    def test_judilibre_au_dela_du_plafond_est_refuse_sans_liste(self):
-        client = ClientSimule(total_legifrance=0, total_judilibre=1001)
-        with self.assertRaises(recherche.RechercheTropLarge):
-            recherche.collecter(plan(), client)
-        self.assertEqual(client.listes_judilibre, 0)
+    def test_search_code_au_dela_de_500_rend_un_avertissement(self):
+        reponse_api = {"totalResultNumber": 501, "results": []}
+        with mock.patch.object(handlers.legifrance_client, "search_with_criteres", return_value=reponse_api):
+            reponse = handlers.handle_search_code({"query": "contrat"}, "local")
+        self.assertFalse(reponse["isError"])
+        self.assertIn("Plus de 500", reponse["content"][0]["text"])
 
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@ effectivement disponibles, puis le format exact que le vérificateur accepte.
 | `dictionnaire_juridique` | Définition d'un terme du lexique juridique officiel de justice.fr. |
 
 `Search_Jurisprudence` applique la même requête aux deux bases (guillemets, `ET`,
-`OU`, parenthèses, articles). Au-delà de 500 décisions après fusion des doublons, la recherche est refusée.
+`OU`, parenthèses, articles). Au-delà de 500 décisions après fusion des doublons, seules les 500 mieux classées sont rendues, avec un avertissement : resserre alors la requête.
 Judilibre ne couvre que l'ordre judiciaire.
 
 ## Recherche large : l'analyse tabulaire en mode recherche

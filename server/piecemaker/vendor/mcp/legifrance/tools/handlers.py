@@ -22,7 +22,7 @@ from tools.decision_history import (
     render_markdown as render_historique,
     render_controle,
 )
-from config.mcp_definitions import INITIALIZE_INSTRUCTIONS
+from tools.connexion_piste import handle_connexion
 LEGIFRANCE_BASE_URL = "https://www.legifrance.gouv.fr"
 
 def create_response(text: str, resource: Dict = None, is_error: bool = False) -> Dict[str, Any]:
@@ -34,31 +34,15 @@ def create_response(text: str, resource: Dict = None, is_error: bool = False) ->
 
 
 # Contrat de recherche énoncé par INITIALIZE_INSTRUCTIONS : au-delà de ce
-# nombre de résultats, la recherche est refusée pour manque de contexte.
+# nombre de résultats, un avertissement signale le manque de contexte.
 LIMITE_RESULTATS = 500
-
-
-def _refus_requete_trop_large(total: int) -> Dict[str, Any]:
-    """Refuse une recherche dont le total dépasse le contrat des 500 résultats."""
-    return create_response(
-        f"<tool-use-error>\n"
-        f"Requête trop large : {total} résultats trouvés (maximum {LIMITE_RESULTATS}).\n"
-        f"La recherche est refusée pour manque de contexte : reformule-la en appliquant "
-        f"les instructions de recherche.\n"
-        f"\n"
-        f"{INITIALIZE_INSTRUCTIONS}\n"
-        f"</tool-use-error>",
-        is_error=True,
-    )
 
 
 def _borne_pagination(args: Dict[str, Any], page_size_defaut: int, page_size_max: int):
     """
     Coerce et borne `page_size`/`page_number` d'après les défauts et maxima du
     schéma. Ne lève jamais : une valeur absente, `None` ou non convertible
-    retombe sur le défaut du schéma. Rend `(page_size, page_number, refus)`
-    où `refus` est `None` ou une réponse d'erreur quand la page demandée
-    commence au-delà du contrat des 500 résultats.
+    retombe sur le défaut du schéma. Rend `(page_size, page_number)`.
     """
     def _coerce_int(value, default):
         if value is None:
@@ -74,19 +58,7 @@ def _borne_pagination(args: Dict[str, Any], page_size_defaut: int, page_size_max
     page_size = max(1, min(page_size, page_size_max))
     page_number = max(1, page_number)
 
-    if (page_number - 1) * page_size >= LIMITE_RESULTATS:
-        refus = create_response(
-            f"<tool-use-error>\n"
-            f"Page hors contrat : la page {page_number} de {page_size} résultats commence "
-            f"au-delà du {LIMITE_RESULTATS}e résultat.\n"
-            f"Une recherche acceptée rend au plus {LIMITE_RESULTATS} résultats : demande une "
-            f"page comprise dans cette limite ou resserre la requête.\n"
-            f"</tool-use-error>",
-            is_error=True,
-        )
-        return page_size, page_number, refus
-
-    return page_size, page_number, None
+    return page_size, page_number
 
 
 def _analysis_parts(value: Any) -> list[str]:
@@ -503,19 +475,10 @@ def handle_recherche_jurisprudence(args: Dict[str, Any], user_id: str) -> Dict[s
     except recherche.RechercheInvalide as erreur:
         return create_response(f"<tool-use-error>\n{erreur}\n</tool-use-error>", is_error=True)
 
-    page_size, page_number, refus_pagination = _borne_pagination(args, 10, 100)
-    if refus_pagination is not None:
-        return refus_pagination
+    page_size, page_number = _borne_pagination(args, 10, 100)
 
     try:
         collecte = recherche.collecter_avec_cache(plan, legifrance_client)
-    except recherche.RechercheTropLarge as trop:
-        refus = _refus_requete_trop_large(trop.total)
-        detail = "\n".join(_ligne_compte(compte) for compte in trop.comptes)
-        refus["content"][0]["text"] = refus["content"][0]["text"].replace(
-            "</tool-use-error>", f"\nDétail des totaux :\n{detail}\n</tool-use-error>"
-        )
-        return refus
     except Exception as e:
         return create_response(
             f"<tool-use-error>\nErreur recherche jurisprudence\nRequête: {plan['query']}\nErreur: {e}\n</tool-use-error>",
@@ -610,9 +573,7 @@ def handle_search_code(args: Dict[str, Any], user_id: str) -> Dict[str, Any]:
 
     # Pagination et tri
     sort = args.get("sort", "PERTINENCE")
-    page_size, page_number, refus_pagination = _borne_pagination(args, 10, 50)
-    if refus_pagination is not None:
-        return refus_pagination
+    page_size, page_number = _borne_pagination(args, 10, 50)
 
     filtres = [{
         "facette": "DATE_VERSION",
@@ -637,17 +598,18 @@ def handle_search_code(args: Dict[str, Any], user_id: str) -> Dict[str, Any]:
         total = result.get("totalResultNumber", 0)
         resultats = result.get("results", [])
 
-        if total > LIMITE_RESULTATS:
-            return _refus_requete_trop_large(total)
-
         summary_parts = [
             f"**Requête:** {query}",
             f"**Type recherche:** {type_recherche} ({type_champ})",
             f"**Date de vigueur:** {date_version}",
             f"**Total:** {total:,} résultats".replace(',', ' '),
             f"**Affichés:** {len(resultats)}",
-            f""
         ]
+        if total > LIMITE_RESULTATS:
+            summary_parts.append(
+                f"⚠️ Plus de {LIMITE_RESULTATS} résultats : la requête manque de contexte. Resserre-la."
+            )
+        summary_parts.append("")
 
         # Formater les résultats
         for i, r in enumerate(resultats, 1):
@@ -790,6 +752,7 @@ def handle_historique_judiciaire(args: Dict[str, Any], user_id: str) -> Dict[str
 
 
 TOOL_HANDLERS = {
+    "connexion": handle_connexion,
     "Search_Jurisprudence": handle_recherche_jurisprudence,
     "Search_Code": handle_search_code,
     "Build_Research_Corpus": handle_build_research_corpus,

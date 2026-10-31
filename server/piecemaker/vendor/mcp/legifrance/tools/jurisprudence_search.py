@@ -694,7 +694,7 @@ def _judilibre_indisponible(etat: Dict[str, Any], erreur: Exception) -> None:
     etat["judilibre_actif"] = False
 
 
-def collecter(plan: Dict[str, Any], client: Any = None) -> Dict[str, Any]:
+def collecter(plan: Dict[str, Any], client: Any = None, refuser_si_trop_large: bool = False) -> Dict[str, Any]:
     client = client or legifrance_client
     etat = {"appels": 0, "judilibre_actif": "judilibre" in plan["sources"], "avertissements": []}
     etapes = _compter(client, plan, etat)
@@ -705,7 +705,8 @@ def collecter(plan: Dict[str, Any], client: Any = None) -> Dict[str, Any]:
     total = sum((e["legifrance"] or 0) + (e["judilibre"] or 0) for e in etapes)
     total_legifrance = sum(e["legifrance"] or 0 for e in etapes)
     total_judilibre = sum(e["judilibre"] or 0 for e in etapes)
-    if total_legifrance > LIMITE_RESULTATS or total_judilibre > PLAFOND_JUDILIBRE:
+    source_depassee = total_legifrance > LIMITE_RESULTATS or total_judilibre > PLAFOND_JUDILIBRE
+    if source_depassee and refuser_si_trop_large:
         raise RechercheTropLarge(total, comptes)
 
     legifrance: List[Dict[str, Any]] = []
@@ -724,7 +725,7 @@ def collecter(plan: Dict[str, Any], client: Any = None) -> Dict[str, Any]:
             try:
                 for requete in etape["requetes_judilibre"]:
                     page = 0
-                    while True:
+                    while len(judilibre) < PLAFOND_JUDILIBRE:
                         reponse = _chercher_judilibre(client, requete, etape["filtres_judilibre"], page, JUDILIBRE_PAGE)
                         etat["appels"] += 1
                         lot = reponse.get("results") or []
@@ -751,8 +752,19 @@ def collecter(plan: Dict[str, Any], client: Any = None) -> Dict[str, Any]:
             restants.append(resultat)
 
     decisions = len(legifrance) + len(restants)
-    if decisions > LIMITE_RESULTATS:
+    if decisions > LIMITE_RESULTATS and refuser_si_trop_large:
         raise RechercheTropLarge(decisions, comptes)
+    if decisions > LIMITE_RESULTATS or source_depassee:
+        etat["avertissements"].append(
+            f"Plus de {LIMITE_RESULTATS} décisions : seules les {LIMITE_RESULTATS} les mieux classées par "
+            "les bases sont rendues. La requête manque de contexte : resserre-la pour obtenir une liste complète."
+        )
+        gardees = {
+            r["id"]
+            for r in sorted(legifrance + restants, key=lambda r: (r["rang"], r["source"] != "legifrance"))[:LIMITE_RESULTATS]
+        }
+        legifrance = [r for r in legifrance if r["id"] in gardees]
+        restants = [r for r in restants if r["id"] in gardees]
 
     ecartees = 0
     a_controler = [r for r in restants if a_verifier(r["clauses"])]

@@ -28,7 +28,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger('legifrance.mcp_stdio')
 
-from config.mcp_definitions import INITIALIZE_INSTRUCTIONS, MCP_TOOLS, MCP_RESOURCES
+from config.mcp_definitions import (
+    INITIALIZE_INSTRUCTIONS,
+    INSTRUCTIONS_CONNEXION,
+    MCP_RESOURCES,
+    MCP_TOOLS,
+    OUTIL_CONNEXION,
+)
+from tools.connexion_piste import connecte
 from tools.handlers import handle_tool_call
 from resources import get_dictionnaire
 
@@ -68,16 +75,16 @@ def handle_initialize(params):
     return {
         "protocolVersion": protocol_version,
         "capabilities": {
-            "tools": {"enabled": True, "list": True, "call": True},
+            "tools": {"enabled": True, "list": True, "call": True, "listChanged": True},
             "resources": {"enabled": True, "list": True, "read": True}
         },
         "serverInfo": {"name": "Légifrance MCP", "version": "2.1.0"},
-        "instructions": INITIALIZE_INSTRUCTIONS,
+        "instructions": INITIALIZE_INSTRUCTIONS if connecte() else INSTRUCTIONS_CONNEXION,
     }
 
 
 def handle_tools_list(params):
-    return {"tools": MCP_TOOLS}
+    return {"tools": MCP_TOOLS if connecte() else [OUTIL_CONNEXION]}
 
 
 def handle_tools_call(params, user_id):
@@ -211,6 +218,7 @@ def main():
             _write_response(jsonrpc_error(None, -32700, f"Parse error: {str(e)}"))
             continue
 
+        connecte_avant = connecte()
         try:
             response = process_request(data)
         except Exception as e:
@@ -222,6 +230,8 @@ def main():
 
         if response is not None:
             _write_response(response)
+        if connecte() != connecte_avant:
+            _write_response({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
 
     logger.info("Fin du flux stdin — arrêt du serveur")
 
