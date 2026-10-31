@@ -30,7 +30,7 @@ test('l’exemple fictif est en YAML, se vérifie et se réécrit à l’identiq
 });
 
 type Json = Record<string, any>;
-const RESERVED_KEYS = new Set(['objectifs', 'qualification', 'valeurs', 'hypotheses', 'acte', 'bilan']);
+const RESERVED_KEYS = new Set(['objectifs', 'qualification', 'valeurs', 'hypotheses', 'bilan']);
 const migrate = (source: Json): Json => {
   const terms = new Set(Object.keys(source).filter((key) => !RESERVED_KEYS.has(key)));
   const questions: Record<string, Partial<Record<'true' | 'false', Json[]>>> = {};
@@ -110,8 +110,8 @@ test('une valeur à mettre entre guillemets est signalée avec la ligne corrigé
   assert.match(syntax('a:\n  citation: *important\n')[0], /^ligne 2 : « \* » non protégé en début de valeur/);
   assert.match(syntax('a:\n  citation: ! le prix\n')[0], /^ligne 2 : « ! » non protégé en début de valeur/);
   assert.match(syntax('a:\n  citation: [sic] le courrier\n')[0], /^ligne 2 : Liste ou objet non fermé/);
-  assert.deepEqual(syntax('acte:\n  - texte:\n      - **La pénalité est donc due.**\n'), ['ligne 3 : « * » non protégé en début de valeur. Écrivez - "**La pénalité est donc due.**".']);
-  assert.deepEqual(syntax('acte:\n  - texte:\n      - La société : elle a payé.\n'), ['ligne 3 : « : » non protégé. Écrivez - "La société : elle a payé.".']);
+  assert.deepEqual(syntax('a:\n  - texte:\n      - **La pénalité est donc due.**\n'), ['ligne 3 : « * » non protégé en début de valeur. Écrivez - "**La pénalité est donc due.**".']);
+  assert.deepEqual(syntax('a:\n  - texte:\n      - La société : elle a payé.\n'), ['ligne 3 : « : » non protégé. Écrivez - "La société : elle a payé.".']);
   assert.deepEqual(syntax('a:\n  citation: "le courrier\n  b: 1\n'), ['ligne 2 : Guillemet non fermé. Fermez le guillemet à la fin de la valeur.']);
 });
 

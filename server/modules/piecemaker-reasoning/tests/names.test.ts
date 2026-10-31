@@ -85,7 +85,7 @@ test('les conseils ne sont ni des erreurs ni des manques et n’apparaissent qu�
 test('une clé avec des espaces est un nom à sa place, une phrase coupée par « : » ailleurs', () => {
   const named = parseReasoningDocument('valeurs:\n  date de commande:\n    valeur: 2025-05-02\npénalité due:\n  si:\n    - mise en demeure: true\nhypotheses:\n  - nom: cas\n    faits:\n      mise en demeure: true\n    attendu:\n      pénalité due: true\n');
   assert.ok(Object.hasOwn(named.value as object, 'pénalité due'));
-  assert.throws(() => parseReasoningDocument('acte:\n  - intitule: Sur la pénalité\n    texte:\n      - Le contrat impose: une livraison\n'), /non protégé/);
+  assert.throws(() => parseReasoningDocument('a:\n  - intitule: Sur la pénalité\n    texte:\n      - Le contrat impose: une livraison\n'), /non protégé/);
 });
 
 test('chaque règle du catalogue porte un message et une correction', () => {

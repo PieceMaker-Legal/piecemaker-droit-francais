@@ -5,7 +5,7 @@ description: Cadre du raisonnement juridique vérifié de PieceMaker (fichiers .
 
 # Raisonnement vérifié
 
-L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnements/<nom>.yaml` (YAML 1.2 core), seul format lu : un fichier par acte ou par question, nommé d'après son sujet (minuscules, chiffres, tirets). `pm raisonnement lister` les montre avec leurs objectifs et leur dernier bilan ; `--raisonnement <nom>` est requis dès que le dossier en compte plusieurs (verifier, acte). Le serveur garde résultat et alertes écartées par raisonnement, la fiabilité des pièces par dossier ; le volet suit le dernier vérifié et propose un sélecteur. Un ancien `.piecemaker/raisonnement.yaml` ou `.js` est refusé avec la consigne de le déplacer ou le transcrire. Commentaires, tags, ancres, alias et doublons sont refusés. Les fautes d'écriture sont toutes rendues d'un coup, chacune avec sa ligne et sa correction : valeur à mettre entre guillemets (avec la ligne corrigée), ligne mal indentée (avec le niveau sur lequel l'aligner), tabulation, clé en double, clé mal placée (avec le bloc auquel elle appartient) ou mal orthographiée (avec la bonne graphie). Les tests gardent leurs jeux d'essai en objet JS, convertis en YAML par `tests/fixtures.ts` avant vérification. Installer la dépendance locale avec `npm ci --prefix server/modules/piecemaker-reasoning`. Comparatif et protocole : `docs/tests/raisonnement-yaml-luna/README.md`. `pm raisonnement verifier` le vérifie, le teste, le réécrit et renvoie ses erreurs et manques. Le volet Raisonnement montre à l'avocat le graphe, le détail et les alertes.
+L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnements/<nom>.yaml` (YAML 1.2 core), seul format lu : un fichier par acte ou par question, nommé d'après son sujet (minuscules, chiffres, tirets). `pm raisonnement lister` les montre avec leurs objectifs et leur dernier bilan ; `--raisonnement <nom>` est requis dès que le dossier en compte plusieurs. Le serveur garde résultat et alertes écartées par raisonnement, la fiabilité des pièces par dossier ; le volet suit le dernier vérifié et propose un sélecteur. Un ancien `.piecemaker/raisonnement.yaml` ou `.js` est refusé avec la consigne de le déplacer ou le transcrire. Commentaires, tags, ancres, alias et doublons sont refusés. Les fautes d'écriture sont toutes rendues d'un coup, chacune avec sa ligne et sa correction : valeur à mettre entre guillemets (avec la ligne corrigée), ligne mal indentée (avec le niveau sur lequel l'aligner), tabulation, clé en double, clé mal placée (avec le bloc auquel elle appartient) ou mal orthographiée (avec la bonne graphie). Les tests gardent leurs jeux d'essai en objet JS, convertis en YAML par `tests/fixtures.ts` avant vérification. Installer la dépendance locale avec `npm ci --prefix server/modules/piecemaker-reasoning`. Comparatif et protocole : `docs/tests/raisonnement-yaml-luna/README.md`. `pm raisonnement verifier` le vérifie, le teste, le réécrit et renvoie ses erreurs et manques. Le volet Raisonnement montre à l'avocat le graphe, le détail et les alertes.
 
 ## Principes (décidés, à ne pas défaire)
 
@@ -32,13 +32,6 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnements/<nom>.ya
 - `hypotheses: [{ nom, faits, attendu }]` : cas supposés que le moteur rejoue (l'ancienne clé `essais` est une erreur qui demande de la renommer) ; un fait absent reprend sa valeur établie ; `attendu` porte sur un terme (vrai/faux) ou un montant (nombre). Une hypothèse non conforme est une erreur : le raisonnement ne dit pas ce que l'agent conclut.
 - Variables : une valeur ouverte (`null`) n'est signalée que si une réponse en dépend (fait décisif calculé, ou opérande d'un montant-réponse). En drafting et en consultation, le manque se lève en fixant la valeur ou par des hypothèses qui la supposent : pour un terme, des hypothèses conformes donnant des résultats différents (la bascule) ; pour un montant, une hypothèse conforme qui donne le montant attendu. En contentieux, seule la preuve le lève. Un fait vrai/faux décisif sans pièce n'est jamais levé par une hypothèse hors drafting. Aucune détection textuelle des blancs.
 - Simulation (`POST /reasoning/simulate`) : rejoue le raisonnement hors ligne avec des valeurs modifiées (sources en cache du dernier test), rien n'est écrit ; renvoie aussi le statut simulé de chaque terme et fait (`termes`). Le volet la joue dans l'organigramme : boutons Vrai / Faux / Dossier sur les faits ; chaque étape montre ses sources, leur citation et ses conditions remplies ou non.
-
-## L'acte rédigé (`acte`)
-
-Le moteur lit et contrôle encore la clé `acte` pour les raisonnements existants. L'agent n'en écrit plus. `pm acte` et `pm docx` sont archivés dans la branche locale `archive/pm-docx-acte`.
-
-- `acte: [{ id, intitule, traite, texte: [paragraphes], conflit, sections }]`, dans l'ordre de lecture. `traite` (nom ou liste) relie la section à un terme, une condition ou une valeur ; les sous-sections en héritent pour le contrôle des citations. `**gras**` et `*italique*` seuls.
-- Contrôles, sans lecture du sens de la prose : `traite` inconnu = erreur ; passage entre « » (trois mots ou plus) absent des `preuve` et `selon` de ce que la section traite (ou de tout le raisonnement si rien n'est traité) = erreur ; `conflit` = erreur ; section qui développe un point à établir ou disputé = manque ; objectif non développé, obstacle non discuté = manque.
 
 ## Contrôles (sous-raisonnements)
 
@@ -78,7 +71,6 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 | `server/modules/piecemaker-reasoning/program.ts` | vérification, manques, sortie, service, exemple fictif |
 | `server/piecemaker/reasoning-connectors.ts` | Légifrance, pièces, registre, BODACC |
 | `server/piecemaker/legal-code/instructions.md` | instruction de l'agent (seule source) |
-| `server/modules/piecemaker-reasoning/acte.ts` | lecture de `acte`, id, gras/italique, contrôles de l'acte |
 | `plugins/piecemaker-raisonnement/src/client.ts` | volet : organigramme du raisonnement et test |
 
 ## Tester

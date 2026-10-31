@@ -149,25 +149,6 @@ export const RULES = {
   'but-d-etape-non-indique': { message: 'But de l’étape non indiqué.', correction: 'Ajoutez but: sous {nom}.' },
   'nom-a-deux-faits': { message: 'Deux faits liés par « {mot} » dans {nom}.', correction: 'Écrivez un seul fait par nom. {lien}' },
   'noms-proches': { message: '{a} et {b} peut-être utilisés pour un même fait.', correction: 'Si c’est le cas, gardez un seul nom.' },
-
-  'section-mal-formee': { message: 'Section mal formée.', correction: 'Écrivez { intitule, traite, texte, sections }.' },
-  'id-de-section-mal-ecrit': { message: 'Id de section mal écrit.', correction: 'Retirez id. Le vérificateur le recrée.' },
-  'id-de-section-duplique': { message: 'Id {id} écrit deux fois.', correction: 'Retirez l’id de la section copiée.' },
-  'intitule-mal-ecrit': { message: 'Intitulé mal écrit.', correction: 'Écrivez le titre sur une ligne.' },
-  'traite-mal-ecrit': { message: 'Clé traite mal écrite.', correction: 'Écrivez le nom d’un terme, d’une condition ou d’une valeur, ou une liste de noms.' },
-  'texte-mal-forme': { message: 'Texte de section mal formé.', correction: 'Écrivez une liste de paragraphes.' },
-  'paragraphe-vide': { message: 'Paragraphe vide.', correction: 'Retirez le paragraphe.' },
-  'paragraphe-multiligne': { message: 'Saut de ligne écrit dans un paragraphe.', correction: 'Séparez le texte en plusieurs éléments.' },
-  'conflit-mal-forme': { message: 'Conflit mal formé.', correction: 'Écrivez [{ sur, modele, avocat }], ou retirez conflit une fois tranché.' },
-  'sections-mal-formees': { message: 'Bloc sections mal formé.', correction: 'Écrivez une liste de sections.' },
-  'section-vide': { message: 'Section vide.', correction: 'Ajoutez intitule, texte ou sections.' },
-  'acte-mal-forme': { message: 'Bloc acte mal formé.', correction: 'Écrivez une liste de sections, dans l’ordre de lecture.' },
-  'traite-non-defini': { message: '{nom} non défini dans le raisonnement.', correction: 'Ajoutez ce point au raisonnement, ou corrigez traite.' },
-  'point-non-etabli': { message: '{nom} {statut} dans le raisonnement.', correction: 'Établissez ce point, ou rédigez la section comme une prétention à démontrer.' },
-  'conflit-non-tranche': { message: 'Conflit de fusion non tranché sur {objet}.', correction: '{action}, puis retirez conflit.' },
-  'citation-hors-raisonnement': { message: 'Citation absente du raisonnement : « {citation} ».', correction: 'Citez ce passage dans preuve ou selon{portee}, ou retirez les guillemets.' },
-  'objectif-non-developpe': { message: 'Objectif non développé dans l’acte.', correction: 'Ajoutez traite: \'{nom}\' à la section qui le soutient.' },
-  'obstacle-non-discute': { message: 'Obstacle {nom} non discuté dans l’acte.', correction: 'Ajoutez traite: \'{nom}\' à la section qui y répond.' },
 } as const satisfies Record<string, Rule>;
 
 export type RuleName = keyof typeof RULES;

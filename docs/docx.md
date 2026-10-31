@@ -57,8 +57,6 @@ Fonctionnement :
   `.docx`, chemin résolu contre la racine du projet (même contrôle lexical que
   le file-tree CloudCLI).
 
-La liaison d’un DOCX au raisonnement (`pm docx`, `pm acte`) est archivée dans la branche locale `archive/pm-docx-acte`. Les statuts de contrôle de l’éditeur le sont aussi.
-
 ## 3. Défauts connus (audit du 2026-09-26)
 
 1. **Écriture sans garde sur les pièces originales.** L'enregistrement
