@@ -306,7 +306,7 @@ blockquote.ptr-citation-quote{margin:8px 0;padding-left:8px;border-left:3px soli
 .ptr-tree-button:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 .ptr-tree-summary{white-space:normal;line-height:1.3}
 .ptr-tree-rows{display:flex;flex-direction:column;gap:8px;margin:12px 0}
-.ptr-tree-row{display:grid;grid-template-columns:minmax(120px,1fr) minmax(160px,2fr) auto;gap:8px;align-items:center}
+.ptr-tree-row{display:grid;grid-template-columns:minmax(120px,1fr) minmax(160px,2fr) auto auto;gap:8px;align-items:center}
 @container (max-width:520px){.ptr-tree-row{grid-template-columns:1fr auto}.ptr-tree-row [data-tree-explanation]{grid-column:1;grid-row:2}}
 @container (max-width:520px){.ptr-home-bar{flex-direction:column;align-items:stretch}.ptr-home-bar .ptr-spacer{display:none}}
 `;

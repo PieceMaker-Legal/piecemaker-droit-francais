@@ -104,6 +104,41 @@ describe('colonne Classement', () => {
     expect(saved.folders.map((folder) => folder.name)).toEqual(['Pièces', 'Archives', 'Notes et recherches', 'Clients']);
   });
 
+  it('indente les sous-dossiers et enregistre leur chemin complet', async () => {
+    await mount(detailOf(true));
+    rpc.mockImplementation(async (method: string, path: string) => (path.startsWith('/classification')
+      ? { folders: [{ name: 'Pièces/Factures', explanation: 'Factures.' }, { name: 'Archives', explanation: '' }, { name: 'Pièces', explanation: 'Base.' }] }
+      : current));
+    $('[data-edit-tree]').click();
+    await vi.waitFor(() => expect(document.querySelectorAll('[data-tree-row]')).toHaveLength(3));
+    const rowsNow = () => [...document.querySelectorAll<HTMLElement>('[data-tree-row]')];
+    const names = () => rowsNow().map((entry) => entry.querySelector<HTMLInputElement>('[data-tree-name]')!.value);
+    expect(names()).toEqual(['Archives', 'Pièces', 'Factures']);
+    expect(rowsNow().map((entry) => entry.querySelector<HTMLInputElement>('[data-tree-name]')!.style.marginLeft)).toEqual(['0px', '0px', '24px']);
+    $('[data-tree-add-child="2"]').click();
+    const child = rowsNow()[3];
+    expect(child.querySelector<HTMLInputElement>('[data-tree-name]')!.style.marginLeft).toBe('48px');
+    child.querySelector<HTMLInputElement>('[data-tree-name]')!.value = '2024';
+    child.querySelector<HTMLInputElement>('[data-tree-name]')!.dispatchEvent(new Event('input', { bubbles: true }));
+    $('[data-modal-action="save"]').click();
+    await vi.waitFor(() => expect(rpc).toHaveBeenCalledWith('PUT', '/classification', expect.anything()));
+    const saved = rpc.mock.calls.find((call) => call[0] === 'PUT')![2] as { folders: { name: string }[] };
+    expect(saved.folders.map((folder) => folder.name)).toEqual(['Archives', 'Pièces', 'Pièces/Factures', 'Pièces/Factures/2024']);
+  });
+
+  it('supprime un dossier avec ses sous-dossiers', async () => {
+    await mount(detailOf(true));
+    rpc.mockImplementation(async (method: string, path: string) => (path.startsWith('/classification')
+      ? { folders: [{ name: 'Pièces', explanation: '' }, { name: 'Pièces/Factures', explanation: '' }, { name: 'Archives', explanation: '' }] }
+      : current));
+    $('[data-edit-tree]').click();
+    await vi.waitFor(() => expect(document.querySelectorAll('[data-tree-row]')).toHaveLength(3));
+    $('[data-tree-remove="0"]').click();
+    expect(document.querySelectorAll('[data-tree-row]')).toHaveLength(1);
+    expect($<HTMLInputElement>('[data-tree-name]').value).toBe('Archives');
+    $('[data-modal-action="cancel"]').click();
+  });
+
   it('propose les dossiers dans le détail de la cellule', async () => {
     await mount(detailOf(true));
     $('td.ptr-cell[data-row="r1"][data-column="1"]').click();

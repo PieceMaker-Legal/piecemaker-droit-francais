@@ -235,7 +235,7 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-confirm .pmd-form-actions{margin-top:2px}
 .pmd-confirm-option{display:flex;align-items:flex-start;gap:8px;color:var(--pmd-muted);font-size:13px;cursor:pointer}
 .pmd-form{display:grid;gap:12px}
-.pmd-tree-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto;gap:8px;align-items:center}
+.pmd-tree-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto auto;gap:8px;align-items:center}
 .pmd-form-section{display:grid;gap:12px;padding-bottom:16px;border-bottom:1px solid var(--pmd-border)}
 .pmd-form-section:last-of-type{border-bottom:0;padding-bottom:0}
 .pmd-form-section h3{margin:0;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--pmd-muted)}

@@ -1,5 +1,5 @@
 import type { Cell, CitationSource, ClassificationFolder, ExportFormat, ExportResult, MarkdownDocument, Provider, Review, ReviewColumn, ResearchState, ReviewDetail, ReviewRow } from '../shared.js';
-import { CATEGORY_LABELS, citationIssue, classifyColumn, defaultUpdateSince, emptyColumns, FLAG_LABELS, isCellFilled, isCaseIndex, MAX_CITATION_CORRECTIONS, RESEARCH_SOURCES, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
+import { CATEGORY_LABELS, citationIssue, classificationFolders, classificationSubtreeEnd, classificationTreeRows, classifyColumn, defaultUpdateSince, emptyColumns, FLAG_LABELS, isCellFilled, isCaseIndex, MAX_CITATION_CORRECTIONS, RESEARCH_SOURCES, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, openModal, renderMarkdown, toast } from './dom.js';
 import { anonymizationProxyOrigin, caseFiles, loadModels } from './host.js';
@@ -496,17 +496,18 @@ export function createReviewView(app: App, project: string, file: string, onBack
 
   async function editTree() {
     const { folders } = await app.rpc<{ folders: ClassificationFolder[] }>('GET', `/classification?project=${encodeURIComponent(project)}`);
-    let rows = folders.map((folder) => ({ ...folder }));
+    let rows = classificationTreeRows(folders);
     const rowsHtml = () => rows.map((folder, index) => `
-      <div class="ptr-tree-row" data-tree-row>
-        <input class="ptr-input" data-tree-name maxlength="60" value="${escapeHtml(folder.name)}" placeholder="Dossier" aria-label="Nom du dossier">
+      <div class="ptr-tree-row" data-tree-row data-tree-depth="${folder.depth}">
+        <input class="ptr-input" data-tree-name maxlength="60" style="margin-left:${folder.depth * 24}px;width:calc(100% - ${folder.depth * 24}px)" value="${escapeHtml(folder.name)}" placeholder="${folder.depth ? 'Sous-dossier' : 'Dossier'}" aria-label="Nom du dossier">
         <input class="ptr-input" data-tree-explanation maxlength="500" value="${escapeHtml(folder.explanation)}" placeholder="Ce qu’on y range" aria-label="Explication du dossier">
-        <button type="button" class="ptr-icon-button" data-tree-remove="${index}" aria-label="Supprimer ce dossier">×</button>
+        <button type="button" class="ptr-icon-button" data-tree-add-child="${index}" title="Ajouter un sous-dossier" aria-label="Ajouter un sous-dossier">+</button>
+        <button type="button" class="ptr-icon-button" data-tree-remove="${index}" title="Supprimer ce dossier et ses sous-dossiers" aria-label="Supprimer ce dossier et ses sous-dossiers">×</button>
       </div>`).join('');
     const answer = await openModal(app.root, {
       title: 'Arborescence du dossier',
       wide: true,
-      body: `<p class="ptr-small ptr-muted">L’IA classe chaque document d’après ces explications. Utilisez « / » pour un sous-dossier. Enregistrer ne déplace aucun fichier : « Appliquer » le fait, après confirmation.</p>
+      body: `<p class="ptr-small ptr-muted">L’IA classe chaque document d’après ces explications. Le bouton « + » d’une ligne ajoute un sous-dossier. Enregistrer ne déplace aucun fichier : « Appliquer » le fait, après confirmation.</p>
         <div class="ptr-tree-rows" data-tree-rows>${rowsHtml()}</div>
         <button type="button" class="ptr-add" data-tree-add>+ Dossier</button>`,
       actions: [{ label: 'Annuler', value: 'cancel' }, { label: 'Enregistrer', value: 'save', kind: 'primary' }],
@@ -514,6 +515,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
         const list = dialog.querySelector<HTMLElement>('[data-tree-rows]')!;
         const sync = () => {
           rows = [...list.querySelectorAll<HTMLElement>('[data-tree-row]')].map((row) => ({
+            depth: Number(row.dataset.treeDepth),
             name: row.querySelector<HTMLInputElement>('[data-tree-name]')!.value,
             explanation: row.querySelector<HTMLInputElement>('[data-tree-explanation]')!.value,
           }));
@@ -522,17 +524,25 @@ export function createReviewView(app: App, project: string, file: string, onBack
         dialog.addEventListener('click', (event) => {
           const target = event.target as HTMLElement;
           const remove = target.closest<HTMLElement>('[data-tree-remove]');
-          if (!remove && !target.closest('[data-tree-add]')) return;
+          const addChild = target.closest<HTMLElement>('[data-tree-add-child]');
+          if (!remove && !addChild && !target.closest('[data-tree-add]')) return;
           sync();
-          if (remove) rows.splice(Number(remove.dataset.treeRemove), 1);
-          else rows.push({ name: '', explanation: '' });
+          let focused = rows.length;
+          if (remove) {
+            const index = Number(remove.dataset.treeRemove);
+            rows.splice(index, classificationSubtreeEnd(rows, index) - index);
+          } else if (addChild) {
+            const index = Number(addChild.dataset.treeAddChild);
+            focused = classificationSubtreeEnd(rows, index);
+            rows.splice(focused, 0, { depth: rows[index].depth + 1, name: '', explanation: '' });
+          } else rows.push({ depth: 0, name: '', explanation: '' });
           list.innerHTML = rowsHtml();
-          if (!remove) list.querySelector<HTMLInputElement>('[data-tree-row]:last-child [data-tree-name]')?.focus();
+          if (!remove) list.querySelectorAll<HTMLInputElement>('[data-tree-name]')[focused]?.focus();
         });
       },
     });
     if (answer !== 'save') return;
-    await app.rpc('PUT', '/classification', { project, folders: rows.filter((row) => row.name.trim()) });
+    await app.rpc('PUT', '/classification', { project, folders: classificationFolders(rows) });
     applyDetail(await app.rpc<ReviewDetail>('GET', `/reviews/item?project=${encodeURIComponent(project)}&file=${encodeURIComponent(file)}`));
     toast(app.root, 'Arborescence enregistrée : les cellules déjà remplies gardent leur réponse.');
   }

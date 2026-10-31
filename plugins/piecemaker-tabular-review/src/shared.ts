@@ -29,6 +29,41 @@ export const DEFAULT_CLASSIFICATION: ClassificationFolder[] = [
   { name: 'Notes et recherches', explanation: 'Notes et recherches.' },
 ];
 
+export type ClassificationTreeRow = ClassificationFolder & { depth: number };
+
+export function classificationTreeRows(folders: ClassificationFolder[]): ClassificationTreeRow[] {
+  const known = new Set(folders.map((folder) => folder.name));
+  const parentOf = (name: string): string => {
+    for (let cut = name.lastIndexOf('/'); cut > 0; cut = name.lastIndexOf('/', cut - 1)) {
+      if (known.has(name.slice(0, cut))) return name.slice(0, cut);
+    }
+    return '';
+  };
+  const childrenOf = (parent: string, depth: number): ClassificationTreeRow[] => folders
+    .filter((folder) => parentOf(folder.name) === parent)
+    .flatMap((folder) => [
+      { ...folder, depth, name: parent ? folder.name.slice(parent.length + 1) : folder.name },
+      ...childrenOf(folder.name, depth + 1),
+    ]);
+  return childrenOf('', 0);
+}
+
+export function classificationFolders(rows: ClassificationTreeRow[]): ClassificationFolder[] {
+  const ancestors: string[] = [];
+  return rows.flatMap((row) => {
+    const name = row.name.trim();
+    ancestors.length = row.depth;
+    ancestors[row.depth] = name;
+    return name ? [{ name: ancestors.filter(Boolean).join('/'), explanation: row.explanation }] : [];
+  });
+}
+
+export function classificationSubtreeEnd(rows: ClassificationTreeRow[], index: number): number {
+  let end = index + 1;
+  while (end < rows.length && rows[end].depth > rows[index].depth) end += 1;
+  return end;
+}
+
 export function classificationColumn(folders: ClassificationFolder[], name = 'Classement'): TemplateColumn {
   const lines = folders.map((folder) => `- ${folder.name}${folder.explanation ? ` : ${folder.explanation}` : ''}`);
   return {

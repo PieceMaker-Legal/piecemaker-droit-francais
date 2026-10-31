@@ -9,7 +9,7 @@ import { listReviews, readReview, updateReview } from './reviews.js';
 import { MAX_COLUMNS } from './templates.js';
 
 const MAX_FOLDERS = 30;
-const MAX_NAME = 60;
+const MAX_NAME = 200;
 const MAX_EXPLANATION = 500;
 
 const treeFile = (project: string) => path.join(project, '.piecemaker', 'arborescence.json');

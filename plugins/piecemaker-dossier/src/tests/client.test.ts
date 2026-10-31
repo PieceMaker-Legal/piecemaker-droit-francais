@@ -118,6 +118,27 @@ describe('Index : tri et classement', () => {
     container.querySelector<HTMLButtonElement>('.pmd-modal [data-close]')!.click();
     expect(fetchMock).toHaveBeenCalledTimes(calls);
   });
+
+  it('indents loaded subfolders and saves the full path of an added one', async () => {
+    vi.stubGlobal('localStorage', dom.window.localStorage);
+    const folders = [{ name: 'Contrats/Signés', explanation: 'Signés' }, { name: 'Courriers', explanation: '' }, { name: 'Contrats', explanation: 'Accords' }];
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, headers: new Headers(), json: async () => ({ folders }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    await openIndex();
+    container.querySelector<HTMLButtonElement>('[data-action="edit-tree"]')!.click();
+    await vi.waitFor(() => expect(container.querySelector('[data-tree-name]')).not.toBeNull());
+    const rows = () => Array.from(container.querySelectorAll<HTMLElement>('[data-tree-row]'));
+    expect(rows().map((row) => row.querySelector<HTMLInputElement>('[data-tree-name]')!.value)).toEqual(['Courriers', 'Contrats', 'Signés']);
+    expect(rows().map((row) => row.querySelector<HTMLInputElement>('[data-tree-name]')!.style.marginLeft)).toEqual(['0px', '0px', '24px']);
+    container.querySelector<HTMLButtonElement>('[data-tree-add-child="1"]')!.click();
+    expect(rows()[3].querySelector<HTMLInputElement>('[data-tree-name]')!.style.marginLeft).toBe('24px');
+    rows()[3].querySelector<HTMLInputElement>('[data-tree-name]')!.value = 'Résiliés';
+    container.querySelector('form[data-tree-form]')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(container.querySelector('.pmd-modal')).toBeNull());
+    const init = (fetchMock.mock.calls.at(-1) as unknown as [string, RequestInit])[1];
+    expect((JSON.parse(init.body as string) as { folders: { name: string }[] }).folders.map((folder) => folder.name))
+      .toEqual(['Courriers', 'Contrats', 'Contrats/Signés', 'Contrats/Résiliés']);
+  });
 });
 
 describe('Nature du document', () => {
