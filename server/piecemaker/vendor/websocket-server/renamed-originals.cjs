@@ -1,3 +1,4 @@
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -210,6 +211,35 @@ async function renamePiece(caseRoot, piecePath, newName, targetDirectory) {
   return { previous, current, markdown: markdown.exists ? relativeKey(markdown.path, root) : null };
 }
 
+function previousPathInGit(root, current) {
+  try {
+    const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 1500 });
+    const blob = git('hash-object', '--', current).trim();
+    return git('log', `--find-object=${blob}`, '--no-renames', '--name-only', '--relative', '--format=', '-z')
+      .split('\0')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .find((entry) => entry !== current && !fs.existsSync(absoluteIn(root, entry)) && markdownCounterpart(absoluteIn(root, entry), root).exists) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function recoverMovedMarkdown(caseRoot, absolutePiece) {
+  try {
+    const root = fs.realpathSync(caseRoot);
+    const current = relativeKey(fs.realpathSync(absolutePiece), root);
+    const previous = current && previousPathInGit(root, current);
+    if (!previous) return false;
+    const rename = { previous, current };
+    if (!renameMarkdown(root, rename)) return false;
+    migrateRenames(root, [rename]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function reconcileRenamedOriginals(caseRoot, originals) {
   const root = fs.realpathSync(caseRoot);
   const orphans = orphanKeysByFingerprint(root, originals);
@@ -222,7 +252,9 @@ async function reconcileRenamedOriginals(caseRoot, originals) {
   const stems = await markdownStems(root);
   const candidates = suspects.flatMap(({ file, keys }) => {
     const matches = previousPathCandidates(root, file, new Set(keys), stems);
-    return matches.length === 1 ? [{ previous: matches[0], current: file.path }] : [];
+    if (matches.length === 1) return [{ previous: matches[0], current: file.path }];
+    const moved = previousPathInGit(root, file.path);
+    return moved && keys.includes(stateKey(moved)) ? [{ previous: moved, current: file.path }] : [];
   });
   const renames = uniqueRenames(candidates).filter((rename) => renameMarkdown(root, rename));
   if (!renames.length) return [];
@@ -230,4 +262,4 @@ async function reconcileRenamedOriginals(caseRoot, originals) {
   return renames;
 }
 
-module.exports = { reconcileRenamedOriginals, renamePiece };
+module.exports = { reconcileRenamedOriginals, recoverMovedMarkdown, renamePiece };

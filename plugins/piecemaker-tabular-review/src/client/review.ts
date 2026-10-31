@@ -8,7 +8,7 @@ import { openDocumentsDrawer } from './documents-drawer.js';
 import { nextSort, sortBy, sortButton } from './ordering.js';
 import type { SortState } from './ordering.js';
 import { openQuestionsDrawer } from './questions-drawer.js';
-import { actionValue, classifiedFolder, newNotes, newPieces, pieceOf, plannedChange, targetPath } from './sorting.js';
+import { actionValue, classifiedChange, classifiedFolder, newNotes, newPieces, pieceOf, plannedChange, targetPath } from './sorting.js';
 import type { PlannedChange } from './sorting.js';
 import { selectMenu } from './select-menu.js';
 
@@ -237,7 +237,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
         ${running ? '<button type="button" class="ptr-button ptr-button-danger" data-cancel>Annuler</button>' : ''}
         <button type="button" class="ptr-button" data-refresh-review aria-label="Actualiser l’analyse" title="Actualiser l’analyse">↻ Actualiser</button>
         ${research ? '' : `<button type="button" class="ptr-button" data-add-pieces title="Ajoute une ligne par document arrivé dans le dossier (converti d’abord si besoin) et lance son analyse">${sorting ? 'Ajouter les nouvelles pièces' : 'Ajouter les nouveaux documents'}</button>`}
-        ${sorting || classification ? '<button type="button" class="ptr-button ptr-button-primary" data-apply-all title="Renomme et range toutes les pièces selon les colonnes d’action, après confirmation">Appliquer pour tous</button>' : ''}
+        ${sorting ? '<button type="button" class="ptr-button ptr-button-primary" data-apply-all title="Renomme et range toutes les pièces selon les colonnes d’action, après confirmation">Appliquer pour tous</button>' : ''}
         <details class="ptr-menu">
           <summary class="ptr-button">Exporter</summary>
           <div class="ptr-menu-list">
@@ -252,7 +252,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
             <thead><tr><th scope="col"><div class="ptr-th-sortable"><span>${research ? 'Décision' : 'Document'}</span>${sortButton(sort, 'label', 'document')}</div></th>${review.columns.map(columnHeading).join('')}<th scope="col" class="ptr-add-col"><button type="button" class="ptr-add" data-add-questions title="Ajouter des questions (colonnes)">+ Question</button>${research || classification ? '' : ' <button type="button" class="ptr-add" data-add-classification title="Ajouter la colonne de classement dans l’arborescence du dossier">+ Classement</button>'}</th></tr></thead>
             <tbody>${sortBy(review.rows, sort, (row, key) => key === 'label' ? row.label : review.cells[row.id]?.[key.slice(1)]?.summary ?? '').map((row) => `
               <tr>
-                <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${(sorting && row.piece) || classifiedFolder(review, row) ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>
+                <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${sorting && row.piece ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>
                 ${review.columns.map((column) => {
                   const cell = review.cells[row.id]?.[String(column.index)];
                   const isSelected = selected?.row === row.id && selected.column === column.index;
@@ -302,6 +302,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
       }
       detail = next;
       render();
+      void sortClassifiedRows();
     } catch (error) {
       if (destroyed) return;
       if (!detail) {
@@ -347,6 +348,9 @@ export function createReviewView(app: App, project: string, file: string, onBack
       },
     });
   }
+
+  const sortedRows = new Map<string, string>();
+  let sortQueue: Promise<void> = Promise.resolve();
 
   const applyDetail = (next: ReviewDetail) => {
     detail = next;
@@ -417,6 +421,58 @@ export function createReviewView(app: App, project: string, file: string, onBack
     return id;
   }
 
+  async function moveClassifiedRows(editedRow?: string) {
+    if (!detail) return;
+    const review = detail.review;
+    const due = review.rows.filter((row) => row.status !== 'running' && classifiedFolder(review, row) && sortedRows.get(row.id) !== classifiedFolder(review, row));
+    if (!due.length) return;
+    const failures: string[] = [];
+    const moved: string[] = [];
+    try {
+      const id = await projectId();
+      const pieces = await caseFiles.pieces(id);
+      for (const row of due) {
+        sortedRows.set(row.id, classifiedFolder(review, row));
+        const piece = pieceOf(row, pieces);
+        if (!piece || !pieces.some((entry) => entry.path.normalize('NFC') === piece.normalize('NFC'))) {
+          if (row.id === editedRow) failures.push(`${row.label} : ${piece ? 'pièce introuvable dans le dossier' : 'pas de pièce d’origine dans le dossier'}.`);
+          continue;
+        }
+        const change = classifiedChange(review, row, pieces);
+        if (!change) continue;
+        try {
+          const result = await caseFiles.rename(id, change.piece, undefined, change.directory);
+          detail = await app.rpc<ReviewDetail>('POST', '/reviews/applied', { project, file, rowId: row.id, current: result.current, markdown: result.markdown });
+          moved.push(result.current);
+        } catch (error) {
+          failures.push(`${change.piece} : ${errorMessage(error)}`);
+        }
+      }
+    } catch (error) {
+      failures.push(errorMessage(error));
+    }
+    if (destroyed) return;
+    if (moved.length) {
+      render();
+      schedule();
+      toast(app.root, moved.length === 1 ? `Pièce rangée : ${moved[0]}` : `${moved.length} pièces rangées.`);
+    }
+    if (failures.length) await showFailures('Classement non appliqué', failures);
+  }
+
+  function sortClassifiedRows(editedRow?: string): Promise<void> {
+    sortQueue = sortQueue.then(() => moveClassifiedRows(editedRow));
+    return sortQueue;
+  }
+
+  async function showFailures(title: string, failures: string[]) {
+    await openModal(app.root, {
+      title,
+      body: `<ul class="ptr-summary-list">${failures.map((failure) => `<li>${escapeHtml(failure)}</li>`).join('')}</ul>`,
+      actions: [{ label: 'Fermer', value: 'close', kind: 'primary' }],
+    });
+  }
+
   /** Renomme et range les pièces des lignes indiquées, après confirmation des noms finaux. */
   async function applyRows(rowIds: string[] | null) {
     if (!detail) return;
@@ -451,13 +507,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     }
     const applied = changes.length - failures.length;
     if (applied) toast(app.root, `${applied} pièce${applied > 1 ? 's' : ''} renommée${applied > 1 ? 's' : ''} ou rangée${applied > 1 ? 's' : ''}.`);
-    if (failures.length) {
-      await openModal(app.root, {
-        title: `${failures.length} changement${failures.length > 1 ? 's' : ''} non appliqué${failures.length > 1 ? 's' : ''}`,
-        body: `<ul class="ptr-summary-list">${failures.map((failure) => `<li>${escapeHtml(failure)}</li>`).join('')}</ul>`,
-        actions: [{ label: 'Fermer', value: 'close', kind: 'primary' }],
-      });
-    }
+    if (failures.length) await showFailures(`${failures.length} changement${failures.length > 1 ? 's' : ''} non appliqué${failures.length > 1 ? 's' : ''}`, failures);
   }
 
   /** Ajoute à la revue les documents qui n'y figurent pas, en convertissant d'abord les pièces sans Markdown. */
@@ -595,6 +645,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
         applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/cell', { project, file, rowId, column, summary }));
         draft = null;
         toast(app.root, summary.trim() ? 'Réponse modifiée.' : 'Réponse effacée.');
+        await sortClassifiedRows(rowId);
       });
       return;
     }

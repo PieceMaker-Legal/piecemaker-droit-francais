@@ -58,6 +58,13 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 
 - Les exceptions sont des chemins relatifs : une pièce déplacée vers un autre
   dossier perd la sienne et redevient protégée (défaut sûr).
+- Une pièce déplacée hors de l’application retrouve son Markdown par le Git du
+  dossier : `previousPathInGit` cherche les anciens chemins de son contenu
+  (`git log --find-object`), déplacement commité ou non. Le serveur le fait en
+  listant les pièces, le hook au moment d’un refus. Sans résultat, le refus donne
+  la commande prête à l’emploi, chemin complet du lanceur et `--dossier` compris :
+  elle convertit les pièces sans Markdown et ne cite aucune pièce, sinon le hook
+  la refuserait. Le hook écrit l’état sans attendre une conversion en cours.
 - Une pièce renommée sur place (même dossier, même extension) garde son
   Markdown, son état et ses exceptions : `renamed-originals.cjs` renomme le
   `.md` et déplace ses clés dans `anonymization-state.json`,

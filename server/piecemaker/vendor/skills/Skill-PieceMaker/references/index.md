@@ -20,7 +20,7 @@ pm tabular_review_index modifier --piece doc:1 --date 2024-03-01 --libelle 2024-
 
 `ouvrir` retrouve l’index, ou le prépare s’il manque. `preparer` et `lancer` valent avant le lancement ; `lire`, `colonnes`, `classement` et `relancer` valent après.
 
-`classement` ajoute la colonne qui classe chaque document dans l’arborescence du dossier. `arborescence --dossiers` remplace cette arborescence : `[{nom, explication}]`, un « / » crée un sous-dossier. Sans `.piecemaker/arborescence.json`, la base est Projets, Pièces, Archives, Notes et recherches. Aucune de ces actions ne déplace de fichier : l’avocat applique le classement depuis le volet, après confirmation.
+`classement` ajoute la colonne qui classe chaque document dans l’arborescence du dossier. `arborescence --dossiers` remplace cette arborescence : `[{nom, explication}]`, un « / » crée un sous-dossier. Sans `.piecemaker/arborescence.json`, la base est Projets, Pièces, Archives, Notes et recherches. Enregistrer l’arborescence ne déplace aucun fichier. Dès que le volet affiche une réponse de la colonne de classement, il range la pièce, sans confirmation ; pour corriger, l’avocat change la valeur dans le tableau.
 
 `lister` et `modifier` portent sur les dates et les libellés des pièces en base, et ne lisent pas les pièces. `lister` : id, date, libellé, nature. `modifier` : date (`AAAA-MM-JJ`, vide pour l’effacer) et/ou libellé (renomme le fichier). `--dossier NOM` = un autre dossier.
 

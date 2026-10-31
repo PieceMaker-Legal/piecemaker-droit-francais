@@ -148,13 +148,49 @@ describe('colonne Classement', () => {
     expect([...select.options].map((option) => option.value)).toEqual(['', 'Projets', 'Pièces', 'Archives', 'Notes et recherches']);
   });
 
-  it('ne déplace la pièce qu’après confirmation', async () => {
+  it('range la pièce dès l’affichage de sa réponse, sans bouton ni confirmation', async () => {
     await mount(detailOf(true));
-    $('[data-apply-all]').click();
-    await vi.waitFor(() => expect($('.ptr-modal').textContent).toContain('Archives/bail.pdf'));
-    expect(rename).not.toHaveBeenCalled();
-    [...document.querySelectorAll<HTMLElement>('[data-modal-action]')].find((button) => button.textContent === 'Appliquer')!.click();
     await vi.waitFor(() => expect(rename).toHaveBeenCalledWith('p1', 'bail.pdf', undefined, 'Archives'));
+    await vi.waitFor(() => expect(rpc).toHaveBeenCalledWith('POST', '/reviews/applied', { project: '/dossier', file: 'revue.json', rowId: 'r1', current: 'Archives/bail.pdf', markdown: 'Archives/bail.md' }));
+    expect(document.querySelector('[data-apply-all]')).toBeNull();
+    expect(document.querySelector('[data-apply-row]')).toBeNull();
+    expect(document.querySelector('.ptr-modal')).toBeNull();
+    expect(rename).toHaveBeenCalledTimes(1);
+  });
+
+  it('déplace de nouveau la pièce quand la valeur change dans le tableau', async () => {
+    await mount(detailOf(true));
+    await vi.waitFor(() => expect(rename).toHaveBeenCalledTimes(1));
+    rpc.mockImplementation(async (method: string, path: string) => {
+      if (path === '/reviews/cell') {
+        current = detailOf(true);
+        current.review.cells.r1[1] = { ...cell('Pièces'), edited: true } as never;
+      }
+      return path.startsWith('/classification') ? { folders: DEFAULT_CLASSIFICATION } : current;
+    });
+    $('td.ptr-cell[data-row="r1"][data-column="1"]').click();
+    await vi.waitFor(() => $('select[data-edit-summary]'));
+    const select = $<HTMLSelectElement>('select[data-edit-summary]');
+    select.value = 'Pièces';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(rename).toHaveBeenLastCalledWith('p1', 'bail.pdf', undefined, 'Pièces'));
+  });
+
+  it('affiche l’échec du rangement', async () => {
+    rename.mockRejectedValueOnce(new Error('Une autre pièce du dossier porte déjà ce nom : bail'));
+    await mount(detailOf(true));
+    await vi.waitFor(() => expect($('.ptr-modal').textContent).toContain('porte déjà ce nom'));
+    $('[data-modal-action="close"]').click();
+    expect(rename).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne déplace rien pour une pièce sortie du dossier à l’ouverture', async () => {
+    const detail = detailOf(true);
+    detail.review.rows[0].piece = 'ancien/absent.pdf';
+    await mount(detail);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(rename).not.toHaveBeenCalled();
+    expect(document.querySelector('.ptr-modal')).toBeNull();
   });
 
   it('ajoute les documents arrivés dans le dossier, pièces et notes', async () => {

@@ -64,6 +64,11 @@ export function plannedChange(review: Review, row: ReviewRow, pseudonyms: Pseudo
   return change.name || change.directory ? change : null;
 }
 
+export function classifiedChange(review: Review, row: ReviewRow, pieces: CasePiece[]): (PlannedChange & { directory: string }) | null {
+  const change = classifiedFolder(review, row) ? plannedChange(review, row, [], pieces) : null;
+  return change?.directory ? { row, piece: change.piece, directory: change.directory } : null;
+}
+
 /** Chemin de la pièce une fois le changement appliqué. */
 export function targetPath(change: PlannedChange): string {
   const extension = change.piece.match(/\.[^./]+$/)?.[0] ?? '';

@@ -52,16 +52,36 @@ function deny(reason) {
   };
 }
 
+function quotedForShell(value) {
+  return `"${value.replace(/["$`\\]/g, '\\$&')}"`;
+}
+
+function conversionCommand(caseRoot) {
+  const launcher = path.join(caseRoot, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm');
+  return `${quotedForShell(launcher)} conversion --dossier ${quotedForShell(caseRoot)}`;
+}
+
+function recoveredByGit(absolute, caseRoot) {
+  try {
+    return require('../../websocket-server/renamed-originals.cjs').recoverMovedMarkdown(caseRoot, absolute);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Message de refus. Il doit rester actionnable : sans indication du Markdown à
  * lire, l'agent réessaie le même chemin sous une autre forme.
  */
 function protectionReason(absolute, caseRoot) {
-  const counterpart = markdownCounterpart(absolute, caseRoot);
+  let counterpart = markdownCounterpart(absolute, caseRoot);
+  if (!counterpart.exists && recoveredByGit(absolute, caseRoot)) {
+    counterpart = markdownCounterpart(absolute, caseRoot);
+  }
   const head = `[PieceMaker] « ${path.basename(absolute)} » est une pièce protégée : son contenu original n’est pas accessible à l’IA.`;
   return counterpart.exists
     ? `${head} Lisez le Markdown anonymisé à la place : ${counterpart.path}`
-    : `${head} Aucun Markdown n’a encore été produit pour cette pièce — lancez « Convertir en Markdown » dans l’administration PieceMaker, ou retirez sa protection si elle n’en a pas besoin.`;
+    : `${head} Aucun Markdown trouvé pour cette pièce, ni par son nom ni par l’historique Git du dossier. Convertissez-la avec : ${conversionCommand(caseRoot)}`;
 }
 
 /**

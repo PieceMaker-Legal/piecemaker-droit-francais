@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -13,7 +14,7 @@ const {
 const { readProtection, writeProtection } = require('../piecemaker-plugin/scripts/lib/protection.cjs');
 const { listOriginals } = require('./originals-pipeline.cjs');
 const { documentIndexFile } = require('./document-index.cjs');
-const { renamePiece } = require('./renamed-originals.cjs');
+const { recoverMovedMarkdown, renamePiece } = require('./renamed-originals.cjs');
 const { homonymMarkdownStem } = require('../piecemaker-plugin/scripts/lib/markdown-name.cjs');
 
 const CONVERTED = 'Fichiers convertis PieceMaker';
@@ -257,4 +258,57 @@ test('renamePiece refuse de ranger hors du dossier ou dans un dossier produit pa
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+function gitCase(pieces) {
+  const root = convertedCase(pieces, (caseRoot, piece) => homonymMarkdownStem(path.join(caseRoot, piece), caseRoot));
+  const git = (...args) => execFileSync('git', ['-C', root, '-c', 'user.name=Jean Dupont', '-c', 'user.email=jean.dupont@example.com', ...args], { stdio: 'ignore' });
+  git('init', '-q');
+  git('add', '-A');
+  git('commit', '-qm', 'pièces');
+  return { root, git };
+}
+
+function movePiece(root, from, to) {
+  fs.mkdirSync(path.dirname(path.join(root, to)), { recursive: true });
+  fs.renameSync(path.join(root, from), path.join(root, to));
+}
+
+test('Git rattache une pièce déplacée hors de l’application, sans commit du déplacement', () => {
+  const { root } = gitCase(['Reçu/bail.pdf']);
+  movePiece(root, 'Reçu/bail.pdf', 'Archives/bail.pdf');
+  assert.equal(recoverMovedMarkdown(root, path.join(root, 'Archives/bail.pdf')), true);
+  assert.ok(fs.existsSync(path.join(root, CONVERTED, `${homonymMarkdownStem(path.join(root, 'Archives/bail.pdf'), root)}.md`)));
+  assert.equal(fs.existsSync(path.join(root, CONVERTED, `${homonymMarkdownStem(path.join(root, 'Reçu/bail.pdf'), root)}.md`)), false);
+});
+
+test('Git rattache une pièce dont le déplacement est déjà commité', () => {
+  const { root, git } = gitCase(['Reçu/bail.pdf']);
+  movePiece(root, 'Reçu/bail.pdf', 'Archives/bail.pdf');
+  git('add', '-A');
+  git('commit', '-qm', 'Modifications hors IA');
+  assert.equal(recoverMovedMarkdown(root, path.join(root, 'Archives/bail.pdf')), true);
+});
+
+test('sans historique Git ou sans ancien chemin, rien n’est rattaché', () => {
+  const plain = convertedCase(['bail.pdf']);
+  assert.equal(recoverMovedMarkdown(plain, path.join(plain, 'bail.pdf')), false);
+  const { root } = gitCase(['Reçu/bail.pdf']);
+  fs.writeFileSync(path.join(root, 'nouvelle.pdf'), '%PDF nouvelle');
+  assert.equal(recoverMovedMarkdown(root, path.join(root, 'nouvelle.pdf')), false);
+  assert.equal(recoverMovedMarkdown(root, path.join(root, 'absente.pdf')), false);
+});
+
+test('un autre fichier au contenu identique, encore présent, n’est pas pris pour l’ancien chemin', () => {
+  const { root } = gitCase(['Reçu/bail.pdf']);
+  fs.copyFileSync(path.join(root, 'Reçu/bail.pdf'), path.join(root, 'copie.pdf'));
+  assert.equal(recoverMovedMarkdown(root, path.join(root, 'copie.pdf')), false);
+});
+
+test('listOriginals reporte l’état d’une pièce déplacée dans un autre dossier grâce à Git', async () => {
+  const { root } = gitCase(['Reçu/bail.pdf']);
+  movePiece(root, 'Reçu/bail.pdf', 'Archives/bail.pdf');
+  await listOriginals(root);
+  assert.ok(readAnonymizationState(root).files[stateKey('Archives/bail.pdf')]);
+  assert.equal(readAnonymizationState(root).files[stateKey('Reçu/bail.pdf')], undefined);
 });

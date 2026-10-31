@@ -50,3 +50,37 @@ test('bouclier vert : consulter et restaurer l’historique reste possible', () 
     assert.equal(decision(command), 'allow', command);
   }
 });
+
+function readReason(file) {
+  const output = execFileSync(process.execPath, [hook], {
+    input: JSON.stringify({ tool_name: 'Read', tool_input: { file_path: path.join(caseRoot, file) }, cwd: caseRoot, hook_event_name: 'PreToolUse' }),
+    env: { ...process.env, PIECEMAKER_HOME: home },
+    encoding: 'utf8',
+  });
+  return JSON.parse(output).hookSpecificOutput.permissionDecisionReason;
+}
+
+test('une pièce déplacée hors de l’application retrouve son Markdown par Git, sinon le refus donne la commande', () => {
+  const { homonymMarkdownStem } = require('./lib/markdown-name.cjs');
+  const git = (...args) => execFileSync('git', ['-C', caseRoot, '-c', 'user.name=Jean Dupont', '-c', 'user.email=jean.dupont@example.com', ...args], { stdio: 'ignore' });
+  const converted = path.join(caseRoot, 'Fichiers convertis PieceMaker');
+  fs.mkdirSync(converted, { recursive: true });
+  fs.writeFileSync(path.join(converted, `${homonymMarkdownStem(path.join(caseRoot, 'pieces/contrat-fictif.pdf'), caseRoot)}.md`), '# Contrat\n');
+  git('init', '-q');
+  git('add', '-A');
+  git('commit', '-qm', 'pièces');
+  fs.mkdirSync(path.join(caseRoot, 'Archives'));
+  fs.renameSync(path.join(caseRoot, 'pieces/contrat-fictif.pdf'), path.join(caseRoot, 'Archives/contrat-fictif.pdf'));
+
+  const moved = homonymMarkdownStem(path.join(caseRoot, 'Archives/contrat-fictif.pdf'), caseRoot);
+  assert.match(readReason('Archives/contrat-fictif.pdf'), new RegExp(`Lisez le Markdown anonymisé à la place : .*${moved}\\.md`));
+  assert.ok(fs.existsSync(path.join(converted, `${moved}.md`)));
+
+  fs.writeFileSync(path.join(caseRoot, 'Archives/nouvelle.pdf'), '%PDF nouvelle');
+  const launcher = path.join(caseRoot, '.agents/skills/Skill-PieceMaker/scripts/pm');
+  fs.mkdirSync(path.dirname(launcher), { recursive: true });
+  fs.writeFileSync(launcher, '#!/bin/sh\n');
+  const command = `"${launcher}" conversion --dossier "${caseRoot}"`;
+  assert.ok(readReason('Archives/nouvelle.pdf').endsWith(`Convertissez-la avec : ${command}`));
+  assert.equal(decision(command), 'allow');
+});
