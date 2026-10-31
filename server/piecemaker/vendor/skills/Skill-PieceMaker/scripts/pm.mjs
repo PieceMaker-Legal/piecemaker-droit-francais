@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'afficher', 'chronologie', 'tabular_review', 'raisonnement', 'suivi', 'docx', 'acte'];
+const TOOLS = ['conversion', 'sql', 'afficher', 'index', 'tabular_review', 'raisonnement', 'suivi', 'docx', 'acte'];
 const REASONING_COMMANDS = ['consignes', 'verifier', 'lister'];
 const VOLETS = ['dossier', 'index', 'tabular-review', 'tampon'];
 const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'index', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer'];
@@ -23,8 +23,8 @@ export const HELP = `Usage: pm <outil> [options]
   afficher [--fichier PATH] [--volet ${VOLETS.join('|')}] [--review FILE]
       sans cible : liste les volets ouverts
       --fermer : ferme le fichier ou le volet
-  chronologie lister [--dossier NOM]
-  chronologie modifier --piece ID [--date AAAA-MM-JJ] [--libelle TEXT] [--dossier NOM]
+  index lister [--dossier NOM]
+  index modifier --piece ID [--date AAAA-MM-JJ] [--libelle TEXT] [--dossier NOM]
   tabular_review ${REVIEW_ACTIONS.join('|')}
       [--dossier PATH] [--fichier FILE] [--projet ID] [--mode analyse|recherche]
       [--nom TEXT] [--modele ID] [--description TEXT] [--questions JSON]
@@ -394,9 +394,9 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     return alreadyOpen ? `Déjà affiché : ${label}` : `Volet affiché : ${label}`;
   }
 
-  if (tool === 'chronologie') {
+  if (tool === 'index') {
     const action = positional[1];
-    if (action !== 'lister' && action !== 'modifier') usage('chronologie attend lister ou modifier.');
+    if (action !== 'lister' && action !== 'modifier') usage('index attend lister ou modifier.');
     const result = await api.sqlFn({
       requete: api.chronologieSql({
         action,

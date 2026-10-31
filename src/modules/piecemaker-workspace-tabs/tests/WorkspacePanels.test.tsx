@@ -126,13 +126,13 @@ it('ouvre le .docx dès que l’agent l’écrit, sans attendre un afficher', ()
   expect(opened).toEqual(['bonjour.docx']);
 });
 
-it('ouvre le volet Dossier sur la chronologie quand le LLM appelle l’outil chronologie', () => {
+it('ouvre le volet Dossier sur la chronologie quand le LLM appelle l’outil index', () => {
   render(<Harness />);
   const viewRequests: unknown[] = [];
   const recordView = () => viewRequests.push((window as unknown as Record<string, unknown>).__piecemakerDossierView);
   window.addEventListener('piecemaker:dossier-view', recordView);
   act(() => {
-    for (const listener of socket.listeners) listener({ kind: 'tool_use', toolId: 'outil-1', toolName: 'mcp__piecemaker__chronologie', toolInput: { action: 'lister' } });
+    for (const listener of socket.listeners) listener({ kind: 'tool_use', toolId: 'outil-1', toolName: 'mcp__piecemaker__index', toolInput: { action: 'lister' } });
   });
   window.removeEventListener('piecemaker:dossier-view', recordView);
   expect(screen.getByLabelText('Contenu piecemaker-dossier')).toBeTruthy();

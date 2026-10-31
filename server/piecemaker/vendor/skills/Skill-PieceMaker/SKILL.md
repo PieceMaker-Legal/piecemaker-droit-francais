@@ -1,6 +1,6 @@
 ---
 name: piecemaker
-description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, chronologie, suivi du dossier (échéances), raisonnement juridique (écrire, compléter, vérifier, consulter le volet Raisonnement), volets, tabular review et liaison DOCX au raisonnement. Use when the user asks about case documents, deadlines or the case follow-up, the legal reasoning (raisonnement) or its panel, linked DOCX reasoning, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
+description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions), conversion, index des pièces, suivi du dossier (échéances), raisonnement juridique (écrire, compléter, vérifier, consulter le volet Raisonnement), volets, tabular review et liaison DOCX au raisonnement. Use when the user asks about case documents, deadlines or the case follow-up, the legal reasoning (raisonnement) or its panel, linked DOCX reasoning, the chronology, SQL on the dossier, converting pieces, opening or closing a panel, or a tabular review.
 ---
 
 # PieceMaker
@@ -14,7 +14,7 @@ L’application PieceMaker doit tourner. `pm` vise le dossier de la session, mê
 
 ## Volets (interface à côté du chat)
 
-Le geste ouvre le volet tout seul : `sql` (écriture), `chronologie`, `tabular_review` (lister, preparer, lancer, ouvrir), un `.docx` écrit ou édité, un tamponnage, `raisonnement` (volet Raisonnement du dossier). Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
+Le geste ouvre le volet tout seul : `sql` (écriture), `index`, `tabular_review` (lister, preparer, lancer, ouvrir), un `.docx` écrit ou édité, un tamponnage, `raisonnement` (volet Raisonnement du dossier). Une ligne `Visible : …` le confirme. N’appelez pas `afficher` après ces commandes.
 
 `afficher` sert à lire, pointer ou fermer.
 
@@ -214,13 +214,13 @@ pm conversion
 pm conversion --force contrat.pdf
 ```
 
-## chronologie
+## index
 
-Dates et libellés des pièces en base. Ne lit pas les pièces : pour cela, voir l’index dans `tabular_review`. `lister` : id, date, libellé, nature. `modifier` : date (`AAAA-MM-JJ`, vide pour l’effacer) et/ou libellé (renomme le fichier). `--dossier NOM` = un autre dossier.
+Dates et libellés des pièces en base. Ne lit pas les pièces : pour cela, voir `pm tabular_review index`. `lister` : id, date, libellé, nature. `modifier` : date (`AAAA-MM-JJ`, vide pour l’effacer) et/ou libellé (renomme le fichier). `--dossier NOM` = un autre dossier.
 
 ```
-pm chronologie lister
-pm chronologie modifier --piece doc:1 --date 2024-03-01 --libelle 2024-03-01_Lettre
+pm index lister
+pm index modifier --piece doc:1 --date 2024-03-01 --libelle 2024-03-01_Lettre
 ```
 
 ## tabular_review

@@ -22,10 +22,10 @@ function publishOpenPanels(file, project, entry) {
   }, 20);
 }
 
-test('les outils exposés sont afficher, chronologie, conversion, sql et tabular_review, sans renommage', async () => {
+test('les outils exposés sont afficher, conversion, index, sql et tabular_review, sans renommage', async () => {
   const { client, close } = await connect({ sqlFn: async () => '' });
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'chronologie', 'conversion', 'raisonnement', 'sql', 'suivi', 'tabular_review']);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'conversion', 'index', 'raisonnement', 'sql', 'suivi', 'tabular_review']);
   const sql = tools.find((tool) => tool.name === 'sql');
   assert.deepEqual(Object.keys(sql.inputSchema.properties), ['requete']);
   assert.deepEqual(sql.annotations, {
@@ -69,10 +69,10 @@ test('sql rend l’erreur du serveur comme erreur MCP', async () => {
   await close();
 });
 
-test('chronologie liste les pièces du dossier courant par date', async () => {
+test('index liste les pièces du dossier courant par date', async () => {
   const calls = [];
   const { client, close } = await connect({ sqlFn: async (input) => { calls.push(input); return 'id\tdate'; } });
-  const result = await client.callTool({ name: 'chronologie', arguments: { action: 'lister' } });
+  const result = await client.callTool({ name: 'index', arguments: { action: 'lister' } });
   assert.equal(result.isError, undefined);
   assert.equal(calls[0].cwd, process.cwd());
   assert.match(calls[0].requete, /^SELECT id, doc_date AS date, label AS libelle/);
@@ -80,21 +80,21 @@ test('chronologie liste les pièces du dossier courant par date', async () => {
   await close();
 });
 
-test('chronologie modifie la date et le libellé en échappant les valeurs', async () => {
+test('index modifie la date et le libellé en échappant les valeurs', async () => {
   const calls = [];
   const { client, close } = await connect({ sqlFn: async (input) => { calls.push(input); return '1 ligne(s) modifiée(s)'; } });
-  await client.callTool({ name: 'chronologie', arguments: { action: 'modifier', dossier: "Société Exemple", piece: "doc:l'acte", date: '2024-03-01', libelle: "2024-03-01_Lettre d'Exemple" } });
+  await client.callTool({ name: 'index', arguments: { action: 'modifier', dossier: "Société Exemple", piece: "doc:l'acte", date: '2024-03-01', libelle: "2024-03-01_Lettre d'Exemple" } });
   assert.equal(calls[0].requete, "UPDATE piecemaker_nodes SET doc_date = '2024-03-01', label = '2024-03-01_Lettre d''Exemple' WHERE project_id = dossier('Société Exemple') AND kind = 'document' AND id = 'doc:l''acte'");
-  await client.callTool({ name: 'chronologie', arguments: { action: 'modifier', piece: 'doc:1', date: '' } });
+  await client.callTool({ name: 'index', arguments: { action: 'modifier', piece: 'doc:1', date: '' } });
   assert.equal(calls[1].requete, "UPDATE piecemaker_nodes SET doc_date = NULL WHERE project_id = dossier() AND kind = 'document' AND id = 'doc:1'");
   await close();
 });
 
-test('chronologie refuse une modification incomplète ou une date mal formée sans appeler SQL', async () => {
+test('index refuse une modification incomplète ou une date mal formée sans appeler SQL', async () => {
   const calls = [];
   const { client, close } = await connect({ sqlFn: async (input) => { calls.push(input); return ''; } });
   for (const args of [{ action: 'modifier', date: '2024-03-01' }, { action: 'modifier', piece: 'doc:1' }, { action: 'modifier', piece: 'doc:1', date: '01/03/2024' }]) {
-    const result = await client.callTool({ name: 'chronologie', arguments: args });
+    const result = await client.callTool({ name: 'index', arguments: args });
     assert.equal(result.isError, true);
   }
   assert.equal(calls.length, 0);

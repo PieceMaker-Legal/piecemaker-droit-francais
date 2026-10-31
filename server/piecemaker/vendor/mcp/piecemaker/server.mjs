@@ -301,7 +301,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
     return afficherResult({ success: true, alreadyOpen, code: alreadyOpen ? 'already_open' : 'opened', message: `${alreadyOpen ? 'Déjà affiché' : 'Volet affiché'} : ${volet}${review ? ` (${path.basename(review)})` : ''}`, panels: listOpenPanels() });
   });
 
-  server.registerTool('chronologie', {
+  server.registerTool('index', {
     description: 'Dates et libellés des pièces du dossier, affichés à l’avocat dans le volet Dossier. '
       + 'Ne lit pas les pièces : pour la lecture intégrale de toutes les pièces, avec chronologie et tri, utiliser tabular_review, action index. '
       + 'lister : id, date, libellé et nature de chaque pièce, par date. '
@@ -315,7 +315,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       libelle: z.string().optional(),
     },
     annotations: {
-      title: 'Chronologie du dossier',
+      title: 'Index du dossier',
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: true,

@@ -19,7 +19,7 @@ test('parseArgv sépare drapeaux, booléens et positionnels', () => {
     flags: { force: true },
     positional: ['conversion', 'contrat.pdf'],
   });
-  assert.equal(parseArgv(['chronologie', 'modifier', '--date', '']).flags.date, '');
+  assert.equal(parseArgv(['index', 'modifier', '--date', '']).flags.date, '');
   assert.equal(parseArgv(['--help']).flags.help, true);
 });
 
@@ -33,7 +33,7 @@ test('findVendor résout le vendor voisin et PIECEMAKER_VENDOR', () => {
   fs.rmSync(isolated, { recursive: true, force: true });
 });
 
-test('sql et chronologie passent par sqlFn', async () => {
+test('sql et index passent par sqlFn', async () => {
   const calls = [];
   const deps = {
     sqlFn: async (input) => {
@@ -47,7 +47,7 @@ test('sql et chronologie passent par sqlFn', async () => {
   assert.deepEqual(calls[0], { requete: 'SELECT label FROM piecemaker_nodes', cwd: process.cwd() });
   const written = await run(['sql', '--requete', "UPDATE piecemaker_nodes SET label='x' WHERE id='p:1'"], { deps });
   assert.match(written, /^ok\nDéjà visible : Dossier \(vue générale\)\.\n?$/);
-  const chrono = await run(['chronologie', 'modifier', '--piece', 'doc:1', '--date', '2024-03-01'], { deps });
+  const chrono = await run(['index', 'modifier', '--piece', 'doc:1', '--date', '2024-03-01'], { deps });
   assert.equal(calls[2].requete, 'SQL:modifier:doc:1:2024-03-01');
   assert.match(chrono, /visible : Dossier \(index\)\./i);
 });
@@ -137,7 +137,7 @@ test('tabular_review ouvre localement et transmet le reste', async () => {
 test('SKILL.md documente toute la surface d’interface', () => {
   const skill = fs.readFileSync(path.join(HERE, '..', 'SKILL.md'), 'utf8');
   const required = [
-    'conversion', 'sql', 'afficher', 'chronologie', 'tabular_review',
+    'conversion', 'sql', 'afficher', 'index', 'tabular_review',
     '--fichier', '--volet', '--review', '--fermer', '--force', '--requete', '--dossier',
     'Visible',
     'lister', 'modifier', '--piece', '--date', '--libelle',
