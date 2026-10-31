@@ -2,6 +2,8 @@
 
 Cette carte réunit les serveurs MCP, les skills, les outils et les commandes de l'assistant. Le détail de chaque fonction reste dans sa propre doc.
 
+Version graphique, à ouvrir dans un navigateur : [carte-outils.html](carte-outils.html).
+
 Le moteur lit un skill, puis appelle un outil. Le skill n'appelle ni le moteur ni un outil.
 
 ```mermaid
