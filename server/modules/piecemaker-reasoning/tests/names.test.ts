@@ -7,6 +7,7 @@ import { adviseNames } from '../names.js';
 import { describeReasoning, EXAMPLE_CODE, EXAMPLE_SOURCES, verifyReasoning } from '../program.js';
 import type { ReasoningConnectors } from '../program.js';
 import type { ReasoningIssue } from '../../../../shared/piecemaker-reasoning.js';
+import { RULES } from '../rules.js';
 
 const connectors: ReasoningConnectors = {
   source: async (_cwd, id) => EXAMPLE_SOURCES[id] ?? null,
@@ -42,7 +43,7 @@ test('un nom en français avec des espaces se vérifie comme son équivalent ave
 
 test('un nom ne peut pas contenir deux espaces ni finir par une espace', () => {
   const { problems } = readReasoning({ objectifs: [{ objectif: 'Obtenir la pénalité', obtenir: 'pénalité  due' }], 'pénalité  due': { si: [{ 'retard constaté': true }] } });
-  assert.ok(problems.some((problem) => problem.text.startsWith('nom de terme invalide')));
+  assert.ok(problems.some((problem) => problem.text.startsWith('Terme mal nommé')));
 });
 
 test('deux noms pour un même fait sont signalés, deux faits voisins ne le sont pas', () => {
@@ -58,8 +59,8 @@ test('deux noms pour un même fait sont signalés, deux faits voisins ne le sont
 test('un nom qui relie deux faits par et, ou, sauf est signalé', () => {
   const [entry] = adviseNames(['livraison reçue et conforme']);
   assert.match(entry.text, /« et »/);
-  assert.match(entry.text, /sous si/);
-  assert.match(adviseNames(['force majeure ou grève'])[0].text, /l_une/);
+  assert.match(entry.correction, /sous si/);
+  assert.match(adviseNames(['force majeure ou grève'])[0].correction, /l_une/);
   assert.deepEqual(adviseNames(['mise en demeure reçue']), []);
 });
 
@@ -76,14 +77,17 @@ test('les conseils ne sont ni des erreurs ni des manques et n’apparaissent qu�
 
   const advice = Array.from({ length: 7 }, (_, index): ReasoningIssue => ({ id: `c${index}`, kind: 'conseil', path: '', line: null, text: `conseil ${index}` }));
   const error: ReasoningIssue = { id: 'e', kind: 'erreur', path: '', line: null, text: 'erreur fictive' };
-  assert.doesNotMatch(describeReasoning({ code: '', issues: [error, ...advice] }), /CONSEIL/);
+  assert.doesNotMatch(describeReasoning({ code: '', issues: [error, ...advice] }), /conseil \d/);
   const shown = describeReasoning({ code: '', issues: advice });
-  assert.equal(shown.match(/^CONSEIL /gm)?.length, 5);
-  assert.match(shown, /5 conseil\(s\) d’écriture/);
+  assert.equal(shown.match(/warning +conseil \d/g)?.length, 5);
 });
 
 test('une clé avec des espaces est un nom à sa place, une phrase coupée par « : » ailleurs', () => {
   const named = parseReasoningDocument('valeurs:\n  date de commande:\n    valeur: 2025-05-02\npénalité due:\n  si:\n    - mise en demeure: true\nhypotheses:\n  - nom: cas\n    faits:\n      mise en demeure: true\n    attendu:\n      pénalité due: true\n');
   assert.ok(Object.hasOwn(named.value as object, 'pénalité due'));
-  assert.throws(() => parseReasoningDocument('acte:\n  - intitule: Sur la pénalité\n    texte:\n      - Le contrat impose: une livraison\n'), /guillemets/);
+  assert.throws(() => parseReasoningDocument('acte:\n  - intitule: Sur la pénalité\n    texte:\n      - Le contrat impose: une livraison\n'), /non protégé/);
+});
+
+test('chaque règle du catalogue porte un message et une correction', () => {
+  for (const [name, rule] of Object.entries(RULES)) assert.ok(rule.message.trim() && rule.correction.trim(), name);
 });

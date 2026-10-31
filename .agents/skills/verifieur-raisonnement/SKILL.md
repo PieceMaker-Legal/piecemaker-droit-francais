@@ -68,7 +68,7 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 
 ## Sortie de `verifier`
 
-- À l'agent : uniquement erreurs puis manques, numérotés, chacun avec son emplacement (`terme › si[0] › selon[1] › validite`), sa ligne, le contenu de la ligne (ou où l'ajouter) et la consigne. Pas de réponses ni de statuts.
+- À l'agent : le format ESLint. Le chemin du fichier, puis une ligne par problème, triée par ligne : `ligne:colonne  error|warning  constat. correction.  nom-de-règle` (`0:0` pour un problème de fichier), et le total `✖ N problems (E errors, W warnings)`. Une erreur est un `error`, un manque ou un conseil un `warning`. Les conseils n'apparaissent que sans erreur, limités à 5. Constat en participe passé, correction à l'impératif : catalogue dans `rules.ts`. Pas de réponses ni de statuts.
 - Le fichier est réécrit dans l'ordre canonique (qualification, objectifs, termes en descendant, contrôles regroupés, valeurs, hypothèses) et imprimé pour grep : un terme par en-tête à deux espaces, une source ou preuve par ligne. L'agent relit avec grep/sed.
 - Au volet : l'objet annoté complet (statuts, décisifs, `bilan.controles`, vigueur, pièces). L'avocat écarte des alertes et note la fiabilité des pièces (tables `pm_reasoning_dismissed`, `pm_reasoning_reliability`).
 

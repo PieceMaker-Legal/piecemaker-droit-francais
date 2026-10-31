@@ -224,7 +224,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
 
   server.registerTool('raisonnement', {
     description: [
-      'verifier : vérifie et teste un raisonnement du dossier (.piecemaker/raisonnements/<nom>.yaml), réécrit le fichier dans son ordre et renvoie ses erreurs et manques, chacun localisé ; raisonnement est requis quand le dossier en compte plusieurs.',
+      'verifier : vérifie et teste un raisonnement du dossier (.piecemaker/raisonnements/<nom>.yaml), réécrit le fichier dans son ordre et renvoie ses erreurs et manques au format ESLint ; raisonnement est requis quand le dossier en compte plusieurs.',
       'lister : liste les raisonnements du dossier avec leurs objectifs et leur dernier bilan.',
     ].join('\n'),
     inputSchema: {

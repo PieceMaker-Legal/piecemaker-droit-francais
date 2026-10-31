@@ -4,6 +4,8 @@ import { readActe } from './acte.js';
 import type { Section } from './acte.js';
 import { CONTROLS, isControlName, NAME } from './names.js';
 import type { ControlSlot } from './names.js';
+import { finding } from './rules.js';
+import type { Finding } from './rules.js';
 
 export type Ref = { piece: string; citation: string };
 export type Target = { piece: string; citation?: string };
@@ -30,7 +32,7 @@ export type Verb = keyof typeof VERBS;
 export type Objective = { objectif: string; effet: string; verbe: Verb; validite?: string; prescription?: string };
 export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean | number> };
 export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; objectifs: Objective[]; hypotheses: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure>; acte: Section[] };
-export type Problem = { path: string; text: string; avocat?: string; cible?: string };
+export type Problem = Finding & { path: string; avocat?: string; cible?: string };
 export type Parsed = { value: unknown; lines: Map<string, number> };
 
 const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u;
@@ -38,17 +40,10 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const RESERVED = new Set(['objectifs', 'questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification', 'acte', 'true', 'false']);
 const TERM_KEYS = new Set(['si', 'sauf']);
 const CONDITION_KEYS = new Set(['l_une', 'delai', 'montant', 'selon', 'decompte']);
-const CONDITION_SHAPE = 'condition : - nom de la condition: true (ou false), avec au besoin selon, delai, montant, decompte ; ou - l_une: [conditions]';
-const FOUNDATION_SHAPE = 'fondement : { preuve: [{ piece, citation }], selon: [{ source, citation }], si: [- nom: true] } avec au moins preuve ou selon';
-const CONTREDIT_REMOVED = 'contredit n’existe plus : écris la pièce en preuve sous nom: { false: [{ preuve: [{ piece, citation }] }] } ; pour une clause contraire, deux fondements de valeurs opposées (true et false) sur la même question';
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
 const BOUNDS = ['au_plus', 'au_moins'] as const;
 const COMPARISONS = ['plus_de', 'au_moins', 'moins_de', 'au_plus'] as const;
-const DELAY_SHAPE = 'delai : { de: date de départ, a: date retenue, au_plus ou au_moins: { jours | jours_ouvres | mois | ans: nombre } }';
-const AMOUNT_SHAPE = 'montant : { valeur: montant du dossier, plus_de | au_moins | moins_de | au_plus: nombre ou autre montant }';
 const isDate = (value: unknown): value is string => typeof value === 'string' && DATE.test(value);
-const OBJECTIVE_SHAPE = 'objectifs: [{ objectif: le but du client, obtenir | écarter: terme (vrai/faux) ou réduire | augmenter: montant de valeurs }] attendu';
-const FORMULA_SHAPE = `formule : { ${OPERATIONS.join(' | ')}: [termes] } (arrondi: [montant, décimales]), { bareme: { assiette, tranches: [{ jusqu_a, taux }, …, { taux }] } } ou { si: terme, alors, sinon } ; un terme est un nombre, un nom de valeur ou une formule`;
 export const operands = (formula: Formula): Operand[] => (formula.operation === 'bareme' ? [formula.assiette, ...formula.tranches.flatMap((tranche) => [tranche.jusqu_a, tranche.taux]).filter((item): item is Operand => item !== null)] : formula.operation === 'si' ? [formula.alors, formula.sinon] : formula.termes);
 export const formulaNames = (formula: Formula): string[] => operands(formula).flatMap((item) => (typeof item === 'string' ? [item] : typeof item === 'number' ? [] : formulaNames(item)));
 export const formulaNumbers = (formula: Formula): number[] => operands(formula).flatMap((item, index) => (typeof item === 'number' ? (formula.operation === 'arrondi' && index === 1 ? [] : [item]) : typeof item === 'string' ? [] : formulaNumbers(item)));
@@ -87,8 +82,17 @@ export const unknownKey = (key: string, admitted: string[]) => {
   return elsewhere ? `clé inconnue ${key} : ${elsewhere} est une clé d’${KEY_HOMES[elsewhere]} ; corrige le nom et vérifie l’indentation (${here})` : `clé inconnue ${key} (${here})`;
 };
 
+const keyFinding = (key: string, admitted: string[]): Finding => {
+  const liste = admitted.join(', ');
+  const intended = near(key, admitted);
+  if (intended) return finding('cle-mal-ecrite', { cle: key, proche: intended });
+  if (KEY_HOMES[key]) return finding('cle-mal-placee', { cle: key, bloc: KEY_HOMES[key], liste });
+  const elsewhere = near(key, Object.keys(KEY_HOMES));
+  return elsewhere ? finding('cle-mal-ecrite-et-placee', { cle: key, proche: elsewhere, bloc: KEY_HOMES[elsewhere] }) : finding('cle-non-reconnue', { cle: key, liste });
+};
+
 export class LiteralError extends Error {
-  constructor(message: string, readonly line: number) { super(`ligne ${line} : ${message}`); }
+  constructor(message: string, readonly line: number, readonly found?: Finding) { super(`ligne ${line} : ${message}`); }
 }
 
 type AstNode = { type: string; loc?: { start: { line: number } }; [key: string]: any };
@@ -150,35 +154,35 @@ const text = (value: unknown) => typeof value === 'string' && value.trim() !== '
 
 export function readReasoning(value: unknown): { reasoning: Reasoning; problems: Problem[] } {
   const problems: Problem[] = [];
-  const problem = (path: string, message: string, avocat?: string, cible?: string) => { problems.push({ path, text: message, ...(avocat ? { avocat, cible } : {}) }); };
+  const problem = (path: string, found: Finding, avocat?: string, cible?: string) => { problems.push({ ...found, path, ...(avocat ? { avocat, cible } : {}) }); };
   const reasoning: Reasoning = { objectifs: [], hypotheses: [], terms: new Map(), valeurs: new Map(), computed: new Map(), acte: [] };
   const dated: Array<{ at: string; name: string }> = [];
   const controls: Array<{ slot: ControlSlot; name: string; at: string }> = [];
   const control = (slot: ControlSlot, raw: unknown, at: string): string | undefined => {
-    if (typeof raw !== 'string' || !NAME.test(raw)) { problem(at, `${slot} : nom du terme qui ${CONTROL_PURPOSE[slot]}, commençant par « ${CONTROLS[slot]} »`); return undefined; }
-    if (!isControlName(raw, slot)) { problem(at, `${slot} : le nom commence par « ${CONTROLS[slot]} » (ex. ${raw.includes('_') && !raw.includes(' ') ? `${CONTROLS[slot].replace(/ /g, '_')}_${raw}` : `${CONTROLS[slot]} de ${raw}`})`); return undefined; }
+    if (typeof raw !== 'string' || !NAME.test(raw)) { problem(at, finding('controle-mal-nomme', { controle: slot, objet: CONTROL_PURPOSE[slot] })); return undefined; }
+    if (!isControlName(raw, slot)) { problem(at, finding('prefixe-de-controle-omis', { controle: slot, prefixe: CONTROLS[slot] })); return undefined; }
     controls.push({ slot, name: raw, at });
     return raw;
   };
-  if (!isObject(value)) { problem('', 'le raisonnement est un objet { objectifs: [...], terme: {...} }'); return { reasoning, problems }; }
+  if (!isObject(value)) { problem('', finding('raisonnement-mal-forme')); return { reasoning, problems }; }
 
   const refs = (raw: unknown, path: string): Ref[] => {
     if (raw === undefined) return [];
-    if (!Array.isArray(raw)) { problem(path, 'liste attendue : [{ piece, citation }]'); return []; }
+    if (!Array.isArray(raw)) { problem(path, finding('preuve-mal-formee')); return []; }
     return raw.flatMap((entry, index) => {
       const at = `${path}[${index}]`;
-      if (isObject(entry)) for (const key of Object.keys(entry)) if (!['piece', 'citation'].includes(key)) problem(`${at}.${key}`, unknownKey(key, ['piece', 'citation']));
-      if (!isObject(entry) || !text(entry.piece) || !text(entry.citation)) { problem(at, '{ piece: chemin de la pièce, citation: passage exact } attendu'); return []; }
+      if (isObject(entry)) for (const key of Object.keys(entry)) if (!['piece', 'citation'].includes(key)) problem(`${at}.${key}`, keyFinding(key, ['piece', 'citation']));
+      if (!isObject(entry) || !text(entry.piece) || !text(entry.citation)) { problem(at, finding('preuve-mal-formee')); return []; }
       return [{ piece: entry.piece as string, citation: entry.citation as string }];
     });
   };
 
   const targets = (raw: unknown, path: string): Target[] => {
     if (raw === undefined) return [];
-    if (!Array.isArray(raw)) { problem(path, 'liste attendue : [{ piece, citation }] (citation facultative si l’élément visé n’existe pas encore)'); return []; }
+    if (!Array.isArray(raw)) { problem(path, finding('renvoi-mal-forme')); return []; }
     return raw.flatMap((entry, index) => {
       const at = `${path}[${index}]`;
-      if (!isObject(entry) || !text(entry.piece) || (entry.citation !== undefined && !text(entry.citation)) || Object.keys(entry).some((key) => !['piece', 'citation'].includes(key))) { problem(at, '{ piece: chemin de l’élément visé, citation: passage visé (facultatif) } attendu'); return []; }
+      if (!isObject(entry) || !text(entry.piece) || (entry.citation !== undefined && !text(entry.citation)) || Object.keys(entry).some((key) => !['piece', 'citation'].includes(key))) { problem(at, finding('renvoi-mal-forme')); return []; }
       return [{ piece: entry.piece as string, ...(entry.citation !== undefined ? { citation: entry.citation as string } : {}) }];
     });
   };
@@ -186,7 +190,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
   const operand = (item: unknown, path: string): Operand | null => (typeof item === 'number' ? item : typeof item === 'string' && NAME.test(item) ? item : formula(item, path));
   const formula = (raw: unknown, path: string): Formula | null => {
     if (isObject(raw) && raw.si !== undefined) {
-      if (typeof raw.si !== 'string' || !NAME.test(raw.si) || raw.alors === undefined || raw.sinon === undefined || Object.keys(raw).some((key) => !['si', 'alors', 'sinon'].includes(key))) { problem(path, FORMULA_SHAPE); return null; }
+      if (typeof raw.si !== 'string' || !NAME.test(raw.si) || raw.alors === undefined || raw.sinon === undefined || Object.keys(raw).some((key) => !['si', 'alors', 'sinon'].includes(key))) { problem(path, finding('formule-mal-formee')); return null; }
       const alors = operand(raw.alors, `${path}.alors`);
       const sinon = operand(raw.sinon, `${path}.sinon`);
       return alors === null || sinon === null ? null : { operation: 'si', condition: raw.si, alors, sinon };
@@ -197,7 +201,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       const tranches = isObject(scale) && Array.isArray(scale.tranches) ? scale.tranches : [];
       const valid = isObject(scale) && scale.assiette !== undefined && tranches.length > 0 && Object.keys(scale).every((key) => ['assiette', 'tranches'].includes(key))
         && tranches.every((tranche, index) => isObject(tranche) && tranche.taux !== undefined && (index === tranches.length - 1 ? tranche.jusqu_a === undefined : tranche.jusqu_a !== undefined) && Object.keys(tranche).every((key) => ['jusqu_a', 'taux'].includes(key)));
-      if (!valid) { problem(`${path}.bareme`, 'bareme : { assiette, tranches: [{ jusqu_a: limite, taux }, …, { taux }] } : la dernière tranche n’a pas de limite'); return null; }
+      if (!valid) { problem(`${path}.bareme`, finding('bareme-mal-forme')); return null; }
       const assiette = operand((scale as Record<string, unknown>).assiette, `${path}.bareme.assiette`);
       const parsed = tranches.map((tranche, index) => ({ jusqu_a: (tranche as Record<string, unknown>).jusqu_a === undefined ? null : operand((tranche as Record<string, unknown>).jusqu_a, `${path}.bareme.tranches[${index}].jusqu_a`), taux: operand((tranche as Record<string, unknown>).taux, `${path}.bareme.tranches[${index}].taux`) }));
       if (assiette === null || parsed.some((tranche, index) => tranche.taux === null || (tranche.jusqu_a === null && index < parsed.length - 1))) return null;
@@ -205,7 +209,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     }
     const operation = operations[0] as typeof OPERATIONS[number];
     const list = isObject(raw) ? raw[operation] : undefined;
-    if (operations.length !== 1 || !(OPERATIONS as readonly string[]).includes(operation) || !Array.isArray(list) || list.length < 2 || (operation === 'arrondi' && (list.length !== 2 || !Number.isInteger(list[1])))) { problem(path, FORMULA_SHAPE); return null; }
+    if (operations.length !== 1 || !(OPERATIONS as readonly string[]).includes(operation) || !Array.isArray(list) || list.length < 2 || (operation === 'arrondi' && (list.length !== 2 || !Number.isInteger(list[1])))) { problem(path, finding('formule-mal-formee')); return null; }
     const termes = list.map((item, index) => operand(item, `${path}.${operation}[${index}]`));
     if (termes.some((item) => item === null)) return null;
     return { operation, termes: termes as Operand[] };
@@ -213,11 +217,11 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
 
   const bases = (raw: unknown, path: string): Basis[] => {
     if (raw === undefined) return [];
-    if (!Array.isArray(raw)) { problem(path, 'liste attendue : [{ source, citation, vigueur }]'); return []; }
+    if (!Array.isArray(raw)) { problem(path, finding('source-mal-formee')); return []; }
     return raw.flatMap((entry, index) => {
       const at = `${path}[${index}]`;
-      if (isObject(entry)) for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'version', 'validite', 'renvoi'].includes(key)) problem(`${at}.${key}`, key === 'contredit' ? CONTREDIT_REMOVED : unknownKey(key, ['source', 'citation', 'vigueur', 'applicabilite', 'version', 'validite', 'renvoi']));
-      if (!isObject(entry) || !text(entry.source) || !text(entry.citation)) { problem(at, '{ source: identifiant du texte, de la décision ou chemin de la pièce, citation: passage exact } attendu'); return []; }
+      if (isObject(entry)) for (const key of Object.keys(entry)) if (!['source', 'citation', 'vigueur', 'applicabilite', 'version', 'validite', 'renvoi'].includes(key)) problem(`${at}.${key}`, key === 'contredit' ? finding('contredit-retire', { nom: 'nom' }) : keyFinding(key, ['source', 'citation', 'vigueur', 'applicabilite', 'version', 'validite', 'renvoi']));
+      if (!isObject(entry) || !text(entry.source) || !text(entry.citation)) { problem(at, finding('source-mal-formee')); return []; }
       const basis: Basis = { source: (entry.source as string).trim(), citation: entry.citation as string, renvoi: targets(entry.renvoi, `${at}.renvoi`) };
       if (entry.applicabilite !== undefined) {
         const name = control('applicabilite', entry.applicabilite, `${at}.applicabilite`);
@@ -233,12 +237,12 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       }
       if (entry.vigueur !== undefined) {
         const vigueur = entry.vigueur;
-        if (!isObject(vigueur) || typeof vigueur.debut !== 'string' || !DATE.test(vigueur.debut) || !(vigueur.fin === null || vigueur.fin === undefined || (typeof vigueur.fin === 'string' && DATE.test(vigueur.fin))) || Object.keys(vigueur).some((key) => !['debut', 'fin', 'au'].includes(key))) problem(`${at}.vigueur`, 'vigueur : { debut: \'AAAA-MM-JJ\', fin: \'AAAA-MM-JJ\' ou null, au: date de valeurs }');
+        if (!isObject(vigueur) || typeof vigueur.debut !== 'string' || !DATE.test(vigueur.debut) || !(vigueur.fin === null || vigueur.fin === undefined || (typeof vigueur.fin === 'string' && DATE.test(vigueur.fin))) || Object.keys(vigueur).some((key) => !['debut', 'fin', 'au'].includes(key))) problem(`${at}.vigueur`, finding('vigueur-mal-formee'));
         else {
           basis.vigueur = { debut: vigueur.debut, fin: (vigueur.fin as string | null | undefined) ?? null };
           if (vigueur.au !== undefined) {
             if (typeof vigueur.au === 'string' && NAME.test(vigueur.au)) { basis.vigueur.au = vigueur.au; dated.push({ at: `${at}.vigueur.au`, name: vigueur.au }); }
-            else problem(`${at}.vigueur.au`, 'au : nom d’une date de valeurs (ex. date de conclusion du contrat)');
+            else problem(`${at}.vigueur.au`, finding('date-vigueur-mal-nommee'));
           }
         }
       }
@@ -247,14 +251,14 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
   };
 
   const measure = (raw: Record<string, unknown>, path: string): Measure | null => {
-    if (raw.delai !== undefined && raw.montant !== undefined) { problem(path, 'une condition porte soit un délai, soit un montant'); return null; }
+    if (raw.delai !== undefined && raw.montant !== undefined) { problem(path, finding('delai-et-montant-melanges')); return null; }
     if (raw.delai !== undefined) {
       const delay = raw.delai;
       const bounds = isObject(delay) ? BOUNDS.filter((key) => delay[key] !== undefined) : [];
       const duration = bounds.length === 1 && isObject((delay as Record<string, unknown>)[bounds[0]]) ? Object.entries((delay as Record<string, Record<string, unknown>>)[bounds[0]]) : [];
       const [unit, count] = duration[0] ?? [];
       if (!isObject(delay) || typeof delay.de !== 'string' || !NAME.test(delay.de) || typeof delay.a !== 'string' || !NAME.test(delay.a) || Object.keys(delay).some((key) => !['de', 'a', ...BOUNDS].includes(key))
-        || bounds.length !== 1 || duration.length !== 1 || !(UNITS as readonly string[]).includes(unit) || !Number.isInteger(count) || (count as number) < 0) { problem(`${path}.delai`, DELAY_SHAPE); return null; }
+        || bounds.length !== 1 || duration.length !== 1 || !(UNITS as readonly string[]).includes(unit) || !Number.isInteger(count) || (count as number) < 0) { problem(`${path}.delai`, finding('delai-mal-forme')); return null; }
       return { delai: { de: delay.de, a: delay.a, borne: bounds[0], duree: { unite: unit as Duration['unite'], nombre: count as number } } };
     }
     if (raw.montant !== undefined) {
@@ -262,56 +266,56 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       const comparisons = isObject(amount) ? COMPARISONS.filter((key) => amount[key] !== undefined) : [];
       const threshold = isObject(amount) && comparisons.length === 1 ? amount[comparisons[0]] : undefined;
       if (!isObject(amount) || typeof amount.valeur !== 'string' || !NAME.test(amount.valeur) || Object.keys(amount).some((key) => !['valeur', ...COMPARISONS].includes(key))
-        || comparisons.length !== 1 || !(typeof threshold === 'number' || (typeof threshold === 'string' && NAME.test(threshold)))) { problem(`${path}.montant`, AMOUNT_SHAPE); return null; }
+        || comparisons.length !== 1 || !(typeof threshold === 'number' || (typeof threshold === 'string' && NAME.test(threshold)))) { problem(`${path}.montant`, finding('montant-mal-forme')); return null; }
       return { montant: { valeur: amount.valeur, comparaison: comparisons[0], seuil: threshold as number | string } };
     }
     return null;
   };
 
   const condition = (raw: unknown, path: string, nested: boolean): Condition[] => {
-    if (!isObject(raw)) { problem(path, CONDITION_SHAPE); return []; }
-    if (raw.condition !== undefined) { problem(`${path}.condition`, `condition: nom n’existe plus : écris ${typeof raw.condition === 'string' && NAME.test(raw.condition) ? `${raw.condition}: true (ou ${raw.condition}: false)` : 'nom: true (ou nom: false)'}, la valeur attendue de la condition`); return []; }
-    if (raw.contredit !== undefined) problem(`${path}.contredit`, CONTREDIT_REMOVED);
-    if (raw.preuve !== undefined) problem(`${path}.preuve`, 'preuve ne se place plus sur une condition de règle : place-la sous la valeur qu’elle établit, à la racine : nom: { true: [{ preuve: [{ piece, citation }] }] } (pour un délai ou un montant : dans valeurs)');
+    if (!isObject(raw)) { problem(path, finding('condition-mal-formee')); return []; }
+    if (raw.condition !== undefined) { problem(`${path}.condition`, finding('condition-retiree', { nom: typeof raw.condition === 'string' && NAME.test(raw.condition) ? raw.condition : 'nom' })); return []; }
+    if (raw.contredit !== undefined) problem(`${path}.contredit`, finding('contredit-retire', { nom: 'nom' }));
+    if (raw.preuve !== undefined) problem(`${path}.preuve`, finding('preuve-deplacee'));
     const names = Object.keys(raw).filter((key) => !CONDITION_KEYS.has(key) && key !== 'contredit' && key !== 'preuve');
     const hasChoice = raw.l_une !== undefined;
-    if (hasChoice === (names.length > 0)) { problem(path, hasChoice ? 'l_une ne porte pas de nom de condition : retire-le ou mets-le dans l’un des membres' : `${CONDITION_SHAPE} (exactement une clé hors ${[...CONDITION_KEYS].join(', ')})`); return []; }
+    if (hasChoice === (names.length > 0)) { problem(path, finding(hasChoice ? 'l-une-nommee' : 'condition-mal-formee')); return []; }
     const stray = names.filter((name) => STRUCTURAL.has(name) || near(name, [...CONDITION_KEYS]));
-    if (names.length > 1 && stray.length) { for (const name of stray) problem(`${path}.${name}`, unknownKey(name, [...CONDITION_KEYS])); return []; }
-    if (names.length > 1) { problem(path, `une condition porte exactement une clé nom: true|false (trouvé : ${names.join(', ')}) ; ${CONDITION_SHAPE}`); return []; }
+    if (names.length > 1 && stray.length) { for (const name of stray) problem(`${path}.${name}`, keyFinding(name, [...CONDITION_KEYS])); return []; }
+    if (names.length > 1) { problem(path, finding('condition-multiple')); return []; }
     const result: Condition = { selon: bases(raw.selon, `${path}.selon`) };
     if (!hasChoice) {
       const name = names[0];
       const expected = raw[name];
-      if (!NAME.test(name)) { problem(`${path}.${name}`, 'nom en français, mots séparés par une espace (ex. retard de livraison)'); return []; }
-      if (typeof expected !== 'boolean') { problem(`${path}.${name}`, `${name} : true ou false attendu, la valeur que la règle exige de ${name} (${name}: true ou ${name}: false)`); return []; }
+      if (!NAME.test(name)) { problem(`${path}.${name}`, finding('condition-mal-nommee')); return []; }
+      if (typeof expected !== 'boolean') { problem(`${path}.${name}`, finding('condition-sans-booleen', { nom: name })); return []; }
       result.condition = name;
       result.attendu = expected;
       const mesure = measure(raw, path);
       if (mesure) {
         const known = reasoning.computed.get(name);
-        if (known && JSON.stringify(known) !== JSON.stringify(mesure)) problem(path, `${name} est calculé de deux façons différentes : garde un seul calcul ou renomme l’un des deux`);
+        if (known && JSON.stringify(known) !== JSON.stringify(mesure)) problem(path, finding('calcul-duplique', { nom: name }));
         reasoning.computed.set(name, mesure);
         result.mesure = mesure;
       }
-      if (raw.decompte !== undefined && !mesure?.delai) problem(`${path}.decompte`, 'decompte ne s’emploie qu’avec un délai');
+      if (raw.decompte !== undefined && !mesure?.delai) problem(`${path}.decompte`, finding('decompte-sans-delai'));
       else if (raw.decompte !== undefined) result.decompte = control('decompte', raw.decompte, `${path}.decompte`);
     } else {
-      if (raw.delai !== undefined || raw.montant !== undefined) problem(path, 'un délai ou un montant porte un nom : nom: true');
-      if (!Array.isArray(raw.l_une) || raw.l_une.length < 2) { problem(`${path}.l_une`, 'l_une : au moins deux conditions'); return []; }
+      if (raw.delai !== undefined || raw.montant !== undefined) problem(path, finding('mesure-non-nommee'));
+      if (!Array.isArray(raw.l_une) || raw.l_une.length < 2) { problem(`${path}.l_une`, finding('l-une-incomplete')); return []; }
       result.l_une = raw.l_une.flatMap((entry, index) => condition(entry, `${path}.l_une[${index}]`, true));
     }
-    if (!nested && !result.selon.length) problem(`${path}.selon`, 'condition sans source : ajoute selon: [{ source, citation }]', result.condition ? `${human(result.condition)} : aucun texte ne fonde cette condition.` : 'Une alternative n’est fondée sur aucun texte.', result.condition);
+    if (!nested && !result.selon.length) problem(`${path}.selon`, finding('selon-non-indique'), result.condition ? `${human(result.condition)} : aucun texte ne fonde cette condition.` : 'Une alternative n’est fondée sur aucun texte.', result.condition);
     return [result];
   };
 
   const foundation = (raw: unknown, path: string): Foundation[] => {
-    if (!isObject(raw)) { problem(path, FOUNDATION_SHAPE); return []; }
-    for (const key of Object.keys(raw)) if (!['preuve', 'selon', 'si'].includes(key)) problem(`${path}.${key}`, key === 'contredit' ? CONTREDIT_REMOVED : unknownKey(key, ['preuve', 'selon', 'si']));
+    if (!isObject(raw)) { problem(path, finding('fondement-mal-forme')); return []; }
+    for (const key of Object.keys(raw)) if (!['preuve', 'selon', 'si'].includes(key)) problem(`${path}.${key}`, key === 'contredit' ? finding('contredit-retire', { nom: 'nom' }) : keyFinding(key, ['preuve', 'selon', 'si']));
     const result: Foundation = { preuve: refs(raw.preuve, `${path}.preuve`), selon: bases(raw.selon, `${path}.selon`), si: [] };
-    if (!result.preuve.length && !result.selon.length) problem(path, FOUNDATION_SHAPE);
+    if (!result.preuve.length && !result.selon.length) problem(path, finding('fondement-mal-forme'));
     if (raw.si !== undefined) {
-      if (!Array.isArray(raw.si)) problem(`${path}.si`, 'liste de conditions attendue : - nom: true');
+      if (!Array.isArray(raw.si)) problem(`${path}.si`, finding('conditions-mal-formees'));
       else result.si = raw.si.flatMap((entry, index) => condition(entry, `${path}.si[${index}]`, true));
     }
     return [result];
@@ -319,21 +323,21 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
 
   for (const [key, raw] of Object.entries(value)) {
     if (key === 'bilan') continue;
-    if (key === 'questions') { problem('questions', 'la clé questions s’appelle objectifs : chaque entrée { objectif: le but du client, obtenir | écarter | réduire | augmenter: terme } ; le verbe remplace reponse'); continue; }
+    if (key === 'questions') { problem('questions', finding('questions-renommee')); continue; }
     if (key === 'objectifs') {
-      if (!Array.isArray(raw) || !raw.length) { problem('objectifs', OBJECTIVE_SHAPE); continue; }
+      if (!Array.isArray(raw) || !raw.length) { problem('objectifs', finding('objectifs-mal-formes')); continue; }
       raw.forEach((entry, index) => {
         const at = `objectifs[${index}]`;
-        if (!isObject(entry) || !text(entry.objectif)) { problem(at, OBJECTIVE_SHAPE); return; }
+        if (!isObject(entry) || !text(entry.objectif)) { problem(at, finding('objectifs-mal-formes')); return; }
         const verbs = (Object.keys(VERBS) as Verb[]).filter((verb) => entry[verb] !== undefined);
-        if (verbs.length !== 1) { problem(at, `${verbs.length ? 'un seul verbe' : 'verbe manquant'} : ${OBJECTIVE_SHAPE}`); return; }
+        if (verbs.length !== 1) { problem(at, finding(verbs.length ? 'verbe-duplique' : 'verbe-non-indique')); return; }
         const effet = entry[verbs[0]];
-        if (typeof effet !== 'string' || !NAME.test(effet)) { problem(`${at}.${verbs[0]}`, `${verbs[0]} : nom du terme ou du montant visé`); return; }
-        for (const field of Object.keys(entry)) if (!['objectif', ...verbs, 'validite', 'prescription'].includes(field)) problem(`${at}.${field}`, field === 'question' ? 'question s’appelle objectif : le but du client' : field === 'reponse' ? 'reponse est remplacée par le verbe : obtenir | écarter | réduire | augmenter: terme' : unknownKey(field, ['objectif', ...Object.keys(VERBS), 'validite', 'prescription']));
+        if (typeof effet !== 'string' || !NAME.test(effet)) { problem(`${at}.${verbs[0]}`, finding('cible-mal-nommee', { verbe: verbs[0] })); return; }
+        for (const field of Object.keys(entry)) if (!['objectif', ...verbs, 'validite', 'prescription'].includes(field)) problem(`${at}.${field}`, field === 'question' ? finding('question-renommee') : field === 'reponse' ? finding('reponse-remplacee') : keyFinding(field, ['objectif', ...Object.keys(VERBS), 'validite', 'prescription']));
         const objective: Objective = { objectif: entry.objectif as string, effet, verbe: verbs[0] };
         for (const slot of ['validite', 'prescription'] as const) {
           if (entry[slot] === undefined) continue;
-          if (entry[slot] === effet) { problem(`${at}.${slot}`, `${slot} : l’objectif porte déjà sur ce contrôle, retire ${slot}`); continue; }
+          if (entry[slot] === effet) { problem(`${at}.${slot}`, finding('controle-duplique', { controle: slot })); continue; }
           objective[slot] = control(slot, entry[slot], `${at}.${slot}`);
         }
         reasoning.objectifs.push(objective);
@@ -342,22 +346,22 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     }
     if (key === 'qualification') {
       if (raw === 'drafting' || raw === 'contentieux' || raw === 'consultation') reasoning.qualification = raw;
-      else problem('qualification', 'qualification : \'drafting\', \'contentieux\' ou \'consultation\'');
+      else problem('qualification', finding('qualification-non-admise'));
       continue;
     }
     if (key === 'valeurs') {
-      if (!isObject(raw)) { problem('valeurs', 'valeurs: { nom: { valeur, preuve } } attendu'); continue; }
+      if (!isObject(raw)) { problem('valeurs', finding('valeurs-mal-formees')); continue; }
       for (const [name, entry] of Object.entries(raw)) {
         const at = `valeurs.${name}`;
         const computedOnly = isObject(entry) && entry.valeur === undefined && entry.formule !== undefined;
-        if (!NAME.test(name) || !isObject(entry) || !(computedOnly || typeof entry.valeur === 'number' || isDate(entry.valeur) || entry.valeur === null)) { problem(at, '{ valeur: \'AAAA-MM-JJ\', nombre ou null si le dossier ne la fixe pas, preuve: [{ piece, citation }] ou selon: [{ source, citation, vigueur }], formule } attendu'); continue; }
-        for (const field of Object.keys(entry)) if (!['valeur', 'preuve', 'selon', 'formule'].includes(field)) problem(`${at}.${field}`, field === 'contredit' ? CONTREDIT_REMOVED : unknownKey(field, ['valeur', 'preuve', 'selon', 'formule']));
+        if (!NAME.test(name) || !isObject(entry) || !(computedOnly || typeof entry.valeur === 'number' || isDate(entry.valeur) || entry.valeur === null)) { problem(at, finding('valeur-mal-formee')); continue; }
+        for (const field of Object.keys(entry)) if (!['valeur', 'preuve', 'selon', 'formule'].includes(field)) problem(`${at}.${field}`, field === 'contredit' ? finding('contredit-retire', { nom: name }) : keyFinding(field, ['valeur', 'preuve', 'selon', 'formule']));
         const value: Value = { valeur: computedOnly ? null : entry.valeur as string | number | null, preuve: refs(entry.preuve, `${at}.preuve`), selon: bases(entry.selon, `${at}.selon`) };
-        value.selon.forEach((basis, index) => { if (basis.validite) problem(`${at}.selon[${index}].validite`, 'la source d’une valeur est un texte : validite ne s’y place pas'); });
+        value.selon.forEach((basis, index) => { if (basis.validite) problem(`${at}.selon[${index}].validite`, finding('validite-mal-placee')); });
         if (entry.formule !== undefined) {
           const parsed = formula(entry.formule, `${at}.formule`);
           if (parsed) value.formule = parsed;
-          if (typeof entry.valeur === 'string') problem(`${at}.formule`, 'une formule calcule un nombre, pas une date');
+          if (typeof entry.valeur === 'string') problem(`${at}.formule`, finding('formule-sur-date'));
         }
         reasoning.valeurs.set(name, value);
       }
@@ -366,80 +370,80 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
     if (key === 'acte') {
       const read = readActe(raw);
       reasoning.acte = read.sections;
-      for (const entry of read.problems) problem(entry.path, entry.text);
+      for (const entry of read.problems) problem(entry.path, entry);
       continue;
     }
-    if (key === 'essais') { problem('essais', 'la clé essais s’appelle hypotheses : renomme-la'); continue; }
+    if (key === 'essais') { problem('essais', finding('essais-renommee')); continue; }
     if (key === 'hypotheses') {
-      if (!Array.isArray(raw)) { problem('hypotheses', 'hypotheses: [{ nom, faits, attendu }] attendu'); continue; }
+      if (!Array.isArray(raw)) { problem('hypotheses', finding('hypotheses-mal-formees')); continue; }
       raw.forEach((entry, index) => {
         const at = `hypotheses[${index}]`;
         const booleans = (map: unknown) => isObject(map) && Object.values(map).every((item) => typeof item === 'boolean' || typeof item === 'number');
         const facts = (map: unknown) => isObject(map) && Object.values(map).every((item) => typeof item === 'boolean' || typeof item === 'number' || isDate(item));
-        if (!isObject(entry) || !text(entry.nom) || !facts(entry.faits) || !booleans(entry.attendu)) { problem(at, '{ nom, faits: { terme: vrai|faux, valeur: \'AAAA-MM-JJ\' ou nombre }, attendu: { terme: vrai|faux, montant: nombre } } attendu'); return; }
+        if (!isObject(entry) || !text(entry.nom) || !facts(entry.faits) || !booleans(entry.attendu)) { problem(at, finding('hypothese-mal-formee')); return; }
         reasoning.hypotheses.push({ nom: entry.nom as string, faits: entry.faits as Trial['faits'], attendu: entry.attendu as Trial['attendu'] });
       });
       continue;
     }
     const rootIntended = near(key, ROOT_KEYS);
-    if (rootIntended) { problem(key, `clé inconnue ${key} : écris ${rootIntended}`); continue; }
-    if (STRUCTURAL.has(key)) { problem(key, `${key} n’a pas sa place au premier niveau : c’est une clé d’${KEY_HOMES[key]} ; vérifie son indentation`); continue; }
-    if (!NAME.test(key) || RESERVED.has(key)) { problem(key, RESERVED.has(key) ? 'nom réservé : choisis un autre nom de terme' : 'nom de terme invalide : mots en français séparés par une espace (ex. pénalité due)'); continue; }
-    if (!isObject(raw)) { problem(key, 'un terme est { si: [...], sauf: [...] } ; une question établie est { true: [fondements], false: [fondements] }'); continue; }
+    if (rootIntended) { problem(key, finding('cle-mal-ecrite', { cle: key, proche: rootIntended })); continue; }
+    if (STRUCTURAL.has(key)) { problem(key, finding('cle-mal-placee', { cle: key, bloc: KEY_HOMES[key], liste: ROOT_KEYS.join(', ') })); continue; }
+    if (!NAME.test(key) || RESERVED.has(key)) { problem(key, RESERVED.has(key) ? finding('nom-reserve', { nom: key }) : finding('terme-mal-nomme')); continue; }
+    if (!isObject(raw)) { problem(key, finding('terme-mal-forme')); continue; }
     const rule = (raw.si !== undefined || raw.sauf !== undefined);
     const sided = raw.true !== undefined || raw.false !== undefined;
-    if (rule && sided) { problem(key, `${key} mêle si/sauf et true/false : une clé est soit un terme (si, sauf), soit une question établie (true, false)`); continue; }
+    if (rule && sided) { problem(key, finding('terme-et-question-melanges')); continue; }
     const annotations = ['statut', 'decisif', 'erreurs', 'manques', 'en_jeu'];
     if (sided) {
-      for (const name of Object.keys(raw)) if (!SIDES.includes(name as Side) && !annotations.includes(name)) problem(`${key}.${name}`, unknownKey(name, [...SIDES]));
+      for (const name of Object.keys(raw)) if (!SIDES.includes(name as Side) && !annotations.includes(name)) problem(`${key}.${name}`, keyFinding(name, [...SIDES]));
       const fondements: Record<Side, Foundation[]> = { true: [], false: [] };
       for (const side of SIDES) {
         const entries = raw[side];
         if (entries === undefined) continue;
-        if (!Array.isArray(entries) || !entries.length) { problem(`${key}.${side}`, 'liste de fondements attendue : [{ preuve, selon, si }]'); continue; }
+        if (!Array.isArray(entries) || !entries.length) { problem(`${key}.${side}`, finding('fondements-mal-formes')); continue; }
         fondements[side] = entries.flatMap((entry, index) => foundation(entry, `${key}.${side}[${index}]`));
       }
-      if (!fondements.true.length && !fondements.false.length) problem(key, 'question sans fondement : ajoute true: [{ preuve: [...] }] ou false: [{ preuve: [...] }]');
+      if (!fondements.true.length && !fondements.false.length) problem(key, finding('question-sans-fondement'));
       reasoning.terms.set(key, { si: [], sauf: [], fondements });
       continue;
     }
-    for (const name of Object.keys(raw)) if (!TERM_KEYS.has(name) && name !== 'but' && !annotations.includes(name)) problem(`${key}.${name}`, unknownKey(name, [...TERM_KEYS, 'but']));
-    if (raw.but !== undefined && !text(raw.but)) problem(`${key}.but`, 'but de l’étape : une phrase courte disant ce que l’étape cherche à démontrer');
+    for (const name of Object.keys(raw)) if (!TERM_KEYS.has(name) && name !== 'but' && !annotations.includes(name)) problem(`${key}.${name}`, keyFinding(name, [...TERM_KEYS, 'but']));
+    if (raw.but !== undefined && !text(raw.but)) problem(`${key}.but`, finding('but-mal-ecrit'));
     const list = (field: 'si' | 'sauf') => {
       const entries = raw[field];
       if (entries === undefined) return [];
-      if (!Array.isArray(entries)) { problem(`${key}.${field}`, 'liste de conditions attendue'); return []; }
+      if (!Array.isArray(entries)) { problem(`${key}.${field}`, finding('conditions-mal-formees')); return []; }
       return entries.flatMap((entry, index) => condition(entry, `${key}.${field}[${index}]`, false));
     };
     const term = { si: list('si'), sauf: list('sauf'), ...(text(raw.but) ? { but: (raw.but as string).trim() } : {}) };
-    if (!term.si.length && !term.sauf.length) problem(key, 'terme sans condition : ajoute si: [...] (ou true: / false: pour établir une question)');
+    if (!term.si.length && !term.sauf.length) problem(key, finding('terme-sans-condition'));
     reasoning.terms.set(key, term);
   }
   for (const [name, mesure] of reasoning.computed) {
-    if (reasoning.terms.has(name)) problem(name, `${name} est à la fois un terme et un calcul : renomme l’un des deux`);
+    if (reasoning.terms.has(name)) problem(name, finding('nom-duplique', { nom: name }));
     const typed = (names: Array<string | null | number>, check: (value: string | number) => boolean, kind: string) => {
-      for (const entry of names) if (typeof entry === 'string' && reasoning.valeurs.has(entry) && reasoning.valeurs.get(entry)!.valeur !== null && !check(reasoning.valeurs.get(entry)!.valeur!)) problem(`valeurs.${entry}`, `${entry} sert à ${name} : ${kind} attendu`);
+      for (const entry of names) if (typeof entry === 'string' && reasoning.valeurs.has(entry) && reasoning.valeurs.get(entry)!.valeur !== null && !check(reasoning.valeurs.get(entry)!.valeur!)) problem(`valeurs.${entry}`, finding('type-de-valeur-errone', { nom: entry, calcul: name, type: kind }));
     };
-    if (mesure.delai) typed([mesure.delai.de, mesure.delai.a], isDate, 'une date \'AAAA-MM-JJ\'');
+    if (mesure.delai) typed([mesure.delai.de, mesure.delai.a], isDate, 'une date AAAA-MM-JJ');
     if (mesure.montant) typed([mesure.montant.valeur, mesure.montant.seuil], (value) => typeof value === 'number', 'un nombre');
   }
-  for (const { at, name } of dated) if (reasoning.valeurs.has(name) && reasoning.valeurs.get(name)!.valeur !== null && !isDate(reasoning.valeurs.get(name)!.valeur)) problem(`valeurs.${name}`, `${name} sert à ${at} : une date 'AAAA-MM-JJ' attendue`);
+  for (const { at, name } of dated) if (reasoning.valeurs.has(name) && reasoning.valeurs.get(name)!.valeur !== null && !isDate(reasoning.valeurs.get(name)!.valeur)) problem(`valeurs.${name}`, finding('date-erronee', { nom: name, emploi: at }));
   for (const name of reasoning.terms.keys()) {
     const slot = (Object.keys(CONTROLS) as ControlSlot[]).find((key) => isControlName(name, key));
-    if (slot && !controls.some((entry) => entry.slot === slot && entry.name === name)) problem(name, `${name} est un contrôle : désigne-le par ${slot}: '${name}' ${slot === 'applicabilite' || slot === 'version' ? 'sur la source' : slot === 'decompte' ? 'sur le délai' : slot === 'validite' ? 'sur l’objectif ou la clause' : 'sur l’objectif'} qu’il conditionne`);
+    if (slot && !controls.some((entry) => entry.slot === slot && entry.name === name)) problem(name, finding('controle-mal-rattache', { nom: name, controle: slot, bloc: slot === 'applicabilite' || slot === 'version' ? 'la source' : slot === 'decompte' ? 'le délai' : slot === 'validite' ? 'l’objectif ou la clause' : 'l’objectif' }));
   }
-  for (const { slot, name, at } of controls) if (!reasoning.terms.has(name)) problem(at, `terme ${name} non défini : écris ${name}: { si: [...] }, le terme qui ${CONTROL_PURPOSE[slot]}`);
+  for (const { name, at } of controls) if (!reasoning.terms.has(name)) problem(at, finding('controle-non-defini', { nom: name }));
   const reaches = (origin: string, current: string, seen: Set<string>): boolean => {
     const next = reasoning.valeurs.get(current)?.formule ? formulaNames(reasoning.valeurs.get(current)!.formule!) : [];
     return next.some((name) => name === origin || (!seen.has(name) && reaches(origin, name, seen.add(name))));
   };
   for (const [name, entry] of reasoning.valeurs) {
     if (!entry.formule) continue;
-    if (reaches(name, name, new Set())) problem(`valeurs.${name}.formule`, `${name} se calcule à partir d’elle-même`);
-    for (const condition of formulaConditions(entry.formule)) if (reasoning.valeurs.has(condition)) problem(`valeurs.${name}.formule`, `si : ${condition} est une valeur ; si désigne un terme ou un fait (vrai/faux)`);
-    for (const operand of formulaNames(entry.formule)) if (reasoning.valeurs.has(operand) && typeof reasoning.valeurs.get(operand)!.valeur === 'string') problem(`valeurs.${operand}`, `${operand} sert à la formule de ${name} : un nombre attendu`);
+    if (reaches(name, name, new Set())) problem(`valeurs.${name}.formule`, finding('formule-circulaire', { nom: name }));
+    for (const condition of formulaConditions(entry.formule)) if (reasoning.valeurs.has(condition)) problem(`valeurs.${name}.formule`, finding('condition-de-formule-erronee', { nom: condition }));
+    for (const operand of formulaNames(entry.formule)) if (reasoning.valeurs.has(operand) && typeof reasoning.valeurs.get(operand)!.valeur === 'string') problem(`valeurs.${operand}`, finding('formule-sur-texte', { nom: operand, calcul: name }));
   }
-  if (!reasoning.objectifs.length && !problems.some((entry) => entry.path === 'objectifs' || entry.path === 'questions')) problem('objectifs', `ajoute ${OBJECTIVE_SHAPE.replace(/ attendu$/, '')}`);
+  if (!reasoning.objectifs.length && !problems.some((entry) => entry.path === 'objectifs' || entry.path === 'questions')) problem('objectifs', finding('objectifs-mal-formes'));
   return { reasoning, problems };
 }
 

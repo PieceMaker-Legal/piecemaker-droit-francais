@@ -157,7 +157,7 @@ test('une liaison ne peut pas remplacer un taux fixé par un texte ni un calcul'
 test('la qualification contentieux appelle encore la prescription, même depuis Word', async () => {
   const input = await embedDocxReasoning(await fixture(), { code: code.replace('qualification: consultation', 'qualification: contentieux'), bindings, clauses });
   const result = await verifyDocxReasoning(input, options);
-  assert.ok(result.verification?.issues.some((issue) => issue.text.includes('prescription')));
+  assert.ok(result.verification?.issues.some((issue) => issue.text.includes('Prescription')));
 });
 
 test('docx-cli 0.28 conserve les métadonnées mais ne retrouve pas le champ imbriqué', { skip: !docxVersion.startsWith('docx 0.28.') }, async () => {

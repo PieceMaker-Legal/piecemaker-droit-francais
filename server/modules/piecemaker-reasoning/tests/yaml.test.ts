@@ -17,7 +17,7 @@ const connectors: ReasoningConnectors = {
 };
 const verify = (code: string, selected = connectors) => verifyReasoning({ code, cwd: '/dossier-fictif', connectors: selected, reliability: new Map(), persons: [], nature: () => null, dismissed: new Set() });
 const syntax = (text: string) => {
-  try { parseReasoningDocument(text); } catch (error) { if (error instanceof ReasoningSyntaxError) return error.problems.map((problem) => problem.message); throw error; }
+  try { parseReasoningDocument(text); } catch (error) { if (error instanceof ReasoningSyntaxError) return error.problems.map((problem) => `${problem.message} ${problem.found?.correction}`); throw error; }
   return [];
 };
 
@@ -78,7 +78,7 @@ test('objectifs et clés métier restent obligatoires sans limiter les noms de t
   assert.ok(missing.issues.some((issue) => issue.kind === 'erreur' && issue.path === 'objectifs'));
   assert.ok((await verify('objectifs: []')).issues.some((issue) => issue.kind === 'erreur' && issue.path === 'objectifs'));
   const wrong = await verify('objectifs: []\nterme_libre:\n  parce_que: fait_libre\n');
-  assert.ok(wrong.issues.some((issue) => issue.text.includes('clé inconnue')));
+  assert.ok(wrong.issues.some((issue) => issue.text.includes('Clé parce_que non reconnue')));
   const value = { objectifs: [{ objectif: 'Obtenir un effet fictif', obtenir: 'effet_à_établir' }], effet_à_établir: { si: [{ fait_entièrement_libre: true, selon: [{ source: 'LEGIARTI000000000001', citation: 'Règle entièrement fictive' }] }] } };
   assert.deepEqual(readReasoning(parseReasoningDocument(printReasoningDocument(value)).value).problems, []);
 });
@@ -104,22 +104,22 @@ test('les doublons, documents multiples, tags, commentaires, ancres et alias ne 
 });
 
 test('une valeur à mettre entre guillemets est signalée avec la ligne corrigée', () => {
-  assert.deepEqual(syntax('a:\n  - piece: p.md\n    citation: la société : le courrier\n'), ['ligne 3 : guillemets : « : » suivi d’une espace se lit comme une nouvelle clé ; écris citation: "la société : le courrier"']);
-  assert.deepEqual(syntax('a:\n  citation: voir le point #3 du contrat\n'), ['ligne 2 : guillemets : « # » ouvre un commentaire et coupe la valeur ; écris citation: "voir le point #3 du contrat"']);
-  assert.deepEqual(syntax('a:\n  citation: "le" courrier\n'), ['ligne 2 : guillemets : la valeur commence par un guillemet mais ne s’y termine pas ; écris citation: "\\"le\\" courrier"']);
-  assert.match(syntax('a:\n  citation: *important\n')[0], /^ligne 2 : guillemets : « \* » en début de valeur a un sens en YAML/);
-  assert.match(syntax('a:\n  citation: ! le prix\n')[0], /^ligne 2 : guillemets : « ! » en début de valeur/);
-  assert.match(syntax('a:\n  citation: [sic] le courrier\n')[0], /^ligne 2 : guillemets : « \[ » en début de valeur/);
-  assert.deepEqual(syntax('acte:\n  - texte:\n      - **La pénalité est donc due.**\n'), ['ligne 3 : guillemets : « * » en début de valeur a un sens en YAML ; écris - "**La pénalité est donc due.**"']);
-  assert.deepEqual(syntax('acte:\n  - texte:\n      - La société : elle a payé.\n'), ['ligne 3 : guillemets : « : » suivi d’une espace se lit comme une nouvelle clé ; écris - "La société : elle a payé."']);
-  assert.deepEqual(syntax('a:\n  citation: "le courrier\n  b: 1\n'), ['ligne 2 : guillemets : guillemet ouvert et jamais fermé ; ferme-le à la fin de la valeur']);
+  assert.deepEqual(syntax('a:\n  - piece: p.md\n    citation: la société : le courrier\n'), ['ligne 3 : « : » non protégé. Écrivez citation: "la société : le courrier".']);
+  assert.deepEqual(syntax('a:\n  citation: voir le point #3 du contrat\n'), ['ligne 2 : « # » non protégé. Écrivez citation: "voir le point #3 du contrat".']);
+  assert.deepEqual(syntax('a:\n  citation: "le" courrier\n'), ['ligne 2 : Guillemet initial non protégé. Écrivez citation: "\\"le\\" courrier".']);
+  assert.match(syntax('a:\n  citation: *important\n')[0], /^ligne 2 : « \* » non protégé en début de valeur/);
+  assert.match(syntax('a:\n  citation: ! le prix\n')[0], /^ligne 2 : « ! » non protégé en début de valeur/);
+  assert.match(syntax('a:\n  citation: [sic] le courrier\n')[0], /^ligne 2 : Liste ou objet non fermé/);
+  assert.deepEqual(syntax('acte:\n  - texte:\n      - **La pénalité est donc due.**\n'), ['ligne 3 : « * » non protégé en début de valeur. Écrivez - "**La pénalité est donc due.**".']);
+  assert.deepEqual(syntax('acte:\n  - texte:\n      - La société : elle a payé.\n'), ['ligne 3 : « : » non protégé. Écrivez - "La société : elle a payé.".']);
+  assert.deepEqual(syntax('a:\n  citation: "le courrier\n  b: 1\n'), ['ligne 2 : Guillemet non fermé. Fermez le guillemet à la fin de la valeur.']);
 });
 
 test('une ligne mal indentée est signalée avec le niveau sur lequel l’aligner', () => {
-  assert.deepEqual(syntax('a:\n  si:\n    - b: true\n   - c: true\n'), ['ligne 4 : indentation : « - c: true » commence après 3 espace(s), ce qui ne la rattache à aucun bloc ; aligne-la sur 4 espace(s), comme la ligne 3 (« - b: true »)']);
-  assert.deepEqual(syntax('a:\n  si:\n    - b: true\n        selon: []\n'), ['ligne 4 : indentation : « selon: [] » commence après 8 espace(s), ce qui ne la rattache à aucun bloc ; aligne-la sur 6 espace(s), comme la ligne 3 (« - b: true »)']);
-  assert.deepEqual(syntax('a:\n\t- b: true\n'), ['ligne 2 : tabulation : indente uniquement avec des espaces']);
-  assert.deepEqual(syntax('a:\n  si: []\n  si: []\n'), ['ligne 3 : clé en double si : elle figure déjà plus haut au même niveau ; réunis les deux blocs sous une seule clé']);
+  assert.deepEqual(syntax('a:\n  si:\n    - b: true\n   - c: true\n'), ['ligne 4 : Ligne mal indentée. Alignez la ligne sur 4 espaces, comme la ligne 3.']);
+  assert.deepEqual(syntax('a:\n  si:\n    - b: true\n        selon: []\n'), ['ligne 4 : Ligne mal indentée. Alignez la ligne sur 6 espaces, comme la ligne 3.']);
+  assert.deepEqual(syntax('a:\n\t- b: true\n'), ['ligne 2 : Tabulation utilisée. Indentez avec des espaces.']);
+  assert.deepEqual(syntax('a:\n  si: []\n  si: []\n'), ['ligne 3 : Clé si écrite deux fois. Réunissez les deux blocs sous une seule clé.']);
 });
 
 test('le vérificateur rend toutes les fautes de syntaxe d’un coup, chacune avec sa ligne', async () => {
@@ -129,13 +129,13 @@ test('le vérificateur rend toutes les fautes de syntaxe d’un coup, chacune av
 });
 
 test('une clé mal placée ou mal orthographiée est nommée avec sa place ou sa bonne graphie', async () => {
-  const at = async (code: string) => (await verify(code)).issues.filter((issue) => issue.kind === 'erreur').map((issue) => `${issue.path} : ${issue.text}`).join('\n');
+  const at = async (code: string) => (await verify(code)).issues.filter((issue) => issue.kind === 'erreur').map((issue) => `${issue.path} : ${issue.text} ${issue.correction}`).join('\n');
   const head = 'objectifs:\n  - objectif: Obtenir un effet fictif\n    obtenir: effet\n';
-  assert.match(await at(`${head}effet:\n  si:\n    - fait: true\n  selon:\n    - source: LEGIARTI000000000001\n      citation: Règle\n`), /effet\.selon : selon n’a pas sa place ici : c’est une clé d’une condition, un fondement ou une valeur ; vérifie son indentation \(admises ici : si, sauf, but\)/);
-  assert.match(await at(`${head}effet:\n  si:\n    - fait: true\n      seleon:\n        - source: LEGIARTI000000000001\n          citation: Règle\n`), /effet\.si\[0\]\.seleon : clé inconnue seleon : écris selon/);
-  assert.match(await at(`${head}hypothèses: []\n`), /hypothèses : clé inconnue hypothèses : écris hypotheses/);
-  assert.match(await at(`${head}effet:\n  si:\n    - fait: true\nselon: []\n`), /selon : selon n’a pas sa place au premier niveau : c’est une clé d’une condition, un fondement ou une valeur ; vérifie son indentation/);
-  assert.match(await at(`${head}effet:\n  true:\n    - preuve:\n        - piece: p.md\n          citaton: passage\n`), /effet\.true\[0\]\.preuve\[0\]\.citaton : clé inconnue citaton : écris citation/);
+  assert.match(await at(`${head}effet:\n  si:\n    - fait: true\n  selon:\n    - source: LEGIARTI000000000001\n      citation: Règle\n`), /effet\.selon : Clé selon mal placée\. Placez la clé dans .*Clés admises ici : si, sauf, but/);
+  assert.match(await at(`${head}effet:\n  si:\n    - fait: true\n      seleon:\n        - source: LEGIARTI000000000001\n          citation: Règle\n`), /effet\.si\[0\]\.seleon : Clé seleon mal écrite\. Écrivez selon\./);
+  assert.match(await at(`${head}hypothèses: []\n`), /hypothèses : Clé hypothèses mal écrite\. Écrivez hypotheses\./);
+  assert.match(await at(`${head}effet:\n  si:\n    - fait: true\nselon: []\n`), /^selon : Clé selon mal placée\./m);
+  assert.match(await at(`${head}effet:\n  true:\n    - preuve:\n        - piece: p.md\n          citaton: passage\n`), /effet\.true\[0\]\.preuve\[0\]\.citaton : Clé citaton mal écrite\. Écrivez citation\./);
 });
 
 test('les chemins gardent leurs lignes YAML et les chaînes profondes partagent les faits', async () => {

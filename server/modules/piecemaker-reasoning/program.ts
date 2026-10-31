@@ -12,6 +12,8 @@ import type { Calculation, Facts, Trace } from './engine.js';
 import { listReasoningFiles, parseReasoningDocument, printReasoningDocument, ReasoningSyntaxError, resolveReasoningFile } from './document.js';
 import { canonical, formulaConditions, SIDES, VERBS, formulaNames, formulaNumbers, LiteralError, readReasoning, stripAnnotations } from './format.js';
 import { adviseNames, derivedName, isControlName } from './names.js';
+import { finding } from './rules.js';
+import type { Finding } from './rules.js';
 import { verifyCitationLinks } from './citation-review.js';
 import type { Basis, Condition, Foundation, Formula, Measure, Objective, Ref, Target, Trial } from './format.js';
 
@@ -51,7 +53,7 @@ const inForce = (date: string, from: string, to: string | null): boolean => from
 const UNIT: Record<string, string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
 const COMPARE: Record<string, string> = { plus_de: 'plus de', au_moins: 'au moins', moins_de: 'moins de', au_plus: 'au plus' };
 const amount = (value: string | number) => (typeof value === 'number' ? value.toLocaleString('fr-FR') : phrase(value));
-const ANCHORED = /\.(piece|source|vigueur|obtenir|écarter|réduire|augmenter|decompte|applicabilite|version|validite|prescription)$/;
+const ANCHORED = /\.(citation|piece|source|vigueur|obtenir|écarter|réduire|augmenter|decompte|applicabilite|version|validite|prescription)$/;
 const applicabilityName = (title: string, spaced: boolean) => {
   const article = /article\s+(\S+)/i.exec(title);
   if (spaced) return `applicabilité de ${article ? `l'article ${article[1]}` : title.toLowerCase().replace(/[^\p{L}\p{N}'’.-]+/gu, ' ').trim().slice(0, 50).trim()}`;
@@ -101,11 +103,11 @@ export async function verifyReasoning(input: {
   const log: ReasoningLogEntry[] = [];
   const emit = (entry: ReasoningLogEntry) => { const index = log.findIndex((item) => item.key === entry.key); if (index >= 0) log[index] = entry; else log.push(entry); input.emit?.(entry); };
   const within = (path: string, at: string) => path === at || path.startsWith(`${at}.`);
-  const issueAt = (at: string) => issues.filter((issue) => within(issue.path, at) || issue.ailleurs?.some((other) => within(other.path, at))).map((issue) => issue.text);
+  const issueAt = (at: string) => issues.filter((issue) => within(issue.path, at) || issue.ailleurs?.some((other) => within(other.path, at)));
   let lines = new Map<string, number>();
   const causes = new Map<string, ReasoningIssue>();
-  const add = (kind: ReasoningIssue['kind'], at: string, text: string, avocat?: string, cible?: string, cause?: string) => {
-    const id = issueId(kind, at, text);
+  const add = (kind: ReasoningIssue['kind'], at: string, found: Finding, avocat?: string, cible?: string, cause?: string) => {
+    const id = issueId(kind, at, found.text);
     const line = lines.get(at) ?? lines.get(at.replace(/\.[^.[\]]+$/, '')) ?? null;
     const same = cause ? causes.get(cause) : undefined;
     if (same) {
@@ -113,7 +115,7 @@ export async function verifyReasoning(input: {
       return;
     }
     if (issues.some((issue) => issue.id === id)) return;
-    const issue: ReasoningIssue = { id, kind, path: at, line, text, ...(avocat ? { avocat, ...(cible ? { cible } : {}) } : {}) };
+    const issue: ReasoningIssue = { id, kind, path: at, line, text: found.text, regle: found.regle, correction: found.correction, ...(avocat ? { avocat, ...(cible ? { cible } : {}) } : {}) };
     issues.push(issue);
     if (cause) causes.set(cause, issue);
   };
@@ -123,7 +125,7 @@ export async function verifyReasoning(input: {
     if (!(error instanceof LiteralError)) throw error;
     const found = error instanceof ReasoningSyntaxError ? error.problems : [error];
     emit({ key: 'lecture', step: 'réponse', status: 'alerte', subject: 'Fichier illisible', text: found.map((problem) => problem.message).join(' ; ') });
-    return { annotated: null, issues: found.map((problem) => ({ id: issueId('erreur', '', problem.message), kind: 'erreur', path: '', line: problem.line, text: problem.message })), code: input.code, log };
+    return { annotated: null, issues: found.map((problem) => ({ id: issueId('erreur', '', problem.message), kind: 'erreur', path: '', line: problem.line, text: problem.found?.text ?? problem.message, regle: problem.found?.regle, correction: problem.found?.correction })), code: input.code, log };
   }
   lines = parsed.lines;
   const stripped = stripAnnotations(parsed.value);
@@ -132,12 +134,11 @@ export async function verifyReasoning(input: {
   const ordered = isObject(stripped) ? printReasoningDocument(canonical(stripped, reasoning)) : null;
   const reread = ordered ? parseReasoningDocument(ordered) : null;
   if (reread) lines = reread.lines;
-  for (const entry of problems) add('erreur', entry.path, entry.text, entry.avocat, entry.cible);
+  for (const entry of problems) add('erreur', entry.path, entry, entry.avocat, entry.cible);
   if (!isObject(stripped)) return { annotated: null, issues, code: input.code, log };
   const annotated = stripped;
 
   const shape = structure(reasoning);
-  const controlLoop = (cycle: string) => { const control = cycle.split(' → ').find((name) => isControlName(name)); return control ? ` ; les sources citées dans ${control} n’ont besoin ni d’applicabilite, ni de version, ni de validite : retire celle qui renvoie à ${control}` : ''; };
   const loopKey = (cycle: string) => {
     const steps = cycle.split(' → ');
     const index = steps.findIndex((name, at) => at > 0 && isControlName(name));
@@ -145,26 +146,26 @@ export async function verifyReasoning(input: {
     const [from, control] = [steps[index - 1], steps[index]];
     return [...lines.keys()].find((route) => route.startsWith(`${from}.`) && /\.(?:applicabilite|version|validite|decompte)$/u.test(route) && node(reread.value as Record<string, unknown>, route.slice(0, route.lastIndexOf('.')))?.[route.slice(route.lastIndexOf('.') + 1)] === control) ?? null;
   };
-  for (const cycle of shape.cycles) add('erreur', loopKey(cycle) ?? cycle.split(' → ')[0], `boucle : ${cycle}${controlLoop(cycle)}`);
+  for (const cycle of shape.cycles) add('erreur', loopKey(cycle) ?? cycle.split(' → ')[0], finding('boucle-detectee', { chaine: cycle }));
   const named = [...reasoning.terms.keys(), ...reasoning.valeurs.keys(), ...[...reasoning.terms.values()].flatMap((term) => [...term.si, ...term.sauf].flatMap(function names(condition: Condition): string[] { return condition.l_une ? condition.l_une.flatMap(names) : [condition.condition!]; }))];
   const spaced = named.some((name) => name.includes(' '));
-  for (const { name, text } of adviseNames(named)) add('conseil', reasoning.terms.has(name) ? name : reasoning.valeurs.has(name) ? `valeurs.${name}` : '', text);
+  for (const advised of adviseNames(named)) add('conseil', reasoning.terms.has(advised.name) ? advised.name : reasoning.valeurs.has(advised.name) ? `valeurs.${advised.name}` : '', advised);
   const amountObjective = (objective: Objective) => !reasoning.terms.has(objective.effet) && reasoning.valeurs.has(objective.effet);
   reasoning.objectifs.forEach((objective, index) => {
     const at = `objectifs[${index}].${objective.verbe}`;
-    if (!reasoning.terms.has(objective.effet) && !amountObjective(objective)) add('erreur', at, `terme ${objective.effet} non défini : écris ${objective.effet}: { si: [...] }, ou déclare-le dans valeurs si l’objectif porte sur un montant`);
-    else if (VERBS[objective.verbe] === 'terme' && amountObjective(objective)) add('erreur', at, `${objective.effet} est un montant : utilise réduire ou augmenter`);
-    else if (VERBS[objective.verbe] === 'montant' && !amountObjective(objective)) add('erreur', at, `${objective.effet} est un terme vrai/faux : utilise obtenir ou écarter`);
+    if (!reasoning.terms.has(objective.effet) && !amountObjective(objective)) add('erreur', at, finding('objectif-non-defini', { nom: objective.effet }));
+    else if (VERBS[objective.verbe] === 'terme' && amountObjective(objective)) add('erreur', at, finding('verbe-terme-sur-montant', { nom: objective.effet }));
+    else if (VERBS[objective.verbe] === 'montant' && !amountObjective(objective)) add('erreur', at, finding('verbe-montant-sur-terme', { nom: objective.effet }));
   });
-  if (!reasoning.qualification) add('manque', 'qualification', 'raisonnement non qualifié : ajoute qualification: \'drafting\', \'contentieux\' ou \'consultation\'', 'Le raisonnement n’est pas qualifié : drafting, contentieux ou consultation.');
+  if (!reasoning.qualification) add('manque', 'qualification', finding('qualification-non-indiquee'), 'Le raisonnement n’est pas qualifié : drafting, contentieux ou consultation.');
   reasoning.objectifs.forEach((objective, index) => {
-    if (reasoning.qualification === 'drafting' && !reasoning.hypotheses.some((trial) => objectiveRoots(objective).some((name) => name in trial.attendu))) add('manque', `objectifs[${index}]`, `objectif sans hypothèse : ajoute dans hypotheses un cas dont attendu porte sur ${objective.effet}`, 'Aucune hypothèse ne vérifie cet objectif.');
-    if (reasoning.qualification === 'contentieux' && !objective.prescription && !isControlName(objective.effet, 'prescription')) add('manque', `objectifs[${index}]`, `${reasoning.qualification} : vérifier la prescription : ajoute prescription: \'${derivedName('prescription', '…', spaced)}\' sur l’objectif et définis ce terme`, 'Prescription à vérifier.');
-    if (reasoning.qualification === 'drafting' && !objective.validite && !isControlName(objective.effet, 'validite')) add('manque', `objectifs[${index}]`, `drafting : vérifier la validité : ajoute validite: '${derivedName('validité', '…', spaced)}' sur l’objectif et définis ce terme`, 'Validité à vérifier.');
+    if (reasoning.qualification === 'drafting' && !reasoning.hypotheses.some((trial) => objectiveRoots(objective).some((name) => name in trial.attendu))) add('manque', `objectifs[${index}]`, finding('hypothese-non-indiquee', { nom: objective.effet }), 'Aucune hypothèse ne vérifie cet objectif.');
+    if (reasoning.qualification === 'contentieux' && !objective.prescription && !isControlName(objective.effet, 'prescription')) add('manque', `objectifs[${index}]`, finding('prescription-non-verifiee', { nom: derivedName('prescription', '…', spaced) }), 'Prescription à vérifier.');
+    if (reasoning.qualification === 'drafting' && !objective.validite && !isControlName(objective.effet, 'validite')) add('manque', `objectifs[${index}]`, finding('validite-acte-non-verifiee', { nom: derivedName('validité', '…', spaced) }), 'Validité à vérifier.');
   });
   const roots = new Set(reasoning.objectifs.flatMap(objectiveRoots));
-  for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, 'terme qui ne sert à aucun objectif : rattache-le comme condition ou ajoute l’objectif qu’il sert');
-  for (const [name, term] of reasoning.terms) if (!term.fondements && !term.but) add('conseil', `${name}.but`, `étape sans but : ajoute but: '…' sous ${name}, une phrase courte disant ce que l’étape cherche à démontrer`, `${human(name)} : le but de l’étape n’est pas expliqué.`, name);
+  for (const name of reasoning.terms.keys()) if (!roots.has(name) && !shape.used.has(name)) add('manque', name, finding('terme-non-rattache'));
+  for (const [name, term] of reasoning.terms) if (!term.fondements && !term.but) add('conseil', `${name}.but`, finding('but-d-etape-non-indique', { nom: name }), `${human(name)} : le but de l’étape n’est pas expliqué.`, name);
 
   const sources = new Map<string, Promise<SourceInfo | null | undefined>>();
   const lookup = (id: string) => {
@@ -174,7 +175,7 @@ export async function verifyReasoning(input: {
   const corrections = new Map<string, string>();
   const checkCitation = (at: string, holder: Record<string, unknown> | null, info: SourceInfo, citation: string, cible: string) => {
     const matched = connectors.match(info.text, citation);
-    if (!matched) { add('erreur', at, `citation introuvable dans ${info.title} : recopie le passage exact`, `Le passage cité est introuvable dans ${info.title} : « ${citation} ».`, cible); return false; }
+    if (!matched) { add('erreur', `${at}.citation`, finding('citation-non-trouvee', { titre: info.title }), `Le passage cité est introuvable dans ${info.title} : « ${citation} ».`, cible); return false; }
     if (matched !== citation) {
       corrections.set(citation, matched);
       if (holder) Object.assign(holder, { citation: matched, corrigee: true, citation_d_origine: citation });
@@ -186,14 +187,14 @@ export async function verifyReasoning(input: {
   const checkTarget = async (at: string, target: Target) => {
     const info = await lookup(target.piece);
     if (info === undefined) return;
-    if (!info) { add('manque', at, `le projet renvoie à un élément absent du dossier (${target.piece}) : joins-le ou corrige le renvoi`, `Élément visé absent du dossier : ${target.piece}.`, `#piece:${target.piece}`); return; }
-    if (target.citation && !connectors.match(info.text, target.citation)) add('manque', at, `passage visé introuvable dans ${info.title} : complète l’élément visé ou corrige le renvoi`, `Le passage visé est introuvable dans ${info.title} : « ${target.citation} ».`, `#piece:${target.piece}`);
+    if (!info) { add('manque', at, finding('renvoi-non-trouve', { element: target.piece }), `Élément visé absent du dossier : ${target.piece}.`, `#piece:${target.piece}`); return; }
+    if (target.citation && !connectors.match(info.text, target.citation)) add('manque', at, finding('passage-non-trouve', { titre: info.title }), `Le passage visé est introuvable dans ${info.title} : « ${target.citation} ».`, `#piece:${target.piece}`);
   };
   const checkRef = async (at: string, ref: Ref) => {
     const holder = node(annotated, at);
     emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: 'en cours', subject: ref.piece, text: 'Relecture de la pièce…' });
     const info = await lookup(ref.piece);
-    if (!info) { add('erreur', `${at}.piece`, `pièce introuvable dans le dossier : ${ref.piece}`, `La pièce ${ref.piece} est introuvable dans le dossier.`); verifiedRefs.set(at, false); emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: 'alerte', subject: ref.piece, text: 'Pièce introuvable dans le dossier' }); return; }
+    if (!info) { add('erreur', `${at}.piece`, finding('piece-non-trouvee', { piece: ref.piece }), `La pièce ${ref.piece} est introuvable dans le dossier.`); verifiedRefs.set(at, false); emit({ key: `piece:${ref.piece}:${ref.citation}`, step: 'pièce', status: 'alerte', subject: ref.piece, text: 'Pièce introuvable dans le dossier' }); return; }
     const ok = checkCitation(at, holder, info, ref.citation, `#piece:${ref.piece}`);
     const reliable = input.reliability.get(ref.piece);
     const nature = input.nature(ref.piece);
@@ -214,33 +215,33 @@ export async function verifyReasoning(input: {
     const title = String(holder?.titre ?? basis.source);
     const problems = issueAt(at);
     const check = basisChecks.get(at);
-    emit({ key, step: 'source', status: problems.some((text) => !text.startsWith('vigueur non') && !text.startsWith('source non vérifiable')) ? 'alerte' : problems.length ? 'neutre' : 'ok', subject: title, text: problems.length ? problems.join(' · ') : `« ${String(holder?.citation ?? basis.citation)} »${check?.kind === 'decision' ? '' : check?.from ? check.to ? ` · en vigueur du ${day(check.from)} au ${day(check.to)}` : ` · en vigueur depuis le ${day(check.from)}` : ''}` });
+    emit({ key, step: 'source', status: problems.some((issue) => issue.regle !== 'vigueur-non-indiquee' && issue.regle !== 'source-non-verifiee') ? 'alerte' : problems.length ? 'neutre' : 'ok', subject: title, text: problems.length ? problems.map((issue) => issue.text).join(' · ') : `« ${String(holder?.citation ?? basis.citation)} »${check?.kind === 'decision' ? '' : check?.from ? check.to ? ` · en vigueur du ${day(check.from)} au ${day(check.to)}` : ` · en vigueur depuis le ${day(check.from)}` : ''}` });
   };
   const checkBasisInner = async (at: string, basis: Basis, holder: Record<string, unknown> | null) => {
     const info = await lookup(basis.source);
     if (info === undefined && !OFFICIAL_ID.test(basis.source)) {
-      add('erreur', `${at}.source`, `source sans identifiant officiel : ${basis.source} ; indique son identifiant (${ID_SHAPE}), trouvé avec les outils Légifrance`, `${basis.source} n’est pas désigné par son identifiant officiel.`, `#source:${basis.source}`);
+      add('erreur', `${at}.source`, finding('identifiant-non-indique', { source: basis.source }), `${basis.source} n’est pas désigné par son identifiant officiel.`, `#source:${basis.source}`);
       basisChecks.set(at, { kind: null, from: null, to: null });
       return;
     }
     if (info === undefined) {
-      add('manque', `${at}.source`, `source non vérifiable automatiquement : aucun connecteur pour ${basis.source}`, `${basis.source} n’a pas pu être relu automatiquement : à vérifier vous-même.`, `#source:${basis.source}`);
+      add('manque', `${at}.source`, finding('source-non-verifiee', { source: basis.source }), `${basis.source} n’a pas pu être relu automatiquement : à vérifier vous-même.`, `#source:${basis.source}`);
       basisChecks.set(at, { kind: 'texte', from: basis.vigueur?.debut ?? null, to: basis.vigueur?.fin ?? null });
-      if (!basis.vigueur) add('manque', `${at}.vigueur`, 'vigueur non renseignée : ajoute vigueur: { debut, fin }', `La version applicable de ${basis.source} n’est pas précisée.`, `#source:${basis.source}`);
+      if (!basis.vigueur) add('manque', `${at}.vigueur`, finding('vigueur-non-indiquee', { version: '' }), `La version applicable de ${basis.source} n’est pas précisée.`, `#source:${basis.source}`);
       return;
     }
-    if (info === null) { add('erreur', `${at}.source`, `source introuvable : ${basis.source}`, `La source ${basis.source} est introuvable.`); basisChecks.set(at, { kind: null, from: null, to: null }); return; }
+    if (info === null) { add('erreur', `${at}.source`, finding('source-non-trouvee', { source: basis.source }), `La source ${basis.source} est introuvable.`); basisChecks.set(at, { kind: null, from: null, to: null }); return; }
     if (holder) holder.titre = info.title;
     checkCitation(at, holder, info, basis.citation, `#source:${basis.source}`);
     if (info.kind === 'decision') {
-      if (info.history?.statut === 'remise en cause') add('erreur', `${at}.source`, `décision remise en cause par un recours (${info.history.details.join(' ; ')}) : cite la décision rendue sur ce recours`, `${info.title} a été remise en cause par un recours : ${info.history.details.join(' ; ')}.`, `#source:${basis.source}`);
-      else if (info.history?.statut === 'à examiner') add('manque', `${at}.source`, `historique judiciaire à examiner${info.history.details.length ? ` (${info.history.details.join(' ; ')})` : ''} : vérifie qu’aucun recours ne l’a remise en cause`, `${info.title} : l’historique judiciaire est à examiner.`, `#source:${basis.source}`);
+      if (info.history?.statut === 'remise en cause') add('erreur', `${at}.source`, finding('decision-remise-en-cause', { detail: info.history.details.join(' ; ') }), `${info.title} a été remise en cause par un recours : ${info.history.details.join(' ; ')}.`, `#source:${basis.source}`);
+      else if (info.history?.statut === 'à examiner') add('manque', `${at}.source`, finding('historique-non-examine', { detail: info.history.details.length ? ` : ${info.history.details.join(' ; ')}` : '' }), `${info.title} : l’historique judiciaire est à examiner.`, `#source:${basis.source}`);
       basisChecks.set(at, { kind: 'decision', from: null, to: null });
       return;
     }
     const version = info.validity ? `en vigueur ${info.validity.to ? `du ${day(info.validity.from)} au ${day(info.validity.to)}` : `depuis le ${day(info.validity.from)}`}` : '';
-    if (!basis.vigueur && info.kind === 'texte') add('manque', `${at}.vigueur`, `vigueur non renseignée : ajoute vigueur: { debut, fin }${info.validity ? ` (version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'})` : ''}`, `La version applicable de ${info.title} n’est pas précisée${version ? ` (version relue : ${version})` : ''}.`, `#source:${basis.source}`);
-    else if (basis.vigueur && info.validity && (basis.vigueur.debut !== info.validity.from || basis.vigueur.fin !== info.validity.to)) add('erreur', `${at}.vigueur`, `vigueur différente de la version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'}`, `${info.title} : la version indiquée ne correspond pas au texte relu (${version}).`, `#source:${basis.source}`);
+    if (!basis.vigueur && info.kind === 'texte') add('manque', `${at}.vigueur`, finding('vigueur-non-indiquee', { version: info.validity ? ` Version citée : debut '${info.validity.from}', fin ${info.validity.to ? `'${info.validity.to}'` : 'null'}.` : '' }), `La version applicable de ${info.title} n’est pas précisée${version ? ` (version relue : ${version})` : ''}.`, `#source:${basis.source}`);
+    else if (basis.vigueur && info.validity && (basis.vigueur.debut !== info.validity.from || basis.vigueur.fin !== info.validity.to)) add('erreur', `${at}.vigueur`, finding('vigueur-erronee', { debut: `'${info.validity.from}'`, fin: info.validity.to ? `'${info.validity.to}'` : 'null' }), `${info.title} : la version indiquée ne correspond pas au texte relu (${version}).`, `#source:${basis.source}`);
     const known = Boolean(info.validity || basis.vigueur);
     basisChecks.set(at, { kind: info.kind, from: known ? info.validity?.from ?? basis.vigueur!.debut : null, to: info.validity ? info.validity.to : basis.vigueur?.fin ?? null });
   };
@@ -267,7 +268,7 @@ export async function verifyReasoning(input: {
       checks.push(checkBasis(`${at}.selon[${index}]`, basis));
       basis.renvoi.forEach((target, other) => checks.push(checkTarget(`${at}.selon[${index}].renvoi[${other}]`, target)));
     });
-    if (condition.mesure?.delai && !condition.decompte) add('manque', `${at}.decompte`, `délai sans décompte : ajoute decompte: '${derivedName('décompte', condition.condition!, spaced)}' et définis ce terme, dont les conditions sourcées établissent la règle de calcul du délai`, `${human(condition.condition!)} : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.`, condition.condition);
+    if (condition.mesure?.delai && !condition.decompte) add('manque', `${at}.decompte`, finding('decompte-non-indique', { nom: derivedName('décompte', condition.condition!, spaced) }), `${human(condition.condition!)} : la règle sur laquelle se fonde le calcul du délai n’est pas mentionnée.`, condition.condition);
   }
   for (const { at, foundation } of foundations) foundation.preuve.forEach((ref, index) => checks.push(checkRef(`${at}.preuve[${index}]`, ref)));
   for (const [name, entry] of reasoning.valeurs) {
@@ -275,13 +276,13 @@ export async function verifyReasoning(input: {
     entry.selon.forEach((basis, index) => checks.push(checkBasis(`valeurs.${name}.selon[${index}]`, basis)));
   }
   await Promise.all(checks);
-  for (const [name, entry] of reasoning.valeurs) entry.selon.forEach((basis, index) => { if (basisChecks.get(`valeurs.${name}.selon[${index}]`)?.kind === 'piece') add('erreur', `valeurs.${name}.selon[${index}].source`, `${basis.source} est une pièce : une donnée stipulée ou constatée se prouve par preuve: [{ piece, citation }] ; selon cite le texte qui fixe une valeur (taux, seuil, barème)`); });
+  for (const [name, entry] of reasoning.valeurs) entry.selon.forEach((basis, index) => { if (basisChecks.get(`valeurs.${name}.selon[${index}]`)?.kind === 'piece') add('erreur', `valeurs.${name}.selon[${index}].source`, finding('piece-citee-comme-texte', { source: basis.source })); });
 
   const correspondences = await verifyCitationLinks({ cwd, reasoning, contexte: canonical(stripAnnotations(annotated) as Record<string, unknown>, reasoning), connectors, lookup, corrections, online: input.online !== false, readable: !issues.some((issue) => issue.kind === 'erreur') });
   for (const [place, result] of correspondences) {
     const holder = node(annotated, place);
     if (holder) holder.correspondance = result;
-    if (result.reponse !== 'validé') add(result.reponse === 'non validé' ? 'erreur' : 'manque', place, `correspondance citation–affirmation : ${result.reponse} — ${result.explication}`, result.explication);
+    if (result.reponse !== 'validé') add(result.reponse === 'non validé' ? 'erreur' : 'manque', place, finding('correspondance-non-validee', { reponse: result.reponse, explication: result.explication.replace(/\.$/u, '') }), result.explication);
     emit({ key: `correspondance:${place}`, step: 'source', status: result.reponse === 'validé' ? 'ok' : result.reponse === 'non validé' ? 'alerte' : 'neutre', subject: place, text: `${result.reponse} — ${result.explication}` });
   }
   const supported = (place: string) => !correspondences.has(place) || correspondences.get(place)!.reponse === 'validé';
@@ -362,12 +363,12 @@ export async function verifyReasoning(input: {
   const applicabilityTerms = new Set([...occurrences.flatMap(({ condition }) => condition.selon), ...[...reasoning.valeurs.values()].flatMap((entry) => entry.selon)].flatMap((basis) => [basis.applicabilite, basis.version].flatMap((control) => (control ? [...tree(control)] : []))));
   const validityTerms = new Set(validityRoots.flatMap((name) => [...tree(name)]));
   const citesLaw = (name: string, kinds = ['texte']) => occurrences.some(({ at, condition }) => tree(name).has(at.split('.')[0]) && condition.selon.some((_, index) => kinds.includes(basisChecks.get(`${at}.selon[${index}]`)?.kind ?? '')));
-  for (const name of new Set(validityRoots)) if (reasoning.terms.has(name) && !citesLaw(name)) add('manque', name, 'la validité s’apprécie au regard du droit applicable : cite dans ce terme le texte qui la fonde (selon: [{ source, citation, vigueur }])', `${human(name)} : le texte qui fonde la validité n’est pas cité.`, name);
+  for (const name of new Set(validityRoots)) if (reasoning.terms.has(name) && !citesLaw(name)) add('manque', name, finding('validite-non-fondee'), `${human(name)} : le texte qui fonde la validité n’est pas cité.`, name);
   const timeRoots = [...occurrences.flatMap(({ condition }) => condition.selon), ...[...reasoning.valeurs.values()].flatMap((entry) => entry.selon)].map((basis) => basis.version).filter((name): name is string => Boolean(name));
-  for (const name of new Set(timeRoots)) if (reasoning.terms.has(name) && !citesLaw(name)) add('manque', name, 'la version applicable dépend de la règle d’application dans le temps : cite dans ce terme le texte qui la fixe (selon: [{ source, citation, vigueur }]) et établis par une pièce que ses conditions sont remplies', `${human(name)} : la règle qui fixe la version applicable du texte n’est pas citée.`, name);
+  for (const name of new Set(timeRoots)) if (reasoning.terms.has(name) && !citesLaw(name)) add('manque', name, finding('version-non-fondee'), `${human(name)} : la règle qui fixe la version applicable du texte n’est pas citée.`, name);
   const countRoots = occurrences.map(({ condition }) => condition.decompte).filter((name): name is string => Boolean(name));
-  for (const name of new Set(countRoots)) if (reasoning.terms.has(name) && !citesLaw(name, ['texte', 'piece'])) add('manque', name, 'le délai se fonde sur une règle : cite dans ce terme le texte ou la clause qui fixe le délai et son décompte (selon: [{ source, citation }]) et établis par une pièce que ses conditions sont remplies', `${human(name)} : la règle qui fonde le délai n’est pas citée.`, name);
-  const declared = (name: string, at: string) => { if (!reasoning.valeurs.has(name)) add('manque', at, `${name} n’est pas déclarée : ajoute valeurs: { ${name}: { valeur, preuve } } (valeur: null si le dossier ne la fixe pas)`, `${human(name)} : cette donnée n’est pas renseignée.`, at.split('.')[0], `valeurs.${name}`); };
+  for (const name of new Set(countRoots)) if (reasoning.terms.has(name) && !citesLaw(name, ['texte', 'piece'])) add('manque', name, finding('delai-non-fonde'), `${human(name)} : la règle qui fonde le délai n’est pas citée.`, name);
+  const declared = (name: string, at: string) => { if (!reasoning.valeurs.has(name)) add('manque', at, finding('valeur-non-declaree', { nom: name }), `${human(name)} : cette donnée n’est pas renseignée.`, at.split('.')[0], `valeurs.${name}`); };
   for (const { at, condition } of occurrences) {
     const delay = condition.mesure?.delai;
     const amount = condition.mesure?.montant;
@@ -375,25 +376,25 @@ export async function verifyReasoning(input: {
     if (amount) {
       declared(amount.valeur, at);
       if (typeof amount.seuil === 'string') declared(amount.seuil, at);
-      else add('manque', `${at}.montant`, `seuil écrit en dur (${amount.seuil}) : déclare-le dans valeurs avec sa preuve (pièce) ou sa source (selon : texte) et désigne-le par son nom`, `${human(condition.condition!)} : le seuil de ${amount.seuil} n’est rattaché à aucune pièce.`, condition.condition);
+      else add('manque', `${at}.montant`, finding('seuil-ecrit-en-dur', { nombre: amount.seuil }), `${human(condition.condition!)} : le seuil de ${amount.seuil} n’est rattaché à aucune pièce.`, condition.condition);
     }
     condition.selon.forEach((basis) => { if (basis.vigueur?.au) declared(basis.vigueur.au, at); });
   }
   const drafting = reasoning.qualification === 'drafting';
   const consultation = reasoning.qualification === 'consultation';
-  for (const name of reasoning.terms.keys()) if (disputed(name)) add('manque', name, `${name} : fondements contraires, à trancher`, `${human(name)} : des fondements contraires sont établis, à trancher.`, name);
+  for (const name of reasoning.terms.keys()) if (disputed(name)) add('manque', name, finding('fondements-opposes', { nom: name }), `${human(name)} : des fondements contraires sont établis, à trancher.`, name);
   const conditionNames = new Set(occurrences.map(({ condition }) => condition.condition).filter((name): name is string => Boolean(name)));
   for (const [name, entry] of reasoning.valeurs) {
     if (!entry.formule) continue;
     for (const operand of new Set(formulaNames(entry.formule))) declared(operand, `valeurs.${name}`);
-    for (const condition of new Set(formulaConditions(entry.formule))) if (!reasoning.terms.has(condition) && !conditionNames.has(condition) && !reasoning.valeurs.has(condition)) add('erreur', `valeurs.${name}.formule`, `si : ${condition} n’est ni un terme ni une condition du raisonnement : définis ${condition}: { si: [...] }`);
+    for (const condition of new Set(formulaConditions(entry.formule))) if (!reasoning.terms.has(condition) && !conditionNames.has(condition) && !reasoning.valeurs.has(condition)) add('erreur', `valeurs.${name}.formule`, finding('condition-non-definie', { nom: condition }));
     const numbers = formulaNumbers(entry.formule);
-    if (!entry.preuve.length && !entry.selon.length) add('manque', `valeurs.${name}`, `mode de calcul sans règle : cite la clause (preuve) ou le texte (selon) qui fixe ce calcul${numbers.length ? ` et les nombres écrits dans la formule (${numbers.join(', ')})` : ''}`, `${human(name)} : la règle qui fixe le mode de calcul n’est pas citée.`);
+    if (!entry.preuve.length && !entry.selon.length) add('manque', `valeurs.${name}`, finding('calcul-non-fonde', { nombres: numbers.length ? ` Justifiez les nombres ${numbers.join(', ')}.` : '' }), `${human(name)} : la règle qui fixe le mode de calcul n’est pas citée.`);
     const statedValue = stated(name);
     const result = computedValue(name);
-    if (typeof statedValue === 'number' && result !== null && Math.abs(statedValue - result) > 0.005) add('manque', `valeurs.${name}`, `montant stipulé (${statedValue}) différent du calcul (${result}) : à rectifier`, `${human(name)} : le montant indiqué (${statedValue}) ne correspond pas au calcul (${result}).`);
+    if (typeof statedValue === 'number' && result !== null && Math.abs(statedValue - result) > 0.005) add('manque', `valeurs.${name}`, finding('montant-different', { x: statedValue, y: result }), `${human(name)} : le montant indiqué (${statedValue}) ne correspond pas au calcul (${result}).`);
   }
-  for (const [name, entry] of reasoning.valeurs) if (entry.valeur !== null && !entry.preuve.length && !entry.selon.length) add('manque', `valeurs.${name}`, 'valeur sans preuve : ajoute preuve: [{ piece, citation }] (pièce) ou selon: [{ source, citation, vigueur }] (texte qui la fixe), ou valeur: null si le dossier ne la fixe pas', `${human(name)} : aucune pièce ni aucun texte ne justifie cette valeur.`);
+  for (const [name, entry] of reasoning.valeurs) if (entry.valeur !== null && !entry.preuve.length && !entry.selon.length) add('manque', `valeurs.${name}`, finding('valeur-non-prouvee'), `${human(name)} : aucune pièce ni aucun texte ne justifie cette valeur.`);
 
   const statuses = new Map<string, ReasoningValue>();
   const vigueurs = new Map<string, ReasoningValue>();
@@ -434,15 +435,14 @@ export async function verifyReasoning(input: {
       for (const name of missing) {
         const isValue = reasoning.valeurs.has(name);
         const at = isValue ? `valeurs.${name}` : `objectifs[${index}]`;
-        if (isValue && reasoning.valeurs.get(name)!.selon.length && reasoning.valeurs.get(name)!.valeur !== null) { add('manque', at, `${objective.effet} dépend de ${name}, dont la source n’est pas acquise : établis sa vigueur à la date et son applicabilité`, `${human(objective.effet)} dépend de ${phrase(name)}, dont le texte n’est pas encore établi comme applicable.`); continue; }
+        if (isValue && reasoning.valeurs.get(name)!.selon.length && reasoning.valeurs.get(name)!.valeur !== null) { add('manque', at, finding('source-non-acquise', { nom: name, effet: objective.effet }), `${human(objective.effet)} dépend de ${phrase(name)}, dont le texte n’est pas encore établi comme applicable.`); continue; }
         const covered = supposing([name], [objective.effet]).length > 0;
         if (name === objective.effet) {
-          if (!((drafting || consultation) && covered)) add('manque', at, `but non renseigné. Écris sa formule et son texte (selon), ou son montant et sa preuve (pièce ou selon)${drafting || consultation ? `, ou des hypothèses avec le montant attendu` : ''}.`, `Le but ${phrase(name)} n’a ni formule ni montant.`);
+          if (!((drafting || consultation) && covered)) add('manque', at, finding('but-non-indique'), `Le but ${phrase(name)} n’a ni formule ni montant.`);
           continue;
         }
-        const supposed = `ajoute une hypothèse qui la suppose (faits) et donne le montant attendu de ${objective.effet}`;
-        if (drafting && !covered) add('manque', at, `${objective.effet} dépend de ${name}, que le projet ne fixe pas : ${isValue ? 'fixe-la dans valeurs, ou ' : ''}${supposed}`, `${human(objective.effet)} dépend de ${phrase(name)}, que le projet ne fixe pas.`, isValue ? undefined : name);
-        if (!drafting && !(consultation && covered)) add('manque', at, isValue ? `${objective.effet} dépend de ${name} : renseigne-la dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)${consultation ? `, ou ${supposed}` : ''}` : `${objective.effet} dépend de ${name} : établis ce point (preuve, ou ses propres conditions)${consultation ? `, ou ${supposed}` : ''}`, `${human(objective.effet)} dépend de ${phrase(name)}, qui n’est pas établi.`, isValue ? undefined : name);
+        if (drafting && !covered) add('manque', at, finding('valeur-non-fixee', { nom: name, effet: objective.effet }), `${human(objective.effet)} dépend de ${phrase(name)}, que le projet ne fixe pas.`, isValue ? undefined : name);
+        if (!drafting && !(consultation && covered)) add('manque', at, finding(isValue ? 'valeur-dependante-non-indiquee' : 'point-dependant-non-etabli', { nom: name, effet: objective.effet }), `${human(objective.effet)} dépend de ${phrase(name)}, qui n’est pas établi.`, isValue ? undefined : name);
       }
       return;
     }
@@ -468,18 +468,18 @@ export async function verifyReasoning(input: {
     const date = dateOf(basis, check);
     if (source && check?.kind && check.kind !== 'decision') source.en_vigueur = date && check.from ? inForce(date, check.from, check.to) : null;
     const au = basis.vigueur?.au;
-    if (date && source?.en_vigueur === false) add(drafting ? 'erreur' : 'manque', `${place}.vigueur`, `version non applicable : elle n’était pas en vigueur au ${date} (${au && typeof valueOf(au) === 'string' ? au : 'date du jour'}) ; cite la version en vigueur à cette date`, `${title} : la version citée n’était pas en vigueur au ${day(date)}.`, `#source:${basis.source}`);
-    if (check?.kind === 'texte' && !au && !drafting) add('manque', `${place}.vigueur`, `applicabilité dans le temps non établie : ajoute vigueur: { debut, fin, au: '${spaced ? 'nom de la date' : 'nom_de_date'}' }, la date de valeurs (avec sa preuve) à laquelle s’apprécie la version applicable`, `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
-    else if (check?.kind === 'texte' && !date) add('manque', `${place}.vigueur`, `${au} : renseigne cette date dans valeurs, avec sa preuve`, `${title} : la date qui fixe la version applicable (${phrase(au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`, `valeurs.${au}`);
+    if (date && source?.en_vigueur === false) add(drafting ? 'erreur' : 'manque', `${place}.vigueur`, finding('version-non-applicable', { date: day(date) }), `${title} : la version citée n’était pas en vigueur au ${day(date)}.`, `#source:${basis.source}`);
+    if (check?.kind === 'texte' && !au && !drafting) add('manque', `${place}.vigueur`, finding('date-de-version-non-indiquee', { nom: spaced ? 'nom de la date' : 'nom_de_date' }), `${title} : l’applicabilité du texte dans le temps n’est pas établie.`, `#source:${basis.source}`);
+    else if (check?.kind === 'texte' && !date) add('manque', `${place}.vigueur`, finding('date-au-non-prouvee', { nom: au! }), `${title} : la date qui fixe la version applicable (${phrase(au!)}) n’est pas établie par une pièce.`, `#source:${basis.source}`, `valeurs.${au}`);
     return title;
   };
   const applicability = (place: string, basis: Basis, title: string) => {
     if (basisChecks.get(place)?.kind !== 'texte') return;
     controlSlots.push(basis.applicabilite ?? null);
-    if (!basis.applicabilite) add('manque', `${place}.applicabilite`, `applicabilité non établie : ajoute applicabilite: '${applicabilityName(title, spaced)}' et définis ce terme, dont les conditions établissent que ce texte s’applique au dossier`, `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
+    if (!basis.applicabilite) add('manque', `${place}.applicabilite`, finding('applicabilite-non-etablie', { nom: applicabilityName(title, spaced) }), `${title} : l’applicabilité de ce texte au dossier n’est pas justifiée.`, `#source:${basis.source}`);
     if (drafting) return;
     controlSlots.push(basis.version ?? null);
-    if (!basis.version) add('manque', `${place}.version`, `version applicable non établie : ajoute version: '${derivedName('version', applicabilityName(title, spaced).replace(/^applicabilité(?: de |_de_)/u, ''), spaced)}' et définis ce terme : cite la règle qui fixe la version applicable (entrée en vigueur, dispositions transitoires) et établis par une pièce qu’elle est remplie`, `${title} : la règle qui rend cette version applicable au dossier n’est pas citée.`, `#source:${basis.source}`);
+    if (!basis.version) add('manque', `${place}.version`, finding('version-non-etablie', { nom: derivedName('version', applicabilityName(title, spaced).replace(/^applicabilité(?: de |_de_)/u, ''), spaced) }), `${title} : la règle qui rend cette version applicable au dossier n’est pas citée.`, `#source:${basis.source}`);
   };
   for (const objective of reasoning.objectifs) {
     if (reasoning.qualification === 'drafting' || objective.validite) controlSlots.push(objective.validite ?? null);
@@ -488,7 +488,7 @@ export async function verifyReasoning(input: {
   for (const { condition } of occurrences) if (condition.mesure?.delai) controlSlots.push(condition.decompte ?? null);
   const groundsOpen = (fact: string) => {
     const pending = [...new Set(SIDES.flatMap((side) => (reasoning.terms.get(fact)?.fondements?.[side] ?? []).flatMap((entry) => entry.si.flatMap(function names(condition: Condition): string[] { return condition.l_une ? condition.l_une.flatMap(names) : [condition.condition!]; }))))].filter((name) => holds(name) === null);
-    return pending.length ? `${fact} décide de la réponse : ses fondements dépendent de ${pending.join(', ')}, à établir ; établis ${pending.length > 1 ? 'ces questions' : 'cette question'} plutôt que d’ajouter un fondement` : `${fact} décide de la réponse : aucun de ses fondements n’est établi ; vérifie leurs citations et, pour chaque texte, son applicabilité et sa vigueur`;
+    return pending.length ? finding('fondements-dependants-non-etablis', { fait: fact, liste: pending.join(', ') }) : finding('fait-non-etabli', { fait: fact });
   };
   for (const { at, condition } of occurrences) {
     const holder = node(annotated, at);
@@ -499,9 +499,9 @@ export async function verifyReasoning(input: {
     if (result?.calcul) holder.calcul = result.calcul;
     if (fact && decisiveLeaves.has(fact)) {
       holder.decisif = true;
-      if (drafting && result?.missing.length && !(decisiveFor.get(fact) ?? []).some((objective) => bracketed([fact, ...result.missing], objective))) add('manque', at, `${fact} décide de la réponse et dépend de ${result.missing.join(', ')}, que le projet ne fixe pas : fixe ${result.missing.length > 1 ? 'ces valeurs' : 'cette valeur'} dans valeurs, ou ajoute des hypothèses qui montrent quand la réponse change`, `${human(fact)} : la réponse dépend de ${listing(result.missing.map(phrase))}, que le projet ne fixe pas.`, fact);
-      if (reasoning.qualification !== 'drafting' && result && !(consultation && (decisiveFor.get(fact) ?? []).some((objective) => bracketed([fact, ...result.missing], objective)))) add('manque', at, `${fact} décide de la réponse : renseigne ${result.missing.join(', ')} dans valeurs, avec sa preuve (pièce) ou sa source (selon : texte)${consultation ? ', ou ajoute des hypothèses qui montrent quand la réponse change' : ''}`, `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
-      else if (reasoning.qualification !== 'drafting' && !result && !disputed(fact)) add('manque', at, reasoning.terms.get(fact)?.fondements ? groundsOpen(fact) : reasoning.terms.has(fact) ? `${fact} décide de la réponse : ajoute un fondement (preuve ou selon) sous true ou false de ${fact}` : `${fact} décide de la réponse : ajoute ${fact}: { true: [{ preuve: [{ piece, citation }] }] } (ou false) à la racine, ou précise ce terme par son propre bloc`, `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
+      if (drafting && result?.missing.length && !(decisiveFor.get(fact) ?? []).some((objective) => bracketed([fact, ...result.missing], objective))) add('manque', at, finding('fait-dependant-non-fixe', { fait: fact, liste: result.missing.join(', ') }), `${human(fact)} : la réponse dépend de ${listing(result.missing.map(phrase))}, que le projet ne fixe pas.`, fact);
+      if (reasoning.qualification !== 'drafting' && result && !(consultation && (decisiveFor.get(fact) ?? []).some((objective) => bracketed([fact, ...result.missing], objective)))) add('manque', at, finding('fait-dependant-non-indique', { fait: fact, liste: result.missing.join(', ') }), `${human(fact)} : ${listing(result.missing.map(phrase))} ${result.missing.length > 1 ? 'ne sont pas établis' : 'n’est pas établi'} par une pièce, alors que la réponse en dépend.`, fact);
+      else if (reasoning.qualification !== 'drafting' && !result && !disputed(fact)) add('manque', at, reasoning.terms.get(fact)?.fondements ? groundsOpen(fact) : finding(reasoning.terms.has(fact) ? 'fait-sans-fondement' : 'fait-sans-preuve', { fait: fact }), `${human(fact)} : aucune pièce ne l’établit, alors que la réponse en dépend.`, fact);
     }
     condition.selon.forEach((basis, index) => {
       const place = `${at}.selon[${index}]`;
@@ -509,10 +509,10 @@ export async function verifyReasoning(input: {
       const title = sourceIssues(place, basis);
       const exempt = applicabilityTerms.has(at.split('.')[0]);
       const clauseExempt = validityTerms.has(at.split('.')[0]) || applicabilityTerms.has(at.split('.')[0]);
-      if (basis.validite && actValidities.has(basis.validite)) add('erreur', `${place}.validite`, `validite : ${basis.validite} est le contrôle de validité de l’acte ; une clause a son propre contrôle (ex. ${derivedName('validité', `la clause ${condition.condition ?? at.split('.')[0]}`, spaced)})`);
+      if (basis.validite && actValidities.has(basis.validite)) add('erreur', `${place}.validite`, finding('validite-acte-sur-clause', { nom: derivedName('validité', `la clause ${condition.condition ?? at.split('.')[0]}`, spaced) }));
       if (check?.kind === 'piece' && !clauseExempt) controlSlots.push(basis.validite ?? null);
-      if (check?.kind === 'piece' && !basis.validite && !clauseExempt) add('manque', `${place}.validite`, `validité de la clause non établie : ajoute validite: '${derivedName('validité', `la clause ${condition.condition ?? at.split('.')[0]}`, spaced)}' et définis ce terme, dont les conditions établissent que la clause est valable au regard du droit applicable`, `${title} : la validité de la clause n’est pas établie.`, `#source:${basis.source}`);
-      if (check?.kind === 'piece' && /\b(code|cgi|loi n|ordonnance n|décret n)/i.test(basis.citation) && /\barticles?\b/i.test(basis.citation) && !condition.selon.some((_, other) => basisChecks.get(`${at}.selon[${other}]`)?.kind === 'texte')) add('manque', place, 'la clause renvoie à un texte de loi : ajoute ce texte à selon (source, citation, vigueur)', `${title} : la clause renvoie à un texte de loi qui n’est pas cité.`, `#source:${basis.source}`);
+      if (check?.kind === 'piece' && !basis.validite && !clauseExempt) add('manque', `${place}.validite`, finding('validite-clause-non-etablie', { nom: derivedName('validité', `la clause ${condition.condition ?? at.split('.')[0]}`, spaced) }), `${title} : la validité de la clause n’est pas établie.`, `#source:${basis.source}`);
+      if (check?.kind === 'piece' && /\b(code|cgi|loi n|ordonnance n|décret n)/i.test(basis.citation) && /\barticles?\b/i.test(basis.citation) && !condition.selon.some((_, other) => basisChecks.get(`${at}.selon[${other}]`)?.kind === 'texte')) add('manque', place, finding('texte-de-clause-non-cite'), `${title} : la clause renvoie à un texte de loi qui n’est pas cité.`, `#source:${basis.source}`);
       if (!exempt) applicability(place, basis, title);
     });
   }
@@ -554,17 +554,14 @@ export async function verifyReasoning(input: {
         const tension = reasoning.objectifs.filter((other, at) => at !== index && gap(other, score(other, facts)) > gaps[at]).map((other) => other.objectif);
         const name = 'leaf' in flip ? flip.leaf! : flip.basis!;
         const value = 'leaf' in flip ? holds(flip.leaf!) : bases.get(flip.at);
-        const goal = `l’objectif « ${objective.objectif} »`;
-        const advice = 'leaf' in flip
-          ? `${name} ${value ? 'fait obstacle à' : 'manque à'} ${goal} : ${reasoning.computed.has(name) ? 'discute les valeurs du calcul ou la règle qui le fixe' : value ? 'conteste-le (une pièce sous false) ou l’interprétation de la règle qui le retient' : 'établis-le par une pièce (sous true) ou par une autre interprétation de la règle'}, ou cherche une exception (sauf) ou un autre fondement (l_une)`
-          : value ? `la source de ${name} fait obstacle à ${goal} : discute son interprétation, sa version ou son applicabilité, ou cherche une source contraire` : `la source de ${name} ne compte pas alors que ${goal} en dépend : établis sa version et son applicabilité, ou cherche une autre source`;
-        add('manque', flip.at, `${advice}${tension.length ? ` ; en tension avec ${tension.map((other) => `l’objectif « ${other} »`).join(', ')} : à arbitrer` : ''}`, `${'leaf' in flip ? human(name) : `La source de ${phrase(name)}`} ${value ? 'fait obstacle à' : 'manque à'} l’objectif : ${objective.objectif}.${tension.length ? ` En tension avec : ${tension.join(' ; ')}.` : ''}`, 'leaf' in flip ? name : undefined);
+        const advice = finding('leaf' in flip ? (reasoning.computed.has(name) ? 'calcul-oppose' : value ? 'fait-opposable' : 'fait-requis-non-etabli') : value ? 'source-opposee' : 'source-requise-non-retenue', { nom: name, objectif: objective.objectif });
+        add('manque', flip.at, tension.length ? { ...advice, correction: `${advice.correction} En tension avec l’objectif ${tension.join(', ')}. Arbitrez.` } : advice, `${'leaf' in flip ? human(name) : `La source de ${phrase(name)}`} ${value ? 'fait obstacle à' : 'manque à'} l’objectif : ${objective.objectif}.${tension.length ? ` En tension avec : ${tension.join(' ; ')}.` : ''}`, 'leaf' in flip ? name : undefined);
         places.add(flip.at);
         found.push(name);
       }
       const holder = node(annotated, `objectifs[${index}]`);
       if (holder) Object.assign(holder, { ...(amountObjective(objective) ? {} : { atteint: gaps[index] === 2 ? false : null }), ...(found.length ? { obstacles: [...new Set(found)] } : {}) });
-      if (gaps[index] === 2 && !found.length) add('manque', `objectifs[${index}]`, 'objectif non atteint et aucun élément seul ne le fait basculer : cherche un autre fondement (l_une), une exception (sauf) ou une autre lecture des règles retenues', `Objectif non atteint : ${objective.objectif}.`);
+      if (gaps[index] === 2 && !found.length) add('manque', `objectifs[${index}]`, finding('objectif-non-atteint'), `Objectif non atteint : ${objective.objectif}.`);
     });
   }
   for (const [name, entry] of reasoning.valeurs) entry.selon.forEach((basis, index) => applicability(`valeurs.${name}.selon[${index}]`, basis, sourceIssues(`valeurs.${name}.selon[${index}]`, basis)));
@@ -590,7 +587,7 @@ export async function verifyReasoning(input: {
     const holder = node(annotated, `hypotheses[${index}]`);
     if (holder) Object.assign(holder, result);
     emit({ key: `essai:${index}`, step: 'essai', status: result.conforme ? 'ok' : 'alerte', subject: reasoning.hypotheses[index].nom, text: result.conforme ? 'Conforme' : `Non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${human(name)} = ${shown(value)}`).join(', ')}` });
-    if (!result.conforme) add('erreur', `hypotheses[${index}]`, `hypothèse non conforme : obtenu ${Object.entries(result.obtenu).map(([name, value]) => `${name} = ${shown(value)}`).join(', ')}`, `L’hypothèse « ${reasoning.hypotheses[index].nom} » ne donne pas le résultat attendu : ${Object.entries(result.obtenu).map(([name, value]) => told(name, value)).join(', ')}.`);
+    if (!result.conforme) add('erreur', `hypotheses[${index}]`, finding('hypothese-non-conforme', { nom: reasoning.hypotheses[index].nom, ecarts: Object.entries(reasoning.hypotheses[index].attendu).filter(([name, expected]) => result.obtenu[name] !== expected).map(([name, expected]) => `${name} attendu ${shown(expected)}, obtenu ${shown(result.obtenu[name])}`).join(' ; ') }), `L’hypothèse « ${reasoning.hypotheses[index].nom} » ne donne pas le résultat attendu : ${Object.entries(result.obtenu).map(([name, value]) => told(name, value)).join(', ')}.`);
   });
 
   if (reasoning.acte.length) {
@@ -640,7 +637,7 @@ export async function verifyReasoning(input: {
       citations: citationsOf,
       objectives: reasoning.objectifs.map((objective, index) => ({ effet: objective.effet, at: `objectifs[${index}]` })),
       obstacles,
-    })) add(issue.kind, issue.path, issue.text, issue.avocat);
+    })) add(issue.kind, issue.path, issue, issue.avocat);
   }
 
   const registre: string[] = [];
@@ -652,17 +649,17 @@ export async function verifyReasoning(input: {
         const closed = !record.found || /radi|cess|ferm|liquid|dissou/i.test(record.status);
         registre.push(`${person.label} : ${record.found ? record.status || 'trouvée au Registre Public' : 'introuvable au Registre Public'}`);
         emit({ key: `registre:${person.label}`, step: 'registre', status: closed ? 'alerte' : 'ok', subject: person.label, text: record.found ? record.status || 'Trouvée au Registre Public' : 'Introuvable au Registre Public' });
-        if (closed) add('manque', '', `registre : ${person.label} ${record.found ? record.status : 'introuvable au Registre Public'} ; vérifie sa capacité à agir ou à être poursuivie avant de conclure`, `${person.label} : ${record.found ? `le Registre Public la donne ${record.status}` : 'introuvable au Registre Public'}.`);
+        if (closed) add('manque', '', finding('registre-a-verifier', { personne: person.label, etat: record.found ? record.status : 'non trouvée' }), `${person.label} : ${record.found ? `le Registre Public la donne ${record.status}` : 'introuvable au Registre Public'}.`);
         if (!siren) {
           emit({ key: `bodacc:${person.label}`, step: 'registre', status: 'alerte', subject: person.label, text: 'SIREN non renseigné : BODACC non consulté' });
-          add('manque', '', `BODACC non consulté pour ${person.label} : SIREN absent des parties du dossier`, `${person.label} : SIREN non renseigné dans les parties, le BODACC n’a pas été consulté.`);
+          add('manque', '', finding('bodacc-non-consulte', { personne: person.label }), `${person.label} : SIREN non renseigné dans les parties, le BODACC n’a pas été consulté.`);
           continue;
         }
         const alerts = await connectors.bodacc(siren);
         emit({ key: `bodacc:${person.label}`, step: 'registre', status: alerts.length ? 'alerte' : 'ok', subject: person.label, text: alerts.length ? `BODACC : ${alerts.join(' ; ')}` : 'BODACC : aucune procédure collective ni radiation' });
         for (const alert of alerts) {
           registre.push(`${person.label} : BODACC ${alert}`);
-          add('manque', '', `BODACC, ${person.label} : ${alert} ; intègre ses effets au raisonnement (arrêt des poursuites individuelles, déclaration de créance, pouvoirs des organes de la procédure)`, `${person.label} : le BODACC signale ${alert}.`);
+          add('manque', '', finding('bodacc-alerte-trouvee', { personne: person.label, alerte: alert }), `${person.label} : le BODACC signale ${alert}.`);
         }
       } catch (error) { registre.push(`${person.label} : vérification impossible (${error instanceof Error ? error.message : 'erreur'})`); }
     }
@@ -788,7 +785,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   };
   const named = async (cwd: string, name?: string) => {
     const found = await resolveReasoningFile(cwd, name);
-    if (!found) throw new TypeError('Aucun raisonnement : écris .piecemaker/raisonnements/<nom>.yaml (nom d’après le sujet, ex. indemnite-de-depart) avec objectifs et les termes, puis relance verifier.');
+    if (!found) throw new TypeError('Aucun raisonnement trouvé. Écrivez .piecemaker/raisonnements/<nom>.yaml avec objectifs et termes, puis relancez verifier.');
     return found;
   };
 
@@ -805,7 +802,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
     const id = projectId(cwd);
     const found = await named(cwd, name);
     const code = await readFile(found.file, 'utf8').catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return null; throw error; });
-    if (code === null) throw new TypeError(`Raisonnement introuvable : .piecemaker/raisonnements/${found.name}.yaml (raisonnements du dossier : ${(await listReasoningFiles(cwd)).join(', ') || 'aucun'}).`);
+    if (code === null) throw new TypeError(`Fichier .piecemaker/raisonnements/${found.name}.yaml non trouvé. Raisonnements du dossier : ${(await listReasoningFiles(cwd)).join(', ') || 'aucun'}.`);
     const result = await verifyReasoning({
       code, cwd, connectors: cached, ...options,
       reliability: new Map(reliability(id).map((entry) => [entry.piece, entry.reliable])),
@@ -819,7 +816,7 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   const verify = async (cwd: string, online = true, emit?: (entry: ReasoningLogEntry) => void, name?: string): Promise<ReasoningSnapshot> => {
     for (const key of sources.keys()) if (key.startsWith(`${cwd}\0`)) sources.delete(key);
     const { id, code, result, file, name: chosen } = await run(cwd, { online, emit }, name);
-    if (await readFile(file, 'utf8') !== code) throw new Error('Le raisonnement a été modifié pendant la vérification : relance-la sur la version actuelle.');
+    if (await readFile(file, 'utf8') !== code) throw new Error('Raisonnement modifié pendant la vérification. Relancez verifier.');
     if (result.code !== code) await writeFile(file, result.code, 'utf8');
     const previous = await read(cwd, chosen);
     const snapshot: ReasoningSnapshot = { ...previous, revision: previous.revision + 1, updatedAt: new Date().toISOString(), code: result.code, annotated: result.annotated, issues: result.issues, test: { at: new Date().toISOString(), log: result.log } };
@@ -857,13 +854,12 @@ export function createReasoningService(getDatabase: () => Database.Database, con
       if (input.commande !== undefined && input.commande !== 'verifier' && input.commande !== 'lister') throw new TypeError('Commande : verifier ou lister.');
       if (input.raisonnement !== undefined && typeof input.raisonnement !== 'string') throw new TypeError('raisonnement : nom du fichier, sans .yaml.');
       if (input.commande === 'lister') return list(cwd);
-      const snapshot = await verify(cwd, true, undefined, input.raisonnement as string | undefined);
-      return `Raisonnement ${snapshot.name} (.piecemaker/raisonnements/${snapshot.name}.yaml)\n${describeReasoning(snapshot)}`;
+      return describeReasoning(await verify(cwd, true, undefined, input.raisonnement as string | undefined));
     },
     async simulate(cwd: string, faits: unknown, name?: string): Promise<Simulation> {
       if (!isObject(faits) || Object.values(faits).some((item) => typeof item !== 'boolean' && typeof item !== 'number' && !(typeof item === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item)))) throw new TypeError('faits : { nom: vrai, faux, nombre ou date AAAA-MM-JJ }.');
       const { result } = await run(cwd, { online: false, simulation: faits as Trial['faits'] }, name);
-      if (!result.simulation) throw new TypeError('Simulation impossible : corrige d’abord les erreurs du raisonnement.');
+      if (!result.simulation) throw new TypeError('Simulation non lancée. Corrigez d’abord les erreurs du raisonnement.');
       return result.simulation;
     },
     async dismiss(cwd: string, issue: string, restore = false, name?: string): Promise<ReasoningSnapshot> {
@@ -887,31 +883,34 @@ export function createReasoningService(getDatabase: () => Database.Database, con
   };
 }
 
-export function describeReasoning(snapshot: Pick<ReasoningSnapshot, 'issues' | 'code'> & { dismissed?: ReasoningSnapshot['dismissed'] }) {
+type DescribedSnapshot = Pick<ReasoningSnapshot, 'issues' | 'code'> & { dismissed?: ReasoningSnapshot['dismissed']; name?: string | null };
+const SEVERITY = { erreur: 'error', manque: 'warning', conseil: 'warning' } as const;
+const shownIssues = (snapshot: DescribedSnapshot) => {
   const hidden = new Set((snapshot.dismissed ?? []).map((entry) => entry.id));
-  const issues = snapshot.issues.filter((issue) => !hidden.has(issue.id));
-  const source = snapshot.code.split('\n');
-  const content = (line: number) => {
-    const text = source[line - 1]?.trim() ?? '';
-    const shown = text.length < 4 && source[line] ? `${text} ${source[line].trim()}` : text;
-    return shown.length > 220 ? `${shown.slice(0, 219)}…` : shown;
-  };
+  return snapshot.issues.filter((issue) => !hidden.has(issue.id));
+};
+const occurrencesOf = (issue: ReasoningIssue) => [{ path: issue.path, line: issue.line }, ...(issue.ailleurs ?? [])];
+const counted = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+export function describeReasoning(snapshot: DescribedSnapshot) {
+  const issues = shownIssues(snapshot);
   const errors = issues.filter((issue) => issue.kind === 'erreur');
-  const gaps = issues.filter((issue) => issue.kind === 'manque');
-  const advice = errors.length ? [] : issues.filter((issue) => issue.kind === 'conseil').slice(0, 5);
-  if (!errors.length && !gaps.length && !advice.length) return 'Aucune erreur, aucun manque. Le raisonnement a été réécrit dans son ordre.';
-  const out = [`${errors.length} erreur(s), ${gaps.length} manque(s)${advice.length ? `, ${advice.length} conseil(s) d’écriture` : ''}. Le raisonnement a été réécrit dans son ordre : les lignes ci-dessous s’y rapportent.`];
-  const block = (label: string, issue: ReasoningIssue, index: number) => {
-    const place = issue.path ? issue.path.replace(/\./g, ' › ') : 'fichier';
-    out.push('', `${label} ${index + 1} — ${place}${issue.line ? ` (ligne ${issue.line})` : ''}`);
-    out.push(issue.line ? `  ligne ${issue.line} : ${content(issue.line)}` : `  ${!issue.path ? 'porte sur le fichier entier' : /[.[]/.test(issue.path) ? `absent du fichier : à ajouter dans ${issue.path.replace(/(\.[^.[\]]+|\[\d+\])$/, '')}` : 'absent du fichier : clé à ajouter au premier niveau de l’objet'}`);
-    out.push(`  ${issue.text}`);
-    if (issue.ailleurs?.length) out.push(`  même cause, aussi : ${issue.ailleurs.map((other) => `${other.path.replace(/\./g, ' › ')}${other.line ? ` (ligne ${other.line})` : ''}`).join(' ; ')}`);
-  };
-  errors.forEach((issue, index) => block('ERREUR', issue, index));
-  gaps.forEach((issue, index) => block('MANQUE', issue, index));
-  advice.forEach((issue, index) => block('CONSEIL', issue, index));
-  return out.join('\n');
+  const listed = [...errors, ...issues.filter((issue) => issue.kind === 'manque'), ...(errors.length ? [] : issues.filter((issue) => issue.kind === 'conseil').slice(0, 5))];
+  if (!listed.length) return 'Aucune erreur, aucun manque. Le raisonnement a été réécrit dans son ordre.';
+  const source = snapshot.code.split('\n');
+  const rows = listed
+    .flatMap((issue) => occurrencesOf(issue).map(({ line }) => ({ line: line ?? 0, column: line ? Math.max(source[line - 1]?.search(/[^\s-]/u) ?? 0, 0) + 1 : 0, severity: SEVERITY[issue.kind], text: issue.correction ? `${issue.text} ${issue.correction}` : issue.text, rule: issue.regle ?? '' })))
+    .sort((left, right) => left.line - right.line || left.column - right.column);
+  const place = (row: { line: number; column: number }) => `${row.line}:${row.column}`;
+  const placeWidth = Math.max(...rows.map((row) => place(row).length));
+  const textWidth = Math.min(80, Math.max(...rows.map((row) => row.text.length)));
+  const failing = rows.filter((row) => row.severity === 'error').length;
+  return [
+    snapshot.name ? `.piecemaker/raisonnements/${snapshot.name}.yaml` : 'raisonnement.yaml',
+    ...rows.map((row) => `  ${place(row).padStart(placeWidth)}  ${row.severity.padEnd(7)}  ${row.text.padEnd(textWidth)}  ${row.rule}`),
+    '',
+    `✖ ${counted(rows.length, 'problem')} (${counted(failing, 'error')}, ${counted(rows.length - failing, 'warning')})`,
+  ].join('\n');
 }
 
 export const EXAMPLE_CODE = `objectifs:

@@ -35,8 +35,8 @@ test('l’acte se range en dernier, reçoit des id et garde un paragraphe par li
   assert.deepEqual(value.acte.map((section: { id: string }) => section.id), ['s1', 's2']);
   assert.match(result.code, /\n {6}- "\*\*La pénalité est donc due\.\*\*"$/m);
   assert.deepEqual(acteIssues(result), [
-    'manque acte[1].traite : pénalité_encourue est à établir dans le raisonnement : établis-le, ou rédige la section comme une prétention à démontrer',
-    'manque acte : obstacle force_majeure_contractuelle non discuté dans l’acte : ajoute traite: \'force_majeure_contractuelle\' à la section qui y répond',
+    'manque acte[1].traite : pénalité_encourue à établir dans le raisonnement.',
+    'manque acte : Obstacle force_majeure_contractuelle non discuté dans l’acte.',
   ]);
 });
 
@@ -44,22 +44,22 @@ test('une citation de l’acte doit figurer dans ce que la section traite', asyn
   const invented = ACTE.replace('**La pénalité est donc due.**', 'Le débiteur a reconnu « avoir livré avec deux mois de retard ».');
   const misplaced = ACTE.replace('traite: \'pénalité_encourue\'', 'traite: \'grève\'');
   const inventedIssues = acteIssues(await verify(withActe(invented)));
-  assert.ok(inventedIssues.some((text) => text.startsWith('erreur acte[1].texte[1] : citation absente du raisonnement : « avoir livré avec deux mois de retard »')), inventedIssues.join('\n'));
+  assert.ok(inventedIssues.some((text) => text.startsWith('erreur acte[1].texte[1] : Citation absente du raisonnement : « avoir livré avec deux mois de retard »')), inventedIssues.join('\n'));
   const misplacedIssues = acteIssues(await verify(withActe(misplaced)));
-  assert.ok(misplacedIssues.some((text) => text.startsWith('erreur acte[1].texte[0] : citation absente du raisonnement')), misplacedIssues.join('\n'));
-  assert.ok(misplacedIssues.some((text) => text.startsWith('manque acte[1].traite : grève est à établir')), misplacedIssues.join('\n'));
+  assert.ok(misplacedIssues.some((text) => text.startsWith('erreur acte[1].texte[0] : Citation absente du raisonnement')), misplacedIssues.join('\n'));
+  assert.ok(misplacedIssues.some((text) => text.startsWith('manque acte[1].traite : grève à établir')), misplacedIssues.join('\n'));
 });
 
 test('l’acte doit développer chaque objectif et renvoyer à des éléments existants', async () => {
   const result = await verify(withActe(ACTE.replace('traite: \'pénalité_encourue\'', 'traite: \'pénalité_inventée\'')));
   const issues = result.issues.map((issue) => `${issue.kind} ${issue.path} : ${issue.text}`);
-  assert.ok(issues.some((text) => text.startsWith('erreur acte[1].traite : traite : pénalité_inventée n’est ni un terme')));
-  assert.ok(issues.some((text) => text.startsWith('manque objectifs[0] : objectif non développé dans l’acte')));
+  assert.ok(issues.some((text) => text.startsWith('erreur acte[1].traite : pénalité_inventée non défini')));
+  assert.ok(issues.some((text) => text.startsWith('manque objectifs[0] : Objectif non développé dans l’acte')));
 });
 
 test('un conflit de fusion bloque jusqu’à ce qu’il soit tranché', async () => {
   const conflicted = ACTE.replace('{ intitule: `Faits`,', '{ intitule: `Faits`, conflit: [{ sur: \'texte\', modele: [\'A\'], avocat: [\'B\'] }],');
-  assert.ok(acteIssues(await verify(withActe(conflicted))).some((text) => text.startsWith('erreur acte[0].conflit : conflit de fusion sur le texte')));
+  assert.ok(acteIssues(await verify(withActe(conflicted))).some((text) => text.startsWith('erreur acte[0].conflit : Conflit de fusion non tranché sur le texte')));
 });
 
 test('gras et italique font l’aller-retour', () => {
@@ -70,7 +70,7 @@ test('gras et italique font l’aller-retour', () => {
 
 test('une citation de l’acte vient de la preuve ou de la source du fondement de ce que la section traite', async () => {
   const section = (traite: string, quote: string) => withActe(`  acte: [{ intitule: \`Discussion\`, traite: '${traite}', texte: [\`Le dossier établit « ${quote} ».\`] }],\n`);
-  const quotation = (result: Awaited<ReturnType<typeof verify>>) => acteIssues(result).filter((text) => text.includes('citation absente du raisonnement'));
+  const quotation = (result: Awaited<ReturnType<typeof verify>>) => acteIssues(result).filter((text) => text.includes('Citation absente du raisonnement'));
   assert.deepEqual(quotation(await verify(section('pénalité_encourue', 'Livré le 14/06/2025'))), []);
   assert.deepEqual(quotation(await verify(section('grève', 'mouvement limité à notre atelier'))), []);
   assert.equal(quotation(await verify(section('mise_en_demeure', 'Livré le 14/06/2025'))).length, 1);

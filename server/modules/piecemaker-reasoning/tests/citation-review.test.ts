@@ -35,7 +35,7 @@ const objective = (result: Awaited<ReturnType<typeof run>>) => {
   assert.ok(Array.isArray(objectives));
   return objectives[0].statut;
 };
-const semantic = (result: Awaited<ReturnType<typeof run>>) => result.issues.filter((issue) => issue.text.startsWith('correspondance citation–affirmation'));
+const semantic = (result: Awaited<ReturnType<typeof run>>) => result.issues.filter((issue) => issue.text.startsWith('Correspondance citation–affirmation'));
 
 test('validé conserve le fondement et son explication sans diagnostic', async () => {
   const result = await run(replies('validé'));
@@ -50,7 +50,7 @@ test('validé conserve le fondement et son explication sans diagnostic', async (
 test('non validé devient une erreur localisée et ne prouve pas le contraire', async () => {
   const result = await run(replies('non validé'));
   assert.equal(objective(result), 'à établir');
-  assert.deepEqual(semantic(result).map(({ kind, path, text }) => ({ kind, path, text })), [{ kind: 'erreur', path: 'fait réalisé.true[0]', text: 'correspondance citation–affirmation : non validé — Explication du lien examiné.' }]);
+  assert.deepEqual(semantic(result).map(({ kind, path, text }) => ({ kind, path, text })), [{ kind: 'erreur', path: 'fait réalisé.true[0]', text: 'Correspondance citation–affirmation non validé : Explication du lien examiné.' }]);
   assert.ok(semantic(result)[0].line);
 });
 
@@ -140,7 +140,7 @@ test('une citation introuvable est traitée mécaniquement sans appel au modèle
   let called = false;
   const result = await run(async () => { called = true; return []; }, { ...model, 'fait réalisé': { true: [{ preuve: [{ ...proof, citation: 'Passage absent.' }] }] } });
   assert.equal(called, false);
-  assert.ok(result.issues.some((issue) => issue.kind === 'erreur' && issue.text.includes('citation introuvable')));
+  assert.ok(result.issues.some((issue) => issue.kind === 'erreur' && issue.text.includes('Citation non trouvée')));
 });
 
 test('les annotations ne peuvent pas injecter une validation dans une nouvelle vérification', async () => {

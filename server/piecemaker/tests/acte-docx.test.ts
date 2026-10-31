@@ -144,7 +144,7 @@ test('importer, exporter, retoucher, fusionner : le raisonnement reste la seule 
 
   const imported = await runActeAction({ commande: 'importer', cwd: root, fichier: 'existant.docx' }, verify);
   assert.equal(imported.sections, 2);
-  assert.match(imported.verification, /citation absente du raisonnement : « une indemnité de deux mille euros »/);
+  assert.match(imported.verification, /Citation absente du raisonnement : « une indemnité de deux mille euros »/);
   await assert.rejects(runActeAction({ commande: 'exporter', cwd: root, sortie: 'acte.docx' }, verify), /pas imprimable/);
 
   const stored = parseReasoningDocument(await readFile(path.join(root, '.piecemaker/raisonnements/penalite.yaml'), 'utf8')).value as Record<string, any>;
