@@ -7,13 +7,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <style>
-/* Colonne centrée, carte large au sommet, détails en cartes dessous. Style Luma, sombre uniquement. */
 :root {
   color-scheme: dark;
   --bg: #0a0a0b; --surface: #161618; --raised: #202024; --high: #2a2a2e;
   --fg: #f7f7f8; --body: #c6c6cb; --muted: #8c8c93; --subtle: #5e5e65;
   --border: rgba(255,255,255,.08); --border-strong: rgba(255,255,255,.2);
-  --blue: #2f6bff; --blue-soft: #7ea2ff; --gold: #f5b13d; --gold-fill: #2a2213;
+  --mcp: #7ea2ff; --skill: #4ade80; --agent: #b794ff; --gold: #f5b13d; --gold-fill: #2a2213;
   --sans: "Inter", "SF Pro Display", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -53,197 +52,155 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 .t-note { font: 400 11.5px var(--sans); fill: var(--muted); }
 .t-mono { font: 400 11.5px var(--mono); fill: var(--body); }
 .t-name { font: 500 11.5px var(--mono); fill: var(--fg); }
-.t-skill { font: 500 12px var(--mono); fill: var(--fg); }
-.t-arrow { font: 500 10.5px var(--sans); fill: var(--blue-soft); }
+.t-arrow { font: 500 10.5px var(--sans); }
 .t-hook { font: 600 12px var(--sans); fill: var(--gold); }
 .t-off { font: 400 11.5px var(--mono); fill: var(--muted); }
+.t-mcp { fill: var(--mcp); }
+.t-skill-c { fill: var(--skill); }
+.t-agent { fill: var(--agent); }
+.c-mcp, code.c-mcp { color: var(--mcp); }
+.c-skill, code.c-skill { color: var(--skill); }
+.c-agent, code.c-agent { color: var(--agent); }
 </style>
 
 <div class="page">
   <header>
     <h1>Carte des outils de l'assistant</h1>
-    <p class="lead">Le moteur lit un skill, puis appelle un outil par l'un de quatre canaux : MCP, Bash, sous-agent ou fichiers. Chaque ligne de la carte correspond à un canal. Tout a été relevé dans le code de la branche <code>main</code>.</p>
+    <p class="lead">Le moteur lit un skill, puis lance ses commandes. Il appelle aussi les outils MCP et les sous-agents. Le bleu marque les MCP, le vert les skills, le violet les sous-agents. Tout a été relevé dans le code de la branche <code>main</code>.</p>
   </header>
 
   <figure>
     <div class="map">
-      <svg viewBox="0 0 1180 972" role="img" aria-label="Le moteur lit les skills, passe par le proxy pour parler au modèle, et appelle les outils. Légifrance passe par MCP sans hook. pm, docx, Bash et les sous-agents passent par les hooks. Le MCP piecemaker est retiré par défaut.">
+      <svg viewBox="0 0 1180 996" role="img" aria-label="Le moteur passe par le proxy pour parler au modèle. Il appelle le MCP legifrance sans hook. Il lit les skills piecemaker et docx-cli, sources des commandes pm et docx, puis les lance par Bash sous le contrôle des hooks. Il lance aussi les sous-agents sous ce contrôle. Le MCP piecemaker est retiré par défaut.">
         <defs>
-          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7ea2ff"/></marker>
-          <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#8c8c93"/></marker>
+          <marker id="n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#8c8c93"/></marker>
+          <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7ea2ff"/></marker>
+          <marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4ade80"/></marker>
+          <marker id="v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#b794ff"/></marker>
         </defs>
 
-        <text class="t-col" x="16" y="26">Skills : la consigne</text>
-        <text class="t-col" x="262" y="26">Moteur</text>
-        <text class="t-col" x="470" y="26">Canal</text>
-        <text class="t-col" x="690" y="26">Outils et commandes</text>
+        <text class="t-col" x="16" y="26">Moteur</text>
+        <rect x="290" y="15" width="12" height="12" rx="3" fill="#141c30" stroke="#7ea2ff"/>
+        <text class="t-col" x="308" y="26">MCP</text>
+        <rect x="352" y="15" width="12" height="12" rx="3" fill="#10241a" stroke="#4ade80"/>
+        <text class="t-col" x="370" y="26">Skill</text>
+        <rect x="414" y="15" width="12" height="12" rx="3" fill="#1e1730" stroke="#b794ff"/>
+        <text class="t-col" x="432" y="26">Sous-agent</text>
+        <rect x="522" y="15" width="12" height="12" rx="3" fill="#2a2213" stroke="#f5b13d"/>
+        <text class="t-col" x="540" y="26">Hooks</text>
 
-        <!-- Proxy -->
-        <rect x="262" y="46" width="120" height="58" rx="12" fill="#202024" stroke="rgba(255,255,255,.08)"/>
-        <text class="t-title" x="322" y="71" text-anchor="middle">Proxy</text>
-        <text class="t-mono" x="322" y="90" text-anchor="middle">hudsucker</text>
-        <line x1="322" y1="128" x2="322" y2="107" stroke="#7ea2ff" stroke-width="1.5" marker-end="url(#a)"/>
-        <line x1="382" y1="75" x2="467" y2="75" stroke="#7ea2ff" stroke-width="1.5" marker-end="url(#a)"/>
-        <text class="t-arrow" x="425" y="67" text-anchor="middle">pseudonymise</text>
-        <rect x="470" y="46" width="190" height="58" rx="12" fill="#202024" stroke="rgba(255,255,255,.08)"/>
-        <text class="t-title" x="565" y="71" text-anchor="middle">API du modèle</text>
-        <text class="t-note" x="565" y="90" text-anchor="middle">le trafic reste filtré</text>
-        <text class="t-note" x="690" y="71">Sans proxy, les sessions lancées par le serveur échouent :</text>
-        <text class="t-note" x="690" y="88">elles ne continuent jamais sans filtre.</text>
+        <rect x="16" y="46" width="120" height="58" rx="12" fill="#202024" stroke="rgba(255,255,255,.08)"/>
+        <text class="t-title" x="76" y="71" text-anchor="middle">Proxy</text>
+        <text class="t-mono" x="76" y="90" text-anchor="middle">hudsucker</text>
+        <line x1="76" y1="128" x2="76" y2="107" stroke="#8c8c93" stroke-width="1.5" marker-end="url(#n)"/>
+        <line x1="136" y1="75" x2="287" y2="75" stroke="#8c8c93" stroke-width="1.5" marker-end="url(#n)"/>
+        <text class="t-note" x="212" y="67" text-anchor="middle">pseudonymise</text>
+        <rect x="290" y="46" width="190" height="58" rx="12" fill="#202024" stroke="rgba(255,255,255,.08)"/>
+        <text class="t-title" x="385" y="71" text-anchor="middle">API du modèle</text>
+        <text class="t-note" x="385" y="90" text-anchor="middle">le trafic reste filtré</text>
+        <text class="t-note" x="506" y="71">Sans proxy, les sessions lancées par le serveur échouent :</text>
+        <text class="t-note" x="506" y="88">elles ne continuent jamais sans filtre.</text>
 
-        <!-- Moteur -->
-        <rect x="262" y="128" width="120" height="824" rx="16" fill="#202024" stroke="rgba(255,255,255,.2)"/>
-        <text class="t-eng" x="322" y="164" text-anchor="middle">Claude</text>
-        <text class="t-eng" x="322" y="188" text-anchor="middle">Codex</text>
-        <text class="t-eng" x="322" y="212" text-anchor="middle">Mistral</text>
-        <text class="t-note" x="322" y="500" text-anchor="middle">Déclarés aussi :</text>
-        <text class="t-note" x="322" y="518" text-anchor="middle">Cursor, OpenCode,</text>
-        <text class="t-note" x="322" y="536" text-anchor="middle">Grok</text>
+        <rect x="16" y="128" width="120" height="852" rx="16" fill="#202024" stroke="rgba(255,255,255,.2)"/>
+        <text class="t-eng" x="76" y="164" text-anchor="middle">Claude</text>
+        <text class="t-eng" x="76" y="188" text-anchor="middle">Codex</text>
+        <text class="t-eng" x="76" y="212" text-anchor="middle">Mistral</text>
+        <text class="t-note" x="76" y="500" text-anchor="middle">Déclarés aussi :</text>
+        <text class="t-note" x="76" y="518" text-anchor="middle">Cursor, OpenCode,</text>
+        <text class="t-note" x="76" y="536" text-anchor="middle">Grok</text>
 
-        <!-- Appels -->
-        <g stroke="#7ea2ff" stroke-width="1.5" fill="none">
-          <line x1="382" y1="186" x2="467" y2="186" marker-end="url(#a)"/>
-          <line x1="382" y1="401" x2="467" y2="401" marker-end="url(#a)"/>
-          <line x1="382" y1="616" x2="467" y2="616" marker-end="url(#a)"/>
-          <line x1="382" y1="734" x2="467" y2="734" marker-end="url(#a)"/>
-          <line x1="382" y1="830" x2="467" y2="830" marker-end="url(#a)"/>
+        <line x1="136" y1="186" x2="287" y2="186" stroke="#7ea2ff" stroke-width="1.5" marker-end="url(#m)"/>
+        <g stroke="#4ade80" stroke-width="1.5">
+          <line x1="136" y1="401" x2="287" y2="401" marker-end="url(#s)"/>
+          <line x1="136" y1="616" x2="287" y2="616" marker-end="url(#s)"/>
+          <line x1="136" y1="748" x2="287" y2="748" marker-end="url(#s)"/>
         </g>
-        <line x1="382" y1="916" x2="467" y2="916" stroke="#8c8c93" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#g)"/>
-        <text class="t-arrow" x="425" y="178" text-anchor="middle">appel MCP</text>
-        <text class="t-arrow" x="396" y="393" text-anchor="middle">Bash</text>
-        <text class="t-arrow" x="396" y="608" text-anchor="middle">Bash</text>
-        <text class="t-arrow" x="396" y="726" text-anchor="middle">Bash</text>
-        <text class="t-arrow" x="396" y="822" text-anchor="middle">Agent</text>
-        <text class="t-note" x="425" y="908" text-anchor="middle">MCP</text>
+        <line x1="136" y1="858" x2="287" y2="858" stroke="#b794ff" stroke-width="1.5" marker-end="url(#v)"/>
+        <line x1="136" y1="944" x2="287" y2="944" stroke="#7ea2ff" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#m)"/>
+        <text class="t-mcp t-arrow" x="212" y="178" text-anchor="middle">appel MCP</text>
+        <text class="t-skill-c t-arrow" x="168" y="393" text-anchor="middle">lit, Bash</text>
+        <text class="t-skill-c t-arrow" x="168" y="608" text-anchor="middle">lit, Bash</text>
+        <text class="t-skill-c t-arrow" x="168" y="740" text-anchor="middle">lit, agit</text>
+        <text class="t-agent t-arrow" x="168" y="850" text-anchor="middle">Agent</text>
+        <text class="t-mcp t-arrow" x="212" y="936" text-anchor="middle">MCP</text>
 
-        <!-- Hooks -->
-        <rect x="412" y="258" width="32" height="608" rx="10" fill="#2a2213" stroke="#f5b13d"/>
-        <text class="t-hook" transform="translate(432 562) rotate(-90)" text-anchor="middle">Hooks : contrôle avant et après l'outil</text>
+        <rect x="200" y="258" width="32" height="636" rx="10" fill="#2a2213" stroke="#f5b13d"/>
+        <text class="t-hook" transform="translate(220 576) rotate(-90)" text-anchor="middle">Hooks : contrôle avant et après l'outil</text>
 
-        <!-- Lignes : skills -->
-        <g stroke="#8c8c93" stroke-width="1.2" stroke-dasharray="3 3">
-          <line x1="262" y1="186" x2="238" y2="186" marker-end="url(#g)"/>
-          <line x1="262" y1="401" x2="238" y2="401" marker-end="url(#g)"/>
-          <line x1="262" y1="616" x2="238" y2="616" marker-end="url(#g)"/>
-          <line x1="262" y1="734" x2="238" y2="734" marker-end="url(#g)"/>
-        </g>
-        <text class="t-note" x="249" y="178" text-anchor="middle">lit</text>
-        <text class="t-note" x="249" y="393" text-anchor="middle">lit</text>
-        <text class="t-note" x="249" y="608" text-anchor="middle">lit</text>
-        <text class="t-note" x="249" y="726" text-anchor="middle">lit</text>
-        <g fill="#161618" stroke="rgba(255,255,255,.08)">
-          <rect x="16" y="128" width="220" height="116" rx="14"/>
-          <rect x="16" y="258" width="220" height="286" rx="14"/>
-          <rect x="16" y="558" width="220" height="116" rx="14"/>
-          <rect x="16" y="688" width="220" height="92" rx="14"/>
-        </g>
-        <text class="t-skill" x="30" y="182">recherche-juridique</text>
-        <text class="t-note" x="30" y="200">recherche et citations</text>
+        <rect x="290" y="128" width="874" height="116" rx="14" fill="#141c30" stroke="#7ea2ff"/>
+        <rect x="290" y="258" width="874" height="286" rx="14" fill="#10241a" stroke="#4ade80"/>
+        <rect x="290" y="558" width="874" height="116" rx="14" fill="#10241a" stroke="#4ade80"/>
+        <rect x="290" y="688" width="874" height="120" rx="14" fill="#10241a" stroke="#4ade80"/>
+        <rect x="290" y="822" width="874" height="72" rx="14" fill="#1e1730" stroke="#b794ff"/>
+        <rect x="290" y="908" width="874" height="72" rx="14" fill="none" stroke="#7ea2ff" stroke-dasharray="5 4"/>
 
-        <text class="t-skill" x="30" y="370">piecemaker</text>
-        <text class="t-note" x="30" y="388">tous les outils du dossier</text>
-        <text class="t-skill" x="30" y="420">legal-code</text>
-        <text class="t-note" x="30" y="438">raisonnement, session /legal-code</text>
-        <text class="t-skill" x="30" y="470">conversion-md</text>
-        <text class="t-note" x="30" y="488">PDF, DOCX, scan vers Markdown</text>
+        <text class="t-title t-mcp" x="306" y="154">MCP legifrance</text>
+        <text class="t-note" x="306" y="172">stdio, déclaré par dossier</text>
+        <text class="t-note" x="306" y="188">7 outils en lecture seule</text>
+        <text class="t-name t-skill-c" x="306" y="212">recherche-juridique</text>
+        <text class="t-note" x="306" y="230">skill : recherche et citations</text>
+        <text class="t-mono" x="560" y="152">Search_Jurisprudence</text>
+        <text class="t-mono" x="560" y="172">Search_Code</text>
+        <text class="t-mono" x="560" y="192">consulter_article · consulter_decision</text>
+        <text class="t-mono" x="560" y="212">Historique_Judiciaire · Tracking_BODACC</text>
+        <text class="t-mono" x="560" y="232">dictionnaire_juridique</text>
 
-        <text class="t-skill" x="30" y="600">docx-cli</text>
-        <text class="t-note" x="30" y="616">lire, éditer, créer un .docx</text>
-        <text class="t-skill" x="30" y="640">redaction-juridique</text>
-        <text class="t-note" x="30" y="656">acte depuis les templates</text>
+        <text class="t-title t-skill-c" x="306" y="286">Skill piecemaker</text>
+        <text class="t-note" x="306" y="306">Source de la commande pm :</text>
+        <text class="t-note" x="306" y="322"><tspan class="t-mono">scripts/pm</tspan> est dans le skill.</text>
+        <text class="t-note" x="306" y="346">Le serveur doit tourner. pm passe par</text>
+        <text class="t-note" x="306" y="362">HTTP en boucle locale, vers la base</text>
+        <text class="t-note" x="306" y="378">et les volets.</text>
+        <text class="t-name t-skill-c" x="306" y="426">legal-code</text>
+        <text class="t-note" x="306" y="444">skill : raisonnement, session /legal-code,</text>
+        <text class="t-note" x="306" y="460">utilise pm raisonnement et pm sql</text>
 
-        <text class="t-skill" x="30" y="716">tamponnage</text>
-        <text class="t-skill" x="30" y="740">historique-dossier</text>
-        <text class="t-skill" x="30" y="764">ajout-de-fonctionnalites</text>
+        <text class="t-name" x="560" y="276">pm conversion</text><text class="t-mono" x="730" y="276">[pièce…] --dossier --force</text>
+        <text class="t-name" x="560" y="294">pm sql</text><text class="t-mono" x="730" y="294">--requete --dossier</text>
+        <text class="t-name" x="560" y="312">pm afficher</text><text class="t-mono" x="730" y="312">--fichier --review --fermer</text>
+        <text class="t-mono" x="730" y="330">--volet dossier|index|tabular-review|tampon</text>
+        <text class="t-name" x="560" y="348">pm raisonnement</text><text class="t-mono" x="730" y="348">consignes | verifier | lister</text>
+        <text class="t-name" x="560" y="366">pm suivi</text><text class="t-mono" x="730" y="366">verifier | lire | ecrire</text>
+        <text class="t-name" x="560" y="384">pm docx</text><text class="t-mono" x="730" y="384">preparer | verifier | comparer | extraire</text>
+        <text class="t-name" x="560" y="402">pm acte</text><text class="t-mono" x="730" y="402">exporter | fusionner | importer</text>
+        <text class="t-name" x="560" y="420">pm tabular_review</text><text class="t-mono" x="730" y="420">lister | ouvrir | documents | modeles</text>
+        <text class="t-mono" x="730" y="438">enregistrer_modele | preparer | lancer</text>
+        <text class="t-mono" x="730" y="456">lire | colonnes | relancer</text>
+        <text class="t-name" x="560" y="474">pm tabular_review_index</text><text class="t-mono" x="730" y="474">ouvrir | preparer | lancer | lire</text>
+        <text class="t-mono" x="730" y="492">colonnes | classement | arborescence</text>
+        <text class="t-mono" x="730" y="510">relancer | lister | modifier</text>
+        <text class="t-note" x="560" y="532">Lancer ou relancer : accord de l'avocat. L'index reste dans l'onglet Dossier.</text>
 
-        <text class="t-note" x="30" y="834">Aucun skill : lancés par le moteur</text>
-        <text class="t-note" x="30" y="920">Aucun skill : remplacé par pm</text>
+        <text class="t-title t-skill-c" x="306" y="584">Skill docx-cli</text>
+        <text class="t-note" x="306" y="602">Source de la commande docx : le skill</text>
+        <text class="t-note" x="306" y="618">installe ce binaire externe.</text>
+        <text class="t-name t-skill-c" x="306" y="642">redaction-juridique</text>
+        <text class="t-note" x="306" y="660">skill : acte depuis les templates, avec docx</text>
+        <text class="t-mono" x="560" y="576">docx create | read | find | insert | replace | edit | delete</text>
+        <text class="t-mono" x="560" y="594">docx outline | wc | diff | render | validate | info | upgrade</text>
+        <text class="t-mono" x="560" y="612">docx styles | sections | lists | tables | headers | footers</text>
+        <text class="t-mono" x="560" y="630">docx footnotes | endnotes | images | hyperlinks | code | equations</text>
+        <text class="t-mono" x="560" y="648">docx tasks | raw · track-changes on off list accept reject apply</text>
+        <text class="t-mono" x="560" y="666">docx comments add | list | reply | resolve | delete</text>
 
-        <!-- Lignes : canaux -->
-        <g fill="#161618" stroke="rgba(255,255,255,.2)">
-          <rect x="470" y="128" width="190" height="116" rx="14"/>
-          <rect x="470" y="258" width="190" height="286" rx="14"/>
-          <rect x="470" y="558" width="190" height="116" rx="14"/>
-          <rect x="470" y="688" width="190" height="92" rx="14"/>
-          <rect x="470" y="794" width="190" height="72" rx="14"/>
-        </g>
-        <rect x="470" y="880" width="190" height="72" rx="14" fill="none" stroke="#5e5e65" stroke-dasharray="5 4"/>
-        <text class="t-title" x="484" y="172">MCP legifrance</text>
-        <text class="t-note" x="484" y="192">stdio, déclaré par dossier</text>
-        <text class="t-note" x="484" y="210">11 outils en lecture seule</text>
+        <text class="t-name t-skill-c" x="306" y="714">conversion-md</text>
+        <text class="t-mono" x="560" y="714">smart_converter.py : PDF, DOCX, scan vers Markdown</text>
+        <text class="t-name t-skill-c" x="306" y="740">tamponnage</text>
+        <text class="t-mono" x="560" y="740">POST /api/stamping · /api/tampon/*</text>
+        <text class="t-name t-skill-c" x="306" y="766">historique-dossier</text>
+        <text class="t-mono" x="560" y="766">git log | show | diff</text>
+        <text class="t-name t-skill-c" x="306" y="792">ajout-de-fonctionnalites</text>
+        <text class="t-mono" x="560" y="792">~/.claude/skills · ~/.piecemaker/{templates,custom}</text>
 
-        <text class="t-title" x="484" y="382">pm</text>
-        <text class="t-note" x="484" y="402">Le serveur doit tourner.</text>
-        <text class="t-note" x="484" y="420">HTTP en boucle locale,</text>
-        <text class="t-note" x="484" y="438">vers la base et les volets.</text>
+        <text class="t-title t-agent" x="306" y="852">Sous-agents</text>
+        <text class="t-note" x="306" y="872">déclarés pour Claude, sans skill</text>
+        <text class="t-name t-agent" x="560" y="850">analyste-pieces</text><text class="t-mono" x="730" y="850">sonnet · Read Grep Glob Bash</text>
+        <text class="t-name t-agent" x="560" y="874">jurisprudence-scanner</text><text class="t-mono" x="730" y="874">haiku · Read Write</text>
 
-        <text class="t-title" x="484" y="606">docx</text>
-        <text class="t-note" x="484" y="626">binaire externe,</text>
-        <text class="t-note" x="484" y="644">installé par le skill docx-cli</text>
-
-        <text class="t-title" x="484" y="728">Autres</text>
-        <text class="t-note" x="484" y="748">HTTP, git et fichiers</text>
-
-        <text class="t-title" x="484" y="826">Sous-agents</text>
-        <text class="t-note" x="484" y="846">déclarés pour Claude</text>
-
-        <text class="t-off" x="484" y="912">MCP piecemaker</text>
-        <text class="t-note" x="484" y="932">retiré par défaut</text>
-
-        <!-- Lignes : outils -->
-        <line x1="660" y1="186" x2="688" y2="186" stroke="#7ea2ff" stroke-width="1.5" marker-end="url(#a)"/>
-        <line x1="660" y1="401" x2="688" y2="401" stroke="#7ea2ff" stroke-width="1.5" marker-end="url(#a)"/>
-        <line x1="660" y1="616" x2="688" y2="616" stroke="#7ea2ff" stroke-width="1.5" marker-end="url(#a)"/>
-        <line x1="660" y1="734" x2="688" y2="734" stroke="#7ea2ff" stroke-width="1.5" marker-end="url(#a)"/>
-        <line x1="660" y1="830" x2="688" y2="830" stroke="#7ea2ff" stroke-width="1.5" marker-end="url(#a)"/>
-        <line x1="660" y1="916" x2="688" y2="916" stroke="#8c8c93" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#g)"/>
-        <g fill="#161618" stroke="rgba(255,255,255,.08)">
-          <rect x="690" y="128" width="474" height="116" rx="14"/>
-          <rect x="690" y="258" width="474" height="286" rx="14"/>
-          <rect x="690" y="558" width="474" height="116" rx="14"/>
-          <rect x="690" y="688" width="474" height="92" rx="14"/>
-          <rect x="690" y="794" width="474" height="72" rx="14"/>
-        </g>
-        <rect x="690" y="880" width="474" height="72" rx="14" fill="none" stroke="#5e5e65" stroke-dasharray="5 4"/>
-
-        <text class="t-mono" x="704" y="152">Search_Jurisprudence</text>
-        <text class="t-mono" x="704" y="172">Search_Code</text>
-        <text class="t-mono" x="704" y="192">consulter_article · consulter_decision</text>
-        <text class="t-mono" x="704" y="212">Historique_Judiciaire · Tracking_BODACC</text>
-        <text class="t-mono" x="704" y="232">dictionnaire_juridique</text>
-
-        <text class="t-name" x="704" y="276">pm conversion</text><text class="t-mono" x="838" y="276">[pièce…] --dossier --force</text>
-        <text class="t-name" x="704" y="294">pm sql</text><text class="t-mono" x="838" y="294">--requete --dossier</text>
-        <text class="t-name" x="704" y="312">pm afficher</text><text class="t-mono" x="838" y="312">--fichier --review --fermer</text>
-        <text class="t-mono" x="838" y="330">--volet dossier|index|tabular-review|tampon</text>
-        <text class="t-name" x="704" y="348">pm raisonnement</text><text class="t-mono" x="838" y="348">consignes | verifier | lister</text>
-        <text class="t-name" x="704" y="366">pm suivi</text><text class="t-mono" x="838" y="366">verifier | lire | ecrire</text>
-        <text class="t-name" x="704" y="384">pm docx</text><text class="t-mono" x="838" y="384">preparer | verifier | comparer | extraire</text>
-        <text class="t-name" x="704" y="402">pm acte</text><text class="t-mono" x="838" y="402">exporter | fusionner | importer</text>
-        <text class="t-name" x="704" y="420">pm tabular_review</text><text class="t-mono" x="838" y="420">lister | ouvrir | documents | modeles</text>
-        <text class="t-mono" x="838" y="438">enregistrer_modele | preparer | lancer</text>
-        <text class="t-mono" x="838" y="456">lire | colonnes | relancer</text>
-        <text class="t-name" x="704" y="474">pm tabular_review_index</text><text class="t-mono" x="880" y="474">ouvrir | preparer | lancer | lire</text>
-        <text class="t-mono" x="838" y="492">colonnes | classement | arborescence</text>
-        <text class="t-mono" x="838" y="510">relancer | lister | modifier</text>
-        <text class="t-note" x="704" y="532">Lancer ou relancer : accord de l'avocat. L'index reste dans l'onglet Dossier.</text>
-
-        <text class="t-mono" x="704" y="576">docx create | read | find | insert | replace | edit | delete</text>
-        <text class="t-mono" x="704" y="594">docx outline | wc | diff | render | validate | info | upgrade</text>
-        <text class="t-mono" x="704" y="612">docx styles | sections | lists | tables | headers | footers</text>
-        <text class="t-mono" x="704" y="630">docx footnotes | endnotes | images | hyperlinks | code | equations</text>
-        <text class="t-mono" x="704" y="648">docx tasks | raw · track-changes on off list accept reject apply</text>
-        <text class="t-mono" x="704" y="666">docx comments add | list | reply | resolve | delete</text>
-
-        <text class="t-mono" x="704" y="716">tamponnage : POST /api/stamping · /api/tampon/*</text>
-        <text class="t-mono" x="704" y="740">historique-dossier : git log | show | diff</text>
-        <text class="t-mono" x="704" y="764">ajout : ~/.claude/skills · ~/.piecemaker/{templates,custom}</text>
-
-        <text class="t-mono" x="704" y="822">analyste-pieces : sonnet · Read Grep Glob Bash</text>
-        <text class="t-mono" x="704" y="846">jurisprudence-scanner : haiku · Read Write</text>
-
-        <text class="t-off" x="704" y="908">conversion · sql · raisonnement · suivi</text>
-        <text class="t-off" x="704" y="928">afficher · tabular_review · tabular_review_index</text>
+        <text class="t-title t-mcp" x="306" y="938">MCP piecemaker</text>
+        <text class="t-note" x="306" y="958">retiré par défaut, remplacé par pm</text>
+        <text class="t-off" x="560" y="936">conversion · sql · raisonnement · suivi</text>
+        <text class="t-off" x="560" y="956">afficher · tabular_review · tabular_review_index</text>
       </svg>
     </div>
     <figcaption>La ligne Légifrance ne traverse pas la bande des hooks : leurs filtres visent <code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Bash</code> et <code>Write</code>, pas les outils MCP. Le moteur va chercher le skill : le skill n'appelle ni le moteur ni un outil. Les commandes <code>docx</code> viennent de <code>docx --help</code>, version 0.24.0.</figcaption>
@@ -254,12 +211,12 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <h2>Où chaque moteur trouve ses outils</h2>
       <div class="scroll"><table>
         <tr><th>Élément</th><th>Claude</th><th>Codex</th><th>Mistral</th></tr>
-        <tr><td>MCP legifrance</td><td><code>.mcp.json</code></td><td><code>.codex/config.toml</code></td><td><code>.vibe/config.toml</code></td></tr>
-        <tr><td>Skills du dossier</td><td><code>.claude/skills</code></td><td><code>.agents/skills</code></td><td><code>.agents/skills</code>, outil <code>skill</code></td></tr>
-        <tr><td>Skills globaux</td><td><code>~/.claude</code></td><td><code>~/.codex/skills</code></td><td><code>~/.vibe/skills</code>, <code>~/.agents/skills</code> : lus, mais l'installateur n'y écrit rien</td></tr>
-        <tr><td>Sous-agents</td><td><code>~/.claude</code></td><td><code>.codex/agents</code>, depuis la Bibliothèque seulement</td><td><code>.vibe/agents</code>, depuis la Bibliothèque seulement</td></tr>
+        <tr><td class="c-mcp">MCP legifrance</td><td><code>.mcp.json</code></td><td><code>.codex/config.toml</code></td><td><code>.vibe/config.toml</code></td></tr>
+        <tr><td class="c-skill">Skills du dossier</td><td><code>.claude/skills</code></td><td><code>.agents/skills</code></td><td><code>.agents/skills</code>, outil <code>skill</code></td></tr>
+        <tr><td class="c-skill">Skills globaux</td><td><code>~/.claude</code></td><td><code>~/.codex/skills</code></td><td><code>~/.vibe/skills</code>, <code>~/.agents/skills</code> : lus, mais l'installateur n'y écrit rien</td></tr>
+        <tr><td class="c-agent">Sous-agents</td><td><code>~/.claude</code></td><td><code>.codex/agents</code>, depuis la Bibliothèque seulement</td><td><code>.vibe/agents</code>, depuis la Bibliothèque seulement</td></tr>
         <tr><td>Hooks</td><td><code>~/.claude/settings.json</code></td><td><code>~/.codex/hooks.json</code></td><td>en code, <code>mistral-sdk/tools.ts</code></td></tr>
-        <tr><td>pm, docx</td><td>Bash</td><td>Bash</td><td>Bash</td></tr>
+        <tr><td class="c-skill">pm, docx</td><td>Bash</td><td>Bash</td><td>Bash</td></tr>
       </table></div>
     </section>
 
@@ -291,10 +248,10 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     <section class="card">
       <h2>Skills réservés au développement</h2>
       <ul>
-        <li><code>verifieur-raisonnement</code> : cadre de <code>pm raisonnement</code> et <code>pm acte</code>.</li>
-        <li><code>backend-module-standards</code> : architecture de <code>server/</code>.</li>
-        <li><code>frontend-module-standards</code> : architecture de <code>src/</code>.</li>
-        <li><code>electron-cloudcli</code> : packaging, installation, mises à jour.</li>
+        <li><code class="c-skill">verifieur-raisonnement</code> : cadre de <code>pm raisonnement</code> et <code>pm acte</code>.</li>
+        <li><code class="c-skill">backend-module-standards</code> : architecture de <code>server/</code>.</li>
+        <li><code class="c-skill">frontend-module-standards</code> : architecture de <code>src/</code>.</li>
+        <li><code class="c-skill">electron-cloudcli</code> : packaging, installation, mises à jour.</li>
       </ul>
     </section>
 
@@ -320,7 +277,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <ul>
         <li><strong>Code résiduel.</strong> <code>handlers.py</code> garde <code>Build_Research_Corpus</code>, absent du registre. Le hook <code>track-legifrance-reads</code> dépend du marqueur que ce corpus écrit.</li>
       </ul>
-      <p>Les écarts sur <code>recherche-juridique</code>, <code>legal-code</code>, <code>suivi</code>, <code>FILE.yaml</code> et <code>verificateur-anonymisation</code> sont corrigés. Les liens morts sont retirés de cette copie.</p>
+      <p>Les écarts sur <code class="c-skill">recherche-juridique</code>, <code class="c-skill">legal-code</code>, <code>suivi</code>, <code>FILE.yaml</code> et <code>verificateur-anonymisation</code> sont corrigés. Les liens morts sont retirés de cette copie.</p>
     </section>
   </div>
 </div>
