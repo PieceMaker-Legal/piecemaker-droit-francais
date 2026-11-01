@@ -2,12 +2,59 @@
 
 Essais du 1er novembre 2026, sur MacBook Air M1 avec 8 Gio de RAM.
 Le profil retenu privilégie le Markdown final : détection limitée à 3 200 pixels, lot de reconnaissance d’une ligne et dilatation activée.
-Les quatorze configurations utilisent les mêmes images à 300 DPI et les mêmes références figées.
-Onze configurations terminent les treize pages. Les trois autres rencontrent la protection mémoire.
+La première campagne compare quatorze configurations avec les mêmes images à 300 DPI et les mêmes références figées.
+Dans cette première campagne, onze configurations terminent les treize pages. Les trois autres rencontrent la protection mémoire.
 
 Le profil retenu donne 80 écarts de caractères dans le Markdown du texte, contre 132 avec le profil initial.
 La validation avec le worker Python réel de PieceMaker termine les treize pages avec un pic observé de **2,54 Go**.
 Le profil initial s’arrête sur les deux tableaux après dépassement du plafond mémoire.
+
+## Contrôle des seuils propres au modèle Small
+
+Un second passage compare trois profils sur les treize mêmes pages, soit 39 traitements de page réussis.
+Le témoin reprend les paramètres OCR de `main`. Ses treize sorties reproduisent exactement les textes, boîtes et scores de la première campagne.
+
+Le [fichier officiel du détecteur Small](https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det_onnx/resolve/28fe5895c24fd108c19eb3e8479f4ab385fbfc62/inference.yml) fournit `thresh=0.2`, `box_thresh=0.45` et `unclip_ratio=1.4`.
+Les deux nouveaux profils appliquent cette combinaison exacte, sans puis avec dilatation.
+Le témoin conserve `0.3 / 0.6 / 1.5`, avec dilatation.
+Les deux autres profils conservent le détecteur à 3 200 pixels, le lot d’une ligne, les deux threads CPU et les options mémoire.
+Le rendu reste fixé à 300 DPI. Les quatre fichiers officiels des modèles sont revérifiés par SHA-256.
+Les versions de bibliothèques et les empreintes du code sont identiques pour les 39 passages.
+Ce test compare des combinaisons de paramètres. Il ne sépare pas l’effet de chaque seuil.
+
+| Profil | Écarts texte JSON / 18 436 | Écarts texte Markdown / 18 436 |
+| --- | ---: | ---: |
+| Actuel dans main | 71 | 80 |
+| Seuils Small, sans dilatation | 116 | 161 |
+| Seuils Small, avec dilatation | 75 | 104 |
+
+| Profil | A : JSON / 699 | A : Markdown / 699 | A : bien placés / 699 | B : JSON / 961 | B : Markdown / 961 | B : bien placés / 961 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Actuel dans main | 675 | 675 | 281 | 879 | 870 | 149 |
+| Seuils Small, sans dilatation | 673 | 673 | 280 | 885 | 854 | 149 |
+| Seuils Small, avec dilatation | 672 | 672 | 281 | 879 | 869 | 149 |
+
+Les nombres exacts gardent leur ponctuation. Les colonnes Markdown comptent les valeurs présentes dans les cellules produites.
+Le placement reste un contrôle distinct. Les limites du comparateur de grille sont décrites plus bas.
+
+| Profil | RAM texte, Go | RAM A, Go | RAM B, Go | RSS maximal, Go | Temps total, s | Temps OCR seul, s |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Actuel dans main | 2,15 | 2,06 | 2,27 | 1,31 | 299,9 | 223,6 |
+| Seuils Small, sans dilatation | 2,15 | 2,10 | 2,38 | 1,35 | 256,2 | 189,5 |
+| Seuils Small, avec dilatation | 2,15 | 2,23 | 2,39 | 1,43 | 258,9 | 187,8 |
+
+Ces pics RAM portent sur les workers recevant les PNG prérendus à 300 DPI. Ils comprennent la mémoire compressée de macOS.
+Le temps total inclut les démarrages Python et la compilation Markdown. Le rendu PDF et les téléchargements sont exclus.
+Une seule exécution par profil est chronométrée. Les applications ouvertes et l’ordonnancement du système influencent les durées.
+Les variantes Small terminent plus vite lors de cette exécution, avec une qualité Markdown inférieure au témoin.
+Le pic de 2,54 Go indiqué plus haut provient du contrôle séparé qui refait le rendu des PDF dans le worker réel.
+
+**Décision mesurée : conserver les paramètres OCR actuels de main.**
+Le témoin donne moins d’écarts de texte, davantage de nombres exacts présents dans chaque tableau Markdown et un pic RAM observé inférieur.
+Les seuils Small sans dilatation reconnaissent six nombres bruts supplémentaires dans le tableau B, mais leur Markdown en conserve seize de moins.
+Aucun paramètre de production, modèle, paquet Python, téléchargement ou compilateur Markdown n’est modifié après ce contrôle.
+Le script de benchmark reçoit seulement les deux profils Small manquants. Le nombre de configurations distinctes comparées passe de 14 à 16.
+Les résultats détaillés de ce contrôle restent dans `/private/tmp/piecemaker-small-specific-20261101`.
 
 ## Configuration intégrée
 
@@ -176,4 +223,5 @@ python tune-small.py --production /chemin/piecemaker/server/piecemaker/vendor/we
 ```
 
 Remplacer le profil par `integrated` vérifie le worker actuellement présent dans le clone PieceMaker.
+Le contrôle des seuils Small utilise `--only det3200-b1-dilation,det3200-b1-small-post,det3200-b1-small-post-dilation`, dans un répertoire neuf.
 Les résultats privés sont conservés dans `/private/tmp/piecemaker-small-tuning-20261101-pages` et `/private/tmp/piecemaker-small-integrated-20261101`.
