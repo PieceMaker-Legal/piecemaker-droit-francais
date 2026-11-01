@@ -23,14 +23,22 @@ function highlightedIdentityAt(x: number, y: number): string | null {
   return null;
 }
 
-function selectionInScope(): string | null {
+type ScreenRect = { left: number; right: number; top: number; bottom: number };
+
+type ScopedSelection = { text: string; range: Range; element: Element };
+
+const MENU_GAP = 4;
+const HOVER_MARGIN = 6;
+
+function selectionInScope(): ScopedSelection | null {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
   const text = selection.toString().replace(/\s+/g, ' ').trim();
   if (text.length < 2) return null;
-  const container = selection.getRangeAt(0).commonAncestorContainer;
+  const range = selection.getRangeAt(0);
+  const container = range.commonAncestorContainer;
   const element = container instanceof Element ? container : container.parentElement;
-  return element?.closest(SCOPE_SELECTOR) ? text : null;
+  return element?.closest(SCOPE_SELECTOR) ? { text, range, element } : null;
 }
 
 function closeMenu(): void {
@@ -41,35 +49,52 @@ function menuItem(label: string, onSelect: () => void): HTMLButtonElement {
   const item = document.createElement('button');
   item.type = 'button';
   item.setAttribute('role', 'menuitem');
-  item.className = 'w-full rounded-md px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground';
+  item.className = 'rounded-md px-2 py-1 hover:bg-accent hover:text-accent-foreground';
   item.textContent = label;
   item.addEventListener('click', () => {
     closeMenu();
+    window.getSelection()?.removeAllRanges();
     onSelect();
   });
   return item;
 }
 
-function openMenu(x: number, y: number, text: string, sessionId: string | null): void {
+function openMenu({ text, range, element }: ScopedSelection): void {
   closeMenu();
   const menu = document.createElement('div');
   menu.id = MENU_ID;
   menu.setAttribute('role', 'menu');
-  menu.className = 'fixed z-[80] min-w-[180px] rounded-lg border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg';
-  const anonymize = menuItem('Anonymiser', () => openInEditor(identityPath('add', text)));
-  menu.appendChild(anonymize);
+  menu.className = 'fixed z-[80] flex items-center gap-1 whitespace-nowrap rounded-lg border border-border bg-popover p-1 text-xs text-popover-foreground shadow-lg';
+  const chat = element.closest(CHAT_SELECTOR);
+  const sessionId = chat ? chatSessionId(chat) : null;
   if (sessionId) {
     menu.appendChild(menuItem('Démarrer une conversation annexe', () => void startSideConversation(sessionId, text)));
   }
+  menu.appendChild(menuItem('Anonymiser', () => openInEditor(identityPath('add', text))));
   document.body.appendChild(menu);
-  menu.style.left = `${Math.min(x, window.innerWidth - menu.offsetWidth)}px`;
-  menu.style.top = `${Math.min(y, window.innerHeight - menu.offsetHeight)}px`;
-  anonymize.focus();
+  const selected = range.getBoundingClientRect();
+  menu.style.left = `${Math.max(0, Math.min(selected.left, window.innerWidth - menu.offsetWidth))}px`;
+  menu.style.top = `${Math.max(0, selected.top - menu.offsetHeight - MENU_GAP)}px`;
+}
+
+function isNear(rect: ScreenRect, x: number, y: number, margin: number): boolean {
+  return x >= rect.left - margin && x <= rect.right + margin && y >= rect.top - margin && y <= rect.bottom + margin;
+}
+
+function paintSelectionMenu(x: number, y: number): void {
+  const menu = document.getElementById(MENU_ID);
+  const selection = selectionInScope();
+  if (menu) {
+    if (isNear(menu.getBoundingClientRect(), x, y, HOVER_MARGIN)) return;
+    if (selection && isNear(selection.range.getBoundingClientRect(), x, y, HOVER_MARGIN)) return;
+    closeMenu();
+  }
+  if (selection && Array.from(selection.range.getClientRects()).some((rect) => isNear(rect, x, y, 0))) openMenu(selection);
 }
 
 export function startIdentityInteractions(): () => void {
   let frame = 0;
-  let pointer: { x: number; y: number; target: EventTarget | null } | null = null;
+  let pointer: { x: number; y: number; target: EventTarget | null; pressed: boolean } | null = null;
   let hovered: HTMLElement | null = null;
 
   const scopeOf = (target: EventTarget | null): HTMLElement | null =>
@@ -85,15 +110,6 @@ export function startIdentityInteractions(): () => void {
     openInEditor(identityPath('open', text));
   };
 
-  const contextMenu = (event: MouseEvent) => {
-    if (!scopeOf(event.target)) return;
-    const text = selectionInScope();
-    if (!text) return;
-    event.preventDefault();
-    const chat = event.target instanceof Element ? event.target.closest(CHAT_SELECTOR) : null;
-    openMenu(event.clientX, event.clientY, text, chat ? chatSessionId(chat) : null);
-  };
-
   const paintCursor = () => {
     frame = 0;
     if (!pointer) return;
@@ -107,10 +123,11 @@ export function startIdentityInteractions(): () => void {
       scope.style.cursor = 'pointer';
       hovered = scope;
     }
+    if (!pointer.pressed) paintSelectionMenu(pointer.x, pointer.y);
   };
 
   const move = (event: MouseEvent) => {
-    pointer = { x: event.clientX, y: event.clientY, target: event.target };
+    pointer = { x: event.clientX, y: event.clientY, target: event.target, pressed: event.buttons !== 0 };
     if (!frame) frame = requestAnimationFrame(paintCursor);
   };
 
@@ -121,8 +138,8 @@ export function startIdentityInteractions(): () => void {
   };
 
   document.addEventListener('click', click);
-  document.addEventListener('contextmenu', contextMenu);
   document.addEventListener('mousemove', move, { passive: true });
+  document.addEventListener('mouseup', move);
   document.addEventListener('mousedown', dismiss, true);
   document.addEventListener('keydown', dismiss);
   window.addEventListener('blur', closeMenu);
@@ -130,8 +147,8 @@ export function startIdentityInteractions(): () => void {
 
   return () => {
     document.removeEventListener('click', click);
-    document.removeEventListener('contextmenu', contextMenu);
     document.removeEventListener('mousemove', move);
+    document.removeEventListener('mouseup', move);
     document.removeEventListener('mousedown', dismiss, true);
     document.removeEventListener('keydown', dismiss);
     window.removeEventListener('blur', closeMenu);

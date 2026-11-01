@@ -17,10 +17,20 @@ const selectSigne = () => {
   const selection = document.createRange();
   selection.setStart(word, 14);
   selection.setEnd(word, 19);
+  const rect = { left: 40, right: 60, top: 40, bottom: 60 };
+  selection.getClientRects = () => [rect] as unknown as DOMRectList;
+  selection.getBoundingClientRect = () => rect as DOMRect;
   window.getSelection()?.addRange(selection);
 };
 
-const openContextMenu = () => pane.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 }));
+const movePointer = async (target: Element, init: MouseEventInit) => {
+  target.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, ...init }));
+  await new Promise(requestAnimationFrame);
+};
+
+const hoverSelection = (init: MouseEventInit = {}) => movePointer(pane, { clientX: 50, clientY: 50, ...init });
+
+const menuLabels = () => Array.from(document.querySelectorAll('#piecemaker-identity-menu button'), (button) => button.textContent);
 
 const sideConversationItem = () => Array.from(document.querySelectorAll<HTMLButtonElement>('#piecemaker-identity-menu button'))
   .find((button) => button.textContent === 'Démarrer une conversation annexe');
@@ -71,15 +81,42 @@ describe('startIdentityInteractions', () => {
     expect(received).toEqual([]);
   });
 
-  it('propose d’anonymiser une sélection du chat par clic droit', () => {
+  it('propose d’anonymiser une sélection du chat au survol', async () => {
     selectSigne();
-    const menuEvent = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 });
-    pane.dispatchEvent(menuEvent);
-    expect(menuEvent.defaultPrevented).toBe(true);
+    await hoverSelection();
     const item = document.querySelector<HTMLButtonElement>('#piecemaker-identity-menu button');
     expect(item?.textContent).toBe('Anonymiser');
     item?.click();
     expect(received).toEqual([identityPath('add', 'signé')]);
+    expect(document.getElementById('piecemaker-identity-menu')).toBeNull();
+    expect(window.getSelection()?.isCollapsed).toBe(true);
+  });
+
+  it('place les boutons au-dessus de la sélection, Anonymiser en dernier, sans prendre le focus', async () => {
+    window.history.pushState(null, '', '/session/source-1');
+    selectSigne();
+    await hoverSelection();
+    const menu = document.getElementById('piecemaker-identity-menu');
+    expect(menuLabels()).toEqual(['Démarrer une conversation annexe', 'Anonymiser']);
+    expect(menu?.style.top).toBe('36px');
+    expect(menu?.contains(document.activeElement)).toBe(false);
+  });
+
+  it('garde le menu quand le pointeur le rejoint et le ferme quand il s’éloigne', async () => {
+    selectSigne();
+    await hoverSelection();
+    const menu = document.getElementById('piecemaker-identity-menu') as HTMLElement;
+    await movePointer(menu, { clientX: 0, clientY: 0 });
+    expect(document.getElementById('piecemaker-identity-menu')).not.toBeNull();
+    await movePointer(pane, { clientX: 300, clientY: 300 });
+    expect(document.getElementById('piecemaker-identity-menu')).toBeNull();
+  });
+
+  it('n’affiche rien hors de la sélection ni pendant qu’on sélectionne', async () => {
+    selectSigne();
+    await hoverSelection({ clientX: 300 });
+    expect(document.getElementById('piecemaker-identity-menu')).toBeNull();
+    await hoverSelection({ buttons: 1 });
     expect(document.getElementById('piecemaker-identity-menu')).toBeNull();
   });
 
@@ -87,7 +124,7 @@ describe('startIdentityInteractions', () => {
     window.history.pushState(null, '', '/session/source-1');
     vi.mocked(api.forkSession).mockResolvedValue(forkResponse(true, { data: { sessionId: 'fork-1' } }));
     selectSigne();
-    openContextMenu();
+    await hoverSelection();
     sideConversationItem()?.click();
     await vi.waitFor(() => expect(received).toEqual([sessionPath('fork-1')]));
     expect(api.forkSession).toHaveBeenCalledWith('source-1');
@@ -103,7 +140,7 @@ describe('startIdentityInteractions', () => {
     pane.replaceWith(sidePane);
     sidePane.appendChild(pane);
     selectSigne();
-    openContextMenu();
+    await hoverSelection();
     sideConversationItem()?.click();
     await vi.waitFor(() => expect(received).toEqual([sessionPath('fork-2')]));
     expect(api.forkSession).toHaveBeenCalledWith('fork-1');
@@ -116,29 +153,30 @@ describe('startIdentityInteractions', () => {
     const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     selectSigne();
-    openContextMenu();
+    await hoverSelection();
     sideConversationItem()?.click();
     await vi.waitFor(() => expect(alert).toHaveBeenCalledOnce());
     expect(window.location.pathname).toBe('/session/source-1');
   });
 
-  it('ne propose pas de conversation annexe sans session ouverte', () => {
+  it('ne propose pas de conversation annexe sans session ouverte', async () => {
     selectSigne();
-    openContextMenu();
+    await hoverSelection();
     expect(sideConversationItem()).toBeUndefined();
   });
 
-  it('ne propose pas de conversation annexe hors du chat', () => {
+  it('ne propose pas de conversation annexe hors du chat', async () => {
     window.history.pushState(null, '', '/session/source-1');
     pane.className = '';
     pane.setAttribute('data-piecemaker-identity-highlight', 'on');
     selectSigne();
-    openContextMenu();
+    await hoverSelection();
     expect(document.querySelector('#piecemaker-identity-menu')).not.toBeNull();
     expect(sideConversationItem()).toBeUndefined();
   });
 
-  it('laisse le menu natif sans sélection', () => {
+  it('laisse le menu natif au clic droit', () => {
+    selectSigne();
     const menuEvent = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
     pane.dispatchEvent(menuEvent);
     expect(menuEvent.defaultPrevented).toBe(false);
