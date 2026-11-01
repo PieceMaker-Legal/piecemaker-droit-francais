@@ -5,7 +5,7 @@ description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions)
 
 # PieceMaker
 
-L’application PieceMaker doit tourner. `pm` vise le dossier de la session, même lancé depuis un autre répertoire (`--dossier PATH` pour un autre) :
+`pm` vise le dossier de la session, même lancé depuis un autre répertoire (`--dossier PATH` pour un autre) :
 
 ```
 <cette-skill>/scripts/pm <outil> …
@@ -18,11 +18,11 @@ Avant d'utiliser un de ces outils, lisez sa référence dans `<cette-skill>/refe
 
 | Besoin | Outil | Référence |
 | --- | --- | --- |
-| Échéances, fiche `matter` | `pm suivi` | `suivi.md` |
+| Suivi des dates, fiche `matter` | `pm suivi` | `suivi.md` |
 | Demande transmise par le tableau, état des dossiers | `pm suivi lire`, `pm suivi ecrire` | `tableau.md` |
 | Analyse de pièces, recherche de jurisprudence | `pm tabular_review` | `tabular.md` |
 | Lecture de toutes les pièces, chronologie, tri, dates des pièces | `pm tabular_review_index` | `index.md` |
-| Lire, pointer ou fermer un volet | `pm afficher` | `volets.md` |
+| Lire, pointer ou fermer un volet dans l'interface user | `pm afficher` | `volets.md` |
 | Tamponner et numéroter les pièces, bordereau | `pm bordereau` | `bordereau.md` |
 
 ## Volets
