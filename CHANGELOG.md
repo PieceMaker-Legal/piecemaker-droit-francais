@@ -3,6 +3,39 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.2.0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.1.0...v2.2.0) (2026-11-01)
+
+### New Features
+
+* **chat:** afficher les actions de sélection au survol ([5759aa5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5759aa58471fcbd21c6c9cc6e2a6bfe1c9f714f2))
+* **chat:** anonymiser ou démarrer une conversation annexe depuis une sélection ([2e480db](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2e480db1b5636c584013d7b87963d685348f6867))
+* **chat:** masquer l'historique copié dans le volet de conversation annexe ([0252521](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0252521e2fd3add2add005f817e6dee5ceed120d))
+* **chat:** ouvrir la conversation annexe dans le volet latéral ([a60ea23](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a60ea23412b32dd7b55446cf4816ec78599ba8b8))
+* **docx:** envoyer un commentaire au chat ouvert ([9793242](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9793242fccb8ee2f93c674ef2ff54cc51339b35a))
+* **mistral:** forker une conversation du SDK ([cc8c528](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/cc8c528c1d4e873f54f25835e8d6061edbe163fd))
+* **style-cabinet:** configurer le style Word et l'injecter dans LibreOffice ([ca4cfb5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ca4cfb5e27069492ad0d8b9864bfcd3ed51287f9))
+* **style-cabinet:** finaliser le skill et ses templates ([9ecf0b2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9ecf0b2ffadce59ad4e8be30d320418664ceaec8))
+* **style-cabinet:** remplacer le template de conclusions par celui d'assignation ([9c59155](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/9c591559ca95977cbe9f6b096ebb077dec94349d))
+
+### Bug Fixes
+
+* **desktop:** authentifier la recherche de Python dans la release Windows ([6719086](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6719086b984263a8dfffa9cd647999ab42419b31))
+* **docx:** signaler les échecs des questions en commentaire ([dec0fef](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/dec0fef83247307c4c2f1feb90ec76187a6b5f90))
+* **skills:** retirer de legal-code le renvoi au skill supprimé ([f8407c2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f8407c2da640ba8e1f0c975407ed9e24a5f5041a))
+
+### Performance
+
+* **ocr:** calibrer Small sur trois corpus à 300 DPI ([6b7311b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6b7311b6789045d99019991f38f1c9c7c8d77678))
+
+### Documentation
+
+* interdire les captures d'écran pour tester ([bcb8358](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/bcb8358c600c6d39ae5a9c4212181b229d34e296))
+* **outils:** ajouter style-docx.py à la carte ([67a6614](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/67a6614997c6e3a43b67124b0d20dce76fe5bde1))
+
+### Maintenance
+
+* **guard:** ajouter des termes à la liste hachée ([4ffd814](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4ffd8140cb4b38699d534e0be41aca98a6d013d9))
+
 ## [2.1.0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.59...v2.1.0) (2026-11-01)
 
 ### New Features
