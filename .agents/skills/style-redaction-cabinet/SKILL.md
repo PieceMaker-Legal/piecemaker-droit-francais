@@ -5,6 +5,14 @@ description: "Appliquer le style de rédaction du cabinet à tout e-mail, citati
 
 # Style rédaction cabinet
 
+## Style Word
+
+Par défaut, le style Word est à configurer. Avant de créer un `.docx`, lance `python3 <dossier de ce skill>/scripts/style-docx.py etat`, puis suis sa réponse.
+
+Crée tout `.docx` avec `python3 <dossier de ce skill>/scripts/style-docx.py creer SORTIE.docx --markdown-file F`. Pour un acte avec template, ajoute `--depuis <template>`. N'utilise pas `docx create`.
+
+## Documents
+
 | Style | Règles | Modèle |
 | --- | --- | --- |
 | E-mails | [styles/e-mails.md](styles/e-mails.md) | Aucun |

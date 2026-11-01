@@ -1,0 +1,21 @@
+{
+  "police": "Garamond",
+  "corps": { "taille": 11, "alignement": "justifie", "interligne": 1, "avant": 0, "apres": 6, "retrait_gauche_cm": 0, "premiere_ligne_cm": 0 },
+  "page": { "marges_cm": { "haut": 2.5, "droite": 2.75, "bas": 2.5, "gauche": 2.5 }, "pagination": "page/total" },
+  "titre": { "taille": 11, "gras": true, "majuscules": true, "alignement": "centre", "avant": 0, "apres": 24, "encadre": true, "fond": "F2F2F2" },
+  "sous_titre": { "taille": 11, "gras": true, "alignement": "centre", "avant": 0, "apres": 12 },
+  "citation": { "taille": 11, "alignement": "justifie", "avant": 0, "apres": 6, "retrait_gauche_cm": 1.27 },
+  "note": { "taille": 10 },
+  "niveaux": [
+    { "format": "romain_maj", "modele": "%1.", "taille": 11, "gras": true, "majuscules": true, "alignement": "justifie", "avant": 12, "apres": 12, "retrait_gauche_cm": 0.635, "suspendu_cm": 0.635 },
+    { "format": "decimal", "modele": "%1.%2.", "taille": 11, "gras": true, "majuscules": true, "alignement": "justifie", "avant": 2, "apres": 12, "retrait_gauche_cm": 1.397, "suspendu_cm": 0.762 },
+    { "format": "decimal", "modele": "%1.%2.%3.", "taille": 11, "gras": true, "alignement": "justifie", "avant": 2, "apres": 12, "retrait_gauche_cm": 2.159, "suspendu_cm": 0.889 },
+    { "format": "decimal", "modele": "%1.%2.%3.%4.", "taille": 11, "gras": true, "alignement": "justifie", "avant": 2, "apres": 12, "retrait_gauche_cm": 3.048, "suspendu_cm": 1.143 },
+    { "format": "decimal", "modele": "%1.%2.%3.%4.%5.", "taille": 11, "gras": true, "alignement": "justifie", "avant": 2, "apres": 12, "retrait_gauche_cm": 3.937, "suspendu_cm": 1.397 },
+    { "format": "decimal", "modele": "%1.%2.%3.%4.%5.%6.", "taille": 11, "gras": true, "alignement": "justifie", "avant": 2, "apres": 12, "retrait_gauche_cm": 4.826, "suspendu_cm": 1.651 },
+    { "format": "decimal", "modele": "%1.%2.%3.%4.%5.%6.%7.", "taille": 11, "gras": true, "alignement": "justifie", "avant": 2, "apres": 12, "retrait_gauche_cm": 5.715, "suspendu_cm": 1.905 },
+    { "format": "decimal", "modele": "%1.%2.%3.%4.%5.%6.%7.%8.", "taille": 11, "gras": true, "alignement": "justifie", "avant": 2, "apres": 12, "retrait_gauche_cm": 6.604, "suspendu_cm": 2.159 },
+    { "format": "decimal", "modele": "%1.%2.%3.%4.%5.%6.%7.%8.%9.", "taille": 11, "gras": true, "alignement": "justifie", "avant": 2, "apres": 12, "retrait_gauche_cm": 7.62, "suspendu_cm": 2.54 }
+  ],
+  "ouverture": { "appliquer_aux_documents_existants": true }
+}
