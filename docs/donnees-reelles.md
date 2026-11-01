@@ -16,7 +16,7 @@ Un incident a imposé de réécrire tout l'historique. Cette règle existe pour 
 
 | Couche | Quand | Fichier |
 | --- | --- | --- |
-| `pre-push` | avant tout push : messages, lignes ajoutées et chemins de chaque commit non encore distant | `.husky/pre-push` |
+| `pre-push` | avant tout push : auteurs et e-mails, messages, lignes ajoutées et chemins de chaque commit non encore distant | `.husky/pre-push` |
 | CI | à chaque push et pull request | `.github/workflows/guard-donnees-reelles.yml` |
 | Session Claude Code | avant toute écriture dans le dépôt, `git commit/tag/push` | `.claude/settings.local.json` (non versionné) |
 

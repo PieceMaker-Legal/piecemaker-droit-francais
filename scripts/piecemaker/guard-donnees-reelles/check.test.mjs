@@ -164,3 +164,39 @@ test('add enregistre des termes hachés par la ligne de commande', () => {
   assert.equal(readList(file).terms.length, 2);
   assert.equal(fs.readFileSync(file, 'utf8').toLowerCase().includes('frobnitz'), false);
 });
+
+test('add refuse une option inconnue sans rien enregistrer', () => {
+  const file = path.join(temporaryDirectory(), 'hashes.json');
+  const result = spawnSync('node', [CHECK, 'add', '--inconnue'], {
+    env: { ...process.env, GUARD_HASH_FILE: file },
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 1);
+  assert.equal(readList(file).terms.length, 0);
+});
+
+test('scanRevisions repère un auteur et un e-mail de commit interdits', async () => {
+  const { matcher } = matcherFor(['zorglub']);
+  const cwd = repositoryWithRemoteBase();
+  const previous = process.cwd();
+  process.chdir(cwd);
+  try {
+    fs.writeFileSync(path.join(cwd, 'b.txt'), 'texte neutre\n');
+    git(cwd, 'add', '.');
+    git(cwd, 'commit', '-q', '-m', 'neutre', '--author=Test <zorglub@example.com>');
+    const findings = await scanRevisions(['HEAD', '--not', '--remotes=origin'], matcher);
+    assert.equal(findings.length, 1);
+    assert.match(findings[0].label, / auteur$/);
+  } finally {
+    process.chdir(previous);
+  }
+});
+
+test('le hook Claude ignore le dossier personnel dans une commande git', () => {
+  const account = path.basename(os.homedir());
+  const { matcher } = matcherFor([account]);
+  const inHome = { tool_name: 'Bash', tool_input: { command: `cd ${os.homedir()}/projet && git commit -m "feat"` } };
+  const inMessage = { tool_name: 'Bash', tool_input: { command: `git commit -m "feat ${account}"` } };
+  assert.equal(scanClaudeToolUse(inHome, matcher).length, 0);
+  assert.equal(scanClaudeToolUse(inMessage, matcher).length, 1);
+});

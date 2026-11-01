@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
@@ -125,7 +126,7 @@ export function scanClaudeToolUse(payload, matcher = createMatcher()) {
   const toolInput = payload.tool_input || {};
   if (payload.tool_name === 'Bash') {
     const command = typeof toolInput.command === 'string' ? toolInput.command : '';
-    return GIT_WRITE_COMMAND.test(command) ? scanText(command, 'commande git', matcher) : [];
+    return GIT_WRITE_COMMAND.test(command) ? scanText(command.replaceAll(os.homedir(), '~'), 'commande git', matcher) : [];
   }
   return scanFileEdit(toolInput, projectDir, matcher);
 }
@@ -145,14 +146,14 @@ export async function scanRevisions(revisionArgs, matcher = createMatcher()) {
   const state = { commit: '', inMessage: false, path: '', messageLine: 0 };
   const args = [
     'log', '-p', '-U0', '--no-color', '--no-ext-diff', '--no-renames',
-    `--format=${COMMIT_START}%h%n%B${MESSAGE_END}`, ...revisionArgs,
+    `--format=${COMMIT_START}%h%n%an <%ae>%n%cn <%ce>%n%B${MESSAGE_END}`, ...revisionArgs,
   ];
   await streamGitLog(args, (line) => {
     if (line.startsWith(COMMIT_START)) {
       state.commit = line.slice(1);
       state.inMessage = true;
       state.path = '';
-      state.messageLine = 0;
+      state.messageLine = -2;
       return;
     }
     if (state.inMessage) {
@@ -161,7 +162,11 @@ export async function scanRevisions(revisionArgs, matcher = createMatcher()) {
         return;
       }
       state.messageLine += 1;
-      if (matcher(line)) findings.push({ label: `${state.commit} message`, line: state.messageLine });
+      if (matcher(line)) {
+        findings.push(state.messageLine <= 0
+          ? { label: `${state.commit} auteur`, line: 0 }
+          : { label: `${state.commit} message`, line: state.messageLine });
+      }
       return;
     }
     if (line.startsWith('diff --git ')) {
@@ -218,6 +223,8 @@ async function runClaudeHook() {
 async function runAdd(argv) {
   const exact = argv.includes('--exact');
   const operands = argv.filter((argument) => argument !== '--exact');
+  const unknownOption = operands.find((argument) => argument.startsWith('-') && argument !== '-');
+  if (unknownOption) throw new Error(`Option inconnue : ${unknownOption}`);
   const terms = operands.includes('-')
     ? (await readStdin()).split('\n').map((term) => term.trim()).filter(Boolean)
     : operands;
