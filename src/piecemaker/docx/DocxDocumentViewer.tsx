@@ -9,6 +9,8 @@ import fr from '@eigenpal/docx-editor-i18n/fr';
 import './docxDocumentViewer.css';
 
 import { useAuth } from '@/modules/auth';
+import { CommentQuestionSlots } from '@/piecemaker/docx/CommentQuestionSlots';
+import { useCommentQuestions } from '@/piecemaker/docx/useCommentQuestions';
 import { useCitationPassage } from '@/piecemaker/citations/citationPassage';
 import { clearDocxCitationHighlight, highlightCitationInDocx } from '@/piecemaker/citations/docxPassage';
 import { api, authenticatedFetch } from '@/shared/api';
@@ -355,6 +357,19 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     saveTimerRef.current = window.setTimeout(() => { void save(); }, SAVE_DEBOUNCE_MS);
   }, [save]);
 
+  const commentQuestions = useCommentQuestions({
+    projectId,
+    filePath: loaded?.filePath,
+    documentName: loaded?.filePath.split(/[\\/]/).pop() || file.name,
+    editorRef,
+    onAnswered: () => {
+      userEditingRef.current = true;
+      setCommentsOpen(true);
+      scheduleSave();
+    },
+    onRefused: setError,
+  });
+
   const close = async () => { if (await flush()) onClose(); };
 
   const reloadExternal = async () => {
@@ -533,6 +548,8 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
           commentsSidebarOpen={commentsOpen}
           onCommentsSidebarOpenChange={handleCommentsSidebarOpenChange}
           onCommentsChange={(comments) => setCommentCount(countThreads(comments))}
+          onCommentAdd={commentQuestions.askComment}
+          onCommentDelete={commentQuestions.forgetComment}
           renderLogo={() => (
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => setOutlineOpen((open) => !open)} className={panelButtonClass(outlineOpen)} aria-pressed={outlineOpen} aria-label="Table des matières" title="Table des matières"><ListTree className="h-4 w-4" /></button>
@@ -546,6 +563,16 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">{error ? file.path : 'Chargement…'}</div>
+      )}
+      {loaded && (
+        <CommentQuestionSlots
+          containerRef={containerRef}
+          providerLabel={commentQuestions.providerLabel}
+          askEnabled={commentQuestions.askEnabled}
+          onAskEnabledChange={commentQuestions.changeAskEnabled}
+          questions={commentQuestions.questions}
+          partialAnswers={commentQuestions.partialAnswers}
+        />
       )}
       {revisionHint && (
         <div className="docx-revision-shortcut-hint" style={{ left: revisionHint.x, top: revisionHint.y }} role="tooltip">

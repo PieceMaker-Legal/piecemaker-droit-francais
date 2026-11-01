@@ -31,6 +31,7 @@ import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { useSlashCommandPills } from '@/piecemaker/chat/useSlashCommandPills';
+import { useDocxCommentQuestions } from '@/piecemaker/chat/useDocxCommentQuestions';
 import { prepareCommandMenuCommands } from '@/piecemaker/chat/prepareCommandMenuCommands';
 import { useContextSuggestion } from '@/modules/piecemaker-context-suggestions';
 
@@ -271,6 +272,8 @@ function ChatInterface({
     setPendingPermissionRequests,
     resolvePermissionModeForProvider,
   });
+
+  useDocxCommentQuestions({ sessionId: selectedSession?.id, input, setInput, queuedDraft, handleSubmit });
 
   const { renderInputWithCommandPills } = useSlashCommandPills({
     slashCommands,

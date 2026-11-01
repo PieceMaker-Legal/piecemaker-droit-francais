@@ -21,6 +21,10 @@ vi.mock('@/shared/context/ThemeContext', () => ({
   useTheme: () => ({ isDarkMode: false }),
 }));
 
+vi.mock('@/modules/project-workspace/context/ProjectsStateContext', () => ({
+  useOptionalProjectMainState: () => ({ selectedSession: null }),
+}));
+
 vi.mock('@/modules/auth', () => ({
   useAuth: () => ({ user: { username: 'Jean Dupont' } }),
 }));

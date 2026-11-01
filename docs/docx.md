@@ -58,6 +58,35 @@ Fonctionnement :
   `.docx`, chemin résolu contre la racine du projet (même contrôle lexical que
   le file-tree CloudCLI).
 
+### Question à l'assistant depuis un commentaire
+
+Une case « Envoyer à Claude / Codex / Mistral » s'ajoute au formulaire de
+commentaire quand un chat du même dossier est ouvert. Le choix est mémorisé.
+
+| Fichier | Rôle |
+| --- | --- |
+| `src/piecemaker/docx/CommentQuestionSlots.tsx` | Case et réponse en cours, par portail dans le DOM de la librairie |
+| `src/piecemaker/docx/useCommentQuestions.ts` | Envoi, suivi du tour, réponse dans le fil |
+| `src/piecemaker/docx/commentQuestions.ts` | Stockage local, prompt, lecture du tour |
+| `src/piecemaker/chat/useDocxCommentQuestions.ts` | Passage par le composeur du chat |
+| `src/modules/chat/ChatInterface.tsx` | Un import et un appel de hook |
+
+- La question passe par le composeur : même modèle, mêmes permissions, même file
+  d'attente. Le chat refuse l'envoi si un message y attend déjà.
+- Le prompt contient le passage commenté, son paragraphe et la question, sans
+  consigne. L'assistant répond dans la session ; il n'a rien à écrire au document.
+- Un script retrouve le tour par le texte du prompt, envoyé après la question. Le
+  sondage a lieu toutes les 3 s, seulement tant qu'une question est en attente.
+- `protect-originals.mjs` autorise sans demande, pour Claude, les lectures `docx`
+  d'un document du dossier (`read`, `find`, `outline`, `wc`, `comments list`).
+  Pendant une autre demande d'autorisation, la carte affiche seulement « répond… ».
+- Pendant le tour, le texte partiel s'affiche dans la carte du commentaire. À la
+  fin, le texte de l'assistant devient une réponse du fil, signée du fournisseur.
+  Il est donc enregistré dans le `.docx` et visible dans Word.
+- La question en attente survit à un rechargement (`localStorage`).
+- Limites : pas de case sur une réponse dans un fil ; seul le texte de
+  l'assistant est repris, sans les outils ; le Markdown reste brut.
+
 ## 3. Défauts connus (audit du 2026-09-26)
 
 1. **Écriture sans garde sur les pièces originales.** L'enregistrement

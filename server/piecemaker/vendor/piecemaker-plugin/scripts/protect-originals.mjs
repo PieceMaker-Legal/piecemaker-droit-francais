@@ -52,6 +52,15 @@ function deny(reason) {
   };
 }
 
+function allow() {
+  return {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'allow',
+    },
+  };
+}
+
 function quotedForShell(value) {
   return `"${value.replace(/["$`\\]/g, '\\$&')}"`;
 }
@@ -207,6 +216,35 @@ function gitHistoryReason(command, cwd) {
   return null;
 }
 
+const SAFE_SHELL_TOKEN = /"[^"$`\\\n]*"|'[^'\n]*'|&&|[^\s"'$`\\;|&<>()*?{}\[\]~!#=]+/g;
+const DOCX_READ_VERBS = new Set(['read', 'find', 'outline', 'wc']);
+
+function docxReadArguments(words) {
+  if (words[0] !== 'docx') return null;
+  if (DOCX_READ_VERBS.has(words[1])) return words.slice(2);
+  return words[1] === 'comments' && words[2] === 'list' ? words.slice(3) : null;
+}
+
+function isCaseDocxRead(words, cwd) {
+  const args = docxReadArguments(words);
+  if (!args || args.some((arg) => arg.startsWith('--batch'))) return false;
+  const files = args.map((arg) => absolutePath(arg, cwd)).filter((target) => statSafe(target));
+  return files.length > 0 && files.every((target) => target.toLowerCase().endsWith('.docx') && locateProjectCase(target));
+}
+
+function isDocxReadCommand(command, cwd) {
+  const text = String(command || '');
+  if (!text || text.length > MAX_COMMAND_LENGTH) return false;
+  if (text.replace(SAFE_SHELL_TOKEN, '').trim()) return false;
+  const commands = [[]];
+  for (const token of text.match(SAFE_SHELL_TOKEN) || []) {
+    if (token === '&&') commands.push([]);
+    else commands.at(-1).push(token.replace(/^["']|["']$/g, ''));
+  }
+  const reads = commands.filter((words) => !(words.length === 2 && words[0] === 'docx' && words[1] === '--version'));
+  return reads.length > 0 && reads.every((words) => isCaseDocxRead(words, cwd));
+}
+
 async function main() {
   const payload = await readHookPayload(2000);
   if (!payload) return null;
@@ -226,7 +264,7 @@ async function main() {
         return deny(protectionReason(candidate, located.caseRoot));
       }
     }
-    return null;
+    return isDocxReadCommand(payload.tool_input?.command, cwd) ? allow() : null;
   }
 
   if (!['Read', 'Grep', 'Glob'].includes(toolName)) return null;
