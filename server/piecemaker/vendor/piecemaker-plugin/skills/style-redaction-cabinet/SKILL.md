@@ -17,9 +17,9 @@ Crée tout `.docx` avec `python3 <dossier de ce skill>/scripts/style-docx.py cre
 | --- | --- | --- |
 | E-mails | [styles/e-mails.md](styles/e-mails.md) | Aucun |
 | Citations | [styles/citations.md](styles/citations.md) | Aucun |
-| Assignation | [styles/assignation.md](styles/assignation.md) | Aucun |
+| Assignation | [styles/assignation.md](styles/assignation.md) | [templates/assignation.docx](templates/assignation.docx) |
 | Mise en demeure | [styles/mise-en-demeure.md](styles/mise-en-demeure.md) | Aucun |
-| Conclusions en défense | [styles/conclusions-en-defense.md](styles/conclusions-en-defense.md) | [templates/conclusions-en-defense.docx](templates/conclusions-en-defense.docx) |
+| Conclusions en défense | [styles/conclusions-en-defense.md](styles/conclusions-en-defense.md) | Aucun |
 | Conclusions d'appel | [styles/conclusions-appel.md](styles/conclusions-appel.md) | Aucun |
 
 En cas de document demandé par l'utilisateur non listé, ajoute une ligne au tableau, et note dans la colonne Règles : "Règle à rédiger à partir de la session <ID de ta session>".
