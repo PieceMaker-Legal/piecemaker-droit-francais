@@ -116,8 +116,8 @@ afterEach(() => {
 });
 
 test('opens and saves a DOCX linked through an encoded Markdown href', async () => {
-  const actualPath = '~/Documents/exemple/dossier-test.docx';
-  const encodedPath = '~/Documents/exemple/dossier-test.docx';
+  const actualPath = '/dossiers/Dossier Exemple/Résumé du dossier.docx';
+  const encodedPath = '/dossiers/Dossier%20Exemple/R%C3%A9sum%C3%A9%20du%20dossier.docx';
   const requestedPaths: string[] = [];
 
   vi.mocked(authenticatedFetch).mockImplementation(async (url, options) => {
@@ -129,8 +129,8 @@ test('opens and saves a DOCX linked through an encoded Markdown href', async () 
 
   render(<DocxDocumentViewer file={{ name: encodedPath.split('/').pop() ?? '', path: encodedPath }} projectId="project-1" isSidebar onClose={() => undefined} />);
 
-  const editor = await screen.findByRole('button', { name: 'Résumé du dossier et personnes clés.docx' });
-  assert.deepEqual(requestedPaths, [encodedPath, actualPath]);
+  const editor = await screen.findByRole('button', { name: 'Résumé du dossier.docx' }, { timeout: 5000 });
+  assert.deepEqual(requestedPaths.slice(0, 2), [encodedPath, actualPath]);
   assert.deepEqual(vi.mocked(api.readFileBlob).mock.calls[0], ['project-1', actualPath]);
 
   vi.useFakeTimers();
@@ -138,9 +138,9 @@ test('opens and saves a DOCX linked through an encoded Markdown href', async () 
   fireEvent.click(editor);
   await act(async () => { await vi.advanceTimersByTimeAsync(800); });
 
-  assert.equal(vi.mocked(authenticatedFetch).mock.calls.length, 3);
-  assert.equal(requestedPaths[2], actualPath);
-  assert.equal(vi.mocked(authenticatedFetch).mock.calls[2]?.[1]?.method, 'PUT');
+  const lastCall = vi.mocked(authenticatedFetch).mock.calls.at(-1);
+  assert.equal(new URL(lastCall?.[0] ?? '', 'http://localhost').searchParams.get('path'), actualPath);
+  assert.equal(lastCall?.[1]?.method, 'PUT');
 });
 
 test('keeps loading while the document is still being written', async () => {

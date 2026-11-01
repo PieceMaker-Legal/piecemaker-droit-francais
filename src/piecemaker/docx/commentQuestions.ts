@@ -1,5 +1,6 @@
 const QUESTIONS_KEY = 'piecemaker:docx-comment-questions';
 const MODE_KEY = 'piecemaker:docx-comment-ask';
+const QUESTION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type CommentQuestion = {
   token: string;
@@ -22,7 +23,8 @@ type TranscriptMessage = {
 function readStored(): CommentQuestion[] {
   try {
     const stored: unknown = JSON.parse(localStorage.getItem(QUESTIONS_KEY) ?? '[]');
-    return Array.isArray(stored) ? stored as CommentQuestion[] : [];
+    if (!Array.isArray(stored)) return [];
+    return (stored as CommentQuestion[]).filter((question) => Date.now() - question.askedAt < QUESTION_MAX_AGE_MS);
   } catch {
     return [];
   }
@@ -37,7 +39,9 @@ function writeStored(questions: CommentQuestion[]) {
 }
 
 export function readDocumentQuestions(projectId: string, filePath: string) {
-  return readStored().filter((question) => question.projectId === projectId && question.filePath === filePath);
+  const stored = readStored();
+  writeStored(stored);
+  return stored.filter((question) => question.projectId === projectId && question.filePath === filePath);
 }
 
 export function storeQuestion(question: CommentQuestion) {

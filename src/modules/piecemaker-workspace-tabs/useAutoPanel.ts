@@ -14,6 +14,7 @@ import {
 import { useWebSocket } from '@/shared/context/WebSocketContext';
 import type { AppTab } from '@/shared/types';
 
+const HIDDEN_POLL_MS = 5_000;
 const MAX_AGE_MS = 120_000;
 const DOSSIER_TAB: AppTab = 'plugin:piecemaker-dossier';
 const TABULAR_REVIEW_TAB: AppTab = 'plugin:piecemaker-tabular-review';
@@ -91,8 +92,11 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
     if (!projectPath) return;
     let active = true;
     let inFlight = false;
+    let lastPollAt = 0;
     const poll = async () => {
       if (!active || inFlight) return;
+      if (document.hidden && Date.now() - lastPollAt < HIDDEN_POLL_MS) return;
+      lastPollAt = Date.now();
       inFlight = true;
       try {
         const result = await pollWorkspacePanel(projectPath);

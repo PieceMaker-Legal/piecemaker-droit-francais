@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 
+import { useProcessingSessions } from '@/shared/context/SessionProtectionContext';
 import type { QueuedDraft } from '@/shared/types';
 
 const DOCX_COMMENT_QUESTION_EVENT = 'piecemaker:docx-comment-question';
@@ -26,11 +27,13 @@ export function askOpenChat(sessionId: string, prompt: string): boolean {
 }
 
 export function useDocxCommentQuestions({ sessionId, input, setInput, queuedDraft, handleSubmit }: UseDocxCommentQuestionsOptions) {
+  const backgroundWork = useProcessingSessions().get(sessionId ?? '')?.background ?? false;
+
   useEffect(() => {
     if (!sessionId) return undefined;
     const receive = (event: Event) => {
       const detail = (event as CustomEvent<DocxCommentQuestionDetail>).detail;
-      if (detail.sessionId !== sessionId || detail.accepted || queuedDraft) return;
+      if (detail.sessionId !== sessionId || detail.accepted || queuedDraft || backgroundWork) return;
       detail.accepted = true;
       const submit = { preventDefault: () => undefined } as FormEvent<HTMLFormElement>;
       void handleSubmit(submit, { content: detail.prompt, attachments: [] }).then(() => {
@@ -39,5 +42,5 @@ export function useDocxCommentQuestions({ sessionId, input, setInput, queuedDraf
     };
     window.addEventListener(DOCX_COMMENT_QUESTION_EVENT, receive);
     return () => window.removeEventListener(DOCX_COMMENT_QUESTION_EVENT, receive);
-  }, [handleSubmit, input, queuedDraft, sessionId, setInput]);
+  }, [backgroundWork, handleSubmit, input, queuedDraft, sessionId, setInput]);
 }

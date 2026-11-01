@@ -29,3 +29,18 @@ test('reuses a completed dossier registration', async () => {
   assert.equal((await ensureDossierRegistration('/cases/Cached')).selectedCase?.path, 'cached-case');
   assert.equal(pmGet.mock.calls.length, 1);
 });
+
+test('shares one repository read between dossiers registered together', async () => {
+  pmGet.mockResolvedValue({
+    folders: [
+      { path: 'case-a', name: 'A', location: '/cases/A', registered: true },
+      { path: 'case-b', name: 'B', location: '/cases/B', registered: true },
+    ],
+  });
+
+  const [first, second] = await Promise.all([ensureDossierRegistration('/cases/A'), ensureDossierRegistration('/cases/B')]);
+
+  assert.equal(first.selectedCase?.path, 'case-a');
+  assert.equal(second.selectedCase?.path, 'case-b');
+  assert.equal(pmGet.mock.calls.length, 1);
+});

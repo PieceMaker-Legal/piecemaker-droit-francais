@@ -14,9 +14,17 @@ type DossierRegistration = { cases: DossierCase[]; selectedCase: DossierCase | n
 const REGISTRATION_MAX_AGE_MS = 30_000;
 const REGISTRATION_MAX_ENTRIES = 32;
 const registrations = new Map<string, { request: Promise<DossierRegistration>; resolvedAt: number | null }>();
+let overviewRequest: Promise<RepositoryOverview> | null = null;
+
+function readOverview(): Promise<RepositoryOverview> {
+  overviewRequest ??= pmGet<RepositoryOverview>('/repository').finally(() => {
+    overviewRequest = null;
+  });
+  return overviewRequest;
+}
 
 async function registerDossier(projectPath: string | null | undefined): Promise<DossierRegistration> {
-  const overview = await pmGet<RepositoryOverview>('/repository');
+  const overview = await readOverview();
   const cases = overview.folders ?? [];
   if (!projectPath) return { cases, selectedCase: null };
   const existingCase = cases.find((entry) => entry.location === projectPath);

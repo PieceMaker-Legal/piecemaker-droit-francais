@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import { test } from 'vitest';
 
-import { buildQuestionPrompt, readQuestionTurn } from '@/piecemaker/docx/commentQuestions';
+import { buildQuestionPrompt, readDocumentQuestions, readQuestionTurn, storeQuestion } from '@/piecemaker/docx/commentQuestions';
 
 const PROMPT = 'Question posée en commentaire du document « acte.docx ».\n\nCe délai est-il exact ?';
 const ASKED_AT = Date.parse('2026-01-10T10:00:00.000Z');
@@ -66,4 +66,13 @@ test('keeps only the assistant text of the question turn', () => {
     { kind: 'text', role: 'assistant', content: 'réponse suivante' },
   ], PROMPT, ASKED_AT);
   assert.equal(turn, 'Je vérifie.\n\nLe délai est exact.');
+});
+
+test('forgets a stored question after seven days', () => {
+  localStorage.clear();
+  const question = { token: 't', sessionId: 's', providerLabel: 'Claude', projectId: 'p', filePath: '/dossier/acte.docx', commentId: 1, prompt: PROMPT };
+  storeQuestion({ ...question, token: 'recente', askedAt: Date.now() - 1000 });
+  storeQuestion({ ...question, token: 'ancienne', askedAt: Date.now() - 8 * 24 * 60 * 60 * 1000 });
+  assert.deepEqual(readDocumentQuestions('p', '/dossier/acte.docx').map(({ token }) => token), ['recente']);
+  assert.ok(!(localStorage.getItem('piecemaker:docx-comment-questions') ?? '').includes('ancienne'));
 });

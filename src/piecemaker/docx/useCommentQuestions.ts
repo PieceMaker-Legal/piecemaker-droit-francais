@@ -30,7 +30,6 @@ type UseCommentQuestionsOptions = {
   documentName: string;
   editorRef: RefObject<DocxEditorRef>;
   onAnswered: () => void;
-  onRefused: (message: string) => void;
 };
 
 async function readMessages(sessionId: string, limit: number | null) {
@@ -62,7 +61,7 @@ function commentedPassage(editor: DocxEditorRef | null, commentId: number) {
   return { passage, paragraphs: [...paragraphs].join('\n') };
 }
 
-export function useCommentQuestions({ projectId, filePath, documentName, editorRef, onAnswered, onRefused }: UseCommentQuestionsOptions) {
+export function useCommentQuestions({ projectId, filePath, documentName, editorRef, onAnswered }: UseCommentQuestionsOptions) {
   const selectedSession = useOptionalProjectMainState()?.selectedSession;
   const sessionId = selectedSession?.id ?? null;
   const provider = selectedSession?.__provider;
@@ -70,13 +69,15 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
   const [askEnabled, setAskEnabled] = useState(readAskMode);
   const [questions, setQuestions] = useState<CommentQuestion[]>([]);
   const [partialAnswers, setPartialAnswers] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState<string | null>(null);
   const polling = useRef(false);
-  const callbacks = useRef({ onAnswered, onRefused });
-  callbacks.current = { onAnswered, onRefused };
+  const answered = useRef(onAnswered);
+  answered.current = onAnswered;
 
   useEffect(() => {
     setQuestions(projectId && filePath ? readDocumentQuestions(projectId, filePath) : []);
     setPartialAnswers({});
+    setNotice(null);
   }, [filePath, projectId]);
 
   const changeAskEnabled = useCallback((enabled: boolean) => {
@@ -91,6 +92,7 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
 
   const askComment = useCallback((comment: Comment) => {
     if (!askEnabled || !providerLabel || !sessionId || !projectId || !filePath) return;
+    setNotice(null);
     const token = createQuestionToken();
     const prompt = buildQuestionPrompt({
       documentName,
@@ -102,7 +104,7 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
     storeQuestion(question);
     if (!askOpenChat(sessionId, prompt)) {
       removeQuestion(token);
-      callbacks.current.onRefused(`Le commentaire est enregistré, mais ${providerLabel} ne l’a pas reçu : le chat n’est pas ouvert ou un message y attend déjà.`);
+      setNotice(`Le commentaire est enregistré, mais ${providerLabel} ne l’a pas reçu : le chat n’est pas ouvert, un message y attend déjà ou un travail s’y déroule en arrière-plan.`);
       return;
     }
     setQuestions((current) => [...current, question]);
@@ -122,7 +124,10 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
       let turn = readQuestionTurn(await readMessages(question.sessionId, RECENT_MESSAGES), question.prompt, question.askedAt);
       if (turn === null && !isRunning) turn = readQuestionTurn(await readMessages(question.sessionId, null), question.prompt, question.askedAt);
       if (turn === null) {
-        if (!isRunning && Date.now() - question.askedAt > UNSENT_QUESTION_MS) finish(question.token);
+        if (!isRunning && Date.now() - question.askedAt > UNSENT_QUESTION_MS) {
+          finish(question.token);
+          setNotice(`${question.providerLabel} n’a pas reçu la question : elle n’apparaît pas dans le chat.`);
+        }
         return;
       }
       if (isRunning) {
@@ -131,6 +136,7 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
       }
       if (!turn) {
         finish(question.token);
+        setNotice(`${question.providerLabel} n’a écrit aucune réponse à copier dans le commentaire.`);
         return;
       }
       const editor = editorRef.current;
@@ -144,7 +150,8 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
         finish(question.token);
         return;
       }
-      if (editor.replyToComment(question.commentId, turn, question.providerLabel) !== null) callbacks.current.onAnswered();
+      if (editor.replyToComment(question.commentId, turn, question.providerLabel) !== null) answered.current();
+      else setNotice(`${question.providerLabel} a répondu dans le chat, mais la réponse n’a pas pu être copiée dans le commentaire.`);
       finish(question.token);
     };
     const poll = async () => {
@@ -164,5 +171,5 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
     return () => window.clearInterval(timer);
   }, [editorRef, finish, questions]);
 
-  return { providerLabel, askEnabled, changeAskEnabled, askComment, forgetComment, questions, partialAnswers };
+  return { providerLabel, askEnabled, changeAskEnabled, askComment, forgetComment, questions, partialAnswers, notice };
 }

@@ -23,7 +23,7 @@ fichier sur disque ; chacun voit les modifications de l'autre.
 - Travaillant entièrement par Bash, il est couvert par `protect-originals.mjs`,
   qui inspecte aussi les commandes shell. Par défaut seuls PDF et images sont
   protégés (`lib/protection.cjs`, `PROTECTED_EXTENSIONS`) : un `.docx` n'est
-  protégé que s'il est listé dans `.piecemaker/protection.json`.
+  jamais protégé, même s'il figure dans `.piecemaker/protection.json`.
 
 ## 2. Côté avocat — visionneuse / éditeur intégré
 
@@ -83,7 +83,11 @@ commentaire quand un chat du même dossier est ouvert. Le choix est mémorisé.
 - Pendant le tour, le texte partiel s'affiche dans la carte du commentaire. À la
   fin, le texte de l'assistant devient une réponse du fil, signée du fournisseur.
   Il est donc enregistré dans le `.docx` et visible dans Word.
-- La question en attente survit à un rechargement (`localStorage`).
+- La question en attente survit à un rechargement (`localStorage`). Elle est
+  oubliée après 7 jours si le document n'est pas rouvert.
+- Une bannière signale un envoi refusé, une question non reçue après 10 min, une
+  réponse vide ou une copie impossible. Le chat refuse aussi l'envoi pendant un
+  travail en arrière-plan, pour ne pas ouvrir son dialogue à la place de l'avocat.
 - Limites : pas de case sur une réponse dans un fil ; seul le texte de
   l'assistant est repris, sans les outils ; le Markdown reste brut.
 

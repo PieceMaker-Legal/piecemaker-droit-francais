@@ -367,7 +367,6 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       setCommentsOpen(true);
       scheduleSave();
     },
-    onRefused: setError,
   });
 
   const close = async () => { if (await flush()) onClose(); };
@@ -530,6 +529,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
         <button type="button" onClick={() => { void overwriteExternal(); }} className="underline">Enregistrer ma version</button>
       </div>}
       {error && <p className="border-b border-border px-3 py-1.5 text-xs text-destructive">{error}</p>}
+      {commentQuestions.notice && <p role="alert" className="border-b border-border px-3 py-1.5 text-xs text-destructive">{commentQuestions.notice}</p>}
       {loaded ? (
         <DocxEditor
           key={loaded.version}
