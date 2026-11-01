@@ -1,18 +1,15 @@
+import { openInEditor, sessionPath } from '@/piecemaker/editor-tabs/editorPanels';
 import { api } from '@/shared/api';
 import { writeDraftText } from '@/shared/chatDrafts';
 import { inheritSessionPermissionMode } from '@/shared/utils';
 
 const SESSION_PATH = /\/session\/([^/]+)\/?$/;
 
-export function openedSessionId(): string | null {
+export function chatSessionId(chat: Element): string | null {
+  const sideConversation = chat.closest<HTMLElement>('[data-side-conversation]')?.dataset.sideConversation;
+  if (sideConversation) return sideConversation;
   const encodedId = window.location.pathname.match(SESSION_PATH)?.[1];
   return encodedId ? decodeURIComponent(encodedId) : null;
-}
-
-function navigateToSession(sessionId: string): void {
-  const path = window.location.pathname.replace(SESSION_PATH, `/session/${encodeURIComponent(sessionId)}`);
-  window.history.pushState(null, '', path);
-  window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
 export async function startSideConversation(sourceSessionId: string, quote: string): Promise<void> {
@@ -25,7 +22,7 @@ export async function startSideConversation(sourceSessionId: string, quote: stri
     }
     inheritSessionPermissionMode(sourceSessionId, forkedSessionId);
     writeDraftText(forkedSessionId, `> ${quote}\n\n`);
-    navigateToSession(forkedSessionId);
+    openInEditor(sessionPath(forkedSessionId));
   } catch (error) {
     console.error('Error starting side conversation:', error);
     window.alert('Impossible de démarrer une conversation annexe depuis cette conversation.');

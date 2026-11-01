@@ -10,7 +10,8 @@ export type IdentityMode = 'open' | 'add';
 type EditorPanel =
   | { kind: 'citation'; token: string; label: string }
   | { kind: 'identity'; mode: IdentityMode; text: string }
-  | { kind: 'plan'; id: string };
+  | { kind: 'plan'; id: string }
+  | { kind: 'session'; id: string };
 
 const plans = new Map<string, string>();
 const planListeners = new Set<() => void>();
@@ -20,6 +21,8 @@ export const citationPath = (token: string, label: string) => `${SCHEME}citation
 export const identityPath = (mode: IdentityMode, text: string) => `${SCHEME}identity/${mode}/${encodeURIComponent(text)}`;
 
 export const planPath = (id: string) => `${SCHEME}plan/${encodeURIComponent(id)}`;
+
+export const sessionPath = (id: string) => `${SCHEME}session/${encodeURIComponent(id)}`;
 
 export function storePlan(id: string, markdown: string) {
   plans.set(id, markdown);
@@ -43,7 +46,7 @@ export function parseEditorPanel(path: string): EditorPanel | null {
   try {
     if (kind === 'citation' && /^[a-f0-9]{64}$/.test(first ?? '')) return { kind, token: first, label: decodeURIComponent(second ?? '') };
     if (kind === 'identity' && (first === 'open' || first === 'add') && second) return { kind, mode: first, text: decodeURIComponent(second) };
-    if (kind === 'plan' && first) return { kind, id: decodeURIComponent(first) };
+    if ((kind === 'plan' || kind === 'session') && first) return { kind, id: decodeURIComponent(first) };
   } catch {
     return null;
   }

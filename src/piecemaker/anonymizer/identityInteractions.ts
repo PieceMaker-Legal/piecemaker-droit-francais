@@ -1,5 +1,5 @@
 import { HIGHLIGHT_NAME } from '@/piecemaker/anonymizer/highlighter';
-import { openedSessionId, startSideConversation } from '@/piecemaker/chat/sideConversation';
+import { chatSessionId, startSideConversation } from '@/piecemaker/chat/sideConversation';
 import { identityPath, openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 
 type HighlightLookup = {
@@ -90,8 +90,8 @@ export function startIdentityInteractions(): () => void {
     const text = selectionInScope();
     if (!text) return;
     event.preventDefault();
-    const inChat = event.target instanceof Element && Boolean(event.target.closest(CHAT_SELECTOR));
-    openMenu(event.clientX, event.clientY, text, inChat ? openedSessionId() : null);
+    const chat = event.target instanceof Element ? event.target.closest(CHAT_SELECTOR) : null;
+    openMenu(event.clientX, event.clientY, text, chat ? chatSessionId(chat) : null);
   };
 
   const paintCursor = () => {

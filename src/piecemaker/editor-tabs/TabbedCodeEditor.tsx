@@ -11,6 +11,7 @@ import { CitationPanel } from '@/piecemaker/citations/CitationPanel';
 import { FileDocumentEditor } from '@/piecemaker/editor-tabs/FileDocumentEditor';
 import { IdentityTab } from '@/piecemaker/editor-tabs/IdentityTab';
 import { PlanTab } from '@/piecemaker/editor-tabs/PlanTab';
+import { SessionTab } from '@/piecemaker/editor-tabs/SessionTab';
 import { CLOSE_IN_EDITOR_EVENT, parseEditorPanel } from '@/piecemaker/editor-tabs/editorPanels';
 import type { CodeEditorFile } from '@/shared/types';
 
@@ -31,6 +32,7 @@ function tabLabel(file: CodeEditorFile) {
   if (panel?.kind === 'citation') return panel.label || 'Citation';
   if (panel?.kind === 'identity') return panel.text;
   if (panel?.kind === 'plan') return 'Plan';
+  if (panel?.kind === 'session') return 'Conversation annexe';
   return file.name;
 }
 
@@ -79,6 +81,8 @@ function TabContent({ props, file, onClose }: { props: CodeEditorProps; file: Co
     ? <CitationPanel token={panel.token} onClose={onClose} />
     : panel.kind === 'plan'
       ? <PlanTab id={panel.id} />
+      : panel.kind === 'session'
+        ? <SessionTab id={panel.id} />
       : <IdentityTab mode={panel.mode} text={panel.text} onClose={onClose} />;
   return props.isSidebar ? content : <div className="fixed inset-0 z-[9999] bg-background">{content}</div>;
 }

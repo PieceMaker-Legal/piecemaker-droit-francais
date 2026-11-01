@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HIGHLIGHT_NAME } from '@/piecemaker/anonymizer/highlighter';
 import { startIdentityInteractions } from '@/piecemaker/anonymizer/identityInteractions';
-import { identityPath, OPEN_IN_EDITOR_EVENT } from '@/piecemaker/editor-tabs/editorPanels';
+import { identityPath, OPEN_IN_EDITOR_EVENT, sessionPath } from '@/piecemaker/editor-tabs/editorPanels';
 import { api } from '@/shared/api';
 import { readDraftText, resetChatDrafts } from '@/shared/chatDrafts';
 
@@ -83,19 +83,31 @@ describe('startIdentityInteractions', () => {
     expect(document.getElementById('piecemaker-identity-menu')).toBeNull();
   });
 
-  it('démarre une conversation annexe : fork, citation dans le brouillon, ouverture', async () => {
+  it('démarre une conversation annexe dans le volet, sans quitter la conversation', async () => {
     window.history.pushState(null, '', '/session/source-1');
     vi.mocked(api.forkSession).mockResolvedValue(forkResponse(true, { data: { sessionId: 'fork-1' } }));
-    const popstate = vi.fn();
-    window.addEventListener('popstate', popstate);
     selectSigne();
     openContextMenu();
     sideConversationItem()?.click();
-    await vi.waitFor(() => expect(window.location.pathname).toBe('/session/fork-1'));
-    window.removeEventListener('popstate', popstate);
+    await vi.waitFor(() => expect(received).toEqual([sessionPath('fork-1')]));
     expect(api.forkSession).toHaveBeenCalledWith('source-1');
     expect(readDraftText('fork-1')).toBe('> signé\n\n');
-    expect(popstate).toHaveBeenCalledOnce();
+    expect(window.location.pathname).toBe('/session/source-1');
+  });
+
+  it('forke la conversation du volet quand la sélection s’y trouve', async () => {
+    window.history.pushState(null, '', '/session/source-1');
+    vi.mocked(api.forkSession).mockResolvedValue(forkResponse(true, { data: { sessionId: 'fork-2' } }));
+    const sidePane = document.createElement('div');
+    sidePane.dataset.sideConversation = 'fork-1';
+    pane.replaceWith(sidePane);
+    sidePane.appendChild(pane);
+    selectSigne();
+    openContextMenu();
+    sideConversationItem()?.click();
+    await vi.waitFor(() => expect(received).toEqual([sessionPath('fork-2')]));
+    expect(api.forkSession).toHaveBeenCalledWith('fork-1');
+    sidePane.remove();
   });
 
   it('reste sur la conversation et prévient si le fork échoue', async () => {
