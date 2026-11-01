@@ -30,7 +30,9 @@ Il désigne désormais Small, dans l'état, l'installation et la suppression.
 ## Conversion
 
 `ocr_small.py` rend chaque page PDF à 300 DPI et lance un worker distinct.
-Le worker utilise le profil OCR officiel du benchmark, sans orientation automatique ni redressement, avec deux threads CPU.
+Le worker utilise le [profil mesuré sur trois corpus](ocr-small-benchmark.md), sans orientation automatique ni redressement, avec deux threads CPU.
+La reconnaissance traite une ligne par lot. Le détecteur limite son côté le plus long à 3 200 pixels et active la dilatation.
+Le rendu PDF reste à 300 DPI. Les deux options mémoire ONNX `enable_cpu_mem_arena` et `enable_mem_pattern` sont désactivées.
 `ocr_markdown.py` regroupe les boîtes du JSON par hauteur, puis cherche des alignements numériques répétés.
 Les zones suffisamment régulières deviennent des tableaux Markdown ; le reste reste du texte dans l'ordre de lecture.
 Les cellules manquantes restent vides. Le traitement conserve chaque texte reconnu sans inventer de valeur.
@@ -53,5 +55,7 @@ Les contrôles couvrent les cellules vides, l'ordre du texte, les coordonnées i
 Les tests existants couvrent aussi la reprise sans OCR, les PDF mixtes, l'installation et sa boîte de dialogue.
 Un essai local fictif vérifie la chaîne PDF scanné → Small → JSON → Markdown et le nom de sortie demandé.
 Un plafond mémoire volontairement insuffisant vérifie la conservation du PDF et du Markdown antérieur.
-Les trois corpus existants sont relus depuis leurs JSON, sans relancer l'OCR lourd ni copier leurs données dans le dépôt.
+Le benchmark relance les treize pages retenues des trois corpus, puis vérifie le worker Python intégré depuis les PDF sources.
+Les textes, coordonnées et scores de ces treize pages correspondent exactement au profil retenu. Les données restent hors du dépôt.
+Le contrôle final mesure un pic d'empreinte mémoire de 2,54 Go sur Mac M1, avec un RSS maximal de 1,65 Go.
 La résolution des dépendances pour Windows ne remplace pas une installation réelle sous Windows.

@@ -116,9 +116,17 @@ def parse_page(source, target, page_index):
         text_detection_model_name='PP-OCRv6_small_det', text_recognition_model_name='PP-OCRv6_small_rec',
         text_detection_model_dir=paths['det'], text_recognition_model_dir=paths['rec'],
         engine='onnxruntime', device='cpu',
-        engine_config={'providers': ['CPUExecutionProvider'], 'intra_op_num_threads': 2, 'inter_op_num_threads': 1},
+        engine_config={
+            'providers': ['CPUExecutionProvider'], 'intra_op_num_threads': 2, 'inter_op_num_threads': 1,
+            'enable_cpu_mem_arena': False, 'enable_mem_pattern': False,
+        },
+        text_recognition_batch_size=1,
+        text_det_limit_side_len=3200, text_det_limit_type='max',
+        text_det_thresh=0.3, text_det_box_thresh=0.6, text_det_unclip_ratio=1.5,
+        text_rec_score_thresh=0.0,
         use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False,
     )
+    engine.paddlex_pipeline.text_det_model.post_op.use_dilation = True
     if Path(source).suffix.lower() == '.pdf':
         import pypdfium2 as pdfium
         with pdfium.PdfDocument(source) as document:
