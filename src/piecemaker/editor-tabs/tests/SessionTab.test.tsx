@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SessionTab } from '@/piecemaker/editor-tabs/SessionTab';
@@ -43,6 +43,26 @@ describe('SessionTab', () => {
     const chat = await screen.findByTestId('chat');
     expect(chat.closest('[data-side-conversation]')).toHaveProperty('dataset.sideConversation', 'fork-1');
     expect(chatProps.mock.lastCall?.[0].selectedSession).toMatchObject({ id: 'fork-1', __provider: 'codex', __projectId: 'dossier-a' });
+  });
+
+  it('masque l’historique copié et garde les messages écrits après le fork', async () => {
+    vi.mocked(api.sessionDetails).mockResolvedValue(detailsResponse(true, { sessionId: 'fork-1', provider: 'claude', createdAt: '2026-01-10T10:00:00.000Z', project: { projectId: 'dossier-a' } }));
+    render(<SessionTab id="fork-1" />);
+    const chat = await screen.findByTestId('chat');
+    const addRow = (timestamp: string) => {
+      const row = document.createElement('div');
+      row.dataset.messageTimestamp = timestamp;
+      chat.appendChild(row);
+      return row;
+    };
+    const original = addRow('2026-01-09T08:00:00.000Z');
+    const stampedByFork = addRow('2026-01-10T10:00:00.880Z');
+    const reply = addRow('2026-01-10T10:00:05.000Z');
+    const optimistic = addRow(String(Date.UTC(2026, 0, 10, 10, 0, 4)));
+    await waitFor(() => expect(original.hidden).toBe(true));
+    expect(stampedByFork.hidden).toBe(true);
+    expect(reply.hidden).toBe(false);
+    expect(optimistic.hidden).toBe(false);
   });
 
   it('ouvre un nouveau fork dans un onglet du volet et ne change pas de page', async () => {
