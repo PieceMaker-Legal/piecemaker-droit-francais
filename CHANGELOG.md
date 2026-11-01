@@ -3,6 +3,76 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.1.0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.59...v2.1.0) (2026-11-01)
+
+### New Features
+
+* **arborescence:** sous-dossiers indentés et règles alignées sur arborescence.json ([5c1ef84](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5c1ef847c554f17fbb12370d2b423ef51b8e2ae0))
+* **bordereau:** commande pm bordereau, retrait du code mort du tampon ([6f3fd3b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6f3fd3bcb08df4564fa8ad4097c48e797b3a76ed))
+* **dossier:** chronologie en tableau et ouverture en analyse tabulaire ([5d3bfba](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5d3bfba919b417a33918aa03fa913f3452d85754))
+* **dossier:** nom figé à gauche et nature modifiable dans la chronologie ([aa24de8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/aa24de8de2d1ca69d0762970b7c0f07e4e1d12bb))
+* **index:** afficher l'index du dossier dans l'analyse tabulaire ([724e286](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/724e286d953e428cc75934c1e93de450177d51ff))
+* **legifrance:** avertir au-delà de 500 résultats et guider la connexion PISTE ([50b6f9e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/50b6f9eef000eb35bdbce3da872b36d59b2ab9bf))
+* **legifrance:** faire de Search_Jurisprudence le seul accès à la jurisprudence ([7fb18dd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7fb18dd88c222db15b4fcab6845e820dbd2af832))
+* **legifrance:** unifier le cache des décisions et retirer la chaîne morte ([3b53f7f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3b53f7fb16f142834b3af1e1764d882a69c242d7))
+* **ocr:** remplacer MinerU par PP-OCRv6 Small ([a1323e4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a1323e4d2e5fa76001c2d200a4ccc58a8915d50a))
+* **onglets:** renommer Échéances en Suivi des dossiers, masquer l'icône git ([e3775fd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e3775fd3bfcf67cdee13e1093bccebccddae20e7))
+* **pieces:** retrouver par Git une pièce déplacée, trier l'index dès le classement ([d2fc3ee](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/d2fc3ee3fcd5607ef88f79b546cfb728e51cd7ca))
+* **pm:** renommer le volet chronologie en index ([22420b8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/22420b8260f0ff35601981c11b0a9f5aae93a656))
+* **raisonnement:** sortie de verifier au format ESLint, correction sur chaque ligne ([dd2eeda](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/dd2eeda80583fb714552086b99d67a5111f540be))
+* **raisonnement:** un seul bouton Valider / Validé pour les pièces ([7a835a6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7a835a6c3642fa62107a8ca467e0953967e727dc))
+* **raisonnement:** vérifier les citations avec le petit modèle choisi ([720e583](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/720e583ba5dc81ebb9b54ee6fda4347158188191))
+* **skills:** renommer redaction-juridique en style-redaction-cabinet ([6f0189a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6f0189a101d0d53760833bfc1dbf751b625fbcaa))
+* **suivi:** le Matter board remplace le suivi des échéances ([febc647](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/febc6474b34b4c639b9f10c977bf283474f564ff))
+* **suivi:** le tableau ne lit que les dossiers ayant un suivi ([0abb756](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0abb75611249393cf6e4578b22a8d87a87edfac7))
+* **suivi:** plusieurs suivis par dossier et un seul tableau ([ca312f6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ca312f6a92282337a138b7cec8349cb0c0d4b0cf))
+* **suivi:** proposer l'etat des dossiers depuis le volet ([0d01229](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/0d012299c3cba19097fd0d3f88ca085c73b8b46e))
+* **tabular-review:** colonne Classement et arborescence du dossier ([6f2bc24](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/6f2bc2425885fb4733d172c2c05ca9ab4ce12f24))
+* **tabular-review:** nommer Index l'analyse de toutes les pieces ([bc4d780](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/bc4d780a568bf1a702e541a81263ff0326f2d94c))
+* **tabular-review:** renommer la chronologie en inventaire integral ([1acf9eb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1acf9eb2a1f5155db928af07c5b64a6e6afd44ae))
+* **tabular-review:** une seule analyse pour la chronologie et le tri ([81b8700](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/81b87006731970745b3e6b5872074ef8139d1598))
+
+### Bug Fixes
+
+* **index:** afficher l'index dans le volet Dossier seulement ([27f97b1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/27f97b1fb334696c671a942c8a67d0743815a4ee))
+* **index:** rétablir le classement et le tri des colonnes ([7ccbe6c](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7ccbe6c4ddd769c9e4158dbd5b3d0f7410d46502))
+* **index:** rétablir le lancement et les colonnes de l’analyse ([eca7b5f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/eca7b5fb73f651d9c149f9c280cfd28328dd2d41))
+* **legifrance:** appliquer la limite de 500 aux décisions dédoublonnées ([3907b96](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/3907b96ad3e8da8824c98ed72f7a15ac4f754755))
+* **tabular-review:** ne pas ajouter deux fois le même document ([68fd6bf](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/68fd6bf92863dd0a395fc84fa0cc5b6b108fa3ed))
+
+### Refactoring
+
+* **index:** fusionner l'index dans tabular_review_index ([ff17281](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ff172812ec6abd07ace2cf9ad30f95cd80794caa))
+* **index:** renommer pm chronologie et l'outil MCP en index ([02d90fd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/02d90fd1b120d2baafff536154b0c4b507b0f6c9))
+* **skill:** découper le skill piecemaker en routeur et références ([8e4ea77](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8e4ea773ec4b975cf3b44494c2b12a5d69826833))
+* **skill:** retirer du skill piecemaker les règles déjà refusées ou non contrôlées ([ec112ab](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ec112ab0911b983dd2f358ba88f6bc64dcb1e21c))
+
+### Documentation
+
+* **outils:** aligner les skills et la doc sur les outils réels ([b7f11fd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b7f11fd4f36bd4f916adc9f367b9fa9643418670))
+* **outils:** corriger le sens des skills et l'index dans l'inventaire ([8e016dd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8e016ddb4d00ca4c3986bb6577e0eca07ad1a664))
+* **outils:** enregistrer la carte des outils dans docs ([cf689c3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/cf689c3c04f524f535b8c3f51dc76abd2c99404c))
+* **outils:** faire de la carte le seul inventaire des outils ([57db847](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/57db84733abf9c143a35a3f2b6b4ae556a369cc6))
+* **outils:** inventorier les MCP, skills et commandes de l'assistant ([dc5ef9e](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/dc5ef9eb86945a62d7752005e2dab7ef5945b348))
+* **outils:** passer la carte à docx 0.28.0 et resserrer le bloc des skills ([33f4ae5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/33f4ae5af469827a1dafa6eb4c109e049bd14cdc))
+* **outils:** placer pm docx dans la carte du skill docx-cli ([812eb9f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/812eb9fbd7a2b1b06e5ce8037866287847565ba2))
+* **outils:** regrouper chaque skill avec ses commandes dans la carte ([47ca2a9](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/47ca2a9349205d7b90fb20a0badf5f22e69a1dbf))
+* **skills:** laisser pm docx dans piecemaker avec un renvoi depuis docx-cli ([bf4b8ff](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/bf4b8ffd944df9524cd0f1f92060463ada3ca3f4))
+
+### Maintenance
+
+* **agents:** supprimer le sous-agent jurisprudence-scanner ([8898388](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/88983885b1ec385627bbf9f01e2788763d691734))
+* **docx-cli:** mettre à jour le skill vers la version 0.28.0 ([be6ac13](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/be6ac1301c58731f7486569e38e894734f7b66ca))
+* **raisonnement:** archiver pm docx et pm acte hors de main ([79add21](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/79add21f79f8249a72fc65cf336e765d82510017))
+* **raisonnement:** retirer la clé acte du moteur et de la documentation ([2cdaf83](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/2cdaf83609b8075de4fb69d03fe1e1a7826a3d63))
+* **skills:** remplacer tamponnage par le fichier et le volet Bordereau ([1e02bf0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1e02bf009d493d628c27ac2c4b2c39e00b0cbd74))
+* **skills:** retirer conversion-md et historique-dossier ([8f003fb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8f003fb3c7096c8bba67d6ace3da6f0f0a6b2094))
+* **skills:** retirer le skill recherche-juridique ([73718b5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/73718b5d03b36380c3913287df91015cc8a2f7f5))
+
+### Tests
+
+* **historique:** begin et end rendent la main sans seuil de temps ([64c149d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/64c149dd9a7b5dcf3738dd774b293e698b1308a6))
+
 ## [2.0.59](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.0.58...v2.0.59) (2026-10-29)
 
 ### New Features
