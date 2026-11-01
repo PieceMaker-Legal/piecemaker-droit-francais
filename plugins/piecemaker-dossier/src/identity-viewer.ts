@@ -278,7 +278,7 @@ export function inject(): () => void {
     const word = adding || '';
     const projectId = cases.some((entry) => entry.projectId === lastAddCase) ? lastAddCase : cases.find((entry) => entry.mappings > 0)?.projectId || cases[0]?.projectId || '';
     body.innerHTML = `<form class="pmd-form" data-identity-add>
-      <h2 class="pmd-title piecemaker-display">Ajouter au mapping</h2>
+      <h2 class="pmd-title piecemaker-display">Anonymiser</h2>
       <label>Mot ou expression<input class="pmd-input" name="word" value="${escapeHtml(word)}" required></label>
       <label>Dossier<select class="pmd-select" name="projectId">${cases.map((entry) => `<option value="${escapeHtml(entry.projectId)}" ${entry.projectId === projectId ? 'selected' : ''}>${escapeHtml(entry.name)}</option>`).join('')}</select></label>
       <fieldset class="pmd-identity-choice">

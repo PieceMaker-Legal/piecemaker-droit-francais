@@ -1,4 +1,5 @@
 import { HIGHLIGHT_NAME } from '@/piecemaker/anonymizer/highlighter';
+import { openedSessionId, startSideConversation } from '@/piecemaker/chat/sideConversation';
 import { identityPath, openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 
 type HighlightLookup = {
@@ -7,7 +8,8 @@ type HighlightLookup = {
 
 export const IDENTITY_CHANGED_EVENT = 'piecemaker:identity-changed';
 
-const SCOPE_SELECTOR = '.chat-messages-pane, [data-piecemaker-identity-highlight="on"]';
+const CHAT_SELECTOR = '.chat-messages-pane';
+const SCOPE_SELECTOR = `${CHAT_SELECTOR}, [data-piecemaker-identity-highlight="on"]`;
 const MENU_ID = 'piecemaker-identity-menu';
 
 function highlightedIdentityAt(x: number, y: number): string | null {
@@ -35,26 +37,34 @@ function closeMenu(): void {
   document.getElementById(MENU_ID)?.remove();
 }
 
-function openMenu(x: number, y: number, text: string): void {
+function menuItem(label: string, onSelect: () => void): HTMLButtonElement {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.setAttribute('role', 'menuitem');
+  item.className = 'w-full rounded-md px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground';
+  item.textContent = label;
+  item.addEventListener('click', () => {
+    closeMenu();
+    onSelect();
+  });
+  return item;
+}
+
+function openMenu(x: number, y: number, text: string, sessionId: string | null): void {
   closeMenu();
   const menu = document.createElement('div');
   menu.id = MENU_ID;
   menu.setAttribute('role', 'menu');
   menu.className = 'fixed z-[80] min-w-[180px] rounded-lg border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg';
-  menu.style.left = `${Math.min(x, window.innerWidth - 200)}px`;
-  menu.style.top = `${Math.min(y, window.innerHeight - 48)}px`;
-  const item = document.createElement('button');
-  item.type = 'button';
-  item.setAttribute('role', 'menuitem');
-  item.className = 'w-full rounded-md px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground';
-  item.textContent = 'Ajouter au mapping';
-  item.addEventListener('click', () => {
-    closeMenu();
-    openInEditor(identityPath('add', text));
-  });
-  menu.appendChild(item);
+  const anonymize = menuItem('Anonymiser', () => openInEditor(identityPath('add', text)));
+  menu.appendChild(anonymize);
+  if (sessionId) {
+    menu.appendChild(menuItem('Démarrer une conversation annexe', () => void startSideConversation(sessionId, text)));
+  }
   document.body.appendChild(menu);
-  item.focus();
+  menu.style.left = `${Math.min(x, window.innerWidth - menu.offsetWidth)}px`;
+  menu.style.top = `${Math.min(y, window.innerHeight - menu.offsetHeight)}px`;
+  anonymize.focus();
 }
 
 export function startIdentityInteractions(): () => void {
@@ -80,7 +90,8 @@ export function startIdentityInteractions(): () => void {
     const text = selectionInScope();
     if (!text) return;
     event.preventDefault();
-    openMenu(event.clientX, event.clientY, text);
+    const inChat = event.target instanceof Element && Boolean(event.target.closest(CHAT_SELECTOR));
+    openMenu(event.clientX, event.clientY, text, inChat ? openedSessionId() : null);
   };
 
   const paintCursor = () => {
