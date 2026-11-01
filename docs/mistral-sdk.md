@@ -12,7 +12,7 @@ Le statut utilisé par l’interface vient de `/api/piecemaker/mistral-sdk/provi
 
 ## Chat et outils
 
-Le raccord appartient à `server/piecemaker/mistral-sdk/`. Il remplace le runtime enregistré sans modifier le répartiteur CloudCLI. Les événements gardent le protocole du chat existant. Les conversations SDK sont enregistrées sous le répertoire de composants PieceMaker, dans `mistral-sdk/sessions/`, avec contrôle du propriétaire avant reprise. Les historiques Vibe restent délégués au lecteur historique tant qu’ils n’ont pas été repris avec le SDK.
+Le raccord appartient à `server/piecemaker/mistral-sdk/`. Il remplace le runtime enregistré sans modifier le répartiteur CloudCLI. Les événements gardent le protocole du chat existant. Les conversations SDK sont enregistrées sous le répertoire de composants PieceMaker, dans `mistral-sdk/sessions/`, avec contrôle du propriétaire avant reprise. Les historiques Vibe restent délégués au lecteur historique tant qu’ils n’ont pas été repris avec le SDK. Un fork copie l’enregistrement complet de la conversation sous un nouvel identifiant : le SDK ne compacte pas, et une session Vibe jamais reprise avec le SDK ne peut pas être forkée.
 
 Les instructions Markdown générales et du dossier sont chargées avec leurs imports `@fichier.md`. Les skills visibles et non désactivés sont annoncés au modèle ; `skill` lit leur contenu complet. `Read`, `Write`, `Edit` et `Bash` permettent leur exécution. Les pièces jointes sont des références de fichiers pour les outils locaux ; ce raccord n’envoie pas directement les images comme entrée vision.
 

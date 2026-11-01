@@ -7,7 +7,7 @@ import path from 'node:path';
 import type { ProviderRuntimeContext, NormalizedMessage } from '@/shared/types.js';
 
 import { createMistralHistory } from './history.js';
-import { createMistralSdkRuntime } from './runtime.js';
+import { createMistralSdkFork, createMistralSdkRuntime } from './runtime.js';
 import type { createMistralTools } from './tools.js';
 import type { mistralSdkAuth } from './auth.service.js';
 
@@ -62,6 +62,34 @@ test('streamed tool fragments execute once and persisted history resumes after a
   assert.ok(JSON.stringify(requests.at(-1)).includes('Vérifier alpha'));
   await assert.rejects(createMistralSdkRuntime(history, async () => [], home, auth, tools).run('autre utilisateur', { sessionId: 'mistral-sdk-example' }, { ...writer, userId: 2 }, context), /autre utilisateur/);
   assert.equal((await history.load('mistral-sdk-example'))?.userId, 1);
+});
+
+test('a fork copies the whole conversation and answers apart from its source', async t => {
+  const { home, history } = await setup(t);
+  const requests: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];
+  const runtime = createMistralSdkRuntime(history, async () => [], home, fixtureClient([[{ content: 'première réponse' }], [{ content: 'réponse annexe' }]], requests), fixtureTools(async () => ''));
+  const writer = { send() {}, setSessionId() {}, userId: 1 } as never;
+  await runtime.run('première question', { sessionId: 'source' }, writer, context);
+  const source = await history.load('source');
+
+  const forked = await createMistralSdkFork(history).forkSession({ providerSessionId: 'source', jsonlPath: '', projectPath: home });
+
+  assert.match(forked.providerSessionId, /^mistral-sdk-/);
+  await fs.access(forked.jsonlPath);
+  assert.deepEqual(await history.load(forked.providerSessionId), source);
+
+  await runtime.run('question annexe', { sessionId: forked.providerSessionId }, writer, context);
+
+  assert.deepEqual(requests[1].messages.slice(1).map(message => message.role), ['user', 'assistant', 'user']);
+  assert.deepEqual(await history.load('source'), source);
+});
+
+test('a conversation without an SDK record cannot be forked', async t => {
+  const { history } = await setup(t);
+  await assert.rejects(
+    () => createMistralSdkFork(history).forkSession({ providerSessionId: 'ancienne-session', jsonlPath: '', projectPath: '' }),
+    (error: Error & { code?: string }) => error.code === 'FORK_SOURCE_NOT_READY',
+  );
 });
 
 test('a denied permission prevents execution and remains visible in the tool result', async t => {

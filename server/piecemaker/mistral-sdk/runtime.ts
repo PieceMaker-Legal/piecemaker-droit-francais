@@ -5,10 +5,10 @@ import { randomUUID } from 'node:crypto';
 
 import type { ChatCompletionRequest, ContentChunk, ToolCall } from '@mistralai/mistralai/models/components';
 
-import type { IProvider, IProviderRuntime } from '@/shared/interfaces.js';
+import type { IProvider, IProviderFork, IProviderRuntime } from '@/shared/interfaces.js';
 import type { AnyRecord, NormalizedMessage, ProviderPermissionDecision, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/types.js';
 import { appendFilesInputTag } from '@/shared/index.js';
-import { buildDefaultProviderCurrentActiveModel, createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
+import { AppError, buildDefaultProviderCurrentActiveModel, createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
 
 import { mistralSdkAuth } from './auth.service.js';
 import { createMistralHistory } from './history.js';
@@ -54,7 +54,19 @@ export function installMistralSdk(provider: IProvider, home: string) {
     return { messages: record.transcript.slice(start, end).map(message => ({ ...message, sessionId })), total: record.transcript.length, hasMore: start > 0, offset, limit };
   };
   const runtime = createMistralSdkRuntime(history, async id => (await legacyHistory(id)).messages, home);
-  Object.assign(provider, { runtime });
+  Object.assign(provider, { runtime, fork: createMistralSdkFork(history) });
+}
+
+export function createMistralSdkFork(history: ReturnType<typeof createMistralHistory>): IProviderFork {
+  return {
+    async forkSession({ providerSessionId }) {
+      const record = await history.load(providerSessionId);
+      if (!record) throw new AppError('Cette conversation n’a pas encore de réponse du SDK Mistral à copier.', { code: 'FORK_SOURCE_NOT_READY', statusCode: 409 });
+      const forkId = `mistral-sdk-${randomUUID()}`;
+      await history.save(forkId, record);
+      return { providerSessionId: forkId, jsonlPath: history.file(forkId) };
+    },
+  };
 }
 
 export function createMistralSdkRuntime(

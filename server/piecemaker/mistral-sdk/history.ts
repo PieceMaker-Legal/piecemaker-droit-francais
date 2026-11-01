@@ -9,6 +9,7 @@ import type { NormalizedMessage } from '@/shared/types.js';
 export function createMistralHistory(home: string) {
   const file = (sessionId: string) => path.join(home, 'mistral-sdk', 'sessions', `${createHash('sha256').update(sessionId).digest('hex')}.json`);
   return {
+    file,
     async load(sessionId: string) {
       try {
         return JSON.parse(await fs.readFile(file(sessionId), 'utf8')) as {

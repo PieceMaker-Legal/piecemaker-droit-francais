@@ -149,6 +149,24 @@ test('a session with no transcript yet cannot be forked', async () => {
   });
 });
 
+test('a Mistral session reaches its fork provider without a transcript path', async () => {
+  await withForkableClaude(async ({ directory }) => {
+    const now = new Date().toISOString();
+    sessionsDb.createSession('mistral-source', 'mistral', directory, 'Mistral session', now, now);
+    sessionsDb.assignProviderSessionId('mistral-source', 'mistral-sdk-source');
+    const mistral = providerRegistry.resolveProvider('mistral') as { fork?: IProviderFork };
+    const realFork = mistral.fork;
+    const forkSession: IProviderFork['forkSession'] = async () => ({ providerSessionId: 'mistral-sdk-fork', jsonlPath: path.join(directory, 'native-fork.jsonl') });
+    Object.defineProperty(mistral, 'fork', { value: { forkSession }, configurable: true, writable: true });
+    try {
+      const result = await sessionsService.forkSessionById('mistral-source');
+      assert.equal(sessionsDb.getSessionById(result.sessionId)?.provider_session_id, 'mistral-sdk-fork');
+    } finally {
+      Object.defineProperty(mistral, 'fork', { value: realFork, configurable: true, writable: true });
+    }
+  });
+});
+
 test('a provider without the capability is refused rather than silently ignored', async () => {
   await withForkableClaude(
     async ({ directory }) => {
