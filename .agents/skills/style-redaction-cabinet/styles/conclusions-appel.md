@@ -1,6 +1,5 @@
 # Style : conclusions d'appel
 
-Modèle : [templates/conclusions-appel.md](../templates/conclusions-appel.md).
 Les règles de [conclusions-en-defense.md](conclusions-en-defense.md) et de [citations.md](citations.md) s'appliquent aussi.
 
 ## Règles

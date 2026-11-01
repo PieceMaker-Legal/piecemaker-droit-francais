@@ -1,6 +1,6 @@
 # Style : conclusions en défense
 
-Modèle : [templates/conclusions-en-defense.md](../templates/conclusions-en-defense.md).
+Modèle : [templates/conclusions-en-defense.docx](../templates/conclusions-en-defense.docx).
 Citations : [citations.md](citations.md).
 
 ## Règles

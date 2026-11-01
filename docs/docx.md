@@ -9,7 +9,7 @@ fichier sur disque ; chacun voit les modifications de l'autre.
 | Quoi | Où |
 | --- | --- |
 | Installation (skill vendu, déclaré dans chaque dossier) | `server/piecemaker/vendor/skills/docx-cli/`, `server/piecemaker/skill-declaration.ts` |
-| Usage en rédaction (templates, placeholders, modifications suivies ; déclaré dans chaque dossier) | `server/piecemaker/vendor/piecemaker-plugin/skills/style-redaction-cabinet/SKILL.md` |
+| Règles de rédaction par document et templates (déclaré dans chaque dossier) | `server/piecemaker/vendor/piecemaker-plugin/skills/style-redaction-cabinet/SKILL.md` |
 | Style Word du cabinet (profil hors dépôt, `~/.piecemaker/custom/style-docx/` ; document créé et LibreOffice) | `server/piecemaker/vendor/piecemaker-plugin/skills/style-redaction-cabinet/scripts/style-docx.py`, `references/configuration-style-docx.md` |
 | Garde-fou Bash (`docx read pièce.docx` passe par le hook) | `server/piecemaker/vendor/piecemaker-plugin/scripts/protect-originals.mjs` |
 | Classement des `.docx` produits par l'IA | `server/piecemaker/vendor/piecemaker-plugin/scripts/classify-ai-documents.mjs` |

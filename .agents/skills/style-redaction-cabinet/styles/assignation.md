@@ -1,6 +1,5 @@
 # Style : assignation
 
-Modèle : [templates/assignation.md](../templates/assignation.md).
 Citations : [citations.md](citations.md).
 
 ## Mise en page
