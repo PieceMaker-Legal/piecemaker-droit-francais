@@ -43,12 +43,15 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
   });
 
   const guard = async (toolName: string, input: Record<string, unknown>) => {
+    let guarded = input;
     for (const script of guardScripts) {
-      const result = await run(process.execPath, [script], JSON.stringify({ tool_name: toolName, tool_input: input, cwd }));
+      const result = await run(process.execPath, [script], JSON.stringify({ tool_name: toolName, tool_input: guarded, cwd }));
       if (!result.trim()) continue;
       const decision = JSON.parse(result).hookSpecificOutput;
       if (decision?.permissionDecision === 'deny') throw new Error(decision.permissionDecisionReason || 'Accès refusé par la protection PieceMaker.');
+      if (decision?.updatedInput) guarded = decision.updatedInput;
     }
+    return guarded;
   };
 
   const add = (name: string, description: string, properties: Record<string, unknown>, required: string[], readOnly: boolean, execute: (input: Record<string, unknown>) => Promise<string>) => {
@@ -96,9 +99,8 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     return 'Modification enregistrée.';
   });
   add('Bash', 'Exécuter une commande dans le dossier courant (shell Windows ou Unix selon le poste).', { command: string }, ['command'], false, async input => {
-    const command = text(input, 'command');
-    await guard('Bash', { command });
-    return run(command, [], undefined, true);
+    const guarded = await guard('Bash', { command: text(input, 'command') });
+    return run(text(guarded, 'command'), [], undefined, true);
   });
 
   const disabled = new Set(Array.isArray(disabledSkills) ? disabledSkills.map(item => String(item?.name).toLowerCase()) : []);

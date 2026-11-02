@@ -23,6 +23,7 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { readHookPayload, runHook, noop } from './lib/hook-io.mjs';
@@ -37,6 +38,7 @@ const {
   markdownCounterpart,
   readProtection,
 } = require('./lib/protection.cjs');
+const { applyMapping, resolveMappedPath } = require('./lib/substitution.cjs');
 
 /** Au-delà, on ne cherche pas de chemin : une commande pareille n'en cite pas un. */
 const MAX_COMMAND_LENGTH = 20_000;
@@ -245,6 +247,55 @@ function isDocxReadCommand(command, cwd) {
   return reads.length > 0 && reads.every((words) => isCaseDocxRead(words, cwd));
 }
 
+const SHELL_WORD = /"[^"]*"|'[^']*'|[^\s;|&<>()]+/g;
+
+function missingFileWords(command, cwd) {
+  const text = String(command || '');
+  if (!text || text.length > MAX_COMMAND_LENGTH) return [];
+  return (text.match(SHELL_WORD) || [])
+    .map((word) => word.replace(/^["']|["']$/g, ''))
+    .filter((bare) => bare && !bare.startsWith('-') && /\.[\p{L}\d]{1,8}$/u.test(bare) && !statSafe(absolutePath(bare, cwd)));
+}
+
+async function anonymizationDictionary() {
+  try {
+    const { createSqliteDictionaryLoader } = require('../../../anonymizer/sqlite-dictionary.cjs');
+    const { productDataRoot } = await import('../../../../../shared/product-config.mjs');
+    const databasePath = process.env.DATABASE_PATH || path.join(productDataRoot(path.join(os.homedir(), '.cloudcli')), 'auth.db');
+    if (!statSafe(databasePath)) return null;
+    const loader = createSqliteDictionaryLoader({ databasePath });
+    const dictionary = loader.get();
+    loader.close();
+    return dictionary.empty ? null : dictionary;
+  } catch {
+    return null;
+  }
+}
+
+async function withExistingFiles(command, cwd) {
+  if (missingFileWords(command, cwd).length === 0) return command;
+  const dictionary = await anonymizationDictionary();
+  if (!dictionary) return command;
+  return String(command).replace(SHELL_WORD, (word) => {
+    const bare = word.replace(/^["']|["']$/g, '');
+    if (!missingFileWords(bare, cwd).length) return word;
+    const resolved = resolveMappedPath(applyMapping(bare, dictionary.mapping), dictionary.mapping, dictionary.reverse, cwd);
+    return statSafe(absolutePath(resolved, cwd))?.isFile() ? quotedForShell(resolved) : word;
+  });
+}
+
+function rewritten(toolInput, command, approved) {
+  const allowed = approved || process.env.PIECEMAKER_HOOK_CLIENT === 'codex';
+  return {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: allowed ? 'allow' : 'ask',
+      ...(allowed ? {} : { permissionDecisionReason: '[PieceMaker] Chemin corrigé vers le fichier présent sur le disque.' }),
+      updatedInput: { ...toolInput, command },
+    },
+  };
+}
+
 async function main() {
   const payload = await readHookPayload(2000);
   if (!payload) return null;
@@ -253,9 +304,10 @@ async function main() {
   const cwd = payload.cwd || process.cwd();
 
   if (toolName === 'Bash') {
-    const gitReason = gitHistoryReason(payload.tool_input?.command, cwd);
+    const command = await withExistingFiles(payload.tool_input?.command, cwd);
+    const gitReason = gitHistoryReason(command, cwd);
     if (gitReason) return deny(gitReason);
-    for (const candidate of commandPaths(payload.tool_input?.command, cwd)) {
+    for (const candidate of commandPaths(command, cwd)) {
       const located = locateProjectCase(candidate);
       if (!shieldActive(located)) continue;
       if (isMappingFile(candidate)) return deny(mappingReason(candidate));
@@ -264,7 +316,9 @@ async function main() {
         return deny(protectionReason(candidate, located.caseRoot));
       }
     }
-    return isDocxReadCommand(payload.tool_input?.command, cwd) ? allow() : null;
+    const approved = isDocxReadCommand(command, cwd);
+    if (command !== payload.tool_input?.command) return rewritten(payload.tool_input, command, approved);
+    return approved ? allow() : null;
   }
 
   if (!['Read', 'Grep', 'Glob'].includes(toolName)) return null;

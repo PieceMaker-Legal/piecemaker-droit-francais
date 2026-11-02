@@ -24,6 +24,16 @@ fichier sur disque ; chacun voit les modifications de l'autre.
   qui inspecte aussi les commandes shell. Par défaut seuls PDF et images sont
   protégés (`lib/protection.cjs`, `PROTECTED_EXTENSIONS`) : un `.docx` n'est
   jamais protégé, même s'il figure dans `.piecemaker/protection.json`.
+- Variantes de nom : le proxy rétablit un code (`SAS_N`) sous sa variante
+  principale, alors que le nom du fichier peut contenir une autre variante. Si
+  un mot de la commande désigne un fichier absent, le hook le masque avec le
+  dictionnaire (`auth.db`) et cherche dans le dossier le seul fichier dont le
+  nom masqué est identique. Il renvoie alors la commande corrigée
+  (`updatedInput`) : `allow` pour une lecture `docx` et pour Codex, `ask` sinon
+  pour Claude. Mistral applique la même correction par `guard`
+  (`server/piecemaker/mistral-sdk/tools.ts`). Plusieurs fichiers possibles :
+  aucune correction. Les contrôles de protection portent sur la commande
+  corrigée.
 
 ## 2. Côté avocat — visionneuse / éditeur intégré
 
