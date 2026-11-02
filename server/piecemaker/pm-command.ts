@@ -32,10 +32,10 @@ function prependToPath(env: NodeJS.ProcessEnv, binDir: string, platform: NodeJS.
   env[key] = [binDir, ...entries].join(delimiter);
 }
 
-function persistPosixPath(binDir: string, userHome: string, platform: NodeJS.Platform) {
-  const existing = ['.zshrc', '.bashrc', '.profile'].map((name) => path.join(userHome, name)).filter((file) => fs.existsSync(file));
-  const files = existing.length ? existing : [path.join(userHome, platform === 'darwin' ? '.zshrc' : '.profile')];
-  for (const file of files) {
+function persistPosixPath(binDir: string, userHome: string) {
+  const always = ['.zshenv', '.zshrc', '.bashrc'].map((name) => path.join(userHome, name));
+  const existing = ['.bash_profile', '.profile'].map((name) => path.join(userHome, name)).filter((file) => fs.existsSync(file));
+  for (const file of [...always, ...existing]) {
     const content = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
     if (content.includes(binDir)) continue;
     fs.appendFileSync(file, `\n# PieceMaker\nexport PATH="${binDir}:$PATH"\n`, 'utf8');
@@ -44,7 +44,11 @@ function persistPosixPath(binDir: string, userHome: string, platform: NodeJS.Pla
 
 function persistWindowsUserPath(binDir: string) {
   const quoted = binDir.replace(/'/g, "''");
-  const script = `$p=[Environment]::GetEnvironmentVariable('Path','User'); if (-not (($p -split ';') -contains '${quoted}')) { [Environment]::SetEnvironmentVariable('Path', ((@($p, '${quoted}') | Where-Object { $_ }) -join ';'), 'User') }`;
+  const script = [
+    "$k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)",
+    "$p = [string]$k.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)",
+    `if (($p -split ';') -notcontains '${quoted}') { $k.SetValue('Path', ((@($p, '${quoted}') | Where-Object { $_ }) -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString); [Environment]::SetEnvironmentVariable('PIECEMAKER_PATH', '${quoted}', 'User') }`,
+  ].join('; ');
   execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true }, () => undefined);
 }
 
@@ -62,6 +66,6 @@ export function installPmCommand(options: PmCommandOptions): string {
 
   prependToPath(env, binDir, platform);
   if (platform === 'win32') (options.persistWindowsPath ?? persistWindowsUserPath)(binDir);
-  else persistPosixPath(binDir, options.userHome ?? os.homedir(), platform);
+  else persistPosixPath(binDir, options.userHome ?? os.homedir());
   return binDir;
 }

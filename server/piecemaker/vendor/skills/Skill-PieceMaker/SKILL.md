@@ -8,10 +8,8 @@ description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions)
 ## Lancer `pm`
 
 1. Lancez `pm <outil> …`. `pm` est dans le PATH.
-2. Si le shell répond « command not found », lancez `"<cette-skill>/scripts/pm" <outil> …`. Mettez le chemin entre guillemets.
-3. Si la commande échoue, lisez l'erreur, corrigez, relancez.
-
-Lancez `pm` vous-même. L'avocat n'a pas de terminal.
+2. Si la commande échoue, lisez l'erreur, corrigez, relancez.
+3. Ne demandez jamais à l'utilisateur de lancer `pm`.
 
 `pm` vise le dossier de la session, depuis tout répertoire. `--dossier "CHEMIN"` vise un autre dossier. `pm --help` liste les outils.
 

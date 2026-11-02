@@ -15,26 +15,30 @@ function temporaryFolder() {
   return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-pm-command-')));
 }
 
-test('installe pm dans le PATH des sessions et du shell, sans doublon', () => {
-  const home = temporaryFolder();
+test('installe pm dans le PATH des sessions du serveur, sans doublon', () => {
   const userHome = temporaryFolder();
-  fs.writeFileSync(path.join(userHome, '.zshrc'), 'export A=1\n');
   const env: NodeJS.ProcessEnv = { PATH: '/usr/bin:/bin' };
 
-  const binDir = installPmCommand({ applicationRoot, piecemakerHome: home, env, platform: 'darwin', userHome });
-  installPmCommand({ applicationRoot, piecemakerHome: home, env, platform: 'darwin', userHome });
+  const binDir = installPmCommand({ applicationRoot, piecemakerHome: temporaryFolder(), env, platform: 'darwin', userHome });
+  installPmCommand({ applicationRoot, piecemakerHome: path.dirname(binDir), env, platform: 'darwin', userHome });
 
   assert.equal(env.PATH, `${binDir}:/usr/bin:/bin`);
-  assert.equal(fs.readFileSync(path.join(userHome, '.zshrc'), 'utf8').split(binDir).length, 2);
+  for (const name of ['.zshenv', '.zshrc', '.bashrc']) {
+    assert.equal(fs.readFileSync(path.join(userHome, name), 'utf8').split(binDir).length, 2);
+  }
   assert.equal(fs.existsSync(path.join(userHome, '.profile')), false);
   const help = execFileSync('pm', ['--help'], { cwd: userHome, env: { ...process.env, PATH: env.PATH }, encoding: 'utf8' });
   assert.match(help, /Usage: pm <outil>/);
 });
 
-test('crée .zshrc sur macOS quand aucun fichier de shell n’existe', () => {
+test('un shell lancé hors PieceMaker trouve pm, interactif ou non', () => {
   const userHome = temporaryFolder();
-  const binDir = installPmCommand({ applicationRoot, piecemakerHome: temporaryFolder(), env: {}, platform: 'darwin', userHome });
-  assert.match(fs.readFileSync(path.join(userHome, '.zshrc'), 'utf8'), new RegExp(`export PATH="${binDir}:\\$PATH"`));
+  installPmCommand({ applicationRoot, piecemakerHome: temporaryFolder(), env: {}, platform: 'darwin', userHome });
+  const env = { HOME: userHome, ZDOTDIR: userHome, PATH: '/usr/bin:/bin' };
+  for (const [shell, args] of [['/bin/zsh', ['-c']], ['/bin/zsh', ['-lic']], ['/bin/bash', ['-ic']]] as const) {
+    const help = execFileSync(shell, [...args, 'pm --help'], { cwd: userHome, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    assert.match(help, /Usage: pm <outil>/, `${shell} ${args.join(' ')}`);
+  }
 });
 
 test('sous Windows, écrit pm.cmd et pm, et inscrit le dossier dans le PATH utilisateur', () => {
