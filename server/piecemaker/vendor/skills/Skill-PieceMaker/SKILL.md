@@ -5,12 +5,15 @@ description: Outils du dossier PieceMaker — SQL (pièces, personnes, mentions)
 
 # PieceMaker
 
-`pm` vise le dossier de la session, même lancé depuis un autre répertoire (`--dossier PATH` pour un autre) :
+## Lancer `pm`
 
-```
-<cette-skill>/scripts/pm <outil> …
-<cette-skill>/scripts/pm --help
-```
+1. Lancez `pm <outil> …`. `pm` est dans le PATH.
+2. Si le shell répond « command not found », lancez `"<cette-skill>/scripts/pm" <outil> …`. Mettez le chemin entre guillemets.
+3. Si la commande échoue, lisez l'erreur, corrigez, relancez.
+
+Lancez `pm` vous-même. L'avocat n'a pas de terminal.
+
+`pm` vise le dossier de la session, depuis tout répertoire. `--dossier "CHEMIN"` vise un autre dossier. `pm --help` liste les outils.
 
 ## Lire avant d'agir
 

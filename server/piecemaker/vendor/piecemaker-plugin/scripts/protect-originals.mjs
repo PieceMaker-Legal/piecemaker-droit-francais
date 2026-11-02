@@ -68,8 +68,7 @@ function quotedForShell(value) {
 }
 
 function conversionCommand(caseRoot) {
-  const launcher = path.join(caseRoot, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm');
-  return `${quotedForShell(launcher)} conversion --dossier ${quotedForShell(caseRoot)}`;
+  return `pm conversion --dossier ${quotedForShell(caseRoot)}`;
 }
 
 function recoveredByGit(absolute, caseRoot) {

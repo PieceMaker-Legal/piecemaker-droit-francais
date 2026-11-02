@@ -44,7 +44,7 @@ export function installLegalCodeHarness(options: {
     }) as ProviderRuntimeWriter;
     const dossier = String(runtimeOptions.cwd ?? runtimeOptions.projectPath ?? '');
     const pm = path.join(dossier, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm');
-    const instructions = `${fs.readFileSync(instructionsPath, 'utf8').trim()}\n\nDossier de la session : ${dossier}. pm n'est pas dans le PATH : lance-le par son chemin, "${pm}". Passe toujours --dossier "${dossier}" à pm, quel que soit le répertoire courant.`;
+    const instructions = `${fs.readFileSync(instructionsPath, 'utf8').trim()}\n\nDossier de la session : ${dossier}. Lance pm. S'il est introuvable, lance "${pm}". Passe toujours --dossier "${dossier}" à pm, quel que soit le répertoire courant.`;
     return run(provider, withLegalCodeInstructions(command, instructions), runtimeOptions, wrapped);
   };
 
