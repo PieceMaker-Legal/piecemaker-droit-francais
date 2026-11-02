@@ -14,7 +14,7 @@ vi.stubEnv('HOME', home);
 vi.stubEnv('USERPROFILE', home);
 
 const { assistant } = await import('../server/assistant.js');
-const { readClassification, saveClassification } = await import('../server/classification.js');
+const { addClassification, readClassification, saveClassification } = await import('../server/classification.js');
 const { appendRows, createReview, listReviews, readReview } = await import('../server/reviews.js');
 const { deleteDraft, listDrafts } = await import('../server/drafts.js');
 
@@ -186,16 +186,15 @@ describe('un seul index par dossier', () => {
     expect([premiere.created, seconde.created, autreNom.created]).toEqual([true, false, false]);
     expect(fichiers()).toEqual([premiere.file]);
     const run = launchers();
-    expect(await assistant({ action: 'index', project: dossier }, run)).toEqual({ fichier: premiere.file });
+    expect(await assistant({ action: 'index', project: dossier }, run)).toMatchObject({ fichier: premiere.file, absentes: expect.any(Number) });
     expect(await assistant({ action: 'preparer', project: dossier, modele: 'Chronologie' }, run)).toMatchObject({ fichier: premiere.file });
     const listed = await assistant({ action: 'lister', project: dossier }, run) as { analyses: { fichier: string; index?: boolean }[] };
     expect(listed.analyses).toEqual([expect.objectContaining({ fichier: premiere.file, nom: 'Index', index: true })]);
   });
 
-  it('crée une analyse classique à côté de la chronologie, sans classement pour l’agent', async () => {
+  it('crée une analyse classique à côté de la chronologie', async () => {
     const classique = createReview(dossier, { ...template, name: 'Analyse de contrat' }, 'Baux', rows, settings);
     expect(classique.created).toBe(true);
-    await expect(assistant({ action: 'classement', project: dossier, fichier: classique.file }, launchers())).rejects.toThrow('index');
   });
 });
 
@@ -235,8 +234,9 @@ describe('outil tabular_review', () => {
     plain.columns = [{ index: 3, name: 'Date', prompt: 'Date ?', format: 'date' }];
     fs.writeFileSync(path.join(project, REVIEW_FOLDER, 'simple.json'), JSON.stringify(plain));
     const run = launchers();
-    await assistant({ action: 'classement', project, fichier: 'simple.json' }, run);
-    const again = await assistant({ action: 'classement', project, fichier: 'simple.json' }, run) as { colonnes: { colonne: number }[] };
+    await addClassification(project, 'simple.json');
+    await addClassification(project, 'simple.json');
+    const again = await assistant({ action: 'lire', project, fichier: 'simple.json' }, run) as { colonnes: { colonne: number }[] };
     expect(again.colonnes.map((column) => column.colonne)).toEqual([3, 4]);
   });
 

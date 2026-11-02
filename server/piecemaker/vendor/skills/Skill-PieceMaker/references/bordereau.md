@@ -8,4 +8,4 @@ Donnez les chemins relatifs au dossier. L’ordre des arguments fixe les numéro
 
 - Une pièce en échec laisse son numéro vide : corrigez et relancez toute la liste.
 - Une liste plus courte laisse en place les anciens numéros supérieurs : signalez-le à l’avocat.
-- Sans tampon, la commande échoue : lancez `pm afficher --volet tampon` et demandez à l’avocat de le créer.
+- Sans tampon, la commande échoue : lancez `pm tab afficher bordereau` et demandez à l’avocat de le créer.

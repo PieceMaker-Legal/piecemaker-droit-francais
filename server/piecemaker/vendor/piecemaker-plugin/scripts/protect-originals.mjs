@@ -68,7 +68,7 @@ function quotedForShell(value) {
 }
 
 function conversionCommand(caseRoot) {
-  return `pm conversion --dossier ${quotedForShell(caseRoot)}`;
+  return `pm dossier conversion --dossier ${quotedForShell(caseRoot)}`;
 }
 
 function recoveredByGit(absolute, caseRoot) {

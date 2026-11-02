@@ -29,7 +29,7 @@ export function installLegalCodeHarness(options: {
 }) {
   const run = options.runtime.run.bind(options.runtime);
   const fetchHistory = options.sessions.fetchHistory.bind(options.sessions);
-  const instructionsPath = path.join(options.applicationRoot, 'server', 'piecemaker', 'legal-code', 'instructions.md');
+  const instructionsPath = path.join(options.applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'references', 'raisonnement.md');
 
   options.runtime.run = async (provider, command, runtimeOptions, writer) => {
     if (runtimeOptions.legalCode !== true || command.startsWith('/')) return run(provider, command, runtimeOptions, writer);

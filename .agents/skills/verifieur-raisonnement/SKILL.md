@@ -1,6 +1,6 @@
 ---
 name: verifieur-raisonnement
-description: Cadre du raisonnement juridique vérifié de PieceMaker (fichiers .piecemaker/raisonnements/<nom>.yaml, vérificateur, contrôles, volet Raisonnement). Use whenever modifying, reviewing or testing server/modules/piecemaker-reasoning, the agent instruction server/piecemaker/legal-code/instructions.md, or the piecemaker-raisonnement plugin.
+description: Cadre du raisonnement juridique vérifié de PieceMaker (fichiers .piecemaker/raisonnements/<nom>.yaml, vérificateur, contrôles, volet Raisonnement). Use whenever modifying, reviewing or testing server/modules/piecemaker-reasoning, the agent instruction server/piecemaker/vendor/skills/Skill-PieceMaker/references/raisonnement.md, or the piecemaker-raisonnement plugin.
 ---
 
 # Raisonnement vérifié
@@ -9,7 +9,7 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnements/<nom>.ya
 
 ## Principes (décidés, à ne pas défaire)
 
-- **Une seule source d'instructions** : `server/piecemaker/legal-code/instructions.md`. Elle ne contient que des règles d'écriture génériques et la commande. La skill `piecemaker`, l'outil MCP et le harness des citations ne la répètent pas.
+- **Une seule source d'instructions** : `server/piecemaker/vendor/skills/Skill-PieceMaker/references/raisonnement.md`. Elle ne contient que des règles d'écriture génériques et la commande. La skill `piecemaker` la renvoie ; le harness Legal Code l'injecte ; le harness des citations ne la répète pas.
 - **C'est le vérificateur qui conduit l'agent** vers un raisonnement complet et sourcé, par ses manques. Les contrôles, la qualification et leurs conséquences ne sont jamais expliqués dans l'instruction.
 - **Erreur = défaut d'écriture** (syntaxe, citation introuvable, terme non défini, hypothèse non conforme…). **Manque = ce qui reste à établir** ; l'avocat peut l'écarter. **Conseil = écriture d'un nom à revoir** (même fait sous deux noms, « et »/« ou »/« sauf » dans un nom) : jamais bloquant, absent du bilan, des annotations et du volet, montré à l'agent seulement sans erreur, 5 au plus (`names.ts`).
 - **Générique** : aucune règle ne dépend d'un domaine ou d'un vocabulaire (« annexe », « contrat »…). L'agent déclare, le vérificateur vérifie.
@@ -70,7 +70,7 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 | `server/modules/piecemaker-reasoning/engine.ts` | logique à trois valeurs, questions et fondements, faits décisifs, délais, hypothèses |
 | `server/modules/piecemaker-reasoning/program.ts` | vérification, manques, sortie, service, exemple fictif |
 | `server/piecemaker/reasoning-connectors.ts` | Légifrance, pièces, registre, BODACC |
-| `server/piecemaker/legal-code/instructions.md` | instruction de l'agent (seule source) |
+| `server/piecemaker/vendor/skills/Skill-PieceMaker/references/raisonnement.md` | instruction de l'agent (seule source) |
 | `plugins/piecemaker-raisonnement/src/client.ts` | volet : organigramme du raisonnement et test |
 
 ## Tester

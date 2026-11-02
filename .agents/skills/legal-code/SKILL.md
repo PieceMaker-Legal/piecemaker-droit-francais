@@ -13,10 +13,10 @@ Si le message de l'utilisateur ne contient pas encore de question, réponds en t
 
 ## Méthode
 
-1. Lance `pm raisonnement consignes` et suis ces règles d'écriture.
+1. Lis la référence `raisonnement.md` de la skill piecemaker et suis ces règles d'écriture.
 2. Lance `pm raisonnement lister`. Si un raisonnement porte déjà sur la demande, reprends-le.
 3. Écris le raisonnement dans `.piecemaker/raisonnements/<nom>.yaml`. Chaque source (`LEGIARTI…`, `JURITEXT…`) est lue sur le mcp Légifrance et sa citation copiée mot pour mot.
-4. Cherche chaque fait dans le dossier (Markdown converti, `pm sql`) et copie l'extrait exact de la pièce. Sans pièce, le fait reste à prouver.
+4. Cherche chaque fait dans le dossier (Markdown converti, `pm dossier sql`) et copie l'extrait exact de la pièce. Sans pièce, le fait reste à prouver.
 5. Lance `pm raisonnement verifier --raisonnement <nom>`. Corrige ce qu'il signale. Relance jusqu'à zéro erreur. Lève autant de manques que tu peux, souligne ceux qui dépendent de l'utilisateur.
 6. Résume pour l'utilisateur en langage juridique : l'objectif et s'il est atteint, ce qui y fait obstacle, ce qui reste à prouver. Sois précis & concis dans tes réponses.
 

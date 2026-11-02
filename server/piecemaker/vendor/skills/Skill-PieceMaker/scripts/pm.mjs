@@ -1,51 +1,70 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'bordereau', 'afficher', 'tabular_review', 'tabular_review_index', 'raisonnement', 'suivi'];
-const REASONING_COMMANDS = ['consignes', 'verifier', 'lister'];
-const VOLETS = ['dossier', 'index', 'tabular-review', 'tampon'];
-const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer'];
+const TOOLS = ['tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers'];
+const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
+const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'fichier'];
+const DOSSIER_COMMANDS = ['verifier', 'sql', 'conversion', 'arborescence', 'index'];
+const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
+const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
-const INDEX_ACTIONS = ['lister', 'modifier', 'ouvrir', 'preparer', 'lancer', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer'];
+const REASONING_COMMANDS = ['verifier', 'lister'];
+const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
+const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
-const BOOLEAN_FLAGS = new Set(['force', 'fermer']);
+const BOOLEAN_FLAGS = new Set(['force']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
+const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
 
-export const HELP = `Usage: pm <outil> [options]
+export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossier PATH])
 
-  conversion [--dossier PATH] [--force] [pièce…]
-  sql [--dossier PATH] [--requete SQL]
-  bordereau [--dossier PATH] <pièce…>
-      tamponne les pièces dans cet ordre : Pièces tamponnées/Pièce n°N.pdf
-  afficher [--fichier PATH] [--volet ${VOLETS.join('|')}] [--review FILE]
-      sans cible : liste les volets ouverts
-      --fermer : ferme le fichier ou le volet
+  tab lister
+      volets ouverts à côté du chat
+  tab afficher|fermer <cible>
+      cibles : dossier | index | tabular_review [FICHIER.json] | bordereau
+               | raisonnement | suivi_dossiers | fichier PATH
+
+  dossier verifier
+      anonymisation, index (pièces absentes), pièces non converties
+  dossier sql "REQUÊTE"
+      seul accès à la base du dossier ; données masquées par le serveur
+  dossier conversion [--force] [pièce…]
+      sans pièce : tout le dossier (pièces pas encore prêtes) ;
+      attend 90 s au plus, puis renvoie l’avancée : relancez pour suivre
+  dossier arborescence --dossiers '[{"nom":"…","explication":"…"}]'
+      remplace .piecemaker/arborescence.json (lecture : le fichier)
+  dossier index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
+      crée l’index s’il manque ; sinon analyse les pièces absentes de l’index
+  dossier index lire
+  dossier index colonnes --questions JSON
+
   tabular_review ${REVIEW_ACTIONS.join('|')}
-  tabular_review_index ${INDEX_ACTIONS.join('|')}
-      toujours dans l’onglet Dossier ; fichier et projet déduits
-      lister [--dossier NOM] ; modifier --piece ID [--date AAAA-MM-JJ] [--libelle TEXT] [--dossier NOM]
-      [--dossier PATH] [--fichier FILE] [--projet ID] [--mode analyse|recherche]
+      [--fichier FILE] [--projet ID] [--mode analyse|recherche]
       [--nom TEXT] [--modele ID] [--description TEXT] [--questions JSON]
       [--documents a,b] [--recherche JSON] [--ia claude|codex|mistral] [--modele-ia TEXT]
-  raisonnement consignes
-      règles d'écriture du raisonnement : à lire avant de l'écrire ou de le compléter
+
+  bordereau <pièce…>
+      tamponne les pièces dans cet ordre : Pièces tamponnées/Pièce n°N.pdf
+
   raisonnement verifier [--raisonnement NOM]
   raisonnement lister
       un fichier par raisonnement : .piecemaker/raisonnements/NOM.yaml ;
       --raisonnement est requis quand le dossier en compte plusieurs
-  suivi verifier [--suivi FICHIER]
-      vérifie un suivi : .piecemaker/<nom>-suivi.json (matter, événements et échéances) ;
-      --suivi est requis quand le dossier en compte plusieurs (ex. appel-suivi.json)
-  suivi lire <chemin>
-      lit un document du tableau des dossiers (ex. projects/cabinet/requests)
-  suivi ecrire <chemin> --json '{...}'
-      écrit un document du tableau des dossiers
+
+  suivi_dossiers verifier [--suivi FICHIER]
+      vérifie .piecemaker/<nom>-suivi.json et recalcule les échéances ;
+      --suivi est requis quand le dossier en compte plusieurs
+  suivi_dossiers lire <chemin>
+      lit un document du Matter board (ex. projects/cabinet/requests)
+  suivi_dossiers ecrire <chemin> --json '{...}'
+      écrit un document du Matter board
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {
@@ -157,10 +176,11 @@ function parseJson(value, name) {
   }
 }
 
-function spawnPiecemaker(cliPath, args, cwd) {
+function spawnPiecemaker(cliPath, args, cwd, signal) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [cliPath, ...args], {
       cwd,
+      signal,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
@@ -172,6 +192,7 @@ function spawnPiecemaker(cliPath, args, cwd) {
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('error', (error) => {
+      if (signal?.aborted) return;
       resolve({ code: 1, stdout, stderr: stderr || error.message });
     });
     child.on('close', (code) => {
@@ -197,19 +218,25 @@ async function defaultDeps(cwd) {
   const client = await import(pathToFileURL(path.join(vendor, 'installer', 'lib', 'conversion-client.mjs')).href);
   const volets = await import(pathToFileURL(path.join(vendor, 'mcp', 'piecemaker', 'volets.mjs')).href);
   const panels = await import(pathToFileURL(path.join(vendor, 'mcp', 'piecemaker', 'volets-ouverts.mjs')).href);
+  const library = createRequire(path.join(vendor, 'piecemaker-plugin', 'scripts', 'lib', 'case-folders.cjs'));
+  const caseFolders = library('./case-folders.cjs');
+  const protection = library('./protection.cjs');
   const cliPath = path.join(vendor, 'installer', 'bin', 'piecemaker.mjs');
   const panelsPath = panels.openPanelsFile();
   return {
     sessionDossier: (cwd) => sessionDossier(cwd, { lookup: client.sessionDossier }),
     sqlFn: client.runSql,
     reasoningFn: client.runReasoning,
-    reasoningInstructions: () => fs.readFileSync(path.join(vendor, '..', 'legal-code', 'instructions.md'), 'utf8'),
     suiviFn: client.runSuivi,
     tabularFn: client.runTabularReview,
     stampFn: client.runStamping,
-    execFn: (args, dir) => spawnPiecemaker(cliPath, args, dir),
-    chronologieSql: volets.chronologieSql,
-    reviewFile: volets.reviewFile,
+    execFn: (args, dir, signal) => spawnPiecemaker(cliPath, args, dir, signal),
+    conversionJob: client.readConversionJob,
+    piecesFn: client.readLocalPieces,
+    caseState: (dir) => {
+      const found = caseFolders.locateProjectCase(dir);
+      return { anonymized: Boolean(found?.anonymized), lifted: protection.isProtectionBypassed(found?.caseRoot ?? dir) };
+    },
     tabularIndex: volets.tabularIndex,
     refuseIndex: volets.refuseIndex,
     describePanels: (dir) => panels.describeOpenPanels(dir, panelsPath),
@@ -279,8 +306,10 @@ async function confirmClose(api, request, target) {
 }
 
 function voletTarget(cwd, volet, review) {
-  if (volet === 'tampon') return { cwd, tab: 'plugin:piecemaker-tampon' };
-  if (volet === 'tabular-review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
+  if (volet === 'bordereau') return { cwd, tab: 'plugin:piecemaker-tampon' };
+  if (volet === 'raisonnement') return { cwd, tab: 'plugin:piecemaker-raisonnement' };
+  if (volet === 'suivi_dossiers') return { cwd, tab: 'plugin:piecemaker-echeances' };
+  if (volet === 'tabular_review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
   return { cwd, tab: 'plugin:piecemaker-dossier', view: volet === 'index' ? 'chronology' : 'general' };
 }
 
@@ -288,6 +317,7 @@ function panelNoticeLabel(target) {
   if (target.tab === 'files') return `Fichiers (${path.basename(target.document || '')})`;
   if (target.tab === 'plugin:piecemaker-tampon') return 'Bordereau';
   if (target.tab === 'plugin:piecemaker-raisonnement') return 'Raisonnement';
+  if (target.tab === 'plugin:piecemaker-echeances') return 'Suivi des dossiers';
   if (target.tab === 'plugin:piecemaker-tabular-review') {
     if (target.draft) return `Analyse tabulaire (projet ${target.draft})`;
     if (target.review) return `Analyse tabulaire (${target.review})`;
@@ -339,6 +369,164 @@ function reviewInput(flags) {
   };
 }
 
+function value(flag) {
+  return flag && flag !== true ? String(flag) : undefined;
+}
+
+function panelRequest(project, target) {
+  const request = { project, ...target };
+  delete request.cwd;
+  return request;
+}
+
+async function tab(api, positional, cwd, resolved) {
+  const [, commande, cible, argument] = positional;
+  if (!TAB_COMMANDS.includes(commande)) usage(`tab attend ${TAB_COMMANDS.join(', ')}.`);
+  if (commande === 'lister') return api.describePanels ? api.describePanels(resolved) : 'Aucun volet ouvert à côté du chat.';
+  if (!TAB_TARGETS.includes(cible)) usage(`Cible inconnue : ${cible ?? '(aucune)'}`);
+  const closing = commande === 'fermer';
+  if (cible === 'fichier') {
+    if (!argument) usage('Indiquez le chemin du fichier.');
+    const file = path.resolve(cwd, argument);
+    if (!closing && !api.exists(file)) fail(`Fichier introuvable : ${argument}`);
+    const target = { cwd: resolved, tab: 'files', document: file };
+    const request = { project: resolved, tab: 'files', document: file };
+    if (closing) {
+      const { closed, alreadyClosed } = await confirmClose(api, request, target);
+      if (!closed) fail('La fermeture du fichier n’a pas été confirmée dans PieceMaker.');
+      return alreadyClosed ? `Déjà fermé : ${argument}` : `Fermé : ${argument}`;
+    }
+    const { opened, alreadyOpen } = await confirmPanel(api, request, target);
+    if (!opened) fail('L’ouverture du fichier n’a pas été confirmée dans PieceMaker.');
+    return alreadyOpen ? `Déjà affiché dans le volet de lecture : ${argument}` : `Affiché dans le volet de lecture : ${argument}`;
+  }
+  const review = cible === 'tabular_review' && argument ? path.basename(argument) : '';
+  const target = voletTarget(resolved, cible, review);
+  const request = panelRequest(resolved, target);
+  const label = `${cible}${review ? ` (${review})` : ''}`;
+  if (closing) {
+    const { closed, alreadyClosed } = await confirmClose(api, request, target);
+    if (!closed) fail(`La fermeture de ${label} n’a pas été confirmée dans PieceMaker.`);
+    return alreadyClosed ? `Déjà fermé : ${label}` : `Fermé : ${label}`;
+  }
+  const { opened, alreadyOpen } = await confirmPanel(api, request, target);
+  if (!opened) fail(`L’ouverture de ${label} n’a pas été confirmée dans PieceMaker.`);
+  return alreadyOpen ? `Déjà affiché : ${label}` : `Volet affiché : ${label}`;
+}
+
+async function runningJob(api, folder) {
+  try {
+    const { job } = await api.conversionJob({ folder });
+    return job?.state === 'running' ? job : null;
+  } catch {
+    return null;
+  }
+}
+
+function progress(job) {
+  return `Conversion en cours : phase ${job.phase}, ${job.percent} %, ${job.processed}/${job.total} pièce(s).`;
+}
+
+async function conversion(api, project, pieces, force) {
+  const running = await runningJob(api, project);
+  if (running) return `${progress(running)}\nRelancez pm dossier conversion pour suivre.`;
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((resolve) => { timer = setTimeout(resolve, api.conversionWaitMs ?? CONVERSION_WAIT_MS, null); });
+  const result = await Promise.race([api.execFn(conversionArgs({ dossier: project, pieces, force }), project, controller.signal), timeout]);
+  clearTimeout(timer);
+  if (!result) {
+    controller.abort();
+    const job = await runningJob(api, project);
+    return `${job ? progress(job) : 'Conversion en cours.'}\nLe travail continue dans PieceMaker : relancez pm dossier conversion pour suivre.`;
+  }
+  if (result.code !== 0) {
+    fail((result.stderr && result.stderr.trim()) || (result.stdout && result.stdout.trim()) || `Échec de la conversion (code ${result.code}).`);
+  }
+  return result.stdout;
+}
+
+async function verifyDossier(api, project) {
+  const state = api.caseState(project);
+  const anonymisation = state.lifted ? 'levée par l’avocat (pièces lisibles par l’IA)'
+    : state.anonymized ? 'faite' : 'à faire : pm dossier conversion';
+  const { analyses = [], projets = [] } = await api.tabularFn({ action: 'lister', project });
+  let index = projets.some((entry) => entry.index) ? 'préparé, pas lancé : pm dossier index lancer' : 'absent : pm dossier index lancer';
+  if (analyses.some((entry) => entry.index)) {
+    const { absentes = 0 } = await api.tabularFn({ action: 'index', project });
+    index = absentes ? `${absentes} pièce(s) absente(s) de l’index : pm dossier index lancer` : 'à jour';
+  }
+  const { pieces = [] } = await api.piecesFn({ folder: project });
+  const pending = pieces.filter((piece) => piece.status !== 'ready');
+  const job = await runningJob(api, project);
+  const conversionLine = job ? progress(job)
+    : pending.length ? `${pending.length} pièce(s) non convertie(s) : pm dossier conversion\n${pending.map((piece) => `  - ${piece.path} (${PIECE_STATES[piece.status] ?? piece.status})`).join('\n')}`
+      : `${pieces.length} pièce(s), toutes converties`;
+  return [`Anonymisation : ${anonymisation}`, `Index : ${index}`, `Conversion : ${conversionLine}`].join('\n');
+}
+
+async function dossier(api, positional, flags, resolved) {
+  const commande = positional[1];
+  if (!DOSSIER_COMMANDS.includes(commande)) usage(`dossier attend ${DOSSIER_COMMANDS.join(', ')}.`);
+  const project = path.resolve(resolved);
+  if (commande === 'verifier') return verifyDossier(api, project);
+  if (commande === 'conversion') return conversion(api, resolved, positional.slice(2), flags.force === true);
+  if (commande === 'sql') {
+    const requete = positional.slice(2).join(' ').trim();
+    if (!requete) usage('Indiquez une requête SQL.');
+    const result = await api.sqlFn({ requete, cwd: resolved });
+    const target = sqlPanelTarget(requete, resolved);
+    if (!target) return result;
+    return withNotice(result, await followPanel(api, { project: resolved, tab: target.tab, view: target.view }, target));
+  }
+  const target = voletTarget(project, 'index');
+  if (commande === 'arborescence') {
+    if (!value(flags.dossiers)) usage('dossier arborescence attend --dossiers JSON.');
+    const result = await api.tabularIndex(api.tabularFn, { action: 'arborescence', project, dossiers: parseJson(flags.dossiers, 'dossiers') });
+    return withNotice(JSON.stringify(result), await followPanel(api, panelRequest(project, target), target));
+  }
+  const action = positional[2];
+  if (!INDEX_ACTIONS.includes(action)) usage(`dossier index attend ${INDEX_ACTIONS.join(', ')}.`);
+  const result = await api.tabularIndex(api.tabularFn, { ...reviewInput(flags), action, project });
+  return withNotice(JSON.stringify(result), await followPanel(api, panelRequest(project, target), target));
+}
+
+async function tabularReview(api, positional, flags, resolved) {
+  const action = positional[1];
+  if (!REVIEW_ACTIONS.includes(action)) usage('tabular_review attend une action connue.');
+  const project = path.resolve(resolved);
+  await api.refuseIndex(api.tabularFn, project, { fichier: flags.fichier, projet: flags.projet });
+  const result = await api.tabularFn({ ...reviewInput(flags), action, project });
+  const text = JSON.stringify(result);
+  if (result?.index) {
+    const target = voletTarget(project, 'index');
+    return withNotice(text, await followPanel(api, panelRequest(project, target), target));
+  }
+  if (REVIEW_FOLLOWED.includes(action) || action === 'lister' || action === 'preparer' || action === 'lancer') {
+    const review = (REVIEW_FOLLOWED.includes(action) || action === 'preparer') && result?.fichier ? String(result.fichier) : undefined;
+    const draft = result && typeof result === 'object' && result.projet ? String(result.projet) : undefined;
+    const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review, draft };
+    return withNotice(text, await followPanel(api, { project, tab: target.tab, review, draft }, target));
+  }
+  return text;
+}
+
+async function suiviDossiers(api, positional, flags, resolved) {
+  const [, commande, chemin] = positional;
+  if (!SUIVI_COMMANDS.includes(commande)) usage(`suivi_dossiers attend ${SUIVI_COMMANDS.join(', ')}.`);
+  const cwd = path.resolve(resolved);
+  if (commande === 'verifier') {
+    if (flags.suivi === true) usage('Indiquez une valeur pour --suivi.');
+    return api.suiviFn({ commande, cwd, ...(flags.suivi ? { suivi: String(flags.suivi) } : {}) });
+  }
+  if (!chemin) usage(`suivi_dossiers ${commande} attend un chemin.`);
+  if (commande === 'lire') return api.suiviFn({ commande, chemin, cwd });
+  if (!value(flags.json)) usage('suivi_dossiers ecrire attend --json.');
+  let donnees;
+  try { donnees = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
+  return api.suiviFn({ commande, chemin, donnees, cwd });
+}
+
 export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   const { flags, positional } = parseArgv(argv);
   if (flags.help && !positional.length) return HELP;
@@ -349,28 +537,10 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   const api = deps || await defaultDeps(cwd);
   const resolved = resolveDossier(flags.dossier, flags.dossier || !api.sessionDossier ? cwd : await api.sessionDossier(cwd));
 
-  if (tool === 'conversion') {
-    const pieces = positional.slice(1);
-    const result = await api.execFn(conversionArgs({
-      dossier: resolved,
-      pieces,
-      force: flags.force === true || flags.force === 'true',
-    }), resolved);
-    if (result.code !== 0) {
-      fail((result.stderr && result.stderr.trim()) || (result.stdout && result.stdout.trim()) || `Échec de la conversion (code ${result.code}).`);
-    }
-    return result.stdout;
-  }
-
-  if (tool === 'sql') {
-    const requete = flags.requete && flags.requete !== true ? String(flags.requete) : positional.slice(1).join(' ').trim();
-    if (!requete) usage('Indiquez une requête SQL (--requete ou arguments).');
-    const result = await api.sqlFn({ requete, cwd: resolved });
-    const target = sqlPanelTarget(requete, resolved);
-    if (!target) return result;
-    const request = { project: resolved, tab: target.tab, view: target.view };
-    return withNotice(result, await followPanel(api, request, target));
-  }
+  if (tool === 'tab') return tab(api, positional, cwd, resolved);
+  if (tool === 'dossier') return dossier(api, positional, flags, resolved);
+  if (tool === 'tabular_review') return tabularReview(api, positional, flags, resolved);
+  if (tool === 'suivi_dossiers') return suiviDossiers(api, positional, flags, resolved);
 
   if (tool === 'bordereau') {
     const pieces = positional.slice(1);
@@ -378,132 +548,19 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     const project = path.resolve(resolved);
     const { results, message } = await api.stampFn({ folder: project, pieces });
     const lines = results.map((entry) => `Pièce n°${entry.pieceNumber} : ${entry.success ? entry.filename : `ÉCHEC, ${entry.error}`}`);
-    const target = voletTarget(project, 'tampon');
+    const target = voletTarget(project, 'bordereau');
     const request = { project, tab: target.tab };
     if (await api.waitPanel(target, 0)) await api.openPanel(request);
     return withNotice([...lines, message].join('\n'), await followPanel(api, request, target));
   }
 
-  if (tool === 'afficher') {
-    const closing = flags.fermer === true;
-    if ((!flags.fichier || flags.fichier === true) && (!flags.volet || flags.volet === true)) {
-      if (closing) usage('Indiquez --fichier ou --volet avec --fermer.');
-      return api.describePanels ? api.describePanels(resolved) : 'Aucun volet ouvert à côté du chat.';
-    }
-    if (flags.fichier && flags.fichier !== true) {
-      const file = path.resolve(cwd, String(flags.fichier));
-      if (!closing && !api.exists(file)) fail(`Fichier introuvable : ${flags.fichier}`);
-      const target = { cwd: resolved, tab: 'files', document: file };
-      const request = { project: resolved, tab: 'files', document: file };
-      if (closing) {
-        const { closed, alreadyClosed } = await confirmClose(api, request, target);
-        if (!closed) fail('La fermeture du fichier n’a pas été confirmée dans PieceMaker.');
-        return alreadyClosed ? `Déjà fermé : ${flags.fichier}` : `Fermé : ${flags.fichier}`;
-      }
-      const { opened, alreadyOpen } = await confirmPanel(api, request, target);
-      if (!opened) fail('L’ouverture du fichier n’a pas été confirmée dans PieceMaker.');
-      return alreadyOpen
-        ? `Déjà affiché dans le volet de lecture : ${flags.fichier}`
-        : `Affiché dans le volet de lecture : ${flags.fichier}`;
-    }
-    if (!VOLETS.includes(flags.volet)) usage(`Volet inconnu : ${flags.volet}`);
-    const review = flags.review && flags.review !== true ? path.basename(String(flags.review)) : '';
-    const target = voletTarget(resolved, flags.volet, review);
-    const request = { project: resolved, ...target };
-    delete request.cwd;
-    if (closing) {
-      const { closed, alreadyClosed } = await confirmClose(api, request, target);
-      if (!closed) fail(`La fermeture du volet ${flags.volet} n’a pas été confirmée dans PieceMaker.`);
-      const label = `${flags.volet}${review ? ` (${review})` : ''}`;
-      return alreadyClosed ? `Déjà fermé : ${label}` : `Fermé : ${label}`;
-    }
-    const { opened, alreadyOpen } = await confirmPanel(api, request, target);
-    if (!opened) fail(`L’ouverture du volet ${flags.volet} n’a pas été confirmée dans PieceMaker.`);
-    const label = `${flags.volet}${review ? ` (${review})` : ''}`;
-    return alreadyOpen ? `Déjà affiché : ${label}` : `Volet affiché : ${label}`;
-  }
-
-  if (tool === 'tabular_review_index') {
-    const action = positional[1];
-    if (!INDEX_ACTIONS.includes(action)) usage('tabular_review_index attend une action connue.');
-    const project = path.resolve(resolved);
-    const target = voletTarget(project, 'index');
-    const result = action === 'lister' || action === 'modifier'
-      ? await api.sqlFn({
-        requete: api.chronologieSql({
-          action,
-          dossier: flags.dossier && flags.dossier !== true ? flags.dossier : undefined,
-          piece: flags.piece,
-          date: flags.date === true ? undefined : flags.date,
-          libelle: flags.libelle === true ? undefined : flags.libelle,
-        }),
-        cwd,
-      })
-      : JSON.stringify(await api.tabularIndex(api.tabularFn, { ...reviewInput(flags), action, project }));
-    return withNotice(result, await followPanel(api, { project, ...target }, target));
-  }
-
-  if (tool === 'tabular_review') {
-    const action = positional[1];
-    if (!REVIEW_ACTIONS.includes(action)) usage('tabular_review attend une action connue.');
-    const project = path.resolve(resolved);
-    await api.refuseIndex(api.tabularFn, project, { fichier: flags.fichier, projet: flags.projet });
-    if (action === 'ouvrir') {
-      const draft = flags.projet && flags.projet !== true ? String(flags.projet) : '';
-      const name = draft ? undefined : api.reviewFile(project, flags.fichier);
-      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review: name, draft: draft || undefined };
-      const request = { project, tab: 'plugin:piecemaker-tabular-review', review: name, draft: draft || undefined };
-      const notice = await followPanel(api, request, target);
-      if (draft) return notice;
-      return withNotice(`Analyse affichée dans le volet Tabular Review. Contenu : « Tabular Review/${name} ».`, notice);
-    }
-    const result = await api.tabularFn({ ...reviewInput(flags), action, project });
-    const text = Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result);
-    if (result?.index) {
-      const target = voletTarget(project, 'index');
-      return withNotice(text, await followPanel(api, { project, ...target }, target));
-    }
-    if (REVIEW_FOLLOWED.includes(action)) {
-      const review = result?.fichier ? String(result.fichier) : undefined;
-      const draft = result?.projet ? String(result.projet) : undefined;
-      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review, draft };
-      return withNotice(text, await followPanel(api, { project, tab: target.tab, review, draft }, target));
-    }
-    if (action === 'lister' || action === 'preparer' || action === 'lancer') {
-      const review = action === 'preparer' && result?.fichier ? String(result.fichier) : undefined;
-      const draft = result && typeof result === 'object' && result.projet ? String(result.projet) : '';
-      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review, draft: draft || undefined };
-      return withNotice(text, await followPanel(api, { project, tab: target.tab, review, draft: target.draft }, target));
-    }
-    return text;
-  }
-
-  if (tool === 'raisonnement') {
-    const commande = positional[1];
-    if (!REASONING_COMMANDS.includes(commande)) usage(`raisonnement attend ${REASONING_COMMANDS.join(', ')}.`);
-    if (commande === 'consignes') return api.reasoningInstructions();
-    if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
-    const input = { commande, cwd: path.resolve(resolved), ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
-    const result = await api.reasoningFn(input);
-    const target = { cwd: input.cwd, tab: 'plugin:piecemaker-raisonnement' };
-    return withNotice(result, await followPanel(api, { project: input.cwd, tab: target.tab }, target));
-  }
-
-  if (tool === 'suivi') {
-    if (positional[1] === 'lire' || positional[1] === 'ecrire') {
-      if (!positional[2]) usage(`suivi ${positional[1]} attend un chemin.`);
-      if (positional[1] === 'lire') return api.suiviFn({ commande: 'lire', chemin: positional[2], cwd: path.resolve(resolved) });
-      if (!flags.json || flags.json === true) usage('suivi ecrire attend --json.');
-      let donnees;
-      try { donnees = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
-      return api.suiviFn({ commande: 'ecrire', chemin: positional[2], donnees, cwd: path.resolve(resolved) });
-    }
-    if (positional[1] !== 'verifier') usage('suivi attend verifier, lire ou ecrire.');
-    if (flags.suivi === true) usage('Indiquez une valeur pour --suivi.');
-    return api.suiviFn({ commande: 'verifier', cwd: path.resolve(resolved), ...(flags.suivi ? { suivi: String(flags.suivi) } : {}) });
-  }
-
-  usage(`Outil inconnu : ${tool}`);
+  const commande = positional[1];
+  if (!REASONING_COMMANDS.includes(commande)) usage(`raisonnement attend ${REASONING_COMMANDS.join(', ')}.`);
+  if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
+  const input = { commande, cwd: path.resolve(resolved), ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
+  const result = await api.reasoningFn(input);
+  const target = voletTarget(input.cwd, 'raisonnement');
+  return withNotice(result, await followPanel(api, { project: input.cwd, tab: target.tab }, target));
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;

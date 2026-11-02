@@ -177,11 +177,20 @@ function pieceMakerCliTarget(command: string): AutoPanelTarget | null {
     return nested ? pieceMakerCliTarget(nested) : null;
   }
   const { flags, rest } = flagMap(argv.slice(script + 1));
-  const tool = rest[0];
-  if (tool === 'afficher') return showTarget(flags);
-  if (tool === 'tabular_review_index') return { kind: 'dossier', view: 'chronology' };
-  if (tool === 'tabular_review') return tabularReviewTarget({ ...flags, action: rest[1] });
-  if (tool === 'sql') return sqlTarget(text(flags.requete) || rest.slice(1).join(' '));
+  const [tool, action] = rest;
+  if (tool === 'tab') return action === 'afficher' ? tabTarget(rest.slice(2)) : null;
+  if (tool === 'dossier' && action === 'index') return { kind: 'dossier', view: 'chronology' };
+  if (tool === 'dossier' && action === 'sql') return sqlTarget(rest.slice(2).join(' '));
+  if (tool === 'tabular_review') return tabularReviewTarget({ ...flags, action });
+  return null;
+}
+
+function tabTarget([target, argument]: string[]): AutoPanelTarget | null {
+  if (target === 'fichier') return argument ? { kind: 'file', path: argument } : null;
+  if (target === 'index') return { kind: 'dossier', view: 'chronology' };
+  if (target === 'dossier') return { kind: 'dossier', view: 'general' };
+  if (target === 'bordereau') return { kind: 'tampon' };
+  if (target === 'tabular_review') return { kind: 'tabular-review', review: argument ? baseName(argument) : null };
   return null;
 }
 

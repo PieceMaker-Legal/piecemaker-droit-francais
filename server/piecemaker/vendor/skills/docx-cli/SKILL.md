@@ -37,7 +37,7 @@ Dès que vous **créez ou modifiez** un `.docx`, ouvrez-le dans le volet de lect
 sans attendre qu’on vous le demande. Après le succès de la commande `docx` :
 
 ```sh
-pm afficher --fichier FICHIER
+pm tab afficher fichier FICHIER
 ```
 
 `FICHIER` est le même chemin que celui que vous venez d’écrire.

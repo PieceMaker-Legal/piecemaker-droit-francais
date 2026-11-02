@@ -38,7 +38,7 @@ describe('outil tabular_review', () => {
     const first = await assistant({ action: 'index', project }, run) as { projet: string };
     const listed = await assistant({ action: 'lister', project }, run) as { projets: { projet: string; nom: string; documents: string[]; questions: string[] }[] };
     const draft = listed.projets.find((entry) => entry.projet === first.projet);
-    expect(draft).toMatchObject({ nom: 'Index', questions: ['Date', 'Événement', 'Importance', 'Secret professionnel', 'Mentions', 'Classement'] });
+    expect(draft).toMatchObject({ nom: 'Index', ia: 'mistral', modele_ia: 'mistral-medium-3.5', questions: ['Date', 'Événement', 'Importance', 'Secret professionnel', 'Mentions', 'Classement'] });
     expect(draft?.documents).toContain('Pièces/courrier.md');
     expect(await assistant({ action: 'index', project }, run)).toEqual({ projet: first.projet });
     const { deleteDraft } = await import('../server/drafts.js');
@@ -68,9 +68,9 @@ describe('outil tabular_review', () => {
 
   it('crée, lit et modifie un modèle', async () => {
     const run = launchers();
-    const created = await assistant({ action: 'enregistrer_modele', nom: 'Modèle exemple', questions: [{ nom: 'Date', consigne: 'Quelle date ?', format: 'date' }] }, run) as Record<string, unknown>;
+    const created = await assistant({ action: 'create_template', nom: 'Modèle exemple', questions: [{ nom: 'Date', consigne: 'Quelle date ?', format: 'date' }] }, run) as Record<string, unknown>;
     expect(created).toMatchObject({ nom: 'Modèle exemple', questions: [{ nom: 'Date', consigne: 'Quelle date ?', format: 'date' }] });
-    await assistant({ action: 'enregistrer_modele', modele: created.id, description: 'Pour les baux' }, run);
+    await assistant({ action: 'create_template', modele: created.id, description: 'Pour les baux' }, run);
     expect(await assistant({ action: 'modeles', modele: 'modèle exemple' }, run)).toMatchObject({ id: created.id, description: 'Pour les baux', questions: [{ nom: 'Date' }] });
     expect((await assistant({ action: 'modeles' }, run) as { nom: string }[]).some((entry) => entry.nom === 'Modèle exemple')).toBe(true);
   });
@@ -88,6 +88,5 @@ describe('outil tabular_review', () => {
   it('refuse un document inconnu et le tri des pièces', async () => {
     const run = launchers();
     await expect(assistant({ action: 'preparer', project, nom: 'X', documents: ['Absent/'] }, run)).rejects.toThrow('Aucun document Markdown pour « Absent/ »');
-    expect(await assistant({ action: 'documents', project }, run)).toEqual(['Pièces/Contrats/avenant.md', 'Pièces/Contrats/bail.md', 'Pièces/courrier.md']);
   });
 });

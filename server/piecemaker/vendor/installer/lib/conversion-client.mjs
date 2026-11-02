@@ -242,3 +242,14 @@ export function readLocalScanJob({ folder, id }) {
   const query = new URLSearchParams({ folder, ...(id ? { id } : {}) });
   return requestJson({ method: 'GET', path: `${LOCAL_BASE}/scan/job?${query}` });
 }
+
+export async function readLocalPieces({ folder }) {
+  await adoptRunningServerPort();
+  const query = new URLSearchParams({ folder });
+  return requestJson({ method: 'GET', path: `${LOCAL_BASE}/pieces?${query}` });
+}
+
+export async function readConversionJob({ folder }) {
+  await adoptRunningServerPort();
+  return readLocalScanJob({ folder });
+}

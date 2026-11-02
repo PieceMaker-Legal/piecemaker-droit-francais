@@ -1,6 +1,6 @@
 # Suivi (échéances du dossier)
 
-Le suivi relève les étapes du dossier qu'il ne faut pas manquer ; il ne raisonne pas (c'est le rôle du raisonnement, propre à un acte) et n'est pas une chronologie. Un fichier par acte ou procédure suivi : `.piecemaker/<nom>-suivi.json` (`.piecemaker/suivi.json` reste valide). Chaque fichier donne une carte sur le Matter board de l'onglet Suivi des dossiers, qui montre tous les dossiers. Quand le dossier en compte plusieurs, cible le fichier : `pm suivi verifier --suivi <nom>-suivi.json`. Les données restent sur le poste.
+Le suivi relève les étapes du dossier qu'il ne faut pas manquer ; il ne raisonne pas (c'est le rôle du raisonnement, propre à un acte) et n'est pas une chronologie. Un fichier par acte ou procédure suivi : `.piecemaker/<nom>-suivi.json` (`.piecemaker/suivi.json` reste valide). Chaque fichier donne une carte sur le Matter board de l'onglet Suivi des dossiers, qui montre tous les dossiers. Quand le dossier en compte plusieurs, cible le fichier : `pm suivi_dossiers verifier --suivi <nom>-suivi.json`. Les données restent sur le poste.
 
 N'y figurent que :
 - en contentieux, les actes qui ont une valeur procédurale (ceux qui font courir un délai ou fixent une étape) et les échéances qui en découlent ;
@@ -52,7 +52,7 @@ Recherche toi-même, avec les outils Légifrance, le texte, la décision ou la c
 - Contrat non signé : `hypothese: true` au lieu de `preuve` ; les échéances qui en partent sont des dates supposées.
 - Accomplissement : `fait: { date, preuve }` si une pièce le prouve ; sinon l'avocat coche la date sur le tableau.
 
-`pm suivi verifier` recalcule chaque échéance (calcul affiché pas à pas), relit pièces et sources (identifiant officiel, citation exacte, version en vigueur à la date de départ, historique judiciaire, fiabilité) et ne renvoie que les erreurs et manques, localisés à la ligne. Corrige et relance jusqu'à ne plus avoir d'erreur.
+`pm suivi_dossiers verifier` recalcule chaque échéance (calcul affiché pas à pas), relit pièces et sources (identifiant officiel, citation exacte, version en vigueur à la date de départ, historique judiciaire, fiabilité) et ne renvoie que les erreurs et manques, localisés à la ligne. Corrige et relance jusqu'à ne plus avoir d'erreur.
 
 ## Fiche `matter` et Matter board
 

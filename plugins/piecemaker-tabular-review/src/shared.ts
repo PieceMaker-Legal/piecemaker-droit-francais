@@ -151,6 +151,8 @@ export const DEFAULT_PROVIDER: Provider = 'mistral';
 
 export const DEFAULT_MODEL: Record<Provider, string> = { claude: 'haiku', codex: '', mistral: 'mistral-small' };
 
+export const INDEX_MODEL: Record<Provider, string> = { claude: 'sonnet', codex: '', mistral: 'mistral-medium-3.5' };
+
 export type ReviewStatus = 'running' | 'done' | 'partial' | 'cancelled' | 'interrupted';
 
 export type ReviewCategory = 'documents' | 'recherche-juridique' | 'tri-pieces';

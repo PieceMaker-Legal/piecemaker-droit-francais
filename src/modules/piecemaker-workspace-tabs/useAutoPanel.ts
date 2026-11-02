@@ -19,6 +19,7 @@ const MAX_AGE_MS = 120_000;
 const DOSSIER_TAB: AppTab = 'plugin:piecemaker-dossier';
 const TABULAR_REVIEW_TAB: AppTab = 'plugin:piecemaker-tabular-review';
 const TAMPON_TAB: AppTab = 'plugin:piecemaker-tampon';
+const PLAIN_TABS: readonly AppTab[] = ['plugin:piecemaker-raisonnement', 'plugin:piecemaker-echeances'];
 const DOSSIER_VIEW_EVENT = 'piecemaker:dossier-view';
 const DOSSIER_VIEW_KEY = '__piecemakerDossierView';
 const TABULAR_REVIEW_SHOW_EVENT = 'piecemaker:tabular-review-show';
@@ -115,6 +116,9 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
             handled = true;
           } else if (request.tab === TAMPON_TAB) {
             show({ kind: 'tampon', reload: true }, state.current, request.id);
+            handled = true;
+          } else if (PLAIN_TABS.includes(request.tab as AppTab)) {
+            state.current.openTab(request.tab as AppTab);
             handled = true;
           }
           if (handled) await acknowledgeWorkspacePanel(projectPath, request.id);

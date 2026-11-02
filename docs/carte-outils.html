@@ -151,22 +151,22 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-note" x="306" y="378">et les volets.</text>
         <text class="t-name t-skill-c" x="306" y="426">legal-code</text>
         <text class="t-note" x="306" y="444">skill : raisonnement, session /legal-code,</text>
-        <text class="t-note" x="306" y="460">utilise pm raisonnement et pm sql</text>
+        <text class="t-note" x="306" y="460">utilise pm raisonnement et pm dossier sql</text>
 
-        <text class="t-name" x="560" y="276">pm conversion</text><text class="t-mono" x="730" y="276">[pièce…] --dossier --force</text>
-        <text class="t-name" x="560" y="294">pm sql</text><text class="t-mono" x="730" y="294">--requete --dossier</text>
-        <text class="t-name" x="560" y="312">pm afficher</text><text class="t-mono" x="730" y="312">--fichier --review --fermer</text>
-        <text class="t-mono" x="730" y="330">--volet dossier|index|tabular-review|tampon</text>
-        <text class="t-name" x="560" y="348">pm raisonnement</text><text class="t-mono" x="730" y="348">consignes | verifier | lister</text>
-        <text class="t-name" x="560" y="366">pm suivi</text><text class="t-mono" x="730" y="366">verifier | lire | ecrire</text>
-        <text class="t-name" x="560" y="384">pm tabular_review</text><text class="t-mono" x="730" y="384">lister | ouvrir | documents | modeles</text>
-        <text class="t-mono" x="730" y="402">enregistrer_modele | preparer | lancer</text>
-        <text class="t-mono" x="730" y="420">lire | colonnes | relancer</text>
-        <text class="t-name" x="560" y="438">pm tabular_review_index</text><text class="t-mono" x="730" y="438">ouvrir | preparer | lancer | lire</text>
-        <text class="t-mono" x="730" y="456">colonnes | classement | arborescence</text>
-        <text class="t-mono" x="730" y="474">relancer | lister | modifier</text>
-        <text class="t-name" x="560" y="492">pm bordereau</text><text class="t-mono" x="730" y="492">pièce… dans l'ordre --dossier</text>
-        <text class="t-note" x="560" y="514">Lancer ou relancer : accord de l'avocat. L'index reste dans l'onglet Dossier.</text>
+        <text class="t-name" x="560" y="276">pm tab</text><text class="t-mono" x="730" y="276">lister | afficher | fermer</text>
+        <text class="t-mono" x="730" y="294">dossier | index | tabular_review | bordereau</text>
+        <text class="t-mono" x="730" y="312">raisonnement | suivi_dossiers | fichier</text>
+        <text class="t-name" x="560" y="330">pm dossier</text><text class="t-mono" x="730" y="330">verifier | sql "REQUÊTE"</text>
+        <text class="t-mono" x="730" y="348">conversion [pièce…] --force</text>
+        <text class="t-mono" x="730" y="366">arborescence --dossiers</text>
+        <text class="t-mono" x="730" y="384">index lancer | lire | colonnes</text>
+        <text class="t-name" x="560" y="402">pm tabular_review</text><text class="t-mono" x="730" y="402">lister | modeles | create_template</text>
+        <text class="t-mono" x="730" y="420">preparer | lancer | lire | colonnes | relancer</text>
+        <text class="t-name" x="560" y="438">pm bordereau</text><text class="t-mono" x="730" y="438">pièce… dans l'ordre</text>
+        <text class="t-name" x="560" y="456">pm raisonnement</text><text class="t-mono" x="730" y="456">verifier | lister</text>
+        <text class="t-name" x="560" y="474">pm suivi_dossiers</text><text class="t-mono" x="730" y="474">verifier | lire | ecrire</text>
+        <text class="t-note" x="560" y="496">Une commande par onglet. --dossier vise un autre dossier.</text>
+        <text class="t-note" x="560" y="514">Lancer l'index : accord de l'avocat. Il reste dans l'onglet Dossier.</text>
 
         <text class="t-title t-skill-c" x="306" y="584">Skill docx-cli</text>
         <text class="t-note" x="306" y="602">Source de la commande docx : le skill</text>
@@ -223,13 +223,15 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
     <section class="card wide">
       <h2>Index</h2>
-      <p>L'index est une tabular review à part. <code>tabular_review_index</code> reprend ses sous-commandes et déduit le fichier et le projet. L'index s'affiche toujours dans l'onglet Dossier, jamais dans le volet Tabular Review. <code>tabular_review</code> refuse son fichier et son projet.</p>
+      <p>L'index est une tabular review à part : une ligne par pièce, pour la chronologie et le classement. <code>pm dossier index</code> déduit le fichier et le projet. L'index s'affiche toujours dans l'onglet Dossier, jamais dans le volet Tabular Review. <code>tabular_review</code> refuse son fichier et son projet.</p>
       <div class="scroll"><table>
         <tr><th>Commande</th><th>Effet</th><th>Lit les pièces</th></tr>
-        <tr><td><code>pm afficher --volet index</code></td><td>Ouvre l'onglet Index du volet Dossier.</td><td>non</td></tr>
-        <tr><td><code>pm tabular_review_index ouvrir</code></td><td>Retrouve ou prépare l'unique analyse de toutes les pièces, puis l'ouvre dans l'onglet Dossier.</td><td>oui, au lancement</td></tr>
-        <tr><td><code>pm tabular_review_index preparer|lancer|lire|colonnes|classement|arborescence|relancer</code></td><td>Mêmes actions que <code>tabular_review</code>, sur l'index. Le résultat s'ouvre dans l'onglet Dossier.</td><td>oui, à <code>lancer</code> et <code>relancer</code></td></tr>
-        <tr><td><code>pm tabular_review_index lister|modifier</code></td><td>Lit ou modifie les dates et les libellés des pièces en base.</td><td>non</td></tr>
+        <tr><td><code>pm tab afficher index</code></td><td>Ouvre l'onglet Index du volet Dossier.</td><td>non</td></tr>
+        <tr><td><code>pm dossier index lancer</code></td><td>Crée l'index s'il manque et l'analyse (modèle medium par défaut). S'il existe, analyse les pièces converties qui en sont absentes.</td><td>oui</td></tr>
+        <tr><td><code>pm dossier index lire|colonnes</code></td><td>Résume l'index, ou ajoute, modifie, retire une question.</td><td>non</td></tr>
+        <tr><td><code>pm dossier arborescence --dossiers JSON</code></td><td>Remplace l'arborescence de classement. La lecture passe par <code>.piecemaker/arborescence.json</code>.</td><td>non</td></tr>
+        <tr><td><code>pm dossier sql "REQUÊTE"</code></td><td>Lit ou modifie les dates et les libellés des pièces en base (requêtes d'exemple dans la skill).</td><td>non</td></tr>
+        <tr><td><code>pm dossier verifier</code></td><td>Donne l'état de l'anonymisation, de l'index et de la conversion, avec la commande qui corrige.</td><td>non</td></tr>
       </table></div>
     </section>
 
@@ -245,7 +247,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
     <section class="card">
       <h2>Volets de l'interface</h2>
-      <p>Ces plugins servent l'avocat. Leurs manifestes ne déclarent aucun outil IA. Le moteur ouvre Dossier, Analyse tabulaire et Bordereau avec <code>pm afficher</code>. <code>pm bordereau</code> tamponne les pièces et recharge le volet Bordereau. L'index est un onglet du volet Dossier, pas un plugin.</p>
+      <p>Ces plugins servent l'avocat. Leurs manifestes ne déclarent aucun outil IA. Le moteur ouvre Dossier, Analyse tabulaire, Bordereau, Raisonnement et Suivi des dossiers avec <code>pm tab afficher</code>. <code>pm bordereau</code> tamponne les pièces et recharge le volet Bordereau. L'index est un onglet du volet Dossier, pas un plugin.</p>
       <p><code>piecemaker-dossier</code>, <code>piecemaker-echeances</code>, <code>piecemaker-library</code>, <code>piecemaker-raisonnement</code>, <code>piecemaker-tabular-review</code>, <code>piecemaker-tampon</code>, <code>piecemaker-timesheet</code>.</p>
     </section>
 

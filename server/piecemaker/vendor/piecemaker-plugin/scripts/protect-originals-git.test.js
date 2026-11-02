@@ -77,7 +77,7 @@ test('une pièce déplacée hors de l’application retrouve son Markdown par Gi
   assert.ok(fs.existsSync(path.join(converted, `${moved}.md`)));
 
   fs.writeFileSync(path.join(caseRoot, 'Archives/nouvelle.pdf'), '%PDF nouvelle');
-  const command = `pm conversion --dossier "${caseRoot}"`;
+  const command = `pm dossier conversion --dossier "${caseRoot}"`;
   assert.ok(readReason('Archives/nouvelle.pdf').endsWith(`Convertissez-la avec : ${command}`));
   assert.equal(decision(command), 'allow');
 });
