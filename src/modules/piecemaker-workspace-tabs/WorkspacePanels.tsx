@@ -60,7 +60,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
         : tab.startsWith('plugin:') ? plugins.some((plugin) => plugin.enabled && tab === `plugin:${plugin.name}`) : true) })).filter((column) => column.tabs.length > 0);
     const enabledPanels = enabledColumns.flatMap((column) => column.tabs);
     const filesHost = enabledPanels.includes('files') ? filesSlots : null;
-    const expandedTab = expanded === 'viewer' ? viewerOpen ? expanded : null : expanded && enabledPanels.includes(expanded) ? expanded : null;
+    const expandedTab = expanded === 'viewer' ? viewerOpen ? filesHost ? 'files' : expanded : null : expanded && enabledPanels.includes(expanded) ? expanded : null;
     const viewerColumn: WorkspaceColumn | null = viewerOpen && !filesHost
       ? { id: 'viewer', tabs: [], width: viewerWidth ?? (enabledColumns.length ? enabledColumns.reduce((sum, column) => sum + column.width, 0) / enabledColumns.length : 1), split: 100 }
       : null;
@@ -98,13 +98,13 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       if (viewerOpen && props.isMobile) setExpanded(filesHost ? 'files' : 'viewer');
     }, [viewerOpen, props.isMobile, filesHost]);
     const toggleViewerExpand = useCallback(() => {
-      setExpanded((current) => current === 'viewer' ? null : 'viewer');
+      setExpanded(expandedTab === 'viewer' ? null : 'viewer');
       setExpandedCompanion(null);
-    }, []);
+    }, [expandedTab]);
     const toggleFilesExpand = useCallback(() => {
-      setExpanded((current) => current === 'files' ? null : 'files');
+      setExpanded(expandedTab === 'files' ? null : 'files');
       setExpandedCompanion(null);
-    }, []);
+    }, [expandedTab]);
     const bindViewerColumn = useCallback((element: HTMLDivElement | null) => {
       if (element) columnRefs.current.set('viewer', element);
       else columnRefs.current.delete('viewer');

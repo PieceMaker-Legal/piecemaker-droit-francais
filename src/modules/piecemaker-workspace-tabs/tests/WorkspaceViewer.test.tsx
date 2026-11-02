@@ -22,7 +22,8 @@ vi.mock('@/piecemaker/editor-tabs/TabbedCodeEditor', () => ({
 
 const document: CodeEditorFile = { name: 'note.md', path: '/dossier/note.md', projectId: 'exemple' };
 
-const Workspace = withWorkspacePanels(() => <div data-testid="main">
+const Workspace = withWorkspacePanels((props) => <div data-testid="main">
+  <button type="button" onClick={() => props.setActiveTab('files')}>files</button>
   <WorkspaceViewer editingFile={document} projectPath="/dossier" onCloseEditor={vi.fn()} onUnsavedChangesChange={vi.fn()} isMobile={false} editorExpanded={false} editorWidth={600} hasManualWidth={false} resizeHandleRef={{ current: null }} onResizeStart={vi.fn()} onToggleEditorExpand={vi.fn()} />
 </div>);
 
@@ -39,6 +40,16 @@ it('met en plein écran le document de la colonne visionneuse puis le réduit', 
   render(<Harness />);
   fireEvent.click(screen.getByRole('button', { name: 'Agrandir le document' }));
   expect(screen.getByTestId('main').closest('[hidden]')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Réduire le document' }));
+  expect(screen.getByTestId('main').closest('[hidden]')).toBeNull();
+});
+
+it('garde le document agrandi quand le volet Fichiers s’ouvre et l’accueille', () => {
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Agrandir le document' }));
+  fireEvent.click(screen.getByRole('button', { name: 'files', hidden: true }));
+  expect(screen.getByTestId('main').closest('[hidden]')).toBeTruthy();
+  expect(globalThis.document.querySelector('.piecemaker-files-panel')?.hasAttribute('hidden')).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Réduire le document' }));
   expect(screen.getByTestId('main').closest('[hidden]')).toBeNull();
 });
