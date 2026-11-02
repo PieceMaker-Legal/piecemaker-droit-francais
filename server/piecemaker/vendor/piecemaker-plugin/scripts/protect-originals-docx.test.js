@@ -83,7 +83,9 @@ const databasePath = path.join(sandbox, 'auth.db');
 fs.mkdirSync(variantRoot, { recursive: true });
 fs.writeFileSync(path.join(variantRoot, 'Assignation Exemple SA.docx'), 'docx fictif');
 fs.writeFileSync(path.join(variantRoot, 'Note Dupont.docx'), 'docx fictif');
-fs.writeFileSync(path.join(variantRoot, 'Note M. Dupont.docx'), 'docx fictif');
+fs.writeFileSync(path.join(variantRoot, 'Note M. Dupont.docx'), 'docx fictif long');
+fs.writeFileSync(path.join(variantRoot, 'Avis Dupont.docx'), 'docx fictif');
+fs.writeFileSync(path.join(variantRoot, 'Avis M. Dupont.docx'), 'docx fictif');
 fs.writeFileSync(path.join(home, 'projects.json'), JSON.stringify({ version: 1, sources: { test: [caseRoot, shieldedRoot, variantRoot] } }));
 const database = new Database(databasePath);
 database.exec(`
@@ -123,8 +125,21 @@ test('un nom de fichier rendu sous une autre variante est remplacé par le fichi
   assert.equal(hookOutput('docx comments add "Assignation Société Exemple SAS.docx" --at p1 --text "Note"', { PIECEMAKER_HOOK_CLIENT: 'codex' }).permissionDecision, 'allow');
 });
 
-test('sans fichier unique correspondant, la commande reste inchangée', () => {
-  assert.equal(hookOutput('docx read "Note Jean Dupont.docx"'), null);
+test('plusieurs fichiers possibles : le hook demande la taille, puis retient le fichier de cette taille', () => {
+  const question = hookOutput('docx read "Note Jean Dupont.docx"');
+  assert.equal(question.permissionDecision, 'deny');
+  assert.match(question.permissionDecisionReason, /- 11 octets, créé le /);
+  assert.match(question.permissionDecisionReason, /- 16 octets, créé le /);
+  assert.match(question.permissionDecisionReason, /PIECEMAKER_TAILLE=/);
+  assert.doesNotMatch(question.permissionDecisionReason, /Dupont/);
+
+  assert.equal(hookOutput('PIECEMAKER_TAILLE=16 docx read "Note Jean Dupont.docx"').updatedInput.command, 'docx read "Note M. Dupont.docx"');
+  assert.equal(hookOutput('PIECEMAKER_TAILLE=11 docx read "Note Jean Dupont.docx"').updatedInput.command, 'docx read "Note Dupont.docx"');
+  assert.equal(hookOutput('PIECEMAKER_TAILLE=99 docx read "Note Jean Dupont.docx"').permissionDecision, 'deny');
+  assert.equal(hookOutput('PIECEMAKER_TAILLE=11 docx read "Avis Jean Dupont.docx"').updatedInput.command, 'docx read "Avis M. Dupont.docx"');
+});
+
+test('sans fichier correspondant, la commande reste inchangée', () => {
   assert.equal(hookOutput('docx read "Note Dupont.docx"').updatedInput, undefined);
   assert.equal(hookOutput('docx read "Absent Société Exemple SAS.docx"'), null);
 });

@@ -32,8 +32,10 @@ fichier sur disque ; chacun voit les modifications de l'autre.
   (`updatedInput`) : `allow` pour une lecture `docx` et pour Codex, `ask` sinon
   pour Claude. Mistral applique la même correction par `guard`
   (`server/piecemaker/mistral-sdk/tools.ts`). Plusieurs fichiers possibles :
-  aucune correction. Les contrôles de protection portent sur la commande
-  corrigée.
+  le hook refuse la commande et liste leur taille exacte et leurs dates, sans
+  nom. L'IA relance la commande précédée de `PIECEMAKER_TAILLE=<octets>` ; le
+  hook retient le fichier de cette taille, le plus récemment créé en cas
+  d'égalité. Les contrôles de protection portent sur la commande corrigée.
 
 ## 2. Côté avocat — visionneuse / éditeur intégré
 

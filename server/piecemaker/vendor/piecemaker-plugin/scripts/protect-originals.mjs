@@ -272,16 +272,57 @@ async function anonymizationDictionary() {
   }
 }
 
+const SIZE_CHOICE = /^\s*PIECEMAKER_TAILLE=(\d+)\s+/;
+
+function sameMaskedFiles(masked, dictionary, cwd) {
+  const directory = resolveMappedPath(path.dirname(masked), dictionary.mapping, dictionary.reverse, cwd);
+  const expected = path.basename(masked).normalize('NFC');
+  let names;
+  try {
+    names = fs.readdirSync(absolutePath(directory, cwd));
+  } catch {
+    return [];
+  }
+  return names
+    .filter((name) => applyMapping(name, dictionary.mapping).normalize('NFC') === expected)
+    .map((name) => ({ path: path.join(directory, name), stat: statSafe(absolutePath(path.join(directory, name), cwd)) }))
+    .filter((file) => file.stat?.isFile());
+}
+
 async function withExistingFiles(command, cwd) {
-  if (missingFileWords(command, cwd).length === 0) return command;
+  const text = String(command ?? '');
+  if (missingFileWords(text, cwd).length === 0) return { command };
   const dictionary = await anonymizationDictionary();
-  if (!dictionary) return command;
-  return String(command).replace(SHELL_WORD, (word) => {
+  if (!dictionary) return { command };
+  const size = text.match(SIZE_CHOICE)?.[1];
+  const ambiguous = [];
+  const resolvedCommand = text.replace(SIZE_CHOICE, '').replace(SHELL_WORD, (word) => {
     const bare = word.replace(/^["']|["']$/g, '');
     if (!missingFileWords(bare, cwd).length) return word;
-    const resolved = resolveMappedPath(applyMapping(bare, dictionary.mapping), dictionary.mapping, dictionary.reverse, cwd);
-    return statSafe(absolutePath(resolved, cwd))?.isFile() ? quotedForShell(resolved) : word;
+    const masked = applyMapping(bare, dictionary.mapping);
+    const resolved = resolveMappedPath(masked, dictionary.mapping, dictionary.reverse, cwd);
+    if (statSafe(absolutePath(resolved, cwd))?.isFile()) return quotedForShell(resolved);
+    const files = sameMaskedFiles(masked, dictionary, cwd);
+    if (files.length < 2) return word;
+    const chosen = files
+      .filter((file) => size !== undefined && file.stat.size === Number(size))
+      .sort((a, b) => b.stat.birthtimeMs - a.stat.birthtimeMs)[0];
+    if (chosen) return quotedForShell(chosen.path);
+    ambiguous.push(files);
+    return word;
   });
+  return { command: resolvedCommand, ambiguous };
+}
+
+function ambiguityReason(ambiguous) {
+  const lines = ambiguous.flat().map((file) => (
+    `- ${file.stat.size} octets, créé le ${file.stat.birthtime.toISOString()}, modifié le ${file.stat.mtime.toISOString()}`
+  ));
+  return [
+    '[PieceMaker] Plusieurs fichiers du dossier portent ce nom une fois anonymisé :',
+    ...lines,
+    'Relance la même commande précédée de PIECEMAKER_TAILLE=<taille exacte en octets>. Si plusieurs fichiers ont cette taille, le plus récemment créé est retenu. En cas de doute, demande à l’utilisateur.',
+  ].join('\n');
 }
 
 function rewritten(toolInput, command, approved) {
@@ -304,7 +345,8 @@ async function main() {
   const cwd = payload.cwd || process.cwd();
 
   if (toolName === 'Bash') {
-    const command = await withExistingFiles(payload.tool_input?.command, cwd);
+    const { command, ambiguous } = await withExistingFiles(payload.tool_input?.command, cwd);
+    if (ambiguous?.length) return deny(ambiguityReason(ambiguous));
     const gitReason = gitHistoryReason(command, cwd);
     if (gitReason) return deny(gitReason);
     for (const candidate of commandPaths(command, cwd)) {
